@@ -29,45 +29,30 @@ const MEANINGFUL_CONTENT_SCAN_TAIL_LIMIT = 4096
  * orca-runtime.ts normalizeTerminalChunk but avoids importing the runtime.
  */
 function hasMeaningfulContent(chunk: string): boolean {
-  // Why: large plain-text PTY bursts should not pay the full ANSI stripping
-  // chain just to prove they contain visible output.
   for (let index = 0; index < chunk.length; index++) {
     const code = chunk.charCodeAt(index)
+    if (code === 0x1b) {
+      const controlEnd = parseMeaningfulControlSequence(chunk, index)
+      if (controlEnd === null) {
+        return false
+      }
+      index = controlEnd
+      continue
+    }
     if (
-      code === 0x1b ||
       code === 0x7f ||
       code < 0x09 ||
       (code > 0x0d && code < 0x20) ||
       (code >= 0x80 && code <= 0x9f)
     ) {
-      break
+      continue
     }
     if (code > 0x20) {
       return true
     }
   }
 
-  const stripped = chunk
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    // eslint-disable-next-line no-control-regex
-    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '') // OSC sequences
-    // eslint-disable-next-line no-control-regex
-    .replace(/\x1b\][^\x07]*(?:\x1b)?$/g, '') // incomplete OSC tail
-    // eslint-disable-next-line no-control-regex
-    .replace(/\x1b[PX^_][\s\S]*?\x1b\\/g, '') // ST-terminated string controls
-    // eslint-disable-next-line no-control-regex
-    .replace(/\x1b[PX^_][\s\S]*(?:\x1b)?$/g, '') // incomplete string-control tail
-    // eslint-disable-next-line no-control-regex
-    .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '') // CSI sequences
-    // eslint-disable-next-line no-control-regex
-    .replace(/\x1b[@-_]/g, '') // Fe sequences
-    // eslint-disable-next-line no-control-regex
-    .replace(/\u0008/g, '') // backspace
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '') // non-printable
-    .trim()
-  return stripped.length > 0
+  return false
 }
 
 /**
@@ -86,10 +71,18 @@ function hasMeaningfulContent(chunk: string): boolean {
  * one giant session and we would never emit the idle-time stop boundaries that
  * the stats design relies on.
  */
+// Why: onExit deletes a PTY's record instead of leaving a tombstone, so a data
+// chunk delivered AFTER exit (the exit-then-data race during pty.ts shutdown)
+// would resurrect a fresh record nothing ever deletes. Remember recently-exited
+// ids in a bounded FIFO to refuse resurrection; the cap keeps the guard itself
+// bounded, and per-spawn UUID ptyIds are never reused so aged-out ids are safe.
+const MAX_EXITED_PTY_IDS = 1024
+
 export class AgentDetector {
   private ptys = new Map<string, PtyRecord>()
   private oscTitleScanTailByPtyId = new Map<string, string>()
   private meaningfulContentScanTailByPtyId = new Map<string, string>()
+  private exitedPtyIds = new Set<string>()
   private stats: StatsCollector
   private meaningfulContentDetector: MeaningfulContentDetector
 
@@ -106,6 +99,11 @@ export class AgentDetector {
   onData(ptyId: string, rawData: string, at: number): void {
     let record = this.ptys.get(ptyId)
     if (!record) {
+      // Why: refuse to resurrect a PTY that already exited — a late post-exit
+      // data chunk must not create a new tracked record (which nothing deletes).
+      if (this.exitedPtyIds.has(ptyId)) {
+        return
+      }
       record = {
         state: 'unknown',
         sessionOpen: false,
@@ -197,6 +195,16 @@ export class AgentDetector {
     this.ptys.delete(ptyId)
     this.oscTitleScanTailByPtyId.delete(ptyId)
     this.meaningfulContentScanTailByPtyId.delete(ptyId)
+    // Remember this id (bounded FIFO) so a late data chunk can't resurrect it.
+    this.exitedPtyIds.delete(ptyId)
+    this.exitedPtyIds.add(ptyId)
+    while (this.exitedPtyIds.size > MAX_EXITED_PTY_IDS) {
+      const oldest = this.exitedPtyIds.values().next()
+      if (oldest.done) {
+        break
+      }
+      this.exitedPtyIds.delete(oldest.value)
+    }
   }
 
   private extractLastOscTitleForPty(ptyId: string, rawData: string): string | null {
@@ -221,6 +229,10 @@ export class AgentDetector {
     } else {
       this.meaningfulContentScanTailByPtyId.delete(ptyId)
     }
+  }
+
+  get trackedPtyCount(): number {
+    return this.ptys.size
   }
 }
 

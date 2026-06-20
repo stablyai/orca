@@ -1,5 +1,5 @@
 import { homedir } from 'os'
-import { basename, join } from 'path'
+import { basename, dirname, join } from 'path'
 import type {
   AiVaultListResult,
   AiVaultScanIssue,
@@ -9,6 +9,7 @@ import { sessionSortTime } from './session-scanner-accumulator'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
 import { codexHomeForSessionsDir, uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
 import { discoverFiles, discoverOpenClawFiles } from './session-scanner-discovery'
+import { resolveKimiSessionsDir } from './session-scanner-kimi-paths'
 import type {
   AiVaultScanOptions,
   SessionFileCandidate,
@@ -172,6 +173,17 @@ export async function scanAiVaultSessions(
       agent: 'droid',
       issues,
       extensions: ['.jsonl']
+    }),
+    discoverFiles({
+      rootDir: resolveKimiSessionsDir(options.kimiSessionsDir),
+      limit: limitPerAgent,
+      agent: 'kimi',
+      issues,
+      extensions: ['.json'],
+      // Why: each Kimi session is <sessions>/wd_*/session_*/state.json; match
+      // only those (not the sibling agents/*/wire.jsonl transcripts).
+      filePredicate: (path) =>
+        basename(path) === 'state.json' && basename(dirname(path)).startsWith('session_')
     })
   ])
 

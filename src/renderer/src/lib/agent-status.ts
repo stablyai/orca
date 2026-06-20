@@ -130,7 +130,8 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   grok: 'Grok',
   hermes: 'Hermes',
   devin: 'Devin',
-  ante: 'Ante'
+  ante: 'Ante',
+  kimi: 'Kimi'
 }
 
 export function formatAgentTypeLabel(agentType: AgentType | null | undefined): string {

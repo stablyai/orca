@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  COMPACT_WORKTREE_CARD_PROPERTIES,
   DEFAULT_WORKTREE_CARD_PROPERTIES,
   TASK_WORKTREE_CARD_PROPERTIES,
   getWorktreeCardModeProperties,
   getWorktreeCardModeUpdates,
+  isDefaultedCompactWorktreeCardProperties,
   normalizeWorktreeCardProperties
 } from './worktree-card-properties'
 
@@ -18,9 +20,11 @@ describe('worktree card properties', () => {
     expect(props).toEqual(DEFAULT_WORKTREE_CARD_PROPERTIES)
   })
 
-  it('defines Compact with status and automation but without extra rows or branch metadata', () => {
+  it('defines Compact as the status-only quiet preset', () => {
     const props = getWorktreeCardModeProperties('Compact')
 
+    expect(props).toEqual(['status'])
+    expect(props).toEqual(COMPACT_WORKTREE_CARD_PROPERTIES)
     expect(props).not.toContain('inline-agents')
     expect(props).not.toContain('issue')
     expect(props).not.toContain('linear-issue')
@@ -28,7 +32,7 @@ describe('worktree card properties', () => {
     expect(props).not.toContain('ports')
     expect(props).not.toContain('branch')
     expect(props).not.toContain('pr')
-    expect(props).toContain('automation')
+    expect(props).not.toContain('automation')
   })
 
   it('keeps status enabled in both presets', () => {
@@ -56,5 +60,14 @@ describe('worktree card properties', () => {
         _worktreeCardModeDefaulted: true
       }
     })
+  })
+
+  it('recognizes only exact defaulted Compact presets', () => {
+    expect(isDefaultedCompactWorktreeCardProperties(['status'])).toBe(true)
+    expect(isDefaultedCompactWorktreeCardProperties(['status', 'unread'])).toBe(true)
+    expect(isDefaultedCompactWorktreeCardProperties(['status', 'automation'])).toBe(true)
+    expect(isDefaultedCompactWorktreeCardProperties(['status', 'unread', 'automation'])).toBe(true)
+    expect(isDefaultedCompactWorktreeCardProperties(['automation', 'status'])).toBe(false)
+    expect(isDefaultedCompactWorktreeCardProperties(['status', 'automation', 'pr'])).toBe(false)
   })
 })

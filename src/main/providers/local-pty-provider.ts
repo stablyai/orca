@@ -65,6 +65,9 @@ type ExitCallback = (payload: { id: string; code: number }) => void
 const dataListeners = new Set<DataCallback>()
 const exitListeners = new Set<ExitCallback>()
 
+/**
+ * Returns a stable default cwd for locally spawned PTYs.
+ */
 function getDefaultCwd(): string {
   if (process.platform !== 'win32') {
     return process.env.HOME || '/'
@@ -82,6 +85,9 @@ function getDefaultCwd(): string {
   return 'C:\\'
 }
 
+/**
+ * Removes inherited pane identity unless this PTY explicitly supplies it.
+ */
 function removeUnspecifiedPaneIdentityEnv(
   env: Record<string, string>,
   explicitEnv: Record<string, string> | undefined
@@ -93,6 +99,9 @@ function removeUnspecifiedPaneIdentityEnv(
   }
 }
 
+/**
+ * Promotes the agent-teams shim path ahead of inherited PATH entries.
+ */
 function promoteAgentTeamsShimPath(
   env: Record<string, string>,
   requestedPath: string | undefined
@@ -108,6 +117,9 @@ function promoteAgentTeamsShimPath(
   env.PATH = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(delimiter)
 }
 
+/**
+ * Disposes native node-pty listeners registered for a PTY id.
+ */
 function disposePtyListeners(id: string): void {
   const disposables = ptyDisposables.get(id)
   if (disposables) {
@@ -118,6 +130,9 @@ function disposePtyListeners(id: string): void {
   }
 }
 
+/**
+ * Resolves a WSL context from a worktree id whose path is already a WSL path.
+ */
 function getWslContextFromWorktreeId(
   worktreeId: string | undefined
 ): { distro: string; treatPosixCwdAsWsl: true } | undefined {
@@ -126,6 +141,9 @@ function getWslContextFromWorktreeId(
   return wslInfo ? { distro: wslInfo.distro, treatPosixCwdAsWsl: true } : undefined
 }
 
+/**
+ * Resolves a WSL launch context from a user-selected distro name.
+ */
 function getWslContextFromPreferredDistro(
   distro: string | null | undefined
 ): { distro: string } | undefined {
@@ -133,6 +151,9 @@ function getWslContextFromPreferredDistro(
   return trimmed ? { distro: trimmed } : undefined
 }
 
+/**
+ * Removes all local tracking state for a PTY id after teardown.
+ */
 function clearPtyState(id: string): void {
   disposePtyListeners(id)
   ptyProcesses.delete(id)
@@ -141,6 +162,9 @@ function clearPtyState(id: string): void {
   ptyLoadGeneration.delete(id)
 }
 
+/**
+ * Allocates either a stable caller-provided PTY id or a new numeric id.
+ */
 function allocatePtyId(sessionId: string | undefined): string {
   const requested = normalizeLocalCallerSessionId(sessionId)
   if (requested) {
@@ -153,6 +177,9 @@ function allocatePtyId(sessionId: string | undefined): string {
   return id
 }
 
+/**
+ * Normalizes renderer session ids that should be reused for local PTY reattach.
+ */
 function normalizeLocalCallerSessionId(sessionId: string | undefined): string | null {
   const requested = sessionId?.trim()
   if (!requested || /^\d+$/.test(requested)) {
@@ -161,6 +188,9 @@ function normalizeLocalCallerSessionId(sessionId: string | undefined): string | 
   return requested
 }
 
+/**
+ * Normalizes node-pty foreground process strings to executable basenames.
+ */
 function normalizeForegroundProcessName(processName: string | null | undefined): string | null {
   const trimmed = processName?.trim().replace(/^["']|["']$/g, '') ?? ''
   if (!trimmed || trimmed === 'xterm-256color') {
@@ -169,6 +199,9 @@ function normalizeForegroundProcessName(processName: string | null | undefined):
   return trimmed.split(/[\\/]/).pop() || null
 }
 
+/**
+ * Falls back to the spawned Windows shell when node-pty reports a terminal name.
+ */
 function resolveForegroundFallbackProcess(
   processName: string | null | undefined,
   shellName: string | undefined
@@ -181,6 +214,9 @@ function resolveForegroundFallbackProcess(
   return shellName ?? processName ?? null
 }
 
+/**
+ * Disposes the native PTY handle while avoiding recycled-pid signals on POSIX.
+ */
 function destroyPtyProcess(proc: pty.IPty, options: { alreadyKilled?: boolean } = {}): void {
   // Why: node-pty's UnixTerminal.destroy() closes the master socket, which
   // releases the ptmx fd to the OS — without this call the fd leaks until GC
@@ -204,6 +240,9 @@ function destroyPtyProcess(proc: pty.IPty, options: { alreadyKilled?: boolean } 
   }
 }
 
+/**
+ * Kills a local PTY and clears all associated local provider state.
+ */
 function safeKillAndClean(id: string, proc: pty.IPty): void {
   disposePtyListeners(id)
   try {
@@ -252,6 +291,12 @@ export class LocalPtyProvider implements IPtyProvider {
     this.opts = opts
   }
 
+  /**
+   * Spawns or reattaches a local PTY session for the renderer process.
+   *
+   * Windows shell launches can pre-deliver short startup commands in argv; this
+   * method preserves that state so the stdin fallback only runs when needed.
+   */
   async spawn(args: PtySpawnOptions): Promise<PtySpawnResult> {
     const reattachId = normalizeLocalCallerSessionId(args.sessionId)
     if (reattachId) {
@@ -281,6 +326,7 @@ export class LocalPtyProvider implements IPtyProvider {
     let shellArgs: string[]
     let effectiveCwd: string
     let validationCwd: string
+    let startupCommandDeliveredInShellArgs = false
     let shellReadyLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
     let getFallbackShellReadyConfig:
       | ((shell: string) => ReturnType<typeof getShellReadyLaunchConfig>)
@@ -340,11 +386,13 @@ export class LocalPtyProvider implements IPtyProvider {
         shellPath,
         cwd,
         defaultCwd,
-        worktreeWslContext ?? preferredWslContext
+        worktreeWslContext ?? preferredWslContext,
+        args.command
       )
       shellArgs = resolved.shellArgs
       effectiveCwd = resolved.effectiveCwd
       validationCwd = resolved.validationCwd
+      startupCommandDeliveredInShellArgs = resolved.startupCommandDeliveredInShellArgs === true
     } else {
       shellPath = args.env?.SHELL || process.env.SHELL || '/bin/zsh'
       shellArgs = ['-l']
@@ -441,6 +489,8 @@ export class LocalPtyProvider implements IPtyProvider {
               shellArgs = resolved.shellArgs
               effectiveCwd = resolved.effectiveCwd
               validationCwd = resolved.validationCwd
+              startupCommandDeliveredInShellArgs =
+                resolved.startupCommandDeliveredInShellArgs === true
             }
           }
         } else if (isHostCodexHomeForWsl(finalEnv.CODEX_HOME)) {
@@ -651,7 +701,7 @@ export class LocalPtyProvider implements IPtyProvider {
     }
     ptyDisposables.set(id, disposables)
 
-    if (args.command) {
+    if (args.command && !startupCommandDeliveredInShellArgs) {
       writeStartupCommandWhenShellReady(shellReadyPromise, proc, args.command, (cleanup) => {
         startupCommandCleanup = cleanup
       })

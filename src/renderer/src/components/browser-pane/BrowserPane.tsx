@@ -15,7 +15,11 @@ import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import { getWorkspaceFileBrowserOpenTarget } from '@/lib/file-preview'
-import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import {
+  getWorkspaceFileDragRejectionMessage,
+  readWorkspaceFileDragPaths,
+  WORKSPACE_FILE_PATH_MIME
+} from '@/lib/workspace-file-drag'
 import {
   ArrowLeft,
   ArrowRight,
@@ -1144,6 +1148,11 @@ function RemoteBrowserPagePane({
   )
 
   useEffect(() => {
+    // Why: StrictMode (and any real remount) runs mount→cleanup→mount. The
+    // cleanup sets mountedRef false; without re-arming it on mount, every
+    // subsequent operation token reads as stale (isCurrentRemoteOperationToken
+    // gates on mountedRef) and the pane wedges on "Opening remote browser".
+    mountedRef.current = true
     return () => {
       mountedRef.current = false
       remoteOperationGenerationRef.current += 1
@@ -1173,9 +1182,11 @@ function RemoteBrowserPagePane({
   }, [clearPendingRemoteWheel])
 
   useEffect(() => {
-    remoteOperationGenerationRef.current += 1
-    streamGenerationRef.current += 1
-    activeStreamTokenRef.current = null
+    // Why: only reset the visible frame/wheel when the pane's identity changes.
+    // The stream/operation generations are owned solely by the streaming effect
+    // below — bumping them here too races that effect (e.g. under StrictMode's
+    // mount→cleanup→mount), leaving its captured token permanently one behind so
+    // the pane wedges on "Opening remote browser" while frames are available.
     remoteStreamViewportSizeRef.current = null
     clearPendingRemoteWheel()
     clearStreamFrame()
@@ -1856,6 +1867,32 @@ function RemoteBrowserPagePane({
     })
   }, [isActive])
 
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    const handleBrowserFocusRequest = (event: Event): void => {
+      const detail = (event as CustomEvent<BrowserFocusRequestDetail>).detail
+      if (!detail || detail.pageId !== browserTab.id) {
+        return
+      }
+      const focusTarget = consumeBrowserFocusRequest(browserTab.id)
+      if (!focusTarget) {
+        return
+      }
+      if (focusTarget === 'address-bar') {
+        addressBarInputRef.current?.focus()
+        addressBarInputRef.current?.select()
+        return
+      }
+      const target = imageRef.current ?? remoteViewportRef.current
+      target?.focus()
+    }
+    window.addEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
+    return () =>
+      window.removeEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
+  }, [browserTab.id, isActive])
+
   const runRemoteNavigation = useCallback(
     async (
       method: 'browser.goto' | 'browser.back' | 'browser.forward' | 'browser.reload',
@@ -2508,6 +2545,7 @@ function RemoteBrowserPagePane({
       </div>
       <div
         ref={remoteViewportRef}
+        tabIndex={-1}
         className="relative min-h-0 flex-1 overflow-hidden bg-background"
       >
         {frameUrl ? (
@@ -2614,6 +2652,7 @@ function BrowserPagePane({
     clearTimeout(browserZoomFeedbackTimerRef.current)
   }, [])
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
+  const dismissAddressBarSuggestionsRef = useRef<(() => void) | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const browserTabIdRef = useRef(browserTab.id)
   browserTabIdRef.current = browserTab.id
@@ -3503,6 +3542,10 @@ function BrowserPagePane({
 
     webviewRef.current = webview
 
+    const dismissAddressBarSuggestions = (): void => {
+      dismissAddressBarSuggestionsRef.current?.()
+    }
+
     const handleDomReady = (): void => {
       const webContentsId = webview.getWebContentsId()
       let queuedAnnotationViewportBridgeSync = false
@@ -3737,6 +3780,7 @@ function BrowserPagePane({
     }
 
     webview.addEventListener('dom-ready', handleDomReady)
+    webview.addEventListener('focus', dismissAddressBarSuggestions)
     webview.addEventListener('did-start-loading', handleDidStartLoading)
     webview.addEventListener('did-stop-loading', handleDidStopLoading)
     // Why: separate handler registered only on 'did-navigate' (full page loads),
@@ -3769,6 +3813,7 @@ function BrowserPagePane({
 
     return () => {
       webview.removeEventListener('dom-ready', handleDomReady)
+      webview.removeEventListener('focus', dismissAddressBarSuggestions)
       webview.removeEventListener('did-start-loading', handleDidStartLoading)
       webview.removeEventListener('did-stop-loading', handleDidStopLoading)
       webview.removeEventListener('did-navigate', handleDidNavigate)
@@ -4464,12 +4509,23 @@ function BrowserPagePane({
 
   const handleInternalFileDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
-      const filePath = event.dataTransfer.getData(WORKSPACE_FILE_PATH_MIME)
-      if (!filePath) {
+      if (!event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
         return
       }
       event.preventDefault()
       event.stopPropagation()
+
+      // Why: browser drops open one URL; multi-path drags must not silently
+      // degrade into opening whichever selected file happened to lead.
+      const dragPaths = readWorkspaceFileDragPaths(event.dataTransfer, { maxPaths: 1 })
+      if (dragPaths.status === 'rejected') {
+        setResourceNotice(getWorkspaceFileDragRejectionMessage(dragPaths.reason))
+        return
+      }
+      const filePath = dragPaths.paths[0]
+      if (!filePath) {
+        return
+      }
 
       const target = getWorkspaceFileBrowserOpenTarget({ filePath, worktreeId })
       if (target.status === 'unsupported') {
@@ -4705,6 +4761,7 @@ function BrowserPagePane({
           onSubmit={submitAddressBar}
           onNavigate={navigateToUrl}
           inputRef={addressBarInputRef}
+          dismissSuggestionsRef={dismissAddressBarSuggestionsRef}
         />
 
         <BrowserImportHintButton profileId={sessionProfileId} />

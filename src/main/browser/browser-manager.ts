@@ -827,6 +827,38 @@ export class BrowserManager {
     this.annotationViewportBridgeOpsByTabId.delete(browserTabId)
   }
 
+  // Why: headless orca serve has no renderer window to mount a <webview>, so its
+  // browser pages are backed by main-process offscreen WebContents instead. This
+  // registers such a page into the same resolution maps the bridge/screencast/
+  // input handlers read, but skips the webview-only guards and the renderer setup
+  // (context menu, grab shortcut, etc.) that assume a renderer-hosted guest.
+  registerOffscreenGuest({
+    browserPageId,
+    worktreeId,
+    sessionProfileId,
+    webContentsId
+  }: {
+    browserPageId: string
+    worktreeId?: string
+    sessionProfileId?: string | null
+    webContentsId: number
+  }): void {
+    const guest = webContents.fromId(webContentsId)
+    if (!guest || guest.isDestroyed()) {
+      return
+    }
+    const previousWebContentsId = this.webContentsIdByTabId.get(browserPageId)
+    if (previousWebContentsId !== undefined && previousWebContentsId !== webContentsId) {
+      this.retireStaleGuestWebContents(previousWebContentsId)
+    }
+    this.webContentsIdByTabId.set(browserPageId, webContentsId)
+    this.tabIdByWebContentsId.set(webContentsId, browserPageId)
+    this.sessionProfileIdByPageId.set(browserPageId, sessionProfileId ?? null)
+    if (worktreeId) {
+      this.worktreeIdByTabId.set(browserPageId, worktreeId)
+    }
+  }
+
   unregisterAll(): void {
     // Cancel all active grab ops before tearing down registrations
     this.grabSessionController.cancelAll('evicted')

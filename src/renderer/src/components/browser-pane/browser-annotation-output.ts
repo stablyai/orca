@@ -24,8 +24,61 @@ function annotationElementLabel(payload: BrowserGrabPayload): string {
   return react ? `${inlineText(react)} ${base}` : base
 }
 
-function inlineText(content: string): string {
-  return content.replace(/\s+/g, ' ').trim()
+export const BROWSER_ANNOTATION_INLINE_TEXT_MAX_LENGTH = 2048
+
+function inlineText(
+  content: string,
+  maxLength = BROWSER_ANNOTATION_INLINE_TEXT_MAX_LENGTH
+): string {
+  // Why: page-controlled DOM text can include paste-sized content. Inline
+  // annotation fields are prompt previews, so collapse whitespace while
+  // scanning only the bounded text we will actually retain.
+  let normalized = ''
+  let pendingSpace = false
+  for (let index = 0; index < content.length && normalized.length < maxLength; ) {
+    const code = content.charCodeAt(index)
+    if (isInlineWhitespaceCode(code)) {
+      if (code === 13 && content.charCodeAt(index + 1) === 10) {
+        index += 1
+      }
+      pendingSpace = normalized.length > 0
+      index += 1
+      continue
+    }
+
+    const codePoint = content.codePointAt(index)
+    if (codePoint === undefined) {
+      break
+    }
+    const char = String.fromCodePoint(codePoint)
+    const extraSpaceLength = pendingSpace ? 1 : 0
+    if (normalized.length + extraSpaceLength + char.length > maxLength) {
+      break
+    }
+    if (pendingSpace) {
+      normalized += ' '
+      pendingSpace = false
+    }
+    normalized += char
+    index += char.length
+  }
+  return normalized
+}
+
+function isInlineWhitespaceCode(code: number): boolean {
+  return (
+    code === 0x20 ||
+    (code >= 0x09 && code <= 0x0d) ||
+    code === 0xa0 ||
+    code === 0x1680 ||
+    (code >= 0x2000 && code <= 0x200a) ||
+    code === 0x2028 ||
+    code === 0x2029 ||
+    code === 0x202f ||
+    code === 0x205f ||
+    code === 0x3000 ||
+    code === 0xfeff
+  )
 }
 
 function formatStyles(styles: BrowserGrabComputedStyles): string[] {
@@ -70,8 +123,18 @@ function formatStyles(styles: BrowserGrabComputedStyles): string[] {
 // run into Math.max when generated HTML contains many fence characters.
 function maxBacktickRunLength(content: string, floor: number): number {
   let maxRun = floor
-  for (const match of content.matchAll(/`+/g)) {
-    maxRun = Math.max(maxRun, match[0].length)
+  let currentRun = 0
+
+  for (let index = 0; index < content.length; index += 1) {
+    if (content.charCodeAt(index) !== 96) {
+      currentRun = 0
+      continue
+    }
+
+    currentRun += 1
+    if (currentRun > maxRun) {
+      maxRun = currentRun
+    }
   }
   return maxRun
 }

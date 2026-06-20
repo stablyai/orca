@@ -19,6 +19,7 @@ import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-histo
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 
 // ─── PTY Provider ───────────────────────────────────────────────────
 
@@ -92,6 +93,7 @@ export type PtySpawnResult = {
   coldRestore?: {
     scrollback: string
     cwd: string
+    oscLinks?: TerminalOscLinkRange[]
   }
 }
 

@@ -91,7 +91,8 @@ vi.mock('@/lib/active-agent-note-send', () => ({
     status: string,
     options: { explicitTarget?: boolean } = {}
   ) => (options.explicitTarget ? `selected:${status}` : status),
-  sendNotesToActiveAgentSession: harness.sendNotesToActiveAgentSession
+  sendNotesToActiveAgentSession: harness.sendNotesToActiveAgentSession,
+  useCanSendNotesToActiveTerminal: () => true
 }))
 
 vi.mock('@/lib/notes-send-agent-targets', () => ({

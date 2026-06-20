@@ -2,17 +2,16 @@ import './xterm-env-polyfill'
 import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { extractLastOscTitle } from '../../shared/agent-detection'
+import { collectHeadlessOscLinkRanges } from './headless-osc-link-ranges'
+import { extractOscScanTail, scanOsc7Uris } from './osc7-uri-extraction'
 import { parseFileUriPath } from './osc7-file-uri'
 import type { TerminalSnapshot, TerminalModes } from './types'
+import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 
 export type HeadlessEmulatorOptions = {
   cols: number
   rows: number
   scrollback?: number
-}
-
-export type HeadlessSnapshotOptions = {
-  scrollbackRows?: number
 }
 
 type TerminalWithSynchronousWrite = Terminal & {
@@ -38,6 +37,7 @@ export class HeadlessEmulator {
   private mouseTrackingMode: MouseTrackingMode = 'none'
   private sgrMouseMode = false
   private sgrMousePixelsMode = false
+  private restoredOscLinks: TerminalOscLinkRange[] = []
   private disposed = false
 
   constructor(opts: HeadlessEmulatorOptions) {
@@ -122,10 +122,11 @@ export class HeadlessEmulator {
     if (this.disposed) {
       return
     }
+    this.restoredOscLinks = []
     this.terminal.resize(cols, rows)
   }
 
-  getSnapshot(opts: HeadlessSnapshotOptions = {}): TerminalSnapshot {
+  getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot {
     const modes = this.getModes()
     const snapshotAnsi = this.normalizeSnapshotAnsiForModes(
       this.serializer.serialize({ scrollback: opts.scrollbackRows }),
@@ -134,6 +135,11 @@ export class HeadlessEmulator {
     return {
       snapshotAnsi,
       scrollbackAnsi: '',
+      oscLinks: collectHeadlessOscLinkRanges(
+        this.terminal,
+        opts.scrollbackRows,
+        this.restoredOscLinks
+      ),
       rehydrateSequences: this.buildRehydrateSequences(modes),
       cwd: this.cwd,
       modes,
@@ -169,7 +175,12 @@ export class HeadlessEmulator {
     this.lastTitle = title
   }
 
+  setRestoredOscLinks(links: TerminalOscLinkRange[] | undefined): void {
+    this.restoredOscLinks = links?.slice() ?? []
+  }
+
   clearScrollback(): void {
+    this.restoredOscLinks = []
     this.terminal.clear()
   }
 
@@ -179,28 +190,13 @@ export class HeadlessEmulator {
   }
 
   private scanOsc7(data: string): void {
-    // OSC-7 format: ESC ] 7 ; <uri> BEL  or  ESC ] 7 ; <uri> ST
-    // BEL = \x07, ST = ESC \
-    // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
-    const osc7Re = /\x1b\]7;([^\x07\x1b]*?)(?:\x07|\x1b\\)/g
-    let match: RegExpExecArray | null
-    while ((match = osc7Re.exec(data)) !== null) {
-      this.parseOsc7Uri(match[1])
-    }
+    scanOsc7Uris(data, (uri) => {
+      this.parseOsc7Uri(uri)
+    })
   }
 
   private extractOscScanTail(input: string): string {
-    const lastOsc = input.lastIndexOf('\x1b]')
-    const lastEscape = input.endsWith('\x1b') ? input.length - 1 : -1
-    const start = Math.max(lastOsc, lastEscape)
-    if (start === -1) {
-      return ''
-    }
-    const suffix = input.slice(start)
-    if (suffix.includes('\x07') || suffix.includes('\x1b\\')) {
-      return ''
-    }
-    return suffix.slice(-OSC_SCAN_TAIL_LIMIT)
+    return extractOscScanTail(input, OSC_SCAN_TAIL_LIMIT)
   }
 
   private scanPrivateModes(data: string): void {

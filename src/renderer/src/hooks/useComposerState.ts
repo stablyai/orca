@@ -151,9 +151,17 @@ import {
 } from '@/lib/workspace-create-error-format'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import {
+  isBranchCheckedOutInWorktrees,
   resolveComposerBranchNameOverrideForCreate,
-  resolveComposerBranchSelection
+  resolveComposerBranchReuse,
+  resolveComposerBranchSelection,
+  resolveComposerReuseOverride
 } from './composer-branch-selection'
+import { isCurrentComposerDropOwner } from './composer-drop-owner'
+import {
+  collectComposerDropUploadResult,
+  shouldReportComposerDropUploadFailure
+} from './composer-drop-upload-result'
 import { translate } from '@/i18n/i18n'
 
 export function canResolveFolderSmartGitHubSubmit({
@@ -242,6 +250,13 @@ export type ComposerCardProps = {
   ) => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
+  /** True when the selected source is an existing LOCAL branch that can be
+   *  reused (checked out) instead of branched off — gates the reuse checkbox. */
+  canReuseSelectedBranch: boolean
+  /** Whether the selected existing local branch will be reused (checked out)
+   *  rather than used as the base for a new branch. */
+  reuseSelectedBranch: boolean
+  onReuseSelectedBranchChange: (next: boolean) => void
   agentPrompt: string
   onAgentPromptChange: (value: string) => void
   /** Rendered issueCommand template to preview inside the empty prompt
@@ -810,6 +825,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [branchNameOverride, setBranchNameOverride] = useState<string | undefined>(undefined)
   const [branchNameOverridePreservesNameEdits, setBranchNameOverridePreservesNameEdits] =
     useState(false)
+  // Why (#5181): when the user picks an existing LOCAL branch, let them reuse it
+  // (check it out) instead of creating a new branch from it. `reuseEligibleBranch`
+  // is the local branch name eligible for reuse (null = not a reusable local
+  // branch, e.g. a remote-only ref or non-branch source); `reuseSelectedBranch`
+  // is the explicit checkbox value driving whether reuse actually happens.
+  const [reuseEligibleBranch, setReuseEligibleBranch] = useState<string | null>(null)
+  const [reuseSelectedBranch, setReuseSelectedBranch] = useState(false)
   const [pushTarget, setPushTarget] = useState<GitPushTarget | undefined>(undefined)
   // Why: when a repo switch wipes a prior Start-from selection, surface the
   // reset inline (e.g. "was PR #8778") so the change is recoverable visually
@@ -1168,6 +1190,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   )
 
   const filteredLinkItems = useMemo(() => {
+    if (normalizedLinkQuery.tooLarge) {
+      return []
+    }
     if (normalizedLinkQuery.directNumber !== null) {
       return linkDirectItem ? [linkDirectItem] : []
     }
@@ -1191,7 +1216,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         .toLowerCase()
       return text.includes(query)
     })
-  }, [linkDirectItem, linkItems, normalizedLinkQuery.directNumber, normalizedLinkQuery.query])
+  }, [
+    linkDirectItem,
+    linkItems,
+    normalizedLinkQuery.directNumber,
+    normalizedLinkQuery.query,
+    normalizedLinkQuery.tooLarge
+  ])
 
   // Persist draft whenever relevant fields change (full-page only).
   useEffect(() => {
@@ -1942,18 +1973,21 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       sourcePaths: string[],
       targetSettings = selectedRepoSettings,
       targetConnectionId = connectionId,
-      targetRepoPath = selectedRepoPath
+      targetRepoPath = selectedRepoPath,
+      canReportFailure: () => boolean = () => true
     ): Promise<{ filePaths: string[]; folderPaths: string[] } | null> => {
       if (!targetSettings?.activeRuntimeEnvironmentId?.trim() && !targetConnectionId) {
         return null
       }
       if (!targetRepoPath) {
-        toast.error(
-          translate(
-            'auto.hooks.useComposerState.3db83fc58a',
-            'No project path is available on this host for attachments.'
+        if (canReportFailure()) {
+          toast.error(
+            translate(
+              'auto.hooks.useComposerState.3db83fc58a',
+              'No project path is available on this host for attachments.'
+            )
           )
-        )
+        }
         return { filePaths: [], folderPaths: [] }
       }
       const destinationDir = joinPath(targetRepoPath, '.orca/drops')
@@ -1968,21 +2002,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         destinationDir,
         { ensureDestinationDir: true }
       )
-      const filePaths: string[] = []
-      const folderPaths: string[] = []
-      let skippedOrFailed = 0
-      for (const result of results) {
-        if (result.status !== 'imported') {
-          skippedOrFailed += 1
-          continue
-        }
-        if (result.kind === 'directory') {
-          folderPaths.push(result.destPath)
-        } else {
-          filePaths.push(result.destPath)
-        }
-      }
-      if (skippedOrFailed > 0) {
+      const uploadResult = collectComposerDropUploadResult(results)
+      if (shouldReportComposerDropUploadFailure(uploadResult, canReportFailure)) {
         toast.error(
           translate(
             'auto.hooks.useComposerState.a9ff236145',
@@ -1990,7 +2011,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           )
         )
       }
-      return { filePaths, folderPaths }
+      return { filePaths: uploadResult.filePaths, folderPaths: uploadResult.folderPaths }
     },
     [connectionId, selectedRepoPath, selectedRepoSettings]
   )
@@ -2015,7 +2036,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   }, [addComposerAttachments, insertComposerFolderPaths, uploadComposerPaths])
 
   const applyLocalComposerDrop = useCallback(
-    async (paths: string[]): Promise<void> => {
+    async (paths: string[], canApply: () => boolean = () => true): Promise<void> => {
       const fileAttachments: string[] = []
       const folderPaths: string[] = []
       for (const filePath of paths) {
@@ -2032,6 +2053,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         }
       }
 
+      if (!canApply()) {
+        return
+      }
       addComposerAttachments(fileAttachments)
       insertComposerFolderPaths(folderPaths)
     },
@@ -2064,22 +2088,28 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       // drop. Earlier subscribers stay bound to keep their own cleanup tidy
       // but short-circuit so the event doesn't double-apply when page+modal
       // are both alive.
-      if (composerDropStack.at(-1) !== instanceId) {
+      if (!isCurrentComposerDropOwner(composerDropStack, instanceId)) {
         return
       }
       void (async () => {
+        const isStillDropOwner = (): boolean =>
+          isCurrentComposerDropOwner(composerDropStack, instanceId)
         const uploaded = await uploadComposerPathsRef.current(
           data.paths,
           selectedRepoSettingsRef.current,
           connectionIdRef.current,
-          selectedRepoPathRef.current
+          selectedRepoPathRef.current,
+          isStillDropOwner
         )
+        if (!isStillDropOwner()) {
+          return
+        }
         if (uploaded) {
           addComposerAttachmentsRef.current(uploaded.filePaths)
           insertComposerFolderPathsRef.current(uploaded.folderPaths)
           return
         }
-        await applyLocalComposerDropRef.current(data.paths)
+        await applyLocalComposerDropRef.current(data.paths, isStillDropOwner)
       })()
     })
     return () => {
@@ -2143,6 +2173,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setCompareBaseRef(undefined)
         setPushTarget(undefined)
         setBranchNameOverride(undefined)
+        // Why (#5181): reuse state is branch-scoped, so a repo switch must clear
+        // it alongside the branch override (matches the other reset paths).
+        setBranchNameOverridePreservesNameEdits(false)
+        setReuseEligibleBranch(null)
+        setReuseSelectedBranch(false)
         setForkPushWarning(null)
         setStartFromResetHint(hint)
       }
@@ -2214,6 +2249,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setBaseBranch(undefined)
         setPushTarget(undefined)
         setBranchNameOverride(undefined)
+        // Why (#5181): clear branch-scoped reuse state on a project switch too.
+        setBranchNameOverridePreservesNameEdits(false)
+        setReuseEligibleBranch(null)
+        setReuseSelectedBranch(false)
         setForkPushWarning(null)
         setStartFromResetHint(null)
         return
@@ -2277,6 +2316,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setCompareBaseRef(undefined)
     setPushTarget(undefined)
     setBranchNameOverride(undefined)
+    // Why (#5181): the Start-from picker means "create a new branch from this
+    // base", so it never offers branch reuse — clear any reuse state left over
+    // from a prior smart-field branch pick.
+    setBranchNameOverridePreservesNameEdits(false)
+    setReuseEligibleBranch(null)
+    setReuseSelectedBranch(false)
     setForkPushWarning(null)
     branchAutoNameRef.current = ''
     setStartFromResetHint(null)
@@ -2531,18 +2576,65 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setPushTarget(undefined)
       setStartFromResetHint(null)
       setForkPushWarning(null)
-      setBranchNameOverridePreservesNameEdits(false)
+      // Why (#5181): reuse an existing local branch (check it out) instead of
+      // branching off it. Default reuse ON when the worktree name was
+      // auto-derived from the branch, and preserve name edits so reuse survives
+      // renaming the worktree folder. Reuse is impossible when the branch is
+      // already checked out in another worktree (git allows it in only one), so
+      // gate eligibility on that and don't pin the override to a busy branch.
+      // Note: worktreesByRepo only covers visible worktrees; a branch busy only
+      // in a hidden external worktree falls through to the backend conflict
+      // check, which rejects it with a clear "already exists locally" error.
+      const branchCheckedOutElsewhere = isBranchCheckedOutInWorktrees(
+        localBranchName,
+        (worktreesByRepo[repoId] ?? []).map((worktree) => worktree.branch)
+      )
+      const { reuseEligibleBranch: nextReuseEligibleBranch, defaultReuse } =
+        resolveComposerBranchReuse({
+          refName,
+          localBranchName,
+          selectionProducedOverride: selection.branchNameOverride !== undefined,
+          branchCheckedOutElsewhere
+        })
+      setReuseEligibleBranch(nextReuseEligibleBranch)
+      setReuseSelectedBranch(defaultReuse)
+      setBranchNameOverridePreservesNameEdits(defaultReuse)
+      const effectiveOverride = resolveComposerReuseOverride({
+        refName,
+        localBranchName,
+        branchNameOverride: selection.branchNameOverride,
+        branchCheckedOutElsewhere
+      })
       if (selection.name !== undefined && selection.lastAutoName !== undefined) {
         setName(selection.name)
         lastAutoNameRef.current = selection.lastAutoName
-        branchAutoNameRef.current = selection.branchAutoName
-        setBranchNameOverride(selection.branchNameOverride)
+        branchAutoNameRef.current = effectiveOverride ? selection.branchAutoName : ''
+        setBranchNameOverride(effectiveOverride)
       } else {
-        setBranchNameOverride(selection.branchNameOverride)
-        branchAutoNameRef.current = selection.branchAutoName
+        setBranchNameOverride(effectiveOverride)
+        branchAutoNameRef.current = effectiveOverride ? selection.branchAutoName : ''
       }
     },
-    [name]
+    [name, worktreesByRepo, repoId]
+  )
+
+  const handleReuseSelectedBranchChange = useCallback(
+    (next: boolean): void => {
+      if (!reuseEligibleBranch) {
+        return
+      }
+      setReuseSelectedBranch(next)
+      // Why (#5181): reuse pins the exact existing branch as the override and
+      // preserves it across worktree-name edits, so the folder can be named
+      // independently while the branch is checked out. Opting out drops the
+      // override so a fresh branch is created from the selected ref as base.
+      setBranchNameOverridePreservesNameEdits(next)
+      setBranchNameOverride(next ? reuseEligibleBranch : undefined)
+      if (next) {
+        branchAutoNameRef.current = reuseEligibleBranch
+      }
+    },
+    [reuseEligibleBranch]
   )
 
   const handleSmartLinearIssueSelect = useCallback(
@@ -2604,6 +2696,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setCompareBaseRef(undefined)
     setPushTarget(undefined)
     setBranchNameOverride(undefined)
+    setBranchNameOverridePreservesNameEdits(false)
+    setReuseEligibleBranch(null)
+    setReuseSelectedBranch(false)
     setForkPushWarning(null)
     branchAutoNameRef.current = ''
     setStartFromResetHint(null)
@@ -3528,6 +3623,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     smartNameGitHubSourceContext: selectedRepoGitHubSourceContext,
     smartNameSelection,
     onClearSmartNameSelection: handleClearSmartNameSelection,
+    canReuseSelectedBranch:
+      !isProjectGroupTarget &&
+      reuseEligibleBranch !== null &&
+      smartNameSelection?.kind === 'branch',
+    reuseSelectedBranch,
+    onReuseSelectedBranchChange: handleReuseSelectedBranchChange,
     agentPrompt,
     onAgentPromptChange: setAgentPrompt,
     linkedOnlyTemplatePreview: shouldApplyLinkedOnlyTemplate ? linkedOnlyTemplatePrompt : null,

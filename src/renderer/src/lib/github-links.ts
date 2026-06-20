@@ -1,3 +1,5 @@
+import { isWorkItemLinkQueryTooLarge } from './work-item-link-query-bounds'
+
 const GH_ITEM_PATH_RE = /^\/([^/]+)\/([^/]+)\/(issues|pull)\/(\d+)(?:\/.*)?$/i
 
 export type RepoSlug = {
@@ -8,6 +10,7 @@ export type RepoSlug = {
 export type GitHubLinkQuery = {
   query: string
   directNumber: number | null
+  tooLarge?: boolean
 }
 
 export function buildGitHubRepoUrl(slug: RepoSlug | null | undefined): string | null {
@@ -97,6 +100,9 @@ export function parseGitHubIssueOrPRLink(input: string): {
  * URLs resolve to a usable query + direct-number lookup.
  */
 export function normalizeGitHubLinkQuery(raw: string): GitHubLinkQuery {
+  if (isWorkItemLinkQueryTooLarge(raw)) {
+    return { query: '', directNumber: null, tooLarge: true }
+  }
   const trimmed = raw.trim()
   if (!trimmed) {
     return { query: '', directNumber: null }

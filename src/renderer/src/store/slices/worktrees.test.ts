@@ -130,12 +130,14 @@ function createTestStore() {
         showDotfilesByWorktree: {},
         expandedDirs: {},
         gitStatusByWorktree: {},
+        gitStatusHeadByWorktree: {},
         gitIgnoredPathsByWorktree: {},
         gitConflictOperationByWorktree: {},
         trackedConflictPathsByWorktree: {},
         gitBranchChangesByWorktree: {},
         gitBranchCompareSummaryByWorktree: {},
         gitBranchCompareRequestKeyByWorktree: {},
+        gitBranchCompareRequestStatusHeadByWorktree: {},
         activeFileIdByWorktree: {},
         activeBrowserTabIdByWorktree: {},
         browserTabsByWorktree: {},
@@ -1057,6 +1059,23 @@ describe('worktree lineage state', () => {
     expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
   })
 
+  it('refetches lineage and rethrows when explicit parent assignment fails', async () => {
+    const store = createTestStore()
+    const lineage = makeLineage()
+    mockApi.worktrees.updateLineage.mockRejectedValueOnce(new Error('stale parent'))
+    mockApi.worktrees.listLineage.mockResolvedValue({ [lineage.worktreeId]: lineage })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await expect(
+      store.getState().assignWorktreeParent(lineage.worktreeId, {
+        parentWorktreeId: lineage.parentWorktreeId
+      })
+    ).rejects.toThrow('stale parent')
+
+    expect(mockApi.worktrees.listLineage).toHaveBeenCalled()
+    expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
+  })
+
   it('fetches raw lineage from the active remote runtime environment', async () => {
     const store = createTestStore()
     const lineage = makeLineage()
@@ -1121,6 +1140,174 @@ describe('worktree lineage state', () => {
     expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
     expect(store.getState().worktreesByRepo.repo1?.[0]).toEqual(updatedChild)
     expect(store.getState().sortEpoch).toBe(4)
+  })
+
+  it('assigns a parent through the active remote runtime environment and rethrows failures', async () => {
+    const store = createTestStore()
+    const lineage = makeLineage()
+    const child = makeWorktree({
+      id: lineage.worktreeId,
+      repoId: 'repo1',
+      path: '/remote/child'
+    })
+    const updatedChild = { ...child, lineage }
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-assign-parent',
+      ok: true,
+      result: { worktree: updatedChild },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [child] },
+      sortEpoch: 3
+    } as Partial<AppState>)
+
+    await store.getState().assignWorktreeParent(lineage.worktreeId, {
+      parentWorktreeId: lineage.parentWorktreeId
+    })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'worktree.set',
+      params: {
+        worktree: `id:${lineage.worktreeId}`,
+        parentWorktree: `id:${lineage.parentWorktreeId}`
+      },
+      timeoutMs: 15_000
+    })
+    expect(mockApi.worktrees.updateLineage).not.toHaveBeenCalled()
+    expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
+    expect(store.getState().worktreesByRepo.repo1?.[0]).toEqual(updatedChild)
+    expect(store.getState().sortEpoch).toBe(4)
+
+    runtimeEnvironmentCall
+      .mockRejectedValueOnce(new Error('remote lineage failed'))
+      .mockResolvedValueOnce({
+        id: 'rpc-lineage-refresh',
+        ok: true,
+        result: { lineage: {} },
+        _meta: { runtimeId: 'runtime-remote' }
+      })
+    await expect(
+      store.getState().assignWorktreeParent(lineage.worktreeId, {
+        parentWorktreeId: lineage.parentWorktreeId
+      })
+    ).rejects.toThrow('remote lineage failed')
+  })
+
+  it('assigns a parent through the worktree owner runtime when host-stamped', async () => {
+    const store = createTestStore()
+    const lineage = makeLineage()
+    const child = makeWorktree({
+      id: lineage.worktreeId,
+      repoId: 'repo1',
+      path: '/remote/child',
+      hostId: 'runtime:owner-env'
+    })
+    const updatedChild = { ...child, lineage }
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-owner-runtime-assign-parent',
+      ok: true,
+      result: { worktree: updatedChild },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,
+      worktreesByRepo: { repo1: [child] }
+    } as Partial<AppState>)
+
+    await store.getState().assignWorktreeParent(lineage.worktreeId, {
+      parentWorktreeId: lineage.parentWorktreeId
+    })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'owner-env',
+      method: 'worktree.set',
+      params: {
+        worktree: `id:${lineage.worktreeId}`,
+        parentWorktree: `id:${lineage.parentWorktreeId}`
+      },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('refreshes assignment failures through the worktree owner runtime when host-stamped', async () => {
+    const store = createTestStore()
+    const lineage = makeLineage()
+    const child = makeWorktree({
+      id: lineage.worktreeId,
+      repoId: 'repo1',
+      path: '/remote/child',
+      hostId: 'runtime:owner-env'
+    })
+    runtimeEnvironmentCall
+      .mockRejectedValueOnce(new Error('owner assignment failed'))
+      .mockResolvedValueOnce({
+        id: 'rpc-owner-runtime-lineage-refresh',
+        ok: true,
+        result: { lineage: { [lineage.worktreeId]: lineage } },
+        _meta: { runtimeId: 'runtime-remote' }
+      })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,
+      worktreesByRepo: { repo1: [child] }
+    } as Partial<AppState>)
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await expect(
+      store.getState().assignWorktreeParent(lineage.worktreeId, {
+        parentWorktreeId: lineage.parentWorktreeId
+      })
+    ).rejects.toThrow('owner assignment failed')
+
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
+      selector: 'owner-env',
+      method: 'worktree.lineageList',
+      params: undefined,
+      timeoutMs: 15_000
+    })
+    expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
+  })
+
+  it('removes stale owner-runtime lineage when host-stamped worktrees refresh empty', async () => {
+    const store = createTestStore()
+    const staleLineage = makeLineage()
+    const staleWorkspaceLineage = makeWorkspaceLineage({
+      childWorkspaceKey: worktreeWorkspaceKey(staleLineage.worktreeId)
+    })
+    const child = makeWorktree({
+      id: staleLineage.worktreeId,
+      repoId: 'repo1',
+      path: '/remote/child',
+      hostId: 'runtime:owner-env'
+    })
+    runtimeEnvironmentCall
+      .mockRejectedValueOnce(new Error('owner assignment failed'))
+      .mockResolvedValueOnce({
+        id: 'rpc-owner-runtime-lineage-refresh',
+        ok: true,
+        result: { lineage: {}, workspaceLineage: {} },
+        _meta: { runtimeId: 'runtime-remote' }
+      })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,
+      worktreesByRepo: { repo1: [child] },
+      worktreeLineageById: { [staleLineage.worktreeId]: staleLineage },
+      workspaceLineageByChildKey: {
+        [staleWorkspaceLineage.childWorkspaceKey]: staleWorkspaceLineage
+      }
+    } as Partial<AppState>)
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await expect(
+      store.getState().assignWorktreeParent(staleLineage.worktreeId, {
+        parentWorktreeId: staleLineage.parentWorktreeId
+      })
+    ).rejects.toThrow('owner assignment failed')
+
+    expect(store.getState().worktreeLineageById).toEqual({})
+    expect(store.getState().workspaceLineageByChildKey).toEqual({})
   })
 
   it('clears lineage through the active remote runtime environment', async () => {
@@ -2114,6 +2301,10 @@ describe('removeWorktree state cleanup', () => {
         'repo1::/path/wt1': [{ path: 'a.ts' }],
         'repo1::/path/wt2': [{ path: 'b.ts' }]
       },
+      gitStatusHeadByWorktree: {
+        'repo1::/path/wt1': 'head-1',
+        'repo1::/path/wt2': 'head-2'
+      },
       gitIgnoredPathsByWorktree: {
         'repo1::/path/wt1': ['dist/'],
         'repo1::/path/wt2': ['coverage/']
@@ -2137,6 +2328,10 @@ describe('removeWorktree state cleanup', () => {
       gitBranchCompareRequestKeyByWorktree: {
         'repo1::/path/wt1': 'req-1',
         'repo1::/path/wt2': 'req-2'
+      },
+      gitBranchCompareRequestStatusHeadByWorktree: {
+        'repo1::/path/wt1': 'head-1',
+        'repo1::/path/wt2': 'head-2'
       }
     } as unknown as Partial<AppState>)
 
@@ -2144,6 +2339,9 @@ describe('removeWorktree state cleanup', () => {
 
     expect(store.getState().gitStatusByWorktree).toEqual({
       'repo1::/path/wt2': [{ path: 'b.ts' }]
+    })
+    expect(store.getState().gitStatusHeadByWorktree).toEqual({
+      'repo1::/path/wt2': 'head-2'
     })
     expect(store.getState().gitIgnoredPathsByWorktree).toEqual({
       'repo1::/path/wt2': ['coverage/']
@@ -2162,6 +2360,9 @@ describe('removeWorktree state cleanup', () => {
     })
     expect(store.getState().gitBranchCompareRequestKeyByWorktree).toEqual({
       'repo1::/path/wt2': 'req-2'
+    })
+    expect(store.getState().gitBranchCompareRequestStatusHeadByWorktree).toEqual({
+      'repo1::/path/wt2': 'head-2'
     })
   })
 
@@ -3671,6 +3872,14 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
         'repoA::/a/wt1': ['dist/'],
         'repoA::/a/wt2': ['coverage/']
       },
+      gitStatusHeadByWorktree: {
+        'repoA::/a/wt1': 'head-1',
+        'repoA::/a/wt2': 'head-2'
+      },
+      gitBranchCompareRequestStatusHeadByWorktree: {
+        'repoA::/a/wt1': 'head-1',
+        'repoA::/a/wt2': 'head-2'
+      },
       rightSidebarTabByWorktree: {
         'repoA::/a/wt1': 'search' as never,
         'repoA::/a/wt2': 'checks'
@@ -3700,6 +3909,10 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
     expect(s.openFiles).toEqual([])
     expect(s.editorDrafts).toEqual({ 'file-99': 'other' })
     expect(s.markdownFrontmatterVisible).toEqual({ 'file-99': true })
+    expect(s.gitStatusHeadByWorktree).toEqual({ 'repoA::/a/wt2': 'head-2' })
+    expect(s.gitBranchCompareRequestStatusHeadByWorktree).toEqual({
+      'repoA::/a/wt2': 'head-2'
+    })
     expect(s.gitIgnoredPathsByWorktree).toEqual({ 'repoA::/a/wt2': ['coverage/'] })
     expect(s.rightSidebarTabByWorktree).toEqual({ 'repoA::/a/wt2': 'checks' })
     expect(s.activeWorktreeId).toBeNull()
@@ -4091,6 +4304,8 @@ describe('migrateWorktreeIdentity', () => {
       unifiedTabsByWorktree: { [OLD]: [{ id: 'unified1', worktreeId: OLD }] },
       groupsByWorktree: { [OLD]: [{ id: 'group1', worktreeId: OLD }] },
       gitStatusByWorktree: { [OLD]: [{ path: 'a.ts' }] },
+      gitStatusHeadByWorktree: { [OLD]: 'head-old' },
+      gitBranchCompareRequestStatusHeadByWorktree: { [OLD]: 'head-old' },
       lastVisitedAtByWorktreeId: { [OLD]: 123 },
       defaultTerminalTabsAppliedByWorktreeId: { [OLD]: true },
       recentlyClosedEditorTabsByWorktree: { [OLD]: [{ id: 'f1', worktreeId: OLD }] },
@@ -4132,6 +4347,8 @@ describe('migrateWorktreeIdentity', () => {
     expect(s.unifiedTabsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
     expect(s.groupsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
     expect(s.gitStatusByWorktree[NEW]).toEqual([{ path: 'a.ts' }])
+    expect(s.gitStatusHeadByWorktree[NEW]).toBe('head-old')
+    expect(s.gitBranchCompareRequestStatusHeadByWorktree[NEW]).toBe('head-old')
     expect(s.rightSidebarExplorerViewByWorktree[OLD]).toBeUndefined()
     expect(s.rightSidebarExplorerViewByWorktree[NEW]).toBe('search')
     expect(s.lastVisitedAtByWorktreeId[NEW]).toBe(123)

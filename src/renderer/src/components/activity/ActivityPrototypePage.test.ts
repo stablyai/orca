@@ -10,13 +10,15 @@ import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import {
+  ACTIVITY_SEARCH_QUERY_MAX_BYTES,
   activityThreadResponseRenderPreview,
   activityThreadMatchesSearchQuery,
   buildActivityThreadGroups,
   buildActivityEvents,
   buildAgentPaneThreads,
   getActivityThreadGroup,
-  groupActivityThreadsByStatus
+  groupActivityThreadsByStatus,
+  isActivitySearchQueryTooLarge
 } from './ActivityPrototypePage'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
@@ -395,6 +397,32 @@ describe('buildActivityEvents', () => {
         searchQuery: 'searchable tail'
       })
     ).toBe(true)
+  })
+
+  it('rejects oversized pasted searches before building thread search text', () => {
+    const oversizedQuery = 'secret-activity-search'.repeat(ACTIVITY_SEARCH_QUERY_MAX_BYTES)
+    const thread = {
+      get paneTitle(): string {
+        throw new Error('oversized activity searches must not scan thread text')
+      }
+    } as Parameters<typeof activityThreadMatchesSearchQuery>[0]['thread']
+
+    expect(isActivitySearchQueryTooLarge(oversizedQuery)).toBe(true)
+    expect(
+      activityThreadMatchesSearchQuery({
+        thread,
+        searchQuery: oversizedQuery
+      })
+    ).toBe(false)
+  })
+
+  it('rejects oversized whitespace before trimming activity searches', () => {
+    expect(
+      activityThreadMatchesSearchQuery({
+        thread: makeThreads(makeActivityResult({}))[0],
+        searchQuery: ' '.repeat(ACTIVITY_SEARCH_QUERY_MAX_BYTES + 1)
+      })
+    ).toBe(false)
   })
 
   it('does not leave a lone surrogate when capping the rendered response preview', () => {

@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
-import { Check, Download } from 'lucide-react-native'
+import { Check, Download, Trash2 } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import {
   isModelInFlight,
@@ -11,9 +11,10 @@ type Props = {
   setup: MobileSpeechSetup
   // Disabled mirrors desktop: the model list greys out when dictation is off.
   disabled: boolean
-  busyModelId: string | null
+  busyAction: { modelId: string; type: 'download' | 'select' | 'delete' } | null
   onUseModel: (model: MobileSpeechModel) => void
   onDownload: (model: MobileSpeechModel) => void
+  onDelete: (model: MobileSpeechModel) => void
 }
 
 function formatSize(bytes: number | null): string {
@@ -38,27 +39,34 @@ function modelMeta(model: MobileSpeechModel): string {
 }
 
 // Renders the speech-model rows shared between the setup sheet and the Voice
-// settings page: size/progress, recommended badge, selected check, download.
+// settings page: size/progress, recommended badge, selected check, download, delete.
 export function VoiceModelList({
   setup,
   disabled,
-  busyModelId,
+  busyAction,
   onUseModel,
-  onDownload
+  onDownload,
+  onDelete
 }: Props): React.JSX.Element {
   return (
     <View style={disabled ? styles.disabled : undefined} pointerEvents={disabled ? 'none' : 'auto'}>
       {setup.models.map((model, idx) => {
+        const anyBusy = busyAction !== null
         const isSelected = model.id === setup.selectedModelId
         const inFlight = isModelInFlight(model)
-        const rowBusy = busyModelId === model.id
+        const rowBusy = busyAction?.modelId === model.id
+        const selectBusy = rowBusy && busyAction?.type === 'select'
+        const downloadBusy = rowBusy && busyAction?.type === 'download'
+        const deleteBusy = rowBusy && busyAction?.type === 'delete'
         return (
           <View key={model.id}>
             {idx > 0 && <View style={styles.separator} />}
             <View style={styles.modelRow}>
               <View style={styles.modelInfo}>
                 <View style={styles.modelTitleRow}>
-                  <Text style={styles.modelLabel}>{model.label}</Text>
+                  <Text style={styles.modelLabel} numberOfLines={1}>
+                    {model.label}
+                  </Text>
                   {model.recommended ? <Text style={styles.recommended}>Recommended</Text> : null}
                 </View>
                 <Text style={styles.modelMeta}>{modelMeta(model)}</Text>
@@ -68,30 +76,51 @@ export function VoiceModelList({
                   {model.status === 'ready' ? 'API key set' : 'Set up on desktop'}
                 </Text>
               ) : model.status === 'ready' ? (
-                isSelected ? (
-                  <View style={styles.selectedTag}>
-                    <Check size={14} color={colors.statusGreen} strokeWidth={2.4} />
-                    <Text style={styles.selectedText}>In use</Text>
-                  </View>
-                ) : (
+                <View style={styles.readyActions}>
+                  {isSelected ? (
+                    <View style={styles.selectedTag}>
+                      <Check size={14} color={colors.statusGreen} strokeWidth={2.4} />
+                      <Text style={styles.selectedText}>In use</Text>
+                    </View>
+                  ) : (
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.actionButton,
+                        pressed && styles.actionPressed
+                      ]}
+                      disabled={anyBusy}
+                      onPress={() => onUseModel(model)}
+                    >
+                      {selectBusy ? (
+                        <ActivityIndicator size="small" color={colors.textSecondary} />
+                      ) : (
+                        <Text style={styles.actionText}>Use</Text>
+                      )}
+                    </Pressable>
+                  )}
                   <Pressable
-                    style={({ pressed }) => [styles.actionButton, pressed && styles.actionPressed]}
-                    disabled={rowBusy}
-                    onPress={() => onUseModel(model)}
+                    style={({ pressed }) => [styles.iconButton, pressed && styles.actionPressed]}
+                    disabled={anyBusy}
+                    onPress={() => onDelete(model)}
+                    accessibilityLabel={'Delete ' + model.label}
                   >
-                    <Text style={styles.actionText}>Use</Text>
+                    {deleteBusy ? (
+                      <ActivityIndicator size="small" color={colors.statusRed} />
+                    ) : (
+                      <Trash2 size={18} color={colors.statusRed} strokeWidth={2.2} />
+                    )}
                   </Pressable>
-                )
+                </View>
               ) : inFlight ? (
                 <ActivityIndicator size="small" color={colors.textSecondary} />
               ) : (
                 <Pressable
                   style={({ pressed }) => [styles.iconButton, pressed && styles.actionPressed]}
-                  disabled={rowBusy}
+                  disabled={anyBusy}
                   onPress={() => onDownload(model)}
                   accessibilityLabel={'Download ' + model.label}
                 >
-                  {rowBusy ? (
+                  {downloadBusy ? (
                     <ActivityIndicator size="small" color={colors.textSecondary} />
                   ) : (
                     <Download size={18} color={colors.textSecondary} strokeWidth={2.2} />
@@ -118,7 +147,12 @@ const styles = StyleSheet.create({
   },
   modelInfo: { flex: 1, minWidth: 0 },
   modelTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  modelLabel: { color: colors.textPrimary, fontSize: typography.bodySize, fontWeight: '500' },
+  modelLabel: {
+    color: colors.textPrimary,
+    fontSize: typography.bodySize,
+    fontWeight: '500',
+    flexShrink: 1
+  },
   recommended: { color: colors.statusGreen, fontSize: 10, fontWeight: '700' },
   modelMeta: { color: colors.textMuted, fontSize: typography.metaSize, marginTop: 2 },
   modelStateText: { color: colors.textMuted, fontSize: typography.metaSize },
@@ -141,6 +175,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.bgRaised
   },
+  readyActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   selectedTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   selectedText: { color: colors.statusGreen, fontSize: typography.metaSize, fontWeight: '600' },
   separator: {

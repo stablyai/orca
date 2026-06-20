@@ -305,6 +305,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'speech.dictation.finish',
   'speech.dictation.setup',
   'speech.dictation.start',
+  'speech.models.delete',
   'speech.models.download',
   'speech.models.list',
   'stats.summary',

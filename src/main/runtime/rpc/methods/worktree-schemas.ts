@@ -143,13 +143,13 @@ export const WorktreeCreate = z
     if ((params.parentWorkspace || params.parentWorktree) && params.noParent === true) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Choose either a parent workspace flag or --no-parent, not both.'
+        message: 'Choose either one parent selector or --no-parent.'
       })
     }
     if (params.parentWorkspace && params.parentWorktree) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Choose either --parent-workspace or --parent-worktree, not both.'
+        message: 'Choose either one parent selector or --no-parent.'
       })
     }
     if (params.startupPrompt !== undefined && params.startupAgent === undefined) {

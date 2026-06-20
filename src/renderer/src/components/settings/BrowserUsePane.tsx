@@ -3,7 +3,8 @@ import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import {
   ORCA_CLI_SKILL_INSTALL_COMMAND,
-  ORCA_CLI_SKILL_NAME
+  ORCA_CLI_SKILL_NAME,
+  ORCA_CLI_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
@@ -30,7 +31,7 @@ import { BrowserUseSkillStep } from './BrowserUseSkillStep'
 import { BrowserUseCliStep } from './BrowserUseCliStep'
 import { BrowserUseCookieImportStep } from './BrowserUseCookieImportStep'
 import {
-  buildSkillInstallCommandForRuntime,
+  buildSkillCommandForRuntime,
   ensureWslCliAvailableForAgentSkillTerminal,
   getWslCliDistroRequest
 } from './CliSkillRuntimeSetup'
@@ -57,11 +58,12 @@ export function BrowserUseSetup({
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const browserUseInstallCommand =
     activeSkillRuntime.agentRuntime && !activeSkillRuntime.installDisabledReason
-      ? buildSkillInstallCommandForRuntime(
-          ORCA_CLI_SKILL_INSTALL_COMMAND,
-          activeSkillRuntime.agentRuntime
-        )
+      ? buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND, activeSkillRuntime.agentRuntime)
       : ORCA_CLI_SKILL_INSTALL_COMMAND
+  const browserUseUpdateCommand =
+    activeSkillRuntime.agentRuntime && !activeSkillRuntime.installDisabledReason
+      ? buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND, activeSkillRuntime.agentRuntime)
+      : ORCA_CLI_SKILL_UPDATE_COMMAND
 
   const handleCliStatusChange = useCallback(
     (nextStatus: CliInstallStatus | null): void => {
@@ -275,6 +277,7 @@ export function BrowserUseSetup({
         >
           <BrowserUseSkillStep
             command={browserUseInstallCommand}
+            installedCommand={browserUseUpdateCommand}
             skillDetected={skillDetected}
             skillLoading={skillLoading}
             skillError={activeSkillRuntime.installDisabledReason ?? skillError}

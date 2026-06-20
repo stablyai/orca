@@ -6,6 +6,7 @@ import {
   parseMessageGraphSessionFile,
   parseRovoSessionFile
 } from './session-scanner-graph-parsers'
+import { parseKimiSessionFile } from './session-scanner-kimi-parser'
 import {
   parseClaudeSessionFile,
   parseCodexSessionFile,
@@ -50,5 +51,7 @@ export async function parseAgentSessionFile(
       return parseDroidSessionFile(candidate.file, platform)
     case 'devin':
       return parseDevinSessionFile(candidate.file, platform)
+    case 'kimi':
+      return parseKimiSessionFile(candidate.file, platform)
   }
 }

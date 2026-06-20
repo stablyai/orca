@@ -58,6 +58,13 @@
     "window": "ウィンドウ",
     "help": "ヘルプ"
   },
+  "tray": {
+    "openOrca": "Orcaを開く",
+    "quit": "終了",
+    "minimizeNotice": {
+      "body": "Orcaはシステムトレイで実行中です"
+    }
+  },
   "worktreeJumpPalette": {
     "matchLabel": {
       "comment": "コメント",
@@ -523,7 +530,11 @@
       "useGlobalFileDrop": {
         "38c9f034ff": "ドロップされたファイルのアップロードに失敗しました。",
         "d720e2f855": "ドロップされた一部のファイルはアップロードできませんでした。",
-        "245faa95b9": "ドロップされたファイルに使用できるリモート ワークスペース パスがありません。"
+        "245faa95b9": "ドロップされたファイルに使用できるリモート ワークスペース パスがありません。",
+        "nativeDropTooManyPathsDescription": "Drop {{value0}} or fewer files at a time.",
+        "nativeDropTooManyPaths": "Drop contains too many files.",
+        "nativeDropPathsTooLargeDescription": "Drop fewer files or use a shorter path list.",
+        "nativeDropPathsTooLarge": "Drop path list is too large."
       },
       "useIpcEvents": {
         "0e3cf53060": "ブラウザタブ {{value0}} が見つかりません",
@@ -602,6 +613,12 @@
         "f70ac54d38": "AI プロバイダー アカウント",
         "4121f7a0a2": "AI agents を管理し、デフォルトを設定し、コマンドをカスタマイズします。",
         "b49abbd2f7": "Agents"
+      },
+      "useAppMenuPaste": {
+        "pasteTooLarge": "Paste is too large."
+      },
+      "useLargeTextControlPaste": {
+        "pasteTooLarge": "Paste is too large."
       }
     },
     "components": {
@@ -794,7 +811,8 @@
         "16c1abe76c": "閲覧済みとしてマークする",
         "ba8e329d92": "閲覧済みのマークを外す",
         "3f79ffc8b7": "PR の詳細を開いて、現在のレビュアーを表示します。",
-        "5c1c973855": "レビュアーを削除"
+        "5c1c973855": "レビュアーを削除",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "GitLabItemDialog": {
         "65e784c1f1": "再度開く",
@@ -858,7 +876,8 @@
         "40c56b95e2": "{{value0}} 承認{{value1}} 残り",
         "3a051b8ade": "作業項目",
         "32f8bef818": "ログは出力されません。",
-        "4168eb2c51": "解決"
+        "4168eb2c51": "解決",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "JiraIssueWorkspace": {
         "b0b92666c9": "コメント",
@@ -892,7 +911,8 @@
         "54649eaeab": "+ 担当者",
         "2a829a2f00": "優先度",
         "693be070d0": "遷移",
-        "ef21405c6d": "Jira Issue"
+        "ef21405c6d": "Jira Issue",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "Landing": {
         "76a95f7f47": "作成",
@@ -1014,7 +1034,8 @@
         "858d0630da": "プレビューを閉じる",
         "39883467f4": "Linear Issue",
         "fda549766e": "コメントするには{{value0}}",
-        "d71cd3003e": "+ 担当者"
+        "d71cd3003e": "+ 担当者",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "NewWorkspaceComposerCard": {
         "cbb47ee0dc": "ローカル Git プロジェクトでのみ使用できます。",
@@ -1069,7 +1090,10 @@
         "setupKindFolder": "Folder",
         "setupHostExistingFolderHelp": "Link a checkout that already exists there, then create this workspace on that host.",
         "importingHostSetup": "Importing...",
-        "importHostSetup": "インポート"
+        "importHostSetup": "インポート",
+        "notePasteTooLarge": "Paste is too large for the note field.",
+        "reuseExistingBranch": "Reuse branch",
+        "reuseExistingBranchHint": "Check out the existing branch instead of creating a new one from it."
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "ワークスペースを作成する前に、プロジェクト、ワークスペース名、および agent を選択します。"
@@ -1238,7 +1262,8 @@
         "50b8fb290f": "閲覧済みとしてマークする",
         "2b4fdb880c": "閲覧済みのマークを外す",
         "56ec6eafb7": "PR の詳細を開いて、現在のレビュアーを表示します。",
-        "7f964a365a": "レビュアーを削除"
+        "7f964a365a": "レビュアーを削除",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "QuickOpen": {
         "1dbd3f59ff": "移動",
@@ -1650,7 +1675,7 @@
         "1628fd7dfa": "アクティブなワークツリー、設定、操作、または開いているタブがありません",
         "b781ae05e3": "入力してワークツリー、設定、タブ、操作を検索します。",
         "f60f8730be": "他に切り替えるワークツリーがない",
-        "c4afa68159": "ワークツリー、設定、操作、ページ タイトル、エミュレータ、URL、PR、またはポートを試す。",
+        "c4afa68159": "ワークツリー、設定、操作、タブタイトル、エージェントプロンプト、URL、PR、またはポートを試してください。",
         "dbd9d87eec": "検索に一致する結果はありません",
         "2c38630a01": "ワークスペースはもう存在しません",
         "7726ce9970": "「モバイルエミュレータ」タブは存在しません",
@@ -1667,7 +1692,8 @@
         "recentWorktreesHeader": "最近のワークツリー",
         "settingsBadge": "設定",
         "actionBadge": "操作",
-        "paletteHostBadge": "Host: {{value0}}"
+        "paletteHostBadge": "Host: {{value0}}",
+        "workspaceTabMissing": "タブはもう存在しません"
       },
       "github": {
         "pr": {
@@ -1826,7 +1852,8 @@
                 "c3e829b4d9": "保存",
                 "463d030ae4": "削除",
                 "8564f58542": "編集",
-                "5f104bf855": "コメントはまだありません。"
+                "5f104bf855": "コメントはまだありません。",
+                "commentTooLarge": "Comment is too large to submit safely."
               },
               "LabelsEditor": {
                 "34dd57d6c8": "読み込み中…",
@@ -1854,7 +1881,8 @@
           "b7e4a1c902": "Paste, drop, or click to add files",
           "8f1c2d4e6a": "Nothing to preview",
           "c91f0a2b14": "Write",
-          "d82b1e3f05": "Preview"
+          "d82b1e3f05": "Preview",
+          "imageUrlTooLarge": "Image URL is too large."
         },
         "IssueSourceSelector": {
           "d6aeb2012b": "からの Issue を表示しています",
@@ -1944,7 +1972,8 @@
           "f6a7b8c9d0": "Close issue",
           "b1c2d3e4f5": "Reopen issue",
           "0a73f59e85": "Send comment",
-          "bf43425540": "コメント"
+          "bf43425540": "コメント",
+          "commentTooLarge": "Comment is too large to submit safely."
         },
         "GitHubWorkItemAssigneePopoverContent": {
           "cddd9b04a7": "Loading assignees",
@@ -2274,6 +2303,7 @@
           "TerminalContextMenu": {
             "b4cdd9314e": "クリアスクリーン",
             "8c17d6786d": "ペインを閉じる",
+            "copyTerminalId": "Terminal ID をコピー",
             "2cf85a6a55": "ペインIDのコピー",
             "39809d152f": "タイトルを設定…",
             "06c2b0f043": "ペインのサイズを均等化する",
@@ -2288,7 +2318,8 @@
             "f3eeb1de13": "コピー",
             "c2f0b72b8d": "入れる",
             "925f49f210": "ペインを展開する",
-            "df766809e0": "ペインを折りたたむ"
+            "df766809e0": "ペインを折りたたむ",
+            "copyTerminalId": "Copy Terminal ID"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "デーモンを再起動します",
@@ -2348,7 +2379,12 @@
                 "53f015fd85": "{{value0}} シンボリックリンク{{value1}} をスキップしました。",
                 "29c031b49a": "{{value0}} ファイル{{value1}} をランタイムにアップロードしています…",
                 "0c77693641": "ワークツリーの準備ができていません - しばらくしてからもう一度お試しください。",
-                "ce8248b835": "ワークツリーのパスが使用できません。"
+                "ce8248b835": "ワークツリーのパスが使用できません。",
+                "internalTooManyPaths": "Drop contains too many paths for a safe terminal paste.",
+                "internalPathsTooLarge": "Drop path list is too large for a safe terminal paste.",
+                "b4cf68e889": "Skipped {{value0}} {{value1}}.",
+                "writeTimeout": "File drop cancelled: terminal did not accept the path before the safety timeout.",
+                "writeRejected": "File drop cancelled: terminal could not accept the path."
               }
             }
           },
@@ -2357,7 +2393,15 @@
               "pane": {
                 "context": {
                   "menu": {
-                    "a29b9faa01": "ペイン ID がコピーされました"
+                    "a29b9faa01": "ペイン ID がコピーされました",
+                    "terminal": {
+                      "id": {
+                        "copied": "Terminal ID をコピーしました",
+                        "copy": {
+                          "failed": "Terminal ID をコピーできません"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -2523,7 +2567,8 @@
                   "097a982ee0": "ファイルをロード中...",
                   "5a9c83c04b": "任意のファイル、URL、agent などを開きます...",
                   "90eb94dc48": "http:// または https:// URL を入力します。",
-                  "5553b283ce": "URL またはファイル パスを入力します。"
+                  "5553b283ce": "URL またはファイル パスを入力します。",
+                  "queryTooLarge": "Search text is too large."
                 }
               },
               "menu": {
@@ -2664,13 +2709,11 @@
             "runtime_checking": "確認中",
             "runtime_online": "接続済み",
             "runtime_unavailable": "Disconnected",
-            "runtime_available": "Available",
             "runtime_connect_unavailable": "Remote host is not reachable",
             "runtime_disconnect_failed": "Disconnect failed",
             "runtime_reconnecting": "Reconnecting",
             "runtime_last_close_reason": "Closed: {{value0}}",
-            "runtime_reconnect_attempt": "Attempt {{value0}}",
-            "runtime_channel_counts": "{{value0}} pending · {{value1}} streams"
+            "runtime_reconnect_attempt": "Attempt {{value0}}"
           },
           "StatusBar": {
             "9659e38343": "ポート",
@@ -3441,7 +3484,8 @@
           "f8b1deb1a4": "キャンセル",
           "51001182e3": "空のディレクトリ",
           "971d85cc84": "リモート プロジェクトとして開きます · {{value0}}",
-          "00c4235c10": "「{{value0}}」に一致するものはありません"
+          "00c4235c10": "「{{value0}}」に一致するものはありません",
+          "largeInputNoMatches": "No matches for this long input"
         },
         "RemoveFolderDialog": {
           "4dc5b5065b": "削除",
@@ -3710,7 +3754,10 @@
           "93aebe4529": "フォルダ",
           "0d224eff10": "プライマリワークツリー",
           "ca74db7550": "SSH 経由のリモートプロジェクト",
-          "021538e1d1": "SSH が切断されました"
+          "021538e1d1": "SSH が切断されました",
+          "runtimeHostDisconnected": "Server disconnected",
+          "runtimeHostProject": "Project on Orca server",
+          "automationCreated": "Created by automation"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -3772,7 +3819,7 @@
           "e091caab15": "プロジェクトが見つかりませんでした",
           "439fa94d53": "アップデート",
           "579b1a8e61": "親から削除",
-          "8d9cd19d09": "親ワークスペースを開く",
+          "8d9cd19d09": "親ワークツリーを開く",
           "d35dfeae58": "グループから削除",
           "76865d827f": "グループに移動",
           "503ec0f8e6": "プロジェクトからの新規グループ",
@@ -3788,7 +3835,9 @@
           "8dacff1fe0": "既読マークを付ける",
           "3baa7d6507": "ピン",
           "697d0f6e1b": "固定を解除する",
-          "250de158fd": "Remove Workspace"
+          "250de158fd": "Remove Workspace",
+          "changeParentWorkspace": "親ワークツリーを変更...",
+          "setParentWorkspace": "親ワークツリーを設定..."
         },
         "WorktreeList": {
           "d880ea0744": "グループを作成し、このプロジェクトをそのグループに移動します。",
@@ -3829,7 +3878,8 @@
           "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
           "7a8b9c0d1e": "Update required",
           "hostAuthNeeded": "Authentication needed",
-          "hostDisconnected": "Disconnected"
+          "hostDisconnected": "Disconnected",
+          "failedNestWorkspace": "ワークスペースをネストできませんでした"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "キャンセル",
@@ -4171,6 +4221,12 @@
           "c7d8e9f0a1": "{{value0}} 件更新",
           "d8e9f0a1b2": "{{value0}} 件スキップ",
           "e9f0a1b2c3": "{{value0}} 件失敗"
+        },
+        "WorktreeParentPickerPopover": {
+          "failedSetParent": "親ワークツリーを設定できませんでした",
+          "current": "現在",
+          "searchPlaceholder": "ワークツリーを検索...",
+          "empty": "一致する対象ワークツリーがありません。"
         }
       },
       "shared": {
@@ -4307,15 +4363,19 @@
           "f97b986b7f": "wsl"
         },
         "AgentSkillSetupPanel": {
-          "0b810ec59f": "Enter を押してインストール コマンドを実行します。",
+          "0b810ec59f": "Press Enter to run the command.",
           "ed197f59a2": "コピーコマンド",
-          "817d3f9f18": "インストールコマンドのコピー",
+          "817d3f9f18": "Copy command",
           "5289300939": "未インストール",
           "9fcebceb2a": "インストール済み",
           "68a468752e": "確認中...",
           "c689392435": "再確認",
-          "a31e2aa302": "インストールコマンドのコピーに失敗しました。",
-          "378ad26865": "インストールコマンドをコピーしました。"
+          "a31e2aa302": "Failed to copy command.",
+          "378ad26865": "Copied command.",
+          "copiedCommand": "Copied command.",
+          "failedToCopyCommand": "Failed to copy command.",
+          "copyCommandAria": "Copy command",
+          "runCommandDescription": "Press Enter to run the command."
         },
         "AgentsPane": {
           "d83834f5e6": "インストールされている agents を検出しています…",
@@ -4356,7 +4416,8 @@
           "agentPermissionsTooltip": "Custom agent arguments stay unchanged when switching modes.",
           "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
           "agentPermissionsYolo": "Yolo",
-          "agentPermissionsManual": "Manual"
+          "agentPermissionsManual": "Manual",
+          "3f1bdf3cb4": "Environment text is too large to parse safely."
         },
         "AppIconSelector": {
           "d5a112dc9b": "次へのアイコン",
@@ -4407,7 +4468,10 @@
             "tintOpacity": "色合いの強さ",
             "tintOpacityDescription": "サイドバーに色合いをどの程度強く混ぜるかを調整します。"
           },
-          "workspaceCardLayoutGuidance": "ワークスペースサイドバーのオプションメニュー > カードレイアウト > コンパクト を使用します。"
+          "workspaceCardLayoutGuidance": "ワークスペースサイドバーのオプションメニュー > カードレイアウト > コンパクト を使用します。",
+          "872af9556e": "システムトレイ",
+          "2edf606c46": "閉じるときにトレイへ最小化",
+          "b707773a0d": "有効にすると、ウィンドウを閉じてもOrcaは終了せず、システムトレイで実行を続けます。"
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -4721,11 +4785,11 @@
           "agentHibernation": {
             "copy": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、対応しているセッションは再度開いたときに再開します。安全モデルを調整中の実験的機能です。",
             "description": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、対応しているセッションは再度開いたときに再開します。",
-            "idleMinutesDescription": "完了したバックグラウンド agent を Orca が休止状態にできるまで待つアイドル時間（分）。",
-            "idleMinutesLabel": "休止まで",
+            "idleMinutesDescription": "完了したバックグラウンド agent を Orca がスリープ状態にできるまで待つアイドル時間（分）。",
+            "idleMinutesLabel": "スリープまで",
             "idleMinutesSuffix": "分",
-            "title": "Agent の休止",
-            "toggleLabel": "Agent の休止を切り替え"
+            "title": "Agent のスリープ",
+            "toggleLabel": "Agent のスリープを切り替え"
           },
           "newWorktreeCardStyle": {
             "copy": "更新された worktree カードのレイアウト、メタデータ配置、カード表示メニュー項目、ステータス表示をプレビューします。",
@@ -5798,19 +5862,6 @@
           "df38d612b7": "まだ追加されたプロジェクトはありません。",
           "3e483e256b": "一致するプロジェクト設定がありません。"
         },
-        "ShortcutBindingRow": {
-          "4a4c2c9d32": "ショートカットを追加",
-          "87381fd8f8": "キーを押してください…",
-          "9cdaaa3d8f": "ショートカットを無効にする",
-          "3b62c142fa": "{{value0}} を無効にする",
-          "f75335b155": "デフォルトにリセットする",
-          "4f2c9b2a05": "{{value0}} をデフォルトにリセット",
-          "97dccee14e": "修正済み",
-          "3b11ef3a43": "{{value0}} ショートカット",
-          "f6579be67b": "ショートカットを変更する",
-          "6a7848fdac": "ショートカットを記録中",
-          "a98d551407": "ショートカットを押すか、修飾キーをダブルタップしてください（例: {{value0}}）。Esc でキャンセルします。"
-        },
         "ShortcutFilterRail": {
           "28b63545bf": "状態",
           "8a1e78c14b": "ショートカットステータスフィルター",
@@ -6273,7 +6324,8 @@
           "ad5d036ecc": "マイクの許可を要求できませんでした。音声ディクテーションが有効になっていませんでした。",
           "f9a9cf6928": "音声ディクテーションを有効にする前に、マイクの許可が必要です。",
           "1eac933202": "macOS のプライバシーとセキュリティを開きました。アクセスを許可した後、ディクテーションを再度有効にします。",
-          "cd9fe37556": "マイクの許可が与えられました"
+          "cd9fe37556": "マイクの許可が与えられました",
+          "6fa734ed95": "Delete {{value0}}"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} を削除",
@@ -6567,7 +6619,9 @@
               "cardLayout": "カードレイアウト",
               "workspaceOptions": "ワークスペースオプション",
               "detailed": "詳細"
-            }
+            },
+            "9a115966d3": "閉じるときにトレイへ最小化",
+            "4d5b9427b5": "有効にすると、ウィンドウを閉じてもOrcaは終了せず、システムトレイで実行を続けます。"
           }
         },
         "auto": {
@@ -6832,11 +6886,10 @@
               "agent": "agent",
               "agents": "agents",
               "description": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、再度開いたときに対応セッションを再開します。",
-              "hibernate": "休止",
               "minutes": "分",
               "sleep": "スリープ",
               "terminal": "terminal",
-              "title": "Agent の休止"
+              "title": "Agent のスリープ"
             },
             "newWorktreeCardStyle": {
               "card": "カード",
@@ -7998,11 +8051,12 @@
           "thisDevice": "This device"
         },
         "WorkspaceDirectorySetting": {
-          "1a2b3c4d5e": "Client default",
-          "2b3c4d5e6f": "Apply to",
-          "3c4d5e6f7a": "Overrides client default",
-          "4d5e6f7a8b": "Inherits the client default",
-          "5e6f7a8b9c": "リセット"
+          "1a2b3c4d5e": "クライアントのデフォルト",
+          "2b3c4d5e6f": "適用先",
+          "3c4d5e6f7a": "クライアントのデフォルトを上書き",
+          "4d5e6f7a8b": "クライアントのデフォルトを継承",
+          "5e6f7a8b9c": "リセット",
+          "6f7a8b9cad": "相対パス（例: .orca/worktrees）を指定するとプロジェクトごとの場所になり、絶対パスを指定すると全プロジェクトで 1 つのフォルダーを共有します。"
         },
         "ProviderHostScopeControl": {
           "scope_label": "{{value0}}: {{value1}}",
@@ -8096,6 +8150,36 @@
           "d37e92a06b": "ORCA_DIAGNOSTICS_DISABLED=1 が設定されています — アプリ診断はオフです。",
           "5ebb31e1fb": "CI で実行中です — 診断はオフです。",
           "e27c8d45bf": "環境変数により診断は無効になっています。"
+        },
+        "ShortcutCommandBlock": {
+          "eb72c52c28": "Press a shortcut, or double-tap a modifier (e.g. {{value0}}). Esc cancels.",
+          "70b5d25583": "{{value0}} shortcut",
+          "287e07ddde": "Modified",
+          "3c83cd7d1c": "Disabled",
+          "07939d084e": "Reset {{value0}} to default",
+          "9b02917027": "Reset to default",
+          "a799f90f82": "Disable {{value0}}",
+          "25e6e76618": "Disable shortcut",
+          "035a822ef0": "Add shortcut",
+          "a0e2ef0e61": "Add another shortcut for {{value0}}",
+          "245c83af24": "Add another shortcut",
+          "482a60225d": "Enable {{value0}}",
+          "6287677c37": "Enable",
+          "01481b964c": "Add shortcut for {{value0}}"
+        },
+        "ShortcutRecorderButton": {
+          "1a13bb054d": "Press shortcut keys for {{value0}}. Escape cancels.",
+          "3732775d74": "Add shortcut for {{value0}}",
+          "88764af2c1": "Change shortcut for {{value0}}",
+          "30feb099d6": "Change shortcut {{value0}} of {{value1}} for {{value2}}",
+          "5d982a2a1f": "Listening for shortcut",
+          "152e0bcd64": "Add shortcut",
+          "5bd56445da": "Change shortcut",
+          "f5ed5dcbf6": "Press keys…"
+        },
+        "ShortcutRemoveButton": {
+          "9e29aff18b": "Remove {{value0}} shortcut {{value1}}",
+          "2a9588b1c2": "Remove this binding"
         }
       },
       "right": {
@@ -8355,6 +8439,9 @@
           "SearchResultItems": {
             "cc06595a3b": "ラインパスのコピー",
             "3596b9668d": "パスのコピー"
+          },
+          "SourceControlEntryContextMenu": {
+            "a1f2c8d901": "表示"
           },
           "SourceControl": {
             "1406954883": "すべてのメモをクリアします...",
@@ -8764,7 +8851,8 @@
                   "f49e0a21e0": "コード",
                   "542bf6a7e2": "イタリック",
                   "256300f8ea": "太字",
-                  "87aff03d63": "送信中..."
+                  "87aff03d63": "送信中...",
+                  "commentTooLarge": "Comment is too large to submit safely."
                 }
               }
             }
@@ -9052,6 +9140,9 @@
                 "copyCommand": "Copy command"
               }
             }
+          },
+          "SourceControlEntryContextMenu": {
+            "a1f2c8d901": "View"
           }
         }
       },
@@ -10165,6 +10256,11 @@
                 }
               }
             }
+          },
+          "useEmulatorScreenKeyboard": {
+            "pasteTooLarge": "Paste is too large for emulator keyboard input.",
+            "unsupportedPasteText": "Emulator keyboard paste supports US keyboard text only.",
+            "pasteTargetUnavailable": "Emulator keyboard paste failed because the device is not ready."
           }
         }
       },
@@ -10416,7 +10512,8 @@
         },
         "MonacoEditor": {
           "68cb83f4a7": "選択したテキストにメモを追加する",
-          "fd68ae03b3": "ファイル内を検索"
+          "fd68ae03b3": "ファイル内を検索",
+          "largePasteTooLarge": "Paste is too large."
         },
         "MonacoGutterContextMenu": {
           "7b57b1b468": "リモート URL をコピー",
@@ -10697,6 +10794,9 @@
               }
             }
           }
+        },
+        "richMarkdownLargeTextPaste": {
+          "tooLarge": "Paste is too large."
         }
       },
       "diff": {
@@ -10713,7 +10813,8 @@
           "DiffCommentPopover": {
             "2b3ce6d394": "キャンセル",
             "e05063cfc1": "{{value0}} 行目",
-            "c845170b3b": "行 {{value0}}-{{value1}}"
+            "c845170b3b": "行 {{value0}}-{{value1}}",
+            "commentTooLarge": "Comment is too large to submit safely."
           },
           "useDiffCommentDecorator": {
             "995fa28b50": "このメモ"
@@ -11390,7 +11491,15 @@
           "openReviewExternally": "{{value0}} を外部で開く",
           "summary": "{{value0}} 件添付 · PR/MR あり {{value1}} 件 · 要対応 {{value2}} 件 · 保留中 {{value3}} 件 · 成功 {{value4}} 件 · PR なし {{value5}} 件 · 不明 {{value6}} 件",
           "showDetails": "{{value0}} の PR チェック詳細を表示",
-          "hideDetails": "{{value0}} の PR チェック詳細を非表示"
+          "hideDetails": "{{value0}} の PR チェック詳細を非表示",
+          "reviewChecks": "レビューのチェック",
+          "allChecksPassing": "すべてのチェックが成功",
+          "oneWorktree": "1 件のワークツリー",
+          "worktreeCount": "{{value0}} 件のワークツリー",
+          "oneFailing": "1 件失敗",
+          "failingCount": "{{value0}} 件失敗",
+          "onePending": "1 件保留中",
+          "pendingCount": "{{value0}} 件保留中"
         },
         "parentPrChecks": {
           "rowSummary": {

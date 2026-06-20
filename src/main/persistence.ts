@@ -89,6 +89,8 @@ import {
   getDefaultUIState,
   getDefaultRepoHookSettings,
   getDefaultWorkspaceSession,
+  getWorktreeCardModeProperties,
+  isDefaultedCompactWorktreeCardProperties,
   normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties,
   ONBOARDING_FLOW_VERSION,
@@ -2651,6 +2653,10 @@ export class Store {
           this.loadNeedsSave = true
         }
         const normalizedProjectGroups = normalizeProjectGroups(parsed.projectGroups)
+        const loadedCompactWorktreeCards =
+          parsed.settings?.compactWorktreeCards ??
+          parsed.settings?.experimentalCompactWorktreeCards ??
+          defaults.settings.compactWorktreeCards
         result = {
           ...defaults,
           ...parsed,
@@ -2691,10 +2697,7 @@ export class Store {
             experimentalActivityDefaultedOffForAllUsers: true,
             // Why: compact worktree cards graduated from Experimental; preserve
             // the old opt-in for profiles written during the rollout.
-            compactWorktreeCards:
-              parsed.settings?.compactWorktreeCards ??
-              parsed.settings?.experimentalCompactWorktreeCards ??
-              defaults.settings.compactWorktreeCards,
+            compactWorktreeCards: loadedCompactWorktreeCards,
             experimentalCompactWorktreeCards: undefined,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
             terminalMacOptionAsAltMigrated: true,
@@ -2711,6 +2714,9 @@ export class Store {
               parsed.settings?.terminalCustomThemes
             ),
             appIcon: normalizeAppIconId(parsed.settings?.appIcon),
+            // Why: persisted settings can be user-edited or written by older
+            // builds; keep tray-minimize false unless the stored value is true.
+            minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
             uiLanguage: normalizeUiLanguage(parsed.settings?.uiLanguage),
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
             visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
@@ -2797,9 +2803,16 @@ export class Store {
               !deliberateUncheck &&
               Array.isArray(rawCardProps) &&
               !rawCardProps.includes('inline-agents')
+            const needsLegacyDefaultedCompactMigration =
+              loadedCompactWorktreeCards &&
+              parsed.ui?._worktreeCardModeDefaulted === true &&
+              isDefaultedCompactWorktreeCardProperties(rawCardProps)
             const migratedCardProps = (() => {
               if (!Array.isArray(rawCardProps)) {
                 return undefined
+              }
+              if (needsLegacyDefaultedCompactMigration) {
+                return getWorktreeCardModeProperties('Compact')
               }
               const candidate = needsInlineAgentsMigration
                 ? [...rawCardProps, 'inline-agents' as const]
@@ -2845,6 +2858,11 @@ export class Store {
             }
             return {
               ...defaults.ui,
+              // Why: missing card properties should follow the persisted card
+              // layout mode; explicit property choices are preserved below.
+              worktreeCardProperties: getWorktreeCardModeProperties(
+                loadedCompactWorktreeCards ? 'Compact' : 'Default'
+              ),
               ...stripMainOwnedTelemetryMarkerFromUI(parsed.ui),
               // Why: migrate once from the retired Appearance setting only
               // when no explicit persisted chrome preference exists yet.
@@ -4483,6 +4501,12 @@ export class Store {
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): GlobalSettings {
     const sanitizedUpdates = { ...updates }
+    // Why: coerce strictly to boolean here (not at the IPC edge) so every write
+    // path is covered and a non-bool renderer payload can never persist a
+    // truthy non-bool that later reads as "tray-minimize on".
+    if ('minimizeToTrayOnClose' in updates) {
+      sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true
+    }
     if ('disabledTuiAgents' in updates) {
       sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
     }
@@ -4625,6 +4649,9 @@ export class Store {
         this.state.ui?.workspaceBoardColumnWidth
       ),
       syncTaskStatusFromWorkspaceBoard: this.state.ui?.syncTaskStatusFromWorkspaceBoard === true,
+      // Why: strict boolean coercion so a missing/legacy value reads as false
+      // (first-run notice still fires) rather than leaking a non-bool through.
+      trayMinimizeNoticeShown: this.state.ui?.trayMinimizeNoticeShown === true,
       markdownTocPanelWidth: clampMarkdownTocPanelWidth(this.state.ui?.markdownTocPanelWidth),
       visibleWorkspaceHostIds: normalizeVisibleExecutionHostIds(
         this.state.ui?.visibleWorkspaceHostIds

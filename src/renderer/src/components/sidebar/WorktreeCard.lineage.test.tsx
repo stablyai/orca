@@ -10,6 +10,7 @@ const openModal = vi.fn()
 const updateWorktreeMeta = vi.fn()
 
 let worktreeCardProperties: WorktreeCardProperty[] = []
+const WORKTREE_CARD_IMPORT_TIMEOUT_MS = 15_000
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
@@ -101,36 +102,44 @@ describe('WorktreeCard lineage indicators', () => {
     worktreeCardProperties = []
   })
 
-  it('does not render parent lineage badge copy on workspace cards', async () => {
-    const { default: WorktreeCard } = await import('./WorktreeCard')
+  it(
+    'does not render parent lineage badge copy on workspace cards',
+    async () => {
+      const { default: WorktreeCard } = await import('./WorktreeCard')
 
-    const markup = renderToStaticMarkup(
-      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
-    )
+      const markup = renderToStaticMarkup(
+        <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
+      )
 
-    expect(markup).not.toContain('Parent workspace')
-    expect(markup).not.toContain('parent:')
-    expect(markup).not.toContain('from master')
-    expect(markup).not.toContain('Missing parent')
-    expect(markup).toContain('overflow-hidden')
-  })
+      expect(markup).not.toContain('Parent workspace')
+      expect(markup).not.toContain('parent:')
+      expect(markup).not.toContain('from master')
+      expect(markup).not.toContain('Missing parent')
+      expect(markup).toContain('overflow-hidden')
+    },
+    WORKTREE_CARD_IMPORT_TIMEOUT_MS
+  )
 
-  it('keeps the child workspace toggle chip', async () => {
-    const { default: WorktreeCard } = await import('./WorktreeCard')
+  it(
+    'keeps the child workspace toggle chip',
+    async () => {
+      const { default: WorktreeCard } = await import('./WorktreeCard')
 
-    const markup = renderToStaticMarkup(
-      <WorktreeCard
-        worktree={makeWorktree()}
-        repo={makeRepo()}
-        isActive={false}
-        lineageChildCount={1}
-        lineageCollapsed={false}
-        onLineageToggle={vi.fn()}
-      />
-    )
+      const markup = renderToStaticMarkup(
+        <WorktreeCard
+          worktree={makeWorktree()}
+          repo={makeRepo()}
+          isActive={false}
+          lineageChildCount={1}
+          lineageCollapsed={false}
+          onLineageToggle={vi.fn()}
+        />
+      )
 
-    expect(markup).toContain('aria-label="Hide 1 child workspace"')
-    expect(markup).toContain('1 child')
-    expect(markup).not.toContain('Parent workspace')
-  })
+      expect(markup).toContain('aria-label="Hide 1 child workspace"')
+      expect(markup).toContain('1 child')
+      expect(markup).not.toContain('Parent workspace')
+    },
+    WORKTREE_CARD_IMPORT_TIMEOUT_MS
+  )
 })

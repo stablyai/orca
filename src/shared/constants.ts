@@ -36,6 +36,7 @@ export {
   TASK_WORKTREE_CARD_PROPERTIES,
   getWorktreeCardModeProperties,
   getWorktreeCardModeUpdates,
+  isDefaultedCompactWorktreeCardProperties,
   normalizeWorktreeCardProperties
 } from './worktree-card-properties'
 
@@ -249,6 +250,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // focus-follows-mouse never happens unexpectedly.
     terminalFocusFollowsMouse: false,
     windowBackgroundBlur: false,
+    minimizeToTrayOnClose: false,
     terminalClipboardOnSelect: false,
     terminalAllowOsc52Clipboard: false,
     claudeAgentTeamsMode: 'off',
@@ -471,6 +473,7 @@ export function getDefaultUIState(): PersistedUIState {
     setupGuideBrowserMilestoneMigrated: true,
     setupGuideBrowserMilestoneLegacyComplete: false,
     browserImportHintHidden: false,
+    trayMinimizeNoticeShown: false,
     mobileEmulatorTabIntroDismissed: false,
     mobileEmulatorAgentSetupDismissed: false,
     // Why: brand-new profiles never saw recent project ordering; only upgraded

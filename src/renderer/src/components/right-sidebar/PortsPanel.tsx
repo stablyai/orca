@@ -22,10 +22,11 @@ import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   killWorkspacePortForTarget,
+  getPortOpenBrowserTooltipLabel,
   openWorkspacePortInBrowser,
   refreshWorkspacePortScanAfterStop,
+  resolvePortOpenInOrcaBrowser,
   scanWorkspacePortsForTarget,
-  shouldOpenWorkspacePortInOrcaBrowser,
   workspacePortRuntimeTargetKey
 } from '@/lib/workspace-port-actions'
 import {
@@ -281,14 +282,18 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
   )
 
   const handleOpenPortInBrowser = useCallback(
-    async (port: WorkspacePort) => {
+    async (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => {
       const result = await openWorkspacePortInBrowser({
         port,
         activeWorktreeId: activeWorktree?.id,
         runtimeTarget,
         createBrowserTab,
         setRemoteBrowserPageHandle,
-        openInOrcaBrowser: shouldOpenWorkspacePortInOrcaBrowser(settings)
+        openInOrcaBrowser: resolvePortOpenInOrcaBrowser({
+          settings,
+          event,
+          isMac: navigator.userAgent.includes('Mac')
+        })
       })
       if (!result.ok) {
         toast.error(
@@ -453,7 +458,7 @@ function LocalPortSection({
   onToggle: () => void
   onStopPort: (port: WorkspacePort) => void
   onShowDetails: (port: WorkspacePort) => void
-  onOpenInBrowser: (port: WorkspacePort) => void
+  onOpenInBrowser: (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => void
 }): React.JSX.Element | null {
   if (ports.length === 0 && !emptyText) {
     return null
@@ -507,15 +512,18 @@ function LocalPortRow({
   port: WorkspacePort
   onStop: (port: WorkspacePort) => void
   onShowDetails: (port: WorkspacePort) => void
-  onOpenInBrowser: (port: WorkspacePort) => void
+  onOpenInBrowser: (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => void
 }): React.JSX.Element {
   const handleCopy = useCallback(() => {
     void window.api.ui.writeClipboardText(addressForPort(port))
   }, [port])
 
-  const handleOpenBrowser = useCallback(() => {
-    void onOpenInBrowser(port)
-  }, [onOpenInBrowser, port])
+  const handleOpenBrowser = useCallback(
+    (event?: React.MouseEvent<HTMLButtonElement>) => {
+      void onOpenInBrowser(port, event)
+    },
+    [onOpenInBrowser, port]
+  )
 
   const handleCopyButtonClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -529,7 +537,9 @@ function LocalPortRow({
 
   const handleOpenBrowserButtonClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
-      handleOpenBrowser()
+      // Why: keyboard activations have detail=0; only pointer clicks carry
+      // the modifier intent for the system-browser escape hatch.
+      handleOpenBrowser(event.detail > 0 ? event : undefined)
       if (event.detail > 0) {
         event.currentTarget.blur()
       }
@@ -555,6 +565,10 @@ function LocalPortRow({
       : port.kind === 'container'
         ? 'Container or forwarded service'
         : 'Unassigned'
+  const openBrowserLabel = translate(
+    'auto.components.right.sidebar.PortsPanel.b22b128b2a',
+    'Open in Browser'
+  )
   const confidenceLabel =
     port.kind === 'workspace' ? (port.owner.confidence === 'cwd' ? 'cwd' : 'command') : null
   const canStopProcess =
@@ -603,19 +617,13 @@ function LocalPortRow({
                   size="icon-xs"
                   className="text-muted-foreground hover:text-foreground"
                   onClick={handleOpenBrowserButtonClick}
-                  aria-label={translate(
-                    'auto.components.right.sidebar.PortsPanel.b22b128b2a',
-                    'Open in Browser'
-                  )}
+                  aria-label={openBrowserLabel}
                 >
                   <ExternalLink size={13} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                {translate(
-                  'auto.components.right.sidebar.PortsPanel.b22b128b2a',
-                  'Open in Browser'
-                )}
+                {getPortOpenBrowserTooltipLabel(openBrowserLabel)}
               </TooltipContent>
             </Tooltip>
             <Tooltip>
@@ -672,9 +680,12 @@ function LocalPortRow({
         <ContextMenuLabel
           className={LOCAL_PORT_MENU_LABEL_CLASS}
         >{`:${port.port}`}</ContextMenuLabel>
-        <ContextMenuItem className={LOCAL_PORT_MENU_ITEM_CLASS} onSelect={handleOpenBrowser}>
+        <ContextMenuItem
+          className={LOCAL_PORT_MENU_ITEM_CLASS}
+          onSelect={() => handleOpenBrowser()}
+        >
           <ExternalLink size={13} />
-          {translate('auto.components.right.sidebar.PortsPanel.b22b128b2a', 'Open in Browser')}
+          {openBrowserLabel}
         </ContextMenuItem>
         <ContextMenuItem className={LOCAL_PORT_MENU_ITEM_CLASS} onSelect={handleCopy}>
           <Copy size={13} />
@@ -850,9 +861,15 @@ function SshPortsPanel(): React.JSX.Element {
   }, [])
 
   const handleOpenForwardInBrowser = useCallback(
-    (entry: PortForwardEntry) => {
+    (entry: PortForwardEntry, event?: React.MouseEvent<HTMLButtonElement>) => {
       const url = browserUrlForPortForwardEntry(entry)
-      if (!shouldOpenWorkspacePortInOrcaBrowser(settings)) {
+      if (
+        !resolvePortOpenInOrcaBrowser({
+          settings,
+          event,
+          isMac: navigator.userAgent.includes('Mac')
+        })
+      ) {
         void window.api.shell.openUrl(url)
         return
       }
@@ -935,7 +952,7 @@ function SshPortsPanel(): React.JSX.Element {
                 key={entry.id}
                 entry={entry}
                 onEdit={() => handleEdit(entry)}
-                onOpenInBrowser={() => handleOpenForwardInBrowser(entry)}
+                onOpenInBrowser={(event) => handleOpenForwardInBrowser(entry, event)}
               />
             ))}
         </div>
@@ -1015,7 +1032,7 @@ function ForwardedPortRow({
 }: {
   entry: PortForwardEntry
   onEdit: () => void
-  onOpenInBrowser: () => void
+  onOpenInBrowser: (event?: React.MouseEvent<HTMLButtonElement>) => void
 }): React.JSX.Element {
   const [removing, setRemoving] = useState(false)
   const mountedRef = useMountedRef()
@@ -1037,9 +1054,12 @@ function ForwardedPortRow({
     void window.api.ui.writeClipboardText(forwardedAddress)
   }, [forwardedAddress])
 
-  const handleOpenBrowser = useCallback(() => {
-    onOpenInBrowser()
-  }, [onOpenInBrowser])
+  const handleOpenBrowser = useCallback(
+    (event?: React.MouseEvent<HTMLButtonElement>) => {
+      onOpenInBrowser(event)
+    },
+    [onOpenInBrowser]
+  )
 
   const handleCopyButtonClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -1053,7 +1073,9 @@ function ForwardedPortRow({
 
   const handleOpenBrowserButtonClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
-      handleOpenBrowser()
+      // Why: keyboard activations have detail=0; only pointer clicks carry
+      // the modifier intent for the system-browser escape hatch.
+      handleOpenBrowser(event.detail > 0 ? event : undefined)
       if (event.detail > 0) {
         event.currentTarget.blur()
       }
@@ -1082,6 +1104,21 @@ function ForwardedPortRow({
   )
 
   const advertisedBrowserUrl = advertisedBrowserUrlForForwardedRow(entry)
+  const openBrowserLabel = translate(
+    'auto.components.right.sidebar.PortsPanel.b22b128b2a',
+    'Open in Browser'
+  )
+  const openBrowserTitle = getPortOpenBrowserTooltipLabel(
+    advertisedBrowserUrl
+      ? translate(
+          'auto.components.right.sidebar.PortsPanel.75aeea592f',
+          'Open {{value0}} in Browser',
+          {
+            value0: advertisedBrowserUrl
+          }
+        )
+      : openBrowserLabel
+  )
 
   return (
     <div className="group flex items-center gap-2 py-1 px-1 -mx-1 rounded hover:bg-accent/50 transition-colors">
@@ -1112,15 +1149,7 @@ function ForwardedPortRow({
           type="button"
           className="p-1 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
           onClick={handleOpenBrowserButtonClick}
-          title={
-            advertisedBrowserUrl
-              ? translate(
-                  'auto.components.right.sidebar.PortsPanel.75aeea592f',
-                  'Open {{value0}} in Browser',
-                  { value0: advertisedBrowserUrl }
-                )
-              : translate('auto.components.right.sidebar.PortsPanel.b22b128b2a', 'Open in Browser')
-          }
+          title={openBrowserTitle}
         >
           <ExternalLink size={13} />
         </button>

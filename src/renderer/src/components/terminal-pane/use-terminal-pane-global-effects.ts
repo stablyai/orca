@@ -21,8 +21,7 @@ import { useAppStore } from '@/store'
 import { restoreScrollStateAfterLayout } from '@/lib/pane-manager/pane-scroll'
 import { useTerminalScrollVisibilityMemory } from './use-terminal-scroll-visibility-memory'
 import { useTerminalContainerFitSync } from './use-terminal-container-fit-sync'
-import { pasteTerminalText } from './terminal-bracketed-paste'
-import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+import { handleTerminalProgrammaticTextPaste } from './terminal-programmatic-text-paste'
 
 const VISIBLE_RESUME_FLUSH_CHARS = 256 * 1024
 
@@ -226,24 +225,17 @@ export function useTerminalPaneGlobalEffects({
   useEffect(() => {
     const onPasteText = (event: Event): void => {
       const detail = (event as CustomEvent<PasteTerminalTextDetail | undefined>).detail
-      if (!detail?.tabId || detail.tabId !== tabId || !detail.text) {
-        return
-      }
-      const manager = managerRef.current
-      if (!manager) {
-        return
-      }
-      const pane = manager.getActivePane() ?? manager.getPanes()[0]
-      if (!pane) {
-        return
-      }
-      pasteTerminalText(pane.terminal, detail.text)
-      recordTerminalUserInputForLeaf(tabId, pane.leafId)
-      pane.terminal.focus()
+      handleTerminalProgrammaticTextPaste({
+        detail,
+        tabId,
+        worktreeId: worktreeIdRef.current,
+        getManager: () => managerRef.current,
+        getPaneTransports: () => paneTransportsRef.current
+      })
     }
     window.addEventListener(PASTE_TERMINAL_TEXT_EVENT, onPasteText)
     return () => window.removeEventListener(PASTE_TERMINAL_TEXT_EVENT, onPasteText)
-  }, [tabId, managerRef])
+  }, [tabId, managerRef, paneTransportsRef])
 
   // Why: dictation events are dispatched globally; gate on isActiveRef so only
   // the foreground terminal pane consumes the inserted text — otherwise text
@@ -256,31 +248,28 @@ export function useTerminalPaneGlobalEffects({
       if (!isActiveRef.current) {
         return
       }
-      const manager = managerRef.current
-      if (!manager) {
-        return
-      }
       const detail = (
         event as CustomEvent<string | { text?: string; tabId?: string; paneId?: number }>
       ).detail
       const text = typeof detail === 'string' ? detail : detail?.text
-      if (typeof detail === 'object' && detail.tabId !== tabId) {
+      if (!text) {
+        return
+      }
+      if (typeof detail === 'object' && detail.tabId && detail.tabId !== tabId) {
         return
       }
       const requestedPaneId = typeof detail === 'object' ? detail.paneId : undefined
-      const pane = requestedPaneId
-        ? manager.getPanes().find((candidate) => candidate.id === requestedPaneId)
-        : (manager.getActivePane() ?? manager.getPanes()[0])
-      if (!pane) {
-        return
-      }
-      const transport = paneTransportsRef.current.get(pane.id)
-      if (!transport) {
-        return
-      }
-      if (text && transport.sendInput(text)) {
-        recordTerminalUserInputForLeaf(tabId, pane.leafId)
-      }
+      handleTerminalProgrammaticTextPaste({
+        detail: {
+          tabId,
+          text,
+          ...(typeof requestedPaneId === 'number' ? { paneId: requestedPaneId } : {})
+        },
+        tabId,
+        worktreeId: worktreeIdRef.current,
+        getManager: () => managerRef.current,
+        getPaneTransports: () => paneTransportsRef.current
+      })
     }
     document.addEventListener('dictation:insertText', onDictationInsert)
     return () => document.removeEventListener('dictation:insertText', onDictationInsert)

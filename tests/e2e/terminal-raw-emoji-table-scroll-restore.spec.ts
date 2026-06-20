@@ -131,6 +131,13 @@ function renderRow(cells) {
     border.vertical
   )
 }
+// Why: Windows can lose the tail of large stdout writes if this fixture exits
+// immediately, which hides the completion marker behind a shell prompt.
+function writeStdout(chunk) {
+  return new Promise((resolve) => {
+    process.stdout.write(chunk, resolve)
+  })
+}
 const parsedRows = table
   .split(/\\r?\\n/)
   .filter((row) => row.trim().startsWith('|') && !isSeparatorRow(row))
@@ -140,10 +147,10 @@ for (const [index, row] of parsedRows.entries()) {
   rendered.push(renderRow(row))
   rendered.push(rule(index === parsedRows.length - 1 ? border.bottom : border.middle))
 }
-process.stdout.write('\\x1b[?2026h\\x1b[2J\\x1b[H')
-process.stdout.write(rendered.join('\\r\\n'))
-process.stdout.write('\\r\\n${marker}\\r\\n')
-process.stdout.write('\\x1b[?2026l')
+await writeStdout('\\x1b[?2026h\\x1b[2J\\x1b[H')
+await writeStdout(rendered.join('\\r\\n'))
+await writeStdout('\\r\\n${marker}\\r\\n')
+await writeStdout('\\x1b[?2026l')
 `
 }
 
@@ -491,8 +498,12 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
     writeFileSync(scriptPath, rawEmojiFixtureBoxTableScript(EMOJI_TABLE_FIXTURE, runId))
 
     try {
+      const completionMarker = rawEmojiFixtureCompletionMarker(runId)
       await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
-      await orcaPage.waitForTimeout(80)
+      // Why: Windows ConPTY can return the PowerShell prompt while xterm is
+      // still flushing synchronized output if the pane is hidden immediately.
+      // This golden is about restored table geometry, not shell-flush timing.
+      await waitForTerminalOutput(orcaPage, completionMarker, 20_000, 30_000)
       await switchToWorktree(orcaPage, secondWorktreeId)
       await waitForActiveTerminalManager(orcaPage, 30_000)
       await orcaPage.waitForTimeout(1_000)
@@ -506,9 +517,9 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
       await expect
         .poll(() => getTerminalContent(orcaPage, 30_000), {
           timeout: 30_000,
-          message: 'raw emoji table did not finish streaming after workspace switch'
+          message: 'raw emoji table marker did not survive workspace switch'
         })
-        .toContain(rawEmojiFixtureCompletionMarker(runId))
+        .toContain(completionMarker)
 
       await scrollActiveTerminalToText(orcaPage, 'Singer')
       await closeFeatureTips(orcaPage)

@@ -125,24 +125,9 @@ vi.mock('@/components/tab-bar/QuickLaunchButton', () => ({
   }
 }))
 
-vi.mock('@/components/sidebar/useWorktreeAgentRows', () => ({
-  useWorktreeAgentRows: () => []
-}))
-
-vi.mock('@/components/dashboard/useNow', () => ({
-  useNow: () => 0
-}))
-
-vi.mock('@/components/AgentStateDot', () => ({
-  AgentStateDot: function AgentStateDot(props: Record<string, unknown>) {
-    return { type: 'AgentStateDot', props }
-  },
-  agentStateLabel: (state: string) => state
-}))
-
-vi.mock('@/lib/agent-catalog', () => ({
-  AgentIcon: function AgentIcon(props: Record<string, unknown>) {
-    return { type: 'AgentIcon', props }
+vi.mock('./ReviewNotesSendMenuContent', () => ({
+  ReviewNotesSendMenuContent: function ReviewNotesSendMenuContent(props: Record<string, unknown>) {
+    return { type: 'ReviewNotesSendMenuContent', props }
   }
 }))
 
@@ -341,11 +326,10 @@ describe('NotesSendMenu', () => {
     )
   })
 
-  it('offers new agent launchers when no existing agent targets are listed', () => {
+  it('passes the default scope to review note send content', () => {
     const tree = renderMenu()
 
-    expect(findAllByType(tree, 'DropdownMenuItem')).toHaveLength(0)
-    expect(findByType(tree, 'QuickLaunchAgentMenuItems').props).toMatchObject({
+    expect(findByType(tree, 'ReviewNotesSendMenuContent').props).toMatchObject({
       worktreeId: 'wt-1',
       groupId: 'group-1',
       prompt: 'prompt-all',

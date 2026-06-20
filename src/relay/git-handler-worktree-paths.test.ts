@@ -29,7 +29,7 @@ function nulWorktreeList(...entries: { path: string; branch?: string }[]): strin
 }
 
 function resolvedRepoPath(): string {
-  return path.resolve('/repo-feature', '/repo/.git', '..')
+  return path.posix.resolve('/repo-feature', '/repo/.git', '..')
 }
 
 describe('relay worktree path parsing', () => {

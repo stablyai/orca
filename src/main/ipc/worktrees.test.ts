@@ -1027,6 +1027,66 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('reuses an existing local branch when the worktree folder is renamed (#5181)', async () => {
+    // Why: the reuse checkbox keeps branchNameOverride pinned to the selected
+    // branch while the worktree folder is named independently. The backend must
+    // still check out that exact branch (no -b) into the renamed folder.
+    listWorktreesMock
+      .mockResolvedValueOnce([
+        {
+          path: '/workspace/repo',
+          head: 'main',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true
+        }
+      ])
+      .mockResolvedValueOnce([
+        {
+          path: '/workspace/repo',
+          head: 'main',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true
+        },
+        {
+          path: '/workspace/my-folder',
+          head: 'abc123',
+          branch: 'refs/heads/fix/bug-0',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'my-folder',
+      baseBranch: 'fix/bug-0',
+      branchNameOverride: 'fix/bug-0'
+    })
+
+    expect(getBranchConflictKindMock).not.toHaveBeenCalled()
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/my-folder',
+      'fix/bug-0',
+      'fix/bug-0',
+      false,
+      false,
+      { checkoutExistingBranch: true }
+    )
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/my-folder',
+      expect.objectContaining({ preserveBranchOnDelete: true })
+    )
+    expect(result).toMatchObject({
+      worktree: expect.objectContaining({
+        path: '/workspace/my-folder',
+        branch: 'refs/heads/fix/bug-0'
+      })
+    })
+  })
+
   it('suffixes only the path when an existing local branch checkout path already exists', async () => {
     const mainWorktree = {
       path: '/workspace/repo',

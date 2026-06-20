@@ -5,7 +5,7 @@ import {
   type ResumableTuiAgent
 } from './agent-session-resume'
 import { tokenizeCustomCommandTemplate } from './commit-message-prompt'
-import { TUI_AGENT_CONFIG } from './tui-agent-config'
+import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { TuiAgent } from './types'
 
@@ -88,11 +88,12 @@ export function planAgentCliArgsSuffix(
 function resolveBaseCommand(args: {
   agent: TuiAgent
   cmdOverrides: Partial<Record<TuiAgent, string>>
+  platform: NodeJS.Platform
   shell: AgentStartupShell
   agentArgs?: string | null
 }): { ok: true; command: string } | { ok: false; error: string } {
   const override = args.cmdOverrides[args.agent]
-  const command = override || TUI_AGENT_CONFIG[args.agent].launchCmd
+  const command = override || getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform)
   const suffix = planAgentCliArgsSuffix(args.agentArgs, args.shell)
   if (!suffix.ok) {
     return suffix
@@ -119,6 +120,7 @@ export function buildAgentStartupPlan(args: {
   const baseCommand = resolveBaseCommand({
     agent,
     cmdOverrides,
+    platform,
     shell,
     agentArgs: args.agentArgs
   })
@@ -209,6 +211,7 @@ export function buildAgentResumeStartupPlan(args: {
   const baseCommand = resolveBaseCommand({
     agent: args.agent,
     cmdOverrides: args.cmdOverrides,
+    platform: args.platform,
     shell,
     agentArgs: args.agentArgs
   })
@@ -272,6 +275,7 @@ export function buildAgentDraftLaunchPlan(args: {
   const baseCommand = resolveBaseCommand({
     agent,
     cmdOverrides,
+    platform,
     shell,
     agentArgs: args.agentArgs
   })

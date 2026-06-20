@@ -179,6 +179,19 @@ describe('registerAppMenu', () => {
     expect(paletteItem?.accelerator).toBeUndefined()
   })
 
+  it('keeps Edit > Paste on the native Electron paste role in this split', () => {
+    const send = vi.fn()
+    getFocusedWindowMock.mockReturnValue({ webContents: { send } })
+    registerAppMenu(buildMenuOptions())
+
+    const editSubmenu = getSubmenu(getTemplate(), 'Edit')
+    const pasteItem = editSubmenu.find((item) => item.role === 'paste')
+
+    expect(pasteItem).toBeDefined()
+    expect(pasteItem?.click).toBeUndefined()
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it.runIf(!isMac)('puts Settings and Exit under File on Windows/Linux', () => {
     registerAppMenu(buildMenuOptions())
 

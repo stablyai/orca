@@ -1,5 +1,8 @@
 import type { JSX } from 'react'
-import { ORCA_CLI_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
+import {
+  ORCA_CLI_SKILL_INSTALL_COMMAND,
+  ORCA_CLI_SKILL_UPDATE_COMMAND
+} from '@/lib/agent-feature-install-commands'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
   ensureOrcaCliAvailableForAgentSkillTerminal
@@ -9,7 +12,7 @@ import type { InstalledAgentSkillState } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { AgentSkillSetupPanel } from '@/components/settings/AgentSkillSetupPanel'
 import {
-  buildSkillInstallCommandForRuntime,
+  buildSkillCommandForRuntime,
   ensureWslCliAvailableForAgentSkillTerminal,
   getWslCliDistroRequest
 } from '@/components/settings/CliSkillRuntimeSetup'
@@ -25,11 +28,12 @@ export function BrowserUseSkillSetupCard(props: {
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const installCommand =
     activeSkillRuntime.agentRuntime && !activeSkillRuntime.installDisabledReason
-      ? buildSkillInstallCommandForRuntime(
-          ORCA_CLI_SKILL_INSTALL_COMMAND,
-          activeSkillRuntime.agentRuntime
-        )
+      ? buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND, activeSkillRuntime.agentRuntime)
       : ORCA_CLI_SKILL_INSTALL_COMMAND
+  const updateCommand =
+    activeSkillRuntime.agentRuntime && !activeSkillRuntime.installDisabledReason
+      ? buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND, activeSkillRuntime.agentRuntime)
+      : ORCA_CLI_SKILL_UPDATE_COMMAND
 
   const handleBeforeOpenTerminal = async (): Promise<void> => {
     useAppStore.getState().recordFeatureInteraction('agent-browser-setup')
@@ -51,6 +55,7 @@ export function BrowserUseSkillSetupCard(props: {
         "Enables agents to navigate and verify pages in Orca's browser."
       )}
       command={installCommand}
+      installedCommand={updateCommand}
       terminalTitle="Browser Use setup"
       terminalAriaLabel="Browser Use skill install terminal"
       terminalWorktreeId="feature-wall-browser-use-skill-terminal"

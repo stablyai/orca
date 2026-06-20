@@ -171,6 +171,93 @@ describe('terminal output batching', () => {
     }
   })
 
+  it('encodes large binary terminal output lazily before the first output frame', async () => {
+    vi.useFakeTimers()
+    try {
+      const messages: string[] = []
+      const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+      const cleanups = new Map<string, () => void>()
+      const dataListenerRef: { current?: (data: string) => void } = {}
+      let captureOutputFrames = false
+      let firstOutputEncodeCount: number | undefined
+      const encodeSpy = vi.spyOn(TextEncoder.prototype, 'encode')
+      const runtime = stubRuntime({
+        resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+        readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+        serializeTerminalBuffer: vi.fn().mockResolvedValue(null),
+        getTerminalSize: vi.fn().mockReturnValue({ cols: 80, rows: 24 }),
+        getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+        getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+        subscribeToTerminalData: vi.fn((_: string, listener: (data: string) => void) => {
+          dataListenerRef.current = listener
+          return vi.fn()
+        }),
+        subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
+        subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+          cleanups.set(id, cleanup)
+        }),
+        cleanupSubscription: vi.fn((id: string) => {
+          const cleanup = cleanups.get(id)
+          cleanups.delete(id)
+          cleanup?.()
+        }),
+        waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
+        sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
+        updateMobileViewport: vi.fn().mockResolvedValue(false)
+      })
+      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+      const dispatchPromise = dispatcher.dispatchStreaming(
+        makeRequest('terminal.subscribe', {
+          terminal: 'terminal-1',
+          client: { id: 'desktop-1', type: 'desktop' },
+          capabilities: { terminalBinaryStream: 1 }
+        }),
+        (msg) => messages.push(msg),
+        {
+          connectionId: 'conn-1',
+          sendBinary: (bytes) => {
+            const frame = decodeTerminalStreamFrame(bytes)
+            if (
+              captureOutputFrames &&
+              firstOutputEncodeCount === undefined &&
+              frame?.opcode === TerminalStreamOpcode.Output
+            ) {
+              firstOutputEncodeCount = encodeSpy.mock.calls.length
+            }
+            binaryFrames.push(bytes)
+          }
+        }
+      )
+
+      await vi.waitFor(() =>
+        expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
+      )
+      await vi.waitFor(() => expect(dataListenerRef.current).toBeDefined())
+
+      binaryFrames.length = 0
+      encodeSpy.mockClear()
+      captureOutputFrames = true
+      const output = 'x'.repeat(48 * 1024 * 3 + 17)
+      dataListenerRef.current?.(output)
+
+      const outputFrames = binaryFrames
+        .map((frame) => decodeTerminalStreamFrame(frame))
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+      expect(outputFrames.length).toBeGreaterThan(1)
+      expect(firstOutputEncodeCount).toBe(1)
+      expect(
+        outputFrames.map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : '')).join('')
+      ).toBe(output)
+
+      runtime.cleanupSubscription('terminal-1:desktop-1')
+      await dispatchPromise
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('routes binary terminal input frames back to the subscribed PTY', async () => {
     const handlers = new Map<
       number,

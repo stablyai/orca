@@ -8,6 +8,7 @@ import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rp
 import { toast } from 'sonner'
 
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn())
+const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({
@@ -15,6 +16,7 @@ vi.mock('sonner', () => ({
 }))
 
 vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+  restorePtyDataHandlersAfterFailedShutdown: mockRestorePtyDataHandlersAfterFailedShutdown,
   unregisterPtyDataHandlers: mockUnregisterPtyDataHandlers
 }))
 
@@ -2627,7 +2629,482 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     shutdownBufferCaptures.clear()
   })
 
-  it('records terminal input even before agent hibernation is enabled', () => {
+  it('automatically hibernates only the completed agent pane and preserves siblings', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const targetLeaf = '11111111-1111-4111-8111-111111111111'
+    const siblingLeaf = '22222222-2222-4222-8222-222222222222'
+    const targetPaneKey = `tab-1:${targetLeaf}`
+    const siblingPaneKey = `tab-1:${siblingLeaf}`
+    const dropByWorktree = vi.fn()
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex', ptyId: 'pty-agent' })]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: targetLeaf },
+            second: { type: 'leaf', leafId: siblingLeaf }
+          },
+          activeLeafId: siblingLeaf,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [targetLeaf]: 'pty-agent', [siblingLeaf]: 'pty-shell' }
+        }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-agent', 'pty-shell'] },
+      unreadTerminalTabs: { 'tab-1': true },
+      unreadTerminalPanes: { [targetPaneKey]: true, [siblingPaneKey]: true },
+      unreadAgentCompletionPanes: { [targetPaneKey]: true, [siblingPaneKey]: true },
+      lastTerminalInputAtByPaneKey: { [targetPaneKey]: 1000, [siblingPaneKey]: 1100 },
+      pendingSetupSplitByTabId: { 'tab-1': { command: 'setup', direction: 'horizontal' } },
+      pendingIssueCommandSplitByTabId: { 'tab-1': { command: 'issue' } }
+    })
+    store.setState({ dropAgentStatusByWorktree: dropByWorktree as never })
+    store.getState().setAgentStatus(
+      targetPaneKey,
+      {
+        state: 'done',
+        prompt: 'resume target',
+        agentType: 'codex',
+        lastAssistantMessage: 'done'
+      },
+      'Codex',
+      { updatedAt: 2000, stateStartedAt: 1000 },
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'target-session' } }
+    )
+    store
+      .getState()
+      .setAgentStatus(
+        siblingPaneKey,
+        { state: 'working', prompt: 'keep running', agentType: 'claude' },
+        'Claude',
+        { updatedAt: 2100, stateStartedAt: 2100 },
+        { tabId: 'tab-1', worktreeId: wt },
+        { providerSession: { key: 'session_id', id: 'sibling-session' } }
+      )
+    const siblingSleepingRecordBefore =
+      store.getState().sleepingAgentSessionsByPaneKey[siblingPaneKey]
+
+    await store.getState().shutdownCompletedAgentPaneForHibernation(wt, {
+      paneKey: targetPaneKey,
+      tabId: 'tab-1',
+      leafId: targetLeaf,
+      ptyId: 'pty-agent'
+    })
+
+    const state = store.getState()
+    expect(mockApi.pty.kill).toHaveBeenCalledWith('pty-agent', { keepHistory: true })
+    expect(mockApi.pty.kill).not.toHaveBeenCalledWith('pty-shell', expect.anything())
+    expect(mockUnregisterPtyDataHandlers).toHaveBeenCalledWith(['pty-agent'])
+    expect(mockUnregisterPtyDataHandlers.mock.invocationCallOrder[0]).toBeLessThan(
+      mockApi.pty.kill.mock.invocationCallOrder[0]
+    )
+    expect(state.ptyIdsByTabId['tab-1']).toEqual(['pty-shell'])
+    expect(state.tabsByWorktree[wt]?.[0]?.ptyId).toBe('pty-shell')
+    expect(state.terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId).toEqual({
+      [targetLeaf]: 'pty-agent',
+      [siblingLeaf]: 'pty-shell'
+    })
+    expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toMatchObject({
+      providerSession: { key: 'session_id', id: 'target-session' }
+    })
+    expect(state.sleepingAgentSessionsByPaneKey[siblingPaneKey]).toBe(siblingSleepingRecordBefore)
+    expect(state.agentStatusByPaneKey[targetPaneKey]).toBeUndefined()
+    expect(state.agentStatusByPaneKey[siblingPaneKey]).toBeDefined()
+    expect(state.retainedAgentsByPaneKey[targetPaneKey]).toMatchObject({
+      entry: { lastAssistantMessage: 'done' }
+    })
+    expect(state.unreadTerminalTabs['tab-1']).toBe(true)
+    expect(state.unreadTerminalPanes[targetPaneKey]).toBeUndefined()
+    expect(state.unreadTerminalPanes[siblingPaneKey]).toBe(true)
+    expect(state.unreadAgentCompletionPanes[targetPaneKey]).toBeUndefined()
+    expect(state.unreadAgentCompletionPanes[siblingPaneKey]).toBe(true)
+    expect(state.lastTerminalInputAtByPaneKey[targetPaneKey]).toBeUndefined()
+    expect(state.lastTerminalInputAtByPaneKey[siblingPaneKey]).toBe(1100)
+    expect(state.pendingSetupSplitByTabId['tab-1']).toBeDefined()
+    expect(state.pendingIssueCommandSplitByTabId['tab-1']).toBeDefined()
+    expect(dropByWorktree).not.toHaveBeenCalled()
+  })
+
+  it('keeps manual sleep worktree-wide', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Terminal', ptyId: 'pty-agent' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-agent', 'pty-shell'] }
+    })
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    expect(store.getState().ptyIdsByTabId['tab-1']).toEqual([])
+    expect(mockApi.pty.kill).toHaveBeenCalledWith('pty-agent', { keepHistory: true })
+    expect(mockApi.pty.kill).toHaveBeenCalledWith('pty-shell', { keepHistory: true })
+  })
+
+  it('does not commit pane sleep state when local target kill fails', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const targetLeaf = '11111111-1111-4111-8111-111111111111'
+    const siblingLeaf = '22222222-2222-4222-8222-222222222222'
+    const targetPaneKey = `tab-1:${targetLeaf}`
+    const handlerSnapshots = [{ ptyId: 'pty-agent' }]
+
+    mockApi.pty.kill.mockRejectedValueOnce(new Error('kill failed'))
+    mockUnregisterPtyDataHandlers.mockReturnValueOnce(handlerSnapshots)
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex', ptyId: 'pty-agent' })]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: targetLeaf },
+            second: { type: 'leaf', leafId: siblingLeaf }
+          },
+          activeLeafId: siblingLeaf,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [targetLeaf]: 'pty-agent', [siblingLeaf]: 'pty-shell' }
+        }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-agent', 'pty-shell'] }
+    })
+    store
+      .getState()
+      .setAgentStatus(
+        targetPaneKey,
+        { state: 'done', prompt: 'resume target', agentType: 'codex' },
+        'Codex',
+        { updatedAt: 2000, stateStartedAt: 1000 },
+        { tabId: 'tab-1', worktreeId: wt },
+        { providerSession: { key: 'session_id', id: 'target-session' } }
+      )
+
+    await expect(
+      store.getState().shutdownCompletedAgentPaneForHibernation(wt, {
+        paneKey: targetPaneKey,
+        tabId: 'tab-1',
+        leafId: targetLeaf,
+        ptyId: 'pty-agent'
+      })
+    ).rejects.toThrow('kill failed')
+
+    const state = store.getState()
+    expect(state.ptyIdsByTabId['tab-1']).toEqual(['pty-agent', 'pty-shell'])
+    expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toBeUndefined()
+    expect(state.agentStatusByPaneKey[targetPaneKey]).toBeDefined()
+    expect(state.suppressedPtyExitIds['pty-agent']).toBeUndefined()
+    expect(mockRestorePtyDataHandlersAfterFailedShutdown).toHaveBeenCalledWith(handlerSnapshots)
+  })
+
+  it('uses target-only runtime stop for automatic pane hibernation', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const targetLeaf = '11111111-1111-4111-8111-111111111111'
+    const siblingLeaf = '22222222-2222-4222-8222-222222222222'
+    const targetPaneKey = `tab-1:${targetLeaf}`
+
+    mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) =>
+      Promise.resolve(
+        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
+          id: 'rpc-default',
+          ok: true,
+          result:
+            args.method === 'terminal.stopExact'
+              ? {
+                  stoppedPtyIds: ['terminal-1'],
+                  livePtyIds: ['terminal-1', 'terminal-2'],
+                  postStopVerified: true,
+                  remainingLivePtyIds: ['terminal-2']
+                }
+              : {},
+          _meta: { runtimeId: 'remote-runtime' }
+        }
+      )
+    )
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: targetLeaf },
+            second: { type: 'leaf', leafId: siblingLeaf }
+          },
+          activeLeafId: siblingLeaf,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {
+            [targetLeaf]: 'remote:env-1@@terminal-1',
+            [siblingLeaf]: 'remote:env-1@@terminal-2'
+          }
+        }
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['remote:env-1@@terminal-1', 'remote:env-1@@terminal-2']
+      }
+    })
+    store
+      .getState()
+      .setAgentStatus(
+        targetPaneKey,
+        { state: 'done', prompt: 'resume target', agentType: 'codex' },
+        'Codex',
+        { updatedAt: 2000, stateStartedAt: 1000 },
+        { tabId: 'tab-1', worktreeId: wt },
+        { providerSession: { key: 'session_id', id: 'target-session' } }
+      )
+
+    await store.getState().shutdownCompletedAgentPaneForHibernation(wt, {
+      paneKey: targetPaneKey,
+      tabId: 'tab-1',
+      leafId: targetLeaf,
+      ptyId: 'remote:env-1@@terminal-1',
+      expectedRuntimePtyId: 'terminal-1'
+    })
+
+    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'runtime-1',
+        method: 'terminal.stopExact',
+        params: expect.objectContaining({
+          expectedPtyIds: ['terminal-1'],
+          keepHistory: true,
+          targetOnly: true
+        })
+      })
+    )
+    expect(mockApi.runtimeEnvironments.call).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'terminal.stop' })
+    )
+    expect(store.getState().ptyIdsByTabId['tab-1']).toEqual(['remote:env-1@@terminal-2'])
+    expect(mockApi.pty.kill).not.toHaveBeenCalled()
+  })
+
+  it('clears stale relay wake hints when pane hibernation leaves no live PTYs in the tab', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const targetLeaf = '11111111-1111-4111-8111-111111111111'
+    const targetPaneKey = `tab-1:${targetLeaf}`
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [
+          makeTab({
+            id: 'tab-1',
+            worktreeId: wt,
+            title: 'Codex',
+            ptyId: 'ssh:ssh-1@@pty-agent'
+          })
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: targetLeaf },
+          activeLeafId: targetLeaf,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [targetLeaf]: 'ssh:ssh-1@@pty-agent' }
+        }
+      },
+      ptyIdsByTabId: { 'tab-1': ['ssh:ssh-1@@pty-agent'] },
+      lastKnownRelayPtyIdByTabId: { 'tab-1': 'ssh:ssh-1@@pty-agent' }
+    })
+    store
+      .getState()
+      .setAgentStatus(
+        targetPaneKey,
+        { state: 'done', prompt: 'resume target', agentType: 'codex' },
+        'Codex',
+        { updatedAt: 2000, stateStartedAt: 1000 },
+        { tabId: 'tab-1', worktreeId: wt },
+        { providerSession: { key: 'session_id', id: 'target-session' } }
+      )
+
+    await store.getState().shutdownCompletedAgentPaneForHibernation(wt, {
+      paneKey: targetPaneKey,
+      tabId: 'tab-1',
+      leafId: targetLeaf,
+      ptyId: 'ssh:ssh-1@@pty-agent'
+    })
+
+    expect(store.getState().ptyIdsByTabId['tab-1']).toEqual([])
+    expect(store.getState().lastKnownRelayPtyIdByTabId['tab-1']).toBeUndefined()
+  })
+
+  it('does not retain stale completion evidence when pane status changes during hibernation', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const targetLeaf = '11111111-1111-4111-8111-111111111111'
+    const targetPaneKey = `tab-1:${targetLeaf}`
+
+    mockApi.pty.kill.mockImplementationOnce(async () => {
+      store
+        .getState()
+        .setAgentStatus(
+          targetPaneKey,
+          { state: 'working', prompt: 'still running', agentType: 'codex' },
+          'Codex',
+          { updatedAt: 3000, stateStartedAt: 3000 },
+          { tabId: 'tab-1', worktreeId: wt },
+          { providerSession: { key: 'session_id', id: 'target-session' } }
+        )
+    })
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex', ptyId: 'pty-agent' })]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: targetLeaf },
+          activeLeafId: targetLeaf,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [targetLeaf]: 'pty-agent' }
+        }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-agent'] }
+    })
+    store.getState().setAgentStatus(
+      targetPaneKey,
+      {
+        state: 'done',
+        prompt: 'stale done',
+        agentType: 'codex',
+        lastAssistantMessage: 'old done'
+      },
+      'Codex',
+      { updatedAt: 2000, stateStartedAt: 1000 },
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'target-session' } }
+    )
+
+    await store.getState().shutdownCompletedAgentPaneForHibernation(wt, {
+      paneKey: targetPaneKey,
+      tabId: 'tab-1',
+      leafId: targetLeaf,
+      ptyId: 'pty-agent'
+    })
+
+    expect(store.getState().agentStatusByPaneKey[targetPaneKey]).toBeUndefined()
+    expect(store.getState().retainedAgentsByPaneKey[targetPaneKey]).toBeUndefined()
+    expect(store.getState().retentionSuppressedPaneKeys[targetPaneKey]).toBe(true)
+  })
+
+  it('rolls back target suppressions when target-only runtime stop fails', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const targetLeaf = '11111111-1111-4111-8111-111111111111'
+    const siblingLeaf = '22222222-2222-4222-8222-222222222222'
+    const targetPaneKey = `tab-1:${targetLeaf}`
+
+    mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) =>
+      Promise.resolve(
+        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
+          id: 'rpc-default',
+          ok: true,
+          result:
+            args.method === 'terminal.stopExact'
+              ? {
+                  stoppedPtyIds: ['terminal-1'],
+                  livePtyIds: ['terminal-1', 'terminal-2'],
+                  postStopVerified: false,
+                  postStopFailure: 'target_still_live'
+                }
+              : {},
+          _meta: { runtimeId: 'remote-runtime' }
+        }
+      )
+    )
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: targetLeaf },
+            second: { type: 'leaf', leafId: siblingLeaf }
+          },
+          activeLeafId: siblingLeaf,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {
+            [targetLeaf]: 'remote:env-1@@terminal-1',
+            [siblingLeaf]: 'remote:env-1@@terminal-2'
+          }
+        }
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['remote:env-1@@terminal-1', 'remote:env-1@@terminal-2']
+      }
+    })
+    store
+      .getState()
+      .setAgentStatus(
+        targetPaneKey,
+        { state: 'done', prompt: 'resume target', agentType: 'codex' },
+        'Codex',
+        { updatedAt: 2000, stateStartedAt: 1000 },
+        { tabId: 'tab-1', worktreeId: wt },
+        { providerSession: { key: 'session_id', id: 'target-session' } }
+      )
+
+    await expect(
+      store.getState().shutdownCompletedAgentPaneForHibernation(wt, {
+        paneKey: targetPaneKey,
+        tabId: 'tab-1',
+        leafId: targetLeaf,
+        ptyId: 'remote:env-1@@terminal-1',
+        expectedRuntimePtyId: 'terminal-1'
+      })
+    ).rejects.toThrow('target_still_live')
+
+    const state = store.getState()
+    expect(state.ptyIdsByTabId['tab-1']).toEqual([
+      'remote:env-1@@terminal-1',
+      'remote:env-1@@terminal-2'
+    ])
+    expect(state.suppressedPtyExitIds['remote:env-1@@terminal-1']).toBeUndefined()
+    expect(state.suppressedPtyExitIds['terminal-1']).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toBeUndefined()
+    expect(state.agentStatusByPaneKey[targetPaneKey]).toBeDefined()
+  })
+
+  it('records terminal input even before agent sleep is enabled', () => {
     const store = createTestStore()
 
     store.getState().recordTerminalInput('tab-1:leaf-1', 1000)

@@ -32,7 +32,7 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { resolveRemoteOperationErrorMessage } from '@/store/slices/editor'
+import { resolveRemoteOperationErrorMessage } from '@/lib/source-control-remote-error'
 import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
@@ -87,6 +87,12 @@ import {
   buildActiveOpenRowKeys
 } from './source-control-active-open-file-keys'
 import {
+  filterSourceControlGroupedPathEntries,
+  filterSourceControlPathEntries,
+  getSourceControlFileFilterState
+} from './source-control-file-filter'
+import { getCommitMessageTextareaRows } from './source-control-commit-message-rows'
+import {
   SourceControlDiscardDialog,
   type PendingDiscardConfirmation
 } from './source-control-discard-dialog'
@@ -96,12 +102,7 @@ import {
 } from './git-status-refresh'
 import { describeForkPushTarget } from './fork-push-target-label'
 import { toast } from 'sonner'
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger
-} from '@/components/ui/context-menu'
+import { SourceControlEntryContextMenu } from './source-control-entry-context-menu'
 import {
   Dialog,
   DialogClose,
@@ -1313,11 +1314,16 @@ function SourceControlInner(): React.JSX.Element {
         )
       : null
   const activePrFromQueue = activePrCacheKey ? (prCache[activePrCacheKey]?.data ?? null) : null
-  const hostedReview: HostedReviewInfo | null = hostedReviewCacheKey
-    ? activePrFromQueue
-      ? { provider: 'github', ...activePrFromQueue, status: activePrFromQueue.checksStatus }
-      : (hostedReviewEntry?.data ?? null)
-    : null
+  const hostedReviewEntryData = hostedReviewEntry?.data ?? null
+  const hostedReview: HostedReviewInfo | null = useMemo(() => {
+    if (!hostedReviewCacheKey) {
+      return null
+    }
+    if (activePrFromQueue) {
+      return { provider: 'github', ...activePrFromQueue, status: activePrFromQueue.checksStatus }
+    }
+    return hostedReviewEntryData
+  }, [activePrFromQueue, hostedReviewCacheKey, hostedReviewEntryData])
   const effectiveBaseRef = resolveSourceControlBaseRef({
     worktreeBaseRef: normalizedWorktreeBaseRef,
     reviewBaseRefName: hostedReview?.baseRefName,
@@ -1465,27 +1471,22 @@ function SourceControlInner(): React.JSX.Element {
     return groups
   }, [entries])
 
-  const normalizedFilter = filterQuery.toLowerCase()
+  const fileFilterState = useMemo(() => getSourceControlFileFilterState(filterQuery), [filterQuery])
+  const normalizedFilter = fileFilterState.normalizedFilter
   const isGitHistoryVisible =
-    !normalizedFilter && Boolean(activeWorktreeId && worktreePath && !isFolder)
+    !normalizedFilter &&
+    !fileFilterState.tooLarge &&
+    Boolean(activeWorktreeId && worktreePath && !isFolder)
 
-  const filteredGrouped = useMemo(() => {
-    if (!normalizedFilter) {
-      return grouped
-    }
-    return {
-      staged: grouped.staged.filter((e) => e.path.toLowerCase().includes(normalizedFilter)),
-      unstaged: grouped.unstaged.filter((e) => e.path.toLowerCase().includes(normalizedFilter)),
-      untracked: grouped.untracked.filter((e) => e.path.toLowerCase().includes(normalizedFilter))
-    }
-  }, [grouped, normalizedFilter])
+  const filteredGrouped = useMemo(
+    () => filterSourceControlGroupedPathEntries(grouped, fileFilterState),
+    [fileFilterState, grouped]
+  )
 
-  const filteredBranchEntries = useMemo(() => {
-    if (!normalizedFilter) {
-      return branchEntries
-    }
-    return branchEntries.filter((e) => e.path.toLowerCase().includes(normalizedFilter))
-  }, [branchEntries, normalizedFilter])
+  const filteredBranchEntries = useMemo(
+    () => filterSourceControlPathEntries(branchEntries, fileFilterState),
+    [branchEntries, fileFilterState]
+  )
 
   const flatEntries = useMemo(() => {
     const arr: FlatEntry[] = []
@@ -4350,12 +4351,9 @@ function SourceControlInner(): React.JSX.Element {
     if (shouldResetToLoading) {
       beginGitBranchCompareRequest(activeWorktreeId, requestKey, effectiveBaseRef)
     } else {
-      useAppStore.setState((s) => ({
-        gitBranchCompareRequestKeyByWorktree: {
-          ...s.gitBranchCompareRequestKeyByWorktree,
-          [activeWorktreeId]: requestKey
-        }
-      }))
+      beginGitBranchCompareRequest(activeWorktreeId, requestKey, effectiveBaseRef, {
+        preserveExistingSummary: true
+      })
     }
 
     try {
@@ -5265,6 +5263,13 @@ function SourceControlInner(): React.JSX.Element {
             />
           ) : null}
 
+          {fileFilterState.tooLarge && (
+            <EmptyState
+              heading="Search text is too large"
+              supportingText="Use a shorter file filter."
+            />
+          )}
+
           {normalizedFilter && !hasFilteredUncommittedEntries && !hasFilteredBranchEntries && (
             <EmptyState
               heading="No matching files"
@@ -5571,6 +5576,7 @@ function SourceControlInner(): React.JSX.Element {
                                 onSelect={handleSelect}
                                 onContextMenu={handleContextMenu}
                                 onRevealInExplorer={revealInExplorer}
+                                connectionId={activeConnectionId}
                                 onOpen={handleOpenDiff}
                                 onStage={handleStage}
                                 onUnstage={handleUnstage}
@@ -5594,6 +5600,7 @@ function SourceControlInner(): React.JSX.Element {
                                 onSelect={handleSelect}
                                 onContextMenu={handleContextMenu}
                                 onRevealInExplorer={revealInExplorer}
+                                connectionId={activeConnectionId}
                                 onOpen={handleOpenDiff}
                                 onStage={handleStage}
                                 onUnstage={handleUnstage}
@@ -5672,6 +5679,7 @@ function SourceControlInner(): React.JSX.Element {
                           worktreePath={worktreePath}
                           depth={node.depth}
                           onRevealInExplorer={revealInExplorer}
+                          connectionId={activeConnectionId}
                           onOpen={(event) => openCommittedDiff(node.entry, event)}
                           commentCount={diffCommentCountByPath.get(node.entry.path) ?? 0}
                           showPathHint={false}
@@ -5685,6 +5693,7 @@ function SourceControlInner(): React.JSX.Element {
                         currentWorktreeId={currentWorktreeId}
                         worktreePath={worktreePath}
                         onRevealInExplorer={revealInExplorer}
+                        connectionId={activeConnectionId}
                         onOpen={(event) => openCommittedDiff(entry, event)}
                         commentCount={diffCommentCountByPath.get(entry.path) ?? 0}
                       />
@@ -6147,7 +6156,7 @@ export function CommitArea({
   // Why: cap at 12 rows so a pasted multi-page commit message doesn't push
   // the Commit button off-screen. The textarea keeps `resize-none` (matching
   // the existing style) — the browser scrolls internally past 12 rows.
-  const rows = Math.min(12, Math.max(2, commitMessage.split('\n').length))
+  const rows = getCommitMessageTextareaRows(commitMessage)
   // Why: only spin the primary when its label matches what's actually
   // running. The commit-area resolver overrides the primary kind to mirror
   // the in-flight op (e.g. user picks Sync from the dropdown → primary
@@ -7483,6 +7492,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   onSelect,
   onContextMenu,
   onRevealInExplorer,
+  connectionId,
   onOpen,
   onStage,
   onUnstage,
@@ -7500,6 +7510,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   onSelect?: (e: React.MouseEvent, key: string, entry: GitStatusEntry) => void
   onContextMenu?: (key: string) => void
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
+  connectionId?: string | null
   onOpen: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
   onStage: (filePath: string) => Promise<void>
   onUnstage: (filePath: string) => Promise<void>
@@ -7540,6 +7551,8 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
     <SourceControlEntryContextMenu
       currentWorktreeId={currentWorktreeId}
       absolutePath={joinPath(worktreePath, entry.path)}
+      connectionId={connectionId}
+      onView={() => onOpen(entry)}
       onRevealInExplorer={onRevealInExplorer}
       onOpenChange={(open) => {
         if (open && onContextMenu) {
@@ -7746,6 +7759,7 @@ function BranchEntryRow({
   worktreePath,
   depth = 0,
   onRevealInExplorer,
+  connectionId,
   onOpen,
   commentCount,
   showPathHint = true
@@ -7755,7 +7769,8 @@ function BranchEntryRow({
   worktreePath: string
   depth?: number
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
-  onOpen: (event: SourceControlRowOpenEvent) => void
+  connectionId?: string | null
+  onOpen: (event?: SourceControlRowOpenEvent) => void
   commentCount: number
   showPathHint?: boolean
 }): React.JSX.Element {
@@ -7768,6 +7783,8 @@ function BranchEntryRow({
     <SourceControlEntryContextMenu
       currentWorktreeId={currentWorktreeId}
       absolutePath={joinPath(worktreePath, entry.path)}
+      connectionId={connectionId}
+      onView={() => onOpen()}
       onRevealInExplorer={onRevealInExplorer}
     >
       <div
@@ -7813,42 +7830,6 @@ function BranchEntryRow({
         </span>
       </div>
     </SourceControlEntryContextMenu>
-  )
-}
-
-function SourceControlEntryContextMenu({
-  currentWorktreeId,
-  absolutePath,
-  onRevealInExplorer,
-  onOpenChange,
-  children
-}: {
-  currentWorktreeId: string
-  absolutePath?: string
-  onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
-  onOpenChange?: (open: boolean) => void
-  children: React.ReactNode
-}): React.JSX.Element {
-  const handleOpenInFileExplorer = useCallback(() => {
-    if (!absolutePath) {
-      return
-    }
-    onRevealInExplorer(currentWorktreeId, absolutePath)
-  }, [absolutePath, currentWorktreeId, onRevealInExplorer])
-
-  return (
-    <ContextMenu onOpenChange={onOpenChange}>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-      <ContextMenuContent className="w-52">
-        <ContextMenuItem onSelect={handleOpenInFileExplorer} disabled={!absolutePath}>
-          <FolderOpen className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.SourceControl.cc05b2d088',
-            'Open in File Explorer'
-          )}
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
   )
 }
 

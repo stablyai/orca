@@ -11,6 +11,11 @@ import {
   getPowerShellOsc133Bootstrap
 } from '../powershell-osc133-bootstrap'
 
+const CMD_EXE_COMMAND_LINE_MAX_CHARS = 8191
+const STARTUP_COMMAND_TEXT_MAX_CHARS = 6000
+const POWERSHELL_ENCODED_COMMAND_ARG_MAX_CHARS = 28_000
+const CMD_UTF8_SETUP_COMMAND = 'chcp 65001 > nul'
+
 /** Result of resolving a Windows shell to its launch args + effective cwd.
  *
  *  Why this module exists: both the in-process LocalPtyProvider and the
@@ -21,6 +26,9 @@ import {
  *  decision here keeps both paths honest. */
 export type WindowsShellLaunchArgs = {
   shellArgs: string[]
+  /** True when the startup command was embedded in shellArgs and must not be
+   *  written again through stdin. */
+  startupCommandDeliveredInShellArgs?: boolean
   /** The cwd node-pty should be spawned with. WSL cannot cd into a Windows
    *  path, so the wsl.exe branch returns the user's home as the effective cwd
    *  and injects `cd '<linux path>'` into shellArgs instead. */
@@ -36,6 +44,55 @@ export type WindowsShellWslContext = {
   treatPosixCwdAsWsl?: boolean
 }
 
+/**
+ * Returns a startup command that is safe to embed in cmd.exe launch args.
+ *
+ * Commands that could exceed Windows cmd.exe limits return null so callers
+ * keep the older stdin delivery path.
+ */
+function getCmdShellArgStartupCommand(command?: string): string | null {
+  if (!command || command.length > STARTUP_COMMAND_TEXT_MAX_CHARS) {
+    return null
+  }
+  const commandArg = `${CMD_UTF8_SETUP_COMMAND} & ${command}`
+  if (commandArg.length > CMD_EXE_COMMAND_LINE_MAX_CHARS) {
+    return null
+  }
+  return command
+}
+
+/**
+ * Builds the PowerShell -EncodedCommand payload for startup bootstrap.
+ *
+ * Short startup commands are appended to the bootstrap and marked as delivered;
+ * large payloads return the bootstrap alone so stdin delivery remains available.
+ */
+function getPowerShellEncodedCommand(startupCommand?: string): {
+  encodedCommand: string
+  startupCommandDeliveredInShellArgs?: boolean
+} {
+  const bootstrap = getPowerShellOsc133Bootstrap()
+  if (!startupCommand || startupCommand.length > STARTUP_COMMAND_TEXT_MAX_CHARS) {
+    return { encodedCommand: encodePowerShellCommand(bootstrap) }
+  }
+
+  const command = `${bootstrap}\n${startupCommand}`
+  const encodedCommand = encodePowerShellCommand(command)
+  // Why: -EncodedCommand expands UTF-16 text into base64; keep a conservative
+  // margin under Windows CreateProcess' 32,767-character command line limit.
+  if (encodedCommand.length > POWERSHELL_ENCODED_COMMAND_ARG_MAX_CHARS) {
+    return { encodedCommand: encodePowerShellCommand(bootstrap) }
+  }
+
+  return {
+    encodedCommand,
+    startupCommandDeliveredInShellArgs: true
+  }
+}
+
+/**
+ * Builds wsl.exe arguments that enter the target directory through the distro shell.
+ */
 function buildWslShellArgs(linuxCwd: string, distro?: string): string[] {
   const setupCommand = [
     `cd ${quotePosixShell(linuxCwd)}`,
@@ -61,28 +118,35 @@ export function resolveWindowsShellLaunchArgs(
   shellPath: string,
   cwd: string,
   defaultCwd: string,
-  wslContext?: WindowsShellWslContext
+  wslContext?: WindowsShellWslContext,
+  startupCommand?: string
 ): WindowsShellLaunchArgs {
   const shellBasename = pathWin32.basename(shellPath).toLowerCase()
 
   if (shellBasename === 'cmd.exe') {
+    const shellArgStartupCommand = getCmdShellArgStartupCommand(startupCommand)
     return {
-      shellArgs: ['/K', 'chcp 65001 > nul'],
+      shellArgs: [
+        '/K',
+        shellArgStartupCommand
+          ? `${CMD_UTF8_SETUP_COMMAND} & ${shellArgStartupCommand}`
+          : CMD_UTF8_SETUP_COMMAND
+      ],
+      ...(shellArgStartupCommand ? { startupCommandDeliveredInShellArgs: true } : {}),
       effectiveCwd: cwd,
       validationCwd: cwd
     }
   }
 
   if (shellBasename === 'powershell.exe' || shellBasename === 'pwsh.exe') {
+    const powerShellCommand = getPowerShellEncodedCommand(startupCommand)
     // Why: foreground-process status on Windows depends on OSC 133 C/D, and
     // PowerShell needs a prompt/readline bootstrap after profiles finish.
     return {
-      shellArgs: [
-        '-NoLogo',
-        '-NoExit',
-        '-EncodedCommand',
-        encodePowerShellCommand(getPowerShellOsc133Bootstrap())
-      ],
+      shellArgs: ['-NoLogo', '-NoExit', '-EncodedCommand', powerShellCommand.encodedCommand],
+      ...(powerShellCommand.startupCommandDeliveredInShellArgs
+        ? { startupCommandDeliveredInShellArgs: true }
+        : {}),
       effectiveCwd: cwd,
       validationCwd: cwd
     }

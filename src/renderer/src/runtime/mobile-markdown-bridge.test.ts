@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   hashMarkdownContent,
+  MOBILE_MARKDOWN_EDIT_MAX_BYTES,
   type RuntimeMobileMarkdownRequest
 } from '../../../shared/mobile-markdown-document'
 import { attachEditorAutosaveController } from '../components/editor/editor-autosave-controller'
@@ -379,6 +380,66 @@ describe('mobile markdown bridge', () => {
     } finally {
       detachAutosave()
       detachBridge()
+    }
+  })
+
+  it('marks oversized multibyte desktop drafts as read-only for mobile editing', async () => {
+    openMarkdownFile()
+    const content = '😀'.repeat(Math.floor(MOBILE_MARKDOWN_EDIT_MAX_BYTES / 4) + 1)
+    const readFile = vi.fn().mockResolvedValue({ content: 'disk', isBinary: false })
+    const state = useAppStore.getState()
+    state.setEditorDraft('/repo/README.md', content)
+    state.markFileDirty('/repo/README.md', true)
+    setupWindow({ readFile })
+    const detach = attachMobileMarkdownBridge()
+
+    try {
+      const response = await sendRequest({
+        id: 'read-large-multibyte',
+        operation: 'read',
+        worktreeId: 'wt-1',
+        tabId: 'tab-md'
+      })
+
+      expect(response).toMatchObject({
+        id: 'read-large-multibyte',
+        ok: true,
+        result: { editable: false, readOnlyReason: 'file_too_large' }
+      })
+      expect(readFile).not.toHaveBeenCalled()
+    } finally {
+      detach()
+    }
+  })
+
+  it('rejects oversized multibyte mobile saves before writing', async () => {
+    openMarkdownFile()
+    const content = '😀'.repeat(Math.floor(MOBILE_MARKDOWN_EDIT_MAX_BYTES / 4) + 1)
+    const writeFile = vi.fn().mockResolvedValue(undefined)
+    setupWindow({
+      readFile: vi.fn().mockResolvedValue({ content: 'original', isBinary: false }),
+      writeFile
+    })
+    const detach = attachMobileMarkdownBridge()
+
+    try {
+      const response = await sendRequest({
+        id: 'save-large-multibyte',
+        operation: 'save',
+        worktreeId: 'wt-1',
+        tabId: 'tab-md',
+        baseVersion: hashMarkdownContent('original'),
+        content
+      })
+
+      expect(response).toMatchObject({
+        id: 'save-large-multibyte',
+        ok: false,
+        error: 'file_too_large'
+      })
+      expect(writeFile).not.toHaveBeenCalled()
+    } finally {
+      detach()
     }
   })
 })

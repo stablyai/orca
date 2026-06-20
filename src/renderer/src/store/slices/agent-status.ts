@@ -52,6 +52,10 @@ type DropAgentStatusByWorktreeOptions = {
   retainedCompletionEvidence?: readonly RetainedAgentEntry[]
 }
 
+type DropHibernatedAgentPaneOptions = {
+  retainedCompletionEvidence?: readonly RetainedAgentEntry[]
+}
+
 export type AgentStatusSlice = {
   /** Explicit agent status entries keyed by `${tabId}:${leafId}` composite.
    *  Real-time only — lives in renderer memory, not persisted to disk. */
@@ -113,6 +117,14 @@ export type AgentStatusSlice = {
    *  Used on tab close — the user is tearing down the whole tab, so any
    *  remaining agent rows (live or retained) must not reappear. */
   dropAgentStatusByTabPrefix: (tabIdPrefix: string) => void
+
+  /** Remove one automatically hibernated completed-agent pane while preserving
+   *  sibling live/retained rows in the same worktree. */
+  dropHibernatedAgentStatusPane: (
+    worktreeId: string,
+    paneKey: string,
+    opts?: DropHibernatedAgentPaneOptions
+  ) => void
 
   /** Remove all entries for a worktree AND suppress re-retention for live rows.
    *  Used on worktree sleep/remove — the whole worktree surface is folding, so
@@ -1104,6 +1116,96 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           agentStatusEpoch:
             hadLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
           sortEpoch: hadLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
+        }
+      })
+      if (hadLive) {
+        queueMicrotask(() => freshness.schedule())
+      }
+    },
+
+    dropHibernatedAgentStatusPane: (worktreeId, paneKey, opts) => {
+      let hadLive = false
+      set((s) => {
+        const liveEntry = s.agentStatusByPaneKey[paneKey]
+        const hasLive = liveEntry !== undefined
+        const hasRetained = paneKey in s.retainedAgentsByPaneKey
+        const migrationUnsupported = pruneMigrationUnsupportedEntries(
+          s.migrationUnsupportedByPtyId,
+          (entry) => entry.paneKey === paneKey
+        )
+        const retainedEvidence = new Map<string, RetainedAgentEntry>()
+        for (const retained of opts?.retainedCompletionEvidence ?? []) {
+          if (
+            retained.entry.paneKey === paneKey &&
+            !liveEntry &&
+            shouldReplaceRetainedWithLive(retainedEvidence.get(paneKey), retained)
+          ) {
+            retainedEvidence.set(paneKey, retained)
+          }
+        }
+        if (
+          liveEntry?.state === 'done' &&
+          liveEntry.agentType !== undefined &&
+          liveEntry.interrupted !== true
+        ) {
+          retainedEvidence.set(
+            paneKey,
+            retainedAgentEntryFromLive(s, worktreeId, liveEntry, liveEntry.agentType)
+          )
+        }
+        const keepsCompletionEvidence = retainedEvidence.has(paneKey)
+        let nextAck = s.acknowledgedAgentsByPaneKey
+        if (!keepsCompletionEvidence && paneKey in nextAck) {
+          nextAck = { ...nextAck }
+          delete nextAck[paneKey]
+        }
+        if (!hasLive && !hasRetained && !migrationUnsupported.changed && !keepsCompletionEvidence) {
+          if (nextAck !== s.acknowledgedAgentsByPaneKey) {
+            return { acknowledgedAgentsByPaneKey: nextAck }
+          }
+          return s
+        }
+        hadLive = hasLive
+
+        const nextLive = hasLive ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
+        if (hasLive) {
+          delete nextLive[paneKey]
+        }
+
+        const nextRetained =
+          hasRetained || keepsCompletionEvidence
+            ? { ...s.retainedAgentsByPaneKey }
+            : s.retainedAgentsByPaneKey
+        if (hasRetained && !keepsCompletionEvidence) {
+          delete nextRetained[paneKey]
+        }
+        for (const [key, retained] of retainedEvidence) {
+          if (shouldReplaceRetainedWithLive(nextRetained[key], retained)) {
+            nextRetained[key] = retained
+          }
+        }
+
+        const needsSuppressor =
+          hasLive && !keepsCompletionEvidence && !(paneKey in s.retentionSuppressedPaneKeys)
+
+        return {
+          agentStatusByPaneKey: nextLive,
+          retainedAgentsByPaneKey: nextRetained,
+          migrationUnsupportedByPtyId: migrationUnsupported.next,
+          ...(nextAck !== s.acknowledgedAgentsByPaneKey
+            ? { acknowledgedAgentsByPaneKey: nextAck }
+            : {}),
+          ...(needsSuppressor
+            ? {
+                retentionSuppressedPaneKeys: {
+                  ...s.retentionSuppressedPaneKeys,
+                  [paneKey]: true
+                }
+              }
+            : {}),
+          agentStatusEpoch:
+            hasLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
+          sortEpoch: hasLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
         }
       })
       if (hadLive) {

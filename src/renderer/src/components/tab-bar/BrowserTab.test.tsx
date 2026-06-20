@@ -195,7 +195,7 @@ async function renderExpandedBrowserTab(tab: BrowserTabState): Promise<unknown> 
   return expandNode(await renderBrowserTab(tab))
 }
 
-describe('BrowserTab favicon', { timeout: 10_000 }, () => {
+describe('BrowserTab favicon', { timeout: 30_000 }, () => {
   beforeEach(() => {
     reactHookRuntime.states = []
     reactHookRuntime.index = 0

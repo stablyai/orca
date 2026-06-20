@@ -1269,6 +1269,65 @@ describe('createPtySubprocess', () => {
     )
   })
 
+  it('embeds short PowerShell startup commands in the Windows shell launch', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    let handle: ReturnType<typeof createPtySubprocess>
+    try {
+      handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe',
+        command: "& 'codex' '--no-alt-screen'"
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const lastCall = spawnMock.mock.calls.at(-1)!
+    const encoded = String(lastCall[1][3])
+    const command = Buffer.from(encoded, 'base64').toString('utf16le')
+    expect(command.trimEnd().endsWith("& 'codex' '--no-alt-screen'")).toBe(true)
+    expect(handle!.startupCommandDeliveredInShellArgs).toBe(true)
+  })
+
+  it('keeps oversized Windows startup commands on PTY stdin delivery', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    let handle: ReturnType<typeof createPtySubprocess>
+    try {
+      handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        shellOverride: 'cmd.exe',
+        command: `codex ${'x'.repeat(7000)}`
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'cmd.exe',
+      ['/K', 'chcp 65001 > nul'],
+      expect.any(Object)
+    )
+    expect(handle!.startupCommandDeliveredInShellArgs).toBeUndefined()
+  })
+
   it('launches Git Bash with login args and CHERE_INVOKING on Windows', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)

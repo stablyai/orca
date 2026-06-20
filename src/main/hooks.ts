@@ -147,13 +147,16 @@ const RECOGNIZED_ORCA_YAML_KEYS = new Set(['scripts', 'issueCommand', 'defaultTa
 export function hasUnrecognizedOrcaYamlKeys(repoPath: string): boolean {
   try {
     const content = readFileSync(join(repoPath, 'orca.yaml'), 'utf-8')
-    return content.split(/\r?\n/).some((line) => {
+    for (const line of iterateLfScriptLines(content)) {
       // Why: bare `key:` at end-of-line (no trailing space) is valid YAML for
       // a mapping with a block value on the next line. Match both forms so
       // newer keys like `futureFeature:\n  nested` are still detected.
       const m = line.match(/^([A-Za-z][A-Za-z0-9_-]*):(\s|$)/)
-      return m != null && !RECOGNIZED_ORCA_YAML_KEYS.has(m[1])
-    })
+      if (m != null && !RECOGNIZED_ORCA_YAML_KEYS.has(m[1])) {
+        return true
+      }
+    }
+    return false
   } catch {
     return false
   }
@@ -466,13 +469,12 @@ function getHookWslContext(
 }
 
 export function buildWindowsRunnerScript(script: string): string {
-  const lines = script.replace(/\r?\n/g, '\n').split('\n')
-  const runnerLines = ['@echo off', 'setlocal EnableExtensions']
+  let runnerScript = '@echo off\r\nsetlocal EnableExtensions\r\n'
 
-  for (const rawLine of lines) {
+  for (const rawLine of iterateLfScriptLines(script)) {
     const command = rawLine.trim()
     if (!command) {
-      runnerLines.push('')
+      runnerScript += '\r\n'
       continue
     }
 
@@ -481,11 +483,27 @@ export function buildWindowsRunnerScript(script: string): string {
     // to later lines, and plain newline-separated commands also keep running
     // after failures. Wrap each line in `call` and bail on non-zero exit codes
     // so the generated runner matches the fail-fast behavior of `set -e`.
-    runnerLines.push(`call ${command}`)
-    runnerLines.push('if errorlevel 1 exit /b %errorlevel%')
+    runnerScript += `call ${command}\r\nif errorlevel 1 exit /b %errorlevel%\r\n`
   }
 
-  return `${runnerLines.join('\r\n')}\r\n`
+  return runnerScript
+}
+
+function* iterateLfScriptLines(script: string): Generator<string> {
+  let lineStart = 0
+
+  for (let index = 0; index < script.length; index++) {
+    if (script.charCodeAt(index) !== 10) {
+      continue
+    }
+    const lineEnd = index > lineStart && script.charCodeAt(index - 1) === 13 ? index - 1 : index
+    yield script.slice(lineStart, lineEnd)
+    lineStart = index + 1
+  }
+
+  if (lineStart <= script.length) {
+    yield script.slice(lineStart)
+  }
 }
 
 export function createSetupRunnerScript(
@@ -508,7 +526,28 @@ export function getSetupRunnerEnvVars(repo: Repo, worktreePath: string): Record<
 }
 
 export function buildPosixRunnerScript(script: string): string {
-  return `#!/usr/bin/env bash\nset -e\n${script.replace(/\r\n/g, '\n')}\n`
+  return `#!/usr/bin/env bash\nset -e\n${normalizeCrlfScriptLineEndings(script)}\n`
+}
+
+function normalizeCrlfScriptLineEndings(script: string): string {
+  let crlfStart = script.indexOf('\r\n')
+  if (crlfStart === -1) {
+    return script
+  }
+
+  let normalized = script.slice(0, crlfStart)
+  let chunkStart = crlfStart + 2
+  normalized += '\n'
+  crlfStart = script.indexOf('\r\n', chunkStart)
+
+  while (crlfStart !== -1) {
+    normalized += script.slice(chunkStart, crlfStart)
+    normalized += '\n'
+    chunkStart = crlfStart + 2
+    crlfStart = script.indexOf('\r\n', chunkStart)
+  }
+
+  return `${normalized}${script.slice(chunkStart)}`
 }
 
 export function createIssueCommandRunnerScript(
@@ -543,9 +582,6 @@ function createWorktreeRunnerScript(
   // is 'win32'. Use bash scripts for WSL, .cmd for native Windows.
   const wslWorktree = isWslPath(worktreePath) || Boolean(runtimeTarget?.wslDistro)
   const useWindowsFormat = process.platform === 'win32' && !wslWorktree
-  const normalizedScript = useWindowsFormat
-    ? script.replace(/\r?\n/g, '\r\n')
-    : script.replace(/\r\n/g, '\n')
   // Why: linked git worktrees use a `.git` file that points at the real gitdir,
   // so writing under `${worktreePath}/.git/...` fails. `git rev-parse --git-path`
   // resolves the actual per-worktree git storage path safely across platforms.
@@ -565,9 +601,9 @@ function createWorktreeRunnerScript(
   mkdirSync(dirname(runnerScriptPath), { recursive: true })
 
   if (useWindowsFormat) {
-    writeFileSync(runnerScriptPath, buildWindowsRunnerScript(normalizedScript), 'utf-8')
+    writeFileSync(runnerScriptPath, buildWindowsRunnerScript(script), 'utf-8')
   } else {
-    writeFileSync(runnerScriptPath, `#!/usr/bin/env bash\nset -e\n${normalizedScript}\n`, 'utf-8')
+    writeFileSync(runnerScriptPath, buildPosixRunnerScript(script), 'utf-8')
     // Why: chmod via UNC paths to WSL filesystem is supported by Windows and
     // sets the execute bit correctly inside WSL.
     chmodSync(runnerScriptPath, 0o755)

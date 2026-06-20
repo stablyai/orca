@@ -12,6 +12,7 @@ import { isPwshAvailable } from '../pwsh'
 import { isWslAvailable, listWslDistros } from '../wsl'
 import { isGitBashAvailable } from '../git-bash'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
+import { destroySystemTray } from '../tray/system-tray'
 import { authorizeExternalPath } from './filesystem-auth'
 import {
   ensureDefaultFloatingWorkspacePath,
@@ -214,6 +215,9 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     // Mark shutdown first because app.exit() can bypass the usual quit latch.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     setTimeout(() => {
+      // Why: app.exit(0) skips before-quit/will-quit, so clean the Windows tray
+      // explicitly before relaunching to avoid a stale notification-area icon.
+      destroySystemTray()
       app.relaunch()
       app.exit(0)
     }, 150)

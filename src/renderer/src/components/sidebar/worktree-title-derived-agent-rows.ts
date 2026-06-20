@@ -1,5 +1,9 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import { detectAgentStatusFromTitle, getAgentLabel } from '@/lib/agent-status'
+import {
+  detectAgentStatusFromTitle,
+  getAgentLabel,
+  isClaudeManagementTitle
+} from '@/lib/agent-status'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import {
   type AgentStatusEntry,
@@ -117,8 +121,12 @@ function buildTitleDerivedAgentRow(args: {
   now: number
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
 }): DashboardAgentRow | null {
-  const status = detectAgentStatusFromTitle(args.title)
-  const label = getAgentLabel(args.title)
+  const isClaudeAgentsTitle = isClaudeManagementTitle(args.title)
+  // Why: `claude agents` is a live Claude Code Agent Teams surface, but the
+  // shared detector keeps it neutral so runtime liveness probes do not treat
+  // the management/list screen as active work.
+  const status = isClaudeAgentsTitle ? 'idle' : detectAgentStatusFromTitle(args.title)
+  const label = isClaudeAgentsTitle ? 'Claude Code' : getAgentLabel(args.title)
   if (!status || !label) {
     return null
   }
@@ -127,7 +135,7 @@ function buildTitleDerivedAgentRow(args: {
   }
   const paneKey = makePaneKey(args.tab.id, args.leafId)
   const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
-  const agentType = resolveTitleDerivedAgentType(args.title, label)
+  const agentType = isClaudeAgentsTitle ? 'claude' : resolveTitleDerivedAgentType(args.title, label)
   if (!agentType) {
     return null
   }

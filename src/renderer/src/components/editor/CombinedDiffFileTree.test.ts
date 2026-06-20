@@ -5,6 +5,11 @@ import {
   getCombinedDiffFileTreeSectionKey,
   handleCombinedDiffFileTreeNavigation
 } from './CombinedDiffFileTree'
+import {
+  COMBINED_DIFF_FILE_TREE_QUERY_MAX_BYTES,
+  getFilteredCombinedDiffFileTreeEntries,
+  isCombinedDiffFileTreeQueryTooLarge
+} from './combined-diff-file-tree-model'
 import type { GitBranchChangeEntry, GitStatusEntry } from '../../../../shared/types'
 
 describe('CombinedDiffFileTree navigation mapping', () => {
@@ -59,5 +64,42 @@ describe('CombinedDiffFileTree navigation mapping', () => {
     expect(index).toBe(1)
     expect(toggleSection).toHaveBeenCalledWith(1)
     expect(scrollToIndex).toHaveBeenCalledWith(1)
+  })
+
+  it('rejects oversized pasted filters before reading diff entries', () => {
+    const oversizedQuery = 'secret-diff-filter'.repeat(COMBINED_DIFF_FILE_TREE_QUERY_MAX_BYTES)
+    const entry = {
+      get path(): string {
+        throw new Error('oversized diff filters must not scan paths')
+      },
+      get status(): GitBranchChangeEntry['status'] {
+        throw new Error('oversized diff filters must not scan statuses')
+      }
+    } as GitBranchChangeEntry
+
+    expect(isCombinedDiffFileTreeQueryTooLarge(oversizedQuery)).toBe(true)
+    expect(
+      getFilteredCombinedDiffFileTreeEntries({
+        entries: [entry],
+        mode: 'branch',
+        query: oversizedQuery,
+        excludedExtensions: new Set(),
+        includeViewed: true,
+        viewedSectionKeys: new Set()
+      })
+    ).toEqual([])
+  })
+
+  it('rejects oversized whitespace before trimming diff filters', () => {
+    expect(
+      getFilteredCombinedDiffFileTreeEntries({
+        entries: [],
+        mode: 'branch',
+        query: ' '.repeat(COMBINED_DIFF_FILE_TREE_QUERY_MAX_BYTES + 1),
+        excludedExtensions: new Set(),
+        includeViewed: true,
+        viewedSectionKeys: new Set()
+      })
+    ).toEqual([])
   })
 })

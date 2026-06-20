@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { clipboardHasImage, handleRichMarkdownImagePaste } from './rich-markdown-paste-image'
 import { insertRichMarkdownImageFromPath } from './rich-markdown-image-insert'
@@ -39,9 +41,15 @@ function pasteEvent(items: Partial<DataTransferItem>[]): ClipboardEvent {
   } as unknown as ClipboardEvent
 }
 
-function editorAt(position: number) {
+function editorAt(position: number, destroyedRef: { current: boolean } = { current: false }) {
+  const dom = document.createElement('div')
+  document.body.appendChild(dom)
   return {
-    state: { selection: { from: position } }
+    get isDestroyed() {
+      return destroyedRef.current
+    },
+    state: { selection: { from: position } },
+    view: { dom }
   }
 }
 
@@ -52,6 +60,7 @@ async function flushPromises(): Promise<void> {
 
 describe('rich markdown image paste', () => {
   beforeEach(() => {
+    document.body.replaceChildren()
     vi.clearAllMocks()
     vi.stubGlobal('window', {
       api: {
@@ -98,7 +107,8 @@ describe('rich markdown image paste', () => {
       sourcePath: '/tmp/orca-paste-image.png',
       worktreeId: 'wt-1',
       runtimeEnvironmentId: undefined,
-      insertPos: 7
+      insertPos: 7,
+      canInsert: expect.any(Function)
     })
   })
 
@@ -117,5 +127,27 @@ describe('rich markdown image paste', () => {
     expect(window.api.ui.saveClipboardImageAsTempFile).toHaveBeenCalledWith({
       connectionId: undefined
     })
+  })
+
+  it('does not insert a pasted image after the editor is destroyed', async () => {
+    const destroyedRef = { current: false }
+    const event = pasteEvent([{ kind: 'file', type: 'image/png' }])
+    const editor = editorAt(5, destroyedRef)
+    vi.mocked(window.api.ui.saveClipboardImageAsTempFile).mockImplementation(async () => {
+      destroyedRef.current = true
+      return '/tmp/orca-paste-image.png'
+    })
+
+    expect(
+      handleRichMarkdownImagePaste({
+        editor: editor as never,
+        event,
+        filePath: '/repo/note.md',
+        worktreeId: 'wt-1'
+      })
+    ).toBe(true)
+
+    await flushPromises()
+    expect(insertRichMarkdownImageFromPath).not.toHaveBeenCalled()
   })
 })

@@ -23,6 +23,13 @@ import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers
 import { isShellProcess } from '../../shared/agent-detection'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
+import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+
+type ColdRestorePayload = {
+  scrollback: string
+  cwd: string
+  oscLinks?: TerminalOscLinkRange[]
+}
 
 export type DaemonPtyAdapterOptions = {
   socketPath: string
@@ -72,7 +79,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // Why: React StrictMode double-mounts: mount → cold restore → unmount →
   // mount → ??? The sticky cache returns the same cold restore data on the
   // second mount until the renderer explicitly acknowledges it.
-  private coldRestoreCache = new Map<string, { scrollback: string; cwd: string }>()
+  private coldRestoreCache = new Map<string, ColdRestorePayload>()
   private activeSessionIds = new Set<string>()
   private dirtySessionVersions = new Map<string, number>()
   // Why: a cold-restored session is a fresh shell whose on-disk checkpoint and
@@ -221,7 +228,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
       }
       if (scrollback) {
-        const coldRestore = { scrollback, cwd: restoreInfo.cwd }
+        const coldRestore = { scrollback, cwd: restoreInfo.cwd, oscLinks: restoreInfo.oscLinks }
         this.coldRestoreCache.set(sessionId, coldRestore)
         return { id: sessionId, pid, coldRestore }
       }
@@ -296,6 +303,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.activeSessionIds.delete(id)
     this.dirtySessionVersions.delete(id)
     this.coldRestoreCache.delete(id)
+    // Why: the !keepHistory close path doesn't take a final checkpoint, so a
+    // session stranded in sessionsNeedingFullCheckpoint would never be cleared.
+    // (Under keepHistory the final checkpoint above already cleared the flag, so
+    // this is a harmless no-op there — kept unconditional to cover both paths.)
+    this.sessionsNeedingFullCheckpoint.delete(id)
     this.stopCheckpointTimerIfIdle()
     this.initialCwds.delete(id)
     // Why: history removal is for the "user explicitly closed this terminal"
@@ -866,6 +878,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
         this.activeSessionIds.delete(event.sessionId)
         this.dirtySessionVersions.delete(event.sessionId)
         this.coldRestoreCache.delete(event.sessionId)
+        // Why: an exited session can never be checkpointed again, so its pending
+        // full-checkpoint flag is dead state. Without this, a cold-restored
+        // session that exits before its first checkpoint leaks a permanent entry.
+        this.sessionsNeedingFullCheckpoint.delete(event.sessionId)
         this.stopCheckpointTimerIfIdle()
         if (this.historyManager) {
           void this.historyManager

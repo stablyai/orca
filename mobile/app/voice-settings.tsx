@@ -19,6 +19,7 @@ import type { RpcClient } from '../src/transport/rpc-client'
 import { BottomDrawer } from '../src/components/BottomDrawer'
 import { VoiceModelList } from '../src/components/VoiceModelList'
 import {
+  deleteDictationModel,
   downloadDictationModel,
   fetchDictationSetup,
   isModelInFlight,
@@ -33,6 +34,8 @@ const DICTATION_MODES = [
   { value: 'toggle', label: 'Toggle' },
   { value: 'hold', label: 'Hold' }
 ] as const
+
+type ModelBusyAction = { modelId: string; type: 'download' | 'select' | 'delete' }
 
 export default function VoiceSettingsScreen(): React.JSX.Element {
   const router = useRouter()
@@ -53,7 +56,7 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
   const [setup, setSetup] = useState<MobileSpeechSetup | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [busyModelId, setBusyModelId] = useState<string | null>(null)
+  const [busyAction, setBusyAction] = useState<ModelBusyAction | null>(null)
   const [modelDrawerOpen, setModelDrawerOpen] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -134,7 +137,7 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
       if (!client) {
         return
       }
-      setBusyModelId(model.id)
+      setBusyAction({ modelId: model.id, type: 'select' })
       setError(null)
       try {
         setSetup(await setDictationConfig(client, { enabled: true, modelId: model.id }))
@@ -142,7 +145,7 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not select model')
       } finally {
-        setBusyModelId(null)
+        setBusyAction(null)
       }
     },
     [client]
@@ -153,7 +156,7 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
       if (!client) {
         return
       }
-      setBusyModelId(model.id)
+      setBusyAction({ modelId: model.id, type: 'download' })
       setError(null)
       try {
         await downloadDictationModel(client, model.id)
@@ -161,10 +164,32 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Download failed')
       } finally {
-        setBusyModelId(null)
+        setBusyAction(null)
       }
     },
     [client, refresh]
+  )
+
+  const handleDelete = useCallback(
+    async (model: MobileSpeechModel) => {
+      if (!client) {
+        return
+      }
+      const deletedSelectedModel = setup?.selectedModelId === model.id
+      setBusyAction({ modelId: model.id, type: 'delete' })
+      setError(null)
+      try {
+        setSetup(await deleteDictationModel(client, model.id))
+        if (deletedSelectedModel) {
+          setModelDrawerOpen(false)
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Delete failed')
+      } finally {
+        setBusyAction(null)
+      }
+    },
+    [client, setup?.selectedModelId]
   )
 
   const enabled = setup?.enabled ?? false
@@ -276,9 +301,10 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
           <VoiceModelList
             setup={setup}
             disabled={false}
-            busyModelId={busyModelId}
+            busyAction={busyAction}
             onUseModel={(m) => void handleUseModel(m)}
             onDownload={(m) => void handleDownload(m)}
+            onDelete={(m) => void handleDelete(m)}
           />
         ) : null}
       </BottomDrawer>

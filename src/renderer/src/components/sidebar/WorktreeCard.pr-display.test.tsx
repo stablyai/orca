@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { GlobalSettings, Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
+import { COMPACT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree-card-properties'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
 const fetchHostedReviewForBranch = vi.fn()
@@ -123,6 +124,12 @@ function renderWorktreeCardMarkup(element: ReactNode): string {
   return renderToStaticMarkup(<>{element}</>)
 }
 
+function getInlineRenameTitleTag(markup: string): string {
+  const match = markup.match(/<span[^>]*data-worktree-title-inline-rename=""[^>]*>/)
+  expect(match).not.toBeNull()
+  return match?.[0] ?? ''
+}
+
 describe('WorktreeCard linked PR display', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -143,6 +150,66 @@ describe('WorktreeCard linked PR display', () => {
     expect(markup).toContain('bg-emerald-500')
     expect(markup).not.toContain('PR: Open')
     expect(markup).not.toContain('Linked PR #456')
+  }, 20_000)
+
+  it('keeps compact toggle-off unread and read-title visuals legacy', async () => {
+    settings = { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: false }
+    hostedReviewCache = {
+      'local::repo-1::feature/local-branch': {
+        data: makeHostedReview({ status: 'failure' }),
+        fetchedAt: Date.now()
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const unreadMarkup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ linkedPR: 456, isUnread: true })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+    const readMarkup = renderWorktreeCardMarkup(
+      <WorktreeCard worktree={makeWorktree({ linkedPR: 456 })} repo={makeRepo()} isActive={false} />
+    )
+    const readTitleTag = getInlineRenameTitleTag(readMarkup)
+
+    expect(unreadMarkup).toContain('aria-label="Mark as read"')
+    expect(unreadMarkup).toContain('text-amber-500')
+    expect(unreadMarkup).not.toContain('PR checks: Failed · Mark read')
+    expect(unreadMarkup).not.toContain('size-[13px] translate-x-px')
+    expect(readTitleTag).toContain('font-normal text-foreground')
+    expect(readTitleTag).not.toContain('text-foreground/80')
+  }, 20_000)
+
+  it('applies experimental unread status and read-title visuals only when enabled', async () => {
+    settings = { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: true }
+    hostedReviewCache = {
+      'local::repo-1::feature/local-branch': {
+        data: makeHostedReview({ status: 'failure' }),
+        fetchedAt: Date.now()
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const unreadMarkup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ linkedPR: 456, isUnread: true })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+    const readMarkup = renderWorktreeCardMarkup(
+      <WorktreeCard worktree={makeWorktree({ linkedPR: 456 })} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(unreadMarkup).toContain('aria-label="Mark as read"')
+    expect(unreadMarkup).toContain('PR checks: Failed · Mark read')
+    expect(unreadMarkup).toContain('size-[13px] translate-x-px')
+    expect(unreadMarkup).not.toContain('lucide-bell')
+    expect(unreadMarkup).not.toContain('text-amber-500')
+    expect(getInlineRenameTitleTag(unreadMarkup)).toContain('font-semibold text-foreground')
+    expect(getInlineRenameTitleTag(readMarkup)).toContain('font-normal text-foreground/80')
   }, 20_000)
 
   it('shows linked GH PR status in the left status slot before hosted review details are cached when new card style is on', async () => {
@@ -363,9 +430,41 @@ describe('WorktreeCard linked PR display', () => {
 
     expect(markup).toContain('Created by automation')
     expect(markup).not.toContain('>Automation</span>')
-  })
+  }, 20_000)
 
-  it('shows the automation metadata icon in compact card mode', async () => {
+  it('hides the automation metadata icon in compact card mode by preset default', async () => {
+    settings = { compactWorktreeCards: true }
+    worktreeCardProperties = [...COMPACT_WORKTREE_CARD_PROPERTIES]
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          automationProvenance: {
+            kind: 'created-by-automation',
+            automationId: 'automation-1',
+            automationNameSnapshot: 'Nightly triage automation',
+            automationRunId: 'run-1',
+            automationRunTitleSnapshot: 'Nightly triage run',
+            createdAt: 1,
+            executionTargetType: 'local',
+            executionTargetId: 'local',
+            projectId: 'repo-1',
+            repoId: 'repo-1',
+            hostId: 'local'
+          }
+        })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).not.toContain('Created by automation')
+    expect(markup).not.toContain('>Automation</span>')
+    expect(markup).not.toContain('Nightly triage automation')
+  }, 20_000)
+
+  it('shows the automation metadata icon in compact card mode when manually enabled', async () => {
     settings = { compactWorktreeCards: true }
     worktreeCardProperties = ['status', 'automation']
     const { default: WorktreeCard } = await import('./WorktreeCard')
@@ -394,7 +493,7 @@ describe('WorktreeCard linked PR display', () => {
 
     expect(markup).toContain('Created by automation')
     expect(markup).not.toContain('>Automation</span>')
-  })
+  }, 20_000)
 
   it('hides automation-created card surfaces when the Automation property is disabled', async () => {
     worktreeCardProperties = ['status']

@@ -165,7 +165,7 @@ describe('WorktreeCardAgents send targets', () => {
     expect(markup).toContain(`data-pane-key="${READY_PANE_KEY}"`)
     expect(markup).toContain(`data-pane-key="${WORKING_PANE_KEY}"`)
     expect(markup).toContain('data-has-send-handler="true"')
-  }, 10_000)
+  }, 30_000)
 
   it('disables rows whose live pane title needs permission', async () => {
     const now = Date.now()

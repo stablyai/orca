@@ -529,9 +529,7 @@ describe('worktree RPC methods', () => {
     )
 
     expect(response).toMatchObject({ ok: false })
-    expect(JSON.stringify(response)).toContain(
-      'Choose either a parent workspace flag or --no-parent'
-    )
+    expect(JSON.stringify(response)).toContain('Choose either one parent selector or --no-parent')
     expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
   })
 

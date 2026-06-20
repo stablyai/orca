@@ -10,6 +10,7 @@ import type { EventProps } from '../../../../shared/telemetry-events'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import { ackPtyData, exposeE2eTerminalPtyAckGate } from './terminal-pty-ack-gate'
+import { clampUtf8Tail, type EagerBufferChunk } from './pty-eager-buffer-clamp'
 
 // ── Singleton PTY event dispatcher ───────────────────────────────────
 // One global IPC listener per channel, routes events to transports by
@@ -28,6 +29,8 @@ export type PtyBufferSnapshot = {
   seq?: number
   source?: 'headless' | 'renderer'
 }
+
+export type LocalPtySessionMetadata = { cwd?: string; shellOverride?: string }
 
 export const ptyDataHandlers = new Map<string, (data: string, meta?: PtyDataMeta) => void>()
 /** Sidecar subscriptions that observe PTY data without owning the primary
@@ -72,6 +75,13 @@ const ptyExitSidecars = new Map<string, Set<(code: number) => void>>()
 export const ptyTeardownHandlers = new Map<string, () => void>()
 let ptyDispatcherAttached = false
 
+export type PtyDataHandlerShutdownSnapshot = {
+  ptyId: string
+  dataHandler?: (data: string, meta?: PtyDataMeta) => void
+  replayHandler?: (data: string) => void
+  teardownHandler?: () => void
+}
+
 /**
  * Remove data and status handlers for the given PTY IDs so that any final
  * data flushed by the main process during PTY teardown cannot trigger
@@ -82,12 +92,36 @@ let ptyDispatcherAttached = false
  * Exit handlers are intentionally kept alive so the normal exit-cleanup
  * path (unregister, clear stale timers, update store) still runs.
  */
-export function unregisterPtyDataHandlers(ptyIds: string[]): void {
+export function unregisterPtyDataHandlers(ptyIds: string[]): PtyDataHandlerShutdownSnapshot[] {
+  const snapshots: PtyDataHandlerShutdownSnapshot[] = []
   for (const id of ptyIds) {
+    snapshots.push({
+      ptyId: id,
+      dataHandler: ptyDataHandlers.get(id),
+      replayHandler: ptyReplayHandlers.get(id),
+      teardownHandler: ptyTeardownHandlers.get(id)
+    })
     ptyDataHandlers.delete(id)
     ptyReplayHandlers.delete(id)
     ptyTeardownHandlers.get(id)?.()
     ptyTeardownHandlers.delete(id)
+  }
+  return snapshots
+}
+
+export function restorePtyDataHandlersAfterFailedShutdown(
+  snapshots: readonly PtyDataHandlerShutdownSnapshot[]
+): void {
+  for (const snapshot of snapshots) {
+    if (snapshot.dataHandler) {
+      ptyDataHandlers.set(snapshot.ptyId, snapshot.dataHandler)
+    }
+    if (snapshot.replayHandler) {
+      ptyReplayHandlers.set(snapshot.ptyId, snapshot.replayHandler)
+    }
+    if (snapshot.teardownHandler) {
+      ptyTeardownHandlers.set(snapshot.ptyId, snapshot.teardownHandler)
+    }
   }
 }
 
@@ -173,13 +207,6 @@ export function subscribeToPtyExit(ptyId: string, watcher: (code: number) => voi
 
 export type EagerPtyHandle = { flush: () => string; dispose: () => void }
 const eagerPtyHandles = new Map<string, EagerPtyHandle>()
-const eagerBufferTextEncoder = new TextEncoder()
-const eagerBufferTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true })
-
-type EagerBufferChunk = {
-  data: string
-  bytes: number
-}
 
 export function getEagerPtyBufferHandle(ptyId: string): EagerPtyHandle | undefined {
   return eagerPtyHandles.get(ptyId)
@@ -189,19 +216,6 @@ export function getEagerPtyBufferHandle(ptyId: string): EagerPtyHandle | undefin
 // serialization. Prevents unbounded memory growth if a restored shell
 // runs a long-lived command (e.g. tail -f) in a worktree the user never opens.
 const EAGER_BUFFER_MAX_BYTES = 512 * 1024
-
-function clampUtf8Tail(data: string, maxBytes: number): EagerBufferChunk {
-  const encoded = eagerBufferTextEncoder.encode(data)
-  if (encoded.byteLength <= maxBytes) {
-    return { data, bytes: encoded.byteLength }
-  }
-  let start = encoded.byteLength - maxBytes
-  while (start < encoded.byteLength && (encoded[start] & 0xc0) === 0x80) {
-    start += 1
-  }
-  const tail = eagerBufferTextDecoder.decode(encoded.subarray(start))
-  return { data: tail, bytes: encoded.byteLength - start }
-}
 
 export function registerEagerPtyBuffer(
   ptyId: string,
@@ -342,10 +356,11 @@ export type PtyTransport = {
   ) => boolean
   isConnected: () => boolean
   getPtyId: () => string | null
+  getConnectionId?: () => string | null | undefined
+  getLocalSessionMetadata?: () => LocalPtySessionMetadata | null
   serializeBuffer?: (opts?: { scrollbackRows?: number }) => Promise<PtyBufferSnapshot | null>
   preserve?: () => void
-  /** Unregister PTY handlers without killing the process, so a remounted
-   *  pane can reattach to the same running shell. */
+  /** Unregister PTY handlers without killing the process for pane remounts. */
   detach?: () => void
   destroy?: () => void | Promise<void>
 }

@@ -37,6 +37,7 @@ export type TerminalShortcutAction =
   | { type: 'toggleExpandActivePane' }
   | { type: 'closeActivePane' }
   | { type: 'splitActivePane'; direction: 'vertical' | 'horizontal' }
+  | { type: 'scrollViewport'; position: 'top' | 'bottom' }
   | { type: 'sendInput'; data: string }
 
 export function resolveTerminalShortcutAction(
@@ -128,6 +129,14 @@ export function resolveTerminalShortcutAction(
     }
     if (event.key === 'ArrowRight') {
       return { type: 'sendInput', data: '\x05' }
+    }
+    // Why: macOS terminal users expect Cmd+↑/↓ to jump through scrollback
+    // without writing escape bytes into the shell.
+    if (event.key === 'ArrowUp') {
+      return { type: 'scrollViewport', position: 'top' }
+    }
+    if (event.key === 'ArrowDown') {
+      return { type: 'scrollViewport', position: 'bottom' }
     }
   }
 

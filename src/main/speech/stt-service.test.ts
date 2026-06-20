@@ -239,6 +239,70 @@ describe('SttService', () => {
     expect(worker!.messages.filter((message) => message.type === 'feed')).toHaveLength(0)
   })
 
+  it('rejects deletion prep while the target model is starting', async () => {
+    let resolveModelState: (state: { id: string; status: string }) => void = () => {}
+    const modelStatePromise = new Promise<{ id: string; status: string }>((resolve) => {
+      resolveModelState = resolve
+    })
+    const service = new SttService({
+      getModelState: vi.fn(() => modelStatePromise),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    const startPromise = service.startDictation('model-a', vi.fn(), undefined, 'desktop')
+    await Promise.resolve()
+
+    await expect(service.prepareModelForDeletion('model-a')).rejects.toThrow('voice_model_in_use')
+
+    resolveModelState({ id: 'model-a', status: 'ready' })
+    await startPromise
+    await service.stopDictation('desktop')
+  })
+
+  it('tears down an idle warm worker before deleting the target model', async () => {
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
+    const worker = getLastWorker()
+    expect(worker).toBeDefined()
+    await service.stopDictation('desktop')
+
+    await service.prepareModelForDeletion('model-a')
+
+    expect(worker!.messages.some((message) => message.type === 'teardown')).toBe(true)
+    expect(worker!.terminated).toBe(true)
+    expect(service.isActive()).toBe(false)
+  })
+
+  it('rejects deletion prep when a target warm worker cannot be torn down during another start', async () => {
+    let resolveModelState: (state: { id: string; status: string }) => void = () => {}
+    const secondModelState = new Promise<{ id: string; status: string }>((resolve) => {
+      resolveModelState = resolve
+    })
+    const getModelState = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'model-a', status: 'ready' })
+      .mockReturnValue(secondModelState)
+    const service = new SttService({
+      getModelState,
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
+    await service.stopDictation('desktop')
+    const startOtherModel = service.startDictation('model-b', vi.fn(), undefined, 'desktop')
+    await Promise.resolve()
+
+    await expect(service.prepareModelForDeletion('model-a')).rejects.toThrow('voice_model_in_use')
+
+    resolveModelState({ id: 'model-b', status: 'ready' })
+    await startOtherModel
+    await service.stopDictation('desktop')
+  })
+
   it('uses the OpenAI transcription session without creating a worker', async () => {
     const sink = vi.fn()
     const service = new SttService({

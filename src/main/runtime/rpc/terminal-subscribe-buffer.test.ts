@@ -428,13 +428,23 @@ describe('terminal subscribe buffering', () => {
           seq: number
         }) => void)
       | undefined
-    const restreamResolves: ((value: { data: string; cols: number; rows: number }) => void)[] = []
+    const restreamResolves: ((value: {
+      data: string
+      cols: number
+      rows: number
+      oscLinks?: { row: number; startCol: number; endCol: number; uri: string }[]
+    }) => void)[] = []
     const serializeTerminalBuffer = vi
       .fn()
       .mockResolvedValueOnce({ data: 'initial', cols: 80, rows: 24 })
       .mockImplementation(
         () =>
-          new Promise<{ data: string; cols: number; rows: number }>((resolve) => {
+          new Promise<{
+            data: string
+            cols: number
+            rows: number
+            oscLinks?: { row: number; startCol: number; endCol: number; uri: string }[]
+          }>((resolve) => {
             restreamResolves.push(resolve)
           })
       )
@@ -488,7 +498,8 @@ describe('terminal subscribe buffering', () => {
     resizeListener?.({ cols: 100, rows: 24, displayMode: 'auto', reason: 'apply-layout', seq: 3 })
     await vi.waitFor(() => expect(restreamResolves).toHaveLength(2))
 
-    restreamResolves[1]?.({ data: 'newer', cols: 100, rows: 24 })
+    const newerOscLinks = [{ row: 0, startCol: 4, endCol: 9, uri: 'https://example.com' }]
+    restreamResolves[1]?.({ data: 'newer', cols: 100, rows: 24, oscLinks: newerOscLinks })
     await vi.waitFor(() =>
       expect(
         binaryFrames.some((frame) => {
@@ -509,6 +520,13 @@ describe('terminal subscribe buffering', () => {
       .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
       .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
     expect(snapshotData).toEqual(['newer'])
+    const snapshotStart = binaryFrames
+      .map((frame) => decodeTerminalStreamFrame(frame))
+      .find((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotStart)
+    expect(snapshotStart && decodeTerminalStreamJson(snapshotStart.payload)).toMatchObject({
+      kind: 'resized',
+      oscLinks: newerOscLinks
+    })
 
     runtime.cleanupSubscription('terminal-1:phone-1')
     await dispatchPromise

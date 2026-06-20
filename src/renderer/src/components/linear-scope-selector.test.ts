@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { LinearTeam, LinearWorkspace } from '../../../shared/types'
 import {
+  LINEAR_SCOPE_TEAM_FILTER_QUERY_MAX_BYTES,
+  filterLinearScopeTeams,
   getLinearScopeTriggerLabel,
+  isLinearScopeTeamFilterQueryTooLarge,
   normalizeLinearScopeTeamSelection
 } from './linear-scope-selector'
 
@@ -92,5 +95,47 @@ describe('LinearScopeSelector helpers', () => {
         teamSelectionIsStickyAll: false
       })
     ).toBe('All workspaces / 2 teams')
+  })
+
+  it('filters teams by team and workspace text', () => {
+    expect(
+      filterLinearScopeTeams(
+        [team('eng', 'ENG'), team('ops', 'OPS', 'workspace-2', 'Beta')],
+        'beta',
+        new Map(workspaces.map((workspace) => [workspace.id, workspace]))
+      )
+    ).toEqual([team('ops', 'OPS', 'workspace-2', 'Beta')])
+  })
+
+  it('rejects oversized pasted filters before reading team text', () => {
+    const oversizedQuery = 'secret-linear-scope'.repeat(LINEAR_SCOPE_TEAM_FILTER_QUERY_MAX_BYTES)
+    const throwingTeams = [
+      {
+        id: 'secret',
+        workspaceId: 'workspace-1',
+        get name(): string {
+          throw new Error('oversized Linear scope filters must not scan team names')
+        },
+        get key(): string {
+          throw new Error('oversized Linear scope filters must not scan team keys')
+        },
+        get workspaceName(): string {
+          throw new Error('oversized Linear scope filters must not scan workspace names')
+        }
+      }
+    ] as LinearTeam[]
+
+    expect(isLinearScopeTeamFilterQueryTooLarge(oversizedQuery)).toBe(true)
+    expect(filterLinearScopeTeams(throwingTeams, oversizedQuery, new Map())).toEqual([])
+  })
+
+  it('rejects oversized whitespace before trimming', () => {
+    expect(
+      filterLinearScopeTeams(
+        [team('eng', 'ENG')],
+        ' '.repeat(LINEAR_SCOPE_TEAM_FILTER_QUERY_MAX_BYTES + 1),
+        new Map()
+      )
+    ).toEqual([])
   })
 })

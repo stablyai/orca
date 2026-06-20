@@ -64,7 +64,7 @@ vi.mock('@/lib/agent-skill-cli-prerequisite', () => ({
 }))
 
 vi.mock('../settings/CliSkillRuntimeSetup', () => ({
-  buildSkillInstallCommandForRuntime: (
+  buildSkillCommandForRuntime: (
     command: string,
     runtime: { runtime: string; wslDistro?: string | null }
   ) =>
@@ -348,6 +348,8 @@ describe('LinearAgentSkillSetupPrompt', () => {
     expect(document.body.textContent).toContain("wsl.exe -d 'Fedora' -- bash -lc 'npx skills add")
     expect(mocks.panelProps.at(-1)).toEqual(
       expect.objectContaining({
+        installedCommand:
+          "wsl.exe -d 'Fedora' -- bash -lc 'npx skills update linear-tickets --global'",
         terminalShellOverride: 'powershell.exe',
         getPrerequisiteStatus: expect.any(Function)
       })

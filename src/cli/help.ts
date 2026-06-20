@@ -194,7 +194,7 @@ Common Commands:
   orca environment show --environment <selector> [--json]
   orca environment rm --environment <selector> [--json]
   orca worktree list [--repo <selector>] [--limit <n>] [--json]
-  orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--linear-issue <identifier-or-url>] [--comment <text>] [--parent-workspace <selector>|--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]
+  orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--linear-issue <identifier-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]
   orca worktree show --worktree <selector> [--json]
   orca worktree current [--json]
   orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]
@@ -228,10 +228,9 @@ Common Commands:
 
 Selectors:
   --repo <selector>         Registered repo selector such as id:<id>, name:<name>, or path:<path>
-  --worktree <selector>     Worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current
+  --worktree <selector>     Worktree selector such as id:<id>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current
   --terminal <handle>       Runtime-issued terminal handle returned by \`orca terminal list --json\`
-  --parent-workspace <selector> Parent workspace selector such as folder:<id> or worktree:<id>
-  --parent-worktree <selector> Parent worktree selector; create infers a child of the caller/current worktree by default
+  --parent-worktree <selector> Parent worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current
   --no-parent               Force no parent lineage for unrelated worktree creation/update
 
 Terminal Send Options:
@@ -255,7 +254,7 @@ Behavior:
   Use selectors for discovery and handles for repeated live terminal operations.
 
 Agent Sessions And Worktrees:
-  \`worktree create --agent\` creates a new checkout/workspace with an agent.
+  \`worktree create --agent\` creates a new checkout with an agent.
   To start a fresh agent in the current worktree, use:
     orca terminal create --worktree active --command "codex"
 
@@ -433,6 +432,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'linear create' && flag === 'parent-current') {
     return '--parent-current      Use the current linked issue as parent'
   }
+  if (command === 'worktree create' && flag === 'parent-worktree') {
+    return '--parent-worktree <selector> Parent selector such as active/current, id:<id>, branch:<branch>, issue:<number>, path:<path>, folder:<id>, or worktree:<id>'
+  }
   if (flag === 'key' && command === 'computer hotkey') {
     return '--key <key-combo>      Modifier chord with one key, e.g. CmdOrCtrl+A'
   }
@@ -479,10 +481,8 @@ export function formatFlagHelp(flag: string): string {
     'no-parent': '--no-parent            Force no parent lineage for unrelated work',
     'no-screenshot': '--no-screenshot       Skip screenshot capture after the operation',
     pages: '--pages <n>           Number of scroll pages',
-    'parent-workspace':
-      '--parent-workspace <selector> Parent workspace selector such as folder:<id>',
     'parent-worktree':
-      '--parent-worktree <selector> Parent selector; create infers the caller/current worktree by default',
+      '--parent-worktree <selector> Parent worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current',
     path: '--path <path>          Path argument for the command',
     prompt: '--prompt <text>        Prompt text for agent-backed commands',
     query: '--query <text>        Search text for matching refs',
@@ -505,7 +505,7 @@ export function formatFlagHelp(flag: string): string {
     'to-x': '--to-x <x>             Destination window-local x coordinate',
     'to-y': '--to-y <y>             Destination window-local y coordinate',
     worktree:
-      '--worktree <selector>  Worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current',
+      '--worktree <selector>  Worktree selector such as id:<id>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current',
     workspace: '--workspace <selector> Existing worktree selector for automation runs',
     'workspace-status':
       '--workspace-status <id> Board status id (defaults: todo, in-progress, in-review, completed)',

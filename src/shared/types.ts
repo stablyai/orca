@@ -805,6 +805,8 @@ export type TerminalTab = {
   quickCommandLabel?: string | null
   customTitle: string | null
   color: string | null
+  /** Pinned tabs survive "close others"; host-persisted for remote servers. */
+  isPinned?: boolean
   sortOrder: number
   createdAt: number
   /** Bumped on shutdown so TerminalPane remounts with a fresh PTY. */
@@ -2419,6 +2421,10 @@ export type GlobalSettings = {
   terminalCursorOpacity?: number
   terminalQuickCommands?: TerminalQuickCommand[]
   windowBackgroundBlur?: boolean
+  /** Why: Windows-only. When on, the close (X) button hides the window to the
+   *  system tray instead of quitting Orca; off keeps the default quit-on-close.
+   *  The tray icon itself is always present on Windows regardless of this flag. */
+  minimizeToTrayOnClose?: boolean
   /** Why: Windows terminals conventionally use right-click as a paste gesture.
    *  The setting stays Windows-only so macOS/Linux keep their existing context
    *  menu behavior and users can still reach the menu with Ctrl+right-click. */
@@ -3102,6 +3108,9 @@ export type PersistedUIState = {
   /** User-dismissed browser import hint in the browser toolbar. Import remains
    *  available from Settings > Browser and the toolbar overflow menu. */
   browserImportHintHidden?: boolean
+  /** Why: Windows-only. Set once after the window first hides to the system
+   *  tray, so the "Orca is still running" notification shows only on first use. */
+  trayMinimizeNoticeShown?: boolean
   /** User dismissed the first-run Mobile Emulator intro (Keep, Hide, or close).
    *  Reversible only by re-enabling the feature in Settings. */
   mobileEmulatorTabIntroDismissed?: boolean

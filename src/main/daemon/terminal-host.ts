@@ -77,6 +77,12 @@ export class TerminalHost {
     this.maxTombstones = opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES
   }
 
+  /**
+   * Creates a terminal session or attaches to an existing live one.
+   *
+   * Startup commands are written through stdin only when the subprocess did not
+   * already deliver them through shell launch arguments.
+   */
   async createOrAttach(opts: CreateOrAttachOptions): Promise<CreateOrAttachResult> {
     const existing = this.sessions.get(opts.sessionId)
 
@@ -128,6 +134,11 @@ export class TerminalHost {
       rows: size.rows,
       subprocess,
       shellReadySupported: opts.shellReadySupported ?? false,
+      // Why: reap the dead session (dispose emulator + drop from the map) the
+      // moment its subprocess exits, instead of retaining it for the daemon's
+      // lifetime. Nothing reads a dead session's emulator (getSnapshot/
+      // takePendingOutput/listSessions all skip !isAlive sessions).
+      onExit: () => this.reapSession(opts.sessionId),
       ...(opts.shellReadyTimeoutMs !== undefined
         ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
         : {})
@@ -137,7 +148,7 @@ export class TerminalHost {
 
     const token = session.attachClient(opts.streamClient)
 
-    if (opts.command) {
+    if (opts.command && !subprocess.startupCommandDeliveredInShellArgs) {
       // Why: startup commands must run inside the long-lived interactive shell
       // the daemon keeps for the pane. Session.write() handles the shell-ready
       // barrier for supported shells and falls back to an immediate write for
@@ -173,9 +184,27 @@ export class TerminalHost {
     this.recordTombstone(sessionId)
     if (opts.immediate) {
       session.forceKillAndDisposeSubprocess()
+      // Why: the immediate path tears down synchronously without firing the
+      // session's onExit hook, so reap it here. The graceful path below funnels
+      // through Session.handleSubprocessExit -> onExit -> reapSession.
+      this.reapSession(sessionId)
       return
     }
     session.kill()
+  }
+
+  // Why: dispose a dead session's headless emulator and drop it from the map so
+  // exited terminals don't pin ~5000 rows of scrollback for the daemon's life.
+  // No-ops on live sessions (a live session must never be disposed here) and on
+  // already-reaped/unknown ids. Wired as the Session onExit hook and also called
+  // on the immediate-kill path.
+  private reapSession(sessionId: string): void {
+    const session = this.sessions.get(sessionId)
+    if (!session || session.isAlive) {
+      return
+    }
+    session.dispose()
+    this.sessions.delete(sessionId)
   }
 
   signal(sessionId: string, sig: string): void {

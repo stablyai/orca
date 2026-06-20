@@ -89,6 +89,18 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).not.toContain('--settings')
   })
 
+  it('uses the Linux Orca CLI command for Claude Agent Teams launches', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'claude-agent-teams',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true
+    })
+
+    expect(plan?.launchCommand).toBe('orca-ide claude-teams')
+  })
+
   it('launches OpenClaude as a distinct argv agent', () => {
     const plan = buildAgentStartupPlan({
       agent: 'openclaude',

@@ -1,3 +1,5 @@
+import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+
 // ─── Protocol Version ────────────────────────────────────────────────
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 
@@ -5,9 +7,9 @@ import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery
 // when daemon-baked behavior cannot be delivered by on-disk wrapper refresh.
 // Why: bump when adding daemon wire behavior so same-version old daemons do
 // not silently accept the handshake and then reject new RPCs.
-export const PROTOCOL_VERSION = 16
+export const PROTOCOL_VERSION = 17
 export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
 ] as const
 
 // ─── Session State Machine ──────────────────────────────────────────
@@ -21,6 +23,7 @@ export type TerminalSnapshot = {
   /** Scrollback portion only (rows above the visible viewport). Write this
    *  to preserve history without interfering with TUI repaints. */
   scrollbackAnsi: string
+  oscLinks?: TerminalOscLinkRange[]
   rehydrateSequences: string
   cwd: string | null
   modes: TerminalModes
@@ -47,6 +50,7 @@ export type TerminalModes = {
 export type TerminalCheckpointFile = {
   snapshotAnsi: string
   scrollbackAnsi: string
+  oscLinks?: TerminalOscLinkRange[]
   rehydrateSequences: string
   cwd: string | null
   cols: number
