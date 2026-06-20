@@ -625,7 +625,11 @@
       "CodexRestartChip": {
         "9132779820": "Despedir",
         "c72a5fb234": "Reanudar",
-        "9263e75f49": "Codex está usando la cuenta anterior."
+        "9263e75f49": "Codex está usando la cuenta anterior.",
+        "a4c8e1b2f7": "Codex is still signed in as {{value0}}",
+        "d3e8a1f4b2": "Account switched",
+        "e9b2c7d1a5": "Restart this session to use {{value0}}. Collapse to keep working with the current account.",
+        "f1a6c8e3b4": "Collapse"
       },
       "FirstLaunchBanner": {
         "b9e1b966c7": "Descartar aviso",
