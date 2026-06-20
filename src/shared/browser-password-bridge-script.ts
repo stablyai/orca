@@ -55,6 +55,11 @@ export function buildBrowserPasswordBridgeScript({
 
   const detect = () => {
     pairs.clear();
+    // Why: re-detection (MutationObserver / scroll) must not leave orphaned
+    // attributes that desync from the pairs map.
+    Array.prototype.forEach.call(document.querySelectorAll('[' + attrUser + '],[' + attrPass + ']'), (el) => {
+      el.removeAttribute(attrUser); el.removeAttribute(attrPass);
+    });
     const fields = [];
     const passwords = Array.prototype.slice.call(document.querySelectorAll('input[type="password"]'));
     passwords.forEach((passwordEl) => {
@@ -92,8 +97,11 @@ export function buildBrowserPasswordBridgeScript({
 
   globalThis.__orcaPasswordBridge = {
     fill: (fieldId, username, password) => {
-      const userEl = document.querySelector('[' + attrUser + '="' + fieldId + '"]');
-      const passEl = document.querySelector('[' + attrPass + '="' + fieldId + '"]');
+      // Why: fieldId comes from an external caller; escape it so special CSS
+      // characters cannot break the attribute selector.
+      const esc = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(fieldId) : fieldId;
+      const userEl = document.querySelector('[' + attrUser + '="' + esc + '"]');
+      const passEl = document.querySelector('[' + attrPass + '="' + esc + '"]');
       const set = (el, value) => {
         if (!el) return;
         el.focus();

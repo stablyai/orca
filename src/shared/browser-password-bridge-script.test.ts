@@ -24,6 +24,9 @@ beforeEach(() => {
 afterEach(() => {
   document.body.innerHTML = ''
   vi.restoreAllMocks()
+  // Clean up bridge globals so tests don't leak state into each other.
+  delete (globalThis as Record<string, unknown>).__orcaPasswordBridgeState
+  delete (globalThis as Record<string, unknown>).__orcaPasswordBridge
 })
 
 describe('buildBrowserPasswordBridgeScript', () => {
@@ -66,12 +69,27 @@ describe('buildBrowserPasswordBridgeScript', () => {
     runBridge()
     const fieldId = document.querySelector('[data-orca-pwid]')!.getAttribute('data-orca-pwid')!
     const pass = document.querySelector('input[name="pass"]') as HTMLInputElement
-    const changed = vi.fn()
-    pass.addEventListener('input', changed)
+    const inputSpy = vi.fn()
+    const changeSpy = vi.fn()
+    pass.addEventListener('input', inputSpy)
+    pass.addEventListener('change', changeSpy)
     // eslint-disable-next-line no-eval
     ;(0, eval)(buildBrowserPasswordFillCall(fieldId, 'me', 'pw'))
     expect((document.querySelector('input[name="user"]') as HTMLInputElement).value).toBe('me')
     expect(pass.value).toBe('pw')
-    expect(changed).toHaveBeenCalled()
+    expect(inputSpy).toHaveBeenCalled()
+    expect(changeSpy).toHaveBeenCalled()
+  })
+
+  it('disable path tears down the bridge and removes the global', () => {
+    const stateKey = '__orcaPasswordBridgeState'
+    runBridge()
+    expect(globalThis.__orcaPasswordBridge).toBeDefined()
+    // eslint-disable-next-line no-eval
+    ;(0, eval)(buildBrowserPasswordBridgeScript({ token: TOKEN, enabled: false }))
+    expect(globalThis.__orcaPasswordBridge).toBeUndefined()
+    // Clean up any residual globals so later tests start clean.
+    delete (globalThis as Record<string, unknown>)[stateKey]
+    delete (globalThis as Record<string, unknown>).__orcaPasswordBridge
   })
 })
