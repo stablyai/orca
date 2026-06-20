@@ -5570,7 +5570,11 @@
           "bea897eec2": "En",
           "62511a575d": "Usar global",
           "30ae6dcce8": "El valor predeterminado global es",
-          "cf5959c834": "Control de fuente AI habilitado"
+          "cf5959c834": "Control de fuente AI habilitado",
+          "show": "Mostrar",
+          "hide": "Ocultar",
+          "showActionsLabel": "Mostrar acciones de IA de control de código fuente",
+          "visibilityHelper": "Controla si los botones de IA de control de código fuente se muestran para este repositorio. La generación usada por funciones separadas sigue la configuración de esas funciones. El valor predeterminado global es {{value0}}."
         },
         "RepositorySourceControlAiHostedReviewDefaults": {
           "053ccfbf52": "Apagado",

@@ -34,6 +34,7 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     remoteActionError: null as string | null,
     isCommitting: inputs.isCommitting,
     isFixingCommitFailureWithAI: false,
+    sourceControlAiActionsVisible: true,
     aiEnabled: false,
     aiAgentConfigured: false,
     isGenerating: false,
@@ -195,6 +196,19 @@ describe('CommitArea', () => {
     expect(button).toBeDefined()
     expect(button).toContain('disabled=""')
     expect(button).toContain('animate-spin')
+  })
+
+  it('hides commit failure AI actions when Source Control AI actions are hidden', () => {
+    const markup = renderCommitArea({
+      ...baseProps(),
+      commitError: 'husky - pre-commit hook failed',
+      commitFailureRecoveryPrompt: 'Fix this commit failure.',
+      sourceControlAiActionsVisible: false
+    })
+
+    expect(markup).not.toContain('AI Fix')
+    expect(markup).not.toContain('Fix commit failure with AI')
+    expect(markup).toContain('Commit blocked')
   })
 
   it('enables the agent picker when commit failure context is available', () => {
@@ -466,6 +480,7 @@ describe('ConflictSummaryCard', () => {
       <ConflictSummaryCard
         conflictOperation="rebase"
         unresolvedCount={1}
+        sourceControlAiActionsVisible={true}
         isResolvingWithAI={false}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
@@ -480,6 +495,7 @@ describe('ConflictSummaryCard', () => {
       <ConflictSummaryCard
         conflictOperation="merge"
         unresolvedCount={1}
+        sourceControlAiActionsVisible={true}
         isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
@@ -490,6 +506,7 @@ describe('ConflictSummaryCard', () => {
       <ConflictSummaryCard
         conflictOperation="rebase"
         unresolvedCount={1}
+        sourceControlAiActionsVisible={true}
         isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
@@ -500,6 +517,7 @@ describe('ConflictSummaryCard', () => {
       <ConflictSummaryCard
         conflictOperation="cherry-pick"
         unresolvedCount={1}
+        sourceControlAiActionsVisible={true}
         isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
@@ -520,6 +538,7 @@ describe('ConflictSummaryCard', () => {
       <ConflictSummaryCard
         conflictOperation="merge"
         unresolvedCount={1}
+        sourceControlAiActionsVisible={true}
         isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
@@ -530,6 +549,7 @@ describe('ConflictSummaryCard', () => {
       <ConflictSummaryCard
         conflictOperation="rebase"
         unresolvedCount={1}
+        sourceControlAiActionsVisible={true}
         isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
@@ -548,6 +568,7 @@ describe('ConflictSummaryCard', () => {
       <ConflictSummaryCard
         conflictOperation="merge"
         unresolvedCount={2}
+        sourceControlAiActionsVisible={true}
         isResolvingWithAI={false}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
@@ -557,6 +578,22 @@ describe('ConflictSummaryCard', () => {
     expect(markup).toContain('Resolve with AI')
     expect(markup).toContain('lucide-sparkles')
     expect(markup).not.toMatch(/\blucide-sparkle(?!s)\b/)
+  })
+
+  it('hides Resolve with AI when Source Control AI actions are hidden', () => {
+    const markup = renderToStaticMarkup(
+      <ConflictSummaryCard
+        conflictOperation="merge"
+        unresolvedCount={2}
+        sourceControlAiActionsVisible={false}
+        isResolvingWithAI={false}
+        onResolveWithAI={vi.fn()}
+        onReview={vi.fn()}
+      />
+    )
+
+    expect(markup).not.toContain('Resolve with AI')
+    expect(markup).toContain('Review conflicts')
   })
 })
 

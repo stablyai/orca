@@ -6,12 +6,14 @@ import { resolveDropdownItems } from './source-control-dropdown-items'
 import { resolvePrimaryAction } from './source-control-primary-action'
 
 type RenderPullRequestComposerOptions = {
+  aiGenerationEnabled?: boolean
   generating?: boolean
   generateDisabled?: boolean
   generateDisabledReason?: string
 }
 
 function renderPullRequestComposer({
+  aiGenerationEnabled = true,
   generating = false,
   generateDisabled = false,
   generateDisabledReason
@@ -47,7 +49,7 @@ function renderPullRequestComposer({
         baseResults={[]}
         setBaseResults={vi.fn()}
         baseSearchError={null}
-        aiGenerationEnabled={true}
+        aiGenerationEnabled={aiGenerationEnabled}
         generating={generating}
         generateDisabled={generateDisabled}
         generateDisabledReason={generateDisabledReason}
@@ -84,6 +86,13 @@ describe('CreateHostedReviewComposer generate tooltip', () => {
     expect(markup).toContain('aria-label="Generate pull request details with AI"')
     expect(markup).not.toContain('{{value0}}')
     expect(markup).not.toContain('title="Generate {{value0}} details with AI"')
+  })
+
+  it('hides hosted review generation controls when Source Control AI actions are hidden', () => {
+    const markup = renderPullRequestComposer({ aiGenerationEnabled: false })
+
+    expect(markup).not.toContain('Generate pull request details with AI')
+    expect(markup).toContain('Create')
   })
 
   it('keeps enabled generation controls as direct tooltip triggers', () => {

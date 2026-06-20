@@ -45,6 +45,7 @@ type UseCreatePullRequestDialogFieldsOptions = {
   settings: AppState['settings']
   submitting: boolean
   prCreationDefaults?: SourceControlAiPrCreationDefaults
+  sourceControlAiActionsVisible?: boolean
   onBranchChangedByGeneration?: () => Promise<void>
   generation?: {
     generating: boolean
@@ -106,6 +107,7 @@ export function useCreatePullRequestDialogFields({
   settings,
   submitting,
   prCreationDefaults,
+  sourceControlAiActionsVisible = true,
   onBranchChangedByGeneration,
   generation
 }: UseCreatePullRequestDialogFieldsOptions) {
@@ -484,7 +486,7 @@ export function useCreatePullRequestDialogFields({
   ])
 
   return {
-    aiGenerationEnabled: resolvedPullRequestAi?.ok === true,
+    aiGenerationEnabled: sourceControlAiActionsVisible && resolvedPullRequestAi?.ok === true,
     initializedFromEligibility:
       currentEligibilityKey !== null && initializedEligibilityKey === currentEligibilityKey,
     base,

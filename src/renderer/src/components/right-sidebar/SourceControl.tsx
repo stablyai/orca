@@ -1566,6 +1566,7 @@ function SourceControlInner(): React.JSX.Element {
   )
   const {
     sourceControlAiDiscoveryHostKey,
+    sourceControlAiActionsVisible,
     resolvedCommitMessageAi,
     resolvedPrCreationDefaults,
     resolveConflictsComposerOpen,
@@ -1604,6 +1605,20 @@ function SourceControlInner(): React.JSX.Element {
     openSettingsTarget,
     openSettingsPage
   })
+
+  useEffect(() => {
+    if (sourceControlAiActionsVisible) {
+      return
+    }
+    setResolveConflictsComposerOpen(false)
+    setCommitGenerationDialogOpen(false)
+    setPullRequestGenerationDialogOpen(false)
+  }, [
+    setCommitGenerationDialogOpen,
+    setPullRequestGenerationDialogOpen,
+    setResolveConflictsComposerOpen,
+    sourceControlAiActionsVisible
+  ])
 
   // Why: orphaned draft/error/in-flight entries accumulate when worktrees are
   // removed from the store (long sessions with many create/destroy cycles).
@@ -1966,6 +1981,9 @@ function SourceControlInner(): React.JSX.Element {
   )
 
   const handleGenerateCommitMessageClick = useCallback((): void => {
+    if (!sourceControlAiActionsVisible) {
+      return
+    }
     if (
       hasConfiguredCommitMessageGenerationDefaults({ settings, repo: activeRepo ?? null }) &&
       resolvedCommitMessageAi?.ok
@@ -1974,7 +1992,14 @@ function SourceControlInner(): React.JSX.Element {
       return
     }
     openCommitGenerationDialog()
-  }, [activeRepo, handleGenerate, openCommitGenerationDialog, resolvedCommitMessageAi, settings])
+  }, [
+    activeRepo,
+    handleGenerate,
+    openCommitGenerationDialog,
+    resolvedCommitMessageAi,
+    settings,
+    sourceControlAiActionsVisible
+  ])
 
   const generateCommitMessageForCreatePrIntent = useCallback(
     async (
@@ -2645,6 +2670,7 @@ function SourceControlInner(): React.JSX.Element {
     settings: activeRepoSettings,
     submitting: isCreatingPr,
     prCreationDefaults: resolvedPrCreationDefaults,
+    sourceControlAiActionsVisible,
     onBranchChangedByGeneration: handleBranchChangedByPullRequestGeneration,
     generation: {
       generating: activePullRequestGenerationRecord?.status === 'running',
@@ -2657,6 +2683,9 @@ function SourceControlInner(): React.JSX.Element {
   })
 
   const handleGeneratePullRequestFieldsClick = useCallback((): void => {
+    if (!sourceControlAiActionsVisible) {
+      return
+    }
     if (
       hasConfiguredSourceControlTextGenerationDefaults({
         actionId: 'pullRequest',
@@ -2668,7 +2697,13 @@ function SourceControlInner(): React.JSX.Element {
       return
     }
     openPullRequestGenerationDialog()
-  }, [activeRepo, handleGeneratePullRequestFields, openPullRequestGenerationDialog, settings])
+  }, [
+    activeRepo,
+    handleGeneratePullRequestFields,
+    openPullRequestGenerationDialog,
+    settings,
+    sourceControlAiActionsVisible
+  ])
 
   useEffect(() => {
     // Why: on Source Control remount, the PR fields hook seeds eligibility
@@ -5215,6 +5250,7 @@ function SourceControlInner(): React.JSX.Element {
               <ConflictSummaryCard
                 conflictOperation={conflictOperation}
                 unresolvedCount={unresolvedConflictReviewEntries.length}
+                sourceControlAiActionsVisible={sourceControlAiActionsVisible}
                 isResolvingWithAI={false}
                 isAbortingOperation={isAbortingOperation}
                 onAbortOperation={handleAbortOperationForConflict}
@@ -5317,7 +5353,7 @@ function SourceControlInner(): React.JSX.Element {
                 baseResults={prBaseResults}
                 setBaseResults={setPrBaseResults}
                 baseSearchError={prBaseSearchError}
-                aiGenerationEnabled={prAiGenerationEnabled}
+                aiGenerationEnabled={sourceControlAiActionsVisible && prAiGenerationEnabled}
                 generating={prGenerating}
                 generateDisabled={prGenerateDisabled}
                 generateDisabledReason={prGenerateDisabledReason}
@@ -5352,7 +5388,8 @@ function SourceControlInner(): React.JSX.Element {
                 isCreatePrIntentInFlight={isCreatePrIntentInFlight}
                 groupId={activeGroupId ?? activeWorktreeId}
                 showComposer={!showGenericEmptyState}
-                aiEnabled={resolvedCommitMessageAi?.ok === true}
+                sourceControlAiActionsVisible={sourceControlAiActionsVisible}
+                aiEnabled={sourceControlAiActionsVisible && resolvedCommitMessageAi?.ok === true}
                 aiAgentConfigured={resolvedCommitMessageAi?.ok === true}
                 isGenerating={isGenerating}
                 generateError={generateError}
@@ -5813,7 +5850,7 @@ function SourceControlInner(): React.JSX.Element {
         </DialogContent>
       </Dialog>
       <SourceControlAgentActionDialog
-        open={resolveConflictsComposerOpen}
+        open={sourceControlAiActionsVisible && resolveConflictsComposerOpen}
         onOpenChange={setResolveConflictsComposerOpen}
         actionId="resolveConflicts"
         title={translate(
@@ -5851,7 +5888,7 @@ function SourceControlInner(): React.JSX.Element {
         }
       />
       <SourceControlTextGenerationDialog
-        open={commitGenerationDialogOpen}
+        open={sourceControlAiActionsVisible && commitGenerationDialogOpen}
         onOpenChange={setCommitGenerationDialogOpen}
         actionId="commitMessage"
         title={translate(
@@ -5872,7 +5909,7 @@ function SourceControlInner(): React.JSX.Element {
         onSaveDefaults={handleSaveCommitMessageGenerationDefaults}
       />
       <SourceControlTextGenerationDialog
-        open={pullRequestGenerationDialogOpen}
+        open={sourceControlAiActionsVisible && pullRequestGenerationDialogOpen}
         onOpenChange={setPullRequestGenerationDialogOpen}
         actionId="pullRequest"
         title={translate(
@@ -6082,6 +6119,7 @@ type CommitAreaProps = {
   isCreatingPr?: boolean
   isCreatePrIntentInFlight?: boolean
   showComposer?: boolean
+  sourceControlAiActionsVisible: boolean
   aiEnabled: boolean
   aiAgentConfigured: boolean
   isGenerating: boolean
@@ -6124,6 +6162,7 @@ export function CommitArea({
   isCreatingPr = false,
   isCreatePrIntentInFlight = false,
   showComposer = true,
+  sourceControlAiActionsVisible,
   aiEnabled,
   aiAgentConfigured,
   isGenerating,
@@ -6541,31 +6580,33 @@ export function CommitArea({
               </p>
             </div>
             <div className="ml-[1.375rem] flex min-w-0 items-center gap-1.5">
-              <CommitFailureFixSplitButton
-                label={translate(
-                  'auto.components.right.sidebar.SourceControl.60bd988f0b',
-                  'AI Fix'
-                )}
-                worktreeId={worktreeId}
-                groupId={groupId}
-                connectionId={connectionId}
-                repoId={repoId}
-                launchPlatform={launchPlatform}
-                prompt={commitFailureRecoveryPrompt}
-                isLaunching={isFixingCommitFailureWithAI}
-                variant="secondary"
-                size="xs"
-                iconClassName="size-3"
-                primaryClassName="h-6 px-2 text-[11px]"
-                chevronClassName="h-6 px-1.5"
-                savedAgentId={readSourceControlLaunchRecipeAgentId(fixCommitFailureRecipe)}
-                savedCommandInputTemplate={fixCommitFailureRecipe?.commandInputTemplate ?? null}
-                savedAgentArgs={fixCommitFailureRecipe?.agentArgs ?? null}
-                onSaveAgentDefault={onSaveLaunchActionDefault}
-                onOpenSettings={onOpenSourceControlAiSettings}
-                onFixWithDefaultAgent={handleFixCommitFailureWithAI}
-                onPromptDelivered={handleCommitFailureAgentPromptDelivered}
-              />
+              {sourceControlAiActionsVisible ? (
+                <CommitFailureFixSplitButton
+                  label={translate(
+                    'auto.components.right.sidebar.SourceControl.60bd988f0b',
+                    'AI Fix'
+                  )}
+                  worktreeId={worktreeId}
+                  groupId={groupId}
+                  connectionId={connectionId}
+                  repoId={repoId}
+                  launchPlatform={launchPlatform}
+                  prompt={commitFailureRecoveryPrompt}
+                  isLaunching={isFixingCommitFailureWithAI}
+                  variant="secondary"
+                  size="xs"
+                  iconClassName="size-3"
+                  primaryClassName="h-6 px-2 text-[11px]"
+                  chevronClassName="h-6 px-1.5"
+                  savedAgentId={readSourceControlLaunchRecipeAgentId(fixCommitFailureRecipe)}
+                  savedCommandInputTemplate={fixCommitFailureRecipe?.commandInputTemplate ?? null}
+                  savedAgentArgs={fixCommitFailureRecipe?.agentArgs ?? null}
+                  onSaveAgentDefault={onSaveLaunchActionDefault}
+                  onOpenSettings={onOpenSourceControlAiSettings}
+                  onFixWithDefaultAgent={handleFixCommitFailureWithAI}
+                  onPromptDelivered={handleCommitFailureAgentPromptDelivered}
+                />
+              ) : null}
               {hasCommitFailureDetails && (
                 <Button
                   type="button"
@@ -6601,31 +6642,33 @@ export function CommitArea({
               {commitError}
             </pre>
             <DialogFooter>
-              <CommitFailureFixSplitButton
-                label={translate(
-                  'auto.components.right.sidebar.SourceControl.834cb3f23d',
-                  'Fix with AI'
-                )}
-                worktreeId={worktreeId}
-                groupId={groupId}
-                connectionId={connectionId}
-                repoId={repoId}
-                launchPlatform={launchPlatform}
-                prompt={commitFailureRecoveryPrompt}
-                isLaunching={isFixingCommitFailureWithAI}
-                variant="default"
-                size="sm"
-                iconClassName="size-4"
-                primaryClassName="rounded-r-none"
-                chevronClassName="rounded-l-none border-l border-primary-foreground/20 px-2"
-                savedAgentId={readSourceControlLaunchRecipeAgentId(fixCommitFailureRecipe)}
-                savedCommandInputTemplate={fixCommitFailureRecipe?.commandInputTemplate ?? null}
-                savedAgentArgs={fixCommitFailureRecipe?.agentArgs ?? null}
-                onSaveAgentDefault={onSaveLaunchActionDefault}
-                onOpenSettings={onOpenSourceControlAiSettings}
-                onFixWithDefaultAgent={handleFixCommitFailureWithAI}
-                onPromptDelivered={handleCommitFailureAgentPromptDelivered}
-              />
+              {sourceControlAiActionsVisible ? (
+                <CommitFailureFixSplitButton
+                  label={translate(
+                    'auto.components.right.sidebar.SourceControl.834cb3f23d',
+                    'Fix with AI'
+                  )}
+                  worktreeId={worktreeId}
+                  groupId={groupId}
+                  connectionId={connectionId}
+                  repoId={repoId}
+                  launchPlatform={launchPlatform}
+                  prompt={commitFailureRecoveryPrompt}
+                  isLaunching={isFixingCommitFailureWithAI}
+                  variant="default"
+                  size="sm"
+                  iconClassName="size-4"
+                  primaryClassName="rounded-r-none"
+                  chevronClassName="rounded-l-none border-l border-primary-foreground/20 px-2"
+                  savedAgentId={readSourceControlLaunchRecipeAgentId(fixCommitFailureRecipe)}
+                  savedCommandInputTemplate={fixCommitFailureRecipe?.commandInputTemplate ?? null}
+                  savedAgentArgs={fixCommitFailureRecipe?.agentArgs ?? null}
+                  onSaveAgentDefault={onSaveLaunchActionDefault}
+                  onOpenSettings={onOpenSourceControlAiSettings}
+                  onFixWithDefaultAgent={handleFixCommitFailureWithAI}
+                  onPromptDelivered={handleCommitFailureAgentPromptDelivered}
+                />
+              ) : null}
               <DialogClose asChild>
                 <Button type="button" variant="outline" size="sm">
                   {translate('auto.components.right.sidebar.SourceControl.783a808870', 'Close')}
@@ -7140,6 +7183,7 @@ function DiffCommentsInlineList({
 export function ConflictSummaryCard({
   conflictOperation,
   unresolvedCount,
+  sourceControlAiActionsVisible,
   isResolvingWithAI,
   isAbortingOperation = false,
   onAbortOperation,
@@ -7148,6 +7192,7 @@ export function ConflictSummaryCard({
 }: {
   conflictOperation: GitConflictOperation
   unresolvedCount: number
+  sourceControlAiActionsVisible: boolean
   isResolvingWithAI: boolean
   isAbortingOperation?: boolean
   onAbortOperation?: (operation: GitConflictOperation) => void
@@ -7184,26 +7229,28 @@ export function ConflictSummaryCard({
         </div>
       </div>
       <div className="mt-2">
-        <Button
-          type="button"
-          variant="default"
-          size="sm"
-          className="h-7 w-full text-xs"
-          disabled={isResolvingWithAI}
-          onClick={onResolveWithAI}
-        >
-          {isResolvingWithAI ? (
-            <RefreshCw className="size-3.5 animate-spin" />
-          ) : (
-            <Sparkles className="size-3.5" />
-          )}
-          {translate('auto.components.right.sidebar.SourceControl.f6cb48b6fe', 'Resolve with AI')}
-        </Button>
+        {sourceControlAiActionsVisible ? (
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            className="h-7 w-full text-xs"
+            disabled={isResolvingWithAI}
+            onClick={onResolveWithAI}
+          >
+            {isResolvingWithAI ? (
+              <RefreshCw className="size-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="size-3.5" />
+            )}
+            {translate('auto.components.right.sidebar.SourceControl.f6cb48b6fe', 'Resolve with AI')}
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="mt-1.5 h-7 w-full text-xs"
+          className={cn(sourceControlAiActionsVisible && 'mt-1.5', 'h-7 w-full text-xs')}
           onClick={onReview}
         >
           <GitMerge className="size-3.5" />

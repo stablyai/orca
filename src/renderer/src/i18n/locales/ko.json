@@ -5555,7 +5555,11 @@
           "bea897eec2": "켜기",
           "62511a575d": "글로벌 사용",
           "30ae6dcce8": "전역 기본값은",
-          "cf5959c834": "소스 제어 AI 활성화"
+          "cf5959c834": "소스 제어 AI 활성화",
+          "show": "표시",
+          "hide": "숨기기",
+          "showActionsLabel": "Source Control AI 작업 표시",
+          "visibilityHelper": "이 저장소에 Source Control AI 버튼을 표시할지 제어합니다. 별도 기능에서 사용하는 생성은 해당 기능의 설정을 따릅니다. 전역 기본값은 {{value0}}입니다."
         },
         "RepositorySourceControlAiHostedReviewDefaults": {
           "053ccfbf52": "끄기",

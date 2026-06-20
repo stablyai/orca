@@ -5607,7 +5607,11 @@
           "bea897eec2": "On",
           "62511a575d": "Use global",
           "30ae6dcce8": "Global default is",
-          "cf5959c834": "Source Control AI enabled"
+          "cf5959c834": "Source Control AI enabled",
+          "show": "Show",
+          "hide": "Hide",
+          "showActionsLabel": "Show Source Control AI actions",
+          "visibilityHelper": "Controls whether Source Control AI buttons are shown for this repository. Generation used by separate features follows those features' settings. Global default is {{value0}}."
         },
         "RepositorySourceControlAiHostedReviewDefaults": {
           "053ccfbf52": "Off",

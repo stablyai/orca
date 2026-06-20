@@ -5592,7 +5592,11 @@
           "bea897eec2": "オン",
           "62511a575d": "グローバルを使用する",
           "30ae6dcce8": "グローバルデフォルトは",
-          "cf5959c834": "ソース管理 AI が有効になっている"
+          "cf5959c834": "ソース管理 AI が有効になっている",
+          "show": "表示",
+          "hide": "非表示",
+          "showActionsLabel": "ソース管理 AI 操作を表示する",
+          "visibilityHelper": "このリポジトリでソース管理 AI ボタンを表示するかどうかを制御します。別機能で使用される生成は、それぞれの機能の設定に従います。グローバルデフォルトは {{value0}} です。"
         },
         "RepositorySourceControlAiHostedReviewDefaults": {
           "053ccfbf52": "オフ",
