@@ -26,6 +26,7 @@ import type {
   PullRequestFieldName,
   PullRequestFieldRevisions
 } from '@/store/slices/pull-request-generation'
+import { resolveCreateReviewDraftTitle } from './create-review-draft-title'
 
 type PullRequestDraftFields = {
   base: string
@@ -287,7 +288,7 @@ export function useCreatePullRequestDialogFields({
     baseEditedByUserRef.current = false
     syncedDefaultBaseRef.current = resolvedDefaultBaseRef || null
     setBase(resolvedDefaultBaseRef)
-    setTitle(eligibility.title ?? '')
+    setTitle(resolveCreateReviewDraftTitle({ branch, eligibilityTitle: eligibility.title }))
     setBody(eligibility.body ?? '')
     setDraft(resolvedPrDefaults.draft)
     setBaseQuery('')
