@@ -305,6 +305,49 @@ describe('scanAiVaultSessions', () => {
     ])
   })
 
+  it('excludes Claude subagent transcripts so workflow agents do not clutter history', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-claude-subagents-'))
+    tempRoots.push(root)
+    const roots = isolatedScanRoots(root)
+    const sessionDir = join(roots.claudeProjectsDir, 'project', 'claude-session')
+    await mkdir(join(sessionDir, 'subagents'), { recursive: true })
+
+    await writeFile(
+      join(roots.claudeProjectsDir, 'project', 'claude-session.jsonl'),
+      jsonLines([
+        {
+          type: 'user',
+          sessionId: 'claude-session',
+          timestamp: '2026-05-01T10:00:00.000Z',
+          cwd: '/repo/app',
+          message: { role: 'user', content: 'Primary session prompt' }
+        }
+      ])
+    )
+
+    // Subagent transcript Claude writes per Task/workflow agent — must not surface.
+    await writeFile(
+      join(sessionDir, 'subagents', 'agent-ad772b7a63b38f17a.jsonl'),
+      jsonLines([
+        {
+          type: 'user',
+          sessionId: 'agent-ad772b7a63b38f17a',
+          timestamp: '2026-05-01T10:05:00.000Z',
+          cwd: '/repo/app',
+          isSidechain: true,
+          agentId: 'ad772b7a63b38f17a',
+          message: { role: 'user', content: 'Subagent task prompt' }
+        }
+      ])
+    )
+
+    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin' })
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0]?.sessionId).toBe('claude-session')
+  })
+
   it('indexes every supported agent transcript format with native resume commands', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-all-agents-'))
     tempRoots.push(root)

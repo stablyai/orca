@@ -74,7 +74,10 @@ export async function scanAiVaultSessions(
       limit: limitPerAgent,
       agent: 'claude',
       issues,
-      extensions: ['.jsonl']
+      extensions: ['.jsonl'],
+      // Why: Claude writes per-Task subagent transcripts under <session>/subagents/; workflows
+      // spawn many, so exclude them — they clutter history and crowd out real sessions.
+      filePredicate: (path) => !path.split(/[\\/]/).includes('subagents')
     }),
     ...codexSessionsDirs.map((rootDir) =>
       discoverFiles({
