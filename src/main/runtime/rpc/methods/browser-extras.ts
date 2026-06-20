@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
+import { assertRpcClipboardTextWriteWithinLimit } from '../rpc-clipboard-text-validation'
 import { BrowserTarget, OptionalFiniteNumber } from '../schemas'
 import {
   ClipboardWrite,
@@ -132,7 +133,10 @@ export const BROWSER_EXTRA_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'browser.clipboardWrite',
     params: ClipboardWrite,
-    handler: async (params, { runtime }) => runtime.browserClipboardWrite(params)
+    handler: async (params, { runtime }) => {
+      await assertRpcClipboardTextWriteWithinLimit(params.text)
+      return runtime.browserClipboardWrite(params)
+    }
   }),
   defineMethod({
     name: 'browser.dialogAccept',

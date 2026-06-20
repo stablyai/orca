@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { normalizeMatchQuery, scoreQueryTokens } from './query-token-match'
 import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-terminal-shell'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 
 export type TabCreateMenuOptionKind =
   | 'go-to-simulator'
@@ -29,6 +30,14 @@ export type TabCreateMenuOptionsContext = {
   windowsShellEntries?: readonly { label: string; shell: BuiltInWindowsTerminalShell }[]
 }
 
+export const TAB_CREATE_MENU_QUERY_MAX_BYTES = 2 * 1024
+
+export function isTabCreateMenuQueryTooLarge(
+  query: string,
+  maxBytes = TAB_CREATE_MENU_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
 function scoreMenuOption(query: string, option: TabCreateMenuOption): number {
   const normalizedQuery = normalizeMatchQuery(query)
   if (!normalizedQuery) {
@@ -163,6 +172,9 @@ export function findMatchingTabCreateMenuOptions(
   query: string,
   options: readonly TabCreateMenuOption[]
 ): TabCreateMenuOption[] {
+  if (isTabCreateMenuQueryTooLarge(query)) {
+    return []
+  }
   const normalizedQuery = normalizeMatchQuery(query)
   if (!normalizedQuery) {
     return []

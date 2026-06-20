@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { getWorktreePaletteSearchScope, searchWorktrees } from './worktree-palette-search'
+import {
+  WORKTREE_PALETTE_QUERY_MAX_BYTES,
+  isWorktreePaletteQueryTooLarge
+} from './worktree-palette-query-bounds'
 import type { Repo, Worktree } from '../../../shared/types'
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
@@ -79,6 +83,44 @@ describe('worktree-palette-search', () => {
         supportingText: null
       }
     ])
+  })
+
+  it('rejects oversized pasted queries before reading worktree metadata', () => {
+    const oversizedQuery = 'secret-worktree-palette-search'.repeat(WORKTREE_PALETTE_QUERY_MAX_BYTES)
+    const worktree = {
+      get id(): string {
+        throw new Error('oversized worktree palette searches must not read ids')
+      },
+      get displayName(): string {
+        throw new Error('oversized worktree palette searches must not scan names')
+      },
+      get branch(): string {
+        throw new Error('oversized worktree palette searches must not scan branches')
+      }
+    } as Worktree
+
+    expect(isWorktreePaletteQueryTooLarge(oversizedQuery)).toBe(true)
+    expect(searchWorktrees([worktree], oversizedQuery, repoMap, null, null)).toEqual([])
+  })
+
+  it('rejects oversized whitespace before trimming worktree palette queries', () => {
+    expect(
+      searchWorktrees(
+        [makeWorktree()],
+        ' '.repeat(WORKTREE_PALETTE_QUERY_MAX_BYTES + 1),
+        repoMap,
+        null,
+        null
+      )
+    ).toEqual([])
+  })
+
+  it('enforces the query budget by UTF-8 byte length', () => {
+    const query = 'é'.repeat(WORKTREE_PALETTE_QUERY_MAX_BYTES)
+
+    expect(query.length).toBe(WORKTREE_PALETTE_QUERY_MAX_BYTES)
+    expect(isWorktreePaletteQueryTooLarge(query)).toBe(true)
+    expect(searchWorktrees([makeWorktree()], query, repoMap, null, null)).toEqual([])
   })
 
   it('returns a truncated comment snippet with the highlighted match range', () => {

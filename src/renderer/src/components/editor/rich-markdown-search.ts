@@ -1,7 +1,10 @@
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
-import { findTextMatchRanges } from './markdown-preview-search'
+import {
+  findTextMatchRanges,
+  isMarkdownPreviewSearchQueryTooLarge
+} from './markdown-preview-search'
 
 export type RichMarkdownSearchMatch = {
   from: number
@@ -29,6 +32,9 @@ export function findRichMarkdownSearchMatches(
   query: string
 ): RichMarkdownSearchMatch[] {
   if (!query) {
+    return []
+  }
+  if (isMarkdownPreviewSearchQueryTooLarge(query)) {
     return []
   }
 

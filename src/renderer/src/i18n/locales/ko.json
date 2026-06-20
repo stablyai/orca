@@ -530,7 +530,11 @@
       "useGlobalFileDrop": {
         "38c9f034ff": "드롭한 파일을 업로드하지 못했습니다.",
         "d720e2f855": "드롭한 일부 파일을 업로드할 수 없습니다.",
-        "245faa95b9": "드롭한 파일에 사용할 수 있는 원격 워크스페이스 경로가 없습니다."
+        "245faa95b9": "드롭한 파일에 사용할 수 있는 원격 워크스페이스 경로가 없습니다.",
+        "nativeDropTooManyPathsDescription": "Drop {{value0}} or fewer files at a time.",
+        "nativeDropTooManyPaths": "Drop contains too many files.",
+        "nativeDropPathsTooLargeDescription": "Drop fewer files or use a shorter path list.",
+        "nativeDropPathsTooLarge": "Drop path list is too large."
       },
       "useIpcEvents": {
         "0e3cf53060": "브라우저 탭 {{value0}}을(를) 찾을 수 없습니다",
@@ -609,6 +613,12 @@
         "f70ac54d38": "AI 제공업체 계정",
         "4121f7a0a2": "AI agents를 관리하고, 기본값을 설정하고, 명령을 사용자 정의하세요.",
         "b49abbd2f7": "Agents"
+      },
+      "useAppMenuPaste": {
+        "pasteTooLarge": "Paste is too large."
+      },
+      "useLargeTextControlPaste": {
+        "pasteTooLarge": "Paste is too large."
       }
     },
     "components": {
@@ -801,7 +811,8 @@
         "16c1abe76c": "본 것으로 표시",
         "ba8e329d92": "본 것으로 표시 해제",
         "3f79ffc8b7": "현재 리뷰어를 보려면 PR 세부정보를 엽니다.",
-        "5c1c973855": "리뷰어 삭제"
+        "5c1c973855": "리뷰어 삭제",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "GitLabItemDialog": {
         "65e784c1f1": "다시 열기",
@@ -865,7 +876,8 @@
         "40c56b95e2": "{{value0}} 승인{{value1}} 남음",
         "3a051b8ade": "작업 항목",
         "32f8bef818": "로그 출력이 없습니다.",
-        "4168eb2c51": "해결"
+        "4168eb2c51": "해결",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "JiraIssueWorkspace": {
         "b0b92666c9": "댓글",
@@ -899,7 +911,8 @@
         "54649eaeab": "+ 담당자",
         "2a829a2f00": "우선순위",
         "693be070d0": "전환",
-        "ef21405c6d": "Jira 이슈"
+        "ef21405c6d": "Jira 이슈",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "Landing": {
         "76a95f7f47": "생성",
@@ -1021,7 +1034,8 @@
         "858d0630da": "미리보기 닫기",
         "39883467f4": "Linear 이슈",
         "fda549766e": "댓글을 달려면 {{value0}}",
-        "d71cd3003e": "+ 담당자"
+        "d71cd3003e": "+ 담당자",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "NewWorkspaceComposerCard": {
         "cbb47ee0dc": "로컬 Git 프로젝트에만 사용할 수 있습니다.",
@@ -1077,6 +1091,7 @@
         "setupHostExistingFolderHelp": "해당 호스트에 이미 있는 체크아웃을 연결한 다음, 그 호스트에서 이 워크스페이스를 만듭니다.",
         "importingHostSetup": "가져오는 중...",
         "importHostSetup": "가져오기",
+        "notePasteTooLarge": "메모 필드에 붙여넣을 내용이 너무 큽니다.",
         "reuseExistingBranch": "Reuse branch",
         "reuseExistingBranchHint": "Check out the existing branch instead of creating a new one from it."
       },
@@ -1247,7 +1262,8 @@
         "50b8fb290f": "본 것으로 표시",
         "2b4fdb880c": "본 표시 해제",
         "56ec6eafb7": "현재 리뷰어를 보려면 PR 세부정보를 엽니다.",
-        "7f964a365a": "리뷰어 삭제"
+        "7f964a365a": "리뷰어 삭제",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "QuickOpen": {
         "1dbd3f59ff": "이동",
@@ -1836,7 +1852,8 @@
                 "c3e829b4d9": "저장",
                 "463d030ae4": "삭제",
                 "8564f58542": "편집",
-                "5f104bf855": "아직 댓글이 없습니다."
+                "5f104bf855": "아직 댓글이 없습니다.",
+                "commentTooLarge": "Comment is too large to submit safely."
               },
               "LabelsEditor": {
                 "34dd57d6c8": "로드 중…",
@@ -1864,7 +1881,8 @@
           "b7e4a1c902": "붙여넣거나, 끌어다 놓거나, 클릭해서 파일 추가",
           "8f1c2d4e6a": "미리 볼 내용이 없습니다",
           "c91f0a2b14": "작성",
-          "d82b1e3f05": "미리보기"
+          "d82b1e3f05": "미리보기",
+          "imageUrlTooLarge": "Image URL is too large."
         },
         "IssueSourceSelector": {
           "d6aeb2012b": "다음에서 이슈 표시",
@@ -1954,7 +1972,8 @@
           "f6a7b8c9d0": "이슈 닫기",
           "b1c2d3e4f5": "이슈 다시 열기",
           "0a73f59e85": "댓글 보내기",
-          "bf43425540": "댓글"
+          "bf43425540": "댓글",
+          "commentTooLarge": "댓글이 너무 커서 안전하게 제출할 수 없습니다."
         },
         "GitHubWorkItemAssigneePopoverContent": {
           "cddd9b04a7": "담당자 로드 중",
@@ -2299,7 +2318,8 @@
             "f3eeb1de13": "복사",
             "c2f0b72b8d": "삽입",
             "925f49f210": "창 확장",
-            "df766809e0": "창 축소"
+            "df766809e0": "창 축소",
+            "copyTerminalId": "Copy Terminal ID"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "데몬 재시작",
@@ -2359,7 +2379,12 @@
                 "53f015fd85": "{{value0}} 심볼릭 링크{{value1}}을 건너뛰었습니다.",
                 "29c031b49a": "{{value0}} 파일{{value1}}을 런타임에 업로드하는 중…",
                 "0c77693641": "Worktree가 준비되지 않았습니다. 잠시 후에 다시 시도하세요.",
-                "ce8248b835": "작업 트리 경로를 사용할 수 없습니다."
+                "ce8248b835": "작업 트리 경로를 사용할 수 없습니다.",
+                "internalTooManyPaths": "Drop contains too many paths for a safe terminal paste.",
+                "internalPathsTooLarge": "Drop path list is too large for a safe terminal paste.",
+                "b4cf68e889": "Skipped {{value0}} {{value1}}.",
+                "writeTimeout": "File drop cancelled: terminal did not accept the path before the safety timeout.",
+                "writeRejected": "File drop cancelled: terminal could not accept the path."
               }
             }
           },
@@ -2542,7 +2567,8 @@
                   "097a982ee0": "파일 로드 중...",
                   "5a9c83c04b": "모든 파일, URL, agent를 엽니다...",
                   "90eb94dc48": "http:// 또는 https:// URL을 입력하세요.",
-                  "5553b283ce": "URL 또는 파일 경로를 입력하세요."
+                  "5553b283ce": "URL 또는 파일 경로를 입력하세요.",
+                  "queryTooLarge": "Search text is too large."
                 }
               },
               "menu": {
@@ -3458,7 +3484,8 @@
           "f8b1deb1a4": "취소",
           "51001182e3": "빈 디렉토리",
           "971d85cc84": "이 호스트에서 프로젝트로 열립니다 · {{value0}}",
-          "00c4235c10": "'{{value0}}'과(와) 일치하는 항목이 없습니다."
+          "00c4235c10": "'{{value0}}'과(와) 일치하는 항목이 없습니다.",
+          "largeInputNoMatches": "No matches for this long input"
         },
         "RemoveFolderDialog": {
           "4dc5b5065b": "제거",
@@ -3729,7 +3756,8 @@
           "ca74db7550": "SSH를 통한 원격 프로젝트",
           "021538e1d1": "SSH 연결이 끊어졌습니다.",
           "runtimeHostDisconnected": "Server disconnected",
-          "runtimeHostProject": "Project on Orca server"
+          "runtimeHostProject": "Project on Orca server",
+          "automationCreated": "Created by automation"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -4388,7 +4416,8 @@
           "agentPermissionsTooltip": "Custom agent arguments stay unchanged when switching modes.",
           "agentPermissionsDescription": "Orca가 agents를 실행할 때 권한 프롬프트를 줄일지, 수동 확인을 유지할지 선택합니다.",
           "agentPermissionsYolo": "Yolo",
-          "agentPermissionsManual": "Manual"
+          "agentPermissionsManual": "Manual",
+          "3f1bdf3cb4": "Environment text is too large to parse safely."
         },
         "AppIconSelector": {
           "d5a112dc9b": "다음 아이콘",
@@ -8836,7 +8865,8 @@
                   "f49e0a21e0": "코드",
                   "542bf6a7e2": "기울임",
                   "256300f8ea": "굵게",
-                  "87aff03d63": "전송 중..."
+                  "87aff03d63": "전송 중...",
+                  "commentTooLarge": "Comment is too large to submit safely."
                 }
               }
             }
@@ -10240,6 +10270,11 @@
                 }
               }
             }
+          },
+          "useEmulatorScreenKeyboard": {
+            "pasteTooLarge": "Paste is too large for emulator keyboard input.",
+            "unsupportedPasteText": "Emulator keyboard paste supports US keyboard text only.",
+            "pasteTargetUnavailable": "Emulator keyboard paste failed because the device is not ready."
           }
         }
       },
@@ -10491,7 +10526,8 @@
         },
         "MonacoEditor": {
           "68cb83f4a7": "선택한 텍스트에 메모 추가",
-          "fd68ae03b3": "파일에서 검색"
+          "fd68ae03b3": "파일에서 검색",
+          "largePasteTooLarge": "Paste is too large."
         },
         "MonacoGutterContextMenu": {
           "7b57b1b468": "원격 URL 복사",
@@ -10772,6 +10808,9 @@
               }
             }
           }
+        },
+        "richMarkdownLargeTextPaste": {
+          "tooLarge": "Paste is too large."
         }
       },
       "diff": {
@@ -10788,7 +10827,8 @@
           "DiffCommentPopover": {
             "2b3ce6d394": "취소",
             "e05063cfc1": "라인 {{value0}}",
-            "c845170b3b": "라인 {{value0}}-{{value1}}"
+            "c845170b3b": "라인 {{value0}}-{{value1}}",
+            "commentTooLarge": "Comment is too large to submit safely."
           },
           "useDiffCommentDecorator": {
             "995fa28b50": "이 메모"

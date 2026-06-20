@@ -131,6 +131,45 @@ describe('registerShellHandlers', () => {
     await expect(handler({})).resolves.toBeNull()
   })
 
+  describe('shell:openPath', () => {
+    it('ignores relative paths', async () => {
+      const handler = getHandler('shell:openPath')
+
+      await expect(handler({}, 'relative/workspace')).resolves.toBeUndefined()
+      expect(statMock).not.toHaveBeenCalled()
+      expect(showItemInFolderMock).not.toHaveBeenCalled()
+    })
+
+    it('ignores missing paths', async () => {
+      statMock.mockRejectedValueOnce(new Error('missing'))
+      const workspacePath = resolve('missing-workspace')
+      const handler = getHandler('shell:openPath')
+
+      await expect(handler({}, workspacePath)).resolves.toBeUndefined()
+      expect(statMock).toHaveBeenCalledWith(normalize(workspacePath))
+      expect(showItemInFolderMock).not.toHaveBeenCalled()
+    })
+
+    it('reveals existing absolute paths', async () => {
+      const workspacePath = resolve('workspace')
+      const handler = getHandler('shell:openPath')
+
+      await expect(handler({}, workspacePath)).resolves.toBeUndefined()
+      expect(showItemInFolderMock).toHaveBeenCalledWith(normalize(workspacePath))
+    })
+
+    it('swallows launcher failures', async () => {
+      showItemInFolderMock.mockImplementationOnce(() => {
+        throw new Error('launcher unavailable')
+      })
+      const workspacePath = resolve('workspace')
+      const handler = getHandler('shell:openPath')
+
+      await expect(handler({}, workspacePath)).resolves.toBeUndefined()
+      expect(showItemInFolderMock).toHaveBeenCalledWith(normalize(workspacePath))
+    })
+  })
+
   describe('shell:openInFileManager', () => {
     it('rejects relative paths', async () => {
       const handler = getHandler('shell:openInFileManager')

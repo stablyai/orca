@@ -9,6 +9,11 @@ import {
   encodeTerminalStreamJson,
   encodeTerminalStreamText
 } from '../../../../shared/terminal-stream-protocol'
+import {
+  TERMINAL_INPUT_CHUNK_MAX_BYTES,
+  TERMINAL_INPUT_MAX_BYTES
+} from '../../../../shared/terminal-input'
+import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clipboard-text'
 
 describe('createRemoteRuntimePtyTransport', () => {
   const runtimeCall = vi.fn()
@@ -993,6 +998,43 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
   })
 
+  it('does not coalesce large remote terminal input chunks above the terminal ceiling', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1'
+      })
+
+      await transport.connect({ url: '', callbacks: {} })
+      const { streamId } = latestSubscribePayload()
+      runtimeCall.mockClear()
+      subscriptionSendBinary.mockClear()
+
+      const chunk = 'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)
+      expect(transport.sendInput(chunk)).toBe(true)
+      expect(subscriptionSendBinary).toHaveBeenCalledTimes(1)
+      let frame = decodeTerminalStreamFrame(subscriptionSendBinary.mock.calls[0][0])
+      expect(frame?.opcode).toBe(TerminalStreamOpcode.Input)
+      expect(frame?.streamId).toBe(streamId)
+      expect(frame ? decodeTerminalStreamText(frame.payload) : '').toBe(chunk)
+
+      expect(transport.sendInput('tail')).toBe(true)
+      await vi.runOnlyPendingTimersAsync()
+
+      expect(runtimeCall).not.toHaveBeenCalled()
+      expect(subscriptionSendBinary).toHaveBeenCalledTimes(2)
+      frame = decodeTerminalStreamFrame(subscriptionSendBinary.mock.calls[1][0])
+      expect(frame?.opcode).toBe(TerminalStreamOpcode.Input)
+      expect(frame?.streamId).toBe(streamId)
+      expect(frame ? decodeTerminalStreamText(frame.payload) : '').toBe('tail')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('returns runtime acceptance for acknowledged terminal input', async () => {
     runtimeCall.mockImplementation((args) => {
       if (args.method === 'terminal.create') {
@@ -1096,6 +1138,155 @@ describe('createRemoteRuntimePtyTransport', () => {
     await transport.connect({ url: '', callbacks: {} })
 
     await expect(transport.sendInputAccepted?.('\x03')).resolves.toBe(false)
+  })
+
+  it('splits large acknowledged remote input before terminal.send RPCs', async () => {
+    runtimeCall.mockImplementation((args) => {
+      if (args.method === 'terminal.create') {
+        return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
+      }
+      if (args.method === 'terminal.send') {
+        return Promise.resolve({
+          ok: true,
+          result: {
+            send: {
+              handle: 'terminal-1',
+              accepted: true,
+              bytesWritten: args.params.text.length
+            }
+          }
+        })
+      }
+      return Promise.resolve({ ok: true, result: {} })
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    const chunk = '😀'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES / 4)
+    await expect(transport.sendInputAccepted?.(`${chunk}tail`)).resolves.toBe(true)
+
+    const sendCalls = runtimeCall.mock.calls.filter((call) => call[0].method === 'terminal.send')
+    expect(sendCalls).toHaveLength(2)
+    expect(sendCalls[0]?.[0].params.text).toBe(chunk)
+    expect(sendCalls[1]?.[0].params.text).toBe('tail')
+  })
+
+  it('yields while validating accepted large acknowledged remote input before terminal.send RPCs', async () => {
+    vi.useFakeTimers()
+    try {
+      runtimeCall.mockImplementation((args) => {
+        if (args.method === 'terminal.create') {
+          return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
+        }
+        if (args.method === 'terminal.send') {
+          return Promise.resolve({
+            ok: true,
+            result: {
+              send: {
+                handle: 'terminal-1',
+                accepted: true,
+                bytesWritten: args.params.text.length
+              }
+            }
+          })
+        }
+        return Promise.resolve({ ok: true, result: {} })
+      })
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1'
+      })
+      const text = 'é'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+
+      await transport.connect({ url: '', callbacks: {} })
+      runtimeCall.mockClear()
+
+      const accepted = transport.sendInputAccepted?.(text)
+      await Promise.resolve()
+
+      expect(runtimeCall).not.toHaveBeenCalled()
+
+      await vi.runAllTimersAsync()
+
+      await expect(accepted).resolves.toBe(true)
+      const sendTexts = runtimeCall.mock.calls
+        .filter((call) => call[0].method === 'terminal.send')
+        .map((call) => call[0].params.text)
+      expect(sendTexts.join('')).toBe(text)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stops large acknowledged remote input after a rejected chunk', async () => {
+    const firstChunk = 'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)
+    const rejectedChunk = `tail${'y'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES - 4)}`
+    runtimeCall.mockImplementation((args) => {
+      if (args.method === 'terminal.create') {
+        return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
+      }
+      if (args.method === 'terminal.send') {
+        return Promise.resolve({
+          ok: true,
+          result: {
+            send: {
+              handle: 'terminal-1',
+              accepted: args.params.text !== rejectedChunk,
+              bytesWritten: args.params.text === rejectedChunk ? 0 : args.params.text.length
+            }
+          }
+        })
+      }
+      return Promise.resolve({ ok: true, result: {} })
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    await expect(transport.sendInputAccepted?.(`${firstChunk}${rejectedChunk}after`)).resolves.toBe(
+      false
+    )
+
+    const sendTexts = runtimeCall.mock.calls
+      .filter((call) => call[0].method === 'terminal.send')
+      .map((call) => call[0].params.text)
+    expect(sendTexts).toEqual([firstChunk, rejectedChunk])
+  })
+
+  it('rejects oversized acknowledged remote input before runtime RPCs', async () => {
+    runtimeCall.mockImplementation((args) => {
+      if (args.method === 'terminal.create') {
+        return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
+      }
+      return Promise.resolve({ ok: true, result: {} })
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+    runtimeCall.mockClear()
+
+    await expect(
+      transport.sendInputAccepted?.('😀'.repeat(Math.floor(TERMINAL_INPUT_MAX_BYTES / 4) + 1))
+    ).resolves.toBe(false)
+    expect(runtimeCall).not.toHaveBeenCalled()
   })
 
   it('preserves literal LF input when sending remote PTY binary frames', async () => {

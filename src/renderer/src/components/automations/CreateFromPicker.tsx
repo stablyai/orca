@@ -18,6 +18,7 @@ import {
   getRuntimeRepoBaseRefDefault,
   searchRuntimeRepoBaseRefs
 } from '@/runtime/runtime-repo-client'
+import { isRuntimeRepoRefSearchQueryWithinLimit } from '@/runtime/runtime-repo-search-bounds'
 import { translate } from '@/i18n/i18n'
 
 const DEFAULT_VALUE = '__project_default__'
@@ -131,6 +132,11 @@ export function CreateFromPicker({
   }, [activeRuntimeEnvironmentId, repoId])
 
   React.useEffect(() => {
+    if (!isRuntimeRepoRefSearchQueryWithinLimit(query)) {
+      setSearchResults([])
+      setIsSearching(false)
+      return
+    }
     const trimmedQuery = query.trim()
     if (!open || !repoId || trimmedQuery.length < 2) {
       setSearchResults([])

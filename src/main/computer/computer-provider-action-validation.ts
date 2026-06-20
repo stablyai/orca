@@ -2,6 +2,7 @@ import {
   computerUseHotkeyValidationMessage,
   computerUsePressKeyValidationMessage
 } from '../../shared/computer-use-key-spec'
+import { validateComputerClipboardPasteTextWithBoundedYield } from './computer-clipboard-paste-validation'
 import { RuntimeClientError } from './runtime-client-error'
 
 type ComputerProviderActionMethod =
@@ -15,10 +16,10 @@ type ComputerProviderActionMethod =
   | 'pasteText'
   | 'setValue'
 
-export function validateComputerProviderActionParams(
+export async function validateComputerProviderActionParams(
   method: ComputerProviderActionMethod,
   params: Record<string, unknown>
-): string {
+): Promise<string> {
   const app = requireNonEmptyString(params, 'app')
   validateWindowTarget(params)
   switch (method) {
@@ -40,8 +41,10 @@ export function validateComputerProviderActionParams(
       validateDragTarget(params)
       return app
     case 'typeText':
-    case 'pasteText':
       requireNonEmptyString(params, 'text')
+      return app
+    case 'pasteText':
+      await validatePasteText(params)
       return app
     case 'pressKey':
       validatePressKey(params)
@@ -180,6 +183,11 @@ function validateHotkey(params: Record<string, unknown>): void {
   if (message) {
     throw new RuntimeClientError('invalid_argument', message)
   }
+}
+
+function validatePasteText(params: Record<string, unknown>): Promise<void> | void {
+  const text = requireNonEmptyString(params, 'text')
+  return validateComputerClipboardPasteTextWithBoundedYield(text)
 }
 
 function requireStringAllowingEmpty(params: Record<string, unknown>, key: string): string {

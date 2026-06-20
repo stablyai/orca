@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { Tab, TabGroup, Worktree } from '../../../shared/types'
-import { buildSearchableSimulatorTabs, searchSimulatorTabs } from './simulator-palette-search'
+import {
+  SIMULATOR_PALETTE_QUERY_MAX_BYTES,
+  buildSearchableSimulatorTabs,
+  isSimulatorPaletteQueryTooLarge,
+  searchSimulatorTabs,
+  type SearchableSimulatorTab
+} from './simulator-palette-search'
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -146,5 +152,26 @@ describe('simulator-palette-search', () => {
     expect(entries).toHaveLength(1)
     expect(entries[0].isCurrentTab).toBe(true)
     expect(searchSimulatorTabs(entries, '')[0]?.score).toBe(-2)
+  })
+
+  it('rejects oversized pasted queries before scanning simulator tabs', () => {
+    const oversizedQuery = 'secret-simulator-palette'.repeat(SIMULATOR_PALETTE_QUERY_MAX_BYTES)
+    const entry = {
+      get tab(): Tab {
+        throw new Error('oversized simulator palette queries must not scan tabs')
+      },
+      worktree: makeWorktree(),
+      repoName: 'repo/mobile',
+      worktreeSortIndex: 0,
+      isCurrentTab: false,
+      isCurrentWorktree: false
+    } as SearchableSimulatorTab
+
+    expect(isSimulatorPaletteQueryTooLarge(oversizedQuery)).toBe(true)
+    expect(searchSimulatorTabs([entry], oversizedQuery)).toEqual([])
+  })
+
+  it('rejects oversized whitespace before trimming simulator palette queries', () => {
+    expect(searchSimulatorTabs([], ' '.repeat(SIMULATOR_PALETTE_QUERY_MAX_BYTES + 1))).toEqual([])
   })
 })

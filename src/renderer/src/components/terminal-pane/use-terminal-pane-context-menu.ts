@@ -12,6 +12,17 @@ import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatc
 import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-session'
 import { pasteTerminalText } from './terminal-bracketed-paste'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
+import {
+  executeTerminalPastePlan,
+  planTerminalPasteWithYield,
+  type TerminalPasteSource,
+  type TerminalPasteTextOptions
+} from './terminal-paste-coordinator'
+import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
+import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
+import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
+import { isTerminalPanePasteTargetCurrent } from './terminal-paste-target-state'
+import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
 import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-paste-recovery'
 import {
   REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT,
@@ -123,9 +134,7 @@ export function useTerminalPaneContextMenu({
     const panes = manager.getPanes()
     if (contextPaneIdRef.current !== null) {
       const clickedPane = panes.find((pane) => pane.id === contextPaneIdRef.current) ?? null
-      if (clickedPane) {
-        return clickedPane
-      }
+      return clickedPane
     }
     return manager.getActivePane() ?? panes[0] ?? null
   }, [managerRef])
@@ -163,6 +172,79 @@ export function useTerminalPaneContextMenu({
     pane.terminal.focus()
   }
 
+  const getShortcutPlatform = (): NodeJS.Platform => {
+    if (navigator.userAgent.includes('Mac')) {
+      return 'darwin'
+    }
+    return navigator.userAgent.includes('Windows') ? 'win32' : 'linux'
+  }
+
+  const isPanePasteTargetMounted = (
+    pane: ManagedPane,
+    transport: PtyTransport | undefined,
+    ptyId: string | null
+  ): boolean => {
+    return isTerminalPanePasteTargetCurrent({
+      manager: managerRef.current,
+      paneTransports: paneTransportsRef.current,
+      paneId: pane.id,
+      leafId: pane.leafId,
+      transport,
+      ptyId
+    })
+  }
+
+  const executeMenuPasteText = async (
+    pane: ManagedPane,
+    source: TerminalPasteSource,
+    text: string,
+    options?: TerminalPasteTextOptions
+  ): Promise<boolean> => {
+    const connectionId = getConnectionId(worktreeId) ?? null
+    const transport = paneTransportsRef.current.get(pane.id)
+    const ptyId = transport?.getPtyId() ?? null
+    const shortcutPlatform = getShortcutPlatform()
+    const plan = await planTerminalPasteWithYield({
+      text,
+      source,
+      target: {
+        kind: 'terminal',
+        paneId: pane.id,
+        leafId: pane.leafId,
+        ptyId,
+        runtime: resolveTerminalPasteRuntime({
+          platform: shortcutPlatform,
+          ptyId,
+          connectionId,
+          remotePlatform: getTerminalPasteSshRemotePlatform(connectionId),
+          transport,
+          isWindowsConpty: forceBracketedMultilineTextPaste
+        })
+      },
+      forceBracketedPaste: options?.forceBracketedPaste,
+      forceBracketedPasteForMultiline: options?.forceBracketedPasteForMultiline,
+      terminalBracketedPasteMode: pane.terminal.modes.bracketedPasteMode
+    })
+    const execution = await executeTerminalPastePlan(plan, {
+      pasteText: (pasteText, pasteOptions) =>
+        pasteTerminalText(pane.terminal, pasteText, pasteOptions),
+      writePty: (data) => writeTerminalPastePtyInput(transport, data),
+      isTargetCurrent: () => isPanePasteTargetMounted(pane, transport, ptyId),
+      canContinue: () => isPanePasteTargetMounted(pane, transport, ptyId)
+    })
+    if (execution.status !== 'pasted') {
+      onPasteError(formatTerminalPasteExecutionError(execution.reason))
+      return false
+    }
+    if (text) {
+      recordTerminalUserInputForLeaf(tabId, pane.leafId)
+    }
+    if (options?.recoverImagePasteWebglAtlas) {
+      scheduleImagePasteWebglAtlasRecovery()
+    }
+    return true
+  }
+
   const onCopyTerminalId = async (): Promise<void> => {
     const pane = resolveMenuPane()
     if (!pane) {
@@ -193,37 +275,37 @@ export function useTerminalPaneContextMenu({
     }
   }
 
-  const onPaste = async (): Promise<void> => {
+  const pasteResolvedPane = async (
+    source: Extract<TerminalPasteSource, 'context-menu' | 'right-click'>
+  ): Promise<void> => {
     const pane = resolveMenuPane()
     if (!pane) {
       return
     }
     const connectionId = getConnectionId(worktreeId) ?? null
-    await pasteTerminalClipboard({
+    const result = await pasteTerminalClipboard({
       readClipboardText: window.api.ui.readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
       connectionId,
       forceBracketedMultilineTextPaste,
-      pasteText: (text, options) => {
-        pasteTerminalText(pane.terminal, text, options)
-        if (text) {
-          recordTerminalUserInputForLeaf(tabId, pane.leafId)
-        }
-        if (options?.recoverImagePasteWebglAtlas) {
-          scheduleImagePasteWebglAtlasRecovery()
-        }
-      },
+      pasteText: (text, options) => executeMenuPasteText(pane, source, text, options),
+      onTextPasteError: () =>
+        onPasteError('Paste failed: clipboard text is too large for a safe terminal paste.'),
       onImagePasteError: (error) => {
         const detail = error instanceof Error ? error.message : String(error)
         onPasteError(`Image paste failed: ${detail}`)
       }
     })
+    if (result.status !== 'pasted') {
+      return
+    }
     // Why: Radix returns focus to the menu trigger (the pane container) on
-    // close, but xterm.js only accepts input when its own helper textarea is
-    // focused. Without this, the user has to click the pane again before
-    // typing works (see #592).
+    // close. Refocus only after a completed paste so rejected async targets
+    // do not steal focus from the user's new control.
     pane.terminal.focus()
   }
+
+  const onPaste = async (): Promise<void> => pasteResolvedPane('context-menu')
 
   // Split-pane CWD inheritance (docs/ssh-split-pane-inherit-cwd.md):
   // mirror the Cmd+D path — sync split on confirmed OSC 7 cache hit,
@@ -370,12 +452,15 @@ export function useTerminalPaneContextMenu({
     // reaches the app menu so the menu remains discoverable.
     if (rightClickToPaste && !event.ctrlKey) {
       event.stopPropagation()
-      const selection = clickedPane?.terminal.getSelection()
+      if (!clickedPane) {
+        return
+      }
+      const selection = clickedPane.terminal.getSelection()
       if (selection) {
         void window.api.ui.writeClipboardText(selection)
-        clickedPane?.terminal.clearSelection()
+        clickedPane.terminal.clearSelection()
       } else {
-        void onPaste()
+        void pasteResolvedPane('right-click')
       }
       return
     }

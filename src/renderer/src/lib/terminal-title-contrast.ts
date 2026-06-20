@@ -73,7 +73,7 @@ function parseCssRgbColor(color: string | undefined): RgbaColor | null {
 
   const parts = rgbMatch[1].includes(',')
     ? rgbMatch[1].split(',').map((part) => part.trim())
-    : rgbMatch[1].replace('/', ' ').trim().split(/\s+/)
+    : getCssRgbFunctionWhitespaceParts(rgbMatch[1], 4)
   if (parts.length < 3) {
     return null
   }
@@ -86,6 +86,49 @@ function parseCssRgbColor(color: string | undefined): RgbaColor | null {
     return null
   }
   return { r: channels[0]!, g: channels[1]!, b: channels[2]!, a: alpha }
+}
+
+// Why: imported terminal themes can supply modern rgb() syntax; keep this
+// render-path parser from allocating regex split arrays.
+function getCssRgbFunctionWhitespaceParts(body: string, maxParts: number): string[] {
+  const parts: string[] = []
+  let tokenStart = -1
+
+  for (let index = 0; index <= body.length; index += 1) {
+    const isEnd = index === body.length
+    if (!isEnd && !isCssRgbFunctionWhitespaceSeparator(body.charCodeAt(index))) {
+      if (tokenStart === -1) {
+        tokenStart = index
+      }
+      continue
+    }
+    if (tokenStart !== -1) {
+      parts.push(body.slice(tokenStart, index))
+      tokenStart = -1
+      if (parts.length >= maxParts) {
+        break
+      }
+    }
+  }
+
+  return parts
+}
+
+function isCssRgbFunctionWhitespaceSeparator(code: number): boolean {
+  return (
+    code === 47 ||
+    code === 32 ||
+    (code >= 9 && code <= 13) ||
+    code === 160 ||
+    code === 5760 ||
+    (code >= 8192 && code <= 8202) ||
+    code === 8232 ||
+    code === 8233 ||
+    code === 8239 ||
+    code === 8287 ||
+    code === 12288 ||
+    code === 65279
+  )
 }
 
 function parseCssRgbChannel(channel: string): number | null {

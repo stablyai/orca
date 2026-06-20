@@ -15,6 +15,7 @@ import {
 import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
 import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
 import { normalizeSelectedTextForFileSearch } from '@/lib/file-search-selection'
+import { isFindQueryTooLarge } from '@/lib/find-query-bounds'
 import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-session'
 import { handleEmptyFloatingWorkspacePanelCloseShortcut } from '@/lib/floating-workspace-terminal-actions'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
@@ -84,6 +85,9 @@ export function matchSearchNavigate(
     return null
   }
   if (!searchState.query) {
+    return null
+  }
+  if (isFindQueryTooLarge(searchState.query)) {
     return null
   }
   return e.shiftKey ? 'previous' : 'next'

@@ -7,7 +7,7 @@ import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { searchRepos } from '@/lib/repo-search'
+import { isRepoSearchQueryTooLarge, searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
@@ -82,6 +82,9 @@ export default function AutomationProjectCombobox({
     : null
   const showHostLabels = useMemo(() => hasMultipleHosts(repos), [repos])
   const filteredGroups = useMemo(() => {
+    if (isRepoSearchQueryTooLarge(query)) {
+      return []
+    }
     const trimmed = query.trim()
     if (!trimmed) {
       return groups

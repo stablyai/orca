@@ -1,7 +1,9 @@
+import os from 'node:os'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
+import { translate } from '../../i18n/i18n'
 import { useAppStore } from '../../store'
 import { shouldOpenAutoRenameBranchAdvanced } from './AutoRenameBranchFromWorkSetting'
 import {
@@ -39,11 +41,12 @@ function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
 
 function findSegmentedControl(node: unknown): ReactElementLike {
   let found: ReactElementLike | null = null
+  const label = translate(
+    'auto.components.settings.GitPane.sourceControlGroupOrderTitle',
+    'Source Control Group Order'
+  )
   visit(node, (entry) => {
-    if (
-      entry.type === SettingsSegmentedControl &&
-      entry.props.ariaLabel === 'Source Control Group Order'
-    ) {
+    if (entry.type === SettingsSegmentedControl && entry.props.ariaLabel === label) {
       found = entry
     }
   })
@@ -60,7 +63,7 @@ function renderGitPane(searchQuery: string): string {
       TooltipProvider,
       null,
       React.createElement(GitPane, {
-        settings: getDefaultSettings('/tmp'),
+        settings: getDefaultSettings(os.homedir()),
         updateSettings: () => {},
         writeSourceControlAiSettings: async () => {},
         displayedGitUsername: 'brennan',
@@ -118,17 +121,28 @@ describe('GitPane', () => {
   it('renders Source Control group order in Git settings', () => {
     const markup = renderGitPane('group order')
 
-    expect(markup).toContain('Source Control Group Order')
-    expect(markup).toContain('Changes first')
-    expect(markup).toContain('Staged first')
-    expect(markup).toContain('Untracked first')
+    expect(markup).toContain(
+      translate(
+        'auto.components.settings.GitPane.sourceControlGroupOrderTitle',
+        'Source Control Group Order'
+      )
+    )
+    expect(markup).toContain(
+      translate('auto.components.settings.GitPane.changesFirst', 'Changes first')
+    )
+    expect(markup).toContain(
+      translate('auto.components.settings.GitPane.stagedFirst', 'Staged first')
+    )
+    expect(markup).toContain(
+      translate('auto.components.settings.GitPane.untrackedFirst', 'Untracked first')
+    )
   })
 
   it('updates Source Control group order only when the selected option changes', () => {
     const updateSettings = vi.fn()
     const element = SourceControlGroupOrderSetting({
       settings: {
-        ...getDefaultSettings('/tmp'),
+        ...getDefaultSettings(os.homedir()),
         sourceControlGroupOrder: 'changes-first'
       },
       updateSettings

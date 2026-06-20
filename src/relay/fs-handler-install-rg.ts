@@ -1,4 +1,12 @@
 import { readFile } from 'fs/promises'
+import {
+  getProcessOutputFields,
+  iterateProcessOutputLines
+} from '../shared/process-output-field-scanner'
+
+const GENERIC_LINUX_RIPGREP_INSTALL =
+  'install ripgrep via your package manager (e.g. apt/dnf/pacman)'
+const OS_RELEASE_ID_LIKE_MAX_FIELDS = 16
 
 export async function detectInstallCommand(): Promise<string> {
   if (process.platform === 'darwin') {
@@ -7,29 +15,64 @@ export async function detectInstallCommand(): Promise<string> {
   if (process.platform === 'linux') {
     try {
       const osRelease = await readFile('/etc/os-release', 'utf-8')
-      const idMatch = osRelease.match(/^ID=(?:"?)([^"\n]+)(?:"?)$/m)
-      const idLikeMatch = osRelease.match(/^ID_LIKE=(?:"?)([^"\n]+)(?:"?)$/m)
-      const ids = [idMatch?.[1], ...(idLikeMatch?.[1]?.split(/\s+/) ?? [])].filter(Boolean)
-      for (const id of ids) {
-        if (id === 'debian' || id === 'ubuntu') {
-          return 'sudo apt install ripgrep'
-        }
-        if (id === 'fedora' || id === 'rhel' || id === 'centos') {
-          return 'sudo dnf install ripgrep'
-        }
-        if (id === 'arch') {
-          return 'sudo pacman -S ripgrep'
-        }
-        if (id === 'alpine') {
-          return 'sudo apk add ripgrep'
-        }
-      }
+      return detectLinuxInstallCommandFromOsRelease(osRelease)
     } catch {
       /* fall through to generic guidance */
     }
-    return 'install ripgrep via your package manager (e.g. apt/dnf/pacman)'
+    return GENERIC_LINUX_RIPGREP_INSTALL
   }
   return 'install ripgrep (https://github.com/BurntSushi/ripgrep#installation)'
+}
+
+export function detectLinuxInstallCommandFromOsRelease(osRelease: string): string {
+  for (const id of getOsReleasePackageFamilyIds(osRelease)) {
+    if (id === 'debian' || id === 'ubuntu') {
+      return 'sudo apt install ripgrep'
+    }
+    if (id === 'fedora' || id === 'rhel' || id === 'centos') {
+      return 'sudo dnf install ripgrep'
+    }
+    if (id === 'arch') {
+      return 'sudo pacman -S ripgrep'
+    }
+    if (id === 'alpine') {
+      return 'sudo apk add ripgrep'
+    }
+  }
+
+  return GENERIC_LINUX_RIPGREP_INSTALL
+}
+
+function getOsReleasePackageFamilyIds(osRelease: string): string[] {
+  const ids: string[] = []
+
+  for (const line of iterateProcessOutputLines(osRelease)) {
+    const separatorIndex = line.indexOf('=')
+    if (separatorIndex <= 0) {
+      continue
+    }
+
+    const key = line.slice(0, separatorIndex)
+    const value = readOsReleaseValue(line.slice(separatorIndex + 1))
+    if (key === 'ID') {
+      const id = getProcessOutputFields(value, 1)[0]
+      if (id) {
+        ids.push(id)
+      }
+    } else if (key === 'ID_LIKE') {
+      ids.push(...getProcessOutputFields(value, OS_RELEASE_ID_LIKE_MAX_FIELDS))
+    }
+  }
+
+  return ids
+}
+
+function readOsReleaseValue(rawValue: string): string {
+  const trimmed = rawValue.trim()
+  const quote = trimmed[0]
+  return (quote === '"' || quote === "'") && trimmed.at(-1) === quote
+    ? trimmed.slice(1, -1)
+    : trimmed
 }
 
 export async function buildInstallRgMessage(cause: unknown): Promise<string> {

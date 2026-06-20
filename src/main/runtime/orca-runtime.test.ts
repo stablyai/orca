@@ -17,6 +17,7 @@ import type {
   WorkspaceSessionState
 } from '../../shared/types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
+import { MAX_OSC_TITLE_CHARS } from '../../shared/agent-detection'
 import {
   addWorktree,
   assertWorktreeCleanForRemoval,
@@ -45,6 +46,12 @@ import {
   type RuntimeTerminalAgentStatusEvent
 } from './orca-runtime'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
+import {
+  TERMINAL_INPUT_CHUNK_MAX_BYTES,
+  TERMINAL_INPUT_MAX_BYTES,
+  TERMINAL_INPUT_TOO_LARGE_ERROR
+} from '../../shared/terminal-input'
+import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../shared/clipboard-text'
 import {
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider
@@ -6213,6 +6220,49 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('resolves Antigravity ready prompts with newline-heavy pasted tails without splitting', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    let pastedTail = ''
+    for (let index = 0; index < 90; index += 1) {
+      pastedTail += `${'pasted text '.repeat(25)}${index}\n`
+    }
+    const splitSpy = vi.spyOn(String.prototype, 'split')
+
+    runtime.onPtyData(
+      'pty-bg',
+      [
+        'Antigravity CLI 1.0.3\n',
+        'user@example.com (Antigravity Business)\n',
+        pastedTail,
+        'Gemini 4 Experimental (High)\n',
+        '~/orca/workspaces/orca/agy-dispatch-issue\n',
+        '>'
+      ].join(''),
+      Date.now()
+    )
+
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+    ).resolves.toMatchObject({
+      handle,
+      condition: 'tui-idle',
+      satisfied: true,
+      status: 'running'
+    })
+    const splitReadyTail = splitSpy.mock.contexts.some((context) => {
+      const value = typeof context === 'string' ? context : String(context)
+      return value.includes('antigravity cli') && value.includes('pasted text pasted text')
+    })
+    expect(splitReadyTail).toBe(false)
+  })
+
   it('resolves tui-idle from an Antigravity prompt before the model line', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -6632,6 +6682,87 @@ describe('OrcaRuntimeService', () => {
     await runtime.sendTerminal(handle, { text: 'continue', enter: true })
 
     expect(writes).toEqual(['continue', '\r'])
+  })
+
+  it('chunks large terminal.send text before provider writes', async () => {
+    const writes: string[] = []
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: (_ptyId, data) => {
+        writes.push(data)
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    const text = ['x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES), 'tail'].join('')
+
+    const result = await runtime.sendTerminal(handle, { text })
+
+    expect(result).toMatchObject({
+      handle,
+      accepted: true,
+      bytesWritten: Buffer.byteLength(text, 'utf8')
+    })
+    expect(writes).toEqual(['x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES), 'tail'])
+  })
+
+  it('yields while validating accepted large terminal.send text before provider writes', async () => {
+    const writes: string[] = []
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: (_ptyId, data) => {
+        writes.push(data)
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    const text = 'é'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+
+    vi.useFakeTimers()
+    try {
+      const sendPromise = runtime.sendTerminal(handle, { text })
+
+      expect(writes).toEqual([])
+
+      await vi.runAllTimersAsync()
+      const result = await sendPromise
+
+      expect(result).toMatchObject({
+        handle,
+        accepted: true,
+        bytesWritten: Buffer.byteLength(text, 'utf8')
+      })
+      expect(writes.length).toBeGreaterThan(1)
+      expect(writes.join('')).toBe(text)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rejects oversized terminal.send text before provider writes', async () => {
+    const writes: string[] = []
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: (_ptyId, data) => {
+        writes.push(data)
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+
+    await expect(
+      runtime.sendTerminal(handle, { text: 'x'.repeat(TERMINAL_INPUT_MAX_BYTES + 1) })
+    ).rejects.toThrow(TERMINAL_INPUT_TOO_LARGE_ERROR)
+    expect(writes).toEqual([])
   })
 
   it('reveals a background terminal session when focusing its handle', async () => {
@@ -7367,7 +7498,7 @@ describe('OrcaRuntimeService', () => {
         ptysById: Map<string, { lastOscTitle: string | null }>
       }
     ).ptysById.get('pty-1')
-    expect(pty?.lastOscTitle).toBe('x'.repeat(4092))
+    expect(pty?.lastOscTitle).toBe('x'.repeat(MAX_OSC_TITLE_CHARS))
   })
 
   it('does not retain split ST-terminated string controls as preview text', async () => {
@@ -7463,6 +7594,37 @@ describe('OrcaRuntimeService', () => {
     expect(retained).toContain('Done')
     expect(retained).not.toContain('38;2')
     expect(retained).not.toContain('49m')
+  })
+
+  it('normalizes large CRLF-heavy terminal chunks without regex replacement or line splits', async () => {
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+    const splitSpy = vi.spyOn(String.prototype, 'split')
+    const runtime = new OrcaRuntimeService(store)
+
+    syncSinglePty(runtime)
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', `${'line\r\n'.repeat(10_000)}tail`, 100)
+    const read = await runtime.readTerminal(terminal.handle, { limit: 5 })
+    const usedCrlfReplace = replaceSpy.mock.calls.some(
+      ([pattern], index) =>
+        pattern instanceof RegExp &&
+        pattern.source === '\\r\\n' &&
+        typeof replaceSpy.mock.contexts[index] === 'string' &&
+        replaceSpy.mock.contexts[index].length > 10_000
+    )
+    const usedLineSplit = splitSpy.mock.calls.some(([separator], index) => {
+      const splitSeparator = separator as unknown
+      return (
+        (splitSeparator === '\n' ||
+          (splitSeparator instanceof RegExp && splitSeparator.source === '\\r?\\n')) &&
+        typeof splitSpy.mock.contexts[index] === 'string' &&
+        splitSpy.mock.contexts[index].length > 10_000
+      )
+    })
+
+    expect(read.tail.at(-1)).toBe('tail')
+    expect(usedCrlfReplace).toBe(false)
+    expect(usedLineSplit).toBe(false)
   })
 
   it('bounds retained partial terminal output before preview reads', async () => {
@@ -18487,7 +18649,8 @@ describe('OrcaRuntimeService', () => {
       expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
       expect(notifier.worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
     } finally {
-      await rm(parentDir, { recursive: true, force: true })
+      // Why: Windows can keep a just-inspected git admin dir busy briefly.
+      await rm(parentDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
     }
   })
 

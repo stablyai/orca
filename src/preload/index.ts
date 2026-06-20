@@ -161,9 +161,11 @@ import {
   ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT
 } from '../shared/updater-renderer-events'
 import {
-  NATIVE_FILE_DROP_TARGET,
   ORCA_INTERNAL_FILE_DRAG_TYPE,
+  createNativeFileDropPayload,
+  createRejectedNativeFileDropPayload,
   hasNativeFileDragTypes,
+  NATIVE_FILE_DROP_MAX_PATHS,
   resolveNativeFileDropPath,
   type NativeDropResolution,
   type NativeFileDropPayload,
@@ -172,6 +174,7 @@ import {
 import { subscribeRuntimeEnvironmentFromPreload } from './runtime-environment-subscriptions'
 import type { RuntimeEnvironmentSubscriptionHandle } from './runtime-environment-subscriptions'
 import type { HostedReviewForBranchArgs } from '../shared/hosted-review'
+import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
 import type {
   CrashReportBreadcrumbData,
   CrashReportSubmitArgs,
@@ -310,7 +313,8 @@ function resolveNativeFileDrop(event: DragEvent): NativeDropResolution | null {
       pathEntries.push({
         nativeFileDropTarget: entry.dataset.nativeFileDropTarget,
         nativeFileDropDir: entry.dataset.nativeFileDropDir,
-        terminalTabId: entry.dataset.terminalTabId
+        terminalTabId: entry.dataset.terminalTabId,
+        terminalPaneLeafId: entry.dataset.terminalPaneLeafId ?? entry.dataset.leafId
       })
     }
   }
@@ -354,6 +358,21 @@ document.addEventListener(
     }
     const resolution = resolveNativeFileDrop(e)
 
+    // Why: resolving native File objects to paths is synchronous in preload.
+    // Reject oversized gestures by count before touching every File object.
+    if (files.length > NATIVE_FILE_DROP_MAX_PATHS) {
+      ipcRenderer.send(
+        'terminal:file-dropped-from-preload',
+        createRejectedNativeFileDropPayload({
+          byteLength: 0,
+          pathCount: files.length,
+          reason: 'too-many-paths',
+          status: 'rejected'
+        })
+      )
+      return
+    }
+
     const paths: string[] = []
     for (let i = 0; i < files.length; i++) {
       // webUtils.getPathForFile is the Electron 28+ replacement for File.path
@@ -374,28 +393,14 @@ document.addEventListener(
       return
     }
 
-    // Why: preload must emit exactly one native-drop event per drop gesture.
-    // The preload layer already has the full FileList. Re-emitting one IPC
-    // message per path and asking the renderer to reconstruct the gesture via
-    // timing would be both fragile and slower under large drops.
-    if (resolution?.target === NATIVE_FILE_DROP_TARGET.fileExplorer) {
-      ipcRenderer.send('terminal:file-dropped-from-preload', {
-        paths,
-        target: NATIVE_FILE_DROP_TARGET.fileExplorer,
-        destinationDir: resolution.destinationDir
-      })
-    } else {
-      // Why: falls back to 'editor' so drops on surfaces without an explicit
-      // marker preserve the prior open-in-editor behavior instead of being
-      // silently discarded.
-      ipcRenderer.send('terminal:file-dropped-from-preload', {
-        paths,
-        target: resolution?.target ?? NATIVE_FILE_DROP_TARGET.editor,
-        ...(resolution?.target === NATIVE_FILE_DROP_TARGET.terminal && resolution.tabId
-          ? { tabId: resolution.tabId }
-          : {})
-      })
+    const payload = createNativeFileDropPayload(resolution, paths)
+    if (!payload) {
+      return
     }
+    // Why: preload must emit exactly one native-drop event per drop gesture.
+    // The shared planner also rejects large path payloads without including
+    // path contents in the failure event.
+    ipcRenderer.send('terminal:file-dropped-from-preload', payload)
   },
   true
 )
@@ -2937,6 +2942,26 @@ const api = {
       ipcRenderer.on('ui:toggleStatusBar', listener)
       return () => ipcRenderer.removeListener('ui:toggleStatusBar', listener)
     },
+    onExportPdfRequested: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('export:requestPdf', listener)
+      return () => ipcRenderer.removeListener('export:requestPdf', listener)
+    },
+    onAppMenuPaste: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:appMenuPaste', listener)
+      return () => ipcRenderer.removeListener('ui:appMenuPaste', listener)
+    },
+    onEditableContextPaste: (
+      callback: (data: { plainTextOnly: boolean }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { plainTextOnly: boolean }
+      ): void => callback({ plainTextOnly: data?.plainTextOnly === true })
+      ipcRenderer.on('ui:editableContextPaste', listener)
+      return () => ipcRenderer.removeListener('ui:editableContextPaste', listener)
+    },
     onDictationKeyDown: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:dictationKeyDown', listener)
@@ -3195,9 +3220,10 @@ const api = {
       ipcRenderer.on('terminal:zoom', listener)
       return () => ipcRenderer.removeListener('terminal:zoom', listener)
     },
-    readClipboardText: (): Promise<string> => ipcRenderer.invoke('clipboard:readText'),
-    readSelectionClipboardText: (): Promise<string> =>
-      ipcRenderer.invoke('clipboard:readSelectionText'),
+    readClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
+      ipcRenderer.invoke('clipboard:readText', options),
+    readSelectionClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
+      ipcRenderer.invoke('clipboard:readSelectionText', options),
     saveClipboardImageAsTempFile: (args?: {
       connectionId?: string | null
     }): Promise<string | null> => ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
@@ -3207,6 +3233,11 @@ const api = {
       ipcRenderer.invoke('clipboard:writeSelectionText', text),
     writeClipboardImage: (dataUrl: string): Promise<void> =>
       ipcRenderer.invoke('clipboard:writeImage', dataUrl),
+    performNativePaste: (options?: { mode?: 'paste' | 'paste-and-match-style' }): void => {
+      ipcRenderer.send('ui:performNativePaste', {
+        mode: options?.mode === 'paste-and-match-style' ? 'paste-and-match-style' : 'paste'
+      })
+    },
     onFileDrop: (callback: (data: NativeFileDropPayload) => void): (() => void) =>
       subscribeNativeFileDrop(callback),
     getZoomLevel: (): number => webFrame.getZoomLevel(),

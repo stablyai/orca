@@ -3,6 +3,7 @@ composer card markup together so the inline and modal variants share one UI
 surface without splitting the controlled form into hard-to-follow fragments. */
 import React from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import {
   AlertTriangle,
   Check,
@@ -21,6 +22,12 @@ import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import {
+  TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES,
+  measureTextControlPasteByteLength,
+  pasteTextIntoTextControl,
+  shouldHandleTextControlPaste
+} from '@/lib/text-control-paste'
 import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
@@ -464,6 +471,39 @@ export default function NewWorkspaceComposerCard({
   const handleAddRepo = React.useCallback((): void => {
     openModal('add-repo')
   }, [openModal])
+  const handleNotePaste = React.useCallback((event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const text = event.clipboardData.getData('text/plain')
+    const byteLengthMeasurement = measureTextControlPasteByteLength(text, {
+      stopAfterBytes: TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES
+    })
+    if (
+      !byteLengthMeasurement.exceededLimit &&
+      !shouldHandleTextControlPaste(text, { measuredByteLength: byteLengthMeasurement.byteLength })
+    ) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    const textarea = event.currentTarget
+    // Why: large note pastes need one controlled owner so React receives a
+    // single final input event after chunked DOM insertion.
+    void pasteTextIntoTextControl(textarea, text, {
+      source: 'clipboard',
+      canContinue: (target) => target.ownerDocument.activeElement === target
+    })
+      .then((result) => {
+        if (result.status === 'rejected' && result.reason === 'too-large') {
+          toast.error(
+            translate(
+              'auto.components.NewWorkspaceComposerCard.notePasteTooLarge',
+              'Paste is too large for the note field.'
+            )
+          )
+        }
+      })
+      .catch(() => {})
+  }, [])
   const projectDescriptionId = React.useId()
   const readyProjectHostSetupOptions = React.useMemo(
     () => projectHostSetupOptions.filter((option) => option.kind === 'ready'),
@@ -836,6 +876,7 @@ export default function NewWorkspaceComposerCard({
                 <textarea
                   value={note}
                   onChange={(event) => onNoteChange(event.target.value)}
+                  onPaste={handleNotePaste}
                   onInput={(event) => {
                     // Why: start at one-line height, grow to fit content so a short
                     // note keeps the dialog compact while longer notes get room to

@@ -335,6 +335,70 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
+  it('reads newline-heavy Command Code transcripts without line-array splitting', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-large-transcript-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    try {
+      const filler = Array.from({ length: 6_000 }, (_value, index) =>
+        JSON.stringify({
+          role: index % 2 === 0 ? 'assistant' : 'user',
+          content: [{ type: 'text', text: `filler ${index}` }]
+        })
+      )
+      writeFileSync(
+        transcriptPath,
+        `${[
+          ...filler,
+          JSON.stringify({
+            role: 'user',
+            content: [{ type: 'text', text: 'large transcript prompt' }]
+          }),
+          JSON.stringify({
+            role: 'assistant',
+            content: [{ type: 'text', text: 'large transcript answer' }]
+          })
+        ].join('\n')}\n`
+      )
+      const splitSpy = vi.spyOn(String.prototype, 'split')
+
+      const tool = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'PreToolUse',
+            transcript_path: transcriptPath,
+            tool_name: 'shell_command',
+            tool_input: { command: 'pwd' }
+          }
+        },
+        'production'
+      )
+      const done = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'Stop',
+            transcript_path: transcriptPath
+          }
+        },
+        'production'
+      )
+
+      expect(tool?.payload.prompt).toBe('large transcript prompt')
+      expect(done?.payload.lastAssistantMessage).toBe('large transcript answer')
+      const usedLineArraySplit = splitSpy.mock.calls.some(
+        ([separator]) => typeof separator === 'string' && separator === '\n'
+      )
+      expect(usedLineArraySplit).toBe(false)
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
   it('trims surrounding whitespace from extracted prompt text', () => {
     const event = normalizeHookPayload(
       state,
@@ -728,6 +792,47 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
+  it('reads newline-heavy Antigravity user requests without wrapper regex matching', () => {
+    const matchSpy = vi.spyOn(String.prototype, 'match')
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-large-prompt-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    const requestText = 'Fix the failing test\n'.repeat(300)
+    try {
+      writeFileSync(
+        transcriptPath,
+        `${JSON.stringify({
+          source: 'USER_EXPLICIT',
+          type: 'USER_INPUT',
+          content: `<USER_REQUEST>\n${requestText}</USER_REQUEST>`
+        })}\n`
+      )
+
+      const started = normalizeHookPayload(
+        state,
+        'antigravity',
+        {
+          paneKey: PANE_KEY,
+          hook_event_name: 'PreInvocation',
+          payload: { transcriptPath }
+        },
+        'production'
+      )
+
+      expect(started?.payload.prompt).toContain('Fix the failing test')
+      expect(started?.payload.prompt).not.toContain('<USER_REQUEST>')
+      expect(started?.payload.prompt).not.toContain('</USER_REQUEST>')
+      const usedRequestWrapperMatch = matchSpy.mock.calls.some(
+        ([pattern]) =>
+          pattern instanceof RegExp &&
+          pattern.source.includes('<USER_REQUEST>') &&
+          pattern.source.includes('[\\s\\S]')
+      )
+      expect(usedRequestWrapperMatch).toBe(false)
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
   it('keeps the cached Antigravity prompt instead of rescanning the transcript', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-cached-prompt-'))
     const transcriptPath = join(tmpDir, 'transcript.jsonl')
@@ -1092,6 +1197,34 @@ describe('shared agent-hook-listener', () => {
       'production'
     )
     expect(event?.payload.prompt).toBe('Find recent PR')
+  })
+
+  it('strips newline-heavy Grok user_query wrappers without regex matching', () => {
+    const matchSpy = vi.spyOn(String.prototype, 'match')
+    const promptText = 'Find recent PR\n'.repeat(300)
+    const event = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'user_prompt_submit',
+          prompt: `<user_query>\n${promptText}</user_query>`
+        }
+      },
+      'production'
+    )
+
+    expect(event?.payload.prompt).toContain('Find recent PR')
+    expect(event?.payload.prompt).not.toContain('<user_query>')
+    expect(event?.payload.prompt).not.toContain('</user_query>')
+    const usedGrokWrapperMatch = matchSpy.mock.calls.some(
+      ([pattern]) =>
+        pattern instanceof RegExp &&
+        pattern.source.startsWith('^<user_query>') &&
+        pattern.source.includes('[\\s\\S]')
+    )
+    expect(usedGrokWrapperMatch).toBe(false)
   })
 
   it('maps Grok feedback notifications to waiting without overwriting the prompt', () => {

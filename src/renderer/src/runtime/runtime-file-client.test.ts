@@ -35,6 +35,7 @@ const fsRename = vi.fn()
 const fsDeletePath = vi.fn()
 const fsStat = vi.fn()
 const fsPathExists = vi.fn()
+const fsSearch = vi.fn()
 const fsImportExternalPaths = vi.fn()
 const fsStageExternalPathsForRuntimeUpload = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
@@ -54,6 +55,7 @@ beforeEach(() => {
   fsDeletePath.mockReset()
   fsStat.mockReset()
   fsPathExists.mockReset()
+  fsSearch.mockReset()
   fsImportExternalPaths.mockReset()
   fsStageExternalPathsForRuntimeUpload.mockReset()
   runtimeEnvironmentCall.mockReset()
@@ -86,6 +88,7 @@ beforeEach(() => {
         deletePath: fsDeletePath,
         stat: fsStat,
         pathExists: fsPathExists,
+        search: fsSearch,
         importExternalPaths: fsImportExternalPaths,
         stageExternalPathsForRuntimeUpload: fsStageExternalPathsForRuntimeUpload
       },
@@ -1039,6 +1042,45 @@ describe('runtime file client', () => {
       params: { worktree: 'id:wt-1', query: 'needle', caseSensitive: true, maxResults: 50 },
       timeoutMs: 15_000
     })
+  })
+
+  it('rejects oversized text search input before local IPC or runtime RPC', async () => {
+    const oversizedQuery = 'x'.repeat(9 * 1024)
+
+    await expect(
+      searchRuntimeFiles(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/remote/repo'
+        },
+        {
+          query: oversizedQuery,
+          rootPath: '/remote/repo',
+          maxResults: 50
+        }
+      )
+    ).resolves.toEqual({ files: [], totalMatches: 0, truncated: false })
+
+    await expect(
+      searchRuntimeFiles(
+        {
+          settings: { activeRuntimeEnvironmentId: null },
+          worktreeId: 'wt-1',
+          worktreePath: '/repo',
+          connectionId: 'ssh-1'
+        },
+        {
+          query: 'needle',
+          rootPath: '/repo',
+          includePattern: 'secret-token-value'.repeat(1024),
+          maxResults: 50
+        }
+      )
+    ).resolves.toEqual({ files: [], totalMatches: 0, truncated: false })
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(fsSearch).not.toHaveBeenCalled()
   })
 
   it('routes quick-open file listing through the selected runtime', async () => {

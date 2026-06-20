@@ -110,6 +110,24 @@ describe('extractTerminalHandleLinks', () => {
       { handle: 'term_worker', startIndex: 5, endIndex: 16 }
     ])
   })
+
+  it('scans huge handle-like terminal lines without regex iteration', () => {
+    const matchAll = vi.spyOn(String.prototype, 'matchAll')
+    const line = `${'term_'.repeat(20_000)} Open term_worker`
+
+    expect(extractTerminalHandleLinks(line)).toEqual([
+      {
+        handle: 'term_worker',
+        startIndex: line.length - 'term_worker'.length,
+        endIndex: line.length
+      }
+    ])
+    expect(matchAll).not.toHaveBeenCalled()
+  })
+
+  it('ignores overlong handle tokens', () => {
+    expect(extractTerminalHandleLinks(`Open term_${'a'.repeat(129)}`)).toEqual([])
+  })
 })
 
 describe('findTerminalHandleTarget', () => {

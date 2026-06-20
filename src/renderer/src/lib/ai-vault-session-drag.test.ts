@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  AI_VAULT_SESSION_DRAG_PAYLOAD_MAX_BYTES,
   AI_VAULT_SESSION_DRAG_TYPE,
   clearAiVaultSessionDragData,
   hasAiVaultSessionDragData,
@@ -64,6 +65,39 @@ describe('Session History session drag data', () => {
     )
 
     expect(readAiVaultSessionDragData(transfer)).toBeNull()
+  })
+
+  it('rejects oversized serialized payloads before parsing', () => {
+    const transfer = createTransfer()
+    const secret = 'ai-vault-drag-secret'
+    transfer.setData(
+      AI_VAULT_SESSION_DRAG_TYPE,
+      secret + 'x'.repeat(AI_VAULT_SESSION_DRAG_PAYLOAD_MAX_BYTES)
+    )
+
+    expect(readAiVaultSessionDragData(transfer)).toBeNull()
+  })
+
+  it('rejects multibyte oversized payloads before parsing', () => {
+    const transfer = createTransfer()
+    transfer.setData(AI_VAULT_SESSION_DRAG_TYPE, '😀'.repeat(4097))
+
+    expect(readAiVaultSessionDragData(transfer)).toBeNull()
+  })
+
+  it('does not retain an oversized internal payload for the hidden-data fallback', () => {
+    const source = createTransfer()
+    writeAiVaultSessionDragData(source, {
+      agent: 'claude',
+      sessionId: 'session-oversized',
+      title: 'Oversized payload',
+      command: 'x'.repeat(AI_VAULT_SESSION_DRAG_PAYLOAD_MAX_BYTES)
+    })
+
+    const dropTransfer = new TypeOnlyDataTransfer() as unknown as DataTransfer
+    dropTransfer.setData(AI_VAULT_SESSION_DRAG_TYPE, '')
+
+    expect(readAiVaultSessionDragData(dropTransfer)).toBeNull()
   })
 
   it('falls back to the active renderer drag payload when Chromium hides custom data', () => {

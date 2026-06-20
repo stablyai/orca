@@ -4,7 +4,10 @@ import type { Editor } from '@tiptap/react'
 import { TextSelection } from '@tiptap/pm/state'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { useAppStore } from '@/store'
-import { isMarkdownPreviewFindShortcut } from './markdown-preview-search'
+import {
+  isMarkdownPreviewFindShortcut,
+  isMarkdownPreviewSearchQueryTooLarge
+} from './markdown-preview-search'
 import {
   createRichMarkdownSearchPlugin,
   findRichMarkdownSearchMatches,
@@ -39,15 +42,18 @@ export function useRichMarkdownSearch({
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), 150)
     return () => clearTimeout(timer)
   }, [searchQuery])
+  const searchRequestQuery = isMarkdownPreviewSearchQueryTooLarge(debouncedQuery)
+    ? ''
+    : debouncedQuery
 
   const matches = useMemo(() => {
-    if (!editor || !isSearchOpen || !debouncedQuery) {
+    if (!editor || !isSearchOpen || !searchRequestQuery) {
       return []
     }
-    return findRichMarkdownSearchMatches(editor.state.doc, debouncedQuery)
+    return findRichMarkdownSearchMatches(editor.state.doc, searchRequestQuery)
     // searchRevision is bumped on ProseMirror doc edits to trigger recomputation
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor, isSearchOpen, debouncedQuery, searchRevision])
+  }, [editor, isSearchOpen, searchRequestQuery, searchRevision])
 
   const matchCount = matches.length
 
@@ -141,7 +147,7 @@ export function useRichMarkdownSearch({
       return
     }
 
-    const query = isSearchOpen ? debouncedQuery : ''
+    const query = isSearchOpen ? searchRequestQuery : ''
 
     // Why: combining decoration meta and selection+scrollIntoView into one
     // transaction avoids a split-dispatch where the first dispatch updates
@@ -178,7 +184,7 @@ export function useRichMarkdownSearch({
         container.scrollTo({ top: targetScroll, behavior: 'instant' })
       }
     }
-  }, [activeMatchIndex, debouncedQuery, editor, isSearchOpen, matches, scrollContainerRef])
+  }, [activeMatchIndex, searchRequestQuery, editor, isSearchOpen, matches, scrollContainerRef])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {

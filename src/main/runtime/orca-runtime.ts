@@ -21,6 +21,11 @@ import {
   createAgentStatusOscProcessor,
   type ProcessedAgentStatusChunk
 } from '../../shared/agent-status-osc'
+import {
+  isTerminalInputTooLargeWithYield,
+  TERMINAL_INPUT_TOO_LARGE_ERROR,
+  iterateTerminalInputChunks
+} from '../../shared/terminal-input'
 import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
 import {
   cleanupClaimedCloneTarget,
@@ -7888,6 +7893,7 @@ export class OrcaRuntimeService {
       if (payload === null) {
         throw new Error('invalid_terminal_send')
       }
+      await assertTerminalInputWithinLimitWithYield(action.text)
       await this.writeTerminalAction(pty.pty.ptyId, action, payload)
       return {
         handle,
@@ -7904,6 +7910,7 @@ export class OrcaRuntimeService {
     if (payload === null) {
       throw new Error('invalid_terminal_send')
     }
+    await assertTerminalInputWithinLimitWithYield(action.text)
 
     await this.writeTerminalAction(leaf.ptyId, action, payload)
 
@@ -7919,28 +7926,46 @@ export class OrcaRuntimeService {
     action: { text?: string; enter?: boolean; interrupt?: boolean },
     payload: string
   ): Promise<void> {
-    // Why: TUI apps (Claude Code, etc.) treat a single large write as a paste
-    // event. Keep Enter/interrupt as a second write for both visible and
-    // background PTYs so CLI automation behaves the same either way.
+    // Why: direct terminal.send can carry paste-sized text from RPC/mobile
+    // clients; chunk text before PTY/ConPTY while preserving suffix separation.
     const hasText = typeof action.text === 'string' && action.text.length > 0
     const hasSuffix = action.enter || action.interrupt
-    if (hasText && hasSuffix) {
-      const textWrote = this.ptyController?.write(ptyId, action.text!) ?? false
-      if (!textWrote) {
-        throw new Error('terminal_not_writable')
-      }
+    if (hasText) {
+      await this.writeTerminalInputChunks(ptyId, action.text!)
+    }
+    if (hasSuffix) {
       const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      if (hasText) {
+        await new Promise((resolve) => setTimeout(resolve, 500))
+      }
       const suffixWrote = this.ptyController?.write(ptyId, suffix) ?? false
       if (!suffixWrote) {
         throw new Error('terminal_not_writable')
       }
       return
     }
+    if (hasText) {
+      return
+    }
 
     const wrote = this.ptyController?.write(ptyId, payload) ?? false
     if (!wrote) {
       throw new Error('terminal_not_writable')
+    }
+  }
+
+  private async writeTerminalInputChunks(ptyId: string, text: string): Promise<void> {
+    const chunks = iterateTerminalInputChunks(text)
+    let chunk = chunks.next()
+    while (!chunk.done) {
+      const wrote = this.ptyController?.write(ptyId, chunk.value) ?? false
+      if (!wrote) {
+        throw new Error('terminal_not_writable')
+      }
+      chunk = chunks.next()
+      if (!chunk.done) {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      }
     }
   }
 
@@ -20649,16 +20674,24 @@ export function appendNormalizedToTailBuffer(
   // Why: status UIs redraw a single line with CR/backspace/ANSI erase
   // controls. Terminal previews are text, not a full screen model, so retain
   // the latest visible redraw segment instead of appending every spinner frame.
-  const pieces = `${boundedPreviousPartialLine}${normalizedChunk}`
-    .split('\n')
-    .map(applyTerminalLineControls)
-  const nextPartialLine = (pieces.pop() ?? '').replace(/[ \t]+$/g, '')
+  const completedLines: string[] = []
+  const combined = `${boundedPreviousPartialLine}${normalizedChunk}`
+  let lineStart = 0
+  for (let index = 0; index < combined.length; index += 1) {
+    if (combined.charCodeAt(index) !== 0x0a) {
+      continue
+    }
+    completedLines.push(
+      trimTerminalLineRight(applyTerminalLineControls(combined.slice(lineStart, index)))
+    )
+    lineStart = index + 1
+  }
+  const nextPartialLine = trimTerminalLineRight(
+    applyTerminalLineControls(combined.slice(lineStart))
+  )
   const retainedPartialLine = nextPartialLine.slice(-MAX_TAIL_PARTIAL_CHARS)
-  const newCompleteLines = pieces.length
-  let nextLines =
-    newCompleteLines > 0
-      ? [...previousLines, ...pieces.map((line) => line.replace(/[ \t]+$/g, ''))]
-      : previousLines
+  const newCompleteLines = completedLines.length
+  let nextLines = newCompleteLines > 0 ? [...previousLines, ...completedLines] : previousLines
   let truncated = previousPartialWasCapped || nextPartialLine.length > MAX_TAIL_PARTIAL_CHARS
 
   if (nextLines.length > MAX_TAIL_LINES) {
@@ -20689,6 +20722,18 @@ export function appendNormalizedToTailBuffer(
     truncated,
     newCompleteLines
   }
+}
+
+function trimTerminalLineRight(line: string): string {
+  let end = line.length
+  while (end > 0) {
+    const code = line.charCodeAt(end - 1)
+    if (code !== 0x20 && code !== 0x09) {
+      break
+    }
+    end -= 1
+  }
+  return end === line.length ? line : line.slice(0, end)
 }
 
 function applyTerminalLineControls(line: string): string {
@@ -21019,6 +21064,15 @@ function buildSendPayload(action: {
   return payload.length > 0 ? payload : null
 }
 
+async function assertTerminalInputWithinLimitWithYield(text: string | undefined): Promise<void> {
+  if (!text) {
+    return
+  }
+  if (await isTerminalInputTooLargeWithYield(text)) {
+    throw new Error(TERMINAL_INPUT_TOO_LARGE_ERROR)
+  }
+}
+
 // Why: tui-idle relies on recognized agent CLIs setting OSC titles. If the
 // terminal runs an unsupported CLI (or a plain shell), no title transition
 // will ever fire. A 5-minute ceiling prevents indefinite hangs while still
@@ -21111,27 +21165,45 @@ function findAntigravityReadyPromptIndex(normalized: string): number | null {
   if (headerIndex === -1) {
     return null
   }
-  const readySegment = normalized.slice(headerIndex)
-  const lines = readySegment.split('\n')
-  let offset = 0
+  let lineStart = headerIndex
   let modelIndex: number | null = null
   let promptIndex: number | null = null
 
-  for (const line of lines) {
-    const trimmed = line.trim()
-    const lineIndex = headerIndex + offset
-    if (lineIndex > headerIndex && trimmed.length > 0) {
-      if (modelIndex === null && trimmed.startsWith('gemini')) {
-        modelIndex = lineIndex + line.indexOf(trimmed)
+  // Why: ready previews can include echoed pasted output after the header;
+  // scan line bounds directly instead of splitting the whole terminal tail.
+  for (let cursor = headerIndex; cursor <= normalized.length; cursor += 1) {
+    if (cursor < normalized.length && normalized.charCodeAt(cursor) !== 10) {
+      continue
+    }
+    let trimmedStart = lineStart
+    let trimmedEnd = cursor
+    while (trimmedStart < trimmedEnd && isTerminalWaitWhitespace(normalized, trimmedStart)) {
+      trimmedStart += 1
+    }
+    while (trimmedEnd > trimmedStart && isTerminalWaitWhitespace(normalized, trimmedEnd - 1)) {
+      trimmedEnd -= 1
+    }
+    if (lineStart > headerIndex && trimmedStart < trimmedEnd) {
+      if (modelIndex === null && normalized.startsWith('gemini', trimmedStart)) {
+        modelIndex = trimmedStart
       }
-      if (promptIndex === null && trimmed === '>') {
-        promptIndex = lineIndex + line.indexOf('>')
+      if (
+        promptIndex === null &&
+        trimmedEnd - trimmedStart === 1 &&
+        normalized.charCodeAt(trimmedStart) === 62
+      ) {
+        promptIndex = trimmedStart
       }
     }
-    offset += line.length + 1
+    lineStart = cursor + 1
   }
 
   return modelIndex !== null && promptIndex !== null ? Math.max(modelIndex, promptIndex) : null
+}
+
+function isTerminalWaitWhitespace(value: string, index: number): boolean {
+  const code = value.charCodeAt(index)
+  return code === 32 || (code >= 9 && code <= 13)
 }
 
 function findTerminalWaitBlockedSignal(
@@ -21426,36 +21498,56 @@ function normalizeTerminalChunk(
     return { text: chunk, pendingAnsi: '' }
   }
   const combined = `${pendingAnsi}${chunk}`
-  let text = ''
+  const parts: string[] = []
+  let textStart = 0
   for (let index = 0; index < combined.length; index += 1) {
     const char = combined[index]
     if (char === '\x1b') {
+      appendTerminalNormalizedSpan(parts, combined, textStart, index)
       if (index + 1 >= combined.length) {
-        return { text, pendingAnsi: combined.slice(index) }
+        return { text: parts.join(''), pendingAnsi: combined.slice(index) }
       }
       const parsed = parseAnsiControlSequence(combined, index)
       if (!parsed) {
         return {
-          text,
+          text: parts.join(''),
           pendingAnsi: trimPendingAnsiControl(combined.slice(index))
         }
       }
       index = parsed.endIndex
+      textStart = index + 1
       continue
     }
     if (char === '\r' && combined[index + 1] === '\n') {
-      text += '\n'
+      appendTerminalNormalizedSpan(parts, combined, textStart, index)
+      parts.push('\n')
       index += 1
+      textStart = index + 1
       continue
     }
     const code = combined.charCodeAt(index)
     if (code === 0x08 || code === 0x09 || code === 0x0a || code === 0x0d) {
-      text += char
-    } else if (isTerminalPreviewPrintableCodeUnit(code)) {
-      text += char
+      appendTerminalNormalizedSpan(parts, combined, textStart, index)
+      parts.push(char)
+      textStart = index + 1
+    } else if (!isTerminalPreviewPrintableCodeUnit(code)) {
+      appendTerminalNormalizedSpan(parts, combined, textStart, index)
+      textStart = index + 1
     }
   }
-  return { text, pendingAnsi: '' }
+  appendTerminalNormalizedSpan(parts, combined, textStart, combined.length)
+  return { text: parts.join(''), pendingAnsi: '' }
+}
+
+function appendTerminalNormalizedSpan(
+  parts: string[],
+  value: string,
+  start: number,
+  end: number
+): void {
+  if (end > start) {
+    parts.push(value.slice(start, end))
+  }
 }
 
 function isTerminalPreviewPrintableCodeUnit(code: number): boolean {

@@ -1,44 +1,22 @@
 import type { TuiAgent } from '../../../shared/types'
-import { TUI_AGENT_CONFIG, type DraftPasteReadySignal } from '../../../shared/tui-agent-config'
+import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { useAppStore } from '@/store'
-import { subscribeToPtyData } from '@/components/terminal-pane/pty-dispatcher'
-import {
-  isRemoteRuntimePtyId,
-  sendRuntimePtyInputVerified
-} from '@/runtime/runtime-terminal-inspection'
-import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
+import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-inspection'
 import { waitForAgentReady } from './agent-ready-wait'
 import { getSettingsForWorktreeRuntimeOwner } from './worktree-runtime-owner'
 import type { GlobalSettings } from '../../../shared/types'
+import { sendAgentDraftPasteContent } from './agent-draft-paste-content'
+import { waitForAgentDraftInputReady } from './agent-draft-readiness'
+export {
+  AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES,
+  AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES,
+  AGENT_DRAFT_PASTE_MAX_BYTES,
+  chunkAgentDraftPasteContent,
+  iterateAgentDraftPasteContentChunks,
+  sendAgentDraftPasteContent
+} from './agent-draft-paste-content'
 
-// Why: bracketed paste markers let modern TUIs (Claude Code / Codex / Pi /
-// OpenCode / Gemini / cursor-agent / copilot) treat the inserted text as a
-// single atomic paste instead of echoing character-by-character or triggering
-// line-edit shortcuts. Callers choose whether to append Enter after the paste.
-const BRACKETED_PASTE_BEGIN = '\x1b[200~'
-const BRACKETED_PASTE_END = '\x1b[201~'
 const POST_PASTE_SUBMIT_DELAY_MS = 50
-
-// Why: every prefill-capable TUI we ship support for (claude / codex / pi /
-// opencode / gemini / cursor-agent / copilot) emits `CSI ? 2004 h` (DECSET
-// 2004 — bracketed-paste-enable) on its output stream when its input layer
-// is wired up. That sequence is the protocol-level "I accept bracketed
-// paste" handshake. For most agents it still does not prove the input box
-// is rendered and visible. OpenCode in particular emits DECSET 2004 during
-// its alt-screen setup at ~500ms, then runs a 1.3s splash render with no
-// data on the PTY, then paints the actual input box at ~1.85s. Pasting
-// during the silent gap drops the bytes.
-//
-// Default strategy: take DECSET 2004 as the necessary precondition, then
-// wait for the TUI's render burst to finish — defined as
-// `BRACKETED_PASTE_QUIET_MS` of stream silence after the most recent
-// post-`?2004h` byte. This captures both the fast TUIs and the slow ones
-// (opencode emits, sleeps, emits again, then goes quiet). Codex opts into a
-// faster source-backed path: after DECSET, wait only until its composer
-// prompt glyph renders.
-const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
-const CODEX_COMPOSER_PROMPT = '›'
-const BRACKETED_PASTE_QUIET_MS = 1500
 
 // Why: deterministic signal can fail in two ways: (1) the agent never
 // emits DECSET 2004 (no shipped agent does this — guarded as a fallback),
@@ -107,7 +85,7 @@ export async function pasteDraftWhenAgentReady(args: {
   }
 
   const settings = getSettingsForAgentTabRuntimeOwner(tabId)
-  const ready = await waitForInputBoxReady(ptyId, budget, readySignal, settings)
+  const ready = await waitForAgentDraftInputReady(ptyId, budget, readySignal, settings)
   if (!ready) {
     // Why: fast-starting TUIs can emit the paste-ready escape sequence before
     // this sidecar subscription attaches. If process/title inspection says the
@@ -162,9 +140,8 @@ async function sendBracketedPasteToAgent(args: {
   submit: boolean
 }): Promise<boolean> {
   const { settings = useAppStore.getState().settings, ptyId, content, submit } = args
-  const pastePayload = `${BRACKETED_PASTE_BEGIN}${content}${BRACKETED_PASTE_END}`
   try {
-    const pasted = await sendRuntimePtyInputVerified(settings, ptyId, pastePayload)
+    const pasted = await sendAgentDraftPasteContent(settings, ptyId, content)
     if (!pasted) {
       return false
     }
@@ -180,128 +157,6 @@ async function sendBracketedPasteToAgent(args: {
   } catch {
     return false
   }
-}
-
-/**
- * Tap the PTY data stream as a side-channel observer (does NOT take over
- * the primary handler that feeds xterm) and resolve `true` once we see
- * DECSET 2004. Most agents also wait for the post-handshake render burst to
- * settle for `BRACKETED_PASTE_QUIET_MS`; Codex waits for its composer prompt
- * glyph instead. Resolves `false` on hard timeout.
- *
- * Why a sidecar subscription:
- *   - the main pane may attach mid-flight; we must not race against its
- *     handler registration on the dispatcher's primary slot.
- *   - DECSET 2004 and the Codex composer prompt may straddle two data chunks
- *     at ANSI parser boundaries, so we keep a small ring of recent bytes and
- *     search the union.
- */
-function waitForInputBoxReady(
-  ptyId: string,
-  timeoutMs: number,
-  readySignal: DraftPasteReadySignal,
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
-): Promise<boolean> {
-  return new Promise<boolean>((resolve) => {
-    let settled = false
-    let recent = ''
-    let postHandshakeRecent = ''
-    let saw2004 = false
-    let quietTimer: number | null = null
-    let hardTimer: number | null = null
-    let unsubscribe: (() => void) | null = null
-
-    const finish = (value: boolean): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      if (hardTimer !== null) {
-        window.clearTimeout(hardTimer)
-      }
-      if (quietTimer !== null) {
-        window.clearTimeout(quietTimer)
-      }
-      unsubscribe?.()
-      resolve(value)
-    }
-
-    const armQuietTimer = (): void => {
-      if (quietTimer !== null) {
-        window.clearTimeout(quietTimer)
-      }
-      quietTimer = window.setTimeout(() => finish(true), BRACKETED_PASTE_QUIET_MS)
-    }
-
-    const observeData = (data: string): void => {
-      // Why: keep just enough recent bytes that an escape sequence split
-      // across two IPC frames is still detectable. 512 bytes also covers
-      // Codex's prompt render around ANSI styling without retaining a large
-      // terminal scrollback copy.
-      const combined = recent + data
-      recent = combined.slice(-512)
-      if (!saw2004) {
-        const markerIndex = combined.indexOf(DECSET_BRACKETED_PASTE)
-        if (markerIndex === -1) {
-          return
-        }
-        saw2004 = true
-        const postHandshakeChunk = combined.slice(markerIndex + DECSET_BRACKETED_PASTE.length)
-        if (readySignal === 'codex-composer-prompt') {
-          if (postHandshakeChunk.includes(CODEX_COMPOSER_PROMPT)) {
-            finish(true)
-            return
-          }
-          postHandshakeRecent = postHandshakeChunk.slice(-512)
-          return
-        }
-        postHandshakeRecent = postHandshakeChunk.slice(-512)
-      } else {
-        if (
-          readySignal === 'codex-composer-prompt' &&
-          (data.includes(CODEX_COMPOSER_PROMPT) ||
-            (postHandshakeRecent + data).includes(CODEX_COMPOSER_PROMPT))
-        ) {
-          finish(true)
-          return
-        }
-        postHandshakeRecent = (postHandshakeRecent + data).slice(-512)
-      }
-      if (readySignal === 'codex-composer-prompt') {
-        return
-      }
-      if (saw2004) {
-        // Reset the quiet window on every byte we see post-handshake.
-        // The TUI's render is "done" when the stream goes quiet for
-        // BRACKETED_PASTE_QUIET_MS — at that point the input box is
-        // mounted and bracketed paste lands in the input buffer.
-        armQuietTimer()
-      }
-    }
-
-    if (isRemoteRuntimePtyId(ptyId)) {
-      void subscribeToRuntimeTerminalData(
-        settings,
-        ptyId,
-        `desktop:paste-ready:${ptyId}`,
-        observeData
-      )
-        .then((remoteUnsubscribe) => {
-          if (settled) {
-            remoteUnsubscribe()
-            return
-          }
-          unsubscribe = remoteUnsubscribe
-        })
-        .catch(() => finish(false))
-    } else {
-      unsubscribe = subscribeToPtyData(ptyId, observeData)
-    }
-
-    if (!settled) {
-      hardTimer = window.setTimeout(() => finish(false), timeoutMs)
-    }
-  })
 }
 
 /**

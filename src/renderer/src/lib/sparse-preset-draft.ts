@@ -1,4 +1,9 @@
-import { isAbsoluteSparseDirectoryPath, normalizeSparseDirectoryLines } from '@/lib/sparse-paths'
+import {
+  forEachSparseDirectoryInputLine,
+  hasSparseDirectoryParentSegment,
+  isAbsoluteSparseDirectoryPath,
+  normalizeSparseDirectoryLines
+} from '@/lib/sparse-paths'
 import { translate } from '@/i18n/i18n'
 
 export type SparsePresetDirectoryParseResult = {
@@ -7,13 +12,21 @@ export type SparsePresetDirectoryParseResult = {
 }
 
 export function parseSparsePresetDirectories(value: string): SparsePresetDirectoryParseResult {
-  const rawEntries = value
-    .split('\n')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0)
+  let hasAbsoluteEntry = false
+  forEachSparseDirectoryInputLine(value, (rawEntry) => {
+    const entry = rawEntry.trim()
+    if (entry.length === 0) {
+      return
+    }
+    if (isAbsoluteSparseDirectoryPath(entry)) {
+      hasAbsoluteEntry = true
+      return false
+    }
+    return undefined
+  })
 
   // Why: absolute paths can look repo-relative after slash normalization.
-  if (rawEntries.some(isAbsoluteSparseDirectoryPath)) {
+  if (hasAbsoluteEntry) {
     return {
       directories: [],
       error: translate(
@@ -32,7 +45,7 @@ export function parseSparsePresetDirectories(value: string): SparsePresetDirecto
     }
   }
 
-  if (directories.some((entry) => entry === '.' || entry.split('/').includes('..'))) {
+  if (directories.some((entry) => entry === '.' || hasSparseDirectoryParentSegment(entry))) {
     return {
       directories: [],
       error: translate(

@@ -77,6 +77,19 @@ import {
 import { parseWebPairingInput } from './web-pairing'
 import { WebRuntimeClient } from './web-runtime-client'
 import { RuntimeRpcCallQueuePool } from '../../../shared/runtime-rpc-call-queue'
+import {
+  assertClipboardTextWriteWithinLimitWithYield,
+  assertClipboardTextWithinLimitWithYield,
+  type ReadClipboardTextOptions
+} from '../../../shared/clipboard-text'
+import {
+  CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
+  CLIPBOARD_IMAGE_MAX_PIXELS,
+  CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
+  CLIPBOARD_IMAGE_TOO_LARGE_ERROR,
+  assertClipboardImageByteLengthWithinLimit,
+  assertClipboardImageDimensionsWithinLimit
+} from '../../../shared/clipboard-image'
 import { sanitizeWebRuntimeWorkspaceSession } from './web-workspace-session'
 import {
   normalizeFeatureInteractions,
@@ -96,7 +109,9 @@ const KEYBINDINGS_STORAGE_KEY = 'orca.web.keybindings.v1'
 // Why: browser-paired clients need desktop parity for large dev sessions; the
 // runtime's no-limit default remains capped for lower-level RPC callers.
 const WEB_RUNTIME_WORKTREE_LIST_LIMIT = 10_000
-const MAX_CLIPBOARD_IMAGE_BASE64_CHARS = 24 * 1024 * 1024
+const MAX_CLIPBOARD_IMAGE_BASE64_CHARS = CLIPBOARD_IMAGE_MAX_BASE64_CHARS
+export const MAX_CLIPBOARD_IMAGE_SOURCE_BYTES = CLIPBOARD_IMAGE_MAX_SOURCE_BYTES
+export const MAX_CLIPBOARD_IMAGE_PIXELS = CLIPBOARD_IMAGE_MAX_PIXELS
 export const CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
 export const CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS = 256 * 1024
 const CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS = 30_000
@@ -121,9 +136,15 @@ function blobToBase64(blob: Blob): Promise<string> {
   })
 }
 
+function assertClipboardImageBlobWithinLimit(blob: Blob): void {
+  assertClipboardImageByteLengthWithinLimit(blob.size)
+}
+
 async function convertImageBlobToPng(blob: Blob): Promise<Blob> {
+  assertClipboardImageBlobWithinLimit(blob)
   const bitmap = await createImageBitmap(blob)
   try {
+    assertClipboardImageDimensionsWithinLimit(bitmap)
     const canvas = document.createElement('canvas')
     canvas.width = bitmap.width
     canvas.height = bitmap.height
@@ -136,6 +157,12 @@ async function convertImageBlobToPng(blob: Blob): Promise<Blob> {
       canvas.toBlob((png) => {
         if (!png) {
           reject(new Error('Clipboard image could not be encoded as PNG'))
+          return
+        }
+        try {
+          assertClipboardImageBlobWithinLimit(png)
+        } catch (error) {
+          reject(error)
           return
         }
         resolve(png)
@@ -160,6 +187,7 @@ async function readClipboardImagePngBase64(): Promise<string | null> {
       continue
     }
     const blob = await item.getType(imageType)
+    assertClipboardImageBlobWithinLimit(blob)
     const pngBlob = imageType === 'image/png' ? blob : await convertImageBlobToPng(blob)
     return blobToBase64(pngBlob)
   }
@@ -1966,7 +1994,11 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         return optimistic
       }
     },
-    readClipboardText: () => navigator.clipboard?.readText?.() ?? Promise.resolve(''),
+    readClipboardText: async (options?: ReadClipboardTextOptions) =>
+      assertClipboardTextWithinLimitWithYield(
+        await (navigator.clipboard?.readText?.() ?? ''),
+        options
+      ),
     readSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     saveClipboardImageAsTempFile: async (args?: { connectionId?: string | null }) => {
@@ -1979,10 +2011,19 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       }
       return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
     },
-    writeClipboardText: (text) => navigator.clipboard?.writeText?.(text) ?? Promise.resolve(),
+    writeClipboardText: async (text) => {
+      await assertClipboardTextWriteWithinLimitWithYield(text)
+      await (navigator.clipboard?.writeText?.(text) ?? Promise.resolve())
+    },
     writeSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     writeClipboardImage: () => Promise.resolve(),
+    performNativePaste: () => {
+      document.execCommand?.('paste')
+    },
+    onExportPdfRequested: () => noopUnsubscribe,
+    onAppMenuPaste: () => noopUnsubscribe,
+    onEditableContextPaste: () => noopUnsubscribe,
     getZoomLevel: () => zoomLevel,
     setZoomLevel: (level) => {
       zoomLevel = level
@@ -2470,7 +2511,7 @@ async function saveClipboardImageAsTempFileInRuntime(
   args?: { connectionId?: string | null }
 ): Promise<string> {
   if (contentBase64.length > MAX_CLIPBOARD_IMAGE_BASE64_CHARS) {
-    throw new Error('Clipboard image is too large')
+    throw new Error(CLIPBOARD_IMAGE_TOO_LARGE_ERROR)
   }
   const connectionId = args?.connectionId ?? null
   const startResponse = await callRuntimeEnvelope<{ uploadId: string }>(

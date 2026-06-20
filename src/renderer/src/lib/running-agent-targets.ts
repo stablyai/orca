@@ -47,9 +47,12 @@ export function deriveRunningAgentSendTargets(
     }
 
     const layoutPtyId =
-      state.terminalLayoutsByTabId[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId] ?? null
+      state.terminalLayoutsByTabId?.[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId] ?? null
+    const tabPtyIds = state.ptyIdsByTabId?.[parsed.tabId]
     const ptyId =
-      layoutPtyId && state.ptyIdsByTabId[parsed.tabId]?.includes(layoutPtyId) ? layoutPtyId : null
+      layoutPtyId && (tabPtyIds === undefined || tabPtyIds.includes(layoutPtyId))
+        ? layoutPtyId
+        : null
     let disabledReason: string | undefined
 
     if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {

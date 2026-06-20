@@ -372,10 +372,16 @@ function extractPromptText(hookPayload: Record<string, unknown>): ExtractedPromp
 }
 
 function stripGrokUserQueryWrapper(promptText: string): string {
-  const match = promptText.match(/^<user_query>([\s\S]*?)(?:<\/user_query>)?$/)
+  const opener = '<user_query>'
+  if (!promptText.startsWith(opener)) {
+    return promptText
+  }
+  const closer = '</user_query>'
+  const wrappedText = promptText.slice(opener.length)
+  const text = wrappedText.endsWith(closer) ? wrappedText.slice(0, -closer.length) : wrappedText
   // Why: Grok emits the submitted prompt wrapped in its internal
   // `<user_query>` envelope; the status cache should hold the user text.
-  return match ? match[1].trim() : promptText
+  return text.trim()
 }
 
 function resolvePrompt(
@@ -717,8 +723,12 @@ function extractAssistantContentText(content: unknown): string | undefined {
 }
 
 function extractAntigravityUserRequest(content: string): string | undefined {
-  const request = content.match(/<USER_REQUEST>\s*([\s\S]*?)\s*<\/USER_REQUEST>/)
-  const text = request ? request[1] : content
+  const opener = '<USER_REQUEST>'
+  const startIndex = content.indexOf(opener)
+  const bodyStartIndex = startIndex === -1 ? -1 : startIndex + opener.length
+  const endIndex = bodyStartIndex === -1 ? -1 : content.indexOf('</USER_REQUEST>', bodyStartIndex)
+  const text =
+    bodyStartIndex === -1 || endIndex === -1 ? content : content.slice(bodyStartIndex, endIndex)
   const trimmed = text.trim()
   return trimmed.length > 0 ? trimmed : undefined
 }
@@ -810,14 +820,12 @@ function readLastCommandCodeUserPromptEntryFromTranscript(
       }
       let lastPrompt: string | undefined
       let lastPromptOffset = 0
-      let lineStart = 0
-      for (const line of text.split('\n')) {
+      for (const { line, byteOffset } of iterateTranscriptLinesWithByteOffsets(text)) {
         const prompt = extractCommandCodeUserPromptFromLine(line.trim())
         if (prompt !== undefined) {
           lastPrompt = prompt
-          lastPromptOffset = textBasePosition + Buffer.byteLength(text.slice(0, lineStart), 'utf8')
+          lastPromptOffset = textBasePosition + byteOffset
         }
-        lineStart += line.length + 1
       }
       return lastPrompt
         ? {
@@ -835,6 +843,24 @@ function readLastCommandCodeUserPromptEntryFromTranscript(
     }
   } catch {
     return undefined
+  }
+}
+
+function* iterateTranscriptLinesWithByteOffsets(
+  text: string
+): Generator<{ line: string; byteOffset: number }> {
+  let lineStart = 0
+  let byteOffset = 0
+
+  for (let index = 0; index <= text.length; index++) {
+    if (index < text.length && text.charCodeAt(index) !== 10) {
+      continue
+    }
+
+    const line = text.slice(lineStart, index)
+    yield { line, byteOffset }
+    byteOffset += Buffer.byteLength(line, 'utf8') + (index < text.length ? 1 : 0)
+    lineStart = index + 1
   }
 }
 
@@ -1034,16 +1060,12 @@ function readLastTextFromTranscriptOnce(
           completeRegion = combined.subarray(firstNewline + 1)
         }
         if (completeRegion.length > 0) {
-          const lines = completeRegion.toString('utf8').split('\n')
-          for (let i = lines.length - 1; i >= 0; i--) {
-            const line = lines[i].trim()
-            if (line.length === 0) {
-              continue
-            }
-            const extracted = extractLineText(line)
-            if (extracted !== undefined) {
-              return extracted
-            }
+          const extracted = findLastExtractedTranscriptLineText(
+            completeRegion.toString('utf8'),
+            extractLineText
+          )
+          if (extracted !== undefined) {
+            return extracted
           }
         }
         carryBytes = nextCarry
@@ -1055,6 +1077,30 @@ function readLastTextFromTranscriptOnce(
   } catch {
     return undefined
   }
+}
+
+function findLastExtractedTranscriptLineText(
+  text: string,
+  extractLineText: (line: string) => string | undefined
+): string | undefined {
+  let lineEnd = text.length
+
+  for (let index = text.length - 1; index >= -1; index--) {
+    if (index >= 0 && text.charCodeAt(index) !== 10) {
+      continue
+    }
+
+    const line = text.slice(index + 1, lineEnd).trim()
+    if (line.length > 0) {
+      const extracted = extractLineText(line)
+      if (extracted !== undefined) {
+        return extracted
+      }
+    }
+    lineEnd = index
+  }
+
+  return undefined
 }
 
 function extractClaudeToolFields(
