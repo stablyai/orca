@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { Repo, Worktree } from '../../../shared/types'
+import type { Repo, TerminalTab, Worktree } from '../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import type { AppState } from './types'
@@ -10,6 +10,7 @@ import {
   resetFloatingVisibleTabCountSelectorCacheForTest,
   selectFloatingVisibleTabCount
 } from './selectors'
+import { selectActiveTerminalChromeState } from './active-terminal-chrome-selector'
 
 function makeWorktree(args: { id: string; repoId: string; displayName: string }): Worktree {
   return {
@@ -39,6 +40,19 @@ function makeRepo(args: Pick<Repo, 'id' | 'path' | 'displayName'> & Partial<Repo
     addedAt: 100,
     kind: 'git',
     ...args
+  }
+}
+
+function makeTerminalTab(args: { id: string; worktreeId: string; title: string }): TerminalTab {
+  return {
+    id: args.id,
+    ptyId: null,
+    worktreeId: args.worktreeId,
+    title: args.title,
+    customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 1
   }
 }
 
@@ -166,6 +180,53 @@ describe('store selectors', () => {
 
     expect(selectFloatingVisibleTabCount({ ...state })).toBe(3)
     expect(openFileScans).toBe(1)
+  })
+
+  it('keeps active terminal chrome stable across title-only tab updates', () => {
+    const activeTab = makeTerminalTab({
+      id: 'term-1',
+      worktreeId: 'wt-1',
+      title: 'Codex working'
+    })
+    const secondTab = makeTerminalTab({
+      id: 'term-2',
+      worktreeId: 'wt-1',
+      title: 'Shell'
+    })
+    const otherWorktreeTab = makeTerminalTab({
+      id: 'term-other',
+      worktreeId: 'wt-2',
+      title: 'Background'
+    })
+    const state = {
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'term-1',
+      tabsByWorktree: {
+        'wt-1': [activeTab, secondTab],
+        'wt-2': [otherWorktreeTab]
+      },
+      canExpandPaneByTabId: { 'term-1': true, 'term-2': false },
+      expandedPaneByTabId: { 'term-1': true, 'term-2': false }
+    } satisfies Parameters<typeof selectActiveTerminalChromeState>[0]
+
+    const selected = selectActiveTerminalChromeState(state)
+    const retitledState = {
+      ...state,
+      tabsByWorktree: {
+        'wt-1': [{ ...activeTab, title: 'Codex working · frame 2' }, secondTab],
+        'wt-2': [{ ...otherWorktreeTab, title: 'Background · frame 2' }]
+      }
+    } satisfies Parameters<typeof selectActiveTerminalChromeState>[0]
+
+    expect(selected).toEqual({
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'term-1',
+      tabCount: 2,
+      effectiveActiveTabId: 'term-1',
+      activeTabCanExpand: true,
+      effectiveActiveTabExpanded: true
+    })
+    expect(selectActiveTerminalChromeState(retitledState)).toEqual(selected)
   })
 
   it('caches the project host setup projection by repo slice identity', () => {
