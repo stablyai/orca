@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import {
+  formatResetCreditExpiry,
   formatResetCountdown,
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel,
@@ -19,6 +20,10 @@ function provider(overrides: Partial<ProviderRateLimits> = {}): ProviderRateLimi
   }
 }
 
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 describe('formatResetCountdown', () => {
   it('uses natural copy when the reset time has arrived', () => {
     expect(formatResetCountdown(0)).toBe('Resets now')
@@ -27,6 +32,22 @@ describe('formatResetCountdown', () => {
 
   it('keeps the "in" preposition for future reset times', () => {
     expect(formatResetCountdown(12 * 60 * 60_000 + 41 * 60_000)).toBe('Resets in 12h 41m')
+  })
+})
+
+describe('formatResetCreditExpiry', () => {
+  it('shows singular and plural expiry countdowns', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-20T12:00:00Z'))
+
+    expect(formatResetCreditExpiry(Date.parse('2026-06-20T14:30:00Z'), 1)).toBe('Expires in 2h 30m')
+    expect(formatResetCreditExpiry(Date.parse('2026-06-25T12:00:00Z'), 2)).toBe(
+      'Next expires in 5d'
+    )
+  })
+
+  it('omits expiry copy when the backend has not reported an expiry', () => {
+    expect(formatResetCreditExpiry(null, 1)).toBeNull()
   })
 })
 

@@ -28,6 +28,15 @@ export type ProviderRateLimits = {
   /** Available earned Codex rate-limit reset credits, if reported. */
   rateLimitResetCredits?: {
     availableCount: number
+    /** Total earned reset credits, including spent or expired credits, if reported. */
+    totalEarnedCount?: number
+    /** Unix ms timestamp for the next available reset credit expiry, if reported. */
+    nextExpiresAt?: number | null
+    credits?: {
+      status: string
+      expiresAt: number | null
+      grantedAt: number | null
+    }[]
   } | null
   /** Unix ms timestamp of the last successful data update. */
   updatedAt: number
