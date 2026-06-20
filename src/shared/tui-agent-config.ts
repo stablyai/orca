@@ -327,6 +327,17 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // `followupPrompt` to the PTY as plain input + Enter after startup (not
     // bracketed paste). Use `draftPrompt` / agent-paste-draft for review-before-send.
     promptInjectionMode: 'stdin-after-start'
+  },
+  jcode: {
+    detectCmd: 'jcode',
+    // Why: bare `jcode` launches the interactive TUI. The argv-prompt paths
+    // (`jcode run <message>`) are one-shot headless modes that emit output and
+    // exit, which would tear down the hosted session. jcode exposes no
+    // documented `--prefill`-style flag to seed the composer, so Orca starts
+    // the bare TUI and injects the composed prompt after startup over the PTY.
+    launchCmd: 'jcode',
+    expectedProcess: 'jcode',
+    promptInjectionMode: 'stdin-after-start'
   }
 }
 

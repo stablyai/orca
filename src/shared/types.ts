@@ -2237,6 +2237,7 @@ export type TuiAgent =
   | 'grok' // xAI Grok CLI
   | 'devin' // Devin CLI
   | 'ante' // Ante (Antigma Labs)
+  | 'jcode' // J-Code (Claude Max / ChatGPT Pro subscriptions)
 
 export type TaskViewPresetId = 'all' | 'issues' | 'review' | 'my-issues' | 'my-prs' | 'prs'
 

@@ -279,6 +279,12 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'openclaw',
     faviconDomain: 'openclaw.ai',
     homepageUrl: 'https://github.com/openclaw/openclaw'
+  },
+  {
+    id: 'jcode',
+    label: 'J-Code',
+    cmd: 'jcode',
+    homepageUrl: 'https://github.com/1jehuang/jcode'
   }
 ])
 
