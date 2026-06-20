@@ -22,6 +22,15 @@ import {
 } from './session-scanner-secondary-parsers'
 import type { SessionFileCandidate } from './session-scanner-types'
 
+/**
+ * Parse a single agent session file into an `AiVaultSession`. Routes to the
+ * appropriate agent-specific parser based on `candidate.agent`. For OpenCode
+ * SQLite candidates (synthetic `db#id` paths), routes to
+ * `parseOpenCodeSqliteSession` instead of the legacy JSON parser.
+ * @param candidate - The session file candidate to parse.
+ * @param platform - The platform to use for resume command generation.
+ * @returns The parsed `AiVaultSession`, or `null` if parsing fails.
+ */
 export async function parseAgentSessionFile(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform

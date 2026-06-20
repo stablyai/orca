@@ -127,6 +127,18 @@ function buildPreviewQuery(db: SyncDatabase): string | null {
           LIMIT ?`
 }
 
+/**
+ * Parse a single OpenCode session from the SQLite database into an
+ * `AiVaultSession`. Reads session metadata (title, cwd, model, tokens, cost)
+ * and up to 5 preview messages by joining the `message` and `part` tables.
+ * The database is opened read-only with `PRAGMA query_only = ON` as a
+ * belt-and-suspenders guard against mutations.
+ * @param args.dbPath - Absolute path to the opencode.db file.
+ * @param args.sessionId - The session ID (primary key in the `session` table).
+ * @param args.platform - The platform to use for resume command generation.
+ * @returns The parsed `AiVaultSession`, or `null` if the session does not exist
+ *   or the database lacks the required schema.
+ */
 export async function parseOpenCodeSqliteSession(args: {
   dbPath: string
   sessionId: string

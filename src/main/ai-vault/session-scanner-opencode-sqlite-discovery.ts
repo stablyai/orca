@@ -92,6 +92,17 @@ function rowToCandidate(row: SessionRow, dbPath: string): SessionFileCandidate {
   }
 }
 
+/**
+ * List OpenCode sessions from one or more SQLite databases as synthetic
+ * `SessionFileCandidate` entries. Each candidate's file path is a synthetic
+ * `<dbPath>#<sessionId>` string that the parser dispatcher routes to
+ * `parseOpenCodeSqliteSession`. Databases that lack the `session` table are
+ * silently skipped; errors are recorded as scan issues.
+ * @param args.dbPaths - Absolute paths to opencode.db files to scan.
+ * @param args.limit - Maximum number of sessions to return per database.
+ * @param args.issues - Collected scan issues to append errors to.
+ * @returns Array of synthetic candidates sorted by `time_updated` DESC.
+ */
 export async function listOpenCodeSqliteSessions(args: {
   dbPaths: readonly string[]
   limit: number
@@ -129,6 +140,19 @@ function sessionIdFromLegacyFilePath(filePath: string): string {
   return basename(filePath, extname(filePath))
 }
 
+/**
+ * Discover OpenCode sessions from both the legacy file layout and the SQLite
+ * DB, deduplicating at the file level before parsing. On mixed installs the
+ * same session may appear once via a stale legacy JSON file and once via the
+ * SQLite DB; SQLite is the source of truth on 1.17.x, so file-based entries
+ * whose sessionId matches a SQLite entry are dropped. Legacy installs without
+ * the `session` table fall through to the file scanner unchanged.
+ * @param args.storageDir - Root of the OpenCode storage directory (contains `session/` and `message/`).
+ * @param args.dbPaths - Absolute paths to opencode.db files to scan.
+ * @param args.limitPerAgent - Maximum number of candidates per source.
+ * @param args.issues - Collected scan issues to append errors to.
+ * @returns A `SessionFileDiscovery` with deduplicated file entries.
+ */
 export async function discoverOpenCodeSessions(args: {
   storageDir: string
   dbPaths: readonly string[]

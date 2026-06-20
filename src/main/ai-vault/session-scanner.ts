@@ -58,6 +58,15 @@ const DEVIN_TRANSCRIPTS_DIR = join(
   'transcripts'
 )
 
+/**
+ * Scan all supported AI agent session stores and return a unified, sorted,
+ * deduplicated list of sessions for the AI Vault panel. Discovers sessions
+ * from file-based stores (Claude, Codex, Gemini, etc.) and SQLite-based
+ * stores (OpenCode 1.17.x). Results are sorted by session sort time DESC
+ * and truncated to `limit`.
+ * @param options - Optional scan configuration (limits, custom dirs, platform).
+ * @returns The list of sessions, scan issues, and a timestamp.
+ */
 export async function scanAiVaultSessions(
   options: AiVaultScanOptions = {}
 ): Promise<AiVaultListResult> {
