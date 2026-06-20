@@ -10457,6 +10457,16 @@
                 }
               }
             }
+          },
+          "PasswordAutofillOverlay": {
+            "fillPassword": "Fill password"
+          },
+          "PasswordSaveBanner": {
+            "updatePrompt": "Update password for {{value0}}?",
+            "savePrompt": "Save password for {{value0}}?",
+            "update": "Update",
+            "save": "Save",
+            "dismiss": "Dismiss"
           }
         }
       },
