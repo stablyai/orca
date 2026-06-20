@@ -17,6 +17,7 @@ import {
   parsePiModels,
   resolveCommitMessageAgentChoice
 } from './commit-message-agent-spec'
+import { TUI_AGENT_AUTO_PICK_ORDER } from './tui-agent-selection'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -81,6 +82,31 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     expect(resolveCommitMessageAgentChoice(null, 'codex', ['codex'])).toBe('claude')
     expect(resolveCommitMessageAgentChoice(null, null, ['claude'])).toBeNull()
     expect(resolveCommitMessageAgentChoice('codex', null, ['codex'])).toBe('codex')
+  })
+
+  it('falls back to the system Source Control AI default when an enabled default TUI agent has no spec', () => {
+    // An enabled default TUI agent with no spec must fall through to the system
+    // default, not resolve to null (which surfaces as a config error). Derived
+    // at runtime so it stays correct if such an agent later gains a spec.
+    const specless = TUI_AGENT_AUTO_PICK_ORDER.find(
+      (agent) => !isCustomAgentId(agent) && !getCommitMessageAgentSpec(agent)
+    )
+    expect(
+      specless,
+      'expected at least one TUI agent without a Source Control AI spec'
+    ).toBeDefined()
+    expect(resolveCommitMessageAgentChoice(null, specless!, [])).toBe(
+      DEFAULT_COMMIT_MESSAGE_AGENT_ID
+    )
+
+    // Inverse: an enabled default that DOES have a spec is used as-is. Pick a
+    // non-default spec-bearing agent so the result proves the guard returned it
+    // rather than the fallback.
+    const withSpec = TUI_AGENT_AUTO_PICK_ORDER.find(
+      (agent) => getCommitMessageAgentSpec(agent) && agent !== DEFAULT_COMMIT_MESSAGE_AGENT_ID
+    )
+    expect(withSpec, 'expected a non-default spec-bearing agent').toBeDefined()
+    expect(resolveCommitMessageAgentChoice(null, withSpec!, [])).toBe(withSpec)
   })
 
   it('gives every model with thinking levels a valid default', () => {

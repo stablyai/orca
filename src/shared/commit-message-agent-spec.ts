@@ -695,12 +695,15 @@ export function resolveCommitMessageAgentChoice(
   if (configuredAgentId) {
     return configuredAgentId
   }
+  // A spec-less but enabled default agent must fall through to the system default
+  // (like a disabled one), not resolve to null and surface a config error.
   if (
     defaultTuiAgent &&
     defaultTuiAgent !== 'blank' &&
-    isTuiAgentEnabled(defaultTuiAgent, disabledTuiAgents)
+    isTuiAgentEnabled(defaultTuiAgent, disabledTuiAgents) &&
+    getCommitMessageAgentSpec(defaultTuiAgent)
   ) {
-    return getCommitMessageAgentSpec(defaultTuiAgent) ? defaultTuiAgent : null
+    return defaultTuiAgent
   }
   return isTuiAgentEnabled(DEFAULT_COMMIT_MESSAGE_AGENT_ID, disabledTuiAgents)
     ? DEFAULT_COMMIT_MESSAGE_AGENT_ID
