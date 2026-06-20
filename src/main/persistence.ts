@@ -3573,6 +3573,12 @@ export class Store {
     if (updates.lastActivityAt !== undefined && Number.isFinite(updates.lastActivityAt)) {
       workspace.lastActivityAt = updates.lastActivityAt
     }
+    if (updates.connectionId !== undefined) {
+      workspace.connectionId = updates.connectionId
+    }
+    if (updates.isRemoteExecOnly !== undefined) {
+      workspace.isRemoteExecOnly = updates.isRemoteExecOnly
+    }
     workspace.updatedAt = Date.now()
     this.scheduleSave()
     return workspace
