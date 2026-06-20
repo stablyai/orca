@@ -52,6 +52,10 @@ export type TuiAgentConfig = {
    * `›` prompt only when the composer row exists, so Orca can paste as soon
    * as that prompt appears after bracketed paste is enabled. */
   draftPasteReadySignal?: DraftPasteReadySignal
+  /** Why: how Orca renders this agent's session. 'terminal' (default) hosts the
+   * agent's TUI in an xterm PTY. 'chat' renders the jcode chat-bubble view
+   * (ChatPane) driven by `jcode run --ndjson`. Only jcode uses 'chat' today. */
+  renderMode?: 'terminal' | 'chat'
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
@@ -337,7 +341,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // the bare TUI and injects the composed prompt after startup over the PTY.
     launchCmd: 'jcode',
     expectedProcess: 'jcode',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
+    // Why: jcode is rendered as a chat-bubble view (M1) backed by
+    // `jcode run --ndjson` instead of a hosted TUI in a PTY.
+    renderMode: 'chat'
   }
 }
 

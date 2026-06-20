@@ -6,6 +6,12 @@ import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
+import {
+  JCODE_CHAT_EVENT_CHANNEL,
+  JCODE_CHAT_SEND_CHANNEL,
+  type JcodeChatEventMessage,
+  type JcodeChatSendPayload
+} from '../shared/jcode-chat-types'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
@@ -407,6 +413,19 @@ document.addEventListener(
 
 // Custom APIs for renderer
 const api = {
+  // Why: jcode chat-bubble view (M1). `send` fires one headless turn; `onEvent`
+  // subscribes to the streamed NDJSON events the main process forwards.
+  jcodeChat: {
+    send: (payload: JcodeChatSendPayload): void => {
+      ipcRenderer.send(JCODE_CHAT_SEND_CHANNEL, payload)
+    },
+    onEvent: (callback: (message: JcodeChatEventMessage) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, message: JcodeChatEventMessage): void =>
+        callback(message)
+      ipcRenderer.on(JCODE_CHAT_EVENT_CHANNEL, listener)
+      return () => ipcRenderer.removeListener(JCODE_CHAT_EVENT_CHANNEL, listener)
+    }
+  },
   app: {
     getIdentity: (): Promise<AppIdentity> => ipcRenderer.invoke('app:getIdentity'),
     getFeatureWallAssetBaseUrl: (): Promise<string> =>

@@ -11,6 +11,7 @@ import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
 import { getLocalPtyProvider, registerPtyHandlers } from '../ipc/pty'
 import { registerDaemonManagementHandlers } from '../ipc/pty-management'
 import { registerSshHandlers } from '../ipc/ssh'
+import { registerJcodeChatHandlers } from '../jcode/jcode-chat-session'
 import { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
 import { browserManager } from '../browser/browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
@@ -105,6 +106,11 @@ export function attachMainWindowServices(
         )
       })
   }
+  // Why: jcode's chat-bubble view (M1) spawns `jcode run --ndjson` via
+  // child_process (not a PTY) and streams parsed NDJSON events to the renderer.
+  // Registered here so it is reinstalled on macOS window recreation like the
+  // other per-window IPC surfaces.
+  registerJcodeChatHandlers(mainWindow)
   registerSshHandlers(store, () => mainWindow, runtime)
   registerRemoteWorkspaceHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)

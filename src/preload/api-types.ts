@@ -11,6 +11,7 @@ import type {
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
 import type { AppIdentity } from '../shared/app-identity'
+import type { JcodeChatEventMessage, JcodeChatSendPayload } from '../shared/jcode-chat-types'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { TaskSourceContext } from '../shared/task-source-context'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
@@ -754,6 +755,10 @@ export type AppApi = {
 }
 
 export type PreloadApi = {
+  jcodeChat: {
+    send: (payload: JcodeChatSendPayload) => void
+    onEvent: (callback: (message: JcodeChatEventMessage) => void) => () => void
+  }
   app: AppApi
   platform: {
     get: () => {

@@ -26,6 +26,7 @@ import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { translate } from '@/i18n/i18n'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
+const ChatPane = lazy(() => import('../chat-pane/ChatPane'))
 
 export default function TabGroupPanel({
   groupId,
@@ -381,10 +382,29 @@ export default function TabGroupPanel({
           />
         ) : null}
         {activeDropZone ? <TabGroupDropOverlay zone={activeDropZone} /> : null}
+        {activeTab && activeTab.contentType === 'chat' && (
+          <div className="absolute inset-0 flex min-h-0 min-w-0">
+            <Suspense
+              fallback={
+                <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+                  {translate(
+                    'auto.components.tab.group.TabGroupPanel.814fb04c43',
+                    'Loading chat...'
+                  )}
+                </div>
+              }
+            >
+              {/* Why: key the chat session by the tab id so each jcode chat tab
+                  keeps an independent conversation / --resume session. */}
+              <ChatPane sessionKey={activeTab.id} />
+            </Suspense>
+          </div>
+        )}
         {activeTab &&
           activeTab.contentType !== 'terminal' &&
           activeTab.contentType !== 'browser' &&
-          activeTab.contentType !== 'simulator' && (
+          activeTab.contentType !== 'simulator' &&
+          activeTab.contentType !== 'chat' && (
             <div className="absolute inset-0 flex min-h-0 min-w-0">
               {/* Why: split groups render editor content inside a plain relative pane body
                   instead of the legacy flex column in Terminal.tsx. */}

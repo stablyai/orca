@@ -754,6 +754,10 @@ export type TabContentType =
   | 'check-details'
   | 'browser'
   | 'simulator'
+  // Why: jcode chat-bubble view (M1). A 'chat' tab renders ChatPane (streamed
+  // NDJSON chat bubbles) instead of an xterm terminal. It shares the editor
+  // pane body slot in TabGroupPanel and maps to the 'editor' visible-tab type.
+  | 'chat'
 
 export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser' | 'simulator'
 export type CtrlTabOrderMode = 'mru' | 'sequential'
