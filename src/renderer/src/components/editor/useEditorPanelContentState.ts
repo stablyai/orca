@@ -336,19 +336,31 @@ export function useEditorPanelContentState({
   const changesStatusEntries = activeFile?.worktreeId
     ? gitStatusByWorktree[activeFile.worktreeId]
     : undefined
-  const activeFileGitStatusSignature = useMemo(() => {
+  const activeFileGitStatusEntries = useMemo(() => {
     if (!activeFile?.relativePath || !changesStatusEntries) {
+      return undefined
+    }
+    return changesStatusEntries.filter((entry) => entry.path === activeFile.relativePath)
+  }, [activeFile?.relativePath, changesStatusEntries])
+  const activeFileGitStatusSignature = useMemo(() => {
+    if (!activeFileGitStatusEntries) {
       return ''
     }
-    const matching = changesStatusEntries.filter((entry) => entry.path === activeFile.relativePath)
     return JSON.stringify(
-      matching.map((entry) => ({
+      activeFileGitStatusEntries.map((entry) => ({
         area: entry.area,
         status: entry.status,
         conflictStatus: entry.conflictStatus
       }))
     )
-  }, [activeFile?.relativePath, changesStatusEntries])
+  }, [activeFileGitStatusEntries])
+  const activeFileShouldReloadOnGitStatusChange = useMemo(
+    () =>
+      activeFile
+        ? shouldReloadDiffOnGitStatusChange(activeFile, activeFileGitStatusEntries)
+        : false,
+    [activeFile, activeFileGitStatusEntries]
+  )
   useEffect(() => {
     if (!activeFile?.id) {
       return
@@ -357,7 +369,7 @@ export function useEditorPanelContentState({
     if (!current) {
       return
     }
-    if (!(isChangesMode || shouldReloadDiffOnGitStatusChange(current))) {
+    if (!(isChangesMode || activeFileShouldReloadOnGitStatusChange)) {
       return
     }
     // Why: the lazy-load effect already fetches on first open; forcing here
@@ -366,7 +378,13 @@ export function useEditorPanelContentState({
       return
     }
     void loadDiffContent(current, { force: true })
-  }, [activeFileGitStatusSignature, isChangesMode, activeFile?.id, loadDiffContent])
+  }, [
+    activeFileShouldReloadOnGitStatusChange,
+    activeFileGitStatusSignature,
+    isChangesMode,
+    activeFile?.id,
+    loadDiffContent
+  ])
 
   useEffect(() => {
     const nonce = activeFile?.diffContentReloadNonce

@@ -55,7 +55,11 @@ import {
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
   type EditorPathMutationTarget
 } from './editor-autosave'
-import { getCombinedBranchEntries, getCombinedUncommittedEntries } from './combined-diff-entries'
+import {
+  getCombinedBranchEntries,
+  getCombinedUncommittedEntries,
+  shouldAutoReloadCombinedDiffFromGitStatus
+} from './combined-diff-entries'
 import { getDiffSectionEstimatedHeight, isIntrinsicHeightImageDiff } from './diff-section-layout'
 import { getLargeDiffRenderLimit } from './large-diff-render-limit'
 import { getStoredTextDiffContent, getStoredTextDiffResult } from './large-diff-section-content'
@@ -398,6 +402,11 @@ export default function CombinedDiffViewer({
   )
   const entries = isBranchMode ? branchEntries : isCommitMode ? commitEntries : uncommittedEntries
   const treeMode = isBranchMode ? 'branch' : isCommitMode ? 'commit' : 'uncommitted'
+  const hasUncommittedEntriesSnapshot = file.uncommittedEntriesSnapshot !== undefined
+  const shouldAutoReloadFromGitStatus = shouldAutoReloadCombinedDiffFromGitStatus({
+    mode: treeMode,
+    hasUncommittedEntriesSnapshot
+  })
   const entrySignature = React.useMemo(
     () =>
       JSON.stringify({
@@ -831,15 +840,15 @@ export default function CombinedDiffViewer({
   )
 
   const combinedGitStatusSignature = React.useMemo(() => {
-    if (treeMode !== 'uncommitted') {
+    if (!shouldAutoReloadFromGitStatus) {
       return ''
     }
     return buildCombinedGitStatusSignature(sections, gitStatusEntries)
-  }, [gitStatusEntries, sections, treeMode])
+  }, [gitStatusEntries, sections, shouldAutoReloadFromGitStatus])
   const prevCombinedGitStatusSignatureRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (treeMode !== 'uncommitted') {
+    if (!shouldAutoReloadFromGitStatus) {
       prevCombinedGitStatusSignatureRef.current = null
       return
     }
@@ -854,7 +863,7 @@ export default function CombinedDiffViewer({
     for (const index of loadedIndicesRef.current) {
       requestCombinedDiffSectionReload(index)
     }
-  }, [combinedGitStatusSignature, requestCombinedDiffSectionReload, treeMode])
+  }, [combinedGitStatusSignature, requestCombinedDiffSectionReload, shouldAutoReloadFromGitStatus])
 
   useEffect(() => {
     if (treeMode !== 'uncommitted') {
