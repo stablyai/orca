@@ -21,6 +21,9 @@ function isolatedScanRoots(root: string) {
     copilotSessionsDir: join(root, 'copilot-sessions'),
     cursorProjectsDir: join(root, 'cursor-projects'),
     opencodeStorageDir: join(root, 'opencode-storage'),
+    // Why: prevent the SQLite scanner from picking up the real
+    // ~/.local/share/opencode/opencode.db during tests.
+    opencodeDbPaths: [] as readonly string[],
     grokSessionsDir: join(root, 'grok-sessions'),
     devinTranscriptsDir: join(root, 'devin-transcripts'),
     hermesSessionsDir: join(root, 'hermes-sessions'),

@@ -7,6 +7,8 @@ import {
   parseRovoSessionFile
 } from './session-scanner-graph-parsers'
 import { parseKimiSessionFile } from './session-scanner-kimi-parser'
+import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
+import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
 import {
   parseClaudeSessionFile,
   parseCodexSessionFile,
@@ -35,8 +37,20 @@ export async function parseAgentSessionFile(
       return parseCopilotSessionFile(candidate.file, platform)
     case 'cursor':
       return parseCursorSessionFile(candidate.file, platform)
-    case 'opencode':
+    case 'opencode': {
+      // Why: OpenCode 1.17.x sessions are read from SQLite via a synthetic
+      // <dbPath>#<sessionId> candidate path. Legacy file-based sessions use
+      // real filesystem paths and fall through to the JSON parser.
+      const sqliteCandidate = splitOpenCodeSqliteCandidate(candidate.file.path)
+      if (sqliteCandidate) {
+        return parseOpenCodeSqliteSession({
+          dbPath: sqliteCandidate.dbPath,
+          sessionId: sqliteCandidate.sessionId,
+          platform
+        })
+      }
       return parseOpenCodeSessionFile(candidate.file, platform)
+    }
     case 'grok':
       return parseGrokSessionFile(candidate.file, platform)
     case 'hermes':

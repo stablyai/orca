@@ -8,7 +8,12 @@ import type {
 import { sessionSortTime } from './session-scanner-accumulator'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
 import { codexHomeForSessionsDir, uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
+import { listOpenCodeDatabases } from '../opencode-usage/scanner'
 import { discoverFiles, discoverOpenClawFiles } from './session-scanner-discovery'
+import {
+  dedupOpenCodeSessions,
+  discoverOpenCodeSessions
+} from './session-scanner-opencode-sqlite-discovery'
 import { resolveKimiSessionsDir } from './session-scanner-kimi-paths'
 import type {
   AiVaultScanOptions,
@@ -107,12 +112,14 @@ export async function scanAiVaultSessions(
       extensions: ['.jsonl'],
       filePredicate: (path) => path.split(/[\\/]/).includes('agent-transcripts')
     }),
-    discoverFiles({
-      rootDir: join(options.opencodeStorageDir ?? OPENCODE_STORAGE_DIR, 'session'),
-      limit: limitPerAgent,
-      agent: 'opencode',
-      issues,
-      extensions: ['.json']
+    // Why: OpenCode 1.17.x migrated sessions from per-session JSON files to a
+    // SQLite DB. discoverOpenCodeSessions runs both the file scanner (legacy)
+    // and the SQLite scanner (1.17.x); dedup by sessionId happens below.
+    discoverOpenCodeSessions({
+      storageDir: options.opencodeStorageDir ?? OPENCODE_STORAGE_DIR,
+      dbPaths: options.opencodeDbPaths ?? (await listOpenCodeDatabases()),
+      limitPerAgent,
+      issues
     }),
     discoverFiles({
       rootDir: options.grokSessionsDir ?? GROK_SESSIONS_DIR,
@@ -209,7 +216,13 @@ export async function scanAiVaultSessions(
     issues
   })
 
-  const sessions = parsedSessions
+  // Why: on mixed installs the same OpenCode session may appear once via the
+  // SQLite DB and once via a stale legacy JSON file. SQLite is the source of
+  // truth on 1.17.x, so drop file-based duplicates when a SQLite entry with
+  // the same sessionId already exists.
+  const dedupedSessions = dedupOpenCodeSessions(parsedSessions)
+
+  const sessions = dedupedSessions
     .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
     .slice(0, limit)
 
@@ -286,9 +299,8 @@ function canStopParsingSessions(
   }
   const visibleCutoff = sessions
     .map(sessionSortTime)
-    .sort((left, right) => right - left)
+    .sort((l, r) => r - l)
     .at(limit - 1)
-
   // Transcript mtime is already our discovery bound and fallback sort key; older
   // files cannot displace the current visible set once the cutoff is newer.
   return typeof visibleCutoff === 'number' && nextCandidateMtimeMs < visibleCutoff
