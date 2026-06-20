@@ -322,13 +322,20 @@ describe('TabBar context menu wiring', () => {
       browserTabs: [],
       tabBarOrder: ['term-1', 'unified-editor-1']
     })
-    const strip = findChildrenByType(element, 'div').find((candidate) =>
+    const divs = findChildrenByType(element, 'div')
+    const stripWrapper = divs.find((candidate) =>
+      String(candidate.props.className ?? '').includes('flex-[0_1_auto]')
+    )
+    const strip = divs.find((candidate) =>
       String(candidate.props.className ?? '').includes('terminal-tab-strip')
     )
 
+    expect(stripWrapper).toBeTruthy()
+    expect(stripWrapper?.props.className).toContain('min-w-0')
+    expect(stripWrapper?.props.className).toContain('max-w-full')
     expect(strip).toBeTruthy()
     expect(strip?.props.className).toContain('min-w-0')
-    expect(strip?.props.className).toContain('flex-[0_1_auto]')
+    expect(strip?.props.className).toContain('flex-1')
     expect(strip?.props.className).toContain('overflow-x-auto')
     expect(strip?.props.className).not.toContain('scrollbar-sleek')
   })
