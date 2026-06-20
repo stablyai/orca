@@ -302,6 +302,17 @@ export function UpdateCard() {
     void window.api.updater.download()
   }
 
+  // Why: the cooldown withholds an update until it has aged locally. "Install
+  // now anyway" is the deliberate, user-only override — it passes overrideCooldown
+  // so the main process permits the otherwise-blocked download.
+  const handleInstallNow = () => {
+    hasStartedDownload.current = true
+    if (!reassuranceSeen) {
+      markReassuranceSeen()
+    }
+    void window.api.updater.download({ overrideCooldown: true })
+  }
+
   // Why: the 'error' variant has no version field, so dismiss needs an
   // optional explicit version override for error/install-failure states.
   const handleClose = () => {
@@ -450,13 +461,15 @@ export function UpdateCard() {
         ? "You're on the latest version"
         : status.state === 'available'
           ? 'Update available'
-          : status.state === 'downloading'
-            ? 'Downloading update'
-            : status.state === 'downloaded'
-              ? 'Update ready to install'
-              : status.state === 'error'
-                ? 'Update error'
-                : 'Update status'
+          : status.state === 'cooling'
+            ? 'Update scheduled'
+            : status.state === 'downloading'
+              ? 'Downloading update'
+              : status.state === 'downloaded'
+                ? 'Update ready to install'
+                : status.state === 'error'
+                  ? 'Update error'
+                  : 'Update status'
 
   // ── Card wrapper ──────────────────────────────────────────────────
 
@@ -539,6 +552,20 @@ export function UpdateCard() {
           onMediaError={() => setMediaFailed(true)}
           onMediaLoad={() => setMediaLoaded(true)}
           onCollapse={handleCollapseWithAnimation}
+        />
+      )
+    }
+
+    // ── Cooling state (held by the supply-chain cooldown) ────────────
+
+    if (status.state === 'cooling') {
+      return (
+        <CoolingCardContent
+          version={status.version}
+          eligibleAt={status.eligibleAt}
+          releaseUrl={releaseUrlForVersion(status.version)}
+          onInstallNow={handleInstallNow}
+          onClose={handleDismissWithAnimation}
         />
       )
     }
@@ -780,6 +807,77 @@ function SimpleCardContent({
         className="mt-0.5 w-full cursor-pointer"
       >
         {translate('auto.components.UpdateCard.ec8fe71cfc', 'Update')}
+      </Button>
+    </div>
+  )
+}
+
+// ── Cooling content (update held by the cooldown) ─────────────────────
+
+function CoolingCardContent({
+  version,
+  eligibleAt,
+  releaseUrl,
+  onInstallNow,
+  onClose
+}: {
+  version: string
+  eligibleAt: number
+  releaseUrl: string
+  onInstallNow: () => void
+  onClose: () => void
+}) {
+  const installDate = new Date(eligibleAt).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  })
+  return (
+    <div className="flex flex-col gap-2.5 p-3.5">
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="text-sm font-semibold">
+          {translate('auto.components.UpdateCard.coolingTitle', 'Update Scheduled')}
+        </h3>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 shrink-0 min-w-[44px] min-h-[44px] -m-2"
+          onClick={onClose}
+          aria-label={translate('auto.components.UpdateCard.318d3b4bc7', 'Dismiss update')}
+        >
+          <X className="size-3.5" />
+        </Button>
+      </div>
+
+      <p className="text-sm text-muted-foreground">
+        {translate(
+          'auto.components.UpdateCard.coolingBody',
+          'Orca v{{value0}} installs on {{value1}}.',
+          { value0: version, value1: installDate }
+        )}
+      </p>
+
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        {translate(
+          'auto.components.UpdateCard.coolingExplainer',
+          'New releases are held for a few days as a safeguard against tampered updates.'
+        )}
+      </p>
+
+      <button
+        className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground self-start"
+        onClick={() => void window.api.shell.openUrl(releaseUrl)}
+      >
+        {translate('auto.components.UpdateCard.44324ef542', 'Release notes')}
+      </button>
+
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onInstallNow}
+        className="mt-0.5 w-full cursor-pointer"
+      >
+        {translate('auto.components.UpdateCard.coolingInstallNow', 'Install now anyway')}
       </Button>
     </div>
   )

@@ -2096,6 +2096,17 @@ export type UpdateStatus =
       // checks straightforward.
       changelog: ChangelogData | null
     }
+  // Why: an update is available but withheld by the client-side cooldown until
+  // it has aged locally (supply-chain release aging). `eligibleAt` is an epoch-
+  // ms wall-clock estimate of when it becomes installable. The user can still
+  // install it now via the manual override.
+  | {
+      state: 'cooling'
+      version: string
+      eligibleAt: number
+      activeNudgeId?: string
+      changelog: ChangelogData | null
+    }
   | { state: 'not-available'; userInitiated?: boolean }
   | { state: 'downloading'; percent: number; version: string; activeNudgeId?: string }
   | { state: 'downloaded'; version: string; releaseUrl?: string; activeNudgeId?: string }
@@ -3083,6 +3094,14 @@ export type PersistedUIState = {
   lastUpdateCheckAt: number | null
   pendingUpdateNudgeId?: string | null
   dismissedUpdateNudgeId?: string | null
+  /** Cooldown in days before an observed update may auto-install (supply-chain
+   *  release aging). 0/undefined disables it. Overridden by the
+   *  ORCA_UPDATE_COOLDOWN_DAYS env var. */
+  updateCooldownDays?: number | null
+  /** Per-version epoch-ms timestamps of when this install first observed each
+   *  update version. The cooldown ages against these, never the server's
+   *  (untrusted) publish times. */
+  updateVersionFirstSeenAt?: Record<string, number> | null
   /** Whether Orca has already attempted to trigger the macOS notification
    *  permission dialog via a startup notification. Prevents re-firing on
    *  every launch. */

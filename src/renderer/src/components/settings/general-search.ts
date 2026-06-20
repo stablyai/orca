@@ -190,6 +190,32 @@ export const getGeneralUpdateSearchEntries = createLocalizedCatalog(() => [
       ),
       ...translateSearchKeyword('auto.components.settings.general.search.e49e739a59', 'download')
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.general.search.coolingSettingTitle',
+      'Update cooldown'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.coolingSettingDescription',
+      'Hold new releases for a number of days before installing them, as a supply-chain safeguard.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.f89a94773c', 'update'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.coolingKwCooldown',
+        'cooldown'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.coolingKwSecurity',
+        'security'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.coolingKwSupplyChain',
+        'supply chain'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.coolingKwDelay', 'delay')
+    ]
   }
 ])
 

@@ -27,6 +27,7 @@ type UpdaterHandlerContext = {
   getPendingInstallVersion: () => string
   getUserInitiatedCheck: () => boolean
   hasNewerDownloadedVersion: () => boolean
+  evaluateCooldownGate: (version: string) => { eligible: boolean; eligibleAt: number | null }
   markMissingManifestPrereleaseFallbackChecking: () => void
   performQuitAndInstall: () => void | Promise<void>
   recordCompletedUpdateCheck: () => void
@@ -58,6 +59,7 @@ export function registerAutoUpdaterHandlers({
   getPendingInstallVersion,
   getUserInitiatedCheck,
   hasNewerDownloadedVersion,
+  evaluateCooldownGate,
   markMissingManifestPrereleaseFallbackChecking,
   performQuitAndInstall,
   recordCompletedUpdateCheck,
@@ -181,7 +183,21 @@ export function registerAutoUpdaterHandlers({
         }
       }
 
-      sendStatus({ state: 'available', version: info.version, changelog })
+      // Why: withhold a freshly-published update until it has aged locally
+      // (supply-chain release aging). evaluateCooldownGate records this install's
+      // own first-seen time and reports eligibility; cooldown 0 → always
+      // eligible, so the historical flow is unchanged when unconfigured.
+      const cooldown = evaluateCooldownGate(info.version)
+      sendStatus(
+        cooldown.eligible
+          ? { state: 'available', version: info.version, changelog }
+          : {
+              state: 'cooling',
+              version: info.version,
+              eligibleAt: cooldown.eligibleAt ?? Date.now(),
+              changelog
+            }
+      )
     })()
   })
 

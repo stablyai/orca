@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
 import { SearchableSetting } from './SearchableSetting'
-import { SettingsSubsectionHeader } from './SettingsFormControls'
+import { NumberField, SettingsSubsectionHeader } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 
 export function GeneralUpdateSettingsSection(): React.JSX.Element {
@@ -34,6 +34,9 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
     // as a download failure based on a stale version from a prior cycle.
     updateVersionRef.current = null
   }
+
+  const updateCooldownDays = useAppStore((s) => s.updateCooldownDays)
+  const setUpdateCooldownDays = useAppStore((s) => s.setUpdateCooldownDays)
 
   const [appVersion, setAppVersion] = useState<string | null>(null)
 
@@ -240,7 +243,46 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
                   'Update check failed. {{value0}}',
                   { value0: updateStatus.message }
                 ))}
+          {updateStatus.state === 'cooling' &&
+            translate(
+              'auto.components.settings.GeneralUpdateSettingsSection.coolingStatus',
+              'Version {{value0}} is available but held by the update cooldown.',
+              { value0: updateStatus.version }
+            )}
         </p>
+      </SearchableSetting>
+
+      <SearchableSetting
+        title={translate(
+          'auto.components.settings.GeneralUpdateSettingsSection.coolingSettingTitle',
+          'Update cooldown'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralUpdateSettingsSection.coolingSettingDescription',
+          'Hold new releases for this many days before installing them, so a compromised update can be caught and pulled first. 0 disables the delay. Overridden by the ORCA_UPDATE_COOLDOWN_DAYS environment variable.'
+        )}
+        keywords={['update', 'cooldown', 'security', 'supply chain', 'delay', 'release aging']}
+      >
+        <NumberField
+          label={translate(
+            'auto.components.settings.GeneralUpdateSettingsSection.coolingSettingLabel',
+            'Update cooldown'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralUpdateSettingsSection.coolingSettingControlDescription',
+            'Hold new releases for this many days before installing them, so a compromised update can be caught and pulled first. 0 installs immediately. Overridden by the ORCA_UPDATE_COOLDOWN_DAYS environment variable.'
+          )}
+          value={updateCooldownDays}
+          defaultValue={0}
+          min={0}
+          max={30}
+          step={1}
+          onChange={setUpdateCooldownDays}
+          suffix={translate(
+            'auto.components.settings.GeneralUpdateSettingsSection.coolingSettingSuffix',
+            'days'
+          )}
+        />
       </SearchableSetting>
     </section>
   )

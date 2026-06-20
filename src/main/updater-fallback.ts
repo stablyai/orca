@@ -19,6 +19,14 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
         // fires at most once per check cycle, this is sufficient.
         Boolean(left.changelog) === Boolean(right.changelog)
       )
+    case 'cooling':
+      return (
+        right.state === 'cooling' &&
+        left.version === right.version &&
+        left.eligibleAt === right.eligibleAt &&
+        left.activeNudgeId === right.activeNudgeId &&
+        Boolean(left.changelog) === Boolean(right.changelog)
+      )
     case 'downloading':
       return (
         right.state === 'downloading' &&

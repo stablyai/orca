@@ -1658,7 +1658,11 @@
         "a726967bd3": "关闭",
         "d5253b54af": "错误",
         "7ffc08506e": "查看",
-        "522df222b9": "旋转器"
+        "522df222b9": "旋转器",
+        "coolingTitle": "Update Scheduled",
+        "coolingBody": "Orca v{{value0}} installs on {{value1}}.",
+        "coolingExplainer": "New releases are held for a few days as a safeguard against tampered updates.",
+        "coolingInstallNow": "Install now anyway"
       },
       "WorktreeJumpPalette": {
         "ac037cfac2": "手机",
@@ -4916,7 +4920,13 @@
           "31fd7150cf": "正在检查更新...",
           "3394d1f663": "检查中",
           "d69a09b672": "启动时会自动检查更新。",
-          "7173352632": "idle"
+          "7173352632": "idle",
+          "coolingStatus": "Version {{value0}} is available but held by the update cooldown.",
+          "coolingSettingTitle": "Update cooldown",
+          "coolingSettingDescription": "Hold new releases for this many days before installing them, so a compromised update can be caught and pulled first. 0 disables the delay. Overridden by the ORCA_UPDATE_COOLDOWN_DAYS environment variable.",
+          "coolingSettingLabel": "Update cooldown",
+          "coolingSettingSuffix": "days",
+          "coolingSettingControlDescription": "Hold new releases for this many days before installing them, so a compromised update can be caught and pulled first. 0 installs immediately. Overridden by the ORCA_UPDATE_COOLDOWN_DAYS environment variable."
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "从工作区的“打开方式”菜单中选择可用的应用程序。",
@@ -7041,6 +7051,8 @@
             "7baf524b04": "工作区",
             "d0bc793689": "创建工作区文件夹的根目录。",
             "4c95d08fa2": "工作区目录",
+            "coolingSettingTitle": "Update cooldown",
+            "coolingSettingDescription": "Hold new releases for a number of days before installing them, as a supply-chain safeguard.",
             "161a86a9da": "关闭固定标签页前确认",
             "8e593f04fc": "关闭固定标签页前显示确认对话框。",
             "defaultProjectRuntime": "Default Project Runtime",

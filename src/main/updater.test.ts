@@ -2304,4 +2304,116 @@ describe('updater', () => {
       url: 'https://github.com/stablyai/orca/releases/download/v1.3.18-rc.1'
     })
   })
+
+  it('withholds a fresh update as cooling until the cooldown has elapsed', async () => {
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const setFirstSeen = vi.fn()
+
+    const { setupAutoUpdater } = await import('./updater')
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      getUpdateCooldownDays: () => 3,
+      getUpdateVersionFirstSeen: () => ({}),
+      setUpdateVersionFirstSeen: setFirstSeen
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    autoUpdaterMock.emit('checking-for-update')
+    autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const statuses = sendMock.mock.calls
+      .filter(([channel]) => channel === 'updater:status')
+      .map(([, status]) => status)
+    const cooling = statuses.find((status) => status.state === 'cooling')
+    expect(cooling).toMatchObject({ state: 'cooling', version: '1.0.61' })
+    expect(typeof cooling.eligibleAt).toBe('number')
+    expect(statuses).not.toContainEqual(
+      expect.objectContaining({ state: 'available', version: '1.0.61' })
+    )
+    // First-seen recorded so the age survives restarts.
+    expect(setFirstSeen).toHaveBeenCalledWith(
+      expect.objectContaining({ '1.0.61': expect.any(Number) })
+    )
+  })
+
+  it('offers a fresh update normally once it has aged past the cooldown', async () => {
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const fourDaysAgo = Date.now() - 4 * 24 * 60 * 60 * 1000
+
+    const { setupAutoUpdater } = await import('./updater')
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      getUpdateCooldownDays: () => 3,
+      getUpdateVersionFirstSeen: () => ({ '1.0.61': fourDaysAgo }),
+      setUpdateVersionFirstSeen: vi.fn()
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    autoUpdaterMock.emit('checking-for-update')
+    autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'available',
+      version: '1.0.61',
+      changelog: null
+    })
+  })
+
+  it('downloads a cooling update only with an explicit user override', async () => {
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    autoUpdaterMock.downloadUpdate.mockResolvedValue(undefined)
+
+    const { setupAutoUpdater, downloadUpdate } = await import('./updater')
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      getUpdateCooldownDays: () => 3,
+      getUpdateVersionFirstSeen: () => ({}),
+      setUpdateVersionFirstSeen: vi.fn()
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    autoUpdaterMock.emit('checking-for-update')
+    autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    // Auto path: a cooling update must never download without the override.
+    downloadUpdate()
+    expect(autoUpdaterMock.downloadUpdate).not.toHaveBeenCalled()
+
+    // Manual override ("Install now anyway") is the only way through.
+    downloadUpdate({ overrideCooldown: true })
+    expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores the cooldown entirely when configured to zero days', async () => {
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const setFirstSeen = vi.fn()
+
+    const { setupAutoUpdater } = await import('./updater')
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      getUpdateCooldownDays: () => 0,
+      getUpdateVersionFirstSeen: () => ({}),
+      setUpdateVersionFirstSeen: setFirstSeen
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    autoUpdaterMock.emit('checking-for-update')
+    autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'available',
+      version: '1.0.61',
+      changelog: null
+    })
+    // Disabled cooldown writes nothing to the first-seen ledger.
+    expect(setFirstSeen).not.toHaveBeenCalled()
+  })
 })

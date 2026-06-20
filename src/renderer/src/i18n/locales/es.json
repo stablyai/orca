@@ -1658,7 +1658,11 @@
         "a726967bd3": "Despedir",
         "d5253b54af": "error",
         "7ffc08506e": "controlar",
-        "522df222b9": "hilandero"
+        "522df222b9": "hilandero",
+        "coolingTitle": "Update Scheduled",
+        "coolingBody": "Orca v{{value0}} installs on {{value1}}.",
+        "coolingExplainer": "New releases are held for a few days as a safeguard against tampered updates.",
+        "coolingInstallNow": "Install now anyway"
       },
       "WorktreeJumpPalette": {
         "ac037cfac2": "Mover",
@@ -4931,7 +4935,13 @@
           "31fd7150cf": "Buscando actualizaciones...",
           "3394d1f663": "de cheques",
           "d69a09b672": "Las actualizaciones se verifican automáticamente al iniciarse.",
-          "7173352632": "idle"
+          "7173352632": "idle",
+          "coolingStatus": "Version {{value0}} is available but held by the update cooldown.",
+          "coolingSettingTitle": "Update cooldown",
+          "coolingSettingDescription": "Hold new releases for this many days before installing them, so a compromised update can be caught and pulled first. 0 disables the delay. Overridden by the ORCA_UPDATE_COOLDOWN_DAYS environment variable.",
+          "coolingSettingLabel": "Update cooldown",
+          "coolingSettingSuffix": "days",
+          "coolingSettingControlDescription": "Hold new releases for this many days before installing them, so a compromised update can be caught and pulled first. 0 installs immediately. Overridden by the ORCA_UPDATE_COOLDOWN_DAYS environment variable."
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Elija las aplicaciones disponibles en el menú Abrir en de un espacio de trabajo.",
@@ -7056,6 +7066,8 @@
             "7baf524b04": "espacio de trabajo",
             "d0bc793689": "Directorio raíz donde se crean las carpetas del espacio de trabajo.",
             "4c95d08fa2": "Directorio de espacio de trabajo",
+            "coolingSettingTitle": "Update cooldown",
+            "coolingSettingDescription": "Hold new releases for a number of days before installing them, as a supply-chain safeguard.",
             "161a86a9da": "Confirmar antes de cerrar pestañas fijadas",
             "8e593f04fc": "Muestra un diálogo de confirmación antes de cerrar una pestaña fijada.",
             "defaultProjectRuntime": "Default Project Runtime",

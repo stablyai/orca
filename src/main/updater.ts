@@ -25,6 +25,14 @@ import {
   getReleaseDownloadUrl
 } from './updater-prerelease-feed'
 import { fetchNudge, shouldApplyNudge } from './updater-nudge'
+import {
+  eligibleAtMs,
+  isVersionEligible,
+  pruneFirstSeenLedger,
+  recordVersionFirstSeen,
+  resolveUpdateCooldownMs,
+  type UpdateFirstSeenLedger
+} from './updater-cooldown'
 
 type CheckFailureSource = 'event' | 'promise' | 'fallback-promise'
 type MissingManifestPrereleaseFallbackResult = { userInitiated: boolean }
@@ -56,6 +64,11 @@ let pendingQuitAndInstallTimer: ReturnType<typeof setTimeout> | null = null
 let quitAndInstallInProgress = false
 let persistLastUpdateCheckAt: ((timestamp: number) => void) | null = null
 let _getLastUpdateCheckAt: (() => number | null) | null = null
+// Why: the cooldown trusts only the device clock and this install's own record
+// of when it first saw a version — never the server's (forgeable) publish time.
+let _getUpdateCooldownDays: (() => number | null) | null = null
+let _getUpdateVersionFirstSeen: (() => Record<string, number> | null) | null = null
+let _setUpdateVersionFirstSeen: ((ledger: Record<string, number>) => void) | null = null
 let backgroundCheckLaunchPending = false
 // Why: a manually promoted background check can emit an error event before the
 // paired promise catch runs; keep the promotion attached to that launch.
@@ -152,15 +165,19 @@ function sendStatus(status: UpdateStatus): void {
     (status.state === 'idle' ||
       status.state === 'not-available' ||
       status.state === 'available' ||
+      status.state === 'cooling' ||
       status.state === 'error')
   const shouldPreserveNudgeForPublishingWindow =
     publishingWindowLastGoodCheck !== null &&
     (status.state === 'idle' ||
       status.state === 'not-available' ||
       status.state === 'available' ||
+      status.state === 'cooling' ||
       status.state === 'error')
   if (awaitingNudgeCheckOutcome) {
-    if (status.state === 'available') {
+    // Why: a cooling result is still a found update (just withheld by the
+    // cooldown), so it resolves a nudge campaign exactly like 'available'.
+    if (status.state === 'available' || status.state === 'cooling') {
       if (shouldPreserveNudgeForPublishingWindow) {
         // Why: a last-good available update is only a temporary fallback; don't
         // let dismissing that card consume the newest-release nudge campaign.
@@ -198,6 +215,7 @@ function sendStatus(status: UpdateStatus): void {
     status.state === 'idle' ||
     status.state === 'not-available' ||
     status.state === 'available' ||
+    status.state === 'cooling' ||
     status.state === 'error'
   ) {
     clearPublishingWindowLastGoodCheck()
@@ -454,6 +472,36 @@ function scheduleAutomaticUpdateCheck(delayMs: number): void {
 
 function recordCompletedUpdateCheck(): void {
   persistLastUpdateCheckAt?.(Date.now())
+}
+
+function resolveCooldownMs(): number {
+  return resolveUpdateCooldownMs({
+    envValue: process.env.ORCA_UPDATE_COOLDOWN_DAYS,
+    settingDays: _getUpdateCooldownDays?.() ?? null
+  })
+}
+
+/**
+ * Record that this install has now observed `version`, then report whether the
+ * client-side cooldown permits installing it yet. Persists the (pruned)
+ * first-seen ledger so the age survives restarts. A cooldown of 0 short-circuits
+ * to eligible, leaving the historical update flow untouched.
+ */
+function evaluateCooldownGate(version: string): { eligible: boolean; eligibleAt: number | null } {
+  const cooldownMs = resolveCooldownMs()
+  if (cooldownMs <= 0) {
+    return { eligible: true, eligibleAt: null }
+  }
+  const nowMs = Date.now()
+  const ledger: UpdateFirstSeenLedger = _getUpdateVersionFirstSeen?.() ?? {}
+  const recorded = recordVersionFirstSeen(ledger, version, nowMs)
+  if (recorded !== ledger) {
+    _setUpdateVersionFirstSeen?.(pruneFirstSeenLedger(recorded, app.getVersion()))
+  }
+  return {
+    eligible: isVersionEligible({ ledger: recorded, version, nowMs, cooldownMs }),
+    eligibleAt: eligibleAtMs({ ledger: recorded, version, nowMs, cooldownMs })
+  }
 }
 
 function getMissingManifestPrereleaseFallbackUserInitiated(): boolean | null {
@@ -879,12 +927,18 @@ export function setupAutoUpdater(
     getDismissedUpdateNudgeId?: () => string | null
     setPendingUpdateNudgeId?: (id: string | null) => void
     setDismissedUpdateNudgeId?: (id: string | null) => void
+    getUpdateCooldownDays?: () => number | null
+    getUpdateVersionFirstSeen?: () => Record<string, number> | null
+    setUpdateVersionFirstSeen?: (ledger: Record<string, number>) => void
   }
 ): void {
   mainWindowRef = mainWindow
   onBeforeQuitCleanup = opts?.onBeforeQuit ?? null
   persistLastUpdateCheckAt = opts?.setLastUpdateCheckAt ?? null
   _getLastUpdateCheckAt = opts?.getLastUpdateCheckAt ?? null
+  _getUpdateCooldownDays = opts?.getUpdateCooldownDays ?? null
+  _getUpdateVersionFirstSeen = opts?.getUpdateVersionFirstSeen ?? null
+  _setUpdateVersionFirstSeen = opts?.setUpdateVersionFirstSeen ?? null
   _getPendingUpdateNudgeId = opts?.getPendingUpdateNudgeId ?? null
   _getDismissedUpdateNudgeId = opts?.getDismissedUpdateNudgeId ?? null
   _setPendingUpdateNudgeId = opts?.setPendingUpdateNudgeId ?? null
@@ -954,6 +1008,7 @@ export function setupAutoUpdater(
     getPendingInstallVersion,
     getUserInitiatedCheck: () => userInitiatedCheck,
     hasNewerDownloadedVersion,
+    evaluateCooldownGate,
     performQuitAndInstall,
     sendCheckFailureStatus,
     sendErrorStatus,
@@ -1010,7 +1065,7 @@ export function setupAutoUpdater(
   }
 }
 
-export function downloadUpdate(): void {
+export function downloadUpdate(options?: { overrideCooldown?: boolean }): void {
   if (downloadInFlight) {
     return
   }
@@ -1018,8 +1073,15 @@ export function downloadUpdate(): void {
   // a failed download leaves the status at 'error' but availableVersion intact,
   // and the error card's "Retry Download" button must be able to restart the
   // download. Without this, the button would appear to do nothing.
+  //
+  // A 'cooling' update is withheld by the client-side supply-chain cooldown and
+  // can only be downloaded through an explicit user override ("Install now
+  // anyway") — never automatically, so an attacker can't trigger it remotely.
   const canStart =
     currentStatus.state === 'available' ||
+    (currentStatus.state === 'cooling' &&
+      options?.overrideCooldown === true &&
+      hasNewerDownloadedVersion()) ||
     (currentStatus.state === 'error' && hasNewerDownloadedVersion())
   if (!canStart) {
     return

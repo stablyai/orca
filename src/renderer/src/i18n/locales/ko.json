@@ -1658,7 +1658,11 @@
         "a726967bd3": "닫기",
         "d5253b54af": "오류",
         "7ffc08506e": "확인",
-        "522df222b9": "스피너"
+        "522df222b9": "스피너",
+        "coolingTitle": "Update Scheduled",
+        "coolingBody": "Orca v{{value0}} installs on {{value1}}.",
+        "coolingExplainer": "New releases are held for a few days as a safeguard against tampered updates.",
+        "coolingInstallNow": "Install now anyway"
       },
       "WorktreeJumpPalette": {
         "ac037cfac2": "이동",
@@ -4916,7 +4920,13 @@
           "31fd7150cf": "업데이트 확인 중...",
           "3394d1f663": "확인 중",
           "d69a09b672": "업데이트는 시작 시 자동으로 확인됩니다.",
-          "7173352632": "idle"
+          "7173352632": "idle",
+          "coolingStatus": "Version {{value0}} is available but held by the update cooldown.",
+          "coolingSettingTitle": "Update cooldown",
+          "coolingSettingDescription": "Hold new releases for this many days before installing them, so a compromised update can be caught and pulled first. 0 disables the delay. Overridden by the ORCA_UPDATE_COOLDOWN_DAYS environment variable.",
+          "coolingSettingLabel": "Update cooldown",
+          "coolingSettingSuffix": "days",
+          "coolingSettingControlDescription": "Hold new releases for this many days before installing them, so a compromised update can be caught and pulled first. 0 installs immediately. Overridden by the ORCA_UPDATE_COOLDOWN_DAYS environment variable."
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "워크스페이스의 열기 메뉴에서 사용 가능한 앱을 선택하세요.",
@@ -7041,6 +7051,8 @@
             "7baf524b04": "워크스페이스",
             "d0bc793689": "워크스페이스 폴더가 생성되는 루트 디렉터리입니다.",
             "4c95d08fa2": "워크스페이스 디렉토리",
+            "coolingSettingTitle": "Update cooldown",
+            "coolingSettingDescription": "Hold new releases for a number of days before installing them, as a supply-chain safeguard.",
             "161a86a9da": "고정된 탭을 닫기 전에 확인",
             "8e593f04fc": "고정된 탭을 닫기 전에 확인 대화상자를 표시합니다.",
             "defaultProjectRuntime": "기본 프로젝트 런타임",

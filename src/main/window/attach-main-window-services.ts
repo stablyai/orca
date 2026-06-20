@@ -137,6 +137,11 @@ export function attachMainWindowServices(
     },
     setDismissedUpdateNudgeId: (id) => {
       store.updateUI({ dismissedUpdateNudgeId: id })
+    },
+    getUpdateCooldownDays: () => store.getUI().updateCooldownDays ?? null,
+    getUpdateVersionFirstSeen: () => store.getUI().updateVersionFirstSeenAt ?? null,
+    setUpdateVersionFirstSeen: (ledger) => {
+      store.updateUI({ updateVersionFirstSeenAt: ledger })
     }
   })
   registerRuntimeWindowLifecycle(mainWindow, runtime)
@@ -392,7 +397,9 @@ export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.handle('updater:check', (_event, options?: { includePrerelease?: boolean }) =>
     checkForUpdatesFromMenu(options)
   )
-  ipcMain.handle('updater:download', () => downloadUpdate())
+  ipcMain.handle('updater:download', (_event, options?: { overrideCooldown?: boolean }) =>
+    downloadUpdate(options)
+  )
   ipcMain.handle('updater:quitAndInstall', () => quitAndInstall())
   ipcMain.handle('updater:dismissNudge', () => dismissNudge())
 }

@@ -1974,7 +1974,7 @@ export type PreloadApi = {
     getVersion: () => Promise<string>
     getStatus: () => Promise<UpdateStatus>
     check: (options?: { includePrerelease?: boolean }) => Promise<void>
-    download: () => Promise<void>
+    download: (options?: { overrideCooldown?: boolean }) => Promise<void>
     quitAndInstall: () => Promise<void>
     dismissNudge: () => Promise<void>
     onStatus: (callback: (status: UpdateStatus) => void) => () => void
