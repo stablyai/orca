@@ -27,6 +27,12 @@ export function parsePasswordBridgeMessage(
 
 type Webview = Electron.WebviewTag
 
+export type PendingPasswordCapture = {
+  origin: string
+  username: string
+  isUpdate: boolean
+}
+
 export function usePasswordAutofill(opts: {
   webview: Webview | null
   browserTabId: string | null
@@ -38,11 +44,7 @@ export function usePasswordAutofill(opts: {
   const [matchesByFieldId, setMatchesByFieldId] = useState<
     Record<string, BrowserCredentialEntry[]>
   >({})
-  const [pendingCapture, setPendingCapture] = useState<{
-    origin: string
-    username: string
-    isUpdate: boolean
-  } | null>(null)
+  const [pendingCapture, setPendingCapture] = useState<PendingPasswordCapture | null>(null)
   // Transient secret — the captured password lives ONLY here, never in React state, never returned.
   const captureSecretRef = useRef<BrowserPasswordCaptureEvent | null>(null)
 

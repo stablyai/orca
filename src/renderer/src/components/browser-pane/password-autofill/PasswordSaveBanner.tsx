@@ -1,25 +1,13 @@
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-
-type PendingCapture = {
-  origin: string
-  username: string
-  isUpdate: boolean
-}
+import { hostnameFromOrigin } from '../../../../../shared/browser-credential-hostname'
+import type { PendingPasswordCapture } from './use-password-autofill'
 
 type PasswordSaveBannerProps = {
-  pending: PendingCapture | null
+  pending: PendingPasswordCapture | null
   onSave: () => void
   onDismiss: () => void
-}
-
-function getHostname(origin: string): string {
-  try {
-    return new URL(origin).hostname
-  } catch {
-    return origin
-  }
 }
 
 // Why: non-modal bar; renders nothing when pending is null so the caller can
@@ -33,7 +21,7 @@ export function PasswordSaveBanner({
     return null
   }
 
-  const host = getHostname(pending.origin)
+  const host = hostnameFromOrigin(pending.origin) ?? pending.origin
 
   const bannerText = pending.isUpdate
     ? translate(

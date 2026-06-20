@@ -13,6 +13,10 @@ import type {
   BrowserPasswordDetectEvent,
   BrowserCredentialEntry
 } from '../../../../../shared/browser-credential-types'
+import { hostnameFromOrigin } from '../../../../../shared/browser-credential-hostname'
+
+// Key icon is ~20px wide; anchor to the field's right edge and center vertically.
+const KEY_SIZE = 20
 
 type PasswordAutofillOverlayProps = {
   detect: BrowserPasswordDetectEvent | null
@@ -25,14 +29,6 @@ type FieldKeyButtonProps = {
   rect: { x: number; y: number; width: number; height: number }
   matches: BrowserCredentialEntry[]
   onFill: (fieldId: string, entryId: string) => void
-}
-
-function getHostname(origin: string): string {
-  try {
-    return new URL(origin).hostname
-  } catch {
-    return origin
-  }
 }
 
 function FieldKeyButton({
@@ -50,8 +46,8 @@ function FieldKeyButton({
     <div
       className="absolute"
       style={{
-        left: rect.x + rect.width - 20,
-        top: rect.y + rect.height / 2 - 10,
+        left: rect.x + rect.width - KEY_SIZE,
+        top: rect.y + rect.height / 2 - KEY_SIZE / 2,
         pointerEvents: 'auto'
       }}
     >
@@ -89,9 +85,9 @@ function FieldKeyButton({
               }}
             >
               <div className="flex min-w-0 flex-col">
-                <span className="truncate text-[12px] font-medium">{entry.username}</span>
-                <span className="truncate text-[11px] text-muted-foreground">
-                  {getHostname(entry.origin)}
+                <span className="truncate text-xs font-medium">{entry.username}</span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {hostnameFromOrigin(entry.origin) ?? entry.origin}
                 </span>
               </div>
             </DropdownMenuItem>
