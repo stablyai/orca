@@ -37,6 +37,7 @@ import {
 } from './browser-guest-ui'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { cleanElectronUserAgent } from './browser-session-ua'
+import { PasswordFillController } from './password-fill-controller'
 import type { BrowserViewportOverride } from '../../shared/types'
 import {
   type BrowserAnnotationViewportBridgeOptions,
@@ -209,6 +210,13 @@ export class BrowserManager {
   private readonly pendingDownloadIdsByGuestId = new Map<number, string[]>()
   private readonly downloadsById = new Map<string, ActiveDownload>()
   private readonly grabSessionController = new BrowserGrabSessionController()
+  // Why: one controller instance is shared across all tabs so the GuestResolver
+  // closure always reads the live webContentsIdByTabId map.
+  private readonly passwordFillController = new PasswordFillController((tabId) => {
+    const id = this.webContentsIdByTabId.get(tabId)
+    const g = id ? webContents.fromId(id) : null
+    return g && !g.isDestroyed() ? g : null
+  })
 
   setSettingsResolver(
     resolver: () => {
@@ -1124,6 +1132,23 @@ export class BrowserManager {
         this.annotationViewportBridgeOpsByTabId.delete(browserTabId)
       }
     }
+  }
+
+  async injectPasswordBridge(
+    browserTabId: string,
+    token: string,
+    enabled: boolean
+  ): Promise<boolean> {
+    return this.passwordFillController.injectBridge(browserTabId, token, enabled)
+  }
+
+  async fillPasswordField(
+    browserTabId: string,
+    fieldId: string,
+    username: string,
+    password: string
+  ): Promise<boolean> {
+    return this.passwordFillController.fill(browserTabId, fieldId, username, password)
   }
 
   private async doSetAnnotationViewportBridgeImpl(
