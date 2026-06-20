@@ -4859,8 +4859,6 @@ export default function SessionScreen() {
                       autoCorrect={autocompleteEnabled}
                       spellCheck={autocompleteEnabled}
                       smartInsertDelete={false}
-                      // Why: Android's default keyboard is required for CJK IME
-                      // composition; iOS can still use ASCII when autocomplete is off.
                       keyboardType={getTerminalCommandKeyboardType(
                         Platform.OS,
                         autocompleteEnabled

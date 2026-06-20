@@ -1,20 +1,17 @@
 export type TerminalKeyboardPlatform = 'android' | 'ios' | 'web' | 'windows' | 'macos'
-export type TerminalKeyboardType = 'ascii-capable' | 'default'
+export type TerminalKeyboardType = 'default'
 
+// Why: terminal inputs use the system default keyboard so non-Latin IMEs (iOS
+// Zhuyin/Japanese/Korean, Android CJK) stay selectable — ASCII-only keyboards hide them.
 export function getTerminalLiveInputKeyboardType(
-  platform: TerminalKeyboardPlatform
+  _platform: TerminalKeyboardPlatform
 ): TerminalKeyboardType {
-  // Why: Android CJK IMEs need the normal system keyboard; password-style
-  // input types suppress composition and break Chinese terminal input.
-  return platform === 'ios' ? 'ascii-capable' : 'default'
+  return 'default'
 }
 
 export function getTerminalCommandKeyboardType(
-  platform: TerminalKeyboardPlatform,
-  autocompleteEnabled: boolean
+  _platform: TerminalKeyboardPlatform,
+  _autocompleteEnabled: boolean
 ): TerminalKeyboardType {
-  if (autocompleteEnabled) {
-    return 'default'
-  }
-  return platform === 'ios' ? 'ascii-capable' : 'default'
+  return 'default'
 }
