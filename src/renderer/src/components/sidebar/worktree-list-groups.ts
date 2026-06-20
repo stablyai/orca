@@ -673,9 +673,39 @@ function manualRankForEntry(
   repoOrder: Map<string, number> | undefined
 ): number {
   const key = entry[0]
-  const repoId = key.startsWith('repo:') ? key.slice('repo:'.length) : key
-  const rank = repoOrder?.get(repoId)
-  return rank === undefined ? Number.POSITIVE_INFINITY : rank
+  const repoIds =
+    entry[1].repoIds.size > 0
+      ? [...entry[1].repoIds]
+      : [key.startsWith('repo:') ? key.slice('repo:'.length) : key]
+  let rank = Number.POSITIVE_INFINITY
+  for (const repoId of repoIds) {
+    const repoRank = repoOrder?.get(repoId)
+    if (repoRank !== undefined && repoRank < rank) {
+      rank = repoRank
+    }
+  }
+  return rank
+}
+
+function getManualOrderAnchorRepo(
+  group: WorktreeGroupEntry,
+  repoMap: Map<string, Repo>,
+  repoOrder: Map<string, number> | undefined
+): Repo | undefined {
+  let anchor = group.repo
+  let anchorRank = anchor ? (repoOrder?.get(anchor.id) ?? Number.POSITIVE_INFINITY) : undefined
+  for (const repoId of group.repoIds) {
+    const repo = repoMap.get(repoId)
+    if (!repo) {
+      continue
+    }
+    const rank = repoOrder?.get(repoId) ?? Number.POSITIVE_INFINITY
+    if (!anchor || rank < (anchorRank ?? Number.POSITIVE_INFINITY)) {
+      anchor = repo
+      anchorRank = rank
+    }
+  }
+  return anchor
 }
 
 /**
@@ -904,6 +934,12 @@ export function buildRows(
       }
     }
   } else {
+    for (const group of grouped.values()) {
+      // Why: logical project headers can contain multiple host setup repos.
+      // Use the repo that anchors manual order so drag and actions target the
+      // same persisted order source the row sorter reads.
+      group.repo = getManualOrderAnchorRepo(group, repoMap, repoOrder)
+    }
     // Why: project header order is its own user choice (projectOrderBy),
     // decoupled from workspace sortBy. Manual uses the canonical repoOrder so
     // header drag has a stable source of truth; Recent follows activity.

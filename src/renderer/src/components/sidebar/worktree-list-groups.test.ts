@@ -361,6 +361,82 @@ describe('buildRows with pinned worktrees', () => {
     ])
   })
 
+  it('orders project identity headers by the manual repo order anchor', () => {
+    const analyticsProject: Project = {
+      ...project,
+      id: 'github:stablyai/analytics',
+      displayName: 'Analytics',
+      sourceRepoIds: ['repo-analytics']
+    }
+    const analyticsRepo: Repo = {
+      ...repo,
+      id: 'repo-analytics',
+      path: '/tmp/analytics',
+      displayName: 'analytics',
+      upstream: { owner: 'stablyai', repo: 'analytics' }
+    }
+    const analyticsWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-analytics',
+      repoId: analyticsRepo.id,
+      displayName: 'analytics'
+    }
+    const analyticsSetup: ProjectHostSetup = {
+      ...projectHostSetups[0]!,
+      id: analyticsRepo.id,
+      projectId: analyticsProject.id,
+      repoId: analyticsRepo.id,
+      path: analyticsRepo.path,
+      displayName: analyticsRepo.displayName
+    }
+    const repoOrder = new Map([
+      [repo.id, 0],
+      [remoteRepo.id, 1],
+      [analyticsRepo.id, 2]
+    ])
+
+    const rows = buildRows(
+      'repo',
+      [worktree, analyticsWorktree, remoteWorktree],
+      new Map([
+        [repo.id, repo],
+        [remoteRepo.id, remoteRepo],
+        [analyticsRepo.id, analyticsRepo]
+      ]),
+      null,
+      new Set(),
+      repoOrder,
+      undefined,
+      'manual',
+      {},
+      new Map([
+        [worktree.id, worktree],
+        [remoteWorktree.id, remoteWorktree],
+        [analyticsWorktree.id, analyticsWorktree]
+      ]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      [],
+      {
+        projects: [project, analyticsProject],
+        projectHostSetups: [...projectHostSetups, analyticsSetup]
+      }
+    )
+
+    const headers = rows.filter((row) => row.type === 'header')
+    expect(headers.map((row) => row.key)).toEqual([
+      'project:github:stablyai/orca',
+      'project:github:stablyai/analytics'
+    ])
+    expect(headers[0]).toMatchObject({
+      key: 'project:github:stablyai/orca',
+      repo: { id: repo.id, badgeColor: repo.badgeColor }
+    })
+  })
+
   it('splits same-host checkouts of one project into separate per-setup groups', () => {
     // Why: multiple local clones/worktrees of one repo share the GitHub slug, so
     // collapsing to the project would merge them into one arbitrarily-named group.
