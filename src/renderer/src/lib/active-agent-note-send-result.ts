@@ -38,7 +38,9 @@ export function activeAgentNotesSendFailureMessage(
     case 'not-writable':
       return `The ${target} terminal did not accept the notes.`
     case 'partial-submit-failed':
-      return 'The notes may already be pasted in the selected terminal, but Orca could not submit them.'
+      return options.explicitTarget
+        ? 'The notes may already be pasted in the selected terminal, but Orca could not submit them.'
+        : 'The notes may already be pasted in the active terminal, but Orca could not submit them.'
     case 'sent':
       return ''
   }

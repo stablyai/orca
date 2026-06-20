@@ -583,6 +583,58 @@ describe('active agent note send', () => {
     )
   })
 
+  it('maps non-running active-focused waits to no active terminal', async () => {
+    testState.callRuntimeRpc.mockImplementation(async (_target, method) => {
+      if (method === 'terminal.list') {
+        return {
+          terminals: [
+            {
+              handle: 'term-1',
+              worktreeId: 'wt-1',
+              worktreePath: '/repo',
+              branch: 'main',
+              tabId: 'tab-1',
+              leafId: LEAF_ID,
+              title: 'Codex',
+              connected: true,
+              writable: true,
+              lastOutputAt: 1,
+              preview: ''
+            }
+          ],
+          totalCount: 1,
+          truncated: false
+        }
+      }
+      if (method === 'terminal.agentStatus') {
+        return { agentStatus: { handle: 'term-1', isRunningAgent: true, status: 'working' } }
+      }
+      if (method === 'terminal.wait') {
+        return {
+          wait: {
+            handle: 'term-1',
+            condition: 'tui-idle',
+            satisfied: false,
+            status: 'exited',
+            exitCode: 0
+          }
+        }
+      }
+      throw new Error(`unexpected method ${method}`)
+    })
+
+    await expect(
+      sendNotesToActiveAgentSession({ worktreeId: 'wt-1', prompt: 'notes' })
+    ).resolves.toEqual({ status: 'no-active-terminal' })
+
+    expect(testState.callRuntimeRpc).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'terminal.send',
+      expect.anything(),
+      expect.anything()
+    )
+  })
+
   it('maps active-focused blocked waits to permission without writing', async () => {
     testState.callRuntimeRpc.mockImplementation(async (_target, method) => {
       if (method === 'terminal.list') {
@@ -1264,7 +1316,12 @@ describe('active agent note send', () => {
     )
     expect(
       activeAgentNotesSendFailureMessage('partial-submit-failed', { explicitTarget: true })
-    ).toContain('may already be pasted')
+    ).toBe(
+      'The notes may already be pasted in the selected terminal, but Orca could not submit them.'
+    )
+    expect(activeAgentNotesSendFailureMessage('partial-submit-failed')).toBe(
+      'The notes may already be pasted in the active terminal, but Orca could not submit them.'
+    )
   })
 
   it('returns no-active-terminal when the explicit note target is absent from the runtime list', async () => {

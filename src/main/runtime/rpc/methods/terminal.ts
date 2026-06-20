@@ -768,6 +768,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       const hasText = typeof params.text === 'string' && params.text.length > 0
       const hasSuffix = params.enter === true || params.interrupt === true
       if (params.requireAgentStatus === 'sendable' && hasText && hasSuffix) {
+        // Why: guarded sends are two-phase writes. Reject combined payload +
+        // submit so guard flips cannot create ambiguous partial delivery.
         return {
           send: {
             handle: params.terminal,

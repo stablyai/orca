@@ -98,14 +98,14 @@ export async function sendNotesToActiveAgentSession({
       { terminal: terminal.handle, for: 'tui-idle', timeoutMs: effectiveTimeoutMs },
       { timeoutMs: effectiveTimeoutMs + 5000 }
     )
+    if (wait.status !== 'running') {
+      return { status: 'no-active-terminal' }
+    }
     if (wait.blockedReason) {
       return { status: 'permission' }
     }
     if (!wait.satisfied) {
       return { status: 'not-ready' }
-    }
-    if (wait.status !== 'running') {
-      return { status: 'no-active-terminal' }
     }
   } catch (error) {
     if (isRuntimeTerminalUnavailable(error)) {
