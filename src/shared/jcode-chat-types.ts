@@ -21,6 +21,12 @@ export type JcodeChatEventMessage = {
   event: JcodeNdjsonEvent
 }
 
+/** Payload the renderer sends over 'jcode-chat:stop' to cancel an in-flight turn. */
+export type JcodeChatStopPayload = {
+  /** Stable per-pane key whose in-flight jcode child should be killed. */
+  sessionKey: string
+}
+
 /** Payload the renderer sends over 'jcode-chat:send' to start one turn. */
 export type JcodeChatSendPayload = {
   /** Stable per-pane key (tab/worktree id) used to route events back. */
@@ -39,4 +45,5 @@ export type JcodeChatSendPayload = {
 }
 
 export const JCODE_CHAT_SEND_CHANNEL = 'jcode-chat:send'
+export const JCODE_CHAT_STOP_CHANNEL = 'jcode-chat:stop'
 export const JCODE_CHAT_EVENT_CHANNEL = 'jcode-chat:event'

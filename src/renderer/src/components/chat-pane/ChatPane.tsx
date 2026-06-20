@@ -1,27 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import type { JcodeChatEventMessage, JcodeNdjsonEvent } from '../../../../shared/jcode-chat-types'
+import { JcodeToolCard, type JcodeToolCall } from './JcodeToolCard'
 
-// Why: M1 chat-bubble view for the jcode agent. Talking to jcode shows replies
-// as chat bubbles instead of a raw terminal. The NDJSON parsing/render logic is
-// ported from the proven jcode-desktop prototype (src/app.js): text_delta
-// streams into the assistant bubble; tool_* events render a one-line placeholder
-// (full tool cards are M2); the jcode session_id from 'start'/'done' is captured
-// for --resume so the conversation continues across turns.
+// Why: M2 enriches the M1 jcode chat-bubble view. Tool calls render as cards
+// (name + pretty args + output/error, bash special-cased, diffs colorized);
+// text_delta streams smoothly into the assistant bubble; connection_phase shows
+// as a subtle status line; 'error' renders an error bubble; the jcode session_id
+// from 'start'/'done' is captured and passed as --resume so the conversation
+// continues across turns; input is disabled while streaming and a Stop button
+// kills the in-flight jcode child. Parsing mirrors the jcode-desktop prototype
+// (src/app.js) and the documented --ndjson schema.
 
 type ChatRole = 'user' | 'assistant'
-
-type ToolPlaceholder = {
-  id: string
-  name: string
-}
 
 type ChatMessage = {
   id: string
   role: ChatRole
   text: string
-  /** One-line placeholders for tool calls seen during this assistant turn. */
-  tools?: ToolPlaceholder[]
+  /** Tool calls seen during this assistant turn, in arrival order. */
+  tools?: JcodeToolCall[]
   isError?: boolean
 }
 
@@ -68,6 +66,24 @@ export default function ChatPane({
     setMessages((prev) => prev.map((m) => (m.id === targetId ? mutate(m) : m)))
   }, [])
 
+  /** Insert-or-update a tool call on the streaming assistant message by id. */
+  const upsertTool = useCallback(
+    (id: string, mutate: (call: JcodeToolCall) => JcodeToolCall, fallbackName = 'tool') => {
+      appendToStreaming((m) => {
+        const tools = m.tools ?? []
+        const index = tools.findIndex((t) => t.id === id)
+        if (index === -1) {
+          const created = mutate({ id, name: fallbackName, rawInput: '', status: 'running' })
+          return { ...m, tools: [...tools, created] }
+        }
+        const next = tools.slice()
+        next[index] = mutate(next[index])
+        return { ...m, tools: next }
+      })
+    },
+    [appendToStreaming]
+  )
+
   const finalizeTurn = useCallback(() => {
     setIsStreaming(false)
     setStatusDetail(null)
@@ -106,17 +122,40 @@ export default function ChatPane({
           }
           break
         }
-        case 'tool_start':
-        case 'tool_exec': {
-          const id = strField(event, 'id') ?? `${event.type}-${Date.now()}`
+        case 'tool_start': {
+          const id = strField(event, 'id') ?? `tool-${Date.now()}`
           const name = strField(event, 'name') ?? 'tool'
-          appendToStreaming((m) => {
-            const tools = m.tools ?? []
-            if (tools.some((t) => t.id === id)) {
-              return m
-            }
-            return { ...m, tools: [...tools, { id, name }] }
-          })
+          upsertTool(id, (call) => ({ ...call, name }), name)
+          break
+        }
+        case 'tool_input': {
+          // Why: args stream as JSON-string fragments; concatenate them so the
+          // card can parse the full object once complete.
+          const id = strField(event, 'id')
+          const delta = strField(event, 'delta') ?? ''
+          if (id) {
+            upsertTool(id, (call) => ({ ...call, rawInput: call.rawInput + delta }))
+          }
+          break
+        }
+        case 'tool_exec': {
+          const id = strField(event, 'id') ?? `tool-${Date.now()}`
+          const name = strField(event, 'name') ?? 'tool'
+          upsertTool(id, (call) => ({ ...call, status: 'running' }), name)
+          break
+        }
+        case 'tool_done': {
+          const id = strField(event, 'id')
+          const errorText = strField(event, 'error')
+          const output = strField(event, 'output')
+          if (id) {
+            upsertTool(id, (call) => ({
+              ...call,
+              output: output ?? call.output,
+              error: errorText ?? undefined,
+              status: errorText ? 'error' : 'done'
+            }))
+          }
           break
         }
         case 'done': {
@@ -140,21 +179,30 @@ export default function ChatPane({
           finalizeTurn()
           break
         }
+        case 'stopped': {
+          // User pressed Stop: annotate the bubble and close the turn.
+          appendToStreaming((m) => ({
+            ...m,
+            text: m.text ? `${m.text}\n\n(stopped)` : '(stopped)'
+          }))
+          finalizeTurn()
+          break
+        }
         case 'exit': {
-          // Terminal safety net: if the child exited without 'done'/'error',
-          // close the turn so the composer re-enables.
+          // Terminal safety net: if the child exited without 'done'/'error'/
+          // 'stopped', close the turn so the composer re-enables.
           if (streamingIdRef.current) {
             finalizeTurn()
           }
           break
         }
         default:
-          // Ignore unknown / not-yet-rendered event kinds (tool_input,
-          // tool_done, message_end, tokens, connection_type) for M1.
+          // Ignore unknown / not-rendered event kinds (connection_type,
+          // message_end, tokens).
           break
       }
     },
-    [appendToStreaming, finalizeTurn]
+    [appendToStreaming, upsertTool, finalizeTurn]
   )
 
   useEffect(() => {
@@ -193,6 +241,14 @@ export default function ChatPane({
     })
   }, [input, isStreaming, sessionKey, provider, model, cwd])
 
+  const stop = useCallback(() => {
+    if (!isStreaming) {
+      return
+    }
+    setStatusDetail('Stopping…')
+    window.api.jcodeChat.stop({ sessionKey })
+  }, [isStreaming, sessionKey])
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
@@ -209,7 +265,7 @@ export default function ChatPane({
               >
                 <div
                   className={cn(
-                    'max-w-[85%] whitespace-pre-wrap break-words rounded-lg px-3 py-2 text-sm',
+                    'max-w-[85%] rounded-lg px-3 py-2 text-sm',
                     message.role === 'user'
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-muted text-foreground',
@@ -217,15 +273,20 @@ export default function ChatPane({
                   )}
                 >
                   {message.tools && message.tools.length > 0 ? (
-                    <div className="mb-1 flex flex-col gap-0.5">
+                    <div className="mb-2 flex flex-col gap-1.5">
                       {message.tools.map((tool) => (
-                        <div key={tool.id} className="text-xs text-muted-foreground">
-                          {`⚙ ${tool.name}`}
-                        </div>
+                        <JcodeToolCard key={tool.id} call={tool} />
                       ))}
                     </div>
                   ) : null}
-                  {message.text || (message.role === 'assistant' && isStreaming ? '…' : '')}
+                  <div className="whitespace-pre-wrap break-words">
+                    {message.text ||
+                      (message.role === 'assistant' &&
+                      isStreaming &&
+                      (!message.tools || message.tools.length === 0)
+                        ? '…'
+                        : '')}
+                  </div>
                 </div>
               </div>
             ))}
@@ -233,7 +294,12 @@ export default function ChatPane({
         )}
       </div>
       {statusDetail ? (
-        <div className="px-4 pb-1 text-xs text-muted-foreground">{statusDetail}</div>
+        <div className="px-4 pb-1 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-1.5 animate-pulse rounded-full bg-primary" />
+            {statusDetail}
+          </span>
+        </div>
       ) : null}
       <div className="border-t border-border p-3">
         <div className="mx-auto flex w-full max-w-3xl items-end gap-2">
@@ -248,20 +314,34 @@ export default function ChatPane({
             }}
             placeholder="Message jcode…"
             rows={1}
-            className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            disabled={isStreaming}
+            className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
           />
-          <button
-            type="button"
-            onClick={send}
-            disabled={isStreaming || !input.trim()}
-            className={cn(
-              'rounded-md px-3 py-2 text-sm font-medium',
-              'bg-primary text-primary-foreground',
-              'disabled:cursor-not-allowed disabled:opacity-50'
-            )}
-          >
-            Send
-          </button>
+          {isStreaming ? (
+            <button
+              type="button"
+              onClick={stop}
+              className={cn(
+                'rounded-md px-3 py-2 text-sm font-medium',
+                'bg-destructive text-destructive-foreground'
+              )}
+            >
+              Stop
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={send}
+              disabled={!input.trim()}
+              className={cn(
+                'rounded-md px-3 py-2 text-sm font-medium',
+                'bg-primary text-primary-foreground',
+                'disabled:cursor-not-allowed disabled:opacity-50'
+              )}
+            >
+              Send
+            </button>
+          )}
         </div>
       </div>
     </div>

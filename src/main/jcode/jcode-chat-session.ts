@@ -9,7 +9,9 @@ import { type BrowserWindow, ipcMain } from 'electron'
 import {
   JCODE_CHAT_EVENT_CHANNEL,
   JCODE_CHAT_SEND_CHANNEL,
+  JCODE_CHAT_STOP_CHANNEL,
   type JcodeChatSendPayload,
+  type JcodeChatStopPayload,
   type JcodeNdjsonEvent
 } from '../../shared/jcode-chat-types'
 
@@ -21,6 +23,10 @@ const JCODE_BIN = '/Users/vinny/.cargo/bin/jcode'
 /** One in-flight turn per sessionKey. A new send for the same key cancels the
  *  previous child first (defensive — the renderer should not double-send). */
 const activeChildren = new Map<string, ChildProcessWithoutNullStreams>()
+
+/** sessionKeys whose child was killed by an explicit user Stop. Used so the
+ *  'close' handler emits a 'stopped' event instead of a spurious 'error'. */
+const stoppedKeys = new Set<string>()
 
 function sendEvent(mainWindow: BrowserWindow, sessionKey: string, event: JcodeNdjsonEvent): void {
   if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) {
@@ -52,6 +58,9 @@ function buildArgs(payload: JcodeChatSendPayload): string[] {
 
 function startTurn(mainWindow: BrowserWindow, payload: JcodeChatSendPayload): void {
   const { sessionKey } = payload
+
+  // A fresh turn supersedes any pending Stop bookkeeping for this pane.
+  stoppedKeys.delete(sessionKey)
 
   // Defensive: kill any prior in-flight child for this pane before starting.
   const prior = activeChildren.get(sessionKey)
@@ -117,6 +126,7 @@ function startTurn(mainWindow: BrowserWindow, payload: JcodeChatSendPayload): vo
 
   child.on('close', (code: number | null) => {
     activeChildren.delete(sessionKey)
+    const wasStopped = stoppedKeys.delete(sessionKey)
     // Flush any trailing partial line that lacked a newline.
     const trailing = stdoutBuffer.trim()
     if (trailing) {
@@ -126,7 +136,10 @@ function startTurn(mainWindow: BrowserWindow, payload: JcodeChatSendPayload): vo
         sendEvent(mainWindow, sessionKey, { type: 'text_delta', text: trailing })
       }
     }
-    if (code !== 0) {
+    if (wasStopped) {
+      // User pressed Stop: a non-zero/kill exit is expected, not an error.
+      sendEvent(mainWindow, sessionKey, { type: 'stopped' })
+    } else if (code !== 0) {
       sendEvent(mainWindow, sessionKey, {
         type: 'error',
         error:
@@ -153,6 +166,28 @@ export function registerJcodeChatHandlers(mainWindow: BrowserWindow): void {
     startTurn(mainWindow, payload)
   })
 
+  // Stop: kill the in-flight child for a pane. The 'close' handler then emits a
+  // 'stopped' event (rather than 'error') because the key is flagged here.
+  ipcMain.removeAllListeners(JCODE_CHAT_STOP_CHANNEL)
+  ipcMain.on(JCODE_CHAT_STOP_CHANNEL, (event, raw: unknown) => {
+    if (event.sender !== mainWindow.webContents) {
+      return
+    }
+    const payload = raw as JcodeChatStopPayload
+    if (!payload || typeof payload.sessionKey !== 'string') {
+      return
+    }
+    const child = activeChildren.get(payload.sessionKey)
+    if (child && !child.killed) {
+      stoppedKeys.add(payload.sessionKey)
+      try {
+        child.kill()
+      } catch {
+        stoppedKeys.delete(payload.sessionKey)
+      }
+    }
+  })
+
   mainWindow.on('closed', () => {
     for (const child of activeChildren.values()) {
       if (!child.killed) {
@@ -164,6 +199,8 @@ export function registerJcodeChatHandlers(mainWindow: BrowserWindow): void {
       }
     }
     activeChildren.clear()
+    stoppedKeys.clear()
     ipcMain.removeAllListeners(JCODE_CHAT_SEND_CHANNEL)
+    ipcMain.removeAllListeners(JCODE_CHAT_STOP_CHANNEL)
   })
 }

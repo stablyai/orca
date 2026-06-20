@@ -9,8 +9,10 @@ import type { AppIdentity } from '../shared/app-identity'
 import {
   JCODE_CHAT_EVENT_CHANNEL,
   JCODE_CHAT_SEND_CHANNEL,
+  JCODE_CHAT_STOP_CHANNEL,
   type JcodeChatEventMessage,
-  type JcodeChatSendPayload
+  type JcodeChatSendPayload,
+  type JcodeChatStopPayload
 } from '../shared/jcode-chat-types'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
@@ -418,6 +420,9 @@ const api = {
   jcodeChat: {
     send: (payload: JcodeChatSendPayload): void => {
       ipcRenderer.send(JCODE_CHAT_SEND_CHANNEL, payload)
+    },
+    stop: (payload: JcodeChatStopPayload): void => {
+      ipcRenderer.send(JCODE_CHAT_STOP_CHANNEL, payload)
     },
     onEvent: (callback: (message: JcodeChatEventMessage) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, message: JcodeChatEventMessage): void =>
