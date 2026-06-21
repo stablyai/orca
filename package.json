@@ -83,7 +83,8 @@
     "bench:idle-cpu": "pnpm run ensure:electron-runtime && node config/scripts/run-idle-cpu-benchmark.mjs",
     "bench:startup": "pnpm run ensure:electron-runtime && node tools/benchmarks/startup-time-bench.mjs",
     "bench:daemon-coldstart": "pnpm run ensure:electron-runtime && node tools/benchmarks/daemon-coldstart-bench.mjs",
-    "bench:compare": "node config/scripts/compare-benchmark-artifacts.mjs"
+    "bench:compare": "node config/scripts/compare-benchmark-artifacts.mjs",
+    "perf:pod:scaffold": "node config/scripts/perf-validation-pod-scaffold.mjs"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
