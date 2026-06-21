@@ -22,6 +22,10 @@ WORKSPACE = "ios/Orca.xcworkspace"
 SCHEME = "Orca"
 BUNDLE_ID = "com.stably.orca.mobile"
 TESTFLIGHT_GROUPS = ["peeps"].freeze
+TESTFLIGHT_CHANGELOG = ENV.fetch(
+  "TESTFLIGHT_CHANGELOG",
+  "Orca Mobile improves paired mobile sessions, terminal/browser reliability, source-control review flows, and reconnect behavior.",
+).freeze
 
 platform :ios do
   desc "Build, sign, upload, and share Orca Mobile on TestFlight"
@@ -74,10 +78,12 @@ platform :ios do
     upload_to_testflight(
       api_key: api_key,
       # Why: fastlane can only assign external TestFlight groups after Apple
-      # finishes processing the uploaded build.
+      # finishes processing the uploaded build, and external distribution
+      # requires beta notes even for small incremental releases.
       skip_waiting_for_build_processing: false,
       distribute_external: true,
       groups: TESTFLIGHT_GROUPS,
+      changelog: TESTFLIGHT_CHANGELOG,
       notify_external_testers: true,
     )
   end
