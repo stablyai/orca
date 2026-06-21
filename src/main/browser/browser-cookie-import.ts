@@ -13,6 +13,7 @@ import {
   detectChromiumBrowsers,
   isSafeBrowserProfileDirectory
 } from './chromium-profile-discovery'
+import { copyChromiumStoreToTemp } from './sqlite-store-copy'
 import {
   copyFileSync,
   existsSync,
@@ -1052,29 +1053,15 @@ export async function importCookiesFromBrowser(
 
   // Why: the browser may hold a lock on the Cookies file. Copying to a temp
   // location avoids lock contention and ensures we read a consistent snapshot.
-  const tmpDir = mkdtempSync(join(tmpdir(), 'orca-cookie-import-'))
-  const tmpCookiesPath = join(tmpDir, 'Cookies')
-
+  // WAL + SHM sidecars are included so we capture the browser's current state
+  // even when it is running (see copyChromiumStoreToTemp for details).
+  let tmpCookiesPath: string
+  let cleanupTmpDir: () => void
   try {
-    copyFileSync(browser.cookiesPath, tmpCookiesPath)
-    // Why: when the source browser is running, it uses WAL journal mode. The most
-    // recently written cookies (including fresh auth tokens) may only exist in the
-    // WAL sidecar file, not yet flushed to the main DB. Copying WAL + SHM ensures
-    // our snapshot reflects the browser's current state.
-    for (const suffix of ['-wal', '-shm'] as const) {
-      const sidecar = browser.cookiesPath + suffix
-      if (existsSync(sidecar)) {
-        try {
-          copyFileSync(sidecar, tmpCookiesPath + suffix)
-        } catch {
-          // Why: sidecar copy is best-effort. The main DB alone may still have
-          // enough cookies for a usable session; missing the WAL just means
-          // we might miss the very latest writes.
-        }
-      }
-    }
+    const copy = copyChromiumStoreToTemp(browser.cookiesPath)
+    tmpCookiesPath = copy.tempDbPath
+    cleanupTmpDir = copy.cleanup
   } catch {
-    rmSync(tmpDir, { recursive: true, force: true })
     return {
       ok: false,
       reason: `Could not copy ${browser.label} cookies database. Try closing ${browser.label} first.`
@@ -1106,7 +1093,7 @@ export async function importCookiesFromBrowser(
     localStatePath
   )
   if (!sourceKey) {
-    rmSync(tmpDir, { recursive: true, force: true })
+    cleanupTmpDir()
     return {
       ok: false,
       reason: `Could not access ${browser.label} encryption key. The OS may have denied access.`
@@ -1138,7 +1125,7 @@ export async function importCookiesFromBrowser(
   }
 
   if (!existsSync(liveCookiesPath)) {
-    rmSync(tmpDir, { recursive: true, force: true })
+    cleanupTmpDir()
     return { ok: false, reason: 'Target cookie database not found. Open a browser tab first.' }
   }
 
@@ -1152,7 +1139,7 @@ export async function importCookiesFromBrowser(
     mkdirSync(stagingDir, { recursive: true })
     copyFileSync(liveCookiesPath, stagingCookiesPath)
   } catch {
-    rmSync(tmpDir, { recursive: true, force: true })
+    cleanupTmpDir()
     return { ok: false, reason: 'Could not create staging cookie database.' }
   }
 
@@ -1185,7 +1172,7 @@ export async function importCookiesFromBrowser(
     if (sourceRows.length === 0) {
       stagingDb.close()
       stagingDb = null
-      rmSync(tmpDir, { recursive: true, force: true })
+      cleanupTmpDir()
       return { ok: false, reason: `No cookies found in ${browser.label}.` }
     }
 
@@ -1304,7 +1291,7 @@ export async function importCookiesFromBrowser(
     stagingDb.close()
     stagingDb = null
 
-    rmSync(tmpDir, { recursive: true, force: true })
+    cleanupTmpDir()
     diag(`  SQLite staging complete: ${imported} cookies, ${domainSet.size} domains`)
 
     // Why: clearing the session's in-memory cookie store before loading imported
@@ -1390,7 +1377,7 @@ export async function importCookiesFromBrowser(
     } catch {
       /* may already be closed */
     }
-    rmSync(tmpDir, { recursive: true, force: true })
+    cleanupTmpDir()
     // Why: if the import fails after the staging DB was created, clean it up
     // to avoid a stale staged import being applied on the next cold start.
     try {
