@@ -1159,6 +1159,19 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         setupDecision: args.setupDecision,
         createdWithAgent: args.createdWithAgent,
         pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
+        ...(args.startup
+          ? {
+              startupCommand: args.startup.command,
+              ...(args.startup.env ? { startupEnv: args.startup.env } : {}),
+              ...(args.startup.launchConfig
+                ? { startupLaunchConfig: args.startup.launchConfig }
+                : {}),
+              ...(args.startup.startupCommandDelivery
+                ? { startupCommandDelivery: args.startup.startupCommandDelivery }
+                : {}),
+              activate: true
+            }
+          : {}),
         parentWorkspace: args.parentWorkspace,
         workspaceStatus: args.workspaceStatus,
         manualOrder: args.manualOrder,
@@ -1587,8 +1600,6 @@ function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
     onActivateView: () => noopUnsubscribe,
     onPaneFocus: () => noopUnsubscribe,
     onOpenLinkInOrcaTab: () => noopUnsubscribe,
-    acceptDownload: () =>
-      Promise.resolve({ ok: false, reason: 'Downloads are handled by the server browser.' }),
     cancelDownload: () => Promise.resolve(false),
     setGrabMode: () =>
       Promise.resolve({
@@ -1675,12 +1686,17 @@ function createGitHubApi(): WebGitHubApi {
     prForBranch: (args) =>
       route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, args),
     refreshPRNow: async ({ candidate }) => {
+      const acceptMergedFallbackPR =
+        candidate.linkedPRNumber == null &&
+        candidate.fallbackPRNumber != null &&
+        candidate.fallbackPRSource != null
       const pr = await route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, {
         repoPath: candidate.repoPath,
         repoId: candidate.repoId,
         branch: candidate.branch,
         linkedPRNumber: candidate.linkedPRNumber ?? null,
-        fallbackPRNumber: candidate.fallbackPRNumber ?? null
+        fallbackPRNumber: candidate.fallbackPRNumber ?? null,
+        ...(acceptMergedFallbackPR ? { acceptMergedFallbackPR: true } : {})
       })
       return pr
         ? { kind: 'found', pr, fetchedAt: Date.now() }

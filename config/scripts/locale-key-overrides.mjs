@@ -600,7 +600,10 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: 'レビューコメントを追加しました。'
   },
   // Port forwarding "Forward" is 転送, not the browser-navigation 進む.
-  'auto.components.right.sidebar.PortsPanel.c9d106547a': { ja: '転送' }
+  'auto.components.right.sidebar.PortsPanel.c9d106547a': { ja: '転送' },
+  // Worktree badge: stand-alone 主要な leaves the adnominal な dangling — align with the Tooltip's プライマリ.
+  'auto.components.sidebar.WorktreeCard.7d517f82e2': { ja: 'プライマリ' },
+  'auto.components.WorktreeJumpPalette.739bda980c': { ja: 'プライマリ' }
 }
 
 export const LOCALE_KEY_OVERRIDES = mergeLocaleKeyOverrides(BASE_LOCALE_KEY_OVERRIDES)

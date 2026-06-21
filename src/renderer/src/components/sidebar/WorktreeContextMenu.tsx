@@ -4,6 +4,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
@@ -57,6 +58,7 @@ type Props = {
   worktree: Worktree
   children: React.ReactNode
   contentClassName?: string
+  newCardStyle?: boolean
   selectedWorktrees?: readonly Worktree[]
   onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
   onOpenChange?: (open: boolean) => void
@@ -121,6 +123,10 @@ function isWorktreeParentPickerDisabled(args: {
   eligibleParentCount: number
 }): boolean {
   return args.isDeleting || args.eligibleParentCount === 0
+}
+
+function shouldShowReadToggleContextMenuItem(args: { newCardStyle: boolean }): boolean {
+  return !args.newCardStyle
 }
 
 function getWorktreeParentPickerAnchor(
@@ -243,6 +249,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   worktree,
   children,
   contentClassName,
+  newCardStyle = false,
   selectedWorktrees,
   onContextMenuSelect,
   onOpenChange
@@ -344,6 +351,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     (item) =>
       worktreeLineageById[item.id] || workspaceLineageByChildKey[worktreeWorkspaceKey(item.id)]
   )
+  const showReadToggle = shouldShowReadToggleContextMenuItem({ newCardStyle })
   const eligibleParentCount = useMemo(
     () =>
       getEligibleWorktreeParents({
@@ -646,6 +654,47 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
           onClickCapture={suppressOpeningPointerEvent}
           onCloseAutoFocus={handleCloseAutoFocus}
         >
+          <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
+            {translate('auto.components.sidebar.WorktreeContextMenu.workspaceSection', 'Workspace')}
+          </DropdownMenuLabel>
+          {!isMultiContext && (
+            <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>
+              <Pencil className="size-3.5" />
+              {translate('auto.components.sidebar.WorktreeContextMenu.439fa94d53', 'Update')}
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger disabled={deletingContext}>
+              <Kanban className="size-3.5" />
+              {isMultiContext
+                ? translate(
+                    'auto.components.sidebar.WorktreeContextMenu.56cde9e8e6',
+                    'Move Statuses To'
+                  )
+                : translate(
+                    'auto.components.sidebar.WorktreeContextMenu.84cdbb7e30',
+                    'Move to Status'
+                  )}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-44">
+              <DropdownMenuRadioGroup value={contextWorkspaceStatus}>
+                {workspaceStatuses.map((status) => {
+                  const meta = getWorkspaceStatusVisualMeta(status)
+                  return (
+                    <DropdownMenuRadioItem
+                      key={status.id}
+                      value={status.id}
+                      onSelect={() => handleAssignWorkspaceStatus(status.id)}
+                    >
+                      <meta.icon className={cn('size-3.5', meta.tone)} />
+                      {status.label}
+                    </DropdownMenuRadioItem>
+                  )
+                })}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuSeparator />
           {!isMultiContext && (
             <>
               <WorktreeOpenInSubMenu
@@ -664,19 +713,24 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                   ? translate('auto.components.sidebar.WorktreeContextMenu.697d0f6e1b', 'Unpin')
                   : translate('auto.components.sidebar.WorktreeContextMenu.3baa7d6507', 'Pin')}
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
-                {worktree.isUnread ? (
-                  <BellOff className="size-3.5" />
-                ) : (
-                  <Bell className="size-3.5" />
-                )}
-                {worktree.isUnread
-                  ? translate('auto.components.sidebar.WorktreeContextMenu.8dacff1fe0', 'Mark Read')
-                  : translate(
-                      'auto.components.sidebar.WorktreeContextMenu.f50603c6b2',
-                      'Mark Unread'
-                    )}
-              </DropdownMenuItem>
+              {showReadToggle && (
+                <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
+                  {worktree.isUnread ? (
+                    <BellOff className="size-3.5" />
+                  ) : (
+                    <Bell className="size-3.5" />
+                  )}
+                  {worktree.isUnread
+                    ? translate(
+                        'auto.components.sidebar.WorktreeContextMenu.8dacff1fe0',
+                        'Mark Read'
+                      )
+                    : translate(
+                        'auto.components.sidebar.WorktreeContextMenu.f50603c6b2',
+                        'Mark Unread'
+                      )}
+                </DropdownMenuItem>
+              )}
               {repo ? (
                 <>
                   <DropdownMenuSeparator />
@@ -753,58 +807,19 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
               )}
             </>
           )}
-          {isMultiContext && (
+          {isMultiContext && hasAnyContextLineage ? (
             <>
-              {hasAnyContextLineage && (
-                <DropdownMenuItem onSelect={handleRemoveParentLink} disabled={deletingContext}>
-                  <Unlink className="size-3.5" />
-                  {translate(
-                    'auto.components.sidebar.WorktreeContextMenu.579b1a8e61',
-                    'Remove from Parent'
-                  )}
-                </DropdownMenuItem>
-              )}
+              <DropdownMenuItem onSelect={handleRemoveParentLink} disabled={deletingContext}>
+                <Unlink className="size-3.5" />
+                {translate(
+                  'auto.components.sidebar.WorktreeContextMenu.579b1a8e61',
+                  'Remove from Parent'
+                )}
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
             </>
-          )}
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger disabled={deletingContext}>
-              <Kanban className="size-3.5" />
-              {isMultiContext
-                ? translate(
-                    'auto.components.sidebar.WorktreeContextMenu.56cde9e8e6',
-                    'Move Statuses To'
-                  )
-                : translate(
-                    'auto.components.sidebar.WorktreeContextMenu.84cdbb7e30',
-                    'Move to Status'
-                  )}
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="w-44">
-              <DropdownMenuRadioGroup value={contextWorkspaceStatus}>
-                {workspaceStatuses.map((status) => {
-                  const meta = getWorkspaceStatusVisualMeta(status)
-                  return (
-                    <DropdownMenuRadioItem
-                      key={status.id}
-                      value={status.id}
-                      onSelect={() => handleAssignWorkspaceStatus(status.id)}
-                    >
-                      <meta.icon className={cn('size-3.5', meta.tone)} />
-                      {status.label}
-                    </DropdownMenuRadioItem>
-                  )
-                })}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          {!isMultiContext && (
-            <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>
-              <Pencil className="size-3.5" />
-              {translate('auto.components.sidebar.WorktreeContextMenu.439fa94d53', 'Update')}
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuSeparator />
+          ) : null}
+
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuItem
@@ -907,6 +922,7 @@ export {
   getWorktreeParentPickerLabel,
   isWorktreeParentPickerDisabled,
   shouldRemoveProjectFromContextMenu,
+  shouldShowReadToggleContextMenuItem,
   shouldUseNativeContextMenu,
   shouldSuppressContextMenuFollowUpClick,
   shouldIgnoreNestedWorktreeContextMenuScope

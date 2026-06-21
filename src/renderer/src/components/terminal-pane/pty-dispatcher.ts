@@ -9,6 +9,8 @@ import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-t
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type { TuiAgent } from '../../../../shared/types'
 import { ackPtyData, exposeE2eTerminalPtyAckGate } from './terminal-pty-ack-gate'
 import { clampUtf8Tail, type EagerBufferChunk } from './pty-eager-buffer-clamp'
 
@@ -294,6 +296,7 @@ export function registerEagerPtyBuffer(
 
 export type PtyConnectResult = {
   id: string
+  launchConfig?: SleepingAgentLaunchConfig
   snapshot?: string
   snapshotCols?: number
   snapshotRows?: number
@@ -311,6 +314,12 @@ export type PtyTransport = {
     /** Daemon session ID for reattach. When provided, the daemon reconnects
      *  to an existing session instead of creating a new one. */
     sessionId?: string
+    command?: string
+    env?: Record<string, string>
+    launchConfig?: SleepingAgentLaunchConfig
+    launchToken?: string
+    launchAgent?: TuiAgent
+    startupCommandDelivery?: StartupCommandDelivery
     callbacks: {
       onConnect?: () => void
       onDisconnect?: () => void
@@ -369,6 +378,9 @@ export type IpcPtyTransportOptions = {
   cwd?: string
   env?: Record<string, string>
   command?: string
+  launchConfig?: SleepingAgentLaunchConfig
+  launchToken?: string
+  launchAgent?: TuiAgent
   startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
   /** Orca worktree identity for scoped shell history. */

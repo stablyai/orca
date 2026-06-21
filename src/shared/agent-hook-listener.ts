@@ -173,6 +173,8 @@ export function warnOnHookEnvOrVersionMismatch(
 
 export type AgentHookEventPayload = {
   paneKey: string
+  /** Ephemeral Orca launch identity stamped into the PTY env for this process. */
+  launchToken?: string
   tabId?: string
   worktreeId?: string
   /** Identifies the SSH connection the event arrived on, or null for local.
@@ -3012,6 +3014,7 @@ export function normalizeHookPayload(
     return null
   }
   const worktreeId = readStringField(record, 'worktreeId')
+  const launchToken = readStringField(record, 'launchToken')
 
   const hookPayloadRecord = hookPayload as Record<string, unknown>
   let promptInteractionKey: string | undefined
@@ -3132,6 +3135,7 @@ export function normalizeHookPayload(
   return payload
     ? {
         paneKey,
+        launchToken,
         tabId,
         worktreeId,
         connectionId: null,

@@ -15,6 +15,8 @@ export type WorkspaceViewSettings = {
   hideDefaultBranchWorkspace?: boolean
   filterRepoIds?: string[]
   collapsedGroups?: string[]
+  workspaceHostScope?: string
+  visibleWorkspaceHostIds?: string[] | null
 }
 
 const GROUP_TO_DESKTOP: Record<MobileGroupMode, NonNullable<WorkspaceViewSettings['groupBy']>> = {
@@ -58,6 +60,8 @@ export type MobileViewState = {
   hideDefaultBranch: boolean
   filterRepoIds: string[]
   collapsedGroups: string[]
+  workspaceHostScope?: string
+  visibleWorkspaceHostIds?: string[] | null
 }
 
 // Apply a desktop PersistedUIState onto the local view state, leaving any field
@@ -68,7 +72,7 @@ export function applyDesktopViewSettings(
 ): MobileViewState {
   const groupMode = groupModeFromDesktop(settings.groupBy)
   const sortMode = sortModeFromDesktop(settings.sortBy)
-  return {
+  const next: MobileViewState = {
     groupMode: groupMode ?? current.groupMode,
     sortMode: sortMode ?? current.sortMode,
     hideSleeping: settings.hideSleepingWorkspaces ?? current.hideSleeping,
@@ -76,4 +80,15 @@ export function applyDesktopViewSettings(
     filterRepoIds: settings.filterRepoIds ?? current.filterRepoIds,
     collapsedGroups: settings.collapsedGroups ?? current.collapsedGroups
   }
+  if (settings.workspaceHostScope !== undefined) {
+    next.workspaceHostScope = settings.workspaceHostScope
+  } else if (current.workspaceHostScope !== undefined) {
+    next.workspaceHostScope = current.workspaceHostScope
+  }
+  if (settings.visibleWorkspaceHostIds !== undefined) {
+    next.visibleWorkspaceHostIds = settings.visibleWorkspaceHostIds
+  } else if (current.visibleWorkspaceHostIds !== undefined) {
+    next.visibleWorkspaceHostIds = current.visibleWorkspaceHostIds
+  }
+  return next
 }

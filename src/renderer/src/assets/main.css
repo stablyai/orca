@@ -496,16 +496,46 @@
   height: 0;
 }
 
+/* Why: horizontal tab strips scroll via chevrons, wheel, and trackpad; a
+   native scrollbar thumb overlays tab labels and looks broken. */
+.terminal-tab-strip,
 .project-view-tab-strip {
-  /* Why: project views load after the table shell; keeping the row stable
-     prevents the list below from jumping when the tabs arrive. */
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
 
+.terminal-tab-strip::-webkit-scrollbar,
 .project-view-tab-strip::-webkit-scrollbar {
   width: 0;
   height: 0;
+}
+
+/* Why: mask fades avoid painting card-colored overlays that mismatch active tabs. */
+.terminal-tab-strip--fade-start.terminal-tab-strip--fade-end {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 1.5rem,
+    #000 calc(100% - 1.5rem),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 1.5rem,
+    #000 calc(100% - 1.5rem),
+    transparent
+  );
+}
+
+.terminal-tab-strip--fade-start:not(.terminal-tab-strip--fade-end) {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 1.5rem, #000 100%);
+  mask-image: linear-gradient(to right, transparent, #000 1.5rem, #000 100%);
+}
+
+.terminal-tab-strip--fade-end:not(.terminal-tab-strip--fade-start) {
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
 }
 
 /* Tab activity affordance (amber wash) is rendered as a React DOM child in

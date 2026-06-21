@@ -185,6 +185,40 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
+  it('uses captured launch config instead of changed settings when resuming worktree sleep', () => {
+    const record = makeRecord({
+      agent: 'codex',
+      origin: 'worktree-sleep',
+      launchConfig: {
+        agentCommand: "codex --profile captured '--model' 'gpt-5' '--reasoning-effort' 'high'",
+        agentArgs: '--model gpt-5 --reasoning-effort high',
+        agentEnv: { CODEX_PROFILE: 'captured' }
+      }
+    })
+    useAppStore.setState({
+      settings: {
+        agentCmdOverrides: { codex: 'codex --profile changed' },
+        agentDefaultArgs: { codex: '--model changed' },
+        agentDefaultEnv: { codex: { CODEX_PROFILE: 'changed' } }
+      },
+      tabsByWorktree: { 'wt-1': [] },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    } as never)
+
+    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
+
+    expect(launched).toBe(1)
+    const state = useAppStore.getState()
+    const resumedTab = state.tabsByWorktree['wt-1']?.[0]
+    const startup = state.pendingStartupByTabId[resumedTab!.id]
+    expect(startup?.command).toBe(
+      "codex --profile captured '--model' 'gpt-5' '--reasoning-effort' 'high' 'resume' 'sess-1'"
+    )
+    expect(startup?.env).toEqual({ CODEX_PROFILE: 'captured' })
+    expect(startup?.command).not.toContain('changed')
+    expect(startup?.launchConfig).toEqual(record.launchConfig)
+  })
+
   it('launches once and clears skipped duplicates for the same provider session', () => {
     const first = makeRecord({ paneKey: 'tab-1:leaf-1', capturedAt: 1, updatedAt: 1 })
     const duplicate = makeRecord({ paneKey: 'tab-2:leaf-1', capturedAt: 2, updatedAt: 2 })

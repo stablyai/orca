@@ -12,6 +12,7 @@ type MockAppState = {
 const mocks = vi.hoisted(() => ({
   state: null as MockAppState | null,
   automationVisiblePageIds: new Set<string>(),
+  mobileDrivenPageIds: new Set<string>(),
   focusGroup: vi.fn()
 }))
 
@@ -29,6 +30,11 @@ vi.mock('./browser-automation-visibility', () => ({
     pageIds.some((pageId) => mocks.automationVisiblePageIds.has(pageId))
 }))
 
+vi.mock('@/lib/pane-manager/browser-mobile-driver-state', () => ({
+  useBrowserMobileDriverForAny: (pageIds: readonly string[]) =>
+    pageIds.some((pageId) => mocks.mobileDrivenPageIds.has(pageId))
+}))
+
 vi.mock('./BrowserPane', () => ({
   default: ({ browserTab, isActive }: { browserTab: BrowserTabState; isActive: boolean }) => (
     <span
@@ -43,6 +49,7 @@ import BrowserPaneOverlayLayer from './BrowserPaneOverlayLayer'
 describe('BrowserPaneOverlayLayer', () => {
   beforeEach(() => {
     mocks.automationVisiblePageIds.clear()
+    mocks.mobileDrivenPageIds.clear()
     mocks.focusGroup.mockClear()
     mocks.state = createState()
   })
@@ -66,12 +73,31 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(markup).toContain('data-browser-pane-active="false"')
   })
 
-  it('keeps the selected browser pane mounted but inactive when its worktree is not visible', () => {
+  it('parks browser panes when their worktree is hidden', () => {
     const markup = renderOverlay({ isWorktreeActive: false })
 
-    expect(markup).toContain('data-browser-pane-id="browser-a"')
-    expect(markup).toContain('data-browser-pane-active="false"')
+    expect(markup).not.toContain('data-browser-pane-id="browser-a"')
+    expect(markup).not.toContain('data-browser-pane-id="browser-b"')
+  })
+
+  it('keeps an automation-visible hidden browser pane mounted', () => {
+    mocks.automationVisiblePageIds.add('page-b')
+
+    const markup = renderOverlay({ isWorktreeActive: false })
+
+    expect(markup).not.toContain('data-browser-pane-id="browser-a"')
     expect(markup).toContain('data-browser-pane-id="browser-b"')
+    expect(markup).toContain('data-browser-pane-active="false"')
+  })
+
+  it('keeps a mobile-controlled hidden browser pane mounted', () => {
+    mocks.mobileDrivenPageIds.add('page-b')
+
+    const markup = renderOverlay({ isWorktreeActive: false })
+
+    expect(markup).not.toContain('data-browser-pane-id="browser-a"')
+    expect(markup).toContain('data-browser-pane-id="browser-b"')
+    expect(markup).toContain('data-browser-pane-active="false"')
   })
 })
 

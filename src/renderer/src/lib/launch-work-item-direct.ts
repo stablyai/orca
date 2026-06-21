@@ -91,10 +91,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       worktreePath: repo.path,
       projectRuntime: repoProjectRuntime
     })
-  const agentArgsPlan = planAgentCliArgsSuffix(
-    agentArgs,
-    preflightLaunchPlatform === 'win32' ? 'powershell' : 'posix'
-  )
+  const shell = preflightLaunchPlatform === 'win32' ? 'powershell' : 'posix'
+  const agentArgsPlan = planAgentCliArgsSuffix(agentArgs, shell)
   if (!agentArgsPlan.ok) {
     // Why: direct launches may create a worktree before the agent startup plan
     // is built; reject malformed saved args before touching user workspaces.
@@ -297,6 +295,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         launchCommand: draftLaunchPlan.launchCommand,
         expectedProcess: draftLaunchPlan.expectedProcess,
         followupPrompt: null,
+        launchConfig: draftLaunchPlan.launchConfig,
         ...(draftLaunchPlan.startupCommandDelivery
           ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
           : {}),

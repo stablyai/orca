@@ -291,6 +291,39 @@ describe('buildActivityEvents', () => {
     })
   })
 
+  it('uses orchestration display metadata for live thread titles', () => {
+    const result = makeActivityResult({
+      entries: {
+        [PANE_KEY]: {
+          ...makeWorkingEntryWithoutHistory(),
+          prompt: 'You are working inside Orca, a multi-agent IDE.',
+          orchestration: {
+            taskId: 'task-1',
+            dispatchId: 'ctx-1',
+            taskTitle: 'Checkout race',
+            displayName: 'Fix checkout race'
+          }
+        }
+      }
+    })
+
+    const threads = makeThreads(result)
+
+    expect(threads[0].paneTitle).toBe('Fix checkout race')
+    expect(
+      activityThreadMatchesSearchQuery({
+        thread: threads[0],
+        searchQuery: 'fix checkout race'
+      })
+    ).toBe(true)
+    expect(
+      activityThreadMatchesSearchQuery({
+        thread: threads[0],
+        searchQuery: 'multi-agent ide'
+      })
+    ).toBe(true)
+  })
+
   it('creates a thread for a repo-less floating terminal agent', () => {
     const tab = makeTabWithIds('tab-1', FLOATING_TERMINAL_WORKTREE_ID, 'Claude')
     const result = buildActivityEvents({

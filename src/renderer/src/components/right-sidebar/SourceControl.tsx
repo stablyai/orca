@@ -168,6 +168,7 @@ import {
 import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
+import { resolveCreateReviewDraftTitle } from './create-review-draft-title'
 import { GitHistoryPanel, type GitHistoryPanelState } from './GitHistoryPanel'
 import { useGitHistoryCommitActions } from './useGitHistoryCommitActions'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
@@ -189,7 +190,6 @@ import type {
   HostedReviewProvider
 } from '../../../../shared/hosted-review'
 import { resolveHostedReviewCreationProvider } from '../../../../shared/hosted-review-creation-providers'
-import { humanizeBranchSlug } from '../../../../shared/branch-name-from-work'
 import { STATUS_COLORS, STATUS_LABELS } from './status-display'
 import { isCustomAgentId } from '../../../../shared/commit-message-agent-spec'
 import {
@@ -236,6 +236,7 @@ import {
   createPrIntentGitStatusMatchesToken,
   createPrIntentRunTokenMatches,
   getCreatePrIntentStagePaths,
+  resolveCreatePrIntentReviewBase,
   resolveCreatePrIntentRemoteStep,
   type CreatePrIntentRunToken
 } from './source-control-create-pr-intent-flow'
@@ -264,6 +265,8 @@ import {
 import {
   createRunningPullRequestGenerationRecord,
   getPullRequestGenerationRecordKey,
+  getPullRequestGenerationSeedRestoreKey,
+  markPullRequestGenerationTerminalSeedRestored,
   resolvePullRequestGenerationCancel,
   resolvePullRequestGenerationFailure,
   resolvePullRequestGenerationSuccess,
@@ -979,7 +982,8 @@ function SourceControlInner(): React.JSX.Element {
     repoId: null as string | null,
     worktreeId: null as string | null,
     worktreePath: null as string | null,
-    branch: null as string | null
+    branch: null as string | null,
+    baseRef: null as string | null
   })
   const [createPrIntentInFlightByWorktree, setCreatePrIntentInFlightByWorktree] = useState<
     Record<string, boolean>
@@ -1089,14 +1093,6 @@ function SourceControlInner(): React.JSX.Element {
   const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
   const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
   const branchName = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
-  useEffect(() => {
-    createPrIntentCurrentTargetRef.current = {
-      repoId: activeRepo?.id ?? null,
-      worktreeId: activeWorktreeId ?? null,
-      worktreePath,
-      branch: branchName
-    }
-  }, [activeRepo?.id, activeWorktreeId, branchName, worktreePath])
   const activePullRequestGenerationKey = getPullRequestGenerationRecordKey({
     worktreeId: activeWorktreeId,
     worktreePath,
@@ -1112,6 +1108,10 @@ function SourceControlInner(): React.JSX.Element {
     activePullRequestGenerationRecordCandidate.context.branch === branchName
       ? activePullRequestGenerationRecordCandidate
       : null
+  const activePullRequestGenerationSeedRestoreKey = getPullRequestGenerationSeedRestoreKey({
+    recordKey: activePullRequestGenerationKey,
+    record: activePullRequestGenerationRecord
+  })
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   // Why: gate polling on both the active tab AND the sidebar being open.
   // The sidebar now stays mounted when closed (for performance), so without
@@ -1343,6 +1343,15 @@ function SourceControlInner(): React.JSX.Element {
     pinnedBaseRef,
     effectiveBaseRef
   })
+  useEffect(() => {
+    createPrIntentCurrentTargetRef.current = {
+      repoId: activeRepo?.id ?? null,
+      worktreeId: activeWorktreeId ?? null,
+      worktreePath,
+      branch: branchName,
+      baseRef: effectiveBaseRef ?? null
+    }
+  }, [activeRepo?.id, activeWorktreeId, branchName, effectiveBaseRef, worktreePath])
 
   const linkedGitHubPR = activeWorktree?.linkedPR ?? null
   const fallbackGitHubPRNumber = linkedGitHubPR == null ? (activePrFromQueue?.number ?? null) : null
@@ -2667,6 +2676,22 @@ function SourceControlInner(): React.JSX.Element {
       })
     })
   }, [activePullRequestGenerationKey, prGenerationRecords, updatePullRequestGenerationRecord])
+  const handlePullRequestGenerationSeedRestored = useCallback((): void => {
+    if (!activePullRequestGenerationKey || !activePullRequestGenerationRecord) {
+      return
+    }
+    const requestId = activePullRequestGenerationRecord.context.requestId
+    updatePullRequestGenerationRecord(activePullRequestGenerationKey, (record) =>
+      markPullRequestGenerationTerminalSeedRestored({
+        record,
+        requestId
+      })
+    )
+  }, [
+    activePullRequestGenerationKey,
+    activePullRequestGenerationRecord,
+    updatePullRequestGenerationRecord
+  ])
 
   const {
     aiGenerationEnabled: prAiGenerationEnabled,
@@ -2698,6 +2723,7 @@ function SourceControlInner(): React.JSX.Element {
     worktreePath: worktreePath ?? '',
     branch: branchName,
     eligibility: hostedReviewCreation,
+    currentBaseRef: effectiveBaseRef,
     repo: activeRepo ?? null,
     settings: activeRepoSettings,
     submitting: isCreatingPr,
@@ -2707,6 +2733,10 @@ function SourceControlInner(): React.JSX.Element {
     generation: {
       generating: activePullRequestGenerationRecord?.status === 'running',
       generateError: activePullRequestGenerationRecord?.error ?? null,
+      seedRestoreKey: activePullRequestGenerationSeedRestoreKey,
+      seed: activePullRequestGenerationRecord?.seed ?? null,
+      seedFieldRevisions: activePullRequestGenerationRecord?.seedFieldRevisions ?? null,
+      onSeedRestored: handlePullRequestGenerationSeedRestored,
       onGenerate: (fields, fieldRevisions, overrides) => {
         void handleGeneratePullRequestFieldsForActive(fields, fieldRevisions, overrides)
       },
@@ -3070,9 +3100,11 @@ function SourceControlInner(): React.JSX.Element {
         return false
       }
 
-      const base = stripBaseRef(
-        eligibility.defaultBaseRef ?? effectiveBaseRef ?? prBase ?? ''
-      ).trim()
+      const base = resolveCreatePrIntentReviewBase({
+        currentBaseRef: token.baseRef,
+        eligibilityDefaultBaseRef: eligibility.defaultBaseRef,
+        composerBaseRef: prBase
+      }).trim()
       if (!base || stripBaseRef(base).toLowerCase() === stripBaseRef(token.branch).toLowerCase()) {
         setCreatePrIntentNoticeForWorktree(token.worktreeId, {
           tone: 'destructive',
@@ -3085,13 +3117,12 @@ function SourceControlInner(): React.JSX.Element {
         return false
       }
 
-      const fallbackTitle =
-        eligibility.title?.trim() ||
-        humanizeBranchSlug(stripBaseRef(token.branch).split('/').pop()?.replace(/_/g, '-') ?? '') ||
-        stripBaseRef(token.branch)
       let fields = {
         base,
-        title: fallbackTitle,
+        title: resolveCreateReviewDraftTitle({
+          branch: token.branch,
+          eligibilityTitle: eligibility.title
+        }),
         body: eligibility.body ?? prBody,
         draft: resolvedPrCreationDefaults.draft
       }
@@ -3256,7 +3287,6 @@ function SourceControlInner(): React.JSX.Element {
     [
       activeRepo,
       createHostedReview,
-      effectiveBaseRef,
       createPrIntentActiveTargetConflicts,
       createPrIntentRunStillOwnsWorktree,
       getCreatePrIntentOperationTarget,
@@ -3274,11 +3304,12 @@ function SourceControlInner(): React.JSX.Element {
 
   const refreshBranchCompareForCreatePrIntent = useCallback(
     async (token: CreatePrIntentRunToken): Promise<number | undefined> => {
-      if (!effectiveBaseRef) {
+      const baseRef = token.baseRef?.trim()
+      if (!baseRef) {
         return undefined
       }
-      const requestKey = `${token.worktreeId}:${effectiveBaseRef}:${Date.now()}:create-pr-intent`
-      beginGitBranchCompareRequest(token.worktreeId, requestKey, effectiveBaseRef)
+      const requestKey = `${token.worktreeId}:${baseRef}:${Date.now()}:create-pr-intent`
+      beginGitBranchCompareRequest(token.worktreeId, requestKey, baseRef)
       const result = await getRuntimeGitBranchCompare(
         {
           // Why: the intent flow may continue after a worktree switch; use the
@@ -3288,12 +3319,12 @@ function SourceControlInner(): React.JSX.Element {
           worktreePath: token.worktreePath,
           connectionId: getConnectionId(token.worktreeId) ?? undefined
         },
-        effectiveBaseRef
+        baseRef
       )
       setGitBranchCompareResult(token.worktreeId, requestKey, result)
       return result.summary.status === 'ready' ? (result.summary.commitsAhead ?? 0) : undefined
     },
-    [activeRepoSettings, beginGitBranchCompareRequest, effectiveBaseRef, setGitBranchCompareResult]
+    [activeRepoSettings, beginGitBranchCompareRequest, setGitBranchCompareResult]
   )
 
   const readHostedReviewCreationEligibilityForIntent = useCallback(
@@ -3314,7 +3345,7 @@ function SourceControlInner(): React.JSX.Element {
         repoId: activeRepo.id,
         worktreePath: token.worktreePath,
         branch: token.branch,
-        base: effectiveBaseRef ?? null,
+        base: token.baseRef ?? null,
         hasUncommittedChanges,
         hasUpstream: upstreamStatus?.hasUpstream,
         ahead: upstreamStatus?.ahead,
@@ -3336,7 +3367,6 @@ function SourceControlInner(): React.JSX.Element {
     },
     [
       activeRepo,
-      effectiveBaseRef,
       fallbackGitHubPRNumber,
       getHostedReviewCreationEligibility,
       linkedAzureDevOpsPR,
@@ -3398,7 +3428,10 @@ function SourceControlInner(): React.JSX.Element {
       repoId: activeRepo.id,
       worktreeId: activeWorktreeId,
       worktreePath,
-      branch: branchName
+      branch: branchName,
+      // Why: Create PR intent crosses async commit/push steps; the review
+      // target must stay tied to the base selected when the run started.
+      baseRef: effectiveBaseRef ?? null
     })
     const operationTarget = getCreatePrIntentOperationTarget(token)
     const runIsCurrent = (): boolean =>
@@ -3622,7 +3655,7 @@ function SourceControlInner(): React.JSX.Element {
       const remoteOk = await runRemoteAction(remoteStep, {
         target: operationTarget,
         remoteStatus: latestUpstreamStatus,
-        baseRef: effectiveBaseRef
+        baseRef: token.baseRef
       })
       if (abortIfStale()) {
         return

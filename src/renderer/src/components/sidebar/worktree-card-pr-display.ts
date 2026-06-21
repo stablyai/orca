@@ -21,6 +21,10 @@ export type WorktreeCardPrDisplay =
       status?: HostedReviewInfo['status']
     }
 
+type WorktreeCardPrDisplayOptions = {
+  reviewHintKey?: string
+}
+
 function getLinkedReviewNumber(
   provider: LinkedReviewMetadataProvider,
   links: LinkedReviewNumbers
@@ -60,7 +64,8 @@ export function getWorktreeCardPrDisplay(
   linkedGitLabMR: number | null = null,
   linkedBitbucketPR: number | null = null,
   linkedAzureDevOpsPR: number | null = null,
-  linkedGiteaPR: number | null = null
+  linkedGiteaPR: number | null = null,
+  options: WorktreeCardPrDisplayOptions = {}
 ): WorktreeCardPrDisplay | null {
   const links = {
     linkedPR,
@@ -75,7 +80,12 @@ export function getWorktreeCardPrDisplay(
     }
     const linkedReviewNumber = getLinkedReviewNumber(review.provider, links)
     if (linkedReviewNumber === null) {
-      return review.provider === 'github' || review.provider === 'gitlab' ? null : review
+      if (review.provider !== 'github' && review.provider !== 'gitlab') {
+        return review
+      }
+      // Why: GitHub/GitLab linked lookups can outlive the worktree metadata
+      // that requested them. A neutral branch lookup is safe to show unlinked.
+      return options.reviewHintKey === '' ? review : null
     }
     if (review.number === linkedReviewNumber) {
       return review

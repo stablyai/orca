@@ -430,7 +430,13 @@ describe('createWebRuntimeSessionTerminal', () => {
         afterTabId: 'web-terminal-host-tab-1%3A%3Aleaf-1',
         targetGroupId: 'group-left',
         command: "codex 'linked issue context'",
+        env: { CODEX_PROFILE: 'captured' },
         startupCommandDelivery: 'shell-ready',
+        launchConfig: {
+          agentArgs: '--model gpt-5',
+          agentEnv: { CODEX_PROFILE: 'captured' }
+        },
+        launchAgent: 'codex',
         activate: true
       })
     ).resolves.toBe(true)
@@ -443,7 +449,13 @@ describe('createWebRuntimeSessionTerminal', () => {
         afterTabId: 'host-tab-1::leaf-1',
         targetGroupId: 'group-left',
         command: "codex 'linked issue context'",
+        env: { CODEX_PROFILE: 'captured' },
         startupCommandDelivery: 'shell-ready',
+        launchConfig: {
+          agentArgs: '--model gpt-5',
+          agentEnv: { CODEX_PROFILE: 'captured' }
+        },
+        launchAgent: 'codex',
         activate: true
       },
       timeoutMs: 15_000

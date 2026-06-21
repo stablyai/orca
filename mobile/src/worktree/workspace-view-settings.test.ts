@@ -60,6 +60,48 @@ describe('applyDesktopViewSettings', () => {
     expect(applyDesktopViewSettings(base, {})).toEqual(base)
   })
 
+  it('preserves current host visibility when desktop omits host fields', () => {
+    const current: MobileViewState = {
+      ...base,
+      workspaceHostScope: 'runtime:devbox',
+      visibleWorkspaceHostIds: ['local']
+    }
+
+    expect(applyDesktopViewSettings(current, {})).toEqual(current)
+  })
+
+  it('syncs desktop workspace host visibility fields', () => {
+    expect(
+      applyDesktopViewSettings(base, {
+        workspaceHostScope: 'runtime:devbox',
+        visibleWorkspaceHostIds: ['local']
+      })
+    ).toEqual({
+      ...base,
+      workspaceHostScope: 'runtime:devbox',
+      visibleWorkspaceHostIds: ['local']
+    })
+  })
+
+  it('accepts explicit null visible workspace host ids from desktop', () => {
+    const current: MobileViewState = {
+      ...base,
+      workspaceHostScope: 'runtime:devbox',
+      visibleWorkspaceHostIds: ['local']
+    }
+
+    expect(
+      applyDesktopViewSettings(current, {
+        workspaceHostScope: 'all',
+        visibleWorkspaceHostIds: null
+      })
+    ).toEqual({
+      ...base,
+      workspaceHostScope: 'all',
+      visibleWorkspaceHostIds: null
+    })
+  })
+
   it('ignores an unrecognized groupBy rather than blanking the mode', () => {
     const next = applyDesktopViewSettings(base, { groupBy: 'mystery' as never })
     expect(next.groupMode).toBe('repo')

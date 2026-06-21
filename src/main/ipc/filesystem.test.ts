@@ -132,7 +132,8 @@ vi.mock('../git/check-ignored-paths', () => ({
 }))
 
 vi.mock('../git/worktree', () => ({
-  listWorktrees: listWorktreesMock
+  listWorktrees: listWorktreesMock,
+  listWorktreesStrict: listWorktreesMock
 }))
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({

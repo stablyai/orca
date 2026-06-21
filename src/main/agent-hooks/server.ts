@@ -215,6 +215,7 @@ function sanitizeHydratedEntry(
   }
   return {
     paneKey,
+    launchToken: typeof record.launchToken === 'string' ? record.launchToken : undefined,
     tabId: typeof tabId === 'string' ? tabId : undefined,
     worktreeId: typeof worktreeId === 'string' ? worktreeId : undefined,
     connectionId,
@@ -233,6 +234,7 @@ function sanitizeHydratedEntry(
 function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentStatusIpcPayload {
   return {
     paneKey: entry.paneKey,
+    ...(entry.launchToken ? { launchToken: entry.launchToken } : {}),
     tabId: entry.tabId,
     worktreeId: entry.worktreeId,
     connectionId: entry.connectionId,
@@ -980,6 +982,7 @@ export class AgentHookServer {
       worktreeId?: string
       env?: string
       version?: string
+      launchToken?: string
       hasExplicitPrompt?: boolean
       promptInteractionKey?: string
       hookEventName?: string
@@ -1082,6 +1085,7 @@ export class AgentHookServer {
     })
     const event: AgentHookEventPayload = {
       paneKey,
+      launchToken: envelope.launchToken,
       tabId,
       worktreeId,
       connectionId: trimmedConnectionId,

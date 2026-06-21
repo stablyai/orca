@@ -41,6 +41,7 @@ import BrowserPane from './browser-pane/BrowserPane'
 import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
 import EmulatorPaneOverlayLayer from './emulator-pane/EmulatorPaneOverlayLayer'
 import { useBrowserAutomationVisibilityForAny } from './browser-pane/browser-automation-visibility'
+import { useBrowserMobileDriverForAny } from '@/lib/pane-manager/browser-mobile-driver-state'
 import TerminalPaneOverlayLayer from './terminal-pane/TerminalPaneOverlayLayer'
 import {
   collectBrowserWebviewIds,
@@ -2095,7 +2096,9 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
     )
   )
   const hasAutomationVisibleBrowser = useBrowserAutomationVisibilityForAny(browserPageIds)
-  const shouldKeepPaintable = shouldMeasureHiddenWorktree || hasAutomationVisibleBrowser
+  const hasMobileDrivenBrowser = useBrowserMobileDriverForAny(browserPageIds)
+  const shouldKeepPaintable =
+    shouldMeasureHiddenWorktree || hasAutomationVisibleBrowser || hasMobileDrivenBrowser
 
   return (
     <div
@@ -2106,8 +2109,8 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
             ? 'absolute inset-0 flex opacity-0 pointer-events-none'
             : 'absolute inset-0 hidden'
       }
-      // Why: automation-visible panes must stay paintable for webviews, but
-      // invisible controls cannot remain reachable by Tab or assistive tech.
+      // Why: automation and mobile control need paintable webviews, but hidden
+      // worktree controls cannot remain reachable by Tab or assistive tech.
       inert={!isVisible}
       aria-hidden={!isVisible}
     >

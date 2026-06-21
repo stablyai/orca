@@ -28,6 +28,8 @@ export function MobileSourceControlModals({ state, worktreeId, actionSheetAction
     localBranches,
     createdPrUrl,
     setCreatedPrUrl,
+    createdPrWarning,
+    setCreatedPrWarning,
     status,
     branchLabel,
     loadStatus,
@@ -79,9 +81,10 @@ export function MobileSourceControlModals({ state, worktreeId, actionSheetAction
         prefill={prPrefill ?? { provider: 'github', base: 'main', title: branchLabel, body: '' }}
         head={status?.branch ?? null}
         onClose={() => setShowPrSheet(false)}
-        onCreated={(url) => {
+        onCreated={(url, warning) => {
           setShowPrSheet(false)
           setCreatedPrUrl(url)
+          setCreatedPrWarning(warning ?? null)
           void loadStatus({ preserveReadyOnFailure: true, force: true })
         }}
       />
@@ -108,15 +111,23 @@ export function MobileSourceControlModals({ state, worktreeId, actionSheetAction
       <ConfirmModal
         visible={createdPrUrl !== null}
         title="Pull Request Created"
-        message="Open it in your browser?"
+        message={
+          createdPrWarning
+            ? `Open it in your browser?\n\n${createdPrWarning}`
+            : 'Open it in your browser?'
+        }
         confirmLabel="Open"
         onConfirm={() => {
           if (createdPrUrl) {
             openMobilePrUrl(createdPrUrl)
           }
           setCreatedPrUrl(null)
+          setCreatedPrWarning(null)
         }}
-        onCancel={() => setCreatedPrUrl(null)}
+        onCancel={() => {
+          setCreatedPrUrl(null)
+          setCreatedPrWarning(null)
+        }}
       />
     </>
   )

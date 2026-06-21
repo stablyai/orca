@@ -71,6 +71,10 @@ function collectLiveMetadata(
 ): Pick<AgentMetadata, 'snippetCandidates' | 'textParts'> {
   const textParts: string[] = []
   const snippetCandidates: string[] = []
+  addText(textParts, entry.orchestration?.displayName)
+  addText(snippetCandidates, entry.orchestration?.displayName)
+  addText(textParts, entry.orchestration?.taskTitle)
+  addText(snippetCandidates, entry.orchestration?.taskTitle)
   addText(textParts, entry.prompt)
   addText(snippetCandidates, entry.prompt)
   addText(textParts, entry.agentType)

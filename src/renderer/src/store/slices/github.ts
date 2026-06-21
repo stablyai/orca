@@ -2659,7 +2659,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                 repo: runtimeRepo.repo.id,
                 branch,
                 linkedPRNumber,
-                ...(fallbackPRNumber !== null ? { fallbackPRNumber } : {})
+                ...(fallbackPRNumber !== null
+                  ? { fallbackPRNumber, acceptMergedFallbackPR: fallbackPRSource !== null }
+                  : {})
               },
               { timeoutMs: 30_000 }
             ).then((pr) =>
@@ -2690,7 +2692,14 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               return window.api.gh.refreshPRNow
                 ? await window.api.gh.refreshPRNow({ candidate })
                 : await window.api.gh
-                    .prForBranch({ repoPath, repoId, branch, linkedPRNumber, fallbackPRNumber })
+                    .prForBranch({
+                      repoPath,
+                      repoId,
+                      branch,
+                      linkedPRNumber,
+                      fallbackPRNumber,
+                      acceptMergedFallbackPR: fallbackPRNumber !== null && fallbackPRSource !== null
+                    })
                     .then((pr) =>
                       pr
                         ? ({ kind: 'found', pr, fetchedAt: Date.now() } as const)

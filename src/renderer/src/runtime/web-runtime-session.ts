@@ -11,6 +11,7 @@ import type {
 } from '../../../shared/runtime-types'
 import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
+import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { TerminalPaneLayoutNode, TuiAgent } from '../../../shared/types'
 import type { AppState } from '../store/types'
 import { getRuntimeEnvironmentIdForWorktree } from '../lib/worktree-runtime-owner'
@@ -48,8 +49,11 @@ export async function createWebRuntimeSessionTerminal(args: {
   afterTabId?: string
   targetGroupId?: string
   command?: string
+  env?: Record<string, string>
   startupCommandDelivery?: StartupCommandDelivery
+  launchConfig?: SleepingAgentLaunchConfig
   agent?: TuiAgent
+  launchAgent?: TuiAgent
   activate?: boolean
   selectWorktree?: boolean
 }): Promise<boolean> {
@@ -73,8 +77,11 @@ export async function createWebRuntimeSessionTerminal(args: {
         afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
         targetGroupId: args.targetGroupId,
         command: args.command,
+        ...(args.env ? { env: args.env } : {}),
         startupCommandDelivery: args.startupCommandDelivery,
+        ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
         agent: args.agent,
+        ...(args.launchAgent ? { launchAgent: args.launchAgent } : {}),
         activate: args.activate !== false
       },
       timeoutMs: 15_000

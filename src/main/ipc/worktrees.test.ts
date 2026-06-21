@@ -112,6 +112,7 @@ vi.mock('electron', () => ({
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: listWorktreesMock,
+  listWorktreesStrict: listWorktreesMock,
   parseWorktreeList: parseWorktreeListMock,
   assertWorktreeCleanForRemoval: assertWorktreeCleanForRemovalMock,
   addWorktree: addWorktreeMock,
@@ -937,6 +938,8 @@ describe('registerWorktreeHandlers', () => {
       {
         command: 'claude --prefill test',
         env: { ORCA_AGENT_MODE: 'direct' },
+        launchAgent: 'claude',
+        startupCommandDelivery: undefined,
         telemetry: {
           agent_kind: 'claude',
           launch_source: 'new_workspace_composer',
@@ -3794,6 +3797,15 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('lists a synthetic worktree for folder-mode repos', async () => {
+    const rootWorktreeId = 'repo-1::/workspace/folder'
+    const priorWorktreeIds = ['repo-1::/workspace/old-folder']
+    const rootMeta = makeWorktreeMeta({
+      instanceId: 'folder-instance',
+      projectId: 'repo:repo-1',
+      hostId: 'local',
+      projectHostSetupId: 'repo-1',
+      priorWorktreeIds
+    })
     store.getRepos.mockReturnValue([
       {
         id: 'repo-1',
@@ -3812,18 +3824,25 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       kind: 'folder'
     })
+    store.getAllWorktreeMeta.mockReturnValue({
+      [rootWorktreeId]: rootMeta
+    })
+    store.getWorktreeMeta.mockImplementation((worktreeId: string) =>
+      worktreeId === rootWorktreeId ? rootMeta : undefined
+    )
 
     const listed = await handlers['worktrees:list'](null, { repoId: 'repo-1' })
 
     expect(listed).toEqual([
       expect.objectContaining({
-        id: 'repo-1::/workspace/folder',
+        id: rootWorktreeId,
         repoId: 'repo-1',
         path: '/workspace/folder',
         displayName: 'folder',
         branch: '',
         head: '',
-        isMainWorktree: true
+        isMainWorktree: true,
+        priorWorktreeIds
       })
     ])
     expect(listWorktreesMock).not.toHaveBeenCalled()
@@ -6230,6 +6249,22 @@ describe('registerWorktreeHandlers', () => {
       false,
       expect.objectContaining({ wslDistro: 'Ubuntu' })
     )
+  })
+
+  it('surfaces selected-runtime list failures during local worktree removal', async () => {
+    mockSelectedWslProjectRuntime()
+    const listError = new Error('wsl git list failed')
+    listWorktreesMock.mockRejectedValue(listError)
+
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-1::/workspace/feature-wt'
+      })
+    ).rejects.toThrow('wsl git list failed')
+
+    expect(listWorktreesMock).toHaveBeenCalledWith('/workspace/repo', { wslDistro: 'Ubuntu' })
+    expect(assertWorktreeCleanForRemovalMock).not.toHaveBeenCalled()
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
   })
 
   it('fails dirty non-force deletes before PTY teardown', async () => {

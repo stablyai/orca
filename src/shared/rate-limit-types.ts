@@ -15,6 +15,34 @@ export type RateLimitBucket = RateLimitWindow & {
   name: string
 }
 
+export type UsageRateLimitSource = 'oauth' | 'cli' | 'web'
+
+export type UsageRateLimitFailureKind =
+  | 'missing-credentials'
+  | 'stale-token'
+  | 'refreshable-credentials-without-token'
+  | 'delegated-refresh-required'
+  | 'deferred-by-live-session'
+  | 'keychain-unavailable'
+  | 'missing-scope'
+  | 'network'
+  | 'server'
+  | 'parse'
+  | 'rate-limited'
+  | 'cli-unavailable'
+  | 'usage-unavailable'
+  | 'unknown'
+
+export type UsageRateLimitMetadata = {
+  source?: UsageRateLimitSource
+  attemptedSources?: UsageRateLimitSource[]
+  failureKind?: UsageRateLimitFailureKind
+  credentialSource?: string
+  authProvenance?: string
+  deferredByLiveClaudeSession?: boolean
+  lastSuccessfulSource?: UsageRateLimitSource
+}
+
 export type ProviderRateLimits = {
   provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi'
   /** 5-hour session window, null if not available. */
@@ -43,6 +71,7 @@ export type ProviderRateLimits = {
   /** Human-readable error message, null when status is 'ok'. */
   error: string | null
   status: ProviderRateLimitStatus
+  usageMetadata?: UsageRateLimitMetadata
 }
 
 export type CodexRateLimitResetOutcome = 'reset' | 'nothingToReset' | 'noCredit' | 'alreadyRedeemed'

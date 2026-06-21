@@ -1668,7 +1668,7 @@
         "f65d992a11": "入力",
         "c5081f2814": "現在のワークツリー",
         "52404f8096": "現在のタブ",
-        "739bda980c": "主要な",
+        "739bda980c": "プライマリ",
         "556e7232ca": "現在",
         "684e8d7bc2": "最近のワークツリーと開いているタブを収集します。",
         "ff908adfe9": "ジャンプターゲットをロード中",
@@ -3748,7 +3748,7 @@
           "0777de5970": "プライマリ ワークツリー (元のクローン ディレクトリ)",
           "0f33af979b": "部分的なチェックアウト。これらのパスの外にあるファイルはディスク上にありません。",
           "4f964d5e8c": "スパース",
-          "7d517f82e2": "主要な",
+          "7d517f82e2": "プライマリ",
           "4eba2ea99e": "自動名前付けに失敗しました。クリックすると詳細が表示されます。",
           "74522ee457": "名前の変更に失敗しました",
           "02e19349f4": "名前の自動変更に失敗しました: 表示エラー",
@@ -3844,7 +3844,8 @@
           "697d0f6e1b": "固定を解除する",
           "250de158fd": "Remove Workspace",
           "changeParentWorkspace": "親ワークツリーを変更...",
-          "setParentWorkspace": "親ワークツリーを設定..."
+          "setParentWorkspace": "親ワークツリーを設定...",
+          "workspaceSection": "ワークスペース"
         },
         "WorktreeList": {
           "d880ea0744": "グループを作成し、このプロジェクトをそのグループに移動します。",
@@ -4790,7 +4791,7 @@
           "dd6f0a1d45": "ペット",
           "0e89a574ae": "右下隅に浮かぶアニメーションのペット。",
           "agentHibernation": {
-            "copy": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、対応しているセッションは再度開いたときに再開します。安全モデルを調整中の実験的機能です。",
+            "copy": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、対応しているセッションは再度開いたときに再開します。Agent のスリープは、Orca から起動した agent の起動オプションを保持します。手動で起動した agent は、現在の Orca のデフォルトで再開される場合があります。安全モデルを調整中の実験的機能です。",
             "description": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、対応しているセッションは再度開いたときに再開します。",
             "idleMinutesDescription": "完了したバックグラウンド agent を Orca がスリープ状態にできるまで待つアイドル時間（分）。",
             "idleMinutesLabel": "スリープまで",
@@ -6901,7 +6902,7 @@
             "agentHibernation": {
               "agent": "agent",
               "agents": "agents",
-              "description": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、再度開いたときに対応セッションを再開します。",
+              "description": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、再度開いたときに対応セッションを再開します。Agent のスリープは Orca から起動した agent の起動オプションを保持します。手動で起動した agent は現在の Orca のデフォルトで再開される場合があります。",
               "minutes": "分",
               "sleep": "スリープ",
               "terminal": "terminal",
@@ -8794,6 +8795,11 @@
                 "066fedd446": "失敗したジョブ",
                 "ae8a04ef17": "競合ファイルの詳細は利用できません",
                 "73d0675356": "競合の詳細を更新しています…",
+                "f5bc5c4cf1": "The hosting provider reports conflicts, but local Git did not reproduce them. Refresh the review or push the branch to recalculate mergeability.",
+                "5bc9bda2af": "Run from this worktree",
+                "e87fb3d929": "Copy mergeability refresh commands",
+                "1e53e45072": "Copied",
+                "084c516efb": "Copy commands",
                 "5dc3af25c0": "コメントを選択",
                 "d7a2f9c401": "Send unresolved {{value0}} comments",
                 "d91f2a6c39": "キュー内の {{value0}} 件のコメントを送信",
@@ -9105,7 +9111,16 @@
             "daysAgo": "{{value0}}d ago",
             "monthsAgo": "{{value0}}mo ago",
             "yearsAgo": "{{value0}}y ago",
-            "sessionId": "セッション ID"
+            "sessionId": "セッション ID",
+            "originalAsk": "Original ask",
+            "latestTurns": "Latest turns",
+            "noPreviewAvailable": "No conversation preview available",
+            "messageCount": "{{value0}} msgs",
+            "userRole": "You",
+            "agentRole": "Agent",
+            "toolRole": "Tool",
+            "systemRole": "System",
+            "sessionRole": "Session"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "Resume {{value0}} session",
@@ -9122,7 +9137,14 @@
             "hideDetails": "詳細を非表示",
             "showDetails": "詳細を表示",
             "moreSessionActions": "セッションのその他の操作",
-            "moreActions": "その他の操作"
+            "moreActions": "その他の操作",
+            "noPreviewAvailable": "No conversation preview available",
+            "dragToResume": "Drag to resume in a new tab",
+            "userRole": "You",
+            "agentRole": "Agent",
+            "toolRole": "Tool",
+            "systemRole": "System",
+            "sessionRole": "Session"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "ファイルを検索",
@@ -11067,7 +11089,16 @@
             "ea6af700da": "{{value0}} 件の注釈",
             "c13693fe27": "{{value0}} 件の注釈",
             "074f0ed10b": "{{value0}} 件の注釈が準備できました。別の要素を選択するか、すべてのフィードバックをコピーしてください。",
-            "a2164a6e5a": "{{value0}} 件の注釈が準備できました。別の要素を選択するか、すべてのフィードバックをコピーしてください。"
+            "a2164a6e5a": "{{value0}} 件の注釈が準備できました。別の要素を選択するか、すべてのフィードバックをコピーしてください。",
+            "9f6f2e8c19": "The downloaded file path is unavailable.",
+            "0c79b7634d": "Could not open the downloaded file. It may have been moved or deleted.",
+            "397d9dc923": "Could not show the downloaded file. It may have been moved or deleted.",
+            "39c04fed61": "Downloading paused",
+            "5c3d530a68": "Downloaded",
+            "4bb7424d6b": "Canceled",
+            "6e776f9ef9": "Download failed",
+            "756bfc25c9": "Open",
+            "09a9489aa5": "Show"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "キャンセル",

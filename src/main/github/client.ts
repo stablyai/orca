@@ -1989,6 +1989,10 @@ const PR_LOOKUP_JSON_FIELDS =
 const PR_BRANCH_LIST_JSON_FIELDS =
   'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
 
+export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
+  acceptMergedFallbackPR?: boolean
+}
+
 function mapRestPRMergeable(pr: RestPullRequest): PRMergeableState {
   const mergeableState = pr.mergeable_state?.toLowerCase()
   if (mergeableState === 'dirty') {
@@ -2030,6 +2034,38 @@ function isMergedImplicitPR(data: PullRequestLookupData, linkedPRNumber?: number
   // explicit PR link. Showing them as implicit review context leaves nothing
   // meaningful to unlink after the branch has been rebased or merged.
   return typeof linkedPRNumber !== 'number' && mapPRState(data.state, data.isDraft) === 'merged'
+}
+
+async function getCurrentHeadOid(
+  repoPath: string,
+  connectionId?: string | null,
+  localGitOptions: { wslDistro?: string } = {}
+): Promise<string | null> {
+  try {
+    const provider = connectionId ? getSshGitProvider(connectionId) : null
+    const result = provider
+      ? await provider.exec(['rev-parse', 'HEAD'], repoPath)
+      : await gitExecFileAsync(['rev-parse', 'HEAD'], {
+          cwd: repoPath,
+          ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
+        })
+    return result.stdout.trim() || null
+  } catch {
+    return null
+  }
+}
+
+function shouldHideMergedImplicitPR(
+  data: PullRequestLookupData | null,
+  linkedPRNumber: number | null | undefined,
+  currentHeadOid: string | null
+): boolean {
+  if (!data || !isMergedImplicitPR(data, linkedPRNumber)) {
+    return false
+  }
+  // Why: keep hiding historical merged branch matches, but preserve the merged
+  // PR for the exact commit currently checked out in the sidebar.
+  return !currentHeadOid || data.headRefOid !== currentHeadOid
 }
 
 function normalizePullRequestLookupData(data: PullRequestLookupData): PullRequestLookupData {
@@ -2455,7 +2491,7 @@ export async function getPRForBranch(
   linkedPRNumber?: number | null,
   connectionId?: string | null,
   fallbackPRNumber?: number | null,
-  options: HostedReviewExecutionOptions = {}
+  options: GitHubPRBranchLookupOptions = {}
 ): Promise<PRInfo | null> {
   const outcome = await getPRForBranchOutcome(
     repoPath,
@@ -2474,7 +2510,7 @@ export async function getPRForBranchOutcome(
   linkedPRNumber?: number | null,
   connectionId?: string | null,
   fallbackPRNumber?: number | null,
-  options: HostedReviewExecutionOptions = {}
+  options: GitHubPRBranchLookupOptions = {}
 ): Promise<PRRefreshOutcome> {
   // Strip refs/heads/ prefix if present
   const branchName = branch.replace(/^refs\/heads\//, '')
@@ -2498,6 +2534,19 @@ export async function getPRForBranchOutcome(
     let data: PullRequestLookupData | null = null
     let dataRepo: OwnerRepo | null = null
     let dataHeadRepo: OwnerRepo | null = headRepo
+    let currentHeadOidForMergedImplicit: string | null | undefined
+
+    const hideMergedImplicitPR = async (candidate: PullRequestLookupData | null) => {
+      if (!candidate || !isMergedImplicitPR(candidate, linkedPRNumber)) {
+        return false
+      }
+      currentHeadOidForMergedImplicit ??= await getCurrentHeadOid(
+        repoPath,
+        connectionId,
+        localGitOptions
+      )
+      return shouldHideMergedImplicitPR(candidate, linkedPRNumber, currentHeadOidForMergedImplicit)
+    }
 
     if (typeof linkedPRNumber === 'number') {
       const exactLookup = await lookupPRByNumber({
@@ -2549,7 +2598,9 @@ export async function getPRForBranchOutcome(
         }
       }
     }
-    if (data && isMergedImplicitPR(data, linkedPRNumber)) {
+    let mergedBranchLookupNumber: number | null = null
+    if (await hideMergedImplicitPR(data)) {
+      mergedBranchLookupNumber = data?.number ?? null
       data = null
       dataRepo = null
       dataHeadRepo = headRepo
@@ -2566,7 +2617,18 @@ export async function getPRForBranchOutcome(
     if (!data) {
       return { kind: 'no-pr', fetchedAt: Date.now() }
     }
-    if (isMergedImplicitPR(data, linkedPRNumber)) {
+    const fallbackConfirmedMergedBranch =
+      typeof fallbackPRNumber === 'number' &&
+      mergedBranchLookupNumber === fallbackPRNumber &&
+      data.number === fallbackPRNumber
+    // Why: a currently visible PR can be merged outside Orca; when the caller
+    // marks the fallback as visible review state, keep its lifecycle fresh even
+    // if GitHub no longer reports it by branch (for example deleted heads).
+    if (
+      (await hideMergedImplicitPR(data)) &&
+      !fallbackConfirmedMergedBranch &&
+      options.acceptMergedFallbackPR !== true
+    ) {
       return { kind: 'no-pr', fetchedAt: Date.now() }
     }
 

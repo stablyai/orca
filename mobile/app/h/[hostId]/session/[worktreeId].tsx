@@ -109,6 +109,10 @@ import {
 } from '../../../../src/terminal/terminal-keyboard-type'
 import { normalizeTerminalTextInput } from '../../../../src/terminal/terminal-text-input-normalization'
 import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
+import {
+  recoverActiveTerminalAfterForeground,
+  shouldRecoverTerminalOnAppStateChange
+} from '../../../../src/terminal/terminal-foreground-recovery'
 import { MobileBrowserPane } from '../../../../src/browser/MobileBrowserPane'
 import { isBlankBrowserUrl, normalizeBrowserUrl } from '../../../../src/browser/browser-url'
 import { StatusDot } from '../../../../src/components/StatusDot'
@@ -158,6 +162,7 @@ import {
 } from '../../../../src/session/mobile-clipboard-image'
 import { useMobileImageAttachment } from '../../../../src/session/use-mobile-image-attachment'
 import { classifyMobileArtifact } from '../../../../src/session/mobile-artifact-kind'
+import { useLiveWorktreeName } from '../../../../src/session/use-live-worktree-name'
 import {
   buildMarkdownDiskFallbackDoc,
   shouldReadMarkdownFromDiskAfterReadTabFailure
@@ -837,7 +842,7 @@ export default function SessionScreen() {
   const {
     hostId,
     worktreeId,
-    name: worktreeName,
+    name: routeWorktreeName,
     created,
     warning: createdWarning
   } = useLocalSearchParams<{
@@ -856,6 +861,12 @@ export default function SessionScreen() {
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const forceReconnectHost = useForceReconnect()
+  const worktreeName = useLiveWorktreeName({
+    client,
+    connState,
+    routeName: routeWorktreeName,
+    worktreeId
+  })
   // Master-detail host state (U5/KTD2): on wide layouts a tapped panel docks beside the
   // session content; on narrow it stays null and the icons push full-screen routes.
   const { isWideLayout } = useResponsiveLayout()
@@ -2404,6 +2415,35 @@ export default function SessionScreen() {
       sub.remove()
     }
   }, [])
+
+  useEffect(() => {
+    let previousAppState: AppStateStatus | null = AppState.currentState
+    const sub = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      const shouldRecover = shouldRecoverTerminalOnAppStateChange(
+        previousAppState,
+        nextAppState,
+        Platform.OS
+      )
+      previousAppState = nextAppState
+      if (!shouldRecover) {
+        return
+      }
+      // Why: iOS can resume a live WKWebView with a blank xterm backing store
+      // without firing web-ready/reconnect; replay scrollback to repaint it.
+      recoverActiveTerminalAfterForeground({
+        activeHandleRef,
+        terminalRefs,
+        initializedHandlesRef,
+        connStateRef,
+        unsubscribeTerminal,
+        subscribeToTerminal,
+        schedule: scheduleDelayedAction
+      })
+    })
+    return () => {
+      sub.remove()
+    }
+  }, [scheduleDelayedAction, subscribeToTerminal, unsubscribeTerminal])
 
   // Why: viewport refits for layout changes outside the subscribe path
   // (tab strip toggling, fold/unfold, rotation) live in a dedicated hook —

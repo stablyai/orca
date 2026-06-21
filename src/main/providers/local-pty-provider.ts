@@ -44,7 +44,12 @@ import { getAgentForegroundContextPaths } from './agent-foreground-context-paths
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 
-const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
+const PANE_IDENTITY_ENV_KEYS = [
+  'ORCA_PANE_KEY',
+  'ORCA_TAB_ID',
+  'ORCA_WORKTREE_ID',
+  'ORCA_AGENT_LAUNCH_TOKEN'
+] as const
 
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()

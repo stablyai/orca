@@ -110,6 +110,13 @@ describe('session tab RPC methods', () => {
         worktree: 'id:wt-1',
         targetGroupId: 'group-left',
         command: 'zsh',
+        env: { CODEX_PROFILE: 'captured' },
+        launchToken: 'launch-token-123',
+        launchConfig: {
+          agentArgs: '--model gpt-5',
+          agentEnv: { CODEX_PROFILE: 'captured' }
+        },
+        launchAgent: 'codex',
         activate: true
       })
     )
@@ -119,8 +126,15 @@ describe('session tab RPC methods', () => {
       afterTabId: undefined,
       targetGroupId: 'group-left',
       command: 'zsh',
+      env: { CODEX_PROFILE: 'captured' },
       startupCommandDelivery: undefined,
       agent: undefined,
+      launchToken: 'launch-token-123',
+      launchConfig: {
+        agentArgs: '--model gpt-5',
+        agentEnv: { CODEX_PROFILE: 'captured' }
+      },
+      launchAgent: 'codex',
       activate: true
     })
   })

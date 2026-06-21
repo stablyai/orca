@@ -298,6 +298,8 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       'orchestration.taskCreate',
       {
         spec: getRequiredStringFlag(flags, 'spec'),
+        taskTitle: getOptionalStringFlag(flags, 'task-title'),
+        displayName: getOptionalStringFlag(flags, 'display-name'),
         deps: getOptionalStringFlag(flags, 'deps'),
         parent: getOptionalStringFlag(flags, 'parent'),
         callerTerminalHandle
@@ -311,6 +313,8 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       tasks: {
         id: string
         spec: string
+        task_title?: string | null
+        display_name?: string | null
         status: string
         assignee_handle?: string | null
         dispatch_id?: string | null
@@ -326,7 +330,8 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       }
       return r.tasks
         .map((t) => {
-          const head = `${t.id} [${t.status}] ${t.spec.slice(0, 60)}`
+          const label = t.display_name ?? t.task_title ?? t.spec
+          const head = `${t.id} [${t.status}] ${label.slice(0, 60)}`
           if (t.status === 'dispatched' && t.assignee_handle) {
             return `${head} -> ${t.assignee_handle} (${t.dispatch_id ?? '?'})`
           }

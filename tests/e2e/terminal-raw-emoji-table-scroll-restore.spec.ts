@@ -18,6 +18,7 @@ import {
   waitForTerminalOutput
 } from './helpers/terminal'
 import { scrollActiveTerminalToText } from './artificial-opencode-active-terminal-scroll'
+import { nodeTerminalCommand } from './terminal-node-command'
 
 type BrowserTerminalPane = {
   terminal: {
@@ -62,6 +63,7 @@ const RAW_EMOJI_BOX_TABLE_WIDTH =
 
 function rawEmojiFixtureBoxTableScript(table: string, runId: string): string {
   const marker = `RAW_EMOJI_FIXTURE_TABLE_RESTORE_${runId}`
+  const frameTailMarker = rawEmojiFixtureFrameTailMarker(runId)
   return `
 const table = ${JSON.stringify(table)}
 const widths = ${JSON.stringify(RAW_EMOJI_BOX_TABLE_COLUMN_WIDTHS)}
@@ -131,11 +133,22 @@ function renderRow(cells) {
     border.vertical
   )
 }
-// Why: Windows can lose the tail of large stdout writes if this fixture exits
-// immediately, which hides the completion marker behind a shell prompt.
-function writeStdout(chunk) {
-  return new Promise((resolve) => {
+// Why: Windows ConPTY can drop or reorder the tail of one large synchronized
+// frame. Drain and yield between chunks so the golden waits on transport, not luck.
+async function writeStdout(chunk) {
+  await new Promise((resolve) => {
     process.stdout.write(chunk, resolve)
+  })
+  if (process.platform === 'win32') {
+    await new Promise((resolve) => setTimeout(resolve, 8))
+  }
+}
+async function writeStdoutLine(line) {
+  await writeStdout(line + '\\r\\n')
+}
+async function flushStdout() {
+  return new Promise((resolve) => {
+    process.stdout.write('', resolve)
   })
 }
 const parsedRows = table
@@ -148,14 +161,22 @@ for (const [index, row] of parsedRows.entries()) {
   rendered.push(rule(index === parsedRows.length - 1 ? border.bottom : border.middle))
 }
 await writeStdout('\\x1b[?2026h\\x1b[2J\\x1b[H')
-await writeStdout(rendered.join('\\r\\n'))
-await writeStdout('\\r\\n${marker}\\r\\n')
+for (const line of rendered) {
+  await writeStdoutLine(line)
+}
+await writeStdoutLine('${frameTailMarker}')
 await writeStdout('\\x1b[?2026l')
+await writeStdoutLine('${marker}')
+await flushStdout()
 `
 }
 
 function rawEmojiFixtureCompletionMarker(runId: string): string {
   return `RAW_EMOJI_FIXTURE_TABLE_RESTORE_${runId}`
+}
+
+function rawEmojiFixtureFrameTailMarker(runId: string): string {
+  return `RAW_EMOJI_FIXTURE_TABLE_FRAME_TAIL_${runId}`
 }
 
 async function setWideRenderedTableViewport(page: Page): Promise<void> {
@@ -499,11 +520,20 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
 
     try {
       const completionMarker = rawEmojiFixtureCompletionMarker(runId)
-      await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
+      const frameTailMarker = rawEmojiFixtureFrameTailMarker(runId)
+      // Why: the fixture marker is the shell-readiness signal here; an extra
+      // Ctrl+C/Ctrl+U preflight can race Windows ConPTY startup and eat input.
+      await sendToTerminal(orcaPage, ptyId, `${nodeTerminalCommand([scriptPath])}\r`)
       // Why: Windows ConPTY can return the PowerShell prompt while xterm is
       // still flushing synchronized output if the pane is hidden immediately.
       // This golden is about restored table geometry, not shell-flush timing.
       await waitForTerminalOutput(orcaPage, completionMarker, 20_000, 30_000)
+      await expect
+        .poll(() => getTerminalContent(orcaPage, 30_000), {
+          timeout: 10_000,
+          message: 'raw emoji table synchronized frame tail was not rendered'
+        })
+        .toContain(frameTailMarker)
       await switchToWorktree(orcaPage, secondWorktreeId)
       await waitForActiveTerminalManager(orcaPage, 30_000)
       await orcaPage.waitForTimeout(1_000)

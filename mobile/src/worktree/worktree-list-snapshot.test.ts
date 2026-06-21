@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import type { Worktree } from './workspace-list-sections'
@@ -21,13 +22,14 @@ function agent(overrides: Partial<RuntimeWorktreeAgentRow> = {}): RuntimeWorktre
 }
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
+  const worktreePath = join('/tmp', 'orca', 'worktrees', 'manta')
   return {
-    worktreeId: 'repo-1::/tmp/orca/worktrees/manta',
+    worktreeId: `repo-1::${worktreePath}`,
     repoId: 'repo-1',
     repo: 'orca',
     branch: 'feature/mobile-lag',
     displayName: 'manta',
-    path: '/tmp/orca/worktrees/manta',
+    path: worktreePath,
     liveTerminalCount: 1,
     hasAttachedPty: true,
     preview: '$ codex',
@@ -65,6 +67,14 @@ describe('areWorktreeListsEqual', () => {
 
     expect(areWorktreeListsEqual(first, reordered)).toBe(false)
     expect(areWorktreeListsEqual(first, renamed)).toBe(false)
+  })
+
+  it('detects host visibility field changes', () => {
+    expect(areWorktreeListsEqual([worktree()], [worktree({ isArchived: true })])).toBe(false)
+    expect(areWorktreeListsEqual([worktree()], [worktree({ isMainWorktree: true })])).toBe(false)
+    expect(areWorktreeListsEqual([worktree()], [worktree({ hasHostSidebarActivity: true })])).toBe(
+      false
+    )
   })
 
   it('detects agent status changes', () => {

@@ -492,6 +492,17 @@ export async function listWorktrees(
   }
 }
 
+export async function listWorktreesStrict(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  const worktrees = (await readWorktreeList(repoPath, options)).map((worktree) => {
+    const translatedPath = translateWorktreePath(worktree.path, repoPath, options)
+    return translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
+  })
+  return annotateSparseCheckoutStatus(worktrees)
+}
+
 async function annotateSparseCheckoutStatus(
   worktrees: GitWorktreeInfo[]
 ): Promise<GitWorktreeInfo[]> {

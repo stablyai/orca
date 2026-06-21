@@ -52,12 +52,20 @@ function appendTabToWorktreeOrder(worktreeId: string, tabId: string): void {
 
 function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean {
   const state = useAppStore.getState()
+  const launchConfig = record.launchConfig
   const startupPlan = buildAgentResumeStartupPlan({
     agent: record.agent,
     providerSession: record.providerSession,
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-    agentArgs: resolveTuiAgentLaunchArgs(record.agent, state.settings?.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv(record.agent, state.settings?.agentDefaultEnv),
+    agentArgs:
+      launchConfig !== undefined
+        ? launchConfig.agentArgs
+        : resolveTuiAgentLaunchArgs(record.agent, state.settings?.agentDefaultArgs),
+    agentEnv:
+      launchConfig !== undefined
+        ? launchConfig.agentEnv
+        : resolveTuiAgentLaunchEnv(record.agent, state.settings?.agentDefaultEnv),
+    ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
     platform: getResumeLaunchPlatform(record.worktreeId)
   })
   if (!startupPlan) {
@@ -75,6 +83,9 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
   })
   state.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
+    ...(startupPlan.env ? { env: startupPlan.env } : {}),
+    launchConfig: startupPlan.launchConfig,
+    launchAgent: record.agent,
     ...(startupPlan.startupCommandDelivery
       ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
       : {}),

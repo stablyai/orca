@@ -91,6 +91,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
+  const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
   const sendPromptToSidebarAgentTarget = useAppStore((s) => s.sendPromptToSidebarAgentTarget)
   const focusedAgentPaneKey = useFocusedAgentPaneKey(worktreeId)
   const compactAgentListRootRef = useRef<HTMLDivElement | null>(null)
@@ -131,7 +132,13 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
 
     return new Map(
       deriveRunningAgentSendTargets(
-        { agentStatusByPaneKey, tabsByWorktree, terminalLayoutsByTabId, ptyIdsByTabId },
+        {
+          agentStatusByPaneKey,
+          tabsByWorktree,
+          terminalLayoutsByTabId,
+          ptyIdsByTabId,
+          runtimePaneTitlesByTabId
+        },
         worktreeId
       ).map((target) => [
         target.paneKey,
@@ -152,6 +159,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     agentStatusByPaneKey,
     isAgentSendTargetModeActive,
     ptyIdsByTabId,
+    runtimePaneTitlesByTabId,
     tabsByWorktree,
     terminalLayoutsByTabId,
     worktreeId

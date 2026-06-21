@@ -45,6 +45,36 @@ describe('terminal send RPC', () => {
     expect(runtime.isTerminalRunningAgent).toHaveBeenCalledWith('terminal-1')
   })
 
+  it('reports runtime-owned terminal agent status', async () => {
+    const runtime = stubRuntime({
+      getTerminalAgentStatus: vi.fn().mockResolvedValue({
+        handle: 'terminal-1',
+        isRunningAgent: true,
+        status: 'permission'
+      })
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('terminal.agentStatus', {
+        terminal: 'terminal-1'
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    expect(response.result).toEqual({
+      agentStatus: {
+        handle: 'terminal-1',
+        isRunningAgent: true,
+        status: 'permission'
+      }
+    })
+    expect(runtime.getTerminalAgentStatus).toHaveBeenCalledWith('terminal-1')
+  })
+
   it('drops desktop input while a mobile client owns the terminal floor', async () => {
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
@@ -102,11 +132,15 @@ describe('terminal send RPC', () => {
       throw new Error(response.error.message)
     }
     expect(response.result).toMatchObject({ send: { accepted: true, bytesWritten: 1 } })
-    expect(runtime.sendTerminal).toHaveBeenCalledWith('terminal-1', {
-      text: 'x',
-      enter: false,
-      interrupt: false
-    })
+    expect(runtime.sendTerminal).toHaveBeenCalledWith(
+      'terminal-1',
+      {
+        text: 'x',
+        enter: false,
+        interrupt: false
+      },
+      { beforeWrite: undefined }
+    )
     expect(runtime.mobileTookFloor).toHaveBeenCalledWith('pty-1', 'mobile-1')
   })
 
@@ -189,10 +223,170 @@ describe('terminal send RPC', () => {
       ok: true,
       result: { send: { accepted: true } }
     })
-    expect(runtime.sendTerminal).toHaveBeenCalledWith('terminal-1', {
-      text,
-      enter: false,
-      interrupt: false
+    expect(runtime.sendTerminal).toHaveBeenCalledWith(
+      'terminal-1',
+      {
+        text,
+        enter: false,
+        interrupt: false
+      },
+      { beforeWrite: undefined }
+    )
+  })
+
+  it('refuses guarded terminal sends when the agent needs permission', async () => {
+    const runtime = stubRuntime({
+      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
+      getTerminalAgentStatus: vi.fn().mockResolvedValue({
+        handle: 'terminal-1',
+        isRunningAgent: true,
+        status: 'permission'
+      }),
+      sendTerminal: vi.fn()
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('terminal.send', {
+        terminal: 'terminal-1',
+        enter: true,
+        requireAgentStatus: 'sendable',
+        client: { id: 'desktop-1', type: 'desktop' }
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    expect(response.result).toEqual({
+      send: {
+        handle: 'terminal-1',
+        accepted: false,
+        bytesWritten: 0,
+        refusedReason: 'permission'
+      }
+    })
+    expect(runtime.getTerminalAgentStatus).toHaveBeenCalledWith('terminal-1')
+    expect(runtime.sendTerminal).not.toHaveBeenCalled()
+  })
+
+  it('allows guarded terminal sends when the agent is sendable', async () => {
+    const runtime = stubRuntime({
+      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
+      getTerminalAgentStatus: vi.fn().mockResolvedValue({
+        handle: 'terminal-1',
+        isRunningAgent: true,
+        status: 'working'
+      }),
+      sendTerminal: vi.fn().mockResolvedValue({
+        handle: 'terminal-1',
+        accepted: true,
+        bytesWritten: 1
+      })
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('terminal.send', {
+        terminal: 'terminal-1',
+        enter: true,
+        requireAgentStatus: 'sendable',
+        client: { id: 'desktop-1', type: 'desktop' }
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    expect(response.result).toMatchObject({ send: { accepted: true, bytesWritten: 1 } })
+    expect(runtime.sendTerminal).toHaveBeenCalledWith(
+      'terminal-1',
+      {
+        text: undefined,
+        enter: true,
+        interrupt: false
+      },
+      { beforeWrite: expect.any(Function) }
+    )
+  })
+
+  it('refuses guarded combined text and submit sends before any PTY write', async () => {
+    const runtime = stubRuntime({
+      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
+      getTerminalAgentStatus: vi.fn(),
+      sendTerminal: vi.fn()
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('terminal.send', {
+        terminal: 'terminal-1',
+        text: 'notes',
+        enter: true,
+        requireAgentStatus: 'sendable',
+        client: { id: 'desktop-1', type: 'desktop' }
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    expect(response.result).toEqual({
+      send: {
+        handle: 'terminal-1',
+        accepted: false,
+        bytesWritten: 0
+      }
+    })
+    expect(runtime.getTerminalAgentStatus).not.toHaveBeenCalled()
+    expect(runtime.sendTerminal).not.toHaveBeenCalled()
+  })
+
+  it('rechecks the mobile floor lock immediately before guarded PTY writes', async () => {
+    const runtime = stubRuntime({
+      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      getDriver: vi
+        .fn()
+        .mockReturnValueOnce({ kind: 'desktop' })
+        .mockReturnValueOnce({ kind: 'desktop' })
+        .mockReturnValue({ kind: 'mobile', clientId: 'mobile-1' }),
+      getTerminalAgentStatus: vi.fn().mockResolvedValue({
+        handle: 'terminal-1',
+        isRunningAgent: true,
+        status: 'working'
+      }),
+      sendTerminal: vi.fn().mockImplementation(async (_handle, _action, options) => {
+        await options.beforeWrite('pty-1')
+        return { handle: 'terminal-1', accepted: true, bytesWritten: 1 }
+      })
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('terminal.send', {
+        terminal: 'terminal-1',
+        enter: true,
+        requireAgentStatus: 'sendable',
+        client: { id: 'desktop-1', type: 'desktop' }
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    expect(response.result).toEqual({
+      send: {
+        handle: 'terminal-1',
+        accepted: false,
+        bytesWritten: 0
+      }
     })
   })
 

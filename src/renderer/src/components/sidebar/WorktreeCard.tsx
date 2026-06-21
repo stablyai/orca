@@ -56,7 +56,10 @@ import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-v
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
 import { runWorktreeDelete } from './delete-worktree-flow'
 import { WorktreeTitleInlineRename } from './WorktreeTitleInlineRename'
-import { canShowWorkspaceDeleteQuickAction } from './workspace-delete-quick-action'
+import {
+  canShowWorkspaceDeleteQuickAction,
+  useWorkspaceDeleteModifierPressed
+} from './workspace-delete-quick-action'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { getFlushWorktreeCardPaddingLeft } from './worktree-list-indentation'
@@ -114,6 +117,7 @@ type WorktreeCardProps = {
 }
 
 const EMPTY_WORKSPACE_PORTS = []
+const HOSTED_REVIEW_CARD_REFRESH_INTERVAL_MS = 60_000
 
 export function shouldBeginWorktreeRename(
   request: WorktreeRenameRequest | null,
@@ -406,7 +410,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
     linkedGitLabMR,
     linkedBitbucketPR,
     linkedAzureDevOpsPR,
-    linkedGiteaPR
+    linkedGiteaPR,
+    {
+      reviewHintKey: hostedReviewEntry?.linkedReviewHintKey
+    }
   )
   const issue: IssueInfo | null | undefined = worktree.linkedIssue
     ? issueEntry !== undefined
@@ -496,6 +503,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   })
   const visibleCardTitle = newCardStyle ? cardTitleDisplay : worktree.displayName
   const isDeleting = deleteState?.isDeleting ?? false
+  const deleteModifierPressed = useWorkspaceDeleteModifierPressed()
 
   const showStatus = cardProps.includes('status')
   const showIssue = cardProps.includes('issue')
@@ -504,7 +512,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showAutomation = cardProps.includes('automation')
   const showComment = cardProps.includes('comment')
   const showPorts = cardProps.includes('ports')
-  const hasAutomationMetadata = showAutomation && !!worktree.automationProvenance
   const shouldRefreshHostedReview = newCardStyle ? showStatus : showPR
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const hoverDetailsOpen = detailsHoverControl.hoverOpen
@@ -528,10 +535,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     ) {
       return
     }
-    const refreshHostedReviewIfVisible = (): void => {
-      if (!isWindowVisible()) {
-        return
-      }
+    const refreshHostedReview = (): void => {
       // Why: branch lookup is lossy for fork/deleted-head PRs; reuse a known PR
       // number from explicit metadata whenever we have one.
       void fetchHostedReviewForBranch(repo.path, branch, {
@@ -544,13 +548,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
         staleWhileRevalidate: true
       })
     }
-    refreshHostedReviewIfVisible()
-    window.addEventListener('focus', refreshHostedReviewIfVisible)
-    document.addEventListener('visibilitychange', refreshHostedReviewIfVisible)
-    return () => {
-      window.removeEventListener('focus', refreshHostedReviewIfVisible)
-      document.removeEventListener('visibilitychange', refreshHostedReviewIfVisible)
-    }
+    // Why: PRs created outside Orca (for example `gh pr create`) do not emit a
+    // renderer event; visible-card polling discovers them after an earlier miss.
+    return installWindowVisibilityInterval({
+      run: refreshHostedReview,
+      intervalMs: HOSTED_REVIEW_CARD_REFRESH_INTERVAL_MS
+    })
   }, [
     repo,
     isFolder,
@@ -801,11 +804,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
     },
     [worktree.id, worktree.isUnread, updateWorktreeMeta]
   )
-  // Why: delete is destructive, so the trash icon stays hidden until row hover
-  // (or keyboard focus within the row) instead of sitting in the default chrome.
+  // Why: delete is destructive, so it only appears while the user is holding
+  // Option/Alt instead of being part of the ordinary hover chrome.
   const showDeleteQuickAction =
     !affiliateListMode &&
     canShowWorkspaceDeleteQuickAction({
+      deleteModifierPressed,
       isDeleting,
       isMainWorktree: worktree.isMainWorktree
     })
@@ -1044,10 +1048,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // carrying a persistent rebase chip while preserving other interruption cues.
   const showConflictOperationBadge =
     !!conflictOperation && conflictOperation !== 'unknown' && conflictOperation !== 'rebase'
-  const hasMetadataBadge = showConflictOperationBadge || hasAutomationMetadata
-  const showUnreadQuickAction = !affiliateListMode && showStatus
-  // Why: the slot owns the tiny unread/status lane; legacy keeps the bell,
-  // while the experimental card keeps the status glyph visible.
+  const hasMetadataBadge = showConflictOperationBadge
+  const showUnreadQuickAction = !affiliateListMode && showStatus && !newCardStyle
+  // Why: the slot owns the tiny unread/status lane; legacy keeps the bell
+  // toggle, while the experimental card keeps the status glyph passive.
   const showCombinedStatusSlot = showStatus
   const showTitleRowPrimary = compactCards && worktree.isMainWorktree && !isFolder
   const showMetaRowDetails = !newCardStyle && !compactCards && (hasDetails || hasPorts)
@@ -1062,7 +1066,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
     showBranch ||
     showDetachedHeadInMetaRow ||
     showConflictOperationBadge ||
-    hasAutomationMetadata ||
     cacheStartedAt != null ||
     showMetaRowDetails
   )
@@ -1070,9 +1073,27 @@ const WorktreeCard = React.memo(function WorktreeCard({
     ? hasMetadataBadge || (newCardStyle && showBranch) || cacheStartedAt != null
     : hasDetailedMetaRowContent
   const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction
+  // Why: the hover owns full identity when the row truncates; normalize once
+  // so title/branch de-dupe and identity-only hover eligibility stay in sync.
+  const trimmedVisibleCardTitle = visibleCardTitle.trim()
   const showBranchIdentityHover = newCardStyle
-    ? !isFolder && branch.length > 0 && !cardProps.includes('branch') && branch !== visibleCardTitle
+    ? !isFolder &&
+      branch.length > 0 &&
+      !cardProps.includes('branch') &&
+      branch !== trimmedVisibleCardTitle
     : compactCards && showBranch
+  const hoverBranchName = newCardStyle
+    ? !isFolder && branch.length > 0
+      ? branch
+      : undefined
+    : showBranchIdentityHover
+      ? branch
+      : undefined
+  const hoverWorkspaceTitle =
+    trimmedVisibleCardTitle.length > 0 && trimmedVisibleCardTitle !== hoverBranchName
+      ? trimmedVisibleCardTitle
+      : undefined
+  const hasHoverIdentity = Boolean(hoverWorkspaceTitle || hoverBranchName)
   const showInlineAgentList = cardProps.includes('inline-agents') && (newCardStyle || !compactCards)
   const hasHoverDetails =
     newCardStyle &&
@@ -1084,7 +1105,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       automationProvenance: metaAutomationProvenance
     }) ||
       workspacePorts.length > 0 ||
-      showBranchIdentityHover)
+      hasHoverIdentity)
   // Why: the parent row owns metadata hover; avoid stacking the title's
   // truncation tooltip on top of the richer details popover.
   const titleWrapper = newCardStyle
@@ -1314,8 +1335,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
               </RepoIdentityChip>
             )}
 
-            {/* Why: in the experimental card, weight carries unread without a
-                 bell, so read titles step back slightly for scan contrast. */}
+            {/* Why: unread alert lives in the left status lane; weight plus dimmed
+                 read titles carry scan contrast in the title row. */}
             <WorktreeTitleInlineRename
               displayName={visibleCardTitle}
               disabled={isDeleting || affiliateListMode}
@@ -1454,19 +1475,14 @@ const WorktreeCard = React.memo(function WorktreeCard({
               {showDeleteQuickAction && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
+                    <button
                       type="button"
-                      variant="ghost"
-                      size="icon-xs"
                       data-workspace-board-preserve-open=""
                       onPointerDown={stopQuickActionPointerPropagation}
                       onClick={handleWorkspaceQuickAction}
                       className={cn(
-                        'size-4 rounded bg-transparent p-0 text-muted-foreground transition-[background-color,color,opacity]',
-                        'can-hover:pointer-events-none can-hover:opacity-0',
-                        'group-hover/worktree-card:pointer-events-auto group-hover/worktree-card:opacity-100',
-                        'group-focus-within/worktree-card:pointer-events-auto group-focus-within/worktree-card:opacity-100',
-                        'focus-visible:pointer-events-auto focus-visible:opacity-100',
+                        'inline-flex size-4 items-center justify-center rounded bg-transparent opacity-0 transition-colors transition-opacity',
+                        'group-hover/worktree-card:opacity-100 group-focus-within/worktree-card:opacity-100 focus-visible:opacity-100',
                         'text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive'
                       )}
                       aria-label={translate(
@@ -1475,7 +1491,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
                       )}
                     >
                       <Trash2 className="size-3.5" />
-                    </Button>
+                    </button>
                   </TooltipTrigger>
                   <TooltipContent side="right" sideOffset={8}>
                     {translate(
@@ -1537,23 +1553,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
                 >
                   <GitMerge className="size-2.5" />
                   {CONFLICT_OPERATION_LABELS[conflictOperation]}
-                </Badge>
-              )}
-
-              {hasAutomationMetadata && (
-                <Badge
-                  variant="outline"
-                  className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 gap-1 text-muted-foreground border-border/60 bg-muted/30 leading-none"
-                  title={translate(
-                    'auto.components.sidebar.WorktreeCard.automationCreated',
-                    'Created by automation'
-                  )}
-                  aria-label={translate(
-                    'auto.components.sidebar.WorktreeCard.automationCreated',
-                    'Created by automation'
-                  )}
-                >
-                  <Workflow className="size-2.5" />
                 </Badge>
               )}
 
@@ -1667,8 +1666,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
         comment={hoverComment}
         automationProvenance={metaAutomationProvenance}
         automationHostId={worktree.hostId}
-        branchName={showBranchIdentityHover ? branch : undefined}
-        workspaceTitle={showBranchIdentityHover ? visibleCardTitle : undefined}
+        branchName={hoverBranchName}
+        workspaceTitle={hoverWorkspaceTitle}
         detailsAfter={
           workspacePorts.length > 0 ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null
         }
@@ -1763,6 +1762,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       ) : (
         <WorktreeContextMenu
           worktree={worktree}
+          newCardStyle={newCardStyle}
           selectedWorktrees={selectedWorktrees}
           onContextMenuSelect={handleContextMenuSelect}
         >

@@ -339,7 +339,8 @@ describe('launchWorkItemDirect', () => {
       agent: 'cursor',
       launchCommand: 'cursor-agent',
       expectedProcess: 'cursor-agent',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: { agentArgs: '', agentEnv: {} }
     })
     mocks.store.createWorktree.mockResolvedValue({
       worktree: { id: 'wt-ssh', path: '/home/orca/repo-worktrees/issue-77' }

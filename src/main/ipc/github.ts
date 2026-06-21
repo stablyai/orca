@@ -51,6 +51,7 @@ import {
   checkOrcaStarred,
   starOrca
 } from '../github/client'
+import type { GitHubPRBranchLookupOptions } from '../github/client'
 import {
   clearVisiblePRRefreshWindow,
   enqueuePRRefresh,
@@ -201,19 +202,31 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         branch: string
         linkedPRNumber?: number | null
         fallbackPRNumber?: number | null
+        acceptMergedFallbackPR?: boolean
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
       const localGitOptions = localGitOptionArgs(store, repo)[0]
       const hostedReviewOptionArgs: [] | [{ localGitExecOptions: { wslDistro?: string } }] =
         localGitOptions ? [{ localGitExecOptions: localGitOptions }] : []
+      const lookupOptions: GitHubPRBranchLookupOptions | undefined = hostedReviewOptionArgs[0]
+        ? { ...hostedReviewOptionArgs[0] }
+        : args.acceptMergedFallbackPR === true
+          ? {}
+          : undefined
+      if (lookupOptions && args.acceptMergedFallbackPR === true) {
+        lookupOptions.acceptMergedFallbackPR = true
+      }
+      const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] = lookupOptions
+        ? [lookupOptions]
+        : []
       const pr = await getPRForBranch(
         repo.path,
         args.branch,
         args.linkedPRNumber ?? null,
         repoConnectionId(repo),
         args.linkedPRNumber == null ? (args.fallbackPRNumber ?? null) : null,
-        ...hostedReviewOptionArgs
+        ...lookupOptionArgs
       )
       // Emit pr_created when a PR is first detected for a branch.
       // Why here: the renderer polls gh:prForBranch to check PR status per worktree.

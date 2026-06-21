@@ -263,6 +263,7 @@ function getOpenCodePluginSource(): string {
     '  const url = `http://127.0.0.1:${coords.port}/hook/opencode`;',
     '  const body = JSON.stringify({',
     '    paneKey,',
+    '    launchToken: process.env.ORCA_AGENT_LAUNCH_TOKEN || "",',
     '    tabId: process.env.ORCA_TAB_ID || "",',
     '    worktreeId: process.env.ORCA_WORKTREE_ID || "",',
     '    env: coords.env,',

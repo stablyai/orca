@@ -2,6 +2,11 @@ import type { TuiAgent } from '../../../shared/types'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { useAppStore } from '@/store'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-inspection'
+import {
+  BRACKETED_PASTE_END,
+  BRACKETED_PASTE_START,
+  sanitizeTerminalPasteText
+} from '@/components/terminal-pane/terminal-bracketed-paste'
 import { waitForAgentReady } from './agent-ready-wait'
 import { getSettingsForWorktreeRuntimeOwner } from './worktree-runtime-owner'
 import type { GlobalSettings } from '../../../shared/types'
@@ -16,7 +21,17 @@ export {
   sendAgentDraftPasteContent
 } from './agent-draft-paste-content'
 
-const POST_PASTE_SUBMIT_DELAY_MS = 50
+// Why: bracketed paste markers let modern TUIs (Claude Code / Codex / Pi /
+// OpenCode / Gemini / cursor-agent / copilot) treat the inserted text as a
+// single atomic paste instead of echoing character-by-character or triggering
+// line-edit shortcuts. Callers choose whether to append Enter after the paste.
+export const BRACKETED_PASTE_BEGIN = BRACKETED_PASTE_START
+export { BRACKETED_PASTE_END }
+export const POST_PASTE_SUBMIT_DELAY_MS = 50
+
+export function sanitizeBracketedPasteContent(content: string): string {
+  return sanitizeTerminalPasteText(content)
+}
 
 // Why: deterministic signal can fail in two ways: (1) the agent never
 // emits DECSET 2004 (no shipped agent does this — guarded as a fallback),

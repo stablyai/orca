@@ -15,7 +15,12 @@ type EditorViewModeByFile = ReturnType<typeof useAppStore.getState>['editorViewM
 
 type UseEditorPanelExternalContentEventsParams = {
   loadDiffContent: (file: OpenFile | null, options?: { force?: boolean }) => Promise<void>
-  loadFileContent: (filePath: string, id: string, worktreeId?: string) => Promise<void>
+  loadFileContent: (
+    filePath: string,
+    id: string,
+    worktreeId?: string,
+    relativePath?: string
+  ) => Promise<void>
   openFilesRef: MutableRefObject<OpenFile[]>
   editorViewModeRef: MutableRefObject<EditorViewModeByFile>
   setFileContents: Dispatch<SetStateAction<Record<string, FileContent>>>
@@ -38,7 +43,7 @@ export function useEditorPanelExternalContentEvents({
       }
       for (const file of getOpenFilesForExternalFileChange(openFilesRef.current, detail)) {
         if (file.mode === 'edit' || file.mode === 'markdown-preview') {
-          void loadFileContent(file.filePath, file.id, file.worktreeId)
+          void loadFileContent(file.filePath, file.id, file.worktreeId, file.relativePath)
           if (editorViewModeRef.current[file.id] === 'changes') {
             void loadDiffContent(file, { force: true })
           }

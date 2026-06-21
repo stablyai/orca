@@ -25,6 +25,7 @@ import {
   isTerminalInputTooLargeWithYield
 } from '../../../../shared/terminal-input'
 import { measureClipboardTextByteLength } from '../../../../shared/clipboard-text'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 
 // Why: when a mobile client subscribes the server resizes the PTY to phone
 // dims and serializes the buffer. Sending only the visible screen meant
@@ -285,6 +286,22 @@ function resolveMobileFloorClientId(
     return driver.clientId
   }
   return null
+}
+
+function getTerminalSendGuardRefusedReason(error: unknown): 'no-agent' | 'permission' | undefined {
+  const message = error instanceof Error ? error.message : String(error)
+  if (message.includes('terminal_guard_permission')) {
+    return 'permission'
+  }
+  if (message.includes('terminal_guard_no_agent')) {
+    return 'no-agent'
+  }
+  return undefined
+}
+
+function isTerminalSendGuardNotWritable(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.includes('terminal_guard_not_writable')
 }
 
 function appendPendingMultiplexOutput(
@@ -567,6 +584,7 @@ const TerminalSend = TerminalHandle.extend({
   text: OptionalString,
   enter: z.unknown().optional(),
   interrupt: z.unknown().optional(),
+  requireAgentStatus: z.enum(['sendable']).optional(),
   // Why: identifies the caller for the driver state machine. Optional for
   // backward compatibility with older mobile clients (server falls back to
   // the most recent mobile actor when absent). New mobile builds populate
@@ -597,6 +615,15 @@ const TerminalCreateParams = z.object({
   command: OptionalString,
   startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
   env: z.record(z.string(), z.string()).optional(),
+  launchConfig: z
+    .object({
+      agentCommand: z.string().optional(),
+      agentArgs: z.string(),
+      agentEnv: z.record(z.string(), z.string())
+    })
+    .optional(),
+  launchToken: OptionalString,
+  launchAgent: z.string().refine(isTuiAgent).optional(),
   title: OptionalString,
   focus: z.unknown().optional(),
   rendererBacked: z.unknown().optional(),
@@ -809,6 +836,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     })
   }),
   defineMethod({
+    name: 'terminal.agentStatus',
+    params: TerminalHandle,
+    handler: async (params, { runtime }) => ({
+      agentStatus: await runtime.getTerminalAgentStatus(params.terminal)
+    })
+  }),
+  defineMethod({
     name: 'terminal.rename',
     params: TerminalRename,
     handler: async (params, { runtime }) => ({
@@ -838,11 +872,97 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           }
         }
       }
-      const result = await runtime.sendTerminal(params.terminal, {
-        text: params.text,
-        enter: params.enter === true,
-        interrupt: params.interrupt === true
-      })
+      const hasText = typeof params.text === 'string' && params.text.length > 0
+      const hasSuffix = params.enter === true || params.interrupt === true
+      if (params.requireAgentStatus === 'sendable' && hasText && hasSuffix) {
+        // Why: guarded sends are two-phase writes. Reject combined payload +
+        // submit so guard flips cannot create ambiguous partial delivery.
+        return {
+          send: {
+            handle: params.terminal,
+            accepted: false,
+            bytesWritten: 0
+          }
+        }
+      }
+      // Why: selected note sends submit with Enter. The runtime must recheck
+      // permission/no-agent state immediately before accepting the PTY write.
+      const assertSendPreconditions =
+        params.requireAgentStatus === 'sendable'
+          ? async (ptyId?: string): Promise<void> => {
+              if (ptyId && isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
+                throw new Error('terminal_guard_not_writable')
+              }
+              const agentStatus = await runtime.getTerminalAgentStatus(params.terminal)
+              if (!agentStatus.isRunningAgent) {
+                throw new Error('terminal_guard_no_agent')
+              }
+              if (agentStatus.status === 'permission') {
+                throw new Error('terminal_guard_permission')
+              }
+            }
+          : undefined
+      if (params.requireAgentStatus === 'sendable') {
+        try {
+          await assertSendPreconditions?.(leaf?.ptyId ?? undefined)
+        } catch (error) {
+          if (isTerminalSendGuardNotWritable(error)) {
+            return {
+              send: {
+                handle: params.terminal,
+                accepted: false,
+                bytesWritten: 0
+              }
+            }
+          }
+          const refusedReason = getTerminalSendGuardRefusedReason(error)
+          if (!refusedReason) {
+            throw error
+          }
+          return {
+            send: {
+              handle: params.terminal,
+              accepted: false,
+              bytesWritten: 0,
+              refusedReason
+            }
+          }
+        }
+      }
+      let result
+      try {
+        result = await runtime.sendTerminal(
+          params.terminal,
+          {
+            text: params.text,
+            enter: params.enter === true,
+            interrupt: params.interrupt === true
+          },
+          { beforeWrite: assertSendPreconditions }
+        )
+      } catch (error) {
+        const refusedReason = getTerminalSendGuardRefusedReason(error)
+        if (refusedReason) {
+          return {
+            send: {
+              handle: params.terminal,
+              accepted: false,
+              bytesWritten: 0,
+              refusedReason
+            }
+          }
+        }
+        if (isTerminalSendGuardNotWritable(error)) {
+          return {
+            send: {
+              handle: params.terminal,
+              accepted: false,
+              bytesWritten: 0
+            }
+          }
+        }
+        throw error
+      }
       // Why: deliberate mobile input is a take-floor action. Drives the
       // `* → mobile{clientId}` driver transition so the desktop banner
       // remounts (if previously reclaimed) and active phone-fit dims follow
@@ -874,6 +994,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         command: params.command,
         startupCommandDelivery: params.startupCommandDelivery,
         env: params.env,
+        ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
+        ...(params.launchToken ? { launchToken: params.launchToken } : {}),
+        ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
         title: params.title,
         focus: params.focus === true,
         rendererBacked: params.rendererBacked === true,

@@ -13,6 +13,7 @@ const mockSetTabCustomTitle = vi.fn()
 const mockUpdateTabPtyId = vi.fn()
 const mockCloseTab = vi.fn()
 const mockSetTabLayout = vi.fn()
+const mockRegisterAgentLaunchConfig = vi.fn()
 const mockRegisterEagerPtyBuffer = vi.fn()
 const mockSubscribeToPtyData = vi.fn()
 const mockSubscribeToPtyExit = vi.fn()
@@ -66,7 +67,9 @@ const state = {
   closeTab: mockCloseTab,
   setTabLayout: mockSetTabLayout,
   clearTabPtyId: vi.fn(),
-  setAgentStatus: vi.fn()
+  setAgentStatus: vi.fn(),
+  registerAgentLaunchConfig: mockRegisterAgentLaunchConfig,
+  clearAgentLaunchConfig: vi.fn()
 }
 
 vi.mock('@/store', () => ({
@@ -189,6 +192,18 @@ describe('launchAgentBackgroundSession', () => {
       })
     )
     expect(mockSetTabLayout.mock.calls.at(-1)?.[1]).not.toHaveProperty('titlesByLeafId')
+    expect(mockSpawn.mock.calls[0]?.[0]).toMatchObject({
+      launchConfig: {
+        agentCommand: "claude '--dangerously-skip-permissions'",
+        agentArgs: '--dangerously-skip-permissions',
+        agentEnv: {}
+      },
+      launchAgent: 'claude',
+      launchToken: expect.stringMatching(UUID_RE)
+    })
+    expect(mockSpawn.mock.calls[0]?.[0].launchToken).toBe(
+      mockSpawn.mock.calls[0]?.[0].env.ORCA_AGENT_LAUNCH_TOKEN
+    )
     expect(mockSetTabCustomTitle).toHaveBeenCalledWith('tab-1', 'Nightly audit', {
       recordInteraction: false
     })
@@ -197,6 +212,31 @@ describe('launchAgentBackgroundSession', () => {
     expect(mockSubscribeToPtyData).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(mockSubscribeToPtyExit).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(result).toMatchObject({ tabId: 'tab-1', ptyId: 'pty-1' })
+  })
+
+  it('records effective launch config returned by local PTY spawn', async () => {
+    const effectiveLaunchConfig = {
+      agentCommand: "claude '--dangerously-skip-permissions'",
+      agentArgs: '--dangerously-skip-permissions',
+      agentEnv: { ORCA_AGENT_TEAMS_TEAM_ID: 'team-fresh' }
+    }
+    mockSpawn.mockResolvedValue({ id: 'pty-1', launchConfig: effectiveLaunchConfig })
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation'
+    })
+
+    const paneKey = expectStablePaneSpawn()
+    const leafId = paneKey.slice('tab-1:'.length)
+    expect(mockRegisterAgentLaunchConfig).toHaveBeenLastCalledWith(paneKey, effectiveLaunchConfig, {
+      agentType: 'claude',
+      launchToken: mockSpawn.mock.calls[0]?.[0].env.ORCA_AGENT_LAUNCH_TOKEN,
+      tabId: 'tab-1',
+      leafId
+    })
   })
 
   it('uses WSL launch quoting for Windows-path projects forced to WSL', async () => {
@@ -272,7 +312,10 @@ describe('launchAgentBackgroundSession', () => {
     expect(state.setAgentStatus).toHaveBeenCalledWith(
       paneKey,
       expect.objectContaining({ state: 'done', prompt: 'ok', agentType: 'codex' }),
-      undefined
+      undefined,
+      undefined,
+      undefined,
+      { launchToken: expect.stringMatching(UUID_RE) }
     )
     expect(onAgentStatus).toHaveBeenCalledWith(
       expect.objectContaining({ state: 'done', prompt: 'ok', agentType: 'codex' })
@@ -289,11 +332,25 @@ describe('launchAgentBackgroundSession', () => {
     })
 
     const paneKey = expectStablePaneSpawn()
-    expect(state.setAgentStatus).toHaveBeenCalledWith(paneKey, {
-      state: 'working',
-      prompt: 'check the status spinner',
-      agentType: 'command-code'
-    })
+    expect(state.setAgentStatus).toHaveBeenCalledWith(
+      paneKey,
+      {
+        state: 'working',
+        prompt: 'check the status spinner',
+        agentType: 'command-code'
+      },
+      undefined,
+      undefined,
+      undefined,
+      {
+        launchConfig: {
+          agentCommand: "command-code --trust '--yolo'",
+          agentArgs: '--yolo',
+          agentEnv: {}
+        },
+        launchToken: expect.stringMatching(UUID_RE)
+      }
+    )
   })
 
   it('uses a sidecar exit watcher so completion survives terminal attachment', async () => {
@@ -313,6 +370,7 @@ describe('launchAgentBackgroundSession', () => {
     sidecar(0)
 
     expect(state.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-1')
+    expect(state.clearAgentLaunchConfig).toHaveBeenCalledWith(expect.stringMatching(/^tab-1:/))
     expect(onExit).toHaveBeenCalledWith('pty-1', 0)
     expect(unsubscribe).toHaveBeenCalled()
   })
@@ -502,6 +560,20 @@ describe('launchAgentBackgroundSession', () => {
     const paneKey = params?.env?.ORCA_PANE_KEY
     const leafId = typeof paneKey === 'string' ? paneKey.slice('tab-1:'.length) : ''
     expect(leafId).toMatch(UUID_RE)
+    expect(mockRegisterAgentLaunchConfig).toHaveBeenCalledWith(
+      `tab-1:${leafId}`,
+      {
+        agentCommand: "claude '--dangerously-skip-permissions'",
+        agentArgs: '--dangerously-skip-permissions',
+        agentEnv: {}
+      },
+      {
+        agentType: 'claude',
+        launchToken: expect.stringMatching(UUID_RE),
+        tabId: 'tab-1',
+        leafId
+      }
+    )
     expect(mockSetTabLayout).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
@@ -516,6 +588,7 @@ describe('launchAgentBackgroundSession', () => {
       params: expect.objectContaining({
         worktree: 'id:wt-1',
         command: "claude '--dangerously-skip-permissions' 'run the automation'",
+        launchAgent: 'claude',
         env: expect.objectContaining({
           ORCA_PANE_KEY: `tab-1:${leafId}`,
           ORCA_TAB_ID: 'tab-1',

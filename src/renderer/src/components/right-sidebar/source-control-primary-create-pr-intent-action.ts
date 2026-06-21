@@ -306,11 +306,16 @@ export function resolveCreatePrHeaderAction(inputs: PrimaryActionInputs): Primar
     }
   }
 
-  // Why: direct header clicks for known blocked states should show the local
-  // notice instead of starting the push-before-review preparation flow.
+  const createPrIntent = resolveCreatePrIntentPrimaryAction(inputs)
+  if (createPrIntent) {
+    return createPrIntent
+  }
+
+  // Why: blocked notices are only for states the preparation intent cannot
+  // safely resolve, such as auth/default-branch/unsafe sync blockers.
   if (canClickBlockedCreateReviewReason(inputs.hostedReviewCreation?.blockedReason)) {
     return resolveDisabledCreatePrHeaderAction(inputs)
   }
 
-  return resolveCreatePrIntentPrimaryAction(inputs) ?? resolveDisabledCreatePrHeaderAction(inputs)
+  return resolveDisabledCreatePrHeaderAction(inputs)
 }
