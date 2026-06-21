@@ -27,6 +27,9 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
     fontWeightBold: '500',
     scrollback: 10000,
     allowTransparency: false,
+    // Why: agent CLIs sometimes render body text with ANSI white/bright-white
+    // on light themes; xterm can keep those cells readable across renderers.
+    minimumContrastRatio: 4.5,
     // Why: on macOS, non-US layouts rely on Option to compose characters like @ and €.
     macOptionIsMeta: false,
     macOptionClickForcesSelection: true,

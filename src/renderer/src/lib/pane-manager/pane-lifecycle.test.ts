@@ -83,6 +83,10 @@ describe('buildDefaultTerminalOptions', () => {
     expect(buildDefaultTerminalOptions().scrollbar?.width).toBe(7)
   })
 
+  it('enables xterm contrast correction for low-contrast CLI colors', () => {
+    expect(buildDefaultTerminalOptions().minimumContrastRatio).toBe(4.5)
+  })
+
   it('only uses inactive outline for block cursors', () => {
     expect(resolveTerminalCursorInactiveStyle('block')).toBe('outline')
     expect(resolveTerminalCursorInactiveStyle('bar')).toBe('bar')
