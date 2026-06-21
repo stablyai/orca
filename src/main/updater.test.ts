@@ -840,7 +840,9 @@ describe('updater', () => {
   })
 
   it('runs a fresh prerelease check when Shift-click promotes an in-flight stable check', async () => {
+    vi.useFakeTimers()
     let resolveStableTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
+    let resolveStableCheck: () => void = () => {}
     fetchNewerReleaseTagsMock
       .mockImplementationOnce(
         () =>
@@ -849,7 +851,14 @@ describe('updater', () => {
           })
       )
       .mockResolvedValueOnce({ tags: ['v1.4.36-rc.5'], state: 'ready' })
-    autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+    autoUpdaterMock.checkForUpdates
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveStableCheck = resolve
+          })
+      )
+      .mockResolvedValueOnce(undefined)
     const sendMock = vi.fn()
     const mainWindow = { webContents: { send: sendMock } }
 
@@ -870,7 +879,10 @@ describe('updater', () => {
       expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
     })
 
+    autoUpdaterMock.emit('checking-for-update')
     autoUpdaterMock.emit('update-not-available')
+    await vi.advanceTimersByTimeAsync(0)
+    resolveStableCheck()
 
     await vi.waitFor(() => {
       expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.4.35', 2, {
