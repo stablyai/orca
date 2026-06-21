@@ -24,6 +24,7 @@ import {
   AlertTriangle,
   ArrowUp,
   Bot,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronsRight,
@@ -4807,8 +4808,13 @@ export default function SessionScreen() {
                       accessibilityLabel="Dismiss keyboard"
                       accessibilityHint="Hides the software keyboard and keeps the current terminal session open."
                     >
-                      <KeyboardIcon size={14} color={colors.textSecondary} strokeWidth={2} />
-                      <Text style={styles.keyboardDismissKeyText}>Hide</Text>
+                      <KeyboardIcon size={15} color={colors.textSecondary} strokeWidth={2} />
+                      <ChevronDown
+                        size={11}
+                        color={colors.textSecondary}
+                        strokeWidth={2.5}
+                        style={styles.keyboardDismissChevron}
+                      />
                     </Pressable>
                   )}
                   {/* Why: with default tap handling the first tap on any accessory
