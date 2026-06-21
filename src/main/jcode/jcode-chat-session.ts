@@ -56,7 +56,8 @@ function sendEvent(mainWindow: BrowserWindow, sessionKey: string, event: JcodeNd
 function buildArgs(
   payload: JcodeChatSendPayload,
   remoteExecHost: string | null,
-  resolvedPrompt: string
+  resolvedPrompt: string,
+  remotePath: string | null
 ): string[] {
   // A named custom profile (from `jcode provider add`) is selected with
   // `--provider-profile <name>` (which IMPLIES openai-compatible) and MUST NOT
@@ -73,14 +74,18 @@ function buildArgs(
   if (payload.model?.trim()) {
     args.push('-m', payload.model.trim())
   }
-  // jcode's `-C/--cwd` does a LOCAL std::env::set_current_dir for ANY value,
-  // independent of --remote-exec (startup.rs parse_and_prepare_args). For a
-  // remote turn payload.cwd is the REMOTE project path, which does not exist on
-  // the Mac, so passing -C would crash the local process with ENOENT. Omit -C
-  // for remote turns; the remote bash then runs in the remote login home (~).
-  // (A jcode-binary change is needed to make -C set ONLY the remote working dir
-  // under --remote-exec — see jcodeBinaryFollowup.) Local turns keep -C as-is.
-  if (!remoteExecHost && payload.cwd?.trim()) {
+  // jcode's `-C/--cwd` behavior is now remote-exec-aware (startup.rs
+  // parse_and_prepare_args + run_single_message_command): under --remote-exec it
+  // does NOT chdir locally but instead seeds the session working_dir so the remote
+  // bash `cd`s into the project dir. So for a remote turn we pass -C <remotePath>
+  // (the worktree's remote folderPath from resolveRemoteExec) — the remote bash
+  // then runs in the project dir instead of the remote login home (~). For a local
+  // turn -C is the local project path as before.
+  if (remoteExecHost) {
+    if (remotePath?.trim()) {
+      args.push('-C', remotePath.trim())
+    }
+  } else if (payload.cwd?.trim()) {
     args.push('-C', payload.cwd.trim())
   }
   if (payload.resumeSessionId?.trim()) {
@@ -151,10 +156,14 @@ async function startTurn(
 
   let child: ChildProcessWithoutNullStreams
   try {
-    child = spawn(JCODE_BIN, buildArgs(payload, remoteExecHost, resolvedPrompt), {
-      cwd: localSpawnCwd,
-      env: process.env
-    })
+    child = spawn(
+      JCODE_BIN,
+      buildArgs(payload, remoteExecHost, resolvedPrompt, remote.remotePath),
+      {
+        cwd: localSpawnCwd,
+        env: process.env
+      }
+    )
   } catch (error) {
     sendEvent(mainWindow, sessionKey, {
       type: 'error',
