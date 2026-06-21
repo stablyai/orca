@@ -1784,6 +1784,12 @@ export class OrcaRuntimeService {
   private authoritativeWindowId: number | null = null
   private tabs = new Map<string, RuntimeSyncedTab>()
   private mobileSessionTabsByWorktree = new Map<string, RuntimeMobileSessionTabsSnapshot>()
+  // Why: idempotency map for mobile terminal creation — a retried create with the
+  // same clientMutationId returns the in-flight operation instead of duplicating.
+  private mobileTerminalCreateByMutationId = new Map<
+    string,
+    Promise<RuntimeMobileSessionCreateTerminalResult>
+  >()
   private mobileSessionTabListeners = new Set<(snapshot: RuntimeMobileSessionTabsResult) => void>()
   private leaves = new Map<string, RuntimeLeafRecord>()
   // Why: PTY output is a per-keystroke hot path. Looking up affected leaves by
@@ -14633,6 +14639,46 @@ export class OrcaRuntimeService {
       launchConfig?: SleepingAgentLaunchConfig
       launchAgent?: TuiAgent
       activate?: boolean
+      clientMutationId?: string
+    } = {}
+  ): Promise<RuntimeMobileSessionCreateTerminalResult> {
+    const mutationId = opts.clientMutationId
+    if (!mutationId) {
+      return this.runCreateMobileSessionTerminal(worktreeSelector, opts)
+    }
+    // Why: a retried create (double-tap, reconnect replay) with the same
+    // idempotency key must return the in-flight operation instead of spawning a
+    // duplicate terminal. Settled entries are dropped so a later retry — after a
+    // failure or after the result is consumed — can start a fresh create.
+    const inflight = this.mobileTerminalCreateByMutationId.get(mutationId)
+    if (inflight) {
+      return inflight
+    }
+    const run = this.runCreateMobileSessionTerminal(worktreeSelector, opts)
+    this.mobileTerminalCreateByMutationId.set(mutationId, run)
+    void run
+      .catch(() => {})
+      .finally(() => {
+        if (this.mobileTerminalCreateByMutationId.get(mutationId) === run) {
+          this.mobileTerminalCreateByMutationId.delete(mutationId)
+        }
+      })
+    return run
+  }
+
+  private async runCreateMobileSessionTerminal(
+    worktreeSelector: string,
+    opts: {
+      afterTabId?: string
+      targetGroupId?: string
+      command?: string
+      env?: Record<string, string>
+      startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
+      agent?: TuiAgent
+      launchConfig?: SleepingAgentLaunchConfig
+      launchAgent?: TuiAgent
+      activate?: boolean
+      clientMutationId?: string
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     this.assertGraphReady()
@@ -14705,7 +14751,16 @@ export class OrcaRuntimeService {
     if (opts.activate !== false) {
       this.notifier?.focusTerminal(reply.tabId, worktreeId, null)
     }
-    return await this.waitForMobileTerminalSurface(worktreeId, reply.tabId)
+    try {
+      return await this.waitForMobileTerminalSurface(worktreeId, reply.tabId)
+    } catch (error) {
+      // Why: the renderer created the tab but its terminal surface never
+      // published (PTY spawn/handle failure). Roll the half-created tab back via
+      // the renderer close path so it can't linger as a ghost in mobile
+      // snapshots, then surface the failure to the caller.
+      this.notifier?.closeTerminal(reply.tabId)
+      throw error
+    }
   }
 
   private async resolveMobileSessionTerminalCommand(
