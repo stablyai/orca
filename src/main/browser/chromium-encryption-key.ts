@@ -7,6 +7,7 @@ import {
   PBKDF2_SALT,
   type EncryptionKeyResult
 } from './chromium-value-decrypt'
+import { diag } from './chromium-diag'
 
 // Why: each platform uses a different OS secret store for the Chromium cookie
 // encryption key. macOS uses the system keychain, Linux uses GNOME keyring
@@ -57,9 +58,7 @@ function getLinuxEncryptionKey(
         timeout: 5_000
       }).trim()
     } catch {
-      console.warn(
-        '[chromium-encryption-key] Linux keyring unavailable — v11 cookies may fail to decrypt'
-      )
+      diag('  Linux keyring unavailable — v11 cookies may fail to decrypt')
     }
   }
 
@@ -106,7 +105,7 @@ function getWindowsEncryptionKey(localStatePath: string): EncryptionKeyResult | 
 
     return { key: Buffer.from(result, 'base64'), mode: 'aes-256-gcm' }
   } catch (err) {
-    console.warn(`[chromium-encryption-key] Windows DPAPI key extraction failed: ${err}`)
+    diag(`  Windows DPAPI key extraction failed: ${err}`)
     return null
   }
 }

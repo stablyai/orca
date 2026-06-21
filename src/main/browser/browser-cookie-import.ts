@@ -5,8 +5,8 @@ import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { decryptChromiumValue } from './chromium-value-decrypt'
 import { getEncryptionKey } from './chromium-encryption-key'
+import { diag, reasonWithDiagLog } from './chromium-diag'
 import {
-  appendFileSync,
   copyFileSync,
   existsSync,
   mkdtempSync,
@@ -21,34 +21,9 @@ import { DatabaseSync } from 'node:sqlite'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-// Why: writing to userData instead of tmpdir() so the diag log is only
-// readable by the current user, not world-readable in /tmp.
-let _diagLog: string | null = null
-function getDiagLogPath(): string {
-  if (!_diagLog) {
-    try {
-      _diagLog = join(app.getPath('userData'), 'cookie-import-diag.log')
-    } catch {
-      _diagLog = join(tmpdir(), 'orca-cookie-import-diag.log')
-    }
-  }
-  return _diagLog
-}
-function reasonWithDiagLog(reason: string): string {
-  return `${reason} Details were written to ${getDiagLogPath()}.`
-}
 function describeImportError(err: unknown): string {
   const raw = err instanceof Error && err.message ? err.message : String(err)
   return raw.replace(/\s+/g, ' ').slice(0, 180)
-}
-function diag(msg: string): void {
-  const line = `[${new Date().toISOString()}] ${msg}\n`
-  try {
-    appendFileSync(getDiagLogPath(), line)
-  } catch {
-    /* best-effort */
-  }
-  console.log('[cookie-import]', msg)
 }
 import type {
   BrowserCookieImportResult,
