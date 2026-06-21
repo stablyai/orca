@@ -26,6 +26,7 @@ import {
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { openTabBarEntry, type TabCreateEntryArgs } from '../tab-bar/tab-create-entry-action'
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
+import { disposeChatSession } from '../chat-pane/chat-session-store'
 import { ensureSimulatorTab, getSimulatorTabForWorktree } from '@/lib/ensure-simulator-tab'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
@@ -276,7 +277,14 @@ export function useTabGroupWorkspaceModel({
         destroyWorkspaceWebviews(browserState.browserPagesByWorkspace, item.entityId)
         closeBrowserTab(item.entityId)
         closeUnifiedTab(item.id)
-      } else if (item.contentType === 'simulator') {
+      } else if (item.contentType === 'simulator' || item.contentType === 'chat') {
+        // Why: chat tabs have no editor/browser/terminal entity to tear down;
+        // removing the unified tab is the whole close. Evict the chat
+        // conversation state (keyed by tab id) so the external store does not
+        // retain closed sessions.
+        if (item.contentType === 'chat') {
+          disposeChatSession(item.id)
+        }
         closeUnifiedTab(item.id)
       } else {
         const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
@@ -341,7 +349,10 @@ export function useTabGroupWorkspaceModel({
           closeUnifiedTab(item.id)
         } else if (item.contentType === 'terminal') {
           closeTab(item.entityId)
-        } else if (item.contentType === 'simulator') {
+        } else if (item.contentType === 'simulator' || item.contentType === 'chat') {
+          if (item.contentType === 'chat') {
+            disposeChatSession(item.id)
+          }
           closeUnifiedTab(item.id)
         } else {
           const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
@@ -417,6 +428,11 @@ export function useTabGroupWorkspaceModel({
       if (item.contentType === 'simulator') {
         setActiveTabType('simulator')
         // simulator has no editor file entity
+      } else if (item.contentType === 'chat') {
+        // Why: chat maps to the 'editor' visible-tab type but has no editor file
+        // entity. Flip the surface to editor (so TabGroupPanel shows the chat
+        // pane, selected via the active tab id) without binding a phantom file.
+        setActiveTabType('editor')
       } else {
         setActiveFile(item.entityId)
         setActiveTabType('editor')

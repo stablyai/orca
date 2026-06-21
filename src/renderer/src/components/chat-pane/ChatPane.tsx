@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { JcodeChatEventMessage, JcodeNdjsonEvent } from '../../../../shared/jcode-chat-types'
-import { JcodeToolCard, type JcodeToolCall } from './JcodeToolCard'
+import { JcodeToolCard } from './JcodeToolCard'
+import { startChatTurn, setChatStatusDetail, useChatSession } from './chat-session-store'
 
 // Why: M2 enriches the M1 jcode chat-bubble view. Tool calls render as cards
 // (name + pretty args + output/error, bash special-cased, diffs colorized);
@@ -13,22 +13,12 @@ import { JcodeToolCard, type JcodeToolCall } from './JcodeToolCard'
 // continues across turns; input is disabled while streaming and a Stop button
 // kills the in-flight jcode child. Parsing mirrors the jcode-desktop prototype
 // (src/app.js) and the documented --ndjson schema.
-
-type ChatRole = 'user' | 'assistant'
-
-type ChatMessage = {
-  id: string
-  role: ChatRole
-  text: string
-  /** Tool calls seen during this assistant turn, in arrival order. */
-  tools?: JcodeToolCall[]
-  isError?: boolean
-}
-
-function strField(event: JcodeNdjsonEvent, key: string): string | undefined {
-  const value = event[key]
-  return typeof value === 'string' ? value : undefined
-}
+//
+// Why (BUG 1, persistence): the conversation + --resume id now live in
+// chat-session-store (a per-sessionKey external store that subscribes to IPC at
+// module level), not in this component's local state. That makes ChatPane safe
+// to unmount/remount on tab switches — switching away and back restores the same
+// conversation with --resume continuity intact.
 
 /** Minimal brain-local (M3) affordance: for a folder-scoped chat pane whose
  *  workspace has an SSH connection, show whether jcode is running brain-local
@@ -102,16 +92,10 @@ export default function ChatPane({
   provider?: string
   model?: string
 }): React.JSX.Element {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  // Why: conversation state is read from the external store keyed by sessionKey,
+  // so it survives this component unmounting on tab switches.
+  const { messages, isStreaming, statusDetail, resumeSessionId } = useChatSession(sessionKey)
   const [input, setInput] = useState('')
-  const [isStreaming, setIsStreaming] = useState(false)
-  const [statusDetail, setStatusDetail] = useState<string | null>(null)
-
-  // Why: refs hold turn-scoped mutable state that must not trigger re-renders on
-  // every NDJSON delta. The assistant message id being streamed into, and the
-  // jcode session id to resume on the next turn.
-  const streamingIdRef = useRef<string | null>(null)
-  const resumeSessionIdRef = useRef<string | undefined>(undefined)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -121,179 +105,13 @@ export default function ChatPane({
     }
   }, [messages, statusDetail])
 
-  const appendToStreaming = useCallback((mutate: (msg: ChatMessage) => ChatMessage) => {
-    const targetId = streamingIdRef.current
-    if (!targetId) {
-      return
-    }
-    setMessages((prev) => prev.map((m) => (m.id === targetId ? mutate(m) : m)))
-  }, [])
-
-  /** Insert-or-update a tool call on the streaming assistant message by id. */
-  const upsertTool = useCallback(
-    (id: string, mutate: (call: JcodeToolCall) => JcodeToolCall, fallbackName = 'tool') => {
-      appendToStreaming((m) => {
-        const tools = m.tools ?? []
-        const index = tools.findIndex((t) => t.id === id)
-        if (index === -1) {
-          const created = mutate({ id, name: fallbackName, rawInput: '', status: 'running' })
-          return { ...m, tools: [...tools, created] }
-        }
-        const next = tools.slice()
-        next[index] = mutate(next[index])
-        return { ...m, tools: next }
-      })
-    },
-    [appendToStreaming]
-  )
-
-  const finalizeTurn = useCallback(() => {
-    setIsStreaming(false)
-    setStatusDetail(null)
-    streamingIdRef.current = null
-  }, [])
-
-  const handleEvent = useCallback(
-    (event: JcodeNdjsonEvent) => {
-      switch (event.type) {
-        case 'start': {
-          const id = strField(event, 'session_id')
-          if (id) {
-            resumeSessionIdRef.current = id
-          }
-          break
-        }
-        case 'status_detail': {
-          const detail = strField(event, 'detail')
-          if (detail) {
-            setStatusDetail(detail)
-          }
-          break
-        }
-        case 'connection_phase': {
-          const phase = strField(event, 'phase')
-          if (phase) {
-            setStatusDetail(phase)
-          }
-          break
-        }
-        case 'text_delta': {
-          const text = strField(event, 'text') ?? ''
-          if (text) {
-            setStatusDetail(null)
-            appendToStreaming((m) => ({ ...m, text: m.text + text }))
-          }
-          break
-        }
-        case 'tool_start': {
-          const id = strField(event, 'id') ?? `tool-${Date.now()}`
-          const name = strField(event, 'name') ?? 'tool'
-          upsertTool(id, (call) => ({ ...call, name }), name)
-          break
-        }
-        case 'tool_input': {
-          // Why: args stream as JSON-string fragments; concatenate them so the
-          // card can parse the full object once complete.
-          const id = strField(event, 'id')
-          const delta = strField(event, 'delta') ?? ''
-          if (id) {
-            upsertTool(id, (call) => ({ ...call, rawInput: call.rawInput + delta }))
-          }
-          break
-        }
-        case 'tool_exec': {
-          const id = strField(event, 'id') ?? `tool-${Date.now()}`
-          const name = strField(event, 'name') ?? 'tool'
-          upsertTool(id, (call) => ({ ...call, status: 'running' }), name)
-          break
-        }
-        case 'tool_done': {
-          const id = strField(event, 'id')
-          const errorText = strField(event, 'error')
-          const output = strField(event, 'output')
-          if (id) {
-            upsertTool(id, (call) => ({
-              ...call,
-              output: output ?? call.output,
-              error: errorText ?? undefined,
-              status: errorText ? 'error' : 'done'
-            }))
-          }
-          break
-        }
-        case 'done': {
-          // Why: jcode may include the full final text in 'done' even when no
-          // text_delta arrived (e.g. cached); backfill an empty bubble.
-          const id = strField(event, 'session_id')
-          if (id) {
-            resumeSessionIdRef.current = id
-          }
-          const finalText = strField(event, 'text')
-          if (finalText) {
-            appendToStreaming((m) => (m.text ? m : { ...m, text: finalText }))
-          }
-          finalizeTurn()
-          break
-        }
-        case 'error': {
-          const message =
-            strField(event, 'error') ?? strField(event, 'message') ?? 'Unknown jcode error'
-          appendToStreaming((m) => ({ ...m, text: m.text + message, isError: true }))
-          finalizeTurn()
-          break
-        }
-        case 'stopped': {
-          // User pressed Stop: annotate the bubble and close the turn.
-          appendToStreaming((m) => ({
-            ...m,
-            text: m.text ? `${m.text}\n\n(stopped)` : '(stopped)'
-          }))
-          finalizeTurn()
-          break
-        }
-        case 'exit': {
-          // Terminal safety net: if the child exited without 'done'/'error'/
-          // 'stopped', close the turn so the composer re-enables.
-          if (streamingIdRef.current) {
-            finalizeTurn()
-          }
-          break
-        }
-        default:
-          // Ignore unknown / not-rendered event kinds (connection_type,
-          // message_end, tokens).
-          break
-      }
-    },
-    [appendToStreaming, upsertTool, finalizeTurn]
-  )
-
-  useEffect(() => {
-    const unsubscribe = window.api.jcodeChat.onEvent((message: JcodeChatEventMessage) => {
-      if (message.sessionKey !== sessionKey) {
-        return
-      }
-      handleEvent(message.event)
-    })
-    return unsubscribe
-  }, [sessionKey, handleEvent])
-
   const send = useCallback(() => {
     const prompt = input.trim()
     if (!prompt || isStreaming) {
       return
     }
-    const userId = `user-${Date.now()}`
-    const assistantId = `assistant-${Date.now()}`
-    setMessages((prev) => [
-      ...prev,
-      { id: userId, role: 'user', text: prompt },
-      { id: assistantId, role: 'assistant', text: '' }
-    ])
-    streamingIdRef.current = assistantId
+    startChatTurn(sessionKey, prompt)
     setInput('')
-    setIsStreaming(true)
-    setStatusDetail('Thinking…')
     window.api.jcodeChat.send({
       sessionKey,
       prompt,
@@ -301,15 +119,15 @@ export default function ChatPane({
       model,
       cwd,
       worktreeId,
-      resumeSessionId: resumeSessionIdRef.current
+      resumeSessionId
     })
-  }, [input, isStreaming, sessionKey, provider, model, cwd, worktreeId])
+  }, [input, isStreaming, sessionKey, provider, model, cwd, worktreeId, resumeSessionId])
 
   const stop = useCallback(() => {
     if (!isStreaming) {
       return
     }
-    setStatusDetail('Stopping…')
+    setChatStatusDetail(sessionKey, 'Stopping…')
     window.api.jcodeChat.stop({ sessionKey })
   }, [isStreaming, sessionKey])
 

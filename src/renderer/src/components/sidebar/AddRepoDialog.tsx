@@ -324,7 +324,12 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
         createError={createError}
         isCreating={isCreating}
         hostSelector={<AddRepoHostSelectorSlot hostSelection={hostSelection} />}
-        showRemoteAction={false}
+        // Why (BUG 3): surface the already-built "Project on SSH host" remote
+        // action so the remote-SSH project entry is reachable. Only show it when
+        // the host dropdown is in local mode — in ssh/runtime mode the primary
+        // Browse action already opens the remote/runtime browse step, so the
+        // dedicated remote action would be redundant.
+        showRemoteAction={selectedHostKind !== 'ssh' && selectedHostKind !== 'runtime'}
         browseHostKind={
           selectedHostKind === 'ssh' || selectedHostKind === 'runtime' ? selectedHostKind : 'local'
         }

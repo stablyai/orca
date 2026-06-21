@@ -5991,7 +5991,9 @@
           "c77f1abfe3": "结束远程 terminals",
           "18968ede9e": "错误",
           "f0871e6bfb": "连接",
-          "47e94bd6ba": "已连接"
+          "47e94bd6ba": "已连接",
+          "idleNotConnected": "未连接",
+          "idleNotConnectedHint": "点“连接”启动会话（brain-local 无需连接）。"
         },
         "SshTargetDestructiveActions": {
           "7e66942808": "这将停止此 SSH 目标上的活动 terminal 会话。重新连接不会恢复它们。",

@@ -22,7 +22,13 @@ import { translate } from '@/i18n/i18n'
 // ── Shared status helpers ────────────────────────────────────────────
 
 export const STATUS_LABELS: Record<SshConnectionStatus, string> = {
-  disconnected: 'Disconnected',
+  // Why (BUG 2): orca never auto-connects, so a freshly added/idle host sits in
+  // the 'disconnected' state. The old "Disconnected" label read like an error to
+  // non-technical users. Relabel the idle state to the neutral "Not connected"
+  // (gray dot stays). Error/auth-failed states are unchanged.
+  get disconnected() {
+    return translate('auto.components.settings.SshTargetCard.idleNotConnected', 'Not connected')
+  },
   connecting: 'Connecting\u2026',
   'auth-failed': 'Auth failed',
   'deploying-relay': 'Deploying relay\u2026',
@@ -265,7 +271,23 @@ export function SshTargetCard({
         <div className="flex items-center gap-2">
           <span className="truncate text-sm font-medium">{target.label}</span>
           <span className={`size-2 shrink-0 rounded-full ${statusColor(status)}`} />
-          <span className="text-[11px] text-muted-foreground">{STATUS_LABELS[status]}</span>
+          {status === 'disconnected' ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="cursor-default text-[11px] text-muted-foreground">
+                  {STATUS_LABELS[status]}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {translate(
+                  'auto.components.settings.SshTargetCard.idleNotConnectedHint',
+                  'Click “Connect” to start a session (brain-local needs no connection).'
+                )}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <span className="text-[11px] text-muted-foreground">{STATUS_LABELS[status]}</span>
+          )}
         </div>
         <p className="truncate text-xs text-muted-foreground">
           {endpoint}

@@ -175,6 +175,13 @@ type TabItem =
       isPinned: boolean
       data: Tab
     }
+  | {
+      type: 'chat'
+      id: string
+      unifiedTabId: string
+      isPinned: boolean
+      data: Tab
+    }
 
 function getTabDragLabel(item: TabItem, generatedTitlesEnabled: boolean): string {
   if (item.type === 'terminal') {
@@ -185,6 +192,9 @@ function getTabDragLabel(item: TabItem, generatedTitlesEnabled: boolean): string
   }
   if (item.type === 'simulator') {
     return item.data.label || 'Mobile Emulator'
+  }
+  if (item.type === 'chat') {
+    return item.data.label || 'jcode'
   }
   return getEditorDisplayLabel(item.data)
 }
@@ -831,6 +841,13 @@ function TabBarInner({
         .map((t) => t.id),
     [unifiedTabs, resolvedGroupId]
   )
+  const chatTabIds = useMemo(
+    () =>
+      (unifiedTabs ?? [])
+        .filter((t) => t.groupId === resolvedGroupId && t.contentType === 'chat')
+        .map((t) => t.id),
+    [unifiedTabs, resolvedGroupId]
+  )
 
   // Build the unified ordered list, reconciling stored order with current items
   const orderedItems = useMemo(() => {
@@ -839,7 +856,8 @@ function TabBarInner({
       terminalIds,
       editorFileIds,
       browserTabIds,
-      simulatorTabIds
+      simulatorTabIds,
+      chatTabIds
     )
     const items: TabItem[] = []
     for (const id of ids) {
@@ -890,6 +908,17 @@ function TabBarInner({
         })
         continue
       }
+      const chatUnified = unifiedTabByVisibleId.get(id)
+      if (chatUnified && chatUnified.contentType === 'chat') {
+        items.push({
+          type: 'chat',
+          id,
+          unifiedTabId: chatUnified.id,
+          isPinned: chatUnified.isPinned === true,
+          data: chatUnified
+        })
+        continue
+      }
     }
     return items
   }, [
@@ -898,6 +927,7 @@ function TabBarInner({
     editorFileIds,
     browserTabIds,
     simulatorTabIds,
+    chatTabIds,
     terminalMap,
     editorMap,
     browserMap,
@@ -931,6 +961,12 @@ function TabBarInner({
       }
       if (item.type === 'simulator') {
         return activeTabType === 'simulator' && item.id === activeSimulatorTabId
+      }
+      if (item.type === 'chat') {
+        // Why: chat maps to the 'editor' visible-tab type (toVisibleTabType) and
+        // is selected via activeFileId (TabGroupPanel sets activeFileId to the
+        // chat tab id), so it shares the editor active-id plumbing.
+        return activeTabType === 'editor' && activeFileId === item.id
       }
       return (
         (activeTabType === 'editor' || activeTabType === 'simulator') && activeFileId === item.id
@@ -1134,6 +1170,47 @@ function TabBarInner({
                     key={item.id}
                     file={simFile}
                     isActive={activeTabType === 'simulator' && item.id === activeSimulatorTabId}
+                    isPinned={item.isPinned}
+                    hasTabsToRight={index < orderedItems.length - 1}
+                    statusByRelativePath={statusByRelativePath}
+                    onActivate={() => onActivateFile?.(item.id)}
+                    onClose={() => onCloseFile?.(item.id)}
+                    onCloseToRight={() => onCloseToRight(item.id)}
+                    onCloseAll={() => onCloseAllFiles?.()}
+                    onMakePermanent={() => {}}
+                    onTogglePin={() => togglePinned(item)}
+                    onSplitGroup={(direction, sourceVisibleTabId) =>
+                      onCreateSplitGroup?.(direction, sourceVisibleTabId)
+                    }
+                    dragData={dragData}
+                    dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+                    includeTopTabBorder={includeTopTabBorder}
+                  />
+                )
+              }
+              if (item.type === 'chat') {
+                // Why: chat tabs render a header in the strip by reusing
+                // EditorFileTab (chat maps to the 'editor' visible-tab type). A
+                // synthetic OpenFile carries only the label so the tab is
+                // clickable/closable like an editor; the real chat surface is
+                // rendered by TabGroupPanel keyed on the same tab id.
+                const chatLabel = item.data.label || 'jcode'
+                const chatFile: OpenFile & { tabId: string } = {
+                  id: item.id,
+                  tabId: item.id,
+                  filePath: chatLabel,
+                  relativePath: chatLabel,
+                  worktreeId,
+                  language: 'chat',
+                  isPreview: false,
+                  isDirty: false,
+                  mode: 'edit'
+                }
+                return (
+                  <EditorFileTab
+                    key={item.id}
+                    file={chatFile}
+                    isActive={activeTabType === 'editor' && activeFileId === item.id}
                     isPinned={item.isPinned}
                     hasTabsToRight={index < orderedItems.length - 1}
                     statusByRelativePath={statusByRelativePath}
