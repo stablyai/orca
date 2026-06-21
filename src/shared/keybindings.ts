@@ -50,6 +50,9 @@ export type KeybindingActionId =
   | 'sidebar.ports.toggle'
   | 'sidebar.focusWorktreeList'
   | 'floatingTerminal.toggle'
+  | 'floatingWorkspace.maximize'
+  | 'floatingWorkspace.minify'
+  | 'floatingWorkspace.minimize'
   | 'zoom.in'
   | 'zoom.out'
   | 'zoom.reset'
@@ -409,6 +412,74 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     allowInTerminal: true
   },
   {
+    id: 'floatingWorkspace.maximize',
+    title: 'Maximize Floating Workspace Panel',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'floating',
+      'workspace',
+      'panel',
+      'floating workspace',
+      'workspace panel',
+      'maximize',
+      'expand'
+    ],
+    // Why: macOS only. On Windows/Linux, Ctrl+Alt+Arrow is commonly
+    // reserved by the OS or desktop environment.
+    defaultBindings: {
+      darwin: ['Mod+Alt+ArrowUp'],
+      linux: [],
+      win32: []
+    },
+    allowInTerminal: true
+  },
+  {
+    id: 'floatingWorkspace.minify',
+    title: 'Minify Floating Workspace Panel',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'floating',
+      'workspace',
+      'panel',
+      'floating workspace',
+      'workspace panel',
+      'minify',
+      'compact'
+    ],
+    defaultBindings: {
+      darwin: ['Mod+Alt+ArrowDown'],
+      linux: [],
+      win32: []
+    },
+    allowInTerminal: true
+  },
+  {
+    id: 'floatingWorkspace.minimize',
+    title: 'Minimize Floating Workspace Panel',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'floating',
+      'workspace',
+      'panel',
+      'floating workspace',
+      'workspace panel',
+      'minimize',
+      'hide'
+    ],
+    defaultBindings: {
+      darwin: [],
+      linux: [],
+      win32: []
+    },
+    allowInTerminal: true
+  },
+  {
     id: 'zoom.in',
     title: 'Zoom In',
     group: 'Global',
@@ -539,7 +610,8 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       darwin: ['Mod+R'],
       linux: [],
       win32: []
-    }
+    },
+    allowInTerminal: true
   },
   {
     id: 'tab.reopenClosed',

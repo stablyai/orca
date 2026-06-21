@@ -21,6 +21,7 @@ import {
   normalizeKeybindingListForAction,
   normalizeKeybindingList
 } from './keybindings'
+import type { KeybindingActionId, KeybindingPlatform } from './keybindings'
 import { ALL_TUI_AGENTS } from './tui-agent-display-names'
 
 describe('keybindings', () => {
@@ -439,6 +440,42 @@ describe('keybindings', () => {
     )
   })
 
+  it('defines floating workspace panel action metadata', () => {
+    const actionIds = [
+      'floatingWorkspace.maximize' as KeybindingActionId,
+      'floatingWorkspace.minify' as KeybindingActionId,
+      'floatingWorkspace.minimize' as KeybindingActionId
+    ] as const
+
+    for (const actionId of actionIds) {
+      expect(getKeybindingDefinition(actionId), actionId).toMatchObject({ id: actionId })
+    }
+  })
+
+  it('assigns floating workspace maximize and minify defaults only on macOS', () => {
+    const maximizeAction = 'floatingWorkspace.maximize' as KeybindingActionId
+    const minifyAction = 'floatingWorkspace.minify' as KeybindingActionId
+
+    expect(getEffectiveKeybindingsForAction(maximizeAction, 'darwin')).toEqual(['Mod+Alt+ArrowUp'])
+    expect(getEffectiveKeybindingsForAction(minifyAction, 'darwin')).toEqual(['Mod+Alt+ArrowDown'])
+    expect(getEffectiveKeybindingsForAction(maximizeAction, 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction(maximizeAction, 'win32')).toEqual([])
+    expect(getEffectiveKeybindingsForAction(minifyAction, 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction(minifyAction, 'win32')).toEqual([])
+  })
+
+  it('leaves floating workspace minimize unassigned because floating terminal toggle owns show and hide', () => {
+    const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
+    const minimizeAction = 'floatingWorkspace.minimize' as KeybindingActionId
+
+    for (const platform of platforms) {
+      expect(getEffectiveKeybindingsForAction(minimizeAction, platform)).toEqual([])
+    }
+    expect(getEffectiveKeybindingsForAction('floatingTerminal.toggle', 'darwin')).toEqual([
+      'Mod+Alt+A'
+    ])
+  })
+
   it('defines a macOS-only default for the new agent tab shortcut', () => {
     expect(getEffectiveKeybindingsForAction('tab.newAgent', 'darwin')).toEqual(['Mod+Alt+T'])
     expect(getEffectiveKeybindingsForAction('tab.newAgent', 'linux')).toEqual([])
@@ -531,6 +568,32 @@ describe('keybindings', () => {
         { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
       )
     ).toBe(true)
+  })
+
+  it('keeps floating workspace tab shortcuts active in app focus even with terminal-first policy configured', () => {
+    const panelFocus = {
+      context: 'app',
+      terminalShortcutPolicy: 'terminal-first'
+    } as const
+
+    expect(
+      keybindingMatchesAction(
+        'tab.rename',
+        { key: 'r', code: 'KeyR', meta: true, control: false, alt: false, shift: false },
+        'darwin',
+        undefined,
+        panelFocus
+      )
+    ).toBe(true)
+    expect(
+      matchKeybindingDigitIndex(
+        'tab.selectByIndex',
+        { key: '4', code: 'Digit4', meta: false, control: false, alt: true, shift: false },
+        'linux',
+        undefined,
+        panelFocus
+      )
+    ).toBe(3)
   })
 
   it('keeps terminal-allowed app shortcuts active in terminal-first mode', () => {

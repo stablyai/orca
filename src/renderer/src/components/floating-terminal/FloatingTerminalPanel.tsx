@@ -57,6 +57,7 @@ import {
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   keybindingMatchesAction,
+  matchKeybindingDigitIndex,
   type KeybindingActionId,
   type KeybindingContext,
   type KeybindingMatchOptions,
@@ -83,6 +84,7 @@ import {
   getDefaultFloatingTerminalCommittedBounds,
   getDefaultFloatingTerminalBounds,
   getMaximizedFloatingTerminalBounds,
+  getMinifiedFloatingTerminalBounds,
   persistFloatingTerminalPanelBounds,
   readPersistedFloatingTerminalPanelBounds,
   resolveFloatingTerminalPanelCommittedBounds,
@@ -354,6 +356,23 @@ export function FloatingTerminalPanel({
           : tabId
       }),
     [activeGroup, groupTabs]
+  )
+  const visibleFloatingTabOrder = useMemo(
+    () =>
+      tabBarOrder.filter((visibleId) => {
+        const tab = resolveGroupTabFromVisibleId(groupTabs, visibleId)
+        if (!tab) {
+          return false
+        }
+        if (tab.contentType === 'terminal') {
+          return terminalItems.some((item) => item.unifiedTabId === tab.id)
+        }
+        if (tab.contentType === 'browser') {
+          return browserItems.some((item) => item.tabId === tab.id)
+        }
+        return editorItems.some((item) => item.tabId === tab.id)
+      }),
+    [browserItems, editorItems, groupTabs, tabBarOrder, terminalItems]
   )
   const activeBrowserTab = activeBrowserId
     ? (browserTabs.find((tab) => tab.id === activeBrowserId) ?? null)
@@ -932,21 +951,72 @@ export function FloatingTerminalPanel({
     setFloatingTerminalInputFocusedInMain(isFloatingWorkspaceTerminalInputTarget(target))
   }, [])
 
+  const toggleMaximized = useCallback(() => {
+    if (maximized) {
+      const restoredState = restoreBoundsRef.current ?? {
+        committedBounds: getDefaultFloatingTerminalCommittedBounds(),
+        renderedBounds: getDefaultFloatingTerminalBounds(),
+        source: 'default' as const
+      }
+      restoreBoundsRef.current = null
+      boundsSourceRef.current = restoredState.source
+      committedBoundsRef.current = restoredState.committedBounds
+      const restoredBounds = shouldReconcileFloatingTerminalPanelBounds(restoredState.source)
+        ? resolveFloatingTerminalPanelBounds(restoredState.committedBounds, restoredState.source)
+        : restoredState.renderedBounds
+      stagedBoundsRef.current = null
+      setBounds(restoredBounds)
+      setMaximized(false)
+      return
+    }
+    restoreBoundsRef.current = {
+      committedBounds: committedBoundsRef.current,
+      renderedBounds: bounds,
+      source: boundsSourceRef.current
+    }
+    stagedBoundsRef.current = null
+    setBounds(getMaximizedFloatingTerminalBounds())
+    setMaximized(true)
+  }, [bounds, maximized])
+
+  const minifyPanel = useCallback(() => {
+    restoreBoundsRef.current = null
+    stagedBoundsRef.current = null
+    setMaximized(false)
+    commitUserBounds(getMinifiedFloatingTerminalBounds())
+  }, [commitUserBounds])
+
   const handleFloatingPanelShortcutAction = useCallback(
     (input: FloatingPanelShortcutInput, consume: () => void): boolean => {
       const state = useAppStore.getState()
       const platform = getShortcutPlatform()
+      const terminalShortcutPolicy = state.settings?.terminalShortcutPolicy
+      const isFloatingTerminalInput = isFloatingWorkspaceTerminalInputTarget(input.target)
       const context: KeybindingContext = input.doubleTapModifier
         ? 'app'
-        : isFloatingWorkspaceTerminalInputTarget(input.target)
+        : isFloatingTerminalInput
           ? 'terminal'
           : 'app'
       const matchOptions: KeybindingMatchOptions = {
         context,
-        terminalShortcutPolicy: state.settings?.terminalShortcutPolicy
+        terminalShortcutPolicy
       }
+      // Floating panel chrome owns these controls even when xterm has DOM focus;
+      // keep the rest of the shortcut table in terminal context for terminal-first.
+      const floatingChromeMatchOptions: KeybindingMatchOptions =
+        isFloatingTerminalInput && terminalShortcutPolicy === 'terminal-first'
+          ? { context: 'app', terminalShortcutPolicy }
+          : matchOptions
       const matches = (actionId: KeybindingActionId): boolean =>
         keybindingMatchesAction(actionId, input, platform, state.keybindings, matchOptions)
+      const matchesFloatingChrome = (actionId: KeybindingActionId): boolean =>
+        keybindingMatchesAction(
+          actionId,
+          input,
+          platform,
+          state.keybindings,
+          floatingChromeMatchOptions
+        )
 
       if (matches('tab.newTerminal')) {
         consume()
@@ -982,18 +1052,59 @@ export function FloatingTerminalPanel({
         }
         return true
       }
+      if (matchesFloatingChrome('tab.rename') && activeTab) {
+        consume()
+        state.setRenamingTabId(activeTab.id)
+        return true
+      }
+      const selectedTabIndex = matchKeybindingDigitIndex(
+        'tab.selectByIndex',
+        input,
+        platform,
+        state.keybindings,
+        matchOptions
+      )
+      if (selectedTabIndex !== null) {
+        const visibleId = visibleFloatingTabOrder[selectedTabIndex]
+        if (!visibleId) {
+          return false
+        }
+        consume()
+        activateFloatingItem(visibleId)
+        return true
+      }
+      if (matchesFloatingChrome('floatingWorkspace.maximize')) {
+        consume()
+        toggleMaximized()
+        return true
+      }
+      if (matchesFloatingChrome('floatingWorkspace.minify')) {
+        consume()
+        minifyPanel()
+        return true
+      }
+      if (matchesFloatingChrome('floatingWorkspace.minimize')) {
+        consume()
+        onOpenChange(false)
+        return true
+      }
       return false
     },
     [
       activeClosableTab,
+      activeTab,
+      activateFloatingItem,
       closeFloatingItem,
       createFloatingBrowserTab,
       createFloatingMarkdownTab,
       createFloatingTerminalTab,
       focusPanelForShortcutsAfterClose,
+      minifyPanel,
       onOpenChange,
       openFloatingMarkdownTab,
-      visibleFloatingItemCount
+      toggleMaximized,
+      visibleFloatingItemCount,
+      visibleFloatingTabOrder
     ]
   )
 
@@ -1013,14 +1124,54 @@ export function FloatingTerminalPanel({
 
       const state = useAppStore.getState()
       const platform = getShortcutPlatform()
-      const context: KeybindingContext = isFloatingWorkspaceTerminalInputTarget(event.target)
-        ? 'terminal'
-        : 'app'
+      const terminalShortcutPolicy = state.settings?.terminalShortcutPolicy
+      const isFloatingTerminalInput = isFloatingWorkspaceTerminalInputTarget(event.target)
+      const context: KeybindingContext = isFloatingTerminalInput ? 'terminal' : 'app'
       const matchOptions: KeybindingMatchOptions = {
         context,
-        terminalShortcutPolicy: state.settings?.terminalShortcutPolicy
+        terminalShortcutPolicy
       }
+      const floatingChromeMatchOptions: KeybindingMatchOptions =
+        isFloatingTerminalInput && terminalShortcutPolicy === 'terminal-first'
+          ? { context: 'app', terminalShortcutPolicy }
+          : matchOptions
       const nativeEvent = event.nativeEvent
+      const isFloatingChromeShortcut =
+        keybindingMatchesAction(
+          'tab.rename',
+          nativeEvent,
+          platform,
+          state.keybindings,
+          floatingChromeMatchOptions
+        ) ||
+        matchKeybindingDigitIndex(
+          'tab.selectByIndex',
+          nativeEvent,
+          platform,
+          state.keybindings,
+          matchOptions
+        ) !== null ||
+        keybindingMatchesAction(
+          'floatingWorkspace.maximize',
+          nativeEvent,
+          platform,
+          state.keybindings,
+          floatingChromeMatchOptions
+        ) ||
+        keybindingMatchesAction(
+          'floatingWorkspace.minify',
+          nativeEvent,
+          platform,
+          state.keybindings,
+          floatingChromeMatchOptions
+        ) ||
+        keybindingMatchesAction(
+          'floatingWorkspace.minimize',
+          nativeEvent,
+          platform,
+          state.keybindings,
+          floatingChromeMatchOptions
+        )
 
       if (
         !isFloatingWorkspacePanelShortcut(
@@ -1029,7 +1180,8 @@ export function FloatingTerminalPanel({
           panelRef.current,
           state.keybindings,
           matchOptions
-        )
+        ) &&
+        !isFloatingChromeShortcut
       ) {
         return
       }
@@ -1214,35 +1366,6 @@ export function FloatingTerminalPanel({
       window.removeEventListener('blur', handleWindowBlur)
     }
   }, [open])
-
-  const toggleMaximized = useCallback(() => {
-    if (maximized) {
-      const restoredState = restoreBoundsRef.current ?? {
-        committedBounds: getDefaultFloatingTerminalCommittedBounds(),
-        renderedBounds: getDefaultFloatingTerminalBounds(),
-        source: 'default' as const
-      }
-      restoreBoundsRef.current = null
-      boundsSourceRef.current = restoredState.source
-      committedBoundsRef.current = restoredState.committedBounds
-      const restoredBounds = shouldReconcileFloatingTerminalPanelBounds(restoredState.source)
-        ? resolveFloatingTerminalPanelBounds(restoredState.committedBounds, restoredState.source)
-        : restoredState.renderedBounds
-      stagedBoundsRef.current = null
-      setBounds(restoredBounds)
-      setMaximized(false)
-      return
-    }
-    restoreBoundsRef.current = {
-      committedBounds: committedBoundsRef.current,
-      renderedBounds: bounds,
-      source: boundsSourceRef.current
-    }
-    stagedBoundsRef.current = null
-    setBounds(getMaximizedFloatingTerminalBounds())
-    setMaximized(true)
-  }, [bounds, maximized])
-
   const handleDragStart = (event: React.PointerEvent<HTMLDivElement>): void => {
     if (maximized) {
       return
