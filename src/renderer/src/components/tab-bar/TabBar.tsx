@@ -1038,7 +1038,7 @@ function TabBarInner({
             // a different box than the tab's own `border-t`, producing a
             // heavier-looking L-corner at the leftmost tab when inactive.
             className={[
-              'terminal-tab-strip flex h-full min-w-0 max-w-full flex-1 items-stretch overflow-x-auto overflow-y-hidden border-r border-border',
+              'terminal-tab-strip flex h-full min-w-0 max-w-full flex-1 items-stretch overflow-x-auto overflow-y-hidden border-r border-border/70',
               getTabStripScrollMaskClassName(tabStripOverflowState)
             ]
               .filter(Boolean)
