@@ -7,6 +7,13 @@ import { decryptChromiumValue } from './chromium-value-decrypt'
 import { getEncryptionKey } from './chromium-encryption-key'
 import { diag, reasonWithDiagLog } from './chromium-diag'
 import {
+  type BrowserProfile,
+  CHROMIUM_BROWSERS,
+  browserRootPath,
+  detectChromiumBrowsers,
+  isSafeBrowserProfileDirectory
+} from './chromium-profile-discovery'
+import {
   copyFileSync,
   existsSync,
   mkdtempSync,
@@ -37,10 +44,7 @@ import { setupClientHintsOverride } from './browser-session-ua'
 // Browser detection
 // ---------------------------------------------------------------------------
 
-export type BrowserProfile = {
-  name: string
-  directory: string
-}
+export type { BrowserProfile } from './chromium-profile-discovery'
 
 export type DetectedBrowser = {
   family: BrowserSessionProfileSource['browserFamily']
@@ -50,90 +54,6 @@ export type DetectedBrowser = {
   keychainAccount?: string
   profiles: BrowserProfile[]
   selectedProfile: string
-}
-
-type ChromiumBrowserDef = {
-  family: BrowserSessionProfileSource['browserFamily']
-  label: string
-  keychainService: string
-  keychainAccount: string
-  // Why: each platform stores browser data in a different location. The per-platform
-  // root paths are resolved at detection time via browserRootPath().
-  macRoot?: string
-  winRoot?: string
-  linuxRoot?: string
-}
-
-const CHROMIUM_BROWSERS: ChromiumBrowserDef[] = [
-  {
-    family: 'chrome',
-    label: 'Google Chrome',
-    keychainService: 'Chrome Safe Storage',
-    keychainAccount: 'Chrome',
-    macRoot: 'Google/Chrome',
-    winRoot: 'Google/Chrome/User Data',
-    linuxRoot: 'google-chrome'
-  },
-  {
-    family: 'edge',
-    label: 'Microsoft Edge',
-    keychainService: 'Microsoft Edge Safe Storage',
-    keychainAccount: 'Microsoft Edge',
-    macRoot: 'Microsoft Edge',
-    winRoot: 'Microsoft/Edge/User Data',
-    linuxRoot: 'microsoft-edge'
-  },
-  {
-    family: 'arc',
-    label: 'Arc',
-    keychainService: 'Arc Safe Storage',
-    keychainAccount: 'Arc',
-    macRoot: 'Arc/User Data'
-  },
-  {
-    family: 'chromium',
-    label: 'Brave',
-    keychainService: 'Brave Safe Storage',
-    keychainAccount: 'Brave',
-    macRoot: 'BraveSoftware/Brave-Browser',
-    winRoot: 'BraveSoftware/Brave-Browser/User Data',
-    linuxRoot: 'BraveSoftware/Brave-Browser'
-  },
-  {
-    family: 'comet',
-    label: 'Comet',
-    keychainService: 'Comet Safe Storage',
-    keychainAccount: 'Comet',
-    macRoot: 'Comet',
-    winRoot: 'Comet/User Data'
-    // linuxRoot intentionally omitted — Comet does not ship a Linux build as of 2026-05-15
-  }
-]
-
-function browserRootPath(def: ChromiumBrowserDef): string | null {
-  if (process.platform === 'darwin') {
-    if (!def.macRoot) {
-      return null
-    }
-    const home = process.env.HOME ?? ''
-    return join(home, 'Library', 'Application Support', def.macRoot)
-  }
-  if (process.platform === 'win32') {
-    if (!def.winRoot) {
-      return null
-    }
-    const localAppData = process.env.LOCALAPPDATA ?? ''
-    if (!localAppData) {
-      return null
-    }
-    return join(localAppData, def.winRoot)
-  }
-  // Linux
-  if (!def.linuxRoot) {
-    return null
-  }
-  const configHome = process.env.XDG_CONFIG_HOME ?? join(process.env.HOME ?? '', '.config')
-  return join(configHome, def.linuxRoot)
 }
 
 // Why: Chromium 96+ moved the cookies DB from <Profile>/Cookies to
@@ -148,47 +68,6 @@ function resolveCookiesPath(profileDir: string): string | null {
     return legacyPath
   }
   return null
-}
-
-function isSafeBrowserProfileDirectory(directory: string): boolean {
-  return (
-    directory.length > 0 &&
-    directory !== '.' &&
-    !directory.includes('\0') &&
-    !directory.includes('/') &&
-    !directory.includes('\\') &&
-    !directory.includes('..')
-  )
-}
-
-// Why: Chrome's Local State JSON contains profile.info_cache which maps profile
-// directory names (e.g. "Default", "Profile 1") to metadata including the
-// user-visible display name. This lets us show human-readable names in the picker.
-function discoverProfiles(browserRoot: string): BrowserProfile[] {
-  try {
-    const localStatePath = join(browserRoot, 'Local State')
-    if (!existsSync(localStatePath)) {
-      return [{ name: 'Default', directory: 'Default' }]
-    }
-    const raw = readFileSync(localStatePath, 'utf-8')
-    const localState = JSON.parse(raw)
-    const infoCache = localState?.profile?.info_cache
-    if (!infoCache || typeof infoCache !== 'object') {
-      return [{ name: 'Default', directory: 'Default' }]
-    }
-    const profiles: BrowserProfile[] = []
-    for (const [dir, info] of Object.entries(infoCache)) {
-      // Why: Local State is external metadata, but profile dirs become path segments.
-      if (!isSafeBrowserProfileDirectory(dir)) {
-        continue
-      }
-      const profileName = (info as { name?: string })?.name ?? dir
-      profiles.push({ name: profileName, directory: dir })
-    }
-    return profiles.length > 0 ? profiles : [{ name: 'Default', directory: 'Default' }]
-  } catch {
-    return [{ name: 'Default', directory: 'Default' }]
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -306,32 +185,24 @@ function detectSafari(): DetectedBrowser | null {
 }
 
 export function detectInstalledBrowsers(): DetectedBrowser[] {
-  const detected: DetectedBrowser[] = []
-  for (const browser of CHROMIUM_BROWSERS) {
-    const root = browserRootPath(browser)
-    if (!root) {
-      continue
-    }
-    const profiles = discoverProfiles(root)
-    // Why: a browser is "detected" if at least one profile has a cookies DB.
-    // Use the first profile with a valid cookies path as the default selection.
-    for (const profile of profiles) {
-      const profileDir = join(root, profile.directory)
-      const cookiesPath = resolveCookiesPath(profileDir)
-      if (cookiesPath) {
-        detected.push({
-          family: browser.family,
-          label: browser.label,
-          keychainService: browser.keychainService,
-          keychainAccount: browser.keychainAccount,
-          cookiesPath,
-          profiles,
-          selectedProfile: profile.directory
-        })
-        break
-      }
-    }
+  // Why: cookiesResolver is the cookies-specific store path resolver. Passing it
+  // to detectChromiumBrowsers keeps the loop store-agnostic so the password
+  // importer can plug in a "Login Data" resolver instead.
+  const cookiesResolver = (root: string, profileDir: string): string | null => {
+    return resolveCookiesPath(join(root, profileDir))
   }
+
+  const chromiumBrowsers = detectChromiumBrowsers(cookiesResolver).map((b) => ({
+    family: b.family,
+    label: b.label,
+    keychainService: b.keychainService,
+    keychainAccount: b.keychainAccount,
+    cookiesPath: cookiesResolver(b.root, b.selectedProfile)!,
+    profiles: b.profiles,
+    selectedProfile: b.selectedProfile
+  }))
+
+  const detected: DetectedBrowser[] = [...chromiumBrowsers]
 
   const firefox = detectFirefox()
   if (firefox) {
