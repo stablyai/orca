@@ -12,6 +12,7 @@ import {
   clampFloatingTerminalBounds,
   getDefaultFloatingTerminalBounds,
   getMaximizedFloatingTerminalBounds,
+  getMinifiedFloatingTerminalBounds,
   type FloatingTerminalPanelBounds
 } from './floating-terminal-panel-bounds'
 
@@ -1497,6 +1498,54 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-3')
   })
 
+  it('ignores focused floating tab index shortcuts past the visible tab count', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' }), makeTab({ id: 'tab-2' })])
+    const element = await renderPanel(true)
+    const { keydownListener, panelElement } = bindFocusedFloatingPanelKeydown(element)
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
+    const stopImmediatePropagation = vi.fn()
+
+    keydownListener(
+      makeFocusedPanelKeyEvent({
+        code: 'Digit5',
+        ctrlKey: true,
+        key: '5',
+        preventDefault,
+        stopImmediatePropagation,
+        stopPropagation,
+        target: panelElement
+      })
+    )
+
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(stopPropagation).not.toHaveBeenCalled()
+    expect(stopImmediatePropagation).not.toHaveBeenCalled()
+    expect(mocks.activateTab).not.toHaveBeenCalled()
+    expect(mocks.setActiveTab).not.toHaveBeenCalled()
+  })
+
+  it('ignores focused floating tab rename shortcuts when no tab is active', async () => {
+    const element = await renderPanel(true)
+    const { keydownListener, panelElement } = bindFocusedFloatingPanelKeydown(element)
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
+    const stopImmediatePropagation = vi.fn()
+
+    keydownListener(
+      makeFocusedPanelKeyEvent({
+        key: 'r',
+        metaKey: true,
+        preventDefault,
+        stopImmediatePropagation,
+        stopPropagation,
+        target: panelElement
+      })
+    )
+
+    expect(mocks.setRenamingTabId).not.toHaveBeenCalled()
+  })
+
   it('leaves focused floating xterm tab index shortcuts to terminal-first terminals', async () => {
     setFloatingTabs([makeTab({ id: 'tab-1' }), makeTab({ id: 'tab-2' })])
     ;(storeBox.state as FloatingPanelStoreState).settings = {
@@ -1614,7 +1663,7 @@ describe('FloatingTerminalPanel close behavior', () => {
 
     const compactBounds = getPanelStyleBounds(await renderPanel(true))
     expect(preventDefault).toHaveBeenCalledWith()
-    expect(compactBounds).toEqual({ left: 756, top: 436, width: 420, height: 280 })
+    expect(compactBounds).toEqual(getMinifiedFloatingTerminalBounds())
     expect(compactBounds.width).toBeLessThan(defaultBounds.width)
     expect(compactBounds.height).toBeLessThan(defaultBounds.height)
     expect(onOpenChange).not.toHaveBeenCalled()

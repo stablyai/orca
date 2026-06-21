@@ -38,19 +38,6 @@ vi.mock('./SidebarSettingsHelpMenu', () => ({
 
 const roots: Root[] = []
 
-function installLocalStorageShim(): void {
-  const values = new Map<string, string>()
-  Object.defineProperty(window, 'localStorage', {
-    configurable: true,
-    value: {
-      clear: () => values.clear(),
-      getItem: (key: string) => values.get(key) ?? null,
-      removeItem: (key: string) => values.delete(key),
-      setItem: (key: string, value: string) => values.set(key, value)
-    }
-  })
-}
-
 async function renderToolbar(onWorkspaceBoardToggle = vi.fn()): Promise<{
   container: HTMLDivElement
   rerender: () => Promise<void>
@@ -79,7 +66,6 @@ async function renderToolbar(onWorkspaceBoardToggle = vi.fn()): Promise<{
 describe('SidebarToolbar moved workspace board hint', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
-    installLocalStorageShim()
     window.localStorage.clear()
     mocks.activeTooltipOpen = false
     mocks.state = {

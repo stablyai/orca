@@ -450,6 +450,8 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       'minify',
       'compact'
     ],
+    // Why: macOS only, same as maximize. On Windows/Linux, Ctrl+Alt+Arrow is
+    // commonly reserved by the OS or desktop environment.
     defaultBindings: {
       darwin: ['Mod+Alt+ArrowDown'],
       linux: [],
@@ -472,6 +474,9 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       'minimize',
       'hide'
     ],
+    // Why: intentionally unbound on every platform. floatingTerminal.toggle
+    // already owns the default show/hide chord; this action exists only so
+    // users can bind an explicit "hide the focused panel" shortcut in Settings.
     defaultBindings: {
       darwin: [],
       linux: [],
