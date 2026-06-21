@@ -288,15 +288,21 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
   },
   hermes: {
     detectCmd: 'hermes',
-    // Why: bare `hermes` opens the classic REPL in recent Hermes releases;
-    // `--tui` starts the full-screen agent UI Orca is designed to host.
-    launchCmd: 'hermes --tui',
+    // Why: top-level `hermes --tui` boots Hermes's MESSAGING gateway (WhatsApp/
+    // Slack), which exits(1) in a loop when that integration isn't configured —
+    // spamming "error: gateway exited (1)". The `chat` subcommand is the actual
+    // interactive agent and needs no messaging gateway (verified: `hermes chat
+    // -q ...` replies cleanly). So launch the agent directly.
+    launchCmd: 'hermes chat',
     expectedProcess: 'hermes',
     promptInjectionMode: 'stdin-after-start'
   },
   openclaw: {
     detectCmd: 'openclaw',
-    launchCmd: 'openclaw',
+    // Why: bare `openclaw` just prints usage. `openclaw chat` is the interactive
+    // terminal UI (alias for `tui --local`), which runs the embedded local agent
+    // runtime — no separately-started Gateway server required.
+    launchCmd: 'openclaw chat',
     expectedProcess: 'openclaw',
     promptInjectionMode: 'stdin-after-start'
   },
