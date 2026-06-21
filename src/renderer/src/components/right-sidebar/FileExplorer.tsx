@@ -132,8 +132,10 @@ function FileExplorerFiles(): React.JSX.Element {
   )
   const hasNameFilter = isFilesViewActive && hasNameFilterQuery
   useEffect(() => {
-    setNameFilterCollapsedPaths((current) => (current.size > 0 ? new Set() : current))
-  }, [hasNameFilter, nameFilterQuery])
+    if (!hasNameFilter) {
+      setNameFilterCollapsedPaths((current) => (current.size > 0 ? new Set() : current))
+    }
+  }, [hasNameFilter])
   const nameFilterFiles = useRuntimeFileListForWorktree({
     enabled: hasNameFilter && !nameFilterQueryTooLarge,
     worktreeId: activeWorktreeId
