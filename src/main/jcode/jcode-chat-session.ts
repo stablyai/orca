@@ -29,14 +29,10 @@ import {
   saveConversation
 } from './jcode-conversation-store'
 import { resolveTurnPrompt } from './jcode-attachments'
+import { resolveJcodeBin } from './jcode-binary'
 import { friendlyChildError } from './jcode-error-messages'
 import { resolveRemoteExec } from './jcode-remote-exec'
 import { applySkillInjection, registerJcodeSkillsHandler } from './jcode-skills'
-
-// Why: jcode is installed via cargo; the absolute path avoids depending on the
-// (often empty under Electron) PATH. Mirrors the pinned tool path the desktop
-// prototype and CLI verification use.
-const JCODE_BIN = '/Users/vinny/.cargo/bin/jcode'
 
 /** One in-flight turn per sessionKey. A new send for the same key cancels the
  *  previous child first (defensive — the renderer should not double-send). */
@@ -157,7 +153,7 @@ async function startTurn(
   let child: ChildProcessWithoutNullStreams
   try {
     child = spawn(
-      JCODE_BIN,
+      resolveJcodeBin(),
       buildArgs(payload, remoteExecHost, resolvedPrompt, remote.remotePath),
       {
         cwd: localSpawnCwd,

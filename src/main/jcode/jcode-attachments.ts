@@ -8,7 +8,7 @@
 // tools execute on the REMOTE host, so a local path is meaningless there. The
 // caller copies each local file to a remote temp dir first and passes the rewritten
 // REMOTE path here; this module stays transport-agnostic and only formats text.
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import type { JcodeChatAttachment, JcodeChatSendPayload } from '../../shared/jcode-chat-types'
 import { getSshConnectionManager } from '../ipc/ssh'
@@ -89,6 +89,11 @@ export type RemoteExecResolution = {
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`
 }
+
+/** Per-file size cap for remote attachment transfer. Large files would block the
+ *  main process (read + base64) and bloat the SSH channel; refuse them with a
+ *  clear note instead. 25 MiB matches the cap surfaced to the user. */
+export const MAX_REMOTE_ATTACHMENT_BYTES = 25 * 1024 * 1024
 
 /** Run a remote command over an SSH connection and resolve when it closes.
  *  Best-effort: rejects only on channel-open failure. */
@@ -210,8 +215,17 @@ export async function resolveTurnPrompt(
 
   // Remote-exec session with a live workspace SSH connection: copy each local
   // file to a remote temp dir and reference the remote path.
-  const { resolved, failed } = await copyFilesToRemote(files, remote.connectionId)
+  const { resolved, failed, oversize } = await copyFilesToRemote(files, remote.connectionId)
   const extraTexts = [...texts]
+  if (oversize.length > 0) {
+    const capMb = Math.round(MAX_REMOTE_ATTACHMENT_BYTES / (1024 * 1024))
+    extraTexts.push({
+      name: 'note',
+      content:
+        `The following files exceed the ${capMb}MB attachment limit and were NOT sent to the ` +
+        `remote host:\n${oversize.map((f) => `- ${f.path}`).join('\n')}`
+    })
+  }
   if (failed.length > 0) {
     extraTexts.push({
       name: 'note',
@@ -224,35 +238,61 @@ export async function resolveTurnPrompt(
 }
 
 /** Copy local files to a fresh remote temp dir over an SSH connection. Returns
- *  resolved remote paths and any files that could not be copied (left local). */
+ *  resolved remote paths, files that could not be copied (left local), and files
+ *  refused for exceeding the size cap.
+ *
+ *  Binary-safe: we base64-encode the raw bytes locally and decode them on the
+ *  remote via `base64 -d`. The previous implementation did
+ *  `contents.toString('utf8')` before writeFile, which CORRUPTS any non-UTF8
+ *  file (images, PDFs, zips) — invalid byte sequences get replaced with U+FFFD.
+ *  Sending base64 over the (text-only) writeFile transport round-trips the exact
+ *  bytes regardless of transport (SFTP or system-ssh `cat`). */
 async function copyFilesToRemote(
   files: { path: string; name: string }[],
   connectionId: string
-): Promise<{ resolved: ResolvedFileAttachment[]; failed: { path: string; name: string }[] }> {
+): Promise<{
+  resolved: ResolvedFileAttachment[]
+  failed: { path: string; name: string }[]
+  oversize: { path: string; name: string }[]
+}> {
   const resolved: ResolvedFileAttachment[] = []
   const failed: { path: string; name: string }[] = []
+  const oversize: { path: string; name: string }[] = []
   if (files.length === 0) {
-    return { resolved, failed }
+    return { resolved, failed, oversize }
   }
   const conn = getSshConnectionManager()?.getConnection(connectionId)
   if (!conn || conn.getState().status !== 'connected') {
-    return { resolved, failed: [...files] }
+    return { resolved, failed: [...files], oversize }
   }
   const remoteDir = buildRemoteAttachmentDir()
   try {
     await runRemoteCommand(conn, `mkdir -p ${shellQuote(remoteDir)}`)
   } catch {
-    return { resolved, failed: [...files] }
+    return { resolved, failed: [...files], oversize }
   }
   for (const file of files) {
     try {
+      // Cheap size gate first so an oversized file never gets read into memory.
+      const info = await stat(file.path)
+      if (info.size > MAX_REMOTE_ATTACHMENT_BYTES) {
+        oversize.push(file)
+        continue
+      }
       const contents = await readFile(file.path)
       const remotePath = `${remoteDir}/${basename(file.path)}`
-      await conn.writeFile(remotePath, contents.toString('utf8'))
+      // Write base64 to a sidecar file, then decode to the real path on the
+      // remote so the bytes are preserved exactly (no utf8 mangling).
+      const b64Path = `${remotePath}.b64`
+      await conn.writeFile(b64Path, contents.toString('base64'))
+      await runRemoteCommand(
+        conn,
+        `base64 -d ${shellQuote(b64Path)} > ${shellQuote(remotePath)} && rm -f ${shellQuote(b64Path)}`
+      )
       resolved.push({ path: remotePath, name: file.name })
     } catch {
       failed.push(file)
     }
   }
-  return { resolved, failed }
+  return { resolved, failed, oversize }
 }

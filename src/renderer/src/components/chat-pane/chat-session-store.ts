@@ -513,6 +513,11 @@ export function clearChatAttachments(sessionKey: string): void {
  *  issued) so nothing typed before close is lost. Use deleteChatConversation to
  *  remove the durable record. */
 export function disposeChatSession(sessionKey: string): void {
+  // Kill any in-flight jcode child for this pane. Without this, closing a chat
+  // tab mid-turn leaves the spawned jcode process running (and burning tokens)
+  // with no UI attached to it. The main-side handler safely no-ops when there is
+  // no active child, so calling it unconditionally is harmless.
+  window.api.jcodeChat.stop({ sessionKey })
   const pending = saveTimers.get(sessionKey)
   if (pending) {
     clearTimeout(pending)
