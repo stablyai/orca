@@ -34,6 +34,11 @@ export type JcodeChatSendPayload = {
   prompt: string
   /** jcode provider id, e.g. 'openai'. */
   provider?: string
+  /** Named custom OpenAI-compatible provider profile (from `jcode provider add`).
+   *  When set, the main process spawns jcode with `--provider-profile <name>`
+   *  (which IMPLIES openai-compatible) and OMITS `-p`. Takes precedence over
+   *  `provider`. `-m model` is still honored to override the profile default. */
+  providerProfile?: string
   /** jcode model id, e.g. 'gpt-5.5'. */
   model?: string
   /** Working directory passed to jcode via -C. */
@@ -50,6 +55,50 @@ export type JcodeChatSendPayload = {
    *  no worktree-derived host is available (e.g. ad-hoc callers). */
   remoteExecHost?: string
 }
+
+/** Authentication style jcode uses for a custom OpenAI-compatible provider. */
+export type JcodeProviderAuth = 'bearer' | 'api-key' | 'none'
+
+/** A user-added custom OpenAI-compatible provider profile. The API key is NOT
+ *  stored here — it lives in jcode's private provider env file (written via
+ *  `jcode provider add --api-key-stdin`). This record only mirrors the
+ *  non-secret config so the composer + settings can list profiles. */
+export type JcodeCustomProvider = {
+  /** Profile name; passed to jcode as `--provider-profile <name>`. */
+  name: string
+  /** OpenAI-compatible base URL, e.g. https://llm.example.com/v1 */
+  baseUrl: string
+  /** Default model id for this profile. */
+  model: string
+  /** Auth style; defaults to 'bearer' when omitted. */
+  auth?: JcodeProviderAuth
+}
+
+/** Renderer -> main args to add a custom provider. The API key (when present)
+ *  is delivered over the child's STDIN, never as an argv flag. */
+export type JcodeProviderAddArgs = {
+  name: string
+  baseUrl: string
+  model: string
+  auth?: JcodeProviderAuth
+  /** Optional custom auth header name (jcode `--auth-header`). */
+  authHeader?: string
+  /** API key value; written to jcode's stdin via `--api-key-stdin`. When empty
+   *  / omitted the provider is added with `--no-api-key`. */
+  apiKey?: string
+}
+
+/** Result of a jcodeProviders:add / :list call. */
+export type JcodeProviderActionResult = {
+  ok: boolean
+  /** Normalized error message when ok === false. */
+  error?: string
+  /** The persisted (non-secret) profile, on a successful add. */
+  provider?: JcodeCustomProvider
+}
+
+export const JCODE_PROVIDERS_LIST_CHANNEL = 'jcodeProviders:list'
+export const JCODE_PROVIDERS_ADD_CHANNEL = 'jcodeProviders:add'
 
 export const JCODE_CHAT_SEND_CHANNEL = 'jcode-chat:send'
 export const JCODE_CHAT_STOP_CHANNEL = 'jcode-chat:stop'
@@ -91,6 +140,9 @@ export type JcodeConversationRecord = {
   /** Persisted composer chip selection. */
   composerProvider?: string
   composerModel?: string
+  /** Persisted custom provider profile selection (mutually exclusive with
+   *  composerProvider; when set the chip points at a `jcode provider add` profile). */
+  composerProviderProfile?: string
   /** The transcript. Capped to a max length on write to bound file growth. */
   messages: JcodePersistedMessage[]
 }

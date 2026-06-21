@@ -2,7 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { JcodeConversationSummary } from '../../../../shared/jcode-chat-types'
+import type {
+  JcodeConversationSummary,
+  JcodeCustomProvider
+} from '../../../../shared/jcode-chat-types'
 import { reopenChatConversation } from '@/lib/launch-chat-agent-tab'
 import { JcodeToolCard } from './JcodeToolCard'
 import {
@@ -16,6 +19,10 @@ import {
   useChatSession
 } from './chat-session-store'
 import { ChatComposer } from './ChatComposer'
+
+// Stable empty reference so the useAppStore selector fallback doesn't produce a
+// new array each render (which would thrash the subscription).
+const EMPTY_CUSTOM_PROVIDERS: JcodeCustomProvider[] = []
 
 // Why (BUG 1/2, reopen): the empty state of a chat tab is a self-contained,
 // chat-feature-owned place to surface "Recent chats" — durable conversations
@@ -182,8 +189,19 @@ export default function ChatPane({
   // provider/model selection also lives in the store (composerProvider/Model)
   // so the chip choice persists across tab switches; only the unsent draft text
   // is local component state.
-  const { messages, isStreaming, statusDetail, resumeSessionId, composerProvider, composerModel } =
-    useChatSession(sessionKey)
+  const {
+    messages,
+    isStreaming,
+    statusDetail,
+    resumeSessionId,
+    composerProvider,
+    composerModel,
+    composerProviderProfile
+  } = useChatSession(sessionKey)
+  // Custom OpenAI-compatible profiles the user added in Settings. Defensive
+  // against settings not yet hydrated.
+  const customProviders =
+    useAppStore((s) => s.settings?.jcodeCustomProviders) ?? EMPTY_CUSTOM_PROVIDERS
   const [input, setInput] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -220,16 +238,30 @@ export default function ChatPane({
     }
     startChatTurn(sessionKey, prompt)
     setInput('')
-    window.api.jcodeChat.send({
-      sessionKey,
-      prompt,
-      // composerProvider undefined ("Auto") falls back to this pane's default.
-      provider: composerProvider ?? provider,
-      model: composerModel ?? model,
-      cwd,
-      worktreeId,
-      resumeSessionId
-    })
+    if (composerProviderProfile) {
+      // Custom OpenAI-compatible profile: main emits `--provider-profile <name>`
+      // and OMITS `-p`. The model defaults to the profile's, overridable by -m.
+      window.api.jcodeChat.send({
+        sessionKey,
+        prompt,
+        providerProfile: composerProviderProfile,
+        model: composerModel,
+        cwd,
+        worktreeId,
+        resumeSessionId
+      })
+    } else {
+      window.api.jcodeChat.send({
+        sessionKey,
+        prompt,
+        // composerProvider undefined ("Auto") falls back to this pane's default.
+        provider: composerProvider ?? provider,
+        model: composerModel ?? model,
+        cwd,
+        worktreeId,
+        resumeSessionId
+      })
+    }
   }, [
     input,
     isStreaming,
@@ -238,6 +270,7 @@ export default function ChatPane({
     model,
     composerProvider,
     composerModel,
+    composerProviderProfile,
     cwd,
     worktreeId,
     resumeSessionId
@@ -319,7 +352,9 @@ export default function ChatPane({
           onStop={stop}
           isStreaming={isStreaming}
           provider={composerProvider}
+          providerProfile={composerProviderProfile}
           model={composerModel}
+          customProviders={customProviders}
           onSelectProvider={(selection) => setChatComposerSelection(sessionKey, selection)}
         />
       </div>

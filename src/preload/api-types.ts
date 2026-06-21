@@ -17,7 +17,9 @@ import type {
   JcodeChatSendPayload,
   JcodeChatStopPayload,
   JcodeConversationRecord,
-  JcodeConversationSummary
+  JcodeConversationSummary,
+  JcodeProviderActionResult,
+  JcodeProviderAddArgs
 } from '../shared/jcode-chat-types'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { TaskSourceContext } from '../shared/task-source-context'
@@ -774,6 +776,17 @@ export type PreloadApi = {
     loadConversation: (sessionKey: string) => Promise<JcodeConversationRecord | null>
     /** Remove a persisted conversation from disk. */
     deleteConversation: (sessionKey: string) => Promise<boolean>
+  }
+  /** Custom OpenAI-compatible provider profiles for jcode chat. */
+  jcodeProviders: {
+    /** List jcode's built-in providers (custom profiles are tracked in settings). */
+    list: () => Promise<{
+      ok: boolean
+      error?: string
+      builtins: { id: string; display_name?: string; detail?: string; recommended?: boolean }[]
+    }>
+    /** Add a custom profile via `jcode provider add` (API key over stdin). */
+    add: (args: JcodeProviderAddArgs) => Promise<JcodeProviderActionResult>
   }
   app: AppApi
   platform: {

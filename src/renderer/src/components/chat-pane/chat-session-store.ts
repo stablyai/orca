@@ -47,6 +47,10 @@ export type ChatSessionState = {
    *  `undefined` provider means "Auto" (let ChatPane's default apply). */
   composerProvider: string | undefined
   composerModel: string | undefined
+  /** Selected custom provider profile name (from a `jcode provider add` profile).
+   *  Mutually exclusive with composerProvider: when set, the turn is sent with
+   *  `providerProfile` (-> `--provider-profile`) instead of `provider` (-> -p). */
+  composerProviderProfile: string | undefined
 }
 
 const EMPTY_SESSION: ChatSessionState = {
@@ -56,7 +60,8 @@ const EMPTY_SESSION: ChatSessionState = {
   resumeSessionId: undefined,
   streamingId: null,
   composerProvider: undefined,
-  composerModel: undefined
+  composerModel: undefined,
+  composerProviderProfile: undefined
 }
 
 const sessions = new Map<string, ChatSessionState>()
@@ -93,6 +98,7 @@ function buildRecord(sessionKey: string, state: ChatSessionState): JcodeConversa
     resumeSessionId: state.resumeSessionId,
     composerProvider: state.composerProvider,
     composerModel: state.composerModel,
+    composerProviderProfile: state.composerProviderProfile,
     messages: state.messages.map((m) => ({
       id: m.id,
       role: m.role,
@@ -401,7 +407,8 @@ export function hydrateChatSession(record: JcodeConversationRecord): void {
     streamingId: null,
     resumeSessionId: record.resumeSessionId,
     composerProvider: record.composerProvider,
-    composerModel: record.composerModel
+    composerModel: record.composerModel,
+    composerProviderProfile: record.composerProviderProfile
   }))
 }
 
@@ -409,17 +416,28 @@ export function setChatStatusDetail(sessionKey: string, detail: string | null): 
   setSession(sessionKey, (state) => ({ ...state, statusDetail: detail }))
 }
 
-/** Persist the composer's provider/model selection per sessionKey so the chip
- *  choice survives tab switches (ChatPane unmount/remount). Pass `undefined`
- *  provider to mean "Auto". Setting a provider clears the model unless one is
- *  given, since models are provider-specific. */
+/** The composer chip selection. A built-in provider and a custom profile are
+ *  mutually exclusive; "Auto" is `provider: undefined, providerProfile: undefined`. */
+export type ChatComposerSelection = {
+  provider?: string | undefined
+  /** Custom profile name; when set, `provider` is ignored on send. */
+  providerProfile?: string | undefined
+  model?: string | undefined
+}
+
+/** Persist the composer's provider/profile/model selection per sessionKey so the
+ *  chip choice survives tab switches (ChatPane unmount/remount). Pass everything
+ *  undefined to mean "Auto". A built-in provider and a custom profile are
+ *  mutually exclusive — selecting one clears the other. When `model` is omitted
+ *  the previous model is kept. */
 export function setChatComposerSelection(
   sessionKey: string,
-  selection: { provider: string | undefined; model?: string | undefined }
+  selection: ChatComposerSelection
 ): void {
   setSession(sessionKey, (state) => ({
     ...state,
-    composerProvider: selection.provider,
+    composerProvider: selection.providerProfile ? undefined : selection.provider,
+    composerProviderProfile: selection.providerProfile,
     composerModel: 'model' in selection ? selection.model : state.composerModel
   }))
 }

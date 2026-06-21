@@ -49,6 +49,7 @@ import { registerCodexAccountHandlers } from './codex-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
 import { registerAgentTrustHandlers } from './agent-trust'
 import { registerClaudeAccountHandlers } from './claude-accounts'
+import { registerJcodeProviderHandlers } from './jcode-providers'
 import { registerUpdaterHandlers } from '../window/attach-main-window-services'
 import {
   registerClipboardHandlers,
@@ -113,6 +114,7 @@ export function registerCoreHandlers(
   registerAgentHookHandlers(runtime)
   registerAgentTrustHandlers()
   registerClaudeAccountHandlers(claudeAccounts)
+  registerJcodeProviderHandlers()
   registerRateLimitHandlers(rateLimits)
   registerGitHubHandlers(store, stats)
   registerGitLabHandlers(store)

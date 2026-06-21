@@ -25,7 +25,19 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { JCODE_PROVIDERS, findProviderOption } from './jcode-providers'
+import type { JcodeCustomProvider } from '../../../../shared/jcode-chat-types'
+import {
+  JCODE_PROVIDERS,
+  buildProfileOptions,
+  findProfileOption,
+  findProviderOption
+} from './jcode-providers'
+
+// Sentinel radio values for the special chip rows.
+const AUTO_VALUE = '__auto__'
+// Custom profiles are namespaced so their value never collides with a built-in
+// provider id in the shared radio group.
+const PROFILE_PREFIX = 'profile:'
 
 // Why: the composer is the Claude-app-style bottom bar. It owns the unsent
 // draft text (local state) and the auto-growing textarea, but the provider/model
@@ -51,7 +63,9 @@ export function ChatComposer({
   onStop,
   isStreaming,
   provider,
+  providerProfile,
   model,
+  customProviders,
   onSelectProvider
 }: {
   value: string
@@ -59,11 +73,17 @@ export function ChatComposer({
   onSend: () => void
   onStop: () => void
   isStreaming: boolean
-  /** Selected provider id, or undefined for "Auto". */
+  /** Selected built-in provider id, or undefined for "Auto"/profile. */
   provider: string | undefined
+  /** Selected custom provider profile name, or undefined. Mutually exclusive
+   *  with `provider`. */
+  providerProfile?: string | undefined
   model: string | undefined
+  /** User-added custom OpenAI-compatible profiles to surface in the picker. */
+  customProviders?: JcodeCustomProvider[]
   onSelectProvider: (selection: {
-    provider: string | undefined
+    provider?: string | undefined
+    providerProfile?: string | undefined
     model?: string | undefined
   }) => void
 }): React.JSX.Element {
@@ -106,7 +126,15 @@ export function ChatComposer({
     [insertToken]
   )
 
-  const providerOption = findProviderOption(provider)
+  const profileOptions = buildProfileOptions(customProviders)
+  // The active option is either a custom profile or a built-in provider.
+  const activeProfileOption = findProfileOption(customProviders, providerProfile)
+  const providerOption = activeProfileOption ?? findProviderOption(provider)
+  // Radio value: profile selection is namespaced; built-in is the raw id; Auto
+  // when neither is set.
+  const radioValue = providerProfile
+    ? `${PROFILE_PREFIX}${providerProfile}`
+    : (provider ?? AUTO_VALUE)
   const chipLabel = providerOption
     ? model
       ? `${providerOption.label} · ${model}`
@@ -220,17 +248,35 @@ export function ChatComposer({
             <DropdownMenuContent align="start" className="min-w-[15rem]">
               <DropdownMenuLabel>Model</DropdownMenuLabel>
               <DropdownMenuRadioGroup
-                value={provider ?? '__auto__'}
+                value={radioValue}
                 onValueChange={(next) => {
-                  if (next === '__auto__') {
-                    onSelectProvider({ provider: undefined, model: undefined })
+                  if (next === AUTO_VALUE) {
+                    onSelectProvider({
+                      provider: undefined,
+                      providerProfile: undefined,
+                      model: undefined
+                    })
+                    return
+                  }
+                  if (next.startsWith(PROFILE_PREFIX)) {
+                    const name = next.slice(PROFILE_PREFIX.length)
+                    const option = findProfileOption(customProviders, name)
+                    onSelectProvider({
+                      provider: undefined,
+                      providerProfile: name,
+                      model: option?.models?.[0]
+                    })
                     return
                   }
                   const option = findProviderOption(next)
-                  onSelectProvider({ provider: next, model: option?.models?.[0] })
+                  onSelectProvider({
+                    provider: next,
+                    providerProfile: undefined,
+                    model: option?.models?.[0]
+                  })
                 }}
               >
-                <DropdownMenuRadioItem value="__auto__">
+                <DropdownMenuRadioItem value={AUTO_VALUE}>
                   Auto
                   <span className="ml-auto text-xs text-muted-foreground">default</span>
                 </DropdownMenuRadioItem>
@@ -239,6 +285,20 @@ export function ChatComposer({
                     {entry.label}
                   </DropdownMenuRadioItem>
                 ))}
+                {profileOptions.length > 0 ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>自定义 Provider</DropdownMenuLabel>
+                    {profileOptions.map((entry) => (
+                      <DropdownMenuRadioItem
+                        key={`${PROFILE_PREFIX}${entry.id}`}
+                        value={`${PROFILE_PREFIX}${entry.id}`}
+                      >
+                        {entry.label}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </>
+                ) : null}
               </DropdownMenuRadioGroup>
               {providerOption?.models && providerOption.models.length > 0 ? (
                 <>
@@ -246,7 +306,11 @@ export function ChatComposer({
                   <DropdownMenuLabel>{providerOption.label} model</DropdownMenuLabel>
                   <DropdownMenuRadioGroup
                     value={model ?? providerOption.models[0]}
-                    onValueChange={(next) => onSelectProvider({ provider, model: next })}
+                    onValueChange={(next) =>
+                      // Preserve whichever of provider/profile is active when only
+                      // the model changes.
+                      onSelectProvider({ provider, providerProfile, model: next })
+                    }
                   >
                     {providerOption.models.map((modelId) => (
                       <DropdownMenuRadioItem key={modelId} value={modelId}>

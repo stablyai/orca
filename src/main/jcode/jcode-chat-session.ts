@@ -49,8 +49,18 @@ function sendEvent(mainWindow: BrowserWindow, sessionKey: string, event: JcodeNd
 }
 
 function buildArgs(payload: JcodeChatSendPayload, remoteExecHost: string | null): string[] {
-  const provider = payload.provider?.trim() || 'openai'
-  const args = ['run', '-p', provider]
+  // A named custom profile (from `jcode provider add`) is selected with
+  // `--provider-profile <name>` (which IMPLIES openai-compatible) and MUST NOT
+  // also pass `-p`; doing both would be ambiguous. It takes precedence over the
+  // built-in `-p provider` path. `-m model` still overrides the profile default.
+  const profile = payload.providerProfile?.trim()
+  let args: string[]
+  if (profile) {
+    args = ['run', '--provider-profile', profile]
+  } else {
+    const provider = payload.provider?.trim() || 'openai'
+    args = ['run', '-p', provider]
+  }
   if (payload.model?.trim()) {
     args.push('-m', payload.model.trim())
   }

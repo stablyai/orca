@@ -24,6 +24,7 @@ import type { GitBranchChangeStatus } from './git-status-types'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
 import type { RepoIcon } from './repo-icon'
 import type { AppIconId } from './app-icon'
+import type { JcodeCustomProvider } from './jcode-chat-types'
 import type {
   RepoSourceControlAiOverrides,
   SourceControlAiSettings
@@ -2640,6 +2641,11 @@ export type GlobalSettings = {
   /** Whether to extract OAuth credentials from the local Gemini CLI installation
    *  for rate-limit fetching. Disabled by default for explicit opt-in. */
   geminiCliOAuthEnabled: boolean
+  /** User-added custom OpenAI-compatible provider profiles for jcode chat. The
+   *  API keys are NOT stored here — they live in jcode's private provider env
+   *  file (written via `jcode provider add --api-key-stdin`). This mirrors the
+   *  non-secret config so the composer + settings can list/select profiles. */
+  jcodeCustomProviders: JcodeCustomProvider[]
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
   /** Per-agent default CLI arguments appended after the binary/path and before prompts. */

@@ -23,10 +23,12 @@ import {
   getAccountsClaudeSearchEntries,
   getAccountsCodexSearchEntries,
   getAccountsGeminiSearchEntries,
+  getAccountsJcodeProvidersSearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsOpencodeSearchEntries,
   getAccountsPaneSearchEntries
 } from './accounts-search'
+import type { JcodeCustomProvider, JcodeProviderAuth } from '../../../../shared/jcode-chat-types'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 import { matchesSettingsSearch } from './settings-search'
@@ -237,6 +239,183 @@ function getSelectedAccountRuntime(
     }
   }
   return { runtime: 'host', label: getHostRuntimeLabel() }
+}
+
+/** "自定义 Provider" — add/list custom OpenAI-compatible provider profiles for
+ *  jcode chat. The API key is sent to the main process which writes it to
+ *  `jcode provider add --api-key-stdin` (over stdin, never argv) and is NOT
+ *  persisted in GlobalSettings; only the non-secret profile is mirrored there
+ *  so the composer can list/select it. */
+function JcodeCustomProvidersSection({
+  settings,
+  updateSettings
+}: {
+  settings: GlobalSettings
+  updateSettings: (updates: Partial<GlobalSettings>) => void
+}): React.JSX.Element {
+  const providers = settings.jcodeCustomProviders ?? []
+  const [name, setName] = useState('')
+  const [baseUrl, setBaseUrl] = useState('')
+  const [apiKey, setApiKey] = useState('')
+  const [model, setModel] = useState('')
+  const [auth, setAuth] = useState<JcodeProviderAuth>('bearer')
+  const [busy, setBusy] = useState(false)
+
+  const resetForm = (): void => {
+    setName('')
+    setBaseUrl('')
+    setApiKey('')
+    setModel('')
+    setAuth('bearer')
+  }
+
+  const onAdd = async (): Promise<void> => {
+    if (!name.trim() || !baseUrl.trim() || !model.trim()) {
+      toast.error('Name, base URL, and model are required.')
+      return
+    }
+    setBusy(true)
+    try {
+      const result = await window.api.jcodeProviders.add({
+        name: name.trim(),
+        baseUrl: baseUrl.trim(),
+        model: model.trim(),
+        auth,
+        apiKey: apiKey.length > 0 ? apiKey : undefined
+      })
+      if (!result.ok || !result.provider) {
+        toast.error(result.error ?? 'Failed to add provider.')
+        return
+      }
+      // Mirror the non-secret profile into settings (upsert by name).
+      const next: JcodeCustomProvider[] = [
+        ...providers.filter((p) => p.name !== result.provider!.name),
+        result.provider
+      ]
+      updateSettings({ jcodeCustomProviders: next })
+      toast.success(`Added provider "${result.provider.name}".`)
+      resetForm()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const onRemove = (providerName: string): void => {
+    updateSettings({
+      jcodeCustomProviders: providers.filter((p) => p.name !== providerName)
+    })
+    toast.success(`Removed provider "${providerName}".`)
+  }
+
+  return (
+    <SearchableSetting
+      title="自定义 Provider"
+      description="Add a custom OpenAI-compatible provider (base URL + API key + model) for jcode chat."
+      keywords={[
+        'jcode',
+        'provider',
+        'custom',
+        'openai',
+        'compatible',
+        'base url',
+        'api key',
+        'endpoint',
+        'gateway',
+        '自定义'
+      ]}
+      className="space-y-3"
+    >
+      {providers.length > 0 ? (
+        <div className="space-y-2">
+          {providers.map((provider) => (
+            <div
+              key={provider.name}
+              className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
+            >
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium">{provider.name}</div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {provider.model} · {provider.baseUrl}
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => onRemove(provider.name)}
+                className="h-7 shrink-0 text-xs text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1">
+          <Label>Name</Label>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="my-gateway"
+            spellCheck={false}
+            className="text-xs"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label>Model</Label>
+          <Input
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            placeholder="gpt-4o"
+            spellCheck={false}
+            className="text-xs"
+          />
+        </div>
+        <div className="space-y-1 sm:col-span-2">
+          <Label>Base URL</Label>
+          <Input
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
+            placeholder="https://llm.example.com/v1"
+            spellCheck={false}
+            className="text-xs"
+          />
+        </div>
+        <div className="space-y-1 sm:col-span-2">
+          <Label>API Key</Label>
+          <Input
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="sk-… (stored in jcode's private env file)"
+            spellCheck={false}
+            className="text-xs"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label>Auth</Label>
+          <Select value={auth} onValueChange={(v) => setAuth(v as JcodeProviderAuth)}>
+            <SelectTrigger className="text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="bearer">Bearer</SelectItem>
+              <SelectItem value="api-key">API key header</SelectItem>
+              <SelectItem value="none">None</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div>
+        <Button size="sm" disabled={busy} onClick={() => void onAdd()}>
+          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
+          Add provider
+        </Button>
+      </div>
+    </SearchableSetting>
+  )
 }
 
 export function AccountsPane({
@@ -1325,6 +1504,25 @@ export function AccountsPane({
             ).
           </p>
         </SearchableSetting>
+      </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsJcodeProvidersSearchEntries()) ? (
+      <section
+        key="jcode-custom-providers"
+        id="accounts-jcode-providers"
+        className="space-y-4 scroll-mt-6"
+      >
+        <div className="space-y-1">
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <OpenAIIcon size={16} />
+            自定义 Provider
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Add a custom OpenAI-compatible endpoint (base URL + API key + model) and pick it in the
+            jcode chat composer.
+          </p>
+        </div>
+        <JcodeCustomProvidersSection settings={settings} updateSettings={updateSettings} />
       </section>
     ) : null
   ].filter(Boolean)

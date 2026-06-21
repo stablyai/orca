@@ -171,10 +171,31 @@ export const getAccountsOpencodeSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsJcodeProvidersSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: '自定义 Provider',
+    description:
+      'Add a custom OpenAI-compatible provider (base URL + API key + model) for jcode chat.',
+    keywords: [
+      'jcode',
+      'provider',
+      'custom',
+      'openai',
+      'compatible',
+      'base url',
+      'api key',
+      'endpoint',
+      'gateway',
+      '自定义'
+    ]
+  }
+])
+
 export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
   ...getAccountsCodexSearchEntries(),
   ...getAccountsGeminiSearchEntries(),
-  ...getAccountsOpencodeSearchEntries()
+  ...getAccountsOpencodeSearchEntries(),
+  ...getAccountsJcodeProvidersSearchEntries()
 ])

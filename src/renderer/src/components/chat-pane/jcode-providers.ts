@@ -4,6 +4,8 @@
 // for a rarely-changing list). "Auto" is represented by an undefined provider
 // in the chat-session-store, which falls back to ChatPane's default provider.
 
+import type { JcodeCustomProvider } from '../../../../shared/jcode-chat-types'
+
 export type JcodeProviderOption = {
   /** jcode provider id passed as -p. */
   id: string
@@ -11,6 +13,9 @@ export type JcodeProviderOption = {
   label: string
   /** Optional suggested model ids (passed as -m). First is the default chip. */
   models?: string[]
+  /** Discriminates a built-in `-p provider` from a custom `--provider-profile`.
+   *  Defaults to 'builtin' for the static list below. */
+  kind?: 'builtin' | 'profile'
 }
 
 /** Curated subset of `jcode provider list`, covering the common cases the brief
@@ -29,4 +34,33 @@ export function findProviderOption(id: string | undefined): JcodeProviderOption 
     return undefined
   }
   return JCODE_PROVIDERS.find((entry) => entry.id === id)
+}
+
+/** Map the user's persisted custom provider profiles into chip options. A
+ *  selected option here carries `kind: 'profile'`, so the composer routes the
+ *  selection to the chat payload's `providerProfile` (which the main process
+ *  emits as `--provider-profile <name>`) rather than `-p provider`. */
+export function buildProfileOptions(
+  profiles: JcodeCustomProvider[] | undefined
+): JcodeProviderOption[] {
+  if (!profiles || profiles.length === 0) {
+    return []
+  }
+  return profiles.map((profile) => ({
+    id: profile.name,
+    label: profile.name,
+    models: profile.model ? [profile.model] : undefined,
+    kind: 'profile'
+  }))
+}
+
+/** Resolve a custom profile option by name, or undefined. */
+export function findProfileOption(
+  profiles: JcodeCustomProvider[] | undefined,
+  name: string | undefined
+): JcodeProviderOption | undefined {
+  if (!name) {
+    return undefined
+  }
+  return buildProfileOptions(profiles).find((entry) => entry.id === name)
 }

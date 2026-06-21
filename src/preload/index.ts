@@ -14,12 +14,16 @@ import {
   JCODE_CHAT_SAVE_CHANNEL,
   JCODE_CHAT_SEND_CHANNEL,
   JCODE_CHAT_STOP_CHANNEL,
+  JCODE_PROVIDERS_ADD_CHANNEL,
+  JCODE_PROVIDERS_LIST_CHANNEL,
   type JcodeChatEventMessage,
   type JcodeChatSavePayload,
   type JcodeChatSendPayload,
   type JcodeChatStopPayload,
   type JcodeConversationRecord,
-  type JcodeConversationSummary
+  type JcodeConversationSummary,
+  type JcodeProviderActionResult,
+  type JcodeProviderAddArgs
 } from '../shared/jcode-chat-types'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
@@ -448,6 +452,19 @@ const api = {
       ipcRenderer.invoke(JCODE_CHAT_LOAD_CHANNEL, sessionKey),
     deleteConversation: (sessionKey: string): Promise<boolean> =>
       ipcRenderer.invoke(JCODE_CHAT_DELETE_CHANNEL, sessionKey)
+  },
+
+  // Custom OpenAI-compatible provider profiles for jcode chat. `add` shells to
+  // `jcode provider add ... --api-key-stdin` (API key delivered over stdin in
+  // the main process, never as an argv flag).
+  jcodeProviders: {
+    list: (): Promise<{
+      ok: boolean
+      error?: string
+      builtins: { id: string; display_name?: string; detail?: string; recommended?: boolean }[]
+    }> => ipcRenderer.invoke(JCODE_PROVIDERS_LIST_CHANNEL),
+    add: (args: JcodeProviderAddArgs): Promise<JcodeProviderActionResult> =>
+      ipcRenderer.invoke(JCODE_PROVIDERS_ADD_CHANNEL, args)
   },
   app: {
     getIdentity: (): Promise<AppIdentity> => ipcRenderer.invoke('app:getIdentity'),
