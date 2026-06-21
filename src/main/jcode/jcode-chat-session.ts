@@ -9,13 +9,24 @@ import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import {
+  JCODE_CHAT_DELETE_CHANNEL,
   JCODE_CHAT_EVENT_CHANNEL,
+  JCODE_CHAT_LIST_CHANNEL,
+  JCODE_CHAT_LOAD_CHANNEL,
+  JCODE_CHAT_SAVE_CHANNEL,
   JCODE_CHAT_SEND_CHANNEL,
   JCODE_CHAT_STOP_CHANNEL,
+  type JcodeChatSavePayload,
   type JcodeChatSendPayload,
   type JcodeChatStopPayload,
   type JcodeNdjsonEvent
 } from '../../shared/jcode-chat-types'
+import {
+  deleteConversation,
+  listConversations,
+  loadConversation,
+  saveConversation
+} from './jcode-conversation-store'
 
 // Why: jcode is installed via cargo; the absolute path avoids depending on the
 // (often empty under Electron) PATH. Mirrors the pinned tool path the desktop
@@ -222,6 +233,56 @@ export function registerJcodeChatHandlers(mainWindow: BrowserWindow, store?: Sto
     }
   })
 
+  // ─── Durable persistence (BUG 1/2) ──────────────────────────────────────
+  // The renderer reduces NDJSON events into full conversation state (messages +
+  // tool cards + --resume id) already, so the simplest faithful backing store is
+  // to let it send a snapshot on turn boundaries and persist that verbatim. This
+  // avoids re-deriving the tool-card shape in main and keeps tool/diff rendering
+  // identical after rehydrate.
+  ipcMain.removeHandler(JCODE_CHAT_SAVE_CHANNEL)
+  ipcMain.handle(JCODE_CHAT_SAVE_CHANNEL, (event, raw: unknown) => {
+    if (event.sender !== mainWindow.webContents) {
+      return false
+    }
+    const payload = raw as JcodeChatSavePayload
+    if (!payload?.record || typeof payload.record.sessionKey !== 'string') {
+      return false
+    }
+    return saveConversation(payload.record)
+  })
+
+  ipcMain.removeHandler(JCODE_CHAT_LIST_CHANNEL)
+  ipcMain.handle(JCODE_CHAT_LIST_CHANNEL, (event) => {
+    if (event.sender !== mainWindow.webContents) {
+      return []
+    }
+    return listConversations()
+  })
+
+  ipcMain.removeHandler(JCODE_CHAT_LOAD_CHANNEL)
+  ipcMain.handle(JCODE_CHAT_LOAD_CHANNEL, (event, raw: unknown) => {
+    if (event.sender !== mainWindow.webContents) {
+      return null
+    }
+    const sessionKey = typeof raw === 'string' ? raw : (raw as { sessionKey?: string })?.sessionKey
+    if (typeof sessionKey !== 'string') {
+      return null
+    }
+    return loadConversation(sessionKey)
+  })
+
+  ipcMain.removeHandler(JCODE_CHAT_DELETE_CHANNEL)
+  ipcMain.handle(JCODE_CHAT_DELETE_CHANNEL, (event, raw: unknown) => {
+    if (event.sender !== mainWindow.webContents) {
+      return false
+    }
+    const sessionKey = typeof raw === 'string' ? raw : (raw as { sessionKey?: string })?.sessionKey
+    if (typeof sessionKey !== 'string') {
+      return false
+    }
+    return deleteConversation(sessionKey)
+  })
+
   mainWindow.on('closed', () => {
     for (const child of activeChildren.values()) {
       if (!child.killed) {
@@ -236,5 +297,9 @@ export function registerJcodeChatHandlers(mainWindow: BrowserWindow, store?: Sto
     stoppedKeys.clear()
     ipcMain.removeAllListeners(JCODE_CHAT_SEND_CHANNEL)
     ipcMain.removeAllListeners(JCODE_CHAT_STOP_CHANNEL)
+    ipcMain.removeHandler(JCODE_CHAT_SAVE_CHANNEL)
+    ipcMain.removeHandler(JCODE_CHAT_LIST_CHANNEL)
+    ipcMain.removeHandler(JCODE_CHAT_LOAD_CHANNEL)
+    ipcMain.removeHandler(JCODE_CHAT_DELETE_CHANNEL)
   })
 }

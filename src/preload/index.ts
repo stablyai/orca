@@ -7,12 +7,19 @@ import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
 import {
+  JCODE_CHAT_DELETE_CHANNEL,
   JCODE_CHAT_EVENT_CHANNEL,
+  JCODE_CHAT_LIST_CHANNEL,
+  JCODE_CHAT_LOAD_CHANNEL,
+  JCODE_CHAT_SAVE_CHANNEL,
   JCODE_CHAT_SEND_CHANNEL,
   JCODE_CHAT_STOP_CHANNEL,
   type JcodeChatEventMessage,
+  type JcodeChatSavePayload,
   type JcodeChatSendPayload,
-  type JcodeChatStopPayload
+  type JcodeChatStopPayload,
+  type JcodeConversationRecord,
+  type JcodeConversationSummary
 } from '../shared/jcode-chat-types'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
@@ -429,7 +436,18 @@ const api = {
         callback(message)
       ipcRenderer.on(JCODE_CHAT_EVENT_CHANNEL, listener)
       return () => ipcRenderer.removeListener(JCODE_CHAT_EVENT_CHANNEL, listener)
-    }
+    },
+    // Why (BUG 1, persistence): durable backing store. The renderer snapshots a
+    // conversation on turn boundaries; main writes it to disk so it survives
+    // restart and a closed chat tab can be reopened + rehydrated.
+    saveConversation: (payload: JcodeChatSavePayload): Promise<boolean> =>
+      ipcRenderer.invoke(JCODE_CHAT_SAVE_CHANNEL, payload),
+    listConversations: (): Promise<JcodeConversationSummary[]> =>
+      ipcRenderer.invoke(JCODE_CHAT_LIST_CHANNEL),
+    loadConversation: (sessionKey: string): Promise<JcodeConversationRecord | null> =>
+      ipcRenderer.invoke(JCODE_CHAT_LOAD_CHANNEL, sessionKey),
+    deleteConversation: (sessionKey: string): Promise<boolean> =>
+      ipcRenderer.invoke(JCODE_CHAT_DELETE_CHANNEL, sessionKey)
   },
   app: {
     getIdentity: (): Promise<AppIdentity> => ipcRenderer.invoke('app:getIdentity'),

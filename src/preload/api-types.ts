@@ -13,8 +13,11 @@ import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
 import type { AppIdentity } from '../shared/app-identity'
 import type {
   JcodeChatEventMessage,
+  JcodeChatSavePayload,
   JcodeChatSendPayload,
-  JcodeChatStopPayload
+  JcodeChatStopPayload,
+  JcodeConversationRecord,
+  JcodeConversationSummary
 } from '../shared/jcode-chat-types'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { TaskSourceContext } from '../shared/task-source-context'
@@ -763,6 +766,14 @@ export type PreloadApi = {
     send: (payload: JcodeChatSendPayload) => void
     stop: (payload: JcodeChatStopPayload) => void
     onEvent: (callback: (message: JcodeChatEventMessage) => void) => () => void
+    /** Persist a conversation snapshot to disk (turn boundaries). */
+    saveConversation: (payload: JcodeChatSavePayload) => Promise<boolean>
+    /** List persisted conversations (newest first), no transcript body. */
+    listConversations: () => Promise<JcodeConversationSummary[]>
+    /** Load a persisted conversation for rehydration, or null if absent. */
+    loadConversation: (sessionKey: string) => Promise<JcodeConversationRecord | null>
+    /** Remove a persisted conversation from disk. */
+    deleteConversation: (sessionKey: string) => Promise<boolean>
   }
   app: AppApi
   platform: {

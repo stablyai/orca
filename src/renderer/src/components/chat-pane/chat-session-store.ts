@@ -1,5 +1,13 @@
+/* eslint-disable max-lines -- Why: the jcode chat store keeps the NDJSON event
+   reducer, the live per-sessionKey external store, and its on-disk persistence
+   backing (snapshot/hydrate/list/delete) together so the full conversation
+   state contract is reviewable as one unit, mirroring persistence.ts. */
 import { useSyncExternalStore } from 'react'
-import type { JcodeChatEventMessage, JcodeNdjsonEvent } from '../../../../shared/jcode-chat-types'
+import type {
+  JcodeChatEventMessage,
+  JcodeConversationRecord,
+  JcodeNdjsonEvent
+} from '../../../../shared/jcode-chat-types'
 import type { JcodeToolCall } from './JcodeToolCard'
 
 // Why (BUG 1, persistence): the jcode chat conversation used to live in
@@ -53,6 +61,73 @@ const EMPTY_SESSION: ChatSessionState = {
 
 const sessions = new Map<string, ChatSessionState>()
 const listeners = new Map<string, Set<() => void>>()
+
+// Why (BUG 1, persistence): the live in-memory store is backed by disk in the
+// main process. To write a full JcodeConversationRecord we need per-session
+// context (worktreeId/cwd) that lives in ChatPane props, not in the event
+// stream. ChatPane registers it on mount via setChatSessionContext so a snapshot
+// written from anywhere (e.g. a turn that finished while the tab was hidden) is
+// complete. Sessions seeded by rehydrate are also marked here.
+type ChatSessionContext = { worktreeId?: string; cwd?: string }
+const sessionContexts = new Map<string, ChatSessionContext>()
+
+// Debounce timers per sessionKey so rapid turn-boundary saves coalesce and we
+// never write on every text_delta.
+const saveTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+/** First non-empty user message, trimmed, as a human title for "Recent chats". */
+function deriveTitle(state: ChatSessionState): string {
+  const firstUser = state.messages.find((m) => m.role === 'user' && m.text.trim())
+  const text = firstUser?.text.trim() ?? 'New chat'
+  return text.length > 80 ? `${text.slice(0, 77)}…` : text
+}
+
+function buildRecord(sessionKey: string, state: ChatSessionState): JcodeConversationRecord {
+  const ctx = sessionContexts.get(sessionKey)
+  return {
+    sessionKey,
+    worktreeId: ctx?.worktreeId,
+    cwd: ctx?.cwd,
+    title: deriveTitle(state),
+    updatedAt: Date.now(),
+    resumeSessionId: state.resumeSessionId,
+    composerProvider: state.composerProvider,
+    composerModel: state.composerModel,
+    messages: state.messages.map((m) => ({
+      id: m.id,
+      role: m.role,
+      text: m.text,
+      ...(m.tools ? { tools: m.tools } : {}),
+      ...(m.isError ? { isError: m.isError } : {})
+    }))
+  }
+}
+
+/** Persist a session snapshot to disk (debounced). Called on turn boundaries.
+ *  No-op for empty conversations so we don't create files for blank tabs. */
+function schedulePersist(sessionKey: string): void {
+  const existing = saveTimers.get(sessionKey)
+  if (existing) {
+    clearTimeout(existing)
+  }
+  const timer = setTimeout(() => {
+    saveTimers.delete(sessionKey)
+    const state = sessions.get(sessionKey)
+    if (!state || state.messages.length === 0) {
+      return
+    }
+    void window.api.jcodeChat.saveConversation({ record: buildRecord(sessionKey, state) })
+  }, 250)
+  saveTimers.set(sessionKey, timer)
+}
+
+/** Register per-session context (worktreeId/cwd) for the disk record. Called by
+ *  ChatPane on mount; safe to call repeatedly. */
+export function setChatSessionContext(sessionKey: string, context: ChatSessionContext): void {
+  sessionContexts.set(sessionKey, context)
+}
+
+const TURN_BOUNDARY_EVENTS = new Set(['start', 'done', 'error', 'stopped', 'exit'])
 
 function getSession(sessionKey: string): ChatSessionState {
   return sessions.get(sessionKey) ?? EMPTY_SESSION
@@ -236,6 +311,12 @@ function ensureIpcSubscription(): void {
       return
     }
     setSession(sessionKey, (state) => reduceEvent(state, message.event))
+    // Why (BUG 1): persist on turn boundaries (done/error/stopped/exit), not on
+    // every text_delta, so we capture the final transcript + --resume id without
+    // thrashing disk. 'start' is handled at startChatTurn (records the prompt).
+    if (TURN_BOUNDARY_EVENTS.has(message.event.type)) {
+      schedulePersist(sessionKey)
+    }
   })
 }
 
@@ -282,6 +363,46 @@ export function startChatTurn(sessionKey: string, prompt: string): void {
     isStreaming: true,
     statusDetail: 'Thinking…'
   }))
+  // Why (BUG 1): persist at the start of a turn so the user prompt is durable
+  // even if jcode crashes before emitting any event.
+  schedulePersist(sessionKey)
+}
+
+/** Seed the in-memory store for a sessionKey from a loaded on-disk conversation.
+ *  Called before/at ChatPane mount when reopening a known conversation so the
+ *  rehydrated view matches the persisted transcript + --resume continuity. Does
+ *  not overwrite a session that already has live messages (avoids clobbering a
+ *  conversation that was kept in memory across a tab switch). */
+export function hydrateChatSession(record: JcodeConversationRecord): void {
+  const existing = sessions.get(record.sessionKey)
+  if (existing && existing.messages.length > 0) {
+    sessionContexts.set(record.sessionKey, {
+      worktreeId: record.worktreeId,
+      cwd: record.cwd
+    })
+    return
+  }
+  sessionContexts.set(record.sessionKey, {
+    worktreeId: record.worktreeId,
+    cwd: record.cwd
+  })
+  setSession(record.sessionKey, (state) => ({
+    ...state,
+    messages: record.messages.map((m) => ({
+      id: m.id,
+      role: m.role,
+      text: m.text,
+      tools: Array.isArray(m.tools) ? (m.tools as JcodeToolCall[]) : undefined,
+      isError: m.isError
+    })),
+    // A rehydrated turn is never mid-stream.
+    isStreaming: false,
+    statusDetail: null,
+    streamingId: null,
+    resumeSessionId: record.resumeSessionId,
+    composerProvider: record.composerProvider,
+    composerModel: record.composerModel
+  }))
 }
 
 export function setChatStatusDetail(sessionKey: string, detail: string | null): void {
@@ -303,9 +424,54 @@ export function setChatComposerSelection(
   }))
 }
 
-/** Drop a session's state. Called when its chat tab is closed so the Map does
- *  not grow unboundedly across the app's lifetime. */
+/** Drop a session's IN-MEMORY state. Called when its chat tab is closed so the
+ *  Map does not grow unboundedly across the app's lifetime.
+ *
+ *  Why (BUG 1/2): this is in-memory eviction ONLY — it must NOT delete the
+ *  on-disk transcript. A closed jcode chat stays in "Recent chats" and can be
+ *  reopened + rehydrated. To flush the latest live state before evicting, we
+ *  persist synchronously-ish (debounced timers are cleared and a final save is
+ *  issued) so nothing typed before close is lost. Use deleteChatConversation to
+ *  remove the durable record. */
 export function disposeChatSession(sessionKey: string): void {
+  const pending = saveTimers.get(sessionKey)
+  if (pending) {
+    clearTimeout(pending)
+    saveTimers.delete(sessionKey)
+  }
+  const state = sessions.get(sessionKey)
+  if (state && state.messages.length > 0) {
+    void window.api.jcodeChat.saveConversation({ record: buildRecord(sessionKey, state) })
+  }
   sessions.delete(sessionKey)
   listeners.delete(sessionKey)
+  sessionContexts.delete(sessionKey)
+}
+
+/** Permanently delete a conversation's durable record (and evict memory). Used
+ *  when the user removes a chat from "Recent chats". */
+export function deleteChatConversation(sessionKey: string): void {
+  const pending = saveTimers.get(sessionKey)
+  if (pending) {
+    clearTimeout(pending)
+    saveTimers.delete(sessionKey)
+  }
+  sessions.delete(sessionKey)
+  listeners.delete(sessionKey)
+  sessionContexts.delete(sessionKey)
+  void window.api.jcodeChat.deleteConversation(sessionKey)
+}
+
+/** List persisted conversations (newest first) for a "Recent chats" surface. */
+export async function listChatConversations(): Promise<
+  Awaited<ReturnType<typeof window.api.jcodeChat.listConversations>>
+> {
+  return window.api.jcodeChat.listConversations()
+}
+
+/** Load a persisted conversation record (transcript + context) by sessionKey. */
+export async function loadChatConversation(
+  sessionKey: string
+): Promise<JcodeConversationRecord | null> {
+  return window.api.jcodeChat.loadConversation(sessionKey)
 }

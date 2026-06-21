@@ -121,7 +121,20 @@ export function ChatComposer({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
+            // Why (BUG 3, IME): guard the Enter-to-send against IME composition.
+            // While composing Chinese/Japanese/etc., pressing Enter COMMITS the
+            // candidate — it must not trigger a send. `isComposing`/keyCode 229
+            // mark an in-progress composition; firing onSend() there both sends a
+            // half-typed prompt AND lets compositionend re-fill the textarea after
+            // ChatPane's setInput('') runs, so the box still shows text. Skipping
+            // send during composition fixes both the premature send and the
+            // text-not-cleared symptom.
+            if (
+              event.key === 'Enter' &&
+              !event.shiftKey &&
+              !event.nativeEvent.isComposing &&
+              event.keyCode !== 229
+            ) {
               event.preventDefault()
               onSend()
             }
