@@ -493,6 +493,8 @@ export type Worktree = {
   baseRef?: string
   /** Remote/branch Orca should publish review commits to when it created this worktree. */
   pushTarget?: GitPushTarget
+  /** Path-derived worktree ids this worktree had before folder renames. */
+  priorWorktreeIds?: string[]
   workspaceStatus?: WorkspaceStatus
   diffComments?: DiffComment[]
   mobileDiffReview?: MobileDiffReviewState

@@ -394,6 +394,29 @@ describe('fetchWorktrees', () => {
     expect(store.getState().sortEpoch).toBe(8)
   })
 
+  it('updates the repo entry when only prior worktree id aliases change', async () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/current-name',
+      repoId: 'repo1',
+      path: '/path/current-name'
+    })
+    const refreshed = makeWorktree({
+      id: 'repo1::/path/current-name',
+      repoId: 'repo1',
+      path: '/path/current-name',
+      priorWorktreeIds: ['repo1::/path/old-name']
+    })
+
+    mockApi.worktrees.list.mockResolvedValue([refreshed])
+    store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
+
+    await store.getState().fetchWorktrees('repo1')
+
+    expect(store.getState().worktreesByRepo.repo1).toEqual([refreshed])
+    expect(store.getState().sortEpoch).toBe(8)
+  })
+
   it('keeps the last known worktree list when a refresh transiently returns empty', async () => {
     const store = createTestStore()
     const existing = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })

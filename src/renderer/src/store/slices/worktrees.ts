@@ -263,6 +263,7 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.pushTarget?.remoteUrl === candidate.pushTarget?.remoteUrl &&
       worktree.sparseBaseRef === candidate.sparseBaseRef &&
       arraysShallowEqual(worktree.sparseDirectories, candidate.sparseDirectories) &&
+      arraysShallowEqual(worktree.priorWorktreeIds, candidate.priorWorktreeIds) &&
       (worktree as WorktreeWithLineage).parentWorktreeId ===
         (candidate as WorktreeWithLineage).parentWorktreeId &&
       arraysShallowEqual(

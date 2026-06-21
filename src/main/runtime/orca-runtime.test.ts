@@ -1872,7 +1872,14 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       kind: 'folder' as const
     }
-    const metaById: Record<string, WorktreeMeta> = {}
+    const rootWorktreeId = 'folder-repo::/workspace/folder'
+    const rootPriorWorktreeIds = ['folder-repo::/workspace/old-folder']
+    const metaById: Record<string, WorktreeMeta> = {
+      [rootWorktreeId]: makeWorktreeMeta({
+        instanceId: 'root-instance',
+        priorWorktreeIds: rootPriorWorktreeIds
+      })
+    }
     const runtimeStore = {
       ...store,
       getRepos: () => [folderRepo],
@@ -1931,8 +1938,9 @@ describe('OrcaRuntimeService', () => {
       totalCount: 2,
       worktrees: [
         expect.objectContaining({
-          id: 'folder-repo::/workspace/folder',
-          isMainWorktree: true
+          id: rootWorktreeId,
+          isMainWorktree: true,
+          priorWorktreeIds: rootPriorWorktreeIds
         }),
         expect.objectContaining({
           id: result.worktree.id,
