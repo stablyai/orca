@@ -5,6 +5,8 @@ import {
   type IpcMainInvokeEvent,
   type WebContents
 } from 'electron'
+import { spawn } from 'node:child_process'
+import { stat } from 'node:fs/promises'
 import {
   assertClipboardTextWriteWithinLimitWithYield,
   assertClipboardTextWithinLimitWithYield,
@@ -19,11 +21,25 @@ import {
   assertClipboardImageByteLengthWithinLimit,
   assertClipboardImageDimensionsWithinLimit
 } from '../../shared/clipboard-image'
+import { writeFileToClipboard } from './clipboard-file-copy'
 
 let trustedClipboardRendererWebContentsId: number | null = null
 
 export function setTrustedClipboardRendererWebContentsId(webContentsId: number | null): void {
   trustedClipboardRendererWebContentsId = webContentsId
+}
+
+// Run a short-lived OS clipboard helper (PowerShell / wl-copy / xclip), feeding
+// it stdin when provided; resolves only on a clean exit.
+function runCommand(command: string, args: string[], stdin?: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ['pipe', 'ignore', 'ignore'] })
+    child.on('error', reject)
+    child.on('exit', (code) =>
+      code === 0 ? resolve() : reject(new Error(`${command} exited with ${code}`))
+    )
+    child.stdin?.end(stdin ?? '')
+  })
 }
 
 export function registerClipboardHandlers(): void {
@@ -32,6 +48,7 @@ export function registerClipboardHandlers(): void {
   ipcMain.removeHandler('clipboard:writeText')
   ipcMain.removeHandler('clipboard:writeSelectionText')
   ipcMain.removeHandler('clipboard:writeImage')
+  ipcMain.removeHandler('clipboard:writeFile')
   ipcMain.removeHandler('clipboard:saveImageAsTempFile')
 
   ipcMain.handle('clipboard:readText', async (event, options?: ReadClipboardTextOptions) => {
@@ -60,6 +77,25 @@ export function registerClipboardHandlers(): void {
       return saveClipboardImageBufferAsTempFile(image.toPNG(), args)
     }
   )
+  // Why: copy the actual file to the OS clipboard so pasting in Finder/Explorer
+  // drops the file itself, not its path as text. Local files only.
+  ipcMain.handle('clipboard:writeFile', (event, filePath: string) => {
+    assertTrustedClipboardSender(event)
+    return writeFileToClipboard(filePath, {
+      platform: process.platform,
+      desktop: process.env.XDG_CURRENT_DESKTOP,
+      pathExists: async (path) => {
+        try {
+          await stat(path)
+          return true
+        } catch {
+          return false
+        }
+      },
+      writeBuffer: (format, buffer) => clipboard.writeBuffer(format, buffer),
+      runCommand
+    })
+  })
   ipcMain.handle('clipboard:writeText', async (event, text: string) => {
     assertTrustedClipboardSender(event)
     return clipboard.writeText(await assertClipboardTextWriteWithinLimitWithYield(text))
