@@ -48,6 +48,7 @@ export const getOpenInAppPresets = createLocalizedCatalog(() => [
   }
 ])
 
+/** Find the built-in preset matching an application's command (case/space-insensitive), or null. */
 export function getOpenInAppPreset(
   application: Pick<OpenInApplication, 'command'>
 ): OpenInAppPreset | null {
@@ -55,6 +56,7 @@ export function getOpenInAppPreset(
   return getOpenInAppPresets().find((preset) => preset.command === command) ?? null
 }
 
+/** Whether a preset's command is already present in the given list of configured applications. */
 export function isOpenInAppPresetAdded(
   applications: readonly Pick<OpenInApplication, 'command'>[],
   preset: OpenInAppPreset
@@ -64,6 +66,7 @@ export function isOpenInAppPresetAdded(
   )
 }
 
+/** Render an application's icon — bundled asset or Google favicon for a known preset, else a generic window icon. */
 export function OpenInApplicationIcon({
   application,
   size = 14
