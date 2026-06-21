@@ -41,7 +41,12 @@ export function buildWindowsPtyCompatibilityOptions(
     // Why: native Windows shells are backed by ConPTY, and xterm's dedicated
     // compatibility heuristics need the OS build to choose the right wrap path.
     windowsPty:
-      buildNumber === undefined ? { backend: 'conpty' } : { backend: 'conpty', buildNumber }
+      buildNumber === undefined ? { backend: 'conpty' } : { backend: 'conpty', buildNumber },
+    // Why: ensure proper CJK handling on Windows ConPTY. Windows line endings
+    // (
+\n) need explicit handling to prevent encoding artifacts. Also ensure
+    // Unicode 11 width tables for CJK double-width character handling.
+    windowsMode: true,
   }
 }
 
