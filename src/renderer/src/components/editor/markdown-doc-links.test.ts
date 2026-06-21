@@ -6,6 +6,7 @@ import type { MarkdownDocument } from '../../../../shared/types'
 import {
   createMarkdownDocumentIndex,
   createMarkdownDocLinkHref,
+  getCreatableMarkdownDocLinkTarget,
   getMarkdownDocLinkAnchor,
   parseMarkdownDocLinkHref,
   remarkMarkdownDocLinks,
@@ -48,6 +49,39 @@ describe('splitMarkdownDocLinkText', () => {
     expect(splitMarkdownDocLinkText('See [[docs/setup-guide.md|Setup Guide]].')).toEqual([
       { type: 'text', value: 'See ' },
       { type: 'docLink', target: 'docs/setup-guide.md', label: 'Setup Guide' },
+      { type: 'text', value: '.' }
+    ])
+  })
+
+  it('splits heading and block-fragment doc links', () => {
+    expect(splitMarkdownDocLinkText('See [[docs/setup-guide.md#Install steps]].')).toEqual([
+      { type: 'text', value: 'See ' },
+      {
+        type: 'docLink',
+        target: 'docs/setup-guide.md#Install steps',
+        label: 'docs/setup-guide.md#Install steps'
+      },
+      { type: 'text', value: '.' }
+    ])
+    expect(splitMarkdownDocLinkText('See [[docs/setup-guide.md#^block-id]].')).toEqual([
+      { type: 'text', value: 'See ' },
+      {
+        type: 'docLink',
+        target: 'docs/setup-guide.md#^block-id',
+        label: 'docs/setup-guide.md#^block-id'
+      },
+      { type: 'text', value: '.' }
+    ])
+  })
+
+  it('treats embedded doc links as a leading marker plus doc link', () => {
+    expect(splitMarkdownDocLinkText('Embed ![[docs/setup-guide.md#^block-id]].')).toEqual([
+      { type: 'text', value: 'Embed !' },
+      {
+        type: 'docLink',
+        target: 'docs/setup-guide.md#^block-id',
+        label: 'docs/setup-guide.md#^block-id'
+      },
       { type: 'text', value: '.' }
     ])
   })
@@ -96,6 +130,15 @@ describe('resolveMarkdownDocLink', () => {
     const index = createMarkdownDocumentIndex(documents)
 
     expect(resolveMarkdownDocLink('docs/setup-guide#Install steps', index)).toMatchObject({
+      status: 'resolved',
+      document: { relativePath: 'docs/setup-guide.md' }
+    })
+  })
+
+  it('resolves block refs against the document target', () => {
+    const index = createMarkdownDocumentIndex(documents)
+
+    expect(resolveMarkdownDocLink('docs/setup-guide#^block-id', index)).toMatchObject({
       status: 'resolved',
       document: { relativePath: 'docs/setup-guide.md' }
     })
@@ -170,12 +213,53 @@ describe('doc link hrefs', () => {
   })
 })
 
+describe('getCreatableMarkdownDocLinkTarget', () => {
+  it('normalizes missing note targets to markdown files', () => {
+    expect(getCreatableMarkdownDocLinkTarget('Project Notes')).toEqual({
+      relativePath: 'Project Notes.md',
+      title: 'Project Notes'
+    })
+    expect(getCreatableMarkdownDocLinkTarget('docs/setup-guide.md#Install steps')).toEqual({
+      relativePath: 'docs/setup-guide.md',
+      title: 'setup-guide'
+    })
+    expect(getCreatableMarkdownDocLinkTarget('docs\\setup-guide')).toEqual({
+      relativePath: 'docs/setup-guide.md',
+      title: 'setup-guide'
+    })
+  })
+
+  it('preserves explicit markdown-family extensions', () => {
+    expect(getCreatableMarkdownDocLinkTarget('notes/readme.MDX')).toEqual({
+      relativePath: 'notes/readme.MDX',
+      title: 'readme'
+    })
+    expect(getCreatableMarkdownDocLinkTarget('notes/readme.markdown')).toEqual({
+      relativePath: 'notes/readme.markdown',
+      title: 'readme'
+    })
+  })
+
+  it('rejects unsafe or unsupported create targets', () => {
+    expect(getCreatableMarkdownDocLinkTarget('')).toBeNull()
+    expect(getCreatableMarkdownDocLinkTarget('#Heading')).toBeNull()
+    expect(getCreatableMarkdownDocLinkTarget('../outside')).toBeNull()
+    expect(getCreatableMarkdownDocLinkTarget('/absolute')).toBeNull()
+    expect(getCreatableMarkdownDocLinkTarget('C:\\repo\\note')).toBeNull()
+    expect(getCreatableMarkdownDocLinkTarget('bad|alias')).toBeNull()
+  })
+})
+
 describe('getMarkdownDocLinkAnchor', () => {
   it('extracts preview heading anchor ids from doc link targets', () => {
     expect(getMarkdownDocLinkAnchor('docs/setup-guide#Install steps')).toBe('install-steps')
     expect(getMarkdownDocLinkAnchor('docs/setup-guide#What is new?')).toBe('what-is-new')
     expect(getMarkdownDocLinkAnchor('docs/setup-guide#install-steps')).toBe('install-steps')
     expect(getMarkdownDocLinkAnchor('docs/setup-guide')).toBeNull()
+  })
+
+  it('does not treat block refs as heading anchors', () => {
+    expect(getMarkdownDocLinkAnchor('docs/setup-guide#^block-id')).toBeNull()
   })
 })
 

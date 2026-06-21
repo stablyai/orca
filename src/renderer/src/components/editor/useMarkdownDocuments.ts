@@ -6,11 +6,14 @@ import { getConnectionId } from '@/lib/connection-context'
 import { listRuntimeMarkdownDocuments, statRuntimePath } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
+import { createMissingMarkdownDocLinkDocument } from './markdown-doc-link-create'
 import {
-  createMarkdownDocumentIndex,
-  getMarkdownDocLinkAnchor,
-  resolveMarkdownDocLink
-} from './markdown-doc-links'
+  showAmbiguousMarkdownDocLinkToast,
+  showCreatedMarkdownDocLinkToast,
+  showInvalidMarkdownDocLinkTargetToast,
+  showMissingMarkdownDocLinkCreateToast
+} from './markdown-doc-link-toasts'
+import { createMarkdownDocumentIndex, resolveMarkdownDocLink } from './markdown-doc-links'
 
 type OpenMarkdownDocumentOptions = {
   anchor?: string | null
@@ -57,9 +60,9 @@ export function useMarkdownDocuments(
 
   const connectionId = getConnectionId(worktreeId)
 
-  const refreshMarkdownDocuments = useCallback(async (): Promise<void> => {
+  const refreshMarkdownDocuments = useCallback(async (): Promise<MarkdownDocument[]> => {
     if (!worktreeId || !worktreePath) {
-      return
+      return []
     }
 
     const requestId = requestRef.current + 1
@@ -78,12 +81,13 @@ export function useMarkdownDocuments(
         worktreePath
       )
       if (requestRef.current !== requestId) {
-        return
+        return documents
       }
       setMarkdownDocumentsByWorktree((prev) => ({
         ...prev,
         [worktreeId]: documents
       }))
+      return documents
     } catch (err) {
       console.error('Failed to list markdown documents:', err)
       if (requestRef.current === requestId) {
@@ -92,6 +96,7 @@ export function useMarkdownDocuments(
           [worktreeId]: []
         }))
       }
+      return []
     }
   }, [activeFile.runtimeEnvironmentId, connectionId, worktreeId, worktreePath])
 
@@ -179,7 +184,10 @@ export function useMarkdownDocuments(
   )
 
   const mdSave = useCallback(
-    (content: string) => onSave(content).then(() => refreshMarkdownDocuments()),
+    async (content: string) => {
+      await onSave(content)
+      await refreshMarkdownDocuments()
+    },
     [onSave, refreshMarkdownDocuments]
   )
 
@@ -188,16 +196,71 @@ export function useMarkdownDocuments(
     [markdownDocuments]
   )
 
+  const createAndOpenMissingDocLink = useCallback(
+    async (target: string): Promise<void> => {
+      if (!worktreeId || !worktreePath) {
+        return
+      }
+      const createdDocument = await createMissingMarkdownDocLinkDocument({
+        context: {
+          settings: settingsForRuntimeOwner(
+            useAppStore.getState().settings,
+            activeFile.runtimeEnvironmentId
+          ),
+          worktreeId,
+          worktreePath,
+          connectionId: connectionId ?? undefined
+        },
+        target,
+        worktreePath
+      })
+      if (!createdDocument) {
+        showInvalidMarkdownDocLinkTargetToast()
+        return
+      }
+
+      await refreshMarkdownDocuments()
+      await openMarkdownDocument(createdDocument)
+      showCreatedMarkdownDocLinkToast(createdDocument.relativePath)
+    },
+    [
+      activeFile.runtimeEnvironmentId,
+      connectionId,
+      openMarkdownDocument,
+      refreshMarkdownDocuments,
+      worktreeId,
+      worktreePath
+    ]
+  )
+
   const onOpenDocLink = useCallback(
     (target: string) => {
-      const resolution = resolveMarkdownDocLink(target, docIndex)
-      if (resolution.status === 'resolved') {
-        void openMarkdownDocument(resolution.document, {
-          anchor: getMarkdownDocLinkAnchor(target)
-        })
-      }
+      void (async () => {
+        let resolution = resolveMarkdownDocLink(target, docIndex)
+        if (resolution.status !== 'resolved') {
+          const refreshedDocuments = await refreshMarkdownDocuments()
+          resolution = resolveMarkdownDocLink(
+            target,
+            createMarkdownDocumentIndex(refreshedDocuments)
+          )
+        }
+        if (resolution.status === 'resolved') {
+          await openMarkdownDocument(resolution.document)
+          return
+        }
+        if (resolution.status === 'missing') {
+          showMissingMarkdownDocLinkCreateToast({
+            onCreate: createAndOpenMissingDocLink,
+            target
+          })
+          return
+        }
+        if (resolution.status === 'ambiguous') {
+          showAmbiguousMarkdownDocLinkToast(resolution.matches)
+        }
+      })()
     },
-    [docIndex, openMarkdownDocument]
+    [createAndOpenMissingDocLink, docIndex, openMarkdownDocument, refreshMarkdownDocuments]
   )
 
   return { markdownDocuments, openMarkdownDocument, onOpenDocLink, previewProps, mdSave }

@@ -92,6 +92,11 @@ export function handleRichMarkdownEditorClick({
       worktreeRoot
     })
   }
+  const clickedDocLinkTarget = getClickedDocLinkTarget(event)
+  if (clickedDocLinkTarget) {
+    onOpenDocLinkRef.current?.(clickedDocLinkTarget)
+    return true
+  }
   if (clickedNode?.type.name === 'markdownDocLink') {
     onOpenDocLinkRef.current?.(clickedNode.attrs.target as string)
     return true
@@ -122,6 +127,14 @@ export function handleRichMarkdownEditorClick({
     runtimeEnvironmentId
   })
   return true
+}
+
+function getClickedDocLinkTarget(event: MouseEvent): string {
+  const target = event.target
+  if (typeof Element === 'undefined' || !(target instanceof Element)) {
+    return ''
+  }
+  return target.closest('[data-doc-link-target]')?.getAttribute('data-doc-link-target') ?? ''
 }
 
 function activateMarkdownImageClick({

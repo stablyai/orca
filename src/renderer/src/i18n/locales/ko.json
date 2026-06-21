@@ -10713,6 +10713,18 @@
               "2fd2b44073": "이 파일에는 참조 스타일 링크가 포함되어 있으므로 코드 모드에서만 편집할 수 있습니다.",
               "57128b73e1": "이 파일에는 HTML, JSX 또는 MDX가 포함되어 있으므로 코드 모드에서만 편집할 수 있습니다."
             }
+          },
+          "doc": {
+            "link": {
+              "toasts": {
+                "3ac54dda7f": "Cannot create note from this link",
+                "86a480c022": "Note created",
+                "dd5af2ab74": "Note not found",
+                "53b9d723ef": "Create note",
+                "e3cfe7a2d5": "Failed to create note",
+                "0c8765cd46": "Document link is ambiguous"
+              }
+            }
           }
         },
         "rich": {

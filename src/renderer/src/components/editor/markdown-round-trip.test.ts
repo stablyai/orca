@@ -192,6 +192,30 @@ describe('rich markdown round trip', () => {
     )
   })
 
+  it('preserves ordinary markdown links around doc links', () => {
+    expect(
+      roundTripMarkdown('Read [the setup guide](docs/setup-guide.md) and [[notes/todo.md]]\n')
+    ).toBe('Read [the setup guide](docs/setup-guide.md) and [[notes/todo.md]]')
+  })
+
+  it('preserves doc links with heading and block fragments', () => {
+    expect(roundTripMarkdown('See [[docs/setup-guide.md#Install steps]]\n')).toBe(
+      'See [[docs/setup-guide.md#Install steps]]'
+    )
+    expect(roundTripMarkdown('See [[docs/setup-guide.md#^block-id]]\n')).toBe(
+      'See [[docs/setup-guide.md#^block-id]]'
+    )
+  })
+
+  it('preserves embedded doc links as embed syntax', () => {
+    expect(roundTripMarkdown('Embed ![[docs/setup-guide.md]]\n')).toBe(
+      'Embed ![[docs/setup-guide.md]]'
+    )
+    expect(roundTripMarkdown('Embed ![[docs/setup-guide.md#^block-id]]\n')).toBe(
+      'Embed ![[docs/setup-guide.md#^block-id]]'
+    )
+  })
+
   it('does not encode invalid doc links', () => {
     const result = roundTripMarkdown('Empty [[]] and blank alias [[a|]]\n')
     expect(result).toContain('[[]]')

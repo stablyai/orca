@@ -10713,6 +10713,18 @@
               "2fd2b44073": "Editable solo en modo código porque este archivo contiene enlaces de estilo de referencia.",
               "57128b73e1": "Editable solo en modo código porque este archivo contiene HTML, JSX o MDX."
             }
+          },
+          "doc": {
+            "link": {
+              "toasts": {
+                "3ac54dda7f": "Cannot create note from this link",
+                "86a480c022": "Note created",
+                "dd5af2ab74": "Note not found",
+                "53b9d723ef": "Create note",
+                "e3cfe7a2d5": "Failed to create note",
+                "0c8765cd46": "Document link is ambiguous"
+              }
+            }
           }
         },
         "rich": {

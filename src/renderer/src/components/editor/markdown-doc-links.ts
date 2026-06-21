@@ -42,6 +42,11 @@ export type MarkdownDocLinkResolution =
   | { status: 'missing' }
   | { status: 'ambiguous'; matches: MarkdownDocument[] }
 
+export type CreatableMarkdownDocLinkTarget = {
+  relativePath: string
+  title: string
+}
+
 export function stripMarkdownExtension(value: string): string {
   const lower = value.toLowerCase()
   for (const extension of ['.markdown', '.mdx', '.md']) {
@@ -52,7 +57,7 @@ export function stripMarkdownExtension(value: string): string {
   return value
 }
 
-function getMarkdownDocLinkDocumentTarget(target: string): string {
+export function getMarkdownDocLinkDocumentTarget(target: string): string {
   const hashIndex = target.indexOf('#')
   if (hashIndex <= 0) {
     return target
@@ -62,12 +67,55 @@ function getMarkdownDocLinkDocumentTarget(target: string): string {
   return target.slice(0, hashIndex)
 }
 
+export function getCreatableMarkdownDocLinkTarget(
+  target: string
+): CreatableMarkdownDocLinkTarget | null {
+  const documentTarget = getMarkdownDocLinkDocumentTarget(target).trim()
+  if (!documentTarget) {
+    return null
+  }
+  const normalized = documentTarget.replaceAll('\\', '/').replace(/\/+/g, '/')
+  if (
+    !normalized ||
+    normalized.startsWith('/') ||
+    normalized.startsWith('~') ||
+    /^[A-Za-z]:/.test(normalized) ||
+    normalized.endsWith('/')
+  ) {
+    return null
+  }
+
+  const segments = normalized.split('/')
+  if (
+    segments.some(
+      (segment) =>
+        !segment ||
+        segment === '.' ||
+        segment === '..' ||
+        segment.includes('\0') ||
+        /[\r\n#<>:"|?*[\]]/.test(segment)
+    )
+  ) {
+    return null
+  }
+
+  const relativePath = /\.(?:md|mdx|markdown)$/i.test(normalized) ? normalized : `${normalized}.md`
+  const fileName = segments.at(-1) ?? ''
+  const title = stripMarkdownExtension(fileName).trim()
+  return title ? { relativePath, title } : null
+}
+
 export function getMarkdownDocLinkAnchor(target: string): string | null {
   const hashIndex = target.indexOf('#')
   if (hashIndex === -1 || hashIndex === target.length - 1) {
     return null
   }
   const anchor = target.slice(hashIndex + 1).trim()
+  if (anchor.startsWith('^')) {
+    // Why: Obsidian block refs are not heading anchors. Open the document for
+    // now and add block-level navigation when Orca indexes block anchors.
+    return null
+  }
   return anchor ? slugMarkdownHeading(anchor) : null
 }
 
