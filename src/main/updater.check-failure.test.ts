@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+// jcode fork: re-enable the production-disabled updater for this dormant-logic
+// test suite (see DISABLE_AUTO_UPDATE in updater.ts). Must precede any import.
+process.env.JCODE_ENABLE_AUTO_UPDATE = '1'
+
 const { appMock, browserWindowMock, nativeUpdaterMock, autoUpdaterMock, isMock, killAllPtyMock } =
   vi.hoisted(() => {
     const appEventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()

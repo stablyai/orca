@@ -30,6 +30,21 @@ type CheckFailureSource = 'event' | 'promise' | 'fallback-promise'
 type MissingManifestPrereleaseFallbackResult = { userInitiated: boolean }
 type PrimaryEventSuppression = { failureKey: string; error: unknown }
 
+// jcode fork: HARD-DISABLE the auto-updater.
+// Why: this is a custom fork (jcode integration). The packaged app's release
+// feed points at upstream orca (github.com/stablyai/orca/releases). If the
+// updater ran, it would download + install an upstream orca build, REPLACING
+// the jcode fork entirely (losing all jcode functionality). That is
+// unacceptable. We early-return from every check entry point so no upstream
+// release is ever fetched, prompted, downloaded, or installed. This is a
+// single clean guard; flip to false only if this fork is ever published to its
+// own release feed.
+//
+// The env override (JCODE_ENABLE_AUTO_UPDATE=1) exists ONLY so the upstream
+// updater unit-test suite can still exercise the (now-dormant) updater logic;
+// it is never set in production, so the packaged jcode app is always disabled.
+const DISABLE_AUTO_UPDATE = process.env.JCODE_ENABLE_AUTO_UPDATE !== '1'
+
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
 const NUDGE_POLL_INTERVAL_MS = 30 * 60 * 1000
@@ -716,6 +731,10 @@ export function checkForUpdates(): void {
   // attribute makes the always-success semantics explicit and queryable
   // (so a dashboard tile can't accidentally treat this span's success rate
   // as the actual update-check success rate).
+  // jcode fork: programmatic check entry point is also disabled.
+  if (DISABLE_AUTO_UPDATE) {
+    return
+  }
   void withUpdaterSpan({ stage: 'check' }, async (span) => {
     span.setAttribute('updater.outcome', 'launched')
     runBackgroundUpdateCheck()
@@ -736,6 +755,12 @@ function enableIncludePrerelease(): void {
 
 /** Menu-triggered check — delegates feedback to renderer toasts via userInitiated flag */
 export function checkForUpdatesFromMenu(options?: { includePrerelease?: boolean }): void {
+  // jcode fork: a manual "Check for Updates" click must also do nothing, so the
+  // menu/Settings/IPC paths can never pull an upstream orca release.
+  if (DISABLE_AUTO_UPDATE) {
+    sendStatus({ state: 'not-available', userInitiated: true })
+    return
+  }
   if (!app.isPackaged || is.dev) {
     sendStatus({ state: 'not-available', userInitiated: true })
     return
@@ -889,6 +914,15 @@ export function setupAutoUpdater(
   _getDismissedUpdateNudgeId = opts?.getDismissedUpdateNudgeId ?? null
   _setPendingUpdateNudgeId = opts?.setPendingUpdateNudgeId ?? null
   _setDismissedUpdateNudgeId = opts?.setDismissedUpdateNudgeId ?? null
+
+  // jcode fork: never wire up checks/nudges/scheduled-timers/event-handlers.
+  // Returning here means we never call setFeedURL, checkForUpdates, the nudge
+  // poller, or the resume/focus daily-check handlers — so the app cannot
+  // self-update to upstream orca. App startup is unaffected (this function is
+  // best-effort; callers don't depend on a return value or side effects).
+  if (DISABLE_AUTO_UPDATE) {
+    return
+  }
 
   if (!app.isPackaged && !is.dev) {
     return

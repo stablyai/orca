@@ -1732,6 +1732,19 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       if (tab.contentType === 'simulator') {
         return true
       }
+      // Why: jcode 'chat' tabs (ChatPane) have no runtime liveness collection
+      // the way terminals (PTYs), editors (openFiles), and browsers
+      // (browserTabsByWorktree) do — a chat tab is "live" simply by existing in
+      // the unified tab model, with its conversation kept in chat-session-store
+      // keyed by the tab id. Without this branch a chat tab falls through to the
+      // editor check below, where liveEditorIds never contains its entityId, so
+      // it is filtered out of validTabs and dropped from group.tabOrder. That is
+      // exactly why a chat tab vanished from the tab bar after switching away
+      // from its worktree and back (reconcileWorktreeTabModel runs on each
+      // activation). Treat chat like simulator: always renderable while present.
+      if (tab.contentType === 'chat') {
+        return true
+      }
       return liveEditorIds.has(tab.entityId)
     }
 

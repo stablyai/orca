@@ -1782,6 +1782,55 @@ describe('TabsSlice', () => {
       })
     })
 
+    // Why: regression for the jcode chat tab vanishing from the tab bar after
+    // switching worktrees and back. Reconcile runs on every worktree activation;
+    // a 'chat' tab has no runtime liveness collection (its conversation lives in
+    // chat-session-store keyed by tab id), so before the fix it fell through to
+    // the editor liveness check and was dropped from validTabs / group.tabOrder.
+    it('keeps chat tabs because their conversation state lives outside the tab model', () => {
+      const groupId = 'g-chat'
+      store.setState({
+        unifiedTabsByWorktree: {
+          [WT]: [
+            {
+              id: 'chat-1',
+              entityId: 'chat-1',
+              groupId,
+              worktreeId: WT,
+              contentType: 'chat',
+              label: 'jcode',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: groupId,
+              worktreeId: WT,
+              activeTabId: 'chat-1',
+              tabOrder: ['chat-1']
+            }
+          ]
+        },
+        layoutByWorktree: { [WT]: { type: 'leaf', groupId } },
+        activeGroupIdByWorktree: { [WT]: groupId },
+        tabsByWorktree: { [WT]: [] }
+      })
+
+      const result = store.getState().reconcileWorktreeTabModel(WT)
+      const state = store.getState()
+
+      expect(result.renderableTabCount).toBe(1)
+      expect(result.activeRenderableTabId).toBe('chat-1')
+      expect(state.unifiedTabsByWorktree[WT].map((tab) => tab.id)).toEqual(['chat-1'])
+      expect(state.groupsByWorktree[WT][0].tabOrder).toEqual(['chat-1'])
+      expect(state.groupsByWorktree[WT][0].activeTabId).toBe('chat-1')
+    })
+
     it('collapses empty split groups when reconciliation drops a stale tab', () => {
       const terminalGroupId = 'g-terminal'
       const staleGroupId = 'g-stale'

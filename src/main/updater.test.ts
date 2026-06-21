@@ -1,6 +1,13 @@
 /* eslint-disable max-lines */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+// jcode fork: the updater is HARD-DISABLED in production (see DISABLE_AUTO_UPDATE
+// in updater.ts) so the app can never self-update to upstream orca. These tests
+// validate the dormant upstream updater logic, so re-enable it for this suite via
+// the test-only env override. Set before any `await import('./updater')` so the
+// module-eval-time read sees it (vi.resetModules re-reads it each beforeEach).
+process.env.JCODE_ENABLE_AUTO_UPDATE = '1'
+
 const {
   appMock,
   browserWindowMock,
