@@ -20,20 +20,30 @@ import {
   RuntimeRpcEnvelopeSchema,
   type RuntimeRpcResponse
 } from './runtime-rpc-envelope'
+// Re-export so existing value importers of `RemoteRuntimeClientError` are
+// unaffected; the class lives in a ws-free module so type-only consumers
+// (and mobile's typecheck) don't compile this file's Node-only deps.
+import { RemoteRuntimeClientError } from './remote-runtime-client-error'
+
+export { RemoteRuntimeClientError } from './remote-runtime-client-error'
 
 type HandshakeState = 'awaiting_ready' | 'awaiting_authenticated' | 'ready'
 
-export class RemoteRuntimeClientError extends Error {
-  readonly code: string
-
-  constructor(code: string, message: string) {
-    super(message)
-    this.name = 'RemoteRuntimeClientError'
-    this.code = code
-  }
-}
-
 function ignoreSettledRemoteRuntimeSocketError(): void {}
+
+function formatRemoteRuntimeCloseMessage(code: number, reason: Buffer): string {
+  const suffixParts: string[] = []
+  if (code !== 1005 && code !== 1006) {
+    suffixParts.push(String(code))
+  }
+  const reasonText = reason.toString().trim()
+  if (reasonText) {
+    suffixParts.push(reasonText)
+  }
+  return suffixParts.length > 0
+    ? `Remote Orca runtime closed the connection (${suffixParts.join(': ')}).`
+    : 'Remote Orca runtime closed the connection.'
+}
 
 export type RemoteRuntimeSubscription = {
   requestId: string
@@ -79,7 +89,9 @@ export async function sendRemoteRuntimeRequest<TResult>(
       }
     }
 
-    const timeout = setTimeout(() => {
+    let timeout = setTimeout(onTimeout, timeoutMs)
+
+    function onTimeout(): void {
       finish({
         ok: false,
         error: new RemoteRuntimeClientError(
@@ -87,7 +99,19 @@ export async function sendRemoteRuntimeRequest<TResult>(
           'Timed out waiting for the remote Orca runtime to respond.'
         )
       })
-    }, timeoutMs)
+    }
+
+    function refreshTimeout(): void {
+      const refreshableTimeout = timeout as { refresh?: () => void }
+      if (typeof refreshableTimeout.refresh === 'function') {
+        refreshableTimeout.refresh()
+        return
+      }
+      // Why: mobile typechecks shared code with DOM timer types, where
+      // setTimeout returns a number and Node's Timeout.refresh is absent.
+      clearTimeout(timeout)
+      timeout = setTimeout(onTimeout, timeoutMs)
+    }
 
     const finish = (
       result: { ok: true; response: RuntimeRpcResponse<TResult> } | { ok: false; error: Error }
@@ -143,13 +167,13 @@ export async function sendRemoteRuntimeRequest<TResult>(
       })
     }
 
-    function onClose(): void {
+    function onClose(code: number, reason: Buffer): void {
       if (!settled) {
         finish({
           ok: false,
           error: new RemoteRuntimeClientError(
             'remote_runtime_unavailable',
-            'Remote Orca runtime closed the connection.'
+            formatRemoteRuntimeCloseMessage(code, reason)
           )
         })
       }
@@ -295,7 +319,7 @@ export async function sendRemoteRuntimeRequest<TResult>(
         return
       }
       if (isKeepaliveFrame(raw)) {
-        timeout.refresh()
+        refreshTimeout()
         return
       }
       const parsed = RuntimeRpcEnvelopeSchema.safeParse(raw)
@@ -444,7 +468,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
       )
     }
 
-    function onClose(): void {
+    function onClose(code: number, reason: Buffer): void {
       clearTimeout(timeout)
       cleanupSocketListeners()
       if (!settled) {
@@ -452,7 +476,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
         reject(
           new RemoteRuntimeClientError(
             'remote_runtime_unavailable',
-            'Remote Orca runtime closed the connection.'
+            formatRemoteRuntimeCloseMessage(code, reason)
           )
         )
         return

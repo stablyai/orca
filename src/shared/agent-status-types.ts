@@ -5,6 +5,8 @@
 // agent misses its own cancellation hook. We still do not infer status from
 // terminal titles anywhere in the data flow.
 
+import type { AgentProviderSessionMetadata } from './agent-session-resume'
+
 export const AGENT_STATUS_STATES = ['working', 'blocked', 'waiting', 'done'] as const
 export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
 // Why: agent types are not restricted to a fixed set — new agents appear
@@ -28,6 +30,8 @@ export type WellKnownAgentType =
   | 'command-code'
   | 'grok'
   | 'hermes'
+  | 'devin'
+  | 'ante'
   | 'unknown'
 export type AgentType = WellKnownAgentType | (string & {})
 
@@ -59,6 +63,8 @@ export const AGENT_STATE_HISTORY_MAX = 20
 export type AgentStatusOrchestrationContext = {
   taskId: string
   dispatchId: string
+  taskTitle?: string
+  displayName?: string
   parentTerminalHandle?: string
   parentPaneKey?: string
   coordinatorHandle?: string
@@ -113,6 +119,9 @@ export type AgentStatusEntry = {
    *  Why: parent/child agent hierarchy is pane-level state, not worktree
    *  lineage; workers often run in the same worktree as their coordinator. */
   orchestration?: AgentStatusOrchestrationContext
+  /** Provider-owned conversation/session id captured from hook payloads.
+   *  Used only for exact CLI resume; Orca terminal ids are not agent-session ids. */
+  providerSession?: AgentProviderSessionMetadata
 }
 
 export type MigrationUnsupportedPtyEntry = {
@@ -172,6 +181,7 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   /** Timestamp (ms) when the current state first appeared for this pane. */
   stateStartedAt: number
   orchestration?: AgentStatusOrchestrationContext
+  providerSession?: AgentProviderSessionMetadata
 }
 
 /** Maximum character length for the prompt field. Truncated on parse. */
@@ -195,6 +205,8 @@ export const AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH = 8000
  * dashboard + hover only display hook-reported data as-is.
  */
 export const AGENT_STATUS_STALE_AFTER_MS = 30 * 60 * 1000
+const SINGLE_LINE_FIELD_SCAN_OVERHEAD = 64
+const SINGLE_LINE_FIELD_SCAN_MULTIPLIER = 8
 
 // Why: typed as ReadonlySet<string> so .has() accepts any string without
 // requiring `state as AgentStatusState` at the check site. The narrowing
@@ -209,10 +221,10 @@ export const AGENT_TYPE_MAX_LENGTH = 40
 // sequence. Shared by the single-line and multiline normalizers so the
 // protection can't drift between them.
 function truncatePreservingSurrogates(value: string, maxLength: number): string {
-  if (value.length <= maxLength) {
+  if (value.length < maxLength) {
     return value
   }
-  let truncated = value.slice(0, maxLength)
+  let truncated = value.length === maxLength ? value : value.slice(0, maxLength)
   const lastCode = truncated.charCodeAt(truncated.length - 1)
   if (lastCode >= 0xd800 && lastCode <= 0xdbff) {
     truncated = truncated.slice(0, -1)
@@ -225,12 +237,47 @@ function normalizeField(value: unknown, maxLength: number = AGENT_STATUS_MAX_FIE
   if (typeof value !== 'string') {
     return ''
   }
-  // Why: include Unicode line separators (U+2028, U+2029) in the collapse
-  // set. A hook payload like "claude rogue" would otherwise bypass the
-  // single-line invariant that downstream UI and equality checks rely on —
-  // the data comes from an untrusted agent process.
-  const singleLine = value.trim().replace(/[\r\n\u2028\u2029]+/g, ' ')
-  return truncatePreservingSurrogates(singleLine, maxLength)
+  return normalizeSingleLinePreview(value, maxLength)
+}
+
+function normalizeSingleLinePreview(value: string, maxLength: number): string {
+  // Why: hook prompt/tool fields are previews. Bound the source scan before
+  // folding line breaks so paste-sized status text cannot run a full regex
+  // replacement just to keep a small dashboard label.
+  const scanEnd = Math.min(
+    value.length,
+    maxLength * SINGLE_LINE_FIELD_SCAN_MULTIPLIER + SINGLE_LINE_FIELD_SCAN_OVERHEAD
+  )
+  let index = 0
+  while (index < scanEnd && isEcmaTrimWhitespace(value.charCodeAt(index))) {
+    index++
+  }
+
+  let normalized = ''
+  let lineSeparatorRun = false
+  while (index < scanEnd && normalized.length < maxLength) {
+    const code = value.charCodeAt(index)
+    if (isSingleLineSeparator(code)) {
+      if (code === 13 && value.charCodeAt(index + 1) === 10) {
+        index++
+      }
+      if (!lineSeparatorRun) {
+        normalized += ' '
+      }
+      lineSeparatorRun = true
+      index++
+      continue
+    }
+
+    normalized += value[index]
+    lineSeparatorRun = false
+    index++
+  }
+
+  if (normalized.length < maxLength) {
+    normalized = trimTrailingWhitespace(normalized)
+  }
+  return truncatePreservingSurrogates(normalized, maxLength)
 }
 
 // Why: assistant messages are a multi-paragraph "what did the agent say"
@@ -250,13 +297,66 @@ function normalizeMultilineField(value: unknown, maxLength: number): string {
   // normalizer's treatment of the same code points, keeping the two paths in
   // sync. Step order preserved: `\r\n` → `\n`, bare `\r` → `\n`,
   // U+2028/U+2029 → `\n`, then collapse blank-line runs.
-  const normalized = value
-    .trim()
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .replace(/[\u2028\u2029]/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
+  const { start, end } = getTrimmedStringBounds(value)
+  let normalized = ''
+  let newlineRun = 0
+  for (let index = start; index < end && normalized.length < maxLength; index++) {
+    const code = value.charCodeAt(index)
+    if (code === 13 || code === 10 || code === 0x2028 || code === 0x2029) {
+      if (code === 13 && value.charCodeAt(index + 1) === 10) {
+        index++
+      }
+      if (newlineRun < 2) {
+        normalized += '\n'
+      }
+      newlineRun++
+      continue
+    }
+
+    normalized += value[index]
+    newlineRun = 0
+  }
   return truncatePreservingSurrogates(normalized, maxLength)
+}
+
+function getTrimmedStringBounds(value: string): { start: number; end: number } {
+  let start = 0
+  let end = value.length
+  while (start < end && isEcmaTrimWhitespace(value.charCodeAt(start))) {
+    start++
+  }
+  while (end > start && isEcmaTrimWhitespace(value.charCodeAt(end - 1))) {
+    end--
+  }
+  return { start, end }
+}
+
+function trimTrailingWhitespace(value: string): string {
+  let end = value.length
+  while (end > 0 && isEcmaTrimWhitespace(value.charCodeAt(end - 1))) {
+    end--
+  }
+  return end === value.length ? value : value.slice(0, end)
+}
+
+function isSingleLineSeparator(code: number): boolean {
+  return code === 13 || code === 10 || code === 0x2028 || code === 0x2029
+}
+
+function isEcmaTrimWhitespace(code: number): boolean {
+  return (
+    code === 0x20 ||
+    (code >= 0x09 && code <= 0x0d) ||
+    code === 0xa0 ||
+    code === 0x1680 ||
+    (code >= 0x2000 && code <= 0x200a) ||
+    code === 0x2028 ||
+    code === 0x2029 ||
+    code === 0x202f ||
+    code === 0x205f ||
+    code === 0x3000 ||
+    code === 0xfeff
+  )
 }
 
 // Why: tool/assistant fields are optional on the entry (absence = "no update

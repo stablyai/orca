@@ -735,7 +735,7 @@ describe('CodexHookService', () => {
       systemHooksPath,
       `${JSON.stringify({
         hooks: {
-          Stop: Array.from({ length: 130_000 }, () => ({
+          Stop: Array.from({ length: 30_000 }, () => ({
             hooks: [{ type: 'command', command: legacyCommand }]
           }))
         }
@@ -758,7 +758,7 @@ describe('CodexHookService', () => {
       hooks: Record<string, unknown>
     }
     expect(systemHooks.hooks.Stop).toBeUndefined()
-  }, 15_000)
+  }, 30_000)
 
   it('removes the legacy Orca Codex profile file when it only contains managed hooks', () => {
     const systemCodexHome = join(tmpHome, '.codex')

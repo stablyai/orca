@@ -20,6 +20,7 @@ import type { BrowserSessionProfile, BrowserSessionProfileScope } from '../../sh
 import { browserManager } from './browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from './browser-media-access'
 import { cleanElectronUserAgent, setupClientHintsOverride } from './browser-session-ua'
+import { isAutoGrantedBrowserSessionPermission } from './browser-session-permission-policy'
 import {
   allowsBrowserWebAuthnPermission,
   clearBrowserWebAuthnAccessHandlers,
@@ -493,10 +494,6 @@ class BrowserSessionRegistry {
       sess.setUserAgent(cleanUA)
       setupClientHintsOverride(sess, cleanUA)
     }
-    // Why: agent-browser clipboard commands execute via CDP in this session.
-    // Until there is a separate trusted bridge, denying clipboard-read breaks
-    // those runtime commands even when invoked with a user gesture.
-    const autoGranted = new Set(['fullscreen', 'clipboard-read', 'clipboard-sanitized-write'])
     sess.setPermissionRequestHandler((webContents, permission, callback, details) => {
       // Why: `media` (camera/mic) must defer to macOS TCC instead of being
       // denied outright. Denying at the session layer would make pages inside
@@ -530,7 +527,7 @@ class BrowserSessionRegistry {
         )
         return
       }
-      const allowed = autoGranted.has(permission)
+      const allowed = isAutoGrantedBrowserSessionPermission(permission)
       if (!allowed) {
         browserManager.notifyPermissionDenied({
           guestWebContentsId: webContents.id,
@@ -547,7 +544,7 @@ class BrowserSessionRegistry {
       if (allowsBrowserWebAuthnPermission(permission, details)) {
         return true
       }
-      return autoGranted.has(permission)
+      return isAutoGrantedBrowserSessionPermission(permission)
     })
     installBrowserWebAuthnAccessHandlers(sess)
     sess.setDisplayMediaRequestHandler((_request, callback) => {

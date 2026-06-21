@@ -7,6 +7,10 @@
  */
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { EventProps } from '../../../../shared/telemetry-events'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
+import { ackPtyData, exposeE2eTerminalPtyAckGate } from './terminal-pty-ack-gate'
+import { clampUtf8Tail, type EagerBufferChunk } from './pty-eager-buffer-clamp'
 
 // ── Singleton PTY event dispatcher ───────────────────────────────────
 // One global IPC listener per channel, routes events to transports by
@@ -25,6 +29,8 @@ export type PtyBufferSnapshot = {
   seq?: number
   source?: 'headless' | 'renderer'
 }
+
+export type LocalPtySessionMetadata = { cwd?: string; shellOverride?: string }
 
 export const ptyDataHandlers = new Map<string, (data: string, meta?: PtyDataMeta) => void>()
 /** Sidecar subscriptions that observe PTY data without owning the primary
@@ -69,6 +75,13 @@ const ptyExitSidecars = new Map<string, Set<(code: number) => void>>()
 export const ptyTeardownHandlers = new Map<string, () => void>()
 let ptyDispatcherAttached = false
 
+export type PtyDataHandlerShutdownSnapshot = {
+  ptyId: string
+  dataHandler?: (data: string, meta?: PtyDataMeta) => void
+  replayHandler?: (data: string) => void
+  teardownHandler?: () => void
+}
+
 /**
  * Remove data and status handlers for the given PTY IDs so that any final
  * data flushed by the main process during PTY teardown cannot trigger
@@ -79,12 +92,36 @@ let ptyDispatcherAttached = false
  * Exit handlers are intentionally kept alive so the normal exit-cleanup
  * path (unregister, clear stale timers, update store) still runs.
  */
-export function unregisterPtyDataHandlers(ptyIds: string[]): void {
+export function unregisterPtyDataHandlers(ptyIds: string[]): PtyDataHandlerShutdownSnapshot[] {
+  const snapshots: PtyDataHandlerShutdownSnapshot[] = []
   for (const id of ptyIds) {
+    snapshots.push({
+      ptyId: id,
+      dataHandler: ptyDataHandlers.get(id),
+      replayHandler: ptyReplayHandlers.get(id),
+      teardownHandler: ptyTeardownHandlers.get(id)
+    })
     ptyDataHandlers.delete(id)
     ptyReplayHandlers.delete(id)
     ptyTeardownHandlers.get(id)?.()
     ptyTeardownHandlers.delete(id)
+  }
+  return snapshots
+}
+
+export function restorePtyDataHandlersAfterFailedShutdown(
+  snapshots: readonly PtyDataHandlerShutdownSnapshot[]
+): void {
+  for (const snapshot of snapshots) {
+    if (snapshot.dataHandler) {
+      ptyDataHandlers.set(snapshot.ptyId, snapshot.dataHandler)
+    }
+    if (snapshot.replayHandler) {
+      ptyReplayHandlers.set(snapshot.ptyId, snapshot.replayHandler)
+    }
+    if (snapshot.teardownHandler) {
+      ptyTeardownHandlers.set(snapshot.ptyId, snapshot.teardownHandler)
+    }
   }
 }
 
@@ -93,30 +130,38 @@ export function ensurePtyDispatcher(): void {
     return
   }
   ptyDispatcherAttached = true
+  exposeE2eTerminalPtyAckGate()
   window.api.pty.onData((payload) => {
-    let meta: PtyDataMeta | undefined
-    if (typeof payload.seq === 'number') {
-      meta ??= {}
-      meta.seq = payload.seq
-    }
-    if (typeof payload.rawLength === 'number') {
-      meta ??= {}
-      meta.rawLength = payload.rawLength
-    }
-    ptyDataHandlers.get(payload.id)?.(payload.data, meta)
-    const sidecars = ptyDataSidecars.get(payload.id)
-    if (sidecars && sidecars.size > 0) {
-      // Why: snapshot the Set before iterating because watchers commonly
-      // unsubscribe themselves on the very chunk that satisfies them
-      // (e.g. agent-paste-draft resolves on DECSET 2004 and immediately
-      // tears down). Iterating the live Set in that case can skip a
-      // watcher or — if a watcher synchronously subscribes a sibling —
-      // double-fire. The Set is never large (one watcher per active
-      // ready-wait), so the array allocation is cheap.
-      const snapshot = Array.from(sidecars)
-      for (const watcher of snapshot) {
-        watcher(payload.data)
+    try {
+      let meta: PtyDataMeta | undefined
+      if (typeof payload.seq === 'number') {
+        meta ??= {}
+        meta.seq = payload.seq
       }
+      if (typeof payload.rawLength === 'number') {
+        meta ??= {}
+        meta.rawLength = payload.rawLength
+      }
+      ptyDataHandlers.get(payload.id)?.(payload.data, meta)
+      const sidecars = ptyDataSidecars.get(payload.id)
+      if (sidecars && sidecars.size > 0) {
+        // Why: snapshot the Set before iterating because watchers commonly
+        // unsubscribe themselves on the very chunk that satisfies them
+        // (e.g. agent-paste-draft resolves on DECSET 2004 and immediately
+        // tears down). Iterating the live Set in that case can skip a
+        // watcher or — if a watcher synchronously subscribes a sibling —
+        // double-fire. The Set is never large (one watcher per active
+        // ready-wait), so the array allocation is cheap.
+        const snapshot = Array.from(sidecars)
+        for (const watcher of snapshot) {
+          watcher(payload.data)
+        }
+      }
+    } finally {
+      // Why: main budgets renderer-bound terminal output by bytes accepted
+      // into this dispatcher. ACK in finally so a bad sidecar cannot leave
+      // a PTY permanently backpressured.
+      ackPtyData(payload.id, payload.rawLength ?? payload.data.length)
     }
   })
   window.api.pty.onReplay((payload) => {
@@ -162,13 +207,6 @@ export function subscribeToPtyExit(ptyId: string, watcher: (code: number) => voi
 
 export type EagerPtyHandle = { flush: () => string; dispose: () => void }
 const eagerPtyHandles = new Map<string, EagerPtyHandle>()
-const eagerBufferTextEncoder = new TextEncoder()
-const eagerBufferTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true })
-
-type EagerBufferChunk = {
-  data: string
-  bytes: number
-}
 
 export function getEagerPtyBufferHandle(ptyId: string): EagerPtyHandle | undefined {
   return eagerPtyHandles.get(ptyId)
@@ -178,19 +216,6 @@ export function getEagerPtyBufferHandle(ptyId: string): EagerPtyHandle | undefin
 // serialization. Prevents unbounded memory growth if a restored shell
 // runs a long-lived command (e.g. tail -f) in a worktree the user never opens.
 const EAGER_BUFFER_MAX_BYTES = 512 * 1024
-
-function clampUtf8Tail(data: string, maxBytes: number): EagerBufferChunk {
-  const encoded = eagerBufferTextEncoder.encode(data)
-  if (encoded.byteLength <= maxBytes) {
-    return { data, bytes: encoded.byteLength }
-  }
-  let start = encoded.byteLength - maxBytes
-  while (start < encoded.byteLength && (encoded[start] & 0xc0) === 0x80) {
-    start += 1
-  }
-  const tail = eagerBufferTextDecoder.decode(encoded.subarray(start))
-  return { data: tail, bytes: encoded.byteLength - start }
-}
 
 export function registerEagerPtyBuffer(
   ptyId: string,
@@ -331,10 +356,11 @@ export type PtyTransport = {
   ) => boolean
   isConnected: () => boolean
   getPtyId: () => string | null
+  getConnectionId?: () => string | null | undefined
+  getLocalSessionMetadata?: () => LocalPtySessionMetadata | null
   serializeBuffer?: (opts?: { scrollbackRows?: number }) => Promise<PtyBufferSnapshot | null>
   preserve?: () => void
-  /** Unregister PTY handlers without killing the process, so a remounted
-   *  pane can reattach to the same running shell. */
+  /** Unregister PTY handlers without killing the process for pane remounts. */
   detach?: () => void
   destroy?: () => void | Promise<void>
 }
@@ -343,6 +369,7 @@ export type IpcPtyTransportOptions = {
   cwd?: string
   env?: Record<string, string>
   command?: string
+  startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
   /** Orca worktree identity for scoped shell history. */
   worktreeId?: string
@@ -356,6 +383,7 @@ export type IpcPtyTransportOptions = {
   activate?: boolean
   /** Why: mirrors PtySpawnOptions.shellOverride — see types.ts for rationale. */
   shellOverride?: string
+  projectRuntime?: ProjectExecutionRuntimeResolution
   /** Telemetry metadata for the `agent_started` event. Forwarded verbatim
    *  to `pty:spawn` so main can fire the event after confirmed launch. The
    *  IPC handler re-validates the schema; this type is the renderer-side

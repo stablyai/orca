@@ -1,20 +1,15 @@
-import { basename, resolve, relative, isAbsolute, posix, sep, win32 } from 'path'
-import type {
-  GitWorktreeInfo,
-  GlobalSettings,
-  OrcaWorkspaceLayout,
-  Repo,
-  Worktree,
-  WorktreeMeta
-} from '../../shared/types'
+import { resolve, relative, isAbsolute, posix, sep, win32 } from 'path'
+import type { GlobalSettings, OrcaWorkspaceLayout, Repo } from '../../shared/types'
 import { resolveRuntimePath } from '../../shared/cross-platform-path'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { splitWorktreeId } from '../../shared/worktree-id'
-import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import { getWslHome, parseWslPath } from '../wsl'
 
 type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
+
+export { computeBranchName, getConfiguredBranchPrefix } from './worktree-branch-name'
+export { mergeWorktree } from './worktree-metadata-merge'
 
 /**
  * Sanitize a worktree name for use in branch names and directory paths.
@@ -74,24 +69,6 @@ export function ensurePathWithinWorkspace(targetPath: string, workspaceDir: stri
   }
 
   return resolvedTargetPath
-}
-
-/**
- * Compute the full branch name by applying the configured prefix strategy.
- */
-export function computeBranchName(
-  sanitizedName: string,
-  settings: { branchPrefix: string; branchPrefixCustom?: string },
-  gitUsername: string | null
-): string {
-  if (settings.branchPrefix === 'git-username') {
-    if (gitUsername) {
-      return `${gitUsername}/${sanitizedName}`
-    }
-  } else if (settings.branchPrefix === 'custom' && settings.branchPrefixCustom) {
-    return `${settings.branchPrefixCustom}/${sanitizedName}`
-  }
-  return sanitizedName
 }
 
 /**
@@ -181,6 +158,17 @@ export function areWorktreePathsEqual(
   rightPath: string,
   platform = process.platform
 ): boolean {
+  if (looksLikePosixAbsolutePath(leftPath) || looksLikePosixAbsolutePath(rightPath)) {
+    // Why: local WSL projects run POSIX paths on a Windows desktop; comparing
+    // them with win32 rules can delete or dedupe the wrong runtime-owned path.
+    if (!looksLikePosixAbsolutePath(leftPath) || !looksLikePosixAbsolutePath(rightPath)) {
+      return false
+    }
+    const left = normalizePosixWorktreePathForComparison(leftPath, platform)
+    const right = normalizePosixWorktreePathForComparison(rightPath, platform)
+    return left === right
+  }
+
   if (platform === 'win32' || looksLikeWindowsPath(leftPath) || looksLikeWindowsPath(rightPath)) {
     const left = win32.normalize(win32.resolve(leftPath))
     const right = win32.normalize(win32.resolve(rightPath))
@@ -199,6 +187,10 @@ function looksLikeWindowsPath(pathValue: string): boolean {
   return (
     /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\') || pathValue.startsWith('//')
   )
+}
+
+function looksLikePosixAbsolutePath(pathValue: string): boolean {
+  return pathValue.startsWith('/') && !pathValue.startsWith('//')
 }
 
 function normalizePosixWorktreePathForComparison(
@@ -263,61 +255,6 @@ export function shouldSetDisplayName(
   sanitizedName: string
 ): boolean {
   return !(branchName === requestedName && sanitizedName === requestedName)
-}
-
-/**
- * Merge raw git worktree info with persisted user metadata into a full Worktree.
- */
-export function mergeWorktree(
-  repoId: string,
-  git: GitWorktreeInfo,
-  meta: WorktreeMeta | undefined,
-  defaultDisplayName?: string
-): Worktree {
-  const branchShort = git.branch.replace(/^refs\/heads\//, '')
-  return {
-    id: `${repoId}::${git.path}`,
-    ...(meta?.instanceId !== undefined ? { instanceId: meta.instanceId } : {}),
-    repoId,
-    path: git.path,
-    head: git.head,
-    branch: git.branch,
-    isBare: git.isBare,
-    ...(git.isSparse === true ? { isSparse: true } : {}),
-    isMainWorktree: git.isMainWorktree,
-    displayName: meta?.displayName || branchShort || defaultDisplayName || basename(git.path),
-    comment: meta?.comment || '',
-    linkedIssue: meta?.linkedIssue ?? null,
-    linkedPR: meta?.linkedPR ?? null,
-    linkedLinearIssue: meta?.linkedLinearIssue ?? null,
-    linkedGitLabMR: meta?.linkedGitLabMR ?? null,
-    linkedGitLabIssue: meta?.linkedGitLabIssue ?? null,
-    isArchived: meta?.isArchived ?? false,
-    isUnread: meta?.isUnread ?? false,
-    isPinned: meta?.isPinned ?? false,
-    sortOrder: meta?.sortOrder ?? 0,
-    ...(meta?.manualOrder !== undefined ? { manualOrder: meta.manualOrder } : {}),
-    lastActivityAt: meta?.lastActivityAt ?? 0,
-    ...(meta?.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
-    ...(meta?.createdWithAgent !== undefined ? { createdWithAgent: meta.createdWithAgent } : {}),
-    ...(meta?.pendingFirstAgentMessageRename !== undefined
-      ? { pendingFirstAgentMessageRename: meta.pendingFirstAgentMessageRename }
-      : {}),
-    ...(git.isSparse === true
-      ? {
-          sparseDirectories: meta?.sparseDirectories,
-          sparseBaseRef: meta?.sparseBaseRef,
-          sparsePresetId: meta?.sparsePresetId
-        }
-      : {}),
-    ...(meta?.baseRef !== undefined ? { baseRef: meta.baseRef } : {}),
-    ...(meta?.pushTarget !== undefined ? { pushTarget: meta.pushTarget } : {}),
-    workspaceStatus: meta?.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
-    // Why: diff comments are persisted on WorktreeMeta (see `WorktreeMeta` in
-    // shared/types) and forwarded verbatim so the renderer store mirrors
-    // on-disk state. `undefined` here means the worktree has no comments yet.
-    diffComments: meta?.diffComments
-  }
 }
 
 /**

@@ -1,43 +1,51 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  AppState,
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  ScrollView,
-  Switch,
-  type AppStateStatus
-} from 'react-native'
+import { View, Text, StyleSheet, Pressable, Switch } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useFocusEffect, useRouter } from 'expo-router'
-import { ChevronLeft, ChevronRight, Smartphone, X } from 'lucide-react-native'
-import {
-  CustomKeyModal,
-  loadCustomKeys,
-  saveCustomKeys,
-  type CustomKey
-} from '../src/components/CustomKeyModal'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import Animated, {
+  useAnimatedRef,
+  useAnimatedScrollHandler,
+  useSharedValue
+} from 'react-native-reanimated'
+import { useRouter } from 'expo-router'
+import { ChevronLeft, ChevronRight, Smartphone, Type } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
 import { loadHosts } from '../src/transport/host-store'
 import type { HostProfile } from '../src/transport/types'
 import { useAllHostClients } from '../src/transport/client-context'
 import type { RpcClient } from '../src/transport/rpc-client'
 import { PickerModal, type PickerOption } from '../src/components/PickerModal'
-import {
-  TERMINAL_ACCESSORY_KEYS,
-  type TerminalAccessoryKey
-} from '../src/terminal/terminal-accessory-keys'
-import {
-  getDefaultTerminalAccessoryBuiltInIds,
-  loadTerminalAccessoryLayout,
-  resetTerminalAccessoryBuiltInIds,
-  saveTerminalAccessoryLayout,
-  setTerminalAccessoryBuiltInVisible
-} from '../src/terminal/terminal-accessory-layout'
+import { TerminalShortcutSettings } from '../src/components/TerminalShortcutSettings'
 import { setTerminalAutoRestoreFitMsForHost } from '../src/terminal/terminal-auto-restore-fit-state'
+import {
+  loadTerminalAutocompleteEnabled,
+  loadTerminalTextScale,
+  saveTerminalAutocompleteEnabled,
+  saveTerminalTextScale
+} from '../src/storage/preferences'
 
 type RestoreValue = 'indefinite' | '60s' | '5m' | '30m'
+
+type TextSizeValue = 'smallest' | 'smaller' | 'default' | 'large' | 'larger' | 'largest'
+
+// scale = baseline zoom the terminal WebView applies on top of fit-to-width.
+// Keep in sync with TERMINAL_TEXT_SCALES; pinch-to-zoom snaps to these values.
+const TEXT_SIZE_OPTIONS: (PickerOption<TextSizeValue> & { scale: number })[] = [
+  { value: 'smallest', label: 'Smallest (50%)', scale: 0.5 },
+  { value: 'smaller', label: 'Smaller (75%)', scale: 0.75 },
+  { value: 'default', label: 'Default (100%)', scale: 1 },
+  { value: 'large', label: 'Large (125%)', scale: 1.25 },
+  { value: 'larger', label: 'Larger (150%)', scale: 1.5 },
+  { value: 'largest', label: 'Largest (200%)', scale: 2 }
+]
+
+function textSizeValueFromScale(scale: number): TextSizeValue {
+  return TEXT_SIZE_OPTIONS.find((o) => o.scale === scale)?.value ?? 'default'
+}
+
+function textSizeSummary(scale: number): string {
+  return (TEXT_SIZE_OPTIONS.find((o) => o.scale === scale) ?? TEXT_SIZE_OPTIONS[0]!).label
+}
 
 const AUTO_RESTORE_FIT_OPTIONS: (PickerOption<RestoreValue> & { ms: number | null })[] = [
   { value: 'indefinite', label: 'Keep at phone size (default)', ms: null },
@@ -111,33 +119,6 @@ function HostFitRow({
   )
 }
 
-function ShortcutBarRow({
-  shortcutKey,
-  visible,
-  onToggle
-}: {
-  shortcutKey: TerminalAccessoryKey
-  visible: boolean
-  onToggle: (visible: boolean) => void
-}): React.JSX.Element {
-  return (
-    <View style={styles.row}>
-      <View style={styles.keycap}>
-        <Text style={styles.keycapText}>{shortcutKey.label}</Text>
-      </View>
-      <View style={styles.rowContent}>
-        <Text style={styles.rowLabel}>{shortcutKey.accessibilityLabel ?? shortcutKey.label}</Text>
-      </View>
-      <Switch
-        value={visible}
-        onValueChange={onToggle}
-        trackColor={{ false: colors.borderSubtle, true: colors.textSecondary }}
-        thumbColor={colors.textPrimary}
-      />
-    </View>
-  )
-}
-
 export default function TerminalSettingsScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -152,9 +133,6 @@ export default function TerminalSettingsScreen() {
     [hostClients]
   )
 
-  const [customKeys, setCustomKeys] = useState<CustomKey[]>([])
-  const [showCustomKeyModal, setShowCustomKeyModal] = useState(false)
-
   // Why: per-host current value, lazily fetched. We keep state at the
   // screen level rather than per-row so the picker can render at root
   // level — embedding PickerModal inside a row clipped its BottomDrawer
@@ -162,81 +140,41 @@ export default function TerminalSettingsScreen() {
   // drawer appear cut-off.
   const [hostMs, setHostMs] = useState<Record<string, number | null | undefined>>({})
   const [pickerHostId, setPickerHostId] = useState<string | null>(null)
-  const [visibleBuiltInIds, setVisibleBuiltInIds] = useState<string[]>(
-    getDefaultTerminalAccessoryBuiltInIds
-  )
-  const layoutWriteChainRef = useRef<Promise<void>>(Promise.resolve())
-  const layoutWriteSeqRef = useRef(0)
-  const pendingLayoutWritesRef = useRef(0)
 
-  const persistLayout = useCallback((nextIds: string[]) => {
-    layoutWriteSeqRef.current += 1
-    pendingLayoutWritesRef.current += 1
-    layoutWriteChainRef.current = layoutWriteChainRef.current
-      .catch(() => {})
-      .then(() => saveTerminalAccessoryLayout(nextIds))
-      .catch(() => {})
-      .finally(() => {
-        pendingLayoutWritesRef.current -= 1
-      })
-  }, [])
-
-  const refreshShortcutLayout = useCallback(() => {
-    const refreshSeq = layoutWriteSeqRef.current
-    void loadTerminalAccessoryLayout().then((layout) => {
-      if (pendingLayoutWritesRef.current > 0 || refreshSeq !== layoutWriteSeqRef.current) {
-        return
-      }
-      setVisibleBuiltInIds(layout.visibleBuiltInIds)
-    })
-  }, [])
-
-  const refreshCustomKeys = useCallback(() => {
-    void loadCustomKeys().then(setCustomKeys)
-  }, [])
-
-  const handleDeleteCustomKey = useCallback(
-    async (key: CustomKey) => {
-      const updated = customKeys.filter((k) => k.id !== key.id)
-      setCustomKeys(updated)
-      await saveCustomKeys(updated)
-    },
-    [customKeys]
-  )
-
-  useFocusEffect(
-    useCallback(() => {
-      refreshShortcutLayout()
-      refreshCustomKeys()
-    }, [refreshShortcutLayout, refreshCustomKeys])
-  )
-
+  const [textScale, setTextScale] = useState(1)
+  const [textSizePickerOpen, setTextSizePickerOpen] = useState(false)
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
-      if (s === 'active') {
-        refreshShortcutLayout()
-        refreshCustomKeys()
+    void loadTerminalTextScale().then(setTextScale)
+  }, [])
+  const selectTextSize = useCallback((value: TextSizeValue) => {
+    const opt = TEXT_SIZE_OPTIONS.find((o) => o.value === value)
+    if (!opt) {
+      return
+    }
+    setTextScale(opt.scale)
+    void saveTerminalTextScale(opt.scale)
+  }, [])
+
+  const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
+  // Why: a fast toggle before the initial load resolves must win — otherwise the
+  // delayed read would clobber the user's choice with the stored (stale) value.
+  const userToggledAutocompleteRef = useRef(false)
+  useEffect(() => {
+    let stale = false
+    void loadTerminalAutocompleteEnabled().then((enabled) => {
+      if (!stale && !userToggledAutocompleteRef.current) {
+        setAutocompleteEnabled(enabled)
       }
     })
-    return () => sub.remove()
-  }, [refreshShortcutLayout, refreshCustomKeys])
-
-  const toggleBuiltInKey = useCallback(
-    (id: string, visible: boolean) => {
-      setVisibleBuiltInIds((current) => {
-        const next = setTerminalAccessoryBuiltInVisible(current, id, visible)
-        persistLayout(next)
-        return next
-      })
-    },
-    [persistLayout]
-  )
-
-  const resetBuiltInKeys = useCallback(() => {
-    const next = resetTerminalAccessoryBuiltInIds()
-    setVisibleBuiltInIds(next)
-    persistLayout(next)
-  }, [persistLayout])
+    return () => {
+      stale = true
+    }
+  }, [])
+  const toggleAutocomplete = useCallback((next: boolean) => {
+    userToggledAutocompleteRef.current = true
+    setAutocompleteEnabled(next)
+    void saveTerminalAutocompleteEnabled(next)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -295,10 +233,28 @@ export default function TerminalSettingsScreen() {
   }
 
   const pickerHost = pickerHostId ? hosts.find((h) => h.id === pickerHostId) : null
-  const visibleBuiltInSet = useMemo(() => new Set(visibleBuiltInIds), [visibleBuiltInIds])
+
+  const scrollRef = useAnimatedRef<Animated.ScrollView>()
+  const scrollOffsetY = useSharedValue(0)
+  const scrollContentHeight = useSharedValue(0)
+  const scrollHandler = useAnimatedScrollHandler((event) => {
+    scrollOffsetY.value = event.contentOffset.y
+  })
+  // Why: imperative toggle instead of state — a re-render while a drag gesture
+  // is active would rebuild the row gestures and could cancel the drag.
+  const setScrollEnabled = useCallback(
+    (enabled: boolean) => {
+      scrollRef.current?.setNativeProps({ scrollEnabled: enabled })
+    },
+    [scrollRef]
+  )
+  const handleDragActiveChange = useCallback(
+    (active: boolean) => setScrollEnabled(!active),
+    [setScrollEnabled]
+  )
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
+    <GestureHandlerRootView style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
       <View style={styles.topRow}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />
@@ -306,13 +262,22 @@ export default function TerminalSettingsScreen() {
         <Text style={styles.heading}>Terminal</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <Animated.ScrollView
+        ref={scrollRef}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
+        onContentSizeChange={(_width, height) => {
+          scrollContentHeight.value = height
+        }}
+      >
         <Text style={styles.groupHeading}>WHEN YOU LEAVE THE APP</Text>
         <Text style={styles.groupDescription}>
           While you&apos;re using a terminal on your phone, Orca shrinks it to fit your screen. When
           you close the app or switch away, this controls whether it stays at phone size (so
           interactive CLI tools don&apos;t reflow) or resizes back to your desktop. You can always
-          tap Restore on the terminal banner to resize it manually.
+          use Restore this terminal or Restore all terminals on the banner to resize manually.
         </Text>
 
         {hosts.length === 0 ? (
@@ -340,76 +305,56 @@ export default function TerminalSettingsScreen() {
           </View>
         )}
 
-        <Text style={[styles.groupHeading, styles.groupTopGap]}>SHORTCUT BAR</Text>
+        <Text style={[styles.groupHeading, styles.inputGroupGap]}>TEXT SIZE</Text>
+        <Text style={styles.groupDescription}>
+          Scale the terminal text. Smaller sizes fit more columns with side margins; larger sizes
+          show fewer columns — drag sideways to pan. You can also pinch to zoom in the terminal
+          itself, which updates this setting. Per-device display only; doesn&apos;t change the
+          desktop terminal.
+        </Text>
         <View style={[styles.section, styles.sectionTopGap]}>
-          {TERMINAL_ACCESSORY_KEYS.map((shortcutKey, idx) => (
-            <View key={shortcutKey.id}>
-              {idx > 0 && <View style={styles.separator} />}
-              <ShortcutBarRow
-                shortcutKey={shortcutKey}
-                visible={visibleBuiltInSet.has(shortcutKey.id)}
-                onToggle={(visible) => toggleBuiltInKey(shortcutKey.id, visible)}
-              />
-            </View>
-          ))}
-          <View style={styles.separator} />
           <Pressable
             style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            onPress={resetBuiltInKeys}
+            onPress={() => setTextSizePickerOpen(true)}
           >
+            <Type size={16} color={colors.textSecondary} />
             <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Reset Defaults</Text>
-              <Text style={styles.rowSublabel}>Show every built-in shortcut key</Text>
-            </View>
-          </Pressable>
-        </View>
-
-        <Text style={[styles.groupHeading, styles.groupTopGap]}>CUSTOM SHORTCUTS</Text>
-        <View style={[styles.section, styles.sectionTopGap]}>
-          {customKeys.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No custom shortcuts defined yet.</Text>
-            </View>
-          ) : (
-            customKeys.map((key, idx) => (
-              <View key={key.id}>
-                {idx > 0 && <View style={styles.separator} />}
-                <View style={styles.row}>
-                  <View style={styles.keycap}>
-                    <Text style={styles.keycapText}>{key.label}</Text>
-                  </View>
-                  <View style={styles.rowContent}>
-                    <Text style={styles.rowLabel}>{key.label}</Text>
-                    <Text style={styles.rowSublabel} numberOfLines={1} ellipsizeMode="tail">
-                      {key.bytes.replace(/\r/g, ' ↵')}
-                    </Text>
-                  </View>
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.deleteButton,
-                      pressed && styles.deleteButtonPressed
-                    ]}
-                    onPress={() => handleDeleteCustomKey(key)}
-                  >
-                    <X size={16} color={colors.statusRed} />
-                  </Pressable>
-                </View>
-              </View>
-            ))
-          )}
-          <View style={styles.separator} />
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            onPress={() => setShowCustomKeyModal(true)}
-          >
-            <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Add Custom Shortcut…</Text>
-              <Text style={styles.rowSublabel}>Create key combo or text macro</Text>
+              <Text style={styles.rowLabel}>Text size</Text>
+              <Text style={styles.rowSublabel}>{textSizeSummary(textScale)}</Text>
             </View>
             <ChevronRight size={16} color={colors.textMuted} />
           </Pressable>
         </View>
-      </ScrollView>
+
+        <Text style={[styles.groupHeading, styles.inputGroupGap]}>KEYBOARD INPUT</Text>
+        <Text style={styles.groupDescription}>
+          Enable phone-style autocomplete, autocorrect, and spelling suggestions in the terminal
+          command bar. Off by default so the keyboard never rewrites commands, flags, or paths.
+          Direct keyboard input (when keys go straight to the terminal) always sends raw keystrokes,
+          so suggestions don&apos;t apply there.
+        </Text>
+        <View style={[styles.section, styles.sectionTopGap]}>
+          <View style={styles.row}>
+            <View style={styles.rowContent}>
+              <Text style={styles.rowLabel}>Autocomplete &amp; autocorrect</Text>
+              <Text style={styles.rowSublabel}>{autocompleteEnabled ? 'On' : 'Off'}</Text>
+            </View>
+            <Switch
+              value={autocompleteEnabled}
+              onValueChange={toggleAutocomplete}
+              trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
+              thumbColor={colors.textPrimary}
+            />
+          </View>
+        </View>
+
+        <TerminalShortcutSettings
+          scrollRef={scrollRef}
+          scrollOffsetY={scrollOffsetY}
+          scrollContentHeight={scrollContentHeight}
+          onDragActiveChange={handleDragActiveChange}
+        />
+      </Animated.ScrollView>
 
       <PickerModal<RestoreValue>
         visible={pickerHost != null}
@@ -424,14 +369,15 @@ export default function TerminalSettingsScreen() {
         onClose={() => setPickerHostId(null)}
       />
 
-      <CustomKeyModal
-        visible={showCustomKeyModal}
-        onClose={() => setShowCustomKeyModal(false)}
-        onKeysChanged={(keys) => {
-          setCustomKeys(keys)
-        }}
+      <PickerModal<TextSizeValue>
+        visible={textSizePickerOpen}
+        title="Terminal text size"
+        options={TEXT_SIZE_OPTIONS}
+        selected={textSizeValueFromScale(textScale)}
+        onSelect={selectTextSize}
+        onClose={() => setTextSizePickerOpen(false)}
       />
-    </View>
+    </GestureHandlerRootView>
   )
 }
 
@@ -472,9 +418,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
     paddingHorizontal: spacing.xs
   },
-  groupTopGap: {
-    marginTop: spacing.xl
-  },
   groupDescription: {
     fontSize: typography.bodySize - 1,
     color: colors.textSecondary,
@@ -488,6 +431,9 @@ const styles = StyleSheet.create({
   },
   sectionTopGap: {
     marginTop: spacing.sm
+  },
+  inputGroupGap: {
+    marginTop: spacing.xl
   },
   emptyText: {
     fontSize: typography.bodySize,
@@ -517,38 +463,9 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 2
   },
-  keycap: {
-    minWidth: 62,
-    alignItems: 'center',
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
-  keycapText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily
-  },
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
     marginHorizontal: spacing.md
-  },
-  emptyContainer: {
-    padding: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  deleteButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.1)'
-  },
-  deleteButtonPressed: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)'
   }
 })

@@ -1,184 +1,115 @@
-import React, { useState } from 'react'
-import {
-  CircleHelp,
-  ExternalLink,
-  FolderPlus,
-  MessageSquareText,
-  RotateCw,
-  School,
-  Settings
-} from 'lucide-react'
-import logo from '../../../../../resources/logo.svg'
-import { useAppStore } from '@/store'
+import React from 'react'
+import { Kanban } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { toast } from 'sonner'
-import { useMountedRef } from '@/hooks/useMountedRef'
-import { showOnboardingFromRenderer } from '../onboarding/show-onboarding-event'
-import { SidebarFeedbackDialog } from './SidebarFeedbackDialog'
 import { ScrollToCurrentWorkspaceToolbarButton } from './ScrollToCurrentWorkspaceToolbarButton'
+import { SidebarSettingsHelpMenu } from './SidebarSettingsHelpMenu'
+import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { hasFeatureInteraction } from '../../../../shared/feature-interactions'
 
-const DOCS_URL = 'https://www.onorca.dev/docs'
+const WORKSPACE_BOARD_MOVED_HINT_STORAGE_KEY = 'orca.workspaceBoardMovedHintSeen.v1'
+const WORKSPACE_BOARD_MOVED_HINT_DURATION_MS = 12000
 
-function openExternalUrl(url: string): void {
-  void window.api.shell.openUrl(url)
+type SidebarToolbarProps = {
+  workspaceBoardOpen: boolean
+  workspaceBoardDragPreviewOpen?: boolean
+  onWorkspaceBoardToggle: () => void
 }
 
-const SidebarToolbar = React.memo(function SidebarToolbar() {
-  const openModal = useAppStore((s) => s.openModal)
-  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
-  const [feedbackOpen, setFeedbackOpen] = useState(false)
-  const [helpMenuOpen, setHelpMenuOpen] = useState(false)
-  const [showAdminHelpOptions, setShowAdminHelpOptions] = useState(false)
-  const [isRestartingOrca, setIsRestartingOrca] = useState(false)
-  const lastShowOnboardingAtRef = React.useRef(0)
-  const mountedRef = useMountedRef()
+const SidebarToolbar = React.memo(function SidebarToolbar({
+  workspaceBoardOpen,
+  workspaceBoardDragPreviewOpen = false,
+  onWorkspaceBoardToggle
+}: SidebarToolbarProps) {
+  const [workspaceBoardMovedHintOpen, setWorkspaceBoardMovedHintOpen] = React.useState(false)
+  const movedHintEligibleRef = React.useRef<boolean | null>(null)
+  const persistedUIReady = useAppStore((state) => state.persistedUIReady)
+  const hasUsedWorkspaceBoard = useAppStore((state) =>
+    hasFeatureInteraction(state.featureInteractions, 'workspace-board')
+  )
 
-  const handleShowOnboarding = (): void => {
-    const now = Date.now()
-    if (now - lastShowOnboardingAtRef.current < 500) {
+  React.useEffect(() => {
+    if (!persistedUIReady) {
       return
     }
-    lastShowOnboardingAtRef.current = now
-    void showOnboardingFromRenderer()
-  }
-
-  const handleHelpMenuOpenChange = (open: boolean): void => {
-    setHelpMenuOpen(open)
-    if (!open) {
-      setShowAdminHelpOptions(false)
+    // Why: only users who had already opened the old board location should
+    // see the relocation hint; first-time users should not become eligible.
+    if (movedHintEligibleRef.current === null) {
+      movedHintEligibleRef.current = hasUsedWorkspaceBoard
     }
-  }
-
-  const revealAdminHelpOptions = (altKey: boolean): void => {
-    // Why: keep restart off the ordinary Help menu; Alt/Option-click is an
-    // intentional admin affordance for recovering the app without teaching it
-    // as a normal user workflow.
-    setShowAdminHelpOptions(altKey)
-  }
-
-  const handleRestartOrca = (): void => {
-    if (isRestartingOrca) {
+    if (!movedHintEligibleRef.current) {
       return
     }
-    setIsRestartingOrca(true)
-    toast.info('Restarting Orca…')
-    void window.api.app.restart().catch((error) => {
-      if (mountedRef.current) {
-        setIsRestartingOrca(false)
-        toast.error('Couldn’t restart Orca.', {
-          description: error instanceof Error ? error.message : undefined
-        })
+    try {
+      if (window.localStorage.getItem(WORKSPACE_BOARD_MOVED_HINT_STORAGE_KEY) === 'true') {
+        return
       }
-    })
+      window.localStorage.setItem(WORKSPACE_BOARD_MOVED_HINT_STORAGE_KEY, 'true')
+    } catch {
+      return
+    }
+
+    setWorkspaceBoardMovedHintOpen(true)
+    const timeoutId = window.setTimeout(() => {
+      setWorkspaceBoardMovedHintOpen(false)
+    }, WORKSPACE_BOARD_MOVED_HINT_DURATION_MS)
+    return () => window.clearTimeout(timeoutId)
+  }, [hasUsedWorkspaceBoard, persistedUIReady])
+
+  const handleWorkspaceBoardClick = (): void => {
+    setWorkspaceBoardMovedHintOpen(false)
+    onWorkspaceBoardToggle()
   }
 
   return (
     <div className="mt-auto shrink-0">
-      <div className="flex items-center justify-between border-t border-sidebar-border px-2 py-1.5">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={() => openModal('add-repo')}
-              className="gap-1.5 text-muted-foreground"
-            >
-              <FolderPlus className="size-3.5" />
-              <span className="text-[11px]">Add Project</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            Open folder picker to add a project
-          </TooltipContent>
-        </Tooltip>
+      <div className="flex items-center justify-between border-t border-worktree-sidebar-border px-2 py-1.5">
+        <SidebarSettingsHelpMenu />
         <div className="flex items-center gap-1">
           <ScrollToCurrentWorkspaceToolbarButton />
-          <DropdownMenu modal={false} open={helpMenuOpen} onOpenChange={handleHelpMenuOpenChange}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    type="button"
-                    aria-label="Help"
-                    className="text-muted-foreground"
-                    onPointerDown={(event) => revealAdminHelpOptions(event.altKey)}
-                    onClick={(event) => revealAdminHelpOptions(event.altKey)}
-                  >
-                    <CircleHelp className="size-3.5" />
-                  </Button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                Help
-              </TooltipContent>
-            </Tooltip>
-            <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-48">
-              <DropdownMenuItem
-                onSelect={() => openModal('setup-guide', { telemetrySource: 'help_menu' })}
-              >
-                <img
-                  src={logo}
-                  alt=""
-                  aria-hidden="true"
-                  className="size-3.5 object-contain invert opacity-55 dark:invert-0"
-                />
-                Onboarding checklist
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="whitespace-nowrap"
-                onClick={handleShowOnboarding}
-                onSelect={handleShowOnboarding}
-              >
-                <School className="size-3.5" />
-                Show onboarding
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setFeedbackOpen(true)}>
-                <MessageSquareText className="size-3.5" />
-                Send feedback
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => openExternalUrl(DOCS_URL)}>
-                <ExternalLink className="size-3.5" />
-                Docs
-              </DropdownMenuItem>
-              {showAdminHelpOptions ? (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onSelect={handleRestartOrca} disabled={isRestartingOrca}>
-                    <RotateCw className="size-3.5" />
-                    Restart Orca
-                  </DropdownMenuItem>
-                </>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Tooltip>
+          <Tooltip open={workspaceBoardMovedHintOpen ? true : undefined}>
             <TooltipTrigger asChild>
               <Button
-                variant="ghost"
+                // Why: previewing the board from a card drag lights up the
+                // trigger so it's clear the drag is another way to open it.
+                variant={
+                  workspaceBoardOpen || workspaceBoardDragPreviewOpen ? 'secondary' : 'ghost'
+                }
                 size="icon-xs"
-                onClick={openSettingsPage}
+                type="button"
+                aria-label={translate(
+                  'auto.components.sidebar.SidebarToolbar.49f62c5665',
+                  'Workspace board'
+                )}
+                aria-pressed={workspaceBoardOpen}
+                data-workspace-board-trigger=""
+                data-workspace-board-preview={workspaceBoardDragPreviewOpen ? 'true' : undefined}
+                onClick={handleWorkspaceBoardClick}
                 className="text-muted-foreground"
               >
-                <Settings className="size-3.5" />
+                <Kanban className="size-3.5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
-              Settings
+              {workspaceBoardMovedHintOpen
+                ? translate(
+                    'auto.components.sidebar.SidebarToolbar.87d0064026',
+                    'Workspace board moved to the bottom bar'
+                  )
+                : workspaceBoardOpen
+                  ? translate(
+                      'auto.components.sidebar.SidebarToolbar.a30e34eb5c',
+                      'Close workspace board'
+                    )
+                  : translate(
+                      'auto.components.sidebar.SidebarToolbar.49f62c5665',
+                      'Workspace board'
+                    )}
             </TooltipContent>
           </Tooltip>
         </div>
       </div>
-      <SidebarFeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
     </div>
   )
 })

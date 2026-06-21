@@ -19,6 +19,7 @@ import {
   getAllWorktreeIds,
   ensureTerminalVisible
 } from './helpers/store'
+import { worktreeRow } from './worktree-row-locators'
 
 /**
  * Record a visit through the same two store calls that
@@ -144,12 +145,8 @@ test.describe('Workspace Back/Forward Navigation', () => {
     // worktree is currently active". `aria-selected` is reserved for batch
     // multi-select state, so a store-only `activeWorktreeId` check would miss
     // render-layer regressions in the active row.
-    const primaryRow = orcaPage.locator(
-      `[id="worktree-list-option-${encodeURIComponent(primaryId)}"]`
-    )
-    const secondaryRow = orcaPage.locator(
-      `[id="worktree-list-option-${encodeURIComponent(secondaryId)}"]`
-    )
+    const primaryRow = worktreeRow(orcaPage, primaryId)
+    const secondaryRow = worktreeRow(orcaPage, secondaryId)
 
     await back.click()
     await expect

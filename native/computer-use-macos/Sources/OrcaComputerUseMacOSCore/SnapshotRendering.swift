@@ -49,6 +49,16 @@ public struct SnapshotRenderNode: Equatable {
     }
 }
 
+public struct SnapshotTabStripCompaction: Equatable {
+    public var retainedIndexes: Set<Int>
+    public var omittedCount: Int
+
+    public init(retainedIndexes: Set<Int>, omittedCount: Int) {
+        self.retainedIndexes = retainedIndexes
+        self.omittedCount = omittedCount
+    }
+}
+
 public enum SnapshotRenderHeuristics {
     public static func displayName(_ node: SnapshotRenderNode) -> String? {
         if let title = clean(node.title) {
@@ -122,6 +132,24 @@ public enum SnapshotRenderHeuristics {
 
     public static func shouldSuppressChildren(role: String, name: String? = nil) -> Bool {
         shouldSuppressChildren(SnapshotRenderNode(role: role, title: name))
+    }
+
+    public static func tabStripCompaction(
+        parent: SnapshotRenderNode,
+        children: [SnapshotRenderNode]
+    ) -> SnapshotTabStripCompaction? {
+        guard isBrowserTabStripContainer(parent) else { return nil }
+        let tabIndexes = Set(children.indices.filter { isBrowserTabLike(children[$0]) })
+        guard tabIndexes.count >= 10 else { return nil }
+
+        let selectedTabIndexes = Set(tabIndexes.filter { isSelectedBrowserTab(children[$0]) })
+        guard !selectedTabIndexes.isEmpty else { return nil }
+
+        let nonTabIndexes = Set(children.indices.filter { !tabIndexes.contains($0) })
+        let retainedIndexes = nonTabIndexes.union(selectedTabIndexes)
+        let omittedCount = tabIndexes.count - selectedTabIndexes.count
+        guard omittedCount > 0 else { return nil }
+        return SnapshotTabStripCompaction(retainedIndexes: retainedIndexes, omittedCount: omittedCount)
     }
 
     public static func line(index: Int, node: SnapshotRenderNode) -> String {
@@ -208,6 +236,26 @@ public enum SnapshotRenderHeuristics {
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "[", with: "\\[")
             .replacingOccurrences(of: "]", with: "\\]")
+    }
+
+    private static func isBrowserTabStripContainer(_ node: SnapshotRenderNode) -> Bool {
+        let roleText = roleText(node)
+        let title = clean(node.title)?.lowercased() ?? ""
+        let label = clean(node.label)?.lowercased() ?? ""
+        let description = clean(node.roleDescription)?.lowercased() ?? ""
+        return roleText == "scroll area" ||
+            description == "tab bar" ||
+            title == "tab bar" ||
+            label == "tab bar"
+    }
+
+    private static func isBrowserTabLike(_ node: SnapshotRenderNode) -> Bool {
+        let roleDescription = clean(node.roleDescription)?.lowercased() ?? ""
+        return node.role == "AXTab" || roleDescription == "tab"
+    }
+
+    private static func isSelectedBrowserTab(_ node: SnapshotRenderNode) -> Bool {
+        node.traits.contains("selected") || clean(node.value) == "1"
     }
 
     private static func splitCamelCase(_ value: String) -> String {

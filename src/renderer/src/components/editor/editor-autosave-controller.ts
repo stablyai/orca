@@ -4,11 +4,12 @@ avoids split-brain saves across visible and hidden editors. */
 import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionIdForFile } from '@/lib/connection-context'
 import {
   buildWorkspaceSessionPayload,
   shouldPersistWorkspaceSession
 } from '@/lib/workspace-session'
+import { persistWorkspaceSessionByHostSync } from '@/lib/workspace-session-host-persistence'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { writeRuntimeFile } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
@@ -80,7 +81,8 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         }
 
         const contentToSave = state.editorDrafts[file.id] ?? fallbackContent
-        const connectionId = getConnectionId(liveFile.worktreeId) ?? undefined
+        const connectionId =
+          getConnectionIdForFile(liveFile.worktreeId, liveFile.filePath) ?? undefined
         const worktree = liveFile.worktreeId
           ? findWorktreeById(state.worktreesByRepo ?? {}, liveFile.worktreeId)
           : null
@@ -285,7 +287,13 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
       // Why: restart/update may quit before the debounced session writer fires.
       // Write the full session now so dirty drafts restore as unsaved tabs.
       if (shouldPersistWorkspaceSession(state)) {
-        window.api.session.setSync(buildWorkspaceSessionPayload(state))
+        // Why: runtime-owned worktree slices persist under their host
+        // partition, mirroring the debounced writer's split.
+        persistWorkspaceSessionByHostSync(
+          window.api.session,
+          buildWorkspaceSessionPayload(state),
+          state
+        )
       }
       detail.resolve()
     } catch (error) {

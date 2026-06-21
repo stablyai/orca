@@ -16,7 +16,8 @@ vi.mock('../git/worktree', () => ({
       isBare: false,
       isMainWorktree: false
     }
-  ])
+  ]),
+  listWorktreesStrict: vi.fn().mockResolvedValue([])
 }))
 
 vi.mock('../hooks', () => ({
@@ -906,6 +907,25 @@ describe('mobile subscribe integration', () => {
       const ok = await runtime.reclaimTerminalForDesktop('pty-1')
       expect(ok).toBe(true)
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+    })
+
+    it('reclaimTerminalForDesktop prefers fresh desktop geometry for a held PTY', async () => {
+      // Why: the held override can carry the first phone-fit baseline, but
+      // desktop can measure newer real geometry while the phone-sized PTY is
+      // held. Manual restore must honor that fresh desktop measurement.
+      settingsState.mobileAutoRestoreFitMs = null
+      const { runtime, ptySizes } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+
+      runtime.recordRendererGeometry('pty-1', 180, 50)
+
+      const ok = await runtime.reclaimTerminalForDesktop('pty-1')
+      expect(ok).toBe(true)
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 180, rows: 50 })
     })
 
     it('setMobileAutoRestoreFitMs(null) clears all pending timers', async () => {

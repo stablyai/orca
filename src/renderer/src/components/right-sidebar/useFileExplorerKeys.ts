@@ -18,6 +18,16 @@ import {
   type SelectionMode
 } from './file-explorer-keyboard-navigation'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
+import { translate } from '@/i18n/i18n'
+import { isEditableTarget } from '@/lib/editable-target'
+
+export function shouldIgnoreFileExplorerKeyTarget(target: EventTarget | null): boolean {
+  return (
+    isEditableTarget(target) ||
+    (target instanceof Element &&
+      target.closest('[data-ignore-file-explorer-keys="true"]') !== null)
+  )
+}
 
 /**
  * Keyboard shortcuts for the file explorer.
@@ -28,6 +38,8 @@ import { keybindingMatchesAction } from '../../../../shared/keybindings'
 export function useFileExplorerKeys(opts: {
   containerRef: React.RefObject<HTMLDivElement | null>
   rowProjection: FileExplorerRowProjection
+  expandedPaths: Set<string>
+  canToggleDirectories: boolean
   inlineInput: InlineInput | null
   selectedPaths: Set<string>
   selectedNode: TreeNode | null
@@ -42,10 +54,15 @@ export function useFileExplorerKeys(opts: {
 }): void {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
+  const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const keybindings = useAppStore((s) => s.keybindings)
 
   const rowProjectionRef = useRef(opts.rowProjection)
   rowProjectionRef.current = opts.rowProjection
+  const expandedPathsRef = useRef(opts.expandedPaths)
+  expandedPathsRef.current = opts.expandedPaths
+  const canToggleDirectoriesRef = useRef(opts.canToggleDirectories)
+  canToggleDirectoriesRef.current = opts.canToggleDirectories
   const inlineInputRef = useRef(opts.inlineInput)
   inlineInputRef.current = opts.inlineInput
   const selectedPathsRef = useRef(opts.selectedPaths)
@@ -117,19 +134,21 @@ export function useFileExplorerKeys(opts: {
     }
 
     const isDirExpanded = (path: string): boolean => {
-      const worktreeId = activeWorktreeIdRef.current
-      if (!worktreeId) {
-        return false
-      }
-      const expanded = useAppStore.getState().expandedDirs[worktreeId]
-      return expanded ? expanded.has(path) : false
+      return expandedPathsRef.current.has(path)
     }
 
     const onKeyDown = (e: KeyboardEvent): void => {
-      if (!rightSidebarOpen || rightSidebarTab !== 'explorer') {
+      if (
+        !rightSidebarOpen ||
+        rightSidebarTab !== 'explorer' ||
+        rightSidebarExplorerView !== 'files'
+      ) {
         return
       }
       if (inlineInputRef.current) {
+        return
+      }
+      if (shouldIgnoreFileExplorerKeyTarget(e.target)) {
         return
       }
 
@@ -148,7 +167,14 @@ export function useFileExplorerKeys(opts: {
         e.preventDefault()
         const run = wantRedo ? redoFileExplorer() : undoFileExplorer()
         void run.catch((err: unknown) => {
-          toast.error(err instanceof Error ? err.message : 'Operation failed')
+          toast.error(
+            err instanceof Error
+              ? err.message
+              : translate(
+                  'auto.components.right.sidebar.useFileExplorerKeys.8adb953095',
+                  'Operation failed'
+                )
+          )
         })
         return
       }
@@ -162,6 +188,7 @@ export function useFileExplorerKeys(opts: {
               activeWorktreeId: activeWorktreeIdRef.current,
               selectedNode: selectedNodeRef.current,
               isExpanded: isDirExpanded,
+              canToggleDirectories: canToggleDirectoriesRef.current,
               findFocusedIndex,
               handlers: {
                 moveSelection: moveSelectionRef.current,
@@ -263,5 +290,5 @@ export function useFileExplorerKeys(opts: {
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [keybindings, rightSidebarOpen, rightSidebarTab, opts.containerRef])
+  }, [keybindings, rightSidebarExplorerView, rightSidebarOpen, rightSidebarTab, opts.containerRef])
 }

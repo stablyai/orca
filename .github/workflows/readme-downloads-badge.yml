@@ -1,0 +1,48 @@
+name: README Downloads Badge
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
+  release:
+    types:
+      - published
+      - edited
+      - deleted
+
+permissions:
+  contents: write
+
+concurrency:
+  group: readme-downloads-badge
+  cancel-in-progress: false
+
+jobs:
+  update:
+    # Why: this workflow commits to main, so forks should not create divergent badge commits.
+    if: github.repository == 'stablyai/orca'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Render downloads badge
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .github/scripts/render-readme-downloads-badge.mjs
+
+      - name: Commit badge update
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- docs/assets/readme-downloads.svg; then
+            echo "Downloads badge is already current."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/assets/readme-downloads.svg
+          git commit -m "Update README downloads badge"
+          git push origin main

@@ -16,7 +16,7 @@ import type { PaneManagerOptions, ManagedPaneInternal } from './pane-manager-typ
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { DragReorderState } from './pane-drag-reorder'
 import type { DragReorderCallbacks } from './pane-drag-reorder'
-import { attachPaneDrag } from './pane-drag-reorder'
+import { attachPaneDrag } from './pane-drag-pointer'
 import { safeFit } from './pane-tree-ops'
 import {
   attachPaneFitResizeObserver,
@@ -24,6 +24,8 @@ import {
 } from './pane-fit-resize-observer'
 import { clearPendingSplitScrollRestore } from './pane-split-scroll'
 import { buildDefaultTerminalOptions } from './pane-terminal-options'
+import { activateOrcaTerminalUnicodeProvider } from './pane-terminal-unicode-provider'
+import { attachDomRendererFocusClassSync } from './pane-dom-focus-class-sync'
 import {
   ENABLE_WEBGL_RENDERER,
   attachWebgl,
@@ -38,8 +40,8 @@ import { shouldFocusTerminalFromPanePointerDown } from './pane-pointer-focus'
 
 function getTerminalUrlOpenHint(): string {
   return navigator.userAgent.includes('Mac')
-    ? '⌘+click to open or ⇧⌘+click for system browser'
-    : 'Ctrl+click to open or Shift+Ctrl+click for system browser'
+    ? 'click to open or ⇧+click for system browser'
+    : 'click to open or Shift+click for system browser'
 }
 
 export function createPaneDOM(
@@ -148,6 +150,7 @@ export function createPaneDOM(
     paneMouseEnterHandler,
     paneDragCleanup,
     compositionHandler: null,
+    focusClassSyncCleanup: null,
     pendingSplitScrollState: null,
     pendingSplitScrollRafIds: [],
     pendingSplitScrollTimerId: null,
@@ -195,7 +198,7 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   terminal.loadAddon(unicode11Addon)
   terminal.loadAddon(webLinksAddon)
 
-  // Activate Unicode 11 widths *before* any caller-driven write. CJK / emoji /
+  // Activate Orca's Unicode 11 width shim *before* any caller-driven write. CJK / emoji /
   // ZWJ codepoints get baked into the buffer at the active unicode version on
   // write — if a restore (snapshot, scrollback, cold-restore) writes bytes
   // through xterm while the default v6 width tables are still active, wide
@@ -204,7 +207,7 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   // (replayTerminalLayout → splitPane/createInitialPane → openTerminal,
   // restoreScrollbackBuffers, handleReattachResult) run after openTerminal,
   // so the activation must stay at this position.
-  terminal.unicode.activeVersion = '11'
+  activateOrcaTerminalUnicodeProvider(terminal)
 
   // Why: the OS reads the focused textarea's screen rect at compositionstart to
   // decide where to display the IME candidate window. xterm.js only repositions
@@ -239,6 +242,8 @@ export function openTerminal(pane: ManagedPaneInternal): void {
     // Store so disposePane() can remove it and avoid a memory leak.
     pane.compositionHandler = handler
   }
+
+  pane.focusClassSyncCleanup = attachDomRendererFocusClassSync(terminal.element)
 
   if (pane.gpuRenderingEnabled) {
     attachWebgl(pane)
@@ -327,6 +332,8 @@ export function disposePane(
   }
   pane.paneDragCleanup?.()
   pane.paneDragCleanup = null
+  pane.focusClassSyncCleanup?.()
+  pane.focusClassSyncCleanup = null
   if (pane.compositionHandler) {
     pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler, true)
     pane.compositionHandler = null

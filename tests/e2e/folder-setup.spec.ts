@@ -5,7 +5,9 @@ import os from 'os'
 import path from 'path'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
-import type { ElectronApplication } from '@stablyai/playwright-test'
+import type { ElectronApplication, Locator } from '@stablyai/playwright-test'
+
+const IMPORT_AS_MONOREPO_BUTTON_NAME = 'Yes, import as monorepo'
 
 const tempRoots: string[] = []
 
@@ -93,6 +95,15 @@ async function chooseFolderInNativeDialog(
   }, folderPath)
 }
 
+function getImportAsMonorepoButton(importDialog: Locator): Locator {
+  // Why: the current accessible action is intentional; accepting retired
+  // labels would hide deterministic dialog copy drift.
+  return importDialog.getByRole('button', {
+    name: IMPORT_AS_MONOREPO_BUTTON_NAME,
+    exact: true
+  })
+}
+
 test.describe('Folder setup', () => {
   test('imports nested repositories from the add-project dialog as a project group', async ({
     electronApp,
@@ -110,16 +121,16 @@ test.describe('Folder setup', () => {
     await expect(dialog).toBeVisible()
     await dialog.getByRole('button', { name: /Browse folder/i }).click()
 
-    const importDialog = orcaPage.getByRole('dialog', { name: /Import as project group/i })
+    const importDialog = orcaPage.getByRole('dialog', {
+      name: /Import repositories from folder/i
+    })
     await expect(
-      importDialog.getByRole('heading', { name: /Import as project group/i })
+      importDialog.getByRole('heading', { name: /Import repositories from folder/i })
     ).toBeVisible()
     await expect(importDialog.getByText('api-service', { exact: true }).first()).toBeVisible()
     await expect(importDialog.getByText('web-client', { exact: true }).first()).toBeVisible()
-    await expect(
-      importDialog.getByRole('button', { name: /Import as project group/i })
-    ).toBeEnabled()
-    await importDialog.getByRole('button', { name: /Import as project group/i }).click()
+    await expect(getImportAsMonorepoButton(importDialog)).toBeEnabled()
+    await getImportAsMonorepoButton(importDialog).click()
 
     await expect
       .poll(
@@ -178,8 +189,10 @@ test.describe('Folder setup', () => {
     await expect(dialog).toBeVisible()
     await dialog.getByRole('button', { name: /Browse folder/i }).click()
 
-    const importDialog = orcaPage.getByRole('dialog', { name: /Import as project group/i })
-    await expect(importDialog.getByText('Found 87 git repositories in this folder.')).toBeVisible()
+    const importDialog = orcaPage.getByRole('dialog', {
+      name: /Import repositories from folder/i
+    })
+    await expect(importDialog.getByText(/Found 87 repositories in/)).toBeVisible()
     await expect
       .poll(async () =>
         importDialog.locator('ul').evaluate((list) => {
@@ -204,7 +217,7 @@ test.describe('Folder setup', () => {
         .locator('input[type="checkbox"]')
         .check()
     }
-    await importDialog.getByRole('button', { name: /Import as project group/i }).click()
+    await getImportAsMonorepoButton(importDialog).click()
 
     await expect
       .poll(

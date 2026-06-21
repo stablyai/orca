@@ -19,6 +19,7 @@ import {
   readRuntimeFileContent,
   writeRuntimeFile
 } from '@/runtime/runtime-file-client'
+import { translate } from '@/i18n/i18n'
 
 type UseFileDeletionParams = {
   activeWorktreeId: string | null
@@ -74,27 +75,36 @@ export function useFileDeletion({
       const isRemote =
         connectionId !== undefined || isRemoteRuntimeFileOperation(fileContext, node.path)
 
-      // Why: remote deletes go through `rm` on the relay — there is no OS-level
-      // Trash/Recycle Bin, so the operation is permanent. Require an explicit
-      // confirmation in that case because the UI's usual undo cannot restore
-      // directories or binary files.
-      if (isRemote) {
-        const message = node.isDirectory
-          ? `Permanently delete '${node.name}' and all its contents? This cannot be undone.`
-          : `Permanently delete '${node.name}'? This cannot be undone.`
-        const confirmed = await confirm({
-          title: `Permanently delete '${node.name}'?`,
-          description: message,
-          confirmLabel: 'Delete',
-          confirmVariant: 'destructive'
-        })
-        if (!confirmed) {
-          inFlightRef.current.delete(node.path)
-          return false
-        }
-      }
-
       try {
+        // Why: remote deletes bypass OS Trash, and undo cannot recover
+        // directories or unreadable files.
+        if (isRemote) {
+          const confirmed = await confirm({
+            title: translate(
+              'auto.components.right.sidebar.useFileDeletion.d979a4fbb5',
+              "Permanently delete '{{value0}}'?",
+              { value0: node.name }
+            ),
+            description: node.isDirectory
+              ? translate(
+                  'auto.components.right.sidebar.useFileDeletion.7fb9435c86',
+                  'This permanently deletes the directory and its contents on the remote host. This cannot be undone.'
+                )
+              : translate(
+                  'auto.components.right.sidebar.useFileDeletion.23e98f192f',
+                  'This permanently deletes the file on the remote host. This cannot be undone.'
+                ),
+            confirmLabel: translate(
+              'auto.components.right.sidebar.useFileDeletion.92276aceb7',
+              'Delete'
+            ),
+            confirmVariant: 'destructive'
+          })
+          if (!confirmed) {
+            return false
+          }
+        }
+
         const filesToClose = openFiles.filter((file) =>
           isPathEqualOrDescendant(file.filePath, node.path)
         )
@@ -179,20 +189,18 @@ export function useFileDeletion({
         // full-tree reloads (the watcher will also trigger a targeted refresh).
         await refreshDir(dirname(node.path))
 
-        // Why: local deletes go to the OS trash and are recoverable; remote
-        // deletes call `rm` on the relay and are permanent. The toast needs
-        // to reflect that so users aren't misled into thinking they can
-        // recover a remote file from a Trash/Recycle Bin that doesn't exist.
-        if (isRemote) {
-          toast.success(`'${node.name}' deleted`)
-        } else {
-          const destination = isWindows ? 'Recycle Bin' : 'Trash'
-          toast.success(`'${node.name}' moved to ${destination}`)
-        }
         return true
       } catch (error) {
         const action = isRemote ? 'delete' : isWindows ? 'move to Recycle Bin' : 'move to Trash'
-        toast.error(error instanceof Error ? error.message : `Failed to ${action} '${node.name}'.`)
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.right.sidebar.useFileDeletion.72691dfebc',
+                "Failed to {{value0}} '{{value1}}'.",
+                { value0: action, value1: node.name }
+              )
+        )
         return false
       } finally {
         inFlightRef.current.delete(node.path)
@@ -204,9 +212,6 @@ export function useFileDeletion({
   const requestDelete = useCallback(
     (node: TreeNode) => {
       setSelectedPaths(new Set([node.path]))
-      // Why: local deletes skip confirmation because they're reversible
-      // (OS-level Trash + in-app undo). Remote deletes are permanent, so
-      // runDelete prompts for confirmation internally before calling `rm`.
       void runDelete(node).then((deleted) => {
         if (deleted) {
           setSelectedPaths(new Set())

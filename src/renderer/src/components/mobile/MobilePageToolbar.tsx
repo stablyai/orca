@@ -1,6 +1,7 @@
 import { Eye, EyeOff, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { translate } from '@/i18n/i18n'
 
 type MobilePageToolbarProps = {
   showMobileButton: boolean
@@ -22,13 +23,16 @@ export function MobilePageToolbar({
             size="icon"
             className="size-7 rounded-full"
             onClick={onClose}
-            aria-label="Close Orca Mobile"
+            aria-label={translate(
+              'auto.components.mobile.MobilePageToolbar.9883b58693',
+              'Close Orca Mobile'
+            )}
           >
             <X className="size-4" />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          Close · Esc
+          {translate('auto.components.mobile.MobilePageToolbar.ad2284a9e2', 'Close · Esc')}
         </TooltipContent>
       </Tooltip>
       <Button
@@ -38,7 +42,9 @@ export function MobilePageToolbar({
         onClick={onToggleMobileSidebarButton}
       >
         {showMobileButton ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-        {showMobileButton ? 'Hide from sidebar' : 'Show in sidebar'}
+        {showMobileButton
+          ? translate('auto.components.mobile.MobilePageToolbar.c669abcf8f', 'Hide from sidebar')
+          : translate('auto.components.mobile.MobilePageToolbar.fb5f28330e', 'Show in sidebar')}
       </Button>
     </div>
   )

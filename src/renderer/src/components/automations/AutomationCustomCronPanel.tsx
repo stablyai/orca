@@ -2,9 +2,13 @@ import React from 'react'
 import { CheckCircle2, CircleAlert } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { formatAutomationSchedule } from '../../../../shared/automation-schedules'
+import {
+  formatAutomationSchedule,
+  getAutomationCronExpressionFields
+} from '../../../../shared/automation-schedules'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { Field } from './automation-page-parts'
+import { translate } from '@/i18n/i18n'
 
 const FIELD_CONTROL_CLASS = 'border-input bg-input/30 shadow-xs dark:bg-input/30'
 
@@ -16,17 +20,29 @@ export function getCronScheduleStatusLabel(
 ): { kind: 'empty' | 'invalid' | 'valid'; label: string } {
   const trimmed = schedule.trim()
   if (!trimmed) {
-    return { kind: 'empty', label: 'Enter a five-field cron.' }
+    return {
+      kind: 'empty',
+      label: translate(
+        'auto.components.automations.AutomationCustomCronPanel.968e66d686',
+        'Enter a five-field cron.'
+      )
+    }
   }
   if (!validateSchedule(trimmed)) {
-    return { kind: 'invalid', label: 'Enter a valid five-field cron before saving.' }
+    return {
+      kind: 'invalid',
+      label: translate(
+        'auto.components.automations.AutomationCustomCronPanel.e81a02d61b',
+        'Enter a valid five-field cron before saving.'
+      )
+    }
   }
   const formatted = formatAutomationSchedule(trimmed)
   return { kind: 'valid', label: formatted === 'Custom schedule' ? 'Valid custom cron' : formatted }
 }
 
 export function getCronFieldValues(schedule: string): readonly string[] {
-  const parts = schedule.trim().split(/\s+/).filter(Boolean)
+  const parts = getAutomationCronExpressionFields(schedule)
   return AUTOMATION_CRON_FIELD_LABELS.map((_, index) => parts[index] ?? '...')
 }
 
@@ -49,7 +65,12 @@ export function AutomationCustomCronPanel({
 
   return (
     <div className="grid gap-3">
-      <Field label="Cron expression">
+      <Field
+        label={translate(
+          'auto.components.automations.AutomationCustomCronPanel.3e3b2c369f',
+          'Cron expression'
+        )}
+      >
         <Input
           value={draft.customSchedule}
           placeholder="0 9 * * 1-5"

@@ -1,10 +1,15 @@
 /* eslint-disable max-lines -- Why: orchestration tests share a mock runtime factory; splitting by method would duplicate 40 lines of setup per file without improving clarity. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_METHODS } from './orchestration'
-import { buildRegistry, type RpcContext } from '../core'
+import { RpcDispatcher } from '../dispatcher'
+import { buildRegistry, type RpcContext, type RpcRequest } from '../core'
 import { OrchestrationDb } from '../../orchestration/db'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimeTerminalSummary } from '../../../../shared/runtime-types'
+
+function lifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
+  return `${type} messages must be sent to a concrete coordinator terminal handle, not a group address.`
+}
 
 describe('orchestration RPC methods', () => {
   let db: OrchestrationDb
@@ -43,6 +48,10 @@ describe('orchestration RPC methods', () => {
     const method = findMethod(name)
     const parsed = method.params ? method.params.parse(params) : undefined
     return method.handler(parsed, ctx)
+  }
+
+  function makeRequest(method: string, params: Record<string, unknown>): RpcRequest {
+    return { id: 'req_1', authToken: 'token', method, params }
   }
 
   it('registers all expected methods', () => {
@@ -97,12 +106,77 @@ describe('orchestration RPC methods', () => {
       expect(() => method.params!.parse({ to: 'b', subject: 'hi', priority: 'medium' })).toThrow()
     })
 
+    it.each(['@all', '@idle', '@worktree:wt_1', '@codex', '@nobody'])(
+      'rejects worker_done to group recipient %s without inserting rows',
+      async (to) => {
+        setup()
+        const listTerminals = vi.spyOn(runtime, 'listTerminals')
+
+        await expect(
+          call('orchestration.send', {
+            from: 'term_worker',
+            to,
+            subject: 'done',
+            type: 'worker_done'
+          })
+        ).rejects.toThrow(lifecycleGroupRecipientError('worker_done'))
+
+        expect(db.getInbox(100)).toHaveLength(0)
+        expect(listTerminals).not.toHaveBeenCalled()
+      }
+    )
+
+    it('rejects worker_done groups before terminal listing failures can win', async () => {
+      setup()
+      const listTerminals = vi
+        .spyOn(runtime, 'listTerminals')
+        .mockRejectedValue(new Error('terminal listing failed'))
+
+      await expect(
+        call('orchestration.send', {
+          from: 'term_worker',
+          to: '@all',
+          subject: 'done',
+          type: 'worker_done'
+        })
+      ).rejects.toThrow(lifecycleGroupRecipientError('worker_done'))
+
+      expect(listTerminals).not.toHaveBeenCalled()
+      expect(db.getInbox(100)).toHaveLength(0)
+    })
+
+    it('returns invalid_argument for worker_done group sends through the dispatcher', async () => {
+      setup()
+      const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
+      const listTerminals = vi.spyOn(runtime, 'listTerminals')
+
+      const response = await dispatcher.dispatch(
+        makeRequest('orchestration.send', {
+          from: 'term_worker',
+          to: '@all',
+          subject: 'done',
+          type: 'worker_done'
+        })
+      )
+
+      expect(response).toMatchObject({
+        ok: false,
+        error: {
+          code: 'invalid_argument',
+          message: lifecycleGroupRecipientError('worker_done')
+        }
+      })
+      expect(listTerminals).not.toHaveBeenCalled()
+      expect(db.getInbox(100)).toHaveLength(0)
+    })
+
     function makeSummary(
       handle: string,
       opts: Partial<RuntimeTerminalSummary> = {}
     ): RuntimeTerminalSummary {
       return {
         handle,
+        ptyId: opts.ptyId ?? handle,
         worktreeId: opts.worktreeId ?? 'wt_default',
         worktreePath: opts.worktreePath ?? '/tmp/wt',
         branch: opts.branch ?? 'main',
@@ -144,6 +218,55 @@ describe('orchestration RPC methods', () => {
       expect(result.messages).toHaveLength(2)
       const recipients = result.messages.map((m) => m.to_handle).sort()
       expect(recipients).toEqual(['term_b', 'term_c'])
+    })
+
+    it('continues to fan out status messages to groups', async () => {
+      setupWithTerminals([makeSummary('term_a'), makeSummary('term_b'), makeSummary('term_c')])
+
+      const result = (await call('orchestration.send', {
+        from: 'term_a',
+        to: '@all',
+        subject: 'status broadcast',
+        type: 'status'
+      })) as { messages: { to_handle: string; type: string }[]; recipients: number }
+
+      expect(result.recipients).toBe(2)
+      expect(result.messages.map((m) => m.to_handle).sort()).toEqual(['term_b', 'term_c'])
+      expect(result.messages.every((m) => m.type === 'status')).toBe(true)
+    })
+
+    it('rejects heartbeat group sends before inserting rows', async () => {
+      setup()
+      const listTerminals = vi.spyOn(runtime, 'listTerminals')
+
+      await expect(
+        call('orchestration.send', {
+          from: 'term_worker',
+          to: '@all',
+          subject: 'alive',
+          type: 'heartbeat',
+          payload: JSON.stringify({ taskId: 'task_1', dispatchId: 'ctx_1' })
+        })
+      ).rejects.toThrow(lifecycleGroupRecipientError('heartbeat'))
+
+      expect(listTerminals).not.toHaveBeenCalled()
+      expect(db.getInbox(100)).toHaveLength(0)
+    })
+
+    it('continues to send worker_done to a concrete terminal handle', async () => {
+      setup()
+
+      const result = (await call('orchestration.send', {
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'done',
+        type: 'worker_done',
+        payload: JSON.stringify({ taskId: 'task_1', dispatchId: 'ctx_1' })
+      })) as { message: { to_handle: string; type: string; payload: string | null } }
+
+      expect(result.message.to_handle).toBe('term_coord')
+      expect(result.message.type).toBe('worker_done')
+      expect(result.message.payload).toBe(JSON.stringify({ taskId: 'task_1', dispatchId: 'ctx_1' }))
     })
 
     it('fans out @idle to only idle agents', async () => {
@@ -412,6 +535,42 @@ describe('orchestration RPC methods', () => {
       expect(db.getUnreadMessages('b')).toHaveLength(1)
     })
 
+    it('keeps waiting for requested types when an unrelated heartbeat arrives', async () => {
+      setup()
+
+      const waitPromise = call('orchestration.check', {
+        terminal: 'coord',
+        wait: true,
+        timeoutMs: 5000,
+        types: 'worker_done,escalation'
+      }) as Promise<{ count: number; messages: { type: string }[] }>
+      await Promise.resolve()
+
+      await call('orchestration.send', {
+        from: 'worker',
+        to: 'coord',
+        subject: 'alive',
+        type: 'heartbeat'
+      })
+
+      const early = await Promise.race([
+        waitPromise.then(() => 'settled'),
+        Promise.resolve('pending')
+      ])
+      expect(early).toBe('pending')
+
+      await call('orchestration.send', {
+        from: 'worker',
+        to: 'coord',
+        subject: 'done',
+        type: 'worker_done'
+      })
+
+      const result = await waitPromise
+      expect(result.count).toBe(1)
+      expect(result.messages[0].type).toBe('worker_done')
+    })
+
     it('does not mark existing messages read when the check starts aborted', async () => {
       setup()
       const abortController = new AbortController()
@@ -501,11 +660,15 @@ describe('orchestration RPC methods', () => {
     it('creates a task', async () => {
       setup()
       const result = (await call('orchestration.taskCreate', {
-        spec: 'implement feature X'
+        spec: 'implement feature X',
+        taskTitle: 'Feature X',
+        displayName: 'Implement feature X'
       })) as { task: { id: string; status: string } }
 
       expect(result.task.id).toMatch(/^task_/)
       expect(result.task.status).toBe('ready')
+      expect(db.getTask(result.task.id)?.task_title).toBe('Feature X')
+      expect(db.getTask(result.task.id)?.display_name).toBe('Implement feature X')
     })
 
     it('creates a task with deps', async () => {

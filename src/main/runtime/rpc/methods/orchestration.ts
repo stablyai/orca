@@ -28,28 +28,48 @@ const TASK_STATUSES: TaskStatus[] = [
   'blocked'
 ]
 
-const SendParams = z.object({
-  to: requiredString('Missing --to'),
-  subject: requiredString('Missing --subject'),
-  from: OptionalString,
-  body: OptionalString,
-  type: z
-    .enum([
-      'status',
-      'dispatch',
-      'worker_done',
-      'merge_ready',
-      'escalation',
-      'handoff',
-      'decision_gate',
-      'heartbeat'
-    ])
-    .optional(),
-  priority: z.enum(['normal', 'high', 'urgent']).optional(),
-  threadId: OptionalString,
-  payload: OptionalString,
-  devMode: OptionalBoolean
-})
+function getLifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
+  return `${type} messages must be sent to a concrete coordinator terminal handle, not a group address.`
+}
+
+const SendParams = z
+  .object({
+    to: requiredString('Missing --to'),
+    subject: requiredString('Missing --subject'),
+    from: OptionalString,
+    body: OptionalString,
+    type: z
+      .enum([
+        'status',
+        'dispatch',
+        'worker_done',
+        'merge_ready',
+        'escalation',
+        'handoff',
+        'decision_gate',
+        'heartbeat'
+      ])
+      .optional(),
+    priority: z.enum(['normal', 'high', 'urgent']).optional(),
+    threadId: OptionalString,
+    payload: OptionalString,
+    devMode: OptionalBoolean
+  })
+  .superRefine((params, ctx) => {
+    if (
+      (params.type !== 'worker_done' && params.type !== 'heartbeat') ||
+      !isGroupAddress(params.to)
+    ) {
+      return
+    }
+    // Why: dispatch lifecycle messages are authority/liveness signals for one
+    // coordinator. Fanout creates lifecycle mail in unrelated terminals.
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: getLifecycleGroupRecipientError(params.type),
+      path: ['to']
+    })
+  })
 
 const CheckParams = z.object({
   terminal: OptionalString,
@@ -80,6 +100,8 @@ const InboxParams = z.object({
 
 const TaskCreateParams = z.object({
   spec: requiredString('Missing --spec'),
+  taskTitle: OptionalString,
+  displayName: OptionalString,
   deps: OptionalString,
   parent: OptionalString,
   callerTerminalHandle: OptionalString
@@ -175,7 +197,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           payload: params.payload
         })
         runtime.deliverPendingMessagesForHandle(params.to)
-        runtime.notifyMessageArrived(params.to)
+        runtime.notifyMessageArrived(params.to, msg.type)
         return { message: msg }
       }
 
@@ -204,9 +226,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           payload: params.payload
         })
       )
-      for (const handle of handles) {
-        runtime.deliverPendingMessagesForHandle(handle)
-        runtime.notifyMessageArrived(handle)
+      for (const message of messages) {
+        runtime.deliverPendingMessagesForHandle(message.to_handle)
+        runtime.notifyMessageArrived(message.to_handle, message.type)
       }
 
       return { messages, recipients: handles.length }
@@ -300,7 +322,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         threadId: original.thread_id ?? original.id
       })
 
-      runtime.notifyMessageArrived(original.from_handle)
+      runtime.notifyMessageArrived(original.from_handle, reply.type)
       return { message: reply }
     }
   }),
@@ -340,6 +362,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       }
       const task = db.createTask({
         spec: params.spec,
+        taskTitle: params.taskTitle,
+        displayName: params.displayName,
         deps,
         parentId: params.parent,
         createdByTerminalHandle: params.callerTerminalHandle
@@ -543,7 +567,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         payload
       })
       runtime.deliverPendingMessagesForHandle(params.to)
-      runtime.notifyMessageArrived(params.to)
+      runtime.notifyMessageArrived(params.to, outbound.type)
 
       const threadId = outbound.id
       const deadline = Date.now() + timeoutMs

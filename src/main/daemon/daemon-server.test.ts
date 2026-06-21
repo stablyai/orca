@@ -9,6 +9,7 @@ import { DaemonClient } from './client'
 import { encodeNdjson } from './ndjson'
 import { PROTOCOL_VERSION, type DaemonRequest } from './types'
 import type { SubprocessHandle } from './session'
+import { getDaemonSocketPath } from './daemon-spawner'
 
 function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'daemon-server-test-'))
@@ -66,7 +67,7 @@ describe('DaemonServer', () => {
 
   beforeEach(() => {
     dir = createTestDir()
-    socketPath = join(dir, 'test.sock')
+    socketPath = getDaemonSocketPath(dir)
     tokenPath = join(dir, 'test.token')
   })
 
@@ -196,6 +197,20 @@ describe('DaemonServer', () => {
       const result = await c.request<{ pong: boolean }>('ping', undefined)
 
       expect(result).toEqual({ pong: true })
+    })
+
+    it('replies with an error to unknown request types and keeps serving', async () => {
+      await startServer()
+      const c = await connectClient()
+
+      // Why: downgraded clients can send request types this daemon does not
+      // know. Reject gracefully instead of crashing the session server.
+      await expect(c.request('definitelyUnknownRequest', undefined)).rejects.toThrow(
+        'Unknown request type: definitelyUnknownRequest'
+      )
+      await expect(c.request<{ pong: boolean }>('ping', undefined)).resolves.toEqual({
+        pong: true
+      })
     })
 
     it('handles systemResolverHealth', async () => {

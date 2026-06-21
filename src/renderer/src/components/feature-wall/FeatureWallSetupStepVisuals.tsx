@@ -1,5 +1,5 @@
 import type { JSX } from 'react'
-import { Check, FolderGit2 } from 'lucide-react'
+import { Check, FolderGit2, MousePointer2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // Why: these static marks replace storyboarded animations for setup steps whose
@@ -80,6 +80,28 @@ function WorktreeGlyphPanel(props: { className?: string }): JSX.Element {
         <span className="h-[5px] w-4/5 rounded-full bg-foreground/10" />
         <span className="h-[5px] w-1/2 rounded-full bg-foreground/10" />
       </span>
+    </div>
+  )
+}
+
+// Use Orca's browser: a browser pane with a cursor grabbing one highlighted
+// element — the point-and-send-to-agent idea compressed into a single mark.
+export function SetupBrowserVisual(): JSX.Element {
+  return (
+    <div aria-hidden className="relative h-28 w-[156px] shrink-0">
+      <div className="absolute inset-y-1 inset-x-0 flex flex-col overflow-hidden rounded-[10px] border-[1.5px] border-border bg-muted shadow-[0_6px_16px_rgba(0,0,0,0.12)]">
+        <div className="flex items-center gap-1.5 border-b border-border px-2 py-1.5">
+          <TerminalDots />
+          <span className="ml-1 h-[5px] flex-1 rounded-full bg-foreground/10" />
+        </div>
+        <div className="flex flex-1 flex-col gap-1.5 p-2">
+          <span className="h-[5px] w-1/2 rounded-full bg-foreground/10" />
+          <span className="relative mt-0.5 flex h-9 items-center rounded-[6px] border-[1.5px] border-emerald-500/45 bg-emerald-500/10 px-2">
+            <span className="h-[5px] w-3/5 rounded-full bg-foreground/15" />
+            <MousePointer2 className="absolute -bottom-1 right-1 size-3.5 fill-foreground/70 text-foreground/70" />
+          </span>
+        </div>
+      </div>
     </div>
   )
 }

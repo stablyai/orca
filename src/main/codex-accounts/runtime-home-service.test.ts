@@ -45,10 +45,12 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     workspaceDir: testState.fakeHomeDir,
     nestWorkspaces: false,
     refreshLocalBaseRefOnWorktreeCreate: false,
+    localBaseRefSuggestionDismissed: false,
     autoRenameBranchFromWork: false,
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
     theme: 'system',
+    uiLanguage: 'system',
     appIcon: overrides.appIcon ?? 'classic',
     editorAutoSave: false,
     editorAutoSaveDelayMs: 1000,
@@ -80,8 +82,10 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     localAccountRuntime: 'host',
     localAccountWslDistro: null,
     openLinksInApp: false,
+    openLinksInAppPreferencePrompted: false,
     rightSidebarOpenByDefault: true,
     sourceControlViewMode: 'list',
+    sourceControlGroupOrder: 'changes-first',
     showTitlebarAppName: true,
     showTasksButton: true,
     floatingTerminalEnabled: false,
@@ -108,7 +112,9 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     defaultTuiAgent: null,
     disabledTuiAgents: [],
     skipDeleteWorktreeConfirm: false,
+    skipCloseTerminalWithRunningProcessConfirm: false,
     skipDeleteAutomationConfirm: false,
+    skipCodexRateLimitResetConfirm: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
     visibleTaskProviders: ['github', 'gitlab', 'linear', 'jira'],
@@ -120,6 +126,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     keepComputerAwakeWhileAgentsRun: false,
+    confirmClosePinnedTab: true,
     terminalMacOptionAsAlt: 'false',
     terminalMacOptionAsAltMigrated: true,
     terminalJISYenToBackslash: false,
@@ -128,13 +135,14 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     experimentalPet: false,
     experimentalActivity: true,
     experimentalTerminalAttention: false,
-    experimentalCompactWorktreeCards: false,
+    compactWorktreeCards: false,
     experimentalWorktreeSymlinks: false,
-    experimentalUnifiedNewTabLauncher: false,
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsPowerShellImplementation: 'powershell.exe',
     enableGitHubAttribution: true,
     ...overrides,
+    localWindowsRuntimeDefault: overrides.localWindowsRuntimeDefault ?? { kind: 'windows-host' },
+    leftSidebarAppearanceMode: overrides.leftSidebarAppearanceMode ?? 'default',
     appFontFamily,
     agentStatusHooksEnabled,
     tabAutoGenerateTitle
@@ -724,6 +732,328 @@ describe('CodexRuntimeHomeService', () => {
     expect(existsSync(getRuntimeCodexHomePath())).toBe(true)
   })
 
+  it('uses the same host CODEX_HOME after switching managed Codex accounts', async () => {
+    const runtimeAuthPath = getRuntimeCodexAuthPath()
+    const account1Auth = createCodexAuthJson('one@example.com', 'acct-1', 'one')
+    const account2Auth = createCodexAuthJson('two@example.com', 'acct-2', 'two')
+    const managedHomePath1 = createManagedAuth(testState.userDataDir, 'account-1', account1Auth)
+    const managedHomePath2 = createManagedAuth(testState.userDataDir, 'account-2', account2Auth)
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'one@example.com',
+          managedHomePath: managedHomePath1,
+          providerAccountId: 'acct-1',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-1',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        },
+        {
+          id: 'account-2',
+          email: 'two@example.com',
+          managedHomePath: managedHomePath2,
+          providerAccountId: 'acct-2',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-2',
+          createdAt: 2,
+          updatedAt: 2,
+          lastAuthenticatedAt: 2
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1',
+      activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
+    })
+    const store = createStore(settings)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    const account1Home = service.prepareForCodexLaunch()
+    settings.activeCodexManagedAccountId = 'account-2'
+    settings.activeCodexManagedAccountIdsByRuntime = { host: 'account-2', wsl: {} }
+    const account2Home = service.prepareForCodexLaunch()
+
+    expect(account1Home).toBe(getRuntimeCodexHomePath())
+    expect(account2Home).toBe(getRuntimeCodexHomePath())
+    expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(account2Auth)
+  })
+
+  it('new host Codex launches get the selected account after preserving outgoing refreshes', async () => {
+    const runtimeAuthPath = getRuntimeCodexAuthPath()
+    const account1Auth = createCodexAuthJson('one@example.com', 'acct-1', 'one', 1)
+    const account1RefreshedAuth = createCodexAuthJson(
+      'one@example.com',
+      'acct-1',
+      'one-refreshed',
+      2
+    )
+    const account2Auth = createCodexAuthJson('two@example.com', 'acct-2', 'two', 1)
+    const managedHomePath1 = createManagedAuth(testState.userDataDir, 'account-1', account1Auth)
+    const managedHomePath2 = createManagedAuth(testState.userDataDir, 'account-2', account2Auth)
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'one@example.com',
+          managedHomePath: managedHomePath1,
+          providerAccountId: 'acct-1',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-1',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        },
+        {
+          id: 'account-2',
+          email: 'two@example.com',
+          managedHomePath: managedHomePath2,
+          providerAccountId: 'acct-2',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-2',
+          createdAt: 2,
+          updatedAt: 2,
+          lastAuthenticatedAt: 2
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1',
+      activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
+    })
+    const store = createStore(settings)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    writeFileSync(runtimeAuthPath, account1RefreshedAuth, 'utf-8')
+    settings.activeCodexManagedAccountId = 'account-2'
+    settings.activeCodexManagedAccountIdsByRuntime = { host: 'account-2', wsl: {} }
+
+    expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
+    expect(readFileSync(join(managedHomePath1, 'auth.json'), 'utf-8')).toBe(account1RefreshedAuth)
+    expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(account2Auth)
+  })
+
+  it('reads back selected-account refreshes without ambiguity from duplicate identities', async () => {
+    const runtimeAuthPath = getRuntimeCodexAuthPath()
+    const account1Auth = createCodexAuthJson('same@example.com', 'acct-same', 'one', 1)
+    const account1RefreshedAuth = createCodexAuthJson(
+      'same@example.com',
+      'acct-same',
+      'one-refreshed',
+      2
+    )
+    const account2Auth = createCodexAuthJson('same@example.com', 'acct-same', 'two', 1)
+    const managedHomePath1 = createManagedAuth(testState.userDataDir, 'account-1', account1Auth)
+    const managedHomePath2 = createManagedAuth(testState.userDataDir, 'account-2', account2Auth)
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'same@example.com',
+          managedHomePath: managedHomePath1,
+          providerAccountId: 'acct-same',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-same',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        },
+        {
+          id: 'account-2',
+          email: 'same@example.com',
+          managedHomePath: managedHomePath2,
+          providerAccountId: 'acct-same',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-same',
+          createdAt: 2,
+          updatedAt: 2,
+          lastAuthenticatedAt: 2
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1',
+      activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
+    })
+    const store = createStore(settings)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    writeFileSync(runtimeAuthPath, account1RefreshedAuth, 'utf-8')
+    service.syncForCurrentSelection()
+
+    expect(readFileSync(join(managedHomePath1, 'auth.json'), 'utf-8')).toBe(account1RefreshedAuth)
+    expect(readFileSync(join(managedHomePath2, 'auth.json'), 'utf-8')).toBe(account2Auth)
+    expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(account1RefreshedAuth)
+  })
+
+  it('keeps fresher selected-account startup refreshes when duplicate identities exist', async () => {
+    const runtimeAuthPath = getRuntimeCodexAuthPath()
+    const account1Auth = createCodexAuthJson('same@example.com', 'acct-same', 'one', 1)
+    const account1RefreshedAuth = createCodexAuthJson(
+      'same@example.com',
+      'acct-same',
+      'one-refreshed',
+      2
+    )
+    const account2Auth = createCodexAuthJson('same@example.com', 'acct-same', 'two', 1)
+    const managedHomePath1 = createManagedAuth(testState.userDataDir, 'account-1', account1Auth)
+    const managedHomePath2 = createManagedAuth(testState.userDataDir, 'account-2', account2Auth)
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'same@example.com',
+          managedHomePath: managedHomePath1,
+          providerAccountId: 'acct-same',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-same',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        },
+        {
+          id: 'account-2',
+          email: 'same@example.com',
+          managedHomePath: managedHomePath2,
+          providerAccountId: 'acct-same',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-same',
+          createdAt: 2,
+          updatedAt: 2,
+          lastAuthenticatedAt: 2
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1',
+      activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
+    })
+    writeFileSync(runtimeAuthPath, account1RefreshedAuth, 'utf-8')
+    const store = createStore(settings)
+
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    new CodexRuntimeHomeService(store as never)
+
+    expect(readFileSync(join(managedHomePath1, 'auth.json'), 'utf-8')).toBe(account1RefreshedAuth)
+    expect(readFileSync(join(managedHomePath2, 'auth.json'), 'utf-8')).toBe(account2Auth)
+    expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(account1RefreshedAuth)
+  })
+
+  it('routes stale live-pane startup refreshes to the matching account before restoring selected auth', async () => {
+    const runtimeAuthPath = getRuntimeCodexAuthPath()
+    const account1Auth = createCodexAuthJson('one@example.com', 'acct-1', 'one', 1)
+    const account1RefreshedAuth = createCodexAuthJson(
+      'one@example.com',
+      'acct-1',
+      'one-refreshed',
+      2
+    )
+    const account2Auth = createCodexAuthJson('two@example.com', 'acct-2', 'two', 1)
+    const managedHomePath1 = createManagedAuth(testState.userDataDir, 'account-1', account1Auth)
+    const managedHomePath2 = createManagedAuth(testState.userDataDir, 'account-2', account2Auth)
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'one@example.com',
+          managedHomePath: managedHomePath1,
+          providerAccountId: 'acct-1',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-1',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        },
+        {
+          id: 'account-2',
+          email: 'two@example.com',
+          managedHomePath: managedHomePath2,
+          providerAccountId: 'acct-2',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-2',
+          createdAt: 2,
+          updatedAt: 2,
+          lastAuthenticatedAt: 2
+        }
+      ],
+      activeCodexManagedAccountId: 'account-2',
+      activeCodexManagedAccountIdsByRuntime: { host: 'account-2', wsl: {} }
+    })
+    writeFileSync(runtimeAuthPath, account1RefreshedAuth, 'utf-8')
+    const store = createStore(settings)
+
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    new CodexRuntimeHomeService(store as never)
+
+    expect(readFileSync(join(managedHomePath1, 'auth.json'), 'utf-8')).toBe(account1RefreshedAuth)
+    expect(readFileSync(join(managedHomePath2, 'auth.json'), 'utf-8')).toBe(account2Auth)
+    expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(account2Auth)
+  })
+
+  it('preserves duplicate-identity outgoing refreshes before switching to another account', async () => {
+    const runtimeAuthPath = getRuntimeCodexAuthPath()
+    const account1Auth = createCodexAuthJson('same@example.com', 'acct-same', 'one', 1)
+    const account1RefreshedAuth = createCodexAuthJson(
+      'same@example.com',
+      'acct-same',
+      'one-refreshed',
+      2
+    )
+    const account2Auth = createCodexAuthJson('same@example.com', 'acct-same', 'two', 1)
+    const account3Auth = createCodexAuthJson('three@example.com', 'acct-3', 'three', 1)
+    const managedHomePath1 = createManagedAuth(testState.userDataDir, 'account-1', account1Auth)
+    const managedHomePath2 = createManagedAuth(testState.userDataDir, 'account-2', account2Auth)
+    const managedHomePath3 = createManagedAuth(testState.userDataDir, 'account-3', account3Auth)
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'same@example.com',
+          managedHomePath: managedHomePath1,
+          providerAccountId: 'acct-same',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-same',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        },
+        {
+          id: 'account-2',
+          email: 'same@example.com',
+          managedHomePath: managedHomePath2,
+          providerAccountId: 'acct-same',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-same',
+          createdAt: 2,
+          updatedAt: 2,
+          lastAuthenticatedAt: 2
+        },
+        {
+          id: 'account-3',
+          email: 'three@example.com',
+          managedHomePath: managedHomePath3,
+          providerAccountId: 'acct-3',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-3',
+          createdAt: 3,
+          updatedAt: 3,
+          lastAuthenticatedAt: 3
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1',
+      activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
+    })
+    const store = createStore(settings)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    writeFileSync(runtimeAuthPath, account1RefreshedAuth, 'utf-8')
+    settings.activeCodexManagedAccountId = 'account-3'
+    settings.activeCodexManagedAccountIdsByRuntime = { host: 'account-3', wsl: {} }
+    service.syncForCurrentSelection()
+
+    expect(readFileSync(join(managedHomePath1, 'auth.json'), 'utf-8')).toBe(account1RefreshedAuth)
+    expect(readFileSync(join(managedHomePath2, 'auth.json'), 'utf-8')).toBe(account2Auth)
+    expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(account3Auth)
+  })
+
   it('mirrors later system Codex config changes before launch', async () => {
     const systemCodexHome = getSystemCodexHomePath()
     mkdirSync(systemCodexHome, { recursive: true })
@@ -766,7 +1096,7 @@ describe('CodexRuntimeHomeService', () => {
     expect(readFileSync(runtimeProfilePath, 'utf-8')).toBe('profile\n')
   })
 
-  it('bridges system Codex sessions before launch without replacing runtime sessions', async () => {
+  it('starts the system Codex session bridge without replacing runtime sessions', async () => {
     const systemMissingRuntimeSessionPath = join(
       getSystemCodexHomePath(),
       'sessions',
@@ -801,9 +1131,12 @@ describe('CodexRuntimeHomeService', () => {
     writeFileSync(join(getSystemCodexHomePath(), 'state_5.sqlite'), 'sqlite\n', 'utf-8')
     const store = createStore(createSettings())
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const { startSystemCodexSessionBridgeInBackground } =
+      await import('../codex/codex-session-bridge')
     const service = new CodexRuntimeHomeService(store as never)
 
     service.prepareForCodexLaunch()
+    await startSystemCodexSessionBridgeInBackground()
 
     const runtimeMissingSessionPath = join(
       getRuntimeCodexHomePath(),
@@ -1217,6 +1550,76 @@ describe('CodexRuntimeHomeService', () => {
 
       expect(readFileSync(managedAuthPath, 'utf-8')).toBe(reauthedAuth)
       expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(reauthedAuth)
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
+  it('reads active WSL token refreshes back before restart using the selected distro', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const wslHome = join(testState.userDataDir, 'wsl-home')
+    vi.doMock('../wsl', () => ({
+      getDefaultWslDistro: () => 'Ubuntu',
+      getWslHome: () => wslHome
+    }))
+    const managedAuth = createCodexAuthJson('wsl@example.com', 'acct-wsl', 'managed', 1_000)
+    const refreshedAuth = createCodexAuthJson(
+      'wsl@example.com',
+      'acct-wsl',
+      'runtime-refreshed',
+      2_000
+    )
+    const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', managedAuth)
+    const managedAuthPath = join(managedHomePath, 'auth.json')
+    const store = createStore(
+      createSettings({
+        codexManagedAccounts: [
+          {
+            id: 'account-1',
+            email: 'wsl@example.com',
+            managedHomePath,
+            managedHomeRuntime: 'wsl',
+            wslDistro: null,
+            wslLinuxHomePath: '/home/alice/.local/share/orca/codex-accounts/account-1/home',
+            providerAccountId: 'acct-wsl',
+            workspaceLabel: null,
+            workspaceAccountId: 'acct-wsl',
+            createdAt: 1,
+            updatedAt: 1,
+            lastAuthenticatedAt: 1
+          }
+        ],
+        activeCodexManagedAccountIdsByRuntime: {
+          host: null,
+          wsl: { Ubuntu: 'account-1' }
+        }
+      })
+    )
+
+    try {
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      const service = new CodexRuntimeHomeService(store as never)
+      const target = { runtime: 'wsl' as const, wslDistro: 'Ubuntu' }
+      const wslRuntimeHomePath = join(
+        wslHome,
+        '.local',
+        'share',
+        'orca',
+        'codex-runtime-home',
+        'home'
+      )
+      const runtimeAuthPath = join(wslRuntimeHomePath, 'auth.json')
+
+      expect(service.prepareForCodexLaunch(target)).toBe(wslRuntimeHomePath)
+      writeFileSync(runtimeAuthPath, refreshedAuth, 'utf-8')
+
+      service.syncActiveWslSelectionsBeforeRestart()
+
+      expect(readFileSync(managedAuthPath, 'utf-8')).toBe(refreshedAuth)
+      expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(refreshedAuth)
     } finally {
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)

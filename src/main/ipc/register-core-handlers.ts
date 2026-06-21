@@ -23,6 +23,7 @@ import { registerMemoryHandlers } from './memory'
 import { registerRateLimitHandlers } from './rate-limits'
 import { registerRuntimeHandlers } from './runtime'
 import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
+import { registerAiVaultHandlers } from './ai-vault'
 import { registerNotificationHandlers } from './notifications'
 import { registerNotebookHandlers } from './notebook'
 import { registerOnboardingHandlers } from './onboarding'
@@ -41,15 +42,18 @@ import { registerTelemetryHandlers } from './telemetry'
 import { registerBrowserHandlers } from './browser'
 import { registerShellHandlers } from './shell'
 import { registerPetHandlers } from './pet'
-import { registerUIHandlers } from './ui'
+import { registerUIHandlers, setTrustedUIRendererWebContentsId } from './ui'
+import { registerEmulatorFrameStreamHandlers } from './emulator-frame-stream'
 import { registerSpeechHandlers } from './speech'
 import { registerCodexAccountHandlers } from './codex-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
 import { registerAgentTrustHandlers } from './agent-trust'
 import { registerClaudeAccountHandlers } from './claude-accounts'
-import { warmSystemFontFamilies } from '../system-fonts'
 import { registerUpdaterHandlers } from '../window/attach-main-window-services'
-import { registerClipboardHandlers } from '../window/clipboard-ipc-handlers'
+import {
+  registerClipboardHandlers,
+  setTrustedClipboardRendererWebContentsId
+} from '../window/clipboard-ipc-handlers'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { OpenCodeUsageStore } from '../opencode-usage/store'
@@ -64,7 +68,8 @@ import type { KeybindingService } from '../keybindings/keybinding-service'
 let registered = false
 
 type CoreHandlerLifecycleOptions = {
-  onBeforeRelaunch?: () => void
+  onBeforeRelaunch?: () => void | Promise<void>
+  getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
 }
 
 export function registerCoreHandlers(
@@ -90,6 +95,8 @@ export function registerCoreHandlers(
   // if a channel is registered twice, so we guard to register only once and
   // just update the per-window web-contents ID on subsequent calls.
   setTrustedBrowserRendererWebContentsId(mainWindowWebContentsId)
+  setTrustedClipboardRendererWebContentsId(mainWindowWebContentsId)
+  setTrustedUIRendererWebContentsId(mainWindowWebContentsId)
   setAgentBrowserBridgeRef(runtime.getAgentBrowserBridge())
   if (registered) {
     return
@@ -143,6 +150,7 @@ export function registerCoreHandlers(
   registerPetHandlers()
   registerSessionHandlers(store)
   registerUIHandlers(store)
+  registerEmulatorFrameStreamHandlers()
   registerWorkspaceSpaceHandlers(store)
   registerWorkspacePortHandlers(store)
   if (commitMessageAgentEnv) {
@@ -153,8 +161,10 @@ export function registerCoreHandlers(
   registerFilesystemWatcherHandlers()
   registerRuntimeHandlers(runtime)
   registerRuntimeEnvironmentHandlers()
+  registerAiVaultHandlers({
+    getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths
+  })
   registerClipboardHandlers()
   registerUpdaterHandlers(store)
   registerSpeechHandlers(store)
-  warmSystemFontFamilies()
 }

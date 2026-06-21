@@ -173,6 +173,25 @@ describe('execCommand', () => {
     expect(channel.stderr.listenerCount('data')).toBe(0)
   })
 
+  it('includes stdout in nonzero-exit errors when stderr is empty', async () => {
+    const channel = createMockChannel()
+    const conn = {
+      exec: vi.fn().mockResolvedValue(channel)
+    }
+    const commandPromise = execCommand(conn as never, 'npm install node-pty 2>&1')
+
+    await Promise.resolve()
+    channel.emit('data', Buffer.from('gyp ERR! stack Error: not found: make\n'))
+    channel.emit('close', 1)
+
+    await expect(commandPromise).rejects.toThrow('gyp ERR! stack Error: not found: make')
+    expect(channel.listenerCount('error')).toBe(0)
+    expect(channel.listenerCount('data')).toBe(0)
+    expect(channel.listenerCount('close')).toBe(0)
+    expect(channel.stderr.listenerCount('error')).toBe(0)
+    expect(channel.stderr.listenerCount('data')).toBe(0)
+  })
+
   it('cleans command channel listeners when a command times out', async () => {
     vi.useFakeTimers()
     try {
@@ -193,6 +212,30 @@ describe('execCommand', () => {
       expect(channel.listenerCount('close')).toBe(0)
       expect(channel.stderr.listenerCount('error')).toBe(0)
       expect(channel.stderr.listenerCount('data')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('uses custom command timeouts without forwarding them to SSH exec', async () => {
+    vi.useFakeTimers()
+    try {
+      const channel = createMockChannel()
+      const conn = {
+        exec: vi.fn().mockResolvedValue(channel)
+      }
+      const commandPromise = execCommand(conn as never, 'npm install', {
+        wrapCommand: false,
+        timeoutMs: 240_000
+      })
+
+      await Promise.resolve()
+      expect(conn.exec).toHaveBeenCalledWith('npm install', { wrapCommand: false })
+      const rejection = expect(commandPromise).rejects.toThrow('timed out after 240s')
+      await vi.advanceTimersByTimeAsync(240_000)
+
+      await rejection
+      expect(channel.close).toHaveBeenCalledOnce()
     } finally {
       vi.useRealTimers()
     }

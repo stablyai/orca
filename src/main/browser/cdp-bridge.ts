@@ -45,6 +45,7 @@ import {
   type RefEntry,
   type SnapshotResult
 } from './snapshot-engine'
+import { insertTextThroughCdp } from './browser-text-insertion'
 import type { BrowserManager } from './browser-manager'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 
@@ -337,7 +338,7 @@ export class CdpBridge {
       await sender('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Delete' })
       await sender('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Delete' })
 
-      await sender('Input.insertText', { text: value })
+      await insertTextThroughCdp(sender, value)
 
       // Why: React and other frameworks use synthetic event listeners that may not
       // detect native keyboard events. Explicitly dispatching input/change ensures
@@ -366,7 +367,7 @@ export class CdpBridge {
       const sender = this.makeCdpSender(guest)
       await this.ensureDebuggerAttached(guest)
 
-      await sender('Input.insertText', { text: input })
+      await insertTextThroughCdp(sender, input)
       return { typed: true }
     })
   }

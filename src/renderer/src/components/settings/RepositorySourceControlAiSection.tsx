@@ -1,144 +1,87 @@
-/* eslint-disable max-lines -- Why: repo Source Control AI settings keep one
-   draft/save flow across model, instruction, and PR-default override groups. */
 import { useMemo, useState } from 'react'
-import type { Repo } from '../../../../shared/types'
-import type {
-  RepoSourceControlAiOverrides,
-  SourceControlAiOperation
-} from '../../../../shared/source-control-ai-types'
+import type React from 'react'
+import type { GlobalSettings, Repo, TuiAgent } from '../../../../shared/types'
+import { CUSTOM_AGENT_ID } from '../../../../shared/commit-message-agent-spec'
+import type { RepoSourceControlAiOverrides } from '../../../../shared/source-control-ai-types'
 import {
-  clearSourceControlAiModelChoiceForHost,
   normalizeRepoSourceControlAiOverrides,
   normalizeSourceControlAiSettings,
-  readSourceControlAiModelChoiceForHost,
-  selectSourceControlAiModelChoiceForHost
+  resolveSourceControlActionRecipe
 } from '../../../../shared/source-control-ai'
-import {
-  getCommitMessageAgentCapability,
-  isCustomAgentId,
-  resolveCommitMessageAgentChoice
-} from '../../../../shared/commit-message-agent-spec'
-import {
-  getCommitMessageModelDiscoveryHostKeyForScope,
-  LOCAL_COMMIT_MESSAGE_HOST_KEY
-} from '../../../../shared/commit-message-host-key'
-import { Label } from '../ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import { useAppStore } from '../../store'
-import { getRuntimeGitScope } from '../../runtime/runtime-git-client'
-import { getRepositorySourceControlAiSectionId } from './repository-settings-targets'
+import { toSourceControlAiRepoUpdate } from '../../../../shared/source-control-ai-recipe-save'
+import type { SourceControlAiRepoUpdate } from '../../../../shared/source-control-ai-recipe-save'
+import type { SourceControlActionId } from '../../../../shared/source-control-ai-actions'
 import { Button } from '../ui/button'
+import { useAppStore } from '../../store'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { getRepositorySourceControlAiSectionId } from './repository-settings-targets'
+import { RepositorySourceControlAiActionRows } from './RepositorySourceControlAiActionRows'
+import { RepositorySourceControlAiCustomCommand } from './RepositorySourceControlAiCustomCommand'
+import { RepositorySourceControlAiEnablement } from './RepositorySourceControlAiEnablement'
+import { RepositorySourceControlAiHostedReviewDefaults } from './RepositorySourceControlAiHostedReviewDefaults'
+import {
+  createRepoAiDraftState,
+  dropRepoLegacyInstructionForAction,
+  hasOwnActionOverride,
+  normalizeRepoAiDraft,
+  resolveRepoAiDraftState,
+  serializeRepoAiDraft,
+  type RepoAiDraftState
+} from './repository-source-control-ai-draft'
+import {
+  ACTION_MODE_INHERIT,
+  DEFAULT_AGENT_VALUE,
+  completeRepoActionRecipe,
+  readInheritedCommandTemplate
+} from './repository-source-control-ai-labels'
+import { getSettingOwnershipSummary } from './setting-ownership'
+import { translate } from '@/i18n/i18n'
+
+export {
+  createRepoAiDraftState,
+  dropRepoLegacyInstructionForAction,
+  resolveRepoAiDraftState
+} from './repository-source-control-ai-draft'
 
 type RepositorySourceControlAiSectionProps = {
   repo: Repo
-  updateRepo: (repoId: string, updates: Partial<Repo>) => void | Promise<boolean>
+  updateRepo: (repoId: string, updates: SourceControlAiRepoUpdate) => void | Promise<boolean>
 }
 
-const INHERIT_MODEL_VALUE = '__inherit__'
-const PROMPT_MODE_INHERIT = 'inherit'
-const PROMPT_MODE_OVERRIDE = 'override'
+type HostedReviewDefaultKey = keyof NonNullable<RepoSourceControlAiOverrides['prCreationDefaults']>
 
-const OPERATIONS: {
-  operation: SourceControlAiOperation
-  modelLabel: string
-  instructionLabel: string
-  globalPlaceholder: string
-}[] = [
-  {
-    operation: 'commitMessage',
-    modelLabel: 'Commit message model',
-    instructionLabel: 'Commit message prompt',
-    globalPlaceholder: 'Global commit message prompt is empty.'
-  },
-  {
-    operation: 'pullRequest',
-    modelLabel: 'PR details model',
-    instructionLabel: 'Pull request prompt',
-    globalPlaceholder: 'Global pull request prompt is empty.'
-  },
-  {
-    operation: 'branchName',
-    modelLabel: 'Branch name model',
-    instructionLabel: 'Branch name prompt',
-    globalPlaceholder: 'Global branch name prompt is empty.'
-  }
-]
-
-type PrDefaultKey = keyof NonNullable<RepoSourceControlAiOverrides['prCreationDefaults']>
-type RepoAiDraftState = {
-  repoId: string
-  value: RepoSourceControlAiOverrides
-  baseSerialized: string
+function readCompleteRecipeForDraft(
+  current: RepoSourceControlAiOverrides,
+  settings: GlobalSettings | null,
+  actionId: SourceControlActionId
+): NonNullable<
+  NonNullable<RepoSourceControlAiOverrides['actionOverrides']>[SourceControlActionId]
+> {
+  const recipe = resolveSourceControlActionRecipe({
+    settings,
+    repo: { sourceControlAi: current },
+    actionId
+  })
+  return completeRepoActionRecipe(recipe, actionId)
 }
 
-function hasOwnPrompt(
-  prompts: RepoSourceControlAiOverrides['instructionsByOperation'],
-  operation: SourceControlAiOperation
-): boolean {
-  return typeof prompts?.[operation] === 'string'
-}
-
-function triStateValue(value: boolean | null | undefined): 'inherit' | 'on' | 'off' {
-  if (value === true) {
-    return 'on'
-  }
-  if (value === false) {
-    return 'off'
-  }
-  return 'inherit'
-}
-
-function normalizeRepoAiDraft(
-  value: RepoSourceControlAiOverrides | null | undefined
+function setActionOverride(
+  current: RepoSourceControlAiOverrides,
+  actionId: SourceControlActionId,
+  recipe: NonNullable<
+    NonNullable<RepoSourceControlAiOverrides['actionOverrides']>[SourceControlActionId]
+  >
 ): RepoSourceControlAiOverrides {
-  return normalizeRepoSourceControlAiOverrides(value) ?? {}
-}
-
-function serializeRepoAiDraft(value: RepoSourceControlAiOverrides): string {
-  return JSON.stringify(normalizeRepoAiDraft(value))
-}
-
-export function createRepoAiDraftState(
-  repoId: string,
-  value: RepoSourceControlAiOverrides
-): RepoAiDraftState {
-  const normalized = normalizeRepoAiDraft(value)
-  return {
-    repoId,
-    value: normalized,
-    baseSerialized: serializeRepoAiDraft(normalized)
-  }
-}
-
-export function resolveRepoAiDraftState(
-  current: RepoAiDraftState,
-  repoId: string,
-  persistedRepoAi: RepoSourceControlAiOverrides,
-  persistedSerialized = serializeRepoAiDraft(persistedRepoAi)
-): RepoAiDraftState {
-  const currentSerialized = serializeRepoAiDraft(current.value)
-  // Why: render-time draft sync relies on object identity to avoid repeating
-  // the same state update during server-rendered settings tests.
-  if (
-    current.repoId === repoId &&
-    currentSerialized === persistedSerialized &&
-    current.baseSerialized === persistedSerialized
-  ) {
-    return current
-  }
-  if (
-    current.repoId !== repoId ||
-    currentSerialized === current.baseSerialized ||
-    currentSerialized === persistedSerialized
-  ) {
-    return {
-      repoId,
-      value: persistedRepoAi,
-      baseSerialized: persistedSerialized
-    }
-  }
-  return current
+  return dropRepoLegacyInstructionForAction(
+    {
+      ...current,
+      actionOverrides: {
+        ...current.actionOverrides,
+        [actionId]: recipe
+      }
+    },
+    actionId
+  )
 }
 
 export function RepositorySourceControlAiSection({
@@ -147,30 +90,11 @@ export function RepositorySourceControlAiSection({
 }: RepositorySourceControlAiSectionProps): React.JSX.Element {
   const mountedRef = useMountedRef()
   const settings = useAppStore((state) => state.settings)
+  const ownership = getSettingOwnershipSummary('repositorySourceControlAi')
   const source = normalizeSourceControlAiSettings(
     settings?.sourceControlAi,
     settings?.commitMessageAi
   )
-  const hostScope = getRuntimeGitScope(settings, repo.connectionId)
-  const hostKey = getCommitMessageModelDiscoveryHostKeyForScope(hostScope)
-  const agentId = resolveCommitMessageAgentChoice(
-    source.agentId,
-    settings?.defaultTuiAgent,
-    settings?.disabledTuiAgents
-  )
-  const baseCapability =
-    agentId && !isCustomAgentId(agentId) ? getCommitMessageAgentCapability(agentId) : null
-  const discoveredModels =
-    agentId && !isCustomAgentId(agentId)
-      ? (source.discoveredModelsByAgentByHost?.[hostKey]?.[agentId] ??
-        (hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY
-          ? source.discoveredModelsByAgent?.[agentId]
-          : undefined))
-      : undefined
-  const capability =
-    baseCapability && discoveredModels?.length
-      ? { ...baseCapability, models: discoveredModels }
-      : baseCapability
   const persistedRepoAi = useMemo(
     () => normalizeRepoAiDraft(repo.sourceControlAi),
     [repo.sourceControlAi]
@@ -231,17 +155,22 @@ export function RepositorySourceControlAiSection({
     }
     const next = normalizeRepoAiDraft(resolvedDraftState.value)
     const nextSerialized = serializeRepoAiDraft(next)
+    const repoUpdate = toSourceControlAiRepoUpdate(next)
     setIsSaving(true)
     setSaveError(null)
     try {
-      const result = await updateRepo(repo.id, { sourceControlAi: next })
+      const result = await updateRepo(repo.id, repoUpdate)
       if (!mountedRef.current) {
         return
       }
       if (result === false) {
-        setSaveError('Failed to save Git AI Author settings.')
+        setSaveError('Failed to save Source Control AI settings.')
         return
       }
+      const savedValue =
+        repoUpdate.sourceControlAi === null
+          ? {}
+          : (normalizeRepoSourceControlAiOverrides(repoUpdate.sourceControlAi) ?? {})
       setDraftState((current) => {
         if (current.repoId !== repo.id) {
           return current
@@ -249,13 +178,13 @@ export function RepositorySourceControlAiSection({
         const currentSerialized = serializeRepoAiDraft(current.value)
         return {
           repoId: repo.id,
-          value: currentSerialized === nextSerialized ? next : current.value,
-          baseSerialized: nextSerialized
+          value: currentSerialized === nextSerialized ? savedValue : current.value,
+          baseSerialized: serializeRepoAiDraft(savedValue)
         }
       })
     } catch {
       if (mountedRef.current) {
-        setSaveError('Failed to save Git AI Author settings.')
+        setSaveError('Failed to save Source Control AI settings.')
       }
     } finally {
       if (mountedRef.current) {
@@ -269,101 +198,87 @@ export function RepositorySourceControlAiSection({
     setSaveError(null)
   }
 
-  const updateModelOverride = (operation: SourceControlAiOperation, modelId: string): void => {
-    if (!capability) {
-      return
-    }
+  const updateEnablement = (value: boolean | undefined): void => {
+    updateDraftRepoAi((current) => ({ ...current, enabled: value }))
+  }
+
+  const updateCustomCommand = (value: string | undefined): void => {
+    updateDraftRepoAi((current) => ({ ...current, customAgentCommand: value }))
+  }
+
+  const updateActionMode = (actionId: SourceControlActionId, mode: string): void => {
     updateDraftRepoAi((current) => {
-      const nextModelOverrides = { ...current.modelOverridesByOperation }
-      if (modelId === INHERIT_MODEL_VALUE) {
-        const nextChoice = clearSourceControlAiModelChoiceForHost(
-          nextModelOverrides[operation],
-          hostKey,
-          capability.id
+      const nextActionOverrides = { ...current.actionOverrides }
+      if (mode === ACTION_MODE_INHERIT) {
+        delete nextActionOverrides[actionId]
+        return dropRepoLegacyInstructionForAction(
+          { ...current, actionOverrides: nextActionOverrides },
+          actionId
         )
-        if (nextChoice) {
-          nextModelOverrides[operation] = nextChoice
-        } else {
-          delete nextModelOverrides[operation]
-        }
-        return { ...current, modelOverridesByOperation: nextModelOverrides }
       }
-      const model = capability.models.find((candidate) => candidate.id === modelId)
-      if (!model) {
-        return current
+      if (!hasOwnActionOverride(nextActionOverrides, actionId)) {
+        nextActionOverrides[actionId] = readCompleteRecipeForDraft(current, settings, actionId)
       }
-      const nextChoice = selectSourceControlAiModelChoiceForHost(
-        current.modelOverridesByOperation?.[operation],
-        hostKey,
-        capability.id,
-        model.id
+      return dropRepoLegacyInstructionForAction(
+        { ...current, actionOverrides: nextActionOverrides },
+        actionId
       )
-      if (model.thinkingLevels && model.defaultThinkingLevel) {
-        nextChoice.selectedThinkingByModel = {
-          ...nextChoice.selectedThinkingByModel,
-          [model.id]: nextChoice.selectedThinkingByModel?.[model.id] ?? model.defaultThinkingLevel
-        }
-      }
-      return {
-        ...current,
-        modelOverridesByOperation: {
-          ...nextModelOverrides,
-          [operation]: nextChoice
-        }
-      }
     })
   }
 
-  const updatePromptMode = (
-    operation: SourceControlAiOperation,
-    mode: string,
-    inheritedValue: string
-  ): void => {
+  const updateActionAgent = (actionId: SourceControlActionId, value: string): void => {
     updateDraftRepoAi((current) => {
-      const nextPrompts = { ...current.instructionsByOperation }
-      if (mode === PROMPT_MODE_INHERIT) {
-        delete nextPrompts[operation]
-      } else if (!hasOwnPrompt(nextPrompts, operation)) {
-        nextPrompts[operation] = inheritedValue
+      const currentRecipe =
+        current.actionOverrides?.[actionId] ??
+        readCompleteRecipeForDraft(current, settings, actionId)
+      const nextRecipe = {
+        ...currentRecipe,
+        agentId:
+          value === DEFAULT_AGENT_VALUE
+            ? null
+            : value === CUSTOM_AGENT_ID
+              ? CUSTOM_AGENT_ID
+              : (value as TuiAgent)
       }
-      return { ...current, instructionsByOperation: nextPrompts }
+      return setActionOverride(current, actionId, nextRecipe)
     })
   }
 
-  const updatePromptOverride = (operation: SourceControlAiOperation, value: string): void => {
-    updateDraftRepoAi((current) => ({
-      ...current,
-      instructionsByOperation: {
-        ...current.instructionsByOperation,
-        [operation]: value
-      }
-    }))
-  }
-
-  const updateOperationThinking = (
-    operation: SourceControlAiOperation,
-    modelId: string,
-    value: string
-  ): void => {
+  const updateActionTemplate = (actionId: SourceControlActionId, value: string): void => {
     updateDraftRepoAi((current) => {
-      const choice = current.modelOverridesByOperation?.[operation]
-      return {
-        ...current,
-        modelOverridesByOperation: {
-          ...current.modelOverridesByOperation,
-          [operation]: {
-            ...choice,
-            selectedThinkingByModel: {
-              ...choice?.selectedThinkingByModel,
-              [modelId]: value
-            }
-          }
-        }
-      }
+      const currentRecipe =
+        current.actionOverrides?.[actionId] ??
+        readCompleteRecipeForDraft(current, settings, actionId)
+      return setActionOverride(current, actionId, {
+        ...currentRecipe,
+        commandInputTemplate: value
+      })
     })
   }
 
-  const updatePrDefault = (key: PrDefaultKey, value: string): void => {
+  const updateActionAgentArgs = (actionId: SourceControlActionId, value: string): void => {
+    updateDraftRepoAi((current) => {
+      const currentRecipe =
+        current.actionOverrides?.[actionId] ??
+        readCompleteRecipeForDraft(current, settings, actionId)
+      return setActionOverride(current, actionId, {
+        ...currentRecipe,
+        agentArgs: value
+      })
+    })
+  }
+
+  const appendVariable = (actionId: SourceControlActionId, variable: string): void => {
+    const override = repoAi.actionOverrides?.[actionId]
+    const currentTemplate =
+      typeof override?.commandInputTemplate === 'string'
+        ? override.commandInputTemplate
+        : readInheritedCommandTemplate(source, actionId)
+    const separator = currentTemplate.endsWith('\n') || currentTemplate.length === 0 ? '' : ' '
+    updateActionTemplate(actionId, `${currentTemplate}${separator}{${variable}}`)
+  }
+
+  const updateHostedReviewDefault = (key: HostedReviewDefaultKey, value: string): void => {
     updateDraftRepoAi((current) => {
       const nextDefaults = { ...current.prCreationDefaults }
       if (value === 'inherit') {
@@ -375,13 +290,6 @@ export function RepositorySourceControlAiSection({
     })
   }
 
-  const prDefaultRows: { key: PrDefaultKey; label: string }[] = [
-    { key: 'draft', label: 'Draft by default' },
-    { key: 'useTemplate', label: 'Use PR template when available' },
-    { key: 'generateDetailsOnOpen', label: 'Generate details when opening Create PR' },
-    { key: 'openAfterCreate', label: 'Open PR after creation' }
-  ]
-
   return (
     <section
       id={getRepositorySourceControlAiSectionId(repo.id)}
@@ -390,15 +298,26 @@ export function RepositorySourceControlAiSection({
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 space-y-1">
-          <h3 className="text-sm font-semibold">Git AI Author</h3>
-          <p className="text-xs text-muted-foreground">
-            Repo-specific overrides. Each field uses global settings until you set it here.
-          </p>
+          <h3 className="text-sm font-semibold">
+            {translate(
+              'auto.components.settings.RepositorySourceControlAiSection.71b003b62b',
+              'Source Control AI'
+            )}
+          </h3>
+          <p className="text-xs text-muted-foreground">{ownership.description}</p>
           {saveError ? <p className="text-xs text-destructive">{saveError}</p> : null}
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           <span className="text-[11px] text-muted-foreground">
-            {isDirty ? 'Unsaved changes' : 'Saved'}
+            {isDirty
+              ? translate(
+                  'auto.components.settings.RepositorySourceControlAiSection.e57dde9d93',
+                  'Unsaved changes'
+                )
+              : translate(
+                  'auto.components.settings.RepositorySourceControlAiSection.ccb07dd027',
+                  'Saved'
+                )}
           </span>
           {isDirty ? (
             <Button
@@ -408,7 +327,10 @@ export function RepositorySourceControlAiSection({
               onClick={discardDraft}
               disabled={isSaving}
             >
-              Discard
+              {translate(
+                'auto.components.settings.RepositorySourceControlAiSection.67b3ff5467',
+                'Discard'
+              )}
             </Button>
           ) : null}
           <Button
@@ -418,145 +340,44 @@ export function RepositorySourceControlAiSection({
             onClick={() => void saveDraft()}
             disabled={!isDirty || isSaving}
           >
-            {isSaving ? 'Saving...' : 'Save'}
+            {isSaving
+              ? translate(
+                  'auto.components.settings.RepositorySourceControlAiSection.57e6e9d4b1',
+                  'Saving...'
+                )
+              : translate(
+                  'auto.components.settings.RepositorySourceControlAiSection.152268c295',
+                  'Save'
+                )}
           </Button>
         </div>
       </div>
 
-      {capability ? (
-        <div className="space-y-3">
-          {OPERATIONS.map((row) => {
-            const choice = repoAi.modelOverridesByOperation?.[row.operation]
-            const selectedModelId = readSourceControlAiModelChoiceForHost(
-              choice,
-              hostKey,
-              capability.id
-            )
-            const selectedModel = selectedModelId
-              ? capability.models.find((model) => model.id === selectedModelId)
-              : null
-            const selectedThinking =
-              selectedModel?.thinkingLevels && selectedModel.defaultThinkingLevel
-                ? (choice?.selectedThinkingByModel?.[selectedModel.id] ??
-                  selectedModel.defaultThinkingLevel)
-                : null
-            return (
-              <div
-                key={row.operation}
-                className="space-y-2 rounded-md border border-border px-3 py-2"
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <Label className="text-xs font-medium">{row.modelLabel}</Label>
-                  <Select
-                    value={selectedModelId ?? INHERIT_MODEL_VALUE}
-                    onValueChange={(value) => updateModelOverride(row.operation, value)}
-                  >
-                    <SelectTrigger size="sm" className="h-8 w-[240px] text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={INHERIT_MODEL_VALUE}>Use global model</SelectItem>
-                      {capability.models.map((model) => (
-                        <SelectItem key={model.id} value={model.id}>
-                          {model.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {selectedModel?.thinkingLevels && selectedThinking ? (
-                  <div className="flex items-center justify-end gap-2">
-                    <span className="text-[11px] text-muted-foreground">Thinking</span>
-                    <Select
-                      value={selectedThinking}
-                      onValueChange={(value) =>
-                        updateOperationThinking(row.operation, selectedModel.id, value)
-                      }
-                    >
-                      <SelectTrigger size="sm" className="h-7 w-[150px] text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {selectedModel.thinkingLevels.map((level) => (
-                          <SelectItem key={level.id} value={level.id}>
-                            {level.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : null}
-              </div>
-            )
-          })}
-        </div>
-      ) : (
-        <p className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
-          Model overrides are available after a supported global Git AI Author agent is selected.
-        </p>
-      )}
-
-      <div className="space-y-3">
-        {OPERATIONS.map((row) => {
-          const inherited = source.instructionsByOperation[row.operation]?.trim() ?? ''
-          const hasOverride = hasOwnPrompt(repoAi.instructionsByOperation, row.operation)
-          const value = hasOverride ? (repoAi.instructionsByOperation?.[row.operation] ?? '') : ''
-          return (
-            <div key={row.instructionLabel} className="space-y-2">
-              <div className="flex items-center justify-between gap-4">
-                <Label className="text-xs font-medium">{row.instructionLabel}</Label>
-                <Select
-                  value={hasOverride ? PROMPT_MODE_OVERRIDE : PROMPT_MODE_INHERIT}
-                  onValueChange={(mode) => updatePromptMode(row.operation, mode, inherited)}
-                >
-                  <SelectTrigger size="sm" className="h-8 w-[150px] text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={PROMPT_MODE_INHERIT}>Use global</SelectItem>
-                    <SelectItem value={PROMPT_MODE_OVERRIDE}>Customize</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <textarea
-                rows={3}
-                value={hasOverride ? value : ''}
-                onChange={(event) => updatePromptOverride(row.operation, event.target.value)}
-                disabled={!hasOverride}
-                placeholder={hasOverride ? '' : inherited || row.globalPlaceholder}
-                className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted/40"
-              />
-            </div>
-          )
-        })}
-      </div>
-
-      <div className="space-y-2">
-        <Label className="text-xs font-medium">PR creation defaults</Label>
-        <div className="space-y-2">
-          {prDefaultRows.map((row) => (
-            <div
-              key={row.key}
-              className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2"
-            >
-              <span className="text-xs text-foreground">{row.label}</span>
-              <Select
-                value={triStateValue(repoAi.prCreationDefaults?.[row.key])}
-                onValueChange={(value) => updatePrDefault(row.key, value)}
-              >
-                <SelectTrigger size="sm" className="h-8 w-[120px] text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="inherit">Use global</SelectItem>
-                  <SelectItem value="on">On</SelectItem>
-                  <SelectItem value="off">Off</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          ))}
-        </div>
-      </div>
+      <RepositorySourceControlAiEnablement
+        value={repoAi.enabled}
+        source={source}
+        onChange={updateEnablement}
+      />
+      <RepositorySourceControlAiCustomCommand
+        value={repoAi.customAgentCommand}
+        source={source}
+        onChange={updateCustomCommand}
+      />
+      <RepositorySourceControlAiActionRows
+        repoAi={repoAi}
+        source={source}
+        defaultTuiAgent={settings?.defaultTuiAgent}
+        onActionModeChange={updateActionMode}
+        onActionAgentChange={updateActionAgent}
+        onActionTemplateChange={updateActionTemplate}
+        onActionAgentArgsChange={updateActionAgentArgs}
+        onAppendVariable={appendVariable}
+      />
+      <RepositorySourceControlAiHostedReviewDefaults
+        value={repoAi.prCreationDefaults}
+        source={source}
+        onChange={updateHostedReviewDefault}
+      />
     </section>
   )
 }

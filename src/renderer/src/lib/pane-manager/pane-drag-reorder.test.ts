@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPaneInternal } from './pane-manager-types'
-import { attachPaneDrag, createDragReorderState } from './pane-drag-reorder'
+import { attachPaneDrag } from './pane-drag-pointer'
+import { createDragReorderState } from './pane-drag-reorder'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 
 const detachPaneFromTree = vi.hoisted(() => vi.fn())
@@ -95,6 +96,8 @@ function pointerEvent(args: Partial<PointerEvent>): PointerEvent {
   return {
     preventDefault: vi.fn(),
     stopPropagation: vi.fn(),
+    button: 0,
+    ctrlKey: false,
     pointerId: 1,
     clientX: 0,
     clientY: 0,
@@ -262,5 +265,42 @@ describe('attachPaneDrag', () => {
     expect(handle.hasPointerCapture(1)).toBe(false)
     expect(state.cleanupActiveDrag).toBeNull()
     expect(window.removeEventListener).toHaveBeenCalledWith('blur', expect.any(Function), true)
+  })
+
+  it('ignores context-menu pointer buttons so the pane menu can open', () => {
+    const handle = new FakeElement()
+    const root = new FakeElement(['pane-manager-root'])
+    const sourcePane = createPane(1, new FakeElement(['pane']))
+    const targetPane = createPane(2, new FakeElement(['pane']))
+    const panes = new Map<number, ManagedPaneInternal>([
+      [sourcePane.id, sourcePane],
+      [targetPane.id, targetPane]
+    ])
+    const state = createDragReorderState()
+
+    attachPaneDrag(handle as unknown as HTMLElement, sourcePane.id, state, {
+      getPanes: () => panes,
+      getRoot: () => root as unknown as HTMLElement,
+      getStyleOptions: () => ({}),
+      isDestroyed: () => false,
+      safeFit: vi.fn(),
+      applyPaneOpacity: vi.fn(),
+      applyDividerStyles: vi.fn(),
+      refitPanesUnder: vi.fn()
+    })
+
+    const rightClick = pointerEvent({ button: 2 })
+    handle.dispatchPointer('pointerdown', rightClick)
+
+    expect(rightClick.preventDefault).not.toHaveBeenCalled()
+    expect(rightClick.stopPropagation).not.toHaveBeenCalled()
+    expect(state.cleanupActiveDrag).toBeNull()
+
+    const controlClick = pointerEvent({ ctrlKey: true })
+    handle.dispatchPointer('pointerdown', controlClick)
+
+    expect(controlClick.preventDefault).not.toHaveBeenCalled()
+    expect(controlClick.stopPropagation).not.toHaveBeenCalled()
+    expect(state.cleanupActiveDrag).toBeNull()
   })
 })

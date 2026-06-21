@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: addWorktree has multiple code paths (no refresh,
-   reset --hard vs update-ref, dirty worktree, diverged branch, custom remote) that each
+   owner reset safety, dirty worktree, diverged branch, custom remote) that each
    need dedicated test coverage. Splitting into separate files would scatter related tests
    without a meaningful boundary. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -18,7 +18,13 @@ vi.mock('./runner', () => ({
   translateWslOutputPaths: translateWslOutputPathsMock
 }))
 
-import { addSparseWorktree, addWorktree, parseWorktreeList, removeWorktree } from './worktree'
+import {
+  addSparseWorktree,
+  addWorktree,
+  moveWorktree,
+  parseWorktreeList,
+  removeWorktree
+} from './worktree'
 
 describe('parseWorktreeList', () => {
   it('parses regular and bare worktree blocks from porcelain output', () => {
@@ -512,9 +518,14 @@ describe('addWorktree', () => {
       'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /repo-other\nHEAD def456\nbranch refs/heads/feature\n'
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse refs/remotes/origin/main^{commit}
-      .mockResolvedValueOnce({ stdout: '' }) // merge-base --is-ancestor
+      .mockResolvedValueOnce({ stdout: '0\t3\n' }) // rev-list --left-right --count
+      .mockResolvedValueOnce({ stdout: 'old-main\n' }) // rev-parse refs/heads/main^{commit}
+      .mockResolvedValueOnce({ stdout: 'remote-main\n' }) // rev-parse remote tracking ref^{commit}
+      .mockResolvedValueOnce({ stdout: '' }) // merge-base captured OIDs
       .mockResolvedValueOnce({ stdout: worktreeListOutput }) // worktree list --porcelain
       .mockResolvedValueOnce({ stdout: '' }) // status --porcelain (in /repo)
+      .mockResolvedValueOnce({ stdout: worktreeListOutput }) // worktree list recheck
+      .mockResolvedValueOnce({ stdout: '' }) // status --porcelain recheck (in /repo)
       .mockResolvedValueOnce({ stdout: '' }) // reset --hard (in /repo)
       .mockResolvedValueOnce({ stdout: '' }) // worktree add
       .mockResolvedValueOnce({ stdout: '' }) // config --local --replace-all branch.<branch>.base
@@ -525,10 +536,18 @@ describe('addWorktree', () => {
 
     expect(gitExecFileAsyncMock.mock.calls).toEqual([
       [['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'], { cwd: '/repo' }],
-      [['merge-base', '--is-ancestor', 'main', 'refs/remotes/origin/main'], { cwd: '/repo' }],
+      [
+        ['rev-list', '--left-right', '--count', 'refs/heads/main...refs/remotes/origin/main'],
+        { cwd: '/repo' }
+      ],
+      [['rev-parse', '--verify', 'refs/heads/main^{commit}'], { cwd: '/repo' }],
+      [['rev-parse', '--verify', 'refs/remotes/origin/main^{commit}'], { cwd: '/repo' }],
+      [['merge-base', '--is-ancestor', 'old-main', 'remote-main'], { cwd: '/repo' }],
       [['worktree', 'list', '--porcelain'], { cwd: '/repo' }],
       [['status', '--porcelain', '--untracked-files=no'], { cwd: '/repo' }],
-      [['reset', '--hard', 'refs/remotes/origin/main'], { cwd: '/repo' }],
+      [['worktree', 'list', '--porcelain'], { cwd: '/repo' }],
+      [['status', '--porcelain', '--untracked-files=no'], { cwd: '/repo' }],
+      [['reset', '--hard', 'remote-main'], { cwd: '/repo' }],
       [
         [
           'worktree',
@@ -561,9 +580,14 @@ describe('addWorktree', () => {
       'worktree /repo\nHEAD abc123\nbranch refs/heads/develop\n\nworktree /repo-main-wt\nHEAD def456\nbranch refs/heads/main\n'
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse refs/remotes/origin/main^{commit}
-      .mockResolvedValueOnce({ stdout: '' }) // merge-base --is-ancestor
+      .mockResolvedValueOnce({ stdout: '0\t3\n' }) // rev-list --left-right --count
+      .mockResolvedValueOnce({ stdout: 'old-main\n' }) // rev-parse refs/heads/main^{commit}
+      .mockResolvedValueOnce({ stdout: 'remote-main\n' }) // rev-parse remote tracking ref^{commit}
+      .mockResolvedValueOnce({ stdout: '' }) // merge-base captured OIDs
       .mockResolvedValueOnce({ stdout: worktreeListOutput }) // worktree list --porcelain
       .mockResolvedValueOnce({ stdout: '' }) // status --porcelain (in /repo-main-wt)
+      .mockResolvedValueOnce({ stdout: worktreeListOutput }) // worktree list recheck
+      .mockResolvedValueOnce({ stdout: '' }) // status --porcelain recheck (in /repo-main-wt)
       .mockResolvedValueOnce({ stdout: '' }) // reset --hard (in /repo-main-wt)
       .mockResolvedValueOnce({ stdout: '' }) // worktree add
       .mockResolvedValueOnce({ stdout: '' }) // config --local --replace-all branch.<branch>.base
@@ -572,33 +596,160 @@ describe('addWorktree', () => {
 
     await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
-    expect(gitExecFileAsyncMock.mock.calls[3]).toEqual([
+    expect(gitExecFileAsyncMock.mock.calls[6]).toEqual([
       ['status', '--porcelain', '--untracked-files=no'],
       expect.objectContaining({ cwd: '/repo-main-wt' })
     ])
-    expect(gitExecFileAsyncMock.mock.calls[4]).toEqual([
-      ['reset', '--hard', 'refs/remotes/origin/main'],
+    expect(gitExecFileAsyncMock.mock.calls[8]).toEqual([
+      ['status', '--porcelain', '--untracked-files=no'],
+      expect.objectContaining({ cwd: '/repo-main-wt' })
+    ])
+    expect(gitExecFileAsyncMock.mock.calls[9]).toEqual([
+      ['reset', '--hard', 'remote-main'],
       expect.objectContaining({ cwd: '/repo-main-wt' })
     ])
   })
 
-  it('uses update-ref when localBranch is not checked out in any worktree', async () => {
+  it('fast-forwards local base via update-ref when localBranch is not checked out', async () => {
     const worktreeListOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/develop\n'
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse refs/remotes/origin/main^{commit}
-      .mockResolvedValueOnce({ stdout: '' }) // merge-base --is-ancestor
+      .mockResolvedValueOnce({ stdout: '0\t3\n' }) // rev-list --left-right --count
+      .mockResolvedValueOnce({ stdout: 'old-main\n' }) // rev-parse refs/heads/main^{commit}
+      .mockResolvedValueOnce({ stdout: 'remote-main\n' }) // rev-parse remote tracking ref^{commit}
+      .mockResolvedValueOnce({ stdout: '' }) // merge-base captured OIDs
       .mockResolvedValueOnce({ stdout: worktreeListOutput }) // worktree list --porcelain
-      .mockResolvedValueOnce({ stdout: '' }) // update-ref
+      .mockResolvedValueOnce({ stdout: '' }) // update-ref refs/heads/main remote-main old-main
       .mockResolvedValueOnce({ stdout: '' }) // worktree add
       .mockResolvedValueOnce({ stdout: '' }) // config --local --replace-all branch.<branch>.base
       .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
       .mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
 
-    await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
+    const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
-    expect(gitExecFileAsyncMock.mock.calls[3]).toEqual([
-      ['update-ref', 'refs/heads/main', 'refs/remotes/origin/main'],
-      expect.objectContaining({ cwd: '/repo' })
+    expect(result.localBaseRefRefresh).toEqual({
+      status: 'updated',
+      baseRef: 'origin/main',
+      localBranch: 'main'
+    })
+    // Compare-and-swap form (expected old OID) so a concurrent ref move is a no-op.
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toContainEqual([
+      'update-ref',
+      'refs/heads/main',
+      'remote-main',
+      'old-main'
+    ])
+    // No worktree owns the branch, so no working tree is reset.
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).not.toContainEqual([
+      'reset',
+      '--hard',
+      'remote-main'
+    ])
+  })
+
+  it('skips local base refresh when the owner worktree becomes dirty before mutation', async () => {
+    const worktreeListOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse refs/remotes/origin/main^{commit}
+      .mockResolvedValueOnce({ stdout: '0\t3\n' }) // rev-list --left-right --count
+      .mockResolvedValueOnce({ stdout: 'old-main\n' }) // rev-parse refs/heads/main^{commit}
+      .mockResolvedValueOnce({ stdout: 'remote-main\n' }) // rev-parse remote tracking ref^{commit}
+      .mockResolvedValueOnce({ stdout: '' }) // merge-base captured OIDs
+      .mockResolvedValueOnce({ stdout: worktreeListOutput }) // worktree list --porcelain
+      .mockResolvedValueOnce({ stdout: '' }) // status --porcelain during evaluation
+      .mockResolvedValueOnce({ stdout: worktreeListOutput }) // worktree list before mutation
+      .mockResolvedValueOnce({ stdout: ' M package.json\n' }) // status --porcelain before mutation
+      .mockResolvedValueOnce({ stdout: '' }) // worktree add
+      .mockResolvedValueOnce({ stdout: '' }) // config --local --replace-all branch.<branch>.base
+      .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+      .mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
+
+    const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
+
+    expect(result.localBaseRefRefresh).toEqual({
+      status: 'skipped_dirty_worktree',
+      baseRef: 'origin/main',
+      localBranch: 'main',
+      ownerWorktreePath: '/repo'
+    })
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).not.toContainEqual([
+      'update-ref',
+      'refs/heads/main',
+      'remote-main',
+      'old-main'
+    ])
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).not.toContainEqual([
+      'reset',
+      '--hard',
+      'refs/heads/main'
+    ])
+  })
+
+  it('skips local base refresh when the owner worktree switches branches before mutation', async () => {
+    const firstWorktreeListOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
+    const secondWorktreeListOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/develop\n'
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse refs/remotes/origin/main^{commit}
+      .mockResolvedValueOnce({ stdout: '0\t3\n' }) // rev-list --left-right --count
+      .mockResolvedValueOnce({ stdout: 'old-main\n' }) // rev-parse refs/heads/main^{commit}
+      .mockResolvedValueOnce({ stdout: 'remote-main\n' }) // rev-parse refs/remotes/origin/main^{commit}
+      .mockResolvedValueOnce({ stdout: '' }) // merge-base captured OIDs
+      .mockResolvedValueOnce({ stdout: firstWorktreeListOutput }) // worktree list during evaluation
+      .mockResolvedValueOnce({ stdout: '' }) // status --porcelain during evaluation
+      .mockResolvedValueOnce({ stdout: secondWorktreeListOutput }) // worktree list before mutation
+      .mockResolvedValueOnce({ stdout: '' }) // worktree add
+      .mockResolvedValueOnce({ stdout: '' }) // config --local --replace-all branch.<branch>.base
+      .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+      .mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
+
+    const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
+
+    expect(result.localBaseRefRefresh).toEqual({
+      status: 'skipped_error',
+      baseRef: 'origin/main',
+      localBranch: 'main'
+    })
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).not.toContainEqual([
+      'update-ref',
+      'refs/heads/main',
+      'remote-main',
+      'old-main'
+    ])
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).not.toContainEqual([
+      'reset',
+      '--hard',
+      'refs/heads/main'
+    ])
+  })
+
+  it('skips local base refresh when owner revalidation cannot list worktrees', async () => {
+    const worktreeListOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse refs/remotes/origin/main^{commit}
+      .mockResolvedValueOnce({ stdout: '0\t3\n' }) // rev-list --left-right --count
+      .mockResolvedValueOnce({ stdout: 'old-main\n' }) // rev-parse refs/heads/main^{commit}
+      .mockResolvedValueOnce({ stdout: 'remote-main\n' }) // rev-parse refs/remotes/origin/main^{commit}
+      .mockResolvedValueOnce({ stdout: '' }) // merge-base captured OIDs
+      .mockResolvedValueOnce({ stdout: worktreeListOutput }) // worktree list during evaluation
+      .mockResolvedValueOnce({ stdout: '' }) // status --porcelain during evaluation
+      .mockRejectedValueOnce(new Error('worktree list failed')) // worktree list before mutation
+      .mockResolvedValueOnce({ stdout: '' }) // worktree add
+      .mockResolvedValueOnce({ stdout: '' }) // config --local --replace-all branch.<branch>.base
+      .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+      .mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
+
+    const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
+
+    expect(result.localBaseRefRefresh).toEqual({
+      status: 'skipped_error',
+      baseRef: 'origin/main',
+      localBranch: 'main'
+    })
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).not.toContainEqual([
+      'update-ref',
+      'refs/heads/main',
+      'remote-main',
+      'old-main'
     ])
   })
 
@@ -606,7 +757,10 @@ describe('addWorktree', () => {
     const worktreeListOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse refs/remotes/origin/main^{commit}
-      .mockResolvedValueOnce({ stdout: '' }) // merge-base --is-ancestor
+      .mockResolvedValueOnce({ stdout: '0\t3\n' }) // rev-list --left-right --count
+      .mockResolvedValueOnce({ stdout: 'old-main\n' }) // rev-parse refs/heads/main^{commit}
+      .mockResolvedValueOnce({ stdout: 'remote-main\n' }) // rev-parse remote tracking ref^{commit}
+      .mockResolvedValueOnce({ stdout: '' }) // merge-base captured OIDs
       .mockResolvedValueOnce({ stdout: worktreeListOutput }) // worktree list --porcelain
       .mockResolvedValueOnce({ stdout: ' M package.json\n' }) // status --porcelain (dirty)
       .mockResolvedValueOnce({ stdout: '' }) // worktree add
@@ -623,15 +777,16 @@ describe('addWorktree', () => {
       ownerWorktreePath: '/repo'
     })
 
-    // No reset --hard or update-ref — just base resolution, merge-base, worktree list, status, worktree add, base config, config --get, config --local set
-    expect(gitExecFileAsyncMock.mock.calls).toHaveLength(8)
+    // No reset --hard or update-ref — just base resolution, drift check, local/remote
+    // OIDs, ancestry check, worktree list, status, worktree add, and config writes.
+    expect(gitExecFileAsyncMock.mock.calls).toHaveLength(11)
     expect(gitExecFileAsyncMock.mock.calls[0]?.[0]).toEqual([
       'rev-parse',
       '--verify',
       '--quiet',
       'refs/remotes/origin/main^{commit}'
     ])
-    expect(gitExecFileAsyncMock.mock.calls[4]?.[0]).toEqual([
+    expect(gitExecFileAsyncMock.mock.calls[7]?.[0]).toEqual([
       'worktree',
       'add',
       '--no-track',
@@ -640,19 +795,19 @@ describe('addWorktree', () => {
       '/repo-feature',
       'refs/remotes/origin/main'
     ])
-    expect(gitExecFileAsyncMock.mock.calls[5]?.[0]).toEqual([
+    expect(gitExecFileAsyncMock.mock.calls[8]?.[0]).toEqual([
       'config',
       '--local',
       '--replace-all',
       'branch.feature/test.base',
       'refs/remotes/origin/main'
     ])
-    expect(gitExecFileAsyncMock.mock.calls[6]?.[0]).toEqual([
+    expect(gitExecFileAsyncMock.mock.calls[9]?.[0]).toEqual([
       'config',
       '--get',
       'push.autoSetupRemote'
     ])
-    expect(gitExecFileAsyncMock.mock.calls[7]?.[0]).toEqual([
+    expect(gitExecFileAsyncMock.mock.calls[10]?.[0]).toEqual([
       'config',
       '--local',
       'push.autoSetupRemote',
@@ -676,7 +831,7 @@ describe('addWorktree', () => {
         expect.objectContaining({ cwd: '/repo' })
       ],
       [
-        ['merge-base', '--is-ancestor', 'main', 'refs/remotes/origin/main'],
+        ['rev-list', '--left-right', '--count', 'refs/heads/main...refs/remotes/origin/main'],
         expect.objectContaining({ cwd: '/repo' })
       ],
       [
@@ -710,6 +865,185 @@ describe('addWorktree', () => {
         expect.objectContaining({ cwd: '/repo-feature' })
       ]
     ])
+  })
+
+  it('skips local base refresh when captured OIDs are no longer ancestor-safe', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse refs/remotes/origin/main^{commit}
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '0\t2\n' }) // stale rev-list result
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'new-local\n' }) // rev-parse refs/heads/main^{commit}
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'remote-main\n' }) // rev-parse refs/remotes/origin/main^{commit}
+    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('not an ancestor')) // merge-base captured OIDs
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
+    resolveCreationBaseConfigWrite()
+    gitExecFileAsyncMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
+
+    const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
+
+    expect(result.localBaseRefRefresh).toEqual({
+      status: 'skipped_not_fast_forward',
+      baseRef: 'origin/main',
+      localBranch: 'main'
+    })
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [
+        ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
+        expect.objectContaining({ cwd: '/repo' })
+      ],
+      [
+        ['rev-list', '--left-right', '--count', 'refs/heads/main...refs/remotes/origin/main'],
+        expect.objectContaining({ cwd: '/repo' })
+      ],
+      [
+        ['rev-parse', '--verify', 'refs/heads/main^{commit}'],
+        expect.objectContaining({ cwd: '/repo' })
+      ],
+      [
+        ['rev-parse', '--verify', 'refs/remotes/origin/main^{commit}'],
+        expect.objectContaining({ cwd: '/repo' })
+      ],
+      [
+        ['merge-base', '--is-ancestor', 'new-local', 'remote-main'],
+        expect.objectContaining({ cwd: '/repo' })
+      ],
+      [
+        [
+          'worktree',
+          'add',
+          '--no-track',
+          '-b',
+          'feature/test',
+          '/repo-feature',
+          'refs/remotes/origin/main'
+        ],
+        expect.objectContaining({ cwd: '/repo' })
+      ],
+      [
+        [
+          'config',
+          '--local',
+          '--replace-all',
+          'branch.feature/test.base',
+          'refs/remotes/origin/main'
+        ],
+        expect.objectContaining({ cwd: '/repo-feature' })
+      ],
+      [
+        ['config', '--get', 'push.autoSetupRemote'],
+        expect.objectContaining({ cwd: '/repo-feature' })
+      ],
+      [
+        ['config', '--local', 'push.autoSetupRemote', 'true'],
+        expect.objectContaining({ cwd: '/repo-feature' })
+      ]
+    ])
+  })
+
+  it('suggests updating the local base ref when setting is off and the branch is safely behind', async () => {
+    const worktreeListOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse refs/remotes/origin/main^{commit}
+      .mockResolvedValueOnce({ stdout: '0\t2\n' }) // rev-list --left-right --count
+      .mockResolvedValueOnce({ stdout: 'old-main\n' }) // rev-parse refs/heads/main^{commit}
+      .mockResolvedValueOnce({ stdout: 'remote-main\n' }) // rev-parse refs/remotes/origin/main^{commit}
+      .mockResolvedValueOnce({ stdout: '' }) // merge-base captured OIDs
+      .mockResolvedValueOnce({ stdout: worktreeListOutput }) // worktree list --porcelain
+      .mockResolvedValueOnce({ stdout: '' }) // status --porcelain
+      .mockResolvedValueOnce({ stdout: '' }) // worktree add
+      .mockResolvedValueOnce({ stdout: '' }) // config --local --replace-all branch.<branch>.base
+      .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+      .mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
+
+    const result = await addWorktree(
+      '/repo',
+      '/repo-feature',
+      'feature/test',
+      'origin/main',
+      false,
+      false,
+      { suggestLocalBaseRefUpdate: true }
+    )
+
+    expect(result.localBaseRefUpdateSuggestion).toEqual({
+      baseRef: 'origin/main',
+      localBranch: 'main',
+      behind: 2
+    })
+    expect(gitExecFileAsyncMock.mock.calls[1]).toEqual([
+      ['rev-list', '--left-right', '--count', 'refs/heads/main...refs/remotes/origin/main'],
+      { cwd: '/repo' }
+    ])
+  })
+
+  it('uses normalized branch metadata for slash-containing remotes', async () => {
+    const worktreeListOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse refs/remotes/foo/bar/main^{commit}
+      .mockResolvedValueOnce({ stdout: '0\t2\n' }) // rev-list --left-right --count
+      .mockResolvedValueOnce({ stdout: 'old-main\n' }) // rev-parse refs/heads/main^{commit}
+      .mockResolvedValueOnce({ stdout: 'remote-main\n' }) // rev-parse refs/remotes/foo/bar/main^{commit}
+      .mockResolvedValueOnce({ stdout: '' }) // merge-base captured OIDs
+      .mockResolvedValueOnce({ stdout: worktreeListOutput }) // worktree list --porcelain
+      .mockResolvedValueOnce({ stdout: '' }) // status --porcelain
+      .mockResolvedValueOnce({ stdout: '' }) // worktree add
+      .mockResolvedValueOnce({ stdout: '' }) // config --local --replace-all branch.<branch>.base
+      .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+      .mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
+
+    const result = await addWorktree(
+      '/repo',
+      '/repo-feature',
+      'feature/test',
+      'foo/bar/main',
+      false,
+      false,
+      {
+        suggestLocalBaseRefUpdate: true,
+        remoteTrackingBase: {
+          base: 'foo/bar/main',
+          branch: 'main',
+          ref: 'refs/remotes/foo/bar/main'
+        }
+      }
+    )
+
+    expect(result.localBaseRefUpdateSuggestion).toEqual({
+      baseRef: 'foo/bar/main',
+      localBranch: 'main',
+      behind: 2
+    })
+    expect(gitExecFileAsyncMock.mock.calls[1]).toEqual([
+      ['rev-list', '--left-right', '--count', 'refs/heads/main...refs/remotes/foo/bar/main'],
+      { cwd: '/repo' }
+    ])
+  })
+
+  it('does not suggest updating the local base ref when its owner worktree is dirty', async () => {
+    const worktreeListOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse refs/remotes/origin/main^{commit}
+      .mockResolvedValueOnce({ stdout: '0\t2\n' }) // rev-list --left-right --count
+      .mockResolvedValueOnce({ stdout: 'old-main\n' }) // rev-parse refs/heads/main^{commit}
+      .mockResolvedValueOnce({ stdout: 'remote-upstream-main\n' }) // rev-parse refs/remotes/upstream/main^{commit}
+      .mockResolvedValueOnce({ stdout: '' }) // merge-base captured OIDs
+      .mockResolvedValueOnce({ stdout: worktreeListOutput }) // worktree list --porcelain
+      .mockResolvedValueOnce({ stdout: ' M package.json\n' }) // status --porcelain
+      .mockResolvedValueOnce({ stdout: '' }) // worktree add
+      .mockResolvedValueOnce({ stdout: '' }) // config --local --replace-all branch.<branch>.base
+      .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+      .mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
+
+    const result = await addWorktree(
+      '/repo',
+      '/repo-feature',
+      'feature/test',
+      'origin/main',
+      false,
+      false,
+      { suggestLocalBaseRefUpdate: true }
+    )
+
+    expect(result).toEqual({})
   })
 
   it('qualifies bare branch name as refs/heads/ when a same-named tag exists', async () => {
@@ -821,9 +1155,14 @@ describe('addWorktree', () => {
     const worktreeListOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse refs/remotes/upstream/main^{commit}
-      .mockResolvedValueOnce({ stdout: '' }) // merge-base --is-ancestor
+      .mockResolvedValueOnce({ stdout: '0\t3\n' }) // rev-list --left-right --count
+      .mockResolvedValueOnce({ stdout: 'old-main\n' }) // rev-parse refs/heads/main^{commit}
+      .mockResolvedValueOnce({ stdout: 'remote-upstream-main\n' }) // rev-parse refs/remotes/upstream/main^{commit}
+      .mockResolvedValueOnce({ stdout: '' }) // merge-base captured OIDs
       .mockResolvedValueOnce({ stdout: worktreeListOutput }) // worktree list --porcelain
       .mockResolvedValueOnce({ stdout: '' }) // status --porcelain
+      .mockResolvedValueOnce({ stdout: worktreeListOutput }) // worktree list recheck
+      .mockResolvedValueOnce({ stdout: '' }) // status --porcelain recheck
       .mockResolvedValueOnce({ stdout: '' }) // reset --hard
       .mockResolvedValueOnce({ stdout: '' }) // worktree add
       .mockResolvedValueOnce({ stdout: '' }) // config --local --replace-all branch.<branch>.base
@@ -833,22 +1172,21 @@ describe('addWorktree', () => {
     await addWorktree('/repo', '/repo-feature', 'feature/test', 'upstream/main', true)
 
     expect(gitExecFileAsyncMock.mock.calls[1]?.[0]).toEqual([
-      'merge-base',
-      '--is-ancestor',
-      'main',
-      'refs/remotes/upstream/main'
+      'rev-list',
+      '--left-right',
+      '--count',
+      'refs/heads/main...refs/remotes/upstream/main'
     ])
-    expect(gitExecFileAsyncMock.mock.calls[4]?.[0]).toEqual([
+    expect(gitExecFileAsyncMock.mock.calls[9]?.[0]).toEqual([
       'reset',
       '--hard',
-      'refs/remotes/upstream/main'
+      'remote-upstream-main'
     ])
   })
 
   it('unsets branch base config during sparse setup cleanup after creation succeeds', async () => {
     const beforeRemoval =
       'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /repo-feature\nHEAD def456\nbranch refs/heads/feature/test\n'
-    const afterPrune = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
     resolveRemoteBase()
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
     resolveCreationBaseConfigWrite()
@@ -857,8 +1195,6 @@ describe('addWorktree', () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // config --local --unset-all branch.<branch>.base
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: beforeRemoval }) // worktree list before remove
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree prune
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: afterPrune }) // worktree list after prune
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // branch -D (rollback force-deletes the fresh branch)
 
     await expect(
@@ -882,10 +1218,31 @@ describe('addWorktree', () => {
   })
 })
 
+describe('moveWorktree', () => {
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+  })
+
+  it('runs `git worktree move` from the repo with old and new paths', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+    await moveWorktree('/repo', '/ws/cunner', '/ws/worktree-creation-spinner')
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['worktree', 'move', '/ws/cunner', '/ws/worktree-creation-spinner'],
+      { cwd: '/repo' }
+    )
+  })
+
+  it('propagates git failures so the caller can fall back', async () => {
+    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('fatal: destination exists'))
+    await expect(moveWorktree('/repo', '/ws/cunner', '/ws/taken')).rejects.toThrow(
+      'destination exists'
+    )
+  })
+})
+
 describe('removeWorktree', () => {
   const beforeRemoval =
     'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /repo-feature\nHEAD def456\nbranch refs/heads/feature/test\n'
-  const afterPrune = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
 
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
@@ -896,8 +1253,6 @@ describe('removeWorktree', () => {
   it('uses safe `branch -d` and preserves a branch with unmerged commits', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: beforeRemoval }) // list before
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree prune
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: afterPrune }) // list after prune
     // Git refuses to delete an unmerged branch with `-d`.
     gitExecFileAsyncMock.mockRejectedValueOnce(new Error('not fully merged')) // branch -d
 
@@ -914,8 +1269,6 @@ describe('removeWorktree', () => {
   it('deletes the branch when `branch -d` succeeds (fully merged)', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: beforeRemoval }) // list before
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree prune
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: afterPrune }) // list after prune
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // branch -d succeeds
 
     await removeWorktree('/repo', '/repo-feature', false)
@@ -925,6 +1278,43 @@ describe('removeWorktree', () => {
       '-d',
       '--',
       'feature/test'
+    ])
+  })
+
+  it('reuses known removed worktree metadata instead of relisting before removal', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // branch -d succeeds
+
+    await removeWorktree('/repo', '/repo-feature', false, {
+      knownRemovedWorktree: {
+        branch: 'refs/heads/feature/test',
+        head: 'def456'
+      }
+    })
+
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toEqual([
+      ['worktree', 'remove', '/repo-feature'],
+      ['branch', '-d', '--', 'feature/test']
+    ])
+  })
+
+  it('prunes and retries branch deletion only when Git reports a checked-out branch', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: beforeRemoval }) // list before
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
+    gitExecFileAsyncMock.mockRejectedValueOnce(
+      new Error("error: cannot delete branch 'feature/test' used by worktree at '/repo-stale'")
+    ) // branch -d hits stale worktree metadata
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree prune
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // branch -d retry succeeds
+
+    await expect(removeWorktree('/repo', '/repo-feature', false)).resolves.toEqual({})
+
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toEqual([
+      ['worktree', 'list', '--porcelain', '-z'],
+      ['worktree', 'remove', '/repo-feature'],
+      ['branch', '-d', '--', 'feature/test'],
+      ['worktree', 'prune'],
+      ['branch', '-d', '--', 'feature/test']
     ])
   })
 })

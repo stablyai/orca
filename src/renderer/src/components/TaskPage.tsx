@@ -3,6 +3,7 @@ task source controls, and GitHub task list co-located so the wiring between the
 selected repo, the task filters, and the work-item list stays readable in one
 place while this surface is still evolving. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import {
   AlertCircle,
@@ -19,11 +20,8 @@ import {
   ExternalLink,
   Eye,
   Files,
-  Github,
-  Gitlab,
   GitMerge,
   GitPullRequest,
-  LayoutGrid,
   List,
   LoaderCircle,
   Lock,
@@ -43,6 +41,12 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useAllWorktrees, useRepoMap } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
+import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import {
+  getSettingsFocusedExecutionHostId,
+  parseExecutionHostId
+} from '../../../shared/execution-host'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
@@ -81,7 +85,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
+import TaskProjectSourceCombobox from '@/components/task-project-source-combobox'
 import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
 import { LinearScopeSelector } from '@/components/linear-scope-selector'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
@@ -89,13 +93,30 @@ import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/I
 import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/IssueSourceSelector'
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
 import { reconcileLinearTeamSelection } from '@/components/task-page-linear-team-selection'
+import {
+  getTaskSourceAvailabilityNotice,
+  getTaskSourceContextSummary
+} from './task-source-context-summary'
+import type {
+  TaskSourceAvailabilityNotice,
+  TaskSourceHostAvailability
+} from './task-source-context-summary'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import {
   getGitHubPRPrimaryReviewer,
   getGitHubPRReviewLabel,
   normalizeGitHubReviewerLogins,
+  parseGitHubReviewerInputLogins,
   type GitHubPRPrimaryReviewer
 } from '@/components/github-pr-reviewer-display'
+import {
+  filterGitHubPRReviewerCandidates,
+  getGitHubPRReviewerQueryState
+} from '@/components/github/github-pr-reviewer-candidate-filter'
+import {
+  filterJiraProjectPickerProjects,
+  getJiraProjectPickerDisplayLabel as getJiraProjectDisplayLabel
+} from '@/components/jira-project-picker-filter'
 import {
   getLinearStateMarkerStyle,
   getLinearStatePillStyle
@@ -118,6 +139,12 @@ import GitHubItemDialog, { type ItemDialogTab } from '@/components/GitHubItemDia
 import PullRequestPage from '@/components/PullRequestPage'
 import GitLabItemDialog from '@/components/GitLabItemDialog'
 import ProjectViewWrapper from '@/components/github-project/ProjectViewWrapper'
+import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import {
+  buildExecutionHostRegistry,
+  type ExecutionHostRegistryEntry
+} from '../../../shared/execution-host-registry'
+import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
 import LinearIssueWorkspace from '@/components/LinearIssueWorkspace'
 import {
   LinearCollectionNotice,
@@ -130,14 +157,27 @@ import { JiraIcon } from '@/components/icons/JiraIcon'
 import { cn } from '@/lib/utils'
 import {
   getLinkedWorkItemSuggestedName,
-  getWorkspaceIntentName,
+  getLinkedWorkItemWorkspaceName,
   getTaskPresetQuery,
   PER_REPO_FETCH_LIMIT,
   CROSS_REPO_DISPLAY_LIMIT
 } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
+import {
+  readLinearBoardIssueDragData,
+  writeLinearBoardIssueDragData
+} from '@/lib/linear-board-drag-payload'
 import { isGitRepoKind } from '../../../shared/repo-kind'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
+import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  getTaskSourceCacheScope,
+  getTaskSourceRuntimeSettings,
+  normalizeTaskSourceContext,
+  type TaskSourceContext
+} from '../../../shared/task-source-context'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import {
   buildTaskPageRepoSourceState,
@@ -152,7 +192,18 @@ import {
   shouldReplaceTaskPageItemsAfterRefresh,
   type TaskPageRepoSourceState
 } from '@/components/task-page-cache-selectors'
+import { shouldHideTaskPageListChrome } from '@/components/task-page-list-chrome-visibility'
 import { findTaskPageJiraIssue } from '@/components/task-page-jira-cache-selectors'
+import { getRepoBackedTaskEmptyState } from '@/components/task-page-empty-state'
+import {
+  getDefaultTaskRepoSelection,
+  getTaskProjectPickerGroups,
+  normalizeTaskRepoSelection
+} from '@/components/task-page-default-repo-selection'
+import {
+  getRepoBackedProviderAvailability,
+  type RuntimeProviderPreflightStatus
+} from '@/components/task-source-provider-availability'
 import {
   createTaskPageGitHubStatusStateDraft,
   resolveTaskPageGitHubStatusStateDraft,
@@ -160,6 +211,7 @@ import {
 } from '@/components/task-page-github-status-state'
 import { deriveTaskPagePRCheckSummary } from '@/components/task-page-pr-check-summary'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
+import { buildJiraCreateTextAdf } from '@/components/jira-create-adf'
 import {
   GITHUB_PR_MERGE_METHOD_LABELS,
   resolveGitHubPRMergeMethods
@@ -188,6 +240,8 @@ import type {
   TaskProvider,
   TaskViewPresetId
 } from '../../../shared/types'
+import type { PreflightStatus } from '../../../preload/api-types'
+import type { GitLabProjectRef } from '../../../shared/gitlab-types'
 import {
   LINEAR_ISSUE_LIST_MAX,
   clampLinearIssueListLimit
@@ -203,6 +257,7 @@ import {
   useTeamLabels
 } from '@/hooks/useIssueMetadata'
 import {
+  linearCreateProject,
   linearCreateIssue,
   linearGetIssue,
   linearTeamStates,
@@ -221,23 +276,31 @@ import {
   restoreAvailableDefaultTaskProvider,
   resolveVisibleTaskProvider
 } from '../../../shared/task-providers'
-
-type TaskSource = TaskProvider
-
-type GitLabTaskFilter = 'opened' | 'merged' | 'closed' | 'all'
-type GitLabIssueFilter = 'opened' | 'assigned-to-me'
-
-const GITLAB_MR_FILTERS: { id: GitLabTaskFilter; label: string }[] = [
-  { id: 'opened', label: 'Open' },
-  { id: 'merged', label: 'Merged' },
-  { id: 'closed', label: 'Closed' },
-  { id: 'all', label: 'All' }
-]
-
-const GITLAB_ISSUE_FILTERS: { id: GitLabIssueFilter; label: string }[] = [
-  { id: 'opened', label: 'Open' },
-  { id: 'assigned-to-me', label: 'Assigned to me' }
-]
+import { translate } from '@/i18n/i18n'
+import {
+  getGitHubModeButtons,
+  getGitHubTaskKindPresets,
+  getGitLabIssueFilters,
+  getGitLabMRFilters,
+  getJiraPresets,
+  getLinearDisplayProperties,
+  getLinearGroupOptions,
+  getLinearModeOptions,
+  getLinearOrderOptions,
+  getLinearPriorityLabel,
+  getLinearViewOptions,
+  getSourceOptions,
+  type GitHubTaskKind,
+  type GitLabIssueFilter,
+  type GitLabTaskFilter,
+  type JiraPresetId,
+  LinearIcon,
+  type LinearDisplayProperty,
+  type LinearGroupBy,
+  type LinearMode,
+  type LinearOrderBy,
+  type LinearViewMode
+} from '@/components/task-page-localized-options'
 
 function isGitLabMRFilter(value: GitLabTaskFilter | GitLabIssueFilter): value is GitLabTaskFilter {
   return value === 'opened' || value === 'merged' || value === 'closed' || value === 'all'
@@ -248,75 +311,6 @@ function isGitLabIssueFilter(
 ): value is GitLabIssueFilter {
   return value === 'opened' || value === 'assigned-to-me'
 }
-type TaskQueryPreset = {
-  id: TaskViewPresetId
-  label: string
-  query: string
-}
-type GitHubTaskKind = 'issues' | 'prs'
-
-const ISSUE_TASK_QUERY_PRESETS: TaskQueryPreset[] = [
-  { id: 'issues', label: 'Open', query: getTaskPresetQuery('issues') },
-  { id: 'my-issues', label: 'Assigned to me', query: getTaskPresetQuery('my-issues') }
-]
-
-const PR_TASK_QUERY_PRESETS: TaskQueryPreset[] = [
-  { id: 'prs', label: 'Open', query: getTaskPresetQuery('prs') },
-  { id: 'my-prs', label: 'Mine', query: getTaskPresetQuery('my-prs') },
-  { id: 'review', label: 'Needs review', query: getTaskPresetQuery('review') }
-]
-
-function getGitHubTaskKindPresets(kind: GitHubTaskKind): TaskQueryPreset[] {
-  return kind === 'prs' ? PR_TASK_QUERY_PRESETS : ISSUE_TASK_QUERY_PRESETS
-}
-
-type SourceOption = {
-  id: TaskSource
-  label: string
-  Icon: (props: { className?: string }) => React.JSX.Element
-  disabled?: boolean
-}
-
-function LinearIcon({ className }: { className?: string }): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden className={className} fill="currentColor">
-      <path d="M2.886 4.18A11.982 11.982 0 0 1 11.99 0C18.624 0 24 5.376 24 12.009c0 3.64-1.62 6.903-4.18 9.105L2.887 4.18ZM1.817 5.626l16.556 16.556c-.524.33-1.075.62-1.65.866L.951 7.277c.247-.575.537-1.126.866-1.65ZM.322 9.163l14.515 14.515c-.71.172-1.443.282-2.195.322L0 11.358a12 12 0 0 1 .322-2.195Zm-.17 4.862 9.823 9.824a12.02 12.02 0 0 1-9.824-9.824Z" />
-    </svg>
-  )
-}
-
-const SOURCE_OPTIONS: SourceOption[] = [
-  {
-    id: 'github',
-    label: 'GitHub',
-    Icon: ({ className }) => <Github className={className} />
-  },
-  {
-    id: 'gitlab',
-    label: 'GitLab',
-    Icon: ({ className }) => <Gitlab className={className} />
-  },
-  {
-    id: 'linear',
-    label: 'Linear',
-    Icon: ({ className }) => <LinearIcon className={className} />
-  },
-  {
-    id: 'jira',
-    label: 'Jira',
-    Icon: ({ className }) => <JiraIcon className={className} />
-  }
-]
-
-type JiraPresetId = 'assigned' | 'reported' | 'all' | 'done'
-type JiraPreset = { id: JiraPresetId; label: string }
-
-const JIRA_PRESETS: JiraPreset[] = [
-  { id: 'assigned', label: 'Assigned' },
-  { id: 'reported', label: 'Reported' },
-  { id: 'all', label: 'All Open' },
-  { id: 'done', label: 'Done' }
-]
 
 const TASK_SEARCH_DEBOUNCE_MS = 300
 const LINEAR_ITEM_LIMIT = 36
@@ -333,36 +327,120 @@ const GITHUB_TASK_ROW_HOVER_SURFACE_CLASS =
   'group-hover/github-task-row:[background:color-mix(in_srgb,var(--muted)_70%,var(--background))]'
 
 function getGitHubWorkItemWorkspaceSeed(item: GitHubWorkItem): string {
-  return (
-    getWorkspaceIntentName({ workItem: item })?.seedName ?? getLinkedWorkItemSuggestedName(item)
-  )
+  return getLinkedWorkItemWorkspaceName(item)?.seedName ?? getLinkedWorkItemSuggestedName(item)
 }
 
 function getGitLabWorkItemWorkspaceSeed(item: GitLabWorkItem): string {
   return (
-    getWorkspaceIntentName({
-      workItem: {
-        type: item.type,
-        provider: 'gitlab',
-        number: item.number,
-        title: item.title
-      }
+    getLinkedWorkItemWorkspaceName({
+      type: item.type,
+      provider: 'gitlab',
+      number: item.number,
+      title: item.title
     })?.seedName ?? getLinkedWorkItemSuggestedName(item)
   )
 }
 
 function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
   return (
-    getWorkspaceIntentName({
-      workItem: {
-        type: 'issue',
-        provider: 'jira',
-        number: 0,
-        title: `${issue.key} ${issue.title}`,
-        jiraIdentifier: issue.key
-      }
+    getLinkedWorkItemWorkspaceName({
+      type: 'issue',
+      provider: 'jira',
+      number: 0,
+      title: `${issue.key} ${issue.title}`,
+      jiraIdentifier: issue.key
     })?.seedName ?? getLinkedWorkItemSuggestedName(issue)
   )
+}
+
+function getTaskPageRepoSourceContext(
+  repo: Repo | null | undefined,
+  provider: 'github' | 'gitlab',
+  gitlabProjectRef?: GitLabProjectRef | null
+): TaskSourceContext | null {
+  if (!repo) {
+    return null
+  }
+  const projection = projectHostSetupProjectionFromRepos([repo])
+  const project = projection.projects[0]
+  const setup = projection.setups[0]
+  const providerIdentity =
+    provider === 'github' && project?.providerIdentity?.provider === 'github'
+      ? project.providerIdentity
+      : provider === 'gitlab' && gitlabProjectRef
+        ? buildGitLabProviderIdentity(gitlabProjectRef)
+        : null
+  return normalizeTaskSourceContext({
+    provider,
+    projectId: setup?.projectId ?? project?.id ?? repo.id,
+    hostId: setup?.hostId ?? getRepoExecutionHostId(repo),
+    projectHostSetupId: setup?.id,
+    repoId: repo.id,
+    providerIdentity
+  })
+}
+
+function buildGitLabProviderIdentity(projectRef: GitLabProjectRef) {
+  const pathParts = projectRef.path
+    .split('/')
+    .map((part) => part.trim())
+    .filter(Boolean)
+  const projectName = pathParts.at(-1) ?? null
+  const namespace = pathParts.length > 1 ? pathParts.slice(0, -1).join('/') : null
+  return {
+    provider: 'gitlab' as const,
+    projectId: projectRef.path,
+    namespace,
+    project: projectName,
+    webUrl: `https://${projectRef.host}/${projectRef.path}`
+  }
+}
+
+function getTaskSourceHostAvailabilityForHost(
+  host: ExecutionHostRegistryEntry | null | undefined,
+  hostId: TaskSourceContext['hostId']
+): TaskSourceHostAvailability | null {
+  if (!host) {
+    return null
+  }
+  if (host.kind === 'runtime') {
+    if (!host.capabilities) {
+      return {
+        hostId,
+        reason: 'checking-task-source-capability'
+      }
+    }
+    if (!host.capabilities.includes(TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY)) {
+      return {
+        hostId,
+        reason: 'missing-task-source-capability'
+      }
+    }
+  }
+  if (host.health === 'local' || host.health === 'available') {
+    return null
+  }
+  return {
+    hostId,
+    health: host.health,
+    status: host.connectionStatus
+  }
+}
+
+function getTaskPageRepoCacheInput(repo: Repo): {
+  id: string
+  path: string
+  executionHostId?: string | null
+  sourceCacheScope?: string | null
+} {
+  const sourceContext = getTaskPageRepoSourceContext(repo, 'github')
+  return {
+    id: repo.id,
+    path: repo.path,
+    executionHostId: repo.executionHostId,
+    sourceCacheScope:
+      sourceContext?.provider === 'github' ? getTaskSourceCacheScope(sourceContext) : null
+  }
 }
 
 // Why: the row's px-3 left padding leaves a 12px gap between the scroll-viewport
@@ -386,14 +464,6 @@ const GITHUB_TASK_STICKY_TITLE_CELL_CLASS = cn(
   GITHUB_TASK_ROW_SURFACE_CLASS,
   GITHUB_TASK_ROW_HOVER_SURFACE_CLASS
 )
-
-type GitHubModeButton = { id: GitHubTaskKind | 'project'; label: string }
-
-const GITHUB_MODE_BUTTONS: GitHubModeButton[] = [
-  { id: 'issues', label: 'Issues' },
-  { id: 'prs', label: 'PRs' },
-  { id: 'project', label: 'Projects' }
-]
 
 function isPRFocusedTaskView(preset: TaskViewPresetId | null, query: string): boolean {
   if (preset === 'prs' || preset === 'my-prs' || preset === 'review') {
@@ -463,22 +533,7 @@ function formatRelativeTime(input: string): string {
   return relativeTimeFormatter.format(diffDays, 'day')
 }
 
-// Why: Linear encodes priority as an integer (0–4). Map to human-readable
-// labels so the table column is scannable without memorising the scale.
-const LINEAR_PRIORITY_LABELS: Record<number, string> = {
-  0: 'None',
-  1: 'Urgent',
-  2: 'High',
-  3: 'Medium',
-  4: 'Low'
-}
-
-type LinearViewMode = 'list' | 'board'
-type LinearMode = 'issues' | 'projects' | 'views'
 type LinearProjectTab = 'overview' | 'issues'
-type LinearGroupBy = 'none' | 'status' | 'assignee' | 'priority' | 'team'
-type LinearOrderBy = 'priority' | 'updated' | 'identifier'
-type LinearDisplayProperty = 'state' | 'priority' | 'assignee' | 'team' | 'labels' | 'updated'
 
 type LinearGroupSection = {
   key: string
@@ -490,50 +545,18 @@ type LinearIssueListRow =
   | { type: 'section'; key: string; label: string; count: number }
   | { type: 'issue'; issue: LinearIssue }
 
-const LINEAR_BOARD_DRAG_ISSUE_MIME = 'application/x-orca-linear-issue-id'
+const LINEAR_CUSTOM_VIEW_MODELS = ['issue', 'project'] satisfies readonly LinearCustomViewModel[]
 
-const LINEAR_MODE_OPTIONS: { id: LinearMode; label: string }[] = [
-  { id: 'issues', label: 'Issues' },
-  { id: 'projects', label: 'Projects' },
-  { id: 'views', label: 'Views' }
-]
-
-const LINEAR_CUSTOM_VIEW_MODEL_OPTIONS: { id: LinearCustomViewModel; label: string }[] = [
-  { id: 'issue', label: 'Issues' },
-  { id: 'project', label: 'Projects' }
-]
-
-const LINEAR_VIEW_OPTIONS: {
-  id: LinearViewMode
-  label: string
-  Icon: typeof List
-}[] = [
-  { id: 'list', label: 'List', Icon: List },
-  { id: 'board', label: 'Board', Icon: LayoutGrid }
-]
-
-const LINEAR_GROUP_OPTIONS: { id: LinearGroupBy; label: string }[] = [
-  { id: 'none', label: 'No grouping' },
-  { id: 'status', label: 'Status' },
-  { id: 'assignee', label: 'Assignee' },
-  { id: 'priority', label: 'Priority' },
-  { id: 'team', label: 'Team' }
-]
-
-const LINEAR_ORDER_OPTIONS: { id: LinearOrderBy; label: string }[] = [
-  { id: 'priority', label: 'Priority' },
-  { id: 'updated', label: 'Updated' },
-  { id: 'identifier', label: 'Identifier' }
-]
-
-const LINEAR_DISPLAY_PROPERTIES: { id: LinearDisplayProperty; label: string }[] = [
-  { id: 'state', label: 'Status' },
-  { id: 'priority', label: 'Priority' },
-  { id: 'assignee', label: 'Assignee' },
-  { id: 'team', label: 'Team' },
-  { id: 'labels', label: 'Labels' },
-  { id: 'updated', label: 'Updated' }
-]
+function mergeLinearCollectionResults<T>(
+  results: LinearCollectionResult<T>[]
+): LinearCollectionResult<T> {
+  const errors = results.flatMap((result) => result.errors ?? [])
+  return {
+    items: results.flatMap((result) => result.items),
+    ...(errors.length > 0 ? { errors } : {}),
+    ...(results.some((result) => result.hasMore) ? { hasMore: true } : {})
+  }
+}
 
 const DEFAULT_LINEAR_DISPLAY_PROPERTIES: LinearDisplayProperty[] = [
   'state',
@@ -543,10 +566,6 @@ const DEFAULT_LINEAR_DISPLAY_PROPERTIES: LinearDisplayProperty[] = [
   'labels',
   'updated'
 ]
-
-function getLinearPriorityLabel(priority: number): string {
-  return LINEAR_PRIORITY_LABELS[priority] ?? `P${priority}`
-}
 
 function getLinearStatusSectionState(section: LinearGroupSection): LinearIssue['state'] | null {
   if (!section.key.startsWith('status:')) {
@@ -567,14 +586,17 @@ function findLinearWorkflowStateForStatus(
 
 function LinearStateCell({
   issue,
-  className
+  className,
+  sourceContext
 }: {
   issue: LinearIssue
   className?: string
+  sourceContext?: TaskSourceContext | null
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const providerSettings = sourceContext ?? settings
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
-  const states = useTeamStates(issue.team.id, settings, issue.workspaceId)
+  const states = useTeamStates(issue.team.id, providerSettings, issue.workspaceId)
   const [open, setOpen] = useState(false)
   const [pending, setPending] = useState(false)
   const reqRef = useRef(0)
@@ -601,22 +623,29 @@ function LinearStateCell({
 
       setPending(true)
       patchLinearIssue(issue.id, { state: nextState })
-      void linearUpdateIssue(settings, issue.id, { stateId }, issue.workspaceId)
+      void linearUpdateIssue(providerSettings, issue.id, { stateId }, issue.workspaceId)
         .then((result) => {
           if (reqId !== reqRef.current) {
             return
           }
           if (result.ok === false) {
             patchLinearIssue(issue.id, { state: previousState })
-            toast.error(result.error ?? 'Failed to update Linear state')
+            toast.error(
+              result.error ??
+                translate('auto.components.TaskPage.6775c05483', 'Failed to update Linear state')
+            )
+            return
           }
+          useAppStore.getState().recordFeatureInteraction('linear-tasks')
         })
         .catch(() => {
           if (reqId !== reqRef.current) {
             return
           }
           patchLinearIssue(issue.id, { state: previousState })
-          toast.error('Failed to update Linear state')
+          toast.error(
+            translate('auto.components.TaskPage.6775c05483', 'Failed to update Linear state')
+          )
         })
         .finally(() => {
           if (reqId === reqRef.current) {
@@ -631,7 +660,7 @@ function LinearStateCell({
       issue.workspaceId,
       patchLinearIssue,
       pending,
-      settings,
+      providerSettings,
       states.data
     ]
   )
@@ -651,7 +680,11 @@ function LinearStateCell({
             ...getLinearStatePillStyle(issue.state.color),
             cursor: pending ? 'default' : 'pointer'
           }}
-          aria-label={`Change Linear state from ${issue.state.name}`}
+          aria-label={translate(
+            'auto.components.TaskPage.d45a910c4a',
+            'Change Linear state from {{value0}}',
+            { value0: issue.state.name }
+          )}
           aria-busy={pending || states.loading}
         >
           <span
@@ -676,7 +709,7 @@ function LinearStateCell({
         ) : states.loading ? (
           <div className="flex items-center gap-2 px-2 py-3 text-[12px] text-muted-foreground">
             <LoaderCircle className="size-3 animate-spin" />
-            Loading states
+            {translate('auto.components.TaskPage.cc13109b5d', 'Loading states')}
           </div>
         ) : states.data.length > 0 ? (
           states.data.map((state) => (
@@ -701,7 +734,7 @@ function LinearStateCell({
           ))
         ) : (
           <div className="px-2 py-3 text-center text-[12px] text-muted-foreground">
-            No states found
+            {translate('auto.components.TaskPage.afc68824ff', 'No states found')}
           </div>
         )}
       </PopoverContent>
@@ -750,7 +783,7 @@ function getLinearIssueGroup(
   if (groupBy === 'team') {
     return { key: `team:${issue.team.id}`, label: issue.team.name }
   }
-  return { key: 'all', label: 'Issues' }
+  return { key: 'all', label: translate('auto.components.TaskPage.dfc0c79bd8', 'Issues') }
 }
 
 function groupLinearIssues(
@@ -760,7 +793,13 @@ function groupLinearIssues(
 ): LinearGroupSection[] {
   const sorted = [...issues].sort((a, b) => compareLinearIssues(a, b, orderBy))
   if (groupBy === 'none') {
-    return [{ key: 'all', label: 'Issues', issues: sorted }]
+    return [
+      {
+        key: 'all',
+        label: translate('auto.components.TaskPage.dfc0c79bd8', 'Issues'),
+        issues: sorted
+      }
+    ]
   }
 
   const sections = new Map<string, LinearGroupSection>()
@@ -797,6 +836,10 @@ function getLinearIssueGridTemplate(visibleProperties: ReadonlySet<LinearDisplay
   return columns.join(' ')
 }
 
+function areStringSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  return a.size === b.size && [...a].every((value) => b.has(value))
+}
+
 function getJiraStatusTone(categoryKey: string): string {
   if (categoryKey === 'done') {
     return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
@@ -816,14 +859,6 @@ const jiraProjectLabelCollator = new Intl.Collator(undefined, {
   sensitivity: 'base'
 })
 
-function getJiraProjectDisplayLabel(project: JiraProject, includeSiteName: boolean): string {
-  const projectLabel = `${project.name} (${project.key})`
-  if (includeSiteName && project.siteName) {
-    return `${project.siteName} · ${projectLabel}`
-  }
-  return projectLabel
-}
-
 function compareJiraProjectsByDisplayLabel(
   a: JiraProject,
   b: JiraProject,
@@ -842,17 +877,6 @@ function compareJiraProjectsByDisplayLabel(
   return jiraProjectLabelCollator.compare(a.key, b.key)
 }
 
-function getJiraProjectSearchText(project: JiraProject, includeSiteName: boolean): string {
-  return [
-    getJiraProjectDisplayLabel(project, includeSiteName),
-    project.key,
-    project.name,
-    project.siteName ?? ''
-  ]
-    .join(' ')
-    .toLocaleLowerCase()
-}
-
 const JIRA_CREATE_SYSTEM_FIELD_KEYS = new Set(['project', 'issuetype', 'summary', 'description'])
 
 function isVisibleJiraCreateField(field: JiraCreateField): boolean {
@@ -869,17 +893,6 @@ function findJiraCreateAllowedValue(field: JiraCreateField, draftValue: string) 
   return field.allowedValues?.find((value) => {
     return value.id === draftValue || value.value === draftValue || value.name === draftValue
   })
-}
-
-function jiraCreateTextToAdf(text: string): Record<string, unknown> {
-  return {
-    type: 'doc',
-    version: 1,
-    content: text.split(/\r?\n/).map((line) => ({
-      type: 'paragraph',
-      content: line ? [{ type: 'text', text: line }] : []
-    }))
-  }
 }
 
 function getJiraCreateOptionPayload(
@@ -923,7 +936,7 @@ function buildJiraCreateFieldValue(field: JiraCreateField, draftValue: string): 
     return Number.isFinite(numberValue) ? numberValue : trimmed
   }
   if (field.schema?.custom?.includes(':textarea') || field.schema?.type === 'textarea') {
-    return jiraCreateTextToAdf(trimmed)
+    return buildJiraCreateTextAdf(trimmed)
   }
   return trimmed
 }
@@ -944,12 +957,27 @@ function buildJiraCreateCustomFields(
 
 function GHStatusCell({
   item,
-  repo
+  repo,
+  sourceContext
 }: {
   item: GitHubWorkItem
   repo: Repo | null
+  sourceContext?: TaskSourceContext | null
 }): React.JSX.Element {
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, repo?.id ?? null))
+  )
+  const sourceSettings = useMemo(
+    () =>
+      sourceContext?.provider === 'github'
+        ? ({
+            ...repoOwnerSettings,
+            ...getTaskSourceRuntimeSettings(sourceContext)
+          } as typeof repoOwnerSettings)
+        : repoOwnerSettings,
+    [repoOwnerSettings, sourceContext]
+  )
   const [statusStateDraft, setStatusStateDraft] = useState(() =>
     createTaskPageGitHubStatusStateDraft(item)
   )
@@ -980,19 +1008,22 @@ function GHStatusCell({
       reqRef.current += 1
       const reqId = reqRef.current
       updateLocalState(newState)
-      patchWorkItem(item.id, { state: newState }, item.repoId)
-      const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+      patchWorkItem(item.id, { state: newState }, item.repoId, { sourceContext })
+      const target = getActiveRuntimeTarget(sourceSettings)
+      const runtimeRepoId =
+        sourceContext?.provider === 'github' ? (sourceContext.repoId ?? repo.id) : repo.id
       const updatePromise =
         target.kind === 'environment'
           ? callRuntimeRpc<{ ok?: boolean; error?: string }>(
               target,
               'github.updateIssue',
-              { repo: repo.id, number: item.number, updates: { state: newState } },
+              { repo: runtimeRepoId, number: item.number, updates: { state: newState } },
               { timeoutMs: 30_000 }
             )
           : window.api.gh.updateIssue({
               repoPath: repo.path,
               repoId: repo.id,
+              sourceContext,
               number: item.number,
               updates: { state: newState }
             })
@@ -1007,27 +1038,40 @@ function GHStatusCell({
             patchWorkItem(
               item.id,
               { state: newState === 'closed' ? 'open' : 'closed' },
-              item.repoId
+              item.repoId,
+              { sourceContext }
             )
-            toast.error(typed.error ?? 'Failed to update state')
+            toast.error(
+              typed.error ??
+                translate('auto.components.TaskPage.1c893195ac', 'Failed to update state')
+            )
+            return
           }
+          useAppStore.getState().recordFeatureInteraction('github-tasks')
         })
         .catch(() => {
           if (reqId !== reqRef.current) {
             return
           }
           updateLocalState(newState === 'closed' ? 'open' : 'closed')
-          patchWorkItem(item.id, { state: newState === 'closed' ? 'open' : 'closed' }, item.repoId)
-          toast.error('Failed to update state')
+          patchWorkItem(
+            item.id,
+            { state: newState === 'closed' ? 'open' : 'closed' },
+            item.repoId,
+            {
+              sourceContext
+            }
+          )
+          toast.error(translate('auto.components.TaskPage.1c893195ac', 'Failed to update state'))
         })
     },
-    [item, localState, repo, patchWorkItem, updateLocalState]
+    [item, localState, patchWorkItem, repo, sourceContext, sourceSettings, updateLocalState]
   )
 
   if (item.type !== 'issue' || !repo) {
     return (
       <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 opacity-70 dark:text-emerald-200">
-        Open
+        {translate('auto.components.TaskPage.606a85c774', 'Open')}
       </span>
     )
   }
@@ -1045,7 +1089,9 @@ function GHStatusCell({
               : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
           )}
         >
-          {localState === 'closed' ? 'Closed' : 'Open'}
+          {localState === 'closed'
+            ? translate('auto.components.TaskPage.d09bf34db7', 'Closed')
+            : translate('auto.components.TaskPage.606a85c774', 'Open')}
           <ChevronDown className="size-2.5 opacity-50" />
         </button>
       </PopoverTrigger>
@@ -1062,7 +1108,7 @@ function GHStatusCell({
           )}
         >
           <CircleDot className="size-3 text-emerald-500" />
-          Open
+          {translate('auto.components.TaskPage.606a85c774', 'Open')}
         </button>
         <button
           type="button"
@@ -1076,7 +1122,7 @@ function GHStatusCell({
           )}
         >
           <CircleDot className="size-3 text-rose-500" />
-          Closed
+          {translate('auto.components.TaskPage.d09bf34db7', 'Closed')}
         </button>
       </PopoverContent>
     </Popover>
@@ -1192,7 +1238,9 @@ function GitHubIssueLabelSelector({
 
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <label className="text-[11px] font-medium text-muted-foreground">Labels</label>
+      <label className="text-[11px] font-medium text-muted-foreground">
+        {translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')}
+      </label>
       <Popover>
         <PopoverTrigger asChild>
           <Button
@@ -1202,7 +1250,9 @@ function GitHubIssueLabelSelector({
             className="h-auto min-h-9 justify-start gap-2 px-3 py-2 text-left"
           >
             {selectedLabels.length === 0 ? (
-              <span className="text-muted-foreground">None</span>
+              <span className="text-muted-foreground">
+                {translate('auto.components.TaskPage.5ebff3a0aa', 'None')}
+              </span>
             ) : (
               <span className="flex min-w-0 flex-wrap gap-1.5">
                 {selectedLabels.map((label) => (
@@ -1222,7 +1272,9 @@ function GitHubIssueLabelSelector({
           {error ? (
             <div className="px-2 py-2 text-xs text-destructive">{error}</div>
           ) : labels.length === 0 ? (
-            <div className="px-2 py-2 text-xs text-muted-foreground">No labels.</div>
+            <div className="px-2 py-2 text-xs text-muted-foreground">
+              {translate('auto.components.TaskPage.b36f4bf9de', 'No labels.')}
+            </div>
           ) : (
             labels.map((label) => (
               <button
@@ -1284,7 +1336,9 @@ function GitHubIssueAssigneeSelector({
 
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <label className="text-[11px] font-medium text-muted-foreground">Assignees</label>
+      <label className="text-[11px] font-medium text-muted-foreground">
+        {translate('auto.components.TaskPage.8aba10579d', 'Assignees')}
+      </label>
       <Popover>
         <PopoverTrigger asChild>
           <Button
@@ -1294,7 +1348,9 @@ function GitHubIssueAssigneeSelector({
             className="h-auto min-h-9 justify-start gap-2 px-3 py-2 text-left"
           >
             {selectedAssignees.length === 0 ? (
-              <span className="text-muted-foreground">Unassigned</span>
+              <span className="text-muted-foreground">
+                {translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
+              </span>
             ) : (
               <span className="flex min-w-0 items-center gap-1.5">
                 <span className="flex -space-x-1">
@@ -1314,7 +1370,9 @@ function GitHubIssueAssigneeSelector({
           {error ? (
             <div className="px-2 py-2 text-xs text-destructive">{error}</div>
           ) : assignees.length === 0 ? (
-            <div className="px-2 py-2 text-xs text-muted-foreground">No assignable users.</div>
+            <div className="px-2 py-2 text-xs text-muted-foreground">
+              {translate('auto.components.TaskPage.edf4bc4135', 'No assignable users.')}
+            </div>
           ) : (
             assignees.map((assignee) => {
               const selected = selectedLogins.has(assignee.login.toLowerCase())
@@ -1356,13 +1414,27 @@ function GitHubIssueAssigneeSelector({
 
 function GHAssigneesCell({
   item,
-  repo
+  repo,
+  sourceContext
 }: {
   item: GitHubWorkItem
   repo: Repo | null
+  sourceContext?: TaskSourceContext | null
 }): React.JSX.Element {
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
-  const settings = useAppStore((s) => s.settings)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, repo?.id ?? null))
+  )
+  const sourceSettings = useMemo(
+    () =>
+      sourceContext?.provider === 'github'
+        ? ({
+            ...repoOwnerSettings,
+            ...getTaskSourceRuntimeSettings(sourceContext)
+          } as typeof repoOwnerSettings)
+        : repoOwnerSettings,
+    [repoOwnerSettings, sourceContext]
+  )
   const [open, setOpen] = useState(false)
   const [pendingLogin, setPendingLogin] = useState<string | null>(null)
   const assignees = useMemo(() => item.assignees ?? [], [item.assignees])
@@ -1381,7 +1453,7 @@ function GHAssigneesCell({
     open ? owner : null,
     open ? repoName : null,
     seedLogins,
-    settings
+    sourceSettings
   )
 
   const toggleAssignee = useCallback(
@@ -1396,11 +1468,11 @@ function GHAssigneesCell({
         ? assignees.filter((a) => a.login.toLowerCase() !== userLoginKey)
         : [...assignees, user]
       setPendingLogin(user.login)
-      patchWorkItem(item.id, { assignees: nextAssignees }, item.repoId)
+      patchWorkItem(item.id, { assignees: nextAssignees }, item.repoId, { sourceContext })
 
       try {
         const updates = isOn ? { removeAssignees: [user.login] } : { addAssignees: [user.login] }
-        const target = getActiveRuntimeTarget(settings)
+        const target = getActiveRuntimeTarget(sourceSettings)
         if (owner && repoName) {
           const args = {
             owner,
@@ -1421,17 +1493,20 @@ function GHAssigneesCell({
             throw new Error(res.error.message)
           }
         } else if (repo) {
+          const runtimeRepoId =
+            sourceContext?.provider === 'github' ? (sourceContext.repoId ?? repo.id) : repo.id
           const res =
             target.kind === 'environment'
               ? await callRuntimeRpc<{ ok?: boolean; error?: string }>(
                   target,
                   'github.updateIssue',
-                  { repo: repo.id, number: item.number, updates },
+                  { repo: runtimeRepoId, number: item.number, updates },
                   { timeoutMs: 30_000 }
                 )
               : await window.api.gh.updateIssue({
                   repoPath: repo.path,
                   repoId: repo.id,
+                  sourceContext,
                   number: item.number,
                   updates
                 })
@@ -1441,9 +1516,14 @@ function GHAssigneesCell({
         } else {
           throw new Error('No GitHub repository context available for this issue.')
         }
+        useAppStore.getState().recordFeatureInteraction('github-tasks')
       } catch (err) {
-        patchWorkItem(item.id, { assignees: previousAssignees }, item.repoId)
-        toast.error(err instanceof Error ? err.message : 'Failed to update assignees.')
+        patchWorkItem(item.id, { assignees: previousAssignees }, item.repoId, { sourceContext })
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate('auto.components.TaskPage.ca63694b4c', 'Failed to update assignees.')
+        )
       } finally {
         setPendingLogin(null)
       }
@@ -1459,7 +1539,8 @@ function GHAssigneesCell({
       pendingLogin,
       repo,
       repoName,
-      settings
+      sourceContext,
+      sourceSettings
     ]
   )
 
@@ -1488,8 +1569,10 @@ function GHAssigneesCell({
           type="button"
           aria-label={
             assignees.length
-              ? `Assigned to ${assignees.map((a) => a.login).join(', ')}`
-              : 'Assign issue'
+              ? translate('auto.components.TaskPage.bb63046423', 'Assigned to {{value0}}', {
+                  value0: assignees.map((a) => a.login).join(', ')
+                })
+              : translate('auto.components.TaskPage.7f94eb6395', 'Assign issue')
           }
           aria-busy={pendingLogin !== null}
           onClick={(event) => event.stopPropagation()}
@@ -1515,13 +1598,19 @@ function GHAssigneesCell({
         onClick={(event) => event.stopPropagation()}
       >
         {!owner || !repoName ? (
-          <div className="px-2 py-2 text-xs text-muted-foreground">Issue has no repo slug.</div>
+          <div className="px-2 py-2 text-xs text-muted-foreground">
+            {translate('auto.components.TaskPage.53e002d895', 'Issue has no repo slug.')}
+          </div>
         ) : metadata.loading ? (
-          <div className="px-2 py-2 text-xs text-muted-foreground">Loading…</div>
+          <div className="px-2 py-2 text-xs text-muted-foreground">
+            {translate('auto.components.TaskPage.0eacf48491', 'Loading…')}
+          </div>
         ) : metadata.error ? (
           <div className="px-2 py-2 text-xs text-destructive">{metadata.error}</div>
         ) : metadata.data.length === 0 ? (
-          <div className="px-2 py-2 text-xs text-muted-foreground">No assignable users.</div>
+          <div className="px-2 py-2 text-xs text-muted-foreground">
+            {translate('auto.components.TaskPage.edf4bc4135', 'No assignable users.')}
+          </div>
         ) : (
           metadata.data.map((user) => {
             const isOn = assignees.some((a) => a.login.toLowerCase() === user.login.toLowerCase())
@@ -1656,10 +1745,12 @@ function buildRequestedReviewUsers(
 
 function PRReviewCell({
   item,
-  repo
+  repo,
+  sourceContext
 }: {
   item: GitHubWorkItem
   repo: Repo | null
+  sourceContext?: TaskSourceContext | null
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [reviewerInput, setReviewerInput] = useState('')
@@ -1674,7 +1765,19 @@ function PRReviewCell({
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const [activeReviewerCursor, setActiveReviewerCursor] = useState({ resetKey: '', index: 0 })
   const [submitting, setSubmitting] = useState(false)
-  const settings = useAppStore((s) => s.settings)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, repo?.id ?? null))
+  )
+  const sourceSettings = useMemo(
+    () =>
+      sourceContext?.provider === 'github'
+        ? ({
+            ...repoOwnerSettings,
+            ...getTaskSourceRuntimeSettings(sourceContext)
+          } as typeof repoOwnerSettings)
+        : repoOwnerSettings,
+    [repoOwnerSettings, sourceContext]
+  )
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
   const reviewerInputFocusFrameRef = useRef<number | null>(null)
 
@@ -1741,7 +1844,7 @@ function PRReviewCell({
     open && reviewSlug ? reviewSlug.owner : null,
     open && reviewSlug ? reviewSlug.repo : null,
     reviewerSeedUsers.map((user) => user.login),
-    settings
+    sourceSettings
   )
 
   const authorLogin = item.author?.toLowerCase() ?? null
@@ -1763,32 +1866,22 @@ function PRReviewCell({
       ),
     [localReviewRequests]
   )
-  const reviewerQuery = reviewerInput.trim().replace(/^@/, '').toLowerCase()
-  const filteredReviewerCandidates = useMemo(() => {
-    const query = reviewerQuery
-    return reviewerCandidates
-      .filter((user) => {
-        const login = user.login.toLowerCase()
-        return (
-          query.length === 0 ||
-          login.includes(query) ||
-          (user.name ?? '').toLowerCase().includes(query)
-        )
-      })
-      .sort((a, b) => {
-        const aLogin = a.login.toLowerCase()
-        const bLogin = b.login.toLowerCase()
-        const aStarts = aLogin.startsWith(query)
-        const bStarts = bLogin.startsWith(query)
-        if (aStarts !== bStarts) {
-          return aStarts ? -1 : 1
-        }
-        return a.login.localeCompare(b.login)
-      })
-  }, [reviewerCandidates, reviewerQuery])
+  const reviewerQueryState = useMemo(
+    () => getGitHubPRReviewerQueryState(reviewerInput),
+    [reviewerInput]
+  )
+  const reviewerQuery = reviewerQueryState.query
+  const filteredReviewerCandidates = useMemo(
+    () =>
+      filterGitHubPRReviewerCandidates({
+        candidates: reviewerCandidates,
+        queryState: reviewerQueryState
+      }),
+    [reviewerCandidates, reviewerQueryState]
+  )
   const suggestedReviewerRows = useMemo(
     () =>
-      reviewerQuery.length === 0
+      reviewerQuery.length === 0 && !reviewerQueryState.isTooLarge
         ? reviewerSeedUsers
             .filter((user) => !selectedReviewerLogins.has(user.login.toLowerCase()))
             .filter((user) => user.login.toLowerCase() !== authorLogin)
@@ -1799,6 +1892,7 @@ function PRReviewCell({
       authorLogin,
       reviewerCandidatesByLogin,
       reviewerQuery.length,
+      reviewerQueryState.isTooLarge,
       reviewerSeedUsers,
       selectedReviewerLogins
     ]
@@ -1834,7 +1928,11 @@ function PRReviewCell({
   )
 
   if (item.type !== 'pr') {
-    return <span className="text-[11px] text-muted-foreground">Issue</span>
+    return (
+      <span className="text-[11px] text-muted-foreground">
+        {translate('auto.components.TaskPage.b1eaa18ace', 'Issue')}
+      </span>
+    )
   }
 
   const itemWithLocalReviewRequests = { ...item, reviewRequests: localReviewRequests }
@@ -1850,49 +1948,57 @@ function PRReviewCell({
       return
     }
     const logins = normalizeGitHubReviewerLogins(
-      requestedLogins ?? reviewerInput.split(/[\s,]+/),
+      requestedLogins ?? parseGitHubReviewerInputLogins(reviewerInput),
       selectedReviewerLogins
     )
     if (logins.length === 0) {
-      toast.error('Enter a reviewer')
+      toast.error(translate('auto.components.TaskPage.d00571d9b1', 'Enter a reviewer'))
       return
     }
     if (localReviewRequests.length + logins.length > 15) {
-      toast.error('You can request up to 15 reviewers')
+      toast.error(
+        translate('auto.components.TaskPage.969e26577c', 'You can request up to 15 reviewers')
+      )
       return
     }
     setSubmitting(true)
     try {
-      const target = getActiveRuntimeTarget(settings)
+      const target = getActiveRuntimeTarget(sourceSettings)
+      const runtimeRepoId =
+        sourceContext?.provider === 'github' ? (sourceContext.repoId ?? repo.id) : repo.id
       const result =
         target.kind === 'environment'
           ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
               target,
               'github.requestPRReviewers',
-              { repo: repo.id, prNumber: item.number, reviewers: logins },
+              { repo: runtimeRepoId, prNumber: item.number, reviewers: logins },
               { timeoutMs: 30_000 }
             )
           : await window.api.gh.requestPRReviewers({
               repoPath: repo.path,
               repoId: repo.id,
+              sourceContext,
               prNumber: item.number,
               reviewers: logins
             })
       if (result.ok) {
-        toast.success('Reviewer requested')
+        toast.success(translate('auto.components.TaskPage.8f06dbb9e5', 'Reviewer requested'))
         const nextReviewRequests = buildRequestedReviewUsers(
           logins,
           reviewerCandidates,
           localReviewRequests
         )
         setLocalReviewRequests(nextReviewRequests)
-        patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId)
+        patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId, {
+          sourceContext
+        })
         setReviewerInput('')
+        useAppStore.getState().recordFeatureInteraction('github-tasks')
       } else {
         toast.error(result.error)
       }
     } catch {
-      toast.error('Failed to request reviewer')
+      toast.error(translate('auto.components.TaskPage.dc67f69962', 'Failed to request reviewer'))
     } finally {
       setSubmitting(false)
     }
@@ -1911,35 +2017,44 @@ function PRReviewCell({
     }
     setSubmitting(true)
     try {
-      const target = getActiveRuntimeTarget(settings)
+      const target = getActiveRuntimeTarget(sourceSettings)
+      const runtimeRepoId =
+        sourceContext?.provider === 'github' ? (sourceContext.repoId ?? repo.id) : repo.id
       const result =
         target.kind === 'environment'
           ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
               target,
               'github.removePRReviewers',
-              { repo: repo.id, prNumber: item.number, reviewers: logins },
+              { repo: runtimeRepoId, prNumber: item.number, reviewers: logins },
               { timeoutMs: 30_000 }
             )
           : await window.api.gh.removePRReviewers({
               repoPath: repo.path,
               repoId: repo.id,
+              sourceContext,
               prNumber: item.number,
               reviewers: logins
             })
       if (result.ok) {
-        toast.success(logins.length === 1 ? 'Reviewer removed' : 'Reviewers removed')
+        toast.success(
+          logins.length === 1
+            ? translate('auto.components.TaskPage.f9191d1714', 'Reviewer removed')
+            : translate('auto.components.TaskPage.837bb901ec', 'Reviewers removed')
+        )
         const removed = new Set(logins.map((login) => login.toLowerCase()))
         const nextReviewRequests = localReviewRequests.filter(
           (reviewer) => !removed.has(reviewer.login.toLowerCase())
         )
         setLocalReviewRequests(nextReviewRequests)
-        patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId)
+        patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId, {
+          sourceContext
+        })
         setReviewerInput('')
       } else {
         toast.error(result.error)
       }
     } catch {
-      toast.error('Failed to remove reviewer')
+      toast.error(translate('auto.components.TaskPage.ed1daeb49a', 'Failed to remove reviewer'))
     } finally {
       setSubmitting(false)
     }
@@ -2009,7 +2124,10 @@ function PRReviewCell({
           </span>
           {options.suggested ? (
             <span className="block truncate text-[12px] leading-4 text-muted-foreground">
-              Recently active in this pull request
+              {translate(
+                'auto.components.TaskPage.5d4fd69a6a',
+                'Recently active in this pull request'
+              )}
             </span>
           ) : null}
         </span>
@@ -2042,7 +2160,7 @@ function PRReviewCell({
       >
         <div className="border-b border-border/70 px-3 py-2">
           <div className="text-[13px] font-semibold text-foreground">
-            Request up to 15 reviewers
+            {translate('auto.components.TaskPage.62c7bd789f', 'Request up to 15 reviewers')}
           </div>
         </div>
         <div className="border-b border-border/70 p-3">
@@ -2050,10 +2168,10 @@ function PRReviewCell({
             ref={setReviewerInputNode}
             value={reviewerInput}
             onChange={(event) => setReviewerInput(event.target.value)}
-            placeholder="Type or choose a user"
+            placeholder={translate('auto.components.TaskPage.0b9b04f4b5', 'Type or choose a user')}
             disabled={!repo || submitting}
             className="h-8 rounded-md bg-background px-2 text-[13px]"
-            aria-label="Type or choose a user"
+            aria-label={translate('auto.components.TaskPage.0b9b04f4b5', 'Type or choose a user')}
             aria-autocomplete="list"
             onKeyDown={(event) => {
               if (event.key === 'ArrowDown' && actionableReviewerRows.length > 0) {
@@ -2088,13 +2206,15 @@ function PRReviewCell({
         </div>
         <div className="max-h-[300px] overflow-y-auto scrollbar-sleek">
           {reviewerMetadata.loading ? (
-            <div className="px-3 py-2 text-[13px] text-muted-foreground">Loading…</div>
+            <div className="px-3 py-2 text-[13px] text-muted-foreground">
+              {translate('auto.components.TaskPage.0eacf48491', 'Loading…')}
+            </div>
           ) : filteredReviewerCandidates.length > 0 ? (
             <>
               {suggestedReviewerRows.length > 0 ? (
                 <>
                   <div className="border-b border-border/70 bg-muted/50 px-3 py-1.5 text-[12px] font-semibold text-foreground">
-                    Suggestions
+                    {translate('auto.components.TaskPage.3ace2e6bcf', 'Suggestions')}
                   </div>
                   {suggestedReviewerRows.map((reviewer, index) =>
                     renderReviewerPickerRow(reviewer, { suggested: true, activeIndex: index })
@@ -2102,7 +2222,7 @@ function PRReviewCell({
                 </>
               ) : null}
               <div className="border-b border-border/70 bg-muted/50 px-3 py-1.5 text-[12px] font-semibold text-foreground">
-                Everyone else
+                {translate('auto.components.TaskPage.67755a83a1', 'Everyone else')}
               </div>
               {everyoneElseReviewerRows.length > 0 ? (
                 everyoneElseReviewerRows.map((reviewer, index) =>
@@ -2113,7 +2233,7 @@ function PRReviewCell({
                 )
               ) : (
                 <div className="px-3 py-2 text-[13px] text-muted-foreground">
-                  No matching reviewers.
+                  {translate('auto.components.TaskPage.8a22eb3f7b', 'No matching reviewers.')}
                 </div>
               )}
             </>
@@ -2121,8 +2241,11 @@ function PRReviewCell({
             <div className="px-3 py-2 text-[13px] text-muted-foreground">
               {reviewerMetadata.error ??
                 (hasReviewerMetadata
-                  ? 'No matching reviewers.'
-                  : 'Open the PR details to view current reviewers.')}
+                  ? translate('auto.components.TaskPage.8a22eb3f7b', 'No matching reviewers.')
+                  : translate(
+                      'auto.components.TaskPage.9e03c17847',
+                      'Open the PR details to view current reviewers.'
+                    ))}
             </div>
           )}
         </div>
@@ -2167,7 +2290,11 @@ function PRChecksCell({
   }, [item.checksSummary, item.type, onLoadChecks])
 
   if (item.type !== 'pr') {
-    return <span className="text-[11px] text-muted-foreground">Issue</span>
+    return (
+      <span className="text-[11px] text-muted-foreground">
+        {translate('auto.components.TaskPage.b1eaa18ace', 'Issue')}
+      </span>
+    )
   }
   const summary = item.checksSummary
   const Icon =
@@ -2201,7 +2328,7 @@ function PRChecksCell({
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
-        Open PR checks
+        {translate('auto.components.TaskPage.995dd6af9b', 'Open PR checks')}
       </TooltipContent>
     </Tooltip>
   )
@@ -2210,16 +2337,35 @@ function PRChecksCell({
 function PRMergeCell({
   item,
   repo,
+  sourceContext,
   onRefresh
 }: {
   item: GitHubWorkItem
   repo: Repo | null
+  sourceContext?: TaskSourceContext | null
   onRefresh: () => void
 }): React.JSX.Element {
   const [merging, setMerging] = useState(false)
   const confirm = useConfirmationDialog()
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, repo?.id ?? null))
+  )
+  const sourceSettings = useMemo(
+    () =>
+      sourceContext?.provider === 'github'
+        ? ({
+            ...repoOwnerSettings,
+            ...getTaskSourceRuntimeSettings(sourceContext)
+          } as typeof repoOwnerSettings)
+        : repoOwnerSettings,
+    [repoOwnerSettings, sourceContext]
+  )
   if (item.type !== 'pr') {
-    return <span className="text-[11px] text-muted-foreground">Issue</span>
+    return (
+      <span className="text-[11px] text-muted-foreground">
+        {translate('auto.components.TaskPage.b1eaa18ace', 'Issue')}
+      </span>
+    )
   }
   const mergePresentation = presentGitHubPRMergeState(item)
   const mergeMethods = resolveGitHubPRMergeMethods(item.mergeMethodSettings)
@@ -2231,8 +2377,14 @@ function PRMergeCell({
     }
     const label = GITHUB_PR_MERGE_METHOD_LABELS[method]
     const confirmed = await confirm({
-      title: `${label} PR #${item.number}?`,
-      description: 'This will update the pull request on GitHub.',
+      title: translate('auto.components.TaskPage.844dc193c7', '{{value0}} PR #{{value1}}?', {
+        value0: label,
+        value1: item.number
+      }),
+      description: translate(
+        'auto.components.TaskPage.0506a78337',
+        'This will update the pull request on GitHub.'
+      ),
       confirmLabel: label
     })
     if (!confirmed) {
@@ -2240,21 +2392,39 @@ function PRMergeCell({
     }
     setMerging(true)
     try {
-      const result = await window.api.gh.mergePR({
-        repoPath: repo.path,
-        repoId: repo.id,
-        prNumber: item.number,
-        method,
-        prRepo: item.prRepo ?? null
-      })
+      const target = getActiveRuntimeTarget(sourceSettings)
+      const runtimeRepoId =
+        sourceContext?.provider === 'github' ? (sourceContext.repoId ?? repo.id) : repo.id
+      const result =
+        target.kind === 'environment'
+          ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
+              target,
+              'github.mergePR',
+              {
+                repo: runtimeRepoId,
+                prNumber: item.number,
+                method,
+                prRepo: item.prRepo ?? null
+              },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.mergePR({
+              repoPath: repo.path,
+              repoId: repo.id,
+              sourceContext,
+              prNumber: item.number,
+              method,
+              prRepo: item.prRepo ?? null
+            })
       if (result.ok) {
-        toast.success('Pull request merged')
+        useAppStore.getState().recordFeatureInteraction('github-tasks')
+        toast.success(translate('auto.components.TaskPage.a161925adc', 'Pull request merged'))
         onRefresh()
       } else {
         toast.error(result.error)
       }
     } catch {
-      toast.error('Failed to merge pull request')
+      toast.error(translate('auto.components.TaskPage.88f478cdef', 'Failed to merge pull request'))
     } finally {
       setMerging(false)
     }
@@ -2267,21 +2437,49 @@ function PRMergeCell({
     const enabled = mergePresentation.autoMergeAction.kind === 'enable'
     setMerging(true)
     try {
-      const result = await window.api.gh.setPRAutoMerge({
-        repoPath: repo.path,
-        repoId: repo.id,
-        prNumber: item.number,
-        enabled,
-        prRepo: item.prRepo ?? null
-      })
+      const target = getActiveRuntimeTarget(sourceSettings)
+      const runtimeRepoId =
+        sourceContext?.provider === 'github' ? (sourceContext.repoId ?? repo.id) : repo.id
+      const result =
+        target.kind === 'environment'
+          ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
+              target,
+              'github.setPRAutoMerge',
+              {
+                repo: runtimeRepoId,
+                prNumber: item.number,
+                enabled,
+                method: enabled ? mergeMethods.defaultMethod : undefined,
+                prRepo: item.prRepo ?? null
+              },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.setPRAutoMerge({
+              repoPath: repo.path,
+              repoId: repo.id,
+              sourceContext,
+              prNumber: item.number,
+              enabled,
+              method: enabled ? mergeMethods.defaultMethod : undefined,
+              prRepo: item.prRepo ?? null
+            })
       if (result.ok) {
-        toast.success(enabled ? 'Auto-merge enabled' : 'Auto-merge disabled')
+        useAppStore.getState().recordFeatureInteraction('github-tasks')
+        toast.success(
+          enabled
+            ? translate('auto.components.TaskPage.fed317634c', 'Auto-merge enabled')
+            : translate('auto.components.TaskPage.a5bf86defe', 'Auto-merge disabled')
+        )
         onRefresh()
       } else {
         toast.error(result.error)
       }
     } catch {
-      toast.error(enabled ? 'Failed to enable auto-merge' : 'Failed to disable auto-merge')
+      toast.error(
+        enabled
+          ? translate('auto.components.TaskPage.a3318684bc', 'Failed to enable auto-merge')
+          : translate('auto.components.TaskPage.1a9ea003dc', 'Failed to disable auto-merge')
+      )
     } finally {
       setMerging(false)
     }
@@ -2334,7 +2532,7 @@ function PRMergeCell({
         ))}
         <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
           <ExternalLink className="size-4" />
-          Open GitHub merge box
+          {translate('auto.components.TaskPage.37d60046e3', 'Open GitHub merge box')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -2389,18 +2587,18 @@ function PaginationBar({
 
   return (
     <nav
-      aria-label="Pagination"
+      aria-label={translate('auto.components.TaskPage.e65757a338', 'Pagination')}
       className="flex items-center justify-center gap-1 border-t border-border/50 px-4 py-3"
     >
       <button
         type="button"
         disabled={currentPage === 0 || loadingTarget !== null}
         onClick={() => onPageChange(currentPage - 1)}
-        aria-label="Previous page"
+        aria-label={translate('auto.components.TaskPage.6cd6b3ae6a', 'Previous page')}
         className={btnClass}
       >
         <ChevronLeft className="size-4" />
-        Previous
+        {translate('auto.components.TaskPage.297a805b64', 'Previous')}
       </button>
 
       {pageNumbers.map((entry, idx) =>
@@ -2410,7 +2608,7 @@ function PaginationBar({
             aria-hidden
             className="inline-flex size-8 items-center justify-center text-sm text-muted-foreground"
           >
-            &hellip;
+            {translate('auto.components.TaskPage.cd171f3391', '...')}
           </span>
         ) : (
           <button
@@ -2418,7 +2616,9 @@ function PaginationBar({
             type="button"
             disabled={loadingTarget !== null && loadingTarget !== entry}
             onClick={() => onPageChange(entry)}
-            aria-label={`Page ${entry + 1}`}
+            aria-label={translate('auto.components.TaskPage.ae859c816b', 'Page {{value0}}', {
+              value0: entry + 1
+            })}
             aria-current={entry === currentPage ? 'page' : undefined}
             className={numClass(entry)}
           >
@@ -2435,10 +2635,10 @@ function PaginationBar({
         type="button"
         disabled={currentPage >= totalPages - 1 || loadingTarget !== null}
         onClick={() => onPageChange(currentPage + 1)}
-        aria-label="Next page"
+        aria-label={translate('auto.components.TaskPage.0c8df28045', 'Next page')}
         className={btnClass}
       >
-        Next
+        {translate('auto.components.TaskPage.b73717af92', 'Next')}
         <ChevronRight className="size-4" />
       </button>
     </nav>
@@ -2454,21 +2654,22 @@ const hasDivergentSources = (
   sources: { issues: GitHubOwnerRepo; prs: GitHubOwnerRepo }
 } => !!s.sources?.issues && !!s.sources.prs && !sameGitHubOwnerRepo(s.sources.issues, s.sources.prs)
 
-// Why: the selector keeps rendering even after the user picks 'origin' (which
-// collapses `sources.issues` onto origin). Upstream-candidate divergence is
-// the right render gate — a repo that has an `upstream` remote pointing
-// somewhere different from origin is always a candidate for the toggle,
-// regardless of the current effective preference.
+// Why: the selector keeps rendering even after the user picks 'upstream' (which
+// makes effective `sources.prs` point at upstream). Raw-candidate divergence is the
+// right render gate — a repo that has an `upstream` remote pointing somewhere
+// different from origin is always a candidate for the toggle, regardless of
+// the current effective preference.
 const hasUpstreamCandidateDivergence = (
   s: TaskPageRepoSourceState
 ): s is TaskPageRepoSourceState & {
-  sources: { prs: GitHubOwnerRepo; upstreamCandidate: GitHubOwnerRepo }
+  sources: { originCandidate: GitHubOwnerRepo; upstreamCandidate: GitHubOwnerRepo }
 } =>
-  !!s.sources?.prs &&
+  !!s.sources?.originCandidate &&
   !!s.sources.upstreamCandidate &&
-  !sameGitHubOwnerRepo(s.sources.prs, s.sources.upstreamCandidate)
+  !sameGitHubOwnerRepo(s.sources.originCandidate, s.sources.upstreamCandidate)
 
 export default function TaskPage(): React.JSX.Element {
+  useTranslation()
   const settings = useAppStore((s) => s.settings)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const taskResumeState = useAppStore((s) => s.taskResumeState)
@@ -2478,6 +2679,10 @@ export default function TaskPage(): React.JSX.Element {
   const closeTaskPage = useAppStore((s) => s.closeTaskPage)
   const activeModal = useAppStore((s) => s.activeModal)
   const repos = useAppStore((s) => s.repos)
+  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const repoMap = useRepoMap()
   const allWorktrees = useAllWorktrees()
   const openModal = useAppStore((s) => s.openModal)
@@ -2493,8 +2698,10 @@ export default function TaskPage(): React.JSX.Element {
   const workItemsInvalidationNonce = useAppStore((s) => s.workItemsInvalidationNonce)
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
+  const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
+  const preflightStatusContextKey = useAppStore((s) => s.preflightStatusContextKey)
   const selectLinearWorkspace = useAppStore((s) => s.selectLinearWorkspace)
   const searchLinearIssues = useAppStore((s) => s.searchLinearIssues)
   const listLinearIssues = useAppStore((s) => s.listLinearIssues)
@@ -2513,13 +2720,27 @@ export default function TaskPage(): React.JSX.Element {
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
+  const expectedPreflightContextKey = useAppStore((s) =>
+    localPreflightContextKey(getLocalPreflightContext(s))
+  )
   const jiraStatus = useAppStore((s) => s.jiraStatus)
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
+  const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
   const connectJira = useAppStore((s) => s.connectJira)
   const selectJiraSite = useAppStore((s) => s.selectJiraSite)
   const searchJiraIssues = useAppStore((s) => s.searchJiraIssues)
   const listJiraIssues = useAppStore((s) => s.listJiraIssues)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
+  const providerRuntimeContextKeyRef = useRef(providerRuntimeContextKey)
+  providerRuntimeContextKeyRef.current = providerRuntimeContextKey
+  const linearStatusCurrent = linearStatusContextKey === providerRuntimeContextKey
+  const jiraStatusCurrent = jiraStatusContextKey === providerRuntimeContextKey
+  const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
+  const linearStatusReady = linearStatusCurrent && linearStatusChecked
+  const jiraStatusReady = jiraStatusCurrent && jiraStatusChecked
+  const linearConnected = linearStatusCurrent && linearStatus.connected
+  const jiraConnected = jiraStatusCurrent && jiraStatus.connected
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
 
@@ -2537,27 +2758,33 @@ export default function TaskPage(): React.JSX.Element {
     if (Array.isArray(persisted)) {
       const filtered = persisted.filter((id) => eligibleRepos.some((r) => r.id === id))
       if (filtered.length > 0) {
-        return new Set(filtered)
+        return normalizeTaskRepoSelection(eligibleRepos, new Set(filtered))
       }
       // Why: empty after filtering (e.g. all persisted repos were removed)
-      // falls through to "all eligible" so the page never renders with an
-      // empty selection — see the multi-combobox invariant.
+      // falls through to the automatic default so the page never renders with
+      // an empty selection — see the multi-combobox invariant.
     }
-    return new Set(eligibleRepos.map((r) => r.id))
+    return getDefaultTaskRepoSelection(eligibleRepos)
   }, [eligibleRepos, pageData.preselectedRepoId, settings?.defaultRepoSelection])
 
   const [repoSelection, setRepoSelection] = useState<ReadonlySet<string>>(resolvedInitialSelection)
+  const taskPickerGroups = useMemo(
+    () => getTaskProjectPickerGroups(eligibleRepos, repoSelection),
+    [eligibleRepos, repoSelection]
+  )
+  const taskPickerRepos = useMemo(
+    () => taskPickerGroups.map((group) => group.repo),
+    [taskPickerGroups]
+  )
 
   // Why: prune selection when a previously-selected repo is removed, and
-  // preserve sticky-all (when the selection equaled every eligible repo
-  // pre-change, keep it equal to every eligible repo post-change so "All
-  // repos" stays truthful). Recreating the Set every time eligibleRepos
-  // changes would churn the fetch effect — only write when the identity of
-  // the selection actually needs to change.
-  const prevEligibleCountRef = useRef(eligibleRepos.length)
+  // preserve sticky-all (when the selection equaled every logical project
+  // pre-change, keep it equal to every logical project post-change). Recreating
+  // the Set every time eligibleRepos changes would churn the fetch effect.
+  const prevTaskPickerCountRef = useRef(taskPickerRepos.length)
   useEffect(() => {
-    const prevCount = prevEligibleCountRef.current
-    prevEligibleCountRef.current = eligibleRepos.length
+    const prevCount = prevTaskPickerCountRef.current
+    prevTaskPickerCountRef.current = taskPickerRepos.length
     const eligibleIds = new Set(eligibleRepos.map((r) => r.id))
     const wasAll = repoSelection.size === prevCount && prevCount > 0
     const pruned = new Set<string>()
@@ -2567,20 +2794,20 @@ export default function TaskPage(): React.JSX.Element {
       }
     }
     if (wasAll) {
-      const allNow = new Set(eligibleIds)
-      if (allNow.size !== repoSelection.size || [...allNow].some((id) => !repoSelection.has(id))) {
+      const allNow = new Set(taskPickerRepos.map((repo) => repo.id))
+      if (!areStringSetsEqual(allNow, repoSelection)) {
         setRepoSelection(allNow)
       }
       return
     }
-    if (pruned.size === 0 && eligibleIds.size > 0) {
-      setRepoSelection(new Set(eligibleIds))
+    if (pruned.size === 0 && eligibleIds.size === 0) {
       return
     }
-    if (pruned.size !== repoSelection.size) {
-      setRepoSelection(pruned)
+    const normalized = normalizeTaskRepoSelection(eligibleRepos, pruned)
+    if (!areStringSetsEqual(normalized, repoSelection)) {
+      setRepoSelection(normalized)
     }
-  }, [eligibleRepos, repoSelection])
+  }, [eligibleRepos, repoSelection, taskPickerRepos])
 
   const selectedRepos = useMemo(
     () => eligibleRepos.filter((r) => repoSelection.has(r.id)),
@@ -2604,6 +2831,10 @@ export default function TaskPage(): React.JSX.Element {
   const jiraSites = jiraStatus.sites ?? []
   const selectedJiraSiteId =
     jiraStatus.selectedSiteId ?? jiraStatus.activeSiteId ?? jiraSites[0]?.id ?? null
+  const selectedJiraSite =
+    selectedJiraSiteId && selectedJiraSiteId !== 'all'
+      ? (jiraSites.find((site) => site.id === selectedJiraSiteId) ?? null)
+      : null
   const preferredVisibleTaskProviders = useMemo(
     () => normalizeVisibleTaskProviders(settings?.visibleTaskProviders),
     [settings?.visibleTaskProviders]
@@ -2614,21 +2845,32 @@ export default function TaskPage(): React.JSX.Element {
       restoreAvailableDefaultTaskProvider(
         preferredVisibleTaskProviders,
         {
-          gitlabInstalled: preflightStatus?.glab?.installed === true,
-          linearConnected: linearStatus.connected === true
+          gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
+          linearConnected: linearConnected === true
         },
         defaultTaskSource
       ),
     [
       defaultTaskSource,
-      linearStatus.connected,
+      linearConnected,
       preferredVisibleTaskProviders,
+      preflightStatusCurrent,
       preflightStatus?.glab?.installed
     ]
   )
+  const sourceOptions = getSourceOptions()
+  const githubModeButtons = getGitHubModeButtons()
+  const linearModeOptions = getLinearModeOptions()
+  const jiraPresets = getJiraPresets()
+  const gitLabIssueFilters = getGitLabIssueFilters()
+  const gitLabMRFilters = getGitLabMRFilters()
+  const linearViewOptions = getLinearViewOptions()
+  const linearGroupOptions = getLinearGroupOptions()
+  const linearOrderOptions = getLinearOrderOptions()
+  const linearDisplayPropertyOptions = getLinearDisplayProperties()
   const visibleSourceOptions = useMemo(
-    () => SOURCE_OPTIONS.filter((source) => visibleTaskProviders.includes(source.id)),
-    [visibleTaskProviders]
+    () => sourceOptions.filter((source) => visibleTaskProviders.includes(source.id)),
+    [sourceOptions, visibleTaskProviders]
   )
   const hideTaskSource = useCallback(
     (provider: TaskProvider, label: string) => {
@@ -2648,7 +2890,11 @@ export default function TaskPage(): React.JSX.Element {
         visibleTaskProviders: nextVisibleTaskProviders,
         defaultTaskSource: nextDefaultTaskSource
       }).catch(() => {
-        toast.error(`Failed to hide ${label}.`)
+        toast.error(
+          translate('auto.components.TaskPage.e9139db03f', 'Failed to hide {{value0}}.', {
+            value0: label
+          })
+        )
       })
     },
     [defaultTaskSource, preferredVisibleTaskProviders, updateSettings]
@@ -2663,8 +2909,367 @@ export default function TaskPage(): React.JSX.Element {
   const initialTaskQuery = getTaskPresetQuery(defaultTaskViewPreset)
 
   const preferredTaskSource = pageData.taskSource ?? defaultTaskSource
-  const [taskSource, setTaskSource] = useState<TaskSource>(
+  const [taskSource, setTaskSource] = useState<TaskProvider>(
     resolveVisibleTaskProvider(preferredTaskSource, visibleTaskProviders)
+  )
+  const runtimePreflightMountedRef = useRef(true)
+  const runtimePreflightRequestedHostIdsRef = useRef<Set<TaskSourceContext['hostId']>>(new Set())
+  const [runtimePreflightStatusByHostId, setRuntimePreflightStatusByHostId] = useState<
+    ReadonlyMap<TaskSourceContext['hostId'], RuntimeProviderPreflightStatus>
+  >(() => new Map())
+  useEffect(
+    () => () => {
+      runtimePreflightMountedRef.current = false
+    },
+    []
+  )
+  const taskSourceRepoContexts = useMemo(
+    () =>
+      taskSource === 'github' || taskSource === 'gitlab'
+        ? selectedRepos
+            .map((repo) => getTaskPageRepoSourceContext(repo, taskSource))
+            .filter((context): context is TaskSourceContext => context !== null)
+        : [],
+    [selectedRepos, taskSource]
+  )
+  const hostRegistryById = useMemo(
+    () =>
+      new Map(
+        buildExecutionHostRegistry({
+          repos,
+          settings,
+          sshTargetLabels,
+          sshConnectionStates,
+          runtimeEnvironments,
+          runtimeStatusByEnvironmentId,
+          hostLabelOverrides: getHostDisplayLabelOverrides(settings)
+        }).map((host) => [host.id, host])
+      ),
+    [
+      repos,
+      settings,
+      sshConnectionStates,
+      sshTargetLabels,
+      runtimeEnvironments,
+      runtimeStatusByEnvironmentId
+    ]
+  )
+  const hostLabelById = useMemo(
+    () => new Map([...hostRegistryById].map(([hostId, host]) => [hostId, host.label])),
+    [hostRegistryById]
+  )
+  const runtimeTaskSourceHostIds = useMemo(() => {
+    if (taskSource !== 'github' && taskSource !== 'gitlab') {
+      return []
+    }
+    const hostIds = new Set<TaskSourceContext['hostId']>()
+    for (const context of taskSourceRepoContexts) {
+      const parsed = parseExecutionHostId(context.hostId)
+      if (parsed?.kind !== 'runtime') {
+        continue
+      }
+      const host = hostRegistryById.get(context.hostId)
+      if (
+        host?.kind !== 'runtime' ||
+        host.health !== 'available' ||
+        !host.capabilities?.includes(TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY)
+      ) {
+        continue
+      }
+      hostIds.add(parsed.id)
+    }
+    return [...hostIds].sort()
+  }, [hostRegistryById, taskSource, taskSourceRepoContexts])
+  useEffect(() => {
+    const unrequestedHostIds = runtimeTaskSourceHostIds.filter(
+      (hostId) => !runtimePreflightRequestedHostIdsRef.current.has(hostId)
+    )
+    if (unrequestedHostIds.length === 0) {
+      return
+    }
+    setRuntimePreflightStatusByHostId((current) => {
+      const next = new Map(current)
+      for (const hostId of unrequestedHostIds) {
+        next.set(hostId, { checked: false, status: null })
+      }
+      return next
+    })
+    for (const hostId of unrequestedHostIds) {
+      runtimePreflightRequestedHostIdsRef.current.add(hostId)
+      const parsed = parseExecutionHostId(hostId)
+      if (parsed?.kind !== 'runtime') {
+        continue
+      }
+      // Why: task sources can span multiple runtime hosts; each runtime owns
+      // its own gh/glab installation and auth state.
+      void callRuntimeRpc<PreflightStatus>(
+        { kind: 'environment', environmentId: parsed.environmentId },
+        'preflight.check',
+        undefined,
+        { timeoutMs: 15_000 }
+      )
+        .then((status) => {
+          if (!runtimePreflightMountedRef.current) {
+            return
+          }
+          setRuntimePreflightStatusByHostId((current) => {
+            const next = new Map(current)
+            next.set(hostId, { checked: true, status })
+            return next
+          })
+        })
+        .catch(() => {
+          if (!runtimePreflightMountedRef.current) {
+            return
+          }
+          setRuntimePreflightStatusByHostId((current) => {
+            const next = new Map(current)
+            next.set(hostId, { checked: true, status: null })
+            return next
+          })
+        })
+    }
+  }, [runtimeTaskSourceHostIds])
+  const getTaskPickerRepoHostLabel = useCallback(
+    (repo: Repo): string | null => {
+      const provider = taskSource === 'gitlab' ? 'gitlab' : 'github'
+      const context = getTaskPageRepoSourceContext(repo, provider)
+      const hostId = context?.hostId ?? repo.executionHostId ?? 'local'
+      return hostRegistryById.get(hostId)?.label ?? null
+    },
+    [hostRegistryById, taskSource]
+  )
+  const taskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(() => {
+    if (taskSource !== 'github' && taskSource !== 'gitlab') {
+      return []
+    }
+    return [
+      ...taskSourceRepoContexts.flatMap((context) => {
+        const host = hostRegistryById.get(context.hostId)
+        const availability = getTaskSourceHostAvailabilityForHost(host, context.hostId)
+        return availability ? [availability] : []
+      }),
+      ...getRepoBackedProviderAvailability({
+        provider: taskSource,
+        contexts: taskSourceRepoContexts,
+        preflightStatus,
+        preflightReady: preflightStatusCurrent && preflightStatusChecked,
+        runtimePreflightStatusByHostId
+      })
+    ]
+  }, [
+    hostRegistryById,
+    preflightStatus,
+    preflightStatusChecked,
+    preflightStatusCurrent,
+    runtimePreflightStatusByHostId,
+    taskSource,
+    taskSourceRepoContexts
+  ])
+  const accountBackedTaskSourceHostId = useMemo(
+    () => getSettingsFocusedExecutionHostId(settings),
+    [settings]
+  )
+  const fallbackTaskSourceProjectId = useMemo(() => {
+    const firstRepoContext = selectedRepos
+      .map((repo) => getTaskPageRepoSourceContext(repo, 'github'))
+      .find((context): context is TaskSourceContext => context !== null)
+    return firstRepoContext?.projectId ?? 'account-backed-task-source'
+  }, [selectedRepos])
+  const linearTaskSourceContext = useMemo(
+    () =>
+      normalizeTaskSourceContext({
+        provider: 'linear',
+        projectId: fallbackTaskSourceProjectId,
+        hostId: accountBackedTaskSourceHostId,
+        providerIdentity: {
+          provider: 'linear',
+          workspaceId:
+            selectedLinearWorkspaceId && selectedLinearWorkspaceId !== 'all'
+              ? selectedLinearWorkspaceId
+              : null,
+          workspaceName:
+            selectedLinearWorkspace?.organizationName ??
+            selectedLinearWorkspace?.displayName ??
+            null
+        },
+        accountLabel:
+          selectedLinearWorkspace?.organizationName ?? selectedLinearWorkspace?.displayName ?? null
+      }),
+    [
+      accountBackedTaskSourceHostId,
+      fallbackTaskSourceProjectId,
+      selectedLinearWorkspace,
+      selectedLinearWorkspaceId
+    ]
+  )
+  const jiraTaskSourceContext = useMemo(
+    () =>
+      normalizeTaskSourceContext({
+        provider: 'jira',
+        projectId: fallbackTaskSourceProjectId,
+        hostId: accountBackedTaskSourceHostId,
+        providerIdentity: {
+          provider: 'jira',
+          siteId: selectedJiraSiteId && selectedJiraSiteId !== 'all' ? selectedJiraSiteId : null,
+          siteUrl: selectedJiraSite?.siteUrl ?? null
+        },
+        accountLabel: selectedJiraSite?.displayName ?? selectedJiraSite?.siteUrl ?? null
+      }),
+    [
+      accountBackedTaskSourceHostId,
+      fallbackTaskSourceProjectId,
+      selectedJiraSite,
+      selectedJiraSiteId
+    ]
+  )
+  const accountBackedTaskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(() => {
+    if (taskSource !== 'linear' && taskSource !== 'jira') {
+      return []
+    }
+    const host = hostRegistryById.get(accountBackedTaskSourceHostId)
+    const availability = getTaskSourceHostAvailabilityForHost(host, accountBackedTaskSourceHostId)
+    return availability ? [availability] : []
+  }, [accountBackedTaskSourceHostId, hostRegistryById, taskSource])
+  const taskSourceAvailabilityNoticeByProvider = useMemo<
+    Partial<Record<TaskProvider, TaskSourceAvailabilityNotice>>
+  >(() => {
+    const availabilityForContexts = (
+      provider: Extract<TaskProvider, 'github' | 'gitlab'>,
+      contexts: readonly TaskSourceContext[]
+    ): TaskSourceHostAvailability[] => [
+      ...contexts.flatMap((context) => {
+        const host = hostRegistryById.get(context.hostId)
+        const availability = getTaskSourceHostAvailabilityForHost(host, context.hostId)
+        return availability ? [availability] : []
+      }),
+      ...getRepoBackedProviderAvailability({
+        provider,
+        contexts,
+        preflightStatus,
+        preflightReady: preflightStatusCurrent && preflightStatusChecked,
+        runtimePreflightStatusByHostId
+      })
+    ]
+    const accountHost = hostRegistryById.get(accountBackedTaskSourceHostId)
+    const accountHostAvailability = getTaskSourceHostAvailabilityForHost(
+      accountHost,
+      accountBackedTaskSourceHostId
+    )
+    const accountAvailability = accountHostAvailability ? [accountHostAvailability] : []
+    const labelFor = (provider: TaskProvider): string =>
+      sourceOptions.find((source) => source.id === provider)?.label ?? provider
+    return {
+      github:
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('github'),
+          sourceCount: selectedRepos.length,
+          hostLabelById,
+          hostAvailability: availabilityForContexts(
+            'github',
+            selectedRepos
+              .map((repo) => getTaskPageRepoSourceContext(repo, 'github'))
+              .filter((context): context is TaskSourceContext => context !== null)
+          )
+        }) ?? undefined,
+      gitlab:
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('gitlab'),
+          sourceCount: selectedRepos.length,
+          hostLabelById,
+          hostAvailability: availabilityForContexts(
+            'gitlab',
+            selectedRepos
+              .map((repo) => getTaskPageRepoSourceContext(repo, 'gitlab'))
+              .filter((context): context is TaskSourceContext => context !== null)
+          )
+        }) ?? undefined,
+      linear:
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('linear'),
+          sourceCount: 1,
+          hostLabelById,
+          hostAvailability: accountAvailability
+        }) ?? undefined,
+      jira:
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('jira'),
+          sourceCount: 1,
+          hostLabelById,
+          hostAvailability: accountAvailability
+        }) ?? undefined
+    }
+  }, [
+    accountBackedTaskSourceHostId,
+    hostRegistryById,
+    hostLabelById,
+    preflightStatus,
+    preflightStatusChecked,
+    preflightStatusCurrent,
+    runtimePreflightStatusByHostId,
+    selectedRepos,
+    sourceOptions
+  ])
+  const taskSourceContextSummary = useMemo(() => {
+    const providerLabel =
+      sourceOptions.find((source) => source.id === taskSource)?.label ?? taskSource
+    return getTaskSourceContextSummary({
+      provider: taskSource,
+      providerLabel,
+      repoContexts: taskSourceRepoContexts,
+      hostAvailability:
+        taskSource === 'linear' || taskSource === 'jira'
+          ? accountBackedTaskSourceHostAvailability
+          : taskSourceHostAvailability,
+      accountHostId: accountBackedTaskSourceHostId,
+      hostLabelById,
+      selectedRepoCount: selectedRepos.length,
+      linearWorkspaceName:
+        selectedLinearWorkspace?.organizationName ?? selectedLinearWorkspace?.id ?? null,
+      jiraSiteName: selectedJiraSite?.displayName ?? selectedJiraSite?.siteUrl ?? null
+    })
+  }, [
+    selectedJiraSite,
+    selectedLinearWorkspace,
+    selectedRepos.length,
+    sourceOptions,
+    taskSource,
+    accountBackedTaskSourceHostAvailability,
+    accountBackedTaskSourceHostId,
+    hostLabelById,
+    taskSourceHostAvailability,
+    taskSourceRepoContexts
+  ])
+  const taskSourceAvailabilityNotice = useMemo(() => {
+    const providerLabel =
+      sourceOptions.find((source) => source.id === taskSource)?.label ?? taskSource
+    return getTaskSourceAvailabilityNotice({
+      providerLabel,
+      sourceCount:
+        taskSource === 'linear' || taskSource === 'jira'
+          ? 1
+          : Math.max(1, taskSourceRepoContexts.length),
+      hostAvailability:
+        taskSource === 'linear' || taskSource === 'jira'
+          ? accountBackedTaskSourceHostAvailability
+          : taskSourceHostAvailability,
+      hostLabelById
+    })
+  }, [
+    accountBackedTaskSourceHostAvailability,
+    hostLabelById,
+    sourceOptions,
+    taskSource,
+    taskSourceHostAvailability,
+    taskSourceRepoContexts.length
+  ])
+  const githubEmptyState = useMemo(
+    () =>
+      getRepoBackedTaskEmptyState({
+        provider: 'github',
+        selectedRepoCount: selectedRepos.length
+      }),
+    [selectedRepos.length]
   )
   const taskSourceManuallyChangedRef = useRef(false)
   const lastPageTaskSourceRef = useRef(pageData.taskSource)
@@ -2735,6 +3340,15 @@ export default function TaskPage(): React.JSX.Element {
   const [gitlabView, setGitlabView] = useState<'issues' | 'mrs' | 'todos'>('mrs')
   const [gitlabTodos, setGitlabTodos] = useState<GitLabTodo[]>([])
   const [gitlabTodosLoading, setGitlabTodosLoading] = useState(false)
+  const gitlabEmptyState = useMemo(
+    () =>
+      getRepoBackedTaskEmptyState({
+        provider: 'gitlab',
+        selectedRepoCount: selectedRepos.length,
+        gitlabView
+      }),
+    [gitlabView, selectedRepos.length]
+  )
 
   const gitlabFilterIsValid =
     gitlabView === 'issues'
@@ -2784,6 +3398,7 @@ export default function TaskPage(): React.JSX.Element {
   // collapse onto a stale in-flight request that resolved against the
   // pre-flip source).
   const lastFetchedInvalidationNonceRef = useRef(0)
+  const paginationGenerationRef = useRef(0)
   // Why: entering Tasks with fresh cache should still verify remote status
   // once, but the result is reconciled into existing rows to avoid a full
   // table shuffle when only status/key fields changed.
@@ -2794,7 +3409,13 @@ export default function TaskPage(): React.JSX.Element {
     const trimmed = initialTaskQuery.trim()
     const merged: GitHubWorkItem[] = []
     for (const r of selectedRepos) {
-      const cached = getCachedWorkItems(r.id, PER_REPO_FETCH_LIMIT, trimmed)
+      const cached = getCachedWorkItems(
+        r.id,
+        PER_REPO_FETCH_LIMIT,
+        trimmed,
+        r.path,
+        getTaskPageRepoSourceContext(r, 'github')
+      )
       if (cached) {
         merged.push(...cached)
       }
@@ -2813,6 +3434,12 @@ export default function TaskPage(): React.JSX.Element {
   const [totalItemCount, setTotalItemCount] = useState<number | null>(null)
   const fetchWorkItemsNextPage = useAppStore((s) => s.fetchWorkItemsNextPage)
   const countWorkItemsAcrossRepos = useAppStore((s) => s.countWorkItemsAcrossRepos)
+
+  useEffect(() => {
+    paginationGenerationRef.current += 1
+    setPaginationLoading(false)
+    setLoadingTargetPage(null)
+  }, [selectedRepos, appliedTaskSearch, workItemsInvalidationNonce])
 
   // Why: clicking a GitHub row (or completing the create-issue flow) opens
   // this dialog for a read/review surface. The dialog's "Use" button routes
@@ -2833,7 +3460,7 @@ export default function TaskPage(): React.JSX.Element {
     useShallow((s) =>
       selectTaskPageWorkItemsCacheEntries(
         s.workItemsCache,
-        selectedRepos,
+        selectedRepos.map(getTaskPageRepoCacheInput),
         PER_REPO_FETCH_LIMIT,
         appliedWorkItemsCacheQuery
       )
@@ -2853,6 +3480,44 @@ export default function TaskPage(): React.JSX.Element {
     ? (cachedDialogWorkItem ?? githubTaskDrawerWorkItem)
     : null
   const dialogRepoPath = dialogWorkItem ? (repoMap.get(dialogWorkItem.repoId)?.path ?? null) : null
+  const dialogSourceContext = useMemo(() => {
+    if (!dialogWorkItem) {
+      return null
+    }
+    if (
+      pageData.openGitHubSourceContext?.provider === 'github' &&
+      pageData.openGitHubWorkItem?.id === dialogWorkItem.id &&
+      pageData.openGitHubWorkItem.repoId === dialogWorkItem.repoId
+    ) {
+      return pageData.openGitHubSourceContext
+    }
+    return getTaskPageRepoSourceContext(repoMap.get(dialogWorkItem.repoId), 'github')
+  }, [dialogWorkItem, pageData.openGitHubSourceContext, pageData.openGitHubWorkItem, repoMap])
+  const gitlabDialogRepo = useMemo(
+    () =>
+      gitlabDialogItem
+        ? (selectedRepos.find((r) => r.id === gitlabDialogItem.repoId) ?? primaryRepo)
+        : null,
+    [gitlabDialogItem, primaryRepo, selectedRepos]
+  )
+  const gitlabDialogSourceContext = useMemo(() => {
+    if (!gitlabDialogItem) {
+      return null
+    }
+    if (
+      pageData.openGitLabSourceContext?.provider === 'gitlab' &&
+      pageData.openGitLabWorkItem?.id === gitlabDialogItem.id &&
+      pageData.openGitLabWorkItem.repoId === gitlabDialogItem.repoId
+    ) {
+      return pageData.openGitLabSourceContext
+    }
+    return getTaskPageRepoSourceContext(gitlabDialogRepo, 'gitlab', gitlabDialogItem.projectRef)
+  }, [
+    gitlabDialogItem,
+    gitlabDialogRepo,
+    pageData.openGitLabSourceContext,
+    pageData.openGitLabWorkItem
+  ])
 
   const setDialogWorkItem = useCallback(
     (item: GitHubWorkItem | null, initialTab: ItemDialogTab = 'conversation') => {
@@ -2871,16 +3536,43 @@ export default function TaskPage(): React.JSX.Element {
     setDialogWorkItem(pageData.openGitHubWorkItem, pageData.openGitHubInitialTab)
   }, [pageData.openGitHubInitialTab, pageData.openGitHubWorkItem, setDialogWorkItem])
 
+  useEffect(() => {
+    setGitlabDialogItem(pageData.openGitLabWorkItem ?? null)
+  }, [pageData.openGitLabWorkItem])
+
   const openGitHubDetailPage = useCallback(
     (item: GitHubWorkItem, initialTab: ItemDialogTab = 'conversation') => {
-      openTaskPage({
-        taskSource: 'github',
-        preselectedRepoId: item.repoId,
-        openGitHubWorkItem: item,
-        openGitHubInitialTab: initialTab
-      })
+      openTaskPage(
+        {
+          taskSource: 'github',
+          preselectedRepoId: item.repoId,
+          openGitHubWorkItem: item,
+          openGitHubSourceContext: getTaskPageRepoSourceContext(repoMap.get(item.repoId), 'github'),
+          openGitHubInitialTab: initialTab
+        },
+        { recordTasksInteraction: false }
+      )
     },
-    [openTaskPage]
+    [openTaskPage, repoMap]
+  )
+
+  const openGitLabDetailPage = useCallback(
+    (item: GitLabWorkItem) => {
+      openTaskPage(
+        {
+          taskSource: 'gitlab',
+          preselectedRepoId: item.repoId,
+          openGitLabWorkItem: item,
+          openGitLabSourceContext: getTaskPageRepoSourceContext(
+            repoMap.get(item.repoId),
+            'gitlab',
+            item.projectRef
+          )
+        },
+        { recordTasksInteraction: false }
+      )
+    },
+    [openTaskPage, repoMap]
   )
 
   const patchTaskPageWorkItemRows = useCallback(
@@ -2965,7 +3657,11 @@ export default function TaskPage(): React.JSX.Element {
         ? `${entry.sources.prs.owner}/${entry.sources.prs.repo}`
         : r.displayName
       toast.message(
-        `Your preferred issue source (upstream) is no longer configured for ${prSlug}. Using origin.`
+        translate(
+          'auto.components.TaskPage.f4374519ae',
+          'Your preferred issue source (upstream) is no longer configured for {{value0}}. Using origin.',
+          { value0: prSlug }
+        )
       )
       fellBackToastedRef.current.add(r.id)
     }
@@ -2974,33 +3670,33 @@ export default function TaskPage(): React.JSX.Element {
   // Why: on a partial-failure retry the cache still holds successful-side
   // data, so `tasksLoading` (which is gated on `anyUncached`) never flips
   // true and the Retry button would otherwise give no feedback. Track
-  // retry-in-flight per repo (keyed by `repoPath`) so that clicking Retry
-  // on one banner only flips that banner's button into its "Retrying…"
+  // retry-in-flight per selected source so that clicking Retry
+  // on one banner only flips that source's button into its "Retrying…"
   // state — other still-failing banners stay in their "Retry" state rather
   // than misleadingly flipping in lockstep. The fetch effect clears the set
   // when the nonce-driven refresh settles.
-  const [retryingRepoPaths, setRetryingRepoPaths] = useState<ReadonlySet<string>>(() => new Set())
+  const [retryingSourceKeys, setRetryingSourceKeys] = useState<ReadonlySet<string>>(() => new Set())
 
   const handleRetryIssuesFetch = useCallback(
-    (repoPath: string) => {
-      const repo = selectedRepos.find((r) => r.path === repoPath)
-      if (!repo) {
+    (sourceKey: string) => {
+      const source = perRepoSourceState.find((s) => s.sourceKey === sourceKey)
+      if (!source) {
         return
       }
       // Why: bumping the shared refresh nonce reuses the Tasks list's
       // single fetch path — nonce changes are treated as force=true so
       // retry doesn't silently dedupe onto a still-failing in-flight request.
       // The nonce bump refreshes ALL selected repos, but the Retrying…
-      // state is scoped to the clicked repo so other banners stay in their
+      // state is scoped to the clicked source so other banners stay in their
       // "Retry" state rather than misleadingly flipping to "Retrying…".
-      setRetryingRepoPaths((prev) => {
+      setRetryingSourceKeys((prev) => {
         const next = new Set(prev)
-        next.add(repoPath)
+        next.add(source.sourceKey)
         return next
       })
       setTaskRefreshNonce((n) => n + 1)
     },
-    [selectedRepos]
+    [perRepoSourceState]
   )
   const handleRefreshGithubTasks = useCallback((): void => {
     setTasksRefreshing(true)
@@ -3021,16 +3717,31 @@ export default function TaskPage(): React.JSX.Element {
     () => selectedRepos.find((r) => r.id === newIssueRepoId) ?? selectedRepos[0] ?? null,
     [selectedRepos, newIssueRepoId]
   )
+  const newIssueSourceContext = useMemo(
+    () => getTaskPageRepoSourceContext(newIssueTargetRepo, 'github'),
+    [newIssueTargetRepo]
+  )
   const newIssueRuntimeTarget = useMemo(() => {
     if (!newIssueTargetRepo?.id) {
       return null
     }
-    const target = getActiveRuntimeTarget(settings)
+    const repoOwnerSettings = getSettingsForRepoRuntimeOwner(
+      { repos: [newIssueTargetRepo], settings },
+      newIssueTargetRepo.id
+    )
+    const targetSettings =
+      newIssueSourceContext?.provider === 'github'
+        ? {
+            ...repoOwnerSettings,
+            ...getTaskSourceRuntimeSettings(newIssueSourceContext)
+          }
+        : repoOwnerSettings
+    const target = getActiveRuntimeTarget(targetSettings)
     if (target.kind !== 'environment') {
       return null
     }
     return repos.some((repo) => repo.id === newIssueTargetRepo.id) ? target : null
-  }, [newIssueTargetRepo?.id, repos, settings])
+  }, [newIssueSourceContext, newIssueTargetRepo, repos, settings])
   const newIssueRepoLabels = useRepoLabels(
     newIssueOpen ? (newIssueTargetRepo?.path ?? null) : null,
     newIssueOpen ? (newIssueTargetRepo?.id ?? null) : null,
@@ -3071,6 +3782,21 @@ export default function TaskPage(): React.JSX.Element {
   const selectedLinearIssue = selectedLinearIssueId
     ? (cachedSelectedLinearIssue ?? selectedLinearIssueFallback)
     : null
+  const linearDetailSourceContext = useMemo(() => {
+    if (
+      selectedLinearIssue &&
+      pageData.openLinearSourceContext?.provider === 'linear' &&
+      pageData.openLinearIssue?.id === selectedLinearIssue.id
+    ) {
+      return pageData.openLinearSourceContext
+    }
+    return linearTaskSourceContext
+  }, [
+    linearTaskSourceContext,
+    pageData.openLinearIssue,
+    pageData.openLinearSourceContext,
+    selectedLinearIssue
+  ])
 
   const setSelectedLinearIssue = useCallback(
     (issue: LinearIssue | null, options?: { allowOutsideList?: boolean }) => {
@@ -3097,9 +3823,16 @@ export default function TaskPage(): React.JSX.Element {
 
   const openLinearDetailPage = useCallback(
     (issue: LinearIssue) => {
-      openTaskPage({ taskSource: 'linear', openLinearIssue: issue })
+      openTaskPage(
+        {
+          taskSource: 'linear',
+          openLinearIssue: issue,
+          openLinearSourceContext: linearTaskSourceContext
+        },
+        { recordTasksInteraction: false }
+      )
     },
-    [openTaskPage]
+    [linearTaskSourceContext, openTaskPage]
   )
 
   const openRelatedLinearIssue = useCallback(
@@ -3126,8 +3859,14 @@ export default function TaskPage(): React.JSX.Element {
       taskPageData: {
         ...s.taskPageData,
         openGitHubWorkItem: undefined,
+        openGitHubSourceContext: undefined,
         openGitHubInitialTab: undefined,
-        openLinearIssue: undefined
+        openGitLabWorkItem: undefined,
+        openGitLabSourceContext: undefined,
+        openLinearIssue: undefined,
+        openLinearSourceContext: undefined,
+        openJiraIssue: undefined,
+        openJiraSourceContext: undefined
       }
     }))
   }, [clearSelectedLinearIssue, setDialogWorkItem])
@@ -3143,16 +3882,54 @@ export default function TaskPage(): React.JSX.Element {
   const cachedSelectedJiraIssue = findTaskPageJiraIssue(
     jiraCacheSnapshot.issueCache,
     jiraCacheSnapshot.searchCache,
-    selectedJiraIssueKey
+    selectedJiraIssueKey,
+    {
+      sourceContext: jiraTaskSourceContext,
+      siteId: selectedJiraIssueFallback?.siteId ?? pageData.openJiraIssue?.siteId ?? null
+    }
   )
   const selectedJiraIssue = selectedJiraIssueKey
     ? (cachedSelectedJiraIssue ?? selectedJiraIssueFallback)
     : null
+  const jiraDetailSourceContext = useMemo(() => {
+    if (
+      selectedJiraIssue &&
+      pageData.openJiraSourceContext?.provider === 'jira' &&
+      pageData.openJiraIssue?.key === selectedJiraIssue.key &&
+      pageData.openJiraIssue.siteId === selectedJiraIssue.siteId
+    ) {
+      return pageData.openJiraSourceContext
+    }
+    return jiraTaskSourceContext
+  }, [
+    jiraTaskSourceContext,
+    pageData.openJiraIssue,
+    pageData.openJiraSourceContext,
+    selectedJiraIssue
+  ])
 
   const setSelectedJiraIssue = useCallback((issue: JiraIssue | null) => {
     setSelectedJiraIssueKey(issue?.key ?? null)
     setSelectedJiraIssueFallback(issue)
   }, [])
+
+  useEffect(() => {
+    setSelectedJiraIssue(pageData.openJiraIssue ?? null)
+  }, [pageData.openJiraIssue, setSelectedJiraIssue])
+
+  const openJiraDetailPage = useCallback(
+    (issue: JiraIssue) => {
+      openTaskPage(
+        {
+          taskSource: 'jira',
+          openJiraIssue: issue,
+          openJiraSourceContext: jiraTaskSourceContext
+        },
+        { recordTasksInteraction: false }
+      )
+    },
+    [jiraTaskSourceContext, openTaskPage]
+  )
 
   // Linear tab state
   const [linearMode, setLinearMode] = useState<LinearMode>('issues')
@@ -3200,7 +3977,6 @@ export default function TaskPage(): React.JSX.Element {
   >(null)
   const [linearProjectIssuesLoading, setLinearProjectIssuesLoading] = useState(false)
   const [linearProjectIssuesError, setLinearProjectIssuesError] = useState<string | null>(null)
-  const [linearCustomViewModel, setLinearCustomViewModel] = useState<LinearCustomViewModel>('issue')
   const [linearCustomViewsResult, setLinearCustomViewsResult] = useState<
     LinearCollectionResult<LinearCustomViewSummary>
   >({ items: [] })
@@ -3267,7 +4043,12 @@ export default function TaskPage(): React.JSX.Element {
   const openLinearProjectContext = useCallback(
     (project: LinearProjectSummary, options?: { parentView?: LinearCustomViewSummary | null }) => {
       if (!project.workspaceId) {
-        toast.error('Linear project is missing workspace context.')
+        toast.error(
+          translate(
+            'auto.components.TaskPage.cba2a2b7fb',
+            'Linear project is missing workspace context.'
+          )
+        )
         return
       }
       const parentView = options?.parentView ?? null
@@ -3301,7 +4082,12 @@ export default function TaskPage(): React.JSX.Element {
   const openLinearCustomViewContext = useCallback(
     (view: LinearCustomViewSummary) => {
       if (!view.workspaceId) {
-        toast.error('Linear view is missing workspace context.')
+        toast.error(
+          translate(
+            'auto.components.TaskPage.669e419d65',
+            'Linear view is missing workspace context.'
+          )
+        )
         return
       }
       clearSelectedLinearIssue()
@@ -3401,7 +4187,7 @@ export default function TaskPage(): React.JSX.Element {
       linearContextResumeAttemptedRef.current ||
       !taskResumeApplied ||
       taskSource !== 'linear' ||
-      !linearStatus.connected ||
+      !linearConnected ||
       !context
     ) {
       return
@@ -3410,7 +4196,10 @@ export default function TaskPage(): React.JSX.Element {
     let cancelled = false
 
     if (context.kind === 'project') {
-      void fetchLinearProject(context.id, context.workspaceId, { force: true })
+      void fetchLinearProject(context.id, context.workspaceId, {
+        force: true,
+        sourceContext: linearTaskSourceContext
+      })
         .then((project) => {
           if (cancelled) {
             return
@@ -3442,12 +4231,12 @@ export default function TaskPage(): React.JSX.Element {
     }
 
     if (context.kind === 'view' && context.model) {
-      setLinearCustomViewModel(context.model)
       setLinearMode('views')
       setLinearCustomViewsLoading(true)
       setLinearCustomViewsError(null)
       void fetchLinearCustomView(context.id, context.workspaceId, context.model, {
-        force: true
+        force: true,
+        sourceContext: linearTaskSourceContext
       })
         .then((restoredView) => {
           if (cancelled) {
@@ -3479,7 +4268,8 @@ export default function TaskPage(): React.JSX.Element {
     fetchLinearCustomView,
     fetchLinearProject,
     listLinearCustomViews,
-    linearStatus.connected,
+    linearConnected,
+    linearTaskSourceContext,
     setTaskResumeState,
     taskResumeApplied,
     taskResumeState?.linearContext,
@@ -3496,17 +4286,19 @@ export default function TaskPage(): React.JSX.Element {
     if (!taskResumeApplied) {
       return
     }
-    if (taskSource !== 'linear' || !linearStatus.connected) {
+    if (taskSource !== 'linear' || !linearConnected) {
       setAvailableTeams([])
       return
     }
     let cancelled = false
-    const cachedTeams = getCachedLinearTeams(selectedLinearWorkspaceId)
+    const cachedTeams = getCachedLinearTeams(selectedLinearWorkspaceId, {
+      sourceContext: linearTaskSourceContext
+    })
     // Why: workspace switches must not leave the prior workspace's teams
     // available for new-issue creation while the replacement fetch is pending,
     // but a workspace-scoped cache can keep the selector usable immediately.
     setAvailableTeams(cachedTeams ?? [])
-    void listLinearTeams(selectedLinearWorkspaceId)
+    void listLinearTeams(selectedLinearWorkspaceId, { sourceContext: linearTaskSourceContext })
       .then((teams) => {
         if (!cancelled) {
           setAvailableTeams(teams)
@@ -3523,12 +4315,13 @@ export default function TaskPage(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     taskSource,
-    linearStatus.connected,
+    linearConnected,
     selectedLinearWorkspaceId,
     linearTeamRefreshNonce,
     taskResumeApplied,
     getCachedLinearTeams,
-    listLinearTeams
+    listLinearTeams,
+    linearTaskSourceContext
   ])
 
   const [availableJiraProjects, setAvailableJiraProjects] = useState<JiraProject[]>([])
@@ -3538,7 +4331,7 @@ export default function TaskPage(): React.JSX.Element {
     if (!taskResumeApplied) {
       return
     }
-    if (taskSource !== 'jira' || !jiraStatus.connected) {
+    if (taskSource !== 'jira' || !jiraConnected) {
       setAvailableJiraProjects([])
       setJiraProjectsLoading(false)
       return
@@ -3546,7 +4339,7 @@ export default function TaskPage(): React.JSX.Element {
     let cancelled = false
     setAvailableJiraProjects([])
     setJiraProjectsLoading(true)
-    void jiraListProjects(settings, selectedJiraSiteId)
+    void jiraListProjects(jiraTaskSourceContext ?? settings, selectedJiraSiteId)
       .then((projects) => {
         if (!cancelled) {
           setAvailableJiraProjects(projects)
@@ -3565,14 +4358,24 @@ export default function TaskPage(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [settings, taskSource, jiraStatus.connected, selectedJiraSiteId, taskResumeApplied])
+  }, [
+    settings,
+    taskSource,
+    jiraConnected,
+    selectedJiraSiteId,
+    taskResumeApplied,
+    jiraTaskSourceContext
+  ])
 
   // Why: stable key for `selectedRepos` so the GitLab fetch effect below
   // doesn't re-run on every parent re-render just because the array
   // reference changed. The memoized string keys off id + path +
   // connectionId — the only fields the effect actually reads.
   const selectedReposKey = useMemo(
-    () => selectedRepos.map((r) => `${r.id}|${r.path}|${r.connectionId ?? ''}`).join(','),
+    () =>
+      selectedRepos
+        .map((r) => `${r.id}|${r.path}|${r.connectionId ?? ''}|${r.executionHostId ?? ''}`)
+        .join(','),
     [selectedRepos]
   )
 
@@ -3617,6 +4420,8 @@ export default function TaskPage(): React.JSX.Element {
             return window.api.gl
               .listIssues({
                 repoPath: repo.path,
+                repoId: repo.id,
+                sourceContext: getTaskPageRepoSourceContext(repo, 'gitlab'),
                 state: 'opened',
                 assignee: isAssignedToMe ? '@me' : undefined,
                 limit: 50
@@ -3637,6 +4442,8 @@ export default function TaskPage(): React.JSX.Element {
             window.api.gl
               .listMRs({
                 repoPath: repo.path,
+                repoId: repo.id,
+                sourceContext: getTaskPageRepoSourceContext(repo, 'gitlab'),
                 state: activeMRFilter ?? 'opened',
                 page: 1,
                 perPage: 50
@@ -3704,7 +4511,11 @@ export default function TaskPage(): React.JSX.Element {
     let stale = false
     setGitlabTodosLoading(true)
     void window.api.gl
-      .todos({ repoPath: primaryRepo.path })
+      .todos({
+        repoPath: primaryRepo.path,
+        repoId: primaryRepo.id,
+        sourceContext: getTaskPageRepoSourceContext(primaryRepo, 'gitlab')
+      })
       .then((todos) => {
         if (!stale) {
           setGitlabTodos(todos as GitLabTodo[])
@@ -3723,7 +4534,7 @@ export default function TaskPage(): React.JSX.Element {
     return () => {
       stale = true
     }
-  }, [taskSource, gitlabView, gitlabRefreshNonce, primaryRepo?.path])
+  }, [taskSource, gitlabView, gitlabRefreshNonce, primaryRepo])
 
   const defaultLinearTeamSelection = settings?.defaultLinearTeamSelection
   const [linearTeamSelection, setLinearTeamSelection] = useState<ReadonlySet<string>>(() => {
@@ -3746,11 +4557,12 @@ export default function TaskPage(): React.JSX.Element {
         ? linearCustomViewContentsLoading
         : linearLoading
   const activeLinearIssueError =
-    selectedLinearProject && linearProjectTab === 'issues'
+    linearStatus.credentialError ??
+    (selectedLinearProject && linearProjectTab === 'issues'
       ? linearProjectIssuesError
       : selectedLinearCustomView?.model === 'issue'
         ? linearCustomViewContentsError
-        : linearError
+        : linearError)
   const activeLinearIssueCollectionErrors =
     selectedLinearProject && linearProjectTab === 'issues'
       ? linearProjectIssuesResult.errors
@@ -4109,9 +4921,10 @@ export default function TaskPage(): React.JSX.Element {
         event.preventDefault()
         return
       }
-      event.dataTransfer.effectAllowed = 'move'
-      event.dataTransfer.setData(LINEAR_BOARD_DRAG_ISSUE_MIME, issue.id)
-      event.dataTransfer.setData('text/plain', issue.id)
+      if (!writeLinearBoardIssueDragData(event.dataTransfer, issue.id)) {
+        event.preventDefault()
+        return
+      }
       setLinearBoardDraggingIssueId(issue.id)
     },
     [linearBoardUpdatingIssueIds, linearStatusBoardEnabled]
@@ -4140,8 +4953,13 @@ export default function TaskPage(): React.JSX.Element {
         return
       }
 
+      const draggedIssue = readLinearBoardIssueDragData(event.dataTransfer)
       const issueId =
-        event.dataTransfer.getData(LINEAR_BOARD_DRAG_ISSUE_MIME) || linearBoardDraggingIssueId
+        draggedIssue.status === 'issue'
+          ? draggedIssue.issueId
+          : draggedIssue.status === 'hidden'
+            ? linearBoardDraggingIssueId
+            : null
       const issue = filteredLinearIssues.find((item) => item.id === issueId)
       if (
         !issue ||
@@ -4165,10 +4983,20 @@ export default function TaskPage(): React.JSX.Element {
       }
 
       try {
-        const states = await linearTeamStates(settings, issue.team.id, issue.workspaceId)
+        const states = await linearTeamStates(
+          linearTaskSourceContext ?? settings,
+          issue.team.id,
+          issue.workspaceId
+        )
         const workflowState = findLinearWorkflowStateForStatus(states, targetState)
         if (!workflowState) {
-          toast.error(`"${targetState.name}" is not available for ${issue.team.name}`)
+          toast.error(
+            translate(
+              'auto.components.TaskPage.745ae567d4',
+              '"{{value0}}" is not available for {{value1}}',
+              { value0: targetState.name, value1: issue.team.name }
+            )
+          )
           return
         }
 
@@ -4183,7 +5011,7 @@ export default function TaskPage(): React.JSX.Element {
         applyFallbackState(nextState)
 
         const result = await linearUpdateIssue(
-          settings,
+          linearTaskSourceContext ?? settings,
           issue.id,
           { stateId: workflowState.id },
           issue.workspaceId
@@ -4192,13 +5020,20 @@ export default function TaskPage(): React.JSX.Element {
           patchLinearIssue(issue.id, { state: previousState })
           patchScopedLinearIssue(issue.id, { state: previousState })
           applyFallbackState(previousState)
-          toast.error(result.error ?? 'Failed to update Linear state')
+          toast.error(
+            result.error ??
+              translate('auto.components.TaskPage.6775c05483', 'Failed to update Linear state')
+          )
+          return
         }
+        useAppStore.getState().recordFeatureInteraction('linear-tasks')
       } catch {
         patchLinearIssue(issue.id, { state: previousState })
         patchScopedLinearIssue(issue.id, { state: previousState })
         applyFallbackState(previousState)
-        toast.error('Failed to update Linear state')
+        toast.error(
+          translate('auto.components.TaskPage.6775c05483', 'Failed to update Linear state')
+        )
       } finally {
         setLinearBoardUpdatingIssueIds((prev) => {
           const next = new Set(prev)
@@ -4214,6 +5049,7 @@ export default function TaskPage(): React.JSX.Element {
       linearStatusBoardEnabled,
       patchScopedLinearIssue,
       patchLinearIssue,
+      linearTaskSourceContext,
       settings
     ]
   )
@@ -4240,11 +5076,50 @@ export default function TaskPage(): React.JSX.Element {
           findTaskPageJiraIssue(
             jiraCacheSnapshot.issueCache,
             jiraCacheSnapshot.searchCache,
-            issue.key
+            issue.key,
+            {
+              sourceContext: jiraTaskSourceContext,
+              siteId: issue.siteId
+            }
           ) ?? issue
       ),
-    [jiraIssues, jiraCacheSnapshot.issueCache, jiraCacheSnapshot.searchCache]
+    [jiraIssues, jiraCacheSnapshot.issueCache, jiraCacheSnapshot.searchCache, jiraTaskSourceContext]
   )
+
+  // New Linear project dialog state
+  const [newLinearProjectOpen, setNewLinearProjectOpen] = useState(false)
+  const [newLinearProjectName, setNewLinearProjectName] = useState('')
+  const [newLinearProjectDescription, setNewLinearProjectDescription] = useState('')
+  const [newLinearProjectContent, setNewLinearProjectContent] = useState('')
+  const [newLinearProjectTeamId, setNewLinearProjectTeamId] = useState<string | null>(null)
+  const [newLinearProjectLeadId, setNewLinearProjectLeadId] = useState<string | null>(null)
+  const [newLinearProjectMemberIds, setNewLinearProjectMemberIds] = useState<string[]>([])
+  const [newLinearProjectLabelIds, setNewLinearProjectLabelIds] = useState<string[]>([])
+  const [newLinearProjectPriority, setNewLinearProjectPriority] = useState<number>(0)
+  const [newLinearProjectStartDate, setNewLinearProjectStartDate] = useState('')
+  const [newLinearProjectTargetDate, setNewLinearProjectTargetDate] = useState('')
+  const [newLinearProjectSubmitting, setNewLinearProjectSubmitting] = useState(false)
+
+  const newLinearProjectTargetTeam = useMemo(
+    () => availableTeams.find((t) => t.id === newLinearProjectTeamId) ?? availableTeams[0] ?? null,
+    [availableTeams, newLinearProjectTeamId]
+  )
+  const newLinearProjectMembers = useTeamMembers(
+    newLinearProjectOpen ? (newLinearProjectTargetTeam?.id ?? null) : null,
+    settings,
+    newLinearProjectTargetTeam?.workspaceId
+  )
+  const newLinearProjectLabels = useTeamLabels(
+    newLinearProjectOpen ? (newLinearProjectTargetTeam?.id ?? null) : null,
+    settings,
+    newLinearProjectTargetTeam?.workspaceId
+  )
+
+  useEffect(() => {
+    setNewLinearProjectLeadId(null)
+    setNewLinearProjectMemberIds([])
+    setNewLinearProjectLabelIds([])
+  }, [newLinearProjectTargetTeam?.id, newLinearProjectTargetTeam?.workspaceId])
 
   // New Linear issue dialog state
   const [newLinearIssueOpen, setNewLinearIssueOpen] = useState(false)
@@ -4269,7 +5144,7 @@ export default function TaskPage(): React.JSX.Element {
 
   useEffect(() => {
     let cancelled = false
-    if (!newLinearIssueTargetTeam) {
+    if (!newLinearIssueOpen || !linearConnected || !newLinearIssueTargetTeam) {
       setNewLinearIssueProjects([])
       setNewLinearIssueProjectsLoading(false)
       return
@@ -4278,7 +5153,7 @@ export default function TaskPage(): React.JSX.Element {
     const targetWorkspaceId =
       newLinearIssueTargetTeam.workspaceId ||
       (selectedLinearWorkspaceId !== 'all' ? selectedLinearWorkspaceId : null)
-    linearListProjects(settings, undefined, 100, targetWorkspaceId)
+    linearListProjects(linearTaskSourceContext ?? settings, undefined, 100, targetWorkspaceId)
       .then((p) => {
         if (!cancelled) {
           setNewLinearIssueProjects(p.items)
@@ -4295,7 +5170,14 @@ export default function TaskPage(): React.JSX.Element {
       // populate the composer after a team/workspace switch.
       cancelled = true
     }
-  }, [newLinearIssueTargetTeam, settings, selectedLinearWorkspaceId])
+  }, [
+    linearConnected,
+    newLinearIssueOpen,
+    newLinearIssueTargetTeam,
+    linearTaskSourceContext,
+    settings,
+    selectedLinearWorkspaceId
+  ])
 
   useEffect(() => {
     // Why: the selected team can change indirectly when the available Linear
@@ -4315,17 +5197,17 @@ export default function TaskPage(): React.JSX.Element {
   }, [newLinearIssueTargetTeam?.id, newLinearIssueTargetTeam?.workspaceId, selectedLinearProject])
 
   const newLinearStates = useTeamStates(
-    newLinearIssueTargetTeam?.id || null,
+    linearConnected ? newLinearIssueTargetTeam?.id || null : null,
     settings,
     newLinearIssueTargetTeam?.workspaceId
   )
   const newLinearMembers = useTeamMembers(
-    newLinearIssueTargetTeam?.id || null,
+    linearConnected ? newLinearIssueTargetTeam?.id || null : null,
     settings,
     newLinearIssueTargetTeam?.workspaceId
   )
   const newLinearLabels = useTeamLabels(
-    newLinearIssueTargetTeam?.id || null,
+    linearConnected ? newLinearIssueTargetTeam?.id || null : null,
     settings,
     newLinearIssueTargetTeam?.workspaceId
   )
@@ -4347,6 +5229,7 @@ export default function TaskPage(): React.JSX.Element {
       !gitlabDialogItem &&
       !selectedLinearIssue &&
       !newIssueOpen &&
+      !newLinearProjectOpen &&
       !newLinearIssueOpen &&
       !linearConnectOpen &&
       activeModal === 'none',
@@ -4394,6 +5277,45 @@ export default function TaskPage(): React.JSX.Element {
   const [jiraConnectState, setJiraConnectState] = useState<'idle' | 'connecting' | 'error'>('idle')
   const [jiraConnectError, setJiraConnectError] = useState<string | null>(null)
   const includeJiraSiteNameInProjectLabel = selectedJiraSiteId === 'all'
+  const previousProviderRuntimeContextKeyRef = useRef(providerRuntimeContextKey)
+
+  useEffect(() => {
+    if (previousProviderRuntimeContextKeyRef.current === providerRuntimeContextKey) {
+      return
+    }
+    previousProviderRuntimeContextKeyRef.current = providerRuntimeContextKey
+    if (newLinearIssueOpen) {
+      setNewLinearIssueOpen(false)
+      setNewLinearIssueTitle('')
+      setNewLinearIssueBody('')
+      setNewLinearIssueTeamId(null)
+      setNewLinearIssueStateId(null)
+      setNewLinearIssueAssigneeId(null)
+      setNewLinearIssuePriority(0)
+      setNewLinearIssueProjectId(null)
+      setNewLinearIssueLabelIds([])
+      setNewLinearIssueProjects([])
+      setNewLinearIssueProjectsLoading(false)
+      setNewLinearIssueSubmitting(false)
+    }
+    if (newJiraIssueOpen) {
+      setNewJiraIssueOpen(false)
+      setNewJiraIssueTitle('')
+      setNewJiraIssueBody('')
+      setNewJiraIssueProjectId(null)
+      setNewJiraIssueProjectComboboxOpen(false)
+      setNewJiraIssueProjectQuery('')
+      setNewJiraIssueProjectCommandValue('')
+      setNewJiraIssueTypeId(null)
+      setAvailableJiraIssueTypes([])
+      setJiraIssueTypesLoading(false)
+      setJiraCreateFields([])
+      setJiraCreateFieldsLoading(false)
+      setJiraCreateFieldsError(null)
+      setNewJiraIssueCustomFieldValues({})
+      setNewJiraIssueSubmitting(false)
+    }
+  }, [newJiraIssueOpen, newLinearIssueOpen, providerRuntimeContextKey])
 
   const sortedAvailableJiraProjects = useMemo(
     () =>
@@ -4404,13 +5326,11 @@ export default function TaskPage(): React.JSX.Element {
   )
 
   const filteredNewJiraIssueProjects = useMemo(() => {
-    const query = newJiraIssueProjectQuery.trim().toLocaleLowerCase()
-    if (!query) {
-      return sortedAvailableJiraProjects
-    }
-    return sortedAvailableJiraProjects.filter((project) =>
-      getJiraProjectSearchText(project, includeJiraSiteNameInProjectLabel).includes(query)
-    )
+    return filterJiraProjectPickerProjects({
+      projects: sortedAvailableJiraProjects,
+      query: newJiraIssueProjectQuery,
+      includeSiteName: includeJiraSiteNameInProjectLabel
+    })
   }, [includeJiraSiteNameInProjectLabel, newJiraIssueProjectQuery, sortedAvailableJiraProjects])
 
   const newJiraIssueTargetProject = useMemo(
@@ -4509,7 +5429,7 @@ export default function TaskPage(): React.JSX.Element {
   )
 
   useEffect(() => {
-    if (!newJiraIssueOpen || !newJiraIssueTargetProject) {
+    if (!newJiraIssueOpen || !jiraConnected || !newJiraIssueTargetProject) {
       setAvailableJiraIssueTypes([])
       setJiraIssueTypesLoading(false)
       return
@@ -4518,7 +5438,7 @@ export default function TaskPage(): React.JSX.Element {
     setAvailableJiraIssueTypes([])
     setJiraIssueTypesLoading(true)
     void jiraListIssueTypes(
-      settings,
+      jiraTaskSourceContext ?? settings,
       newJiraIssueTargetProject.id,
       newJiraIssueTargetProject.siteId
     )
@@ -4531,7 +5451,9 @@ export default function TaskPage(): React.JSX.Element {
       })
       .catch(() => {
         if (!cancelled) {
-          toast.error('Failed to load Jira issue types.')
+          toast.error(
+            translate('auto.components.TaskPage.af2a8371de', 'Failed to load Jira issue types.')
+          )
         }
       })
       .finally(() => {
@@ -4542,10 +5464,15 @@ export default function TaskPage(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [settings, newJiraIssueOpen, newJiraIssueTargetProject])
+  }, [settings, jiraConnected, newJiraIssueOpen, newJiraIssueTargetProject, jiraTaskSourceContext])
 
   useEffect(() => {
-    if (!newJiraIssueOpen || !newJiraIssueTargetProject || !newJiraIssueTargetType) {
+    if (
+      !newJiraIssueOpen ||
+      !jiraConnected ||
+      !newJiraIssueTargetProject ||
+      !newJiraIssueTargetType
+    ) {
       setJiraCreateFields([])
       setJiraCreateFieldsLoading(false)
       setJiraCreateFieldsError(null)
@@ -4558,7 +5485,7 @@ export default function TaskPage(): React.JSX.Element {
     setJiraCreateFieldsError(null)
     setNewJiraIssueCustomFieldValues({})
     void jiraListCreateFields(
-      settings,
+      jiraTaskSourceContext ?? settings,
       newJiraIssueTargetProject.id,
       newJiraIssueTargetType.id,
       newJiraIssueTargetProject.siteId
@@ -4583,7 +5510,14 @@ export default function TaskPage(): React.JSX.Element {
       // responses after the user switches either selector.
       cancelled = true
     }
-  }, [settings, newJiraIssueOpen, newJiraIssueTargetProject, newJiraIssueTargetType])
+  }, [
+    settings,
+    jiraConnected,
+    newJiraIssueOpen,
+    newJiraIssueTargetProject,
+    newJiraIssueTargetType,
+    jiraTaskSourceContext
+  ])
 
   // Why: defense-in-depth safety net applied to the current page's items.
   // The active tab scopes requests to issues or PRs, and this keeps stale
@@ -4656,7 +5590,7 @@ export default function TaskPage(): React.JSX.Element {
         item.branchName,
         item.headSha,
         item.prRepo ?? null,
-        { repoId: repo.id }
+        { repoId: repo.id, sourceContext: getTaskPageRepoSourceContext(repo, 'github') }
       ).then((checks) => {
         patchTaskPageWorkItemRows(
           { id: item.id, repoId: item.repoId },
@@ -4721,7 +5655,13 @@ export default function TaskPage(): React.JSX.Element {
         return
       }
       const q = stripRepoQualifiers(appliedTaskSearch.trim())
-      const repoArgs = selectedRepos.map((r) => ({ repoId: r.id, path: r.path }))
+      const repoArgs = selectedRepos.map((r) => ({
+        repoId: r.id,
+        path: r.path,
+        executionHostId: r.executionHostId,
+        sourceContext: getTaskPageRepoSourceContext(r, 'github')
+      }))
+      const requestGeneration = paginationGenerationRef.current
 
       const target = targetPage ?? pages.length
       setPaginationLoading(true)
@@ -4739,6 +5679,9 @@ export default function TaskPage(): React.JSX.Element {
             q,
             cursor
           )
+          if (paginationGenerationRef.current !== requestGeneration) {
+            return
+          }
           if (items.length === 0) {
             break
           }
@@ -4754,8 +5697,10 @@ export default function TaskPage(): React.JSX.Element {
       } catch (err) {
         console.error('Failed to load next page:', err)
       } finally {
-        setPaginationLoading(false)
-        setLoadingTargetPage(null)
+        if (paginationGenerationRef.current === requestGeneration) {
+          setPaginationLoading(false)
+          setLoadingTargetPage(null)
+        }
       }
     },
     [paginationLoading, selectedRepos, pages, appliedTaskSearch, fetchWorkItemsNextPage]
@@ -4799,19 +5744,19 @@ export default function TaskPage(): React.JSX.Element {
     if (!taskResumeApplied) {
       return
     }
-    // Why: both early-return branches must clear `retryingRepoPaths` — if the
+    // Why: both early-return branches must clear `retryingSourceKeys` — if the
     // user clicks Retry and then switches `taskSource` away from 'github' (or
     // somehow ends up with zero repos selected) before the fetch dispatches,
     // neither the `.then` nor the `.catch` below will fire, and the Retry
     // button would stay stuck in its disabled/Retrying state indefinitely.
     if (taskSource !== 'github' || githubMode !== 'items') {
-      setRetryingRepoPaths(new Set())
+      setRetryingSourceKeys(new Set())
       setTasksRefreshing(false)
       setTasksFiltering(false)
       return
     }
     if (selectedRepos.length === 0) {
-      setRetryingRepoPaths(new Set())
+      setRetryingSourceKeys(new Set())
       setTasksRefreshing(false)
       setTasksFiltering(false)
       return
@@ -4831,7 +5776,13 @@ export default function TaskPage(): React.JSX.Element {
     let anyUncached = false
     let anyRepoCached = false
     for (const r of selectedRepos) {
-      const cached = getCachedWorkItems(r.id, PER_REPO_FETCH_LIMIT, q)
+      const cached = getCachedWorkItems(
+        r.id,
+        PER_REPO_FETCH_LIMIT,
+        q,
+        r.path,
+        getTaskPageRepoSourceContext(r, 'github')
+      )
       if (cached === null) {
         anyUncached = true
       } else {
@@ -4866,7 +5817,12 @@ export default function TaskPage(): React.JSX.Element {
       workItemsInvalidationNonce !== lastFetchedInvalidationNonceRef.current
     lastFetchedInvalidationNonceRef.current = workItemsInvalidationNonce
     const forcedFetch = (forceRefresh && taskRefreshNonce > 0) || preferenceInvalidated
-    const repoArgs = selectedRepos.map((r) => ({ repoId: r.id, path: r.path }))
+    const repoArgs = selectedRepos.map((r) => ({
+      repoId: r.id,
+      path: r.path,
+      executionHostId: r.executionHostId,
+      sourceContext: getTaskPageRepoSourceContext(r, 'github')
+    }))
     const landingRefreshKey = `${repoArgs.map((r) => `${r.repoId}:${r.path}`).join('|')}::${q}`
     const shouldProbeOnLanding =
       !forcedFetch && anyRepoCached && !landingGitHubRefreshKeysRef.current.has(landingRefreshKey)
@@ -4881,29 +5837,29 @@ export default function TaskPage(): React.JSX.Element {
     // so the toolbar still shows a refresh-in-progress affordance.
     setTasksRefreshing(forcedFetch)
 
-    // Why: snapshot the retrying paths at effect-dispatch so overlapping
+    // Why: snapshot the retrying source keys at effect-dispatch so overlapping
     // retries don't clear each other's pending state. An earlier cancelled
     // effect settling after a newer retry starts would otherwise wipe the
-    // newer retry's repo from the set. Clearing only the paths captured
+    // newer retry's source from the set. Clearing only the keys captured
     // when this effect dispatched preserves later additions.
-    const dispatchedRetryPaths = retryingRepoPaths
+    const dispatchedRetrySourceKeys = retryingSourceKeys
     void fetchWorkItemsAcrossRepos(repoArgs, PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT, q, {
       ...deriveTaskPageGitHubWorkItemsFetchOptions(forcedFetch, shouldProbeOnLanding)
     })
       .then(({ items, failedCount: failed }) => {
-        // Why: clear only the repos this effect was responsible for
+        // Why: clear only the sources this effect was responsible for
         // retrying (the snapshot captured at dispatch time). Overlapping
         // retries — a second click while a prior fetch is still in flight
-        // — must not clear the newer repo from the set, so we can't just
+        // — must not clear the newer source from the set, so we can't just
         // reset the whole set here. The early-return branches above reset
         // the whole set because those branches won't dispatch a fetch.
-        setRetryingRepoPaths((prev) => {
-          if (dispatchedRetryPaths.size === 0) {
+        setRetryingSourceKeys((prev) => {
+          if (dispatchedRetrySourceKeys.size === 0) {
             return prev
           }
           const next = new Set(prev)
-          for (const p of dispatchedRetryPaths) {
-            next.delete(p)
+          for (const key of dispatchedRetrySourceKeys) {
+            next.delete(key)
           }
           return next
         })
@@ -4929,19 +5885,19 @@ export default function TaskPage(): React.JSX.Element {
       .catch((err) => {
         // Why: fetchWorkItemsAcrossRepos swallows per-repo failures, so a
         // reject here means an IPC-level or programmer error — surface it.
-        // Clear only the repos this effect was responsible for retrying
+        // Clear only the sources this effect was responsible for retrying
         // (the snapshot captured at dispatch time). Overlapping retries —
         // a second click while a prior fetch is still in flight — must
-        // not clear the newer repo from the set, so we can't just reset
+        // not clear the newer source from the set, so we can't just reset
         // the whole set here. The early-return branches above reset the
         // whole set because those branches won't dispatch a fetch.
-        setRetryingRepoPaths((prev) => {
-          if (dispatchedRetryPaths.size === 0) {
+        setRetryingSourceKeys((prev) => {
+          if (dispatchedRetrySourceKeys.size === 0) {
             return prev
           }
           const next = new Set(prev)
-          for (const p of dispatchedRetryPaths) {
-            next.delete(p)
+          for (const key of dispatchedRetrySourceKeys) {
+            next.delete(key)
           }
           return next
         })
@@ -4959,7 +5915,12 @@ export default function TaskPage(): React.JSX.Element {
     // The search API is cached 120s server-side so this doesn't add
     // meaningful latency or rate-limit pressure.
     void countWorkItemsAcrossRepos(
-      selectedRepos.map((r) => ({ repoId: r.id, path: r.path })),
+      selectedRepos.map((r) => ({
+        repoId: r.id,
+        path: r.path,
+        executionHostId: r.executionHostId,
+        sourceContext: getTaskPageRepoSourceContext(r, 'github')
+      })),
       q
     ).then((count) => {
       if (!cancelled) {
@@ -5060,7 +6021,9 @@ export default function TaskPage(): React.JSX.Element {
       // preset updates the persisted settings instead of only changing the
       // current page state.
       void updateSettings({ defaultTaskViewPreset: presetId }).catch(() => {
-        toast.error('Failed to save default task view.')
+        toast.error(
+          translate('auto.components.TaskPage.fe380f306c', 'Failed to save default task view.')
+        )
       })
     },
     [updateSettings]
@@ -5112,6 +6075,7 @@ export default function TaskPage(): React.JSX.Element {
       githubMode !== 'items' ||
       dialogWorkItem ||
       newIssueOpen ||
+      newLinearProjectOpen ||
       newLinearIssueOpen ||
       newJiraIssueOpen ||
       activeModal !== 'none'
@@ -5154,6 +6118,7 @@ export default function TaskPage(): React.JSX.Element {
     dialogWorkItem,
     githubMode,
     newIssueOpen,
+    newLinearProjectOpen,
     newLinearIssueOpen,
     newJiraIssueOpen,
     taskSource
@@ -5169,12 +6134,13 @@ export default function TaskPage(): React.JSX.Element {
       }
       openModal('new-workspace-composer', {
         linkedWorkItem,
+        taskSourceContext: getTaskPageRepoSourceContext(repoMap.get(item.repoId), 'github'),
         prefilledName: getGitHubWorkItemWorkspaceSeed(item),
         initialRepoId: item.repoId,
         telemetrySource: 'sidebar'
       })
     },
-    [openModal]
+    [openModal, repoMap]
   )
 
   const handleUseWorkItem = useCallback(
@@ -5186,6 +6152,7 @@ export default function TaskPage(): React.JSX.Element {
       // the worktree appeared in the sidebar before the user had a chance
       // to review it. The composer already owns the prefill flow. Telemetry
       // attribution flows via `openComposerForItem` (sets telemetrySource).
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
       openComposerForItem(item)
     },
     [openComposerForItem]
@@ -5208,10 +6175,18 @@ export default function TaskPage(): React.JSX.Element {
       if (result === false) {
         toast.error(
           item.type === 'pr'
-            ? 'Unable to open the workspace attached to this pull request.'
-            : 'Unable to open the workspace attached to this issue.'
+            ? translate(
+                'auto.components.TaskPage.534a9c6017',
+                'Unable to open the workspace attached to this pull request.'
+              )
+            : translate(
+                'auto.components.TaskPage.585dba2989',
+                'Unable to open the workspace attached to this issue.'
+              )
         )
+        return
       }
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
     },
     [handleUseWorkItem]
   )
@@ -5226,16 +6201,22 @@ export default function TaskPage(): React.JSX.Element {
       }
       openModal('new-workspace-composer', {
         linkedWorkItem,
+        taskSourceContext: getTaskPageRepoSourceContext(
+          repoMap.get(item.repoId),
+          'gitlab',
+          item.projectRef
+        ),
         prefilledName: getGitLabWorkItemWorkspaceSeed(item),
         initialRepoId: item.repoId,
         telemetrySource: 'sidebar'
       })
     },
-    [openModal]
+    [openModal, repoMap]
   )
 
   const handleUseGitLabItem = useCallback(
     (item: GitLabWorkItem): void => {
+      useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
       openComposerForGitLabItem(item)
     },
     [openComposerForGitLabItem]
@@ -5256,7 +6237,10 @@ export default function TaskPage(): React.JSX.Element {
             newIssueRuntimeTarget,
             'github.createIssue',
             {
-              repo: newIssueTargetRepo.id,
+              repo:
+                newIssueSourceContext?.provider === 'github'
+                  ? (newIssueSourceContext.repoId ?? newIssueTargetRepo.id)
+                  : newIssueTargetRepo.id,
               title,
               body: newIssueBody,
               labels: newIssueLabels,
@@ -5267,23 +6251,32 @@ export default function TaskPage(): React.JSX.Element {
         : await window.api.gh.createIssue({
             repoPath: newIssueTargetRepo.path,
             repoId: newIssueTargetRepo.id,
+            sourceContext: newIssueSourceContext,
             title,
             body: newIssueBody,
             labels: newIssueLabels,
             assignees: newIssueAssignees.map((assignee) => assignee.login)
           })
       if (!result.ok) {
-        toast.error(result.error || 'Failed to create issue.')
+        toast.error(
+          result.error ||
+            translate('auto.components.TaskPage.7437e340b4', 'Failed to create issue.')
+        )
         return
       }
-      toast.success(`Opened issue #${result.number}`, {
-        action: result.url
-          ? {
-              label: 'View',
-              onClick: () => window.open(result.url, '_blank')
-            }
-          : undefined
-      })
+      toast.success(
+        translate('auto.components.TaskPage.3f9604efc7', 'Opened issue #{{value0}}', {
+          value0: result.number
+        }),
+        {
+          action: result.url
+            ? {
+                label: translate('auto.components.TaskPage.9c57663908', 'View'),
+                onClick: () => window.open(result.url, '_blank')
+              }
+            : undefined
+        }
+      )
       setNewIssueOpen(false)
       setNewIssueTitle('')
       setNewIssueBody('')
@@ -5314,12 +6307,20 @@ export default function TaskPage(): React.JSX.Element {
         ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.workItem>>>(
             newIssueRuntimeTarget,
             'github.workItem',
-            { repo: newIssueTargetRepo.id, number: result.number, type: 'issue' },
+            {
+              repo:
+                newIssueSourceContext?.provider === 'github'
+                  ? (newIssueSourceContext.repoId ?? newIssueTargetRepo.id)
+                  : newIssueTargetRepo.id,
+              number: result.number,
+              type: 'issue'
+            },
             { timeoutMs: 30_000 }
           )
         : window.api.gh.workItem({
             repoPath: newIssueTargetRepo.path,
             repoId: newIssueTargetRepo.id,
+            sourceContext: newIssueSourceContext,
             number: result.number,
             type: 'issue'
           })
@@ -5343,11 +6344,100 @@ export default function TaskPage(): React.JSX.Element {
     newIssueAssignees,
     newIssueLabels,
     newIssueRuntimeTarget,
+    newIssueSourceContext,
     newIssueSubmitting,
     newIssueTargetRepo,
     newIssueTitle,
     openGitHubDetailPage,
     setDialogWorkItem
+  ])
+
+  const handleCreateNewLinearProject = useCallback(async (): Promise<void> => {
+    if (!newLinearProjectTargetTeam) {
+      return
+    }
+    const name = newLinearProjectName.trim()
+    if (!name || newLinearProjectSubmitting) {
+      return
+    }
+    setNewLinearProjectSubmitting(true)
+    try {
+      const result = await linearCreateProject(linearTaskSourceContext ?? settings, {
+        name,
+        description: newLinearProjectDescription.trim() || undefined,
+        content: newLinearProjectContent.trim() || undefined,
+        teamIds: [newLinearProjectTargetTeam.id],
+        workspaceId: newLinearProjectTargetTeam.workspaceId,
+        leadId: newLinearProjectLeadId || undefined,
+        memberIds: newLinearProjectMemberIds.length > 0 ? newLinearProjectMemberIds : undefined,
+        labelIds: newLinearProjectLabelIds.length > 0 ? newLinearProjectLabelIds : undefined,
+        priority: newLinearProjectPriority,
+        startDate: newLinearProjectStartDate || undefined,
+        targetDate: newLinearProjectTargetDate || undefined
+      })
+      if (!result.ok) {
+        toast.error(
+          result.error ||
+            translate('auto.components.TaskPage.3ca9b424a3', 'Failed to create project.')
+        )
+        return
+      }
+      toast.success(
+        translate('auto.components.TaskPage.cb98f0350c', 'Created {{value0}}', {
+          value0: result.project.name
+        }),
+        {
+          action: result.project.url
+            ? {
+                label: translate('auto.components.TaskPage.9c57663908', 'View'),
+                onClick: () => window.open(result.project.url, '_blank')
+              }
+            : undefined
+        }
+      )
+      setNewLinearProjectOpen(false)
+      setNewLinearProjectName('')
+      setNewLinearProjectDescription('')
+      setNewLinearProjectContent('')
+      setNewLinearProjectLeadId(null)
+      setNewLinearProjectMemberIds([])
+      setNewLinearProjectLabelIds([])
+      setNewLinearProjectPriority(0)
+      setNewLinearProjectStartDate('')
+      setNewLinearProjectTargetDate('')
+      setAppliedLinearProjectSearch('')
+      setLinearProjectSearchInput('')
+      setLinearProjectsResult((current) => ({
+        ...current,
+        items: [result.project, ...current.items.filter((item) => item.id !== result.project.id)]
+      }))
+      setSelectedLinearProjectDetail(result.project)
+      openLinearProjectContext(result.project)
+      setLinearRefreshNonce((n) => n + 1)
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translate('auto.components.TaskPage.3ca9b424a3', 'Failed to create project.')
+      )
+    } finally {
+      setNewLinearProjectSubmitting(false)
+    }
+  }, [
+    newLinearProjectContent,
+    newLinearProjectDescription,
+    newLinearProjectLabelIds,
+    newLinearProjectLeadId,
+    newLinearProjectMemberIds,
+    newLinearProjectName,
+    newLinearProjectPriority,
+    newLinearProjectStartDate,
+    newLinearProjectSubmitting,
+    newLinearProjectTargetDate,
+    newLinearProjectTargetTeam,
+    openLinearProjectContext,
+    linearTaskSourceContext,
+    settings
   ])
 
   const handleCreateNewLinearIssue = useCallback(async (): Promise<void> => {
@@ -5363,12 +6453,18 @@ export default function TaskPage(): React.JSX.Element {
       newLinearIssueProjectId === selectedLinearProject.id &&
       newLinearIssueTargetTeam.workspaceId !== selectedLinearProject.workspaceId
     ) {
-      toast.error('Select a team from the project workspace before filing this issue.')
+      toast.error(
+        translate(
+          'auto.components.TaskPage.1e1b2ad8f2',
+          'Select a team from the project workspace before filing this issue.'
+        )
+      )
       return
     }
     setNewLinearIssueSubmitting(true)
+    const submitProviderRuntimeContextKey = providerRuntimeContextKey
     try {
-      const result = await linearCreateIssue(settings, {
+      const result = await linearCreateIssue(linearTaskSourceContext ?? settings, {
         teamId: newLinearIssueTargetTeam.id,
         title,
         description: newLinearIssueBody || undefined,
@@ -5379,18 +6475,29 @@ export default function TaskPage(): React.JSX.Element {
         projectId: newLinearIssueProjectId || null,
         labelIds: newLinearIssueLabelIds.length > 0 ? newLinearIssueLabelIds : undefined
       })
-      if (!result.ok) {
-        toast.error(result.error || 'Failed to create issue.')
+      if (submitProviderRuntimeContextKey !== providerRuntimeContextKeyRef.current) {
         return
       }
-      toast.success(`Created ${result.identifier}`, {
-        action: result.url
-          ? {
-              label: 'View',
-              onClick: () => window.open(result.url, '_blank')
-            }
-          : undefined
-      })
+      if (!result.ok) {
+        toast.error(
+          result.error ||
+            translate('auto.components.TaskPage.7437e340b4', 'Failed to create issue.')
+        )
+        return
+      }
+      toast.success(
+        translate('auto.components.TaskPage.cb98f0350c', 'Created {{value0}}', {
+          value0: result.identifier
+        }),
+        {
+          action: result.url
+            ? {
+                label: translate('auto.components.TaskPage.9c57663908', 'View'),
+                onClick: () => window.open(result.url, '_blank')
+              }
+            : undefined
+        }
+      )
       setNewLinearIssueOpen(false)
       setNewLinearIssueTitle('')
       setNewLinearIssueBody('')
@@ -5400,18 +6507,28 @@ export default function TaskPage(): React.JSX.Element {
       setNewLinearIssueProjectId(null)
       setNewLinearIssueLabelIds([])
       setLinearRefreshNonce((n) => n + 1)
+      useAppStore.getState().recordFeatureInteraction('linear-tasks')
 
       // Why: auto-select the new issue in the inline workspace so the user
       // sees exactly what was filed, mirroring the GitHub create-issue flow.
-      void linearGetIssue(settings, result.id, newLinearIssueTargetTeam.workspaceId)
+      void linearGetIssue(
+        linearTaskSourceContext ?? settings,
+        result.id,
+        newLinearIssueTargetTeam.workspaceId
+      )
         .then((full) => {
+          if (submitProviderRuntimeContextKey !== providerRuntimeContextKeyRef.current) {
+            return
+          }
           if (full) {
-            openLinearDetailPage(full)
+            setSelectedLinearIssue(full, { allowOutsideList: true })
           }
         })
         .catch(() => {})
     } finally {
-      setNewLinearIssueSubmitting(false)
+      if (submitProviderRuntimeContextKey === providerRuntimeContextKeyRef.current) {
+        setNewLinearIssueSubmitting(false)
+      }
     }
   }, [
     newLinearIssueBody,
@@ -5423,8 +6540,10 @@ export default function TaskPage(): React.JSX.Element {
     newLinearIssueAssigneeId,
     newLinearIssueProjectId,
     newLinearIssueLabelIds,
-    openLinearDetailPage,
+    providerRuntimeContextKey,
     selectedLinearProject,
+    setSelectedLinearIssue,
+    linearTaskSourceContext,
     settings
   ])
 
@@ -5441,8 +6560,9 @@ export default function TaskPage(): React.JSX.Element {
       newJiraIssueCustomFieldValues
     )
     setNewJiraIssueSubmitting(true)
+    const submitProviderRuntimeContextKey = providerRuntimeContextKey
     try {
-      const result = await jiraCreateIssue(settings, {
+      const result = await jiraCreateIssue(jiraTaskSourceContext ?? settings, {
         siteId: newJiraIssueTargetProject.siteId,
         projectId: newJiraIssueTargetProject.id,
         issueTypeId: newJiraIssueTargetType.id,
@@ -5450,26 +6570,44 @@ export default function TaskPage(): React.JSX.Element {
         description: newJiraIssueBody || undefined,
         customFields
       })
-      if (!result.ok) {
-        toast.error(result.error || 'Failed to create Jira issue.')
+      if (submitProviderRuntimeContextKey !== providerRuntimeContextKeyRef.current) {
         return
       }
-      toast.success(`Created ${result.key}`, {
-        action: result.url
-          ? {
-              label: 'View',
-              onClick: () => window.open(result.url, '_blank')
-            }
-          : undefined
-      })
+      if (!result.ok) {
+        toast.error(
+          result.error ||
+            translate('auto.components.TaskPage.aec5feeb69', 'Failed to create Jira issue.')
+        )
+        return
+      }
+      toast.success(
+        translate('auto.components.TaskPage.cb98f0350c', 'Created {{value0}}', {
+          value0: result.key
+        }),
+        {
+          action: result.url
+            ? {
+                label: translate('auto.components.TaskPage.9c57663908', 'View'),
+                onClick: () => window.open(result.url, '_blank')
+              }
+            : undefined
+        }
+      )
       setNewJiraIssueOpen(false)
       setNewJiraIssueTitle('')
       setNewJiraIssueBody('')
       setNewJiraIssueCustomFieldValues({})
       setJiraRefreshNonce((n) => n + 1)
 
-      void jiraGetIssue(settings, result.key, newJiraIssueTargetProject.siteId)
+      void jiraGetIssue(
+        jiraTaskSourceContext ?? settings,
+        result.key,
+        newJiraIssueTargetProject.siteId
+      )
         .then((full) => {
+          if (submitProviderRuntimeContextKey !== providerRuntimeContextKeyRef.current) {
+            return
+          }
           if (full) {
             // Why: the list cache may still be fresh after create; insert the
             // new row locally before selecting it so the inspector stays open.
@@ -5479,7 +6617,9 @@ export default function TaskPage(): React.JSX.Element {
         })
         .catch(() => {})
     } finally {
-      setNewJiraIssueSubmitting(false)
+      if (submitProviderRuntimeContextKey === providerRuntimeContextKeyRef.current) {
+        setNewJiraIssueSubmitting(false)
+      }
     }
   }, [
     hasMissingJiraCreateField,
@@ -5490,6 +6630,8 @@ export default function TaskPage(): React.JSX.Element {
     newJiraIssueTargetProject,
     newJiraIssueTargetType,
     newJiraIssueTitle,
+    providerRuntimeContextKey,
+    jiraTaskSourceContext,
     settings,
     setSelectedJiraIssue,
     visibleJiraCreateFields
@@ -5551,21 +6693,27 @@ export default function TaskPage(): React.JSX.Element {
   ])
 
   useEffect(() => {
-    if (!preflightStatusChecked) {
+    if (!preflightStatusCurrent || !preflightStatusChecked) {
       void refreshPreflightStatus()
     }
-    if (!linearStatusChecked) {
+    if (!linearStatusReady) {
       void checkLinearConnection()
     }
-    if (!jiraStatusChecked) {
+    if (!jiraStatusReady) {
       void checkJiraConnection()
     }
   }, [
     checkJiraConnection,
     checkLinearConnection,
-    jiraStatusChecked,
-    linearStatusChecked,
+    expectedPreflightContextKey,
+    jiraStatusContextKey,
+    jiraStatusReady,
+    linearStatusContextKey,
+    linearStatusReady,
+    providerRuntimeContextKey,
+    preflightStatusContextKey,
     preflightStatusChecked,
+    preflightStatusCurrent,
     refreshPreflightStatus
   ])
 
@@ -5618,7 +6766,7 @@ export default function TaskPage(): React.JSX.Element {
     if (linearMode !== 'issues') {
       return
     }
-    if (!linearStatus.connected) {
+    if (!linearConnected) {
       return
     }
 
@@ -5631,7 +6779,7 @@ export default function TaskPage(): React.JSX.Element {
       trimmed.length > 0
         ? ({ kind: 'search', query: trimmed, limit: LINEAR_ITEM_LIMIT } as const)
         : ({ kind: 'list', filter: 'all', limit: effectiveLinearIssueLimit } as const)
-    const cachedResult = getCachedLinearIssues(readArgs)
+    const cachedResult = getCachedLinearIssues(readArgs, { sourceContext: linearTaskSourceContext })
     if (readArgs.kind === 'search') {
       setLinearIssuesHasMore(false)
       if (cachedResult) {
@@ -5673,10 +6821,12 @@ export default function TaskPage(): React.JSX.Element {
     const request =
       readArgs.kind === 'search'
         ? searchLinearIssues(readArgs.query, LINEAR_ITEM_LIMIT, {
-            force: forceRefresh || shouldProbeOnLanding
+            force: forceRefresh || shouldProbeOnLanding,
+            sourceContext: linearTaskSourceContext
           })
         : listLinearIssues(readArgs.filter, effectiveLinearIssueLimit, {
-            force: forceRefresh || shouldProbeOnLanding
+            force: forceRefresh || shouldProbeOnLanding,
+            sourceContext: linearTaskSourceContext
           })
 
     void request
@@ -5732,13 +6882,14 @@ export default function TaskPage(): React.JSX.Element {
   }, [
     taskSource,
     linearMode,
-    linearStatus.connected,
+    linearConnected,
     selectedLinearWorkspaceId,
     appliedLinearSearch,
     linearIssueLimit,
     linearRefreshNonce,
     taskResumeApplied,
-    getCachedLinearIssues
+    getCachedLinearIssues,
+    linearTaskSourceContext
   ])
 
   useEffect(() => {
@@ -5755,12 +6906,14 @@ export default function TaskPage(): React.JSX.Element {
     if (!taskResumeApplied || taskSource !== 'linear' || linearMode !== 'projects') {
       return
     }
-    if (!linearStatus.connected || selectedLinearProject) {
+    if (!linearConnected || selectedLinearProject) {
       return
     }
     let cancelled = false
     const query = appliedLinearProjectSearch.trim()
-    const cached = getCachedLinearProjects(query || undefined, LINEAR_ITEM_LIMIT)
+    const cached = getCachedLinearProjects(query || undefined, LINEAR_ITEM_LIMIT, undefined, {
+      sourceContext: linearTaskSourceContext
+    })
     if (cached) {
       setLinearProjectsResult(cached)
     }
@@ -5768,7 +6921,8 @@ export default function TaskPage(): React.JSX.Element {
     setLinearProjectsLoading(force || cached === null)
     setLinearProjectsError(null)
     void listLinearProjectsFromStore(query || undefined, LINEAR_ITEM_LIMIT, undefined, {
-      force
+      force,
+      sourceContext: linearTaskSourceContext
     })
       .then((result) => {
         if (!cancelled) {
@@ -5792,12 +6946,13 @@ export default function TaskPage(): React.JSX.Element {
     taskResumeApplied,
     taskSource,
     linearMode,
-    linearStatus.connected,
+    linearConnected,
     selectedLinearWorkspaceId,
     selectedLinearProject,
     appliedLinearProjectSearch,
     linearRefreshNonce,
-    getCachedLinearProjects
+    getCachedLinearProjects,
+    linearTaskSourceContext
   ])
 
   useEffect(() => {
@@ -5809,7 +6964,8 @@ export default function TaskPage(): React.JSX.Element {
     setLinearProjectDetailLoading(true)
     setLinearProjectDetailError(null)
     void fetchLinearProject(selectedLinearProject.id, selectedLinearProject.workspaceId, {
-      force: linearRefreshNonce > 0
+      force: linearRefreshNonce > 0,
+      sourceContext: linearTaskSourceContext
     })
       .then((project) => {
         if (!cancelled) {
@@ -5835,7 +6991,13 @@ export default function TaskPage(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [fetchLinearProject, linearRefreshNonce, selectedLinearProject, setTaskResumeState])
+  }, [
+    fetchLinearProject,
+    linearRefreshNonce,
+    selectedLinearProject,
+    setTaskResumeState,
+    linearTaskSourceContext
+  ])
 
   useEffect(() => {
     if (!selectedLinearProject?.workspaceId || linearProjectTab !== 'issues') {
@@ -5849,7 +7011,7 @@ export default function TaskPage(): React.JSX.Element {
       selectedLinearProject.id,
       selectedLinearProject.workspaceId,
       effectiveLimit,
-      { force: linearRefreshNonce > 0 }
+      { force: linearRefreshNonce > 0, sourceContext: linearTaskSourceContext }
     )
       .then((result) => {
         if (!cancelled) {
@@ -5873,6 +7035,7 @@ export default function TaskPage(): React.JSX.Element {
     linearProjectTab,
     linearRefreshNonce,
     listLinearProjectIssues,
+    linearTaskSourceContext,
     selectedLinearProject
   ])
 
@@ -5880,21 +7043,37 @@ export default function TaskPage(): React.JSX.Element {
     if (!taskResumeApplied || taskSource !== 'linear' || linearMode !== 'views') {
       return
     }
-    if (!linearStatus.connected || selectedLinearCustomView) {
+    if (!linearConnected || selectedLinearCustomView) {
       return
     }
     let cancelled = false
-    const cached = getCachedLinearCustomViews(linearCustomViewModel, LINEAR_ITEM_LIMIT)
-    if (cached) {
-      setLinearCustomViewsResult(cached)
+    const cachedResults = LINEAR_CUSTOM_VIEW_MODELS.map((model) =>
+      getCachedLinearCustomViews(model, LINEAR_ITEM_LIMIT, undefined, {
+        sourceContext: linearTaskSourceContext
+      })
+    )
+    const allCached = cachedResults.every(
+      (result): result is LinearCollectionResult<LinearCustomViewSummary> => result !== null
+    )
+    if (allCached) {
+      setLinearCustomViewsResult(mergeLinearCollectionResults(cachedResults))
     }
     const force = linearRefreshNonce > 0
-    setLinearCustomViewsLoading(force || cached === null)
+    setLinearCustomViewsLoading(force || !allCached)
     setLinearCustomViewsError(null)
-    void listLinearCustomViews(linearCustomViewModel, LINEAR_ITEM_LIMIT, undefined, { force })
+    // Why: the Views tab already has a Model column, so listing both view
+    // models avoids a second, redundant Issues/Projects switch.
+    void Promise.all(
+      LINEAR_CUSTOM_VIEW_MODELS.map((model) =>
+        listLinearCustomViews(model, LINEAR_ITEM_LIMIT, undefined, {
+          force,
+          sourceContext: linearTaskSourceContext
+        })
+      )
+    )
       .then((result) => {
         if (!cancelled) {
-          setLinearCustomViewsResult(result)
+          setLinearCustomViewsResult(mergeLinearCollectionResults(result))
           setLinearCustomViewsLoading(false)
         }
       })
@@ -5914,12 +7093,13 @@ export default function TaskPage(): React.JSX.Element {
     taskResumeApplied,
     taskSource,
     linearMode,
-    linearStatus.connected,
+    linearConnected,
     selectedLinearWorkspaceId,
     selectedLinearCustomView,
-    linearCustomViewModel,
     linearRefreshNonce,
-    getCachedLinearCustomViews
+    getCachedLinearCustomViews,
+    listLinearCustomViews,
+    linearTaskSourceContext
   ])
 
   useEffect(() => {
@@ -5938,13 +7118,13 @@ export default function TaskPage(): React.JSX.Element {
             selectedLinearCustomView.id,
             selectedLinearCustomView.workspaceId,
             issueLimit,
-            { force: linearRefreshNonce > 0 }
+            { force: linearRefreshNonce > 0, sourceContext: linearTaskSourceContext }
           )
         : listLinearCustomViewProjects(
             selectedLinearCustomView.id,
             selectedLinearCustomView.workspaceId,
             LINEAR_ITEM_LIMIT,
-            { force: linearRefreshNonce > 0 }
+            { force: linearRefreshNonce > 0, sourceContext: linearTaskSourceContext }
           )
     void request
       .then((result) => {
@@ -5974,6 +7154,7 @@ export default function TaskPage(): React.JSX.Element {
     linearCustomViewIssueLimit,
     listLinearCustomViewIssues,
     listLinearCustomViewProjects,
+    linearTaskSourceContext,
     selectedLinearCustomView
   ])
 
@@ -5982,7 +7163,7 @@ export default function TaskPage(): React.JSX.Element {
       return
     }
 
-    if (!linearStatus.connected) {
+    if (!linearConnected) {
       clearSelectedLinearIssue()
       return
     }
@@ -6008,7 +7189,7 @@ export default function TaskPage(): React.JSX.Element {
   }, [
     clearSelectedLinearIssue,
     filteredLinearIssues,
-    linearStatus.connected,
+    linearConnected,
     selectedLinearIssueCanFloat,
     selectedLinearIssueId,
     taskResumeApplied,
@@ -6043,7 +7224,7 @@ export default function TaskPage(): React.JSX.Element {
     if (taskSource !== 'jira') {
       return
     }
-    if (!jiraStatus.connected) {
+    if (!jiraConnected) {
       return
     }
 
@@ -6054,8 +7235,10 @@ export default function TaskPage(): React.JSX.Element {
     const trimmed = appliedJiraSearch.trim()
     const request =
       trimmed.length > 0
-        ? searchJiraIssues(trimmed, JIRA_ITEM_LIMIT)
-        : listJiraIssues(activeJiraPreset, JIRA_ITEM_LIMIT)
+        ? searchJiraIssues(trimmed, JIRA_ITEM_LIMIT, { sourceContext: jiraTaskSourceContext })
+        : listJiraIssues(activeJiraPreset, JIRA_ITEM_LIMIT, {
+            sourceContext: jiraTaskSourceContext
+          })
 
     void request
       .then((issues) => {
@@ -6079,19 +7262,20 @@ export default function TaskPage(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     taskSource,
-    jiraStatus.connected,
+    jiraConnected,
     selectedJiraSiteId,
     appliedJiraSearch,
     activeJiraPreset,
     jiraRefreshNonce,
-    taskResumeApplied
+    taskResumeApplied,
+    jiraTaskSourceContext
   ])
 
   useEffect(() => {
     if (!taskResumeApplied || taskSource !== 'jira') {
       return
     }
-    if (!jiraStatus.connected || displayedJiraIssues.length === 0) {
+    if (!jiraConnected || displayedJiraIssues.length === 0) {
       if (selectedJiraIssueKey !== null) {
         setSelectedJiraIssueKey(null)
       }
@@ -6109,7 +7293,7 @@ export default function TaskPage(): React.JSX.Element {
     }
   }, [
     displayedJiraIssues,
-    jiraStatus.connected,
+    jiraConnected,
     selectedJiraIssueFallback,
     selectedJiraIssueKey,
     taskResumeApplied,
@@ -6121,24 +7305,26 @@ export default function TaskPage(): React.JSX.Element {
   // strings (e.g. "ENG-123") so we use 0 as a placeholder number since the
   // provider-generic work item shape still expects numeric issue metadata.
   const openComposerForLinearItem = useCallback(
-    (issue: LinearIssue, renderedText?: string): void => {
-      const linkedWorkItem = buildLinearIssueLinkedWorkItem(issue, renderedText)
+    (issue: LinearIssue): void => {
+      const linkedWorkItem = buildLinearIssueLinkedWorkItem(issue)
       openModal('new-workspace-composer', {
         linkedWorkItem,
+        taskSourceContext: linearTaskSourceContext,
         prefilledName: getLinearIssueWorkspaceName(issue),
         telemetrySource: 'sidebar'
       })
     },
-    [openModal]
+    [linearTaskSourceContext, openModal]
   )
 
   const handleUseLinearItem = useCallback(
-    (issue: LinearIssue, renderedText?: string): void => {
+    (issue: LinearIssue): void => {
       // Why: same rationale as handleUseWorkItem — open the New Workspace
       // dialog pre-filled rather than yolo-creating the worktree, so the
       // user can confirm name / agent / setup before the worktree lands in
       // the sidebar. Telemetry attribution flows via openComposerForLinearItem.
-      openComposerForLinearItem(issue, renderedText)
+      useAppStore.getState().recordFeatureInteraction('linear-tasks')
+      openComposerForLinearItem(issue)
     },
     [openComposerForLinearItem]
   )
@@ -6174,7 +7360,9 @@ export default function TaskPage(): React.JSX.Element {
         })
         .catch(() => {
           setLinearLoading(false)
-          toast.error('Failed to switch Linear workspace.')
+          toast.error(
+            translate('auto.components.TaskPage.d0d570b306', 'Failed to switch Linear workspace.')
+          )
         })
     },
     [clearSelectedLinearIssue, linearMode, selectLinearWorkspace, setTaskResumeState]
@@ -6184,7 +7372,9 @@ export default function TaskPage(): React.JSX.Element {
     (next: ReadonlySet<string>, persisted: string[] | null): void => {
       setLinearTeamSelection(new Set(next))
       void updateSettings({ defaultLinearTeamSelection: persisted }).catch(() => {
-        toast.error('Failed to save team selection.')
+        toast.error(
+          translate('auto.components.TaskPage.3f594861a5', 'Failed to save team selection.')
+        )
       })
     },
     [updateSettings]
@@ -6218,15 +7408,17 @@ export default function TaskPage(): React.JSX.Element {
       }
       openModal('new-workspace-composer', {
         linkedWorkItem,
+        taskSourceContext: jiraTaskSourceContext,
         prefilledName: getJiraIssueWorkspaceSeed(issue),
         telemetrySource: 'sidebar'
       })
     },
-    [openModal]
+    [jiraTaskSourceContext, openModal]
   )
 
   const handleUseJiraItem = useCallback(
     (issue: JiraIssue): void => {
+      useAppStore.getState().recordFeatureInteraction('jira-tasks')
       openComposerForJiraItem(issue)
     },
     [openComposerForJiraItem]
@@ -6259,6 +7451,16 @@ export default function TaskPage(): React.JSX.Element {
     }
   }, [connectJira, jiraApiTokenDraft, jiraEmailDraft, jiraSiteUrlDraft])
 
+  const taskPageListChromeHidden = shouldHideTaskPageListChrome({
+    taskSource,
+    hasGitHubDetail: Boolean(dialogWorkItem),
+    hasGitLabDetail: Boolean(gitlabDialogItem),
+    hasJiraDetail: Boolean(selectedJiraIssue),
+    hasLinearIssueDetail: Boolean(selectedLinearIssue),
+    hasLinearProjectContext: Boolean(selectedLinearProject),
+    hasLinearViewContext: Boolean(selectedLinearCustomView)
+  })
+
   return (
     <div className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background text-foreground">
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
@@ -6270,13 +7472,7 @@ export default function TaskPage(): React.JSX.Element {
             too low, breaking the visual band across the top chrome. */}
         <div className="mx-auto flex min-h-0 min-w-0 w-full flex-1 flex-col px-5 pt-1.5 pb-5 md:px-8 md:pt-1.5 md:pb-7">
           <div
-            className={cn(
-              'flex-none flex flex-col gap-3',
-              // Why: GitHub detail views (PR + Issue) fill the entire right
-              // pane — the list filter row above them is not relevant and
-              // would visually duplicate the detail page's own breadcrumb.
-              taskSource === 'github' && dialogWorkItem && 'hidden'
-            )}
+            className={cn('flex-none flex flex-col gap-3', taskPageListChromeHidden && 'hidden')}
           >
             <section className="flex flex-col gap-3">
               <div className="flex flex-col gap-3">
@@ -6296,51 +7492,76 @@ export default function TaskPage(): React.JSX.Element {
                           size="icon"
                           className="size-7 rounded-full"
                           onClick={closeTaskPage}
-                          aria-label="Close tasks"
+                          aria-label={translate(
+                            'auto.components.TaskPage.1a06219d5c',
+                            'Close tasks'
+                          )}
                         >
                           <X className="size-4" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" sideOffset={6}>
-                        Close · Esc
+                        {translate('auto.components.TaskPage.4826fd1ad8', 'Close · Esc')}
                       </TooltipContent>
                     </Tooltip>
                     <div className="mx-1 h-5 w-px bg-border/50" aria-hidden />
                     {visibleSourceOptions.map((source) => {
                       const active = taskSource === source.id
+                      const sourceAvailabilityNotice =
+                        taskSourceAvailabilityNoticeByProvider[source.id] ?? null
+                      const sourceDisabled = source.disabled || sourceAvailabilityNotice?.blocking
                       return (
                         <Tooltip key={source.id}>
                           <TooltipTrigger asChild>
                             <button
                               type="button"
-                              disabled={source.disabled}
+                              disabled={sourceDisabled}
                               onClick={() => {
+                                if (sourceAvailabilityNotice?.blocking) {
+                                  return
+                                }
                                 taskSourceManuallyChangedRef.current = true
-                                openTaskPage({ taskSource: source.id })
+                                openTaskPage(
+                                  { taskSource: source.id },
+                                  { recordTasksInteraction: false }
+                                )
                                 void updateSettings({ defaultTaskSource: source.id }).catch(() => {
-                                  toast.error('Failed to save default task source.')
+                                  toast.error(
+                                    translate(
+                                      'auto.components.TaskPage.609532fae7',
+                                      'Failed to save default task source.'
+                                    )
+                                  )
                                 })
                               }}
-                              aria-label={source.label}
+                              data-task-source={source.id}
+                              aria-label={sourceAvailabilityNotice?.label ?? source.label}
+                              aria-pressed={active}
                               className={cn(
                                 'group flex h-8 w-8 items-center justify-center rounded-md border transition',
                                 active
                                   ? 'border-foreground/40 bg-muted/70 text-foreground shadow-sm'
                                   : 'border-border/40 bg-transparent text-muted-foreground hover:bg-muted/40 hover:text-foreground',
-                                source.disabled && 'cursor-not-allowed opacity-55'
+                                sourceDisabled && 'cursor-not-allowed opacity-55'
                               )}
                             >
                               <source.Icon className="size-3.5" />
                             </button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" sideOffset={6}>
-                            {source.label}
+                            {sourceAvailabilityNotice?.label ?? source.label}
                           </TooltipContent>
                         </Tooltip>
                       )
                     })}
+                    <div
+                      className="hidden min-w-0 max-w-[min(420px,40vw)] items-center rounded-md border border-border/50 bg-muted/35 px-2 py-1 text-xs text-muted-foreground sm:flex"
+                      title={taskSourceContextSummary.title}
+                    >
+                      <span className="truncate">{taskSourceContextSummary.label}</span>
+                    </div>
                   </div>
-                  {taskSource === 'linear' && linearStatus.connected ? (
+                  {taskSource === 'linear' && linearConnected ? (
                     <div className="flex items-center gap-2">
                       <LinearScopeSelector
                         workspaces={linearWorkspaces}
@@ -6368,8 +7589,15 @@ export default function TaskPage(): React.JSX.Element {
                             disabled={!selectedLinearTeamForExternalLink}
                             aria-label={
                               selectedLinearTeamForExternalLink
-                                ? `Open ${selectedLinearTeamForExternalLink.name} in Linear`
-                                : 'Select one Linear team to open in Linear'
+                                ? translate(
+                                    'auto.components.TaskPage.246bd64aed',
+                                    'Open {{value0}} in Linear',
+                                    { value0: selectedLinearTeamForExternalLink.name }
+                                  )
+                                : translate(
+                                    'auto.components.TaskPage.8029e2bd4d',
+                                    'Select one Linear team to open in Linear'
+                                  )
                             }
                             className="h-8 w-8 rounded-md border-border/50 bg-muted/50 text-foreground shadow-sm transition hover:bg-muted/50"
                           >
@@ -6378,13 +7606,20 @@ export default function TaskPage(): React.JSX.Element {
                         </TooltipTrigger>
                         <TooltipContent side="bottom" sideOffset={6}>
                           {selectedLinearTeamForExternalLink
-                            ? `Open ${selectedLinearTeamForExternalLink.name} in Linear`
-                            : 'Select one team to open in Linear'}
+                            ? translate(
+                                'auto.components.TaskPage.246bd64aed',
+                                'Open {{value0}} in Linear',
+                                { value0: selectedLinearTeamForExternalLink.name }
+                              )
+                            : translate(
+                                'auto.components.TaskPage.2af3ab5c58',
+                                'Select one team to open in Linear'
+                              )}
                         </TooltipContent>
                       </Tooltip>
                     </div>
                   ) : null}
-                  {taskSource === 'jira' && jiraStatus.connected ? (
+                  {taskSource === 'jira' && jiraConnected ? (
                     <div className="flex items-center gap-2">
                       {jiraSites.length > 1 ? (
                         <Select
@@ -6396,7 +7631,12 @@ export default function TaskPage(): React.JSX.Element {
                             setJiraError(null)
                             setJiraLoading(true)
                             void selectJiraSite(value).catch(() => {
-                              toast.error('Failed to switch Jira site.')
+                              toast.error(
+                                translate(
+                                  'auto.components.TaskPage.d09b7631b7',
+                                  'Failed to switch Jira site.'
+                                )
+                              )
                             })
                           }}
                         >
@@ -6404,7 +7644,9 @@ export default function TaskPage(): React.JSX.Element {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="all">All Jira sites</SelectItem>
+                            <SelectItem value="all">
+                              {translate('auto.components.TaskPage.e592d99051', 'All Jira sites')}
+                            </SelectItem>
                             {jiraSites.map((site) => (
                               <SelectItem key={site.id} value={site.id}>
                                 {site.displayName}
@@ -6417,11 +7659,22 @@ export default function TaskPage(): React.JSX.Element {
                   ) : null}
                 </div>
 
+                {taskSourceAvailabilityNotice ? (
+                  <div
+                    role="status"
+                    className="flex max-w-3xl items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
+                    title={taskSourceAvailabilityNotice.title}
+                  >
+                    <AlertCircle className="size-3.5 flex-none" />
+                    <span className="min-w-0 truncate">{taskSourceAvailabilityNotice.label}</span>
+                  </div>
+                ) : null}
+
                 {taskSource === 'github' ? (
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     {projectModeVisible ? (
                       <div className="flex items-center gap-1 text-xs">
-                        {GITHUB_MODE_BUTTONS.map((mode) => {
+                        {githubModeButtons.map((mode) => {
                           const active =
                             mode.id === 'project'
                               ? githubMode === 'project'
@@ -6461,20 +7714,34 @@ export default function TaskPage(): React.JSX.Element {
                     {githubMode !== 'project' && (
                       <>
                         <div className="min-w-0 max-w-[220px] shrink-0">
-                          <RepoMultiCombobox
-                            repos={eligibleRepos}
+                          <TaskProjectSourceCombobox
+                            groups={taskPickerGroups}
                             selected={repoSelection}
+                            getRepoHostLabel={getTaskPickerRepoHostLabel}
                             onChange={(next) => {
-                              setRepoSelection(next)
-                              void updateSettings({ defaultRepoSelection: [...next] }).catch(() => {
-                                toast.error('Failed to save project selection.')
-                              })
+                              const normalized = normalizeTaskRepoSelection(eligibleRepos, next)
+                              setRepoSelection(normalized)
+                              void updateSettings({ defaultRepoSelection: [...normalized] }).catch(
+                                () => {
+                                  toast.error(
+                                    translate(
+                                      'auto.components.TaskPage.dfd72673e7',
+                                      'Failed to save project selection.'
+                                    )
+                                  )
+                                }
+                              )
                             }}
                             onSelectAll={() => {
-                              const allIds = new Set(eligibleRepos.map((r) => r.id))
+                              const allIds = new Set(taskPickerRepos.map((r) => r.id))
                               setRepoSelection(allIds)
                               void updateSettings({ defaultRepoSelection: null }).catch(() => {
-                                toast.error('Failed to save project selection.')
+                                toast.error(
+                                  translate(
+                                    'auto.components.TaskPage.dfd72673e7',
+                                    'Failed to save project selection.'
+                                  )
+                                )
                               })
                             }}
                             triggerClassName="h-8 w-auto max-w-[220px] rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
@@ -6494,8 +7761,15 @@ export default function TaskPage(): React.JSX.Element {
                               }}
                               aria-label={
                                 selectedGitHubRepoExternalLink
-                                  ? `Open ${selectedGitHubRepoExternalLink.label} in GitHub`
-                                  : 'Select one GitHub project to open in GitHub'
+                                  ? translate(
+                                      'auto.components.TaskPage.8d1e17a3ef',
+                                      'Open {{value0}} in GitHub',
+                                      { value0: selectedGitHubRepoExternalLink.label }
+                                    )
+                                  : translate(
+                                      'auto.components.TaskPage.d1132848f8',
+                                      'Select one GitHub project to open in GitHub'
+                                    )
                               }
                               className="h-8 w-8 rounded-md border-border/50 bg-muted/50 text-foreground shadow-sm transition hover:bg-muted/50"
                             >
@@ -6504,8 +7778,15 @@ export default function TaskPage(): React.JSX.Element {
                           </TooltipTrigger>
                           <TooltipContent side="bottom" sideOffset={6}>
                             {selectedGitHubRepoExternalLink
-                              ? `Open ${selectedGitHubRepoExternalLink.label} in GitHub`
-                              : 'Select one project to open in GitHub'}
+                              ? translate(
+                                  'auto.components.TaskPage.8d1e17a3ef',
+                                  'Open {{value0}} in GitHub',
+                                  { value0: selectedGitHubRepoExternalLink.label }
+                                )
+                              : translate(
+                                  'auto.components.TaskPage.bc46d8204e',
+                                  'Select one project to open in GitHub'
+                                )}
                           </TooltipContent>
                         </Tooltip>
                       </>
@@ -6571,15 +7852,24 @@ export default function TaskPage(): React.JSX.Element {
                           onKeyDown={handleTaskSearchKeyDown}
                           placeholder={
                             activeGithubTaskKind === 'prs'
-                              ? 'Search GitHub PRs...'
-                              : 'Search GitHub issues...'
+                              ? translate(
+                                  'auto.components.TaskPage.eee4df4c66',
+                                  'Search GitHub PRs...'
+                                )
+                              : translate(
+                                  'auto.components.TaskPage.b15ceb409d',
+                                  'Search GitHub issues...'
+                                )
                           }
                           className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
                         />
                         {taskSearchInput || appliedTaskSearch ? (
                           <button
                             type="button"
-                            aria-label="Clear search"
+                            aria-label={translate(
+                              'auto.components.TaskPage.b797bdd7c3',
+                              'Clear search'
+                            )}
                             onClick={handleResetGithubTaskSearch}
                             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
                           >
@@ -6605,14 +7895,17 @@ export default function TaskPage(): React.JSX.Element {
                                 setNewIssueOpen(true)
                               }}
                               disabled={!newIssueTargetRepo}
-                              aria-label="New GitHub issue"
+                              aria-label={translate(
+                                'auto.components.TaskPage.d3d0998b7d',
+                                'New GitHub issue'
+                              )}
                               className="size-8 border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
                             >
                               <Plus className="size-4" />
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" sideOffset={6}>
-                            New GitHub issue
+                            {translate('auto.components.TaskPage.d3d0998b7d', 'New GitHub issue')}
                           </TooltipContent>
                         </Tooltip>
                         <Tooltip>
@@ -6624,7 +7917,15 @@ export default function TaskPage(): React.JSX.Element {
                               disabled={githubTasksBusy}
                               aria-busy={githubTasksBusy}
                               aria-label={
-                                githubTasksBusy ? 'Refreshing GitHub work' : 'Refresh GitHub work'
+                                githubTasksBusy
+                                  ? translate(
+                                      'auto.components.TaskPage.6ffa6be99f',
+                                      'Refreshing GitHub work'
+                                    )
+                                  : translate(
+                                      'auto.components.TaskPage.ff53631e6f',
+                                      'Refresh GitHub work'
+                                    )
                               }
                               className="size-8 cursor-pointer border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md disabled:pointer-events-auto disabled:cursor-wait supports-[backdrop-filter]:bg-transparent"
                             >
@@ -6636,7 +7937,15 @@ export default function TaskPage(): React.JSX.Element {
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" sideOffset={6}>
-                            {githubTasksBusy ? 'Refreshing GitHub work…' : 'Refresh GitHub work'}
+                            {githubTasksBusy
+                              ? translate(
+                                  'auto.components.TaskPage.31f81cc334',
+                                  'Refreshing GitHub work…'
+                                )
+                              : translate(
+                                  'auto.components.TaskPage.ff53631e6f',
+                                  'Refresh GitHub work'
+                                )}
                           </TooltipContent>
                         </Tooltip>
                       </div>
@@ -6701,7 +8010,7 @@ export default function TaskPage(): React.JSX.Element {
                                 ) : null}
                                 <IssueSourceSelector
                                   preference={repo.issueSourcePreference}
-                                  origin={s.sources.prs}
+                                  origin={s.sources.originCandidate}
                                   upstream={s.sources.upstreamCandidate}
                                   onChange={(next) => {
                                     void setIssueSourcePreference(repo.id, repo.path, next)
@@ -6714,7 +8023,7 @@ export default function TaskPage(): React.JSX.Element {
                       )
                     })()}
                   </div>
-                ) : taskSource === 'linear' && linearStatus.connected ? (
+                ) : taskSource === 'linear' && linearConnected ? (
                   <div
                     className="min-w-0 rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm"
                     data-contextual-tour-target="tasks-search-presets"
@@ -6723,9 +8032,12 @@ export default function TaskPage(): React.JSX.Element {
                       <div
                         className="flex items-center gap-1 text-xs"
                         role="group"
-                        aria-label="Linear task mode"
+                        aria-label={translate(
+                          'auto.components.TaskPage.0cbf7e5cf3',
+                          'Linear task mode'
+                        )}
                       >
-                        {LINEAR_MODE_OPTIONS.map((mode) => {
+                        {linearModeOptions.map((mode) => {
                           const active = linearMode === mode.id
                           return (
                             <button
@@ -6755,6 +8067,20 @@ export default function TaskPage(): React.JSX.Element {
                               variant="outline"
                               size="icon"
                               onClick={() => {
+                                if (linearMode === 'projects' && !selectedLinearProject) {
+                                  setNewLinearProjectName('')
+                                  setNewLinearProjectDescription('')
+                                  setNewLinearProjectContent('')
+                                  setNewLinearProjectTeamId(availableTeams[0]?.id ?? null)
+                                  setNewLinearProjectLeadId(null)
+                                  setNewLinearProjectMemberIds([])
+                                  setNewLinearProjectLabelIds([])
+                                  setNewLinearProjectPriority(0)
+                                  setNewLinearProjectStartDate('')
+                                  setNewLinearProjectTargetDate('')
+                                  setNewLinearProjectOpen(true)
+                                  return
+                                }
                                 setNewLinearIssueTitle('')
                                 setNewLinearIssueBody('')
                                 const projectTeamId =
@@ -6770,14 +8096,32 @@ export default function TaskPage(): React.JSX.Element {
                                 setNewLinearIssueOpen(true)
                               }}
                               disabled={availableTeams.length === 0}
-                              aria-label="New Linear issue"
+                              aria-label={
+                                linearMode === 'projects' && !selectedLinearProject
+                                  ? translate(
+                                      'auto.components.TaskPage.1361275ec3',
+                                      'New Linear project'
+                                    )
+                                  : translate(
+                                      'auto.components.TaskPage.3feb524d42',
+                                      'New Linear issue'
+                                    )
+                              }
                               className="size-8 border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
                             >
                               <Plus className="size-4" />
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" sideOffset={6}>
-                            New Linear issue
+                            {linearMode === 'projects' && !selectedLinearProject
+                              ? translate(
+                                  'auto.components.TaskPage.1361275ec3',
+                                  'New Linear project'
+                                )
+                              : translate(
+                                  'auto.components.TaskPage.3feb524d42',
+                                  'New Linear issue'
+                                )}
                           </TooltipContent>
                         </Tooltip>
                         <Tooltip>
@@ -6793,7 +8137,10 @@ export default function TaskPage(): React.JSX.Element {
                                     ? linearProjectsLoading || linearProjectDetailLoading
                                     : linearCustomViewsLoading || linearCustomViewContentsLoading
                               }
-                              aria-label="Refresh Linear"
+                              aria-label={translate(
+                                'auto.components.TaskPage.8964184a8b',
+                                'Refresh Linear'
+                              )}
                               className="size-8 border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
                             >
                               {linearMode === 'issues' && linearLoading ? (
@@ -6810,7 +8157,7 @@ export default function TaskPage(): React.JSX.Element {
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" sideOffset={6}>
-                            Refresh Linear
+                            {translate('auto.components.TaskPage.8964184a8b', 'Refresh Linear')}
                           </TooltipContent>
                         </Tooltip>
                       </div>
@@ -6844,13 +8191,19 @@ export default function TaskPage(): React.JSX.Element {
                                 setLinearRefreshNonce((n) => n + 1)
                               }
                             }}
-                            placeholder="Search Linear issues..."
+                            placeholder={translate(
+                              'auto.components.TaskPage.eec0c5c079',
+                              'Search Linear issues...'
+                            )}
                             className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
                           />
                           {linearSearchInput ? (
                             <button
                               type="button"
-                              aria-label="Clear search"
+                              aria-label={translate(
+                                'auto.components.TaskPage.b797bdd7c3',
+                                'Clear search'
+                              )}
                               onClick={() => {
                                 setLinearSearchInput('')
                                 setAppliedLinearSearch('')
@@ -6871,13 +8224,19 @@ export default function TaskPage(): React.JSX.Element {
                           <Input
                             value={linearProjectSearchInput}
                             onChange={(e) => setLinearProjectSearchInput(e.target.value)}
-                            placeholder="Search Linear projects..."
+                            placeholder={translate(
+                              'auto.components.TaskPage.0b65d3fb2c',
+                              'Search Linear projects...'
+                            )}
                             className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
                           />
                           {linearProjectSearchInput ? (
                             <button
                               type="button"
-                              aria-label="Clear search"
+                              aria-label={translate(
+                                'auto.components.TaskPage.b797bdd7c3',
+                                'Clear search'
+                              )}
                               onClick={() => {
                                 setLinearProjectSearchInput('')
                                 setAppliedLinearProjectSearch('')
@@ -6890,45 +8249,13 @@ export default function TaskPage(): React.JSX.Element {
                           ) : null}
                         </div>
                       </div>
-                    ) : linearMode === 'views' && !selectedLinearCustomView ? (
-                      <div
-                        className="mt-3 flex min-w-0 flex-wrap items-center gap-2"
-                        role="group"
-                        aria-label="Linear view type"
-                      >
-                        {LINEAR_CUSTOM_VIEW_MODEL_OPTIONS.map((option) => {
-                          const active = option.id === linearCustomViewModel
-                          return (
-                            <button
-                              key={option.id}
-                              type="button"
-                              aria-pressed={active}
-                              onClick={() => {
-                                setSelectedLinearCustomView(null)
-                                setLinearCustomViewModel(option.id)
-                                setLinearCustomViewsResult({ items: [] })
-                                setLinearCustomViewsError(null)
-                                setLinearRefreshNonce((n) => n + 1)
-                              }}
-                              className={cn(
-                                'rounded-md border px-2 py-1 text-xs transition',
-                                active
-                                  ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
-                                  : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
-                              )}
-                            >
-                              {option.label}
-                            </button>
-                          )
-                        })}
-                      </div>
                     ) : null}
                   </div>
-                ) : taskSource === 'jira' && jiraStatus.connected ? (
+                ) : taskSource === 'jira' && jiraConnected ? (
                   <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex flex-wrap gap-2">
-                        {JIRA_PRESETS.map((preset) => {
+                        {jiraPresets.map((preset) => {
                           const active = !jiraSearchInput && activeJiraPreset === preset.id
                           return (
                             <button
@@ -6975,7 +8302,10 @@ export default function TaskPage(): React.JSX.Element {
                               disabled={
                                 sortedAvailableJiraProjects.length === 0 || jiraProjectsLoading
                               }
-                              aria-label="New Jira issue"
+                              aria-label={translate(
+                                'auto.components.TaskPage.0c11ca0b6d',
+                                'New Jira issue'
+                              )}
                               className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
                             >
                               {jiraProjectsLoading ? (
@@ -6986,7 +8316,7 @@ export default function TaskPage(): React.JSX.Element {
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" sideOffset={6}>
-                            New Jira issue
+                            {translate('auto.components.TaskPage.0c11ca0b6d', 'New Jira issue')}
                           </TooltipContent>
                         </Tooltip>
                         <Tooltip>
@@ -6996,7 +8326,10 @@ export default function TaskPage(): React.JSX.Element {
                               size="icon"
                               onClick={() => setJiraRefreshNonce((n) => n + 1)}
                               disabled={jiraLoading}
-                              aria-label="Refresh Jira issues"
+                              aria-label={translate(
+                                'auto.components.TaskPage.2ff9fd71fd',
+                                'Refresh Jira issues'
+                              )}
                               className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
                             >
                               {jiraLoading ? (
@@ -7007,7 +8340,10 @@ export default function TaskPage(): React.JSX.Element {
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" sideOffset={6}>
-                            Refresh Jira issues
+                            {translate(
+                              'auto.components.TaskPage.2ff9fd71fd',
+                              'Refresh Jira issues'
+                            )}
                           </TooltipContent>
                         </Tooltip>
                       </div>
@@ -7036,13 +8372,19 @@ export default function TaskPage(): React.JSX.Element {
                               setJiraRefreshNonce((n) => n + 1)
                             }
                           }}
-                          placeholder="Jira JQL, e.g. project = ABC AND statusCategory != Done"
+                          placeholder={translate(
+                            'auto.components.TaskPage.99c2755218',
+                            'Jira JQL, e.g. project = ABC AND statusCategory != Done'
+                          )}
                           className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
                         />
                         {jiraSearchInput ? (
                           <button
                             type="button"
-                            aria-label="Clear search"
+                            aria-label={translate(
+                              'auto.components.TaskPage.b797bdd7c3',
+                              'Clear search'
+                            )}
                             onClick={() => {
                               setJiraSearchInput('')
                               setAppliedJiraSearch('')
@@ -7083,20 +8425,34 @@ export default function TaskPage(): React.JSX.Element {
                         })}
                       </div>
                       <div className="min-w-0 w-full sm:w-[200px]">
-                        <RepoMultiCombobox
-                          repos={eligibleRepos}
+                        <TaskProjectSourceCombobox
+                          groups={taskPickerGroups}
                           selected={repoSelection}
+                          getRepoHostLabel={getTaskPickerRepoHostLabel}
                           onChange={(next) => {
-                            setRepoSelection(next)
-                            void updateSettings({ defaultRepoSelection: [...next] }).catch(() => {
-                              toast.error('Failed to save project selection.')
-                            })
+                            const normalized = normalizeTaskRepoSelection(eligibleRepos, next)
+                            setRepoSelection(normalized)
+                            void updateSettings({ defaultRepoSelection: [...normalized] }).catch(
+                              () => {
+                                toast.error(
+                                  translate(
+                                    'auto.components.TaskPage.dfd72673e7',
+                                    'Failed to save project selection.'
+                                  )
+                                )
+                              }
+                            )
                           }}
                           onSelectAll={() => {
-                            const allIds = new Set(eligibleRepos.map((r) => r.id))
+                            const allIds = new Set(taskPickerRepos.map((r) => r.id))
                             setRepoSelection(allIds)
                             void updateSettings({ defaultRepoSelection: null }).catch(() => {
-                              toast.error('Failed to save project selection.')
+                              toast.error(
+                                translate(
+                                  'auto.components.TaskPage.dfd72673e7',
+                                  'Failed to save project selection.'
+                                )
+                              )
                             })
                           }}
                           triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
@@ -7112,8 +8468,8 @@ export default function TaskPage(): React.JSX.Element {
                           <div className="flex flex-wrap gap-2">
                             {gitlabView === 'issues' || gitlabView === 'mrs'
                               ? (gitlabView === 'issues'
-                                  ? GITLAB_ISSUE_FILTERS
-                                  : GITLAB_MR_FILTERS
+                                  ? gitLabIssueFilters
+                                  : gitLabMRFilters
                                 ).map(({ id, label }) => {
                                   const active = activeGitlabFilter === id
                                   return (
@@ -7151,8 +8507,14 @@ export default function TaskPage(): React.JSX.Element {
                                 disabled={gitlabLoading || gitlabTodosLoading}
                                 aria-label={
                                   gitlabView === 'todos'
-                                    ? 'Refresh My Todos'
-                                    : 'Refresh GitLab work items'
+                                    ? translate(
+                                        'auto.components.TaskPage.c679af7ad9',
+                                        'Refresh My Todos'
+                                      )
+                                    : translate(
+                                        'auto.components.TaskPage.d4c2830063',
+                                        'Refresh GitLab work items'
+                                      )
                                 }
                                 className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
                               >
@@ -7165,8 +8527,14 @@ export default function TaskPage(): React.JSX.Element {
                             </TooltipTrigger>
                             <TooltipContent side="bottom" sideOffset={6}>
                               {gitlabView === 'todos'
-                                ? 'Refresh My Todos'
-                                : 'Refresh GitLab work items'}
+                                ? translate(
+                                    'auto.components.TaskPage.c679af7ad9',
+                                    'Refresh My Todos'
+                                  )
+                                : translate(
+                                    'auto.components.TaskPage.d4c2830063',
+                                    'Refresh GitLab work items'
+                                  )}
                             </TooltipContent>
                           </Tooltip>
                         </div>
@@ -7199,7 +8567,7 @@ export default function TaskPage(): React.JSX.Element {
                 initialTab={dialogInitialTab}
                 repoPath={dialogRepoPath}
                 repoId={dialogWorkItem.repoId}
-                variant="page"
+                sourceContext={dialogSourceContext}
                 backLabel="GitHub list"
                 onUse={(item) => {
                   setDialogWorkItem(null)
@@ -7225,19 +8593,25 @@ export default function TaskPage(): React.JSX.Element {
                     githubTaskGridClass
                   )}
                 >
-                  <span className={GITHUB_TASK_STICKY_ID_HEADER_CLASS}>ID</span>
-                  <span className={GITHUB_TASK_STICKY_TITLE_HEADER_CLASS}>Title / Context</span>
-                  {activeGithubTaskKind === 'issues' ? <span>Assignees</span> : null}
+                  <span className={GITHUB_TASK_STICKY_ID_HEADER_CLASS}>
+                    {translate('auto.components.TaskPage.eb10c32872', 'ID')}
+                  </span>
+                  <span className={GITHUB_TASK_STICKY_TITLE_HEADER_CLASS}>
+                    {translate('auto.components.TaskPage.5eccb3c841', 'Title / Context')}
+                  </span>
+                  {activeGithubTaskKind === 'issues' ? (
+                    <span>{translate('auto.components.TaskPage.8aba10579d', 'Assignees')}</span>
+                  ) : null}
                   {showPRManagementColumns ? (
                     <>
-                      <span>Reviewers</span>
-                      <span>Checks</span>
-                      <span>Merge</span>
+                      <span>{translate('auto.components.TaskPage.f6fa3c97d0', 'Reviewers')}</span>
+                      <span>{translate('auto.components.TaskPage.a7396b05c6', 'Checks')}</span>
+                      <span>{translate('auto.components.TaskPage.443f7dd928', 'Merge')}</span>
                     </>
                   ) : (
-                    <span>Status</span>
+                    <span>{translate('auto.components.TaskPage.154b0fa623', 'Status')}</span>
                   )}
-                  <span>Updated</span>
+                  <span>{translate('auto.components.TaskPage.f362667d55', 'Updated')}</span>
                   <span />
                 </div>
 
@@ -7251,7 +8625,9 @@ export default function TaskPage(): React.JSX.Element {
                   // Why: per-repo partial-failure signal — distinct from a hard
                   // IPC reject (tasksError). The two are mutually exclusive.
                   <div className="border-b border-border/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-200">
-                    {failedCount} of {selectedRepos.length} projects failed to load
+                    {failedCount} {translate('auto.components.TaskPage.7762f4b03a', 'of')}
+                    {selectedRepos.length}{' '}
+                    {translate('auto.components.TaskPage.d1766fd62d', 'projects failed to load')}
                   </div>
                 ) : null}
 
@@ -7277,7 +8653,10 @@ export default function TaskPage(): React.JSX.Element {
                         className="flex items-center justify-between gap-3 border-b border-border/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"
                       >
                         <span>
-                          Couldn&apos;t load issues from{' '}
+                          {translate(
+                            'auto.components.TaskPage.0c0de0fc0e',
+                            "Couldn't load issues from"
+                          )}{' '}
                           <span className="font-mono">
                             {err.source.owner}/{err.source.repo}
                           </span>{' '}
@@ -7286,16 +8665,16 @@ export default function TaskPage(): React.JSX.Element {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleRetryIssuesFetch(s.repoPath)}
-                          disabled={tasksLoading || retryingRepoPaths.has(s.repoPath)}
+                          onClick={() => handleRetryIssuesFetch(s.sourceKey)}
+                          disabled={tasksLoading || retryingSourceKeys.has(s.sourceKey)}
                         >
-                          {retryingRepoPaths.has(s.repoPath) ? (
+                          {retryingSourceKeys.has(s.sourceKey) ? (
                             <span className="flex items-center gap-1">
                               <LoaderCircle className="h-3 w-3 animate-spin" />
-                              Retrying…
+                              {translate('auto.components.TaskPage.5b6b2af943', 'Retrying…')}
                             </span>
                           ) : (
-                            'Retry'
+                            translate('auto.components.TaskPage.0bfbf62f75', 'Retry')
                           )}
                         </Button>
                       </div>
@@ -7362,9 +8741,11 @@ export default function TaskPage(): React.JSX.Element {
                 failedCount === 0 &&
                 perRepoSourceState.every((s) => !s.error) ? (
                   <div className="px-4 py-10 text-center">
-                    <p className="text-base font-medium text-foreground">No matching GitHub work</p>
+                    <p className="text-base font-medium text-foreground">
+                      {githubEmptyState.title}
+                    </p>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      Change the query or clear it.
+                      {githubEmptyState.description}
                     </p>
                   </div>
                 ) : null}
@@ -7439,7 +8820,7 @@ export default function TaskPage(): React.JSX.Element {
                               </h3>
                               {item.type === 'pr' && item.state === 'draft' ? (
                                 <span className="shrink-0 rounded-full border border-slate-500/30 bg-slate-500/10 px-1.5 py-0 text-[10px] font-medium text-slate-600 dark:text-slate-300">
-                                  Draft
+                                  {translate('auto.components.TaskPage.054bf695cc', 'Draft')}
                                 </span>
                               ) : null}
                               {selectedRepos.length > 1 && itemRepo ? (
@@ -7454,7 +8835,13 @@ export default function TaskPage(): React.JSX.Element {
                               ) : null}
                             </div>
                             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-                              <span>{item.author ?? 'unknown author'}</span>
+                              <span>
+                                {item.author ??
+                                  translate(
+                                    'auto.components.TaskPage.6430594b18',
+                                    'unknown author'
+                                  )}
+                              </span>
                               {selectedRepos.length === 1 && itemRepo ? (
                                 <span>{itemRepo.displayName}</span>
                               ) : null}
@@ -7483,14 +8870,22 @@ export default function TaskPage(): React.JSX.Element {
 
                           {!showPRManagementColumns ? (
                             <div className="min-w-0 flex items-center text-xs text-muted-foreground">
-                              <GHAssigneesCell item={item} repo={itemRepo ?? null} />
+                              <GHAssigneesCell
+                                item={item}
+                                repo={itemRepo ?? null}
+                                sourceContext={getTaskPageRepoSourceContext(itemRepo, 'github')}
+                              />
                             </div>
                           ) : null}
 
                           {showPRManagementColumns ? (
                             <>
                               <div className="flex min-w-0 items-center">
-                                <PRReviewCell item={item} repo={itemRepo ?? null} />
+                                <PRReviewCell
+                                  item={item}
+                                  repo={itemRepo ?? null}
+                                  sourceContext={getTaskPageRepoSourceContext(itemRepo, 'github')}
+                                />
                               </div>
 
                               <div className="flex min-w-0 items-center">
@@ -7505,13 +8900,18 @@ export default function TaskPage(): React.JSX.Element {
                                 <PRMergeCell
                                   item={item}
                                   repo={itemRepo ?? null}
+                                  sourceContext={getTaskPageRepoSourceContext(itemRepo, 'github')}
                                   onRefresh={() => setTaskRefreshNonce((current) => current + 1)}
                                 />
                               </div>
                             </>
                           ) : (
                             <div className="flex items-center">
-                              <GHStatusCell item={item} repo={itemRepo ?? null} />
+                              <GHStatusCell
+                                item={item}
+                                repo={itemRepo ?? null}
+                                sourceContext={getTaskPageRepoSourceContext(itemRepo, 'github')}
+                              />
                             </div>
                           )}
 
@@ -7545,11 +8945,19 @@ export default function TaskPage(): React.JSX.Element {
                                     )}
                                     aria-label={
                                       attachedWorkspace
-                                        ? 'Resume workspace attached to PR'
-                                        : 'Start workspace from PR'
+                                        ? translate(
+                                            'auto.components.TaskPage.67d881244c',
+                                            'Resume workspace attached to PR'
+                                          )
+                                        : translate(
+                                            'auto.components.TaskPage.e4b29c5bcf',
+                                            'Start workspace from PR'
+                                          )
                                     }
                                   >
-                                    {attachedWorkspace ? 'Resume' : 'Start'}
+                                    {attachedWorkspace
+                                      ? translate('auto.components.TaskPage.7753652524', 'Resume')
+                                      : translate('auto.components.TaskPage.7d08e8be0f', 'Start')}
                                     <ArrowRight className="size-3" />
                                   </Button>
                                   <DropdownMenuTrigger asChild>
@@ -7561,7 +8969,10 @@ export default function TaskPage(): React.JSX.Element {
                                       className={cn(
                                         attachedWorkspace ? 'shadow-xs' : 'bg-background/80'
                                       )}
-                                      aria-label="More PR actions"
+                                      aria-label={translate(
+                                        'auto.components.TaskPage.7deb9e59a5',
+                                        'More PR actions'
+                                      )}
                                     >
                                       <ChevronDown className="size-3" />
                                     </Button>
@@ -7574,14 +8985,20 @@ export default function TaskPage(): React.JSX.Element {
                                   {attachedWorkspace ? (
                                     <DropdownMenuItem onSelect={() => handleUseWorkItem(item)}>
                                       <Plus className="size-4" />
-                                      Start new workspace
+                                      {translate(
+                                        'auto.components.TaskPage.b6329379ca',
+                                        'Start new workspace'
+                                      )}
                                     </DropdownMenuItem>
                                   ) : null}
                                   <DropdownMenuItem
                                     onSelect={() => window.api.shell.openUrl(item.url)}
                                   >
                                     <ExternalLink className="size-4" />
-                                    Open in browser
+                                    {translate(
+                                      'auto.components.TaskPage.c1d1600362',
+                                      'Open in browser'
+                                    )}
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -7595,12 +9012,20 @@ export default function TaskPage(): React.JSX.Element {
                                 }}
                                 aria-label={
                                   attachedWorkspace
-                                    ? 'Open workspace attached to issue'
-                                    : 'Start workspace from issue'
+                                    ? translate(
+                                        'auto.components.TaskPage.2193a99ec1',
+                                        'Open workspace attached to issue'
+                                      )
+                                    : translate(
+                                        'auto.components.TaskPage.e104fa3d3d',
+                                        'Start workspace from issue'
+                                      )
                                 }
                                 className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-background/80 px-2 py-1 text-[11px] text-foreground transition hover:bg-muted/60"
                               >
-                                {attachedWorkspace ? 'Open' : 'Start'}
+                                {attachedWorkspace
+                                  ? translate('auto.components.TaskPage.606a85c774', 'Open')
+                                  : translate('auto.components.TaskPage.7d08e8be0f', 'Start')}
                                 <ArrowRight className="size-3" />
                               </button>
                             )}
@@ -7611,7 +9036,10 @@ export default function TaskPage(): React.JSX.Element {
                                     type="button"
                                     onClick={(e) => e.stopPropagation()}
                                     className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-muted/60 hover:text-foreground"
-                                    aria-label="More actions"
+                                    aria-label={translate(
+                                      'auto.components.TaskPage.66ae7330f6',
+                                      'More actions'
+                                    )}
                                   >
                                     <EllipsisVertical className="size-4" />
                                   </button>
@@ -7623,14 +9051,20 @@ export default function TaskPage(): React.JSX.Element {
                                   {attachedWorkspace ? (
                                     <DropdownMenuItem onSelect={() => handleUseWorkItem(item)}>
                                       <Plus className="size-4" />
-                                      Start new workspace
+                                      {translate(
+                                        'auto.components.TaskPage.b6329379ca',
+                                        'Start new workspace'
+                                      )}
                                     </DropdownMenuItem>
                                   ) : null}
                                   <DropdownMenuItem
                                     onSelect={() => window.api.shell.openUrl(item.url)}
                                   >
                                     <ExternalLink className="size-4" />
-                                    Open in browser
+                                    {translate(
+                                      'auto.components.TaskPage.c1d1600362',
+                                      'Open in browser'
+                                    )}
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -7665,10 +9099,10 @@ export default function TaskPage(): React.JSX.Element {
           ) : taskSource === 'gitlab' && gitlabView === 'todos' ? (
             <div className="flex min-h-0 max-h-full flex-col rounded-md border border-t-0 border-border/50 bg-muted/50 overflow-hidden rounded-t-none shadow-sm">
               <div className="flex-none grid grid-cols-[110px_minmax(0,3fr)_minmax(120px,1.2fr)_110px_50px] gap-3 border-b border-border/50 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                <span>Action</span>
-                <span>Title</span>
-                <span>Project</span>
-                <span>Updated</span>
+                <span>{translate('auto.components.TaskPage.8396825a14', 'Action')}</span>
+                <span>{translate('auto.components.TaskPage.16cba35bee', 'Title')}</span>
+                <span>{translate('auto.components.TaskPage.00022ec0ba', 'Project')}</span>
+                <span>{translate('auto.components.TaskPage.f362667d55', 'Updated')}</span>
                 <span />
               </div>
               <div
@@ -7696,8 +9130,14 @@ export default function TaskPage(): React.JSX.Element {
                 {!gitlabTodosLoading && gitlabTodos.length === 0 ? (
                   <div className="px-4 py-12 text-center text-sm text-muted-foreground">
                     {primaryRepo
-                      ? 'No pending todos. You’re all caught up!'
-                      : 'Select a project so we can authenticate to GitLab.'}
+                      ? translate(
+                          'auto.components.TaskPage.d591aac6ae',
+                          'No pending todos. You’re all caught up!'
+                        )
+                      : translate(
+                          'auto.components.TaskPage.03da966159',
+                          'Select a project so we can authenticate to GitLab.'
+                        )}
                   </div>
                 ) : null}
                 <div className="divide-y divide-border/50">
@@ -7716,9 +9156,15 @@ export default function TaskPage(): React.JSX.Element {
                       className="grid w-full cursor-pointer gap-3 px-3 py-2 text-left grid-cols-[110px_minmax(0,3fr)_minmax(120px,1.2fr)_110px_50px] hover:bg-muted/50"
                       title={
                         todo.targetType === 'MergeRequest'
-                          ? `MR !${todo.targetIid ?? ''}`
+                          ? translate('auto.components.TaskPage.a0544fb653', 'MR !{{value0}}', {
+                              value0: todo.targetIid ?? ''
+                            })
                           : todo.targetType === 'Issue'
-                            ? `Issue #${todo.targetIid ?? ''}`
+                            ? translate(
+                                'auto.components.TaskPage.e9b6955dcd',
+                                'Issue #{{value0}}',
+                                { value0: todo.targetIid ?? '' }
+                              )
                             : todo.targetType
                       }
                     >
@@ -7746,10 +9192,10 @@ export default function TaskPage(): React.JSX.Element {
           ) : taskSource === 'gitlab' ? (
             <div className="flex min-h-0 max-h-full flex-col rounded-md border border-t-0 border-border/50 bg-muted/50 overflow-hidden rounded-t-none shadow-sm">
               <div className="flex-none grid grid-cols-[80px_minmax(0,3fr)_120px_110px_50px] gap-3 border-b border-border/50 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                <span>ID</span>
-                <span>Title</span>
-                <span>Type / State</span>
-                <span>Updated</span>
+                <span>{translate('auto.components.TaskPage.eb10c32872', 'ID')}</span>
+                <span>{translate('auto.components.TaskPage.16cba35bee', 'Title')}</span>
+                <span>{translate('auto.components.TaskPage.00b7ffb952', 'Type / State')}</span>
+                <span>{translate('auto.components.TaskPage.f362667d55', 'Updated')}</span>
                 <span />
               </div>
               <div
@@ -7784,14 +9230,13 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 ) : null}
                 {!gitlabLoading && displayedGitLabItems.length === 0 && !gitlabError ? (
-                  <div className="px-4 py-12 text-center text-sm text-muted-foreground">
-                    {primaryRepo
-                      ? gitlabView === 'issues'
-                        ? 'No GitLab issues match this filter.'
-                        : gitlabView === 'mrs'
-                          ? 'No GitLab MRs match this filter.'
-                          : 'No GitLab work matches this filter.'
-                      : 'Select a project to see GitLab work items.'}
+                  <div className="px-4 py-12 text-center">
+                    <p className="text-base font-medium text-foreground">
+                      {gitlabEmptyState.title}
+                    </p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {gitlabEmptyState.description}
+                    </p>
                   </div>
                 ) : null}
                 <div className="divide-y divide-border/50">
@@ -7805,11 +9250,15 @@ export default function TaskPage(): React.JSX.Element {
                       role="button"
                       tabIndex={0}
                       key={item.id}
-                      onClick={() => setGitlabDialogItem(item)}
+                      onClick={() => {
+                        useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+                        openGitLabDetailPage(item)
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault()
-                          setGitlabDialogItem(item)
+                          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+                          openGitLabDetailPage(item)
                         }
                       }}
                       className="grid w-full cursor-pointer gap-3 px-3 py-2 text-left grid-cols-[80px_minmax(0,3fr)_120px_110px_50px] hover:bg-muted/50"
@@ -7823,7 +9272,10 @@ export default function TaskPage(): React.JSX.Element {
                       </span>
                       <span className="min-w-0 truncate text-sm">{item.title}</span>
                       <span className="text-xs text-muted-foreground">
-                        {item.type === 'mr' ? 'MR' : 'Issue'} · {item.state}
+                        {item.type === 'mr'
+                          ? translate('auto.components.TaskPage.e224d76876', 'MR')
+                          : translate('auto.components.TaskPage.b1eaa18ace', 'Issue')}{' '}
+                        · {item.state}
                       </span>
                       <span className="text-xs text-muted-foreground">
                         {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : ''}
@@ -7839,13 +9291,17 @@ export default function TaskPage(): React.JSX.Element {
                                 event.stopPropagation()
                                 handleUseGitLabItem(item)
                               }}
-                              aria-label={`Start workspace from ${item.type === 'mr' ? 'MR' : 'issue'} ${item.number}`}
+                              aria-label={translate(
+                                'auto.components.TaskPage.5e8061b088',
+                                'Start workspace from {{value0}} {{value1}}',
+                                { value0: item.type === 'mr' ? 'MR' : 'issue', value1: item.number }
+                              )}
                             >
                               <ArrowRight className="size-3.5" />
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" sideOffset={6}>
-                            Start workspace
+                            {translate('auto.components.TaskPage.9497f2787c', 'Start workspace')}
                           </TooltipContent>
                         </Tooltip>
                         <button
@@ -7854,7 +9310,10 @@ export default function TaskPage(): React.JSX.Element {
                             e.stopPropagation()
                             void window.api.shell.openUrl(item.url)
                           }}
-                          aria-label="Open in GitLab"
+                          aria-label={translate(
+                            'auto.components.TaskPage.bcdc1330b2',
+                            'Open in GitLab'
+                          )}
                           className="text-muted-foreground hover:text-foreground"
                         >
                           <ExternalLink className="size-3.5" />
@@ -7866,16 +9325,21 @@ export default function TaskPage(): React.JSX.Element {
               </div>
             </div>
           ) : taskSource === 'jira' ? (
-            !jiraStatusChecked ? (
+            !jiraStatusReady ? (
               <div className="mt-4 flex items-center justify-center py-14">
                 <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
               </div>
-            ) : !jiraStatus.connected ? (
+            ) : !jiraConnected ? (
               <div className="mt-4 flex flex-col items-center justify-center rounded-md border border-border/50 bg-muted/50 px-6 py-14 text-center shadow-sm">
                 <JiraIcon className="mb-4 size-8 text-muted-foreground/60" />
-                <p className="text-base font-medium text-foreground">Connect your Jira site</p>
+                <p className="text-base font-medium text-foreground">
+                  {translate('auto.components.TaskPage.a150c59da7', 'Connect your Jira site')}
+                </p>
                 <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-                  Browse, edit, create, and start work from Jira issues directly from here.
+                  {translate(
+                    'auto.components.TaskPage.b518ae6307',
+                    'Browse, edit, create, and start work from Jira issues directly from here.'
+                  )}
                 </p>
                 <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
                   <Button
@@ -7888,10 +9352,10 @@ export default function TaskPage(): React.JSX.Element {
                       setJiraConnectOpen(true)
                     }}
                   >
-                    Connect Jira
+                    {translate('auto.components.TaskPage.83bce6be5c', 'Connect Jira')}
                   </Button>
                   <Button variant="outline" onClick={() => hideTaskSource('jira', 'Jira')}>
-                    Hide Jira
+                    {translate('auto.components.TaskPage.e7115334aa', 'Hide Jira')}
                   </Button>
                 </div>
               </div>
@@ -7899,20 +9363,23 @@ export default function TaskPage(): React.JSX.Element {
               <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
                 <div className="flex h-10 flex-none items-center justify-between gap-3 border-b border-border/50 bg-muted/35 px-3">
                   <div className="min-w-0 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                    Jira issues
+                    {translate('auto.components.TaskPage.63b2abd3aa', 'Jira issues')}
                   </div>
                   <div className="shrink-0 text-[11px] text-muted-foreground">
-                    {displayedJiraIssues.length} shown
+                    {displayedJiraIssues.length}{' '}
+                    {translate('auto.components.TaskPage.b7bae28b6a', 'shown')}
                   </div>
                 </div>
 
                 <div className="grid h-8 flex-none grid-cols-[90px_minmax(0,1fr)_128px_92px_80px] items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground max-md:!hidden lg:grid-cols-[96px_minmax(0,1.25fr)_132px_120px_136px_96px_64px] xl:grid-cols-[104px_minmax(0,1.45fr)_144px_132px_160px_128px_72px]">
-                  <span>Key</span>
-                  <span>Issue</span>
-                  <span>Status</span>
-                  <span>Priority</span>
-                  <span className="block max-lg:!hidden">Assignee</span>
-                  <span>Updated</span>
+                  <span>{translate('auto.components.TaskPage.37e7ee311e', 'Key')}</span>
+                  <span>{translate('auto.components.TaskPage.b1eaa18ace', 'Issue')}</span>
+                  <span>{translate('auto.components.TaskPage.154b0fa623', 'Status')}</span>
+                  <span>{translate('auto.components.TaskPage.c8d5bec5f7', 'Priority')}</span>
+                  <span className="block max-lg:!hidden">
+                    {translate('auto.components.TaskPage.d2a876ca53', 'Assignee')}
+                  </span>
+                  <span>{translate('auto.components.TaskPage.f362667d55', 'Updated')}</span>
                   <span />
                 </div>
 
@@ -7920,9 +9387,9 @@ export default function TaskPage(): React.JSX.Element {
                   className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
                   style={{ scrollbarGutter: 'stable' }}
                 >
-                  {jiraError ? (
+                  {(jiraStatus.credentialError ?? jiraError) ? (
                     <div className="border-b border-border px-4 py-4 text-sm text-destructive">
-                      {jiraError}
+                      {jiraStatus.credentialError ?? jiraError}
                     </div>
                   ) : null}
 
@@ -7937,13 +9404,24 @@ export default function TaskPage(): React.JSX.Element {
                     </div>
                   ) : null}
 
-                  {!jiraLoading && jiraIssues.length === 0 && !jiraError ? (
+                  {!jiraLoading &&
+                  jiraIssues.length === 0 &&
+                  !jiraError &&
+                  !jiraStatus.credentialError ? (
                     <div className="px-4 py-10 text-center">
-                      <p className="text-sm font-medium text-foreground">No Jira issues found</p>
+                      <p className="text-sm font-medium text-foreground">
+                        {translate('auto.components.TaskPage.eba87f2edb', 'No Jira issues found')}
+                      </p>
                       <p className="mt-2 text-sm text-muted-foreground">
                         {jiraSearchInput
-                          ? 'Try a different JQL query.'
-                          : 'No issues match the selected preset.'}
+                          ? translate(
+                              'auto.components.TaskPage.f51e254d35',
+                              'Try a different JQL query.'
+                            )
+                          : translate(
+                              'auto.components.TaskPage.94d900518d',
+                              'No issues match the selected preset.'
+                            )}
                       </p>
                     </div>
                   ) : null}
@@ -7963,14 +9441,14 @@ export default function TaskPage(): React.JSX.Element {
                           tabIndex={0}
                           aria-current={selected ? 'true' : undefined}
                           data-current={selected ? 'true' : undefined}
-                          onClick={() => setSelectedJiraIssue(issue)}
+                          onClick={() => openJiraDetailPage(issue)}
                           onKeyDown={(e) => {
                             if (e.target !== e.currentTarget) {
                               return
                             }
                             if (e.key === 'Enter' || e.key === ' ') {
                               e.preventDefault()
-                              setSelectedJiraIssue(issue)
+                              openJiraDetailPage(issue)
                             }
                           }}
                           className={cn(
@@ -8001,10 +9479,12 @@ export default function TaskPage(): React.JSX.Element {
                                 <span className="truncate">{issue.status.name}</span>
                               </span>
                               <span className="shrink-0 text-[11px] text-muted-foreground">
-                                {issue.priority?.name ?? 'No priority'}
+                                {issue.priority?.name ??
+                                  translate('auto.components.TaskPage.713179dfdc', 'No priority')}
                               </span>
                               <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-                                {issue.assignee?.displayName ?? 'Unassigned'}
+                                {issue.assignee?.displayName ??
+                                  translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
                               </span>
                             </div>
                             <div className="mt-1 flex min-w-0 items-center gap-1 max-lg:!hidden">
@@ -8039,7 +9519,8 @@ export default function TaskPage(): React.JSX.Element {
                           </div>
 
                           <span className="block truncate text-[12px] text-muted-foreground max-md:!hidden">
-                            {issue.priority?.name ?? 'No priority'}
+                            {issue.priority?.name ??
+                              translate('auto.components.TaskPage.713179dfdc', 'No priority')}
                           </span>
 
                           <div className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground max-lg:!hidden">
@@ -8055,7 +9536,8 @@ export default function TaskPage(): React.JSX.Element {
                               </span>
                             )}
                             <span className="truncate">
-                              {issue.assignee?.displayName ?? 'Unassigned'}
+                              {issue.assignee?.displayName ??
+                                translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
                             </span>
                           </div>
 
@@ -8080,13 +9562,20 @@ export default function TaskPage(): React.JSX.Element {
                                     event.stopPropagation()
                                     handleUseJiraItem(issue)
                                   }}
-                                  aria-label={`Start workspace from ${issue.key}`}
+                                  aria-label={translate(
+                                    'auto.components.TaskPage.ff90d0abc7',
+                                    'Start workspace from {{value0}}',
+                                    { value0: issue.key }
+                                  )}
                                 >
                                   <ArrowRight className="size-3.5" />
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent side="bottom" sideOffset={6}>
-                                Start workspace
+                                {translate(
+                                  'auto.components.TaskPage.9497f2787c',
+                                  'Start workspace'
+                                )}
                               </TooltipContent>
                             </Tooltip>
                             <Tooltip>
@@ -8098,13 +9587,17 @@ export default function TaskPage(): React.JSX.Element {
                                     event.stopPropagation()
                                     window.api.shell.openUrl(issue.url)
                                   }}
-                                  aria-label={`Open ${issue.key} in Jira`}
+                                  aria-label={translate(
+                                    'auto.components.TaskPage.4ac8ff2275',
+                                    'Open {{value0}} in Jira',
+                                    { value0: issue.key }
+                                  )}
                                 >
                                   <ExternalLink className="size-3.5" />
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent side="bottom" sideOffset={6}>
-                                Open in Jira
+                                {translate('auto.components.TaskPage.eee68073b2', 'Open in Jira')}
                               </TooltipContent>
                             </Tooltip>
                           </div>
@@ -8116,7 +9609,8 @@ export default function TaskPage(): React.JSX.Element {
                 <JiraIssueWorkspace
                   issue={selectedJiraIssue}
                   onUse={handleUseJiraItem}
-                  onClose={() => setSelectedJiraIssue(null)}
+                  onClose={closeTaskDetailPage}
+                  sourceContext={jiraDetailSourceContext}
                 />
               </div>
             )
@@ -8128,17 +9622,23 @@ export default function TaskPage(): React.JSX.Element {
               onUse={handleUseLinearItem}
               onOpenIssue={openRelatedLinearIssue}
               onClose={closeTaskDetailPage}
+              sourceContext={linearDetailSourceContext}
             />
-          ) : !linearStatusChecked ? (
+          ) : !linearStatusReady ? (
             <div className="mt-4 flex items-center justify-center py-14">
               <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
             </div>
-          ) : !linearStatus.connected ? (
+          ) : !linearConnected ? (
             <div className="mt-4 flex flex-col items-center justify-center rounded-md border border-border/50 bg-muted/50 px-6 py-14 text-center shadow-sm">
               <LinearIcon className="mb-4 size-8 text-muted-foreground/60" />
-              <p className="text-base font-medium text-foreground">Connect your Linear account</p>
+              <p className="text-base font-medium text-foreground">
+                {translate('auto.components.TaskPage.6d56559467', 'Connect your Linear account')}
+              </p>
               <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-                Browse and start work on your assigned Linear issues directly from here.
+                {translate(
+                  'auto.components.TaskPage.228b25028f',
+                  'Browse and start work on your assigned Linear issues directly from here.'
+                )}
               </p>
               <Button
                 className="mt-5"
@@ -8146,7 +9646,7 @@ export default function TaskPage(): React.JSX.Element {
                   setLinearConnectOpen(true)
                 }}
               >
-                Add Linear access
+                {translate('auto.components.TaskPage.851017590d', 'Add Linear access')}
               </Button>
             </div>
           ) : selectedLinearProject && linearProjectTab === 'overview' ? (
@@ -8199,13 +9699,13 @@ export default function TaskPage(): React.JSX.Element {
           ) : linearMode === 'projects' && !selectedLinearProject ? (
             <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
               <div className="grid h-8 flex-none items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground grid-cols-[minmax(180px,1.5fr)_110px_100px_90px_120px_110px_80px_70px]">
-                <span>Project</span>
-                <span>Status</span>
-                <span>Health</span>
-                <span>Priority</span>
-                <span>Lead</span>
-                <span>Target</span>
-                <span>Issues</span>
+                <span>{translate('auto.components.TaskPage.00022ec0ba', 'Project')}</span>
+                <span>{translate('auto.components.TaskPage.154b0fa623', 'Status')}</span>
+                <span>{translate('auto.components.TaskPage.8a07f21e76', 'Health')}</span>
+                <span>{translate('auto.components.TaskPage.c8d5bec5f7', 'Priority')}</span>
+                <span>{translate('auto.components.TaskPage.34da8ac06c', 'Lead')}</span>
+                <span>{translate('auto.components.TaskPage.7da41c9225', 'Target')}</span>
+                <span>{translate('auto.components.TaskPage.dfc0c79bd8', 'Issues')}</span>
                 <span />
               </div>
               <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto scrollbar-sleek">
@@ -8235,17 +9735,17 @@ export default function TaskPage(): React.JSX.Element {
                 errors={linearProjectsResult.errors}
                 hasMore={linearProjectsResult.hasMore}
                 count={linearProjectsResult.items.length}
-                label="projects"
+                label={translate('auto.components.TaskPage.b39fe6511d', 'projects')}
               />
             </div>
           ) : linearMode === 'views' && !selectedLinearCustomView ? (
             <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
               <div className="grid h-8 flex-none items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground grid-cols-[minmax(220px,1.5fr)_120px_120px_120px_130px_60px]">
-                <span>View</span>
-                <span>Model</span>
-                <span>Visibility</span>
-                <span>Owner</span>
-                <span>Updated</span>
+                <span>{translate('auto.components.TaskPage.9c57663908', 'View')}</span>
+                <span>{translate('auto.components.TaskPage.0aa8525950', 'Model')}</span>
+                <span>{translate('auto.components.TaskPage.a04fe7ba73', 'Visibility')}</span>
+                <span>{translate('auto.components.TaskPage.b4e10f096e', 'Owner')}</span>
+                <span>{translate('auto.components.TaskPage.f362667d55', 'Updated')}</span>
                 <span />
               </div>
               <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto scrollbar-sleek">
@@ -8256,7 +9756,6 @@ export default function TaskPage(): React.JSX.Element {
                 ) : null}
                 <LinearCustomViewTable
                   views={linearCustomViewsResult.items}
-                  model={linearCustomViewModel}
                   loading={linearCustomViewsLoading}
                   hasError={!!linearCustomViewsResult.errors?.length}
                   workspaceSelection={selectedLinearWorkspaceId}
@@ -8272,7 +9771,7 @@ export default function TaskPage(): React.JSX.Element {
                 errors={linearCustomViewsResult.errors}
                 hasMore={linearCustomViewsResult.hasMore}
                 count={linearCustomViewsResult.items.length}
-                label={`${linearCustomViewModel} views`}
+                label={translate('auto.components.TaskPage.3cb855080f', 'views')}
               />
             </div>
           ) : selectedLinearCustomView?.model === 'project' && !selectedLinearProject ? (
@@ -8287,7 +9786,7 @@ export default function TaskPage(): React.JSX.Element {
                       setLinearProjectParentView(null)
                       setTaskResumeState({ linearContext: undefined })
                     }}
-                    aria-label="Back to views"
+                    aria-label={translate('auto.components.TaskPage.bc06ed0fb0', 'Back to views')}
                   >
                     <ChevronLeft className="size-3.5" />
                   </Button>
@@ -8295,7 +9794,9 @@ export default function TaskPage(): React.JSX.Element {
                     <div className="truncate text-[13px] font-medium text-foreground">
                       {selectedLinearCustomView.name}
                     </div>
-                    <div className="truncate text-[11px] text-muted-foreground">Linear / Views</div>
+                    <div className="truncate text-[11px] text-muted-foreground">
+                      {translate('auto.components.TaskPage.733b8f2421', 'Linear / Views')}
+                    </div>
                   </div>
                 </div>
                 {selectedLinearCustomView.url ? (
@@ -8306,7 +9807,7 @@ export default function TaskPage(): React.JSX.Element {
                     className="gap-1 border-border/50 bg-background/70"
                   >
                     <ExternalLink className="size-3.5" />
-                    Linear
+                    {translate('auto.components.TaskPage.8675cd6188', 'Linear')}
                   </Button>
                 ) : null}
               </div>
@@ -8339,7 +9840,7 @@ export default function TaskPage(): React.JSX.Element {
                 errors={linearCustomViewProjectsResult.errors}
                 hasMore={linearCustomViewProjectsResult.hasMore}
                 count={linearCustomViewProjectsResult.items.length}
-                label="projects"
+                label={translate('auto.components.TaskPage.b39fe6511d', 'projects')}
               />
             </div>
           ) : (
@@ -8359,21 +9860,25 @@ export default function TaskPage(): React.JSX.Element {
                         setLinearProjectParentView(null)
                         setTaskResumeState({ linearContext: undefined })
                       }}
-                      aria-label="Back"
+                      aria-label={translate('auto.components.TaskPage.f397d513e3', 'Back')}
                     >
                       <ChevronLeft className="size-3.5" />
                     </Button>
                   ) : null}
                   <div className="min-w-0 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                    {activeLinearIssueContextLabel ?? 'Linear issues'}
+                    {activeLinearIssueContextLabel ??
+                      translate('auto.components.TaskPage.60f68a2ef4', 'Linear issues')}
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <div
                     className="hidden items-center rounded-md border border-border/50 bg-background/70 p-0.5 md:flex"
-                    aria-label="Linear view mode"
+                    aria-label={translate(
+                      'auto.components.TaskPage.d47248df4d',
+                      'Linear view mode'
+                    )}
                   >
-                    {LINEAR_VIEW_OPTIONS.map(({ id, label, Icon }) => {
+                    {linearViewOptions.map(({ id, label, Icon }) => {
                       const active = linearViewMode === id
                       return (
                         <Tooltip key={id}>
@@ -8381,7 +9886,11 @@ export default function TaskPage(): React.JSX.Element {
                             <button
                               type="button"
                               onClick={() => setLinearViewMode(id)}
-                              aria-label={`${label} view`}
+                              aria-label={translate(
+                                'auto.components.TaskPage.af377b13b1',
+                                '{{value0}} view',
+                                { value0: label }
+                              )}
                               aria-pressed={active}
                               className={cn(
                                 'inline-flex size-6 items-center justify-center rounded text-muted-foreground transition hover:text-foreground',
@@ -8392,7 +9901,9 @@ export default function TaskPage(): React.JSX.Element {
                             </button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" sideOffset={6}>
-                            {label} view
+                            {translate('auto.components.TaskPage.af377b13b1', '{{value0}} view', {
+                              value0: label
+                            })}
                           </TooltipContent>
                         </Tooltip>
                       )
@@ -8406,19 +9917,19 @@ export default function TaskPage(): React.JSX.Element {
                         className="gap-1 border-border/50 bg-background/70 text-[11px]"
                       >
                         <SlidersHorizontal className="size-3.5" />
-                        View
+                        {translate('auto.components.TaskPage.9c57663908', 'View')}
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-56">
                       <DropdownMenuLabel className="flex items-center gap-2">
                         <List className="size-3.5" />
-                        View
+                        {translate('auto.components.TaskPage.9c57663908', 'View')}
                       </DropdownMenuLabel>
                       <DropdownMenuRadioGroup
                         value={linearViewMode}
                         onValueChange={(value) => setLinearViewMode(value as LinearViewMode)}
                       >
-                        {LINEAR_VIEW_OPTIONS.map(({ id, label, Icon }) => (
+                        {linearViewOptions.map(({ id, label, Icon }) => (
                           <DropdownMenuRadioItem key={id} value={id}>
                             <Icon className="size-3.5" />
                             {label}
@@ -8428,13 +9939,13 @@ export default function TaskPage(): React.JSX.Element {
                       <DropdownMenuSeparator />
                       <DropdownMenuLabel className="flex items-center gap-2">
                         <SlidersHorizontal className="size-3.5" />
-                        Grouping
+                        {translate('auto.components.TaskPage.5659da12fc', 'Grouping')}
                       </DropdownMenuLabel>
                       <DropdownMenuRadioGroup
                         value={linearGroupBy}
                         onValueChange={(value) => setLinearGroupBy(value as LinearGroupBy)}
                       >
-                        {LINEAR_GROUP_OPTIONS.map((option) => (
+                        {linearGroupOptions.map((option) => (
                           <DropdownMenuRadioItem key={option.id} value={option.id}>
                             {option.label}
                           </DropdownMenuRadioItem>
@@ -8443,13 +9954,13 @@ export default function TaskPage(): React.JSX.Element {
                       <DropdownMenuSeparator />
                       <DropdownMenuLabel className="flex items-center gap-2">
                         <ArrowDownUp className="size-3.5" />
-                        Ordering
+                        {translate('auto.components.TaskPage.5d2d835467', 'Ordering')}
                       </DropdownMenuLabel>
                       <DropdownMenuRadioGroup
                         value={linearOrderBy}
                         onValueChange={(value) => setLinearOrderBy(value as LinearOrderBy)}
                       >
-                        {LINEAR_ORDER_OPTIONS.map((option) => (
+                        {linearOrderOptions.map((option) => (
                           <DropdownMenuRadioItem key={option.id} value={option.id}>
                             {option.label}
                           </DropdownMenuRadioItem>
@@ -8458,9 +9969,9 @@ export default function TaskPage(): React.JSX.Element {
                       <DropdownMenuSeparator />
                       <DropdownMenuLabel className="flex items-center gap-2">
                         <Eye className="size-3.5" />
-                        Display properties
+                        {translate('auto.components.TaskPage.a26a48252e', 'Display properties')}
                       </DropdownMenuLabel>
-                      {LINEAR_DISPLAY_PROPERTIES.map((property) => (
+                      {linearDisplayPropertyOptions.map((property) => (
                         <DropdownMenuCheckboxItem
                           key={property.id}
                           checked={effectiveLinearDisplayProperties.has(property.id)}
@@ -8473,7 +9984,8 @@ export default function TaskPage(): React.JSX.Element {
                     </DropdownMenuContent>
                   </DropdownMenu>
                   <div className="text-[11px] text-muted-foreground">
-                    {pagedLinearIssues.length} shown
+                    {pagedLinearIssues.length}{' '}
+                    {translate('auto.components.TaskPage.b7bae28b6a', 'shown')}
                   </div>
                 </div>
               </div>
@@ -8483,15 +9995,25 @@ export default function TaskPage(): React.JSX.Element {
                   className="grid h-8 flex-none items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground max-lg:!hidden lg:grid-cols-[var(--linear-grid-template)] [&>span]:min-w-0 [&>span]:truncate"
                   style={linearIssueGridStyle}
                 >
-                  <span>Key</span>
-                  <span>Issue</span>
-                  {effectiveLinearDisplayProperties.has('labels') ? <span>Labels</span> : null}
-                  {effectiveLinearDisplayProperties.has('team') ? <span>Team</span> : null}
-                  {effectiveLinearDisplayProperties.has('state') ? <span>Status</span> : null}
-                  {effectiveLinearDisplayProperties.has('assignee') ? (
-                    <span className="text-center">Assignee</span>
+                  <span>{translate('auto.components.TaskPage.37e7ee311e', 'Key')}</span>
+                  <span>{translate('auto.components.TaskPage.b1eaa18ace', 'Issue')}</span>
+                  {effectiveLinearDisplayProperties.has('labels') ? (
+                    <span>{translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')}</span>
                   ) : null}
-                  {effectiveLinearDisplayProperties.has('updated') ? <span>Updated</span> : null}
+                  {effectiveLinearDisplayProperties.has('team') ? (
+                    <span>{translate('auto.components.TaskPage.a98cbe7664', 'Team')}</span>
+                  ) : null}
+                  {effectiveLinearDisplayProperties.has('state') ? (
+                    <span>{translate('auto.components.TaskPage.154b0fa623', 'Status')}</span>
+                  ) : null}
+                  {effectiveLinearDisplayProperties.has('assignee') ? (
+                    <span className="text-center">
+                      {translate('auto.components.TaskPage.d2a876ca53', 'Assignee')}
+                    </span>
+                  ) : null}
+                  {effectiveLinearDisplayProperties.has('updated') ? (
+                    <span>{translate('auto.components.TaskPage.f362667d55', 'Updated')}</span>
+                  ) : null}
                   <span />
                 </div>
               ) : null}
@@ -8523,10 +10045,16 @@ export default function TaskPage(): React.JSX.Element {
                 activeLinearIssueHasCollectionError ? (
                   <div className="px-4 py-10 text-center">
                     <p className="text-sm font-medium text-foreground">
-                      Unable to load Linear issues
+                      {translate(
+                        'auto.components.TaskPage.cc8795e07c',
+                        'Unable to load Linear issues'
+                      )}
                     </p>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      Review the workspace error below, then refresh.
+                      {translate(
+                        'auto.components.TaskPage.5ed38a49e5',
+                        'Review the workspace error below, then refresh.'
+                      )}
                     </p>
                   </div>
                 ) : null}
@@ -8536,13 +10064,24 @@ export default function TaskPage(): React.JSX.Element {
                 !activeLinearIssueError &&
                 !activeLinearIssueHasCollectionError ? (
                   <div className="px-4 py-10 text-center">
-                    <p className="text-sm font-medium text-foreground">No Linear issues found</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {translate('auto.components.TaskPage.903c7af49f', 'No Linear issues found')}
+                    </p>
                     <p className="mt-2 text-sm text-muted-foreground">
                       {activeLinearIssueContextLabel
-                        ? 'No issues match this Linear context.'
+                        ? translate(
+                            'auto.components.TaskPage.25ff84769a',
+                            'No issues match this Linear context.'
+                          )
                         : linearSearchInput
-                          ? 'Try a different search query.'
-                          : 'No assigned issues. Try searching for something.'}
+                          ? translate(
+                              'auto.components.TaskPage.2bdefbcac3',
+                              'Try a different search query.'
+                            )
+                          : translate(
+                              'auto.components.TaskPage.d079be2dc8',
+                              'No assigned issues. Try searching for something.'
+                            )}
                     </p>
                   </div>
                 ) : null}
@@ -8552,11 +10091,16 @@ export default function TaskPage(): React.JSX.Element {
                 filteredLinearIssues.length === 0 ? (
                   <div className="px-4 py-10 text-center">
                     <p className="text-sm font-medium text-foreground">
-                      No fetched issues match the selected teams
+                      {translate(
+                        'auto.components.TaskPage.618107fab3',
+                        'No fetched issues match the selected teams'
+                      )}
                     </p>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      Try selecting more teams or refreshing; team filters apply to the current
-                      fetched issue set.
+                      {translate(
+                        'auto.components.TaskPage.592a55611b',
+                        'Try selecting more teams or refreshing; team filters apply to the current fetched issue set.'
+                      )}
                     </p>
                   </div>
                 ) : null}
@@ -8652,7 +10196,11 @@ export default function TaskPage(): React.JSX.Element {
                                         event.stopPropagation()
                                         handleUseLinearItem(issue)
                                       }}
-                                      aria-label={`Start workspace from ${issue.identifier}`}
+                                      aria-label={translate(
+                                        'auto.components.TaskPage.ff90d0abc7',
+                                        'Start workspace from {{value0}}',
+                                        { value0: issue.identifier }
+                                      )}
                                     >
                                       <ArrowRight className="size-3.5" />
                                     </Button>
@@ -8663,7 +10211,11 @@ export default function TaskPage(): React.JSX.Element {
                                         event.stopPropagation()
                                         window.api.shell.openUrl(issue.url)
                                       }}
-                                      aria-label={`Open ${issue.identifier} in Linear`}
+                                      aria-label={translate(
+                                        'auto.components.TaskPage.246bd64aed',
+                                        'Open {{value0}} in Linear',
+                                        { value0: issue.identifier }
+                                      )}
                                     >
                                       <ExternalLink className="size-3.5" />
                                     </Button>
@@ -8671,10 +10223,20 @@ export default function TaskPage(): React.JSX.Element {
                                 </div>
                                 <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
                                   {effectiveLinearDisplayProperties.has('state') ? (
-                                    <LinearStateCell issue={issue} className="px-1.5 py-0.5" />
+                                    <LinearStateCell
+                                      issue={issue}
+                                      className="px-1.5 py-0.5"
+                                      sourceContext={linearTaskSourceContext}
+                                    />
                                   ) : null}
                                   {effectiveLinearDisplayProperties.has('assignee') ? (
-                                    <span>{issue.assignee?.displayName ?? 'Unassigned'}</span>
+                                    <span>
+                                      {issue.assignee?.displayName ??
+                                        translate(
+                                          'auto.components.TaskPage.42a9160321',
+                                          'Unassigned'
+                                        )}
+                                    </span>
                                   ) : null}
                                   {effectiveLinearDisplayProperties.has('team') ? (
                                     <span className="truncate">{teamLabel}</span>
@@ -8780,11 +10342,16 @@ export default function TaskPage(): React.JSX.Element {
                             </div>
                             <div className="mt-1 flex min-w-0 items-center gap-1.5 lg:!hidden">
                               {effectiveLinearDisplayProperties.has('state') ? (
-                                <LinearStateCell issue={issue} className="px-1.5 py-0.5" />
+                                <LinearStateCell
+                                  issue={issue}
+                                  className="px-1.5 py-0.5"
+                                  sourceContext={linearTaskSourceContext}
+                                />
                               ) : null}
                               {effectiveLinearDisplayProperties.has('assignee') ? (
                                 <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-                                  {issue.assignee?.displayName ?? 'Unassigned'}
+                                  {issue.assignee?.displayName ??
+                                    translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
                                 </span>
                               ) : null}
                               {effectiveLinearDisplayProperties.has('team') ? (
@@ -8821,7 +10388,11 @@ export default function TaskPage(): React.JSX.Element {
 
                           {effectiveLinearDisplayProperties.has('state') ? (
                             <div className="flex min-w-0 max-lg:!hidden">
-                              <LinearStateCell issue={issue} className="max-w-full px-2 py-0.5" />
+                              <LinearStateCell
+                                issue={issue}
+                                className="max-w-full px-2 py-0.5"
+                                sourceContext={linearTaskSourceContext}
+                              />
                             </div>
                           ) : null}
 
@@ -8831,7 +10402,10 @@ export default function TaskPage(): React.JSX.Element {
                                 <TooltipTrigger asChild>
                                   <div
                                     className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-[10px] text-muted-foreground"
-                                    aria-label={issue.assignee?.displayName ?? 'Unassigned'}
+                                    aria-label={
+                                      issue.assignee?.displayName ??
+                                      translate('auto.components.TaskPage.42a9160321', 'Unassigned')
+                                    }
                                   >
                                     {issue.assignee?.avatarUrl ? (
                                       <img
@@ -8845,7 +10419,8 @@ export default function TaskPage(): React.JSX.Element {
                                   </div>
                                 </TooltipTrigger>
                                 <TooltipContent side="bottom" sideOffset={6}>
-                                  {issue.assignee?.displayName ?? 'Unassigned'}
+                                  {issue.assignee?.displayName ??
+                                    translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
                                 </TooltipContent>
                               </Tooltip>
                             </div>
@@ -8875,13 +10450,17 @@ export default function TaskPage(): React.JSX.Element {
                                     event.stopPropagation()
                                     handleUseLinearItem(issue)
                                   }}
-                                  aria-label={`Start workspace from ${issue.identifier}`}
+                                  aria-label={translate(
+                                    'auto.components.TaskPage.ff90d0abc7',
+                                    'Start workspace from {{value0}}',
+                                    { value0: issue.identifier }
+                                  )}
                                 >
                                   <ArrowRight className="size-3.5" />
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent side="bottom" sideOffset={6}>
-                                Start
+                                {translate('auto.components.TaskPage.7d08e8be0f', 'Start')}
                               </TooltipContent>
                             </Tooltip>
                             <Tooltip>
@@ -8893,13 +10472,17 @@ export default function TaskPage(): React.JSX.Element {
                                     event.stopPropagation()
                                     window.api.shell.openUrl(issue.url)
                                   }}
-                                  aria-label={`Open ${issue.identifier} in Linear`}
+                                  aria-label={translate(
+                                    'auto.components.TaskPage.246bd64aed',
+                                    'Open {{value0}} in Linear',
+                                    { value0: issue.identifier }
+                                  )}
                                 >
                                   <ExternalLink className="size-3.5" />
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent side="bottom" sideOffset={6}>
-                                Open in Linear
+                                {translate('auto.components.TaskPage.6244a02f46', 'Open in Linear')}
                               </TooltipContent>
                             </Tooltip>
                           </div>
@@ -8915,7 +10498,7 @@ export default function TaskPage(): React.JSX.Element {
                     errors={linearProjectIssuesResult.errors}
                     hasMore={showLinearEmptyFilteredLoadMore}
                     count={linearProjectIssuesResult.items.length}
-                    label="project issues"
+                    label={translate('auto.components.TaskPage.67662ade50', 'project issues')}
                     onLoadMore={handleLinearEmptyFilteredLoadMore}
                     loading={activeLinearIssueLoading}
                     loadMoreLabel="Fetch more"
@@ -8937,7 +10520,7 @@ export default function TaskPage(): React.JSX.Element {
                     errors={linearCustomViewIssuesResult.errors}
                     hasMore={showLinearEmptyFilteredLoadMore}
                     count={linearCustomViewIssuesResult.items.length}
-                    label="view issues"
+                    label={translate('auto.components.TaskPage.be8cf68d9f', 'view issues')}
                     onLoadMore={handleLinearEmptyFilteredLoadMore}
                     loading={activeLinearIssueLoading}
                     loadMoreLabel="Fetch more"
@@ -8958,7 +10541,7 @@ export default function TaskPage(): React.JSX.Element {
                   <LinearCollectionNotice
                     hasMore={showLinearEmptyFilteredLoadMore}
                     count={linearIssues.length}
-                    label="issues"
+                    label={translate('auto.components.TaskPage.d1e243795c', 'issues')}
                     onLoadMore={handleLinearEmptyFilteredLoadMore}
                     loading={activeLinearIssueLoading}
                     loadMoreLabel="Fetch more"
@@ -8998,7 +10581,9 @@ export default function TaskPage(): React.JSX.Element {
           }}
         >
           <DialogHeader>
-            <DialogTitle>New GitHub issue</DialogTitle>
+            <DialogTitle>
+              {translate('auto.components.TaskPage.d3d0998b7d', 'New GitHub issue')}
+            </DialogTitle>
             {(() => {
               // Why: parent design doc §1 surface 2 — the composer is the
               // non-negotiable surface because User D's regression (filing a
@@ -9019,7 +10604,12 @@ export default function TaskPage(): React.JSX.Element {
                 ? `${entry.sources.issues.owner}/${entry.sources.issues.repo}`
                 : null
               const fallback = newIssueTargetRepo?.displayName ?? 'this repository'
-              return <DialogDescription>Filing in {issuesSlug ?? fallback}</DialogDescription>
+              return (
+                <DialogDescription>
+                  {translate('auto.components.TaskPage.9f2b4c03a6', 'Filing in')}
+                  {issuesSlug ?? fallback}
+                </DialogDescription>
+              )
             })()}
             {(() => {
               // Why: mirror the Tasks-view selector in the composer so User D
@@ -9040,17 +10630,19 @@ export default function TaskPage(): React.JSX.Element {
                 return null
               }
               const entry = perRepoSourceState.find((s) => s.repoId === newIssueTargetRepo.id)
-              if (!entry || !entry.sources?.upstreamCandidate || !entry.sources?.prs) {
+              if (!entry || !entry.sources?.upstreamCandidate || !entry.sources?.originCandidate) {
                 return null
               }
-              if (sameGitHubOwnerRepo(entry.sources.prs, entry.sources.upstreamCandidate)) {
+              if (
+                sameGitHubOwnerRepo(entry.sources.originCandidate, entry.sources.upstreamCandidate)
+              ) {
                 return null
               }
               return (
                 <div className="mt-1">
                   <IssueSourceSelector
                     preference={newIssueTargetRepo.issueSourcePreference}
-                    origin={entry.sources.prs}
+                    origin={entry.sources.originCandidate}
                     upstream={entry.sources.upstreamCandidate}
                     disabled={newIssueSubmitting}
                     // Why: the composer only files issues, so the "Issues from
@@ -9073,7 +10665,9 @@ export default function TaskPage(): React.JSX.Element {
           <div className="flex flex-col gap-3">
             {selectedRepos.length > 1 ? (
               <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-medium text-muted-foreground">Project</label>
+                <label className="text-[11px] font-medium text-muted-foreground">
+                  {translate('auto.components.TaskPage.00022ec0ba', 'Project')}
+                </label>
                 <Select
                   value={newIssueRepoId ?? undefined}
                   onValueChange={(v) => setNewIssueRepoId(v)}
@@ -9093,7 +10687,9 @@ export default function TaskPage(): React.JSX.Element {
               </div>
             ) : null}
             <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-medium text-muted-foreground">Title</label>
+              <label className="text-[11px] font-medium text-muted-foreground">
+                {translate('auto.components.TaskPage.16cba35bee', 'Title')}
+              </label>
               <Input
                 autoFocus
                 value={newIssueTitle}
@@ -9104,18 +10700,21 @@ export default function TaskPage(): React.JSX.Element {
                     void handleCreateNewIssue()
                   }
                 }}
-                placeholder="Short summary"
+                placeholder={translate('auto.components.TaskPage.578f730c16', 'Short summary')}
                 disabled={newIssueSubmitting}
               />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-medium text-muted-foreground">
-                Description (optional, markdown)
+                {translate(
+                  'auto.components.TaskPage.7f3f7b4c18',
+                  'Description (optional, markdown)'
+                )}
               </label>
               <GitHubMarkdownComposer
                 value={newIssueBody}
                 onChange={setNewIssueBody}
-                placeholder="What's going on?"
+                placeholder={translate('auto.components.TaskPage.34d97ca682', "What's going on?")}
                 disabled={newIssueSubmitting}
                 minHeightClassName="min-h-40"
                 onSubmitShortcut={() => void handleCreateNewIssue()}
@@ -9139,7 +10738,9 @@ export default function TaskPage(): React.JSX.Element {
                 onChange={setNewIssueAssignees}
               />
             </div>
-            <p className="text-[10px] text-muted-foreground">{submitShortcutLabel} to submit.</p>
+            <p className="text-[10px] text-muted-foreground">
+              {submitShortcutLabel} {translate('auto.components.TaskPage.fc0d8a1fa4', 'to submit.')}
+            </p>
           </div>
           <DialogFooter>
             <Button
@@ -9147,7 +10748,7 @@ export default function TaskPage(): React.JSX.Element {
               onClick={() => setNewIssueOpen(false)}
               disabled={newIssueSubmitting}
             >
-              Cancel
+              {translate('auto.components.TaskPage.ff69a30681', 'Cancel')}
             </Button>
             <Button
               onClick={() => void handleCreateNewIssue()}
@@ -9156,10 +10757,477 @@ export default function TaskPage(): React.JSX.Element {
               {newIssueSubmitting ? (
                 <>
                   <LoaderCircle className="size-4 animate-spin" />
-                  Creating…
+                  {translate('auto.components.TaskPage.8ff6fdc368', 'Creating…')}
                 </>
               ) : (
-                'Create issue'
+                translate('auto.components.TaskPage.e15ba2d2eb', 'Create issue')
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={newLinearProjectOpen}
+        onOpenChange={(open) => {
+          if (!newLinearProjectSubmitting) {
+            setNewLinearProjectOpen(open)
+          }
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          className="flex max-h-[88vh] flex-col gap-0 overflow-hidden rounded-xl border-border bg-background p-0 shadow-2xl sm:max-w-3xl"
+          onKeyDown={(event) => {
+            if (isScreenSubmitShortcut(event)) {
+              event.preventDefault()
+              void handleCreateNewLinearProject()
+            }
+          }}
+        >
+          <DialogTitle className="sr-only">
+            {translate('auto.components.TaskPage.1361275ec3', 'New Linear project')}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            {translate(
+              'auto.components.TaskPage.bdebffcbfe',
+              'Create a Linear project for the selected team.'
+            )}
+          </DialogDescription>
+          <div className="flex items-center justify-between border-b border-border/60 bg-muted/10 px-5 py-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {translate('auto.components.TaskPage.02f67c0d09', 'New Project')}
+              </span>
+              <span className="text-xs text-muted-foreground/40">/</span>
+              {availableTeams.length > 1 ? (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      className="h-7 max-w-56 gap-1 px-2 text-xs font-medium text-foreground hover:bg-muted"
+                    >
+                      <span className="truncate">
+                        {newLinearProjectTargetTeam
+                          ? `${newLinearProjectTargetTeam.key} - ${newLinearProjectTargetTeam.name}`
+                          : translate('auto.components.TaskPage.5af6f0ae5b', 'Select team')}
+                      </span>
+                      <ChevronDown className="size-3 flex-none text-muted-foreground" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-72 p-1">
+                    <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {translate('auto.components.TaskPage.a98cbe7664', 'Team')}
+                    </div>
+                    <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+                      {availableTeams.map((team) => (
+                        <button
+                          key={team.id}
+                          type="button"
+                          onClick={() => setNewLinearProjectTeamId(team.id)}
+                          className={cn(
+                            'flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+                            newLinearProjectTargetTeam?.id === team.id
+                              ? 'bg-muted font-medium text-foreground'
+                              : 'text-foreground/80'
+                          )}
+                        >
+                          <span className="truncate">
+                            {team.key} - {team.name}
+                          </span>
+                          {newLinearProjectTargetTeam?.id === team.id ? (
+                            <Check className="size-3 flex-none" />
+                          ) : null}
+                        </button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                <span className="truncate text-xs font-medium text-foreground">
+                  {newLinearProjectTargetTeam
+                    ? `${newLinearProjectTargetTeam.key} - ${newLinearProjectTargetTeam.name}`
+                    : ''}
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setNewLinearProjectOpen(false)}
+              className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+              disabled={newLinearProjectSubmitting}
+              aria-label={translate('auto.components.TaskPage.b6795e65fd', 'Close')}
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5 scrollbar-sleek">
+            <input
+              autoFocus
+              value={newLinearProjectName}
+              onChange={(event) => setNewLinearProjectName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                  event.preventDefault()
+                  void handleCreateNewLinearProject()
+                }
+              }}
+              placeholder={translate('auto.components.TaskPage.ecbcc83140', 'Project name')}
+              disabled={newLinearProjectSubmitting}
+              className="w-full border-none bg-transparent p-0 text-xl font-semibold text-foreground outline-none placeholder:text-muted-foreground/45 focus:outline-none focus:ring-0 focus-visible:ring-0"
+            />
+
+            <input
+              value={newLinearProjectDescription}
+              onChange={(event) => setNewLinearProjectDescription(event.target.value)}
+              placeholder={translate(
+                'auto.components.TaskPage.579f98afcd',
+                'Add a short summary...'
+              )}
+              disabled={newLinearProjectSubmitting}
+              className="w-full border-none bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-muted-foreground/45 focus:outline-none focus:ring-0 focus-visible:ring-0"
+            />
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={newLinearProjectSubmitting}
+                    className="flex items-center gap-1.5 rounded-md border border-border/80 bg-muted/15 px-2 py-1 text-xs text-foreground/80 transition-colors hover:bg-muted/50 active:bg-muted disabled:opacity-50"
+                  >
+                    <LinearPriorityIcon priority={newLinearProjectPriority} className="size-3.5" />
+                    <span>{getLinearPriorityLabel(newLinearProjectPriority)}</span>
+                    <ChevronDown className="size-3 text-muted-foreground/70" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-48 p-1">
+                  <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {translate('auto.components.TaskPage.c8d5bec5f7', 'Priority')}
+                  </div>
+                  {[0, 1, 2, 3, 4].map((priority) => (
+                    <button
+                      key={priority}
+                      type="button"
+                      onClick={() => setNewLinearProjectPriority(priority)}
+                      className={cn(
+                        'flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+                        newLinearProjectPriority === priority
+                          ? 'bg-muted font-medium text-foreground'
+                          : 'text-foreground/80'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <LinearPriorityIcon priority={priority} className="size-3.5" />
+                        {getLinearPriorityLabel(priority)}
+                      </span>
+                      {newLinearProjectPriority === priority ? (
+                        <Check className="size-3 text-foreground" />
+                      ) : null}
+                    </button>
+                  ))}
+                </PopoverContent>
+              </Popover>
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={newLinearProjectSubmitting}
+                    className="flex items-center gap-1.5 rounded-md border border-border/80 bg-muted/15 px-2 py-1 text-xs text-foreground/80 transition-colors hover:bg-muted/50 active:bg-muted disabled:opacity-50"
+                  >
+                    <UserRound className="size-3.5 text-muted-foreground/70" />
+                    <span className="max-w-[120px] truncate">
+                      {newLinearProjectMembers.data.find(
+                        (member) => member.id === newLinearProjectLeadId
+                      )?.displayName ?? translate('auto.components.TaskPage.34da8ac06c', 'Lead')}
+                    </span>
+                    <ChevronDown className="size-3 text-muted-foreground/70" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-64 p-1">
+                  <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {translate('auto.components.TaskPage.34da8ac06c', 'Lead')}
+                  </div>
+                  {newLinearProjectMembers.loading ? (
+                    <div className="flex items-center justify-center p-4">
+                      <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+                      <button
+                        type="button"
+                        onClick={() => setNewLinearProjectLeadId(null)}
+                        className={cn(
+                          'flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+                          newLinearProjectLeadId === null
+                            ? 'bg-muted font-medium text-foreground'
+                            : 'text-foreground/80'
+                        )}
+                      >
+                        <span className="flex items-center gap-2">
+                          <UserRound className="size-3.5 text-muted-foreground/50" />
+                          {translate('auto.components.TaskPage.cfaadb6b22', 'No lead')}
+                        </span>
+                        {newLinearProjectLeadId === null ? <Check className="size-3" /> : null}
+                      </button>
+                      {newLinearProjectMembers.data.map((member) => (
+                        <button
+                          key={member.id}
+                          type="button"
+                          onClick={() => setNewLinearProjectLeadId(member.id)}
+                          className={cn(
+                            'flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+                            newLinearProjectLeadId === member.id
+                              ? 'bg-muted font-medium text-foreground'
+                              : 'text-foreground/80'
+                          )}
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            {member.avatarUrl ? (
+                              <img
+                                src={member.avatarUrl}
+                                alt={member.displayName}
+                                className="size-3.5 flex-none rounded-full"
+                              />
+                            ) : (
+                              <UserRound className="size-3.5 flex-none text-muted-foreground/70" />
+                            )}
+                            <span className="truncate">{member.displayName}</span>
+                          </span>
+                          {newLinearProjectLeadId === member.id ? (
+                            <Check className="size-3 flex-none" />
+                          ) : null}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={newLinearProjectSubmitting}
+                    className="flex items-center gap-1.5 rounded-md border border-border/80 bg-muted/15 px-2 py-1 text-xs text-foreground/80 transition-colors hover:bg-muted/50 active:bg-muted disabled:opacity-50"
+                  >
+                    <Users className="size-3.5 text-muted-foreground/70" />
+                    <span>
+                      {newLinearProjectMemberIds.length === 0
+                        ? translate('auto.components.TaskPage.d6cda23ef1', 'Members')
+                        : translate(
+                            'auto.components.TaskPage.7719d8daa9',
+                            '{{value0}} member{{value1}}',
+                            {
+                              value0: newLinearProjectMemberIds.length,
+                              value1: newLinearProjectMemberIds.length > 1 ? 's' : ''
+                            }
+                          )}
+                    </span>
+                    <ChevronDown className="size-3 text-muted-foreground/70" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-64 p-1">
+                  <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {translate('auto.components.TaskPage.d6cda23ef1', 'Members')}
+                  </div>
+                  {newLinearProjectMembers.loading ? (
+                    <div className="flex items-center justify-center p-4">
+                      <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+                      {newLinearProjectMembers.data.map((member) => {
+                        const selected = newLinearProjectMemberIds.includes(member.id)
+                        return (
+                          <button
+                            key={member.id}
+                            type="button"
+                            onClick={() =>
+                              setNewLinearProjectMemberIds((current) =>
+                                selected
+                                  ? current.filter((id) => id !== member.id)
+                                  : [...current, member.id]
+                              )
+                            }
+                            className={cn(
+                              'flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+                              selected
+                                ? 'bg-muted font-medium text-foreground'
+                                : 'text-foreground/80'
+                            )}
+                          >
+                            <span className="flex min-w-0 items-center gap-2">
+                              {member.avatarUrl ? (
+                                <img
+                                  src={member.avatarUrl}
+                                  alt={member.displayName}
+                                  className="size-3.5 flex-none rounded-full"
+                                />
+                              ) : (
+                                <UserRound className="size-3.5 flex-none text-muted-foreground/70" />
+                              )}
+                              <span className="truncate">{member.displayName}</span>
+                            </span>
+                            {selected ? <Check className="size-3 flex-none" /> : null}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={newLinearProjectSubmitting}
+                    className="flex items-center gap-1.5 rounded-md border border-border/80 bg-muted/15 px-2 py-1 text-xs text-foreground/80 transition-colors hover:bg-muted/50 active:bg-muted disabled:opacity-50"
+                  >
+                    <Tag className="size-3.5 text-muted-foreground/70" />
+                    <span>
+                      {newLinearProjectLabelIds.length === 0
+                        ? translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')
+                        : translate(
+                            'auto.components.TaskPage.eff9800d4b',
+                            '{{value0}} label{{value1}}',
+                            {
+                              value0: newLinearProjectLabelIds.length,
+                              value1: newLinearProjectLabelIds.length > 1 ? 's' : ''
+                            }
+                          )}
+                    </span>
+                    <ChevronDown className="size-3 text-muted-foreground/70" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-64 p-1">
+                  <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')}
+                  </div>
+                  {newLinearProjectLabels.loading ? (
+                    <div className="flex items-center justify-center p-4">
+                      <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+                      {newLinearProjectLabels.data.length === 0 ? (
+                        <div className="px-2 py-2 text-xs text-muted-foreground">
+                          {translate('auto.components.TaskPage.af9e877f30', 'No labels')}
+                        </div>
+                      ) : (
+                        newLinearProjectLabels.data.map((label) => {
+                          const selected = newLinearProjectLabelIds.includes(label.id)
+                          return (
+                            <button
+                              key={label.id}
+                              type="button"
+                              onClick={() =>
+                                setNewLinearProjectLabelIds((current) =>
+                                  selected
+                                    ? current.filter((id) => id !== label.id)
+                                    : [...current, label.id]
+                                )
+                              }
+                              className={cn(
+                                'flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+                                selected
+                                  ? 'bg-muted font-medium text-foreground'
+                                  : 'text-foreground/80'
+                              )}
+                            >
+                              <span className="flex min-w-0 items-center gap-2">
+                                <span
+                                  className="size-2 flex-none rounded-full bg-muted-foreground/40"
+                                  style={label.color ? { backgroundColor: label.color } : undefined}
+                                />
+                                <span className="truncate">{label.name}</span>
+                              </span>
+                              {selected ? <Check className="size-3 flex-none" /> : null}
+                            </button>
+                          )
+                        })
+                      )}
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+
+              <label className="flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-muted/30 px-2 py-1 text-xs text-foreground transition-colors hover:bg-muted/50 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+                <Clock3 className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="shrink-0 text-muted-foreground">
+                  {translate('auto.components.TaskPage.7d08e8be0f', 'Start')}
+                </span>
+                <input
+                  type="date"
+                  value={newLinearProjectStartDate}
+                  onChange={(event) => setNewLinearProjectStartDate(event.target.value)}
+                  disabled={newLinearProjectSubmitting}
+                  className="h-5 min-w-[6.75rem] cursor-pointer border-none bg-transparent p-0 text-xs text-foreground outline-none disabled:cursor-not-allowed"
+                  aria-label={translate('auto.components.TaskPage.09623359b9', 'Start date')}
+                />
+              </label>
+
+              <label className="flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-muted/30 px-2 py-1 text-xs text-foreground transition-colors hover:bg-muted/50 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+                <Clock3 className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="shrink-0 text-muted-foreground">
+                  {translate('auto.components.TaskPage.7da41c9225', 'Target')}
+                </span>
+                <input
+                  type="date"
+                  value={newLinearProjectTargetDate}
+                  onChange={(event) => setNewLinearProjectTargetDate(event.target.value)}
+                  disabled={newLinearProjectSubmitting}
+                  className="h-5 min-w-[6.75rem] cursor-pointer border-none bg-transparent p-0 text-xs text-foreground outline-none disabled:cursor-not-allowed"
+                  aria-label={translate('auto.components.TaskPage.2ea1c701b6', 'Target date')}
+                />
+              </label>
+            </div>
+
+            <div className="border-t border-border/40 pt-4">
+              <textarea
+                value={newLinearProjectContent}
+                onChange={(event) => setNewLinearProjectContent(event.target.value)}
+                placeholder={translate(
+                  'auto.components.TaskPage.cf72580c04',
+                  'Write a description, project brief, or collect ideas...'
+                )}
+                rows={8}
+                disabled={newLinearProjectSubmitting}
+                className="max-h-72 min-h-40 w-full min-w-0 resize-none overflow-y-auto border-none bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-muted-foreground/45 scrollbar-sleek focus:outline-none focus:ring-0 focus-visible:ring-0"
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              {submitShortcutLabel} {translate('auto.components.TaskPage.fc0d8a1fa4', 'to submit.')}
+            </p>
+          </div>
+
+          <DialogFooter className="border-t border-border/60 bg-muted/10 px-5 py-3">
+            <Button
+              variant="outline"
+              onClick={() => setNewLinearProjectOpen(false)}
+              disabled={newLinearProjectSubmitting}
+            >
+              {translate('auto.components.TaskPage.ff69a30681', 'Cancel')}
+            </Button>
+            <Button
+              onClick={() => void handleCreateNewLinearProject()}
+              disabled={
+                !newLinearProjectTargetTeam ||
+                !newLinearProjectName.trim() ||
+                newLinearProjectSubmitting
+              }
+            >
+              {newLinearProjectSubmitting ? (
+                <>
+                  <LoaderCircle className="size-4 animate-spin" />
+                  {translate('auto.components.TaskPage.1b59a07674', 'Creating...')}
+                </>
+              ) : (
+                translate('auto.components.TaskPage.5301ca0f20', 'Create project')
               )}
             </Button>
           </DialogFooter>
@@ -9188,7 +11256,7 @@ export default function TaskPage(): React.JSX.Element {
           <div className="flex items-center justify-between border-b border-border/60 px-5 py-3 bg-muted/10">
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                New Issue
+                {translate('auto.components.TaskPage.c11105dac5', 'New Issue')}
               </span>
               <span className="text-muted-foreground/40 text-xs">/</span>
               {availableTeams.length > 1 ? (
@@ -9199,13 +11267,14 @@ export default function TaskPage(): React.JSX.Element {
                       size="xs"
                       className="h-7 gap-1 px-2 font-medium text-xs text-foreground hover:bg-muted"
                     >
-                      {newLinearIssueTargetTeam?.key ?? 'Select Team'}
+                      {newLinearIssueTargetTeam?.key ??
+                        translate('auto.components.TaskPage.d7f16d0e32', 'Select Team')}
                       <ChevronDown className="size-3 text-muted-foreground" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent align="start" className="w-64 p-1">
                     <div className="text-[10px] font-semibold text-muted-foreground px-2 py-1.5 uppercase tracking-wider">
-                      Switch Team
+                      {translate('auto.components.TaskPage.4f3cb99f41', 'Switch Team')}
                     </div>
                     {availableTeams.map((t) => (
                       <button
@@ -9252,7 +11321,7 @@ export default function TaskPage(): React.JSX.Element {
                   void handleCreateNewLinearIssue()
                 }
               }}
-              placeholder="Issue title"
+              placeholder={translate('auto.components.TaskPage.d9151fd4e9', 'Issue title')}
               disabled={newLinearIssueSubmitting}
               className="text-lg font-semibold bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 p-0 placeholder:text-muted-foreground/40 text-foreground w-full"
             />
@@ -9261,7 +11330,7 @@ export default function TaskPage(): React.JSX.Element {
             <textarea
               value={newLinearIssueBody}
               onChange={(e) => setNewLinearIssueBody(e.target.value)}
-              placeholder="Add description..."
+              placeholder={translate('auto.components.TaskPage.9bc8aea407', 'Add description...')}
               rows={5}
               disabled={newLinearIssueSubmitting}
               className="w-full min-w-0 text-sm bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 p-0 placeholder:text-muted-foreground/45 text-foreground resize-none max-h-60 overflow-y-auto scrollbar-sleek py-1"
@@ -9287,7 +11356,10 @@ export default function TaskPage(): React.JSX.Element {
                             className="size-2 rounded-full flex-shrink-0"
                             style={{ backgroundColor: selectedState?.color || '#a3a3a3' }}
                           />
-                          <span>{selectedState?.name || 'Status'}</span>
+                          <span>
+                            {selectedState?.name ||
+                              translate('auto.components.TaskPage.154b0fa623', 'Status')}
+                          </span>
                         </>
                       )
                     })()}
@@ -9296,7 +11368,7 @@ export default function TaskPage(): React.JSX.Element {
                 </PopoverTrigger>
                 <PopoverContent align="start" className="w-56 p-1">
                   <div className="text-[10px] font-semibold text-muted-foreground px-2 py-1 uppercase tracking-wider">
-                    Status
+                    {translate('auto.components.TaskPage.154b0fa623', 'Status')}
                   </div>
                   {newLinearStates.loading ? (
                     <div className="flex items-center justify-center p-4">
@@ -9365,7 +11437,9 @@ export default function TaskPage(): React.JSX.Element {
                       return (
                         <>
                           <UserRound className="size-3.5 text-muted-foreground/70" />
-                          <span>Assignee</span>
+                          <span>
+                            {translate('auto.components.TaskPage.d2a876ca53', 'Assignee')}
+                          </span>
                         </>
                       )
                     })()}
@@ -9374,7 +11448,7 @@ export default function TaskPage(): React.JSX.Element {
                 </PopoverTrigger>
                 <PopoverContent align="start" className="w-64 p-1">
                   <div className="text-[10px] font-semibold text-muted-foreground px-2 py-1 uppercase tracking-wider">
-                    Assignee
+                    {translate('auto.components.TaskPage.d2a876ca53', 'Assignee')}
                   </div>
                   {newLinearMembers.loading ? (
                     <div className="flex items-center justify-center p-4">
@@ -9393,7 +11467,9 @@ export default function TaskPage(): React.JSX.Element {
                       >
                         <div className="flex items-center gap-2">
                           <UserRound className="size-3.5 text-muted-foreground/50" />
-                          <span>Unassigned</span>
+                          <span>
+                            {translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
+                          </span>
                         </div>
                         {newLinearIssueAssigneeId === null && (
                           <Check className="size-3 text-foreground" />
@@ -9443,28 +11519,31 @@ export default function TaskPage(): React.JSX.Element {
                     <LinearPriorityIcon priority={newLinearIssuePriority} className="size-3.5" />
                     <span>
                       {newLinearIssuePriority === 1
-                        ? 'Urgent'
+                        ? translate('auto.components.TaskPage.f373ab1a4f', 'Urgent')
                         : newLinearIssuePriority === 2
-                          ? 'High'
+                          ? translate('auto.components.TaskPage.345b169f1f', 'High')
                           : newLinearIssuePriority === 3
-                            ? 'Medium'
+                            ? translate('auto.components.TaskPage.7fd59c18d8', 'Medium')
                             : newLinearIssuePriority === 4
-                              ? 'Low'
-                              : 'Priority'}
+                              ? translate('auto.components.TaskPage.69591944e7', 'Low')
+                              : translate('auto.components.TaskPage.c8d5bec5f7', 'Priority')}
                     </span>
                     <ChevronDown className="size-3 text-muted-foreground/70" />
                   </button>
                 </PopoverTrigger>
                 <PopoverContent align="start" className="w-48 p-1">
                   <div className="text-[10px] font-semibold text-muted-foreground px-2 py-1 uppercase tracking-wider">
-                    Priority
+                    {translate('auto.components.TaskPage.c8d5bec5f7', 'Priority')}
                   </div>
                   {[
-                    { val: 0, label: 'No priority' },
-                    { val: 1, label: 'Urgent' },
-                    { val: 2, label: 'High' },
-                    { val: 3, label: 'Medium' },
-                    { val: 4, label: 'Low' }
+                    {
+                      val: 0,
+                      label: translate('auto.components.TaskPage.713179dfdc', 'No priority')
+                    },
+                    { val: 1, label: translate('auto.components.TaskPage.f373ab1a4f', 'Urgent') },
+                    { val: 2, label: translate('auto.components.TaskPage.345b169f1f', 'High') },
+                    { val: 3, label: translate('auto.components.TaskPage.7fd59c18d8', 'Medium') },
+                    { val: 4, label: translate('auto.components.TaskPage.69591944e7', 'Low') }
                   ].map((p) => (
                     <button
                       key={p.val}
@@ -9510,7 +11589,7 @@ export default function TaskPage(): React.JSX.Element {
                 </PopoverTrigger>
                 <PopoverContent align="start" className="w-64 p-1">
                   <div className="text-[10px] font-semibold text-muted-foreground px-2 py-1 uppercase tracking-wider">
-                    Project
+                    {translate('auto.components.TaskPage.00022ec0ba', 'Project')}
                   </div>
                   {newLinearIssueProjectsLoading ? (
                     <div className="flex items-center justify-center p-4">
@@ -9529,7 +11608,9 @@ export default function TaskPage(): React.JSX.Element {
                       >
                         <div className="flex items-center gap-2">
                           <FolderKanban className="size-3.5 text-muted-foreground/50" />
-                          <span>No Project</span>
+                          <span>
+                            {translate('auto.components.TaskPage.1742eafc14', 'No Project')}
+                          </span>
                         </div>
                         {newLinearIssueProjectId === null && (
                           <Check className="size-3 text-foreground" />
@@ -9571,15 +11652,22 @@ export default function TaskPage(): React.JSX.Element {
                     <Tag className="size-3.5 text-muted-foreground/70" />
                     <span>
                       {newLinearIssueLabelIds.length === 0
-                        ? 'Labels'
-                        : `${newLinearIssueLabelIds.length} label${newLinearIssueLabelIds.length > 1 ? 's' : ''}`}
+                        ? translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')
+                        : translate(
+                            'auto.components.TaskPage.eff9800d4b',
+                            '{{value0}} label{{value1}}',
+                            {
+                              value0: newLinearIssueLabelIds.length,
+                              value1: newLinearIssueLabelIds.length > 1 ? 's' : ''
+                            }
+                          )}
                     </span>
                     <ChevronDown className="size-3 text-muted-foreground/70" />
                   </button>
                 </PopoverTrigger>
                 <PopoverContent align="start" className="w-64 p-1">
                   <div className="text-[10px] font-semibold text-muted-foreground px-2 py-1 uppercase tracking-wider">
-                    Labels
+                    {translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')}
                   </div>
                   {newLinearLabels.loading ? (
                     <div className="flex items-center justify-center p-4">
@@ -9629,7 +11717,7 @@ export default function TaskPage(): React.JSX.Element {
           {/* Footer */}
           <div className="flex items-center justify-between border-t border-border/60 px-6 py-4 bg-muted/5">
             <span className="text-[10px] text-muted-foreground/60 font-medium">
-              {submitShortcutLabel} to submit.
+              {submitShortcutLabel} {translate('auto.components.TaskPage.fc0d8a1fa4', 'to submit.')}
             </span>
             <div className="flex items-center gap-2">
               <Button
@@ -9639,7 +11727,7 @@ export default function TaskPage(): React.JSX.Element {
                 disabled={newLinearIssueSubmitting}
                 className="text-xs h-8 text-muted-foreground hover:text-foreground"
               >
-                Cancel
+                {translate('auto.components.TaskPage.ff69a30681', 'Cancel')}
               </Button>
               <Button
                 size="sm"
@@ -9654,10 +11742,10 @@ export default function TaskPage(): React.JSX.Element {
                 {newLinearIssueSubmitting ? (
                   <>
                     <LoaderCircle className="size-3.5 animate-spin mr-1" />
-                    Creating…
+                    {translate('auto.components.TaskPage.8ff6fdc368', 'Creating…')}
                   </>
                 ) : (
-                  'Create issue'
+                  translate('auto.components.TaskPage.e15ba2d2eb', 'Create issue')
                 )}
               </Button>
             </div>
@@ -9683,17 +11771,28 @@ export default function TaskPage(): React.JSX.Element {
           }}
         >
           <DialogHeader>
-            <DialogTitle>New Jira issue</DialogTitle>
+            <DialogTitle>
+              {translate('auto.components.TaskPage.0c11ca0b6d', 'New Jira issue')}
+            </DialogTitle>
             <DialogDescription>
               {newJiraIssueTargetProject
-                ? `Creates a new issue in ${newJiraIssueTargetProject.key}.`
-                : 'Choose a Jira project before creating the issue.'}
+                ? translate(
+                    'auto.components.TaskPage.0f7b0d964a',
+                    'Creates a new issue in {{value0}}.',
+                    { value0: newJiraIssueTargetProject.key }
+                  )
+                : translate(
+                    'auto.components.TaskPage.e178c0a953',
+                    'Choose a Jira project before creating the issue.'
+                  )}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-medium text-muted-foreground">Project</label>
+                <label className="text-[11px] font-medium text-muted-foreground">
+                  {translate('auto.components.TaskPage.00022ec0ba', 'Project')}
+                </label>
                 <Popover
                   open={newJiraIssueProjectComboboxOpen}
                   onOpenChange={handleNewJiraIssueProjectComboboxOpenChange}
@@ -9716,7 +11815,9 @@ export default function TaskPage(): React.JSX.Element {
                           )}
                         </span>
                       ) : (
-                        <span className="min-w-0 truncate text-muted-foreground">Project</span>
+                        <span className="min-w-0 truncate text-muted-foreground">
+                          {translate('auto.components.TaskPage.00022ec0ba', 'Project')}
+                        </span>
                       )}
                       <ChevronDown className="size-3.5 shrink-0 opacity-50" />
                     </Button>
@@ -9733,12 +11834,17 @@ export default function TaskPage(): React.JSX.Element {
                     >
                       <CommandInput
                         ref={newJiraIssueProjectSearchInputRef}
-                        placeholder="Search projects..."
+                        placeholder={translate(
+                          'auto.components.TaskPage.cfb56a7868',
+                          'Search projects...'
+                        )}
                         value={newJiraIssueProjectQuery}
                         onValueChange={setNewJiraIssueProjectQuery}
                       />
                       <CommandList className="max-h-56">
-                        <CommandEmpty>No projects found.</CommandEmpty>
+                        <CommandEmpty>
+                          {translate('auto.components.TaskPage.93c57f15e5', 'No projects found.')}
+                        </CommandEmpty>
                         {filteredNewJiraIssueProjects.map((project) => {
                           const selectionKey = getJiraProjectSelectionKey(project)
                           const selected = selectionKey === newJiraIssueTargetProjectSelectionKey
@@ -9770,7 +11876,9 @@ export default function TaskPage(): React.JSX.Element {
                 </Popover>
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-medium text-muted-foreground">Issue type</label>
+                <label className="text-[11px] font-medium text-muted-foreground">
+                  {translate('auto.components.TaskPage.ae592fee62', 'Issue type')}
+                </label>
                 <Select
                   value={newJiraIssueTypeId ?? newJiraIssueTargetType?.id ?? undefined}
                   onValueChange={(v) => setNewJiraIssueTypeId(v)}
@@ -9782,7 +11890,11 @@ export default function TaskPage(): React.JSX.Element {
                 >
                   <SelectTrigger>
                     <SelectValue
-                      placeholder={jiraIssueTypesLoading ? 'Loading...' : 'Issue type'}
+                      placeholder={
+                        jiraIssueTypesLoading
+                          ? translate('auto.components.TaskPage.7d63e2626e', 'Loading...')
+                          : translate('auto.components.TaskPage.ae592fee62', 'Issue type')
+                      }
                     />
                   </SelectTrigger>
                   <SelectContent>
@@ -9796,7 +11908,9 @@ export default function TaskPage(): React.JSX.Element {
               </div>
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-medium text-muted-foreground">Title</label>
+              <label className="text-[11px] font-medium text-muted-foreground">
+                {translate('auto.components.TaskPage.16cba35bee', 'Title')}
+              </label>
               <Input
                 autoFocus
                 value={newJiraIssueTitle}
@@ -9807,18 +11921,18 @@ export default function TaskPage(): React.JSX.Element {
                     void handleCreateNewJiraIssue()
                   }
                 }}
-                placeholder="Short summary"
+                placeholder={translate('auto.components.TaskPage.578f730c16', 'Short summary')}
                 disabled={newJiraIssueSubmitting}
               />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-medium text-muted-foreground">
-                Description (optional)
+                {translate('auto.components.TaskPage.f161bf9ede', 'Description (optional)')}
               </label>
               <textarea
                 value={newJiraIssueBody}
                 onChange={(e) => setNewJiraIssueBody(e.target.value)}
-                placeholder="What's going on?"
+                placeholder={translate('auto.components.TaskPage.34d97ca682', "What's going on?")}
                 rows={6}
                 disabled={newJiraIssueSubmitting}
                 className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto scrollbar-sleek"
@@ -9827,7 +11941,7 @@ export default function TaskPage(): React.JSX.Element {
             {jiraCreateFieldsLoading ? (
               <div className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                 <LoaderCircle className="size-3.5 animate-spin" />
-                Loading required Jira fields…
+                {translate('auto.components.TaskPage.cbcdcbe244', 'Loading required Jira fields…')}
               </div>
             ) : null}
             {jiraCreateFieldsError ? (
@@ -9856,7 +11970,13 @@ export default function TaskPage(): React.JSX.Element {
                           disabled={newJiraIssueSubmitting}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder={`Select ${field.name}`} />
+                            <SelectValue
+                              placeholder={translate(
+                                'auto.components.TaskPage.1f0fce91e3',
+                                'Select {{value0}}',
+                                { value0: field.name }
+                              )}
+                            />
                           </SelectTrigger>
                           <SelectContent>
                             {field.allowedValues.map((value) => {
@@ -9881,8 +12001,15 @@ export default function TaskPage(): React.JSX.Element {
                           type={field.schema?.type === 'number' ? 'number' : 'text'}
                           placeholder={
                             field.schema?.type === 'array'
-                              ? 'Comma-separated values'
-                              : `Enter ${field.name}`
+                              ? translate(
+                                  'auto.components.TaskPage.56cdb413a2',
+                                  'Comma-separated values'
+                                )
+                              : translate(
+                                  'auto.components.TaskPage.919a20dd5b',
+                                  'Enter {{value0}}',
+                                  { value0: field.name }
+                                )
                           }
                           disabled={newJiraIssueSubmitting}
                         />
@@ -9892,7 +12019,9 @@ export default function TaskPage(): React.JSX.Element {
                 })}
               </div>
             ) : null}
-            <p className="text-[10px] text-muted-foreground">{submitShortcutLabel} to submit.</p>
+            <p className="text-[10px] text-muted-foreground">
+              {submitShortcutLabel} {translate('auto.components.TaskPage.fc0d8a1fa4', 'to submit.')}
+            </p>
           </div>
           <DialogFooter>
             <Button
@@ -9900,7 +12029,7 @@ export default function TaskPage(): React.JSX.Element {
               onClick={() => setNewJiraIssueOpen(false)}
               disabled={newJiraIssueSubmitting}
             >
-              Cancel
+              {translate('auto.components.TaskPage.ff69a30681', 'Cancel')}
             </Button>
             <Button
               onClick={() => void handleCreateNewJiraIssue()}
@@ -9916,45 +12045,24 @@ export default function TaskPage(): React.JSX.Element {
               {newJiraIssueSubmitting ? (
                 <>
                   <LoaderCircle className="size-4 animate-spin" />
-                  Creating…
+                  {translate('auto.components.TaskPage.8ff6fdc368', 'Creating…')}
                 </>
               ) : (
-                'Create issue'
+                translate('auto.components.TaskPage.e15ba2d2eb', 'Create issue')
               )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <GitHubItemDialog
-        workItem={dialogWorkItem}
-        repoPath={
-          // Why: the dialog is for a single item — resolve its repoPath from the
-          // item's own repoId (set when fan-out merged the list) so it works in
-          // cross-repo mode too. Reusing the memoized repo map avoids an O(n)
-          // scan on every render while the dialog is open.
-          dialogWorkItem ? (repoMap.get(dialogWorkItem.repoId)?.path ?? null) : null
-        }
-        repoId={dialogWorkItem?.repoId ?? null}
-        onUse={(item) => {
-          setDialogWorkItem(null)
-          handleUseWorkItem(item)
-        }}
-        onClose={() => setDialogWorkItem(null)}
-      />
-
       <GitLabItemDialog
         item={gitlabDialogItem}
         // Why: dialog's repoPath has to come from the clicked item's
         // own repo, not primaryRepo — items may originate in any of
         // the selected repos now that the GitLab fetch is multi-repo.
-        repoPath={
-          gitlabDialogItem
-            ? (selectedRepos.find((r) => r.id === gitlabDialogItem.repoId)?.path ??
-              primaryRepo?.path ??
-              null)
-            : null
-        }
+        repoPath={gitlabDialogRepo?.path ?? null}
+        repoId={gitlabDialogItem?.repoId ?? null}
+        sourceContext={gitlabDialogSourceContext}
         onCreateWorkspace={(item) => {
           setGitlabDialogItem(null)
           handleUseGitLabItem(item)
@@ -9994,15 +12102,23 @@ export default function TaskPage(): React.JSX.Element {
           }}
         >
           <DialogHeader className="gap-3">
-            <DialogTitle className="leading-tight">Connect Jira site</DialogTitle>
+            <DialogTitle className="leading-tight">
+              {translate('auto.components.TaskPage.60f806ce99', 'Connect Jira site')}
+            </DialogTitle>
             <DialogDescription>
-              Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.
+              {translate(
+                'auto.components.TaskPage.33fc2bcb30',
+                'Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.'
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
             <Input
               autoFocus
-              placeholder="https://example.atlassian.net"
+              placeholder={translate(
+                'auto.components.TaskPage.163df31e0e',
+                'https://example.atlassian.net'
+              )}
               value={jiraSiteUrlDraft}
               onChange={(e) => {
                 setJiraSiteUrlDraft(e.target.value)
@@ -10015,7 +12131,7 @@ export default function TaskPage(): React.JSX.Element {
             />
             <Input
               type="email"
-              placeholder="you@example.com"
+              placeholder={translate('auto.components.TaskPage.68df347677', 'you@example.com')}
               value={jiraEmailDraft}
               onChange={(e) => {
                 setJiraEmailDraft(e.target.value)
@@ -10028,7 +12144,7 @@ export default function TaskPage(): React.JSX.Element {
             />
             <Input
               type="password"
-              placeholder="Atlassian API token"
+              placeholder={translate('auto.components.TaskPage.b95623e93f', 'Atlassian API token')}
               value={jiraApiTokenDraft}
               onChange={(e) => {
                 setJiraApiTokenDraft(e.target.value)
@@ -10043,7 +12159,7 @@ export default function TaskPage(): React.JSX.Element {
               <p className="text-xs text-destructive">{jiraConnectError}</p>
             )}
             <p className="text-xs text-muted-foreground">
-              Create a token in{' '}
+              {translate('auto.components.TaskPage.59c14d34a2', 'Create a token in')}{' '}
               <button
                 className="text-primary underline-offset-2 hover:underline"
                 onClick={() =>
@@ -10052,13 +12168,16 @@ export default function TaskPage(): React.JSX.Element {
                   )
                 }
               >
-                Atlassian account settings
+                {translate('auto.components.TaskPage.246c2b3dd3', 'Atlassian account settings')}
               </button>
               .
             </p>
             <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
               <Lock className="size-3 shrink-0" />
-              Your token is encrypted via the OS keychain and stored locally.
+              {translate(
+                'auto.components.TaskPage.2abe22ef76',
+                'Your token is encrypted via the OS keychain and stored locally.'
+              )}
             </p>
           </div>
           <DialogFooter>
@@ -10067,7 +12186,7 @@ export default function TaskPage(): React.JSX.Element {
               onClick={() => setJiraConnectOpen(false)}
               disabled={jiraConnectState === 'connecting'}
             >
-              Cancel
+              {translate('auto.components.TaskPage.ff69a30681', 'Cancel')}
             </Button>
             <Button
               onClick={() => void handleJiraConnect()}
@@ -10081,10 +12200,10 @@ export default function TaskPage(): React.JSX.Element {
               {jiraConnectState === 'connecting' ? (
                 <>
                   <LoaderCircle className="size-4 animate-spin" />
-                  Verifying…
+                  {translate('auto.components.TaskPage.513cddfa7a', 'Verifying…')}
                 </>
               ) : (
-                'Connect'
+                translate('auto.components.TaskPage.887efe9140', 'Connect')
               )}
             </Button>
           </DialogFooter>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { X, GitCompareArrows, Eye, ShieldAlert, Pin } from 'lucide-react'
+import { X, GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { basename, normalizeRelativePath } from '@/lib/path'
@@ -21,10 +21,13 @@ import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getDropIndicatorClasses,
   getTabRootStateClasses,
+  getTabStripBorderClasses,
   type DropIndicator
 } from './drop-indicator'
 import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
 import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
+import { translate } from '@/i18n/i18n'
+import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 
 export default function EditorFileTab({
   file,
@@ -40,7 +43,8 @@ export default function EditorFileTab({
   onTogglePin,
   onSplitGroup,
   dragData,
-  dropIndicator
+  dropIndicator,
+  includeTopTabBorder = true
 }: {
   file: OpenFile & { tabId?: string }
   isActive: boolean
@@ -56,6 +60,7 @@ export default function EditorFileTab({
   onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
+  includeTopTabBorder?: boolean
 }): React.JSX.Element {
   const worktree = useWorktreeById(file.worktreeId)
   const repo = useRepoById(worktree?.repoId ?? null)
@@ -72,6 +77,7 @@ export default function EditorFileTab({
 
   const isDiff = file.mode === 'diff'
   const isConflictReview = file.mode === 'conflict-review'
+  const isCheckDetails = file.mode === 'check-details'
   const isMarkdownPreviewTab = file.mode === 'markdown-preview'
   const resolvedLanguage =
     file.mode === 'diff'
@@ -197,10 +203,11 @@ export default function EditorFileTab({
   const tabRoot = (
     <div
       ref={setNodeRef}
+      data-tab-id={file.tabId ?? file.id}
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...listeners}
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none border-t ${hasTabsToRight ? 'border-r' : ''} border-border ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
         if (e.button !== 0) {
           return
@@ -235,6 +242,10 @@ export default function EditorFileTab({
         <ShieldAlert
           className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-orange-400' : 'text-orange-400/70'}`}
         />
+      ) : isCheckDetails ? (
+        <ListChecks
+          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
+        />
       ) : isDiff ? (
         <GitCompareArrows
           className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
@@ -249,12 +260,16 @@ export default function EditorFileTab({
         />
       )}
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
-      <span className="mr-1 flex min-w-0 items-baseline gap-1">
+      <span className="mr-1 flex min-w-0 flex-1 items-baseline gap-1">
         {isRenaming ? (
           <Input
             ref={setRenameInputElement}
             data-tab-rename-input="true"
-            aria-label={`Rename file ${basename(file.filePath)}`}
+            aria-label={translate(
+              'auto.components.tab.bar.EditorFileTab.3da7445c84',
+              'Rename file {{value0}}',
+              { value0: basename(file.filePath) }
+            )}
             defaultValue={basename(file.filePath)}
             // Why: keep the inline field compact enough for the titlebar while
             // giving filenames a little more room than the static tab label.
@@ -280,7 +295,7 @@ export default function EditorFileTab({
           />
         ) : (
           <span
-            className={`truncate max-w-[80px]${file.isPreview ? ' italic' : ''}${file.externalMutation ? ' line-through' : ''}`}
+            className={`${TAB_LABEL_WIDTH_CLASSES}${file.isPreview ? ' italic' : ''}${file.externalMutation ? ' line-through' : ''}`}
             style={tabStatusColor ? { color: tabStatusColor } : undefined}
             onDoubleClick={(e) => {
               if (file.isPreview && onMakePermanent) {
@@ -347,6 +362,7 @@ export default function EditorFileTab({
   return (
     <>
       <div
+        className={TAB_CONTAINER_WIDTH_CLASSES}
         onContextMenuCapture={(event) => {
           event.preventDefault()
           window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))

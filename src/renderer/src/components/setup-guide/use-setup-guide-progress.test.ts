@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
+  FEATURE_WALL_SETUP_STEPS,
+  type FeatureWallSetupStepId
+} from '../../../../shared/feature-wall-setup-steps'
+import type { FeatureWallSetupProgress } from '../feature-wall/feature-wall-setup-progress'
+import {
+  getSetupGuideBrowserMilestoneAwareProgress,
+  shouldMarkBrowserMilestoneLegacyComplete
+} from './setup-guide-browser-milestone-progress'
+import {
   getComputerUsePermissionSetupState,
   getCurrentSetupScriptProbeState,
   getSetupGuideProgressReady,
@@ -7,6 +16,86 @@ import {
   markSetupScriptProbePending,
   settleSetupScriptProbe
 } from './setup-guide-progress-readiness'
+
+function makePreBrowserDoneStepState(): Partial<Record<FeatureWallSetupStepId, boolean>> {
+  return Object.fromEntries(
+    FEATURE_WALL_SETUP_STEPS.map((step) => [step.id, step.id !== 'browser'])
+  ) as Partial<Record<FeatureWallSetupStepId, boolean>>
+}
+
+function makeProgress(overrides: Partial<FeatureWallSetupProgress> = {}): FeatureWallSetupProgress {
+  return {
+    ready: true,
+    stepDone: {
+      'default-agent': false,
+      'add-two-repos': false,
+      notifications: false,
+      'split-terminal': false,
+      'two-worktrees': false,
+      browser: false,
+      'task-sources': false,
+      'agent-capabilities': false,
+      'setup-script': false
+    },
+    coreDoneCount: 0,
+    coreTotal: FEATURE_WALL_SETUP_STEPS.length,
+    ...overrides
+  }
+}
+
+describe('browser milestone legacy setup guide progress', () => {
+  it('marks old profiles as legacy-complete when pre-browser steps were already done', () => {
+    expect(
+      shouldMarkBrowserMilestoneLegacyComplete({
+        stepDone: makePreBrowserDoneStepState(),
+        setupGuideSidebarDismissed: false
+      })
+    ).toBe(true)
+  })
+
+  it('marks old profiles as legacy-complete when the sidebar checklist was dismissed', () => {
+    expect(
+      shouldMarkBrowserMilestoneLegacyComplete({
+        stepDone: {},
+        setupGuideSidebarDismissed: true
+      })
+    ).toBe(true)
+  })
+
+  it('does not mark old active incomplete profiles as legacy-complete', () => {
+    expect(
+      shouldMarkBrowserMilestoneLegacyComplete({
+        stepDone: {
+          'split-terminal': true
+        },
+        setupGuideSidebarDismissed: false
+      })
+    ).toBe(false)
+  })
+
+  it('keeps legacy-complete setup guide progress complete across all surfaces', () => {
+    const progress = getSetupGuideBrowserMilestoneAwareProgress(
+      makeProgress({
+        stepDone: makePreBrowserDoneStepState() as Record<FeatureWallSetupStepId, boolean>,
+        coreDoneCount: FEATURE_WALL_SETUP_STEPS.length - 1
+      }),
+      true
+    )
+
+    expect(progress.coreDoneCount).toBe(FEATURE_WALL_SETUP_STEPS.length)
+    expect(progress.stepDone.browser).toBe(true)
+    expect(Object.values(progress.stepDone).every(Boolean)).toBe(true)
+  })
+
+  it('leaves fresh setup guide progress unchanged when browser is incomplete', () => {
+    const original = makeProgress({
+      stepDone: makePreBrowserDoneStepState() as Record<FeatureWallSetupStepId, boolean>,
+      coreDoneCount: FEATURE_WALL_SETUP_STEPS.length - 1
+    })
+
+    expect(getSetupGuideBrowserMilestoneAwareProgress(original, false)).toBe(original)
+  })
+})
 
 describe('getComputerUsePermissionSetupState', () => {
   it('does not treat a failed status read as unavailable setup completion', () => {
@@ -48,6 +137,7 @@ describe('getSetupGuideProgressReady', () => {
     settingsLoaded: true,
     preflightStatusChecked: true,
     linearStatusChecked: true,
+    jiraStatusChecked: true,
     browserUseSkillDiscoveryLoading: false,
     computerUseSkillDiscoveryLoading: false,
     orchestrationSkillDiscoveryLoading: false,
@@ -105,9 +195,10 @@ describe('getSetupGuideProgressReady', () => {
     ).toBe(false)
   })
 
-  it('waits for preflight and Linear checks', () => {
+  it('waits for preflight, Linear, and Jira checks', () => {
     expect(getSetupGuideProgressReady({ ...readyInput, preflightStatusChecked: false })).toBe(false)
     expect(getSetupGuideProgressReady({ ...readyInput, linearStatusChecked: false })).toBe(false)
+    expect(getSetupGuideProgressReady({ ...readyInput, jiraStatusChecked: false })).toBe(false)
   })
 })
 

@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: browser IPC handlers must be registered together so the
    trust boundary (isTrustedBrowserRenderer) and handler teardown stay consistent. */
-import { BrowserWindow, dialog, ipcMain, webContents } from 'electron'
+import { BrowserWindow, ipcMain, webContents } from 'electron'
 import { browserManager } from '../browser/browser-manager'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
@@ -329,34 +329,6 @@ export function registerBrowserHandlers(): void {
       })
     }
   )
-
-  ipcMain.handle('browser:acceptDownload', async (event, args: { downloadId: string }) => {
-    if (!isTrustedBrowserRenderer(event.sender)) {
-      return { ok: false, reason: 'not-authorized' as const }
-    }
-    const prompt = browserManager.getDownloadPrompt(args.downloadId, event.sender.id)
-    if (!prompt) {
-      return { ok: false, reason: 'not-ready' as const }
-    }
-
-    const parent = BrowserWindow.fromWebContents(event.sender)
-    const result = parent
-      ? await dialog.showSaveDialog(parent, { defaultPath: prompt.filename })
-      : await dialog.showSaveDialog({ defaultPath: prompt.filename })
-    if (result.canceled || !result.filePath) {
-      browserManager.cancelDownload({
-        downloadId: args.downloadId,
-        senderWebContentsId: event.sender.id
-      })
-      return { ok: false, reason: 'canceled' as const }
-    }
-
-    return browserManager.acceptDownload({
-      downloadId: args.downloadId,
-      senderWebContentsId: event.sender.id,
-      savePath: result.filePath
-    })
-  })
 
   ipcMain.handle('browser:cancelDownload', (event, args: { downloadId: string }) => {
     if (!isTrustedBrowserRenderer(event.sender)) {

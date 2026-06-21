@@ -3,10 +3,11 @@ import {
   isKeybindingAllowedInTerminal,
   isKeybindingPotentialTerminalConflict,
   keybindingMatchesAction,
-  normalizeTerminalShortcutPolicy,
+  matchKeybindingDigitIndex,
   type KeybindingActionId,
   type KeybindingMatchOptions,
-  type KeybindingOverrides
+  type KeybindingOverrides,
+  type PhysicalModifierToken
 } from './keybindings'
 
 export type WindowShortcutInput = {
@@ -21,12 +22,14 @@ export type WindowShortcutInput = {
   metaKey?: boolean
   ctrlKey?: boolean
   shiftKey?: boolean
+  // Set only by the double-tap detector; threads the synthetic input through
+  // the main-process resolver so allowlisted actions can fire on double-tap.
+  doubleTapModifier?: PhysicalModifierToken
 }
 
 export type WindowShortcutAction =
   | { type: 'zoom'; direction: 'in' | 'out' | 'reset' }
   | { type: 'openSettings' }
-  | { type: 'exportPdf' }
   | { type: 'forceReload' }
   | { type: 'toggleWorktreePalette' }
   | { type: 'toggleFloatingTerminal' }
@@ -35,6 +38,7 @@ export type WindowShortcutAction =
   | { type: 'openQuickOpen' }
   | { type: 'openNewWorkspace' }
   | { type: 'deleteCurrentWorkspace' }
+  | { type: 'openWorkspaceBoard' }
   | { type: 'openTasks' }
   | { type: 'switchRecentTab' }
   | { type: 'jumpToWorktreeIndex'; index: number }
@@ -92,6 +96,32 @@ export function matchesRecentTabSwitcherChord(
   )
 }
 
+function isControlKey(input: WindowShortcutInput): boolean {
+  return (
+    input.code === 'ControlLeft' ||
+    input.code === 'ControlRight' ||
+    input.code === 'Control' ||
+    input.key === 'Control'
+  )
+}
+
+function isTabKey(input: WindowShortcutInput): boolean {
+  return input.code === 'Tab' || input.key === 'Tab'
+}
+
+export function isRecentTabSwitcherCommitRelease(input: WindowShortcutInput): boolean {
+  if (input.type !== 'keyUp' && input.type !== 'keyup') {
+    return false
+  }
+  if (isControlKey(input)) {
+    return true
+  }
+  const control = input.control ?? input.ctrlKey
+  // Why: some Electron surfaces report the final Ctrl+Tab release as Tab
+  // keyup after Control is already up, so commit instead of stranding the UI.
+  return isTabKey(input) && control === false
+}
+
 function actionMatches(
   actionId: KeybindingActionId,
   input: WindowShortcutInput,
@@ -100,28 +130,6 @@ function actionMatches(
   options: WindowShortcutResolveOptions
 ): boolean {
   return keybindingMatchesAction(actionId, input, platform, keybindings, options)
-}
-
-function implicitWorktreeIndexShortcutAllowed(options: WindowShortcutResolveOptions): boolean {
-  if (options.context !== 'terminal') {
-    return true
-  }
-  return normalizeTerminalShortcutPolicy(options.terminalShortcutPolicy) === 'orca-first'
-}
-
-function implicitTabIndexShortcutAllowed(options: WindowShortcutResolveOptions): boolean {
-  return implicitWorktreeIndexShortcutAllowed(options)
-}
-
-function tabIndexModifierPressed(input: WindowShortcutInput, platform: NodeJS.Platform): boolean {
-  const meta = Boolean(input.meta ?? input.metaKey)
-  const control = Boolean(input.control ?? input.ctrlKey)
-  const alt = Boolean(input.alt ?? input.altKey)
-
-  // Why: Ctrl+1-9 is free on macOS because workspace jumps use Cmd+1-9.
-  // On Windows/Linux Ctrl+1-9 is already the workspace jump, so Alt+1-9
-  // gives tab indexing a non-conflicting hardcoded chord.
-  return platform === 'darwin' ? control && !meta && !alt : alt && !meta && !control
 }
 
 export function resolveWindowShortcutAction(
@@ -164,10 +172,6 @@ export function resolveWindowShortcutAction(
     return { type: 'openSettings' }
   }
 
-  if (actionMatches('file.exportPdf', input, platform, keybindings, options)) {
-    return { type: 'exportPdf' }
-  }
-
   if (actionMatches('app.forceReload', input, platform, keybindings, options)) {
     return { type: 'forceReload' }
   }
@@ -202,6 +206,10 @@ export function resolveWindowShortcutAction(
     return { type: 'deleteCurrentWorkspace' }
   }
 
+  if (actionMatches('workspace.openBoard', input, platform, keybindings, options)) {
+    return { type: 'openWorkspaceBoard' }
+  }
+
   if (actionMatches('voice.dictation', input, platform, keybindings, options)) {
     return { type: 'dictationKeyDown' }
   }
@@ -214,27 +222,30 @@ export function resolveWindowShortcutAction(
     return { type: 'switchRecentTab' }
   }
 
-  if (
-    implicitWorktreeIndexShortcutAllowed(options) &&
-    platformPrimaryModifier(input, platform) &&
-    !input.alt &&
-    !input.shift &&
-    input.key &&
-    input.key >= '1' &&
-    input.key <= '9'
-  ) {
-    return { type: 'jumpToWorktreeIndex', index: parseInt(input.key, 10) - 1 }
+  // Why: the two ranges live in different scopes (no shared conflictGroup), so a
+  // user is free to map both onto the same modifier without it being blocked as a
+  // conflict. Checking workspace first gives that overlap deterministic
+  // precedence — workspace wins — matching the historical Cmd-before-Ctrl order.
+  const worktreeIndex = matchKeybindingDigitIndex(
+    'workspace.selectByIndex',
+    input,
+    platform,
+    keybindings,
+    options
+  )
+  if (worktreeIndex !== null) {
+    return { type: 'jumpToWorktreeIndex', index: worktreeIndex }
   }
 
-  if (
-    implicitTabIndexShortcutAllowed(options) &&
-    tabIndexModifierPressed(input, platform) &&
-    !input.shift &&
-    input.key &&
-    input.key >= '1' &&
-    input.key <= '9'
-  ) {
-    return { type: 'jumpToTabIndex', index: parseInt(input.key, 10) - 1 }
+  const tabIndex = matchKeybindingDigitIndex(
+    'tab.selectByIndex',
+    input,
+    platform,
+    keybindings,
+    options
+  )
+  if (tabIndex !== null) {
+    return { type: 'jumpToTabIndex', index: tabIndex }
   }
 
   // Why: this helper is the explicit allowlist for main-process interception.
@@ -254,8 +265,6 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
           : 'zoom.reset'
     case 'openSettings':
       return 'app.settings'
-    case 'exportPdf':
-      return 'file.exportPdf'
     case 'forceReload':
       return 'app.forceReload'
     case 'toggleWorktreePalette':
@@ -272,6 +281,8 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
       return 'workspace.create'
     case 'deleteCurrentWorkspace':
       return 'workspace.delete'
+    case 'openWorkspaceBoard':
+      return 'workspace.openBoard'
     case 'openTasks':
       return 'view.tasks'
     case 'switchRecentTab':
@@ -281,15 +292,13 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
     case 'dictationKeyDown':
       return 'voice.dictation'
     case 'jumpToWorktreeIndex':
+      return 'workspace.selectByIndex'
     case 'jumpToTabIndex':
-      return null
+      return 'tab.selectByIndex'
   }
 }
 
 export function windowShortcutActionCapturesTerminal(action: WindowShortcutAction): boolean {
-  if (action.type === 'jumpToWorktreeIndex' || action.type === 'jumpToTabIndex') {
-    return true
-  }
   const actionId = getWindowShortcutActionId(action)
   if (!actionId) {
     return false

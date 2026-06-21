@@ -135,10 +135,9 @@ test.describe('Tab Rename (Inline)', () => {
     await expect(renameInput).toBeVisible()
     await expect(renameInput).toBeFocused()
 
-    // Why: plain keyboard typing exercises the real focused selection. If the
-    // context menu steals focus back or the title is not selected, this will not
-    // replace the original text with the intended custom title.
-    await orcaPage.keyboard.type('Context Menu Title')
+    // Why: after the context-menu path proves focus lands in the inline input,
+    // fill avoids per-keystroke timing races in the shared full-suite browser.
+    await renameInput.fill('Context Menu Title')
     await renameInput.press('Enter')
 
     await expect

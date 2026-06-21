@@ -1,98 +1,53 @@
-import { useEffect, useMemo } from 'react'
-import type { FeatureWallSetupStepId } from '../../../../shared/feature-wall-setup-steps'
-import { useAppStore } from '@/store'
-import { getFeatureWallSetupProgress } from '../feature-wall/feature-wall-setup-progress'
-
-export const SETTINGS_SETUP_GUIDE_STEP_IDS = [
-  'split-terminal',
-  'two-worktrees',
-  'notifications',
-  'default-agent',
-  'task-sources'
-] as const satisfies readonly FeatureWallSetupStepId[]
+import { useMemo } from 'react'
+import {
+  FEATURE_WALL_SETUP_STEPS,
+  getFirstIncompleteFeatureWallSetupStepId,
+  type FeatureWallSetupStepId
+} from '../../../../shared/feature-wall-setup-steps'
+import type { FeatureWallSetupProgress } from '../feature-wall/feature-wall-setup-progress'
+import { useSetupGuideProgress } from '../setup-guide/use-setup-guide-progress'
 
 export type SettingsSetupGuideProgress = {
+  ready: boolean
   doneCount: number
   total: number
   firstIncompleteStepId: FeatureWallSetupStepId | null
 }
 
-export function getSettingsSetupGuideProgress(
+export function getSettingsSetupGuideProgress(progress: {
+  ready: boolean
   stepDone: Partial<Record<FeatureWallSetupStepId, boolean>>
-): SettingsSetupGuideProgress {
-  const doneCount = SETTINGS_SETUP_GUIDE_STEP_IDS.filter((stepId) => stepDone[stepId]).length
+}): SettingsSetupGuideProgress {
+  const doneCount = FEATURE_WALL_SETUP_STEPS.filter((step) => progress.stepDone[step.id]).length
   const firstIncompleteStepId =
-    SETTINGS_SETUP_GUIDE_STEP_IDS.find((stepId) => !stepDone[stepId]) ?? null
+    doneCount === FEATURE_WALL_SETUP_STEPS.length
+      ? null
+      : getFirstIncompleteFeatureWallSetupStepId(progress.stepDone)
 
   return {
+    ready: progress.ready,
     doneCount,
-    total: SETTINGS_SETUP_GUIDE_STEP_IDS.length,
+    total: FEATURE_WALL_SETUP_STEPS.length,
     firstIncompleteStepId
   }
 }
 
 export function useSettingsSetupGuideProgress(
-  shouldRefreshTaskSourceState: boolean
+  shouldRefreshCoreState: boolean
 ): SettingsSetupGuideProgress {
-  const settings = useAppStore((s) => s.settings)
-  const featureInteractions = useAppStore((s) => s.featureInteractions)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
-  const preflightStatus = useAppStore((s) => s.preflightStatus)
-  const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
-  const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
-  const linearStatus = useAppStore((s) => s.linearStatus)
-  const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
-  const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
+  const fullProgress = useSettingsSetupGuideFullProgress(shouldRefreshCoreState, false, false)
 
-  useEffect(() => {
-    if (!shouldRefreshTaskSourceState) {
-      return
-    }
-    if (!preflightStatusChecked) {
-      void refreshPreflightStatus()
-    }
-    if (!linearStatusChecked) {
-      void checkLinearConnection()
-    }
-  }, [
-    checkLinearConnection,
-    linearStatusChecked,
-    preflightStatusChecked,
-    refreshPreflightStatus,
-    shouldRefreshTaskSourceState
-  ])
+  return useMemo(() => getSettingsSetupGuideProgress(fullProgress), [fullProgress])
+}
 
-  const hasConnectedTaskSource =
-    (preflightStatus?.gh.installed === true && preflightStatus.gh.authenticated === true) ||
-    (preflightStatus?.glab?.installed === true && preflightStatus.glab.authenticated === true) ||
-    linearStatus.connected === true
-
-  return useMemo(() => {
-    // Why: Settings renders only five steps, so avoid the full setup guide
-    // probes for setup scripts and agent skills, especially over SSH.
-    const fullProgress = getFeatureWallSetupProgress({
-      settings,
-      featureInteractions,
-      hasConnectedTaskSource,
-      browserUseSkillInstalled: false,
-      computerUseSkillInstalled: false,
-      computerUsePermissionsReady: false,
-      orchestrationSkillInstalled: false,
-      gitRepoCount: 0,
-      worktreesByRepo,
-      tabsByWorktree,
-      terminalLayoutsByTabId,
-      hasSetupScript: false
-    })
-    return getSettingsSetupGuideProgress(fullProgress.stepDone)
-  }, [
-    featureInteractions,
-    hasConnectedTaskSource,
-    settings,
-    tabsByWorktree,
-    terminalLayoutsByTabId,
-    worktreesByRepo
-  ])
+export function useSettingsSetupGuideFullProgress(
+  shouldRefreshCoreState: boolean,
+  orchestrationSkillInstalled: boolean,
+  browserUseSkillInstalled: boolean
+): FeatureWallSetupProgress {
+  return useSetupGuideProgress(
+    shouldRefreshCoreState,
+    orchestrationSkillInstalled,
+    browserUseSkillInstalled
+  )
 }

@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
 import type { FloatingTerminalTriggerLocation } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 type FloatingTerminalIconContextMenuProps = {
   children: React.ReactNode
@@ -41,13 +42,19 @@ export function FloatingTerminalIconContextMenu({
     if (currentLocation === 'floating-button') {
       return {
         icon: <PanelBottom className="size-3.5" />,
-        label: 'Move to Status Bar',
+        label: translate(
+          'auto.components.floating.terminal.FloatingTerminalIconContextMenu.0ee79e0674',
+          'Move to Status Bar'
+        ),
         location: 'status-bar' as const
       }
     }
     return {
       icon: <PanelTop className="size-3.5" />,
-      label: 'Move to Floating Button',
+      label: translate(
+        'auto.components.floating.terminal.FloatingTerminalIconContextMenu.763f5fa2c1',
+        'Move to Floating Button'
+      ),
       location: 'floating-button' as const
     }
   }, [currentLocation])
@@ -104,11 +111,15 @@ export function FloatingTerminalIconContextMenu({
           <DropdownMenuItem
             className="whitespace-nowrap"
             onSelect={() => {
+              useAppStore.getState().recordFeatureInteraction('floating-workspace-hidden')
               void updateSettings({ floatingTerminalEnabled: false })
             }}
           >
             <EyeOff className="size-3.5" />
-            Hide Floating Workspace
+            {translate(
+              'auto.components.floating.terminal.FloatingTerminalIconContextMenu.8e7d775287',
+              'Hide Floating Workspace'
+            )}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

@@ -225,6 +225,64 @@ describe('buildWorkspaceSessionPatch', () => {
     expect(patch.activeConnectionIdsAtShutdown).toBeUndefined()
   })
 
+  it('patches tab chrome as a sanitized bundle when split groups change', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({
+        unifiedTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'term-unified-1',
+              entityId: 'tab-1',
+              groupId: 'group-left',
+              worktreeId: 'wt-1',
+              contentType: 'terminal',
+              label: 'shell',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        groupsByWorktree: {
+          'wt-1': [
+            {
+              id: 'group-left',
+              worktreeId: 'wt-1',
+              activeTabId: 'term-unified-1',
+              tabOrder: ['term-unified-1']
+            },
+            {
+              id: 'group-right',
+              worktreeId: 'wt-1',
+              activeTabId: null,
+              tabOrder: []
+            }
+          ]
+        },
+        layoutByWorktree: {
+          'wt-1': {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', groupId: 'group-left' },
+            second: { type: 'leaf', groupId: 'group-right' }
+          }
+        },
+        activeGroupIdByWorktree: { 'wt-1': 'group-right' }
+      }),
+      ['groupsByWorktree']
+    )
+
+    expect(Object.keys(patch).sort()).toEqual(
+      ['activeGroupIdByWorktree', 'tabGroupLayouts', 'tabGroups', 'unifiedTabs'].sort()
+    )
+    expect(patch.tabGroups?.['wt-1']).toEqual([
+      expect.objectContaining({ id: 'group-left', tabOrder: ['term-unified-1'] })
+    ])
+    expect(patch.tabGroupLayouts?.['wt-1']).toEqual({ type: 'leaf', groupId: 'group-left' })
+    expect(patch.activeGroupIdByWorktree?.['wt-1']).toBe('group-left')
+  })
+
   it('persists default terminal tab idempotency marker changes', () => {
     const patch = buildWorkspaceSessionPatch(
       createSnapshot({ defaultTerminalTabsAppliedByWorktreeId: { 'wt-1': true } }),
@@ -244,5 +302,15 @@ describe('buildWorkspaceSessionPatch', () => {
 
     expect(Object.hasOwn(patch, 'defaultTerminalTabsAppliedByWorktreeId')).toBe(true)
     expect(patch.defaultTerminalTabsAppliedByWorktreeId).toBeUndefined()
+  })
+
+  it('keeps sleeping agent session clearing keys in patches', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({ sleepingAgentSessionsByPaneKey: {} }),
+      ['sleepingAgentSessionsByPaneKey']
+    )
+
+    expect(Object.hasOwn(patch, 'sleepingAgentSessionsByPaneKey')).toBe(true)
+    expect(patch.sleepingAgentSessionsByPaneKey).toBeUndefined()
   })
 })

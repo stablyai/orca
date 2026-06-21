@@ -200,9 +200,11 @@ describe('git RPC methods', () => {
       abortRuntimeGitMerge: vi.fn().mockResolvedValue({ ok: true }),
       abortRuntimeGitRebase: vi.fn().mockResolvedValue({ ok: true }),
       pushRuntimeGit: vi.fn().mockResolvedValue({ ok: true }),
-      getRuntimeGitRemoteFileUrl: vi.fn().mockResolvedValue('https://example.com/file#L3')
+      getRuntimeGitRemoteFileUrl: vi.fn().mockResolvedValue('https://example.com/file#L3'),
+      getRuntimeGitRemoteCommitUrl: vi.fn().mockResolvedValue('https://example.com/commit/abc')
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+    const commitOid = '0123456789abcdef0123456789abcdef01234567'
 
     await dispatcher.dispatch(
       makeRequest('git.commit', { worktree: 'id:wt-1', message: 'feat: test' })
@@ -234,6 +236,12 @@ describe('git RPC methods', () => {
         line: 3
       })
     )
+    const commitUrlResponse = await dispatcher.dispatch(
+      makeRequest('git.remoteCommitUrl', {
+        worktree: 'id:wt-1',
+        sha: commitOid
+      })
+    )
 
     expect(runtime.commitRuntimeGit).toHaveBeenCalledWith('id:wt-1', 'feat: test')
     expect(runtime.generateRuntimeCommitMessage).toHaveBeenCalledWith('id:wt-1')
@@ -250,6 +258,26 @@ describe('git RPC methods', () => {
       undefined
     )
     expect(response).toMatchObject({ ok: true, result: 'https://example.com/file#L3' })
+    expect(runtime.getRuntimeGitRemoteCommitUrl).toHaveBeenCalledWith('id:wt-1', commitOid)
+    expect(commitUrlResponse).toMatchObject({ ok: true, result: 'https://example.com/commit/abc' })
+  })
+
+  it('rejects remote commit URL requests without a full git object id', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitRemoteCommitUrl: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.remoteCommitUrl', {
+        worktree: 'id:wt-1',
+        sha: 'abc123'
+      })
+    )
+
+    expect(response.ok).toBe(false)
+    expect(runtime.getRuntimeGitRemoteCommitUrl).not.toHaveBeenCalled()
   })
 
   it('forwards force-with-lease push mode to the runtime', async () => {
@@ -302,6 +330,78 @@ describe('git RPC methods', () => {
     )
 
     expect(runtime.fetchRuntimeGit).toHaveBeenCalledWith('id:wt-1', pushTarget)
+  })
+
+  it('forwards fork sync requests to the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      syncRuntimeGitForkDefaultBranch: vi.fn().mockResolvedValue({
+        status: 'up-to-date',
+        originRemote: 'origin',
+        upstreamRemote: 'upstream',
+        branchName: 'main',
+        ahead: 0,
+        behind: 0
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.forkSync', {
+        worktree: 'id:wt-1',
+        expectedUpstream: { owner: 'stablyai', repo: 'orca' }
+      })
+    )
+
+    expect(runtime.syncRuntimeGitForkDefaultBranch).toHaveBeenCalledWith('id:wt-1', {
+      owner: 'stablyai',
+      repo: 'orca'
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { status: 'up-to-date', branchName: 'main', ahead: 0, behind: 0 }
+    })
+  })
+
+  it('rejects blank fork sync expected upstream fields before calling the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      syncRuntimeGitForkDefaultBranch: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.forkSync', {
+        worktree: 'id:wt-1',
+        expectedUpstream: { owner: '   ', repo: 'orca' }
+      })
+    )
+
+    expect(response.ok).toBe(false)
+    expect(response).toMatchObject({
+      error: expect.objectContaining({ code: 'invalid_argument' })
+    })
+    expect(runtime.syncRuntimeGitForkDefaultBranch).not.toHaveBeenCalled()
+  })
+
+  it('rejects missing fork sync expected upstream before calling the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      syncRuntimeGitForkDefaultBranch: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.forkSync', {
+        worktree: 'id:wt-1'
+      })
+    )
+
+    expect(response.ok).toBe(false)
+    expect(response).toMatchObject({
+      error: expect.objectContaining({ code: 'invalid_argument' })
+    })
+    expect(runtime.syncRuntimeGitForkDefaultBranch).not.toHaveBeenCalled()
   })
 
   it('forwards fast-forward push target to the runtime', async () => {
@@ -363,6 +463,73 @@ describe('git RPC methods', () => {
       enableGitHubAttribution: true,
       commitMessageDiscoveryHostKey: 'runtime:env-1'
     })
+  })
+
+  it('forwards one-shot commit-message params to the runtime', async () => {
+    const sourceControlAiResolvedParams = {
+      agentId: 'codex',
+      model: 'gpt-5.5',
+      thinkingLevel: 'high',
+      customPrompt: 'Use Conventional Commits.'
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      generateRuntimeCommitMessage: vi.fn().mockResolvedValue({ success: true, message: 'test' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('git.generateCommitMessage', {
+        worktree: 'id:wt-1',
+        sourceControlAiResolvedParams
+      })
+    )
+
+    expect(runtime.generateRuntimeCommitMessage).toHaveBeenCalledWith('id:wt-1', {
+      sourceControlAiResolvedParams
+    })
+  })
+
+  it('forwards one-shot pull-request generation params to the runtime', async () => {
+    const sourceControlAiResolvedParams = {
+      agentId: 'codex',
+      model: 'gpt-5.5',
+      thinkingLevel: 'high',
+      commandInputTemplate: '{basePrompt}\n\nUse release-note style.'
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      generateRuntimePullRequestFields: vi
+        .fn()
+        .mockResolvedValue({ success: true, fields: { title: 'Test', body: '', draft: false } })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('git.generatePullRequestFields', {
+        worktree: 'id:wt-1',
+        base: 'main',
+        title: '',
+        body: '',
+        draft: false,
+        provider: 'github',
+        useTemplate: true,
+        sourceControlAiResolvedParams
+      })
+    )
+
+    expect(runtime.generateRuntimePullRequestFields).toHaveBeenCalledWith(
+      'id:wt-1',
+      {
+        base: 'main',
+        title: '',
+        body: '',
+        draft: false,
+        provider: 'github',
+        useTemplate: true
+      },
+      { sourceControlAiResolvedParams }
+    )
   })
 
   it('rejects malformed commit-message settings before calling the runtime', async () => {
@@ -445,5 +612,55 @@ describe('git RPC methods', () => {
 
     expect(response.ok).toBe(false)
     expect(runtime.getRuntimeGitHistory).not.toHaveBeenCalled()
+  })
+
+  it('checks out a branch', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      checkoutRuntimeGitBranch: vi.fn().mockResolvedValue({ ok: true, branch: 'feature/x' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.checkout', { worktree: 'id:wt-1', branch: 'feature/x' })
+    )
+
+    expect(runtime.checkoutRuntimeGitBranch).toHaveBeenCalledWith('id:wt-1', 'feature/x')
+    expect(response).toMatchObject({ ok: true, result: { ok: true, branch: 'feature/x' } })
+  })
+
+  it('rejects a checkout branch that starts with a dash', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      checkoutRuntimeGitBranch: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.checkout', { worktree: 'id:wt-1', branch: '--force' })
+    )
+
+    expect(response.ok).toBe(false)
+    expect(runtime.checkoutRuntimeGitBranch).not.toHaveBeenCalled()
+  })
+
+  it('lists local branches', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      listRuntimeGitLocalBranches: vi
+        .fn()
+        .mockResolvedValue({ current: 'main', branches: ['main', 'feature/x'] })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.localBranches', { worktree: 'id:wt-1' })
+    )
+
+    expect(runtime.listRuntimeGitLocalBranches).toHaveBeenCalledWith('id:wt-1')
+    expect(response).toMatchObject({
+      ok: true,
+      result: { current: 'main', branches: ['main', 'feature/x'] }
+    })
   })
 })

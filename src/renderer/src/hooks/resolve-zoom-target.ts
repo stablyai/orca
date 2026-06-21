@@ -12,10 +12,10 @@ export function resolveZoomTarget(args: {
     | 'space'
     | 'skills'
     | 'mobile'
-  activeTabType: 'terminal' | 'editor' | 'browser'
+  activeTabType: 'terminal' | 'editor' | 'browser' | 'simulator'
   activeBrowserPageId?: string | null
   activeElement: unknown
-}): 'terminal' | 'editor' | 'browser' | 'ui' {
+}): 'terminal' | 'editor' | 'browser' | 'simulator' | 'ui' {
   const { activeView, activeTabType, activeBrowserPageId, activeElement } = args
   const terminalInputFocused =
     typeof activeElement === 'object' &&
@@ -48,6 +48,9 @@ export function resolveZoomTarget(args: {
   // just-deactivated editor or terminal during tab switches.
   if (activeTabType === 'browser' && activeBrowserPageId) {
     return 'browser'
+  }
+  if (activeTabType === 'simulator') {
+    return 'simulator'
   }
   if (activeTabType === 'editor' || editorFocused) {
     return 'editor'

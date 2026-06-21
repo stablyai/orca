@@ -28,7 +28,7 @@ import {
 //   - preToolUse/postToolUse/postToolUseFailure: in-flight tool preview
 //     between submit and stop — without these the pane appears idle for the
 //     entire duration of a long tool-heavy turn
-//   - beforeShellExecution / beforeMCPExecution: approval prompts (→ waiting)
+//   - beforeShellExecution / beforeMCPExecution: shell/MCP tool preview (→ working)
 //   - afterAgentResponse: carries the final composed reply text so the
 //     dashboard can surface it on done
 // sessionStart / sessionEnd are intentionally NOT subscribed — cursor-agent

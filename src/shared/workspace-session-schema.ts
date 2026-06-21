@@ -14,11 +14,14 @@ import type {
   TabGroupLayoutNode,
   TerminalPaneLayoutNode,
   TuiAgent,
+  WorkspaceKey,
   WorkspaceSessionState
 } from './types'
 import { isValidTerminalTabId } from './terminal-tab-id'
 import { isTuiAgent } from './tui-agent-config'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
+import { normalizeAgentProviderSession, RESUMABLE_TUI_AGENTS } from './agent-session-resume'
+import { isWorkspaceKey } from './workspace-scope'
 
 // ─── Terminal pane layout (recursive) ───────────────────────────────
 
@@ -27,6 +30,9 @@ const terminalTabIdSchema = z
   .string()
   .min(1)
   .refine(isValidTerminalTabId, 'terminal tab id must not contain ":"')
+const workspaceKeySchema = z.custom<WorkspaceKey>(
+  (value) => typeof value === 'string' && isWorkspaceKey(value)
+)
 
 // Why: z.lazy + type annotation keeps the recursive inference working without
 // forcing zod to resolve the whole tree at definition time.
@@ -65,8 +71,10 @@ const terminalTabSchema = z.object({
   title: z.string(),
   defaultTitle: z.string().optional(),
   generatedTitle: z.string().nullable().optional(),
+  quickCommandLabel: z.string().nullable().optional(),
   customTitle: z.string().nullable(),
   color: z.string().nullable(),
+  isPinned: z.boolean().optional(),
   sortOrder: z.number(),
   createdAt: z.number(),
   generation: z.number().optional(),
@@ -80,11 +88,61 @@ const terminalTabSchema = z.object({
     .catch(undefined)
 })
 
+// ─── Sleeping agent resume records ─────────────────────────────────
+
+const agentProviderSessionSchema = z.preprocess(
+  (raw) => normalizeAgentProviderSession(raw) ?? undefined,
+  z.object({
+    key: z.enum(['session_id', 'conversation_id']),
+    id: z.string().min(1).max(512)
+  })
+)
+
+const sleepingAgentSessionRecordSchema = z.object({
+  paneKey: z.string().refine((value) => value.length > 0),
+  tabId: terminalTabIdSchema.optional(),
+  worktreeId: z.string().min(1),
+  agent: z.enum(RESUMABLE_TUI_AGENTS),
+  providerSession: agentProviderSessionSchema,
+  prompt: z.string(),
+  state: z.enum(['working', 'blocked', 'waiting', 'done']),
+  capturedAt: z.number().finite().positive(),
+  updatedAt: z.number().finite().positive(),
+  terminalTitle: z.string().optional(),
+  lastAssistantMessage: z.string().optional(),
+  connectionId: z.string().nullable().optional(),
+  origin: z.enum(['worktree-sleep', 'quit', 'live']).optional()
+})
+
+const sleepingAgentSessionsByPaneKeySchema = z.preprocess((raw) => {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return undefined
+  }
+
+  const cleaned: Record<string, z.infer<typeof sleepingAgentSessionRecordSchema>> = {}
+  for (const [paneKey, value] of Object.entries(raw as Record<string, unknown>)) {
+    const parsed = sleepingAgentSessionRecordSchema.safeParse(value)
+    if (parsed.success && parsed.data.paneKey === paneKey) {
+      cleaned[paneKey] = parsed.data
+    }
+  }
+
+  return Object.keys(cleaned).length > 0 ? cleaned : undefined
+}, z.record(z.string(), sleepingAgentSessionRecordSchema).optional())
+
 // ─── Unified tab model ──────────────────────────────────────────────
 
-const tabContentTypeSchema = z.enum(['terminal', 'editor', 'diff', 'conflict-review', 'browser'])
+const tabContentTypeSchema = z.enum([
+  'terminal',
+  'editor',
+  'diff',
+  'conflict-review',
+  'check-details',
+  'browser',
+  'simulator'
+])
 
-const workspaceVisibleTabTypeSchema = z.enum(['terminal', 'editor', 'browser'])
+const workspaceVisibleTabTypeSchema = z.enum(['terminal', 'editor', 'browser', 'simulator'])
 
 const tabSchema = z.object({
   id: z.string(),
@@ -94,6 +152,7 @@ const tabSchema = z.object({
   contentType: tabContentTypeSchema,
   label: z.string(),
   generatedLabel: z.string().nullable().optional(),
+  quickCommandLabel: z.string().nullable().optional(),
   customLabel: z.string().nullable(),
   color: z.string().nullable(),
   sortOrder: z.number(),
@@ -189,6 +248,9 @@ const browserPageSchema = z.object({
   canGoForward: z.boolean(),
   loadError: browserLoadErrorSchema.nullable(),
   createdAt: z.number(),
+  // Why: explicit null marks a browser page as client-local even when its
+  // worktree is remote-owned; older sessions omit it and keep inferred runtime.
+  browserRuntimeEnvironmentId: z.string().nullable().optional(),
   // Why: optional+nullable so sessions persisted before viewport presets were
   // added still validate; without this, zod would strip the field during
   // restore and reset the user's chosen preset on every app restart.
@@ -211,6 +273,7 @@ const browserHistoryEntriesSchema = z
 
 export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.object({
   activeRepoId: z.string().nullable(),
+  activeWorkspaceKey: workspaceKeySchema.nullable().optional(),
   activeWorktreeId: z.string().nullable(),
   activeTabId: z.string().nullable(),
   tabsByWorktree: z.record(z.string(), z.array(terminalTabSchema)),
@@ -256,7 +319,8 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
       z.record(z.string(), z.number().finite().nonnegative())
     )
     .optional(),
-  defaultTerminalTabsAppliedByWorktreeId: z.record(z.string(), z.literal(true)).optional()
+  defaultTerminalTabsAppliedByWorktreeId: z.record(z.string(), z.literal(true)).optional(),
+  sleepingAgentSessionsByPaneKey: sleepingAgentSessionsByPaneKeySchema
 })
 
 export type ParsedWorkspaceSession =

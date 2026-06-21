@@ -6,12 +6,13 @@ import { useAppStore } from '@/store'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   scanWorkspacePortsForTarget,
-  workspacePortRuntimeTargetKey
+  workspacePortScanKeyForTarget
 } from '@/lib/workspace-port-actions'
 import { getExternalWorkspacePorts, getWorkspacePortGroups } from '@/lib/workspace-port-groups'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
 import { PortRow, WorkspaceGroupRows } from './ports-status-popover-rows'
+import { translate } from '@/i18n/i18n'
 
 type PortsStatusSegmentProps = {
   compact?: boolean
@@ -24,11 +25,12 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
   const refreshing = useAppStore((s) => s.workspacePortScanRefreshing)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
+  const setWorkspacePortScanForKey = useAppStore((s) => s.setWorkspacePortScanForKey)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [open, setOpen] = useState(false)
   const [externalOpen, setExternalOpen] = useState(false)
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
-  const scanKey = `${workspacePortRuntimeTargetKey(runtimeTarget)}:all`
+  const scanKey = workspacePortScanKeyForTarget(runtimeTarget)
 
   const workspaceGroups = useMemo(() => getWorkspacePortGroups(scan), [scan])
   const externalPorts = useMemo(() => getExternalWorkspacePorts(scan), [scan])
@@ -45,6 +47,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
       // popover should still collapse that stale window without flashing icons.
       void scanWorkspacePortsForTarget(runtimeTarget)
         .then((result) => {
+          setWorkspacePortScanForKey(scanKey, result)
           setWorkspacePortScan({ key: scanKey, result })
         })
         .catch((error) => {
@@ -60,7 +63,13 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
           })
         })
     },
-    [recordFeatureInteraction, runtimeTarget, scanKey, setWorkspacePortScan]
+    [
+      recordFeatureInteraction,
+      runtimeTarget,
+      scanKey,
+      setWorkspacePortScan,
+      setWorkspacePortScanForKey
+    ]
   )
 
   return (
@@ -72,7 +81,11 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
               type="button"
               {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
               className="inline-flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent/70"
-              aria-label={`Ports, ${workspacePortCount} workspace ${workspacePortCount === 1 ? 'port' : 'ports'}`}
+              aria-label={translate(
+                'auto.components.status.bar.PortsStatusSegment.b8bc3e420a',
+                'Ports, {{value0}} workspace {{value1}}',
+                { value0: workspacePortCount, value1: workspacePortCount === 1 ? 'port' : 'ports' }
+              )}
             >
               {refreshing ? (
                 <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
@@ -93,9 +106,25 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
           </PopoverTrigger>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6}>
-          Ports — {workspacePortCount} workspace
-          {workspacePortCount === 1 ? ' port' : ' ports'}
-          {externalPorts.length > 0 ? ` · ${externalPorts.length} external` : ''}
+          {translate(
+            'auto.components.status.bar.PortsStatusSegment.ca41be2802',
+            'Ports — {{value0}} workspace {{value1}}{{value2}}',
+            {
+              value0: workspacePortCount,
+              value1:
+                workspacePortCount === 1
+                  ? translate('auto.components.status.bar.PortsStatusSegment.45834a9ace', 'port')
+                  : translate('auto.components.status.bar.PortsStatusSegment.8caaa86e9a', 'ports'),
+              value2:
+                externalPorts.length > 0
+                  ? translate(
+                      'auto.components.status.bar.PortsStatusSegment.a8e4bdb412',
+                      ' · {{value0}} external',
+                      { value0: externalPorts.length }
+                    )
+                  : ''
+            }
+          )}
         </TooltipContent>
       </Tooltip>
 
@@ -111,16 +140,26 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
           <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
             <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-foreground">
               <Plug className="size-3 shrink-0 text-muted-foreground" />
-              <span className="truncate">Ports</span>
+              <span className="truncate">
+                {translate('auto.components.status.bar.PortsStatusSegment.c22ea609fd', 'Ports')}
+              </span>
             </div>
             <span className="text-[11px] tabular-nums text-muted-foreground">
-              {workspacePortCount} workspace · {externalPorts.length} external
+              {translate(
+                'auto.components.status.bar.PortsStatusSegment.2b84c4d11f',
+                '{{value0}} workspace · {{value1}} external',
+                { value0: workspacePortCount, value1: externalPorts.length }
+              )}
             </span>
           </div>
 
           {scan?.unavailableReason ? (
             <div className="px-3 py-3 text-xs text-muted-foreground">
-              Port scan unavailable on {scan.platform}: {scan.unavailableReason}
+              {translate(
+                'auto.components.status.bar.PortsStatusSegment.95495019ed',
+                'Port scan unavailable on {{value0}}: {{value1}}',
+                { value0: scan.platform, value1: scan.unavailableReason }
+              )}
             </div>
           ) : (
             <div className="max-h-[28rem] overflow-y-auto scrollbar-sleek">
@@ -134,7 +173,15 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
                 ))
               ) : (
                 <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-                  {refreshing ? 'Scanning for workspace ports...' : 'No workspace ports detected'}
+                  {refreshing
+                    ? translate(
+                        'auto.components.status.bar.PortsStatusSegment.c174bbbfed',
+                        'Scanning for workspace ports...'
+                      )
+                    : translate(
+                        'auto.components.status.bar.PortsStatusSegment.3a87d54dfb',
+                        'No workspace ports detected'
+                      )}
                 </div>
               )}
 
@@ -153,7 +200,12 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
                   ) : (
                     <ChevronRight className="size-3" />
                   )}
-                  <span>External Ports</span>
+                  <span>
+                    {translate(
+                      'auto.components.status.bar.PortsStatusSegment.7dac3ecc9d',
+                      'External Ports'
+                    )}
+                  </span>
                   <span className="ml-auto font-mono text-[10px]">{externalPorts.length}</span>
                 </button>
                 {externalOpen && (
@@ -169,7 +221,10 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
                       ))
                     ) : (
                       <div className="px-2 py-2 text-xs text-muted-foreground">
-                        No external ports detected
+                        {translate(
+                          'auto.components.status.bar.PortsStatusSegment.4ebf90c12e',
+                          'No external ports detected'
+                        )}
                       </div>
                     )}
                   </div>

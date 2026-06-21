@@ -7,8 +7,11 @@ import {
   type SearchEngine
 } from '../../../../shared/browser-url'
 import type { BrowserHistoryEntry } from '../../../../shared/types'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import { translate } from '@/i18n/i18n'
 
 export const MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS = 8
+export const BROWSER_ADDRESS_BAR_QUERY_MAX_BYTES = 2 * 1024
 
 export type BrowserAddressBarSuggestion = {
   url: string
@@ -17,6 +20,13 @@ export type BrowserAddressBarSuggestion = {
   lastVisitedAt: number
   visitCount: number
   isSearch: boolean
+}
+
+export function isBrowserAddressBarQueryTooLarge(
+  query: string,
+  maxBytes = BROWSER_ADDRESS_BAR_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
 function scoreBrowserAddressBarSuggestion(
@@ -52,6 +62,9 @@ export function buildBrowserAddressBarSuggestions({
   searchEngine?: SearchEngine
   value: string
 }): BrowserAddressBarSuggestion[] {
+  if (isBrowserAddressBarQueryTooLarge(value)) {
+    return []
+  }
   const trimmed = value.trim()
   if (trimmed === '' || trimmed === 'about:blank' || trimmed.startsWith('data:')) {
     if (browserUrlHistory.length === 0) {
@@ -62,7 +75,6 @@ export function buildBrowserAddressBarSuggestions({
       .slice(0, MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS)
       .map((entry) => ({ ...entry, subtitle: entry.url, isSearch: false }))
   }
-
   const historySuggestions: BrowserAddressBarSuggestion[] =
     browserUrlHistory.length > 0
       ? browserUrlHistory
@@ -82,7 +94,11 @@ export function buildBrowserAddressBarSuggestions({
     topAction = {
       url: buildSearchUrl(trimmed, searchEngine, { kagiSessionLink }),
       title: trimmed,
-      subtitle: `${SEARCH_ENGINE_LABELS[searchEngine]} Search`,
+      subtitle: translate(
+        'auto.components.browser.pane.browser.address.bar.suggestions.87fcdd0da9',
+        '{{value0}} Search',
+        { value0: SEARCH_ENGINE_LABELS[searchEngine] }
+      ),
       lastVisitedAt: 0,
       visitCount: 0,
       isSearch: true

@@ -126,6 +126,7 @@ module.exports = {
     prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName)
     verifyPackagedMainRuntimeDeps(resourcesDir)
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
+    chmodMacServeSimHelpers(resourcesDir, context.electronPlatformName)
     for (const filename of readdirSync(resourcesDir)) {
       if (!filename.startsWith('agent-browser-')) {
         continue
@@ -141,6 +142,11 @@ module.exports = {
   },
   win: {
     executableName: 'Orca',
+    // Why: Windows installers are signed after electron-builder packaging by
+    // SignPath, so the packager cannot infer the updater publisherName.
+    signtoolOptions: {
+      publisherName: 'SignPath Foundation'
+    },
     extraResources: [
       ...commonExtraResources,
       winSpeechNativeResource,
@@ -207,6 +213,12 @@ module.exports = {
         from: 'node_modules/agent-browser/bin/agent-browser-darwin-${arch}',
         to: 'agent-browser-darwin-${arch}'
       },
+      // Why: serve-sim resolves its helper binary and camera assets relative
+      // to dist/serve-sim.js, so the whole package must be a real resource dir.
+      {
+        from: 'node_modules/serve-sim',
+        to: 'serve-sim'
+      },
       {
         from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',
         to: 'Orca Computer Use.app'
@@ -231,12 +243,19 @@ module.exports = {
     artifactName: 'orca-macos-${arch}.${ext}'
   },
   linux: {
-    // Why: Ubuntu 26 ships GNOME Orca as the `orca` package and /usr/bin/orca.
+    // Why: Ubuntu desktop ships GNOME Orca as the `orca` package and /usr/bin/orca.
     // The Linux installer should not claim those system package/file names.
     executableName: 'orca-ide',
     // Why: the icns source lets electron-builder emit standard hicolor PNG
     // sizes; a single 1024px PNG is ignored by some Linux docks/launchers.
     icon: 'resources/build/icon.icns',
+    desktop: {
+      entry: {
+        // Why: Electron reports WM_CLASS=orca for the visible Linux window;
+        // GNOME docks need an exact match to group it with orca-ide.desktop.
+        StartupWMClass: 'orca'
+      }
+    },
     extraResources: [
       ...commonExtraResources,
       linuxSpeechNativeResource,
@@ -264,12 +283,33 @@ module.exports = {
   deb: {
     packageName: 'orca-ide',
     artifactName: 'orca-ide_${version}_${arch}.${ext}',
-    depends: ['python3', 'python3-gi', 'gir1.2-atspi-2.0', 'at-spi2-core', 'xdotool', 'xclip']
+    // Why: xvfb lets the bundled `orca serve` CLI run browser panes on a headless
+    // Linux host — Chromium needs a display server even for offscreen rendering,
+    // and serve starts Xvfb itself when present (see ensure-virtual-display.ts).
+    depends: ['python3', 'python3-gi', 'gir1.2-atspi-2.0', 'at-spi2-core', 'xdotool', 'xclip', 'xvfb'],
+    // Why: symlink the bundled CLI onto PATH at install time so `orca-ide serve`
+    // works on a headless host. The in-app CLI registration (CliInstaller) is
+    // GUI-triggered and can never run on a server, so without this the CLI is
+    // unreachable from the shell on exactly the hosts that need it.
+    afterInstall: 'resources/linux/packaging/after-install.sh',
+    afterRemove: 'resources/linux/packaging/after-remove.sh'
   },
   rpm: {
     packageName: 'orca-ide',
     artifactName: 'orca-ide-${version}.${arch}.${ext}',
-    depends: ['python3', 'python3-gobject', 'at-spi2-core', 'xdotool', 'xclip']
+    // Why: see deb depends. RPM distros ship Xvfb as xorg-x11-server-Xvfb (there
+    // is no `xvfb` package), so the name differs from the deb here.
+    depends: [
+      'python3',
+      'python3-gobject',
+      'at-spi2-core',
+      'xdotool',
+      'xclip',
+      'xorg-x11-server-Xvfb'
+    ],
+    // Why: same headless CLI-on-PATH registration as deb; rpm runs these via fpm.
+    afterInstall: 'resources/linux/packaging/after-install.sh',
+    afterRemove: 'resources/linux/packaging/after-remove.sh'
   },
   beforeBuild: electronBuilderNativeRebuild,
   // Why: must be true so that electron-builder rebuilds native modules
@@ -299,6 +339,23 @@ function chmodUnixCliLaunchers(resourcesDir, electronPlatformName) {
     // Why: packaged Unix installs expose these extraResources as public shell
     // commands, and source/packager mode drift must not ship a non-executable CLI.
     chmodSync(launcherPath, 0o755)
+  }
+}
+
+function chmodMacServeSimHelpers(resourcesDir, electronPlatformName) {
+  if (electronPlatformName !== 'darwin') {
+    return
+  }
+  const helperPaths = [
+    join(resourcesDir, 'serve-sim', 'bin', 'serve-sim-bin'),
+    join(resourcesDir, 'serve-sim', 'dist', 'simcam', 'serve-sim-camera-helper'),
+    join(resourcesDir, 'node_modules', 'serve-sim', 'bin', 'serve-sim-bin'),
+    join(resourcesDir, 'node_modules', 'serve-sim', 'dist', 'simcam', 'serve-sim-camera-helper')
+  ]
+  for (const helperPath of helperPaths) {
+    if (existsSync(helperPath)) {
+      chmodSync(helperPath, 0o755)
+    }
   }
 }
 

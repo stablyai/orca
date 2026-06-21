@@ -58,7 +58,8 @@ describe('repo slice skipped-onboarding folder startup', () => {
       {
         sidebarRevealBehavior: 'auto',
         startup: {
-          command: 'codex',
+          command: "codex '--dangerously-bypass-approvals-and-sandbox'",
+          env: {},
           telemetry: {
             agent_kind: 'codex',
             launch_source: 'onboarding',

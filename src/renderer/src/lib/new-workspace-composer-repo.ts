@@ -1,28 +1,35 @@
-import { isGitRepoKind } from '../../../shared/repo-kind'
+import type { ExecutionHostScope } from '../../../shared/execution-host'
+import {
+  getNewWorkspaceDialogEligibleRepos,
+  resolveNewWorkspaceDialogGitRepoId,
+  resolveNewWorkspaceDialogRepoId
+} from '../../../shared/new-workspace-dialog-repo'
 import type { Repo } from '../../../shared/types'
 
 export function getComposerEligibleRepos(repos: readonly Repo[]): Repo[] {
-  return repos.filter((repo) => Boolean(repo.path))
+  return getNewWorkspaceDialogEligibleRepos(repos)
 }
 
 export function resolveComposerRepoId({
   eligibleRepos,
   draftRepoId,
   initialRepoId,
-  activeRepoId
+  activeRepoId,
+  focusedHostScope
 }: {
   eligibleRepos: readonly Repo[]
   draftRepoId?: string | null
   initialRepoId?: string | null
   activeRepoId?: string | null
+  focusedHostScope?: ExecutionHostScope | null
 }): string {
-  const resolvedRepo =
-    (draftRepoId && eligibleRepos.find((repo) => repo.id === draftRepoId)) ||
-    (initialRepoId && eligibleRepos.find((repo) => repo.id === initialRepoId)) ||
-    (activeRepoId && eligibleRepos.find((repo) => repo.id === activeRepoId)) ||
-    eligibleRepos[0]
-
-  return resolvedRepo?.id ?? ''
+  return resolveNewWorkspaceDialogRepoId({
+    eligibleRepos,
+    draftRepoId,
+    initialRepoId,
+    activeRepoId,
+    focusedHostScope
+  })
 }
 
 export function resolveComposerGitRepoId(args: {
@@ -30,8 +37,7 @@ export function resolveComposerGitRepoId(args: {
   draftRepoId?: string | null
   initialRepoId?: string | null
   activeRepoId?: string | null
+  focusedHostScope?: ExecutionHostScope | null
 }): string | null {
-  const repoId = resolveComposerRepoId(args)
-  const repo = repoId ? args.eligibleRepos.find((entry) => entry.id === repoId) : null
-  return repo && isGitRepoKind(repo) ? repo.id : null
+  return resolveNewWorkspaceDialogGitRepoId(args)
 }

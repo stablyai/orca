@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getDropIndicatorClasses,
-  getTabRootStateClasses
+  getTabRootStateClasses,
+  getTabStripBorderClasses
 } from './drop-indicator'
 
 describe('getDropIndicatorClasses', () => {
@@ -52,6 +53,20 @@ describe('ACTIVE_TAB_INDICATOR_CLASSES', () => {
     expect(ACTIVE_TAB_INDICATOR_CLASSES).toContain('pointer-events-none')
     expect(ACTIVE_TAB_INDICATOR_CLASSES).not.toContain('-top-px')
     expect(ACTIVE_TAB_INDICATOR_CLASSES).not.toContain('bg-[#1e3d9c]')
+  })
+})
+
+describe('getTabStripBorderClasses', () => {
+  it('includes top and right borders by default', () => {
+    expect(getTabStripBorderClasses(true)).toBe('border-t border-r border-border')
+    expect(getTabStripBorderClasses(false)).toBe('border-t border-border')
+  })
+
+  it('can omit the top border for rounded floating panel titlebars', () => {
+    expect(getTabStripBorderClasses(true, { includeTopBorder: false })).toBe(
+      'border-r border-border'
+    )
+    expect(getTabStripBorderClasses(false, { includeTopBorder: false })).toBe('border-border')
   })
 })
 

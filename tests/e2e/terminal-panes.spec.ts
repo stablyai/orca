@@ -19,6 +19,7 @@ import {
   countVisibleTerminalPanes,
   focusLastTerminalPane,
   moveTerminalPaneByLeafId,
+  readPaneIdentitySnapshot,
   readTerminalPaneDomLeafOrder,
   splitActiveTerminalPane,
   waitForPaneIdentitySnapshot,
@@ -75,6 +76,106 @@ async function openTerminalContextMenu(page: Page): Promise<void> {
       modifiers: isMac ? ['Control'] : modifiers
     })
   await expect(page.getByText('Set Title…', { exact: true })).toBeVisible()
+}
+
+async function openPaneTitleContextMenu(page: Page, title: string): Promise<void> {
+  const modifiers: ('Alt' | 'Control' | 'Meta' | 'Shift')[] = (await page.evaluate(() =>
+    navigator.userAgent.includes('Windows')
+  ))
+    ? ['Control']
+    : []
+  const isMac = await page.evaluate(() => navigator.userAgent.includes('Mac'))
+  const titleBar = page.locator('.pane-title-bar', { hasText: title }).first()
+  await expect(titleBar).toBeVisible()
+  await titleBar.click({
+    button: isMac ? 'left' : 'right',
+    position: { x: 20, y: 10 },
+    modifiers: isMac ? ['Control'] : modifiers
+  })
+  await expect(page.getByText('Set Title…', { exact: true })).toBeVisible()
+}
+
+async function installDelayedTerminalFocusSteals(
+  page: Page,
+  delaysMs: readonly number[]
+): Promise<void> {
+  await page.evaluate((delays) => {
+    const focusTerminalAfterTitleFocus = (event: FocusEvent): void => {
+      const target = event.target
+      if (!(target instanceof HTMLInputElement) || !target.classList.contains('pane-title-input')) {
+        return
+      }
+      document.removeEventListener('focusin', focusTerminalAfterTitleFocus, true)
+      for (const delay of delays) {
+        window.setTimeout(() => {
+          const textarea = document.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
+          textarea?.focus()
+        }, delay)
+      }
+    }
+    document.addEventListener('focusin', focusTerminalAfterTitleFocus, true)
+  }, delaysMs)
+}
+
+async function readVisibleXtermContainerBox(
+  page: Page
+): Promise<{ x: number; y: number; width: number; height: number }> {
+  return page
+    .locator('.xterm:visible')
+    .first()
+    .evaluate((xterm) => {
+      const container = xterm.closest('.xterm-container')
+      if (!(container instanceof HTMLElement)) {
+        throw new Error('No visible xterm container found')
+      }
+      const rect = container.getBoundingClientRect()
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+    })
+}
+
+function expectTerminalToReserveTitleSpace(
+  actual: { x: number; y: number; width: number; height: number },
+  expected: { x: number; y: number; width: number; height: number }
+): void {
+  expect(Math.abs(actual.x - expected.x)).toBeLessThan(1)
+  expect(Math.abs(actual.width - expected.width)).toBeLessThan(1)
+  expect(actual.y - expected.y).toBeGreaterThan(10)
+  expect(expected.height - actual.height).toBeGreaterThan(10)
+}
+
+async function expectPaneTitleAttachedToLeaf(
+  page: Page,
+  title: string,
+  leafId: string
+): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          ({ title, leafId }) => {
+            const titleBar = Array.from(
+              document.querySelectorAll<HTMLElement>('.pane-title-bar')
+            ).find((element) => element.textContent?.includes(title))
+            const pane = document.querySelector<HTMLElement>(`.pane[data-leaf-id="${leafId}"]`)
+            if (!titleBar || !pane) {
+              return false
+            }
+            const titleRect = titleBar.getBoundingClientRect()
+            const paneRect = pane.getBoundingClientRect()
+            return (
+              Math.abs(titleRect.left - paneRect.left) < 1 &&
+              Math.abs(titleRect.top - paneRect.top) < 1 &&
+              Math.abs(titleRect.width - paneRect.width) < 1
+            )
+          },
+          { title, leafId }
+        ),
+      {
+        timeout: 5_000,
+        message: 'Pane title overlay did not stay attached to its pane'
+      }
+    )
+    .toBe(true)
 }
 
 async function getTabCustomTitle(
@@ -275,6 +376,257 @@ test.describe('Terminal Panes', () => {
     await expect(orcaPage.locator('.pane-title-text', { hasText: title })).toHaveCount(1)
   })
 
+  test('Set Title editor renders in Orca overlay while terminal reserves title space', async ({
+    orcaPage
+  }) => {
+    const title = `Reserved overlay title ${Date.now()}`
+    const terminalBoxBefore = await readVisibleXtermContainerBox(orcaPage)
+
+    await openTerminalContextMenu(orcaPage)
+    await orcaPage.getByText('Set Title…', { exact: true }).click()
+
+    const titleInput = orcaPage.locator('.pane-title-overlay-layer .pane-title-input').first()
+    await expect(titleInput).toBeVisible()
+    await expect(titleInput).toBeFocused()
+    await expect(orcaPage.getByText('Set Title…', { exact: true })).toBeHidden()
+    await expect(orcaPage.locator('.pane .pane-title-input')).toHaveCount(0)
+    await expect(orcaPage.locator('.pane[data-has-title]')).toHaveCount(1)
+    await expect
+      .poll(() =>
+        orcaPage
+          .locator('.pane-title-bar')
+          .first()
+          .evaluate((titleBar) => getComputedStyle(titleBar).backgroundColor)
+      )
+      .not.toBe('rgba(0, 0, 0, 0)')
+    const terminalBoxEditing = await readVisibleXtermContainerBox(orcaPage)
+    expectTerminalToReserveTitleSpace(terminalBoxEditing, terminalBoxBefore)
+
+    await titleInput.fill(title)
+    await titleInput.press('Enter')
+    await expect(orcaPage.locator('.pane-title-text', { hasText: title })).toBeVisible()
+    await expect(orcaPage.locator('.pane[data-has-title]')).toHaveCount(1)
+    expectTerminalToReserveTitleSpace(
+      await readVisibleXtermContainerBox(orcaPage),
+      terminalBoxBefore
+    )
+  })
+
+  test('Set Title context menu opens from the title overlay strip', async ({ orcaPage }) => {
+    const title = `Overlay menu title ${Date.now()}`
+    const updatedTitle = `Overlay menu updated ${Date.now()}`
+
+    await setPaneTitleFromTerminalMenu(orcaPage, title)
+    await openPaneTitleContextMenu(orcaPage, title)
+    await orcaPage.getByText('Set Title…', { exact: true }).click()
+
+    const titleInput = orcaPage.locator('.pane-title-input').first()
+    await expect(titleInput).toBeVisible()
+    await expect(titleInput).toBeFocused()
+    await expect(titleInput).toHaveValue(title)
+    await titleInput.fill(updatedTitle)
+    await titleInput.press('Enter')
+
+    await expect(orcaPage.locator('.pane-title-text', { hasText: updatedTitle })).toHaveCount(1)
+    await expect(orcaPage.locator('.pane-title-text', { hasText: title })).toHaveCount(0)
+  })
+
+  test('Set Title strip activates its pane and accepts file-path drops', async ({ orcaPage }) => {
+    const title = `Drop target title ${Date.now()}`
+    const droppedPath = `/tmp/title-drop-${Date.now()}.txt`
+
+    await setPaneTitleFromTerminalMenu(orcaPage, title)
+    const initialSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    const titledLeafId = initialSnapshot.activeLeafId ?? initialSnapshot.panes[0]?.leafId
+    if (!titledLeafId) {
+      throw new Error('No titled pane leaf id found before split')
+    }
+
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    await waitForPaneCount(orcaPage, 2)
+    const splitSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
+    const otherPane = splitSnapshot.panes.find((pane) => pane.leafId !== titledLeafId)
+    if (!otherPane) {
+      throw new Error('No inactive pane found for title-strip drop test')
+    }
+
+    await orcaPage.evaluate(
+      ({ tabId, paneId }) => {
+        window.__paneManagers?.get(tabId)?.setActivePane(paneId, { focus: false })
+      },
+      { tabId: splitSnapshot.tabId, paneId: otherPane.numericPaneId }
+    )
+    await expect
+      .poll(async () => (await readPaneIdentitySnapshot(orcaPage))?.activeLeafId ?? null)
+      .toBe(otherPane.leafId)
+
+    const titleBar = orcaPage.locator('.pane-title-bar', { hasText: title }).first()
+    await expect(titleBar).toHaveAttribute('data-native-file-drop-target', 'terminal')
+    await expect(titleBar).toHaveAttribute('data-terminal-tab-id', splitSnapshot.tabId)
+
+    await titleBar.evaluate((element, path) => {
+      const dataTransfer = new DataTransfer()
+      dataTransfer.setData('text/x-orca-file-path', path)
+      element.dispatchEvent(
+        new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer })
+      )
+      element.dispatchEvent(
+        new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer })
+      )
+    }, droppedPath)
+
+    await expect
+      .poll(async () => (await readPaneIdentitySnapshot(orcaPage))?.activeLeafId ?? null, {
+        timeout: 5_000,
+        message: 'Title-strip drop did not activate the titled pane'
+      })
+      .toBe(titledLeafId)
+    await expect
+      .poll(async () => (await getTerminalContent(orcaPage)).includes(droppedPath), {
+        timeout: 5_000,
+        message: 'Title-strip drop did not paste into the titled pane terminal'
+      })
+      .toBe(true)
+  })
+
+  test('Set Title overlay follows its pane after same-count pane move', async ({ orcaPage }) => {
+    const title = `Moved overlay title ${Date.now()}`
+
+    await setPaneTitleFromTerminalMenu(orcaPage, title)
+    const initialSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    const titledLeafId = initialSnapshot.activeLeafId ?? initialSnapshot.panes[0]?.leafId
+    if (!titledLeafId) {
+      throw new Error('No titled pane leaf id found before move')
+    }
+
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    await waitForPaneCount(orcaPage, 2)
+    const beforeMove = await waitForPaneIdentitySnapshot(orcaPage, 2)
+    const target = beforeMove.panes.find((pane) => pane.leafId !== titledLeafId)
+    if (!target) {
+      throw new Error('No target pane found for titled pane move')
+    }
+    const beforeOrder = await readTerminalPaneDomLeafOrder(orcaPage)
+
+    await expectPaneTitleAttachedToLeaf(orcaPage, title, titledLeafId)
+    await moveTerminalPaneByLeafId(orcaPage, titledLeafId, target.leafId, 'right')
+
+    await expect
+      .poll(async () => readTerminalPaneDomLeafOrder(orcaPage), {
+        timeout: 10_000,
+        message: 'Pane move did not update DOM order'
+      })
+      .not.toEqual(beforeOrder)
+    await expectPaneTitleAttachedToLeaf(orcaPage, title, titledLeafId)
+  })
+
+  test('Set Title keeps the pane drag handle available over the title strip', async ({
+    orcaPage
+  }) => {
+    const title = `Draggable title ${Date.now()}`
+
+    await setPaneTitleFromTerminalMenu(orcaPage, title)
+    const initialSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    const titledLeafId = initialSnapshot.activeLeafId ?? initialSnapshot.panes[0]?.leafId
+    if (!titledLeafId) {
+      throw new Error('No titled pane leaf id found before split')
+    }
+
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    await waitForPaneCount(orcaPage, 2)
+    await expectPaneTitleAttachedToLeaf(orcaPage, title, titledLeafId)
+
+    const titleTopHit = await orcaPage.evaluate(
+      ({ title, titledLeafId }) => {
+        const titleBar = Array.from(document.querySelectorAll<HTMLElement>('.pane-title-bar')).find(
+          (element) => element.textContent?.includes(title)
+        )
+        const titleDragHandle =
+          titleBar.querySelector<HTMLElement>('.pane-title-drag-handle') ?? null
+        const pane = document.querySelector<HTMLElement>(`.pane[data-leaf-id="${titledLeafId}"]`)
+        if (!titleBar || !pane || !titleDragHandle) {
+          return null
+        }
+        const titleRect = titleBar.getBoundingClientRect()
+        const hitElement = document.elementFromPoint(
+          titleRect.left + titleRect.width / 2,
+          titleRect.top + 4
+        )
+        return {
+          hitDragHandle:
+            hitElement instanceof HTMLElement &&
+            hitElement.closest('.pane-title-drag-handle') !== null,
+          pointerEvents: getComputedStyle(titleDragHandle).pointerEvents,
+          titleTop: titleRect.top,
+          handleTop: titleDragHandle.getBoundingClientRect().top
+        }
+      },
+      { title, titledLeafId }
+    )
+
+    expect(titleTopHit).not.toBeNull()
+    expect(titleTopHit?.hitDragHandle).toBe(true)
+    expect(titleTopHit?.pointerEvents).toBe('auto')
+    expect(Math.abs((titleTopHit?.handleTop ?? 0) - (titleTopHit?.titleTop ?? 0))).toBeLessThan(1)
+
+    await orcaPage.locator('.pane-title-bar', { hasText: title }).click({
+      position: { x: 20, y: 18 }
+    })
+    await expect(orcaPage.locator('.pane-title-input')).toBeVisible()
+  })
+
+  test('@headful Set Title pane can be dragged from the title strip', async ({ orcaPage }) => {
+    const title = `Dragged title ${Date.now()}`
+
+    await setPaneTitleFromTerminalMenu(orcaPage, title)
+    const initialSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    const titledLeafId = initialSnapshot.activeLeafId ?? initialSnapshot.panes[0]?.leafId
+    if (!titledLeafId) {
+      throw new Error('No titled pane leaf id found before drag')
+    }
+
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    await waitForPaneCount(orcaPage, 2)
+    const beforeDrag = await waitForPaneIdentitySnapshot(orcaPage, 2)
+    const target = beforeDrag.panes.find((pane) => pane.leafId !== titledLeafId)
+    if (!target) {
+      throw new Error('No target pane found for titled pane drag')
+    }
+    const beforeOrder = await readTerminalPaneDomLeafOrder(orcaPage)
+
+    const titleDragHandle = orcaPage
+      .locator('.pane-title-bar', { hasText: title })
+      .locator('.pane-title-drag-handle')
+    await expect(titleDragHandle).toBeVisible({ timeout: 3_000 })
+    const sourceBox = await titleDragHandle.boundingBox()
+    const targetBox = await orcaPage.locator(`.pane[data-leaf-id="${target.leafId}"]`).boundingBox()
+    expect(sourceBox).not.toBeNull()
+    expect(targetBox).not.toBeNull()
+    const sourceIndex = beforeOrder.indexOf(titledLeafId)
+    const targetIndex = beforeOrder.indexOf(target.leafId)
+    const targetDropX =
+      sourceIndex < targetIndex ? targetBox!.x + targetBox!.width - 8 : targetBox!.x + 8
+
+    await orcaPage.mouse.move(sourceBox!.x + sourceBox!.width / 2, sourceBox!.y + 4)
+    await orcaPage.mouse.down()
+    await orcaPage.mouse.move(targetDropX, targetBox!.y + targetBox!.height / 2, {
+      steps: 20
+    })
+    await orcaPage.mouse.up()
+
+    await expect
+      .poll(async () => readTerminalPaneDomLeafOrder(orcaPage), {
+        timeout: 10_000,
+        message: 'Title-strip pane drag did not update DOM order'
+      })
+      .not.toEqual(beforeOrder)
+    const afterDrag = await waitForPaneIdentitySnapshot(orcaPage, 2)
+    expect(afterDrag.panes.map((pane) => pane.leafId).sort()).toEqual(
+      beforeDrag.panes.map((pane) => pane.leafId).sort()
+    )
+    await expectPaneTitleAttachedToLeaf(orcaPage, title, titledLeafId)
+  })
+
   test('Set Title input stays open when clicked in a split terminal', async ({ orcaPage }) => {
     await splitActiveTerminalPane(orcaPage, 'vertical')
     await waitForPaneCount(orcaPage, 2)
@@ -288,9 +640,8 @@ test.describe('Terminal Panes', () => {
     await expect(titleInput).toBeVisible()
     await expect(titleInput).toBeFocused()
 
-    // Why: pane-level pointerdown focuses xterm for terminal clicks. Pane-local
-    // controls must be excluded or clicking the already-open title input blurs
-    // it and commits an empty title, which looks like the editor flashed closed.
+    // Why: overlay controls own the title strip. Clicking the already-open
+    // title input must not leak through to xterm and flash the editor closed.
     await titleInput.evaluate((input) => {
       const pointerInit: PointerEventInit = {
         bubbles: true,
@@ -341,6 +692,138 @@ test.describe('Terminal Panes', () => {
     await expect(titleInput).toBeFocused()
   })
 
+  test('Set Title survives delayed terminal focus handoffs', async ({ orcaPage }) => {
+    await openTerminalContextMenu(orcaPage)
+    await installDelayedTerminalFocusSteals(orcaPage, [50, 150, 300])
+    await orcaPage.getByText('Set Title…', { exact: true }).click()
+
+    const titleInput = orcaPage.locator('.pane-title-input').first()
+    await expect(titleInput).toBeVisible()
+    await expect(titleInput).toBeFocused()
+    await orcaPage.waitForTimeout(600)
+    await expect(titleInput).toBeVisible()
+    await expect(titleInput).toBeFocused()
+  })
+
+  test('Set Title survives delayed terminal focus handoffs in a split pane', async ({
+    orcaPage
+  }) => {
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    await waitForPaneCount(orcaPage, 2)
+
+    await openTerminalContextMenu(orcaPage)
+    await installDelayedTerminalFocusSteals(orcaPage, [50, 150, 300])
+    await orcaPage.getByText('Set Title…', { exact: true }).click()
+
+    const titleInput = orcaPage.locator('.pane-title-input').first()
+    await expect(titleInput).toBeVisible()
+    await expect(titleInput).toBeFocused()
+    await orcaPage.waitForTimeout(600)
+    await expect(titleInput).toBeVisible()
+    await expect(titleInput).toBeFocused()
+  })
+
+  test('Set Title preserves draft text across terminal focus steals', async ({ orcaPage }) => {
+    const draftTitle = `Draft title ${Date.now()}`
+
+    await openTerminalContextMenu(orcaPage)
+    await orcaPage.getByText('Set Title…', { exact: true }).click()
+
+    const titleInput = orcaPage.locator('.pane-title-input').first()
+    await expect(titleInput).toBeVisible()
+    await expect(titleInput).toBeFocused()
+    await titleInput.fill(draftTitle)
+
+    await orcaPage.evaluate(() => {
+      const textarea = document.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
+      textarea?.focus()
+    })
+
+    await expect(titleInput).toBeVisible()
+    await expect(titleInput).toBeFocused()
+    await expect(titleInput).toHaveValue(draftTitle)
+  })
+
+  test('Set Title does not submit when synthetic focus restore fails', async ({ orcaPage }) => {
+    const draftTitle = `Blocked focus title ${Date.now()}`
+
+    await openTerminalContextMenu(orcaPage)
+    await orcaPage.getByText('Set Title…', { exact: true }).click()
+
+    const titleInput = orcaPage.locator('.pane-title-input').first()
+    await expect(titleInput).toBeVisible()
+    await expect(titleInput).toBeFocused()
+    await titleInput.fill(draftTitle)
+    await titleInput.evaluate((input) => {
+      input.focus = () => {}
+    })
+
+    await orcaPage.evaluate(() => {
+      const textarea = document.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
+      textarea?.focus()
+    })
+
+    await expect(titleInput).toBeVisible()
+    await expect(titleInput).toHaveValue(draftTitle)
+    await expect(orcaPage.locator('.pane-title-text', { hasText: draftTitle })).toHaveCount(0)
+  })
+
+  test('Set Title still commits by blur after synthetic terminal focus steals', async ({
+    orcaPage
+  }) => {
+    const title = `Post steal blur title ${Date.now()}`
+
+    await openTerminalContextMenu(orcaPage)
+    await installDelayedTerminalFocusSteals(orcaPage, [50, 150])
+    await orcaPage.getByText('Set Title…', { exact: true }).click()
+
+    const titleInput = orcaPage.locator('.pane-title-input').first()
+    await expect(titleInput).toBeVisible()
+    await expect(titleInput).toBeFocused()
+    await orcaPage.waitForTimeout(300)
+    await titleInput.fill(title)
+    await orcaPage
+      .locator('.xterm:visible')
+      .first()
+      .click({ position: { x: 40, y: 60 } })
+
+    await expect(titleInput).toHaveCount(0)
+    await expect(orcaPage.locator('.pane-title-text', { hasText: title })).toHaveCount(1)
+  })
+
+  test('Set Title commits when tabbing away from the title input', async ({ orcaPage }) => {
+    const title = `Tab commit title ${Date.now()}`
+
+    await openTerminalContextMenu(orcaPage)
+    await orcaPage.getByText('Set Title…', { exact: true }).click()
+
+    const titleInput = orcaPage.locator('.pane-title-input').first()
+    await expect(titleInput).toBeVisible()
+    await expect(titleInput).toBeFocused()
+    await titleInput.fill(title)
+    await titleInput.press('Tab')
+
+    await expect(titleInput).toHaveCount(0)
+    await expect(orcaPage.locator('.pane-title-text', { hasText: title })).toHaveCount(1)
+  })
+
+  test('Set Title overlay hides with its inactive terminal tab', async ({ orcaPage }) => {
+    const title = `Hidden tab title ${Date.now()}`
+    const worktreeId = (await getActiveWorktreeId(orcaPage))!
+
+    await setPaneTitleFromTerminalMenu(orcaPage, title)
+    await expect(orcaPage.locator('.pane-title-text', { hasText: title })).toBeVisible()
+
+    await pressShortcut(orcaPage, 't')
+    await expect
+      .poll(async () => (await getWorktreeTabs(orcaPage, worktreeId)).length, { timeout: 5_000 })
+      .toBeGreaterThanOrEqual(2)
+    await expect(orcaPage.locator('.pane-title-text', { hasText: title })).toBeHidden()
+
+    await pressShortcut(orcaPage, 'BracketLeft', { shift: true })
+    await expect(orcaPage.locator('.pane-title-text', { hasText: title })).toBeVisible()
+  })
+
   test('Set Title still commits by blur after focus settles', async ({ orcaPage }) => {
     const title = `Blur commit title ${Date.now()}`
 
@@ -359,6 +842,27 @@ test.describe('Terminal Panes', () => {
 
     await expect(titleInput).toHaveCount(0)
     await expect(orcaPage.locator('.pane-title-text', { hasText: title })).toHaveCount(1)
+  })
+
+  test('Set Title remove button hover stays transparent', async ({ orcaPage }) => {
+    const title = `Remove hover title ${Date.now()}`
+
+    await setPaneTitleFromTerminalMenu(orcaPage, title)
+    const removeButton = orcaPage.getByRole('button', { name: `Remove pane title: ${title}` })
+    await orcaPage.locator('.pane-title-bar', { hasText: title }).hover()
+    await removeButton.hover()
+    await expect(orcaPage.getByText('Remove title', { exact: true })).toBeVisible()
+
+    const hoverStyle = await removeButton.evaluate((element) => {
+      const style = getComputedStyle(element)
+      return {
+        backgroundColor: style.backgroundColor,
+        opacity: style.opacity
+      }
+    })
+
+    expect(hoverStyle.backgroundColor).toBe('rgba(0, 0, 0, 0)')
+    expect(Number(hoverStyle.opacity)).toBeGreaterThan(0.9)
   })
 
   test('Set Title stays pane-local during agent title churn', async ({ orcaPage }) => {

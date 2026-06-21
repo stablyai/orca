@@ -10,17 +10,24 @@ import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
   GitConflictOperation,
+  GitForkSyncExpectedUpstream,
+  GitForkSyncResult,
   GitPushTarget,
   GitUpstreamStatus,
   GitWorktreeInfo,
   RemoveWorktreeResult
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
-import { buildHostedRemoteFileUrl } from '../git/hosted-remote-url'
+import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from '../git/hosted-remote-url'
 import { JsonRpcErrorCode } from '../ssh/relay-protocol'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 import type { RemoteCommitMessageExecResult } from '../text-generation/commit-message-text-generation'
+import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
+import {
+  describeMaxBufferOverflowError,
+  isMaxBufferOverflowError
+} from '../git/max-buffer-overflow'
 
 type NonInteractiveExecQueueEntry = {
   started: boolean
@@ -43,19 +50,34 @@ function formatStatusEntriesForCleanCheck(entries: GitStatusResult['entries']): 
   return entries.map((entry) => `${entry.area} ${entry.status}: ${entry.path}`).join('\n')
 }
 
+function filterUntrackedPorcelainStatus(stdout: string | undefined): string | undefined {
+  const trackedLines = (stdout ?? '')
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0 && !line.startsWith('?? '))
+  return trackedLines.length > 0 ? trackedLines.join('\n') : undefined
+}
+
 export class SshGitProvider implements IGitProvider {
   private connectionId: string
   private mux: SshChannelMultiplexer
   private nonInteractiveExecQueues = new Map<string, NonInteractiveExecQueueEntry[]>()
   private loggedWorktreeIsCleanFallback = false
 
-  constructor(connectionId: string, mux: SshChannelMultiplexer) {
+  constructor(
+    connectionId: string,
+    mux: SshChannelMultiplexer,
+    private readonly hostPlatform: RemoteHostPlatform | null = null
+  ) {
     this.connectionId = connectionId
     this.mux = mux
   }
 
   getConnectionId(): string {
     return this.connectionId
+  }
+
+  getHostPlatform(): RemoteHostPlatform | null {
+    return this.hostPlatform
   }
 
   async getStatus(
@@ -108,10 +130,25 @@ export class SshGitProvider implements IGitProvider {
     if (!stagedSummary) {
       return null
     }
-    const { stdout: stagedPatch } = await this.exec(
-      ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
-      worktreePath
-    )
+    let stagedPatch = ''
+    try {
+      const patchResult = await this.exec(
+        ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
+        worktreePath
+      )
+      stagedPatch = patchResult.stdout
+    } catch (error) {
+      if (!isMaxBufferOverflowError(error)) {
+        throw error
+      }
+      // Why: a very large staged diff can overflow the remote exec buffer. The
+      // patch is optional context (truncated later anyway), so degrade to the
+      // file-name summary instead of failing commit-message generation.
+      console.warn(
+        '[ssh-git] Staged patch too large to read; using file summary only:',
+        describeMaxBufferOverflowError(error)
+      )
+    }
     return {
       branch: branchResult.stdout.trim() || null,
       stagedSummary,
@@ -326,6 +363,19 @@ export class SshGitProvider implements IGitProvider {
     await this.mux.request('git.abortRebase', { worktreePath })
   }
 
+  async checkoutBranch(worktreePath: string, branch: string): Promise<void> {
+    await this.mux.request('git.checkout', { worktreePath, branch })
+  }
+
+  async listLocalBranches(
+    worktreePath: string
+  ): Promise<{ current: string | null; branches: string[] }> {
+    return (await this.mux.request('git.localBranches', { worktreePath })) as {
+      current: string | null
+      branches: string[]
+    }
+  }
+
   async getBranchCompare(worktreePath: string, baseRef: string): Promise<GitBranchCompareResult> {
     return (await this.mux.request('git.branchCompare', {
       worktreePath,
@@ -383,6 +433,16 @@ export class SshGitProvider implements IGitProvider {
     await this.mux.request('git.fetch', { worktreePath, ...(pushTarget ? { pushTarget } : {}) })
   }
 
+  async syncForkDefaultBranch(
+    worktreePath: string,
+    expectedUpstream: GitForkSyncExpectedUpstream
+  ): Promise<GitForkSyncResult> {
+    return (await this.mux.request('git.forkSync', {
+      worktreePath,
+      ...(expectedUpstream ? { expectedUpstream } : {})
+    })) as GitForkSyncResult
+  }
+
   async fetchRemoteTrackingRef(
     worktreePath: string,
     remote: string,
@@ -394,6 +454,18 @@ export class SshGitProvider implements IGitProvider {
       remote,
       branch,
       ref
+    })
+  }
+
+  async fetchGitLabMergeRequestHead(
+    worktreePath: string,
+    remote: string,
+    mrIid: number
+  ): Promise<void> {
+    await this.mux.request('git.fetchGitLabMergeRequestHead', {
+      worktreePath,
+      remote,
+      mrIid
     })
   }
 
@@ -458,12 +530,26 @@ export class SshGitProvider implements IGitProvider {
     })) ?? {}) as RemoveWorktreeResult
   }
 
-  async worktreeIsClean(worktreePath: string): Promise<{ clean: boolean; stdout?: string }> {
+  async worktreeIsClean(
+    worktreePath: string,
+    options: { includeUntracked?: boolean } = {}
+  ): Promise<{ clean: boolean; stdout?: string }> {
     try {
-      return (await this.mux.request('git.worktreeIsClean', { worktreePath })) as {
+      const result = (await this.mux.request('git.worktreeIsClean', {
+        worktreePath,
+        ...(options.includeUntracked === false ? { includeUntracked: false } : {})
+      })) as {
         clean: boolean
         stdout?: string
       }
+      if (options.includeUntracked === false) {
+        if (!result.clean && result.stdout === undefined) {
+          return result
+        }
+        const trackedStdout = filterUntrackedPorcelainStatus(result.stdout)
+        return { clean: !trackedStdout, ...(trackedStdout ? { stdout: trackedStdout } : {}) }
+      }
+      return result
     } catch (error) {
       if (!isJsonRpcMethodNotFoundError(error)) {
         throw error
@@ -477,19 +563,84 @@ export class SshGitProvider implements IGitProvider {
       // Why: existing SSH relays may predate git.worktreeIsClean, but git.status
       // is a narrow relay RPC and avoids the generic git.exec allowlist.
       const status = await this.getStatus(worktreePath)
-      const clean = status.entries.length === 0
-      return { clean, stdout: formatStatusEntriesForCleanCheck(status.entries) }
+      const entries =
+        options.includeUntracked === false
+          ? status.entries.filter((entry) => entry.area !== 'untracked')
+          : status.entries
+      const clean = entries.length === 0
+      return { clean, stdout: formatStatusEntriesForCleanCheck(entries) }
     }
+  }
+
+  async refreshLocalBaseRefForWorktreeCreate(args: {
+    repoPath: string
+    fullRef: string
+    remoteTrackingRef: string
+    ownerWorktreePath?: string
+    checkOnly?: boolean
+  }): Promise<void> {
+    await this.mux.request('git.refreshLocalBaseRefForWorktreeCreate', args)
   }
 
   async renameCurrentBranch(worktreePath: string, newBranch: string): Promise<void> {
     await this.mux.request('git.renameCurrentBranch', { worktreePath, newBranch })
   }
 
-  async exec(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }> {
-    return (await this.mux.request('git.exec', { args, cwd })) as {
+  async exec(
+    args: string[],
+    cwd: string,
+    options?: { signal?: AbortSignal; timeoutMs?: number }
+  ): Promise<{ stdout: string; stderr: string }> {
+    const result = options
+      ? await this.mux.request('git.exec', { args, cwd }, options)
+      : await this.mux.request('git.exec', { args, cwd })
+    return result as {
       stdout: string
       stderr: string
+    }
+  }
+
+  async clone(
+    args: string[],
+    cwd: string,
+    options?: {
+      signal?: AbortSignal
+      timeoutMs?: number
+      onProgress?: (progress: { phase: string; percent: number }) => void
+    }
+  ): Promise<{ stdout: string; stderr: string }> {
+    const progressId = `clone-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const unsubscribe = options?.onProgress
+      ? this.mux.onNotificationByMethod('git.cloneProgress', (params) => {
+          if (params.progressId !== progressId) {
+            return
+          }
+          const phase = params.phase
+          const percent = params.percent
+          if (typeof phase === 'string' && typeof percent === 'number') {
+            options.onProgress?.({ phase, percent })
+          }
+        })
+      : undefined
+    try {
+      const result = await this.mux.request(
+        'git.clone',
+        { args, cwd, progressId },
+        { signal: options?.signal, timeoutMs: options?.timeoutMs }
+      )
+      return result as {
+        stdout: string
+        stderr: string
+      }
+    } catch (error) {
+      if (isJsonRpcMethodNotFoundError(error)) {
+        throw new Error(
+          'SSH clone support is unavailable on this relay. Reconnect the SSH target to update Orca on the host, then try again.'
+        )
+      }
+      throw error
+    } finally {
+      unsubscribe?.()
     }
   }
 
@@ -510,18 +661,21 @@ export class SshGitProvider implements IGitProvider {
 
   // Why: SSH worktrees need the remote URL from the relay-side .git/config
   // before local code can map it to a hosted source link.
+  private async readOriginRemoteUrl(worktreePath: string): Promise<string | null> {
+    try {
+      const result = await this.exec(['remote', 'get-url', 'origin'], worktreePath)
+      return result.stdout.trim() || null
+    } catch {
+      return null
+    }
+  }
+
   async getRemoteFileUrl(
     worktreePath: string,
     relativePath: string,
     line: number
   ): Promise<string | null> {
-    let remoteUrl: string
-    try {
-      const result = await this.exec(['remote', 'get-url', 'origin'], worktreePath)
-      remoteUrl = result.stdout.trim()
-    } catch {
-      return null
-    }
+    const remoteUrl = await this.readOriginRemoteUrl(worktreePath)
     if (!remoteUrl) {
       return null
     }
@@ -541,5 +695,13 @@ export class SshGitProvider implements IGitProvider {
     }
 
     return buildHostedRemoteFileUrl(remoteUrl, relativePath, defaultBranch, line)
+  }
+
+  async getRemoteCommitUrl(worktreePath: string, sha: string): Promise<string | null> {
+    const remoteUrl = await this.readOriginRemoteUrl(worktreePath)
+    if (!remoteUrl) {
+      return null
+    }
+    return buildHostedRemoteCommitUrl(remoteUrl, sha)
   }
 }

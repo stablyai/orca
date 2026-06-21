@@ -7,20 +7,22 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '../../store'
-import { AGENT_GENERATED_TAB_TITLES_TITLE } from './agent-generated-tab-title-copy'
-import { AGENT_STATUS_HOOKS_TITLE } from './agent-status-hooks-copy'
-import { getAgentAwakeDescription } from './agent-awake-copy'
+import { getAgentGeneratedTabTitlesTitle } from './agent-generated-tab-title-copy'
+import { getAgentStatusHooksTitle } from './agent-status-hooks-copy'
+import { getAgentAwakeDescription, getAgentAwakeTitle } from './agent-awake-copy'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import {
   AgentAvailabilityControl,
+  AgentPermissionsSetting,
   AgentGeneratedTabTitlesSetting,
   AgentStatusHooksSetting,
   AgentsPane,
-  AGENTS_PANE_SEARCH_ENTRIES,
+  getAgentsPaneSearchEntries,
   buildAgentAvailabilitySettingsUpdate,
   createAgentAvailabilityUpdateQueue
 } from './AgentsPane'
 import { matchesSettingsSearch } from './settings-search'
+import { TooltipProvider } from '../ui/tooltip'
 
 const detectedAgentsMock = vi.hoisted(() => ({
   detectedIds: ['claude'] as TuiAgent[] | null,
@@ -64,11 +66,15 @@ function renderPane(
   props: Partial<React.ComponentProps<typeof AgentsPane>> = {}
 ): string {
   return renderToStaticMarkup(
-    React.createElement(AgentsPane, {
-      settings,
-      updateSettings: vi.fn(),
-      ...props
-    })
+    React.createElement(
+      TooltipProvider,
+      null,
+      React.createElement(AgentsPane, {
+        settings,
+        updateSettings: vi.fn(),
+        ...props
+      })
+    )
   )
 }
 
@@ -141,7 +147,7 @@ describe('AgentsPane', () => {
     expect(markup).toContain('aria-checked="false"')
   })
 
-  it('keeps the agent location aligned with a WSL default terminal while capabilities load', () => {
+  it('does not render the legacy agent location control on Windows', () => {
     const markup = renderPane(
       {
         ...getDefaultSettings('/tmp'),
@@ -150,8 +156,9 @@ describe('AgentsPane', () => {
       { wslSupportedPlatform: true, wslCapabilitiesLoading: true }
     )
 
-    expect(markup).toContain('Show installed agents from WSL default.')
-    expect(markup).toContain('role="radio" aria-checked="true" disabled=""')
+    expect(markup).not.toContain('Agent location')
+    expect(markup).not.toContain('aria-label="Agent location"')
+    expect(markup).not.toContain('Show installed agents from WSL default.')
   })
 
   it('hides the WSL agent location controls on platforms without WSL support', () => {
@@ -182,8 +189,9 @@ describe('AgentsPane', () => {
       updateSettings
     })
 
-    const keepAwakeSwitch = findSwitch(element, 'Keep computer awake while agents are working')
-    expect(keepAwakeSwitch.props['aria-label']).toBe('Keep computer awake while agents are working')
+    const keepAwakeTitle = getAgentAwakeTitle()
+    const keepAwakeSwitch = findSwitch(element, keepAwakeTitle)
+    expect(keepAwakeSwitch.props['aria-label']).toBe(keepAwakeTitle)
     expect(keepAwakeSwitch.props['aria-checked']).toBe(false)
 
     const onClick = keepAwakeSwitch.props.onClick as () => void
@@ -204,7 +212,7 @@ describe('AgentsPane', () => {
       updateSettings
     })
 
-    const statusSwitch = findSwitchRow(element, AGENT_STATUS_HOOKS_TITLE)
+    const statusSwitch = findSwitchRow(element, getAgentStatusHooksTitle())
     expect(statusSwitch.props.checked).toBe(true)
 
     const onChange = statusSwitch.props.onChange as () => void
@@ -225,7 +233,7 @@ describe('AgentsPane', () => {
       updateSettings
     })
 
-    const generatedTitleSwitch = findSwitchRow(element, AGENT_GENERATED_TAB_TITLES_TITLE)
+    const generatedTitleSwitch = findSwitchRow(element, getAgentGeneratedTabTitlesTitle())
     expect(generatedTitleSwitch.props.checked).toBe(false)
 
     const onChange = generatedTitleSwitch.props.onChange as () => void
@@ -237,40 +245,64 @@ describe('AgentsPane', () => {
   })
 
   it('includes awake and sleep search metadata for the setting', () => {
-    expect(matchesSettingsSearch('awake', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
-    expect(matchesSettingsSearch('sleep', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
-    expect(matchesSettingsSearch('lid', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('awake', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('sleep', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('lid', getAgentsPaneSearchEntries())).toBe(true)
   })
 
   it('includes hook search metadata for the status setting', () => {
-    expect(matchesSettingsSearch('hooks', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
-    expect(matchesSettingsSearch('waiting', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
-    expect(matchesSettingsSearch('codex', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('hooks', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('waiting', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('codex', getAgentsPaneSearchEntries())).toBe(true)
   })
 
   it('includes generated title search metadata', () => {
-    expect(matchesSettingsSearch('generated title', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
-    expect(matchesSettingsSearch('stable session', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('generated title', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('stable session', getAgentsPaneSearchEntries())).toBe(true)
   })
 
   it('includes enable and hide search metadata for agent visibility', () => {
-    expect(matchesSettingsSearch('disable', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
-    expect(matchesSettingsSearch('hide', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('disable', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('hide', getAgentsPaneSearchEntries())).toBe(true)
+  })
+
+  it('includes agent permission search metadata', () => {
+    expect(matchesSettingsSearch('permission', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('yolo', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('manual', getAgentsPaneSearchEntries())).toBe(true)
+  })
+
+  it('applies the selected agent permission mode from settings without a mixed segment', () => {
+    const onChange = vi.fn()
+    const element = AgentPermissionsSetting({ mode: 'mixed', onChange })
+    const props = element.props.children.props.action.props as {
+      value: 'yolo'
+      onChange: (value: 'yolo' | 'manual' | 'mixed') => void
+      options: { value: string }[]
+    }
+
+    expect(props.value).toBe('yolo')
+    expect(props.options.map((option) => option.value)).toEqual(['yolo', 'manual'])
+    props.onChange('mixed')
+    expect(onChange).not.toHaveBeenCalled()
+
+    props.onChange('manual')
+    expect(onChange).toHaveBeenCalledWith('manual')
   })
 
   it('keeps catalog agent ids, labels, and commands discoverable in settings search', () => {
     for (const agent of AGENT_CATALOG) {
-      expect(matchesSettingsSearch(agent.id, AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
-      expect(matchesSettingsSearch(agent.label, AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
-      expect(matchesSettingsSearch(agent.cmd, AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+      expect(matchesSettingsSearch(agent.id, getAgentsPaneSearchEntries())).toBe(true)
+      expect(matchesSettingsSearch(agent.label, getAgentsPaneSearchEntries())).toBe(true)
+      expect(matchesSettingsSearch(agent.cmd, getAgentsPaneSearchEntries())).toBe(true)
     }
 
-    expect(matchesSettingsSearch('GitHub Copilot', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
-    expect(matchesSettingsSearch('open claude', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
-    expect(matchesSettingsSearch('command-code', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
-    expect(matchesSettingsSearch('command code', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
-    expect(matchesSettingsSearch('agy', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
-    expect(matchesSettingsSearch('cursor-agent', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('GitHub Copilot', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('open claude', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('command-code', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('command code', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('agy', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('cursor-agent', getAgentsPaneSearchEntries())).toBe(true)
   })
 
   it('renders per-agent availability as labeled status choices without row explanation copy', () => {
@@ -343,9 +375,11 @@ describe('AgentsPane', () => {
     })
   })
 
-  it('includes agent location search metadata', () => {
-    expect(matchesSettingsSearch('wsl', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
-    expect(matchesSettingsSearch('windows', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+  it('does not include legacy agent location search metadata', () => {
+    expect(matchesSettingsSearch('agent location', getAgentsPaneSearchEntries())).toBe(false)
+    expect(matchesSettingsSearch('installed agents in wsl', getAgentsPaneSearchEntries())).toBe(
+      false
+    )
   })
 
   it('serializes rapid availability writes against the latest settings snapshot', async () => {

@@ -6,6 +6,7 @@ import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
+import { translate } from '@/i18n/i18n'
 
 export function GeneralUpdateSettingsSection(): React.JSX.Element {
   const updateStatus = useAppStore((s) => s.updateStatus)
@@ -59,13 +60,26 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
   return (
     <section key="updates" className="space-y-4">
       <SettingsSubsectionHeader
-        title="Updates"
-        description={`Current version: ${appVersion ?? '...'}`}
+        title={translate(
+          'auto.components.settings.GeneralUpdateSettingsSection.f2b1ccc12a',
+          'Updates'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralUpdateSettingsSection.d91ebfb87e',
+          'Current version: {{value0}}',
+          { value0: appVersion ?? '...' }
+        )}
       />
 
       <SearchableSetting
-        title="Check for Updates"
-        description="Check for app updates and install a newer Orca version."
+        title={translate(
+          'auto.components.settings.GeneralUpdateSettingsSection.e1a647adc5',
+          'Check for Updates'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralUpdateSettingsSection.ceb579abaf',
+          'Check for app updates and install a newer Orca version.'
+        )}
         keywords={['update', 'version', 'release notes', 'download']}
         className="space-y-3"
       >
@@ -89,7 +103,10 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
             ) : (
               <RefreshCw className="size-3.5" />
             )}
-            Check for Updates
+            {translate(
+              'auto.components.settings.GeneralUpdateSettingsSection.e1a647adc5',
+              'Check for Updates'
+            )}
           </Button>
 
           {updateStatus.state === 'available' ? (
@@ -98,31 +115,60 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
               size="sm"
               onClick={() => {
                 void window.api.updater.download().catch((error) => {
-                  toast.error('Could not start the update download.', {
-                    description: String((error as Error)?.message ?? error)
-                  })
+                  toast.error(
+                    translate(
+                      'auto.components.settings.GeneralUpdateSettingsSection.02dc082e70',
+                      'Could not start the update download.'
+                    ),
+                    {
+                      description: String((error as Error)?.message ?? error)
+                    }
+                  )
                 })
               }}
               className="gap-2"
             >
               <Download className="size-3.5" />
-              Install Update ({updateStatus.version})
+              {translate(
+                'auto.components.settings.GeneralUpdateSettingsSection.42717918f4',
+                'Install Update ('
+              )}
+              {updateStatus.version})
             </Button>
           ) : updateStatus.state === 'downloaded' ? (
             <Button variant="default" size="sm" onClick={handleRestartToUpdate} className="gap-2">
               <Download className="size-3.5" />
-              Restart to Update ({updateStatus.version})
+              {translate(
+                'auto.components.settings.GeneralUpdateSettingsSection.f44299636f',
+                'Restart to Update ('
+              )}
+              {updateStatus.version})
             </Button>
           ) : null}
         </div>
 
         <p className="text-xs text-muted-foreground">
-          {updateStatus.state === 'idle' && 'Updates are checked automatically on launch.'}
-          {updateStatus.state === 'checking' && 'Checking for updates...'}
+          {updateStatus.state === 'idle' &&
+            translate(
+              'auto.components.settings.GeneralUpdateSettingsSection.d69a09b672',
+              'Updates are checked automatically on launch.'
+            )}
+          {updateStatus.state === 'checking' &&
+            translate(
+              'auto.components.settings.GeneralUpdateSettingsSection.31fd7150cf',
+              'Checking for updates...'
+            )}
           {updateStatus.state === 'available' && (
             <>
-              Version {updateStatus.version} is available. Click &quot;Install Update&quot; to
-              download and install it.{' '}
+              {translate(
+                'auto.components.settings.GeneralUpdateSettingsSection.a6b37929dc',
+                'Version'
+              )}
+              {updateStatus.version}{' '}
+              {translate(
+                'auto.components.settings.GeneralUpdateSettingsSection.8311da27ba',
+                'is available. Click "Install Update" to download and install it.'
+              )}{' '}
               <a
                 href={
                   updateStatus.releaseUrl ??
@@ -132,16 +178,35 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
                 rel="noopener noreferrer"
                 className="underline hover:text-foreground"
               >
-                Release notes
+                {translate(
+                  'auto.components.settings.GeneralUpdateSettingsSection.8a52ca1d02',
+                  'Release notes'
+                )}
               </a>
             </>
           )}
-          {updateStatus.state === 'not-available' && 'You\u2019re on the latest version.'}
+          {updateStatus.state === 'not-available' &&
+            translate(
+              'auto.components.settings.GeneralUpdateSettingsSection.f40d88390d',
+              'You’re on the latest version.'
+            )}
           {updateStatus.state === 'downloading' &&
-            `Downloading v${updateStatus.version}... ${updateStatus.percent}%`}
+            translate(
+              'auto.components.settings.GeneralUpdateSettingsSection.2a48034c4c',
+              'Downloading v{{value0}}... {{value1}}%',
+              { value0: updateStatus.version, value1: updateStatus.percent }
+            )}
           {updateStatus.state === 'downloaded' && (
             <>
-              Version {updateStatus.version} is ready to install.{' '}
+              {translate(
+                'auto.components.settings.GeneralUpdateSettingsSection.a6b37929dc',
+                'Version'
+              )}
+              {updateStatus.version}{' '}
+              {translate(
+                'auto.components.settings.GeneralUpdateSettingsSection.d89806cc89',
+                'is ready to install.'
+              )}{' '}
               <a
                 href={
                   updateStatus.releaseUrl ??
@@ -151,7 +216,10 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
                 rel="noopener noreferrer"
                 className="underline hover:text-foreground"
               >
-                Release notes
+                {translate(
+                  'auto.components.settings.GeneralUpdateSettingsSection.8a52ca1d02',
+                  'Release notes'
+                )}
               </a>
             </>
           )}
@@ -162,8 +230,16 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
             // 'downloaded' state). Label accordingly so a download failure
             // isn't mislabeled as a "check" failure. Mirrors UpdateCard.tsx.
             (updateVersionRef.current
-              ? `Update error. ${updateStatus.message}`
-              : `Update check failed. ${updateStatus.message}`)}
+              ? translate(
+                  'auto.components.settings.GeneralUpdateSettingsSection.b9ad70c30d',
+                  'Update error. {{value0}}',
+                  { value0: updateStatus.message }
+                )
+              : translate(
+                  'auto.components.settings.GeneralUpdateSettingsSection.bd79d412f0',
+                  'Update check failed. {{value0}}',
+                  { value0: updateStatus.message }
+                ))}
         </p>
       </SearchableSetting>
     </section>

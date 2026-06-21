@@ -6,6 +6,7 @@ describe('SESSION_RELEVANT_FIELDS', () => {
   // A snapshot field omitted here would persist stale data after that field changes.
   const fixture: Record<keyof WorkspaceSessionSnapshot, true> = {
     activeRepoId: true,
+    activeWorkspaceKey: true,
     activeWorktreeId: true,
     activeTabId: true,
     tabsByWorktree: true,
@@ -30,7 +31,8 @@ describe('SESSION_RELEVANT_FIELDS', () => {
     worktreesByRepo: true,
     lastKnownRelayPtyIdByTabId: true,
     lastVisitedAtByWorktreeId: true,
-    defaultTerminalTabsAppliedByWorktreeId: true
+    defaultTerminalTabsAppliedByWorktreeId: true,
+    sleepingAgentSessionsByPaneKey: true
   }
 
   it('contains every key of WorkspaceSessionSnapshot', () => {

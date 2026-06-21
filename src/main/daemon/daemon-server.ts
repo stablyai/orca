@@ -5,11 +5,13 @@ import { createServer, type Server, type Socket } from 'net'
 import { randomUUID } from 'crypto'
 import { performance } from 'perf_hooks'
 import { writeFileSync, chmodSync, unlinkSync } from 'fs'
+import { StringDecoder } from 'string_decoder'
 import { encodeNdjson, createNdjsonParser } from './ndjson'
 import { TerminalHost } from './terminal-host'
 import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import type { SubprocessHandle } from './session'
+import { checkPtySpawnHealth } from './pty-subprocess'
 import {
   PROTOCOL_VERSION,
   NOTIFY_PREFIX,
@@ -21,6 +23,7 @@ import {
 export type DaemonServerOptions = {
   socketPath: string
   tokenPath: string
+  ptySpawnHealthCheck?: () => Promise<void>
   spawnSubprocess: (opts: {
     sessionId: string
     cols: number
@@ -44,6 +47,7 @@ export class DaemonServer {
   private host: TerminalHost
   private socketPath: string
   private tokenPath: string
+  private ptySpawnHealthCheck: () => Promise<void>
 
   private clients = new Map<string, ConnectedClient>()
   private streamDataBatcher = new DaemonStreamDataBatcher((clientId) => this.clients.get(clientId))
@@ -61,6 +65,7 @@ export class DaemonServer {
     this.tokenPath = opts.tokenPath
     this.token = randomUUID()
     this.host = new TerminalHost({ spawnSubprocess: opts.spawnSubprocess })
+    this.ptySpawnHealthCheck = opts.ptySpawnHealthCheck ?? checkPtySpawnHealth
   }
 
   async start(): Promise<void> {
@@ -113,6 +118,9 @@ export class DaemonServer {
   }
 
   private handleConnection(socket: Socket): void {
+    // Why: clients can send multibyte prompt/input text split across socket
+    // chunks; keep UTF-8 sequences intact before NDJSON parsing.
+    const decoder = new StringDecoder('utf8')
     const parser = createNdjsonParser(
       (msg) => this.handleFirstMessage(socket, msg, parser),
       () => {
@@ -120,7 +128,7 @@ export class DaemonServer {
       }
     )
 
-    socket.on('data', (chunk) => parser.feed(chunk.toString()))
+    socket.on('data', (chunk) => parser.feed(decoder.write(chunk)))
     socket.on('error', () => socket.destroy())
   }
 
@@ -179,6 +187,9 @@ export class DaemonServer {
   }
 
   private setupControlSocket(socket: Socket, clientId: string): void {
+    // Why: terminal writes and startup commands can contain emoji/Unicode.
+    // Decoding per Buffer would corrupt split multibyte sequences.
+    const decoder = new StringDecoder('utf8')
     const parser = createNdjsonParser(
       (msg) => this.handleRequest(socket, clientId, msg as DaemonRequest),
       () => {} // Ignore parse errors
@@ -186,7 +197,7 @@ export class DaemonServer {
 
     // Remove the initial data listener and replace with the RPC parser
     socket.removeAllListeners('data')
-    socket.on('data', (chunk) => parser.feed(chunk.toString()))
+    socket.on('data', (chunk) => parser.feed(decoder.write(chunk)))
 
     socket.on('close', () => {
       const client = this.clients.get(clientId)
@@ -263,10 +274,14 @@ export class DaemonServer {
           env: p.env,
           envToDelete: p.envToDelete,
           command: p.command,
+          startupCommandDelivery: p.startupCommandDelivery,
           shellOverride: p.shellOverride,
           terminalWindowsWslDistro: p.terminalWindowsWslDistro,
           terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
           shellReadySupported: p.shellReadySupported,
+          ...(p.shellReadyTimeoutMs !== undefined
+            ? { shellReadyTimeoutMs: p.shellReadyTimeoutMs }
+            : {}),
           streamClient: {
             onData: (data) => {
               const lastInputAt = this.lastInputAtBySessionId.get(p.sessionId)
@@ -334,7 +349,7 @@ export class DaemonServer {
 
       case 'kill':
         this.lastInputAtBySessionId.delete(request.payload.sessionId)
-        this.host.kill(request.payload.sessionId)
+        this.host.kill(request.payload.sessionId, { immediate: request.payload.immediate })
         return {}
 
       case 'signal':
@@ -362,11 +377,25 @@ export class DaemonServer {
       case 'getSnapshot':
         return { snapshot: this.host.getSnapshot(request.payload.sessionId) }
 
+      case 'takePendingOutput':
+        // Why no await before this call: with includeSnapshot, drain and
+        // serialize must share one synchronous turn — an intervening await
+        // would let PTY data land in between, and cold restore would replay
+        // those bytes on top of a snapshot that already contains them.
+        return this.host.takePendingOutput(
+          request.payload.sessionId,
+          request.payload.includeSnapshot === true
+        )
+
       case 'ping':
         return { pong: true }
 
       case 'systemResolverHealth':
         return { health: await readCurrentProcessMacSystemResolverHealth() }
+
+      case 'ptySpawnHealth':
+        await this.ptySpawnHealthCheck()
+        return { healthy: true }
 
       case 'shutdown':
         if (request.payload.killSessions) {

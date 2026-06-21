@@ -64,7 +64,9 @@ export default function CacheTimer({
           )}
         >
           <Timer className="size-2.5" />
-          <span>{expired ? 'expired' : label}</span>
+          {/* When expired, the red icon alone conveys state — the countdown
+              text is only meaningful while the cache is still alive. */}
+          {!expired && <span>{label}</span>}
         </div>
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={8}>

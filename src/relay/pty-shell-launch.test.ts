@@ -96,6 +96,32 @@ describe('getRelayShellLaunchConfig', () => {
     }
   )
 
+  it('does not pass POSIX login flags to Windows shells', () => {
+    expect(
+      getRelayShellLaunchConfig('C:\\Windows\\System32\\cmd.exe', { HOME: homeDir }, 'win32')
+    ).toEqual({
+      args: [],
+      env: {}
+    })
+    expect(
+      getRelayShellLaunchConfig(
+        'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+        { HOME: homeDir },
+        'win32'
+      )
+    ).toEqual({
+      args: ['-NoLogo'],
+      env: {}
+    })
+  })
+
+  it('keeps PowerShell Core on POSIX remotes as a login shell', () => {
+    expect(getRelayShellLaunchConfig('/usr/bin/pwsh', { HOME: homeDir }, 'linux')).toEqual({
+      args: ['-l'],
+      env: {}
+    })
+  })
+
   it.skipIf(process.platform === 'win32')('rewrites stale persistent wrapper files', () => {
     const zshRoot = join(homeDir, '.orca-relay', 'shell-ready', 'zsh')
     mkdirSync(zshRoot, { recursive: true })
@@ -122,6 +148,37 @@ describe('getRelayShellLaunchConfig', () => {
       expect(config.env).toEqual({})
       expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
       expect(bashRc).toContain('printf "\\033]133;C\\007"')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'enables the shell-ready marker for requested zsh startup delivery',
+    () => {
+      const config = getRelayShellLaunchConfig('/bin/zsh', { HOME: homeDir }, 'linux', {
+        emitReadyMarker: true
+      })
+      const zshRoot = join(homeDir, '.orca-relay', 'shell-ready', 'zsh')
+      const zlogin = readFileSync(join(zshRoot, '.zlogin'), 'utf8')
+
+      expect(config.args).toEqual(['-l'])
+      expect(config.env.ZDOTDIR).toBe(zshRoot)
+      expect(config.env.ORCA_SHELL_READY_MARKER).toBe('1')
+      expect(zlogin).toContain('zle -N zle-line-init __orca_prompt_mark')
+      expect(zlogin).toContain('printf "\\033]777;orca-shell-ready\\007"')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'enables the shell-ready marker for requested bash startup delivery',
+    () => {
+      const config = getRelayShellLaunchConfig('/bin/bash', { HOME: homeDir }, 'linux', {
+        emitReadyMarker: true
+      })
+      const bashRc = readFileSync(config.args[1] as string, 'utf8')
+
+      expect(config.env.ORCA_SHELL_READY_MARKER).toBe('1')
+      expect(bashRc).toContain('__orca_append_prompt_command "__orca_prompt_mark"')
+      expect(bashRc).toContain('printf "\\033]777;orca-shell-ready\\007"')
     }
   )
 

@@ -27,7 +27,15 @@ vi.mock('./gh-utils', async () => {
   }
 })
 
-import { createIssue, getIssue, listIssues, updateIssue } from './issues'
+import {
+  addIssueComment,
+  createIssue,
+  getIssue,
+  listAssignableUsers,
+  listIssues,
+  listLabels,
+  updateIssue
+} from './issues'
 
 describe('issue source operations', () => {
   beforeEach(() => {
@@ -62,6 +70,71 @@ describe('issue source operations', () => {
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       ['api', '--cache', '300s', 'repos/stablyai/orca/issues/923'],
       { cwd: '/repo-root' }
+    )
+  })
+
+  it('routes local WSL issue operations through repo resolution and gh execution options', async () => {
+    const localGitOptions = { wslDistro: 'Ubuntu' }
+    getIssueOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+    resolveIssueSourceMock.mockResolvedValue({
+      source: { owner: 'stablyai', repo: 'orca' },
+      fellBack: false
+    })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 923,
+          title: 'Use upstream issues',
+          state: 'open',
+          html_url: 'https://github.com/stablyai/orca/issues/923',
+          labels: []
+        })
+      })
+      .mockResolvedValueOnce({ stdout: '[]' })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 924,
+          html_url: 'https://github.com/stablyai/orca/issues/924'
+        })
+      })
+      .mockResolvedValueOnce({ stdout: '' })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          id: 1,
+          user: { login: 'octo', avatar_url: '', type: 'User' },
+          body: 'Comment',
+          created_at: '2026-06-16T00:00:00.000Z',
+          html_url: 'https://github.com/stablyai/orca/issues/923#issuecomment-1'
+        })
+      })
+      .mockResolvedValueOnce({ stdout: 'bug\nfrontend\n' })
+      .mockResolvedValueOnce({ stdout: '{"login":"octo","avatar_url":""}\n' })
+
+    await getIssue('/repo-root', 923, null, localGitOptions)
+    await listIssues('/repo-root', 5, undefined, null, localGitOptions)
+    await createIssue(
+      '/repo-root',
+      'New issue',
+      'Body',
+      undefined,
+      null,
+      undefined,
+      localGitOptions
+    )
+    await updateIssue('/repo-root', 923, { body: 'Updated' }, null, localGitOptions)
+    await addIssueComment('/repo-root', 923, 'Comment', null, null, localGitOptions)
+    await listLabels('/repo-root', undefined, null, localGitOptions)
+    await listAssignableUsers('/repo-root', undefined, null, localGitOptions)
+
+    expect(getIssueOwnerRepoMock).toHaveBeenCalledWith('/repo-root', null, localGitOptions)
+    expect(resolveIssueSourceMock).toHaveBeenCalledWith(
+      '/repo-root',
+      undefined,
+      null,
+      localGitOptions
+    )
+    expect(ghExecFileAsyncMock.mock.calls.every((call) => call[1]?.wslDistro === 'Ubuntu')).toBe(
+      true
     )
   })
 

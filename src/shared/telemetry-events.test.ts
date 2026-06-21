@@ -12,10 +12,119 @@ import {
   agentKindSchema,
   errorClassSchema,
   eventSchemas,
+  isCohortExtendedEvent,
   SETTINGS_CHANGED_WHITELIST,
   settingsChangedKeySchema
 } from './telemetry-events'
+import { FEATURE_INTERACTION_IDS, getFeatureInteractionCategory } from './feature-interactions'
 import { appStarSourceSchema } from './gh-star-source'
+
+describe('feature_interaction_usage_bucket_reached schema', () => {
+  it('accepts a valid bucket payload', () => {
+    const parsed = eventSchemas.feature_interaction_usage_bucket_reached.safeParse({
+      feature_id: 'browser-tab-created',
+      feature_category: 'browser',
+      count_bucket: 'count_3_4',
+      bucket_source: 'crossed_now',
+      nth_repo_added: 2
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('is in the runtime cohort-injection roster', () => {
+    expect(isCohortExtendedEvent('feature_interaction_usage_bucket_reached')).toBe(true)
+  })
+
+  it('keeps the feature id enum in sync with the catalog', () => {
+    const schema = eventSchemas.feature_interaction_usage_bucket_reached
+    for (const feature_id of FEATURE_INTERACTION_IDS) {
+      expect(
+        schema.safeParse({
+          feature_id,
+          feature_category: getFeatureInteractionCategory(feature_id),
+          count_bucket: 'count_1',
+          bucket_source: 'crossed_now'
+        }).success
+      ).toBe(true)
+    }
+  })
+
+  it('rejects unknown enum values and mismatched categories', () => {
+    const valid = {
+      feature_id: 'github-tasks',
+      feature_category: 'task_management',
+      count_bucket: 'count_1',
+      bucket_source: 'observed_existing'
+    }
+    expect(
+      eventSchemas.feature_interaction_usage_bucket_reached.safeParse({
+        ...valid,
+        feature_id: 'unknown-feature'
+      }).success
+    ).toBe(false)
+    expect(
+      eventSchemas.feature_interaction_usage_bucket_reached.safeParse({
+        ...valid,
+        feature_category: 'browser'
+      }).success
+    ).toBe(false)
+    expect(
+      eventSchemas.feature_interaction_usage_bucket_reached.safeParse({
+        ...valid,
+        count_bucket: 'count_4'
+      }).success
+    ).toBe(false)
+    expect(
+      eventSchemas.feature_interaction_usage_bucket_reached.safeParse({
+        ...valid,
+        bucket_source: 'renderer'
+      }).success
+    ).toBe(false)
+  })
+
+  it('rejects raw privacy fields via .strict()', () => {
+    const rawFields = [
+      'prompt',
+      'command',
+      'path',
+      'repo',
+      'branch',
+      'url',
+      'hostname',
+      'error',
+      'text',
+      'query',
+      'result_label',
+      'workspace_name',
+      'setting_name',
+      'target_id',
+      'annotation_text',
+      'dom_snippet',
+      'screenshot',
+      'page_title',
+      'trusted_directory',
+      'trigger_x',
+      'trigger_y',
+      'focus_state',
+      'minimize_state',
+      'audio',
+      'transcript',
+      'model',
+      'device',
+      'error_detail'
+    ]
+    for (const field of rawFields) {
+      const parsed = eventSchemas.feature_interaction_usage_bucket_reached.safeParse({
+        feature_id: 'browser-annotations-sent-to-agent',
+        feature_category: 'browser',
+        count_bucket: 'count_1',
+        bucket_source: 'crossed_now',
+        [field]: 'raw'
+      })
+      expect(parsed.success).toBe(false)
+    }
+  })
+})
 
 describe('app_starred_orca schema', () => {
   it('accepts every declared app star source', () => {
@@ -46,6 +155,129 @@ describe('app_starred_orca schema', () => {
       repo: 'stablyai/orca'
     })
     expect(parsed.success).toBe(false)
+  })
+})
+
+describe('star_nag_outcome schema', () => {
+  const valid = {
+    outcome: 'shown',
+    source: 'threshold',
+    mode: 'gh',
+    threshold: 35,
+    agents_since_baseline: 35,
+    agents_since_baseline_bucket: '35-69',
+    nth_repo_added: 2
+  }
+
+  it('accepts a strict valid payload with cohort context', () => {
+    expect(eventSchemas.star_nag_outcome.safeParse(valid).success).toBe(true)
+  })
+
+  it('is in the runtime cohort-injection roster', () => {
+    expect(isCohortExtendedEvent('star_nag_outcome')).toBe(true)
+  })
+
+  it('accepts next_threshold only as a positive integer for deferrals', () => {
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({
+        ...valid,
+        outcome: 'dismissed',
+        next_threshold: 70
+      }).success
+    ).toBe(true)
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({
+        ...valid,
+        outcome: 'later',
+        next_threshold: 70
+      }).success
+    ).toBe(true)
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, next_threshold: 0 }).success).toBe(
+      false
+    )
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, next_threshold: 1.5 }).success).toBe(
+      false
+    )
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({ ...valid, outcome: 'shown', next_threshold: 70 })
+        .success
+    ).toBe(false)
+  })
+
+  it('accepts cooldown_days only for deferrals', () => {
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({
+        ...valid,
+        outcome: 'later',
+        cooldown_days: 30
+      }).success
+    ).toBe(true)
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({
+        ...valid,
+        outcome: 'dismissed',
+        cooldown_days: 30
+      }).success
+    ).toBe(true)
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, cooldown_days: 0 }).success).toBe(
+      false
+    )
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({
+        ...valid,
+        outcome: 'opened_repo',
+        cooldown_days: 30
+      }).success
+    ).toBe(false)
+  })
+
+  it('accepts new star nag action outcomes', () => {
+    for (const outcome of [
+      'star_clicked',
+      'direct_star_succeeded',
+      'direct_star_failed',
+      'opened_repo',
+      'later'
+    ]) {
+      expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, outcome }).success).toBe(true)
+    }
+  })
+
+  it('rejects unknown outcome source mode and bucket values', () => {
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, outcome: 'ignored' }).success).toBe(
+      false
+    )
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, source: 'renderer' }).success).toBe(
+      false
+    )
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, mode: 'desktop' }).success).toBe(
+      false
+    )
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({
+        ...valid,
+        agents_since_baseline_bucket: '35+'
+      }).success
+    ).toBe(false)
+  })
+
+  it('rejects malformed numeric fields and raw extra fields', () => {
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, threshold: -1 }).success).toBe(false)
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, threshold: 1.5 }).success).toBe(
+      false
+    )
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({ ...valid, agents_since_baseline: -1 }).success
+    ).toBe(false)
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, nth_repo_added: -1 }).success).toBe(
+      false
+    )
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, error: 'gh failed' }).success).toBe(
+      false
+    )
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({ ...valid, url: 'https://github.com' }).success
+    ).toBe(false)
   })
 })
 

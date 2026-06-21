@@ -17,6 +17,12 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Why: hover-reveal controls (sidebar/row action buttons) hide with `opacity-0`
+   and fade in via `group-hover`. Touch devices have no hover, so those controls
+   stay invisible. Gate the hide behind `can-hover:` so touch (hover: none) keeps
+   them visible while pointer devices preserve the reveal-on-hover behavior. */
+@custom-variant can-hover (@media (hover: hover));
+
 .theme-transition-disabled *,
 .theme-transition-disabled *::before,
 .theme-transition-disabled *::after {
@@ -52,6 +58,12 @@
   --color-chart-5: var(--chart-5);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-worktree-sidebar: var(--worktree-sidebar);
+  --color-worktree-sidebar-foreground: var(--worktree-sidebar-foreground);
+  --color-worktree-sidebar-accent: var(--worktree-sidebar-accent);
+  --color-worktree-sidebar-accent-foreground: var(--worktree-sidebar-accent-foreground);
+  --color-worktree-sidebar-border: var(--worktree-sidebar-border);
+  --color-worktree-sidebar-ring: var(--worktree-sidebar-ring);
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-accent: var(--sidebar-accent);
@@ -137,6 +149,12 @@
   --chart-3: var(--color-blue-600);
   --chart-4: var(--color-blue-700);
   --chart-5: var(--color-blue-800);
+  --worktree-sidebar: #f5f5f5;
+  --worktree-sidebar-foreground: #0a0a0a;
+  --worktree-sidebar-accent: #eaeaea;
+  --worktree-sidebar-accent-foreground: #171717;
+  --worktree-sidebar-border: #e5e5e5;
+  --worktree-sidebar-ring: #a1a1a1;
   --sidebar: #fafafa;
   --sidebar-foreground: #0a0a0a;
   --sidebar-primary: #171717;
@@ -210,6 +228,14 @@
   --chart-3: var(--color-blue-600);
   --chart-4: var(--color-blue-700);
   --chart-5: var(--color-blue-800);
+  /* Why: light mode sets worktree-sidebar to secondary (#f5f5f5); mirror that
+     lift in dark mode so the panel reads clearly above #0a0a0a canvas. */
+  --worktree-sidebar: #2a2a2a;
+  --worktree-sidebar-foreground: #fafafa;
+  --worktree-sidebar-accent: #353535;
+  --worktree-sidebar-accent-foreground: #fafafa;
+  --worktree-sidebar-border: rgb(255 255 255 / 0.1);
+  --worktree-sidebar-ring: #737373;
   --sidebar: #171717;
   --sidebar-foreground: #fafafa;
   --sidebar-primary: #1447e6;
@@ -258,6 +284,31 @@
   --linear-priority-bar-inactive-fill: color-mix(in srgb, lch(39.576 1.25 282) 62%, transparent);
 }
 
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
+  /* Why: Sonner's dark-theme defaults can resolve the close icon and button
+     background to the same color; keep the X readable on both Orca themes. */
+  color: var(--popover-foreground);
+  background: var(--popover);
+  border-color: rgb(0 0 0 / 0.14);
+}
+
+[data-sonner-toaster][data-sonner-theme='dark']
+  [data-sonner-toast][data-styled='true']
+  [data-close-button] {
+  color: var(--popover-foreground);
+  background: var(--popover);
+  border-color: rgb(255 255 255 / 0.14);
+}
+
+.dark [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
+  border-color: rgb(255 255 255 / 0.14);
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button]:hover {
+  color: var(--accent-foreground);
+  background: var(--accent);
+}
+
 /* ── Base Layer ──────────────────────────────────────── */
 
 @layer base {
@@ -272,7 +323,11 @@
     margin: 0;
     padding: 0;
     overflow: hidden;
-    height: 100vh;
+    /* Why: dvh tracks the visible viewport so the web app shell isn't taller
+       than the screen when a mobile browser's URL bar is shown (100vh = the
+       large viewport, which forces a ~40-100px scroll). In Electron there is
+       no browser chrome, so dvh resolves identically to the window height. */
+    height: 100dvh;
     font-family: var(
       --app-font-family,
       'Geist',
@@ -441,27 +496,46 @@
   height: 0;
 }
 
-/* Hide tab-strip scrollbars to prevent drag-time scrollbar flashes */
-.terminal-tab-strip {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-.terminal-tab-strip::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-}
-
+/* Why: horizontal tab strips scroll via chevrons, wheel, and trackpad; a
+   native scrollbar thumb overlays tab labels and looks broken. */
+.terminal-tab-strip,
 .project-view-tab-strip {
-  /* Why: project views load after the table shell; keeping the row stable
-     prevents the list below from jumping when the tabs arrive. */
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
 
+.terminal-tab-strip::-webkit-scrollbar,
 .project-view-tab-strip::-webkit-scrollbar {
   width: 0;
   height: 0;
+}
+
+/* Why: mask fades avoid painting card-colored overlays that mismatch active tabs. */
+.terminal-tab-strip--fade-start.terminal-tab-strip--fade-end {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 1.5rem,
+    #000 calc(100% - 1.5rem),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 1.5rem,
+    #000 calc(100% - 1.5rem),
+    transparent
+  );
+}
+
+.terminal-tab-strip--fade-start:not(.terminal-tab-strip--fade-end) {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 1.5rem, #000 100%);
+  mask-image: linear-gradient(to right, transparent, #000 1.5rem, #000 100%);
+}
+
+.terminal-tab-strip--fade-end:not(.terminal-tab-strip--fade-start) {
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
 }
 
 /* Tab activity affordance (amber wash) is rendered as a React DOM child in
@@ -472,7 +546,7 @@
 /* ── Layout ──────────────────────────────────────────── */
 
 #root {
-  height: 100vh;
+  height: 100dvh;
   width: 100vw;
   overflow: hidden;
 }
@@ -480,7 +554,7 @@
 .app-layout {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100dvh;
   width: 100vw;
   overflow: hidden;
 }
@@ -526,7 +600,9 @@
   align-items: center;
   overflow: hidden;
   flex-shrink: 0;
-  background: var(--bg-titlebar, var(--card));
+  /* Why: in workspace view this strip sits directly above the worktree
+     sidebar — match its surface so the left column reads as one panel. */
+  background: var(--worktree-sidebar);
   /* Why: draw the divider via inset shadow instead of border-bottom so the
      flex content area spans the full 36px. With border-bottom + border-box,
      the content area shrinks to 35px and flex-centered controls land at
@@ -540,15 +616,21 @@
   user-select: none;
 }
 
+/* Why: when the sidebar is collapsed this header floats over the tab strip,
+   so keep the standard titlebar surface instead of the sidebar tint. */
+.titlebar-left-floating {
+  background: var(--bg-titlebar, var(--card));
+}
+
 .titlebar-traffic-light-pad {
   width: calc(80px / var(--ui-zoom-factor, 1));
   flex-shrink: 0;
 }
 
-/* Why: small identity anchor on Windows where the native window chrome is
-   hidden. Sized to sit comfortably in the 36px titlebar with a little
-   horizontal breathing room. The SVG fill is white; light mode inverts it to
-   black so it reads on the light titlebar background. */
+/* Why: small identity anchor on desktop custom titlebars where native window
+   chrome is hidden. Sized to sit comfortably in the 36px titlebar with a
+   little horizontal breathing room. The SVG fill is white; light mode inverts
+   it to black so it reads on the light titlebar background. */
 .titlebar-logo {
   height: 16px;
   flex-shrink: 0;
@@ -562,10 +644,9 @@
   filter: invert(1);
 }
 
-/* Why: Windows-only custom title bar buttons that replace the native OS chrome
-   removed by titleBarStyle:'hidden'.  Anchored to the top-right corner of the
-   viewport so they overlay any layout mode (full titlebar, workspace split, etc.)
-   and stay accessible at all times. */
+/* Why: desktop custom title bar buttons replace hidden native OS chrome.
+   Anchored to the top-right corner of the viewport so they overlay any layout
+   mode (full titlebar, workspace split, etc.) and stay accessible at all times. */
 .window-controls {
   position: fixed;
   top: 0;
@@ -604,7 +685,7 @@
 
 /* Why: flex spacer that reserves the width occupied by the three window-control
    buttons (3 × 46px) so that the preceding titlebar content is not obscured by
-   the fixed-position overlay on Windows. */
+   the fixed-position overlay when custom desktop chrome is active. */
 .window-controls-titlebar-spacer {
   flex-shrink: 0;
   width: var(--window-controls-width, 0px);
@@ -619,29 +700,28 @@
   -webkit-app-region: no-drag;
 }
 
-/* Why: the right sidebar header extends to the window's right edge. On Windows
-   the fixed-position window-controls overlay sits on top of that edge, so we
-   add matching padding-right so the header's close button (pr-1) isn't hidden
-   behind the overlay. --window-controls-width is 0px on non-Windows. */
+/* Why: the right sidebar header extends to the window's right edge. When custom
+   desktop chrome is active, the fixed-position window-controls overlay sits on
+   top of that edge, so we add matching padding-right so the header's close
+   button (pr-1) isn't hidden behind the overlay. */
 .right-sidebar-header-inset {
   padding-right: var(--window-controls-width, 0px);
 }
 
 /* Why: in side-bar activity-bar mode the icon strip sits flush against the
    right window edge. The fixed-position window-controls overlay (height 36px,
-   width 138px) covers the top-right corner, so the topmost sidebar icons are
-   unreachable without this offset. --window-controls-height is 0px on
-   non-Windows so this rule is a no-op there. */
+   width 138px) covers the top-right corner when custom desktop chrome is
+   active, so the topmost sidebar icons are unreachable without this offset. */
 .side-activity-bar-windows-inset {
   padding-top: var(--window-controls-height, 0px);
 }
 
 /* Why: in side activity-bar mode the panel header does NOT extend to the window
    edge — the 40px icon strip sits to its right. But the window-controls overlay
-   is 138px wide, so it still overlaps the panel by (138 - 40) = 98px. Apply
-   exactly that remainder as padding-right so the close button clears the
-   minimize button. max(0px, ...) keeps this a no-op on non-Windows where the
-   var is 0px and the subtraction would otherwise go negative. */
+   is 138px wide when custom desktop chrome is active, so it still overlaps the
+   panel by (138 - 40) = 98px. Apply exactly that remainder as padding-right so
+   the close button clears the minimize button. max(0px, ...) keeps this a no-op
+   when the var is 0px and the subtraction would otherwise go negative. */
 .right-sidebar-header-side-inset {
   padding-right: max(0px, calc(var(--window-controls-width, 0px) - 40px));
 }
@@ -705,6 +785,12 @@
   white-space: nowrap;
   overflow: hidden;
   cursor: pointer;
+}
+
+/* Why: when the app name sits inside the worktree sidebar header, it should
+   inherit that panel's contrast instead of the generic titlebar text color. */
+.titlebar-left:not(.titlebar-left-floating) .titlebar-app-name {
+  color: var(--worktree-sidebar-foreground);
 }
 
 .titlebar-app-name-main {
@@ -787,6 +873,15 @@
   color: var(--foreground);
 }
 
+.editor-header-path--static {
+  cursor: default;
+}
+
+.editor-header-path--static:hover,
+.editor-header-path--static:focus-visible {
+  color: var(--muted-foreground);
+}
+
 .editor-header-path-row {
   display: flex;
   align-items: center;
@@ -848,15 +943,26 @@
   background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
 }
 
-[data-worktree-card-surface][data-worktree-card-active='true'] {
+[data-worktree-card-surface][data-worktree-card-active='primary'] {
   border-color: color-mix(in srgb, var(--sidebar-border) 40%, transparent);
   background: color-mix(in srgb, var(--sidebar-foreground) 8%, transparent);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--sidebar-foreground) 4%, transparent);
 }
 
-.dark [data-worktree-card-surface][data-worktree-card-active='true'] {
+.dark [data-worktree-card-surface][data-worktree-card-active='primary'] {
   background: color-mix(in srgb, var(--sidebar-foreground) 10%, transparent);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--sidebar-foreground) 3%, transparent);
+}
+
+[data-worktree-card-surface][data-worktree-card-active='secondary'] {
+  border-color: color-mix(in srgb, var(--sidebar-ring) 25%, transparent);
+  background: color-mix(in srgb, var(--sidebar-accent) 45%, transparent);
+  box-shadow: none;
+}
+
+.dark [data-worktree-card-surface][data-worktree-card-active='secondary'] {
+  border-color: color-mix(in srgb, var(--sidebar-ring) 28%, transparent);
+  background: color-mix(in srgb, var(--sidebar-accent) 34%, transparent);
 }
 
 .worktree-agent-row-hover:hover {
@@ -886,6 +992,109 @@
 
 .dark .setup-script-prompt-card {
   background: color-mix(in srgb, var(--sidebar-foreground) 12%, var(--sidebar));
+}
+
+/* Why: one-shot sidebar education cards need stronger separation than
+   worktree-sidebar-accent, which sits almost on top of the sidebar fill. */
+.worktree-sidebar-notice-card {
+  position: relative;
+  border: 1px solid
+    color-mix(in srgb, var(--worktree-sidebar-foreground) 24%, var(--worktree-sidebar-border));
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 9%, var(--worktree-sidebar));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--worktree-sidebar-foreground) 8%, transparent),
+    0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 10%, transparent);
+}
+
+.dark .worktree-sidebar-notice-card {
+  border-color: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) 32%,
+    var(--worktree-sidebar-border)
+  );
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 14%, var(--worktree-sidebar));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--worktree-sidebar-foreground) 12%, transparent),
+    0 1px 4px rgb(0 0 0 / 0.28);
+}
+
+/* Why: the project-order notice sits directly under the Projects header; a
+   caret aligned to that label reads as a callout instead of a random card. */
+.worktree-sidebar-notice-card--to-section-title::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 1.75rem;
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+  border-left: 1px solid
+    color-mix(in srgb, var(--worktree-sidebar-foreground) 24%, var(--worktree-sidebar-border));
+  border-top: 1px solid
+    color-mix(in srgb, var(--worktree-sidebar-foreground) 24%, var(--worktree-sidebar-border));
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 9%, var(--worktree-sidebar));
+}
+
+.dark .worktree-sidebar-notice-card--to-section-title::before {
+  border-left-color: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) 32%,
+    var(--worktree-sidebar-border)
+  );
+  border-top-color: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) 32%,
+    var(--worktree-sidebar-border)
+  );
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 14%, var(--worktree-sidebar));
+}
+
+/* Why: the first-run Mobile Emulator intro sits directly under that menu row;
+   an upward caret aligned to the phone icon reads as a callout, not a footer. */
+.mobile-emulator-tab-intro-callout--menu {
+  position: relative;
+}
+
+.mobile-emulator-tab-intro-callout--menu::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: 0.8125rem;
+  border-style: solid;
+  border-width: 0 7px 7px;
+  /* Why: use foreground + border to create a subtle shadow that adapts to theme */
+  border-color: transparent transparent color-mix(in srgb, var(--foreground) 10%, var(--border))
+    transparent;
+}
+
+.mobile-emulator-tab-intro-callout--menu::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 0.8125rem;
+  border-style: solid;
+  border-width: 0 6px 6px;
+  border-color: transparent transparent var(--muted) transparent;
+}
+
+.dark .mobile-emulator-tab-intro-callout--menu::before {
+  /* Why: use foreground + border to create a subtle shadow that adapts to theme */
+  border-bottom-color: color-mix(in srgb, var(--foreground) 12%, var(--border));
+}
+
+.dark .mobile-emulator-tab-intro-callout--menu::after {
+  border-bottom-color: color-mix(in srgb, var(--accent) 80%, transparent);
+}
+
+/* Why: anchor the optional setup card over the emulator without blurring the
+   device preview, which read as a rendering glitch. */
+.mobile-emulator-agent-setup-guide-scrim {
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--background) 92%, transparent),
+    transparent
+  );
+  pointer-events: none;
 }
 
 /* Why: the detected command is editable, but a pure app-background fill reads
@@ -1225,6 +1434,49 @@
   animation-name: workspace-kanban-sheet-out;
   animation-duration: 200ms;
   animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0);
+}
+
+/* Why: this board is attached to the worktree sidebar, not floating above it;
+   the generic Sheet elevation casts a haze over the sidebar when left open. */
+.workspace-kanban-sheet-content {
+  box-shadow: inset 1px 0 0 color-mix(in srgb, var(--worktree-sidebar-border) 80%, transparent);
+  backdrop-filter: none;
+}
+
+/* Why: a sidebar-card drag should advertise the board as a possible drop
+   surface without fully committing the companion panel until the pointer enters it. */
+.workspace-kanban-sheet-content[data-workspace-board-drag-preview='true'] {
+  background: color-mix(in srgb, var(--worktree-sidebar) 88%, var(--background));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 58%, transparent),
+    0 10px 24px color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+.workspace-kanban-sheet-content[data-workspace-board-drag-preview='true'] > * {
+  opacity: 0.42;
+}
+
+/* Why: while a card drag previews the board, pulse the toolbar trigger with the
+   same ring the drawer uses so it reads as another way to open the board. */
+@keyframes workspace-board-trigger-preview-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--sidebar-ring) 55%, transparent);
+  }
+
+  70%,
+  100% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--sidebar-ring) 0%, transparent);
+  }
+}
+
+[data-workspace-board-trigger][data-workspace-board-preview='true'] {
+  animation: workspace-board-trigger-preview-pulse 1.4s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-workspace-board-trigger][data-workspace-board-preview='true'] {
+    animation: none;
+  }
 }
 
 @keyframes workspace-kanban-sheet-in {
@@ -1755,6 +2007,55 @@
   height: 6px;
   width: 6px;
   border-width: 1.5px;
+}
+
+/* Cmd+J feature tip — JS-driven sequence (keypress → palette → typing → results).
+   The keypress press-down and palette entrance are handled inline by React state
+   transitions; this file only defines the caret blink and the results fade-in. */
+
+/* Blinking caret for the simulated command-palette input while "typing". */
+@keyframes cmd-j-tip-caret {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+.animate-cmd-j-tip-caret {
+  animation: cmd-j-tip-caret 1s step-end infinite;
+}
+
+/* Worktree rows fade in when the palette opens — mirrors the real palette,
+   which shows recent worktrees on empty query and filters synchronously. */
+@keyframes cmd-j-tip-result-in {
+  0% {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-cmd-j-tip-result-in {
+  animation: cmd-j-tip-result-in 120ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-cmd-j-tip-caret {
+    animation: none;
+    opacity: 1;
+  }
+
+  .animate-cmd-j-tip-result-in {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* ── Feature wall: agents-orchestration animations ───────────────── */
@@ -2817,12 +3118,12 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  margin: 4px 0 6px 0;
+  margin: 2px 0 4px 0;
   padding-left: 8px;
   border-left: 2px solid color-mix(in srgb, #e7b10a 35%, transparent);
   color: var(--muted-foreground);
   font-size: 12.5px;
-  line-height: 1.4;
+  line-height: 1.35;
 }
 
 .orca-diff-comment-quote-text {
@@ -2830,10 +3131,7 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  word-break: break-all;
+  white-space: nowrap;
 }
 
 /* Comment Body */
@@ -2937,51 +3235,20 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   margin-top: 4px;
 }
 
-/* Why: a tour panel must read as elevated above the chrome it is teaching about
-   without resorting to color. A 1px inner top highlight plus the documented
-   floating shadow keeps it above the surface in both light and dark modes. */
+/* Why: tours need a distinct item surface without highlighting the underlying target. */
 .orca-contextual-tour-panel {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--foreground) 4%, var(--popover)) 0%,
-    var(--popover) 12%
-  );
+  --contextual-tour-panel-surface: color-mix(in srgb, var(--foreground) 7%, var(--popover));
+  --contextual-tour-panel-border: color-mix(in srgb, var(--foreground) 14%, var(--border));
+  background: var(--contextual-tour-panel-surface);
+  border-color: var(--contextual-tour-panel-border);
   box-shadow:
     inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 10%, transparent),
     0 10px 24px rgba(0, 0, 0, 0.18);
 }
 
 .dark .orca-contextual-tour-panel {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--foreground) 4%, var(--popover)) 0%,
-    var(--popover) 14%
-  );
-  box-shadow:
-    inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 5%, transparent),
-    0 10px 24px rgba(0, 0, 0, 0.18);
-}
-
-/* Why: a tour panel must read as elevated above the chrome it is teaching about
-   without resorting to color. A 1px inner top highlight plus the documented
-   floating shadow keeps it above the surface in both light and dark modes. */
-.orca-contextual-tour-panel {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--foreground) 4%, var(--popover)) 0%,
-    var(--popover) 12%
-  );
-  box-shadow:
-    inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 10%, transparent),
-    0 10px 24px rgba(0, 0, 0, 0.18);
-}
-
-.dark .orca-contextual-tour-panel {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--foreground) 4%, var(--popover)) 0%,
-    var(--popover) 14%
-  );
+  --contextual-tour-panel-surface: color-mix(in srgb, var(--foreground) 10%, var(--popover));
+  --contextual-tour-panel-border: color-mix(in srgb, var(--foreground) 16%, var(--border));
   box-shadow:
     inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 5%, transparent),
     0 10px 24px rgba(0, 0, 0, 0.18);

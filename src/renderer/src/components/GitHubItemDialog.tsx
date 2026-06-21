@@ -1,8 +1,6 @@
 /* eslint-disable max-lines -- Why: the GH item dialog keeps its header, conversation, files, and checks tabs co-located so the read-only PR/Issue surface stays in one place while this view evolves. */
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: GitHub item dialogs hydrate provider data, diff sections, snippets, and cache refetches from async provider/virtualizer lifecycles. */
 import React, {
   Suspense,
-  lazy,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -11,7 +9,9 @@ import React, {
   useState,
   useSyncExternalStore
 } from 'react'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { useShallow } from 'zustand/react/shallow'
 import type { editor as monacoEditor } from 'monaco-editor'
 import {
   ArrowDown,
@@ -51,8 +51,6 @@ import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
-import { VisuallyHidden } from 'radix-ui'
 import {
   Accordion,
   AccordionContent,
@@ -84,7 +82,18 @@ import {
   isIntrinsicHeightImageDiff
 } from '@/components/editor/diff-section-layout'
 import type { DiffSection } from '@/components/editor/diff-section-types'
+import { removeDiffSectionMeasuredHeight } from '@/components/editor/diff-section-height-cache'
+import {
+  MAX_RENDERED_DIFF_COMBINED_CHARACTERS,
+  MAX_RENDERED_DIFF_LINES_PER_SIDE,
+  getLargeDiffRenderLimit,
+  type LargeDiffRenderLimit
+} from '@/components/editor/large-diff-render-limit'
 import type { CombinedDiffFileTreeEntry } from '@/components/editor/combined-diff-file-tree-model'
+import {
+  getStoredTextDiffContent,
+  getStoredTextDiffResult
+} from '@/components/editor/large-diff-section-content'
 import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel-content'
 import {
   createGitHubChecksTabState,
@@ -108,7 +117,7 @@ import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
   getPRCommentAudienceEmptyLabel,
-  PR_COMMENT_AUDIENCE_FILTERS,
+  getPrCommentAudienceFilters,
   type PRCommentAudienceFilter
 } from '@/lib/pr-comment-audience'
 import {
@@ -128,6 +137,7 @@ import {
   updateCommentCodeContextExpansionState,
   type CommentCodeContextLineUpdate
 } from '@/components/comment-code-context-state'
+import { getPrCommentCodeContext } from '@/components/github/pr-comment-code-context'
 import { resolveCommentReplyTarget } from '@/components/comment-reply-target-state'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
@@ -135,28 +145,32 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-cl
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
+import {
+  getCommentBodySubmitState,
+  hasBoundedCommentBodyText
+} from '@/lib/comment-body-submit-state'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import {
   getGitHubPRReviewerRows,
-  normalizeGitHubReviewerLogins
+  normalizeGitHubReviewerLogins,
+  parseGitHubReviewerInputLogins
 } from '@/components/github-pr-reviewer-display'
+import {
+  filterGitHubPRReviewerCandidates,
+  getGitHubPRReviewerQueryState
+} from '@/components/github/github-pr-reviewer-candidate-filter'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import {
   GITHUB_PR_MERGE_METHOD_LABELS,
   resolveGitHubPRMergeMethods
 } from '../../../shared/github-pr-merge-methods'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
-import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
-import { getConnectionId } from '@/lib/connection-context'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
   findGithubIssueWorkspaceAttachment,
-  findGithubPrWorkspaceAttachment,
   getGithubWorkItemWorkspaceAttachmentLabel
 } from '@/lib/github-work-item-workspace-attachment'
-import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
+import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { buildFixBrokenChecksPrompt, getBrokenChecks } from '@/components/pr-checks-fix-prompt'
 import type {
   GitHubOwnerRepo,
   GitHubPRFile,
@@ -170,12 +184,15 @@ import type {
   GitBranchChangeEntry,
   GitDiffResult,
   PRCheckDetail,
-  PRComment,
-  TuiAgent
+  PRComment
 } from '../../../shared/types'
+import {
+  getTaskSourceRuntimeSettings,
+  type TaskSourceContext
+} from '../../../shared/task-source-context'
 import { PER_REPO_FETCH_LIMIT } from '../../../shared/work-items'
-
-const IS_MAC = navigator.userAgent.includes('Mac')
+import { translate } from '@/i18n/i18n'
+import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 
 // Why: the GH item dialog can be opened from any work-item list surface and
 // doesn't have the full owner/repo context the list's cache entry carries.
@@ -270,8 +287,8 @@ type GitHubItemDialogProps = {
   workItem: GitHubWorkItem | null
   repoPath: string | null
   repoId?: string | null
+  sourceContext?: TaskSourceContext | null
   initialTab?: ItemDialogTab
-  variant?: 'sheet' | 'page'
   backLabel?: string
   /** Called when the user clicks the primary CTA to start work from this item. */
   onUse: (item: GitHubWorkItem) => void
@@ -434,18 +451,23 @@ function PRReviewersPanel({
   item,
   loading,
   repoPath,
+  sourceContext,
   onReviewersRequested
 }: {
   item: GitHubWorkItem
   loading: boolean
   repoPath: string | null
+  sourceContext?: TaskSourceContext | null
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [reviewerInput, setReviewerInput] = useState('')
   const [reviewerPickerSide, setReviewerPickerSide] = useState<'top' | 'bottom'>('bottom')
   const [reviewerPickerMaxHeight, setReviewerPickerMaxHeight] = useState<number | null>(null)
-  const [activeReviewerCursor, setActiveReviewerCursor] = useState({ resetKey: '', index: 0 })
+  const [activeReviewerCursor, setActiveReviewerCursor] = useState({
+    resetKey: '',
+    index: 0
+  })
   const [submitting, setSubmitting] = useState(false)
   const [localReviewRequests, setLocalReviewRequests] = useState<GitHubAssignableUser[]>(
     () => item.reviewRequests ?? []
@@ -456,7 +478,19 @@ function PRReviewersPanel({
     reviewRequests: item.reviewRequests
   }))
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
-  const settings = useAppStore((s) => s.settings)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
+  )
+  const sourceSettings = useMemo(
+    () =>
+      sourceContext?.provider === 'github'
+        ? ({
+            ...repoOwnerSettings,
+            ...getTaskSourceRuntimeSettings(sourceContext)
+          } as typeof repoOwnerSettings)
+        : repoOwnerSettings,
+    [repoOwnerSettings, sourceContext]
+  )
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
   const reviewerInputFocusFrameRef = useRef<number | null>(null)
   const reviewerPanelMountedRef = useRef(true)
@@ -531,11 +565,12 @@ function PRReviewersPanel({
     open && reviewSlug ? reviewSlug.owner : null,
     open && reviewSlug ? reviewSlug.repo : null,
     reviewerSeedUsers.map((user) => user.login),
-    settings
+    sourceSettings
   )
   const reviewerMetadataByPath = useRepoAssignees(
     open && !reviewSlug ? repoPath : null,
-    open && !reviewSlug ? item.repoId : null
+    open && !reviewSlug ? item.repoId : null,
+    sourceSettings
   )
   const reviewerMetadata = reviewSlug ? reviewerMetadataBySlug : reviewerMetadataByPath
   const displayItem = { ...item, reviewRequests: localReviewRequests }
@@ -559,32 +594,22 @@ function PRReviewersPanel({
       ),
     [localReviewRequests]
   )
-  const reviewerQuery = reviewerInput.trim().replace(/^@/, '').toLowerCase()
-  const filteredReviewerCandidates = useMemo(() => {
-    const query = reviewerQuery
-    return reviewerCandidates
-      .filter((user) => {
-        const login = user.login.toLowerCase()
-        return (
-          query.length === 0 ||
-          login.includes(query) ||
-          (user.name ?? '').toLowerCase().includes(query)
-        )
-      })
-      .sort((a, b) => {
-        const aLogin = a.login.toLowerCase()
-        const bLogin = b.login.toLowerCase()
-        const aStarts = aLogin.startsWith(query)
-        const bStarts = bLogin.startsWith(query)
-        if (aStarts !== bStarts) {
-          return aStarts ? -1 : 1
-        }
-        return a.login.localeCompare(b.login)
-      })
-  }, [reviewerCandidates, reviewerQuery])
+  const reviewerQueryState = useMemo(
+    () => getGitHubPRReviewerQueryState(reviewerInput),
+    [reviewerInput]
+  )
+  const reviewerQuery = reviewerQueryState.query
+  const filteredReviewerCandidates = useMemo(
+    () =>
+      filterGitHubPRReviewerCandidates({
+        candidates: reviewerCandidates,
+        queryState: reviewerQueryState
+      }),
+    [reviewerCandidates, reviewerQueryState]
+  )
   const suggestedReviewerRows = useMemo(
     () =>
-      reviewerQuery.length === 0
+      reviewerQuery.length === 0 && !reviewerQueryState.isTooLarge
         ? reviewerSeedUsers
             .filter((user) => !selectedReviewerLogins.has(user.login.toLowerCase()))
             .filter((user) => user.login.toLowerCase() !== authorLogin)
@@ -595,6 +620,7 @@ function PRReviewersPanel({
       authorLogin,
       reviewerCandidatesByLogin,
       reviewerQuery.length,
+      reviewerQueryState.isTooLarge,
       reviewerSeedUsers,
       selectedReviewerLogins
     ]
@@ -634,7 +660,8 @@ function PRReviewersPanel({
     localReviewRequests.length > 0 ||
     item.reviewRequests !== undefined ||
     item.latestReviews !== undefined
-  const canRequestReview = !!repoPath || getActiveRuntimeTarget(settings).kind === 'environment'
+  const canRequestReview =
+    !!repoPath || getActiveRuntimeTarget(sourceSettings).kind === 'environment'
 
   const measureReviewerPickerPlacement = useCallback(() => {
     const rect = reviewerInputRef.current?.getBoundingClientRect()
@@ -661,20 +688,30 @@ function PRReviewersPanel({
       return
     }
     const logins = normalizeGitHubReviewerLogins(
-      requestedLogins ?? reviewerInput.split(/[\s,]+/),
+      requestedLogins ?? parseGitHubReviewerInputLogins(reviewerInput),
       selectedReviewerLogins
     )
     if (logins.length === 0) {
-      toast.error('Enter a reviewer')
+      toast.error(translate('auto.components.GitHubItemDialog.94ab23a9f9', 'Enter a reviewer'))
       return
     }
     if (localReviewRequests.length + logins.length > 15) {
-      toast.error('You can request up to 15 reviewers')
+      toast.error(
+        translate(
+          'auto.components.GitHubItemDialog.12e761610e',
+          'You can request up to 15 reviewers'
+        )
+      )
       return
     }
-    const target = getActiveRuntimeTarget(settings)
+    const target = getActiveRuntimeTarget(sourceSettings)
     if (target.kind !== 'environment' && !repoPath) {
-      toast.error('No repo context available for this pull request.')
+      toast.error(
+        translate(
+          'auto.components.GitHubItemDialog.b4af16bf43',
+          'No repo context available for this pull request.'
+        )
+      )
       return
     }
     setSubmitting(true)
@@ -690,6 +727,7 @@ function PRReviewersPanel({
           : await window.api.gh.requestPRReviewers({
               repoPath: repoPath ?? '',
               repoId: item.repoId,
+              sourceContext,
               prNumber: item.number,
               reviewers: logins
             })
@@ -697,7 +735,10 @@ function PRReviewersPanel({
         return
       }
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to request reviewer')
+        toast.error(
+          result.error ??
+            translate('auto.components.GitHubItemDialog.c42d942b75', 'Failed to request reviewer')
+        )
         return
       }
       const nextReviewRequests = buildRequestedReviewUsers(
@@ -706,13 +747,22 @@ function PRReviewersPanel({
         localReviewRequests
       )
       setLocalReviewRequests(nextReviewRequests)
-      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId)
+      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId, {
+        sourceContext
+      })
       onReviewersRequested(nextReviewRequests)
       setReviewerInput('')
-      toast.success(logins.length === 1 ? 'Reviewer requested' : 'Reviewers requested')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      toast.success(
+        logins.length === 1
+          ? translate('auto.components.GitHubItemDialog.ea985e657f', 'Reviewer requested')
+          : translate('auto.components.GitHubItemDialog.c016e4bac3', 'Reviewers requested')
+      )
     } catch {
       if (reviewerPanelMountedRef.current) {
-        toast.error('Failed to request reviewer')
+        toast.error(
+          translate('auto.components.GitHubItemDialog.c42d942b75', 'Failed to request reviewer')
+        )
       }
     } finally {
       if (reviewerPanelMountedRef.current) {
@@ -732,9 +782,14 @@ function PRReviewersPanel({
     if (logins.length === 0) {
       return
     }
-    const target = getActiveRuntimeTarget(settings)
+    const target = getActiveRuntimeTarget(sourceSettings)
     if (target.kind !== 'environment' && !repoPath) {
-      toast.error('No repo context available for this pull request.')
+      toast.error(
+        translate(
+          'auto.components.GitHubItemDialog.b4af16bf43',
+          'No repo context available for this pull request.'
+        )
+      )
       return
     }
     setSubmitting(true)
@@ -750,6 +805,7 @@ function PRReviewersPanel({
           : await window.api.gh.removePRReviewers({
               repoPath: repoPath ?? '',
               repoId: item.repoId,
+              sourceContext,
               prNumber: item.number,
               reviewers: logins
             })
@@ -757,7 +813,10 @@ function PRReviewersPanel({
         return
       }
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to remove reviewer')
+        toast.error(
+          result.error ??
+            translate('auto.components.GitHubItemDialog.73487fb975', 'Failed to remove reviewer')
+        )
         return
       }
       const removed = new Set(logins.map((login) => login.toLowerCase()))
@@ -765,13 +824,22 @@ function PRReviewersPanel({
         (reviewer) => !removed.has(reviewer.login.toLowerCase())
       )
       setLocalReviewRequests(nextReviewRequests)
-      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId)
+      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId, {
+        sourceContext
+      })
       onReviewersRequested(nextReviewRequests)
       setReviewerInput('')
-      toast.success(logins.length === 1 ? 'Reviewer removed' : 'Reviewers removed')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      toast.success(
+        logins.length === 1
+          ? translate('auto.components.GitHubItemDialog.69515bff81', 'Reviewer removed')
+          : translate('auto.components.GitHubItemDialog.2e69540652', 'Reviewers removed')
+      )
     } catch {
       if (reviewerPanelMountedRef.current) {
-        toast.error('Failed to remove reviewer')
+        toast.error(
+          translate('auto.components.GitHubItemDialog.73487fb975', 'Failed to remove reviewer')
+        )
       }
     } finally {
       if (reviewerPanelMountedRef.current) {
@@ -810,7 +878,17 @@ function PRReviewersPanel({
         key={`${options.suggested ? 'suggested' : 'reviewer'}:${reviewer.login}`}
         type="button"
         aria-label={
-          selected ? `Unrequest reviewer ${reviewer.login}` : `Request reviewer ${reviewer.login}`
+          selected
+            ? translate(
+                'auto.components.GitHubItemDialog.fedc09eeb9',
+                'Unrequest reviewer {{value0}}',
+                { value0: reviewer.login }
+              )
+            : translate(
+                'auto.components.GitHubItemDialog.8c45901789',
+                'Request reviewer {{value0}}',
+                { value0: reviewer.login }
+              )
         }
         aria-pressed={selected}
         className={cn(
@@ -846,7 +924,10 @@ function PRReviewersPanel({
           </span>
           {options.suggested ? (
             <span className="block truncate text-[12px] leading-4 text-muted-foreground">
-              Recently edited these files
+              {translate(
+                'auto.components.GitHubItemDialog.e3243d9376',
+                'Recently edited these files'
+              )}
             </span>
           ) : null}
         </span>
@@ -858,7 +939,9 @@ function PRReviewersPanel({
     <aside className="rounded-lg border border-border/50 bg-card/50 shadow-xs">
       <div className="flex h-10 items-center gap-2 border-b border-border/50 px-3">
         <Users className="size-3.5 text-muted-foreground" />
-        <span className="text-[13px] font-medium text-foreground">Reviewers</span>
+        <span className="text-[13px] font-medium text-foreground">
+          {translate('auto.components.GitHubItemDialog.dc8a092c57', 'Reviewers')}
+        </span>
         {reviewers.length > 0 ? (
           <span className="ml-auto rounded-full border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
             {reviewers.length}
@@ -869,7 +952,7 @@ function PRReviewersPanel({
         {loading && !hasReviewerMetadata ? (
           <div className="flex items-center gap-2 py-1 text-[12px] text-muted-foreground">
             <LoaderCircle className="size-3.5 animate-spin" />
-            Loading reviewers
+            {translate('auto.components.GitHubItemDialog.6a45771d47', 'Loading reviewers')}
           </div>
         ) : reviewers.length > 0 ? (
           <div className="flex flex-col gap-2">
@@ -900,7 +983,11 @@ function PRReviewersPanel({
                           size="icon-xs"
                           className="size-6 shrink-0 text-muted-foreground hover:text-foreground"
                           disabled={submitting || !canRequestReview}
-                          aria-label={`Remove reviewer ${reviewer.login}`}
+                          aria-label={translate(
+                            'auto.components.GitHubItemDialog.8b15a5e91c',
+                            'Remove reviewer {{value0}}',
+                            { value0: reviewer.login }
+                          )}
                           onClick={() => {
                             void handleRemoveReviewers([reviewer.login])
                           }}
@@ -908,7 +995,12 @@ function PRReviewersPanel({
                           <X className="size-3.5" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>Remove reviewer</TooltipContent>
+                      <TooltipContent>
+                        {translate(
+                          'auto.components.GitHubItemDialog.5c1c973855',
+                          'Remove reviewer'
+                        )}
+                      </TooltipContent>
                     </Tooltip>
                   ) : null}
                 </div>
@@ -916,7 +1008,9 @@ function PRReviewersPanel({
             })}
           </div>
         ) : (
-          <div className="py-1 text-[12px] text-muted-foreground">No reviewers requested.</div>
+          <div className="py-1 text-[12px] text-muted-foreground">
+            {translate('auto.components.GitHubItemDialog.36f9ac4a47', 'No reviewers requested.')}
+          </div>
         )}
         <Popover open={open} onOpenChange={handleReviewerPickerOpenChange}>
           <PopoverAnchor asChild>
@@ -930,8 +1024,11 @@ function PRReviewersPanel({
                 }
               }}
               disabled={submitting || !canRequestReview}
-              placeholder="Type or choose a user"
-              aria-label="Reviewer"
+              placeholder={translate(
+                'auto.components.GitHubItemDialog.bb42774171',
+                'Type or choose a user'
+              )}
+              aria-label={translate('auto.components.GitHubItemDialog.934add88b6', 'Reviewer')}
               aria-expanded={open}
               aria-haspopup="listbox"
               className="mt-3 h-8 min-w-0 cursor-text rounded-md border-border/50 bg-background text-xs"
@@ -993,26 +1090,34 @@ function PRReviewersPanel({
           >
             <div className="border-b border-border/70 px-3 py-2">
               <div className="text-[13px] font-semibold text-foreground">
-                Request up to 15 reviewers
+                {translate(
+                  'auto.components.GitHubItemDialog.b0b7344684',
+                  'Request up to 15 reviewers'
+                )}
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
               {reviewerMetadata.loading ? (
-                <div className="px-3 py-2 text-[13px] text-muted-foreground">Loading...</div>
+                <div className="px-3 py-2 text-[13px] text-muted-foreground">
+                  {translate('auto.components.GitHubItemDialog.a98433e73d', 'Loading...')}
+                </div>
               ) : filteredReviewerCandidates.length > 0 ? (
                 <>
                   {suggestedReviewerRows.length > 0 ? (
                     <>
                       <div className="border-b border-border/70 bg-muted/50 px-3 py-1.5 text-[12px] font-semibold text-foreground">
-                        Suggestions
+                        {translate('auto.components.GitHubItemDialog.c2b21818e1', 'Suggestions')}
                       </div>
                       {suggestedReviewerRows.map((reviewer, index) =>
-                        renderReviewerPickerRow(reviewer, { suggested: true, activeIndex: index })
+                        renderReviewerPickerRow(reviewer, {
+                          suggested: true,
+                          activeIndex: index
+                        })
                       )}
                     </>
                   ) : null}
                   <div className="border-b border-border/70 bg-muted/50 px-3 py-1.5 text-[12px] font-semibold text-foreground">
-                    Everyone else
+                    {translate('auto.components.GitHubItemDialog.1ffce94a8b', 'Everyone else')}
                   </div>
                   {everyoneElseReviewerRows.length > 0 ? (
                     everyoneElseReviewerRows.map((reviewer, index) =>
@@ -1023,7 +1128,10 @@ function PRReviewersPanel({
                     )
                   ) : (
                     <div className="px-3 py-2 text-[13px] text-muted-foreground">
-                      No matching reviewers.
+                      {translate(
+                        'auto.components.GitHubItemDialog.70e84e3d0b',
+                        'No matching reviewers.'
+                      )}
                     </div>
                   )}
                 </>
@@ -1031,8 +1139,14 @@ function PRReviewersPanel({
                 <div className="px-3 py-2 text-[13px] text-muted-foreground">
                   {reviewerMetadata.error ??
                     (hasReviewerMetadata
-                      ? 'No matching reviewers.'
-                      : 'Open the PR details to view current reviewers.')}
+                      ? translate(
+                          'auto.components.GitHubItemDialog.70e84e3d0b',
+                          'No matching reviewers.'
+                        )
+                      : translate(
+                          'auto.components.GitHubItemDialog.3f79ffc8b7',
+                          'Open the PR details to view current reviewers.'
+                        ))}
                 </div>
               )}
             </div>
@@ -1045,44 +1159,6 @@ function PRReviewersPanel({
 
 function isPRFileViewed(file: GitHubPRFile): boolean {
   return file.viewerViewedState === 'VIEWED'
-}
-
-function findNearestBraceBlock(
-  lines: string[],
-  targetLine: number
-): { startLine: number; endLine: number } | null {
-  const stack: number[] = []
-  const ranges: { startLine: number; endLine: number }[] = []
-  const targetIndex = targetLine - 1
-
-  lines.forEach((line, lineIndex) => {
-    for (const character of line) {
-      if (character === '{') {
-        stack.push(lineIndex)
-      } else if (character === '}') {
-        const startLine = stack.pop()
-        if (startLine !== undefined && startLine <= lineIndex) {
-          ranges.push({ startLine: startLine + 1, endLine: lineIndex + 1 })
-        }
-      }
-    }
-  })
-
-  const containingRange = ranges
-    .filter((range) => range.startLine - 1 <= targetIndex && targetIndex <= range.endLine - 1)
-    .sort((a, b) => a.endLine - a.startLine - (b.endLine - b.startLine))[0]
-
-  if (containingRange) {
-    return containingRange
-  }
-
-  return (
-    ranges
-      .filter(
-        (range) => range.startLine - 1 >= targetIndex && range.startLine - 1 - targetIndex <= 8
-      )
-      .sort((a, b) => a.startLine - b.startLine)[0] ?? null
-  )
 }
 
 // Why: SWR cache for the work-item details fetch. Reopening the same drawer
@@ -1289,21 +1365,89 @@ if (typeof import.meta !== 'undefined' && import.meta.hot) {
 // Why: bounded LRU — opening many PRs with many files during a session
 // would otherwise grow this module-level map without bound until reload.
 const PR_FILE_CONTENT_CACHE_MAX = 64
-const prFileContentCache = new Map<string, Promise<GitHubPRFileContents> | GitHubPRFileContents>()
+// Why: raw-content overflow is only a sentinel; force the reported size past
+// the render budget so downstream checks reliably choose fallback mode.
+const GITHUB_PR_RAW_CONTENT_OVERFLOW_CHARACTER_COUNT = MAX_RENDERED_DIFF_COMBINED_CHARACTERS + 1
+const PR_FILE_CONTENT_CACHE_MAX_BYTES = MAX_RENDERED_DIFF_COMBINED_CHARACTERS * 4
+type PRFileContentCacheEntry = {
+  value: Promise<GitHubPRFileContents> | GitHubPRFileContents
+  byteCount: number
+}
+const prFileContentCache = new Map<string, PRFileContentCacheEntry>()
+let prFileContentCacheBytes = 0
+
+function getUtf8ByteCount(value: string): number {
+  let byteCount = 0
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code < 0x80) {
+      byteCount += 1
+    } else if (code < 0x800) {
+      byteCount += 2
+    } else if (code >= 0xd800 && code <= 0xdbff && index + 1 < value.length) {
+      const next = value.charCodeAt(index + 1)
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        byteCount += 4
+        index += 1
+      } else {
+        byteCount += 3
+      }
+    } else {
+      byteCount += 3
+    }
+  }
+  return byteCount
+}
+
+function isPRFileContentsTooLargeSentinel(contents: GitHubPRFileContents): boolean {
+  return contents.originalTooLarge === true || contents.modifiedTooLarge === true
+}
+
+function getPRFileContentsCacheByteCount(contents: GitHubPRFileContents): number {
+  if (isPRFileContentsTooLargeSentinel(contents)) {
+    return 0
+  }
+  return getUtf8ByteCount(contents.original) + getUtf8ByteCount(contents.modified)
+}
+
+function getRetainedPRFileContentsByteCount(contents: GitHubPRFileContents): number | null {
+  if (isPRFileContentsTooLargeSentinel(contents)) {
+    return 0
+  }
+  const byteCount = getPRFileContentsCacheByteCount(contents)
+  return byteCount <= PR_FILE_CONTENT_CACHE_MAX_BYTES ? byteCount : null
+}
 
 function touchPRFileContentCache(
   key: string,
   value: Promise<GitHubPRFileContents> | GitHubPRFileContents
 ): void {
+  const retainedByteCount = value instanceof Promise ? 0 : getRetainedPRFileContentsByteCount(value)
+  if (retainedByteCount === null) {
+    const existing = prFileContentCache.get(key)
+    prFileContentCacheBytes -= existing?.byteCount ?? 0
+    prFileContentCache.delete(key)
+    return
+  }
+
+  const existing = prFileContentCache.get(key)
+  prFileContentCacheBytes -= existing?.byteCount ?? 0
   // Why: re-insert to move to the most-recently-used position; Map preserves
   // insertion order so the oldest key is always first when evicting.
   prFileContentCache.delete(key)
-  prFileContentCache.set(key, value)
-  while (prFileContentCache.size > PR_FILE_CONTENT_CACHE_MAX) {
+  const byteCount = retainedByteCount
+  prFileContentCache.set(key, { value, byteCount })
+  prFileContentCacheBytes += byteCount
+  while (
+    prFileContentCache.size > PR_FILE_CONTENT_CACHE_MAX ||
+    prFileContentCacheBytes > PR_FILE_CONTENT_CACHE_MAX_BYTES
+  ) {
     const oldest = prFileContentCache.keys().next().value
     if (oldest === undefined) {
       break
     }
+    const evicted = prFileContentCache.get(oldest)
+    prFileContentCacheBytes -= evicted?.byteCount ?? 0
     prFileContentCache.delete(oldest)
   }
 }
@@ -1316,8 +1460,9 @@ function getPRFileContentCacheKey(args: {
   headSha: string
   baseSha: string
 }): string {
+  const repositoryKey = args.repoId ? `repo:${args.repoId}` : `path:${args.repoPath}`
   return [
-    args.repoId,
+    repositoryKey,
     args.prNumber,
     args.file.path,
     args.file.oldPath ?? '',
@@ -1330,6 +1475,7 @@ function getPRFileContentCacheKey(args: {
 function loadPRFileContents(args: {
   repoPath: string
   repoId: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   file: GitHubPRFile
   headSha: string
@@ -1338,13 +1484,15 @@ function loadPRFileContents(args: {
   const cacheKey = getPRFileContentCacheKey(args)
   const cached = prFileContentCache.get(cacheKey)
   if (cached) {
-    touchPRFileContentCache(cacheKey, cached)
-    return Promise.resolve(cached)
+    touchPRFileContentCache(cacheKey, cached.value)
+    return Promise.resolve(cached.value)
   }
-  const request = window.api.gh
+  let request: Promise<GitHubPRFileContents>
+  request = window.api.gh
     .prFileContents({
       repoPath: args.repoPath,
       repoId: args.repoId,
+      sourceContext: args.sourceContext,
       prNumber: args.prNumber,
       path: args.file.path,
       oldPath: args.file.oldPath,
@@ -1353,11 +1501,17 @@ function loadPRFileContents(args: {
       baseSha: args.baseSha
     })
     .then((contents) => {
-      touchPRFileContentCache(cacheKey, contents)
+      if (prFileContentCache.get(cacheKey)?.value === request) {
+        touchPRFileContentCache(cacheKey, contents)
+      }
       return contents
     })
     .catch((err) => {
-      prFileContentCache.delete(cacheKey)
+      const cachedRequest = prFileContentCache.get(cacheKey)
+      if (cachedRequest?.value === request) {
+        prFileContentCacheBytes -= cachedRequest.byteCount
+        prFileContentCache.delete(cacheKey)
+      }
       throw err
     })
   touchPRFileContentCache(cacheKey, request)
@@ -1367,6 +1521,7 @@ function loadPRFileContents(args: {
 function addIssueCommentForRepo(args: {
   repoId?: string
   repoPath: string
+  sourceContext?: TaskSourceContext | null
   number: number
   body: string
   type?: 'issue' | 'pr'
@@ -1374,6 +1529,7 @@ function addIssueCommentForRepo(args: {
   return window.api.gh.addIssueComment({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    sourceContext: args.sourceContext,
     number: args.number,
     body: args.body,
     type: args.type
@@ -1383,6 +1539,7 @@ function addIssueCommentForRepo(args: {
 function addPRReviewCommentForRepo(args: {
   repoId?: string
   repoPath: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   commitId: string
   path: string
@@ -1393,6 +1550,7 @@ function addPRReviewCommentForRepo(args: {
   return window.api.gh.addPRReviewComment({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    sourceContext: args.sourceContext,
     prNumber: args.prNumber,
     commitId: args.commitId,
     path: args.path,
@@ -1405,6 +1563,7 @@ function addPRReviewCommentForRepo(args: {
 function addPRReviewCommentReplyForRepo(args: {
   repoId?: string
   repoPath: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   commentId: number
   body: string
@@ -1415,6 +1574,7 @@ function addPRReviewCommentReplyForRepo(args: {
   return window.api.gh.addPRReviewCommentReply({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    sourceContext: args.sourceContext,
     prNumber: args.prNumber,
     commentId: args.commentId,
     body: args.body,
@@ -1427,6 +1587,7 @@ function addPRReviewCommentReplyForRepo(args: {
 function setPRFileViewedForRepo(args: {
   repoId?: string
   repoPath: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   pullRequestId: string
   path: string
@@ -1435,6 +1596,7 @@ function setPRFileViewedForRepo(args: {
   return window.api.gh.setPRFileViewed({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    sourceContext: args.sourceContext,
     prNumber: args.prNumber,
     pullRequestId: args.pullRequestId,
     path: args.path,
@@ -1445,12 +1607,14 @@ function setPRFileViewedForRepo(args: {
 function getWorkItemDetailsForRepo(args: {
   repoId?: string
   repoPath: string
+  sourceContext?: TaskSourceContext | null
   number: number
   type: 'issue' | 'pr'
 }): Promise<GitHubWorkItemDetails | null> {
   return window.api.gh.workItemDetails({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    sourceContext: args.sourceContext,
     number: args.number,
     type: args.type
   })
@@ -1474,7 +1638,11 @@ function PRViewedCheckbox({
           type="button"
           role="checkbox"
           aria-checked={checked}
-          aria-label={`${checked ? 'Unmark' : 'Mark'} ${filePath} as viewed`}
+          aria-label={translate(
+            'auto.components.GitHubItemDialog.2d89a38d9d',
+            '{{value0}} {{value1}} as viewed',
+            { value0: checked ? 'Unmark' : 'Mark', value1: filePath }
+          )}
           disabled={pending}
           onClick={(event) => {
             event.stopPropagation()
@@ -1500,11 +1668,13 @@ function PRViewedCheckbox({
               <Check className="size-3" strokeWidth={3} />
             ) : null}
           </span>
-          <span>Viewed</span>
+          <span>{translate('auto.components.GitHubItemDialog.af924014f8', 'Viewed')}</span>
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={4}>
-        {checked ? 'Unmark viewed' : 'Mark viewed'}
+        {checked
+          ? translate('auto.components.GitHubItemDialog.ba8e329d92', 'Unmark viewed')
+          : translate('auto.components.GitHubItemDialog.16c1abe76c', 'Mark viewed')}
       </TooltipContent>
     </Tooltip>
   )
@@ -1543,6 +1713,30 @@ function gitHubPRFileToBranchEntry(file: GitHubPRFile): GitBranchChangeEntry {
   }
 }
 
+function getPRFileContentsRenderLimit(contents: GitHubPRFileContents): LargeDiffRenderLimit {
+  if (!contents.originalTooLarge && !contents.modifiedTooLarge) {
+    return getLargeDiffRenderLimit({
+      originalContent: contents.original,
+      modifiedContent: contents.modified
+    })
+  }
+
+  return {
+    limited: true,
+    reason: 'character-count' as const,
+    lineCounts: null,
+    characterCount:
+      contents.original.length +
+      contents.modified.length +
+      (contents.originalTooLarge ? GITHUB_PR_RAW_CONTENT_OVERFLOW_CHARACTER_COUNT : 0) +
+      (contents.modifiedTooLarge ? GITHUB_PR_RAW_CONTENT_OVERFLOW_CHARACTER_COUNT : 0),
+    limits: {
+      maxLinesPerSide: MAX_RENDERED_DIFF_LINES_PER_SIDE,
+      maxCombinedCharacters: MAX_RENDERED_DIFF_COMBINED_CHARACTERS
+    }
+  }
+}
+
 function getPRFileDiffResult(contents: GitHubPRFileContents): GitDiffResult {
   if (contents.originalIsBinary) {
     return {
@@ -1577,6 +1771,7 @@ type PRFilesCombinedDiffViewerProps = {
   comments: PRComment[]
   repoPath: string
   repoId: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   prUrl: string
   headSha: string | undefined
@@ -1591,6 +1786,7 @@ function PRFilesCombinedDiffViewer({
   comments,
   repoPath,
   repoId,
+  sourceContext,
   prNumber,
   prUrl,
   headSha,
@@ -1626,7 +1822,10 @@ function PRFilesCombinedDiffViewer({
       return entriesCacheRef.current.entries
     }
     const nextEntries = files.map(gitHubPRFileToBranchEntry)
-    entriesCacheRef.current = { signature: diffEntrySignature, entries: nextEntries }
+    entriesCacheRef.current = {
+      signature: diffEntrySignature,
+      entries: nextEntries
+    }
     return nextEntries
   }, [diffEntrySignature, files])
   const fileByPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files])
@@ -1706,7 +1905,8 @@ function PRFilesCombinedDiffViewer({
         loading: true,
         error: undefined,
         dirty: false,
-        diffResult: null
+        diffResult: null,
+        largeDiffRenderLimit: null
       }))
     )
   }, [entries, entrySignature])
@@ -1727,7 +1927,11 @@ function PRFilesCombinedDiffViewer({
       const generation = generationRef.current
       loadingIndicesRef.current.add(index)
 
-      const load = async (): Promise<{ result: GitDiffResult; error?: string }> => {
+      const load = async (): Promise<{
+        result: GitDiffResult
+        resultContents?: GitHubPRFileContents
+        error?: string
+      }> => {
         if (file.isBinary) {
           return {
             result: {
@@ -1748,18 +1952,22 @@ function PRFilesCombinedDiffViewer({
               originalIsBinary: false,
               modifiedIsBinary: false
             },
-            error: 'Diff unavailable because the PR commit SHAs are missing.'
+            error: translate(
+              'auto.components.GitHubItemDialog.829674460a',
+              'Diff unavailable because the PR commit SHAs are missing.'
+            )
           }
         }
         const contents = await loadPRFileContents({
           repoPath,
           repoId,
+          sourceContext,
           prNumber,
           file,
           headSha,
           baseSha
         })
-        return { result: getPRFileDiffResult(contents) }
+        return { result: getPRFileDiffResult(contents), resultContents: contents }
       }
 
       load()
@@ -1771,37 +1979,46 @@ function PRFilesCombinedDiffViewer({
             originalIsBinary: false,
             modifiedIsBinary: false
           } as GitDiffResult,
+          resultContents: undefined,
           error: error instanceof Error ? error.message : 'Failed to load diff.'
         }))
-        .then(({ result, error }) => {
+        .then(({ result, resultContents, error }) => {
           loadingIndicesRef.current.delete(index)
           if (generationRef.current !== generation) {
             return
           }
+          const largeDiffRenderLimit =
+            !error && result.kind === 'text' && resultContents
+              ? getPRFileContentsRenderLimit(resultContents)
+              : null
+          const storedContent = getStoredTextDiffContent(result, largeDiffRenderLimit)
+          const storedResult = getStoredTextDiffResult(result, largeDiffRenderLimit)
           loadedIndicesRef.current.add(index)
           setSections((prev) =>
             prev.map((current, currentIndex) =>
               currentIndex === index
                 ? {
                     ...current,
-                    diffResult: result,
-                    originalContent: result.kind === 'text' ? result.originalContent : '',
-                    modifiedContent: result.kind === 'text' ? result.modifiedContent : '',
+                    diffResult: storedResult,
+                    originalContent: storedContent.originalContent,
+                    modifiedContent: storedContent.modifiedContent,
                     loading: false,
-                    error
+                    error,
+                    largeDiffRenderLimit
                   }
                 : current
             )
           )
         })
     },
-    [baseSha, fileByPath, headSha, prNumber, repoId, repoPath]
+    [baseSha, fileByPath, headSha, prNumber, repoId, repoPath, sourceContext]
   )
 
   const retrySection = useCallback(
     (index: number) => {
       loadedIndicesRef.current.delete(index)
       loadingIndicesRef.current.delete(index)
+      setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
       setSections((prev) =>
         prev.map((section, sectionIndex) =>
           sectionIndex === index
@@ -1811,7 +2028,8 @@ function PRFilesCombinedDiffViewer({
                 originalContent: '',
                 modifiedContent: '',
                 loading: true,
-                error: undefined
+                error: undefined,
+                largeDiffRenderLimit: null
               }
             : section
         )
@@ -1872,7 +2090,9 @@ function PRFilesCombinedDiffViewer({
           section.added === undefined && section.removed === undefined
             ? undefined
             : (section.added ?? 0) + (section.removed ?? 0),
-        useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult)
+        useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult),
+        isLargeDiffLimited: section.largeDiffRenderLimit?.limited === true,
+        lineCounts: section.largeDiffRenderLimit?.lineCounts ?? undefined
       })
     },
     overscan: PR_DIFF_OVERSCAN,
@@ -1923,12 +2143,18 @@ function PRFilesCombinedDiffViewer({
       }
     ) => {
       if (!headSha) {
-        toast.error('Unable to comment without the PR head SHA.')
+        toast.error(
+          translate(
+            'auto.components.GitHubItemDialog.d1fa2cf888',
+            'Unable to comment without the PR head SHA.'
+          )
+        )
         return false
       }
       const result = await addPRReviewCommentForRepo({
         repoPath,
         repoId,
+        sourceContext,
         prNumber,
         commitId: headSha,
         path: section.path,
@@ -1937,14 +2163,22 @@ function PRFilesCombinedDiffViewer({
         body
       })
       if (!result.ok) {
-        toast.error(result.error || 'Failed to add review comment.')
+        toast.error(
+          result.error ||
+            translate(
+              'auto.components.GitHubItemDialog.b0b09778c8',
+              'Failed to add review comment.'
+            )
+        )
         return false
       }
       onCommentAdded(result.comment)
-      toast.success('Review comment added.')
+      toast.success(
+        translate('auto.components.GitHubItemDialog.a341343303', 'Review comment added.')
+      )
       return true
     },
-    [headSha, onCommentAdded, prNumber, repoId, repoPath]
+    [headSha, onCommentAdded, prNumber, repoId, repoPath, sourceContext]
   )
 
   const renderViewedCheckbox = useCallback(
@@ -1982,19 +2216,23 @@ function PRFilesCombinedDiffViewer({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  aria-label="Show file tree"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.1257d1435d',
+                    'Show file tree'
+                  )}
                   onClick={() => setFileTreeCollapsed(false)}
                 >
                   <PanelLeftOpen className="size-3.5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                Show file tree
+                {translate('auto.components.GitHubItemDialog.1257d1435d', 'Show file tree')}
               </TooltipContent>
             </Tooltip>
           )}
           <span className="truncate text-xs text-muted-foreground">
-            {files.filter(isPRFileViewed).length} / {files.length} files viewed
+            {files.filter(isPRFileViewed).length} / {files.length}{' '}
+            {translate('auto.components.GitHubItemDialog.f2d02cdf8c', 'files viewed')}
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -2003,14 +2241,18 @@ function PRFilesCombinedDiffViewer({
             className="w-20 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
             onClick={() => setAllSectionsCollapsed(!allSectionsCollapsed)}
           >
-            {allSectionsCollapsed ? 'Expand All' : 'Collapse All'}
+            {allSectionsCollapsed
+              ? translate('auto.components.GitHubItemDialog.3c19ec3069', 'Expand All')
+              : translate('auto.components.GitHubItemDialog.d00a0a7f8f', 'Collapse All')}
           </button>
           <button
             type="button"
             className="w-24 rounded border border-border px-2 py-0.5 text-center text-xs text-muted-foreground transition-colors hover:text-foreground"
             onClick={() => setSideBySide((prev) => !prev)}
           >
-            {sideBySide ? 'Inline' : 'Side by Side'}
+            {sideBySide
+              ? translate('auto.components.GitHubItemDialog.6e43a16435', 'Inline')
+              : translate('auto.components.GitHubItemDialog.31770bef03', 'Side by Side')}
           </button>
         </div>
       </div>
@@ -2082,6 +2324,7 @@ function CommentCodeContext({
   comment,
   repoPath,
   repoId,
+  sourceContext,
   prNumber,
   files,
   headSha,
@@ -2090,6 +2333,7 @@ function CommentCodeContext({
   comment: PRComment
   repoPath: string | null
   repoId: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   files: GitHubPRFile[]
   headSha: string | undefined
@@ -2114,7 +2358,7 @@ function CommentCodeContext({
       return
     }
     let cancelled = false
-    loadPRFileContents({ repoPath, repoId, prNumber, file, headSha, baseSha })
+    loadPRFileContents({ repoPath, repoId, sourceContext, prNumber, file, headSha, baseSha })
       .then((result) => {
         if (!cancelled) {
           setContents(result)
@@ -2128,7 +2372,7 @@ function CommentCodeContext({
     return () => {
       cancelled = true
     }
-  }, [baseSha, file, headSha, line, prNumber, repoId, repoPath])
+  }, [baseSha, file, headSha, line, prNumber, repoId, repoPath, sourceContext])
 
   const resolvedContextExpansionState = resolveCommentCodeContextExpansionState(
     contextExpansionState,
@@ -2170,47 +2414,45 @@ function CommentCodeContext({
     return (
       <div className="mb-3 flex items-center gap-2 rounded-md border border-border/40 bg-muted/20 px-3 py-2 text-[12px] text-muted-foreground">
         <LoaderCircle className="size-3.5 animate-spin" />
-        Loading code context…
+        {translate('auto.components.GitHubItemDialog.db61d76cd5', 'Loading code context…')}
       </div>
     )
   }
 
+  if (getPRFileContentsRenderLimit(contents).limited) {
+    return null
+  }
+
   const source = contents.modified || contents.original
-  const lines = source.split(/\r?\n/)
+  const codeContext = getPrCommentCodeContext({
+    source,
+    line,
+    startLine,
+    contextBefore,
+    contextAfter,
+    fallbackLines: CODE_CONTEXT_FALLBACK_LINES,
+    maxBlockLines: CODE_CONTEXT_MAX_BLOCK_LINES
+  })
+  if (!codeContext) {
+    return null
+  }
+  const {
+    selectedLines,
+    totalLines,
+    commentFrom,
+    commentTo,
+    from,
+    to,
+    blockRange,
+    shouldUseBlockRange,
+    canExpandAbove,
+    canExpandBelow,
+    canExpandBlock
+  } = codeContext
   const language = detectLanguage(comment.path)
-  const commentFrom = Math.max(1, Math.min(startLine ?? line, line))
-  const commentTo = Math.min(lines.length, Math.max(startLine ?? line, line))
-  const from = Math.max(1, commentFrom - contextBefore)
-  const to = Math.min(lines.length, commentTo + contextAfter)
-  const selectedLines = lines.slice(from - 1, to)
-  const candidateBlockRange = findNearestBraceBlock(lines, commentFrom)
-  const candidateBlockLineCount = candidateBlockRange
-    ? candidateBlockRange.endLine - candidateBlockRange.startLine + 1
-    : 0
-  const isWholeFileBlock =
-    candidateBlockRange !== null &&
-    candidateBlockRange.startLine <= 2 &&
-    candidateBlockRange.endLine >= lines.length - 1
-  const shouldUseBlockRange =
-    candidateBlockRange !== null &&
-    !isWholeFileBlock &&
-    candidateBlockLineCount <= CODE_CONTEXT_MAX_BLOCK_LINES
-  const blockRange = shouldUseBlockRange
-    ? candidateBlockRange
-    : {
-        startLine: Math.max(1, commentFrom - CODE_CONTEXT_FALLBACK_LINES),
-        endLine: Math.min(lines.length, commentTo + CODE_CONTEXT_FALLBACK_LINES)
-      }
-  const canExpandAbove = from > 1
-  const canExpandBelow = to < lines.length
-  const canExpandBlock = blockRange.startLine < from || blockRange.endLine > to
   const blockTooltip = shouldUseBlockRange
     ? 'Show surrounding code block'
     : 'Show nearby code context'
-
-  if (selectedLines.length === 0) {
-    return null
-  }
 
   return (
     <div className="mb-3 overflow-hidden rounded-md border border-border/50 bg-muted/20">
@@ -2219,16 +2461,31 @@ function CommentCodeContext({
           <span className="truncate font-mono">{comment.path}</span>
           <span className="shrink-0 font-mono">
             L{from}
-            {to !== from ? `-L${to}` : ''}
+            {to !== from
+              ? translate('auto.components.GitHubItemDialog.d1c0dad471', '-L{{value0}}', {
+                  value0: to
+                })
+              : ''}
           </span>
           {(from !== commentFrom || to !== commentTo) && (
             <span className="shrink-0 font-mono text-muted-foreground/70">
-              comment L{commentFrom}
-              {commentTo !== commentFrom ? `-L${commentTo}` : ''}
+              {translate('auto.components.GitHubItemDialog.bd7be7b1fd', 'comment L')}
+              {commentFrom}
+              {commentTo !== commentFrom
+                ? translate('auto.components.GitHubItemDialog.d1c0dad471', '-L{{value0}}', {
+                    value0: commentTo
+                  })
+                : ''}
             </span>
           )}
         </div>
-        <ButtonGroup className="text-muted-foreground" aria-label="Code context controls">
+        <ButtonGroup
+          className="text-muted-foreground"
+          aria-label={translate(
+            'auto.components.GitHubItemDialog.d43736d09c',
+            'Code context controls'
+          )}
+        >
           {(contextBefore > 0 || contextAfter > 0) && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -2241,12 +2498,17 @@ function CommentCodeContext({
                     setContextBefore(0)
                     setContextAfter(0)
                   }}
-                  aria-label="Reset code context"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.b1574e8ac2',
+                    'Reset code context'
+                  )}
                 >
                   <UndoDot className="size-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Reset code context</TooltipContent>
+              <TooltipContent>
+                {translate('auto.components.GitHubItemDialog.b1574e8ac2', 'Reset code context')}
+              </TooltipContent>
             </Tooltip>
           )}
           <Tooltip>
@@ -2262,12 +2524,18 @@ function CommentCodeContext({
                     Math.min(current + CODE_CONTEXT_EXPAND_STEP, commentFrom - 1)
                   )
                 }
-                aria-label={`Show ${CODE_CONTEXT_EXPAND_STEP} more lines above`}
+                aria-label={translate(
+                  'auto.components.GitHubItemDialog.307c98e8e3',
+                  'Show {{value0}} more lines above',
+                  { value0: CODE_CONTEXT_EXPAND_STEP }
+                )}
               >
                 <ArrowUp className="size-3.5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Show more lines above</TooltipContent>
+            <TooltipContent>
+              {translate('auto.components.GitHubItemDialog.5664681624', 'Show more lines above')}
+            </TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -2279,15 +2547,21 @@ function CommentCodeContext({
                 disabled={!canExpandBelow}
                 onClick={() =>
                   setContextAfter((current) =>
-                    Math.min(current + CODE_CONTEXT_EXPAND_STEP, lines.length - commentTo)
+                    Math.min(current + CODE_CONTEXT_EXPAND_STEP, totalLines - commentTo)
                   )
                 }
-                aria-label={`Show ${CODE_CONTEXT_EXPAND_STEP} more lines below`}
+                aria-label={translate(
+                  'auto.components.GitHubItemDialog.307c98e8e3',
+                  'Show {{value0}} more lines below',
+                  { value0: CODE_CONTEXT_EXPAND_STEP }
+                )}
               >
                 <ArrowDown className="size-3.5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Show more lines below</TooltipContent>
+            <TooltipContent>
+              {translate('auto.components.GitHubItemDialog.06c06e58ba', 'Show more lines below')}
+            </TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -2350,6 +2624,7 @@ function CommentCodeContext({
 function ConversationTab({
   item,
   repoPath,
+  sourceContext,
   body,
   comments,
   files,
@@ -2370,6 +2645,7 @@ function ConversationTab({
   item: GitHubWorkItem
   repoPath: string | null
   repoId: string | null
+  sourceContext?: TaskSourceContext | null
   body: string
   comments: PRComment[]
   files: GitHubPRFile[]
@@ -2433,15 +2709,26 @@ function ConversationTab({
       await runWorkItemBodyUpdate({
         item,
         repoPath,
+        sourceContext,
         projectOrigin,
         body: resolvedBodyDraft,
         parsedSlug: bodySlug
       })
       onBodyUpdated(resolvedBodyDraft)
       setBodyEditing(false)
-      toast.success('Description updated.')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      toast.success(
+        translate('auto.components.GitHubItemDialog.5221548274', 'Description updated.')
+      )
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update description.')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate(
+              'auto.components.GitHubItemDialog.58c73cb0d8',
+              'Failed to update description.'
+            )
+      )
     } finally {
       setBodySaving(false)
     }
@@ -2453,13 +2740,19 @@ function ConversationTab({
     item,
     onBodyUpdated,
     projectOrigin,
-    repoPath
+    repoPath,
+    sourceContext
   ])
 
   const handleReply = useCallback(
     async (comment: PRComment, replyBody: string): Promise<boolean> => {
       if (!repoPath) {
-        toast.error('Unable to reply without a repository path.')
+        toast.error(
+          translate(
+            'auto.components.GitHubItemDialog.745c9089ec',
+            'Unable to reply without a repository path.'
+          )
+        )
         return false
       }
       const result =
@@ -2467,6 +2760,7 @@ function ConversationTab({
           ? await addPRReviewCommentReplyForRepo({
               repoPath,
               repoId: item.repoId,
+              sourceContext,
               prNumber: item.number,
               commentId: comment.id,
               body: replyBody,
@@ -2477,21 +2771,25 @@ function ConversationTab({
           : await addIssueCommentForRepo({
               repoPath,
               repoId: item.repoId,
+              sourceContext,
               number: item.number,
               body: `@${comment.author} ${replyBody}`,
               type: item.type
             })
 
       if (!result.ok) {
-        toast.error(result.error || 'Failed to post reply.')
+        toast.error(
+          result.error ||
+            translate('auto.components.GitHubItemDialog.283699bc82', 'Failed to post reply.')
+        )
         return false
       }
       onCommentAdded(result.comment)
       setReplyingTo(null)
-      toast.success('Reply posted.')
+      toast.success(translate('auto.components.GitHubItemDialog.10f4ff5be8', 'Reply posted.'))
       return true
     },
-    [item.number, item.repoId, item.type, onCommentAdded, repoPath]
+    [item.number, item.repoId, item.type, onCommentAdded, repoPath, sourceContext]
   )
 
   const rightPanel =
@@ -2501,6 +2799,7 @@ function ConversationTab({
           item={item}
           repoPath={repoPath}
           repoId={item.repoId}
+          sourceContext={sourceContext}
           projectOrigin={projectOrigin}
           localState={localState}
           onStateChange={onStateChange}
@@ -2510,6 +2809,7 @@ function ConversationTab({
           item={item}
           loading={loading}
           repoPath={repoPath}
+          sourceContext={sourceContext}
           onReviewersRequested={onReviewersRequested}
         />
         <aside className="overflow-hidden rounded-lg border border-border/50 bg-card/50 shadow-xs">
@@ -2517,6 +2817,7 @@ function ConversationTab({
             item={item}
             repoPath={repoPath}
             repoId={item.repoId}
+            sourceContext={sourceContext}
             headSha={headSha}
             checks={checks}
             loading={loading || !detailsLoaded}
@@ -2559,12 +2860,16 @@ function ConversationTab({
         {comment.path && (
           <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground/70">
             {comment.path.split('/').pop()}
-            {comment.line ? `:L${comment.line}` : ''}
+            {comment.line
+              ? translate('auto.components.GitHubItemDialog.136542c9ba', ':L{{value0}}', {
+                  value0: comment.line
+                })
+              : ''}
           </span>
         )}
         {comment.isResolved && (
           <span className="rounded-full border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[11px] text-muted-foreground">
-            resolved
+            {translate('auto.components.GitHubItemDialog.68cb993d61', 'resolved')}
           </span>
         )}
         <div className="ml-auto flex shrink-0 items-center gap-1">
@@ -2577,12 +2882,17 @@ function ConversationTab({
                 onClick={() =>
                   setReplyingTo((current) => (current === comment.id ? null : comment.id))
                 }
-                aria-label="Reply to comment"
+                aria-label={translate(
+                  'auto.components.GitHubItemDialog.bca8eb39ac',
+                  'Reply to comment'
+                )}
               >
                 <MessageSquarePlus className="size-3.5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Reply to comment</TooltipContent>
+            <TooltipContent>
+              {translate('auto.components.GitHubItemDialog.bca8eb39ac', 'Reply to comment')}
+            </TooltipContent>
           </Tooltip>
           {comment.url && (
             <Tooltip>
@@ -2593,12 +2903,17 @@ function ConversationTab({
                   size="icon-xs"
                   className="size-7"
                   onClick={() => window.api.shell.openUrl(comment.url)}
-                  aria-label="Open comment on GitHub"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.a154ec5224',
+                    'Open comment on GitHub'
+                  )}
                 >
                   <ExternalLink className="size-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Open comment on GitHub</TooltipContent>
+              <TooltipContent>
+                {translate('auto.components.GitHubItemDialog.a154ec5224', 'Open comment on GitHub')}
+              </TooltipContent>
             </Tooltip>
           )}
         </div>
@@ -2608,6 +2923,7 @@ function ConversationTab({
           comment={comment}
           repoPath={repoPath}
           repoId={item.repoId}
+          sourceContext={sourceContext}
           prNumber={item.number}
           files={files}
           headSha={headSha}
@@ -2624,7 +2940,14 @@ function ConversationTab({
           <CommentReplyForm
             className="mt-3"
             placeholder={
-              comment.path ? 'Reply in this review thread' : `Reply to @${comment.author}`
+              comment.path
+                ? translate(
+                    'auto.components.GitHubItemDialog.86f809e2ce',
+                    'Reply in this review thread'
+                  )
+                : translate('auto.components.GitHubItemDialog.080d071d48', 'Reply to @{{value0}}', {
+                    value0: comment.author
+                  })
             }
             onCancel={() => setReplyingTo(null)}
             onSubmit={(replyBody) => handleReply(comment, replyBody)}
@@ -2661,7 +2984,11 @@ function ConversationTab({
         >
           <AccordionTrigger className="px-3 py-2 text-[13px] text-muted-foreground hover:bg-accent/30">
             <span className="min-w-0 truncate">
-              Resolved {group.kind === 'thread' ? 'thread' : 'comment'} by {root.author}
+              {translate('auto.components.GitHubItemDialog.228e2f59d3', 'Resolved')}{' '}
+              {group.kind === 'thread'
+                ? translate('auto.components.GitHubItemDialog.28d0d3374f', 'thread')
+                : translate('auto.components.GitHubItemDialog.e2bf3e41a9', 'comment')}{' '}
+              {translate('auto.components.GitHubItemDialog.0ae387d8ca', 'by')} {root.author}
               {count > 1 ? ` (${count})` : ''}
             </span>
           </AccordionTrigger>
@@ -2687,7 +3014,10 @@ function ConversationTab({
         <div className="rounded-lg border border-border/50 bg-card/50 shadow-xs">
           <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2 text-[12px] text-muted-foreground">
             <span className="font-medium text-foreground">{authorLabel}</span>
-            <span>updated {formatRelativeTime(item.updatedAt)}</span>
+            <span>
+              {translate('auto.components.GitHubItemDialog.8223320f8d', 'updated')}{' '}
+              {formatRelativeTime(item.updatedAt)}
+            </span>
             {canEditBody && !loading && detailsLoaded ? (
               bodyEditing ? (
                 <div className="ml-auto flex items-center gap-1">
@@ -2703,7 +3033,7 @@ function ConversationTab({
                     }}
                   >
                     <X className="size-3.5" />
-                    Cancel
+                    {translate('auto.components.GitHubItemDialog.675bc0d638', 'Cancel')}
                   </Button>
                   <Button
                     type="button"
@@ -2717,7 +3047,7 @@ function ConversationTab({
                     ) : (
                       <Check className="size-3.5" />
                     )}
-                    Save
+                    {translate('auto.components.GitHubItemDialog.9df4e74bdf', 'Save')}
                   </Button>
                 </div>
               ) : (
@@ -2732,12 +3062,17 @@ function ConversationTab({
                         setBodyDraft(body)
                         setBodyEditing(true)
                       }}
-                      aria-label="Edit description"
+                      aria-label={translate(
+                        'auto.components.GitHubItemDialog.4d555d3796',
+                        'Edit description'
+                      )}
                     >
                       <Pencil className="size-3.5" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Edit description</TooltipContent>
+                  <TooltipContent>
+                    {translate('auto.components.GitHubItemDialog.4d555d3796', 'Edit description')}
+                  </TooltipContent>
                 </Tooltip>
               )
             ) : null}
@@ -2751,7 +3086,10 @@ function ConversationTab({
               <GitHubMarkdownComposer
                 value={resolvedBodyDraft}
                 onChange={setBodyDraft}
-                placeholder="Description"
+                placeholder={translate(
+                  'auto.components.GitHubItemDialog.52b20b56f7',
+                  'Description'
+                )}
                 disabled={bodySaving}
                 autoFocus
                 minHeightClassName="min-h-64"
@@ -2765,7 +3103,12 @@ function ConversationTab({
                 className="min-w-0 max-w-full overflow-hidden break-words text-[14px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
               />
             ) : (
-              <span className="italic text-muted-foreground">No description provided.</span>
+              <span className="italic text-muted-foreground">
+                {translate(
+                  'auto.components.GitHubItemDialog.9b9cb55994',
+                  'No description provided.'
+                )}
+              </span>
             )}
           </div>
         </div>
@@ -2774,7 +3117,9 @@ function ConversationTab({
           <>
             <div className="flex items-center gap-2 pt-1">
               <MessageSquare className="size-4 text-muted-foreground" />
-              <span className="text-[13px] font-medium text-foreground">Comments</span>
+              <span className="text-[13px] font-medium text-foreground">
+                {translate('auto.components.GitHubItemDialog.1506916c09', 'Comments')}
+              </span>
               {comments.length > 0 && (
                 <span className="rounded-full border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
                   {comments.length}
@@ -2784,7 +3129,7 @@ function ConversationTab({
 
             {item.type === 'pr' && comments.length > 0 && (
               <div className="grid grid-cols-3 rounded-lg border border-border/50 bg-background p-0.5">
-                {PR_COMMENT_AUDIENCE_FILTERS.map((filter) => {
+                {getPrCommentAudienceFilters().map((filter) => {
                   const isActive = commentFilter === filter.value
                   return (
                     <button
@@ -2807,7 +3152,7 @@ function ConversationTab({
 
             {comments.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-left text-[13px] text-muted-foreground">
-                No comments yet.
+                {translate('auto.components.GitHubItemDialog.5a94f3d0e9', 'No comments yet.')}
               </div>
             ) : visibleComments.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-center text-[13px] text-muted-foreground">
@@ -2826,6 +3171,7 @@ function ConversationTab({
             className="mt-1"
             repoPath={repoPath}
             repoId={item.repoId}
+            sourceContext={sourceContext}
             issueNumber={item.number}
             itemType={item.type}
             onCommentAdded={onCommentAdded}
@@ -2842,6 +3188,7 @@ function PRActionsPanel({
   item,
   repoPath,
   repoId,
+  sourceContext,
   projectOrigin,
   localState,
   onStateChange,
@@ -2850,6 +3197,7 @@ function PRActionsPanel({
   item: GitHubWorkItem
   repoPath: string | null
   repoId: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
   localState: GitHubWorkItem['state']
   onStateChange: (state: GitHubWorkItem['state']) => void
@@ -2880,10 +3228,10 @@ function PRActionsPanel({
   const applyStatePatch = useCallback(
     (state: GitHubWorkItem['state']) => {
       onStateChange(state)
-      patchWorkItem(item.id, { state }, item.repoId)
+      patchWorkItem(item.id, { state }, item.repoId, { sourceContext })
       patchProjectRowIfNeeded(state)
     },
-    [item.id, item.repoId, onStateChange, patchProjectRowIfNeeded, patchWorkItem]
+    [item.id, item.repoId, onStateChange, patchProjectRowIfNeeded, patchWorkItem, sourceContext]
   )
 
   const handleStateChange = async (): Promise<void> => {
@@ -2892,11 +3240,21 @@ function PRActionsPanel({
     }
     const label = nextState === 'closed' ? 'Close' : 'Reopen'
     const confirmed = await confirm({
-      title: `${label} PR #${item.number}?`,
+      title: translate(
+        'auto.components.GitHubItemDialog.03d7216d62',
+        '{{value0}} PR #{{value1}}?',
+        { value0: label, value1: item.number }
+      ),
       description:
         nextState === 'closed'
-          ? 'This will close the pull request on GitHub.'
-          : 'This will reopen the pull request on GitHub.',
+          ? translate(
+              'auto.components.GitHubItemDialog.de45fedf7b',
+              'This will close the pull request on GitHub.'
+            )
+          : translate(
+              'auto.components.GitHubItemDialog.b6f1b7adbd',
+              'This will reopen the pull request on GitHub.'
+            ),
       confirmLabel: label,
       confirmVariant: nextState === 'closed' ? 'destructive' : 'default'
     })
@@ -2910,15 +3268,27 @@ function PRActionsPanel({
       await runPullRequestStateUpdate({
         repoPath,
         repoId,
+        sourceContext,
         projectOrigin,
         number: item.number,
         updates: { state: nextState }
       })
-      toast.success(nextState === 'closed' ? 'Pull request closed' : 'Pull request reopened')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      toast.success(
+        nextState === 'closed'
+          ? translate('auto.components.GitHubItemDialog.9f88657c4e', 'Pull request closed')
+          : translate('auto.components.GitHubItemDialog.bd3b4492a0', 'Pull request reopened')
+      )
       onMutated()
     } catch (err) {
       applyStatePatch(previousState)
-      toast.error(err instanceof Error ? err.message : `Failed to ${label.toLowerCase()} PR`)
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate('auto.components.GitHubItemDialog.e9b7cb7d17', 'Failed to {{value0}} PR', {
+              value0: label.toLowerCase()
+            })
+      )
     } finally {
       setStatePending(false)
     }
@@ -2930,8 +3300,15 @@ function PRActionsPanel({
     }
     const label = GITHUB_PR_MERGE_METHOD_LABELS[method]
     const confirmed = await confirm({
-      title: `${label} PR #${item.number}?`,
-      description: 'This will update the pull request on GitHub.',
+      title: translate(
+        'auto.components.GitHubItemDialog.03d7216d62',
+        '{{value0}} PR #{{value1}}?',
+        { value0: label, value1: item.number }
+      ),
+      description: translate(
+        'auto.components.GitHubItemDialog.a27ee5ca1a',
+        'This will update the pull request on GitHub.'
+      ),
       confirmLabel: label
     })
     if (!confirmed) {
@@ -2942,6 +3319,7 @@ function PRActionsPanel({
       const result = await window.api.gh.mergePR({
         repoPath,
         repoId: repoId ?? undefined,
+        sourceContext,
         prNumber: item.number,
         method,
         prRepo: item.prRepo ?? null
@@ -2951,10 +3329,13 @@ function PRActionsPanel({
         return
       }
       applyStatePatch('merged')
-      toast.success('Pull request merged')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      toast.success(translate('auto.components.GitHubItemDialog.dbe5e2448e', 'Pull request merged'))
       onMutated()
     } catch {
-      toast.error('Failed to merge pull request')
+      toast.error(
+        translate('auto.components.GitHubItemDialog.aba792c8b3', 'Failed to merge pull request')
+      )
     } finally {
       setMergePending(false)
     }
@@ -2970,18 +3351,29 @@ function PRActionsPanel({
       const result = await window.api.gh.setPRAutoMerge({
         repoPath,
         repoId: repoId ?? undefined,
+        sourceContext,
         prNumber: item.number,
         enabled,
+        method: enabled ? mergeMethods.defaultMethod : undefined,
         prRepo: item.prRepo ?? null
       })
       if (!result.ok) {
         toast.error(result.error)
         return
       }
-      toast.success(enabled ? 'Auto-merge enabled' : 'Auto-merge disabled')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      toast.success(
+        enabled
+          ? translate('auto.components.GitHubItemDialog.a35ea5a0f6', 'Auto-merge enabled')
+          : translate('auto.components.GitHubItemDialog.4b390bd50d', 'Auto-merge disabled')
+      )
       onMutated()
     } catch {
-      toast.error(enabled ? 'Failed to enable auto-merge' : 'Failed to disable auto-merge')
+      toast.error(
+        enabled
+          ? translate('auto.components.GitHubItemDialog.825a8fb8cd', 'Failed to enable auto-merge')
+          : translate('auto.components.GitHubItemDialog.ce360fc318', 'Failed to disable auto-merge')
+      )
     } finally {
       setMergePending(false)
     }
@@ -2992,7 +3384,9 @@ function PRActionsPanel({
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <GitPullRequest className="size-3.5 text-muted-foreground" />
-          <span className="text-[13px] font-medium text-foreground">Pull request</span>
+          <span className="text-[13px] font-medium text-foreground">
+            {translate('auto.components.GitHubItemDialog.a2495e4784', 'Pull request')}
+          </span>
         </div>
         <WorkItemStateBadge item={actionItem} />
       </div>
@@ -3024,7 +3418,12 @@ function PRActionsPanel({
               </DropdownMenuTrigger>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {!repoPath ? 'Merge requires a registered local repo' : mergePresentation.tooltip}
+              {!repoPath
+                ? translate(
+                    'auto.components.GitHubItemDialog.5932578f51',
+                    'Merge requires a registered local repo'
+                  )
+                : mergePresentation.tooltip}
             </TooltipContent>
           </Tooltip>
           <DropdownMenuContent align="start" className="w-52">
@@ -3050,7 +3449,7 @@ function PRActionsPanel({
             ))}
             <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
               <ExternalLink className="size-4" />
-              Open GitHub merge box
+              {translate('auto.components.GitHubItemDialog.53fe19aefc', 'Open GitHub merge box')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -3074,7 +3473,9 @@ function PRActionsPanel({
           ) : (
             <CircleDot className="size-3.5" />
           )}
-          {nextState === 'closed' ? 'Close pull request' : 'Reopen PR'}
+          {nextState === 'closed'
+            ? translate('auto.components.GitHubItemDialog.21860b58d0', 'Close pull request')
+            : translate('auto.components.GitHubItemDialog.ec5c4b3ab2', 'Reopen PR')}
         </Button>
       </div>
     </aside>
@@ -3097,7 +3498,15 @@ function CommentReactions({
         <span
           key={reaction.content}
           className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/35 px-2 text-[12px] leading-none text-foreground"
-          aria-label={`${reaction.count} ${reaction.content} reaction${reaction.count === 1 ? '' : 's'}`}
+          aria-label={translate(
+            'auto.components.GitHubItemDialog.a18f669c7a',
+            '{{value0}} {{value1}} reaction{{value2}}',
+            {
+              value0: reaction.count,
+              value1: reaction.content,
+              value2: reaction.count === 1 ? '' : 's'
+            }
+          )}
         >
           <span aria-hidden="true">{REACTION_EMOJI[reaction.content]}</span>
           <span className="tabular-nums">{reaction.count}</span>
@@ -3123,13 +3532,22 @@ function CommentReplyForm({
   const mountedRef = useMountedRef()
 
   const submit = useCallback(async () => {
-    const trimmed = body.trim()
-    if (!trimmed || submitting) {
+    const bodyState = getCommentBodySubmitState(body)
+    if (bodyState.status === 'empty' || submitting) {
+      return
+    }
+    if (bodyState.status === 'too-large-leading-whitespace') {
+      toast.error(
+        translate(
+          'auto.components.GitHubItemDialog.commentTooLarge',
+          'Comment is too large to submit safely.'
+        )
+      )
       return
     }
     setSubmitting(true)
     try {
-      const ok = await onSubmit(trimmed)
+      const ok = await onSubmit(bodyState.body)
       if (!mountedRef.current) {
         return
       }
@@ -3142,6 +3560,7 @@ function CommentReplyForm({
       }
     }
   }, [body, mountedRef, onSubmit, submitting])
+  const canSubmitReply = hasBoundedCommentBodyText(body)
 
   return (
     <div className={cn('rounded-md border border-border/50 bg-background/60 p-2', className)}>
@@ -3156,10 +3575,12 @@ function CommentReplyForm({
       />
       <div className="mt-2 flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onCancel}>
-          Cancel
+          {translate('auto.components.GitHubItemDialog.675bc0d638', 'Cancel')}
         </Button>
-        <Button size="sm" disabled={!body.trim() || submitting} onClick={() => void submit()}>
-          {submitting ? 'Posting…' : 'Reply'}
+        <Button size="sm" disabled={!canSubmitReply || submitting} onClick={() => void submit()}>
+          {submitting
+            ? translate('auto.components.GitHubItemDialog.5752c25aff', 'Posting…')
+            : translate('auto.components.GitHubItemDialog.f64dd90102', 'Reply')}
         </Button>
       </div>
     </div>
@@ -3253,52 +3674,6 @@ function getChecksSummaryLabel(checks: PRCheckDetail[]): string {
   return `${counts.passing} of ${checks.length} checks passing`
 }
 
-function getBrokenChecks(checks: PRCheckDetail[]): PRCheckDetail[] {
-  return checks.filter((check) =>
-    ['failure', 'cancelled', 'timed_out'].includes(getCheckConclusion(check))
-  )
-}
-
-function buildFixBrokenChecksPrompt(item: GitHubWorkItem, checks: PRCheckDetail[]): string {
-  const brokenChecks = getBrokenChecks(checks)
-  const checkLines =
-    brokenChecks.length > 0
-      ? brokenChecks.map((check) => {
-          const details = [
-            getCheckStatusLabel(check),
-            check.checkRunId ? `check run ${check.checkRunId}` : null,
-            check.workflowRunId ? `workflow run ${check.workflowRunId}` : null,
-            check.url ? `details: ${check.url}` : null
-          ]
-            .filter(Boolean)
-            .join(', ')
-          return `- ${check.name}${details ? ` (${details})` : ''}`
-        })
-      : ['- No failing check is currently listed; refresh PR checks first, then inspect CI.']
-
-  return [
-    `Fix the broken checks for PR #${item.number}: ${item.title}`,
-    `PR: ${item.url}`,
-    '',
-    'Broken checks:',
-    ...checkLines,
-    '',
-    'Focus only on making the failing checks pass. Inspect the CI output first, make the smallest correct code or test changes, and do not work on unrelated cleanup.'
-  ].join('\n')
-}
-
-function pickDefaultAgent(
-  defaultAgent: TuiAgent | 'blank' | null | undefined,
-  detectedAgents: TuiAgent[],
-  disabledAgents?: TuiAgent[]
-): TuiAgent | null {
-  const enabledAgents = filterEnabledTuiAgents(detectedAgents, disabledAgents)
-  if (defaultAgent && defaultAgent !== 'blank' && enabledAgents.includes(defaultAgent)) {
-    return defaultAgent
-  }
-  return AGENT_CATALOG.find((entry) => enabledAgents.includes(entry.id))?.id ?? null
-}
-
 function getCheckDetailsKey(check: PRCheckDetail): string {
   return String(check.checkRunId ?? check.workflowRunId ?? check.url ?? check.name)
 }
@@ -3323,6 +3698,7 @@ function ChecksTab({
   item,
   repoPath,
   repoId,
+  sourceContext,
   headSha,
   checks,
   loading,
@@ -3332,6 +3708,7 @@ function ChecksTab({
   item: GitHubWorkItem
   repoPath: string | null
   repoId: string | null
+  sourceContext?: TaskSourceContext | null
   headSha: string | undefined
   checks: GitHubWorkItemDetails['checks']
   loading: boolean
@@ -3380,7 +3757,12 @@ function ChecksTab({
 
   const handleRefresh = useCallback(async (): Promise<PRCheckDetail[] | null> => {
     if (!repoPath) {
-      toast.error('Unable to refresh checks without a repository path.')
+      toast.error(
+        translate(
+          'auto.components.GitHubItemDialog.e7007aa1d8',
+          'Unable to refresh checks without a repository path.'
+        )
+      )
       return null
     }
     setRefreshing(true)
@@ -3388,6 +3770,7 @@ function ChecksTab({
       const nextChecks = (await window.api.gh.prChecks({
         repoPath,
         repoId: repoId ?? undefined,
+        sourceContext,
         prNumber: item.number,
         headSha,
         noCache: true
@@ -3396,12 +3779,16 @@ function ChecksTab({
       onChecksUpdated(nextChecks)
       return nextChecks
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to refresh checks')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate('auto.components.GitHubItemDialog.0bbdc673c1', 'Failed to refresh checks')
+      )
       return null
     } finally {
       setRefreshing(false)
     }
-  }, [headSha, item.number, onChecksUpdated, repoId, repoPath])
+  }, [headSha, item.number, onChecksUpdated, repoId, repoPath, sourceContext])
 
   const handleRerun = useCallback(
     async (failedOnly: boolean): Promise<void> => {
@@ -3413,6 +3800,7 @@ function ChecksTab({
         const result = await window.api.gh.rerunPRChecks({
           repoPath,
           repoId: repoId ?? undefined,
+          sourceContext,
           prNumber: item.number,
           headSha,
           failedOnly
@@ -3421,15 +3809,23 @@ function ChecksTab({
           toast.error(result.error)
           return
         }
-        toast.success(result.count === 1 ? 'Check rerun requested' : 'Check reruns requested')
+        toast.success(
+          result.count === 1
+            ? translate('auto.components.GitHubItemDialog.ddafe851e1', 'Check rerun requested')
+            : translate('auto.components.GitHubItemDialog.e463ec935f', 'Check reruns requested')
+        )
         await handleRefresh()
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to rerun checks')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate('auto.components.GitHubItemDialog.9e7c221b8d', 'Failed to rerun checks')
+        )
       } finally {
         setRerunning(false)
       }
     },
-    [handleRefresh, headSha, item.number, rerunning, repoId, repoPath]
+    [handleRefresh, headSha, item.number, rerunning, repoId, repoPath, sourceContext]
   )
 
   const handleFixBrokenChecks = useCallback(async (): Promise<void> => {
@@ -3438,72 +3834,54 @@ function ChecksTab({
       return
     }
     if (failedChecks.length === 0) {
-      toast.message('No broken checks to fix.')
+      toast.message(
+        translate('auto.components.GitHubItemDialog.1690fd7f4a', 'No broken checks to fix.')
+      )
       return
     }
 
+    const basePrompt = buildFixBrokenChecksPrompt({
+      reviewKind: 'PR',
+      reviewNumber: item.number,
+      reviewTitle: item.title,
+      reviewUrl: item.url,
+      checks: list
+    })
     setFixingChecks(true)
     try {
-      const prompt = buildFixBrokenChecksPrompt(item, list)
-      const store = useAppStore.getState()
-      const attachedWorkspace = findGithubPrWorkspaceAttachment(
-        store.allWorktrees(),
-        targetRepoId,
-        item.number
-      )
-
-      if (!attachedWorkspace) {
-        await launchWorkItemDirect({
-          item: { ...item, pasteContent: prompt },
-          repoId: targetRepoId,
-          launchSource: 'task_page',
-          telemetrySource: 'sidebar',
-          openModalFallback: () => {
-            toast.error('Unable to create a fix workspace automatically.')
-          }
-        })
-        return
-      }
-
-      if (!activateAndRevealWorktree(attachedWorkspace.id)) {
-        toast.error('Unable to open the workspace attached to this pull request.')
-        return
-      }
-
-      const connectionId = getConnectionId(attachedWorkspace.id)
-      if (connectionId === undefined) {
-        toast.error('Unable to resolve the workspace connection.')
-        return
-      }
-
-      const activeStore = useAppStore.getState()
-      const detectedAgents =
-        typeof connectionId === 'string'
-          ? await activeStore.ensureRemoteDetectedAgents(connectionId)
-          : await activeStore.ensureDetectedAgents()
-      const agent = pickDefaultAgent(
-        activeStore.settings?.defaultTuiAgent,
-        detectedAgents,
-        activeStore.settings?.disabledTuiAgents
-      )
-      if (!agent) {
-        toast.error('No enabled AI agents. Configure agents in Settings.')
-        return
-      }
-
-      const result = launchAgentInNewTab({
-        agent,
-        worktreeId: attachedWorkspace.id,
-        prompt,
-        promptDelivery: 'draft',
-        launchSource: 'task_page'
+      const started = await startFixChecksAgent({
+        item,
+        repoId: targetRepoId,
+        basePrompt,
+        launchSource: 'task_page',
+        telemetrySource: 'sidebar',
+        openModalFallback: () => {
+          toast.error(
+            translate(
+              'auto.components.GitHubItemDialog.06482d6190',
+              'Unable to create a fix workspace automatically.'
+            )
+          )
+        }
       })
-      if (!result) {
-        toast.error('Could not build the agent launch command.')
-        return
+      if (started) {
+        toast.success(
+          translate(
+            'auto.components.GitHubItemDialog.28986b3747',
+            'Started an AI agent for the broken checks.'
+          )
+        )
       }
-      focusTerminalTabSurface(result.tabId)
-      toast.success('Started an AI agent for the broken checks.')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.error('Failed to start fix checks agent', err)
+      toast.error(
+        translate(
+          'auto.components.GitHubItemDialog.03e542fcfe',
+          'Failed to start an AI agent for the broken checks: {{value0}}',
+          { value0: message }
+        )
+      )
     } finally {
       setFixingChecks(false)
     }
@@ -3521,7 +3899,11 @@ function ChecksTab({
         return
       }
       setChecksState((current) =>
-        updateGitHubChecksTabDetails(current, key, { loading: true, details: null, error: null })
+        updateGitHubChecksTabDetails(current, key, {
+          loading: true,
+          details: null,
+          error: null
+        })
       )
       void window.api.gh
         .prCheckDetails({
@@ -3571,13 +3953,13 @@ function ChecksTab({
           className="size-7 shrink-0"
           disabled={!repoPath || refreshing}
           onClick={() => void handleRefresh()}
-          aria-label="Refresh checks"
+          aria-label={translate('auto.components.GitHubItemDialog.9a1004fc76', 'Refresh checks')}
         >
           <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />
         </Button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
-        Refresh checks
+        {translate('auto.components.GitHubItemDialog.9a1004fc76', 'Refresh checks')}
       </TooltipContent>
     </Tooltip>
   )
@@ -3598,11 +3980,16 @@ function ChecksTab({
             ) : (
               <Wrench className="size-3" />
             )}
-            {variant === 'compact' ? 'Fix checks' : 'Fix broken checks'}
+            {variant === 'compact'
+              ? translate('auto.components.GitHubItemDialog.9157d48ddb', 'Fix checks')
+              : translate('auto.components.GitHubItemDialog.2511f44bb7', 'Fix broken checks')}
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          Start the default AI agent on these checks
+          {translate(
+            'auto.components.GitHubItemDialog.f4b1292569',
+            'Start the default AI agent on these checks'
+          )}
         </TooltipContent>
       </Tooltip>
     ) : null
@@ -3622,7 +4009,7 @@ function ChecksTab({
             ) : (
               <RefreshCw className="size-3" />
             )}
-            Rerun
+            {translate('auto.components.GitHubItemDialog.1b56e28faa', 'Rerun')}
             <ChevronDown className="size-3 opacity-60" />
           </Button>
         </DropdownMenuTrigger>
@@ -3632,11 +4019,11 @@ function ChecksTab({
             onSelect={() => void handleRerun(true)}
           >
             <RefreshCw className="size-4" />
-            Rerun failed checks
+            {translate('auto.components.GitHubItemDialog.e31651a224', 'Rerun failed checks')}
           </DropdownMenuItem>
           <DropdownMenuItem disabled={rerunning} onSelect={() => void handleRerun(false)}>
             <RefreshCw className="size-4" />
-            Rerun all checks
+            {translate('auto.components.GitHubItemDialog.71c11aff84', 'Rerun all checks')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -3668,7 +4055,9 @@ function ChecksTab({
             )}
           />
           <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-medium leading-5 text-foreground">Checks</div>
+            <div className="text-[13px] font-medium leading-5 text-foreground">
+              {translate('auto.components.GitHubItemDialog.4bd1f5b055', 'Checks')}
+            </div>
             {list.length > 0 && (
               <div className="truncate text-[11px] leading-4 text-muted-foreground">
                 {summaryLabel}
@@ -3750,18 +4139,33 @@ function ChecksTab({
         {state?.loading ? (
           <div className="flex items-center gap-2 py-2 text-[12px] text-muted-foreground">
             <LoaderCircle className="size-3.5 animate-spin" />
-            Loading check details…
+            {translate('auto.components.GitHubItemDialog.934d87ab96', 'Loading check details…')}
           </div>
         ) : (
           <div className="flex min-w-0 flex-col gap-2">
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
               <span>
-                Status:{' '}
+                {translate('auto.components.GitHubItemDialog.9c3ba11a05', 'Status:')}{' '}
                 {details ? getCheckStatusLabel(detailsStatusCheck) : getCheckStatusLabel(check)}
               </span>
-              {startedAt && <span>Started {startedAt}</span>}
-              {completedAt && <span>Completed {completedAt}</span>}
-              {check.checkRunId && <span className="font-mono">check #{check.checkRunId}</span>}
+              {startedAt && (
+                <span>
+                  {translate('auto.components.GitHubItemDialog.4812814bc8', 'Started')}
+                  {startedAt}
+                </span>
+              )}
+              {completedAt && (
+                <span>
+                  {translate('auto.components.GitHubItemDialog.0f478f5efa', 'Completed')}
+                  {completedAt}
+                </span>
+              )}
+              {check.checkRunId && (
+                <span className="font-mono">
+                  {translate('auto.components.GitHubItemDialog.485609c4f2', 'check #')}
+                  {check.checkRunId}
+                </span>
+              )}
             </div>
 
             {state?.error && <div className="text-[12px] text-muted-foreground">{state.error}</div>}
@@ -3793,7 +4197,7 @@ function ChecksTab({
             {hasAnnotations && (
               <div className="min-w-0 rounded-md border border-border/40 bg-background/70">
                 <div className="border-b border-border/40 px-2.5 py-1.5 text-[11px] font-medium text-foreground">
-                  Annotations
+                  {translate('auto.components.GitHubItemDialog.96d8f36798', 'Annotations')}
                 </div>
                 <div className="flex flex-col">
                   {details!.annotations.map((annotation, index) => (
@@ -3806,7 +4210,8 @@ function ChecksTab({
                     >
                       <div className="flex min-w-0 items-center gap-2">
                         <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
-                          {annotation.path ?? 'Annotation'}
+                          {annotation.path ??
+                            translate('auto.components.GitHubItemDialog.7d42606f66', 'Annotation')}
                           {annotation.startLine ? `:${annotation.startLine}` : ''}
                         </span>
                         {annotation.annotationLevel && (
@@ -3837,7 +4242,7 @@ function ChecksTab({
             {hasJobs && (
               <div className="min-w-0 rounded-md border border-border/40 bg-background/70">
                 <div className="border-b border-border/40 px-2.5 py-1.5 text-[11px] font-medium text-foreground">
-                  Jobs
+                  {translate('auto.components.GitHubItemDialog.08d072664d', 'Jobs')}
                 </div>
                 <div className="flex flex-col">
                   {details!.jobs.map((job, index) => (
@@ -3853,7 +4258,9 @@ function ChecksTab({
                           {job.name}
                         </span>
                         <span className="shrink-0 text-[11px] text-muted-foreground">
-                          {job.conclusion ?? job.status ?? 'unknown'}
+                          {job.conclusion ??
+                            job.status ??
+                            translate('auto.components.GitHubItemDialog.773ff70035', 'unknown')}
                         </span>
                       </div>
                       {job.steps.length > 0 && (
@@ -3877,7 +4284,10 @@ function ChecksTab({
 
             {!state?.error && !hasOutput && !hasAnnotations && !hasJobs && (
               <div className="text-[12px] text-muted-foreground">
-                No inline output is available for this check.
+                {translate(
+                  'auto.components.GitHubItemDialog.744197c84d',
+                  'No inline output is available for this check.'
+                )}
               </div>
             )}
 
@@ -3890,7 +4300,7 @@ function ChecksTab({
                   className="h-7 gap-1 px-2 text-[11px]"
                   onClick={() => window.api.shell.openUrl(openUrl)}
                 >
-                  Open in GitHub
+                  {translate('auto.components.GitHubItemDialog.5dddefdf58', 'Open in GitHub')}
                   <ExternalLink className="size-3" />
                 </Button>
               </div>
@@ -3919,10 +4329,13 @@ function ChecksTab({
             <CircleDashed className="size-4 shrink-0 text-muted-foreground" />
             <div className="flex min-w-0 flex-1 flex-col">
               <span className="truncate text-[13px] font-medium text-foreground">
-                No checks found
+                {translate('auto.components.GitHubItemDialog.ecffebc251', 'No checks found')}
               </span>
               <span className="truncate text-[11px] text-muted-foreground">
-                This pull request has no reported checks yet.
+                {translate(
+                  'auto.components.GitHubItemDialog.90020cc1f3',
+                  'This pull request has no reported checks yet.'
+                )}
               </span>
             </div>
             {actions}
@@ -3935,7 +4348,9 @@ function ChecksTab({
         {compactHeader}
         <div className="flex flex-col items-center justify-center gap-1 px-4 py-6 text-center">
           <CircleDashed className="size-4 text-muted-foreground/60" />
-          <div className="text-[12px] text-muted-foreground">No checks reported yet</div>
+          <div className="text-[12px] text-muted-foreground">
+            {translate('auto.components.GitHubItemDialog.e52bed9264', 'No checks reported yet')}
+          </div>
         </div>
       </>
     )
@@ -3943,17 +4358,34 @@ function ChecksTab({
   if (variant === 'page') {
     const countChips: { label: string; className: string }[] = []
     if (counts.passing > 0) {
-      countChips.push({ label: `${counts.passing} passing`, className: CHECK_COLOR.success })
+      countChips.push({
+        label: translate('auto.components.GitHubItemDialog.311d0cee55', '{{value0}} passing', {
+          value0: counts.passing
+        }),
+        className: CHECK_COLOR.success
+      })
     }
     if (counts.failing > 0) {
-      countChips.push({ label: `${counts.failing} failing`, className: CHECK_COLOR.failure })
+      countChips.push({
+        label: translate('auto.components.GitHubItemDialog.b1ac991806', '{{value0}} failing', {
+          value0: counts.failing
+        }),
+        className: CHECK_COLOR.failure
+      })
     }
     if (counts.pending > 0) {
-      countChips.push({ label: `${counts.pending} pending`, className: CHECK_COLOR.pending })
+      countChips.push({
+        label: translate('auto.components.GitHubItemDialog.18f80e1329', '{{value0}} pending', {
+          value0: counts.pending
+        }),
+        className: CHECK_COLOR.pending
+      })
     }
     if (counts.skipped + counts.neutral > 0) {
       countChips.push({
-        label: `${counts.skipped + counts.neutral} skipped`,
+        label: translate('auto.components.GitHubItemDialog.d23bbb6416', '{{value0}} skipped', {
+          value0: counts.skipped + counts.neutral
+        }),
         className: 'text-muted-foreground'
       })
     }
@@ -4011,15 +4443,23 @@ function ChecksTab({
 // repo. The edit IPCs return a structured `{ ok, error }` shape; we adapt
 // to a thrown rejection so the existing `useImmediateMutation` flow
 // (which expects throws on failure) continues to work unchanged.
+function getGitHubMutationSettings(repoId: string | null | undefined) {
+  const state = useAppStore.getState()
+  // Why: project-origin mutations are slug-addressed, but when we know the
+  // backing repo id they must still execute on that repo's owner host.
+  return getSettingsForRepoRuntimeOwner(state, repoId ?? null)
+}
+
 async function runIssueUpdate(args: {
   repoPath: string | null
   repoId?: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
   number: number
   updates: Parameters<typeof window.api.gh.updateIssue>[0]['updates']
 }): Promise<void> {
   if (args.projectOrigin) {
-    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.repoId))
     const updateArgs = {
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
@@ -4032,7 +4472,9 @@ async function runIssueUpdate(args: {
             target,
             'github.project.updateIssueBySlug',
             updateArgs,
-            { timeoutMs: 30_000 }
+            {
+              timeoutMs: 30_000
+            }
           )
         : await window.api.gh.updateIssueBySlug(updateArgs)
     if (!res.ok) {
@@ -4046,6 +4488,7 @@ async function runIssueUpdate(args: {
   const res = await window.api.gh.updateIssue({
     repoPath: args.repoPath,
     repoId: args.repoId ?? undefined,
+    sourceContext: args.sourceContext,
     number: args.number,
     updates: args.updates
   })
@@ -4057,6 +4500,7 @@ async function runIssueUpdate(args: {
 async function runWorkItemBodyUpdate(args: {
   item: GitHubWorkItem
   repoPath: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
   body: string
   parsedSlug: GitHubOwnerRepo | null
@@ -4068,7 +4512,7 @@ async function runWorkItemBodyUpdate(args: {
     if (!targetSlug) {
       throw new Error('No GitHub repository context available for this pull request.')
     }
-    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.item.repoId))
     const updateArgs = {
       owner: targetSlug.owner,
       repo: targetSlug.repo,
@@ -4081,7 +4525,9 @@ async function runWorkItemBodyUpdate(args: {
             target,
             'github.project.updatePullRequestBySlug',
             updateArgs,
-            { timeoutMs: 30_000 }
+            {
+              timeoutMs: 30_000
+            }
           )
         : await window.api.gh.updatePullRequestBySlug(updateArgs)
     if (!res.ok) {
@@ -4093,6 +4539,7 @@ async function runWorkItemBodyUpdate(args: {
   await runIssueUpdate({
     repoPath: args.repoPath,
     repoId: args.item.repoId,
+    sourceContext: args.sourceContext,
     projectOrigin: args.projectOrigin,
     number: args.item.number,
     updates: { body: args.body }
@@ -4102,12 +4549,13 @@ async function runWorkItemBodyUpdate(args: {
 async function runPullRequestStateUpdate(args: {
   repoPath: string | null
   repoId?: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
   number: number
   updates: { state: 'open' | 'closed' }
 }): Promise<void> {
   if (args.projectOrigin) {
-    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.repoId))
     const updateArgs = {
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
@@ -4120,7 +4568,9 @@ async function runPullRequestStateUpdate(args: {
             target,
             'github.project.updatePullRequestBySlug',
             updateArgs,
-            { timeoutMs: 30_000 }
+            {
+              timeoutMs: 30_000
+            }
           )
         : await window.api.gh.updatePullRequestBySlug(updateArgs)
     if (!res.ok) {
@@ -4134,6 +4584,7 @@ async function runPullRequestStateUpdate(args: {
   const res = await window.api.gh.updatePRState({
     repoPath: args.repoPath,
     repoId: args.repoId ?? undefined,
+    sourceContext: args.sourceContext,
     prNumber: args.number,
     updates: args.updates
   })
@@ -4166,7 +4617,9 @@ function GitHubLabelsSettingsLink({
         className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
       >
         <Settings className="size-3.5 shrink-0" />
-        <span className="min-w-0 flex-1 text-left">Edit labels on GitHub</span>
+        <span className="min-w-0 flex-1 text-left">
+          {translate('auto.components.GitHubItemDialog.2aa9acdf34', 'Edit labels on GitHub')}
+        </span>
         <ExternalLink className="size-3 shrink-0 opacity-70" />
       </button>
     </div>
@@ -4177,6 +4630,7 @@ function GHEditSection({
   item,
   repoPath,
   repoId,
+  sourceContext,
   projectOrigin,
   localState,
   localLabels,
@@ -4192,6 +4646,7 @@ function GHEditSection({
   item: GitHubWorkItem
   repoPath: string | null
   repoId: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
   localState: GitHubWorkItem['state']
   localLabels: string[]
@@ -4217,6 +4672,19 @@ function GHEditSection({
   const assigneesItemKey = `${item.repoId}\0${item.id}`
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
+  )
+  const sourceSettings = useMemo(
+    () =>
+      sourceContext?.provider === 'github'
+        ? ({
+            ...repoOwnerSettings,
+            ...getTaskSourceRuntimeSettings(sourceContext)
+          } as typeof repoOwnerSettings)
+        : repoOwnerSettings,
+    [repoOwnerSettings, sourceContext]
+  )
   const { isPending, run } = useImmediateMutation()
   // Why: when the dialog opens from a Project view, mutations route through
   // *BySlug IPCs and we must keep `projectViewCache` in sync alongside
@@ -4240,16 +4708,18 @@ function GHEditSection({
   const slugRepo = projectOrigin?.repo ?? null
   const repoLabelsByPath = useRepoLabels(
     projectOrigin ? null : repoPath,
-    projectOrigin ? null : repoId
+    projectOrigin ? null : repoId,
+    sourceSettings
   )
-  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo)
+  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo, sourceSettings)
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
   const repositoryLabelsUrl = useMemo(() => getGitHubRepositoryLabelsUrl(item.url), [item.url])
   const repoAssigneesByPath = useRepoAssignees(
     projectOrigin ? null : repoPath,
-    projectOrigin ? null : repoId
+    projectOrigin ? null : repoId,
+    sourceSettings
   )
-  const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees)
+  const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees, sourceSettings)
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
   const hasAttachedWorkspace =
     attachedWorkspaceLabel !== null && attachedWorkspaceLabel !== undefined
@@ -4282,22 +4752,24 @@ function GHEditSection({
           runIssueUpdate({
             repoId: item.repoId,
             repoPath,
+            sourceContext,
             projectOrigin,
             number: item.number,
             updates: { state: newState }
           }),
         onOptimistic: () => {
           onStateChange(newState)
-          patchWorkItem(item.id, { state: newState }, item.repoId)
+          patchWorkItem(item.id, { state: newState }, item.repoId, { sourceContext })
           patchProjectRowIfNeeded({ state: newState })
         },
         onRevert: () => {
           onStateChange(prevState)
-          patchWorkItem(item.id, { state: prevState }, item.repoId)
+          patchWorkItem(item.id, { state: prevState }, item.repoId, { sourceContext })
           patchProjectRowIfNeeded({ state: prevState })
         },
         onSuccess: () => {
-          patchWorkItem(item.id, { state: newState }, item.repoId)
+          useAppStore.getState().recordFeatureInteraction('github-tasks')
+          patchWorkItem(item.id, { state: newState }, item.repoId, { sourceContext })
           patchProjectRowIfNeeded({ state: newState })
           onMutated()
         },
@@ -4310,6 +4782,7 @@ function GHEditSection({
       item.repoId,
       localState,
       repoPath,
+      sourceContext,
       projectOrigin,
       patchWorkItem,
       patchProjectRowIfNeeded,
@@ -4331,21 +4804,23 @@ function GHEditSection({
             runIssueUpdate({
               repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { addLabels: [label] }
             }),
           onOptimistic: () => {
             onLabelsChange(newLabels)
-            patchWorkItem(item.id, { labels: newLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: newLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: newLabels })
           },
           onSuccess: () => {
+            useAppStore.getState().recordFeatureInteraction('github-tasks')
             onMutated()
           },
           onRevert: () => {
             onLabelsChange(prevLabels)
-            patchWorkItem(item.id, { labels: prevLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: prevLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: prevLabels })
           },
           onError: (err) => toast.error(err)
@@ -4356,21 +4831,23 @@ function GHEditSection({
             runIssueUpdate({
               repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { removeLabels: [label] }
             }),
           onOptimistic: () => {
             onLabelsChange(newLabels)
-            patchWorkItem(item.id, { labels: newLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: newLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: newLabels })
           },
           onRevert: () => {
             onLabelsChange(prevLabels)
-            patchWorkItem(item.id, { labels: prevLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: prevLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: prevLabels })
           },
           onSuccess: () => {
+            useAppStore.getState().recordFeatureInteraction('github-tasks')
             onMutated()
           },
           onError: (err) => toast.error(err)
@@ -4383,6 +4860,7 @@ function GHEditSection({
       item.repoId,
       localLabels,
       repoPath,
+      sourceContext,
       projectOrigin,
       patchWorkItem,
       patchProjectRowIfNeeded,
@@ -4409,6 +4887,7 @@ function GHEditSection({
             runIssueUpdate({
               repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { removeAssignees: [login] }
@@ -4422,6 +4901,7 @@ function GHEditSection({
             patchProjectRowIfNeeded({ assignees: prevAssignees })
           },
           onSuccess: () => {
+            useAppStore.getState().recordFeatureInteraction('github-tasks')
             onMutated()
           },
           onError: (err) => toast.error(err)
@@ -4432,6 +4912,7 @@ function GHEditSection({
             runIssueUpdate({
               repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { addAssignees: [login] }
@@ -4441,6 +4922,7 @@ function GHEditSection({
             patchProjectRowIfNeeded({ assignees: newAssignees })
           },
           onSuccess: () => {
+            useAppStore.getState().recordFeatureInteraction('github-tasks')
             onMutated()
           },
           onRevert: () => {
@@ -4456,6 +4938,7 @@ function GHEditSection({
       item.repoId,
       assigneesItemKey,
       repoPath,
+      sourceContext,
       projectOrigin,
       localAssignees,
       patchProjectRowIfNeeded,
@@ -4486,7 +4969,7 @@ function GHEditSection({
         {/* State */}
         <section>
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            Status
+            {translate('auto.components.GitHubItemDialog.00ccdf9b5a', 'Status')}
           </div>
           <Popover>
             <PopoverTrigger asChild>
@@ -4518,7 +5001,7 @@ function GHEditSection({
                 )}
               >
                 <CircleDot className="size-3 text-emerald-500" />
-                Open
+                {translate('auto.components.GitHubItemDialog.dc1ca081a8', 'Open')}
               </button>
               <button
                 type="button"
@@ -4529,7 +5012,7 @@ function GHEditSection({
                 )}
               >
                 <CircleDashed className="size-3 text-rose-500" />
-                Closed
+                {translate('auto.components.GitHubItemDialog.ab050dffec', 'Closed')}
               </button>
             </PopoverContent>
           </Popover>
@@ -4538,13 +5021,16 @@ function GHEditSection({
         {/* Assignees */}
         <section>
           <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            <span>Assignees</span>
+            <span>{translate('auto.components.GitHubItemDialog.83ac703dda', 'Assignees')}</span>
             <Popover open={assigneePopoverOpen} onOpenChange={setAssigneePopoverOpen}>
               <PopoverTrigger asChild>
                 <button
                   type="button"
                   disabled={isPending('assignees') || repoAssignees.loading}
-                  aria-label="Edit assignees"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.76adcf5fe2',
+                    'Edit assignees'
+                  )}
                   className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
                 >
                   {isPending('assignees') ? (
@@ -4597,7 +5083,9 @@ function GHEditSection({
             </Popover>
           </div>
           {localAssignees.length === 0 ? (
-            <div className="text-[12px] text-muted-foreground">No one assigned</div>
+            <div className="text-[12px] text-muted-foreground">
+              {translate('auto.components.GitHubItemDialog.c67de9e2fe', 'No one assigned')}
+            </div>
           ) : (
             <ul className="flex flex-col gap-1.5">
               {localAssignees.map((login) => {
@@ -4626,13 +5114,16 @@ function GHEditSection({
         {/* Labels */}
         <section>
           <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            <span>Labels</span>
+            <span>{translate('auto.components.GitHubItemDialog.217e55d87c', 'Labels')}</span>
             <Popover open={labelPopoverOpen} onOpenChange={setLabelPopoverOpen}>
               <PopoverTrigger asChild>
                 <button
                   type="button"
                   disabled={isPending('labels') || repoLabels.loading}
-                  aria-label="Edit labels"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.4ba0132f37',
+                    'Edit labels'
+                  )}
                   className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
                 >
                   {isPending('labels') ? (
@@ -4684,7 +5175,9 @@ function GHEditSection({
             </Popover>
           </div>
           {localLabels.length === 0 ? (
-            <div className="text-[12px] text-muted-foreground">None yet</div>
+            <div className="text-[12px] text-muted-foreground">
+              {translate('auto.components.GitHubItemDialog.886a64b081', 'None yet')}
+            </div>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {localLabels.map((name) => (
@@ -4701,7 +5194,7 @@ function GHEditSection({
 
         <section>
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            Workspace
+            {translate('auto.components.GitHubItemDialog.2e4d806c92', 'Workspace')}
           </div>
           {attachedWorkspaceLabel ? (
             <div className="mb-2 flex min-w-0 items-center gap-1.5 text-[12px] text-muted-foreground">
@@ -4717,13 +5210,23 @@ function GHEditSection({
                   size="sm"
                   onClick={handleOpenOrUseWorkspace}
                   className="flex-1 gap-1.5"
-                  aria-label="Open workspace attached to issue"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.84855fedd0',
+                    'Open workspace attached to issue'
+                  )}
                 >
-                  Open workspace
+                  {translate('auto.components.GitHubItemDialog.726db41722', 'Open workspace')}
                   <ArrowRight className="size-3.5" />
                 </Button>
                 <DropdownMenuTrigger asChild>
-                  <Button type="button" size="icon-sm" aria-label="More issue workspace actions">
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    aria-label={translate(
+                      'auto.components.GitHubItemDialog.fe6ff12dc2',
+                      'More issue workspace actions'
+                    )}
+                  >
                     <ChevronDown className="size-3.5" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -4731,7 +5234,7 @@ function GHEditSection({
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onSelect={() => onUse(item)}>
                   <Plus className="size-4" />
-                  Start new workspace
+                  {translate('auto.components.GitHubItemDialog.36182aa57f', 'Start new workspace')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -4741,9 +5244,15 @@ function GHEditSection({
               size="sm"
               onClick={() => onUse(item)}
               className="w-full gap-1.5"
-              aria-label="Start workspace from issue"
+              aria-label={translate(
+                'auto.components.GitHubItemDialog.0ab4664a8b',
+                'Start workspace from issue'
+              )}
             >
-              Start workspace from issue
+              {translate(
+                'auto.components.GitHubItemDialog.0ab4664a8b',
+                'Start workspace from issue'
+              )}
               <ArrowRight className="size-3.5" />
             </Button>
           )}
@@ -4778,7 +5287,7 @@ function GHEditSection({
             )}
           >
             <CircleDot className="size-3 text-emerald-500" />
-            Open
+            {translate('auto.components.GitHubItemDialog.dc1ca081a8', 'Open')}
           </button>
           <button
             type="button"
@@ -4789,7 +5298,7 @@ function GHEditSection({
             )}
           >
             <CircleDashed className="size-3 text-rose-500" />
-            Closed
+            {translate('auto.components.GitHubItemDialog.ab050dffec', 'Closed')}
           </button>
         </PopoverContent>
       </Popover>
@@ -4803,7 +5312,9 @@ function GHEditSection({
             className="group/labels inline-flex items-center gap-1 rounded-full border border-border/30 bg-muted/20 px-2 py-0.5 text-[11px] transition hover:brightness-125 hover:ring-1 hover:ring-white/10 disabled:opacity-50"
           >
             {localLabels.length === 0 ? (
-              <span className="text-muted-foreground">+ Label</span>
+              <span className="text-muted-foreground">
+                {translate('auto.components.GitHubItemDialog.f41ec96c13', '+ Label')}
+              </span>
             ) : (
               localLabels.map((name) => (
                 <span key={name} className="text-[10px] text-muted-foreground">
@@ -4865,7 +5376,9 @@ function GHEditSection({
             className="group/assignees inline-flex items-center gap-1 rounded-full border border-border/30 bg-muted/20 px-2 py-0.5 text-[11px] transition hover:brightness-125 hover:ring-1 hover:ring-white/10 disabled:opacity-50"
           >
             {localAssignees.length === 0 ? (
-              <span className="text-muted-foreground">+ Assignee</span>
+              <span className="text-muted-foreground">
+                {translate('auto.components.GitHubItemDialog.c6f37a563d', '+ Assignee')}
+              </span>
             ) : (
               localAssignees.map((login) => (
                 <span key={login} className="text-[10px] text-muted-foreground">
@@ -4934,13 +5447,23 @@ function GHEditSection({
                 size="sm"
                 onClick={handleOpenOrUseWorkspace}
                 className="gap-2"
-                aria-label="Open workspace attached to issue"
+                aria-label={translate(
+                  'auto.components.GitHubItemDialog.84855fedd0',
+                  'Open workspace attached to issue'
+                )}
               >
-                Open workspace
+                {translate('auto.components.GitHubItemDialog.726db41722', 'Open workspace')}
                 <ArrowRight className="size-4" />
               </Button>
               <DropdownMenuTrigger asChild>
-                <Button type="button" size="icon-sm" aria-label="More issue workspace actions">
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.fe6ff12dc2',
+                    'More issue workspace actions'
+                  )}
+                >
                   <ChevronDown className="size-3.5" />
                 </Button>
               </DropdownMenuTrigger>
@@ -4948,7 +5471,7 @@ function GHEditSection({
             <DropdownMenuContent align="end">
               <DropdownMenuItem onSelect={() => onUse(item)}>
                 <Plus className="size-4" />
-                Start new workspace
+                {translate('auto.components.GitHubItemDialog.36182aa57f', 'Start new workspace')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -4958,9 +5481,12 @@ function GHEditSection({
             size="sm"
             onClick={() => onUse(item)}
             className="gap-2"
-            aria-label="Start workspace from issue"
+            aria-label={translate(
+              'auto.components.GitHubItemDialog.0ab4664a8b',
+              'Start workspace from issue'
+            )}
           >
-            Start workspace from issue
+            {translate('auto.components.GitHubItemDialog.0ab4664a8b', 'Start workspace from issue')}
             <ArrowRight className="size-4" />
           </Button>
         )}
@@ -4973,6 +5499,7 @@ function GHCommentComposer({
   className,
   repoPath,
   repoId,
+  sourceContext,
   issueNumber,
   itemType,
   onCommentAdded
@@ -4980,6 +5507,7 @@ function GHCommentComposer({
   className?: string
   repoPath: string
   repoId?: string | null
+  sourceContext?: TaskSourceContext | null
   issueNumber: number
   itemType: 'issue' | 'pr'
   onCommentAdded: (comment: PRComment) => void
@@ -4989,8 +5517,17 @@ function GHCommentComposer({
   const mountedRef = useMountedRef()
 
   const handleSubmit = useCallback(async () => {
-    const trimmed = body.trim()
-    if (!trimmed) {
+    const bodyState = getCommentBodySubmitState(body)
+    if (bodyState.status === 'empty') {
+      return
+    }
+    if (bodyState.status === 'too-large-leading-whitespace') {
+      toast.error(
+        translate(
+          'auto.components.GitHubItemDialog.commentTooLarge',
+          'Comment is too large to submit safely.'
+        )
+      )
       return
     }
     setSubmitting(true)
@@ -4998,8 +5535,9 @@ function GHCommentComposer({
       const result = await addIssueCommentForRepo({
         repoPath,
         repoId: repoId ?? undefined,
+        sourceContext,
         number: issueNumber,
-        body: trimmed,
+        body: bodyState.body,
         type: itemType
       })
       if (!mountedRef.current) {
@@ -5011,25 +5549,33 @@ function GHCommentComposer({
         // the real login/avatar immediately instead of waiting for a reopen.
         onCommentAdded(result.comment)
       } else {
-        toast.error(result.error ?? 'Failed to add comment')
+        toast.error(
+          result.error ??
+            translate('auto.components.GitHubItemDialog.082515176a', 'Failed to add comment')
+        )
       }
     } catch (err) {
       if (mountedRef.current) {
-        toast.error(err instanceof Error ? err.message : 'Failed to add comment')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate('auto.components.GitHubItemDialog.082515176a', 'Failed to add comment')
+        )
       }
     } finally {
       if (mountedRef.current) {
         setSubmitting(false)
       }
     }
-  }, [body, mountedRef, repoPath, repoId, issueNumber, itemType, onCommentAdded])
+  }, [body, mountedRef, repoPath, repoId, sourceContext, issueNumber, itemType, onCommentAdded])
+  const canSubmitComment = hasBoundedCommentBodyText(body)
 
   return (
     <div className={cn('flex flex-col items-start gap-2', className)}>
       <GitHubMarkdownComposer
         value={body}
         onChange={setBody}
-        placeholder="Add a comment…"
+        placeholder={translate('auto.components.GitHubItemDialog.c5c117270e', 'Add a comment…')}
         disabled={submitting}
         minHeightClassName="min-h-28"
         className="w-full"
@@ -5037,16 +5583,16 @@ function GHCommentComposer({
       />
       <Button
         onClick={handleSubmit}
-        disabled={!body.trim() || submitting}
+        disabled={!canSubmitComment || submitting}
         className="gap-2"
-        aria-label="Send comment"
+        aria-label={translate('auto.components.GitHubItemDialog.0a73f59e85', 'Send comment')}
       >
         {submitting ? (
           <LoaderCircle className="size-3.5 animate-spin" />
         ) : (
           <Send className="size-3.5" />
         )}
-        Comment
+        {translate('auto.components.GitHubItemDialog.bf43425540', 'Comment')}
       </Button>
     </div>
   )
@@ -5069,10 +5615,12 @@ function GHCommentComposer({
 // doc §1 rule: hide when either side is unknown rather than guessing.
 function WorkItemIssueSourceIndicator({
   url,
-  repoId
+  repoId,
+  repoPath
 }: {
   url: string
   repoId: string | null
+  repoPath?: string | null
 }): React.JSX.Element | null {
   // Why: subscribe to a single store-side selector that returns the resolved
   // sources for this repo — either the primary `(repoPath, PER_REPO_FETCH_LIMIT, '')`
@@ -5086,7 +5634,7 @@ function WorkItemIssueSourceIndicator({
   // indicator is small and the cache rewrite rate is bounded by user-initiated
   // refresh/search actions.
   const sources = useAppStore((s) =>
-    s.getWorkItemsAnySourcesForRepo(repoId ?? '', PER_REPO_FETCH_LIMIT)
+    s.getWorkItemsAnySourcesForRepo(repoId ?? '', PER_REPO_FETCH_LIMIT, repoPath ?? undefined)
   )
   const issues = useMemo<GitHubOwnerRepo | null>(() => {
     const fromUrl = parseOwnerRepoFromItemUrl(url)
@@ -5118,8 +5666,8 @@ export default function GitHubItemDialog({
   workItem,
   repoPath,
   repoId,
+  sourceContext,
   initialTab,
-  variant = 'sheet',
   backLabel = 'Back',
   projectOrigin,
   onUse,
@@ -5167,7 +5715,12 @@ export default function GitHubItemDialog({
 
       const result = activateAndRevealWorktree(currentAttached.id)
       if (result === false) {
-        toast.error('Unable to open the workspace attached to this issue.')
+        toast.error(
+          translate(
+            'auto.components.GitHubItemDialog.2ef631437e',
+            'Unable to open the workspace attached to this issue.'
+          )
+        )
       }
     },
     [effectiveRepoId, onUse]
@@ -5292,7 +5845,10 @@ export default function GitHubItemDialog({
     if (missing.length === 0) {
       return cachedDetails
     }
-    return { ...cachedDetails, comments: [...cachedDetails.comments, ...missing] }
+    return {
+      ...cachedDetails,
+      comments: [...cachedDetails.comments, ...missing]
+    }
     // Why: optimisticTick is the rerender signal for cold-open writes — the
     // memo reads optimisticCommentsRef.current (a ref, no subscription), so
     // bumping the tick is what forces this memo to re-run. The lint flags it
@@ -5349,6 +5905,7 @@ export default function GitHubItemDialog({
       getWorkItemDetailsForRepo({
         repoPath,
         repoId: effectiveRepoId ?? undefined,
+        sourceContext,
         number: workItem.number,
         type: workItem.type
       })
@@ -5409,7 +5966,7 @@ export default function GitHubItemDialog({
           error: message
         })
       })
-  }, [repoPath, effectiveRepoId, workItem, detailsCacheKey, initialTab, refetchTick])
+  }, [repoPath, effectiveRepoId, sourceContext, workItem, detailsCacheKey, initialTab, refetchTick])
 
   const Icon = workItem?.type === 'pr' ? GitPullRequest : CircleDot
   const displayWorkItem = useMemo<GitHubWorkItem | null>(() => {
@@ -5480,14 +6037,17 @@ export default function GitHubItemDialog({
         linkCopiedResetTimerRef.current = null
         setLinkCopyState((current) => clearGitHubLinkCopied(current, copiedWorkItemId))
       }, 1500)
-      toast.success('GitHub link copied')
+      toast.success(translate('auto.components.GitHubItemDialog.2e77dc2053', 'GitHub link copied'))
     } catch {
-      toast.error('Failed to copy GitHub link')
+      toast.error(
+        translate('auto.components.GitHubItemDialog.5fea151559', 'Failed to copy GitHub link')
+      )
     }
   }, [clearLinkCopiedResetTimer, workItem])
 
   const appendOptimisticComment = useCallback(
     (comment: PRComment) => {
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
       // Why: skip refreshDetails() — gh api --cache 60s returns stale data
       // that overwrites the optimistic comment. The next dialog open (after
       // cache expiry) will pick up the server-confirmed version.
@@ -5503,7 +6063,10 @@ export default function GitHubItemDialog({
           const ids = new Set(prev.details.comments.map((c) => c.id))
           if (!ids.has(comment.id)) {
             touchWorkItemDetailsCache(detailsCacheKey, {
-              details: { ...prev.details, comments: [...prev.details.comments, comment] },
+              details: {
+                ...prev.details,
+                comments: [...prev.details.comments, comment]
+              },
               fetchedAt: 0,
               error: undefined
             })
@@ -5523,7 +6086,12 @@ export default function GitHubItemDialog({
   const handlePRFileViewedChange = useCallback(
     async (path: string, viewed: boolean): Promise<boolean> => {
       if (!repoPath || !details?.pullRequestId || !workItem || workItem.type !== 'pr') {
-        toast.error('Unable to sync viewed state for this pull request.')
+        toast.error(
+          translate(
+            'auto.components.GitHubItemDialog.c0253318d6',
+            'Unable to sync viewed state for this pull request.'
+          )
+        )
         return false
       }
       setPendingViewedPaths((prev) => new Set(prev).add(path))
@@ -5535,6 +6103,7 @@ export default function GitHubItemDialog({
         const ok = await setPRFileViewedForRepo({
           repoId: workItem.repoId,
           repoPath,
+          sourceContext,
           prNumber: workItem.number,
           pullRequestId: details.pullRequestId,
           path,
@@ -5544,7 +6113,12 @@ export default function GitHubItemDialog({
           if (detailsCacheKey && previousState) {
             patchCachedPRFileViewedState(detailsCacheKey, path, previousState)
           }
-          toast.error('Failed to sync viewed state with GitHub.')
+          toast.error(
+            translate(
+              'auto.components.GitHubItemDialog.b7bf31b8de',
+              'Failed to sync viewed state with GitHub.'
+            )
+          )
           return false
         }
         return true
@@ -5556,10 +6130,10 @@ export default function GitHubItemDialog({
         })
       }
     },
-    [details?.pullRequestId, detailsCacheKey, repoPath, workItem]
+    [details?.pullRequestId, detailsCacheKey, repoPath, sourceContext, workItem]
   )
 
-  const isIssuePage = variant === 'page' && workItem?.type === 'issue'
+  const isIssuePage = workItem?.type === 'issue'
   const ownerRepo = workItem ? parseOwnerRepoFromItemUrl(workItem.url) : null
   const issueStateBadgeTone =
     localState === 'closed' ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'
@@ -5603,7 +6177,10 @@ export default function GitHubItemDialog({
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => void handleCopyWorkItemLink()}
-                      aria-label="Copy GitHub link"
+                      aria-label={translate(
+                        'auto.components.GitHubItemDialog.c43fe79ee0',
+                        'Copy GitHub link'
+                      )}
                     >
                       {linkCopied ? (
                         <Check className="size-4 text-emerald-500" />
@@ -5613,7 +6190,12 @@ export default function GitHubItemDialog({
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" sideOffset={6}>
-                    {linkCopied ? 'Copied' : 'Copy GitHub link'}
+                    {linkCopied
+                      ? translate('auto.components.GitHubItemDialog.038b3d39b1', 'Copied')
+                      : translate(
+                          'auto.components.GitHubItemDialog.c43fe79ee0',
+                          'Copy GitHub link'
+                        )}
                   </TooltipContent>
                 </Tooltip>
                 <Tooltip>
@@ -5622,13 +6204,16 @@ export default function GitHubItemDialog({
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => window.api.shell.openUrl(workItem.url)}
-                      aria-label="Open on GitHub"
+                      aria-label={translate(
+                        'auto.components.GitHubItemDialog.3fdf777817',
+                        'Open on GitHub'
+                      )}
                     >
                       <ExternalLink className="size-4" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" sideOffset={6}>
-                    Open on GitHub
+                    {translate('auto.components.GitHubItemDialog.3fdf777817', 'Open on GitHub')}
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -5653,16 +6238,22 @@ export default function GitHubItemDialog({
                         size="sm"
                         onClick={() => handleOpenOrUseIssueWorkspace(workItem)}
                         className="gap-1.5 whitespace-nowrap"
-                        aria-label="Open workspace attached to issue"
+                        aria-label={translate(
+                          'auto.components.GitHubItemDialog.84855fedd0',
+                          'Open workspace attached to issue'
+                        )}
                       >
-                        Open workspace
+                        {translate('auto.components.GitHubItemDialog.726db41722', 'Open workspace')}
                         <ArrowRight className="size-3.5" />
                       </Button>
                       <DropdownMenuTrigger asChild>
                         <Button
                           type="button"
                           size="icon-sm"
-                          aria-label="More issue workspace actions"
+                          aria-label={translate(
+                            'auto.components.GitHubItemDialog.fe6ff12dc2',
+                            'More issue workspace actions'
+                          )}
                         >
                           <ChevronDown className="size-3.5" />
                         </Button>
@@ -5671,11 +6262,14 @@ export default function GitHubItemDialog({
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onSelect={() => onUse(workItem)}>
                         <Plus className="size-4" />
-                        Start new workspace
+                        {translate(
+                          'auto.components.GitHubItemDialog.36182aa57f',
+                          'Start new workspace'
+                        )}
                       </DropdownMenuItem>
                       <DropdownMenuItem onSelect={() => window.api.shell.openUrl(workItem.url)}>
                         <ExternalLink className="size-4" />
-                        Open on GitHub
+                        {translate('auto.components.GitHubItemDialog.3fdf777817', 'Open on GitHub')}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -5685,9 +6279,15 @@ export default function GitHubItemDialog({
                     size="sm"
                     onClick={() => onUse(workItem)}
                     className="gap-1.5 whitespace-nowrap"
-                    aria-label="Start workspace from issue"
+                    aria-label={translate(
+                      'auto.components.GitHubItemDialog.0ab4664a8b',
+                      'Start workspace from issue'
+                    )}
                   >
-                    Start workspace from issue
+                    {translate(
+                      'auto.components.GitHubItemDialog.0ab4664a8b',
+                      'Start workspace from issue'
+                    )}
                     <ArrowRight className="size-3.5" />
                   </Button>
                 )}
@@ -5705,18 +6305,28 @@ export default function GitHubItemDialog({
                 ) : (
                   <CircleDot className="size-3.5" />
                 )}
-                {localState === 'closed' ? 'Closed' : 'Open'}
+                {localState === 'closed'
+                  ? translate('auto.components.GitHubItemDialog.ab050dffec', 'Closed')
+                  : translate('auto.components.GitHubItemDialog.dc1ca081a8', 'Open')}
               </span>
               <span className="flex flex-wrap items-center gap-1.5">
                 <span className="font-semibold text-foreground">
-                  {workItem.author ?? 'unknown'}
+                  {workItem.author ??
+                    translate('auto.components.GitHubItemDialog.773ff70035', 'unknown')}
                 </span>
-                <span>opened this issue</span>
+                <span>
+                  {translate('auto.components.GitHubItemDialog.55962099bc', 'opened this issue')}
+                </span>
                 <span className="text-muted-foreground/80">
-                  · updated {formatRelativeTime(workItem.updatedAt)}
+                  {translate('auto.components.GitHubItemDialog.10ef1afb8e', '· updated')}
+                  {formatRelativeTime(workItem.updatedAt)}
                 </span>
               </span>
-              <WorkItemIssueSourceIndicator url={workItem.url} repoId={effectiveRepoId} />
+              <WorkItemIssueSourceIndicator
+                url={workItem.url}
+                repoId={effectiveRepoId}
+                repoPath={repoPath}
+              />
               {issueAttachedWorkspaceLabel ? (
                 <span className="inline-flex min-w-0 items-center gap-1.5">
                   <FolderKanban className="size-3.5 shrink-0" />
@@ -5729,19 +6339,17 @@ export default function GitHubItemDialog({
       ) : (
         <div className="flex-none border-b border-border/60 bg-card/80 px-4 py-3 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-card/70">
           <div className="flex items-start gap-3">
-            {variant === 'page' ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={onClose}
-                className="-ml-1 mt-0.5 shrink-0 gap-1.5"
-                aria-label={backLabel}
-              >
-                <ChevronLeft className="size-4" />
-                {backLabel}
-              </Button>
-            ) : null}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              className="-ml-1 mt-0.5 shrink-0 gap-1.5"
+              aria-label={backLabel}
+            >
+              <ChevronLeft className="size-4" />
+              {backLabel}
+            </Button>
             <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/40 text-muted-foreground">
               <Icon className="size-4" />
             </div>
@@ -5749,14 +6357,24 @@ export default function GitHubItemDialog({
               <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                 <WorkItemStateBadge item={{ ...workItem, state: localState }} />
                 <span className="font-mono">#{workItem.number}</span>
-                <span>{workItem.type === 'pr' ? 'Pull request' : 'Issue'}</span>
+                <span>
+                  {workItem.type === 'pr'
+                    ? translate('auto.components.GitHubItemDialog.a2495e4784', 'Pull request')
+                    : translate('auto.components.GitHubItemDialog.3e544d966d', 'Issue')}
+                </span>
               </div>
               <h2 className="text-[15px] font-semibold leading-snug text-foreground">
                 {workItem.title}
               </h2>
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-                <span>{workItem.author ?? 'unknown'}</span>
-                <span>updated {formatRelativeTime(workItem.updatedAt)}</span>
+                <span>
+                  {workItem.author ??
+                    translate('auto.components.GitHubItemDialog.773ff70035', 'unknown')}
+                </span>
+                <span>
+                  {translate('auto.components.GitHubItemDialog.8223320f8d', 'updated')}
+                  {formatRelativeTime(workItem.updatedAt)}
+                </span>
                 {workItem.branchName && (
                   <span className="max-w-full truncate rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
                     {workItem.branchName}
@@ -5770,7 +6388,11 @@ export default function GitHubItemDialog({
                 ) : null}
               </div>
               {workItem.type === 'issue' && (
-                <WorkItemIssueSourceIndicator url={workItem.url} repoId={effectiveRepoId} />
+                <WorkItemIssueSourceIndicator
+                  url={workItem.url}
+                  repoId={effectiveRepoId}
+                  repoPath={repoPath}
+                />
               )}
             </div>
             <div className="flex shrink-0 items-center justify-end gap-1">
@@ -5780,9 +6402,15 @@ export default function GitHubItemDialog({
                   size="sm"
                   onClick={() => onUse(workItem)}
                   className="gap-1.5 whitespace-nowrap"
-                  aria-label="Start workspace from PR"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.0caac1a18f',
+                    'Start workspace from PR'
+                  )}
                 >
-                  Start workspace from PR
+                  {translate(
+                    'auto.components.GitHubItemDialog.0caac1a18f',
+                    'Start workspace from PR'
+                  )}
                   <ArrowRight className="size-3.5" />
                 </Button>
               )}
@@ -5794,7 +6422,10 @@ export default function GitHubItemDialog({
                     variant="ghost"
                     size="icon-sm"
                     onClick={() => void handleCopyWorkItemLink()}
-                    aria-label="Copy GitHub link"
+                    aria-label={translate(
+                      'auto.components.GitHubItemDialog.c43fe79ee0',
+                      'Copy GitHub link'
+                    )}
                   >
                     {linkCopied ? (
                       <Check className="size-4 text-emerald-500" />
@@ -5804,7 +6435,9 @@ export default function GitHubItemDialog({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {linkCopied ? 'Copied' : 'Copy GitHub link'}
+                  {linkCopied
+                    ? translate('auto.components.GitHubItemDialog.038b3d39b1', 'Copied')
+                    : translate('auto.components.GitHubItemDialog.c43fe79ee0', 'Copy GitHub link')}
                 </TooltipContent>
               </Tooltip>
               <Tooltip>
@@ -5813,32 +6446,18 @@ export default function GitHubItemDialog({
                     variant="ghost"
                     size="icon-sm"
                     onClick={() => window.api.shell.openUrl(workItem.url)}
-                    aria-label="Open on GitHub"
+                    aria-label={translate(
+                      'auto.components.GitHubItemDialog.3fdf777817',
+                      'Open on GitHub'
+                    )}
                   >
                     <ExternalLink className="size-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  Open on GitHub
+                  {translate('auto.components.GitHubItemDialog.3fdf777817', 'Open on GitHub')}
                 </TooltipContent>
               </Tooltip>
-              {variant === 'sheet' ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={onClose}
-                      aria-label="Close preview"
-                    >
-                      <X className="size-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={6}>
-                    Close · Esc
-                  </TooltipContent>
-                </Tooltip>
-              ) : null}
             </div>
           </div>
         </div>
@@ -5849,6 +6468,7 @@ export default function GitHubItemDialog({
           item={workItem}
           repoPath={repoPath}
           repoId={effectiveRepoId}
+          sourceContext={sourceContext}
           projectOrigin={projectOrigin}
           localState={localState}
           localLabels={localLabels}
@@ -5887,6 +6507,7 @@ export default function GitHubItemDialog({
                   item={displayWorkItem ?? workItem}
                   repoPath={repoPath}
                   repoId={effectiveRepoId}
+                  sourceContext={sourceContext}
                   body={body}
                   comments={comments}
                   files={files}
@@ -5937,6 +6558,7 @@ export default function GitHubItemDialog({
                       item={workItem}
                       repoPath={repoPath}
                       repoId={effectiveRepoId}
+                      sourceContext={sourceContext}
                       projectOrigin={projectOrigin}
                       localState={localState}
                       localLabels={localLabels}
@@ -5975,13 +6597,13 @@ export default function GitHubItemDialog({
             >
               <TabsTrigger value="conversation" className="px-2">
                 <MessageSquare className="size-3.5" />
-                Conversation
+                {translate('auto.components.GitHubItemDialog.e30a5470c9', 'Conversation')}
               </TabsTrigger>
               {workItem.type === 'pr' && (
                 <>
                   <TabsTrigger value="checks" className="px-2">
                     <ListChecks className="size-3.5" />
-                    Checks
+                    {translate('auto.components.GitHubItemDialog.4bd1f5b055', 'Checks')}
                     {checks.length > 0 && (
                       <span className="ml-1 text-[10px] text-muted-foreground">
                         {checks.length}
@@ -5990,7 +6612,7 @@ export default function GitHubItemDialog({
                   </TabsTrigger>
                   <TabsTrigger value="files" className="px-2">
                     <FileText className="size-3.5" />
-                    Files
+                    {translate('auto.components.GitHubItemDialog.999b5ad7d9', 'Files')}
                     {files.length > 0 && (
                       <span className="ml-1 text-[10px] text-muted-foreground">{files.length}</span>
                     )}
@@ -6005,6 +6627,7 @@ export default function GitHubItemDialog({
                   item={displayWorkItem ?? workItem}
                   repoPath={repoPath}
                   repoId={effectiveRepoId}
+                  sourceContext={sourceContext}
                   body={body}
                   comments={comments}
                   files={files}
@@ -6056,6 +6679,7 @@ export default function GitHubItemDialog({
                       item={workItem}
                       repoPath={repoPath}
                       repoId={effectiveRepoId}
+                      sourceContext={sourceContext}
                       headSha={details?.headSha}
                       checks={checks}
                       loading={loading || !detailsLoaded}
@@ -6075,7 +6699,10 @@ export default function GitHubItemDialog({
                       </div>
                     ) : files.length === 0 ? (
                       <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">
-                        No files changed.
+                        {translate(
+                          'auto.components.GitHubItemDialog.3cd5ae5b7b',
+                          'No files changed.'
+                        )}
                       </div>
                     ) : (
                       <PRFilesCombinedDiffViewer
@@ -6083,6 +6710,7 @@ export default function GitHubItemDialog({
                         comments={comments}
                         repoPath={repoPath ?? ''}
                         repoId={effectiveRepoId ?? ''}
+                        sourceContext={sourceContext}
                         prNumber={workItem.number}
                         prUrl={workItem.url}
                         headSha={details?.headSha}
@@ -6102,57 +6730,9 @@ export default function GitHubItemDialog({
     </div>
   ) : null
 
-  if (variant === 'page') {
-    return (
-      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm">
-        {content}
-      </div>
-    )
-  }
-
   return (
-    <Sheet open={workItem !== null} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent
-        side="right"
-        showCloseButton={false}
-        className={cn(
-          'flex w-full flex-col gap-0 overflow-hidden p-0 lg:max-w-[var(--github-item-dialog-max-width)]',
-          // Why: native macOS traffic lights are drawn above web content, so a
-          // nearly full-width right sheet must leave the titlebar's 80px
-          // traffic-light pad uncovered instead of relying on z-index.
-          IS_MAC
-            ? 'max-w-[calc(100vw-(80px/var(--ui-zoom-factor,1)))] sm:max-w-[calc(100vw-(80px/var(--ui-zoom-factor,1)))]'
-            : 'max-w-[calc(100vw-1rem)] sm:max-w-[calc(100vw-1rem)]'
-        )}
-        style={
-          {
-            '--github-item-dialog-max-width': IS_MAC
-              ? 'min(calc(100vw - (80px / var(--ui-zoom-factor, 1))), 1600px)'
-              : 'min(calc(100vw - 2rem), 1600px)'
-          } as React.CSSProperties
-        }
-        onOpenAutoFocus={(event) => {
-          // Why: focusing the first actionable element inside the drawer
-          // causes the "Start workspace" action to receive focus and
-          // get visually highlighted on open. Preventing auto-focus keeps the
-          // drawer feeling like a passive preview until the user acts.
-          event.preventDefault()
-        }}
-      >
-        {/* Why: SheetTitle/Description are required by Radix Dialog for a11y,
-            but the visible header carries the same info. Wrap each with
-            `asChild` so the VisuallyHidden span wraps the element cleanly. */}
-        <VisuallyHidden.Root asChild>
-          <SheetTitle>{workItem?.title ?? 'GitHub item'}</SheetTitle>
-        </VisuallyHidden.Root>
-        <VisuallyHidden.Root asChild>
-          <SheetDescription>
-            Preview and edit the selected GitHub issue or pull request.
-          </SheetDescription>
-        </VisuallyHidden.Root>
-
-        {content}
-      </SheetContent>
-    </Sheet>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm">
+      {content}
+    </div>
   )
 }

@@ -150,6 +150,45 @@ describe('createLinearSlice invalidation', () => {
     expect(store.getState().linearIssueCache['workspace-1::issue-id'].fetchedAt).toBe(0)
   })
 
+  it('refreshing a linked Linear issue invalidates stale issue collection caches', async () => {
+    const store = createTestStore()
+    linearGetIssue.mockResolvedValueOnce(issue('issue-id'))
+    store.setState({
+      linearIssueCache: {
+        'workspace-1::issue-id': { data: issue('issue-id'), fetchedAt: Date.now() }
+      },
+      linearSearchCache: {
+        'workspace-1::search::issue::20': { data: [issue('issue-id')], fetchedAt: Date.now() }
+      },
+      linearListCache: {
+        'workspace-1::list::all::36': {
+          data: { items: [issue('issue-id')], hasMore: false },
+          fetchedAt: Date.now()
+        }
+      },
+      linearProjectIssueCache: {
+        'workspace-1::project-issues::project-1::20': {
+          data: { items: [issue('issue-id')], hasMore: false },
+          fetchedAt: Date.now()
+        }
+      },
+      linearCustomViewIssueCache: {
+        'workspace-1::custom-view-issues::view-1::20': {
+          data: { items: [issue('issue-id')], hasMore: false },
+          fetchedAt: Date.now()
+        }
+      }
+    })
+
+    await store.getState().refreshLinearIssue('issue-id', 'workspace-1')
+
+    expect(store.getState().linearSearchCache).toEqual({})
+    expect(store.getState().linearListCache).toEqual({})
+    expect(store.getState().linearProjectIssueCache).toEqual({})
+    expect(store.getState().linearCustomViewIssueCache).toEqual({})
+    expect(linearGetIssue).toHaveBeenCalledWith(null, 'issue-id', 'workspace-1')
+  })
+
   it('connect invalidates cached Linear rows and waits for refreshed status', async () => {
     const store = createTestStore()
     const statusRefresh = deferred<LinearConnectionStatus>()

@@ -11,7 +11,7 @@ const WorkspaceKanbanAreaSelectionOverlay = React.forwardRef<
       {...props}
       ref={ref}
       data-workspace-board-selection-rect=""
-      className="pointer-events-none absolute left-0 top-0 z-30 hidden rounded-md border border-sidebar-ring bg-sidebar-ring/15 will-change-transform"
+      className="pointer-events-none absolute left-0 top-0 z-30 hidden rounded-md border border-worktree-sidebar-ring bg-worktree-sidebar-ring/15 will-change-transform"
     />
   )
 })

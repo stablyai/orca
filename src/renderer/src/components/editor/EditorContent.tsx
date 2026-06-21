@@ -4,7 +4,8 @@ now Changes view mode). Keeping the mode-selection branches colocated is easier
 to reason about than scattering the switch across per-mode wrappers. Individual
 renderers (MonacoEditor, DiffViewer, ChangesModeView, MarkdownPreview, etc.)
 already live in their own modules. */
-import React, { lazy } from 'react'
+import React from 'react'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
@@ -19,13 +20,19 @@ import {
 } from './ConflictComponents'
 import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
 import type { GitStatusEntry, GitDiffResult } from '../../../../shared/types'
-import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
 import { getMarkdownRenderMode } from './markdown-render-mode'
 import { getMarkdownRichModeUnsupportedMessage } from './markdown-rich-mode'
+import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
 import { extractFrontMatter, prependFrontMatter } from './markdown-frontmatter'
 import { RichMarkdownErrorBoundary } from './RichMarkdownErrorBoundary'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
-import { findGitConflictBlocks } from './monaco-conflict-decorations'
+import {
+  findGitConflictBlocks,
+  getGitConflictMarkerLineLength
+} from './monaco-conflict-decorations'
+import { getDiffContentSignature } from './diff-content-signature'
+import { translate } from '@/i18n/i18n'
+import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
 
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DiffViewer = lazy(() => import('./DiffViewer'))
@@ -38,13 +45,26 @@ const MermaidViewer = lazy(() => import('./MermaidViewer'))
 const CsvViewer = lazy(() => import('./CsvViewer'))
 const IpynbViewer = lazy(() => import('./IpynbViewer'))
 
-const richMarkdownSizeEncoder = new TextEncoder()
-// Why: encodeInto() with a pre-allocated buffer avoids creating a new
-// Uint8Array on every render, reducing GC pressure for large files.
-const richMarkdownSizeBuffer = new Uint8Array(RICH_MARKDOWN_MAX_SIZE_BYTES + 1)
-
 export function getMarkdownSourceLineOffset(frontMatterRaw: string): number {
-  return (frontMatterRaw.match(/\r\n|\r|\n/g) ?? []).length
+  let offset = 0
+
+  for (let index = 0; index < frontMatterRaw.length; index++) {
+    const code = frontMatterRaw.charCodeAt(index)
+
+    if (code === 13) {
+      offset++
+      if (frontMatterRaw.charCodeAt(index + 1) === 10) {
+        index++
+      }
+      continue
+    }
+
+    if (code === 10) {
+      offset++
+    }
+  }
+
+  return offset
 }
 
 type FileContent = {
@@ -79,11 +99,13 @@ function FileLoadErrorView({
       <div className="flex max-w-xl items-start gap-3 rounded-md border border-border bg-background p-4">
         <AlertCircle className="mt-0.5 size-4 flex-shrink-0 text-destructive" />
         <div className="min-w-0">
-          <div className="font-medium text-foreground">Unable to load file</div>
+          <div className="font-medium text-foreground">
+            {translate('auto.components.editor.EditorContent.39f018b052', 'Unable to load file')}
+          </div>
           <div className="mt-1 break-words">{message}</div>
           <Button type="button" variant="outline" size="sm" className="mt-3" onClick={onRetry}>
             <RefreshCw className="size-3.5" />
-            Retry
+            {translate('auto.components.editor.EditorContent.2a512bb46a', 'Retry')}
           </Button>
         </div>
       </div>
@@ -163,6 +185,7 @@ export function EditorContent({
   const closeFile = useAppStore((s) => s.closeFile)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
+  const reloadOpenCheckRunDetailsTab = useAppStore((s) => s.reloadOpenCheckRunDetailsTab)
   const [conflictNavigationIndexByFile, setConflictNavigationIndexByFile] = React.useState<
     Record<string, number>
   >({})
@@ -201,7 +224,7 @@ export function EditorContent({
             return
           }
           const line = blocks[nextIndex].startLine
-          const markerLine = content.split(/\r?\n/)[line - 1] ?? ''
+          const markerLineLength = getGitConflictMarkerLineLength(content, line)
           setConflictNavigationIndexByFile((prev) => ({ ...prev, [file.id]: nextIndex }))
           // Why: a same-location reveal can be requested twice before Monaco
           // consumes the first one. Clearing first guarantees the prop changes
@@ -212,7 +235,7 @@ export function EditorContent({
               filePath: file.filePath,
               line,
               column: 1,
-              matchLength: markerLine.length
+              matchLength: markerLineLength
             })
           })
         }
@@ -252,8 +275,10 @@ export function EditorContent({
               conflictKind: entry.conflictKind,
               conflictStatus: entry.conflictStatus,
               conflictStatusSource: entry.conflictStatusSource,
-              message:
-                'This file is in a conflict state, but no working-tree file is available to edit.',
+              message: translate(
+                'auto.components.editor.EditorContent.8b1a605bae',
+                'This file is in a conflict state, but no working-tree file is available to edit.'
+              ),
               guidance: 'Resolve the conflict in Git or restore one side before reopening it.'
             }
           : {
@@ -318,12 +343,7 @@ export function EditorContent({
     const currentContent = editBuffers[activeFile.id] ?? fc.content
     const richModeUnsupportedMessage = getMarkdownRichModeUnsupportedMessage(currentContent)
     const renderMode = getMarkdownRenderMode({
-      // Why: the threshold is defined in bytes because large pasted Unicode
-      // documents can exceed ProseMirror's performance envelope long before
-      // JS string length reaches the same numeric value.
-      exceedsRichModeSizeLimit:
-        richMarkdownSizeEncoder.encodeInto(currentContent, richMarkdownSizeBuffer).written >
-        RICH_MARKDOWN_MAX_SIZE_BYTES,
+      exceedsRichModeSizeLimit: exceedsMarkdownRichModeSizeLimit(currentContent),
       hasRichModeUnsupportedContent: richModeUnsupportedMessage !== null,
       viewMode: mdViewMode
     })
@@ -476,7 +496,7 @@ export function EditorContent({
       return (
         <div className={className}>
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            Loading...
+            {translate('auto.components.editor.EditorContent.b2735221f5', 'Loading...')}
           </div>
         </div>
       )
@@ -506,7 +526,10 @@ export function EditorContent({
       return (
         <div className={className}>
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            Binary file — cannot display
+            {translate(
+              'auto.components.editor.EditorContent.b9de81ba52',
+              'Binary file — cannot display'
+            )}
           </div>
         </div>
       )
@@ -605,6 +628,35 @@ export function EditorContent({
     )
   }
 
+  if (activeFile.mode === 'check-details') {
+    const checkRunDetails = activeFile.checkRunDetails
+    if (!checkRunDetails) {
+      return (
+        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+          {translate(
+            'auto.components.editor.EditorContent.6c4f1a8d2e',
+            'Check details are unavailable.'
+          )}
+        </div>
+      )
+    }
+    const details = checkRunDetails.details
+    const openUrl = details?.detailsUrl ?? details?.url ?? checkRunDetails.check.url
+    return (
+      <CheckRunDetailsPanel
+        check={checkRunDetails.check}
+        details={checkRunDetails.details}
+        loading={checkRunDetails.loading}
+        error={checkRunDetails.error}
+        openUrl={openUrl}
+        worktreeId={activeFile.worktreeId}
+        onRefresh={() => {
+          void reloadOpenCheckRunDetailsTab(activeFile.id)
+        }}
+      />
+    )
+  }
+
   if (activeFile.mode === 'conflict-review') {
     return (
       <ConflictReviewPanel
@@ -651,7 +703,7 @@ export function EditorContent({
     if (!fc) {
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-          Loading preview...
+          {translate('auto.components.editor.EditorContent.37a0e81fa6', 'Loading preview...')}
         </div>
       )
     }
@@ -663,7 +715,10 @@ export function EditorContent({
     if (fc.isBinary) {
       return (
         <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-          Markdown preview is unavailable for binary files.
+          {translate(
+            'auto.components.editor.EditorContent.8608ce4cb1',
+            'Markdown preview is unavailable for binary files.'
+          )}
         </div>
       )
     }
@@ -697,7 +752,7 @@ export function EditorContent({
     if (!fc) {
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-          Loading...
+          {translate('auto.components.editor.EditorContent.b2735221f5', 'Loading...')}
         </div>
       )
     }
@@ -714,7 +769,10 @@ export function EditorContent({
       }
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-          Binary file — cannot display
+          {translate(
+            'auto.components.editor.EditorContent.b9de81ba52',
+            'Binary file — cannot display'
+          )}
         </div>
       )
     }
@@ -786,7 +844,7 @@ export function EditorContent({
   if (!dc) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-        Loading diff...
+        {translate('auto.components.editor.EditorContent.c88c73a0d3', 'Loading diff...')}
       </div>
     )
   }
@@ -806,18 +864,32 @@ export function EditorContent({
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
         <div className="space-y-2">
-          <div className="text-sm font-medium text-foreground">Binary file changed</div>
+          <div className="text-sm font-medium text-foreground">
+            {translate('auto.components.editor.EditorContent.78541e254e', 'Binary file changed')}
+          </div>
           <div className="text-xs text-muted-foreground">
             {activeFile.diffSource === 'branch'
-              ? 'Text diff is unavailable for this file in branch compare.'
-              : 'Text diff is unavailable for this file.'}
+              ? translate(
+                  'auto.components.editor.EditorContent.3c6e71df22',
+                  'Text diff is unavailable for this file in branch compare.'
+                )
+              : translate(
+                  'auto.components.editor.EditorContent.8a0898ae4c',
+                  'Text diff is unavailable for this file.'
+                )}
           </div>
         </div>
       </div>
     )
   }
-  const modifiedDiffContent = editBuffers[activeFile.id] ?? dc.modifiedContent
-  if (isMarkdown && mdViewMode === 'preview') {
+  const modifiedDiffBuffer = editBuffers[activeFile.id]
+  const modifiedDiffContent = modifiedDiffBuffer ?? dc.modifiedContent
+  const largeDiffSaveContentAvailable = !(
+    dc.largeDiffRenderLimit?.limited === true &&
+    modifiedDiffBuffer === undefined &&
+    dc.modifiedContent.length === 0
+  )
+  if (isMarkdown && mdViewMode === 'preview' && dc.largeDiffRenderLimit?.limited !== true) {
     return (
       <div className="flex h-full min-h-0 flex-col">
         <div className="border-b border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
@@ -825,7 +897,10 @@ export function EditorContent({
           deletions simultaneously, so preview mode intentionally shows the
           modified side of the diff. Source mode remains available for the
           actual line-by-line comparison. */}
-          Previewing the modified version of this diff. Switch to source mode to inspect changes.
+          {translate(
+            'auto.components.editor.EditorContent.9640d1d3db',
+            'Previewing the modified version of this diff. Switch to source mode to inspect changes.'
+          )}
         </div>
         <div className="min-h-0 flex-1">
           <MarkdownPreview
@@ -845,12 +920,22 @@ export function EditorContent({
       </div>
     )
   }
+  // Why: kept Monaco models ignore refreshed git blobs unless the model identity
+  // rotates. Key off fetched diff content and explicit reload nonce, not live
+  // edit-buffer text, so editable unstaged diffs keep their undo stack.
+  const diffReloadNonce = activeFile.diffContentReloadNonce ?? 0
+  const originalModelKey = `${diffViewStateKey}:original:${getDiffContentSignature(dc.originalContent)}`
+  const modifiedModelKey = `${diffViewStateKey}:modified:${getDiffContentSignature(dc.modifiedContent)}:${diffReloadNonce}`
   return (
     <DiffViewer
-      key={viewStateScopeId}
+      key={`${viewStateScopeId}:${diffReloadNonce}:${getDiffContentSignature(dc.modifiedContent)}`}
       modelKey={diffViewStateKey}
+      originalModelKey={originalModelKey}
+      modifiedModelKey={modifiedModelKey}
       originalContent={dc.originalContent}
       modifiedContent={modifiedDiffContent}
+      largeDiffRenderLimit={dc.largeDiffRenderLimit}
+      largeDiffSaveContentAvailable={largeDiffSaveContentAvailable}
       language={monacoLanguage}
       filePath={activeFile.filePath}
       relativePath={activeFile.relativePath}
@@ -877,9 +962,9 @@ function FrontMatterBanner({ raw }: { raw: string }): React.JSX.Element {
   return (
     <div className="border-b border-border/60 bg-muted/40 px-3 py-2">
       <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-        Front Matter
+        {translate('auto.components.editor.EditorContent.e4b074749d', 'Front Matter')}
         <span className="ml-2 font-normal normal-case tracking-normal opacity-70">
-          (edit in source mode)
+          {translate('auto.components.editor.EditorContent.56dba34e1a', '(edit in source mode)')}
         </span>
       </div>
       <pre className="max-h-32 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground font-mono scrollbar-editor">

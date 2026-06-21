@@ -49,6 +49,14 @@ export type EditorRequestFileCloseDetail = {
   fileId: string
 }
 
+export function isExternalReloadableEditorTab(file: OpenFile): boolean {
+  return (
+    file.mode === 'edit' ||
+    file.mode === 'markdown-preview' ||
+    (file.mode === 'diff' && (file.diffSource === 'unstaged' || file.diffSource === 'staged'))
+  )
+}
+
 export function canAutoSaveOpenFile(file: OpenFile): boolean {
   // Why: single-file editors and one-file unstaged diffs have an unambiguous
   // write target. Combined diff and conflict-review tabs can represent multiple
@@ -91,7 +99,10 @@ export function getOpenFilesForExternalFileChange(
       return file.filePath === absolutePath
     }
     if (file.mode === 'diff') {
-      return file.diffSource === 'unstaged' && file.relativePath === target.relativePath
+      return (
+        (file.diffSource === 'unstaged' || file.diffSource === 'staged') &&
+        file.relativePath === target.relativePath
+      )
     }
     return false
   })

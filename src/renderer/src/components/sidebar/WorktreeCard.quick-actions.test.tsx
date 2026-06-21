@@ -16,7 +16,7 @@ const fetchIssue = vi.fn()
 const openModal = vi.fn()
 const updateWorktreeMeta = vi.fn()
 
-let worktreeCardProperties: WorktreeCardProperty[] = ['status', 'unread']
+let worktreeCardProperties: WorktreeCardProperty[] = ['status']
 let tabsByWorktree: Record<string, { id: string }[]> = {}
 let ptyIdsByTabId: Record<string, string[]> = {}
 let browserTabsByWorktree: Record<string, { id: string }[]> = {}
@@ -129,7 +129,7 @@ describe('WorktreeCard quick actions', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    worktreeCardProperties = ['status', 'unread']
+    worktreeCardProperties = ['status']
     tabsByWorktree = {}
     ptyIdsByTabId = {}
     browserTabsByWorktree = {}
@@ -157,7 +157,22 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).toContain('data-worktree-card-meta-row=""')
   })
 
-  it('renders folder kind in the detailed metadata row', () => {
+  it('can render the current workspace with a secondary active surface', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree()}
+        repo={makeRepo()}
+        isActive
+        activeSurfaceVariant="secondary"
+      />
+    )
+
+    expect(markup).toContain('data-worktree-card-active="secondary"')
+    expect(markup).toContain('bg-sidebar-accent/45')
+    expect(markup).not.toContain('bg-black/[0.08]')
+  })
+
+  it('renders folder kind and directory in the detailed metadata row', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCard
         worktree={makeWorktree({ displayName: 'Docs folder', branch: '' })}
@@ -168,10 +183,31 @@ describe('WorktreeCard quick actions', () => {
 
     expect(markup).toContain('Docs folder')
     expect(markup).toContain('>Folder</span>')
+    expect(markup).toContain('>quick-action</span>')
     expect(markup).toContain('data-worktree-card-meta-row=""')
   })
 
-  it('renders the pending first-agent rename title button', () => {
+  it('renders synthetic folder workspace directory in the detailed metadata row', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          id: 'folder:folder-1',
+          displayName: 'Docs folder',
+          branch: '',
+          path: '/repo/worktrees/quick-action'
+        })}
+        repo={undefined}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Docs folder')
+    expect(markup).toContain('>Folder</span>')
+    expect(markup).toContain('>quick-action</span>')
+    expect(markup).toContain('data-worktree-card-meta-row=""')
+  })
+
+  it('does not render a pending first-agent rename title badge', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCard
         worktree={makeWorktree({ pendingFirstAgentMessageRename: true })}
@@ -180,13 +216,46 @@ describe('WorktreeCard quick actions', () => {
       />
     )
 
-    expect(markup).toContain('aria-label="Will be renamed from first agent message"')
-    expect(markup).toContain('rename pending')
-    expect(markup).toContain('Will be renamed from first agent message')
+    expect(markup).not.toMatch(/Will be renamed from first agent message|rename pending/)
+    expect(markup).not.toContain(
+      'aria-label="This worktree will be renamed from the first agent message"'
+    )
+    expect(markup).not.toContain('rename pending')
+    expect(markup).not.toContain('This worktree will be renamed from the first agent message')
   })
 
-  it('renders the repeated branch metadata row in detailed cards', () => {
-    worktreeCardProperties = []
+  it('renders the failed first-agent rename title badge', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ firstAgentMessageRenameError: 'model could not name this' })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('aria-label="Auto-rename failed: view error"')
+    expect(markup).toContain('rename failed')
+  })
+
+  it('renders the failed first-agent rename title badge when rename is also pending', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          firstAgentMessageRenameError: 'model could not name this',
+          pendingFirstAgentMessageRename: true
+        })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('aria-label="Auto-rename failed: view error"')
+    expect(markup).toContain('rename failed')
+    expect(markup).not.toContain('rename pending')
+  })
+
+  it('renders the migrated branch metadata row when branch is enabled', () => {
+    worktreeCardProperties = ['branch']
 
     const markup = renderToStaticMarkup(
       <WorktreeCard
@@ -224,7 +293,7 @@ describe('WorktreeCard quick actions', () => {
 
   it('omits the repeated branch metadata row when compact cards are enabled', () => {
     worktreeCardProperties = []
-    settings = { experimentalCompactWorktreeCards: true }
+    settings = { compactWorktreeCards: true }
 
     const markup = renderToStaticMarkup(
       <WorktreeCard
@@ -241,7 +310,7 @@ describe('WorktreeCard quick actions', () => {
 
   it('omits the branch metadata row when the workspace has a custom title', () => {
     worktreeCardProperties = []
-    settings = { experimentalCompactWorktreeCards: true }
+    settings = { compactWorktreeCards: true }
 
     const markup = renderToStaticMarkup(
       <WorktreeCard
@@ -258,8 +327,8 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).not.toContain('text-[11px] text-muted-foreground truncate leading-none')
   })
 
-  it('uses the pre-compact unread lane and primary badge when compact cards are disabled', () => {
-    worktreeCardProperties = ['status', 'unread']
+  it('uses the left status lane and primary badge when compact cards are disabled', () => {
+    worktreeCardProperties = ['status']
 
     const markup = renderToStaticMarkup(
       <WorktreeCard
@@ -279,9 +348,9 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).toContain('data-worktree-card-meta-row=""')
   })
 
-  it('moves unread and primary into the title row when compact cards are enabled', () => {
-    worktreeCardProperties = ['status', 'unread']
-    settings = { experimentalCompactWorktreeCards: true }
+  it('keeps unread in the status lane and moves primary into the title row when compact cards are enabled', () => {
+    worktreeCardProperties = ['status']
+    settings = { compactWorktreeCards: true }
 
     const markup = renderToStaticMarkup(
       <WorktreeCard

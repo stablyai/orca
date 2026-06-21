@@ -1,5 +1,6 @@
 import type { JSX } from 'react'
 import { AlertTriangle } from 'lucide-react'
+import { translate } from '@/i18n/i18n'
 
 export function DeleteWorktreeWarningPanels({
   isMainWorktree,
@@ -17,8 +18,21 @@ export function DeleteWorktreeWarningPanels({
           <div className="flex items-start gap-2">
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
             <div className="min-w-0 flex-1">
-              This is the <span className="font-semibold text-foreground">main worktree</span> (the
-              original clone directory). {mainWorktreeBlocker}
+              {translate(
+                'auto.components.sidebar.DeleteWorktreeWarningPanels.e3be9eba15',
+                'This is the'
+              )}
+              <span className="font-semibold text-foreground">
+                {translate(
+                  'auto.components.sidebar.DeleteWorktreeWarningPanels.c4f96a6e18',
+                  'main worktree'
+                )}
+              </span>{' '}
+              {translate(
+                'auto.components.sidebar.DeleteWorktreeWarningPanels.026738155a',
+                '(the original clone directory).'
+              )}
+              {mainWorktreeBlocker}
             </div>
           </div>
         </div>

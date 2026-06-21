@@ -1,6 +1,7 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
 import { Copy } from 'lucide-react'
+import { translate } from '@/i18n/i18n'
 
 type SelectedTextCopyMenuProps = {
   children: React.ReactNode
@@ -114,7 +115,7 @@ export function SelectedTextCopyMenu({
               onClick={handleCopy}
             >
               <Copy className="size-3.5 text-muted-foreground" />
-              Copy
+              {translate('auto.components.SelectedTextCopyMenu.9b40d7b018', 'Copy')}
             </button>
           </div>,
           document.body

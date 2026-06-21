@@ -6,6 +6,11 @@ import { LinearClient, AuthenticationLinearError } from '@linear/sdk'
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
+import {
+  CredentialDecryptionError,
+  credentialFileHasContent,
+  readStoredCredentialToken
+} from '../integration-credential-file'
 import type {
   LinearConnectionStatus,
   LinearViewer,
@@ -55,9 +60,13 @@ type LinearWorkspaceFile = {
 export type LinearClientForWorkspace = {
   workspace: LinearWorkspace
   client: LinearClient
+  apiKey: string
 }
 
 let cachedTokens = new Map<string, string>()
+// Why: decrypt failures are recorded per workspace so getStatus can explain
+// failing reads without re-touching the keychain on every status poll.
+const credentialErrors = new Map<string, string>()
 let cachedLegacyViewer: LinearViewer | null = null
 let legacyViewerLoadedFromDisk = false
 let cachedWorkspaceFile: LinearWorkspaceFile | null = null
@@ -327,6 +336,7 @@ function saveWorkspaceToken(workspaceId: string, apiKey: string): void {
   const tokenPath = getWorkspaceTokenPath(workspaceId)
   writeEncryptedToken(tokenPath, apiKey)
   cachedTokens.set(workspaceId, apiKey)
+  credentialErrors.delete(workspaceId)
 }
 
 // Backward-compatible export for the legacy single-workspace storage path.
@@ -352,12 +362,17 @@ export function loadToken(options: { force?: boolean; workspaceId?: string } = {
   }
   try {
     const raw = readFileSync(tokenPath)
-    const token = safeStorage.isEncryptionAvailable()
-      ? safeStorage.decryptString(raw)
-      : raw.toString('utf-8')
-    cachedTokens.set(workspaceId, token)
+    const token = readStoredCredentialToken('Linear', raw)
+    if (token) {
+      cachedTokens.set(workspaceId, token)
+    }
+    credentialErrors.delete(workspaceId)
     return token
-  } catch {
+  } catch (error) {
+    if (error instanceof CredentialDecryptionError) {
+      credentialErrors.set(workspaceId, error.message)
+      throw error
+    }
     return null
   }
 }
@@ -369,11 +384,12 @@ export function hasStoredToken(workspaceId?: string): boolean {
   if (cachedTokens.has(workspaceId)) {
     return true
   }
-  return existsSync(getWorkspaceTokenPath(workspaceId))
+  return credentialFileHasContent(getWorkspaceTokenPath(workspaceId))
 }
 
 function clearTokenFile(workspaceId: string): void {
   cachedTokens.delete(workspaceId)
+  credentialErrors.delete(workspaceId)
   try {
     unlinkSync(getWorkspaceTokenPath(workspaceId))
   } catch {
@@ -388,6 +404,7 @@ export function clearToken(workspaceId?: string): void {
       clearTokenFile(workspace.id)
     }
     cachedTokens = new Map()
+    credentialErrors.clear()
     cachedLegacyViewer = null
     legacyViewerLoadedFromDisk = false
     cachedWorkspaceFile = emptyWorkspaceFile()
@@ -503,18 +520,31 @@ export function getClients(
   workspaceId?: LinearWorkspaceSelection | null
 ): LinearClientForWorkspace[] {
   const state = getWorkspaceState()
-  const selectedWorkspaces =
-    workspaceId === 'all'
-      ? state.workspaces
-      : state.workspaces.filter((workspace) => workspace.id === resolveWorkspaceId(workspaceId))
+  const isAllSelection = workspaceId === 'all'
+  const selectedWorkspaces = isAllSelection
+    ? state.workspaces
+    : state.workspaces.filter((workspace) => workspace.id === resolveWorkspaceId(workspaceId))
 
   const clients: LinearClientForWorkspace[] = []
   for (const workspace of selectedWorkspaces) {
-    const token = loadToken({ force: true, workspaceId: workspace.id })
+    let token: string | null
+    try {
+      token = loadToken({ force: true, workspaceId: workspace.id })
+    } catch (error) {
+      // Why: under an 'all' selection one un-decryptable workspace must not
+      // collapse reads for the healthy ones. loadToken already recorded the
+      // per-workspace credentialError for getStatus to surface, so skip this
+      // workspace like a missing token. A specific-workspace selection still
+      // rethrows so the renderer can surface the decrypt banner promptly.
+      if (isAllSelection && error instanceof CredentialDecryptionError) {
+        continue
+      }
+      throw error
+    }
     if (!token) {
       continue
     }
-    clients.push({ workspace, client: new LinearClient({ apiKey: token }) })
+    clients.push({ workspace, client: new LinearClient({ apiKey: token }), apiKey: token })
   }
   return clients
 }
@@ -594,12 +624,17 @@ export function getStatus(): LinearConnectionStatus {
     state.workspaces[0] ??
     null
 
+  const credentialError = state.workspaces
+    .map((workspace) => credentialErrors.get(workspace.id))
+    .find((message) => message !== undefined)
+
   return {
     connected: state.workspaces.length > 0,
     viewer: activeWorkspace,
     workspaces: state.workspaces,
     activeWorkspaceId: state.activeWorkspaceId,
-    selectedWorkspaceId: state.selectedWorkspaceId
+    selectedWorkspaceId: state.selectedWorkspaceId,
+    ...(credentialError ? { credentialError } : {})
   }
 }
 
@@ -612,7 +647,13 @@ export async function testConnection(
   if (!resolvedWorkspaceId) {
     return { ok: false, error: 'No API key stored.' }
   }
-  const token = loadToken({ force: true, workspaceId: resolvedWorkspaceId })
+  let token: string | null
+  try {
+    token = loadToken({ force: true, workspaceId: resolvedWorkspaceId })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Test failed'
+    return { ok: false, error: message }
+  }
   if (!token) {
     return { ok: false, error: 'No API key stored.' }
   }

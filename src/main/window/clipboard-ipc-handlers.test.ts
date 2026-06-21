@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
+import {
+  CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
+  CLIPBOARD_IMAGE_MAX_PIXELS,
+  CLIPBOARD_IMAGE_MAX_SOURCE_BYTES
+} from '../../shared/clipboard-image'
 
 const {
   removeHandlerMock,
@@ -67,7 +72,10 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   }
 }))
 
-import { registerClipboardHandlers } from './clipboard-ipc-handlers'
+import {
+  registerClipboardHandlers,
+  setTrustedClipboardRendererWebContentsId
+} from './clipboard-ipc-handlers'
 
 function getRegisteredHandlers(): Map<string, (...args: unknown[]) => unknown> {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
@@ -78,6 +86,33 @@ function getRegisteredHandlers(): Map<string, (...args: unknown[]) => unknown> {
     handlers.set(channel, handler)
   }
   return handlers
+}
+
+function makeClipboardEvent(senderOverrides: Record<string, unknown> = {}): {
+  sender: Record<string, unknown>
+} {
+  return {
+    sender: {
+      id: 17,
+      getType: () => 'window',
+      getURL: () => 'file:///orca/index.html',
+      isDestroyed: () => false,
+      ...senderOverrides
+    }
+  }
+}
+
+function trackPromiseSettled(promise: Promise<unknown>): () => boolean {
+  let settled = false
+  void promise.then(
+    () => {
+      settled = true
+    },
+    () => {
+      settled = true
+    }
+  )
+  return () => settled
 }
 
 describe('registerClipboardHandlers', () => {
@@ -94,13 +129,16 @@ describe('registerClipboardHandlers', () => {
     randomUUIDMock.mockReset()
     randomUUIDMock.mockReturnValue('00000000-0000-4000-8000-000000000000')
     getSshFilesystemProviderMock.mockReset()
+    setTrustedClipboardRendererWebContentsId(null)
   })
 
   afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllEnvs()
     vi.restoreAllMocks()
   })
 
-  it('registers normal and selection text clipboard IPC handlers', () => {
+  it('registers normal and selection text clipboard IPC handlers', async () => {
     clipboardReadTextMock.mockImplementation((clipboardType?: string) =>
       clipboardType === 'selection' ? 'selection text' : 'standard text'
     )
@@ -108,15 +146,153 @@ describe('registerClipboardHandlers', () => {
     registerClipboardHandlers()
 
     const handlers = getRegisteredHandlers()
-    expect(handlers.get('clipboard:readText')?.()).toBe('standard text')
-    expect(handlers.get('clipboard:readSelectionText')?.()).toBe('selection text')
-    handlers.get('clipboard:writeText')?.({}, 'normal text')
-    handlers.get('clipboard:writeSelectionText')?.({}, 'primary text')
+    await expect(handlers.get('clipboard:readText')?.(makeClipboardEvent())).resolves.toBe(
+      'standard text'
+    )
+    await expect(handlers.get('clipboard:readSelectionText')?.(makeClipboardEvent())).resolves.toBe(
+      'selection text'
+    )
+    await handlers.get('clipboard:writeText')?.(makeClipboardEvent(), 'normal text')
+    await handlers.get('clipboard:writeSelectionText')?.(makeClipboardEvent(), 'primary text')
 
     expect(clipboardReadTextMock).toHaveBeenCalledWith()
     expect(clipboardReadTextMock).toHaveBeenCalledWith('selection')
     expect(clipboardWriteTextMock).toHaveBeenCalledWith('normal text')
     expect(clipboardWriteTextMock).toHaveBeenCalledWith('primary text', 'selection')
+  })
+
+  it('rejects clipboard IPC from senders outside the current main renderer', async () => {
+    setTrustedClipboardRendererWebContentsId(17)
+    registerClipboardHandlers()
+
+    const handlers = getRegisteredHandlers()
+    const untrustedEvent = makeClipboardEvent({ id: 42 })
+    await expect(handlers.get('clipboard:readText')?.(untrustedEvent)).rejects.toThrow(
+      'Unauthorized clipboard IPC sender'
+    )
+    await expect(
+      handlers.get('clipboard:writeText')?.(untrustedEvent, 'copied-secret-token-value')
+    ).rejects.toThrow('Unauthorized clipboard IPC sender')
+    await expect(
+      handlers.get('clipboard:saveImageAsTempFile')?.(untrustedEvent, {
+        connectionId: 'ssh-secret'
+      })
+    ).rejects.toThrow('Unauthorized clipboard IPC sender')
+    expect(() =>
+      handlers.get('clipboard:writeImage')?.(untrustedEvent, 'data:image/png;base64,AAAA')
+    ).toThrow('Unauthorized clipboard IPC sender')
+
+    expect(clipboardReadTextMock).not.toHaveBeenCalled()
+    expect(clipboardWriteTextMock).not.toHaveBeenCalled()
+    expect(clipboardReadImageMock).not.toHaveBeenCalled()
+    expect(nativeImageCreateFromBufferMock).not.toHaveBeenCalled()
+    expect(clipboardWriteImageMock).not.toHaveBeenCalled()
+    expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects clipboard IPC from destroyed, browser, and mismatched dev-origin senders', async () => {
+    registerClipboardHandlers()
+
+    const handlers = getRegisteredHandlers()
+    await expect(
+      handlers.get('clipboard:readText')?.(makeClipboardEvent({ isDestroyed: () => true }))
+    ).rejects.toThrow('Unauthorized clipboard IPC sender')
+    await expect(
+      handlers.get('clipboard:readText')?.(makeClipboardEvent({ getType: () => 'webview' }))
+    ).rejects.toThrow('Unauthorized clipboard IPC sender')
+
+    vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173')
+
+    await expect(
+      handlers.get('clipboard:readText')?.(
+        makeClipboardEvent({ getURL: () => 'http://127.0.0.1:5173/workspace' })
+      )
+    ).rejects.toThrow('Unauthorized clipboard IPC sender')
+    await expect(
+      handlers.get('clipboard:readText')?.(makeClipboardEvent({ getURL: () => 'not a url' }))
+    ).rejects.toThrow('Unauthorized clipboard IPC sender')
+
+    expect(clipboardReadTextMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects oversized text clipboard IPC reads without returning clipboard contents', async () => {
+    clipboardReadTextMock.mockImplementation((clipboardType?: string) =>
+      clipboardType === 'selection' ? 'selection secret' : 'standard secret'
+    )
+
+    registerClipboardHandlers()
+
+    const handlers = getRegisteredHandlers()
+    await expect(
+      handlers.get('clipboard:readText')?.(makeClipboardEvent(), { maxBytes: 4 })
+    ).rejects.toThrow('Clipboard text is too large for this paste target.')
+    await expect(
+      handlers.get('clipboard:readSelectionText')?.(makeClipboardEvent(), { maxBytes: 4 })
+    ).rejects.toThrow('Clipboard text is too large for this paste target.')
+  })
+
+  it('yields while measuring large accepted text clipboard IPC reads', async () => {
+    vi.useFakeTimers()
+    const text = 'é'.repeat(300_000)
+    clipboardReadTextMock.mockReturnValue(text)
+
+    registerClipboardHandlers()
+
+    const handlers = getRegisteredHandlers()
+    const result = handlers.get('clipboard:readText')?.(makeClipboardEvent(), {
+      maxBytes: text.length * 3
+    })
+    if (!(result instanceof Promise)) {
+      throw new Error('Expected clipboard read handler to return a Promise')
+    }
+    const isSettled = trackPromiseSettled(result)
+
+    await Promise.resolve()
+
+    expect(isSettled()).toBe(false)
+    await vi.runOnlyPendingTimersAsync()
+    await expect(result).resolves.toBe(text)
+  })
+
+  it('yields before writing large text clipboard IPC payloads', async () => {
+    vi.useFakeTimers()
+    const text = 'é'.repeat(300_000)
+
+    registerClipboardHandlers()
+
+    const handlers = getRegisteredHandlers()
+    const result = handlers.get('clipboard:writeText')?.(makeClipboardEvent(), text)
+    if (!(result instanceof Promise)) {
+      throw new Error('Expected clipboard write handler to return a Promise')
+    }
+    const isSettled = trackPromiseSettled(result)
+
+    await Promise.resolve()
+
+    expect(isSettled()).toBe(false)
+    expect(clipboardWriteTextMock).not.toHaveBeenCalled()
+    await vi.runOnlyPendingTimersAsync()
+    await result
+    expect(clipboardWriteTextMock).toHaveBeenCalledWith(text)
+  })
+
+  it('rejects oversized text clipboard IPC writes before calling Electron clipboard', async () => {
+    registerClipboardHandlers()
+
+    const handlers = getRegisteredHandlers()
+    await expect(
+      handlers.get('clipboard:writeText')?.(
+        makeClipboardEvent(),
+        'copied-secret-token-value'.repeat(900_000)
+      )
+    ).rejects.toThrow('Clipboard text is too large to copy safely.')
+    await expect(
+      handlers.get('clipboard:writeSelectionText')?.(
+        makeClipboardEvent(),
+        'selection-secret-token-value'.repeat(900_000)
+      )
+    ).rejects.toThrow('Clipboard text is too large to copy safely.')
+    expect(clipboardWriteTextMock).not.toHaveBeenCalled()
   })
 
   it('removes stale clipboard IPC handlers before registering replacements', () => {
@@ -137,6 +313,7 @@ describe('registerClipboardHandlers', () => {
       'orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png'
     )
     clipboardReadImageMock.mockReturnValue({
+      getSize: () => ({ height: 1, width: 1 }),
       isEmpty: () => false,
       toPNG: () => png
     })
@@ -144,9 +321,9 @@ describe('registerClipboardHandlers', () => {
     registerClipboardHandlers()
 
     const handlers = getRegisteredHandlers()
-    await expect(handlers.get('clipboard:saveImageAsTempFile')?.({}, undefined)).resolves.toBe(
-      expectedPath
-    )
+    await expect(
+      handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), undefined)
+    ).resolves.toBe(expectedPath)
     expect(fsWriteFileMock).toHaveBeenCalledWith(expectedPath, png)
     expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
   })
@@ -156,6 +333,7 @@ describe('registerClipboardHandlers', () => {
     const writeFileBase64 = vi.fn().mockResolvedValue(undefined)
     const getTempDir = vi.fn().mockResolvedValue('/var/tmp')
     clipboardReadImageMock.mockReturnValue({
+      getSize: () => ({ height: 1, width: 1 }),
       isEmpty: () => false,
       toPNG: () => png
     })
@@ -165,7 +343,9 @@ describe('registerClipboardHandlers', () => {
 
     const handlers = getRegisteredHandlers()
     await expect(
-      handlers.get('clipboard:saveImageAsTempFile')?.({}, { connectionId: 'ssh-1' })
+      handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), {
+        connectionId: 'ssh-1'
+      })
     ).resolves.toBe('/var/tmp/orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png')
     expect(getSshFilesystemProviderMock).toHaveBeenCalledWith('ssh-1')
     expect(getTempDir).toHaveBeenCalled()
@@ -180,6 +360,7 @@ describe('registerClipboardHandlers', () => {
     const png = Buffer.from([0, 1, 2, 3])
     const writeFileBase64 = vi.fn().mockResolvedValue(undefined)
     clipboardReadImageMock.mockReturnValue({
+      getSize: () => ({ height: 1, width: 1 }),
       isEmpty: () => false,
       toPNG: () => png
     })
@@ -192,7 +373,9 @@ describe('registerClipboardHandlers', () => {
 
     const handlers = getRegisteredHandlers()
     await expect(
-      handlers.get('clipboard:saveImageAsTempFile')?.({}, { connectionId: 'ssh-1' })
+      handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), {
+        connectionId: 'ssh-1'
+      })
     ).resolves.toBe(
       'C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png'
     )
@@ -200,5 +383,72 @@ describe('registerClipboardHandlers', () => {
       'C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png',
       png.toString('base64')
     )
+  })
+
+  it('rejects oversized clipboard image dimensions before PNG conversion', async () => {
+    const toPNG = vi.fn(() => Buffer.from([0, 1, 2, 3]))
+    clipboardReadImageMock.mockReturnValue({
+      getSize: () => ({ height: 1, width: CLIPBOARD_IMAGE_MAX_PIXELS + 1 }),
+      isEmpty: () => false,
+      toPNG
+    })
+
+    registerClipboardHandlers()
+
+    const handlers = getRegisteredHandlers()
+    await expect(
+      handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), undefined)
+    ).rejects.toThrow('Clipboard image is too large')
+    expect(toPNG).not.toHaveBeenCalled()
+    expect(fsWriteFileMock).not.toHaveBeenCalled()
+    expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects oversized clipboard PNG bytes before SSH provider lookup', async () => {
+    clipboardReadImageMock.mockReturnValue({
+      getSize: () => ({ height: 1, width: 1 }),
+      isEmpty: () => false,
+      toPNG: () => Buffer.alloc(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES + 1)
+    })
+
+    registerClipboardHandlers()
+
+    const handlers = getRegisteredHandlers()
+    await expect(
+      handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), {
+        connectionId: 'ssh-secret'
+      })
+    ).rejects.toThrow('Clipboard image is too large')
+    expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
+    expect(fsWriteFileMock).not.toHaveBeenCalled()
+  })
+
+  it('ignores oversized clipboard write-image data before decoding base64', () => {
+    registerClipboardHandlers()
+
+    const handlers = getRegisteredHandlers()
+    const dataUrl = [
+      'data:image/png;base64,',
+      'A'.repeat(CLIPBOARD_IMAGE_MAX_BASE64_CHARS + 1)
+    ].join('')
+    handlers.get('clipboard:writeImage')?.(makeClipboardEvent(), dataUrl)
+
+    expect(nativeImageCreateFromBufferMock).not.toHaveBeenCalled()
+    expect(clipboardWriteImageMock).not.toHaveBeenCalled()
+  })
+
+  it('ignores clipboard write images with oversized decoded dimensions', () => {
+    nativeImageCreateFromBufferMock.mockReturnValue({
+      getSize: () => ({ height: 1, width: CLIPBOARD_IMAGE_MAX_PIXELS + 1 }),
+      isEmpty: () => false
+    })
+
+    registerClipboardHandlers()
+
+    const handlers = getRegisteredHandlers()
+    handlers.get('clipboard:writeImage')?.(makeClipboardEvent(), 'data:image/png;base64,AAAA')
+
+    expect(nativeImageCreateFromBufferMock).toHaveBeenCalled()
+    expect(clipboardWriteImageMock).not.toHaveBeenCalled()
   })
 })

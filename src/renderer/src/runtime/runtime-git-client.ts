@@ -6,6 +6,8 @@ import type {
   GitCommitCompareResult,
   GitConflictOperation,
   GitDiffResult,
+  GitForkSyncExpectedUpstream,
+  GitForkSyncResult,
   GitPushTarget,
   GitStatusResult,
   GitUpstreamStatus,
@@ -15,6 +17,8 @@ import type {
   CommitMessageAgentCapability,
   CommitMessageModelCapability
 } from '../../../shared/commit-message-agent-spec'
+import type { HostedReviewProvider } from '../../../shared/hosted-review'
+import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
@@ -33,6 +37,15 @@ export type RuntimeGeneratePullRequestFieldsResult =
       branchChangedByPreparation?: boolean
     }
   | { success: false; error: string; canceled?: boolean; branchChangedByPreparation?: boolean }
+
+export type RuntimePullRequestGenerationInput = {
+  base: string
+  title: string
+  body: string
+  draft: boolean
+  provider?: HostedReviewProvider
+  useTemplate?: boolean
+}
 
 type RuntimeGitSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> &
   Partial<
@@ -57,6 +70,14 @@ export type RuntimeGitContext = {
   worktreePath: string
   connectionId?: string
 }
+
+export type RuntimeGenerateCommitMessageOverrides = {
+  sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
+  sourceControlAi?: GlobalSettings['sourceControlAi']
+  agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
+}
+
+export type RuntimeGeneratePullRequestFieldsOverrides = RuntimeGenerateCommitMessageOverrides
 
 function getRuntimeCommitMessageSettings(
   settings: RuntimeGitSettings | null | undefined,
@@ -323,6 +344,29 @@ export async function fetchRuntimeGit(
   )
 }
 
+export async function syncRuntimeGitForkDefaultBranch(
+  context: RuntimeGitContext,
+  expectedUpstream: GitForkSyncExpectedUpstream
+): Promise<GitForkSyncResult> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.syncFork({
+      worktreePath: context.worktreePath,
+      connectionId: context.connectionId,
+      expectedUpstream
+    })
+  }
+  return callRuntimeRpc<GitForkSyncResult>(
+    target,
+    'git.forkSync',
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      expectedUpstream
+    },
+    { timeoutMs: 60_000 }
+  )
+}
+
 export async function pullRuntimeGit(
   context: RuntimeGitContext,
   pushTarget?: GitPushTarget
@@ -495,14 +539,20 @@ export async function commitRuntimeGit(
 }
 
 export async function generateRuntimeCommitMessage(
-  context: RuntimeGitContext
+  context: RuntimeGitContext,
+  overrides?: RuntimeGenerateCommitMessageOverrides
 ): Promise<RuntimeGenerateCommitMessageResult> {
   const target = getActiveRuntimeTarget(context.settings)
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.generateCommitMessage({
       worktreePath: context.worktreePath,
       repoId: context.worktreeId ? getRepoIdFromWorktreeId(context.worktreeId) : undefined,
-      connectionId: context.connectionId
+      connectionId: context.connectionId,
+      ...(overrides?.sourceControlAiResolvedParams
+        ? { sourceControlAiResolvedParams: overrides.sourceControlAiResolvedParams }
+        : {}),
+      ...(overrides?.sourceControlAi ? { sourceControlAi: overrides.sourceControlAi } : {}),
+      ...(overrides?.agentCmdOverrides ? { agentCmdOverrides: overrides.agentCmdOverrides } : {})
     }) as Promise<RuntimeGenerateCommitMessageResult>
   }
   return callRuntimeRpc<RuntimeGenerateCommitMessageResult>(
@@ -510,7 +560,12 @@ export async function generateRuntimeCommitMessage(
     'git.generateCommitMessage',
     {
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
-      ...getRuntimeCommitMessageSettings(context.settings, context.connectionId)
+      ...getRuntimeCommitMessageSettings(context.settings, context.connectionId),
+      ...(overrides?.sourceControlAiResolvedParams
+        ? { sourceControlAiResolvedParams: overrides.sourceControlAiResolvedParams }
+        : {}),
+      ...(overrides?.sourceControlAi ? { sourceControlAi: overrides.sourceControlAi } : {}),
+      ...(overrides?.agentCmdOverrides ? { agentCmdOverrides: overrides.agentCmdOverrides } : {})
     },
     { timeoutMs: 75_000 }
   )
@@ -563,7 +618,8 @@ export async function cancelRuntimeGenerateCommitMessage(
 
 export async function generateRuntimePullRequestFields(
   context: RuntimeGitContext,
-  input: { base: string; title: string; body: string; draft: boolean }
+  input: RuntimePullRequestGenerationInput,
+  overrides?: RuntimeGeneratePullRequestFieldsOverrides
 ): Promise<RuntimeGeneratePullRequestFieldsResult> {
   const target = getActiveRuntimeTarget(context.settings)
   if (target.kind === 'local' || !context.worktreeId) {
@@ -571,7 +627,12 @@ export async function generateRuntimePullRequestFields(
       worktreePath: context.worktreePath,
       repoId: context.worktreeId ? getRepoIdFromWorktreeId(context.worktreeId) : undefined,
       connectionId: context.connectionId,
-      ...input
+      ...input,
+      ...(overrides?.sourceControlAiResolvedParams
+        ? { sourceControlAiResolvedParams: overrides.sourceControlAiResolvedParams }
+        : {}),
+      ...(overrides?.sourceControlAi ? { sourceControlAi: overrides.sourceControlAi } : {}),
+      ...(overrides?.agentCmdOverrides ? { agentCmdOverrides: overrides.agentCmdOverrides } : {})
     }) as Promise<RuntimeGeneratePullRequestFieldsResult>
   }
   return callRuntimeRpc<RuntimeGeneratePullRequestFieldsResult>(
@@ -580,7 +641,12 @@ export async function generateRuntimePullRequestFields(
     {
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       ...input,
-      ...getRuntimeCommitMessageSettings(context.settings, context.connectionId)
+      ...getRuntimeCommitMessageSettings(context.settings, context.connectionId),
+      ...(overrides?.sourceControlAiResolvedParams
+        ? { sourceControlAiResolvedParams: overrides.sourceControlAiResolvedParams }
+        : {}),
+      ...(overrides?.sourceControlAi ? { sourceControlAi: overrides.sourceControlAi } : {}),
+      ...(overrides?.agentCmdOverrides ? { agentCmdOverrides: overrides.agentCmdOverrides } : {})
     },
     { timeoutMs: 75_000 }
   )
@@ -751,6 +817,29 @@ export async function getRuntimeGitRemoteFileUrl(
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       relativePath: args.relativePath,
       line: args.line
+    },
+    { timeoutMs: 15_000 }
+  )
+}
+
+export async function getRuntimeGitRemoteCommitUrl(
+  context: RuntimeGitContext,
+  args: { sha: string }
+): Promise<string | null> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.remoteCommitUrl({
+      worktreePath: context.worktreePath,
+      sha: args.sha,
+      connectionId: context.connectionId
+    })
+  }
+  return callRuntimeRpc<string | null>(
+    target,
+    'git.remoteCommitUrl',
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      sha: args.sha
     },
     { timeoutMs: 15_000 }
   )

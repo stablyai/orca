@@ -27,12 +27,35 @@ type TreeOpsCallbacks = {
   requestPaneReparentFrame?: (callback: FrameRequestCallback) => void
 }
 
+const MIN_PANE_FIT_WIDTH_PX = 48
+const MIN_PANE_FIT_HEIGHT_PX = 24
+const MIN_PANE_FIT_COLS = 8
+const MIN_PANE_FIT_ROWS = 4
+
 function getProposedDimensions(pane: ManagedPane): { cols: number; rows: number } | null {
   try {
     return pane.fitAddon.proposeDimensions() ?? null
   } catch {
     return null
   }
+}
+
+function canMeasurePaneForFit(pane: ManagedPane): boolean {
+  const measure = pane.container.getBoundingClientRect
+  if (typeof measure === 'function') {
+    const rect = measure.call(pane.container)
+    if (rect.width < MIN_PANE_FIT_WIDTH_PX || rect.height < MIN_PANE_FIT_HEIGHT_PX) {
+      return false
+    }
+  }
+  const dims = getProposedDimensions(pane)
+  if (!dims) {
+    return false
+  }
+  // Why: worktree switches can briefly measure a near-zero overlay before
+  // fallback positioning lands. Fitting there pins the PTY at ~2 cols until
+  // the next user-driven resize.
+  return dims.cols >= MIN_PANE_FIT_COLS && dims.rows >= MIN_PANE_FIT_ROWS
 }
 
 function captureScrollStateForFit(pane: ManagedPane): ScrollState | null {
@@ -43,6 +66,9 @@ function captureScrollStateForFit(pane: ManagedPane): ScrollState | null {
 }
 
 export function safeFit(pane: ManagedPane): void {
+  if (!canMeasurePaneForFit(pane)) {
+    return
+  }
   let scrollState: ScrollState | null = null
   let shouldRestoreScroll = false
   try {

@@ -2,7 +2,7 @@
    preflight validation, and lifecycle guards that must stay in one execution path. */
 import * as pty from 'node-pty'
 import { statSync } from 'fs'
-import { win32 as pathWin32 } from 'path'
+import { delimiter, win32 as pathWin32 } from 'path'
 import type { SubprocessHandle } from './session'
 import { DaemonProtocolError } from './types'
 import {
@@ -27,8 +27,25 @@ import { getWslContextFromSessionId } from './wsl-session-context'
 import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
+import { resolveAgentForegroundProcess } from '../providers/agent-foreground-process'
+import {
+  isAgentForegroundWrapperProcess,
+  recognizeAgentProcess,
+  recognizeAgentProcessFromCommandLine
+} from '../../shared/agent-process-recognition'
+import {
+  shouldUseShellReadyStartupDelivery,
+  type StartupCommandDelivery
+} from '../../shared/codex-startup-delivery'
+import { isShellProcess } from '../../shared/shell-process-detection'
+import { parsePtySessionId } from './pty-session-id'
+import { getAgentForegroundContextPaths } from '../providers/agent-foreground-context-paths'
 
 const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
+const FOREGROUND_AGENT_CACHE_TTL_MS = 1000
+const SHELL_FOREGROUND_REFRESH_RETRY_MS = 5_000
+const STARTUP_AGENT_FOREGROUND_BOOTSTRAP_MS = 5_000
+const PTY_SPAWN_HEALTH_TIMEOUT_MS = 2_000
 
 export type PtySubprocessOptions = {
   sessionId: string
@@ -38,6 +55,7 @@ export type PtySubprocessOptions = {
   env?: Record<string, string>
   envToDelete?: string[]
   command?: string
+  startupCommandDelivery?: StartupCommandDelivery
   /** Explicit shell executable path/basename the renderer asked for.
    *  Overrides env.COMSPEC / env.SHELL resolution inside the daemon so a user
    *  who picks "New WSL terminal" from the "+" menu actually gets WSL. */
@@ -46,6 +64,9 @@ export type PtySubprocessOptions = {
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
 }
 
+/**
+ * Returns a stable default working directory for daemon-spawned PTYs.
+ */
 function getDefaultCwd(): string {
   if (process.platform !== 'win32') {
     return process.env.HOME || '/'
@@ -63,6 +84,9 @@ function getDefaultCwd(): string {
   return 'C:\\'
 }
 
+/**
+ * Removes pane identity inherited from the daemon parent unless explicitly set.
+ */
 function removeUnspecifiedPaneIdentityEnv(
   env: Record<string, string>,
   explicitEnv: Record<string, string> | undefined
@@ -74,6 +98,27 @@ function removeUnspecifiedPaneIdentityEnv(
   }
 }
 
+/**
+ * Promotes the agent-teams shim path ahead of inherited PATH entries.
+ */
+function promoteAgentTeamsShimPath(
+  env: Record<string, string>,
+  requestedPath: string | undefined
+): void {
+  if (!env.ORCA_AGENT_TEAMS_TEAM_ID || !requestedPath) {
+    return
+  }
+  const shimDir = requestedPath.split(delimiter)[0]
+  if (!shimDir) {
+    return
+  }
+  const currentParts = env.PATH?.split(delimiter).filter(Boolean) ?? []
+  env.PATH = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(delimiter)
+}
+
+/**
+ * Removes stale development hook endpoints inherited by daemon children.
+ */
 function removeInheritedDevAgentHookEndpoint(
   env: Record<string, string>,
   explicitEnv: Record<string, string> | undefined
@@ -86,6 +131,9 @@ function removeInheritedDevAgentHookEndpoint(
   }
 }
 
+/**
+ * Resolves a WSL launch context from a user-selected distro name.
+ */
 function getWslContextFromPreferredDistro(
   distro: string | null | undefined
 ): { distro: string } | undefined {
@@ -93,12 +141,18 @@ function getWslContextFromPreferredDistro(
   return trimmed ? { distro: trimmed } : undefined
 }
 
+/**
+ * Strips Electron's internal run-as-node flag from user shell environments.
+ */
 function removeInheritedElectronRunAsNode(env: Record<string, string>): void {
   // Why: the daemon needs ELECTRON_RUN_AS_NODE=1 internally, but user shells
   // must not inherit it or nested Electron commands run as plain Node.
   delete env.ELECTRON_RUN_AS_NODE
 }
 
+/**
+ * Formats a daemon preflight failure with the same ENOENT details node-pty exposes.
+ */
 function formatMissingDaemonPathError(kind: 'helper' | 'cwd', path: string): DaemonProtocolError {
   const detailName = kind === 'helper' ? 'helper' : 'cwd'
   const step = kind === 'helper' ? 'posix_spawn' : 'daemon_cwd'
@@ -109,6 +163,9 @@ function formatMissingDaemonPathError(kind: 'helper' | 'cwd', path: string): Dae
   )
 }
 
+/**
+ * Checks whether a path currently exists and is a directory.
+ */
 function isExistingDirectory(path: string | undefined): path is string {
   if (!path) {
     return false
@@ -120,6 +177,9 @@ function isExistingDirectory(path: string | undefined): path is string {
   }
 }
 
+/**
+ * Moves the daemon process to a stable cwd after its original cwd disappears.
+ */
 function repairDaemonCwd(): string | null {
   const candidates = [
     process.env.ORCA_USER_DATA_PATH,
@@ -139,6 +199,9 @@ function repairDaemonCwd(): string | null {
   return null
 }
 
+/**
+ * Ensures the daemon cwd is valid before native PTY spawning.
+ */
 function preflightDaemonCwd(): void {
   let daemonCwd = '<unavailable>'
   try {
@@ -159,6 +222,9 @@ function preflightDaemonCwd(): void {
   throw formatMissingDaemonPathError('cwd', daemonCwd)
 }
 
+/**
+ * Validates macOS node-pty helper availability before spawning terminals.
+ */
 function preflightMacNodePtySpawnEnvironment(): void {
   if (process.platform !== 'darwin') {
     return
@@ -186,10 +252,16 @@ function preflightMacNodePtySpawnEnvironment(): void {
   throw formatMissingDaemonPathError('helper', candidates[0] ?? '<unresolved>')
 }
 
+/**
+ * Detects native Windows paths that should be validated before spawn.
+ */
 function isNativeWindowsPath(path: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(path) || path.startsWith('\\\\')
 }
 
+/**
+ * Validates explicit native Windows cwd paths before ConPTY launch.
+ */
 function preflightWindowsPtySpawnEnvironment(args: {
   validationCwd: string
   cwdWasExplicit: boolean
@@ -205,6 +277,9 @@ function preflightWindowsPtySpawnEnvironment(args: {
   validateWorkingDirectory(args.validationCwd)
 }
 
+/**
+ * Wraps native PTY spawn failures with shell and cwd context.
+ */
 function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string): Error {
   const message = err instanceof Error ? err.message : String(err)
   const formatted = new DaemonProtocolError(
@@ -216,6 +291,81 @@ function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string):
   return formatted
 }
 
+/**
+ * Runs a short native PTY spawn probe for daemon health checks.
+ */
+export async function checkPtySpawnHealth(): Promise<void> {
+  if (process.platform !== 'darwin') {
+    return
+  }
+
+  ensureNodePtySpawnHelperExecutable()
+  preflightMacNodePtySpawnEnvironment()
+
+  const cwd = isExistingDirectory(process.env.ORCA_USER_DATA_PATH)
+    ? process.env.ORCA_USER_DATA_PATH
+    : getDefaultCwd()
+
+  let proc: pty.IPty
+  try {
+    proc = pty.spawn('/bin/sh', ['-c', 'exit 0'], {
+      name: 'xterm-256color',
+      cols: 2,
+      rows: 1,
+      cwd,
+      env: {
+        ...process.env,
+        TERM: 'xterm-256color'
+      }
+    })
+  } catch (err) {
+    throw formatPtySpawnError(err, '/bin/sh', cwd)
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    let settled = false
+    let exitDisposable: { dispose(): void } | undefined
+    const finish = (error?: Error, opts?: { kill?: boolean }): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      exitDisposable?.dispose()
+      if (opts?.kill) {
+        try {
+          proc.kill()
+        } catch {
+          // Best-effort cleanup for a short-lived health probe.
+        }
+      }
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve()
+    }
+    const timer = setTimeout(() => {
+      finish(new Error(`PTY spawn health check timed out after ${PTY_SPAWN_HEALTH_TIMEOUT_MS}ms`), {
+        kill: true
+      })
+    }, PTY_SPAWN_HEALTH_TIMEOUT_MS)
+
+    // Why: ping only proves the daemon protocol is alive. A real short-lived
+    // PTY spawn catches stale node-pty helper paths captured by this process.
+    exitDisposable = proc.onExit(({ exitCode }) => {
+      if (exitCode === 0) {
+        finish()
+        return
+      }
+      finish(new Error(`PTY spawn health check exited with code ${exitCode}`))
+    })
+  })
+}
+
+/**
+ * Normalizes node-pty foreground process strings to executable basenames.
+ */
 function normalizeForegroundProcessName(processName: string | null | undefined): string | null {
   const trimmed = processName?.trim().replace(/^["']|["']$/g, '') ?? ''
   if (!trimmed || trimmed === 'xterm-256color') {
@@ -224,6 +374,28 @@ function normalizeForegroundProcessName(processName: string | null | undefined):
   return trimmed.split(/[\\/]/).pop() || null
 }
 
+/**
+ * Falls back to the spawned Windows shell when node-pty reports a terminal name.
+ */
+function resolveFallbackForegroundProcess(
+  processName: string | null | undefined,
+  shellPath: string
+): string | null {
+  const normalized = normalizeForegroundProcessName(processName)
+  if (normalized || process.platform !== 'win32') {
+    return normalized
+  }
+  // Why: Windows node-pty can report the terminal name instead of the shell.
+  // Use the spawned shell so shell-rooted foreground enrichment still runs.
+  return normalizeForegroundProcessName(pathWin32.basename(shellPath))
+}
+
+/**
+ * Spawns the daemon-owned PTY subprocess for a terminal session.
+ *
+ * The returned handle records whether the startup command was already embedded
+ * in Windows shell args so the daemon host does not write it a second time.
+ */
 export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandle {
   const size = normalizePtySize(opts.cols, opts.rows)
   const env: Record<string, string> = {
@@ -247,6 +419,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   } as Record<string, string>
   for (const key of opts.envToDelete ?? []) {
     delete env[key]
+  }
+  if (opts.env?.TERM) {
+    env.TERM = opts.env.TERM
   }
   // Why: the daemon is forked from Electron and can inherit the pane identity
   // of the terminal that launched `pn dev`; each PTY must opt into its own.
@@ -274,6 +449,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let shellPath =
     cwdWslInfo || sessionWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
+  let startupCommandDeliveredInShellArgs = false
+  const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
+  const isCodexStartupCommand = startupAgentRecognition?.agent === 'codex'
   const requestedCwd = opts.cwd || getDefaultCwd()
   let spawnCwd = requestedCwd
   let validationCwd = spawnCwd
@@ -316,11 +494,13 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       shellPath,
       spawnCwd,
       getDefaultCwd(),
-      sessionWslContext ?? preferredWslContext
+      sessionWslContext ?? preferredWslContext,
+      opts.command
     )
     shellArgs = resolved.shellArgs
     spawnCwd = resolved.effectiveCwd
     validationCwd = resolved.validationCwd
+    startupCommandDeliveredInShellArgs = resolved.startupCommandDeliveredInShellArgs === true
     if (isWindowsGitBashShellPath(shellPath)) {
       // Why: Git for Windows login startup files otherwise cd to $HOME,
       // ignoring node-pty's cwd for repo-scoped terminals.
@@ -346,11 +526,14 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
               getDefaultCwd(),
               {
                 distro: codexHomeWslInfo.distro
-              }
+              },
+              opts.command
             )
             shellArgs = resolved.shellArgs
             spawnCwd = resolved.effectiveCwd
             validationCwd = resolved.validationCwd
+            startupCommandDeliveredInShellArgs =
+              resolved.startupCommandDeliveredInShellArgs === true
           }
         }
       } else if (isHostCodexHomeForWsl(env.CODEX_HOME)) {
@@ -377,22 +560,45 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       addOrcaWslInteropEnv(env)
     }
   } else {
-    // Why: any Orca-injected overlay env that user rc files can clobber
-    // needs the wrapper so the post-rc restore line runs.
-    const shellLaunch = opts.command
-      ? getShellReadyLaunchConfig(shellPath)
-      : env.ORCA_ATTRIBUTION_SHIM_DIR ||
-          env.ORCA_OPENCODE_CONFIG_DIR ||
-          env.ORCA_PI_CODING_AGENT_DIR ||
-          env.ORCA_OMP_CODING_AGENT_DIR ||
-          env.ORCA_CODEX_HOME
-        ? getAttributionShellLaunchConfig(shellPath)
-        : null
+    // Why: relay-side launch modes can ask for host defaults to stay scrubbed
+    // even after environment normalization above.
+    for (const key of opts.envToDelete ?? []) {
+      delete env[key]
+    }
+    if (opts.env?.TERM) {
+      env.TERM = opts.env.TERM
+    }
+    // Why: OpenCode/Codex path restoration and OMP's typed-command status
+    // wrapper need shell-ready code after user startup files run.
+    let shellLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
+    if (opts.command && isCodexStartupCommand) {
+      const shouldWaitForShellReady = shouldUseShellReadyStartupDelivery({
+        command: opts.command,
+        startupCommandDelivery: opts.startupCommandDelivery
+      })
+      // Why: payload-bearing Codex startup text can be dropped by rc-file noise;
+      // plain Codex stays markerless to preserve the startup-speed path.
+      shellLaunch = shouldWaitForShellReady
+        ? getShellReadyLaunchConfig(shellPath)
+        : getAttributionShellLaunchConfig(shellPath)
+    } else if (opts.command) {
+      shellLaunch = getShellReadyLaunchConfig(shellPath)
+    } else {
+      shellLaunch =
+        env.ORCA_ATTRIBUTION_SHIM_DIR ||
+        env.ORCA_OPENCODE_CONFIG_DIR ||
+        env.ORCA_OMP_STATUS_EXTENSION ||
+        env.ORCA_CODEX_HOME ||
+        env.ORCA_AGENT_TEAMS_SHIM_DIR
+          ? getAttributionShellLaunchConfig(shellPath)
+          : null
+    }
     if (shellLaunch) {
       Object.assign(env, shellLaunch.env)
     }
     shellArgs = shellLaunch?.args ?? ['-l']
   }
+  promoteAgentTeamsShimPath(env, opts.env?.PATH)
 
   // Why: asar packaging can strip the +x bit from node-pty's spawn-helper
   // binary. The main process fixes this via LocalPtyProvider, but the daemon
@@ -407,7 +613,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let proc: pty.IPty
   try {
     proc = pty.spawn(shellPath, shellArgs, {
-      name: 'xterm-256color',
+      name: env.TERM ?? 'xterm-256color',
       cols: size.cols,
       rows: size.rows,
       cwd: spawnCwd,
@@ -434,8 +640,96 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let dead = false
   let disposed = false
   let nodePtyKillIssued = false
+  let cachedAgentForeground: { processName: string; refreshedAt: number } | null = null
+  const agentForegroundContextPaths = getAgentForegroundContextPaths({
+    cwd: opts.cwd,
+    worktreeId: parsePtySessionId(opts.sessionId).worktreeId
+  })
+  let startupAgentForeground: { processName: string; expiresAt: number } | null =
+    startupAgentRecognition
+      ? {
+          processName: startupAgentRecognition.processName,
+          expiresAt: Date.now() + STARTUP_AGENT_FOREGROUND_BOOTSTRAP_MS
+        }
+      : null
+  let foregroundRefreshInFlight = false
+  let lastForegroundRefreshStartedAt = 0
+  const getFallbackForegroundProcess = (): string | null =>
+    resolveFallbackForegroundProcess(proc.process, shellPath)
+  const getActiveStartupAgentForeground = (
+    now = Date.now()
+  ): { processName: string; expiresAt: number } | null => {
+    if (!startupAgentForeground) {
+      return null
+    }
+    if (now > startupAgentForeground.expiresAt) {
+      startupAgentForeground = null
+      return null
+    }
+    return startupAgentForeground
+  }
+  const shouldInspectFallbackForegroundProcess = (fallbackProcess: string | null): boolean =>
+    fallbackProcess !== null &&
+    (isShellProcess(fallbackProcess) || isAgentForegroundWrapperProcess(fallbackProcess))
+  const scheduleAgentForegroundRefresh = (fallbackProcess: string | null): void => {
+    if (dead || !proc.pid) {
+      return
+    }
+    const fallbackIsShell = fallbackProcess !== null && isShellProcess(fallbackProcess)
+    if (
+      !fallbackProcess ||
+      recognizeAgentProcess(fallbackProcess) ||
+      !shouldInspectFallbackForegroundProcess(fallbackProcess)
+    ) {
+      return
+    }
+    const now = Date.now()
+    const retryMs =
+      fallbackIsShell && !getActiveStartupAgentForeground(now) && !cachedAgentForeground
+        ? SHELL_FOREGROUND_REFRESH_RETRY_MS
+        : FOREGROUND_AGENT_CACHE_TTL_MS
+    if (foregroundRefreshInFlight || now - lastForegroundRefreshStartedAt < retryMs) {
+      return
+    }
+    foregroundRefreshInFlight = true
+    lastForegroundRefreshStartedAt = now
+    // Why: daemon foreground reads are sync and run on the IPC hot path.
+    // Refresh shell/wrapper-derived identities (powershell/node -> codex/etc.)
+    // in the background and serve them from a short cache on later reads.
+    void resolveAgentForegroundProcess(proc.pid, fallbackProcess, {
+      contextPaths: agentForegroundContextPaths
+    })
+      .then((processName) => {
+        if (dead) {
+          return
+        }
+        if (!processName || !recognizeAgentProcess(processName)) {
+          const currentFallbackProcess = getFallbackForegroundProcess()
+          if (
+            fallbackIsShell &&
+            !getActiveStartupAgentForeground() &&
+            currentFallbackProcess !== null &&
+            isShellProcess(currentFallbackProcess)
+          ) {
+            cachedAgentForeground = null
+            startupAgentForeground = null
+          }
+          return
+        }
+        cachedAgentForeground = { processName, refreshedAt: Date.now() }
+        startupAgentForeground = null
+      })
+      .catch(() => {
+        // Best-effort only: foreground enrichment must never affect PTY health.
+      })
+      .finally(() => {
+        foregroundRefreshInFlight = false
+      })
+  }
   proc.onExit(() => {
     dead = true
+    cachedAgentForeground = null
+    startupAgentForeground = null
     // Why: UnixTerminal.destroy() registers `_socket.once('close', () => this.kill('SIGHUP'))`
     // (unixTerminal.js:219-229). After the child exits, the master socket's
     // 'close' event can fire before our dispose() path gets to neutralize
@@ -452,6 +746,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
 
   return {
     pid: proc.pid,
+    ...(startupCommandDeliveredInShellArgs ? { startupCommandDeliveredInShellArgs: true } : {}),
     getForegroundProcess: () => {
       // Why: node-pty's `.process` getter reports the PTY's live foreground
       // process name (the agent running in the shell, or the shell itself) and
@@ -461,7 +756,25 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         return null
       }
       try {
-        return normalizeForegroundProcessName(proc.process)
+        const fallbackProcess = getFallbackForegroundProcess()
+        if (fallbackProcess && recognizeAgentProcess(fallbackProcess)) {
+          cachedAgentForeground = { processName: fallbackProcess, refreshedAt: Date.now() }
+          startupAgentForeground = null
+          return fallbackProcess
+        }
+        scheduleAgentForegroundRefresh(fallbackProcess)
+        const now = Date.now()
+        if (
+          cachedAgentForeground &&
+          now - cachedAgentForeground.refreshedAt <= FOREGROUND_AGENT_CACHE_TTL_MS
+        ) {
+          return cachedAgentForeground.processName
+        }
+        const activeStartupAgentForeground = getActiveStartupAgentForeground(now)
+        if (fallbackProcess && isShellProcess(fallbackProcess) && activeStartupAgentForeground) {
+          return activeStartupAgentForeground.processName
+        }
+        return fallbackProcess
       } catch {
         return null
       }

@@ -1,5 +1,10 @@
 /* eslint-disable max-lines -- Why: shared type definitions for all runtime RPC methods live in one file for discoverability and import simplicity. */
-import type { AgentStatusEntry, AgentStatusOrchestrationContext } from './agent-status-types'
+import type {
+  AgentStatusEntry,
+  AgentStatusOrchestrationContext,
+  AgentStatusState,
+  AgentType
+} from './agent-status-types'
 import type {
   BaseRefSearchResult,
   BrowserCookieImportResult,
@@ -14,6 +19,7 @@ import type {
   TuiAgent,
   Worktree,
   WorktreeLineage,
+  WorkspaceLineage,
   WorktreeLineageWarning
 } from './types'
 import type { TerminalPaneLayoutNode } from './types'
@@ -22,6 +28,7 @@ import type {
   RuntimeMarkdownSaveTabResult
 } from './mobile-markdown-document'
 import type { RuntimeCapability } from './protocol-version'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime-shared-control-types'
 
 export type { RuntimeMarkdownReadTabResult, RuntimeMarkdownSaveTabResult }
 
@@ -48,6 +55,7 @@ export type RuntimeStatus = {
   runtimeProtocolVersion?: number
   minCompatibleRuntimeClientVersion?: number
   capabilities?: RuntimeCapability[]
+  remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
   hostPlatform?: NodeJS.Platform
   // COMPAT(runtimeStatusMobileAliases): added 2026-05-15 for mobile builds
   // that still read these names; new desktop/CLI code uses the fields above.
@@ -111,6 +119,7 @@ export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
   id: string
   title: string
+  quickCommandLabel?: string | null
   parentTabId: string
   leafId: string
   ptyId?: string | null
@@ -118,6 +127,9 @@ export type RuntimeMobileSessionTerminalTab = {
   agentStatus?: AgentStatusEntry | null
   launchAgent?: TuiAgent
   parentLayout?: TerminalLayoutSnapshot
+  /** Tab-level color/pin (per parentTabId), host-persisted for remote servers. */
+  color?: string | null
+  isPinned?: boolean
   isActive: boolean
 }
 
@@ -140,6 +152,9 @@ export type RuntimeMobileSessionMarkdownTab = {
   sourceFilePath: string
   sourceRelativePath: string
   documentVersion: string
+  /** Tab-level color/pin, host-persisted for remote servers. */
+  color?: string | null
+  isPinned?: boolean
 }
 
 export type RuntimeMobileSessionFileTab = {
@@ -152,6 +167,9 @@ export type RuntimeMobileSessionFileTab = {
   mode?: 'edit' | 'diff'
   diffSource?: 'staged' | 'unstaged'
   isDirty: boolean
+  /** Tab-level color/pin, host-persisted for remote servers. */
+  color?: string | null
+  isPinned?: boolean
   isActive: boolean
 }
 
@@ -165,6 +183,8 @@ export type RuntimeMobileSessionBrowserTab = {
   loading: boolean
   canGoBack: boolean
   canGoForward: boolean
+  color?: string | null
+  isPinned?: boolean
   isActive: boolean
 }
 
@@ -275,7 +295,7 @@ export type RuntimeFileListResult = {
 export type RuntimeFileOpenResult = {
   worktree: string
   relativePath: string
-  kind: 'markdown' | 'text' | 'binary'
+  kind: 'markdown' | 'text' | 'binary' | 'image'
   opened: boolean
 }
 
@@ -287,6 +307,19 @@ export type RuntimeFileReadResult = {
   byteLength: number
 }
 
+/** Result of resolving a file path tapped in the mobile terminal against the
+ *  worktree root (+ optional cwd). relativePath is null when the path resolves
+ *  outside the worktree (not openable via the worktree-scoped file RPCs). */
+export type RuntimeTerminalPathResolution = {
+  worktree: string
+  relativePath: string | null
+  /** Absolute on-disk path (or remote path), present when relativePath is.
+   *  Used to build a file:// URL for opening HTML in a browser tab. */
+  absolutePath: string | null
+  exists: boolean
+  isDirectory: boolean
+}
+
 export type RuntimeFilePreviewResult = {
   content: string
   isBinary: boolean
@@ -296,6 +329,7 @@ export type RuntimeFilePreviewResult = {
 
 export type RuntimeTerminalSummary = {
   handle: string
+  ptyId: string | null
   worktreeId: string
   worktreePath: string
   branch: string
@@ -308,8 +342,57 @@ export type RuntimeTerminalSummary = {
   preview: string
 }
 
+export type RuntimeTerminalVisualTerminalNode = {
+  type: 'terminal'
+  handle: string
+  tabId: string
+  leafId: string
+  title: string | null
+  connected: boolean
+  active: boolean
+}
+
+export type RuntimeTerminalVisualPaneNode =
+  | RuntimeTerminalVisualTerminalNode
+  | {
+      type: 'pane-split'
+      direction: Extract<TerminalPaneLayoutNode, { type: 'split' }>['direction']
+      first: RuntimeTerminalVisualPaneNode
+      second: RuntimeTerminalVisualPaneNode
+    }
+
+export type RuntimeTerminalVisualTab = {
+  tabId: string
+  title: string | null
+  activeLeafId: string | null
+  panes: RuntimeTerminalVisualPaneNode
+}
+
+export type RuntimeTerminalVisualGroupNode = {
+  type: 'group'
+  groupId: string | null
+  activeTabId: string | null
+  tabs: RuntimeTerminalVisualTab[]
+}
+
+export type RuntimeTerminalVisualLayoutNode =
+  | RuntimeTerminalVisualGroupNode
+  | {
+      type: 'split'
+      direction: Extract<TabGroupLayoutNode, { type: 'split' }>['direction']
+      first: RuntimeTerminalVisualLayoutNode
+      second: RuntimeTerminalVisualLayoutNode
+    }
+
+export type RuntimeTerminalVisualLayout = {
+  worktreeId: string
+  worktreePath: string
+  root: RuntimeTerminalVisualLayoutNode
+}
+
 export type RuntimeTerminalListResult = {
   terminals: RuntimeTerminalSummary[]
+  visualLayouts?: RuntimeTerminalVisualLayout[]
   totalCount: number
   truncated: boolean
 }
@@ -344,10 +427,20 @@ export type RuntimeTerminalSend = {
   handle: string
   accepted: boolean
   bytesWritten: number
+  refusedReason?: 'no-agent' | 'permission'
+}
+
+export type RuntimeTerminalAgentStatusState = 'working' | 'permission' | 'idle' | null
+
+export type RuntimeTerminalAgentStatus = {
+  handle: string
+  isRunningAgent: boolean
+  status: RuntimeTerminalAgentStatusState
 }
 
 export type RuntimeTerminalCreate = {
   handle: string
+  tabId?: string
   worktreeId: string
   title: string | null
   surface?: 'background' | 'visible'
@@ -357,6 +450,13 @@ export type RuntimeTerminalSplit = {
   handle: string
   tabId: string
   paneRuntimeId: number
+}
+
+export type RuntimeTerminalResolvePane = {
+  handle: string
+  tabId: string
+  leafId: string
+  ptyId: string | null
 }
 
 export type RuntimeTerminalFocus = {
@@ -389,7 +489,32 @@ export type RuntimeTerminalWait = {
   blockedReason?: RuntimeTerminalWaitBlockedReason
 }
 
+/** One agent's live status as carried to mobile in a worktree.ps summary.
+ *  Flat shape (parentPaneKey points to another row in the same worktree's list)
+ *  so the client can rebuild the spawn-lineage tree desktop renders inline. */
+export type RuntimeWorktreeAgentRow = {
+  paneKey: string
+  /** paneKey of the orchestration parent, or null for a root agent. */
+  parentPaneKey: string | null
+  state: AgentStatusState
+  agentType: AgentType | null
+  /** Raw hook-reported prompt. Display surfaces can prefer displayName. */
+  prompt: string
+  /** Explicit orchestration task title, or null outside dispatch. */
+  taskTitle: string | null
+  /** Explicit UI label for orchestration task rows, or null outside dispatch. */
+  displayName: string | null
+  lastAssistantMessage: string | null
+  toolName: string | null
+  toolInput: string | null
+  interrupted: boolean
+  /** When the current `state` was first reported (ms). Drives "Xm ago". */
+  stateStartedAt: number
+  updatedAt: number
+}
+
 export type RuntimeWorktreePsSummary = {
+  workspaceKind?: 'git' | 'folder-workspace'
   worktreeId: string
   repoId: string
   repo: string
@@ -400,13 +525,54 @@ export type RuntimeWorktreePsSummary = {
   displayName: string
   linkedIssue: number | null
   linkedPR: { number: number; state: string } | null
+  linkedLinearIssue: string | null
+  linkedGitLabMR: number | null
+  linkedGitLabIssue: number | null
+  comment: string
   isPinned: boolean
+  /** True for the worktree currently focused on the desktop/host
+   *  (session.activeWorktreeId). Mobile scrolls it into view and highlights it
+   *  so the list reflects the desktop's current selection. */
+  isActive: boolean
   unread: boolean
   liveTerminalCount: number
   hasAttachedPty: boolean
   lastOutputAt: number | null
   preview: string
   status: RuntimeWorktreeStatus
+  /** Live agents in this worktree, newest-state-first. Empty for shell-only
+   *  worktrees. Mirrors desktop's inline agent list (WorktreeCardAgents). */
+  agents: RuntimeWorktreeAgentRow[]
+}
+
+export type RuntimeGitLocalBranches = {
+  current: string | null
+  branches: string[]
+}
+
+/** One speech model as presented to the mobile dictation-setup sheet: catalog
+ *  metadata joined with live download/ready state. */
+export type RuntimeSpeechModelSummary = {
+  id: string
+  label: string
+  provider: 'local' | 'openai'
+  sizeBytes: number | null
+  recommended: boolean
+  status: 'ready' | 'not-downloaded' | 'downloading' | 'extracting' | 'error'
+  progress: number | null
+}
+
+export type RuntimeSpeechSetupState = {
+  enabled: boolean
+  selectedModelId: string
+  /** 'toggle' = press once to start/stop; 'hold' = dictate while held. */
+  dictationMode: 'toggle' | 'hold'
+  models: RuntimeSpeechModelSummary[]
+}
+
+export type RuntimeGitCheckoutResult = {
+  ok: true
+  branch: string
 }
 
 export type RuntimeWorktreeStatus = 'active' | 'working' | 'permission' | 'done' | 'inactive'
@@ -415,12 +581,14 @@ export type RuntimeWorktreeRecord = Worktree & {
   parentWorktreeId: string | null
   childWorktreeIds: string[]
   lineage: WorktreeLineage | null
+  workspaceLineage?: WorkspaceLineage | null
   git: GitWorktreeInfo
 }
 
 export type RuntimeWorktreeCreateResult = {
   worktree: RuntimeWorktreeRecord
   lineage: WorktreeLineage | null
+  workspaceLineage?: WorkspaceLineage | null
   warnings: WorktreeLineageWarning[]
   warning?: string
 }
@@ -795,190 +963,13 @@ export type BrowserErrorCode =
   | 'browser_timeout'
   | 'browser_error'
 
-// Computer-use types (see docs/computer-use/plan.md §4 and §12.6).
+export type EmulatorErrorCode =
+  | 'emulator_no_active'
+  | 'emulator_device_not_found'
+  | 'emulator_helper_failed'
+  | 'emulator_not_macos'
+  | 'emulator_error'
 
-export const COMPUTER_ERROR_CODES = {
-  app_not_found: 'app_not_found',
-  app_blocked: 'app_blocked',
-  window_not_found: 'window_not_found',
-  window_stale: 'window_stale',
-  provider_incompatible: 'provider_incompatible',
-  unsupported_capability: 'unsupported_capability',
-  permission_denied: 'permission_denied',
-  element_not_found: 'element_not_found',
-  element_not_clickable: 'element_not_clickable',
-  action_not_supported: 'action_not_supported',
-  value_not_settable: 'value_not_settable',
-  invalid_argument: 'invalid_argument',
-  action_timeout: 'action_timeout',
-  screenshot_failed: 'screenshot_failed',
-  accessibility_error: 'accessibility_error'
-} as const
-
-export type ComputerErrorCode = keyof typeof COMPUTER_ERROR_CODES
-
-export type ComputerAppQuery = string
-
-export type ComputerSessionTarget = {
-  session?: string
-  worktree?: string
-  app?: ComputerAppQuery
-}
-
-export type ComputerListAppsArgs = {
-  worktree?: string
-}
-
-export type ComputerAppInfo = {
-  name: string
-  bundleId: string | null
-  pid: number
-}
-
-export type ComputerWindowInfo = {
-  id?: number | null
-  title: string
-  x?: number | null
-  y?: number | null
-  width: number
-  height: number
-  isMinimized?: boolean | null
-  isOffscreen?: boolean | null
-  screenIndex?: number | null
-  platform?: Record<string, unknown>
-}
-
-export type ComputerSnapshotData = {
-  id: string
-  app: ComputerAppInfo
-  window: ComputerWindowInfo
-  coordinateSpace: 'window'
-  treeText: string
-  elementCount: number
-  focusedElementId: number | null
-  truncation?: {
-    truncated: boolean
-    maxNodes?: number
-    maxDepth?: number
-    maxDepthReached?: boolean
-  }
-}
-
-export type ComputerScreenshotData = {
-  data?: string
-  format: 'png'
-  width: number
-  height: number
-  scale: number
-  path?: string
-  dataOmitted?: boolean
-  expiresAt?: string
-}
-
-export type ComputerScreenshotMetadata = {
-  engine?: 'screenCaptureKit' | 'cgWindowList' | 'unknown'
-  windowId?: number | null
-}
-
-export type ComputerScreenshotStatus =
-  | { state: 'captured'; metadata?: ComputerScreenshotMetadata }
-  | { state: 'skipped'; reason: 'no_screenshot_flag' }
-  | {
-      state: 'failed'
-      code: ComputerErrorCode
-      message: string
-      metadata?: ComputerScreenshotMetadata
-    }
-
-export type ComputerActionMetadata = {
-  path: 'accessibility' | 'synthetic' | 'clipboard'
-  actionName?: string | null
-  fallbackReason?: string | null
-  targetWindowId?: number | null
-  verification?: ComputerActionVerification
-}
-
-export type ComputerActionVerification =
-  | {
-      state: 'verified'
-      property: 'focusedText' | 'selection'
-      expected?: string | null
-      actualPreview?: string | null
-    }
-  | {
-      state: 'unverified'
-      reason: 'synthetic_input' | 'clipboard_paste' | 'provider_unavailable' | 'window_changed'
-    }
-
-export type ComputerSnapshotResult = {
-  snapshot: ComputerSnapshotData
-  screenshot: ComputerScreenshotData | null
-  screenshotStatus: ComputerScreenshotStatus
-}
-
-export type ComputerActionResult = ComputerSnapshotResult & {
-  action?: ComputerActionMetadata
-}
-
-export type ComputerProviderCapabilities = {
-  platform: NodeJS.Platform
-  provider: string
-  providerVersion: string
-  protocolVersion: number
-  supports: {
-    apps: {
-      list: boolean
-      bundleIds: boolean
-      pids: boolean
-    }
-    windows: {
-      list: boolean
-      targetById: boolean
-      targetByIndex: boolean
-      focus: boolean
-      moveResize: boolean
-    }
-    observation: {
-      screenshot: boolean
-      annotatedScreenshot: boolean
-      elementFrames: boolean
-      ocr: boolean
-    }
-    actions: {
-      click: boolean
-      typeText: boolean
-      pressKey: boolean
-      hotkey: boolean
-      pasteText: boolean
-      scroll: boolean
-      drag: boolean
-      setValue: boolean
-      performAction: boolean
-    }
-    surfaces: {
-      menus: boolean
-      dialogs: boolean
-      dock: boolean
-      menubar: boolean
-    }
-  }
-}
-
-export type ComputerWindowListWindow = ComputerWindowInfo & {
-  app: ComputerAppInfo
-  index: number
-  isMain?: boolean | null
-}
-
-export type ComputerListWindowsResult = {
-  app: ComputerAppInfo
-  windows: ComputerWindowListWindow[]
-}
-
-export type ComputerListAppsResult = {
-  apps: (ComputerAppInfo & {
-    isRunning: boolean
-    lastUsedAt: string | null
-    useCount: number | null
-  })[]
-}
+// Keep the broad runtime-types import surface stable while letting computer-use
+// CI watch a narrow contract file instead of every runtime type change.
+export * from './computer-use-runtime-types'

@@ -18,95 +18,18 @@ import {
   formatAutomationSchedule,
   isValidAutomationSchedule
 } from '../../../../shared/automation-schedules'
+import { translate } from '@/i18n/i18n'
+import { parseHermesOutput, type ParsedHermesSection } from './hermes-cron-output-parse'
 
-type ParsedSection = {
-  heading: string
-  level: number
-  body: string
-}
-
-type ParsedHermesOutput = {
-  title: string | null
-  metadata: { label: string; value: string }[]
-  sections: ParsedSection[]
-}
-
-const METADATA_LINE_PATTERN = /^\*\*([^*]+):\*\*\s+(.+?)\s*$/
-
-function splitSections(content: string): ParsedSection[] {
-  const lines = content.split(/\r?\n/)
-  const sections: ParsedSection[] = []
-  let current: ParsedSection | null = null
-  for (const line of lines) {
-    const heading = /^(#{2,6})\s+(.+?)\s*$/.exec(line)
-    if (heading) {
-      if (current) {
-        current.body = current.body.trimEnd()
-        sections.push(current)
-      }
-      current = { heading: heading[2], level: heading[1].length, body: '' }
-      continue
-    }
-    if (current) {
-      current.body += `${line}\n`
-    }
-  }
-  if (current) {
-    current.body = current.body.trimEnd()
-    sections.push(current)
-  }
-  return sections
-}
-
-function parseHermesOutput(content: string): ParsedHermesOutput {
-  const lines = content.split(/\r?\n/)
-  let title: string | null = null
-  const metadata: { label: string; value: string }[] = []
-  let bodyStart = 0
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index]
-    if (!title) {
-      const titleMatch = /^#\s+(?:Cron Job:\s*)?(.+?)\s*$/.exec(line)
-      if (titleMatch) {
-        title = titleMatch[1]
-        bodyStart = index + 1
-        continue
-      }
-    }
-    const metaMatch = METADATA_LINE_PATTERN.exec(line)
-    if (metaMatch) {
-      metadata.push({ label: metaMatch[1].trim(), value: metaMatch[2].trim() })
-      bodyStart = index + 1
-      continue
-    }
-    if (line.trim() === '') {
-      if (metadata.length > 0 || title) {
-        bodyStart = index + 1
-        continue
-      }
-      continue
-    }
-    if (title || metadata.length > 0) {
-      break
-    }
-  }
-  const remainder = lines.slice(bodyStart).join('\n')
-  return {
-    title,
-    metadata,
-    sections: splitSections(remainder)
-  }
-}
-
-function isPromptSection(section: ParsedSection): boolean {
+function isPromptSection(section: ParsedHermesSection): boolean {
   return /^prompt$/i.test(section.heading.trim())
 }
 
-function isResponseSection(section: ParsedSection): boolean {
+function isResponseSection(section: ParsedHermesSection): boolean {
   return /^response$/i.test(section.heading.trim())
 }
 
-function isErrorSection(section: ParsedSection): boolean {
+function isErrorSection(section: ParsedHermesSection): boolean {
   return /^error$/i.test(section.heading.trim())
 }
 
@@ -302,7 +225,10 @@ export function HermesCronOutputView({ content }: { content: string }): React.JS
       ) : null}
 
       {errorSection ? (
-        <SectionCard title="Error" accent="error">
+        <SectionCard
+          title={translate('auto.components.automations.HermesCronOutputView.05affc68e3', 'Error')}
+          accent="error"
+        >
           <CommentMarkdown
             variant="document"
             content={errorSection.body}
@@ -312,7 +238,13 @@ export function HermesCronOutputView({ content }: { content: string }): React.JS
       ) : null}
 
       {responseSection ? (
-        <SectionCard title="Response" accent="response">
+        <SectionCard
+          title={translate(
+            'auto.components.automations.HermesCronOutputView.4557213074',
+            'Response'
+          )}
+          accent="response"
+        >
           <CommentMarkdown
             variant="document"
             content={responseSection.body}
@@ -323,7 +255,7 @@ export function HermesCronOutputView({ content }: { content: string }): React.JS
 
       {promptSection ? (
         <CollapsibleSection
-          title="Prompt"
+          title={translate('auto.components.automations.HermesCronOutputView.e27c716b43', 'Prompt')}
           tone="muted"
           icon={MessageSquare}
           iconClass="text-indigo-700 dark:text-indigo-400"

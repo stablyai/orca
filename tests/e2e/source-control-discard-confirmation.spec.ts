@@ -12,6 +12,7 @@ async function openSourceControl(page: Page): Promise<void> {
     state?.setRightSidebarOpen(true)
   })
   await page.getByRole('button', { name: /Source Control/ }).click()
+  await page.getByTestId('source-control-filter-toggle').click()
   await expect(page.getByPlaceholder(/Filter files/)).toBeVisible()
 }
 
@@ -79,6 +80,16 @@ async function deleteUntrackedFileFromRow(row: Locator): Promise<void> {
   await deleteButton.press('Enter')
 }
 
+async function confirmPendingDelete(page: Page): Promise<void> {
+  // Why: the confirm button is auto-focused when the dialog opens
+  // (see focusDiscardDialogConfirmButton in source-control-discard-dialog.tsx).
+  // Pressing Enter on the row's original button just retriggers open; we need
+  // to target the dialog confirm by accessible name.
+  const confirmButton = page.getByRole('button', { name: 'Delete' }).last()
+  await expect(confirmButton).toBeVisible()
+  await confirmButton.click()
+}
+
 test.describe('Source Control discard confirmation', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
@@ -95,6 +106,7 @@ test.describe('Source Control discard confirmation', () => {
     await expect(row).toBeVisible()
 
     await deleteUntrackedFileFromRow(row)
+    await confirmPendingDelete(orcaPage)
 
     await expect(
       orcaPage.getByRole('dialog', { name: `Delete "${seededFile.fileName}"?` })

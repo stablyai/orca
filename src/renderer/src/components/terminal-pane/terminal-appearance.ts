@@ -156,7 +156,19 @@ export function composeActiveTerminalTheme(
   if (!baseTheme) {
     return null
   }
-  let theme: ITheme = { ...baseTheme }
+  // Why: setting scrollbar.width enables xterm's overview ruler, whose border
+  // defaults to the foreground color and paints a bright vertical line beside
+  // the scrollbar. We only want the slimmer scrollbar, not the ruler chrome.
+  // Why: xterm's default slider alpha (~0.2) is nearly invisible on dark
+  // backgrounds; raise the contrast so the thumb reads. Placed before the
+  // spread so an explicit theme value still wins.
+  let theme: ITheme = {
+    overviewRulerBorder: 'transparent',
+    scrollbarSliderBackground: 'rgba(180, 180, 185, 0.4)',
+    scrollbarSliderHoverBackground: 'rgba(180, 180, 185, 0.6)',
+    scrollbarSliderActiveBackground: 'rgba(180, 180, 185, 0.8)',
+    ...baseTheme
+  }
   // Why: merge user-imported Ghostty color overrides on top of the resolved
   // base theme so individual colors can be tweaked without losing the rest.
   if (settings.terminalColorOverrides) {
@@ -214,7 +226,7 @@ export function applyTerminalAppearance(
     // bleeding in from a prior opacity setting that has since been reset.
     pane.terminal.options.allowTransparency =
       settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
-    const cursorStyle = settings.terminalCursorStyle ?? 'bar'
+    const cursorStyle = settings.terminalCursorStyle ?? 'block'
     pane.terminal.options.cursorStyle = cursorStyle
     pane.terminal.options.cursorInactiveStyle = resolveTerminalCursorInactiveStyle(cursorStyle)
     pane.terminal.options.cursorBlink = settings.terminalCursorBlink

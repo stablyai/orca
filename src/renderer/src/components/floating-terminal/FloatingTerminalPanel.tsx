@@ -2,26 +2,19 @@
  * resizing, orchestration setup, and mixed terminal/browser/editor tab
  * handling in one surface so the floating worktree does not drift from the
  * main tab model while still keeping the DOM-mounted panes local. */
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState
-} from 'react'
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { FileText, Globe, Minus, TerminalSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import BrowserPane from '@/components/browser-pane/BrowserPane'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import TabBar from '@/components/tab-bar/TabBar'
 import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { useShortcutKeys } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyDetails, type ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import {
   Dialog,
   DialogContent,
@@ -66,8 +59,13 @@ import {
   keybindingMatchesAction,
   type KeybindingActionId,
   type KeybindingContext,
-  type KeybindingMatchOptions
+  type KeybindingMatchOptions,
+  type PhysicalModifierToken
 } from '../../../../shared/keybindings'
+import {
+  ModifierDoubleTapDetector,
+  toModifierDoubleTapEvent
+} from '../../../../shared/modifier-double-tap-detector'
 import type {
   BrowserTab as BrowserTabState,
   Tab,
@@ -94,6 +92,7 @@ import {
   type FloatingTerminalPanelCommittedBounds,
   type FloatingTerminalPanelBoundsSource
 } from './floating-terminal-panel-bounds'
+import { translate } from '@/i18n/i18n'
 const EMPTY_TERMINAL_TABS: TerminalTab[] = []
 const EMPTY_BROWSER_TABS: BrowserTabState[] = []
 const EMPTY_GROUPS: TabGroup[] = []
@@ -105,7 +104,19 @@ const EditorPanel = lazy(() => import('@/components/editor/EditorPanel'))
 type FloatingTerminalPanelProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  tourInteractionSnapshot?: FloatingWorkspaceTourInteractionSnapshot | null | undefined
 }
+
+type FloatingWorkspaceTourInteractionSnapshot = {
+  wasPreviouslyInteracted?: boolean
+  persisted?: Promise<void>
+  recordFeatureInteractionForTour: boolean
+}
+
+type FloatingPanelShortcutInput = Partial<
+  Pick<KeyboardEvent, 'altKey' | 'code' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey'>
+> &
+  Pick<KeyboardEvent, 'target'> & { doubleTapModifier?: PhysicalModifierToken }
 
 const FLOATING_TERMINAL_NO_DRAG_SELECTOR =
   'button,input,textarea,select,[role="menuitem"],[data-testid="sortable-tab"],[data-floating-terminal-no-drag]'
@@ -147,9 +158,20 @@ function areFloatingTerminalPanelCommittedBoundsEqual(
   return left !== null && JSON.stringify(left) === JSON.stringify(right)
 }
 
+function setFloatingTerminalInputFocusedInMain(focused: boolean): void {
+  const setInputFocused = window.api.ui.setFloatingTerminalInputFocused
+  // Why: dev reloads can pair a new renderer with an older preload; losing this
+  // shortcut mirror should not take down the whole React tree.
+  if (typeof setInputFocused !== 'function') {
+    return
+  }
+  setInputFocused(focused)
+}
+
 export function FloatingTerminalPanel({
   open,
-  onOpenChange
+  onOpenChange,
+  tourInteractionSnapshot
 }: FloatingTerminalPanelProps): React.JSX.Element | null {
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
@@ -174,11 +196,11 @@ export function FloatingTerminalPanel({
   const browserDefaultUrl = useAppStore((s) => s.browserDefaultUrl)
   const floatingTerminalCwd = useAppStore((s) => s.settings?.floatingTerminalCwd ?? '')
   const generatedTabTitlesEnabled = useAppStore((s) => s.settings?.tabAutoGenerateTitle === true)
-  const newTerminalShortcutKeys = useShortcutKeys('tab.newTerminal')
-  const newBrowserShortcutKeys = useShortcutKeys('tab.newBrowser')
-  const newMarkdownShortcutKeys = useShortcutKeys('tab.newMarkdown')
-  const openMarkdownShortcutKeys = useShortcutKeys('tab.openMarkdown')
-  const closeShortcutKeys = useShortcutKeys('tab.close')
+  const newTerminalShortcut = useShortcutKeyDetails('tab.newTerminal')
+  const newBrowserShortcut = useShortcutKeyDetails('tab.newBrowser')
+  const newMarkdownShortcut = useShortcutKeyDetails('tab.newMarkdown')
+  const openMarkdownShortcut = useShortcutKeyDetails('tab.openMarkdown')
+  const closeShortcut = useShortcutKeyDetails('tab.close')
 
   const [cwd, setCwd] = useState<string | null>(null)
   const [markdownCwd, setMarkdownCwd] = useState<string | null>(null)
@@ -208,6 +230,10 @@ export function FloatingTerminalPanel({
   const pendingEditorCloseQueueRef = useRef<string[]>([])
   const saveDialogFileIdRef = useRef<string | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
+  const doubleTapDetectorRef = useRef<ModifierDoubleTapDetector | null>(null)
+  if (!doubleTapDetectorRef.current) {
+    doubleTapDetectorRef.current = new ModifierDoubleTapDetector()
+  }
   const shortcutFocusFrameRef = useRef<number | null>(null)
   const shortcutFocusTimeoutRef = useRef<number | null>(null)
   const mountedRef = useMountedRef()
@@ -276,12 +302,14 @@ export function FloatingTerminalPanel({
               title: resolveUnifiedTabLabel(
                 {
                   ...tab,
+                  quickCommandLabel: tab.quickCommandLabel ?? terminalTab.quickCommandLabel,
                   generatedLabel: tab.generatedLabel ?? terminalTab.generatedTitle
                 },
                 generatedTabTitlesEnabled,
                 tab.label
               ),
               generatedTitle: terminalTab.generatedTitle ?? tab.generatedLabel ?? null,
+              quickCommandLabel: terminalTab.quickCommandLabel ?? tab.quickCommandLabel ?? null,
               customTitle: tab.customLabel ?? terminalTab.customTitle,
               color: tab.color ?? terminalTab.color
             }
@@ -339,6 +367,13 @@ export function FloatingTerminalPanel({
       : activeTab?.contentType === 'terminal'
         ? 'terminal'
         : 'editor'
+
+  useContextualTour('floating-workspace', open, 'floating_workspace_visible', {
+    recordFeatureInteraction: tourInteractionSnapshot?.recordFeatureInteractionForTour ?? false,
+    featureInteractionPersisted: tourInteractionSnapshot?.persisted,
+    wasFeaturePreviouslyInteracted: tourInteractionSnapshot?.wasPreviouslyInteracted
+  })
+
   const {
     saveDialogFileId,
     saveDialogFile,
@@ -650,7 +685,10 @@ export function FloatingTerminalPanel({
         return
       }
       createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, url, {
-        title: 'New Browser Tab',
+        title: translate(
+          'auto.components.floating.terminal.FloatingTerminalPanel.8b14ba6c17',
+          'New Browser Tab'
+        ),
         focusAddressBar: true,
         targetGroupId: activeGroup?.id
       })
@@ -891,8 +929,73 @@ export function FloatingTerminalPanel({
   }, [cancelShortcutFocusFrame, focusPanelForShortcuts])
 
   const setFloatingTerminalInputFocused = useCallback((target: EventTarget | null): void => {
-    window.api.ui.setFloatingTerminalInputFocused(isFloatingWorkspaceTerminalInputTarget(target))
+    setFloatingTerminalInputFocusedInMain(isFloatingWorkspaceTerminalInputTarget(target))
   }, [])
+
+  const handleFloatingPanelShortcutAction = useCallback(
+    (input: FloatingPanelShortcutInput, consume: () => void): boolean => {
+      const state = useAppStore.getState()
+      const platform = getShortcutPlatform()
+      const context: KeybindingContext = input.doubleTapModifier
+        ? 'app'
+        : isFloatingWorkspaceTerminalInputTarget(input.target)
+          ? 'terminal'
+          : 'app'
+      const matchOptions: KeybindingMatchOptions = {
+        context,
+        terminalShortcutPolicy: state.settings?.terminalShortcutPolicy
+      }
+      const matches = (actionId: KeybindingActionId): boolean =>
+        keybindingMatchesAction(actionId, input, platform, state.keybindings, matchOptions)
+
+      if (matches('tab.newTerminal')) {
+        consume()
+        createFloatingTerminalTab()
+        return true
+      }
+      if (matches('tab.newBrowser')) {
+        consume()
+        createFloatingBrowserTab()
+        return true
+      }
+      if (matches('tab.newMarkdown')) {
+        consume()
+        createFloatingMarkdownTab()
+        return true
+      }
+      if (matches('tab.openMarkdown')) {
+        consume()
+        openFloatingMarkdownTab()
+        return true
+      }
+      if (matches('tab.close')) {
+        consume()
+        if (activeClosableTab) {
+          closeFloatingItem(activeClosableTab.id)
+          if (visibleFloatingItemCount <= 1) {
+            // Why: closing the final xterm removes the focused textarea; keep
+            // the empty floating workspace as the owner for the next Cmd/Ctrl+T.
+            focusPanelForShortcutsAfterClose()
+          }
+        } else {
+          onOpenChange(false)
+        }
+        return true
+      }
+      return false
+    },
+    [
+      activeClosableTab,
+      closeFloatingItem,
+      createFloatingBrowserTab,
+      createFloatingMarkdownTab,
+      createFloatingTerminalTab,
+      focusPanelForShortcutsAfterClose,
+      onOpenChange,
+      openFloatingMarkdownTab,
+      visibleFloatingItemCount
+    ]
+  )
 
   const handleShortcutSurfaceKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -918,8 +1021,6 @@ export function FloatingTerminalPanel({
         terminalShortcutPolicy: state.settings?.terminalShortcutPolicy
       }
       const nativeEvent = event.nativeEvent
-      const matches = (actionId: KeybindingActionId): boolean =>
-        keybindingMatchesAction(actionId, nativeEvent, platform, state.keybindings, matchOptions)
 
       if (
         !isFloatingWorkspacePanelShortcut(
@@ -933,52 +1034,9 @@ export function FloatingTerminalPanel({
         return
       }
 
-      if (matches('tab.newTerminal')) {
-        event.preventDefault()
-        createFloatingTerminalTab()
-        return
-      }
-      if (matches('tab.newBrowser')) {
-        event.preventDefault()
-        createFloatingBrowserTab()
-        return
-      }
-      if (matches('tab.newMarkdown')) {
-        event.preventDefault()
-        createFloatingMarkdownTab()
-        return
-      }
-      if (matches('tab.openMarkdown')) {
-        event.preventDefault()
-        openFloatingMarkdownTab()
-        return
-      }
-      if (matches('tab.close')) {
-        event.preventDefault()
-        if (activeClosableTab) {
-          closeFloatingItem(activeClosableTab.id)
-          if (visibleFloatingItemCount <= 1) {
-            // Why: closing the final xterm removes the focused textarea; keep
-            // the empty floating workspace as the owner for the next Cmd/Ctrl+T.
-            focusPanelForShortcutsAfterClose()
-          }
-        } else {
-          onOpenChange(false)
-        }
-      }
+      handleFloatingPanelShortcutAction(nativeEvent, () => event.preventDefault())
     },
-    [
-      activeClosableTab,
-      closeFloatingItem,
-      createFloatingBrowserTab,
-      createFloatingMarkdownTab,
-      createFloatingTerminalTab,
-      focusPanelForShortcutsAfterClose,
-      onOpenChange,
-      openFloatingMarkdownTab,
-      open,
-      visibleFloatingItemCount
-    ]
+    [handleFloatingPanelShortcutAction, open]
   )
 
   useEffect(() => {
@@ -986,13 +1044,35 @@ export function FloatingTerminalPanel({
       return
     }
 
-    const handleFloatingPanelKeyDown = (event: KeyboardEvent): void => {
-      if (event.defaultPrevented || event.repeat) {
-        return
-      }
+    const isPanelFocused = (): boolean => {
       const panel = panelRef.current
       const active = document.activeElement
-      if (!panel || !(active instanceof HTMLElement) || !panel.contains(active)) {
+      return Boolean(panel && active instanceof HTMLElement && panel.contains(active))
+    }
+
+    const handleFloatingPanelKeyDown = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented) {
+        return
+      }
+      if (!isPanelFocused()) {
+        doubleTapDetectorRef.current?.reset()
+        return
+      }
+
+      const detected = doubleTapDetectorRef.current?.process(
+        toModifierDoubleTapEvent({
+          type: 'keyDown',
+          code: event.code,
+          key: event.key,
+          shift: event.shiftKey,
+          control: event.ctrlKey,
+          alt: event.altKey,
+          meta: event.metaKey,
+          isAutoRepeat: event.repeat
+        }),
+        Date.now()
+      )
+      if (event.repeat) {
         return
       }
 
@@ -1011,38 +1091,17 @@ export function FloatingTerminalPanel({
         event.stopImmediatePropagation()
       }
 
-      if (matches('tab.newTerminal')) {
-        consume()
-        createFloatingTerminalTab()
+      if (
+        detected &&
+        handleFloatingPanelShortcutAction(
+          { doubleTapModifier: detected.modifier, target: event.target },
+          consume
+        )
+      ) {
         return
       }
-      if (matches('tab.newBrowser')) {
-        consume()
-        createFloatingBrowserTab()
-        return
-      }
-      if (matches('tab.newMarkdown')) {
-        consume()
-        createFloatingMarkdownTab()
-        return
-      }
-      if (matches('tab.openMarkdown')) {
-        consume()
-        openFloatingMarkdownTab()
-        return
-      }
-      if (matches('tab.close')) {
-        consume()
-        if (activeClosableTab) {
-          closeFloatingItem(activeClosableTab.id)
-          if (visibleFloatingItemCount <= 1) {
-            // Why: closing the final xterm removes the focused textarea; keep
-            // the empty floating workspace as the owner for the next Cmd/Ctrl+T.
-            focusPanelForShortcutsAfterClose()
-          }
-        } else {
-          onOpenChange(false)
-        }
+
+      if (handleFloatingPanelShortcutAction(event, consume)) {
         return
       }
 
@@ -1077,29 +1136,45 @@ export function FloatingTerminalPanel({
       }
     }
 
+    const handleFloatingPanelKeyUp = (event: KeyboardEvent): void => {
+      if (!isPanelFocused()) {
+        doubleTapDetectorRef.current?.reset()
+        return
+      }
+      doubleTapDetectorRef.current?.process(
+        toModifierDoubleTapEvent({
+          type: 'keyUp',
+          code: event.code,
+          key: event.key,
+          shift: event.shiftKey,
+          control: event.ctrlKey,
+          alt: event.altKey,
+          meta: event.metaKey
+        }),
+        Date.now()
+      )
+    }
+
+    const handleFloatingPanelBlur = (): void => doubleTapDetectorRef.current?.reset()
+
     // Why: the main Terminal view is not mounted on Landing/Settings, but the
     // floating workspace must still own its tab shortcuts while it has focus.
     window.addEventListener('keydown', handleFloatingPanelKeyDown, { capture: true })
-    return () =>
+    window.addEventListener('keyup', handleFloatingPanelKeyUp, { capture: true })
+    window.addEventListener('blur', handleFloatingPanelBlur)
+    return () => {
       window.removeEventListener('keydown', handleFloatingPanelKeyDown, { capture: true })
-  }, [
-    activeClosableTab,
-    closeFloatingItem,
-    createFloatingBrowserTab,
-    createFloatingMarkdownTab,
-    createFloatingTerminalTab,
-    focusPanelForShortcutsAfterClose,
-    onOpenChange,
-    openFloatingMarkdownTab,
-    open,
-    visibleFloatingItemCount
-  ])
+      window.removeEventListener('keyup', handleFloatingPanelKeyUp, { capture: true })
+      window.removeEventListener('blur', handleFloatingPanelBlur)
+      doubleTapDetectorRef.current?.reset()
+    }
+  }, [handleFloatingPanelShortcutAction, open])
 
   useEffect(() => {
     if (!open) {
-      window.api.ui.setFloatingTerminalInputFocused(false)
+      setFloatingTerminalInputFocusedInMain(false)
     }
-    return () => window.api.ui.setFloatingTerminalInputFocused(false)
+    return () => setFloatingTerminalInputFocusedInMain(false)
   }, [open])
 
   useEffect(() => {
@@ -1112,7 +1187,7 @@ export function FloatingTerminalPanel({
       if (!panel || !(event.target instanceof Node) || panel.contains(event.target)) {
         return
       }
-      window.api.ui.setFloatingTerminalInputFocused(false)
+      setFloatingTerminalInputFocusedInMain(false)
       const active = document.activeElement
       if (active instanceof HTMLElement && panel.contains(active)) {
         // Why: regular tab strip items are non-focusable, so clicking them can
@@ -1128,7 +1203,7 @@ export function FloatingTerminalPanel({
       }
       // Why: browser webviews focus out-of-process and do not emit renderer
       // pointerdown events, so release floating ownership on renderer blur too.
-      window.api.ui.setFloatingTerminalInputFocused(false)
+      setFloatingTerminalInputFocusedInMain(false)
       active.blur()
     }
 
@@ -1238,12 +1313,15 @@ export function FloatingTerminalPanel({
   return (
     // Why: root notification cards use z-40; keep the floating workspace below
     // them so alerts are never hidden behind an open terminal panel.
+    // Drop shadow on the outer shell, border on an inner shell — mixing both on
+    // one rounded node made corners look stubby. Floating tabs skip their top
+    // border so the titlebar curve stays clean.
     <div
       ref={setPanelNode}
       data-floating-terminal-panel
       aria-hidden={!open}
       tabIndex={-1}
-      className={`fixed z-30 flex min-h-[280px] min-w-[420px] overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)] outline-none ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`}
+      className={`fixed z-30 flex min-h-[280px] min-w-[420px] rounded-lg bg-transparent text-card-foreground shadow-[0_4px_12px_rgba(0,0,0,0.16),0_24px_64px_rgba(0,0,0,0.32)] outline-none dark:shadow-[0_8px_20px_rgba(0,0,0,0.35),0_28px_72px_rgba(0,0,0,0.58)] ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`}
       style={{
         visibility: open ? 'visible' : 'hidden',
         left: bounds.left,
@@ -1262,7 +1340,7 @@ export function FloatingTerminalPanel({
       onBlurCapture={(event) => setFloatingTerminalInputFocused(event.relatedTarget)}
       onKeyDownCapture={handleShortcutSurfaceKeyDown}
     >
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="relative flex h-full w-full min-h-0 flex-col overflow-hidden rounded-lg border border-black/14 bg-card dark:border-white/14">
         <div
           className="flex h-9 shrink-0 cursor-grab items-center border-b border-border bg-[var(--bg-titlebar,var(--card))] active:cursor-grabbing"
           data-floating-terminal-shortcut-surface
@@ -1330,6 +1408,7 @@ export function FloatingTerminalPanel({
               onMakePreviewFilePermanent={makePreviewFilePermanent}
               onPinFile={pinFile}
               tabBarOrder={tabBarOrder}
+              tabStripChrome="floating-panel"
             />
           </div>
           <FloatingTerminalWindowControls
@@ -1339,7 +1418,12 @@ export function FloatingTerminalPanel({
           />
         </div>
 
-        <div className="relative min-h-0 flex-1 overflow-hidden bg-background">
+        <div
+          className="relative min-h-0 flex-1 overflow-hidden bg-background"
+          data-contextual-tour-target={
+            hasVisibleFloatingTabs ? 'floating-workspace-surface' : undefined
+          }
+        >
           {cwd
             ? tabs.map((tab) => {
                 const isActive = tab.id === activeTerminalId
@@ -1354,7 +1438,13 @@ export function FloatingTerminalPanel({
                       worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
                       cwd={cwd}
                       isActive={isActive}
-                      isVisible={isActive}
+                      // Why: the closed panel is only CSS-hidden, so gate
+                      // visibility on `open` too. This routes the floating
+                      // terminal through the standard hidden-terminal
+                      // suspend/resume path: no live WebGL context (or glyph
+                      // atlas to corrupt) while hidden, and the resume on
+                      // reopen rebuilds the renderer from scratch.
+                      isVisible={isActive && open}
                       onPtyExit={() => closeTab(tab.id)}
                       onCloseTab={() => closeFloatingItem(tab.id)}
                     />
@@ -1379,7 +1469,10 @@ export function FloatingTerminalPanel({
               <Suspense
                 fallback={
                   <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                    Loading editor...
+                    {translate(
+                      'auto.components.floating.terminal.FloatingTerminalPanel.d6b563ae24',
+                      'Loading editor...'
+                    )}
                   </div>
                 }
               >
@@ -1401,11 +1494,11 @@ export function FloatingTerminalPanel({
               onNewBrowser={createFloatingBrowserTab}
               onClose={() => onOpenChange(false)}
               onFocusPanel={focusPanelForShortcuts}
-              newTerminalShortcutKeys={newTerminalShortcutKeys}
-              newBrowserShortcutKeys={newBrowserShortcutKeys}
-              newMarkdownShortcutKeys={newMarkdownShortcutKeys}
-              openMarkdownShortcutKeys={openMarkdownShortcutKeys}
-              closeShortcutKeys={closeShortcutKeys}
+              newTerminalShortcut={newTerminalShortcut}
+              newBrowserShortcut={newBrowserShortcut}
+              newMarkdownShortcut={newMarkdownShortcut}
+              openMarkdownShortcut={openMarkdownShortcut}
+              closeShortcut={closeShortcut}
             />
           ) : null}
         </div>
@@ -1417,9 +1510,17 @@ export function FloatingTerminalPanel({
         >
           <div className="space-y-2">
             <div className="space-y-0.5">
-              <p className="text-sm font-medium">Enable orchestration</p>
+              <p className="text-sm font-medium">
+                {translate(
+                  'auto.components.floating.terminal.FloatingTerminalPanel.2a3c5ddf5e',
+                  'Enable orchestration'
+                )}
+              </p>
               <p className="text-xs leading-5 text-muted-foreground">
-                Set up the Orca CLI and agent skill so agents can coordinate through Orca.
+                {translate(
+                  'auto.components.floating.terminal.FloatingTerminalPanel.8cf80db43b',
+                  'Set up the Orca CLI and agent skill so agents can coordinate through Orca.'
+                )}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -1430,7 +1531,10 @@ export function FloatingTerminalPanel({
                 className="flex-1"
                 onClick={dismissOrchestrationSetup}
               >
-                Dismiss
+                {translate(
+                  'auto.components.floating.terminal.FloatingTerminalPanel.adc281394d',
+                  'Dismiss'
+                )}
               </Button>
               <Button
                 type="button"
@@ -1439,7 +1543,10 @@ export function FloatingTerminalPanel({
                 className="flex-1"
                 onClick={() => setOrchestrationDialogOpen(true)}
               >
-                Enable
+                {translate(
+                  'auto.components.floating.terminal.FloatingTerminalPanel.bbc177f98f',
+                  'Enable'
+                )}
               </Button>
             </div>
           </div>
@@ -1454,7 +1561,6 @@ export function FloatingTerminalPanel({
       )}
       <FloatingTerminalOrchestrationDialog
         open={orchestrationDialogOpen}
-        activeTabId={activeTerminalId}
         onOpenChange={setOrchestrationDialogOpen}
         onSetupStateChange={() => void refreshOrchestrationSetupVisibility()}
       />
@@ -1468,11 +1574,23 @@ export function FloatingTerminalPanel({
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-sm">Unsaved Changes</DialogTitle>
+            <DialogTitle className="text-sm">
+              {translate(
+                'auto.components.floating.terminal.FloatingTerminalPanel.690b6fb98a',
+                'Unsaved Changes'
+              )}
+            </DialogTitle>
             <DialogDescription className="text-xs">
               {saveDialogFile
-                ? `"${saveDialogFile.relativePath.split('/').pop()}" has unsaved changes. Do you want to save before closing?`
-                : 'This file has unsaved changes.'}
+                ? translate(
+                    'auto.components.floating.terminal.FloatingTerminalPanel.5ddc688c52',
+                    '"{{value0}}" has unsaved changes. Do you want to save before closing?',
+                    { value0: saveDialogFile.relativePath.split('/').pop() }
+                  )
+                : translate(
+                    'auto.components.floating.terminal.FloatingTerminalPanel.b085fb58b5',
+                    'This file has unsaved changes.'
+                  )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
@@ -1482,7 +1600,10 @@ export function FloatingTerminalPanel({
               size="sm"
               onClick={handleFloatingSaveDialogCancel}
             >
-              Cancel
+              {translate(
+                'auto.components.floating.terminal.FloatingTerminalPanel.e7bf09d4d4',
+                'Cancel'
+              )}
             </Button>
             <Button
               type="button"
@@ -1490,10 +1611,16 @@ export function FloatingTerminalPanel({
               size="sm"
               onClick={handleFloatingSaveDialogDiscard}
             >
-              Don&apos;t Save
+              {translate(
+                'auto.components.floating.terminal.FloatingTerminalPanel.918c2139f3',
+                "Don't Save"
+              )}
             </Button>
             <Button type="button" size="sm" onClick={handleFloatingSaveDialogSave}>
-              Save
+              {translate(
+                'auto.components.floating.terminal.FloatingTerminalPanel.da508bd7f5',
+                'Save'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1509,11 +1636,11 @@ function FloatingTerminalEmptyState({
   onNewBrowser,
   onClose,
   onFocusPanel,
-  newTerminalShortcutKeys,
-  newBrowserShortcutKeys,
-  newMarkdownShortcutKeys,
-  openMarkdownShortcutKeys,
-  closeShortcutKeys
+  newTerminalShortcut,
+  newBrowserShortcut,
+  newMarkdownShortcut,
+  openMarkdownShortcut,
+  closeShortcut
 }: {
   onNewTerminal: () => void
   onNewMarkdown: () => void
@@ -1521,11 +1648,11 @@ function FloatingTerminalEmptyState({
   onNewBrowser: () => void
   onClose: () => void
   onFocusPanel: () => void
-  newTerminalShortcutKeys: string[]
-  newBrowserShortcutKeys: string[]
-  newMarkdownShortcutKeys: string[]
-  openMarkdownShortcutKeys: string[]
-  closeShortcutKeys: string[]
+  newTerminalShortcut: ShortcutKeyComboDetails
+  newBrowserShortcut: ShortcutKeyComboDetails
+  newMarkdownShortcut: ShortcutKeyComboDetails
+  openMarkdownShortcut: ShortcutKeyComboDetails
+  closeShortcut: ShortcutKeyComboDetails
 }): React.JSX.Element {
   return (
     <div
@@ -1539,21 +1666,33 @@ function FloatingTerminalEmptyState({
           type="button"
           variant="ghost"
           className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
+          data-contextual-tour-target="floating-workspace-new-terminal"
           onClick={onNewTerminal}
         >
           <TerminalSquare className="size-3.5 opacity-90" />
-          <span className="truncate text-left leading-none">New Terminal</span>
-          <FloatingEmptyStateShortcut keys={newTerminalShortcutKeys} />
+          <span className="truncate text-left leading-none">
+            {translate(
+              'auto.components.floating.terminal.FloatingTerminalPanel.3215fc73e9',
+              'New Terminal'
+            )}
+          </span>
+          <FloatingEmptyStateShortcut shortcut={newTerminalShortcut} />
         </Button>
         <Button
           type="button"
           variant="ghost"
           className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
+          data-contextual-tour-target="floating-workspace-new-markdown"
           onClick={onNewMarkdown}
         >
           <FileText className="size-3.5 opacity-90" />
-          <span className="truncate text-left leading-none">New Markdown Note</span>
-          <FloatingEmptyStateShortcut keys={newMarkdownShortcutKeys} />
+          <span className="truncate text-left leading-none">
+            {translate(
+              'auto.components.floating.terminal.FloatingTerminalPanel.629528690b',
+              'New Markdown Note'
+            )}
+          </span>
+          <FloatingEmptyStateShortcut shortcut={newMarkdownShortcut} />
         </Button>
         <Button
           type="button"
@@ -1562,8 +1701,13 @@ function FloatingTerminalEmptyState({
           onClick={onOpenMarkdown}
         >
           <FileText className="size-3.5 opacity-90" />
-          <span className="truncate text-left leading-none">Open Markdown Note</span>
-          <FloatingEmptyStateShortcut keys={openMarkdownShortcutKeys} />
+          <span className="truncate text-left leading-none">
+            {translate(
+              'auto.components.floating.terminal.FloatingTerminalPanel.88ffb502e5',
+              'Open Markdown Note'
+            )}
+          </span>
+          <FloatingEmptyStateShortcut shortcut={openMarkdownShortcut} />
         </Button>
         <Button
           type="button"
@@ -1572,8 +1716,13 @@ function FloatingTerminalEmptyState({
           onClick={onNewBrowser}
         >
           <Globe className="size-3.5 opacity-90" />
-          <span className="truncate text-left leading-none">New Browser</span>
-          <FloatingEmptyStateShortcut keys={newBrowserShortcutKeys} />
+          <span className="truncate text-left leading-none">
+            {translate(
+              'auto.components.floating.terminal.FloatingTerminalPanel.8b07759314',
+              'New Browser'
+            )}
+          </span>
+          <FloatingEmptyStateShortcut shortcut={newBrowserShortcut} />
         </Button>
         <Button
           type="button"
@@ -1582,21 +1731,31 @@ function FloatingTerminalEmptyState({
           onClick={onClose}
         >
           <Minus className="size-3.5 opacity-90" />
-          <span className="truncate text-left leading-none">Minimize</span>
-          <FloatingEmptyStateShortcut keys={closeShortcutKeys} />
+          <span className="truncate text-left leading-none">
+            {translate(
+              'auto.components.floating.terminal.FloatingTerminalPanel.fc1042e92b',
+              'Minimize'
+            )}
+          </span>
+          <FloatingEmptyStateShortcut shortcut={closeShortcut} />
         </Button>
       </div>
     </div>
   )
 }
 
-function FloatingEmptyStateShortcut({ keys }: { keys: string[] }): React.JSX.Element {
-  if (keys.length === 0) {
+function FloatingEmptyStateShortcut({
+  shortcut
+}: {
+  shortcut: ShortcutKeyComboDetails
+}): React.JSX.Element {
+  if (shortcut.keys.length === 0) {
     return <span aria-hidden />
   }
   return (
     <ShortcutKeyCombo
-      keys={keys}
+      keys={shortcut.keys}
+      doubleTap={shortcut.doubleTap}
       className="self-center justify-self-end opacity-90 [&>span]:text-foreground"
       separatorClassName="mx-0 text-[9px] text-foreground"
     />
