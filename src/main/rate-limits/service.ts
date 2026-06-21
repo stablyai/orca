@@ -792,6 +792,12 @@ export class RateLimitService {
     return process.platform !== 'win32'
   }
 
+  private shouldAllowClaudePtyFallback(): boolean {
+    // Why: CodexBar-style auto recovery uses Claude CLI as the next source,
+    // but Windows hidden PTY support remains less reliable than host/WSL shells.
+    return process.platform !== 'win32'
+  }
+
   private withFetchingStatus(
     current: ProviderRateLimits | null,
     provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi'
@@ -855,9 +861,7 @@ export class RateLimitService {
       await Promise.allSettled([
         fetchClaudeRateLimits({
           authPreparation: claudeAuthPreparation,
-          // Why: active quota refreshes run on startup/focus/timers. They must
-          // never spawn hidden Claude Code, which can trigger macOS App Data TCC.
-          allowPtyFallback: false
+          allowPtyFallback: this.shouldAllowClaudePtyFallback()
         }),
         missingWslCodexHome ??
           fetchCodexRateLimits({
@@ -1032,9 +1036,7 @@ export class RateLimitService {
 
     const claude = await fetchClaudeRateLimits({
       authPreparation: claudeAuthPreparation,
-      // Why: account-change refreshes share the same automatic active quota
-      // surface as startup/timer refreshes, so keep them API-only as well.
-      allowPtyFallback: false
+      allowPtyFallback: this.shouldAllowClaudePtyFallback()
     }).catch(
       (err): ProviderRateLimits => ({
         provider: 'claude',
@@ -1069,7 +1071,14 @@ export class RateLimitService {
   ): ProviderRateLimits {
     // Fresh data is fine — use it
     if (fresh.status === 'ok') {
-      return fresh
+      return {
+        ...fresh,
+        usageMetadata: {
+          ...fresh.usageMetadata,
+          lastSuccessfulSource:
+            fresh.usageMetadata?.source ?? fresh.usageMetadata?.lastSuccessfulSource
+        }
+      }
     }
 
     // Explicitly unavailable — user likely cleared a setting. Discard any stale
@@ -1103,7 +1112,13 @@ export class RateLimitService {
     return {
       ...previous,
       error: fresh.error,
-      status: 'error'
+      status: 'error',
+      usageMetadata: {
+        ...previous.usageMetadata,
+        ...fresh.usageMetadata,
+        lastSuccessfulSource:
+          previous.usageMetadata?.lastSuccessfulSource ?? previous.usageMetadata?.source
+      }
     }
   }
 

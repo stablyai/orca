@@ -353,7 +353,7 @@ describe('RateLimitService', () => {
     expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchClaudeRateLimits).toHaveBeenCalledWith({
       authPreparation: undefined,
-      allowPtyFallback: false
+      allowPtyFallback: true
     })
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(1)
@@ -459,7 +459,7 @@ describe('RateLimitService', () => {
         wslLinuxConfigDir: '/home/jin/.claude',
         stripAuthEnv: true
       }),
-      allowPtyFallback: false
+      allowPtyFallback: true
     })
     expect(service.getState().claudeTarget).toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
   })
@@ -519,7 +519,7 @@ describe('RateLimitService', () => {
     })
 
     expect(fetchClaudeRateLimits).toHaveBeenLastCalledWith(
-      expect.objectContaining({ allowPtyFallback: false })
+      expect.objectContaining({ allowPtyFallback: true })
     )
 
     expect(service.getState().inactiveClaudeAccounts).not.toEqual(
