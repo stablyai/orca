@@ -3,7 +3,13 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { JcodeToolCard } from './JcodeToolCard'
-import { startChatTurn, setChatStatusDetail, useChatSession } from './chat-session-store'
+import {
+  setChatComposerSelection,
+  setChatStatusDetail,
+  startChatTurn,
+  useChatSession
+} from './chat-session-store'
+import { ChatComposer } from './ChatComposer'
 
 // Why: M2 enriches the M1 jcode chat-bubble view. Tool calls render as cards
 // (name + pretty args + output/error, bash special-cased, diffs colorized);
@@ -93,8 +99,12 @@ export default function ChatPane({
   model?: string
 }): React.JSX.Element {
   // Why: conversation state is read from the external store keyed by sessionKey,
-  // so it survives this component unmounting on tab switches.
-  const { messages, isStreaming, statusDetail, resumeSessionId } = useChatSession(sessionKey)
+  // so it survives this component unmounting on tab switches. The composer's
+  // provider/model selection also lives in the store (composerProvider/Model)
+  // so the chip choice persists across tab switches; only the unsent draft text
+  // is local component state.
+  const { messages, isStreaming, statusDetail, resumeSessionId, composerProvider, composerModel } =
+    useChatSession(sessionKey)
   const [input, setInput] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -115,13 +125,25 @@ export default function ChatPane({
     window.api.jcodeChat.send({
       sessionKey,
       prompt,
-      provider,
-      model,
+      // composerProvider undefined ("Auto") falls back to this pane's default.
+      provider: composerProvider ?? provider,
+      model: composerModel ?? model,
       cwd,
       worktreeId,
       resumeSessionId
     })
-  }, [input, isStreaming, sessionKey, provider, model, cwd, worktreeId, resumeSessionId])
+  }, [
+    input,
+    isStreaming,
+    sessionKey,
+    provider,
+    model,
+    composerProvider,
+    composerModel,
+    cwd,
+    worktreeId,
+    resumeSessionId
+  ])
 
   const stop = useCallback(() => {
     if (!isStreaming) {
@@ -132,100 +154,75 @@ export default function ChatPane({
   }, [isStreaming, sessionKey])
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
+    <div className="flex h-full min-h-0 w-full flex-col bg-background text-foreground">
       <RemoteExecBanner worktreeId={worktreeId} />
-      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
         {messages.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            Ask jcode anything. Replies stream in as chat bubbles.
+          <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+            <div className="text-base font-medium text-foreground">Message jcode to start</div>
+            <div className="mt-1 text-sm text-muted-foreground">
+              Replies stream in. Tool calls and diffs render inline.
+            </div>
           </div>
         ) : (
-          <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={cn('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}
-              >
-                <div
-                  className={cn(
-                    'max-w-[85%] rounded-lg px-3 py-2 text-sm',
-                    message.role === 'user'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-foreground',
-                    message.isError && 'bg-destructive/15 text-destructive'
-                  )}
-                >
-                  {message.tools && message.tools.length > 0 ? (
-                    <div className="mb-2 flex flex-col gap-1.5">
-                      {message.tools.map((tool) => (
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-6 py-6">
+            {messages.map((message) => {
+              const hasTools = !!message.tools && message.tools.length > 0
+              const placeholder =
+                message.role === 'assistant' && isStreaming && !hasTools && !message.text ? '…' : ''
+              if (message.role === 'user') {
+                return (
+                  <div key={message.id} className="flex justify-end">
+                    <div className="max-w-[85%] rounded-2xl bg-primary px-4 py-2.5 text-sm text-primary-foreground whitespace-pre-wrap break-words">
+                      {message.text}
+                    </div>
+                  </div>
+                )
+              }
+              return (
+                <div key={message.id} className="flex flex-col gap-2">
+                  {hasTools ? (
+                    <div className="flex flex-col gap-1.5">
+                      {message.tools!.map((tool) => (
                         <JcodeToolCard key={tool.id} call={tool} />
                       ))}
                     </div>
                   ) : null}
-                  <div className="whitespace-pre-wrap break-words">
-                    {message.text ||
-                      (message.role === 'assistant' &&
-                      isStreaming &&
-                      (!message.tools || message.tools.length === 0)
-                        ? '…'
-                        : '')}
-                  </div>
+                  {message.text || placeholder ? (
+                    <div
+                      className={cn(
+                        'text-sm leading-relaxed whitespace-pre-wrap break-words',
+                        message.isError ? 'text-destructive' : 'text-foreground'
+                      )}
+                    >
+                      {message.text || placeholder}
+                    </div>
+                  ) : null}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
-      {statusDetail ? (
-        <div className="px-4 pb-1 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="size-1.5 animate-pulse rounded-full bg-primary" />
-            {statusDetail}
-          </span>
-        </div>
-      ) : null}
-      <div className="border-t border-border p-3">
-        <div className="mx-auto flex w-full max-w-3xl items-end gap-2">
-          <textarea
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault()
-                send()
-              }
-            }}
-            placeholder="Message jcode…"
-            rows={1}
-            disabled={isStreaming}
-            className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-          />
-          {isStreaming ? (
-            <button
-              type="button"
-              onClick={stop}
-              className={cn(
-                'rounded-md px-3 py-2 text-sm font-medium',
-                'bg-destructive text-destructive-foreground'
-              )}
-            >
-              Stop
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={send}
-              disabled={!input.trim()}
-              className={cn(
-                'rounded-md px-3 py-2 text-sm font-medium',
-                'bg-primary text-primary-foreground',
-                'disabled:cursor-not-allowed disabled:opacity-50'
-              )}
-            >
-              Send
-            </button>
-          )}
-        </div>
+      <div className="px-4 pt-1 pb-3">
+        {statusDetail ? (
+          <div className="mx-auto mb-1.5 w-full max-w-3xl px-1 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-1.5 animate-pulse rounded-full bg-primary" />
+              {statusDetail}
+            </span>
+          </div>
+        ) : null}
+        <ChatComposer
+          value={input}
+          onChange={setInput}
+          onSend={send}
+          onStop={stop}
+          isStreaming={isStreaming}
+          provider={composerProvider}
+          model={composerModel}
+          onSelectProvider={(selection) => setChatComposerSelection(sessionKey, selection)}
+        />
       </div>
     </div>
   )

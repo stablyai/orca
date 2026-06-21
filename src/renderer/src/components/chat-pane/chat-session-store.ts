@@ -34,6 +34,11 @@ export type ChatSessionState = {
   resumeSessionId: string | undefined
   /** Id of the assistant message currently being streamed into, if any. */
   streamingId: string | null
+  /** Composer toolbar selection (Claude-style provider/model chip). Persisted
+   *  per sessionKey so it survives ChatPane unmount/remount on tab switches.
+   *  `undefined` provider means "Auto" (let ChatPane's default apply). */
+  composerProvider: string | undefined
+  composerModel: string | undefined
 }
 
 const EMPTY_SESSION: ChatSessionState = {
@@ -41,7 +46,9 @@ const EMPTY_SESSION: ChatSessionState = {
   isStreaming: false,
   statusDetail: null,
   resumeSessionId: undefined,
-  streamingId: null
+  streamingId: null,
+  composerProvider: undefined,
+  composerModel: undefined
 }
 
 const sessions = new Map<string, ChatSessionState>()
@@ -279,6 +286,21 @@ export function startChatTurn(sessionKey: string, prompt: string): void {
 
 export function setChatStatusDetail(sessionKey: string, detail: string | null): void {
   setSession(sessionKey, (state) => ({ ...state, statusDetail: detail }))
+}
+
+/** Persist the composer's provider/model selection per sessionKey so the chip
+ *  choice survives tab switches (ChatPane unmount/remount). Pass `undefined`
+ *  provider to mean "Auto". Setting a provider clears the model unless one is
+ *  given, since models are provider-specific. */
+export function setChatComposerSelection(
+  sessionKey: string,
+  selection: { provider: string | undefined; model?: string | undefined }
+): void {
+  setSession(sessionKey, (state) => ({
+    ...state,
+    composerProvider: selection.provider,
+    composerModel: 'model' in selection ? selection.model : state.composerModel
+  }))
 }
 
 /** Drop a session's state. Called when its chat tab is closed so the Map does
