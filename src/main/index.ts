@@ -1328,7 +1328,13 @@ app.whenReady().then(async () => {
   rateLimits.setClaudeAuthPreparationResolver((target) =>
     claudeRuntimeAuth!.prepareForRateLimitFetch(target)
   )
-  rateLimits.setSettingsResolver(() => store!.getSettings())
+  rateLimits.setSettingsResolver(() => {
+    const settings = store!.getSettings()
+    return {
+      opencodeSessionCookie: settings.opencodeSessionCookie,
+      opencodeWorkspaceId: settings.opencodeWorkspaceId
+    }
+  })
   keybindings = new KeybindingService({
     homePath: app.getPath('home'),
     getLegacyOverrides: () => store!.getSettings().keybindings
