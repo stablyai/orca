@@ -6,6 +6,7 @@ import { join } from 'path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
+  buildWindowsAgentHookEndpointPrelude,
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
   hookDefinitionHasManagedCommand,
@@ -89,9 +90,9 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       ') else (',
       '  echo {}',
       ')',
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
-      'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
+      ...buildWindowsAgentHookEndpointPrelude(),
+      'if "%ORCA_AGENT_HOOK_PORT%%__ORCA_ORIGINAL_AGENT_HOOK_PORT%"=="" exit /b 0',
+      'if "%ORCA_AGENT_HOOK_TOKEN%%__ORCA_ORIGINAL_AGENT_HOOK_TOKEN%"=="" exit /b 0',
       'if "%ORCA_PANE_KEY%"=="" exit /b 0',
       buildWindowsAntigravityHookPostCommand(),
       'exit /b 0',
@@ -163,8 +164,9 @@ function getWindowsWrapperScript(eventName: string): string {
 
 function buildWindowsAntigravityHookPostCommand(): string {
   // Why: Antigravity hooks are best-effort status updates; do not let a stalled
-  // local listener hold the agent process open.
-  return `powershell -NoProfile -ExecutionPolicy Bypass -Command "$utf8=[System.Text.UTF8Encoding]::new($false); [Console]::InputEncoding=$utf8; [Console]::OutputEncoding=$utf8; $inputData=[Console]::In.ReadToEnd(); try { $payload=if ([string]::IsNullOrWhiteSpace($inputData)) { @{} } else { $inputData | ConvertFrom-Json }; $body=@{ paneKey=$env:ORCA_PANE_KEY; tabId=$env:ORCA_TAB_ID; worktreeId=$env:ORCA_WORKTREE_ID; env=$env:ORCA_AGENT_HOOK_ENV; version=$env:ORCA_AGENT_HOOK_VERSION; hook_event_name=$env:ORCA_ANTIGRAVITY_EVENT; payload=$payload } | ConvertTo-Json -Depth 100 -Compress; $bodyBytes=$utf8.GetBytes($body); Invoke-WebRequest -UseBasicParsing -Method Post -Uri ('http://127.0.0.1:' + $env:ORCA_AGENT_HOOK_PORT + '/hook/antigravity') -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Orca-Agent-Hook-Token'=$env:ORCA_AGENT_HOOK_TOKEN } -Body $bodyBytes -TimeoutSec 2 | Out-Null } catch {}"`
+  // local listener hold the agent process open. The fallback protects new PTYs
+  // if endpoint.cmd was left pointing at a dead old listener.
+  return `powershell -NoProfile -ExecutionPolicy Bypass -Command "$utf8=[System.Text.UTF8Encoding]::new($false); [Console]::InputEncoding=$utf8; [Console]::OutputEncoding=$utf8; $inputData=[Console]::In.ReadToEnd(); try { $payload=if ([string]::IsNullOrWhiteSpace($inputData)) { @{} } else { $inputData | ConvertFrom-Json } } catch { exit 0 }; function __orcaPost([string]$port,[string]$token,[string]$hookEnv,[string]$version) { if ([string]::IsNullOrWhiteSpace($port) -or [string]::IsNullOrWhiteSpace($token)) { return $false }; try { $body=@{ paneKey=$env:ORCA_PANE_KEY; tabId=$env:ORCA_TAB_ID; worktreeId=$env:ORCA_WORKTREE_ID; env=$hookEnv; version=$version; hook_event_name=$env:ORCA_ANTIGRAVITY_EVENT; payload=$payload } | ConvertTo-Json -Depth 100 -Compress; $bodyBytes=$utf8.GetBytes($body); Invoke-WebRequest -UseBasicParsing -Method Post -Uri ('http://127.0.0.1:' + $port + '/hook/antigravity') -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Orca-Agent-Hook-Token'=$token } -Body $bodyBytes -TimeoutSec 2 | Out-Null; return $true } catch { return $false } }; if (__orcaPost $env:ORCA_AGENT_HOOK_PORT $env:ORCA_AGENT_HOOK_TOKEN $env:ORCA_AGENT_HOOK_ENV $env:ORCA_AGENT_HOOK_VERSION) { exit 0 }; if ($env:__ORCA_ORIGINAL_AGENT_HOOK_PORT -and ($env:__ORCA_ORIGINAL_AGENT_HOOK_PORT -ne $env:ORCA_AGENT_HOOK_PORT -or $env:__ORCA_ORIGINAL_AGENT_HOOK_TOKEN -ne $env:ORCA_AGENT_HOOK_TOKEN)) { [void](__orcaPost $env:__ORCA_ORIGINAL_AGENT_HOOK_PORT $env:__ORCA_ORIGINAL_AGENT_HOOK_TOKEN $env:__ORCA_ORIGINAL_AGENT_HOOK_ENV $env:__ORCA_ORIGINAL_AGENT_HOOK_VERSION) }"`
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

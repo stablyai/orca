@@ -4,6 +4,7 @@ import { join } from 'path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
+  buildWindowsAgentHookEndpointPrelude,
   createManagedCommandMatcher,
   buildWindowsAgentHookPostCommand,
   getSharedManagedScriptPath,
@@ -497,21 +498,25 @@ function cleanupLegacySystemManagedHooks(): void {
 
   const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
   const nextHooks = { ...config.hooks }
+  const systemTomlPath = getSystemCodexConfigTomlPath()
+  const shouldCollectTrustEntries = existsSync(systemTomlPath)
   const trustEntries: CodexTrustEntry[] = []
   let removedManagedHook = false
   for (const [eventName, definitions] of Object.entries(nextHooks)) {
     if (!Array.isArray(definitions)) {
       continue
     }
-    const eventTrustEntries = collectManagedTrustEntries(
-      legacyConfigPath,
-      eventName,
-      definitions,
-      isManagedCommand
-    )
-    // Why: user hook configs can be large; avoid the argument limit from push(...entries).
-    for (const entry of eventTrustEntries) {
-      trustEntries.push(entry)
+    if (shouldCollectTrustEntries) {
+      const eventTrustEntries = collectManagedTrustEntries(
+        legacyConfigPath,
+        eventName,
+        definitions,
+        isManagedCommand
+      )
+      // Why: user hook configs can be large; avoid the argument limit from push(...entries).
+      for (const entry of eventTrustEntries) {
+        trustEntries.push(entry)
+      }
     }
     const cleaned = removeManagedCommands(definitions, isManagedCommand)
     removedManagedHook ||= definitions.some((definition) =>
@@ -529,7 +534,7 @@ function cleanupLegacySystemManagedHooks(): void {
   if (removedManagedHook) {
     writeHooksJson(legacyConfigPath, { ...config, hooks: nextHooks })
   }
-  removeMatchingTrustEntries(getSystemCodexConfigTomlPath(), trustEntries)
+  removeMatchingTrustEntries(systemTomlPath, trustEntries)
 }
 
 function stripLegacyManagedProfileBlock(content: string): string {
@@ -636,9 +641,9 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       // the live port/token for this Orca install; sourcing it here lets a
       // surviving PTY reach the current server even though its env points at
       // the prior Orca's coordinates.
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
-      'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
+      ...buildWindowsAgentHookEndpointPrelude(),
+      'if "%ORCA_AGENT_HOOK_PORT%%__ORCA_ORIGINAL_AGENT_HOOK_PORT%"=="" exit /b 0',
+      'if "%ORCA_AGENT_HOOK_TOKEN%%__ORCA_ORIGINAL_AGENT_HOOK_TOKEN%"=="" exit /b 0',
       'if "%ORCA_PANE_KEY%"=="" exit /b 0',
       buildWindowsAgentHookPostCommand('codex'),
       'exit /b 0',

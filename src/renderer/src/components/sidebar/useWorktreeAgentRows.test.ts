@@ -261,6 +261,33 @@ describe('buildWorktreeAgentRows', () => {
     })
   })
 
+  it('renders live worktree-attributed entries with legacy pane keys', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [],
+      entries: [
+        makeEntry('tab-1:1', 1000, {
+          agentType: 'codex',
+          state: 'working',
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          prompt: 'child agent'
+        })
+      ],
+      retained: [],
+      now: 2000
+    })
+
+    expect(rows.map((row) => row.paneKey)).toEqual(['tab-1:1'])
+    expect(rows[0]).toMatchObject({
+      agentType: 'codex',
+      state: 'working',
+      tab: {
+        id: 'tab-1',
+        worktreeId: 'wt-1'
+      }
+    })
+  })
+
   it('uses runtime orchestration metadata for hook-reported live rows', () => {
     const parent = makeEntry(PANE_KEY_1, 1000, {
       prompt: 'parent',

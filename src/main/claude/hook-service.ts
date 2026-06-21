@@ -1,6 +1,7 @@
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
+  buildWindowsAgentHookEndpointPrelude,
   buildWindowsAgentHookPostCommand,
   readHooksJson,
   writeHooksJson,
@@ -59,9 +60,9 @@ function getManagedScript(
       // (`set KEY=VALUE` lines) via `call` refreshes them so the hook
       // reaches the current server. Falls through to PTY env if the file
       // is missing (first run / pre-endpoint-file / running outside Orca).
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
-      'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
+      ...buildWindowsAgentHookEndpointPrelude(),
+      'if "%ORCA_AGENT_HOOK_PORT%%__ORCA_ORIGINAL_AGENT_HOOK_PORT%"=="" exit /b 0',
+      'if "%ORCA_AGENT_HOOK_TOKEN%%__ORCA_ORIGINAL_AGENT_HOOK_TOKEN%"=="" exit /b 0',
       'if "%ORCA_PANE_KEY%"=="" exit /b 0',
       buildWindowsAgentHookPostCommand('claude'),
       'exit /b 0',

@@ -12,8 +12,11 @@ import {
 } from 'fs'
 import { homedir, tmpdir } from 'os'
 import { join } from 'path'
-import { spawnSync } from 'child_process'
+import { spawn, spawnSync } from 'child_process'
+import { createServer, type Server } from 'http'
+import type { AddressInfo } from 'net'
 import {
+  buildWindowsAgentHookEndpointPrelude,
   buildWindowsAgentHookPostCommand,
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
@@ -333,6 +336,18 @@ describe('wrapPosixHookCommand', () => {
 })
 
 describe('buildWindowsAgentHookPostCommand', () => {
+  it('captures the original PTY endpoint before sourcing endpoint.cmd', () => {
+    const commands = buildWindowsAgentHookEndpointPrelude()
+
+    expect(commands.slice(0, 4)).toEqual([
+      'set "__ORCA_ORIGINAL_AGENT_HOOK_PORT=%ORCA_AGENT_HOOK_PORT%"',
+      'set "__ORCA_ORIGINAL_AGENT_HOOK_TOKEN=%ORCA_AGENT_HOOK_TOKEN%"',
+      'set "__ORCA_ORIGINAL_AGENT_HOOK_ENV=%ORCA_AGENT_HOOK_ENV%"',
+      'set "__ORCA_ORIGINAL_AGENT_HOOK_VERSION=%ORCA_AGENT_HOOK_VERSION%"'
+    ])
+    expect(commands[4]).toContain('call "%ORCA_AGENT_HOOK_ENDPOINT%"')
+  })
+
   it('forces UTF-8 for redirected hook stdin and POST bodies', () => {
     const command = buildWindowsAgentHookPostCommand('codex')
 
@@ -343,4 +358,157 @@ describe('buildWindowsAgentHookPostCommand', () => {
     expect(command).toContain('/hook/codex')
     expect(command).not.toContain("'Content-Type'='application/json'")
   })
+
+  it('falls back to the original PTY endpoint when endpoint.cmd supplied a dead port', async () => {
+    if (process.platform !== 'win32') {
+      return
+    }
+
+    const received = createDeferred<{
+      url: string | undefined
+      token: string | string[] | undefined
+      body: Record<string, unknown>
+    }>()
+    const server = createServer((req, res) => {
+      let rawBody = ''
+      req.setEncoding('utf8')
+      req.on('data', (chunk) => {
+        rawBody += chunk
+      })
+      req.on('end', () => {
+        res.writeHead(200)
+        res.end('ok')
+        received.resolve({
+          url: req.url,
+          token: req.headers['x-orca-agent-hook-token'],
+          body: JSON.parse(rawBody) as Record<string, unknown>
+        })
+      })
+    })
+
+    try {
+      const livePort = await listenOnLoopback(server)
+      const closedPort = await reserveClosedLoopbackPort()
+      const result = runShellCommand(
+        buildWindowsAgentHookPostCommand('codex'),
+        JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt: 'hello' }),
+        {
+          ...process.env,
+          ORCA_AGENT_HOOK_PORT: String(closedPort),
+          ORCA_AGENT_HOOK_TOKEN: 'dead-token',
+          ORCA_AGENT_HOOK_ENV: 'production',
+          ORCA_AGENT_HOOK_VERSION: 'dead-version',
+          ORCA_PANE_KEY: 'tab-id:leaf-id',
+          ORCA_TAB_ID: 'tab-id',
+          ORCA_WORKTREE_ID: 'worktree-id',
+          __ORCA_ORIGINAL_AGENT_HOOK_PORT: String(livePort),
+          __ORCA_ORIGINAL_AGENT_HOOK_TOKEN: 'live-token',
+          __ORCA_ORIGINAL_AGENT_HOOK_ENV: 'production',
+          __ORCA_ORIGINAL_AGENT_HOOK_VERSION: 'live-version'
+        }
+      )
+      const request = await withTimeout(received.promise, 5_000)
+
+      expect(await result).toMatchObject({ status: 0 })
+      expect(request.url).toBe('/hook/codex')
+      expect(request.token).toBe('live-token')
+      expect(request.body).toMatchObject({
+        paneKey: 'tab-id:leaf-id',
+        tabId: 'tab-id',
+        worktreeId: 'worktree-id',
+        env: 'production',
+        version: 'live-version'
+      })
+      expect(request.body.payload).toMatchObject({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'hello'
+      })
+    } finally {
+      await closeServer(server)
+    }
+  })
 })
+
+function createDeferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (reason?: unknown) => void
+} {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((innerResolve, innerReject) => {
+    resolve = innerResolve
+    reject = innerReject
+  })
+  return { promise, resolve, reject }
+}
+
+function listenOnLoopback(server: Server): Promise<number> {
+  return new Promise((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      server.off('error', reject)
+      resolve((server.address() as AddressInfo).port)
+    })
+  })
+}
+
+async function reserveClosedLoopbackPort(): Promise<number> {
+  const server = createServer()
+  const port = await listenOnLoopback(server)
+  await closeServer(server)
+  return port
+}
+
+function closeServer(server: Server): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (!server.listening) {
+      resolve()
+      return
+    }
+    server.close((error) => {
+      if (error) {
+        reject(error)
+      } else {
+        resolve()
+      }
+    })
+  })
+}
+
+function runShellCommand(
+  command: string,
+  input: string,
+  env: NodeJS.ProcessEnv
+): Promise<{ status: number | null; stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, { shell: true, env })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk
+    })
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk
+    })
+    child.on('error', reject)
+    child.on('close', (status) => {
+      resolve({ status, stdout, stderr })
+    })
+    child.stdin.end(input)
+  })
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timeout: NodeJS.Timeout | undefined
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeout = setTimeout(() => reject(new Error(`Timed out after ${ms}ms`)), ms)
+  })
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeout) {
+      clearTimeout(timeout)
+    }
+  })
+}

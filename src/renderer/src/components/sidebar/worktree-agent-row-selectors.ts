@@ -89,10 +89,12 @@ function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, Ag
   const entriesByWorktree = new Map<string, AgentStatusEntry[]>()
   for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
     const parsed = parsePaneKey(paneKey)
-    if (!parsed) {
-      continue
-    }
-    const worktreeId = tabIdToWorktreeId.get(parsed.tabId) ?? entry.worktreeId
+    // Why: Windows/RC Codex sessions can replay a worktree-attributed status
+    // before the pane key has migrated to UUID form. Keep the sidebar row
+    // visible from main-stamped attribution instead of dropping it here.
+    const worktreeId = parsed
+      ? (tabIdToWorktreeId.get(parsed.tabId) ?? entry.worktreeId)
+      : entry.worktreeId
     if (!worktreeId) {
       continue
     }

@@ -150,6 +150,28 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
 
     expect(selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')).toEqual([childEntry])
   })
+
+  it('uses worktree attribution when the pane key is still legacy-shaped', () => {
+    const legacyPaneKey = 'tab-1:1'
+    const childEntry = makeEntry(legacyPaneKey, 1000, {
+      agentType: 'codex',
+      state: 'working',
+      worktreeId: 'wt-1',
+      tabId: 'tab-1'
+    })
+    const state = {
+      tabsByWorktree: {
+        'wt-1': []
+      },
+      agentStatusByPaneKey: {
+        [legacyPaneKey]: childEntry
+      },
+      migrationUnsupportedByPtyId: {},
+      retainedAgentsByPaneKey: {}
+    }
+
+    expect(selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')).toEqual([childEntry])
+  })
 })
 
 describe('selectRuntimeAgentOrchestrationForWorktree', () => {

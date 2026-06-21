@@ -25,11 +25,15 @@ import {
 
 function tabFromAttributedStatusEntry(entry: AgentStatusEntry): TerminalTab | null {
   const parsed = parsePaneKey(entry.paneKey)
-  if (!parsed || !entry.worktreeId) {
+  const legacy = parsed ? null : parseLegacyNumericPaneKey(entry.paneKey)
+  // Why: worktree attribution is authoritative for orphan rows; legacy Codex
+  // pane keys still need a tab shell so the sidebar can render the live status.
+  const tabId = parsed?.tabId ?? legacy?.tabId ?? entry.tabId
+  if (!tabId || !entry.worktreeId) {
     return null
   }
   return {
-    id: parsed.tabId,
+    id: tabId,
     ptyId: null,
     worktreeId: entry.worktreeId,
     title: entry.terminalTitle ?? 'Agent',

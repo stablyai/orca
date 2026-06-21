@@ -106,12 +106,26 @@ export function wrapPosixHookCommand(scriptPath: string, env: Record<string, str
   return `if [ -x ${quoted} ]; then ${invocation}; fi`
 }
 
+export function buildWindowsAgentHookEndpointPrelude(): string[] {
+  // Why: endpoint.cmd refreshes surviving PTYs after an Orca restart, but a
+  // stale endpoint file must not erase the still-valid env stamped on a newly
+  // launched PTY. Keep a snapshot so the PowerShell poster can fall back.
+  return [
+    'set "__ORCA_ORIGINAL_AGENT_HOOK_PORT=%ORCA_AGENT_HOOK_PORT%"',
+    'set "__ORCA_ORIGINAL_AGENT_HOOK_TOKEN=%ORCA_AGENT_HOOK_TOKEN%"',
+    'set "__ORCA_ORIGINAL_AGENT_HOOK_ENV=%ORCA_AGENT_HOOK_ENV%"',
+    'set "__ORCA_ORIGINAL_AGENT_HOOK_VERSION=%ORCA_AGENT_HOOK_VERSION%"',
+    'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul'
+  ]
+}
+
 export function buildWindowsAgentHookPostCommand(source: AgentHookSource): string {
   // Why: Windows PowerShell 5.1 defaults redirected stdin/request bodies to the
   // active code page. Hook payloads are UTF-8 JSON, so force UTF-8 on both read
-  // and POST or CJK prompts arrive in Orca as literal question marks. Timeout
-  // caps best-effort hook posts if the local listener stalls.
-  return `powershell -NoProfile -ExecutionPolicy Bypass -Command "$utf8=[System.Text.UTF8Encoding]::new($false); [Console]::InputEncoding=$utf8; [Console]::OutputEncoding=$utf8; $inputData=[Console]::In.ReadToEnd(); if ([string]::IsNullOrWhiteSpace($inputData)) { exit 0 }; try { $body=@{ paneKey=$env:ORCA_PANE_KEY; tabId=$env:ORCA_TAB_ID; worktreeId=$env:ORCA_WORKTREE_ID; env=$env:ORCA_AGENT_HOOK_ENV; version=$env:ORCA_AGENT_HOOK_VERSION; payload=($inputData | ConvertFrom-Json) } | ConvertTo-Json -Depth 100 -Compress; $bodyBytes=$utf8.GetBytes($body); Invoke-WebRequest -UseBasicParsing -Method Post -Uri ('http://127.0.0.1:' + $env:ORCA_AGENT_HOOK_PORT + '/hook/${source}') -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Orca-Agent-Hook-Token'=$env:ORCA_AGENT_HOOK_TOKEN } -Body $bodyBytes -TimeoutSec 2 | Out-Null } catch {}"`
+  // and POST or CJK prompts arrive in Orca as literal question marks. The
+  // fallback preserves new PTYs when endpoint.cmd points at a dead old server.
+  // Timeout caps best-effort hook posts if the local listener stalls.
+  return `powershell -NoProfile -ExecutionPolicy Bypass -Command "$utf8=[System.Text.UTF8Encoding]::new($false); [Console]::InputEncoding=$utf8; [Console]::OutputEncoding=$utf8; $inputData=[Console]::In.ReadToEnd(); if ([string]::IsNullOrWhiteSpace($inputData)) { exit 0 }; try { $payload=$inputData | ConvertFrom-Json } catch { exit 0 }; function __orcaPost([string]$port,[string]$token,[string]$hookEnv,[string]$version) { if ([string]::IsNullOrWhiteSpace($port) -or [string]::IsNullOrWhiteSpace($token)) { return $false }; try { $body=@{ paneKey=$env:ORCA_PANE_KEY; tabId=$env:ORCA_TAB_ID; worktreeId=$env:ORCA_WORKTREE_ID; env=$hookEnv; version=$version; payload=$payload } | ConvertTo-Json -Depth 100 -Compress; $bodyBytes=$utf8.GetBytes($body); Invoke-WebRequest -UseBasicParsing -Method Post -Uri ('http://127.0.0.1:' + $port + '/hook/${source}') -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Orca-Agent-Hook-Token'=$token } -Body $bodyBytes -TimeoutSec 2 | Out-Null; return $true } catch { return $false } }; if (__orcaPost $env:ORCA_AGENT_HOOK_PORT $env:ORCA_AGENT_HOOK_TOKEN $env:ORCA_AGENT_HOOK_ENV $env:ORCA_AGENT_HOOK_VERSION) { exit 0 }; if ($env:__ORCA_ORIGINAL_AGENT_HOOK_PORT -and ($env:__ORCA_ORIGINAL_AGENT_HOOK_PORT -ne $env:ORCA_AGENT_HOOK_PORT -or $env:__ORCA_ORIGINAL_AGENT_HOOK_TOKEN -ne $env:ORCA_AGENT_HOOK_TOKEN)) { [void](__orcaPost $env:__ORCA_ORIGINAL_AGENT_HOOK_PORT $env:__ORCA_ORIGINAL_AGENT_HOOK_TOKEN $env:__ORCA_ORIGINAL_AGENT_HOOK_ENV $env:__ORCA_ORIGINAL_AGENT_HOOK_VERSION) }"`
 }
 
 export function removeManagedCommands(

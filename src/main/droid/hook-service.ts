@@ -2,6 +2,7 @@ import { homedir } from 'os'
 import { join } from 'path'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
+  buildWindowsAgentHookEndpointPrelude,
   createManagedCommandMatcher,
   buildWindowsAgentHookPostCommand,
   getSharedManagedScriptPath,
@@ -64,9 +65,9 @@ function getManagedScript(): string {
     return [
       '@echo off',
       'setlocal',
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
-      'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
+      ...buildWindowsAgentHookEndpointPrelude(),
+      'if "%ORCA_AGENT_HOOK_PORT%%__ORCA_ORIGINAL_AGENT_HOOK_PORT%"=="" exit /b 0',
+      'if "%ORCA_AGENT_HOOK_TOKEN%%__ORCA_ORIGINAL_AGENT_HOOK_TOKEN%"=="" exit /b 0',
       'if "%ORCA_PANE_KEY%"=="" exit /b 0',
       buildWindowsAgentHookPostCommand('droid'),
       'exit /b 0',
