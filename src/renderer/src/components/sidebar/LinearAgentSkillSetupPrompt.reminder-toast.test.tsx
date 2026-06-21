@@ -87,6 +87,19 @@ vi.mock('../settings/AgentSkillSetupPanel', () => ({
 let root: Root | null = null
 let container: HTMLDivElement | null = null
 
+function installLocalStorageShim(): void {
+  const values = new Map<string, string>()
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      clear: () => values.clear(),
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value)
+    }
+  })
+}
+
 function cliStatus(overrides: Partial<CliInstallStatus>): CliInstallStatus {
   return {
     platform: 'darwin',
@@ -173,6 +186,7 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
     mocks.toastWarning.mockClear()
     mocks.toastWarning.mockReturnValue('linear-setup-toast-id')
     mocks.panelProps.length = 0
+    installLocalStorageShim()
     window.localStorage.clear()
     _linearAgentSkillSetupPromptInternalsForTests.resetSessionReminders()
     Object.defineProperty(window, 'api', {
