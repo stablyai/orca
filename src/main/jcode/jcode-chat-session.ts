@@ -30,6 +30,7 @@ import {
   saveConversation
 } from './jcode-conversation-store'
 import { resolveTurnPrompt, type RemoteExecResolution } from './jcode-attachments'
+import { applySkillInjection, registerJcodeSkillsHandler } from './jcode-skills'
 
 // Why: jcode is installed via cargo; the absolute path avoids depending on the
 // (often empty under Electron) PATH. Mirrors the pinned tool path the desktop
@@ -162,6 +163,15 @@ async function startTurn(
     })
     return
   }
+
+  // FEATURE B: prepend a selected skill's SKILL.md body (re-discovered from cwd +
+  // worktreeId so remote skills resolve over SSH). Non-fatal if missing.
+  resolvedPrompt = await applySkillInjection(
+    payload.skillName,
+    resolvedPrompt,
+    { cwd: payload.cwd, worktreeId: payload.worktreeId },
+    store
+  )
 
   // The Node child_process `cwd` MUST be a directory that exists on THIS (local)
   // machine — jcode itself always runs locally, even for brain-local turns. For a
@@ -361,6 +371,10 @@ export function registerJcodeChatHandlers(mainWindow: BrowserWindow, store?: Sto
     }
     return deleteConversation(sessionKey)
   })
+
+  // FEATURE B: skills-list IPC for the "/" menu (handler + cleanup live in
+  // jcode-skills to keep this module under budget).
+  registerJcodeSkillsHandler(mainWindow, store)
 
   mainWindow.on('closed', () => {
     for (const child of activeChildren.values()) {

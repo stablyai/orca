@@ -1,4 +1,4 @@
-import { FileText, Paperclip, X } from 'lucide-react'
+import { FileText, Paperclip, Puzzle, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { JcodeChatAttachment } from '../../../../shared/jcode-chat-types'
 import type { SlashCommand } from './chat-slash-commands'
@@ -48,42 +48,134 @@ export function ChatAttachmentChips({
   )
 }
 
-/** The "/"-triggered quick-command popover, anchored above the textarea. */
-export function SlashCommandPopover({
-  matches,
+/** One selectable row inside the slash popover. `index` is the FLAT index across
+ *  both groups so keyboard nav (activeIndex) works uniformly. */
+function SlashRow({
+  command,
+  index,
   activeIndex,
   onHover,
   onPick
 }: {
-  matches: SlashCommand[]
+  command: SlashCommand
+  index: number
   activeIndex: number
   onHover: (index: number) => void
   onPick: (command: SlashCommand) => void
 }): React.JSX.Element {
   return (
-    <div className="absolute bottom-full left-0 z-20 mb-1 w-full max-w-sm overflow-hidden rounded-lg border border-border bg-popover shadow-md">
-      <div className="border-b border-border px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-        Orca quick commands
-      </div>
-      {matches.map((command, index) => (
+    <button
+      type="button"
+      className={cn(
+        'flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-sm transition-colors',
+        index === activeIndex ? 'bg-muted' : 'hover:bg-muted'
+      )}
+      onMouseEnter={() => onHover(index)}
+      onMouseDown={(event) => {
+        // mousedown so the textarea doesn't lose focus before we act.
+        event.preventDefault()
+        onPick(command)
+      }}
+    >
+      <span className="truncate font-medium">{command.label}</span>
+      <span className="ml-auto truncate pl-2 text-xs text-muted-foreground">{command.hint}</span>
+    </button>
+  )
+}
+
+/** FEATURE B: a chip for the skill armed for the next send. Its SKILL.md body is
+ *  injected into the prompt by the main process; this only shows the name + a ✕
+ *  to disarm. Renders nothing when no skill is armed. */
+export function SkillChip({
+  name,
+  onRemove
+}: {
+  name: string | null | undefined
+  onRemove: () => void
+}): React.JSX.Element | null {
+  if (!name) {
+    return null
+  }
+  return (
+    <div className="flex flex-wrap gap-1.5 px-1 pb-1">
+      <span className="inline-flex max-w-[16rem] items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-xs text-foreground">
+        <Puzzle className="size-3 shrink-0 text-primary" />
+        <span className="truncate">skill: {name}</span>
         <button
-          key={command.id}
           type="button"
-          className={cn(
-            'flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-sm transition-colors',
-            index === activeIndex ? 'bg-muted' : 'hover:bg-muted'
-          )}
-          onMouseEnter={() => onHover(index)}
-          onMouseDown={(event) => {
-            // mousedown so the textarea doesn't lose focus before we act.
-            event.preventDefault()
-            onPick(command)
-          }}
+          aria-label="Remove skill"
+          className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+          onClick={onRemove}
         >
-          <span className="font-medium">{command.label}</span>
-          <span className="ml-auto text-xs text-muted-foreground">{command.hint}</span>
+          <X className="size-3" />
         </button>
-      ))}
+      </span>
+    </div>
+  )
+}
+
+/** The "/"-triggered popover, anchored above the textarea. Renders two grouped
+ *  sections — orca quick commands + project/global skills — with a single FLAT
+ *  active index so ↑/↓ moves across both. The flat order is `commands` then
+ *  `skills`; the caller computes activeIndex against that same concatenation. */
+export function SlashCommandPopover({
+  commands,
+  skills,
+  activeIndex,
+  onHover,
+  onPick,
+  degraded
+}: {
+  commands: SlashCommand[]
+  skills: SlashCommand[]
+  activeIndex: number
+  onHover: (index: number) => void
+  onPick: (command: SlashCommand) => void
+  /** True when a remote project's project-local skills could not be read. */
+  degraded?: boolean
+}): React.JSX.Element {
+  return (
+    <div className="absolute bottom-full left-0 z-20 mb-1 max-h-72 w-full max-w-sm overflow-y-auto rounded-lg border border-border bg-popover shadow-md">
+      {commands.length > 0 ? (
+        <>
+          <div className="border-b border-border px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Orca quick commands
+          </div>
+          {commands.map((command, i) => (
+            <SlashRow
+              key={command.id}
+              command={command}
+              index={i}
+              activeIndex={activeIndex}
+              onHover={onHover}
+              onPick={onPick}
+            />
+          ))}
+        </>
+      ) : null}
+      {skills.length > 0 ? (
+        <>
+          <div className="border-y border-border px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Skills
+          </div>
+          {skills.map((command, i) => (
+            <SlashRow
+              key={command.id}
+              command={command}
+              // Flat index continues after the commands group.
+              index={commands.length + i}
+              activeIndex={activeIndex}
+              onHover={onHover}
+              onPick={onPick}
+            />
+          ))}
+        </>
+      ) : null}
+      {degraded ? (
+        <div className="border-t border-border px-2.5 py-1.5 text-[11px] text-muted-foreground">
+          Project skills on the remote host were unavailable; showing global skills only.
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -80,7 +80,60 @@ export type JcodeChatSendPayload = {
    *  main process resolves the host from `worktreeId`; this is only honored when
    *  no worktree-derived host is available (e.g. ad-hoc callers). */
   remoteExecHost?: string
+  /** FEATURE B: name of a skill the user picked from the "/" menu. The main
+   *  process re-discovers it (cwd + worktreeId) and prepends its SKILL.md body to
+   *  the prompt so the headless model follows it. Kept out of the transcript
+   *  bubble (the renderer shows only the user's text + a small skill chip). */
+  skillName?: string
 }
+
+// ─── FEATURE B: project-specific skills in the "/" menu ─────────────────────
+// jcode headless has no native skill loader. "Skills" are SKILL.md files (YAML
+// frontmatter `name` + `description`/`when_to_use`, body = instructions) living
+// in three source classes: project-local <projectRoot>/.claude/skills/<name>/,
+// global ~/.claude/skills/<name>/ (mostly symlinks), and plugin skill dirs from
+// ~/.claude/plugins/installed_plugins.json. The main process discovers + parses
+// them; on select, the chosen skill's BODY is injected into the outgoing prompt
+// so the headless model follows it (no jcode-binary change required).
+
+/** Where a discovered skill came from (for grouping/precedence in the menu). */
+export type JcodeSkillSource = 'project' | 'global' | 'plugin'
+
+/** One discovered SKILL.md. `body` is the post-frontmatter instruction text that
+ *  is injected into the prompt when the skill is selected. */
+export type JcodeSkill = {
+  /** Skill name (frontmatter `name`, or the directory name). Plugin skills are
+   *  namespaced as `plugin:skill` to mirror Claude Code and avoid collisions. */
+  name: string
+  /** One-line-ish summary (frontmatter `description` || `when_to_use`). */
+  description: string
+  /** Instruction body after the frontmatter, injected on select. */
+  body: string
+  source: JcodeSkillSource
+  /** Owning plugin id for `source === 'plugin'` (e.g. superpowers@marketplace). */
+  pluginId?: string
+}
+
+/** Result of a skills-list call. `degraded` is true when a remote project's
+ *  project-local skills could not be read (no live SSH connection), so only
+ *  global + plugin skills are returned. */
+export type JcodeSkillsListResult = {
+  skills: JcodeSkill[]
+  /** True when project-local (remote) skills were unavailable; UI may note it. */
+  degraded?: boolean
+}
+
+/** Renderer -> main payload to list skills for the current chat pane. */
+export type JcodeSkillsListPayload = {
+  /** Project root for project-local `.claude/skills` discovery (the pane's cwd).
+   *  For a remote worktree this is the REMOTE path; main resolves the SSH target
+   *  from `worktreeId` and reads it over the connection. */
+  cwd?: string
+  /** Worktree / folder-workspace key so main can resolve a remote project. */
+  worktreeId?: string
+}
+
+export const JCODE_SKILLS_LIST_CHANNEL = 'jcode-skills:list'
 
 /** Authentication style jcode uses for a custom OpenAI-compatible provider. */
 export type JcodeProviderAuth = 'bearer' | 'api-key' | 'none'

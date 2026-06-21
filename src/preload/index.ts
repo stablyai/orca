@@ -17,6 +17,7 @@ import {
   JCODE_CHAT_STOP_CHANNEL,
   JCODE_PROVIDERS_ADD_CHANNEL,
   JCODE_PROVIDERS_LIST_CHANNEL,
+  JCODE_SKILLS_LIST_CHANNEL,
   type JcodeChatEventMessage,
   type JcodeChatSavePayload,
   type JcodeChatSendPayload,
@@ -24,7 +25,9 @@ import {
   type JcodeConversationRecord,
   type JcodeConversationSummary,
   type JcodeProviderActionResult,
-  type JcodeProviderAddArgs
+  type JcodeProviderAddArgs,
+  type JcodeSkillsListPayload,
+  type JcodeSkillsListResult
 } from '../shared/jcode-chat-types'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
@@ -455,7 +458,11 @@ const api = {
       ipcRenderer.invoke(JCODE_CHAT_DELETE_CHANNEL, sessionKey),
     // Open a native multi-select file picker; resolves to ABSOLUTE paths (empty
     // on cancel). Used by the composer "Add files" action.
-    pickFiles: (): Promise<string[]> => ipcRenderer.invoke(JCODE_CHAT_PICK_FILES_CHANNEL)
+    pickFiles: (): Promise<string[]> => ipcRenderer.invoke(JCODE_CHAT_PICK_FILES_CHANNEL),
+    // FEATURE B: list SKILL.md skills (project-local + global + plugin) for the
+    // current pane's cwd/worktree. Backs the "/" menu Skills group.
+    listSkills: (payload: JcodeSkillsListPayload): Promise<JcodeSkillsListResult> =>
+      ipcRenderer.invoke(JCODE_SKILLS_LIST_CHANNEL, payload)
   },
 
   // Custom OpenAI-compatible provider profiles for jcode chat. `add` shells to

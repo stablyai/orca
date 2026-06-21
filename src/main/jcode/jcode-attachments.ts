@@ -106,6 +106,65 @@ function runRemoteCommand(
   })
 }
 
+/** A live SSH connection object (as returned by the connection manager). */
+export type SshConnection = NonNullable<
+  ReturnType<NonNullable<ReturnType<typeof getSshConnectionManager>>['getConnection']>
+>
+
+/** Resolve a live, connected SSH connection by id, or null. Shared by the skill
+ *  discovery module so it can read remote `.claude/skills` over the same SSH
+ *  transport that attachment copying uses. */
+export function getLiveSshConnection(connectionId: string): SshConnection | null {
+  const conn = getSshConnectionManager()?.getConnection(connectionId)
+  if (!conn || conn.getState().status !== 'connected') {
+    return null
+  }
+  return conn
+}
+
+/** Run a remote command over SSH and CAPTURE its stdout (unlike runRemoteCommand,
+ *  which discards output). Resolves with the accumulated stdout on a zero exit;
+ *  resolves with null on any non-zero/failed exit so callers can treat a missing
+ *  file or directory as "no skills here" rather than throwing. Best-effort, with
+ *  a bound so a hung channel can't stall skill discovery forever. */
+export function runRemoteCapture(conn: SshConnection, command: string): Promise<string | null> {
+  const TIMEOUT_MS = 10_000
+  return new Promise((resolve) => {
+    conn
+      .exec(command)
+      .then((channel) => {
+        let stdout = ''
+        let exitCode: number | null = null
+        let settled = false
+        const finish = (value: string | null): void => {
+          if (settled) {
+            return
+          }
+          settled = true
+          if (timer) {
+            clearTimeout(timer)
+          }
+          resolve(value)
+        }
+        const timer = setTimeout(() => finish(null), TIMEOUT_MS)
+        if (typeof timer.unref === 'function') {
+          timer.unref()
+        }
+        channel.on('data', (data: Buffer) => {
+          stdout += data.toString()
+        })
+        channel.stderr?.on('data', () => {})
+        channel.on('exit', (code: number | null) => {
+          exitCode = code
+        })
+        channel.on('close', () => finish(exitCode === 0 ? stdout : null))
+        channel.on('error', () => finish(null))
+        channel.stderr?.on('error', () => {})
+      })
+      .catch(() => resolve(null))
+  })
+}
+
 /** Resolve the final prompt string for a turn by weaving in any attachments.
  *  For LOCAL sessions, file attachments are referenced by their local path. For
  *  remote-exec sessions, each local file is copied to a remote temp dir over the

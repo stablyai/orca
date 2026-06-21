@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ArrowUp,
   ChevronDown,
@@ -33,8 +33,9 @@ import {
   findProfileOption,
   findProviderOption
 } from './jcode-providers'
-import { SLASH_COMMANDS, filterSlashCommands, type SlashCommand } from './chat-slash-commands'
-import { ChatAttachmentChips, SlashCommandPopover } from './ChatComposerExtras'
+import { SLASH_COMMANDS } from './chat-slash-commands'
+import { useChatSlashMenu } from './use-chat-slash-menu'
+import { ChatAttachmentChips, SkillChip, SlashCommandPopover } from './ChatComposerExtras'
 
 // Why: the composer is the Claude-app-style bottom bar. It owns the unsent
 // draft text (local state) and the auto-growing textarea, but the provider/model
@@ -67,7 +68,11 @@ export function ChatComposer({
   onAddFiles,
   onAddText,
   onRemoveAttachment,
-  onSlashAction
+  onSlashAction,
+  cwd,
+  worktreeId,
+  selectedSkillName,
+  onSelectSkill
 }: {
   value: string
   onChange: (next: string) => void
@@ -97,12 +102,37 @@ export function ChatComposer({
   onRemoveAttachment: (index: number) => void
   /** Run an orca-side "/" action (start new chat / reopen last). */
   onSlashAction: (action: 'clear' | 'resume') => void
+  /** FEATURE B: project root + worktree for skill discovery, the skill armed for
+   *  the next send (shows a chip; null = none), and the arm/disarm callback. */
+  cwd?: string
+  worktreeId?: string
+  selectedSkillName?: string | null
+  onSelectSkill: (skillName: string | null) => void
 }): React.JSX.Element {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
-  // Slash menu is shown when the draft is exactly a "/query" with no spaces yet.
-  const [slashOpen, setSlashOpen] = useState(false)
-  const [slashIndex, setSlashIndex] = useState(0)
+
+  // FEATURE B: the "/" menu (orca quick commands + skills) is owned by the hook;
+  // selecting a skill row arms it via onSelectSkill.
+  const {
+    slashOpen,
+    slashIndex,
+    setSlashIndex,
+    setSlashOpen,
+    commands: slashCommandRows,
+    skills: slashSkillRows,
+    flatMatches,
+    degraded: skillsDegraded,
+    runSlashCommand
+  } = useChatSlashMenu({
+    value,
+    cwd,
+    worktreeId,
+    textareaRef,
+    onChange,
+    onSlashAction,
+    onSelectSkill
+  })
 
   // Auto-grow the textarea up to a max height, then scroll internally.
   useEffect(() => {
@@ -113,37 +143,6 @@ export function ChatComposer({
     el.style.height = 'auto'
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`
   }, [value])
-
-  // Derive whether the "/" menu should be visible and which commands match.
-  const slashQuery =
-    value.startsWith('/') && !value.includes(' ') && !value.includes('\n')
-      ? value.slice(1).toLowerCase()
-      : null
-  const slashMatches = slashQuery === null ? [] : filterSlashCommands(slashQuery)
-
-  // Keep the menu open state in sync with whether there is a "/" query + matches.
-  useEffect(() => {
-    const shouldOpen = slashQuery !== null && slashMatches.length > 0
-    setSlashOpen(shouldOpen)
-    if (shouldOpen) {
-      setSlashIndex(0)
-    }
-  }, [slashQuery, slashMatches.length])
-
-  const runSlashCommand = useCallback(
-    (command: SlashCommand) => {
-      if (command.kind === 'template') {
-        onChange(command.template)
-      } else {
-        // Action: clear the "/command" draft, then run it.
-        onChange('')
-        onSlashAction(command.action)
-      }
-      setSlashOpen(false)
-      window.requestAnimationFrame(() => textareaRef.current?.focus())
-    },
-    [onChange, onSlashAction]
-  )
 
   const profileOptions = buildProfileOptions(customProviders)
   // The active option is either a custom profile or a built-in provider.
@@ -166,13 +165,18 @@ export function ChatComposer({
         {/* Attachment chips above the textarea. */}
         <ChatAttachmentChips attachments={attachments} onRemove={onRemoveAttachment} />
 
+        {/* FEATURE B: armed-skill chip (the skill body is injected on send). */}
+        <SkillChip name={selectedSkillName} onRemove={() => onSelectSkill(null)} />
+
         <div className="relative">
           {slashOpen ? (
             <SlashCommandPopover
-              matches={slashMatches}
+              commands={slashCommandRows}
+              skills={slashSkillRows}
               activeIndex={slashIndex}
               onHover={setSlashIndex}
               onPick={runSlashCommand}
+              degraded={skillsDegraded}
             />
           ) : null}
 
@@ -192,20 +196,20 @@ export function ChatComposer({
             }}
             onKeyDown={(event) => {
               // Slash menu keyboard nav takes priority while open.
-              if (slashOpen && slashMatches.length > 0) {
+              if (slashOpen && flatMatches.length > 0) {
                 if (event.key === 'ArrowDown') {
                   event.preventDefault()
-                  setSlashIndex((i) => (i + 1) % slashMatches.length)
+                  setSlashIndex((i) => (i + 1) % flatMatches.length)
                   return
                 }
                 if (event.key === 'ArrowUp') {
                   event.preventDefault()
-                  setSlashIndex((i) => (i - 1 + slashMatches.length) % slashMatches.length)
+                  setSlashIndex((i) => (i - 1 + flatMatches.length) % flatMatches.length)
                   return
                 }
                 if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) {
                   event.preventDefault()
-                  runSlashCommand(slashMatches[slashIndex])
+                  runSlashCommand(flatMatches[slashIndex])
                   return
                 }
                 if (event.key === 'Escape') {
@@ -426,7 +430,7 @@ export function ChatComposer({
             <button
               type="button"
               onClick={onSend}
-              disabled={!value.trim() && attachments.length === 0}
+              disabled={!value.trim() && attachments.length === 0 && !selectedSkillName}
               aria-label="Send"
               className={cn(
                 'flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity',

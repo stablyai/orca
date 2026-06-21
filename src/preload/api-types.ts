@@ -19,7 +19,9 @@ import type {
   JcodeConversationRecord,
   JcodeConversationSummary,
   JcodeProviderActionResult,
-  JcodeProviderAddArgs
+  JcodeProviderAddArgs,
+  JcodeSkillsListPayload,
+  JcodeSkillsListResult
 } from '../shared/jcode-chat-types'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { TaskSourceContext } from '../shared/task-source-context'
@@ -779,6 +781,9 @@ export type PreloadApi = {
     /** Open a native multi-select file picker; resolves to ABSOLUTE paths (empty
      *  array on cancel). Backs the composer "Add files" action. */
     pickFiles: () => Promise<string[]>
+    /** FEATURE B: list SKILL.md skills (project-local + global + plugin) for the
+     *  current pane's cwd/worktree. Backs the "/" menu Skills group. */
+    listSkills: (payload: JcodeSkillsListPayload) => Promise<JcodeSkillsListResult>
   }
   /** Custom OpenAI-compatible provider profiles for jcode chat. */
   jcodeProviders: {

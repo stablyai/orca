@@ -207,6 +207,10 @@ export default function ChatPane({
   const customProviders =
     useAppStore((s) => s.settings?.jcodeCustomProviders) ?? EMPTY_CUSTOM_PROVIDERS
   const [input, setInput] = useState('')
+  // FEATURE B: a skill armed from the "/" menu for the next send. Its SKILL.md
+  // body is injected into the prompt by the main process at send time; here we
+  // only carry the name (and show a chip). Cleared after each send.
+  const [selectedSkillName, setSelectedSkillName] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Why (BUG 1, persistence): register this pane's context so disk snapshots are
@@ -238,23 +242,41 @@ export default function ChatPane({
   const send = useCallback(() => {
     const prompt = input.trim()
     const attachments = pendingAttachments
-    // Allow sending with attachments only (no typed text), but require at least
-    // one of the two.
-    if ((!prompt && attachments.length === 0) || isStreaming) {
+    // Allow sending with attachments only or a skill only (no typed text), but
+    // require at least one of the three.
+    if ((!prompt && attachments.length === 0 && !selectedSkillName) || isStreaming) {
       return
     }
     // Record a transcript-visible user message. The main process weaves the
-    // attachment paths/text into the prompt jcode actually receives; here we
-    // append a short human-readable summary so the bubble reflects what was sent.
-    const summary =
-      attachments.length > 0
-        ? `${prompt ? `${prompt}\n\n` : ''}[Attached: ${attachments
-            .map((a) => a.name || (a.kind === 'file' ? a.path : 'text'))
-            .join(', ')}]`
-        : prompt
+    // attachment paths/text into the prompt jcode actually receives (and prepends
+    // a selected skill's body); here we append a short human-readable summary so
+    // the bubble reflects what was sent — including a "skill: <name>" hint, but
+    // NOT the heavy SKILL.md body (kept out of the transcript).
+    const parts: string[] = []
+    if (prompt) {
+      parts.push(prompt)
+    }
+    const extras: string[] = []
+    if (selectedSkillName) {
+      extras.push(`skill: ${selectedSkillName}`)
+    }
+    if (attachments.length > 0) {
+      extras.push(
+        `Attached: ${attachments
+          .map((a) => a.name || (a.kind === 'file' ? a.path : 'text'))
+          .join(', ')}`
+      )
+    }
+    if (extras.length > 0) {
+      parts.push(`[${extras.join(' · ')}]`)
+    }
+    const summary = parts.join('\n\n')
     startChatTurn(sessionKey, summary)
     setInput('')
     clearChatAttachments(sessionKey)
+    // Skill is single-shot: arm once, consume on this send.
+    const skillName = selectedSkillName ?? undefined
+    setSelectedSkillName(null)
     const sharedAttachments = attachments.length > 0 ? attachments : undefined
     if (composerProviderProfile) {
       // Custom OpenAI-compatible profile: main emits `--provider-profile <name>`
@@ -267,7 +289,8 @@ export default function ChatPane({
         model: composerModel,
         cwd,
         worktreeId,
-        resumeSessionId
+        resumeSessionId,
+        skillName
       })
     } else {
       window.api.jcodeChat.send({
@@ -279,7 +302,8 @@ export default function ChatPane({
         model: composerModel ?? model,
         cwd,
         worktreeId,
-        resumeSessionId
+        resumeSessionId,
+        skillName
       })
     }
   }, [
@@ -294,7 +318,8 @@ export default function ChatPane({
     composerProviderProfile,
     cwd,
     worktreeId,
-    resumeSessionId
+    resumeSessionId,
+    selectedSkillName
   ])
 
   const stop = useCallback(() => {
@@ -449,6 +474,10 @@ export default function ChatPane({
           onAddText={addText}
           onRemoveAttachment={(index) => removeChatAttachment(sessionKey, index)}
           onSlashAction={runSlashAction}
+          cwd={cwd}
+          worktreeId={worktreeId}
+          selectedSkillName={selectedSkillName}
+          onSelectSkill={setSelectedSkillName}
         />
       </div>
     </div>
