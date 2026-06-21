@@ -63,6 +63,21 @@ function simulatorTab(id: string, groupId: string, sortOrder: number): Tab {
   }
 }
 
+function chatTab(id: string, groupId: string, sortOrder: number): Tab {
+  return {
+    id,
+    entityId: id,
+    groupId,
+    worktreeId: 'wt',
+    contentType: 'chat',
+    label: 'jcode',
+    customLabel: null,
+    color: null,
+    sortOrder,
+    createdAt: sortOrder
+  }
+}
+
 describe('getGroupVisibleTabOrder', () => {
   it('returns active-group refs with backing ids plus unified tab ids', () => {
     const group: TabGroup = {
@@ -185,6 +200,38 @@ describe('getGroupVisibleTabOrder', () => {
     ).toEqual([
       { type: 'terminal', id: 'term-1', tabId: 'tab-t1' },
       { type: 'simulator', id: 'tab-s1', tabId: 'tab-s1' },
+      { type: 'editor', id: '/repo/file.md', tabId: 'tab-e1' }
+    ])
+  })
+
+  it('includes chat tabs keyed by unified tab id, emitted as the editor visible-type (regression: chat dropped from keyboard nav)', () => {
+    // A jcode chat tab has no editor file entity; its entityId defaults to its
+    // own tab id and is never in editorEntityIds. Before the fix it fell into
+    // the editor branch's entity check and was silently dropped, making the
+    // chat tab invisible to Ctrl+Tab / next-prev tab cycling. It maps to the
+    // 'editor' visible-tab type, so it must be emitted as such with its tab id.
+    const group: TabGroup = {
+      id: 'g1',
+      worktreeId: 'wt',
+      activeTabId: 'tab-c1',
+      tabOrder: ['tab-t1', 'tab-c1', 'tab-e1']
+    }
+    const tabs: Tab[] = [
+      terminalTab('tab-t1', 'g1', 'term-1', 0),
+      chatTab('tab-c1', 'g1', 1),
+      editorTab('tab-e1', 'g1', '/repo/file.md', 2)
+    ]
+    expect(
+      getGroupVisibleTabOrder(
+        group,
+        tabs,
+        new Set(['term-1']),
+        new Set(['/repo/file.md']),
+        new Set()
+      )
+    ).toEqual([
+      { type: 'terminal', id: 'term-1', tabId: 'tab-t1' },
+      { type: 'editor', id: 'tab-c1', tabId: 'tab-c1' },
       { type: 'editor', id: '/repo/file.md', tabId: 'tab-e1' }
     ])
   })

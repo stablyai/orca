@@ -13,6 +13,7 @@ export type ActiveTabNavOrderIds = {
   editorIds?: string[]
   browserIds?: string[]
   simulatorIds?: string[]
+  chatIds?: string[]
 }
 
 /**
@@ -65,6 +66,7 @@ export function getGroupVisibleTabOrder(
   const seenBrowsers = new Set<string>()
   const seenEditors = new Set<string>()
   const seenSimulators = new Set<string>()
+  const seenChats = new Set<string>()
   for (const unifiedId of group.tabOrder) {
     const tab = tabsById.get(unifiedId)
     if (!tab) {
@@ -88,6 +90,20 @@ export function getGroupVisibleTabOrder(
       }
       seenSimulators.add(tab.id)
       result.push({ type: 'simulator', id: tab.id, tabId: tab.id })
+    } else if (tab.contentType === 'chat') {
+      // Why: chat maps to the 'editor' visible-tab type (toVisibleTabType) and
+      // has no editor file entity — its entityId defaults to its own tab id and
+      // is never in editorEntityIds, so the final editor branch would silently
+      // drop it from keyboard nav order. Mirror the simulator precedent and key
+      // by the unified tab id. Emit type 'editor' so the existing editor
+      // activation/active-key plumbing (activateCyclableTab, getActiveVisible-
+      // TabKey via group.activeTabId) handles chat without a new union member:
+      // chat activation sets activeTabType 'editor' + group.activeTabId = tab.id.
+      if (seenChats.has(tab.id)) {
+        continue
+      }
+      seenChats.add(tab.id)
+      result.push({ type: 'editor', id: tab.id, tabId: tab.id })
     } else {
       if (!editorEntityIds.has(tab.entityId) || seenEditors.has(tab.id)) {
         continue
@@ -137,6 +153,11 @@ export function getActiveTabNavOrder(
     (state.unifiedTabsByWorktree[worktreeId] ?? [])
       .filter((tab) => tab.contentType === 'simulator')
       .map((tab) => tab.id)
+  const chatIds =
+    ids.chatIds ??
+    (state.unifiedTabsByWorktree[worktreeId] ?? [])
+      .filter((tab) => tab.contentType === 'chat')
+      .map((tab) => tab.id)
 
   const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
   const group = activeGroupId
@@ -163,12 +184,14 @@ export function getActiveTabNavOrder(
     terminalIds,
     editorIds,
     browserIds,
-    simulatorIds
+    simulatorIds,
+    chatIds
   )
   const terminalIdSet = new Set(terminalIds)
   const editorIdSet = new Set(editorIds)
   const browserIdSet = new Set(browserIds)
   const simulatorIdSet = new Set(simulatorIds)
+  const chatIdSet = new Set(chatIds)
   const result: VisibleTabRef[] = []
   for (const id of visibleIds) {
     if (terminalIdSet.has(id)) {
@@ -179,6 +202,11 @@ export function getActiveTabNavOrder(
       result.push({ type: 'browser', id })
     } else if (simulatorIdSet.has(id)) {
       result.push({ type: 'simulator', id })
+    } else if (chatIdSet.has(id)) {
+      // Why: chat maps to the 'editor' visible-tab type; emit type 'editor'
+      // with the chat tab id so activation/active-key plumbing matches the
+      // active-group path above.
+      result.push({ type: 'editor', id })
     }
   }
   return result
