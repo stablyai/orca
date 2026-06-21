@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES,
+  AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES,
+  AGENT_DRAFT_PASTE_MAX_BYTES,
+  chunkAgentDraftPasteContent,
   getSettingsForAgentTabRuntimeOwner,
+  iterateAgentDraftPasteContentChunks,
   pasteDraftWhenAgentReady,
+  sendAgentDraftPasteContent,
   sendBracketedPasteToRunningAgent
 } from './agent-paste-draft'
 
@@ -356,6 +362,131 @@ describe('pasteDraftWhenAgentReady', () => {
     await expect(promise).resolves.toBe(true)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(2, {}, 'pty-1', '\r')
   })
+
+  it('streams large running-agent drafts as bounded bracketed chunks before submit', async () => {
+    const content = 'x'.repeat(
+      AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES + AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES + 7
+    )
+    const promise = sendBracketedPasteToRunningAgent({
+      ptyId: 'pty-1',
+      content
+    })
+
+    await flushMicrotasks(20)
+
+    const calls = testState.sendRuntimePtyInputVerified.mock.calls
+    expect(calls.at(0)).toEqual([{}, 'pty-1', '\x1b[200~'])
+    expect(calls.at(-1)?.[2]).toBe('\x1b[201~')
+    expect(
+      calls
+        .slice(1, -1)
+        .map((call) => call[2])
+        .join('')
+    ).toBe(content)
+    for (const call of calls.slice(1, -1)) {
+      expect((call[2] as string).length).toBeLessThanOrEqual(AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES)
+    }
+
+    await vi.advanceTimersByTimeAsync(50)
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenLastCalledWith({}, 'pty-1', '\r')
+  })
+
+  it('closes bracketed paste and does not submit when a chunked draft write is rejected', async () => {
+    testState.sendRuntimePtyInputVerified
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true)
+    const content = 'x'.repeat(
+      AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES + AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES + 7
+    )
+
+    await expect(
+      sendBracketedPasteToRunningAgent({
+        ptyId: 'pty-1',
+        content
+      })
+    ).resolves.toBe(false)
+
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(3)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(1, {}, 'pty-1', '[200~')
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(3, {}, 'pty-1', '[201~')
+    expect(testState.sendRuntimePtyInputVerified.mock.calls.some((call) => call[2] === '\r')).toBe(
+      false
+    )
+  })
+
+  it('sanitizes escape bytes inside chunked agent draft paste content', () => {
+    const chunks = chunkAgentDraftPasteContent('before\x1b[201~after😀', 6)
+
+    expect(chunks.at(0)).toBe('\x1b[200~')
+    expect(chunks.at(-1)).toBe('\x1b[201~')
+    expect(chunks.slice(1, -1).join('')).toBe('before␛[201~after😀')
+    expect(chunks.slice(1, -1).join('')).not.toContain('\x1b[201~')
+  })
+
+  it('chunks escape-heavy agent draft paste without per-character string sanitizer scans', () => {
+    const content = Array.from({ length: 64 }, (_value, index) => `draft-${index}\x1b[201~`).join(
+      ''
+    )
+    const includesSpy = vi.spyOn(String.prototype, 'includes')
+    const replaceAllSpy = vi.spyOn(String.prototype, 'replaceAll')
+
+    const chunks = chunkAgentDraftPasteContent(content, 12)
+    const includesCallCount = includesSpy.mock.calls.length
+    const replaceAllCallCount = replaceAllSpy.mock.calls.length
+    includesSpy.mockRestore()
+    replaceAllSpy.mockRestore()
+
+    expect(chunks.at(0)).toBe('\x1b[200~')
+    expect(chunks.at(-1)).toBe('\x1b[201~')
+    expect(chunks.slice(1, -1).join('')).not.toContain('\x1b[201~')
+    expect(chunks.slice(1, -1).join('')).toContain('␛[201~')
+    expect(includesCallCount).toBe(0)
+    expect(replaceAllCallCount).toBe(0)
+  })
+
+  it('keeps agent draft chunk arrays aligned with lazy chunk iteration', () => {
+    const content = 'before\x1b[201~after😀'
+
+    expect(chunkAgentDraftPasteContent(content, 6)).toEqual([
+      ...iterateAgentDraftPasteContentChunks(content, 6)
+    ])
+  })
+
+  it('iterates large agent draft chunks lazily', () => {
+    const text = 'x'.repeat(128)
+    const codePointAt = vi.spyOn(String.prototype, 'codePointAt')
+    const chunks = iterateAgentDraftPasteContentChunks(text, 8)
+
+    expect(chunks.next()).toEqual({ done: false, value: '\x1b[200~' })
+    expect(chunks.next()).toEqual({ done: false, value: 'x'.repeat(8) })
+
+    expect(codePointAt.mock.calls.length).toBeLessThan(text.length)
+  })
+
+  it('yields during large accepted-size preflight before writing agent draft chunks', async () => {
+    const content = 'x'.repeat(AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES + 300 * 1024)
+    const promise = sendAgentDraftPasteContent({}, 'pty-1', content)
+
+    await flushMicrotasks(5)
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+
+    await vi.runOnlyPendingTimersAsync()
+    await flushMicrotasks(10)
+
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith({}, 'pty-1', '\x1b[200~')
+    await expect(promise).resolves.toBe(true)
+  })
+
+  it('rejects oversized agent drafts before any PTY write', async () => {
+    await expect(
+      sendAgentDraftPasteContent({}, 'pty-1', 'x'.repeat(AGENT_DRAFT_PASTE_MAX_BYTES + 1))
+    ).resolves.toBe(false)
+
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+  })
 })
 
 describe('getSettingsForAgentTabRuntimeOwner', () => {
@@ -385,7 +516,8 @@ describe('getSettingsForAgentTabRuntimeOwner', () => {
   })
 })
 
-async function flushMicrotasks(): Promise<void> {
-  await Promise.resolve()
-  await Promise.resolve()
+async function flushMicrotasks(iterations = 2): Promise<void> {
+  for (let index = 0; index < iterations; index += 1) {
+    await Promise.resolve()
+  }
 }

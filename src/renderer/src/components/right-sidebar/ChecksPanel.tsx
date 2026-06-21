@@ -119,6 +119,7 @@ import { readSourceControlLaunchRecipeAgentId } from '@/lib/source-control-launc
 import {
   DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
   resolveSourceControlActionRecipe,
+  resolveSourceControlAiEnabled,
   resolveSourceControlAiForOperation,
   resolveSourceControlAiPrCreationDefaults
 } from '../../../../shared/source-control-ai'
@@ -754,6 +755,10 @@ export default function ChecksPanel(): React.JSX.Element {
           prCreationProductDefaults: DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
         })
   }, [repo, settings])
+  const sourceControlAiActionsVisible = useMemo(
+    () => (settings ? resolveSourceControlAiEnabled({ settings, repo }) : false),
+    [repo, settings]
+  )
   const createComposerOpen =
     !activeReview &&
     !isFolder &&
@@ -792,6 +797,7 @@ export default function ChecksPanel(): React.JSX.Element {
     settings: ownerSettings,
     submitting: isCreatingPr,
     prCreationDefaults,
+    sourceControlAiActionsVisible,
     onBranchChangedByGeneration: handleBranchChangedByPullRequestGeneration
   })
   const handlePrBaseChange = useCallback(
@@ -2014,6 +2020,11 @@ export default function ChecksPanel(): React.JSX.Element {
     : noEnabledAgentKnown
       ? 'No enabled AI agents. Configure agents in Settings.'
       : undefined
+  useEffect(() => {
+    if (!sourceControlAiActionsVisible) {
+      setAgentComposerState(null)
+    }
+  }, [sourceControlAiActionsVisible])
   const resolveCommentsWithAIDisabledReason = commentsLoading
     ? 'Comments are still loading.'
     : aiActionDisabledReason
@@ -2173,7 +2184,7 @@ export default function ChecksPanel(): React.JSX.Element {
   // not a local MERGE_HEAD, so the prompt must tell the agent how to reproduce
   // the merge locally instead of reusing the live Source Control conflict prompt.
   const handleResolveConflictsWithAI = useCallback(async (): Promise<void> => {
-    if (!activeWorktreeId || !activeConflictReview) {
+    if (!sourceControlAiActionsVisible || !activeWorktreeId || !activeConflictReview) {
       return
     }
     const conflictFiles = activeConflictReview.conflictSummary?.files ?? []
@@ -2195,11 +2206,17 @@ export default function ChecksPanel(): React.JSX.Element {
       }),
       launchSource: 'conflict_resolution'
     })
-  }, [activeConflictReview, activeWorktreeId, activeWorktreePath])
+  }, [activeConflictReview, activeWorktreeId, activeWorktreePath, sourceControlAiActionsVisible])
 
   const handleResolveCommentsWithAI = useCallback(
     (selectedGroups: PRCommentGroup[]): void => {
-      if (!activeWorktreeId || !activeReview || !repo || resolveCommentsWithAIDisabledReason) {
+      if (
+        !sourceControlAiActionsVisible ||
+        !activeWorktreeId ||
+        !activeReview ||
+        !repo ||
+        resolveCommentsWithAIDisabledReason
+      ) {
         return
       }
       const selectedThreadIds = selectedGroups.flatMap((group) =>
@@ -2248,6 +2265,7 @@ export default function ChecksPanel(): React.JSX.Element {
       activeWorktreePath,
       repo,
       resolveCommentsWithAIDisabledReason,
+      sourceControlAiActionsVisible,
       stateRequestKey
     ]
   )
@@ -2323,7 +2341,13 @@ export default function ChecksPanel(): React.JSX.Element {
   )
 
   const handleFixChecksWithAI = useCallback(async (): Promise<void> => {
-    if (isFixingChecksWithAI || !activeWorktreeId || !activeReview || !repo) {
+    if (
+      !sourceControlAiActionsVisible ||
+      isFixingChecksWithAI ||
+      !activeWorktreeId ||
+      !activeReview ||
+      !repo
+    ) {
       return
     }
     const broken = getBrokenChecks(checks)
@@ -2405,6 +2429,7 @@ export default function ChecksPanel(): React.JSX.Element {
     isFixingChecksWithAI,
     pr?.prRepo,
     repo,
+    sourceControlAiActionsVisible,
     stateRequestKey
   ])
 
@@ -3018,7 +3043,7 @@ export default function ChecksPanel(): React.JSX.Element {
               baseResults={prBaseResults}
               setBaseResults={setPrBaseResults}
               baseSearchError={prBaseSearchError}
-              aiGenerationEnabled={prAiGenerationEnabled}
+              aiGenerationEnabled={sourceControlAiActionsVisible && prAiGenerationEnabled}
               generating={prGenerating}
               generateDisabled={prGenerateDisabled}
               generateDisabledReason={prGenerateDisabledReason}
@@ -3179,7 +3204,7 @@ export default function ChecksPanel(): React.JSX.Element {
         )}
       </div>
 
-      {shouldShowReviewTriageStrip && (
+      {shouldShowReviewTriageStrip && sourceControlAiActionsVisible && (
         <PRTriageStrip
           review={activeConflictReview ?? activeReview}
           reviewKind={reviewShortLabel}
@@ -3226,14 +3251,16 @@ export default function ChecksPanel(): React.JSX.Element {
         resolveCommentsWithAIDisabled={Boolean(resolveCommentsWithAIDisabledReason)}
         resolveCommentsWithAIDisabledReason={resolveCommentsWithAIDisabledReason}
         onAddComment={pr ? handleAddPRComment : undefined}
-        onResolveSelectedCommentsWithAI={handleResolveCommentsWithAI}
+        onResolveSelectedCommentsWithAI={
+          sourceControlAiActionsVisible ? handleResolveCommentsWithAI : undefined
+        }
         onReply={pr ? handleReplyToComment : undefined}
         onResolve={pr || activeGitLabReview ? handleResolve : undefined}
         onEditComment={pr ? handleEditComment : undefined}
         onDeleteComment={pr ? handleDeleteComment : undefined}
       />
       <SourceControlAgentActionDialog
-        open={agentComposerState !== null}
+        open={sourceControlAiActionsVisible && agentComposerState !== null}
         onOpenChange={(open) => {
           if (!open) {
             setAgentComposerState(null)

@@ -40,6 +40,7 @@ import {
 } from '../../shared/keybindings'
 import { getMainE2EConfig } from '../e2e-config'
 import { buildEditableContextMenuTemplate } from './editable-context-menu'
+import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 
 function forceRepaint(window: BrowserWindow): void {
   if (window.isDestroyed()) {
@@ -268,6 +269,12 @@ export function createMainWindow(
         : process.platform === 'win32'
           ? 'hidden'
           : undefined,
+    // Why: Linux ignores titleBarStyle: 'hidden', so without this the native
+    // WM title bar stays and stacks on top of our renderer titlebar (double
+    // title bar). frame: false drops the native frame; the renderer draws its
+    // own titlebar + window controls (see WindowControls in App.tsx), matching
+    // the Windows custom-titlebar path.
+    ...(process.platform === 'linux' ? { frame: false } : {}),
     // Why: initial position for 1x zoom; syncTrafficLightPosition() adjusts
     // dynamically when the user changes UI zoom.
     ...(process.platform === 'darwin'
@@ -287,6 +294,9 @@ export function createMainWindow(
     }
   })
   const rendererWebContentsId = mainWindow.webContents.id
+  // Why: native paste fallback is privileged IPC; only the real top-level
+  // renderer should be allowed to request Electron's native paste operation.
+  setTrustedUIRendererWebContentsId(rendererWebContentsId)
 
   if (process.platform === 'darwin') {
     // Why: persistent browser webviews use separate compositor layers, and on
@@ -1039,8 +1049,8 @@ export function createMainWindow(
   }
   ipcMain.on(trafficLightChannel, onSyncTrafficLights)
 
-  // Why: renderer-drawn window controls on Windows send these to replicate the
-  // native title bar buttons that 'hidden' titleBarStyle removes.
+  // Why: renderer-drawn window controls on Windows/Linux desktop send these to
+  // replicate the native title bar buttons hidden by custom chrome.
   const minimizeChannel = 'window:minimize'
   const onMinimize = (): void => {
     if (!mainWindow.isDestroyed()) {
@@ -1079,9 +1089,9 @@ export function createMainWindow(
     }
     mainWindow.webContents.send('window:close-requested', { isQuitting: false })
   }
-  // Why: the ··· button in the renderer-drawn title bar on Windows pops up
-  // the application menu at the cursor position, replicating the Alt-key
-  // reveal that autoHideMenuBar normally provides.
+  // Why: the ··· button in the renderer-drawn title bar on Windows/Linux
+  // desktop pops up the application menu at the cursor position, replicating
+  // the Alt-key reveal that autoHideMenuBar normally provides.
   const popupMenuChannel = 'menu:popup'
   const onPopupMenu = (): void => {
     Menu.getApplicationMenu()?.popup({ window: mainWindow })
@@ -1123,6 +1133,7 @@ export function createMainWindow(
     ipcMain.removeListener(terminalInputFocusChannel, onTerminalInputFocused)
     ipcMain.removeListener(floatingTerminalInputFocusChannel, onFloatingTerminalInputFocused)
     ipcMain.removeListener(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
+    clearTrustedUIRendererWebContentsId(rendererWebContentsId)
     // Why: on updater-triggered shutdown, BrowserWindow can emit `closed`
     // after its webContents has already been destroyed. The destroyed
     // webContents owns its listeners, so do not touch `mainWindow.webContents`

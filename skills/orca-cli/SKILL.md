@@ -66,7 +66,7 @@ orca worktree rm --worktree id:<worktreeId> --force --json
 
 Selectors:
 
-- `id:<worktreeId>`, `path:<absolutePath>`, `branch:<branchName>`, `issue:<number>`
+- `id:<worktreeId>`, `name:<displayName>`, `path:<absolutePath>`, `branch:<branchName>`, `issue:<number>`
 - `active` / `current` for the enclosing Orca-managed worktree from the shell cwd
 - For `worktree create --parent-worktree` only, folder/worktree parent context keys are also valid: `folder:<folderId>`, `worktree:<worktreeId>`, `id:folder:<folderId>`, `id:worktree:<worktreeId>`
 
@@ -76,6 +76,7 @@ Lineage rules:
 - Use `--parent-worktree active` when the child worktree relationship should be explicit.
 - Use `--parent-worktree folder:<folderId>` or `--parent-worktree worktree:<worktreeId>` when a folder or worktree parent context should be explicit.
 - Use `--no-parent` only when the new work is independent.
+- `--no-parent` only controls Orca lineage; it does not choose the Git base. For independent top-level work, omit `--base-branch` so Orca uses the repo default base, or explicitly pass the repo default base. Never base it on the current feature branch unless the user asks for stacked work or "branch from current".
 - If `--repo` is omitted, Orca infers the repo from the current Orca worktree when possible.
 
 Agent/setup flags:

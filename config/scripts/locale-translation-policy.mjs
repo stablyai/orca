@@ -374,7 +374,7 @@ function applyBrandMistranslationFixes(enValue, localeValue, locale, key = '') {
   for (const [brand, wrongForms] of Object.entries(mistranslations).sort(
     ([left], [right]) => right.length - left.length
   )) {
-    if (!enValue.includes(brand)) {
+    if (!includesPreservedLatinTerm(enValue, brand)) {
       continue
     }
     // Why: terminal/theme "Cursor" labels name the on-screen カーソル, not the Cursor product —

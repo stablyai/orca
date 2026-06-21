@@ -205,6 +205,47 @@ describe('WorktreeCardAgents', () => {
     expect(markup).not.toContain('data-testid="agent-row"')
   })
 
+  it('dims non-focused compact agent row text', async () => {
+    mockAgentActivityDisplayMode = 'compact'
+    mockAgents = [
+      mockAgent({
+        agentType: 'codex',
+        startedAt: 1000,
+        prompt: 'Run tests',
+        lastAssistantMessage: 'Inspecting changes'
+      })
+    ]
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+
+    expect(markup).toContain('<span class="text-muted-foreground/90">Run tests</span>')
+    expect(markup).toContain('<span class="text-muted-foreground/65"> - Inspecting changes</span>')
+    expect(markup).not.toContain('data-focused-agent-pane="true"')
+    expect(markup).not.toContain('<span class="text-foreground">Run tests</span>')
+  })
+
+  it('keeps focused compact agent row text legible', async () => {
+    mockAgentActivityDisplayMode = 'compact'
+    mockFocusedAgentPaneKey = 'tab-1:1'
+    mockAgents = [
+      mockAgent({
+        agentType: 'codex',
+        startedAt: 1000,
+        prompt: 'Focused prompt',
+        lastAssistantMessage: 'Reading output'
+      })
+    ]
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+
+    expect(markup).toContain('data-focused-agent-pane="true"')
+    expect(markup).toContain('<span class="text-foreground">Focused prompt</span>')
+    expect(markup).toContain('<span class="text-foreground/70"> - Reading output</span>')
+    expect(markup).not.toContain('<span class="text-muted-foreground/90">Focused prompt</span>')
+  })
+
   it('marks only the focused agent row', async () => {
     mockAgentActivityDisplayMode = 'full'
     mockFocusedAgentPaneKey = 'tab-1:2'
@@ -523,6 +564,27 @@ describe('WorktreeCardAgents', () => {
     expect(iconTitles).toEqual([])
     expect(markup).not.toContain('>5 working<')
     expect(markup).toContain('>+2<')
+  })
+
+  it('rotates the compact summary chevron when collapsed', async () => {
+    const { CompactAgentSummaryButton } = await import('./worktree-card-compact-agents')
+    const agents = [
+      mockAgent({ paneKey: 'tab-1:1', agentType: 'codex', startedAt: 1000, prompt: 'One' })
+    ] as DashboardAgentRowData[]
+
+    const markup = renderToStaticMarkup(
+      <CompactAgentSummaryButton
+        agents={agents}
+        subjectLabel="1 agent"
+        expanded={false}
+        onToggle={vi.fn()}
+      />
+    )
+
+    expect(markup).toContain('aria-expanded="false"')
+    expect(markup).toContain(
+      'lucide-chevron-down size-3 shrink-0 transition-transform duration-150 -rotate-90'
+    )
   })
 
   it('uses a neutral compact summary label while expanded', async () => {

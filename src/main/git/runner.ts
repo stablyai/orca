@@ -1154,11 +1154,10 @@ export function extractExecError(err: unknown): { stderr: string; stdout: string
  * and burns the retry budget. Also supports HTTP-date Retry-After values.
  */
 export function parseRetryAfterMs(stderr: string): number | null {
-  const m = stderr.match(/retry-after:\s*([^\r\n]+)/i)
-  if (!m) {
+  const raw = findRetryAfterHeaderValue(stderr)
+  if (raw === null) {
     return null
   }
-  const raw = m[1].trim()
   if (/^\d+$/.test(raw)) {
     const seconds = Number(raw)
     return Number.isFinite(seconds) ? seconds * 1000 : null
@@ -1168,6 +1167,50 @@ export function parseRetryAfterMs(stderr: string): number | null {
     return null
   }
   return Math.max(0, ts - Date.now())
+}
+
+function findRetryAfterHeaderValue(stderr: string): string | null {
+  const headerIndex = indexOfAsciiIgnoreCase(stderr, 'retry-after:', 0)
+  if (headerIndex === -1) {
+    return null
+  }
+  let valueStart = headerIndex + 'retry-after:'.length
+  while (valueStart < stderr.length) {
+    const code = stderr.charCodeAt(valueStart)
+    if (code !== 9 && code !== 32) {
+      break
+    }
+    valueStart++
+  }
+  let valueEnd = valueStart
+  while (valueEnd < stderr.length) {
+    const code = stderr.charCodeAt(valueEnd)
+    if (code === 10 || code === 13) {
+      break
+    }
+    valueEnd++
+  }
+  const value = stderr.slice(valueStart, valueEnd).trim()
+  return value.length > 0 ? value : null
+}
+
+function indexOfAsciiIgnoreCase(value: string, search: string, fromIndex: number): number {
+  const lastStart = value.length - search.length
+  for (let index = Math.max(0, fromIndex); index <= lastStart; index++) {
+    let matches = true
+    for (let offset = 0; offset < search.length; offset++) {
+      const code = value.charCodeAt(index + offset)
+      const normalizedCode = code >= 65 && code <= 90 ? code + 32 : code
+      if (normalizedCode !== search.charCodeAt(offset)) {
+        matches = false
+        break
+      }
+    }
+    if (matches) {
+      return index
+    }
+  }
+  return -1
 }
 
 /**

@@ -18,6 +18,7 @@ import {
   worktreeWorkspaceKey
 } from '../../../../shared/workspace-scope'
 import { deriveGeneratedTabTitle } from '../../../../shared/agent-tab-title'
+import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../../shared/worktree-id'
@@ -141,24 +142,6 @@ function updateUnifiedTerminalLabel(
     return null
   }
   return unifiedTabs.map((entry, index) => (index === unifiedIndex ? { ...entry, label } : entry))
-}
-
-function getDecorativeAgentTitleSignature(title: string): string | null {
-  const status = detectAgentStatusFromTitle(title)
-  if (!status) {
-    return null
-  }
-  // Why: agent spinners can emit OSC title frames many times per second; the
-  // spinner glyph is live decoration, not meaningful tab or sort state.
-  return `${status}:${title
-    .trim()
-    .replace(/^[\u2800-\u28ff\s]+/u, '')
-    .replace(/\s+/g, ' ')}`
-}
-
-function isDecorativeAgentTitleFrameChange(prevTitle: string, nextTitle: string): boolean {
-  const prevSignature = getDecorativeAgentTitleSignature(prevTitle)
-  return prevSignature !== null && prevSignature === getDecorativeAgentTitleSignature(nextTitle)
 }
 
 function updateUnifiedTerminalGeneratedLabel(
@@ -1265,7 +1248,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
   setGeneratedTabTitleFromAgentPrompt: (paneKey, prompt) => {
     const tabId = getTabIdFromPaneKey(paneKey)
-    if (!tabId || !prompt.trim()) {
+    if (!tabId || prompt.length === 0) {
       return
     }
     set((s) => {
@@ -1516,6 +1499,17 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       .find((entry) => entry.contentType === 'terminal' && entry.entityId === tabId)
     if (item) {
       get().setUnifiedTabColor(item.id, color)
+      // Why: tab color is host-authoritative for remote-server tabs; mirror it
+      // so it persists instead of reverting on the next snapshot.
+      const state = get()
+      const owningWorktreeId = Object.keys(state.unifiedTabsByWorktree).find((wId) =>
+        (state.unifiedTabsByWorktree[wId] ?? []).some((entry) => entry.id === item.id)
+      )
+      if (owningWorktreeId && getRuntimeEnvironmentIdForWorktree(state, owningWorktreeId)) {
+        void import('@/runtime/web-runtime-session').then(({ setWebRuntimeTabProps }) =>
+          setWebRuntimeTabProps({ worktreeId: owningWorktreeId, tabId: item.id, color })
+        )
+      }
     }
   },
 
@@ -2184,7 +2178,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       get().clearSleepingAgentSessionsByWorktree(worktreeId)
     }
 
-    // Why: only automatic completed-agent hibernation keeps passive completion
+    // Why: only automatic completed-agent sleep keeps passive completion
     // evidence; manual sleep/remove still fold the entire worktree surface.
     get().dropAgentStatusByWorktree(worktreeId, {
       shutdownReason,

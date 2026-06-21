@@ -91,6 +91,8 @@ function createMockAgent(index: number, now: number): RuntimeWorktreeAgentRow {
     state: index % 12 === 0 ? 'waiting' : 'working',
     agentType: index % 3 === 0 ? 'claude' : 'codex',
     prompt: `Investigate mobile lag scenario ${index + 1}`,
+    taskTitle: null,
+    displayName: null,
     lastAssistantMessage: index % 6 === 0 ? 'Running focused checks' : null,
     toolName: null,
     toolInput: null,

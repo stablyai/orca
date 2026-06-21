@@ -21,6 +21,12 @@ import {
   createAgentStatusOscProcessor,
   type ProcessedAgentStatusChunk
 } from '../../shared/agent-status-osc'
+import { buildOrchestrationTaskDisplayMetadata } from '../../shared/orchestration-task-display'
+import {
+  isTerminalInputTooLargeWithYield,
+  TERMINAL_INPUT_TOO_LARGE_ERROR,
+  iterateTerminalInputChunks
+} from '../../shared/terminal-input'
 import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
 import {
   cleanupClaimedCloneTarget,
@@ -95,11 +101,14 @@ import type {
   ProjectGroupImportMode,
   ProjectGroupImportResult,
   MemorySnapshot,
+  Tab,
   TabGroupLayoutNode,
   TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
   TerminalTab,
   TuiAgent,
   WorkspaceCreateTelemetrySource,
+  WorkspaceSessionState,
   DirEntry
 } from '../../shared/types'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
@@ -193,9 +202,11 @@ import {
   toDetectedWorktree
 } from '../../shared/worktree-ownership'
 import {
+  BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_CAPABILITIES,
-  RUNTIME_PROTOCOL_VERSION
+  RUNTIME_PROTOCOL_VERSION,
+  type RuntimeCapability
 } from '../../shared/protocol-version'
 import type {
   WorkspacePortKillRequest,
@@ -214,12 +225,14 @@ import type {
   RuntimeRepoSearchRefs,
   RuntimeTerminalRead,
   RuntimeTerminalRename,
+  RuntimeTerminalAgentStatus,
   RuntimeTerminalSend,
   RuntimeTerminalCreate,
   RuntimeTerminalSplit,
   RuntimeTerminalFocus,
   RuntimeTerminalClose,
   RuntimeTerminalListResult,
+  RuntimeTerminalResolvePane,
   RuntimeTerminalState,
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
@@ -233,6 +246,11 @@ import type {
   RuntimeSpeechSetupState,
   RuntimeTerminalShow,
   RuntimeTerminalSummary,
+  RuntimeTerminalVisualGroupNode,
+  RuntimeTerminalVisualLayout,
+  RuntimeTerminalVisualLayoutNode,
+  RuntimeTerminalVisualPaneNode,
+  RuntimeTerminalVisualTab,
   RuntimeSyncedLeaf,
   RuntimeSyncedTab,
   RuntimeMarkdownReadTabResult,
@@ -245,6 +263,7 @@ import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTerminalTab,
+  RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot,
@@ -257,6 +276,11 @@ import type {
 } from '../../shared/runtime-types'
 import type { AutomationService } from '../automations/service'
 import { RuntimeBrowserCommands } from './orca-runtime-browser'
+import { buildHeadlessTerminalSplitLayout } from './headless-terminal-split-layout'
+import {
+  buildHeadlessTabGroupMove,
+  buildHeadlessTabGroupSplit
+} from './headless-tab-group-split-layout'
 import { RuntimeEmulatorCommands, setEmulatorBridge } from './orca-runtime-emulator'
 import { serveSimStateWatcher } from '../emulator/serve-sim-state-watcher'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
@@ -276,6 +300,7 @@ import { joinWorktreeRelativePath } from './runtime-relative-paths'
 import { collectMemorySnapshot } from '../memory/collector'
 import { BrowserWindow, ipcMain } from 'electron'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
+import type { BrowserBackend } from '../browser/browser-backend'
 import { BrowserError } from '../browser/cdp-bridge'
 import {
   getPRForBranch,
@@ -308,6 +333,7 @@ import {
   listLabels,
   listAssignableUsers
 } from '../github/client'
+import type { GitHubPRBranchLookupOptions } from '../github/client'
 import { resolveGitHubPrStartPoint } from '../github/pr-start-point'
 import { fetchPrHeadTrackingRef } from '../github/pr-head-tracking-ref'
 import { getWorkItemDetails, getPRFileContents } from '../github/work-item-details'
@@ -526,6 +552,7 @@ import {
 import { hasLocalCommitObject } from '../git/commit-object-ref'
 import {
   listWorktrees,
+  listWorktreesStrict,
   addWorktree,
   addSparseWorktree,
   assertWorktreeCleanForRemoval,
@@ -615,6 +642,10 @@ import type { RateLimitState } from '../../shared/rate-limit-types'
 import type { VoiceSettings } from '../../shared/speech-types'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import { getCatalogModel, isLocalSpeechModel, SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
+import {
+  deleteLocalSpeechModel,
+  getSpeechModelDeletionErrorCode
+} from '../speech/speech-model-deletion'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
 import {
@@ -797,9 +828,11 @@ type RuntimeLeafRecord = RuntimeSyncedLeaf & {
   tailBuffer: string[]
   tailPartialLine: string
   tailPendingAnsi: string
+  tailRedrawCursor: RetainedTailRedrawCursor | null
   tailTruncated: boolean
   tailLinesTotal: number
   preview: string
+  waitBlockedAt: number | null
   lastAgentStatus: AgentStatus | null
   // Why: the most recent OSC title observed on this leaf's PTY data. Used by
   // worktree.ps so daemon-hosted terminals (no renderer pushing pane titles)
@@ -858,9 +891,11 @@ type RuntimePtyWorktreeRecord = {
   tailBuffer: string[]
   tailPartialLine: string
   tailPendingAnsi: string
+  tailRedrawCursor: RetainedTailRedrawCursor | null
   tailTruncated: boolean
   tailLinesTotal: number
   preview: string
+  waitBlockedAt: number | null
 }
 
 export type RuntimeTerminalAgentStatusEvent = {
@@ -1719,6 +1754,7 @@ export class OrcaRuntimeService {
   private clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
   private forkBackfillStarted = false
   private agentBrowserBridge: AgentBrowserBridge | null = null
+  private offscreenBrowserBackend: BrowserBackend | null = null
   private emulatorBridge: EmulatorBridge | null = null
   private resolvedWorktreeCache: ResolvedWorktreeCache | null = null
   private resolvedWorktreeInFlight: ResolvedWorktreeInFlight | null = null
@@ -2370,9 +2406,21 @@ export class OrcaRuntimeService {
   }
 
   getStatus(): RuntimeStatus {
-    const capabilities = this.getAvailableAuthoritativeWindow()
-      ? [...RUNTIME_CAPABILITIES]
-      : RUNTIME_CAPABILITIES.filter((capability) => capability !== 'browser.screencast.v1')
+    // Why: browser panes need a backend that can create and stream a page. A
+    // desktop renderer provides one via <webview>; a headless serve provides one
+    // via the offscreen backend. Either way the same browser.screencast.v1 path
+    // works, so advertise it when either is present. browser.headless.v1
+    // additionally tells clients this host owns browser pages with no renderer,
+    // so they must not fall back to a local desktop browser tab.
+    const hasRenderer = Boolean(this.getAvailableAuthoritativeWindow())
+    const hasOffscreen = !hasRenderer && Boolean(this.offscreenBrowserBackend)
+    const canBrowse = hasRenderer || hasOffscreen
+    const capabilities: RuntimeCapability[] = RUNTIME_CAPABILITIES.filter(
+      (capability) => capability !== 'browser.screencast.v1' || canBrowse
+    )
+    if (hasOffscreen) {
+      capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
+    }
     return {
       runtimeId: this.runtimeId,
       rendererGraphEpoch: this.rendererGraphEpoch,
@@ -2452,6 +2500,14 @@ export class OrcaRuntimeService {
     return this.agentBrowserBridge
   }
 
+  setOffscreenBrowserBackend(backend: BrowserBackend | null): void {
+    this.offscreenBrowserBackend = backend
+  }
+
+  getOffscreenBrowserBackend(): BrowserBackend | null {
+    return this.offscreenBrowserBackend
+  }
+
   setEmulatorBridge(bridge: EmulatorBridge | null): void {
     this.emulatorBridge = bridge
     setEmulatorBridge(bridge)
@@ -2508,9 +2564,11 @@ export class OrcaRuntimeService {
         tailBuffer: tailSource?.tailBuffer ?? [],
         tailPartialLine: tailSource?.tailPartialLine ?? '',
         tailPendingAnsi: tailSource?.tailPendingAnsi ?? '',
+        tailRedrawCursor: tailSource?.tailRedrawCursor ?? null,
         tailTruncated: tailSource?.tailTruncated ?? false,
         tailLinesTotal: tailSource?.tailLinesTotal ?? 0,
         preview: tailSource?.preview ?? '',
+        waitBlockedAt: tailSource?.waitBlockedAt ?? null,
         lastAgentStatus: tailSource?.lastAgentStatus ?? null,
         lastOscTitle: tailSource?.lastOscTitle ?? null,
         lastOscTitleAt: tailSource?.lastOscTitleAt ?? null,
@@ -2634,19 +2692,32 @@ export class OrcaRuntimeService {
         options.force !== true &&
         options.onlyServeOwnedTerminals !== true
       ) {
+        // Why: terminals are stable/persisted so we normally skip a rebuild, but
+        // offscreen browser tabs are live and may have been created/closed since.
+        // Reconcile just the browser tabs against the live bridge instead of
+        // leaving a stale snapshot that omits a freshly-opened browser tab.
+        this.reconcileHeadlessMobileSessionBrowserTabs(entryWorktreeId, existing)
         continue
       }
-      const tabs = this.buildHeadlessMobileSessionTerminalTabs(
+      const terminalTabs = this.buildHeadlessMobileSessionTerminalTabs(
         entryWorktreeId,
         persistedTabs
       ).filter(
         (tab) => options.onlyServeOwnedTerminals !== true || this.hasServeOwnedPtyBinding(tab)
       )
+      // Why: offscreen browser panes are live-only (no persisted session entry),
+      // so include them on every hydrate regardless of the onlyServeOwnedTerminals
+      // filter, which is about terminal PTY ownership and never applies to browsers.
+      const browserTabs = this.buildHeadlessMobileSessionBrowserTabs(entryWorktreeId)
+      const tabs: RuntimeMobileSessionSnapshotTab[] = [...terminalTabs, ...browserTabs]
       if (tabs.length === 0) {
         continue
       }
-      const activeTab = this.pickHeadlessActiveTerminalTab(tabs)
-      const tabOrder = this.collectHeadlessParentTabOrder(tabs)
+      const activeTab = this.pickHeadlessActiveTerminalTab(terminalTabs)
+      const tabOrder = [
+        ...this.collectHeadlessParentTabOrder(terminalTabs),
+        ...browserTabs.map((tab) => tab.id)
+      ]
       const groupId = this.getHeadlessMobileSessionGroupId(entryWorktreeId)
       const mergedTabs =
         options.onlyServeOwnedTerminals === true && existing
@@ -2655,10 +2726,28 @@ export class OrcaRuntimeService {
       const mergedActiveTab =
         existing?.tabs.find((tab) => tab.id === existing.activeTabId) ??
         activeTab ??
-        (mergedTabs[0]?.type === 'terminal' ? mergedTabs[0] : null)
+        mergedTabs[0] ??
+        null
       const mergedTerminalTabs = mergedTabs.filter(
         (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
       )
+      const mergedBrowserOrder = mergedTabs
+        .filter((tab): tab is RuntimeMobileSessionBrowserTab => tab.type === 'browser')
+        .map((tab) => tab.id)
+      // Why: a persisted multi-group split must be restored on cold rebuild, or
+      // the headless serve coalesces the user's group layout back into one group
+      // (the persisted tabGroups/tabGroupLayouts would otherwise be write-only).
+      const persistedGroups = session.tabGroups?.[entryWorktreeId]
+      const persistedLayout = session.tabGroupLayouts?.[entryWorktreeId]
+      const hasPersistedSplit =
+        options.onlyServeOwnedTerminals !== true &&
+        persistedGroups !== undefined &&
+        persistedGroups.length > 1
+      const activeTopLevelId = mergedActiveTab
+        ? mergedActiveTab.type === 'terminal'
+          ? mergedActiveTab.parentTabId
+          : mergedActiveTab.id
+        : null
       this.mobileSessionTabsByWorktree.set(entryWorktreeId, {
         worktree: existing?.worktree ?? entryWorktreeId,
         publicationEpoch: `headless-hydrated:${Date.now().toString(36)}`,
@@ -2666,24 +2755,162 @@ export class OrcaRuntimeService {
         activeGroupId: existing?.activeGroupId ?? groupId,
         activeTabId: mergedActiveTab?.id ?? null,
         activeTabType: mergedActiveTab?.type ?? null,
-        tabGroups:
-          options.onlyServeOwnedTerminals === true && existing?.tabGroups
-            ? this.mergeMobileSessionTabGroups(
-                entryWorktreeId,
-                existing.tabGroups,
-                mergedTerminalTabs,
-                mergedActiveTab?.type === 'terminal' ? mergedActiveTab : null
+        tabGroups: hasPersistedSplit
+          ? this.appendBrowserTabOrder(
+              this.distributeHeadlessTabsAcrossGroups(
+                persistedGroups.map((group) => ({
+                  id: group.id,
+                  activeTabId: group.activeTabId,
+                  tabOrder: [...group.tabOrder],
+                  ...(group.recentTabIds ? { recentTabIds: [...group.recentTabIds] } : {})
+                })),
+                this.collectHeadlessParentTabOrder(mergedTerminalTabs),
+                activeTopLevelId
+              ),
+              mergedBrowserOrder,
+              undefined,
+              // Why: distribute drops browser ids (terminal-only), so carry each
+              // browser's persisted group forward instead of coalescing left.
+              this.collectBrowserGroupAssignment(persistedGroups, mergedBrowserOrder)
+            )
+          : options.onlyServeOwnedTerminals === true && existing?.tabGroups
+            ? this.appendBrowserTabOrder(
+                this.mergeMobileSessionTabGroups(
+                  entryWorktreeId,
+                  existing.tabGroups,
+                  mergedTerminalTabs,
+                  mergedActiveTab?.type === 'terminal' ? mergedActiveTab : null
+                ),
+                mergedBrowserOrder
               )
             : [
                 {
                   id: groupId,
-                  activeTabId: activeTab?.parentTabId ?? tabOrder[0] ?? null,
+                  activeTabId: mergedActiveTab?.id
+                    ? (activeTab?.parentTabId ?? mergedActiveTab.id)
+                    : (tabOrder[0] ?? null),
                   tabOrder
                 }
               ],
+        ...(hasPersistedSplit && persistedLayout ? { tabGroupLayout: persistedLayout } : {}),
         tabs: mergedTabs
       })
     }
+  }
+
+  // Why: keep an existing snapshot's browser tabs in sync with the live bridge
+  // without rebuilding stable terminal state. Replaces browser entries with the
+  // current live set and rewrites the browser portion of the primary group order.
+  private reconcileHeadlessMobileSessionBrowserTabs(
+    worktreeId: string,
+    existing: RuntimeMobileSessionTabsSnapshot
+  ): void {
+    if (!this.offscreenBrowserBackend) {
+      return
+    }
+    const liveBrowserTabs = this.buildHeadlessMobileSessionBrowserTabs(worktreeId)
+    const liveIds = liveBrowserTabs.map((tab) => tab.id)
+    const existingBrowserIds = existing.tabs
+      .filter((tab): tab is RuntimeMobileSessionBrowserTab => tab.type === 'browser')
+      .map((tab) => tab.id)
+    const unchanged =
+      liveIds.length === existingBrowserIds.length &&
+      liveIds.every((id, index) => existingBrowserIds[index] === id)
+    if (unchanged) {
+      return
+    }
+    const nonBrowserTabs = existing.tabs.filter((tab) => tab.type !== 'browser')
+    const nextTabs: RuntimeMobileSessionSnapshotTab[] = [...nonBrowserTabs, ...liveBrowserTabs]
+    const liveIdSet = new Set(liveIds)
+    const tabGroups = this.appendBrowserTabOrder(
+      (existing.tabGroups ?? []).map((group) => ({
+        ...group,
+        // Drop closed browser ids; appendBrowserTabOrder re-adds the live ones.
+        tabOrder: group.tabOrder.filter(
+          (id) => liveIdSet.has(id) || !existingBrowserIds.includes(id)
+        )
+      })),
+      liveIds
+    )
+    const activeStillPresent = nextTabs.some((tab) => tab.id === existing.activeTabId)
+    const active = activeStillPresent
+      ? null
+      : (nextTabs.find((tab) => tab.isActive) ?? nextTabs[0] ?? null)
+    this.mobileSessionTabsByWorktree.set(worktreeId, {
+      ...existing,
+      publicationEpoch: `headless-hydrated:${Date.now().toString(36)}`,
+      snapshotVersion: existing.snapshotVersion + 1,
+      ...(activeStillPresent
+        ? {}
+        : { activeTabId: active?.id ?? null, activeTabType: active?.type ?? null }),
+      tabGroups,
+      tabs: nextTabs
+    })
+  }
+
+  // Why: browser session tabs have no parentTabId so the terminal-only group
+  // builder drops them from tabOrder; this re-adds their ids to a group.
+  // Browser tabs are live-only (no persisted session entry), but their GROUP
+  // membership must still survive snapshot rebuilds like terminals'. The
+  // passed-in groups already encode each browser's group (carried from the prior
+  // snapshot / persisted tabGroups), so keep each existing browser id where it
+  // is; only a genuinely-new browser id goes to its create-target group (when
+  // that group exists) and otherwise to the first group. Previously every
+  // browser was force-pushed into group[0], so opening a browser in the right
+  // split group always snapped it back to the left on the next rebuild.
+  private appendBrowserTabOrder(
+    groups: readonly RuntimeMobileSessionTabGroup[],
+    browserTabIds: readonly string[],
+    newTabAssignment?: { tabId: string; groupId: string },
+    // browserPageId -> groupId from the prior/persisted groups. The terminal
+    // distributor rebuilds tabOrder from terminal ids only and drops browser
+    // ids, so this carries each browser's group across rebuilds.
+    priorGroupByBrowserId?: ReadonlyMap<string, string>
+  ): RuntimeMobileSessionTabGroup[] {
+    if (browserTabIds.length === 0) {
+      return [...groups]
+    }
+    const next = groups.map((group) => ({ ...group, tabOrder: [...group.tabOrder] }))
+    if (next.length === 0) {
+      return next
+    }
+    const groupById = new Map(next.map((group) => [group.id, group]))
+    const ownerGroupByTabId = new Map<string, RuntimeMobileSessionTabGroup>()
+    for (const group of next) {
+      for (const id of group.tabOrder) {
+        ownerGroupByTabId.set(id, group)
+      }
+    }
+    for (const id of browserTabIds) {
+      if (ownerGroupByTabId.has(id)) {
+        continue
+      }
+      const priorGroupId = priorGroupByBrowserId?.get(id)
+      const targetGroup =
+        (newTabAssignment?.tabId === id ? groupById.get(newTabAssignment.groupId) : undefined) ??
+        (priorGroupId ? groupById.get(priorGroupId) : undefined) ??
+        next[0]!
+      targetGroup.tabOrder.push(id)
+    }
+    return next
+  }
+
+  // browserPageId -> groupId from a set of groups (the persisted/prior layout),
+  // so a browser stays in its group across rebuilds that drop browser ids.
+  private collectBrowserGroupAssignment(
+    groups: readonly RuntimeMobileSessionTabGroup[] | undefined,
+    browserTabIds: readonly string[]
+  ): Map<string, string> {
+    const browserIdSet = new Set(browserTabIds)
+    const assignment = new Map<string, string>()
+    for (const group of groups ?? []) {
+      for (const id of group.tabOrder) {
+        if (browserIdSet.has(id)) {
+          assignment.set(id, group.id)
+        }
+      }
+    }
+    return assignment
   }
 
   private isServeOwnedPtyId(ptyId: string | null | undefined): boolean {
@@ -2757,25 +2984,56 @@ export class OrcaRuntimeService {
               tabOrder: []
             }
           ]
-    const target = nextGroups[0]!
-    for (const tabId of parentTabOrder) {
-      if (!target.tabOrder.includes(tabId)) {
-        target.tabOrder.push(tabId)
+    // Why: keep each tab in the group that already owns it (a multi-group split
+    // must survive the merge), drop tabs no longer present, and route only
+    // genuinely-new tabs into the active group — never funnel everything into
+    // group[0], which duplicated/coalesced tabs that lived in other groups.
+    const ownerGroupId = new Map<string, string>()
+    for (const group of nextGroups) {
+      for (const tabId of group.tabOrder) {
+        ownerGroupId.set(tabId, group.id)
       }
     }
-    const activeParentId =
-      activeTab?.parentTabId ?? target.activeTabId ?? target.tabOrder[0] ?? null
-    target.activeTabId =
-      activeParentId && target.tabOrder.includes(activeParentId)
-        ? activeParentId
-        : (target.tabOrder[0] ?? null)
+    const liveTabIds = new Set(parentTabOrder)
+    const activeParentId = activeTab?.parentTabId ?? null
+    const activeGroupId =
+      (activeParentId ? ownerGroupId.get(activeParentId) : undefined) ?? nextGroups[0]!.id
+    const retainedOrder = new Map<string, string[]>(nextGroups.map((group) => [group.id, []]))
+    for (const tabId of parentTabOrder) {
+      const groupId = ownerGroupId.get(tabId) ?? activeGroupId
+      retainedOrder.get(groupId)?.push(tabId)
+    }
     return nextGroups
+      .map((group) => {
+        const tabOrder = retainedOrder.get(group.id) ?? []
+        const keptActive =
+          group.activeTabId &&
+          tabOrder.includes(group.activeTabId) &&
+          liveTabIds.has(group.activeTabId)
+            ? group.activeTabId
+            : null
+        return {
+          ...group,
+          tabOrder,
+          activeTabId:
+            activeParentId && tabOrder.includes(activeParentId)
+              ? activeParentId
+              : (keptActive ?? tabOrder[0] ?? null)
+        }
+      })
+      .filter((group) => group.tabOrder.length > 0)
   }
 
   private publishPtyBackedMobileSessionTerminal(
     worktreeId: string,
     pty: RuntimePtyWorktreeRecord,
-    args: { tabId: string; leafId: string; title: string | null; activate: boolean }
+    args: {
+      tabId: string
+      leafId: string
+      title: string | null
+      activate: boolean
+      split?: { splitFromLeafId: string; direction: 'horizontal' | 'vertical' }
+    }
   ): void {
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
     const title = args.title ?? getLatestPtyTitle(pty) ?? 'Terminal'
@@ -2785,10 +3043,21 @@ export class OrcaRuntimeService {
         candidate.parentTabId === args.tabId &&
         candidate.leafId === args.leafId
     )
+    // Why: a split inserts into the parent tab's layout, which lives on the
+    // sibling surface, not this new leaf's (empty) existing surface.
+    const baseLayout = args.split
+      ? (existing?.tabs.find(
+          (candidate): candidate is RuntimeMobileSessionTerminalTab =>
+            candidate.type === 'terminal' &&
+            candidate.parentTabId === args.tabId &&
+            candidate.leafId === args.split!.splitFromLeafId
+        )?.parentLayout ?? existingTab?.parentLayout)
+      : existingTab?.parentLayout
     const parentLayout = this.buildMaterializedHeadlessParentLayout(
       args.leafId,
       pty.ptyId,
-      existingTab?.parentLayout
+      baseLayout,
+      args.split
     )
     const tab: RuntimeMobileSessionTerminalTab = {
       type: 'terminal',
@@ -2811,6 +3080,13 @@ export class OrcaRuntimeService {
     const tabs = this.mergeMobileSessionSnapshotTabs(
       existingTabs.map((candidate) => ({
         ...candidate,
+        // Why: the client picks one sibling's parentLayout to render the whole
+        // tab; a split must update every sibling surface to the new tree, or a
+        // stale single-leaf sibling makes the client fall back to a default
+        // direction ("Split Right" renders as down).
+        ...(args.split && candidate.type === 'terminal' && candidate.parentTabId === args.tabId
+          ? { parentLayout }
+          : {}),
         isActive: tab.isActive ? false : candidate.isActive
       })),
       [tab]
@@ -2896,10 +3172,57 @@ export class OrcaRuntimeService {
             ...(ptyId ? { ptyId } : {}),
             ...(tab.launchAgent ? { launchAgent: tab.launchAgent } : {}),
             ...(layout ? { parentLayout: this.cloneTerminalLayoutSnapshot(layout) } : {}),
+            ...(tab.color != null ? { color: tab.color } : {}),
+            ...(tab.isPinned ? { isPinned: true } : {}),
             isActive: this.isPersistedTerminalLeafActive(worktreeId, tab.id, leafId, layout)
           }
         })
       })
+  }
+
+  // Why: headless serve backs browser panes with offscreen WebContents that live
+  // only in the BrowserManager, never in a renderer graph. Without surfacing them
+  // as session tabs, a session.tabs snapshot (e.g. on terminal open) prunes the
+  // paired browser tab and closing it fails with tab_not_found. Synthesize browser
+  // session tabs from the live bridge so they are first-class alongside terminals.
+  private buildHeadlessMobileSessionBrowserTabs(
+    worktreeId: string
+  ): RuntimeMobileSessionBrowserTab[] {
+    if (!this.offscreenBrowserBackend || !this.agentBrowserBridge?.tabList) {
+      return []
+    }
+    return this.agentBrowserBridge.tabList(worktreeId).tabs.map((tab) => {
+      const persistedProps = this.getPersistedUnifiedSessionTabProps(worktreeId, tab.browserPageId)
+      return {
+        type: 'browser' as const,
+        // Why: an offscreen page has no separate workspace identity, so the page id
+        // is its own workspace id (matches the server's browserWorkspaceId fallback).
+        id: tab.browserPageId,
+        title: tab.title || tab.url || 'Browser',
+        browserWorkspaceId: tab.browserPageId,
+        browserPageId: tab.browserPageId,
+        url: tab.url || 'about:blank',
+        loading: false,
+        canGoBack: false,
+        canGoForward: false,
+        ...(persistedProps ? { color: persistedProps.color } : {}),
+        ...(persistedProps ? { isPinned: persistedProps.isPinned === true } : {}),
+        isActive: tab.active === true
+      }
+    })
+  }
+
+  private getPersistedUnifiedSessionTabProps(
+    worktreeId: string,
+    tabId: string
+  ): Pick<Tab, 'color' | 'isPinned'> | null {
+    const tab =
+      this.store
+        ?.getWorkspaceSession?.()
+        ?.unifiedTabs?.[worktreeId]?.find(
+          (candidate) => candidate.id === tabId || candidate.entityId === tabId
+        ) ?? null
+    return tab ? { color: tab.color, isPinned: tab.isPinned } : null
   }
 
   private collectPersistedTerminalLeafIds(layout: TerminalLayoutSnapshot | undefined): string[] {
@@ -3000,40 +3323,128 @@ export class OrcaRuntimeService {
     return order
   }
 
+  // Why: the group tab order must follow actual creation/insertion order across
+  // both terminals and browsers, not list terminals first. A terminal's top-level
+  // id is its parentTabId (split leaves share one); a browser's is its own id.
+  private collectHeadlessTopLevelTabOrder(
+    tabs: readonly RuntimeMobileSessionSnapshotTab[]
+  ): string[] {
+    const order: string[] = []
+    const seen = new Set<string>()
+    for (const tab of tabs) {
+      const topLevelId = tab.type === 'terminal' ? tab.parentTabId : tab.id
+      if (!seen.has(topLevelId)) {
+        seen.add(topLevelId)
+        order.push(topLevelId)
+      }
+    }
+    return order
+  }
+
   private getHeadlessMobileSessionGroupId(worktreeId: string): string {
     return `headless-terminals:${worktreeId}`
   }
 
   private buildHeadlessMobileSessionTabGroups(
     worktreeId: string,
-    tabs: readonly RuntimeMobileSessionTerminalTab[],
-    activeTab: RuntimeMobileSessionTerminalTab | null,
-    existingGroups?: readonly RuntimeMobileSessionTabGroup[]
+    tabs: readonly RuntimeMobileSessionSnapshotTab[],
+    activeTab: RuntimeMobileSessionSnapshotTab | null,
+    existingGroups?: readonly RuntimeMobileSessionTabGroup[],
+    // Why: a new tab created via a specific group's "+" must land in THAT group,
+    // not the active one — otherwise every "+" in a split funnels to one group.
+    newTabAssignment?: { tabId: string; groupId: string }
   ): RuntimeMobileSessionTabGroup[] {
-    const groupId = existingGroups?.[0]?.id ?? this.getHeadlessMobileSessionGroupId(worktreeId)
-    const tabOrder = this.collectHeadlessParentTabOrder(tabs)
-    const activeParentTabId =
-      activeTab?.parentTabId ??
+    // Why: order across terminals and browsers in their actual array order so a
+    // tab opened after a browser tab lands to its right, not regrouped before it.
+    const tabOrder = this.collectHeadlessTopLevelTabOrder(tabs)
+    const topLevelOf = (tab: RuntimeMobileSessionSnapshotTab): string =>
+      tab.type === 'terminal' ? tab.parentTabId : tab.id
+    const activeTopLevelId =
+      (activeTab ? topLevelOf(activeTab) : null) ??
       existingGroups?.[0]?.activeTabId ??
-      tabs.find((tab) => tab.isActive)?.parentTabId ??
+      (() => {
+        const active = tabs.find((tab) => tab.isActive)
+        return active ? topLevelOf(active) : null
+      })() ??
       tabOrder[0] ??
       null
+
+    // Why: when the user has split tabs into multiple groups, preserve that
+    // assignment across rebuilds instead of coalescing back to one group.
+    if (existingGroups && existingGroups.length > 1) {
+      return this.distributeHeadlessTabsAcrossGroups(
+        existingGroups,
+        tabOrder,
+        activeTopLevelId,
+        newTabAssignment
+      )
+    }
+
+    const groupId = existingGroups?.[0]?.id ?? this.getHeadlessMobileSessionGroupId(worktreeId)
     return [
       {
         id: groupId,
         activeTabId:
-          activeParentTabId && tabOrder.includes(activeParentTabId)
-            ? activeParentTabId
+          activeTopLevelId && tabOrder.includes(activeTopLevelId)
+            ? activeTopLevelId
             : (tabOrder[0] ?? null),
         tabOrder
       }
     ]
   }
 
+  // Distribute live top-level tabs into the existing multi-group structure,
+  // keeping each tab in its group; tabs new since the last snapshot join the
+  // active group. Emptied groups are dropped so a closed split collapses.
+  private distributeHeadlessTabsAcrossGroups(
+    existingGroups: readonly RuntimeMobileSessionTabGroup[],
+    tabOrder: readonly string[],
+    activeTopLevelId: string | null,
+    newTabAssignment?: { tabId: string; groupId: string }
+  ): RuntimeMobileSessionTabGroup[] {
+    const groupIdByTabId = new Map<string, string>()
+    for (const group of existingGroups) {
+      for (const tabId of group.tabOrder) {
+        groupIdByTabId.set(tabId, group.id)
+      }
+    }
+    // Why: route a freshly-created tab to the group its "+" was clicked in,
+    // when that group still exists; otherwise fall through to the active group.
+    const hasTargetGroup =
+      newTabAssignment !== undefined &&
+      existingGroups.some((group) => group.id === newTabAssignment.groupId)
+    if (hasTargetGroup) {
+      groupIdByTabId.set(newTabAssignment!.tabId, newTabAssignment!.groupId)
+    }
+    const activeGroupId =
+      (activeTopLevelId ? groupIdByTabId.get(activeTopLevelId) : undefined) ?? existingGroups[0]!.id
+    const orderByGroup = new Map<string, string[]>(existingGroups.map((group) => [group.id, []]))
+    for (const tabId of tabOrder) {
+      const groupId = groupIdByTabId.get(tabId) ?? activeGroupId
+      orderByGroup.get(groupId)?.push(tabId)
+    }
+    return existingGroups
+      .map((group) => {
+        const nextOrder = orderByGroup.get(group.id) ?? []
+        return {
+          ...group,
+          tabOrder: nextOrder,
+          activeTabId:
+            activeTopLevelId && nextOrder.includes(activeTopLevelId)
+              ? activeTopLevelId
+              : group.activeTabId && nextOrder.includes(group.activeTabId)
+                ? group.activeTabId
+                : (nextOrder[0] ?? null)
+        }
+      })
+      .filter((group) => group.tabOrder.length > 0)
+  }
+
   private buildMaterializedHeadlessParentLayout(
     leafId: string,
     ptyId: string,
-    existingLayout: TerminalLayoutSnapshot | undefined
+    existingLayout: TerminalLayoutSnapshot | undefined,
+    split?: { splitFromLeafId: string; direction: 'horizontal' | 'vertical' }
   ): TerminalLayoutSnapshot {
     if (!existingLayout) {
       return {
@@ -3042,6 +3453,18 @@ export class OrcaRuntimeService {
         expandedLeafId: null,
         ptyIdsByLeafId: { [leafId]: ptyId }
       }
+    }
+    // Why: a split must insert the new leaf into the live layout tree with the
+    // requested direction, or the published snapshot keeps the old single-leaf
+    // root and the split renders with a fallback direction ("Split Right" lands
+    // as a top/bottom split). Reuse the persisted-split builder for parity.
+    if (split) {
+      return buildHeadlessTerminalSplitLayout(this.cloneTerminalLayoutSnapshot(existingLayout), {
+        leafId,
+        ptyId,
+        splitFromLeafId: split.splitFromLeafId,
+        direction: split.direction
+      })
     }
     return {
       ...this.cloneTerminalLayoutSnapshot(existingLayout),
@@ -3254,9 +3677,6 @@ export class OrcaRuntimeService {
       ...candidate,
       isActive: candidate.id === activeTab.id
     }))
-    const terminalTabs = tabs.filter(
-      (candidate): candidate is RuntimeMobileSessionTerminalTab => candidate.type === 'terminal'
-    )
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
       publicationEpoch: `headless:${Date.now().toString(36)}`,
@@ -3265,7 +3685,7 @@ export class OrcaRuntimeService {
       activeTabType: 'terminal',
       tabGroups: this.buildHeadlessMobileSessionTabGroups(
         worktreeId,
-        terminalTabs,
+        tabs,
         activeTab,
         snapshot.tabGroups
       ),
@@ -3274,6 +3694,36 @@ export class OrcaRuntimeService {
     this.persistHeadlessTerminalActiveLeaf(worktreeId, activeTab)
     this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
+  }
+
+  // Why: a headless split only updated the LIVE session snapshot, never the
+  // persisted workspace session layout. So a later snapshot rebuild (e.g. on the
+  // next terminal create) re-derived from the stale single-leaf persisted layout
+  // and collapsed the split. Persist the new split leaf into the workspace
+  // session's terminalLayoutsByTabId so the split survives rebuilds.
+  private persistHeadlessTerminalSplit(args: {
+    tabId: string
+    leafId: string
+    ptyId: string
+    splitFromLeafId: string
+    direction: 'horizontal' | 'vertical'
+  }): void {
+    const session = this.store?.getWorkspaceSession?.()
+    if (!session || !this.store?.setWorkspaceSession) {
+      return
+    }
+    const existing = session.terminalLayoutsByTabId?.[args.tabId]
+    const nextLayout = buildHeadlessTerminalSplitLayout(
+      existing ? this.cloneTerminalLayoutSnapshot(existing) : undefined,
+      args
+    )
+    this.store.setWorkspaceSession({
+      ...session,
+      terminalLayoutsByTabId: {
+        ...session.terminalLayoutsByTabId,
+        [args.tabId]: nextLayout
+      }
+    })
   }
 
   private persistHeadlessTerminalActiveLeaf(
@@ -3341,10 +3791,102 @@ export class OrcaRuntimeService {
         // just whichever leaf happened to be first in the session snapshot.
         this.notifier?.closeTerminal(tab.parentTabId)
       }
+    } else if (tab.type === 'browser' && this.offscreenBrowserBackend) {
+      // Why: headless browser tabs are offscreen WebContents with no renderer to
+      // route closeSessionTab to. Close the page directly and drop it from the
+      // snapshot so paired clients stop showing it.
+      await this.closeHeadlessMobileBrowserTab(worktreeId, snapshot!, tab)
     } else {
       this.notifier?.closeSessionTab?.(tab.id, worktreeId)
     }
     return { closed: true }
+  }
+
+  private async closeHeadlessMobileBrowserTab(
+    worktreeId: string,
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    tab: RuntimeMobileSessionBrowserTab
+  ): Promise<void> {
+    if (tab.browserPageId) {
+      await this.offscreenBrowserBackend?.closeTab(tab.browserPageId).catch(() => {})
+    }
+    const nextTabs = snapshot.tabs.filter((candidate) => candidate.id !== tab.id)
+    const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
+    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
+      ...snapshot,
+      publicationEpoch: `headless:${Date.now().toString(36)}`,
+      snapshotVersion: snapshot.snapshotVersion + 1,
+      activeTabId: active?.id ?? null,
+      activeTabType: active?.type ?? null,
+      tabGroups: (snapshot.tabGroups ?? []).map((group) => ({
+        ...group,
+        tabOrder: group.tabOrder.filter((id) => id !== tab.id),
+        activeTabId: group.activeTabId === tab.id ? null : group.activeTabId
+      })),
+      tabs: nextTabs
+    }
+    this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
+    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+  }
+
+  private markHeadlessBrowserSessionTabActive(
+    worktreeId: string | undefined,
+    browserPageId: string,
+    targetGroupId?: string
+  ): void {
+    if (!this.offscreenBrowserBackend || !worktreeId) {
+      return
+    }
+    // Hydrate first so the freshly created browser tab is present in the snapshot.
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const tab = snapshot?.tabs.find(
+      (candidate): candidate is RuntimeMobileSessionBrowserTab =>
+        candidate.type === 'browser' && candidate.browserPageId === browserPageId
+    )
+    if (!snapshot || !tab) {
+      return
+    }
+    const groups = snapshot.tabGroups ?? []
+    const hasTargetGroup =
+      targetGroupId !== undefined && groups.some((group) => group.id === targetGroupId)
+    // Why: move the new browser into the group whose "+" was clicked, removing it
+    // from wherever the rebuild placed it. Only the TARGET group's activeTabId
+    // (and the global active) change — every other group's active tab is left
+    // intact, so creating in the right group never resets the left group's tab.
+    const nextGroups = hasTargetGroup
+      ? groups.map((group) => {
+          const withoutTab = group.tabOrder.filter((id) => id !== tab.id)
+          if (group.id === targetGroupId) {
+            return { ...group, tabOrder: [...withoutTab, tab.id], activeTabId: tab.id }
+          }
+          return withoutTab.length === group.tabOrder.length
+            ? group
+            : { ...group, tabOrder: withoutTab }
+        })
+      : groups.map((group) =>
+          group.tabOrder.includes(tab.id) ? { ...group, activeTabId: tab.id } : group
+        )
+    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
+      ...snapshot,
+      publicationEpoch: `headless:${Date.now().toString(36)}`,
+      snapshotVersion: snapshot.snapshotVersion + 1,
+      ...(hasTargetGroup ? { activeGroupId: targetGroupId } : {}),
+      activeTabId: tab.id,
+      activeTabType: 'browser',
+      tabs: snapshot.tabs.map((candidate) => ({
+        ...candidate,
+        isActive: candidate.id === tab.id
+      })),
+      tabGroups: nextGroups
+    }
+    this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
+    // Why: browser group membership is otherwise live-only; persist it so a
+    // later rebuild keeps the browser in its group instead of coalescing left.
+    if (hasTargetGroup && nextSnapshot.tabGroupLayout) {
+      this.persistHeadlessTabGroups(worktreeId, nextGroups, nextSnapshot.tabGroupLayout)
+    }
+    this.emitMobileSessionTabsSnapshot(nextSnapshot)
   }
 
   private closeHeadlessMobileTerminalTab(
@@ -3380,10 +3922,8 @@ export class OrcaRuntimeService {
       activeTabType: active?.type ?? null,
       tabGroups: this.buildHeadlessMobileSessionTabGroups(
         worktreeId,
-        nextTabs.filter(
-          (candidate): candidate is RuntimeMobileSessionTerminalTab => candidate.type === 'terminal'
-        ),
-        active?.type === 'terminal' ? active : null,
+        nextTabs,
+        active,
         snapshot.tabGroups
       ),
       tabs: nextTabs
@@ -3438,11 +3978,238 @@ export class OrcaRuntimeService {
     return { moved: true }
   }
 
+  // Why: pane geometry inside a tab (split ratios, expanded pane, pane titles)
+  // is host-authoritative for remote-server tabs but had no push path, so a
+  // client divider-drag / expand / pane-rename reverted on the next snapshot.
+  // Persist the structural fields onto the tab's layout, keeping host-owned
+  // pty bindings and active leaf.
+  async updateMobileSessionPaneLayout(
+    worktreeSelector: string,
+    args: {
+      tabId: string
+      root: TerminalPaneLayoutNode | null
+      expandedLeafId: string | null
+      titlesByLeafId?: Record<string, string>
+    }
+  ): Promise<{ updated: true }> {
+    const explicitWorktreeId = getExplicitWorktreeIdSelector(worktreeSelector)
+    const worktreeId =
+      explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+    // Why: when a renderer is authoritative (desktop host reached via shared
+    // control), it owns pane geometry and republishes it — a headless write here
+    // would be overwritten and could fight the renderer. Persist only headlessly.
+    if (this.getAvailableAuthoritativeWindow()) {
+      return { updated: true }
+    }
+    // Why: resolve to the host tab id (older/raw-id clients) so the persisted
+    // layout entry matches, matching setMobileSessionTabProps.
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const hostTabId = snapshot
+      ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
+      : args.tabId
+    const resolvedArgs = { ...args, tabId: hostTabId }
+    this.persistHeadlessTerminalPaneLayout(resolvedArgs)
+    this.applyHeadlessTerminalPaneLayoutToSnapshot(worktreeId, resolvedArgs)
+    return { updated: true }
+  }
+
+  // Why: tab color/pin are host-authoritative for remote-server tabs but had no
+  // push path, so pinning or coloring a tab reverted on the next snapshot and
+  // was never persisted. Persist to the workspace session + live snapshot.
+  async setMobileSessionTabProps(
+    worktreeSelector: string,
+    args: { tabId: string; color?: string | null; isPinned?: boolean }
+  ): Promise<{ updated: true }> {
+    const explicitWorktreeId = getExplicitWorktreeIdSelector(worktreeSelector)
+    const worktreeId =
+      explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+    // Why: a renderer-authoritative host owns + republishes tab props, so a
+    // headless write would be overwritten. Persist only when headless.
+    if (this.getAvailableAuthoritativeWindow()) {
+      return { updated: true }
+    }
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const hostTabId = snapshot
+      ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
+      : args.tabId
+    this.persistHeadlessSessionTabProps(worktreeId, hostTabId, args)
+    this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, hostTabId, args)
+    return { updated: true }
+  }
+
+  private persistHeadlessSessionTabProps(
+    worktreeId: string,
+    tabId: string,
+    props: { color?: string | null; isPinned?: boolean }
+  ): void {
+    const session = this.store?.getWorkspaceSession?.()
+    if (!session || !this.store?.setWorkspaceSession) {
+      return
+    }
+    const tabs = session.tabsByWorktree[worktreeId]
+    const nextSession: WorkspaceSessionState = { ...session }
+    let changed = false
+    if (tabs?.some((tab) => tab.id === tabId)) {
+      changed = true
+      nextSession.tabsByWorktree = {
+        ...session.tabsByWorktree,
+        [worktreeId]: tabs.map((tab) =>
+          tab.id === tabId
+            ? {
+                ...tab,
+                ...(props.color !== undefined ? { color: props.color } : {}),
+                ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {})
+              }
+            : tab
+        )
+      }
+    }
+
+    const unifiedTabs = session.unifiedTabs?.[worktreeId]
+    if (unifiedTabs?.some((tab) => tab.id === tabId || tab.entityId === tabId)) {
+      changed = true
+      nextSession.unifiedTabs = {
+        ...session.unifiedTabs,
+        [worktreeId]: unifiedTabs.map((tab) =>
+          tab.id === tabId || tab.entityId === tabId
+            ? {
+                ...tab,
+                ...(props.color !== undefined ? { color: props.color } : {}),
+                ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {})
+              }
+            : tab
+        )
+      }
+    }
+
+    if (!changed) {
+      return
+    }
+    this.store.setWorkspaceSession(nextSession)
+  }
+
+  private applyHeadlessSessionTabPropsToSnapshot(
+    worktreeId: string,
+    tabId: string,
+    props: { color?: string | null; isPinned?: boolean }
+  ): void {
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    if (!snapshot) {
+      return
+    }
+    let changed = false
+    const tabs = snapshot.tabs.map((tab) => {
+      if (this.getMobileSessionTopLevelTabId(tab) !== tabId) {
+        return tab
+      }
+      changed = true
+      return {
+        ...tab,
+        ...(props.color !== undefined ? { color: props.color } : {}),
+        ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {})
+      }
+    })
+    if (!changed) {
+      return
+    }
+    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
+      ...snapshot,
+      publicationEpoch: `headless:${Date.now().toString(36)}`,
+      snapshotVersion: snapshot.snapshotVersion + 1,
+      tabs
+    }
+    this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
+    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+  }
+
+  private getMobileSessionTopLevelTabId(tab: RuntimeMobileSessionSnapshotTab): string {
+    return tab.type === 'terminal' ? tab.parentTabId : tab.id
+  }
+
+  // Merge the client's pane structure into the persisted tab layout. PTY
+  // bindings and active leaf stay host-owned; only ratios/expand/titles change.
+  // terminalLayoutsByTabId is keyed by tab id (worktree-independent).
+  private persistHeadlessTerminalPaneLayout(args: {
+    tabId: string
+    root: TerminalPaneLayoutNode | null
+    expandedLeafId: string | null
+    titlesByLeafId?: Record<string, string>
+  }): void {
+    const session = this.store?.getWorkspaceSession?.()
+    if (!session || !this.store?.setWorkspaceSession) {
+      return
+    }
+    const existing = session.terminalLayoutsByTabId?.[args.tabId]
+    if (!existing) {
+      return
+    }
+    this.store.setWorkspaceSession({
+      ...session,
+      terminalLayoutsByTabId: {
+        ...session.terminalLayoutsByTabId,
+        [args.tabId]: {
+          ...this.cloneTerminalLayoutSnapshot(existing),
+          root: args.root ?? existing.root,
+          expandedLeafId: args.expandedLeafId,
+          ...(args.titlesByLeafId ? { titlesByLeafId: args.titlesByLeafId } : {})
+        }
+      }
+    })
+  }
+
+  private applyHeadlessTerminalPaneLayoutToSnapshot(
+    worktreeId: string,
+    args: {
+      tabId: string
+      root: TerminalPaneLayoutNode | null
+      expandedLeafId: string | null
+      titlesByLeafId?: Record<string, string>
+    }
+  ): void {
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    if (!snapshot) {
+      return
+    }
+    let changed = false
+    const tabs = snapshot.tabs.map((tab) => {
+      if (tab.type !== 'terminal' || tab.parentTabId !== args.tabId || !tab.parentLayout) {
+        return tab
+      }
+      changed = true
+      return {
+        ...tab,
+        parentLayout: {
+          ...tab.parentLayout,
+          root: args.root ?? tab.parentLayout.root,
+          expandedLeafId: args.expandedLeafId,
+          ...(args.titlesByLeafId ? { titlesByLeafId: args.titlesByLeafId } : {})
+        }
+      }
+    })
+    if (!changed) {
+      return
+    }
+    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
+      ...snapshot,
+      publicationEpoch: `headless:${Date.now().toString(36)}`,
+      snapshotVersion: snapshot.snapshotVersion + 1,
+      tabs
+    }
+    this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
+    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+  }
+
   private moveHeadlessMobileSessionTab(
     worktreeId: string,
     snapshot: RuntimeMobileSessionTabsSnapshot,
     move: RuntimeMobileSessionTabMove
   ): RuntimeMobileSessionTabMoveResult {
+    if (move.kind === 'split') {
+      return this.splitHeadlessMobileSessionTabGroup(worktreeId, snapshot, move)
+    }
+    if (move.kind === 'move-to-group') {
+      return this.moveHeadlessMobileSessionTabToGroup(worktreeId, snapshot, move)
+    }
     if (move.kind !== 'reorder') {
       throw new Error('renderer_unavailable')
     }
@@ -3465,30 +4232,162 @@ export class OrcaRuntimeService {
       return aIndex - bIndex
     })
     const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
+    const reorderedTargetActiveTabId =
+      active?.type === 'terminal' ? active.parentTabId : active ? active.id : (tabOrder[0] ?? null)
+    // Why: reorder only changes ONE group's order. Preserve every other group so
+    // a multi-group split isn't deleted by re-sorting tabs in one of its groups.
+    const existingGroups = snapshot.tabGroups ?? []
+    const nextGroups = existingGroups.some((group) => group.id === targetGroup.id)
+      ? existingGroups.map((group) =>
+          group.id === targetGroup.id
+            ? { ...group, tabOrder, activeTabId: reorderedTargetActiveTabId }
+            : group
+        )
+      : [{ ...targetGroup, tabOrder, activeTabId: reorderedTargetActiveTabId }]
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
       publicationEpoch: `headless:${Date.now().toString(36)}`,
       snapshotVersion: snapshot.snapshotVersion + 1,
       activeTabId: active?.id ?? null,
       activeTabType: active?.type ?? null,
-      tabGroups: [
-        {
-          ...targetGroup,
-          tabOrder,
-          activeTabId:
-            active?.type === 'terminal'
-              ? active.parentTabId
-              : active
-                ? active.id
-                : (tabOrder[0] ?? null)
-        }
-      ],
+      tabGroups: nextGroups,
       tabs: nextTabs
     }
     this.persistHeadlessTerminalTabOrder(worktreeId, tabOrder)
+    if (nextGroups.length > 1 && snapshot.tabGroupLayout) {
+      this.persistHeadlessTabGroups(worktreeId, nextGroups, snapshot.tabGroupLayout)
+    }
     this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
     return { moved: true }
+  }
+
+  // Why: a drag-to-split-group used to be a client-only change the headless host
+  // never modeled, so the next snapshot coalesced every tab back into one group.
+  // Model + persist the multi-group layout so the split survives rebuilds.
+  private splitHeadlessMobileSessionTabGroup(
+    worktreeId: string,
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    move: Extract<RuntimeMobileSessionTabMove, { kind: 'split' }>
+  ): RuntimeMobileSessionTabMoveResult {
+    const hostTabId = this.resolveMobileSessionHostTabId(snapshot, move.tabId)
+    if (!hostTabId) {
+      throw new Error('tab_not_found')
+    }
+    const split = buildHeadlessTabGroupSplit({
+      groups: snapshot.tabGroups ?? [],
+      layout: snapshot.tabGroupLayout,
+      tabId: hostTabId,
+      targetGroupId: move.targetGroupId,
+      splitDirection: move.splitDirection,
+      newGroupId: randomUUID()
+    })
+    if (!split) {
+      // Renderer treats an unsplittable drop (e.g. last tab onto its own group)
+      // as a no-op; mirror that instead of churning the snapshot.
+      return { moved: true }
+    }
+    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
+      ...snapshot,
+      publicationEpoch: `headless:${Date.now().toString(36)}`,
+      snapshotVersion: snapshot.snapshotVersion + 1,
+      activeGroupId: split.newGroupId,
+      tabGroups: split.groups,
+      tabGroupLayout: split.layout
+    }
+    this.persistHeadlessTabGroups(worktreeId, split.groups, split.layout)
+    this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
+    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    return { moved: true }
+  }
+
+  // Move a tab into an existing group on a headless serve (non-split drop).
+  private moveHeadlessMobileSessionTabToGroup(
+    worktreeId: string,
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    move: Extract<RuntimeMobileSessionTabMove, { kind: 'move-to-group' }>
+  ): RuntimeMobileSessionTabMoveResult {
+    const hostTabId = this.resolveMobileSessionHostTabId(snapshot, move.tabId)
+    if (!hostTabId) {
+      throw new Error('tab_not_found')
+    }
+    const moved = buildHeadlessTabGroupMove({
+      groups: snapshot.tabGroups ?? [],
+      layout: snapshot.tabGroupLayout,
+      tabId: hostTabId,
+      targetGroupId: move.targetGroupId,
+      index: move.index
+    })
+    if (!moved) {
+      // Same-group / missing-target drop is a renderer no-op; mirror that.
+      return { moved: true }
+    }
+    const layout = moved.layout ?? { type: 'leaf' as const, groupId: move.targetGroupId }
+    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
+      ...snapshot,
+      publicationEpoch: `headless:${Date.now().toString(36)}`,
+      snapshotVersion: snapshot.snapshotVersion + 1,
+      activeGroupId: move.targetGroupId,
+      tabGroups: moved.groups,
+      tabGroupLayout: layout
+    }
+    this.persistHeadlessTabGroups(worktreeId, moved.groups, layout)
+    this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
+    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    return { moved: true }
+  }
+
+  // Persist the headless tab-GROUP layout so snapshot rebuilds keep the split.
+  private persistHeadlessTabGroups(
+    worktreeId: string,
+    groups: readonly RuntimeMobileSessionTabGroup[],
+    layout: TabGroupLayoutNode
+  ): void {
+    const session = this.store?.getWorkspaceSession?.()
+    if (!session || !this.store?.setWorkspaceSession) {
+      return
+    }
+    this.store.setWorkspaceSession({
+      ...session,
+      tabGroups: {
+        ...session.tabGroups,
+        [worktreeId]: groups.map((group) => ({
+          id: group.id,
+          worktreeId,
+          activeTabId: group.activeTabId,
+          tabOrder: [...group.tabOrder],
+          ...(group.recentTabIds ? { recentTabIds: [...group.recentTabIds] } : {})
+        }))
+      },
+      tabGroupLayouts: {
+        ...session.tabGroupLayouts,
+        [worktreeId]: layout
+      }
+    })
+  }
+
+  // Persist a manual terminal rename so a headless rebuild keeps the title
+  // instead of reverting to the generated/default one.
+  private persistHeadlessTerminalTitle(
+    worktreeId: string,
+    tabId: string,
+    title: string | null
+  ): void {
+    const session = this.store?.getWorkspaceSession?.()
+    if (!session || !this.store?.setWorkspaceSession) {
+      return
+    }
+    const tabs = session.tabsByWorktree[worktreeId]
+    if (!tabs?.some((tab) => tab.id === tabId)) {
+      return
+    }
+    this.store.setWorkspaceSession({
+      ...session,
+      tabsByWorktree: {
+        ...session.tabsByWorktree,
+        [worktreeId]: tabs.map((tab) => (tab.id === tabId ? { ...tab, customTitle: title } : tab))
+      }
+    })
   }
 
   private normalizeMobileSessionTabOrder(
@@ -3848,6 +4747,7 @@ export class OrcaRuntimeService {
           lines: pty.tailBuffer,
           partialLine: pty.tailPartialLine,
           pendingAnsi: pty.tailPendingAnsi,
+          redrawCursor: pty.tailRedrawCursor,
           truncated: pty.tailTruncated,
           linesTotal: pty.tailLinesTotal
         }
@@ -3859,14 +4759,30 @@ export class OrcaRuntimeService {
       pty.lastOutputAt = at
       const normalized = normalizeTerminalChunk(data, pty.tailPendingAnsi)
       pty.tailPendingAnsi = normalized.pendingAnsi
+      const previousWaitText = buildTerminalWaitText(
+        pty.tailBuffer,
+        pty.tailPartialLine,
+        pty.preview
+      )
       const nextTail = appendNormalizedToTailBuffer(
         pty.tailBuffer,
         pty.tailPartialLine,
-        normalized.text
+        normalized.text,
+        pty.tailRedrawCursor
       )
+      if (
+        nextTailHasNewerBlockedReason(
+          previousWaitText,
+          buildTerminalWaitText(nextTail.lines, nextTail.partialLine, pty.preview),
+          normalized.text
+        )
+      ) {
+        pty.waitBlockedAt = at
+      }
       ptyTailAfter = nextTail
       pty.tailBuffer = nextTail.lines
       pty.tailPartialLine = nextTail.partialLine
+      pty.tailRedrawCursor = nextTail.redrawCursor
       pty.tailTruncated = pty.tailTruncated || nextTail.truncated
       pty.tailLinesTotal += nextTail.newCompleteLines
       pty.preview = buildPreview(pty.tailBuffer, pty.tailPartialLine)
@@ -3905,6 +4821,7 @@ export class OrcaRuntimeService {
           leaf.tailBuffer,
           leaf.tailPartialLine,
           leaf.tailPendingAnsi,
+          leaf.tailRedrawCursor,
           leaf.tailTruncated,
           leaf.tailLinesTotal,
           ptyTailBefore
@@ -3915,19 +4832,37 @@ export class OrcaRuntimeService {
         leaf.tailBuffer = pty.tailBuffer
         leaf.tailPartialLine = pty.tailPartialLine
         leaf.tailPendingAnsi = pty.tailPendingAnsi
+        leaf.tailRedrawCursor = pty.tailRedrawCursor
         leaf.tailTruncated = pty.tailTruncated
         leaf.tailLinesTotal = pty.tailLinesTotal
         leaf.preview = pty.preview
+        leaf.waitBlockedAt = pty.waitBlockedAt
       } else {
         const normalized = normalizeTerminalChunk(data, leaf.tailPendingAnsi)
         leaf.tailPendingAnsi = normalized.pendingAnsi
+        const previousWaitText = buildTerminalWaitText(
+          leaf.tailBuffer,
+          leaf.tailPartialLine,
+          leaf.preview
+        )
         const nextTail = appendNormalizedToTailBuffer(
           leaf.tailBuffer,
           leaf.tailPartialLine,
-          normalized.text
+          normalized.text,
+          leaf.tailRedrawCursor
         )
+        if (
+          nextTailHasNewerBlockedReason(
+            previousWaitText,
+            buildTerminalWaitText(nextTail.lines, nextTail.partialLine, leaf.preview),
+            normalized.text
+          )
+        ) {
+          leaf.waitBlockedAt = at
+        }
         leaf.tailBuffer = nextTail.lines
         leaf.tailPartialLine = nextTail.partialLine
+        leaf.tailRedrawCursor = nextTail.redrawCursor
         leaf.tailTruncated = leaf.tailTruncated || nextTail.truncated
         leaf.tailLinesTotal += nextTail.newCompleteLines
         leaf.preview = buildPreview(leaf.tailBuffer, leaf.tailPartialLine)
@@ -4710,6 +5645,28 @@ export class OrcaRuntimeService {
     return { started: true }
   }
 
+  async deleteMobileSpeechModel(modelId: string): Promise<RuntimeSpeechSetupState> {
+    if (!this.store?.getSettings || !this.store.updateSettings) {
+      throw new Error('voice_dictation_unavailable')
+    }
+    const store = this.store
+    try {
+      // The runtime store is adapted to the minimal speech settings contract used by deletion.
+      await deleteLocalSpeechModel({
+        store: {
+          getSettings: () => store.getSettings(),
+          updateSettings: (updates, options) => store.updateSettings?.(updates, options)
+        },
+        modelManager: getSpeechModelManager(store),
+        sttService: getSpeechSttService(store),
+        modelId
+      })
+    } catch (error) {
+      throw new Error(getSpeechModelDeletionErrorCode(error) ?? 'voice_model_delete_failed')
+    }
+    return this.listMobileSpeechModels()
+  }
+
   // Enables/disables dictation and/or selects the model, merging into the
   // existing voice settings so other voice fields are preserved.
   async configureMobileDictation(params: {
@@ -5323,6 +6280,14 @@ export class OrcaRuntimeService {
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.oscTitleScanTailByPtyId.delete(ptyId)
     this.clearAgentRowSnapshotsForPty(ptyId)
+    // Why: a Claude agent-team leader whose PTY exits naturally (agent finished,
+    // process died, renderer reload) must release its team + nested panes map.
+    // Previously only explicit closeTerminal evicted it, so natural exits leaked
+    // one team per never-reused teamId for the runtime's lifetime.
+    const exitedTeamLeaderHandle = this.handleByPtyId.get(ptyId)
+    if (exitedTeamLeaderHandle) {
+      this.claudeAgentTeams.removeTeamForLeaderHandle(exitedTeamLeaderHandle)
+    }
     // Layout state machine: clear `layouts` and `layoutQueues`. Any
     // already-queued applyLayout work for this ptyId will run, but every
     // applyLayout re-checks `layouts.has(ptyId)` (or fresh-subscribe) and
@@ -6626,11 +7591,207 @@ export class OrcaRuntimeService {
       terminals.push(this.buildPtyTerminalSummary(pty, worktreesById))
     }
 
+    const listedTerminals = terminals.slice(0, limit)
+    const visualLayouts = this.buildTerminalVisualLayouts(
+      listedTerminals,
+      worktreesById,
+      targetWorktreeId
+    )
+
     return {
-      terminals: terminals.slice(0, limit),
+      terminals: listedTerminals,
+      ...(visualLayouts.length > 0 ? { visualLayouts } : {}),
       totalCount: terminals.length,
       truncated: terminals.length > limit
     }
+  }
+
+  private buildTerminalVisualLayouts(
+    terminals: RuntimeTerminalSummary[],
+    worktreesById: Map<string, ResolvedWorktree>,
+    targetWorktreeId: string | null
+  ): RuntimeTerminalVisualLayout[] {
+    if (terminals.length === 0) {
+      return []
+    }
+    // Why: the mobile/session snapshot supplies topology, but terminal.list
+    // must print the same handles in both the flat list and visual tree.
+    const summariesByLeafKey = new Map(
+      terminals.map((terminal) => [this.getLeafKey(terminal.tabId, terminal.leafId), terminal])
+    )
+    const summariesByWorktree = new Map<string, RuntimeTerminalSummary[]>()
+    for (const terminal of terminals) {
+      const existing = summariesByWorktree.get(terminal.worktreeId)
+      if (existing) {
+        existing.push(terminal)
+      } else {
+        summariesByWorktree.set(terminal.worktreeId, [terminal])
+      }
+    }
+    const snapshots = targetWorktreeId
+      ? [this.mobileSessionTabsByWorktree.get(targetWorktreeId)].filter(
+          (snapshot): snapshot is RuntimeMobileSessionTabsSnapshot => snapshot !== undefined
+        )
+      : [...this.mobileSessionTabsByWorktree.values()]
+    const layouts: RuntimeTerminalVisualLayout[] = []
+    for (const snapshot of snapshots) {
+      const worktreeTerminals = summariesByWorktree.get(snapshot.worktree)
+      if (!worktreeTerminals || worktreeTerminals.length === 0) {
+        continue
+      }
+      const groups = this.buildTerminalVisualGroups(snapshot, summariesByLeafKey)
+      if (groups.length === 0) {
+        continue
+      }
+      const groupsById = new Map(
+        groups
+          .filter((group): group is RuntimeTerminalVisualGroupNode & { groupId: string } =>
+            Boolean(group.groupId)
+          )
+          .map((group) => [group.groupId, group])
+      )
+      const root =
+        this.buildTerminalVisualGroupLayout(snapshot.tabGroupLayout, groupsById) ?? groups[0]
+      if (!root) {
+        continue
+      }
+      const worktree = worktreesById.get(snapshot.worktree)
+      layouts.push({
+        worktreeId: snapshot.worktree,
+        worktreePath: worktree?.path ?? worktreeTerminals[0]?.worktreePath ?? '',
+        root
+      })
+    }
+    return layouts
+  }
+
+  private buildTerminalVisualGroups(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    summariesByLeafKey: ReadonlyMap<string, RuntimeTerminalSummary>
+  ): RuntimeTerminalVisualGroupNode[] {
+    const terminalTabs = snapshot.tabs.filter(
+      (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
+    )
+    if (terminalTabs.length === 0) {
+      return []
+    }
+    const tabsByParentId = new Map<string, RuntimeMobileSessionTerminalTab[]>()
+    const parentOrder: string[] = []
+    for (const tab of terminalTabs) {
+      const existing = tabsByParentId.get(tab.parentTabId)
+      if (existing) {
+        existing.push(tab)
+      } else {
+        parentOrder.push(tab.parentTabId)
+        tabsByParentId.set(tab.parentTabId, [tab])
+      }
+    }
+    const groupSources =
+      snapshot.tabGroups && snapshot.tabGroups.length > 0
+        ? snapshot.tabGroups
+        : [{ id: null, activeTabId: snapshot.activeTabId, tabOrder: parentOrder }]
+    return groupSources
+      .map((group): RuntimeTerminalVisualGroupNode | null => {
+        const tabs = group.tabOrder
+          .map((tabId) => {
+            const surfaces =
+              tabsByParentId.get(tabId) ?? terminalTabs.filter((tab) => tab.id === tabId)
+            return this.buildTerminalVisualTab(tabId, surfaces, summariesByLeafKey)
+          })
+          .filter((tab): tab is RuntimeTerminalVisualTab => tab !== null)
+        if (tabs.length === 0) {
+          return null
+        }
+        return {
+          type: 'group',
+          groupId: group.id,
+          activeTabId: group.activeTabId,
+          tabs
+        }
+      })
+      .filter((group): group is RuntimeTerminalVisualGroupNode => group !== null)
+  }
+
+  private buildTerminalVisualTab(
+    tabId: string,
+    surfaces: RuntimeMobileSessionTerminalTab[],
+    summariesByLeafKey: ReadonlyMap<string, RuntimeTerminalSummary>
+  ): RuntimeTerminalVisualTab | null {
+    const firstSurface = surfaces[0]
+    if (!firstSurface) {
+      return null
+    }
+    const parentTabId = firstSurface.parentTabId
+    const activeLeafId =
+      firstSurface.parentLayout?.activeLeafId ??
+      surfaces.find((surface) => surface.isActive)?.leafId ??
+      firstSurface.leafId
+    const root = firstSurface.parentLayout?.root ?? {
+      type: 'leaf' as const,
+      leafId: firstSurface.leafId
+    }
+    const panes = this.buildTerminalVisualPane(root, parentTabId, activeLeafId, summariesByLeafKey)
+    if (!panes) {
+      return null
+    }
+    return {
+      tabId: parentTabId || tabId,
+      title: this.tabs.get(parentTabId)?.title ?? firstSurface.title ?? null,
+      activeLeafId,
+      panes
+    }
+  }
+
+  private buildTerminalVisualPane(
+    node: TerminalPaneLayoutNode,
+    tabId: string,
+    activeLeafId: string | null,
+    summariesByLeafKey: ReadonlyMap<string, RuntimeTerminalSummary>
+  ): RuntimeTerminalVisualPaneNode | null {
+    if (node.type === 'leaf') {
+      const summary = summariesByLeafKey.get(this.getLeafKey(tabId, node.leafId))
+      if (!summary) {
+        return null
+      }
+      return {
+        type: 'terminal',
+        handle: summary.handle,
+        tabId: summary.tabId,
+        leafId: summary.leafId,
+        title: summary.title,
+        connected: summary.connected,
+        active: summary.leafId === activeLeafId
+      }
+    }
+    const first = this.buildTerminalVisualPane(node.first, tabId, activeLeafId, summariesByLeafKey)
+    const second = this.buildTerminalVisualPane(
+      node.second,
+      tabId,
+      activeLeafId,
+      summariesByLeafKey
+    )
+    if (first && second) {
+      return { type: 'pane-split', direction: node.direction, first, second }
+    }
+    return first ?? second
+  }
+
+  private buildTerminalVisualGroupLayout(
+    node: TabGroupLayoutNode | null | undefined,
+    groupsById: ReadonlyMap<string, RuntimeTerminalVisualGroupNode>
+  ): RuntimeTerminalVisualLayoutNode | null {
+    if (!node) {
+      return null
+    }
+    if (node.type === 'leaf') {
+      return groupsById.get(node.groupId) ?? null
+    }
+    const first = this.buildTerminalVisualGroupLayout(node.first, groupsById)
+    const second = this.buildTerminalVisualGroupLayout(node.second, groupsById)
+    if (first && second) {
+      return { type: 'split', direction: node.direction, first, second }
+    }
+    return first ?? second
   }
 
   // Why: when --terminal is omitted, the CLI auto-resolves to the active
@@ -6694,6 +7855,23 @@ export class OrcaRuntimeService {
     throw new Error('no_active_terminal')
   }
 
+  resolveTerminalPane(paneKey: string): RuntimeTerminalResolvePane {
+    // Why: the renderer context menu only knows the stable pane key; main owns
+    // the runtime terminal handle that agents and CLI commands can address.
+    const handle = this.getTerminalHandleForPaneKey(paneKey)
+    if (!handle) {
+      throw new Error('terminal_not_found')
+    }
+    const record = this.handles.get(handle)
+    const parsed = parsePaneKey(paneKey)
+    return {
+      handle,
+      tabId: record?.tabId ?? parsed?.tabId ?? '',
+      leafId: record?.leafId ?? parsed?.leafId ?? '',
+      ptyId: record?.ptyId ?? null
+    }
+  }
+
   async showTerminal(handle: string): Promise<RuntimeTerminalShow> {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
@@ -6750,7 +7928,11 @@ export class OrcaRuntimeService {
       text?: string
       enter?: boolean
       interrupt?: boolean
-    }
+    },
+    options: {
+      beforeWrite?: (ptyId: string) => void | Promise<void>
+      suffixFailureError?: string
+    } = {}
   ): Promise<RuntimeTerminalSend> {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
@@ -6761,7 +7943,8 @@ export class OrcaRuntimeService {
       if (payload === null) {
         throw new Error('invalid_terminal_send')
       }
-      await this.writeTerminalAction(pty.pty.ptyId, action, payload)
+      await assertTerminalInputWithinLimitWithYield(action.text)
+      await this.writeTerminalAction(pty.pty.ptyId, action, payload, options)
       return {
         handle,
         accepted: true,
@@ -6777,8 +7960,9 @@ export class OrcaRuntimeService {
     if (payload === null) {
       throw new Error('invalid_terminal_send')
     }
+    await assertTerminalInputWithinLimitWithYield(action.text)
 
-    await this.writeTerminalAction(leaf.ptyId, action, payload)
+    await this.writeTerminalAction(leaf.ptyId, action, payload, options)
 
     return {
       handle,
@@ -6787,33 +7971,236 @@ export class OrcaRuntimeService {
     }
   }
 
+  async getTerminalAgentStatus(handle: string): Promise<RuntimeTerminalAgentStatus> {
+    const terminal = this.getTerminalAgentStatusSnapshot(handle)
+    const explicitStatus = this.getFreshExplicitAgentStatusForHandle(handle)
+    const blockedByWaitText = detectTerminalWaitBlockedReason(terminal.waitText)
+    const liveTitleClearsBlockedText =
+      terminal.titleStatusIsLive &&
+      terminal.titleStatus !== null &&
+      terminal.titleStatus !== 'permission'
+    if (terminal.titleStatus === 'permission' && terminal.titleStatusIsLive) {
+      return { handle, isRunningAgent: true, status: 'permission' }
+    }
+    if (
+      blockedByWaitText &&
+      !liveTitleClearsBlockedText &&
+      (!explicitStatus ||
+        explicitStatus.status === 'permission' ||
+        (terminal.waitBlockedAt !== null && terminal.waitBlockedAt >= explicitStatus.updatedAt))
+    ) {
+      return { handle, isRunningAgent: true, status: 'permission' }
+    }
+    if (explicitStatus) {
+      // Why: permission titles can linger after hooks report the agent resumed.
+      // Fresh hook state is tighter, but current shell/management evidence wins.
+      const isRunningAgent =
+        !terminalTitleBlocksExplicitAgentStatus(terminal.title) &&
+        !(await this.terminalHasShellForegroundProcess(handle))
+      return {
+        handle,
+        isRunningAgent,
+        status: isRunningAgent ? explicitStatus.status : null
+      }
+    }
+    if (terminal.titleStatus) {
+      return { handle, isRunningAgent: true, status: terminal.titleStatus }
+    }
+
+    return {
+      handle,
+      isRunningAgent: await this.isTerminalRunningAgent(handle),
+      status: null
+    }
+  }
+
+  private getTerminalAgentStatusSnapshot(handle: string): {
+    waitText: string
+    waitBlockedAt: number | null
+    title: string | null
+    titleStatus: AgentStatus | null
+    titleStatusIsLive: boolean
+  } {
+    const pty = this.getLivePtyForHandle(handle)
+    if (pty) {
+      if (!pty.pty.connected) {
+        throw new Error('terminal_gone')
+      }
+      const leaf = this.getPrimaryLeafForPty(pty.pty.ptyId)
+      const leafTitle = leaf
+        ? getLatestAgentCandidateTitleInfo(
+            { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
+            { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt }
+          )
+        : null
+      const ptyTitle =
+        leafTitle ??
+        getLatestAgentCandidateTitleInfo(
+          { title: pty.pty.title, updatedAt: pty.pty.titleUpdatedAt },
+          { title: pty.pty.lastOscTitle, updatedAt: pty.pty.lastOscTitleAt }
+        )
+      const waitText = buildTerminalWaitText(
+        pty.pty.tailBuffer,
+        pty.pty.tailPartialLine,
+        pty.pty.preview
+      )
+      return {
+        waitText,
+        waitBlockedAt: pty.pty.waitBlockedAt,
+        title: ptyTitle?.title ?? null,
+        titleStatus: ptyTitle
+          ? detectAgentStatusFromTitle(ptyTitle.title)
+          : pty.pty.lastAgentStatus,
+        titleStatusIsLive: ptyTitle !== null
+      }
+    }
+
+    const { leaf } = this.getLiveLeafForHandle(handle)
+    if (getTerminalState(leaf) !== 'running') {
+      throw new Error('terminal_exited')
+    }
+    if (!leaf.ptyId) {
+      throw new Error('terminal_gone')
+    }
+    const title = getLatestAgentCandidateTitleInfo(
+      { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
+      { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt },
+      { title: this.tabs.get(leaf.tabId)?.title, updatedAt: 0 }
+    )
+    return {
+      waitText: buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview),
+      waitBlockedAt: leaf.waitBlockedAt,
+      title: title?.title ?? null,
+      titleStatus: title ? detectAgentStatusFromTitle(title.title) : leaf.lastAgentStatus,
+      titleStatusIsLive: (title?.updatedAt ?? 0) > 0
+    }
+  }
+
+  private async terminalHasShellForegroundProcess(handle: string): Promise<boolean> {
+    if (!this.ptyController) {
+      return false
+    }
+    try {
+      const pty = this.getLivePtyForHandle(handle)
+      const ptyId = pty?.pty.ptyId ?? this.getLiveLeafForHandle(handle).leaf.ptyId
+      if (!ptyId) {
+        return false
+      }
+      const foregroundProcess = await this.ptyController.getForegroundProcess(ptyId)
+      return foregroundProcess !== null && isShellProcess(foregroundProcess)
+    } catch {
+      return false
+    }
+  }
+
+  private getFreshExplicitAgentStatusForHandle(handle: string): {
+    status: NonNullable<RuntimeTerminalAgentStatus['status']>
+    updatedAt: number
+  } | null {
+    const paneKey = this.getPaneKeyForTerminalHandle(handle)
+    const now = Date.now()
+    let bestStatus: NonNullable<RuntimeTerminalAgentStatus['status']> | null = null
+    let bestUpdatedAt = -1
+
+    const consider = (
+      state: AgentStatusEntry['state'] | undefined,
+      updatedAt: number | null | undefined
+    ): void => {
+      if (!state) {
+        return
+      }
+      if (typeof updatedAt !== 'number' || now - updatedAt > AGENT_STATUS_STALE_AFTER_MS) {
+        return
+      }
+      const status = mapExplicitAgentStateToRuntimeTerminalStatus(state)
+      // Why: older retained permission rows can remain visible after the agent
+      // resumes. Prefer the newest explicit state; only let permission win ties.
+      if (updatedAt > bestUpdatedAt || (updatedAt === bestUpdatedAt && status === 'permission')) {
+        bestStatus = status
+        bestUpdatedAt = updatedAt
+      }
+    }
+
+    if (paneKey) {
+      const retained = this.latestAgentStatusByPaneKey.get(paneKey)
+      consider(retained?.payload.state, retained?.updatedAt)
+    }
+
+    for (const entry of this.getAgentStatusSnapshotFn?.() ?? []) {
+      if (entry.terminalHandle !== handle && (!paneKey || entry.paneKey !== paneKey)) {
+        continue
+      }
+      consider(entry.state, entry.receivedAt)
+    }
+
+    return bestStatus ? { status: bestStatus, updatedAt: bestUpdatedAt } : null
+  }
+
   private async writeTerminalAction(
     ptyId: string,
     action: { text?: string; enter?: boolean; interrupt?: boolean },
-    payload: string
+    payload: string,
+    options: {
+      beforeWrite?: (ptyId: string) => void | Promise<void>
+      suffixFailureError?: string
+    } = {}
   ): Promise<void> {
-    // Why: TUI apps (Claude Code, etc.) treat a single large write as a paste
-    // event. Keep Enter/interrupt as a second write for both visible and
-    // background PTYs so CLI automation behaves the same either way.
+    // Why: direct terminal.send can carry paste-sized text from RPC/mobile
+    // clients; chunk text before PTY/ConPTY while preserving suffix separation.
     const hasText = typeof action.text === 'string' && action.text.length > 0
     const hasSuffix = action.enter || action.interrupt
-    if (hasText && hasSuffix) {
-      const textWrote = this.ptyController?.write(ptyId, action.text!) ?? false
-      if (!textWrote) {
-        throw new Error('terminal_not_writable')
-      }
+    if (hasText) {
+      await this.writeTerminalInputChunks(ptyId, action.text!, options)
+    }
+    if (hasSuffix) {
       const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      if (hasText) {
+        await new Promise((resolve) => setTimeout(resolve, 500))
+      }
+      try {
+        await options.beforeWrite?.(ptyId)
+      } catch (error) {
+        if (options.suffixFailureError) {
+          throw new Error(options.suffixFailureError)
+        }
+        throw error
+      }
       const suffixWrote = this.ptyController?.write(ptyId, suffix) ?? false
       if (!suffixWrote) {
-        throw new Error('terminal_not_writable')
+        throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
       return
     }
+    if (hasText) {
+      return
+    }
 
+    await options.beforeWrite?.(ptyId)
     const wrote = this.ptyController?.write(ptyId, payload) ?? false
     if (!wrote) {
       throw new Error('terminal_not_writable')
+    }
+  }
+
+  private async writeTerminalInputChunks(
+    ptyId: string,
+    text: string,
+    options: {
+      beforeWrite?: (ptyId: string) => void | Promise<void>
+    } = {}
+  ): Promise<void> {
+    const chunks = iterateTerminalInputChunks(text)
+    let chunk = chunks.next()
+    while (!chunk.done) {
+      await options.beforeWrite?.(ptyId)
+      const wrote = this.ptyController?.write(ptyId, chunk.value) ?? false
+      if (!wrote) {
+        throw new Error('terminal_not_writable')
+      }
+      chunk = chunks.next()
+      if (!chunk.done) {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      }
     }
   }
 
@@ -7299,12 +8686,16 @@ export class OrcaRuntimeService {
       if (!worktreeId || !summaries.has(worktreeId)) {
         continue
       }
+      const taskTitle = orchestrationByPaneKey?.[src.paneKey]?.taskTitle ?? null
+      const displayName = orchestrationByPaneKey?.[src.paneKey]?.displayName ?? null
       const row: RuntimeWorktreeAgentRow = {
         paneKey: src.paneKey,
         parentPaneKey: orchestrationByPaneKey?.[src.paneKey]?.parentPaneKey ?? null,
         state: src.state,
         agentType: src.agentType,
         prompt: src.prompt,
+        taskTitle,
+        displayName,
         lastAssistantMessage: src.lastAssistantMessage,
         toolName: src.toolName,
         toolInput: src.toolInput,
@@ -8574,17 +9965,24 @@ export class OrcaRuntimeService {
     repoSelector: string,
     branch: string,
     linkedPRNumber?: number | null,
-    fallbackPRNumber?: number | null
+    fallbackPRNumber?: number | null,
+    acceptMergedFallbackPR?: boolean
   ): Promise<Awaited<ReturnType<typeof getPRForBranch>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
-    const options = this.getHostedReviewExecutionOptions(repo)
+    const options: GitHubPRBranchLookupOptions = this.getHostedReviewExecutionOptions(repo) ?? {}
+    const lookupOptions = { ...options }
+    if (acceptMergedFallbackPR === true) {
+      lookupOptions.acceptMergedFallbackPR = true
+    }
+    const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] =
+      Object.keys(lookupOptions).length > 0 ? [lookupOptions] : []
     return getPRForBranch(
       repo.path,
       branch,
       linkedPRNumber ?? null,
       repo.connectionId ?? null,
       linkedPRNumber == null ? (fallbackPRNumber ?? null) : null,
-      options
+      ...lookupOptionArgs
     )
   }
 
@@ -9739,22 +11137,48 @@ export class OrcaRuntimeService {
 
   private async ensureRemoteOrcaDirIgnored(
     fsProvider: IFilesystemProvider,
-    repoPath: string
+    repoPath: string,
+    options: { required?: boolean } = {}
   ): Promise<void> {
     const gitignorePath = joinWorktreeRelativePath(repoPath, '.gitignore')
+    let result: Awaited<ReturnType<IFilesystemProvider['readFile']>>
     try {
-      const result = await fsProvider.readFile(gitignorePath)
-      if (result.isBinary || /^\.orca\/?$/m.test(result.content)) {
+      result = await fsProvider.readFile(gitignorePath)
+    } catch (error) {
+      if (!isENOENT(error)) {
+        if (options.required) {
+          throw error
+        }
+        console.warn('[runtime] Could not inspect remote .gitignore for .orca', error)
         return
       }
-      const separator = result.content.endsWith('\n') ? '' : '\n'
-      await fsProvider.writeFile(gitignorePath, `${result.content}${separator}.orca\n`)
-    } catch {
       try {
         await fsProvider.writeFile(gitignorePath, '.orca\n')
-      } catch (error) {
-        console.warn('[runtime] Could not update remote .gitignore to exclude .orca', error)
+      } catch (writeError) {
+        if (options.required) {
+          throw writeError
+        }
+        console.warn('[runtime] Could not update remote .gitignore to exclude .orca', writeError)
       }
+      return
+    }
+    if (result.isBinary) {
+      if (options.required) {
+        throw new Error('Remote .gitignore is binary; cannot verify .orca is ignored')
+      }
+      return
+    }
+    if (/^\.orca\/?$/m.test(result.content)) {
+      return
+    }
+    const separator = result.content.endsWith('\n') ? '' : '\n'
+    try {
+      await fsProvider.writeFile(gitignorePath, `${result.content}${separator}.orca\n`)
+    } catch (writeError) {
+      if (options.required) {
+        throw writeError
+      }
+      console.warn('[runtime] Could not update remote .gitignore to exclude .orca', writeError)
     }
   }
 
@@ -11907,6 +13331,7 @@ export class OrcaRuntimeService {
       this.store.removeWorkspaceLineage?.(worktreeWorkspaceKey(worktree.id))
     } else if (lineage?.parentWorktree) {
       const parent = await this.resolveWorktreeSelector(lineage.parentWorktree)
+
       this.validateLineageParent(worktree, parent)
       if (!worktree.instanceId || !parent.instanceId) {
         throw new RuntimeLineageError(
@@ -12339,6 +13764,19 @@ export class OrcaRuntimeService {
     advertisedUrlWatcher.forgetWorktree(worktreeId)
     serveSimStateWatcher.forgetWorktree(worktreeId)
     deleteWorktreeHistoryDir(worktreeId)
+    this.closeHeadlessBrowserPagesForWorktree(worktreeId)
+  }
+
+  // Why: headless offscreen browser pages are main-process BrowserWindows that
+  // outlive a worktree unless explicitly closed — removing a worktree without
+  // closing its open panes leaks the windows for the life of the serve process.
+  private closeHeadlessBrowserPagesForWorktree(worktreeId: string): void {
+    if (!this.offscreenBrowserBackend || !this.agentBrowserBridge?.tabList) {
+      return
+    }
+    for (const tab of this.agentBrowserBridge.tabList(worktreeId).tabs) {
+      void this.offscreenBrowserBackend.closeTab(tab.browserPageId).catch(() => {})
+    }
   }
 
   private rememberPreservedBranchCleanupTarget(
@@ -12506,8 +13944,8 @@ export class OrcaRuntimeService {
       const registeredWorktrees = repo.connectionId
         ? await provider!.listWorktrees(repo.path)
         : hasLocalWorktreeGitOptions
-          ? await listWorktrees(repo.path, localWorktreeGitOptions)
-          : await listWorktrees(repo.path)
+          ? await listWorktreesStrict(repo.path, localWorktreeGitOptions)
+          : await listWorktreesStrict(repo.path)
       const removedMeta = store.getWorktreeMeta(removalTarget.id)
       const removedPushTarget = removedMeta?.pushTarget ?? removalTarget.pushTarget
       const registeredWorktree = findRegisteredDeletableWorktree(
@@ -12572,7 +14010,8 @@ export class OrcaRuntimeService {
               repo.path,
               removalTarget.id,
               removedPushTarget,
-              store
+              store,
+              localWorktreeGitOptions
             )
           }
           this.clearOptimisticReconcileToken(removalTarget.id)
@@ -12604,7 +14043,8 @@ export class OrcaRuntimeService {
                 repo.path,
                 removalTarget.id,
                 removedPushTarget,
-                store
+                store,
+                localWorktreeGitOptions
               ))
           this.clearOptimisticReconcileToken(removalTarget.id)
           this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
@@ -12655,7 +14095,7 @@ export class OrcaRuntimeService {
           canonicalWorktreePath,
           repo,
           undefined,
-          this.getLocalGitExecutionOptionArgs(repo)[0]
+          hasLocalWorktreeGitOptions ? localWorktreeGitOptions : undefined
         )
         if (!result.success) {
           console.error(`[hooks] archive hook failed for ${canonicalWorktreePath}:`, result.output)
@@ -12716,15 +14156,15 @@ export class OrcaRuntimeService {
 
       let removalResult: RemoveWorktreeResult | undefined
       try {
-        const removeOptions = hasLocalWorktreeGitOptions
-          ? { ...(!deleteBranch ? { deleteBranch } : {}), ...localWorktreeGitOptions }
-          : !deleteBranch
-            ? { deleteBranch }
-            : undefined
+        const removeOptions = {
+          ...(!deleteBranch ? { deleteBranch } : {}),
+          // Why: removal already validated the Git row under the selected
+          // project runtime; keep branch cleanup on that same canonical row.
+          knownRemovedWorktree: registeredWorktree,
+          ...localWorktreeGitOptions
+        }
         removalResult = this.preserveBranchHeadFallback(
-          await (removeOptions
-            ? removeWorktree(repo.path, canonicalWorktreePath, force, removeOptions)
-            : removeWorktree(repo.path, canonicalWorktreePath, force)),
+          await removeWorktree(repo.path, canonicalWorktreePath, force, removeOptions),
           registeredWorktree.head
         )
       } catch (error) {
@@ -12753,10 +14193,10 @@ export class OrcaRuntimeService {
           // (`.git/worktrees/<name>`) is still intact. Without pruning, `git worktree
           // list` continues to show the stale entry and the branch it had checked out
           // remains locked — other worktrees cannot check it out.
-          await gitExecFileAsync(
-            ['worktree', 'prune'],
-            getLocalProjectGitExecOptions(this.requireStore(), repo)
-          ).catch(() => {})
+          await gitExecFileAsync(['worktree', 'prune'], {
+            cwd: repo.path,
+            ...localWorktreeGitOptions
+          }).catch(() => {})
           await cleanupUnusedWorktreePushTargetRemote(
             repo.path,
             removalTarget.id,
@@ -12814,7 +14254,15 @@ export class OrcaRuntimeService {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       pty.pty.title = title
+      // Why: a manual rename must outrank later agent OSC title updates (which
+      // win by timestamp), so stamp it as the freshest title.
+      pty.pty.titleUpdatedAt = Date.now()
       this.touchMobileSessionSnapshotsForPty(pty.pty.ptyId)
+      // Why: without a renderer the rename only lived on the live pty and was
+      // lost on restart. Persist customTitle so a headless rebuild keeps it.
+      if (!this.notifier?.renameTerminal && pty.pty.tabId) {
+        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, pty.pty.tabId, title)
+      }
       for (const leaf of this.leaves.values()) {
         if (leaf.ptyId === pty.pty.ptyId) {
           this.notifier?.renameTerminal(leaf.tabId, title)
@@ -12844,6 +14292,11 @@ export class OrcaRuntimeService {
       leafId?: string
       sessionId?: string
       persistHostSessionBinding?: boolean
+      // Why: the headless mobile-session create publishes its own authoritative
+      // snapshot (with the correct target group) right after spawn. Skip the
+      // intermediate pty-backed publish so the new tab doesn't briefly flash in
+      // the wrong (active) group before the corrected snapshot lands.
+      deferMobileSessionPublish?: boolean
     } = {}
   ): Promise<RuntimeTerminalCreate> {
     // Why: pre-diff createTerminal fell back to the renderer's active worktree
@@ -12941,7 +14394,7 @@ export class OrcaRuntimeService {
         pty.paneKey = paneKey
       }
       const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
-      if (pty) {
+      if (pty && opts.deferMobileSessionPublish !== true) {
         this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
           tabId,
           leafId,
@@ -13087,7 +14540,8 @@ export class OrcaRuntimeService {
         command,
         opts.startupCommandDelivery,
         undefined,
-        opts.agent
+        opts.agent,
+        opts.targetGroupId
       )
     }
     const requestId = randomUUID()
@@ -13178,7 +14632,8 @@ export class OrcaRuntimeService {
     command?: string,
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery'],
     identity?: { tabId: string; leafId: string; sessionId?: string },
-    launchAgent?: TuiAgent
+    launchAgent?: TuiAgent,
+    targetGroupId?: string
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
     // Why: SshPtyProvider treats sessionId as a relay reattach request. Only
@@ -13198,7 +14653,10 @@ export class OrcaRuntimeService {
         : stableSessionId
           ? { sessionId: stableSessionId }
           : {}),
-      persistHostSessionBinding: true
+      persistHostSessionBinding: true,
+      // Why: this method publishes the authoritative snapshot (with the target
+      // group) below; skip the intermediate publish to avoid a wrong-group flash.
+      deferMobileSessionPublish: true
     })
     const livePty = this.getLivePtyForHandle(terminal.handle)
     if (!livePty) {
@@ -13249,17 +14707,24 @@ export class OrcaRuntimeService {
       worktree: worktreeId,
       publicationEpoch: `headless:${Date.now().toString(36)}`,
       snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
-      activeGroupId: existing?.activeGroupId ?? this.getHeadlessMobileSessionGroupId(worktreeId),
+      // Why: activating the new tab also focuses its group, so when "+" targeted
+      // a specific split group, make that group active too.
+      activeGroupId:
+        activate && targetGroupId
+          ? targetGroupId
+          : (existing?.activeGroupId ?? this.getHeadlessMobileSessionGroupId(worktreeId)),
       activeTabId: activate ? tab.id : (existing?.activeTabId ?? null),
       activeTabType: activate ? 'terminal' : (existing?.activeTabType ?? null),
       tabGroups: this.buildHeadlessMobileSessionTabGroups(
         worktreeId,
-        tabs.filter(
-          (candidate): candidate is RuntimeMobileSessionTerminalTab => candidate.type === 'terminal'
-        ),
+        tabs,
         activate ? tab : null,
-        existing?.tabGroups
+        existing?.tabGroups,
+        targetGroupId ? { tabId: parentTabId, groupId: targetGroupId } : undefined
       ),
+      // Why: keep the group split geometry when a new tab is created, otherwise
+      // opening a terminal while split loses the groups' arrangement.
+      ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
       tabs
     }
     this.mobileSessionTabsByWorktree.set(worktreeId, next)
@@ -13616,7 +15081,17 @@ export class OrcaRuntimeService {
         tabId: parentTabId,
         leafId,
         title: null,
-        activate: opts.activate !== false
+        activate: opts.activate !== false,
+        split: { splitFromLeafId: parsedPaneKey.leafId, direction }
+      })
+      // Why: persist the split into the workspace session so a later snapshot
+      // rebuild keeps it instead of collapsing back to a single pane.
+      this.persistHeadlessTerminalSplit({
+        tabId: parentTabId,
+        leafId,
+        ptyId: createdPty.ptyId,
+        splitFromLeafId: parsedPaneKey.leafId,
+        direction
       })
     }
 
@@ -14031,7 +15506,19 @@ export class OrcaRuntimeService {
     }
 
     if (selector.startsWith('id:')) {
-      candidates = worktrees.filter((worktree) => worktree.id === selector.slice(3))
+      const worktreeId = selector.slice(3)
+      candidates = worktrees.filter((worktree) => worktree.id === worktreeId)
+      if (candidates.length === 0) {
+        const parsed = splitWorktreeIdForFilesystem(worktreeId)
+        const repo = parsed ? this.store?.getRepo(parsed.repoId) : null
+        const fallback =
+          repo?.connectionId && this.store?.getWorktreeMeta(worktreeId)
+            ? this.buildResolvedWorktreeFromId(worktreeId)
+            : null
+        if (fallback !== null) {
+          candidates = [fallback]
+        }
+      }
     } else if (selector.startsWith('path:')) {
       candidates = worktrees.filter((worktree) =>
         runtimePathsEqual(worktree.path, selector.slice(5))
@@ -14048,6 +15535,10 @@ export class OrcaRuntimeService {
       candidates = worktrees.filter((worktree) =>
         branchSelectorMatches(worktree.branch, branchSelector)
       )
+    } else if (selector.startsWith('name:')) {
+      // Keep display-name matching exact so selector behavior stays deterministic
+      // and duplicate names use the same ambiguity path as other selectors.
+      candidates = worktrees.filter((worktree) => worktree.displayName === selector.slice(5))
     } else if (selector.startsWith('issue:')) {
       candidates = worktrees.filter(
         (worktree) =>
@@ -14227,8 +15718,7 @@ export class OrcaRuntimeService {
       } catch {
         warnings.push({
           code: 'LINEAGE_PARENT_CONTEXT_MISSING',
-          message:
-            'Worktree created, but Orca could not validate the environment parent context.',
+          message: 'Worktree created, but Orca could not validate the environment parent context.',
           details: { envParentWorkspace: input.envParentWorkspace }
         })
       }
@@ -14762,7 +16252,13 @@ export class OrcaRuntimeService {
 
   private async listRepoWorktreesForResolution(repo: Repo): Promise<RuntimeWorktreeScanResult> {
     if (!repo.connectionId) {
-      return { ok: true, worktrees: await listRepoWorktrees(repo) }
+      return {
+        ok: true,
+        worktrees: await listRepoWorktrees(
+          repo,
+          getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
+        )
+      }
     }
     const provider = getSshGitProvider(repo.connectionId)
     if (!provider) {
@@ -14870,9 +16366,11 @@ export class OrcaRuntimeService {
         tailBuffer: [],
         tailPartialLine: '',
         tailPendingAnsi: '',
+        tailRedrawCursor: null,
         tailTruncated: false,
         tailLinesTotal: 0,
-        preview: state.preview ?? ''
+        preview: state.preview ?? '',
+        waitBlockedAt: null
       }
       if (state.title) {
         this.setPtyManagementTitleFromObservedTitle(pty, state.title, titleObservedAt ?? 0)
@@ -14989,8 +16487,10 @@ export class OrcaRuntimeService {
     pty.tailBuffer = []
     pty.tailPartialLine = ''
     pty.tailPendingAnsi = ''
+    pty.tailRedrawCursor = null
     pty.tailTruncated = false
     pty.tailLinesTotal = 0
+    pty.waitBlockedAt = null
   }
 
   private pruneDisconnectedPtyRecords(): void {
@@ -15016,6 +16516,9 @@ export class OrcaRuntimeService {
     this.clearAgentRowSnapshotsForPty(ptyId)
     const handle = this.handleByPtyId.get(ptyId)
     if (handle) {
+      // Why: pruning can remove a PTY without onPtyExit firing; release any agent
+      // team owned by this leader handle so it does not leak.
+      this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
       this.handleByPtyId.delete(ptyId)
       const record = this.handles.get(handle)
       if (record?.tabId.startsWith('pty:')) {
@@ -15228,6 +16731,15 @@ export class OrcaRuntimeService {
     snapshot: RuntimeMobileSessionTabsSnapshot,
     tab: RuntimeMobileSessionSnapshotTab
   ): boolean {
+    // Why: headless offscreen browser tabs live only on the server and are
+    // re-derived from the live bridge on each hydrate, so a renderer-graph merge
+    // must keep them rather than prune them as "not in the renderer graph".
+    if (tab.type === 'browser') {
+      return (
+        Boolean(this.offscreenBrowserBackend) &&
+        this.isHeadlessMobileSessionPublication(snapshot.publicationEpoch)
+      )
+    }
     if (tab.type !== 'terminal') {
       return false
     }
@@ -15508,6 +17020,8 @@ export class OrcaRuntimeService {
         ...(tab.launchAgent ? { launchAgent: tab.launchAgent } : {}),
         ...(agentStatus ?? this.buildPtyMobileAgentStatus(livePty ?? pty, tab, terminalHandle)),
         ...(tab.parentLayout ? { parentLayout: tab.parentLayout } : {}),
+        ...(tab.color != null ? { color: tab.color } : {}),
+        ...(tab.isPinned ? { isPinned: true } : {}),
         isActive: tab.isActive,
         ...(terminalHandle
           ? { status: 'ready' as const, terminal: terminalHandle }
@@ -15659,16 +17173,7 @@ export class OrcaRuntimeService {
   // status without throwing on stale handles, so this returns null on any error.
   getAgentStatusForHandle(handle: string): string | null {
     try {
-      const { leaf } = this.getLiveLeafForHandle(handle)
-      const title = getLatestAgentCandidateTitle(
-        { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
-        { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt },
-        { title: this.tabs.get(leaf.tabId)?.title, updatedAt: 0 }
-      )
-      if (title) {
-        return detectAgentStatusFromTitle(title)
-      }
-      return leaf.lastAgentStatus
+      return this.getTerminalAgentStatusSnapshot(handle).titleStatus
     } catch {
       return null
     }
@@ -15733,6 +17238,14 @@ export class OrcaRuntimeService {
       return undefined
     }
     const task = db?.getTask?.(dispatch.task_id)
+    const display =
+      typeof task?.spec === 'string'
+        ? buildOrchestrationTaskDisplayMetadata({
+            spec: task.spec,
+            taskTitle: task.task_title,
+            displayName: task.display_name
+          })
+        : { taskTitle: '', displayName: '' }
     const activeRun = dispatch.status === 'completed' ? undefined : db?.getActiveCoordinatorRun?.()
     const parentTerminalHandle =
       task?.created_by_terminal_handle ??
@@ -15746,6 +17259,8 @@ export class OrcaRuntimeService {
     return {
       taskId: dispatch.task_id,
       dispatchId: dispatch.id,
+      ...(display.taskTitle ? { taskTitle: display.taskTitle } : {}),
+      ...(display.displayName ? { displayName: display.displayName } : {}),
       ...(parentTerminalHandle ? { parentTerminalHandle } : {}),
       ...(parentPaneKey ? { parentPaneKey } : {}),
       ...(activeRun?.coordinator_handle ? { coordinatorHandle: activeRun.coordinator_handle } : {}),
@@ -18781,7 +20296,12 @@ export class OrcaRuntimeService {
     getAgentBrowserBridge: () => this.agentBrowserBridge,
     resolveWorktreeSelector: (selector) => this.resolveWorktreeSelector(selector),
     getAuthoritativeWindow: () => this.getAuthoritativeWindow(),
-    getAvailableAuthoritativeWindow: () => this.getAvailableAuthoritativeWindow()
+    getAvailableAuthoritativeWindow: () => this.getAvailableAuthoritativeWindow(),
+    getOffscreenBrowserBackend: () => this.offscreenBrowserBackend,
+    // Why: bind the method directly rather than re-listing params in a wrapper
+    // arrow — a hand-listed wrapper silently dropped targetGroupId before, so a
+    // new browser opened in the right split group landed in the left.
+    markHeadlessBrowserSessionTabActive: this.markHeadlessBrowserSessionTabActive.bind(this)
   })
 
   private readonly emulatorCommands = new RuntimeEmulatorCommands({
@@ -19390,10 +20910,12 @@ function buildTerminalWaitText(lines: string[], partialLine: string, preview: st
 export function appendNormalizedToTailBuffer(
   previousLines: string[],
   previousPartialLine: string,
-  normalizedChunk: string
+  normalizedChunk: string,
+  previousRedrawCursor: RetainedTailRedrawCursor | null = null
 ): {
   lines: string[]
   partialLine: string
+  redrawCursor: RetainedTailRedrawCursor | null
   truncated: boolean
   newCompleteLines: number
 } {
@@ -19401,6 +20923,7 @@ export function appendNormalizedToTailBuffer(
     return {
       lines: previousLines,
       partialLine: previousPartialLine,
+      redrawCursor: previousRedrawCursor,
       truncated: false,
       newCompleteLines: 0
     }
@@ -19410,20 +20933,38 @@ export function appendNormalizedToTailBuffer(
   // larger line transcript for pagination, but keep partial-line work bounded.
   const previousPartialWasCapped = previousPartialLine.length > MAX_TAIL_PARTIAL_CHARS
   const boundedPreviousPartialLine = previousPartialLine.slice(-MAX_TAIL_PARTIAL_CHARS)
-  // Why: status UIs redraw a single line with CR/backspace/ANSI erase
-  // controls. Terminal previews are text, not a full screen model, so retain
-  // the latest visible redraw segment instead of appending every spinner frame.
-  const pieces = `${boundedPreviousPartialLine}${normalizedChunk}`
-    .split('\n')
-    .map(applyTerminalLineControls)
-  const nextPartialLine = (pieces.pop() ?? '').replace(/[ \t]+$/g, '')
+  const combinedChunk = `${boundedPreviousPartialLine}${normalizedChunk}`
+  if (previousRedrawCursor || containsTerminalVerticalLineControl(combinedChunk)) {
+    return appendNormalizedToMultilineTailBuffer(
+      previousLines,
+      boundedPreviousPartialLine,
+      normalizedChunk,
+      previousPartialWasCapped,
+      previousRedrawCursor
+    )
+  }
+
+  // Why: status UIs redraw a single line with CR/backspace/ANSI erase controls.
+  // Terminal previews are text, not a full screen model, so retain the latest
+  // visible redraw segment instead of appending every spinner frame.
+  const segments = splitRetainedTerminalTailSegments(combinedChunk)
+  const pieces = processTerminalTailCompleteSegments(segments.completeSegments)
+  const partialResult = applyTerminalLineControls(segments.partialSegment)
+  const nextPartialLine = trimTerminalLineRight(partialResult.text)
   const retainedPartialLine = nextPartialLine.slice(-MAX_TAIL_PARTIAL_CHARS)
-  const newCompleteLines = pieces.length
+  const newCompleteLines = segments.completeLineCount
+  const omittedNewCompleteLines = newCompleteLines - pieces.length
   let nextLines =
     newCompleteLines > 0
-      ? [...previousLines, ...pieces.map((line) => line.replace(/[ \t]+$/g, ''))]
+      ? [
+          ...(omittedNewCompleteLines > 0 ? [] : previousLines),
+          ...pieces.map((line) => line.replace(/[ \t]+$/g, ''))
+        ]
       : previousLines
-  let truncated = previousPartialWasCapped || nextPartialLine.length > MAX_TAIL_PARTIAL_CHARS
+  let truncated =
+    previousPartialWasCapped ||
+    omittedNewCompleteLines > 0 ||
+    nextPartialLine.length > MAX_TAIL_PARTIAL_CHARS
 
   if (nextLines.length > MAX_TAIL_LINES) {
     nextLines = nextLines.slice(nextLines.length - MAX_TAIL_LINES)
@@ -19447,24 +20988,332 @@ export function appendNormalizedToTailBuffer(
     }
   }
 
+  const redrawCursor =
+    !partialResult.hadControl || partialResult.cursorColumn === nextPartialLine.length
+      ? null
+      : {
+          rowFromEnd: 0,
+          column: partialResult.cursorColumn
+        }
+
   return {
     lines: nextLines,
     partialLine: retainedPartialLine,
+    redrawCursor,
     truncated,
     newCompleteLines
   }
 }
 
-function applyTerminalLineControls(line: string): string {
+function trimTerminalLineRight(line: string): string {
+  let end = line.length
+  while (end > 0) {
+    const code = line.charCodeAt(end - 1)
+    if (code !== 0x20 && code !== 0x09) {
+      break
+    }
+    end -= 1
+  }
+  return end === line.length ? line : line.slice(0, end)
+}
+
+function appendNormalizedToMultilineTailBuffer(
+  previousLines: string[],
+  boundedPreviousPartialLine: string,
+  normalizedChunk: string,
+  previousPartialWasCapped: boolean,
+  previousRedrawCursor: RetainedTailRedrawCursor | null
+): {
+  lines: string[]
+  partialLine: string
+  redrawCursor: RetainedTailRedrawCursor | null
+  truncated: boolean
+  newCompleteLines: number
+} {
+  const rows: RetainedTerminalRow[] = [
+    ...previousLines.map((line) => ({ text: line, completed: true })),
+    { text: boundedPreviousPartialLine, completed: false }
+  ]
+  let cursorRow = previousRedrawCursor
+    ? Math.max(0, rows.length - 1 - previousRedrawCursor.rowFromEnd)
+    : rows.length - 1
+  let cursorColumn = previousRedrawCursor?.column ?? boundedPreviousPartialLine.length
+  let newCompleteLines = 0
+  let truncated = previousPartialWasCapped
+
+  const ensureCursorRow = (): void => {
+    while (cursorRow >= rows.length) {
+      rows.push({ text: '', completed: false })
+    }
+  }
+  const trimRows = (): void => {
+    const maxRows = MAX_TAIL_LINES + 1
+    if (rows.length <= maxRows) {
+      return
+    }
+    const removeCount = rows.length - maxRows
+    rows.splice(0, removeCount)
+    cursorRow = Math.max(0, cursorRow - removeCount)
+    truncated = true
+  }
+  const moveCursorToColumn = (nextColumn: number): void => {
+    cursorColumn = clampTerminalPreviewCursor(nextColumn)
+  }
+  const markCursorRowRewritten = (): void => {
+    ensureCursorRow()
+    rows[cursorRow]!.completed = false
+  }
+  const writeChar = (char: string): void => {
+    ensureCursorRow()
+    markCursorRowRewritten()
+    const row = rows[cursorRow]!
+    if (cursorColumn > row.text.length) {
+      row.text = `${row.text}${' '.repeat(cursorColumn - row.text.length)}`
+    }
+    row.text =
+      cursorColumn >= row.text.length
+        ? `${row.text}${char}`
+        : `${row.text.slice(0, cursorColumn)}${char}${row.text.slice(cursorColumn + 1)}`
+    cursorColumn += 1
+  }
+  const eraseLine = (mode: number): void => {
+    ensureCursorRow()
+    markCursorRowRewritten()
+    const row = rows[cursorRow]!
+    if (mode === 0) {
+      row.text = row.text.slice(0, cursorColumn)
+    } else if (mode === 1) {
+      const deleteCount = Math.min(cursorColumn + 1, row.text.length)
+      row.text = `${' '.repeat(deleteCount)}${row.text.slice(deleteCount)}`
+    } else if (mode === 2) {
+      row.text = ''
+    }
+  }
+
+  for (let index = 0; index < normalizedChunk.length; index += 1) {
+    const char = normalizedChunk[index]
+    if (char === '\n') {
+      ensureCursorRow()
+      rows[cursorRow]!.completed = true
+      newCompleteLines += 1
+      cursorRow += 1
+      cursorColumn = 0
+      ensureCursorRow()
+      trimRows()
+      continue
+    }
+    if (char === '\r') {
+      cursorColumn = 0
+      continue
+    }
+    if (char === '\u0008') {
+      cursorColumn = Math.max(0, cursorColumn - 1)
+      continue
+    }
+    if (char === '\u001b') {
+      const parsed = parseAnsiControlSequence(normalizedChunk, index)
+      if (!parsed) {
+        continue
+      }
+      index = parsed.endIndex
+      if (parsed.kind !== 'csi' || !hasCanonicalNumericCsiParams(parsed.params)) {
+        continue
+      }
+      const firstParam = parsed.firstParam ?? 1
+      if (parsed.final === 'A') {
+        cursorRow = Math.max(0, cursorRow - firstParam)
+        rows.splice(cursorRow + 1)
+      } else if (parsed.final === 'K') {
+        eraseLine(parsed.firstParam ?? 0)
+      } else if (parsed.final === 'G' || parsed.final === '`') {
+        moveCursorToColumn(firstParam - 1)
+      } else if (parsed.final === 'D') {
+        cursorColumn = Math.max(0, cursorColumn - firstParam)
+      } else if (parsed.final === 'C') {
+        moveCursorToColumn(cursorColumn + firstParam)
+      }
+      continue
+    }
+    writeChar(char)
+  }
+
+  return finalizeRetainedTerminalRows(rows, cursorRow, cursorColumn, truncated, newCompleteLines)
+}
+
+type RetainedTailRedrawCursor = {
+  rowFromEnd: number
+  column: number
+}
+
+type RetainedTerminalRow = {
+  text: string
+  completed: boolean
+}
+
+function finalizeRetainedTerminalRows(
+  rows: RetainedTerminalRow[],
+  cursorRow: number,
+  cursorColumn: number,
+  initialTruncated: boolean,
+  newCompleteLines: number
+): {
+  lines: string[]
+  partialLine: string
+  redrawCursor: RetainedTailRedrawCursor | null
+  truncated: boolean
+  newCompleteLines: number
+} {
+  let truncated = initialTruncated
+  let retainedRows = rows.map((row) => ({ ...row, text: row.text.replace(/[ \t]+$/g, '') }))
+
+  if (retainedRows.length > MAX_TAIL_LINES + 1) {
+    const removeCount = retainedRows.length - (MAX_TAIL_LINES + 1)
+    retainedRows = retainedRows.slice(removeCount)
+    cursorRow = Math.max(0, cursorRow - removeCount)
+    truncated = true
+  }
+
+  let totalChars = retainedRows.reduce((sum, row) => sum + row.text.length, 0)
+  let trimStartIndex = 0
+  while (trimStartIndex < retainedRows.length - 1 && totalChars > MAX_TAIL_CHARS) {
+    totalChars -= retainedRows[trimStartIndex]!.text.length
+    trimStartIndex += 1
+  }
+  if (trimStartIndex > 0) {
+    retainedRows = retainedRows.slice(trimStartIndex)
+    cursorRow = Math.max(0, cursorRow - trimStartIndex)
+    truncated = true
+  }
+  while (
+    retainedRows.length > 1 &&
+    cursorRow < retainedRows.length - 1 &&
+    retainedRows.at(-1)?.completed === false &&
+    retainedRows.at(-1)?.text.length === 0
+  ) {
+    retainedRows.pop()
+  }
+
+  const lastRow = retainedRows.at(-1)
+  let partialLine = lastRow && !lastRow.completed ? lastRow.text : ''
+  let lines = (lastRow && !lastRow.completed ? retainedRows.slice(0, -1) : retainedRows).map(
+    (row) => row.text
+  )
+
+  if (partialLine.length > MAX_TAIL_PARTIAL_CHARS) {
+    partialLine = partialLine.slice(-MAX_TAIL_PARTIAL_CHARS)
+    truncated = true
+  }
+  if (lines.length > MAX_TAIL_LINES) {
+    lines = lines.slice(lines.length - MAX_TAIL_LINES)
+    truncated = true
+  }
+  const outputRowCount = lines.length + 1
+  const defaultCursorRow = outputRowCount - 1
+  const defaultCursorColumn = partialLine.length
+  const redrawCursor =
+    cursorRow === defaultCursorRow && cursorColumn === defaultCursorColumn
+      ? null
+      : {
+          rowFromEnd: Math.max(0, outputRowCount - 1 - cursorRow),
+          column: clampTerminalPreviewCursor(cursorColumn)
+        }
+
+  return {
+    lines,
+    partialLine,
+    redrawCursor,
+    truncated,
+    newCompleteLines
+  }
+}
+
+function splitRetainedTerminalTailSegments(value: string): {
+  completeSegments: string[]
+  partialSegment: string
+  completeLineCount: number
+} {
+  let completeLineCount = 0
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] === '\n') {
+      completeLineCount += 1
+    }
+  }
+
+  const retainedCompleteCount = Math.min(completeLineCount, MAX_TAIL_LINES)
+  const omittedCompleteCount = completeLineCount - retainedCompleteCount
+  let startIndex = 0
+  if (omittedCompleteCount > 0) {
+    let seen = 0
+    for (let index = 0; index < value.length; index += 1) {
+      if (value[index] !== '\n') {
+        continue
+      }
+      seen += 1
+      if (seen === omittedCompleteCount) {
+        startIndex = index + 1
+        break
+      }
+    }
+  }
+
+  const completeSegments: string[] = []
+  let segmentStart = startIndex
+  for (let index = startIndex; index < value.length; index += 1) {
+    if (value[index] !== '\n') {
+      continue
+    }
+    completeSegments.push(value.slice(segmentStart, index))
+    segmentStart = index + 1
+  }
+
+  return {
+    completeSegments,
+    partialSegment: value.slice(segmentStart),
+    completeLineCount
+  }
+}
+
+function processTerminalTailCompleteSegments(segments: string[]): string[] {
+  const processed: string[] = []
+  let totalChars = 0
+  for (let index = segments.length - 1; index >= 0; index -= 1) {
+    const line = applyTerminalLineControls(segments[index]!).text
+    processed.push(line)
+    totalChars += line.length
+    if (totalChars > MAX_TAIL_CHARS) {
+      break
+    }
+  }
+  processed.reverse()
+  return processed
+}
+
+function applyTerminalLineControls(line: string): {
+  text: string
+  cursorColumn: number
+  hadControl: boolean
+} {
   const carriageIndex = line.lastIndexOf('\r')
   const latestRedraw = carriageIndex >= 0 ? line.slice(carriageIndex + 1) : line
   if (!latestRedraw.includes('\u0008') && !latestRedraw.includes('\u001b')) {
-    return latestRedraw
+    return {
+      text: latestRedraw,
+      cursorColumn: latestRedraw.length,
+      hadControl: carriageIndex >= 0
+    }
   }
 
   const chars: string[] = []
   let cursor = 0
+  const moveCursorTo = (nextCursor: number): void => {
+    cursor = clampTerminalPreviewCursor(nextCursor)
+  }
   const writeChar = (char: string): void => {
+    if (cursor > chars.length) {
+      const oldLength = chars.length
+      chars.length = cursor
+      chars.fill(' ', oldLength, cursor)
+    }
     if (cursor >= chars.length) {
       chars.push(char)
     } else {
@@ -19487,36 +21336,45 @@ function applyTerminalLineControls(line: string): string {
       if (parsed.kind !== 'csi') {
         continue
       }
+      if (!hasCanonicalNumericCsiParams(parsed.params)) {
+        continue
+      }
       if (parsed.final === 'K') {
         const mode = parsed.firstParam ?? 0
         if (mode === 0) {
           chars.length = cursor
         } else if (mode === 1) {
-          chars.splice(0, cursor)
-          cursor = 0
-        } else if (mode === 2 || mode === 3) {
+          const deleteCount = Math.min(cursor + 1, chars.length)
+          chars.fill(' ', 0, deleteCount)
+        } else if (mode === 2) {
           chars.length = 0
-          cursor = 0
         }
       } else if (parsed.final === 'G' || parsed.final === '`') {
-        cursor = Math.min(chars.length, Math.max(0, (parsed.firstParam ?? 1) - 1))
+        moveCursorTo((parsed.firstParam ?? 1) - 1)
       } else if (parsed.final === 'D') {
         cursor = Math.max(0, cursor - (parsed.firstParam ?? 1))
       } else if (parsed.final === 'C') {
-        cursor = Math.min(chars.length, cursor + (parsed.firstParam ?? 1))
+        moveCursorTo(cursor + (parsed.firstParam ?? 1))
       }
     } else {
       writeChar(char)
     }
   }
-  return chars.join('')
+  return { text: chars.join(''), cursorColumn: cursor, hadControl: true }
+}
+
+function clampTerminalPreviewCursor(nextCursor: number): number {
+  if (!Number.isFinite(nextCursor)) {
+    return MAX_TAIL_PARTIAL_CHARS
+  }
+  return Math.min(MAX_TAIL_PARTIAL_CHARS, Math.max(0, Math.floor(nextCursor)))
 }
 
 function parseAnsiControlSequence(
   value: string,
   escapeIndex: number
 ):
-  | { kind: 'csi'; final: string; firstParam: number | null; endIndex: number }
+  | { kind: 'csi'; final: string; params: string; firstParam: number | null; endIndex: number }
   | {
       kind: 'other'
       endIndex: number
@@ -19530,10 +21388,11 @@ function parseAnsiControlSequence(
         continue
       }
       const params = value.slice(escapeIndex + 2, index)
-      const firstParamMatch = /^\??(\d+)/.exec(params)
+      const firstParamMatch = /^(\d+)/.exec(params)
       return {
         kind: 'csi',
         final: value[index] ?? '',
+        params,
         firstParam: firstParamMatch ? Number(firstParamMatch[1]) : null,
         endIndex: index
       }
@@ -19566,16 +21425,43 @@ function isStTerminatedStringControlIntroducer(introducer: string | undefined): 
   return introducer === 'P' || introducer === 'X' || introducer === '^' || introducer === '_'
 }
 
+function hasCanonicalNumericCsiParams(params: string): boolean {
+  return /^[0-9;]*$/.test(params)
+}
+
+function containsTerminalVerticalLineControl(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] !== '\u001b') {
+      continue
+    }
+    const parsed = parseAnsiControlSequence(value, index)
+    if (!parsed) {
+      return false
+    }
+    index = parsed.endIndex
+    if (
+      parsed.kind === 'csi' &&
+      parsed.final === 'A' &&
+      hasCanonicalNumericCsiParams(parsed.params)
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
 function tailStateMatches(
   lines: string[],
   partialLine: string,
   pendingAnsi: string,
+  redrawCursor: RetainedTailRedrawCursor | null,
   truncated: boolean,
   linesTotal: number,
   snapshot: {
     lines: string[]
     partialLine: string
     pendingAnsi: string
+    redrawCursor: RetainedTailRedrawCursor | null
     truncated: boolean
     linesTotal: number
   }
@@ -19583,6 +21469,7 @@ function tailStateMatches(
   if (
     partialLine !== snapshot.partialLine ||
     pendingAnsi !== snapshot.pendingAnsi ||
+    !tailRedrawCursorsMatch(redrawCursor, snapshot.redrawCursor) ||
     truncated !== snapshot.truncated ||
     linesTotal !== snapshot.linesTotal ||
     lines.length !== snapshot.lines.length
@@ -19598,6 +21485,19 @@ function tailStateMatches(
     }
   }
   return true
+}
+
+function tailRedrawCursorsMatch(
+  left: RetainedTailRedrawCursor | null,
+  right: RetainedTailRedrawCursor | null
+): boolean {
+  if (left === right) {
+    return true
+  }
+  if (!left || !right) {
+    return false
+  }
+  return left.rowFromEnd === right.rowFromEnd && left.column === right.column
 }
 
 function buildTailLines(lines: string[], partialLine: string): string[] {
@@ -19783,6 +21683,15 @@ function buildSendPayload(action: {
   return payload.length > 0 ? payload : null
 }
 
+async function assertTerminalInputWithinLimitWithYield(text: string | undefined): Promise<void> {
+  if (!text) {
+    return
+  }
+  if (await isTerminalInputTooLargeWithYield(text)) {
+    throw new Error(TERMINAL_INPUT_TOO_LARGE_ERROR)
+  }
+}
+
 // Why: tui-idle relies on recognized agent CLIs setting OSC titles. If the
 // terminal runs an unsupported CLI (or a plain shell), no title transition
 // will ever fire. A 5-minute ceiling prevents indefinite hangs while still
@@ -19838,6 +21747,36 @@ function isKnownReadyPromptPreview(preview: string): boolean {
 
 function detectTerminalWaitBlockedReason(preview: string): RuntimeTerminalWaitBlockedReason | null {
   const normalized = preview.toLowerCase()
+  return findActionableTerminalWaitBlockedSignal(normalized)?.reason ?? null
+}
+
+function nextTailHasNewerBlockedReason(
+  previousWaitText: string,
+  nextWaitText: string,
+  appendedText: string
+): boolean {
+  const nextBlockedSignal = findActionableTerminalWaitBlockedSignal(nextWaitText.toLowerCase())
+  if (!nextBlockedSignal) {
+    return false
+  }
+  // Why: permission prompts can arrive split across PTY chunks. Stamp the
+  // blocked signal when the accumulated tail first becomes blocked, or when
+  // a later prompt appears after stale blocked text already in the tail.
+  const previousBlockedSignal = findActionableTerminalWaitBlockedSignal(
+    previousWaitText.toLowerCase()
+  )
+  if (previousBlockedSignal === null) {
+    return true
+  }
+  const appendCandidateSignal = findActionableTerminalWaitBlockedSignal(
+    `${previousWaitText}${appendedText}`.toLowerCase()
+  )
+  return appendCandidateSignal !== null && appendCandidateSignal.index > previousBlockedSignal.index
+}
+
+function findActionableTerminalWaitBlockedSignal(
+  normalized: string
+): { reason: RuntimeTerminalWaitBlockedReason; index: number } | null {
   const blockedSignal = findTerminalWaitBlockedSignal(normalized)
   if (blockedSignal === null) {
     return null
@@ -19845,10 +21784,7 @@ function detectTerminalWaitBlockedReason(preview: string): RuntimeTerminalWaitBl
   const readyIndex = findKnownReadyPromptIndex(normalized)
   // Why: retained terminal tails can include stale startup modals. If a known
   // ready prompt appears after that modal, the latest signal is ready.
-  if (readyIndex !== null && readyIndex > blockedSignal.index) {
-    return null
-  }
-  return blockedSignal.reason
+  return readyIndex !== null && readyIndex > blockedSignal.index ? null : blockedSignal
 }
 
 function findKnownReadyPromptIndex(normalized: string): number | null {
@@ -19875,50 +21811,69 @@ function findAntigravityReadyPromptIndex(normalized: string): number | null {
   if (headerIndex === -1) {
     return null
   }
-  const readySegment = normalized.slice(headerIndex)
-  const lines = readySegment.split('\n')
-  let offset = 0
+  let lineStart = headerIndex
   let modelIndex: number | null = null
   let promptIndex: number | null = null
 
-  for (const line of lines) {
-    const trimmed = line.trim()
-    const lineIndex = headerIndex + offset
-    if (lineIndex > headerIndex && trimmed.length > 0) {
-      if (modelIndex === null && trimmed.startsWith('gemini')) {
-        modelIndex = lineIndex + line.indexOf(trimmed)
+  // Why: ready previews can include echoed pasted output after the header;
+  // scan line bounds directly instead of splitting the whole terminal tail.
+  for (let cursor = headerIndex; cursor <= normalized.length; cursor += 1) {
+    if (cursor < normalized.length && normalized.charCodeAt(cursor) !== 10) {
+      continue
+    }
+    let trimmedStart = lineStart
+    let trimmedEnd = cursor
+    while (trimmedStart < trimmedEnd && isTerminalWaitWhitespace(normalized, trimmedStart)) {
+      trimmedStart += 1
+    }
+    while (trimmedEnd > trimmedStart && isTerminalWaitWhitespace(normalized, trimmedEnd - 1)) {
+      trimmedEnd -= 1
+    }
+    if (lineStart > headerIndex && trimmedStart < trimmedEnd) {
+      if (modelIndex === null && normalized.startsWith('gemini', trimmedStart)) {
+        modelIndex = trimmedStart
       }
-      if (promptIndex === null && trimmed === '>') {
-        promptIndex = lineIndex + line.indexOf('>')
+      if (
+        promptIndex === null &&
+        trimmedEnd - trimmedStart === 1 &&
+        normalized.charCodeAt(trimmedStart) === 62
+      ) {
+        promptIndex = trimmedStart
       }
     }
-    offset += line.length + 1
+    lineStart = cursor + 1
   }
 
   return modelIndex !== null && promptIndex !== null ? Math.max(modelIndex, promptIndex) : null
 }
 
+function isTerminalWaitWhitespace(value: string, index: number): boolean {
+  const code = value.charCodeAt(index)
+  return code === 32 || (code >= 9 && code <= 13)
+}
+
 function findTerminalWaitBlockedSignal(
   normalized: string
 ): { reason: RuntimeTerminalWaitBlockedReason; index: number } | null {
+  const candidates: { reason: RuntimeTerminalWaitBlockedReason; index: number }[] = []
   const updateIndex = normalized.lastIndexOf('update available')
   if (updateIndex !== -1 && normalized.includes('press enter to continue', updateIndex)) {
-    return { reason: 'codex-update-prompt', index: updateIndex }
+    candidates.push({ reason: 'codex-update-prompt', index: updateIndex })
   }
   const cwdIndex = normalized.lastIndexOf('choose working directory to')
   if (cwdIndex !== -1 && normalized.includes('press enter to continue', cwdIndex)) {
-    return { reason: 'codex-cwd-prompt', index: cwdIndex }
+    candidates.push({ reason: 'codex-cwd-prompt', index: cwdIndex })
   }
   const modelMigrationIndex = normalized.lastIndexOf('codex just got an upgrade')
   if (
     modelMigrationIndex !== -1 &&
     normalized.includes('press enter to continue', modelMigrationIndex)
   ) {
-    return { reason: 'codex-model-migration-prompt', index: modelMigrationIndex }
+    candidates.push({ reason: 'codex-model-migration-prompt', index: modelMigrationIndex })
   }
   const hooksIndex = normalized.lastIndexOf('hooks need review')
   if (hooksIndex !== -1 && normalized.includes('press enter to confirm', hooksIndex)) {
-    return { reason: 'codex-hooks-review-prompt', index: hooksIndex }
+    candidates.push({ reason: 'codex-hooks-review-prompt', index: hooksIndex })
   }
   const trustIndex = Math.max(
     normalized.lastIndexOf('do you trust'),
@@ -19933,7 +21888,7 @@ function findTerminalWaitBlockedSignal(
       trustSegment.includes('directory') ||
       trustSegment.includes('repo'))
   ) {
-    return { reason: 'codex-trust-workspace', index: trustIndex }
+    candidates.push({ reason: 'codex-trust-workspace', index: trustIndex })
   }
   const interactivePromptIndex = Math.max(
     normalized.lastIndexOf('press enter to confirm'),
@@ -19953,9 +21908,19 @@ function findTerminalWaitBlockedSignal(
     interactivePromptContext.includes('trust') ||
     interactivePromptContext.includes('hook')
   if (interactivePromptIndex !== -1 && hasCodexInteractiveContext) {
-    return { reason: 'codex-interactive-prompt', index: interactivePromptIndex }
+    const contextStart = Math.max(0, interactivePromptIndex - 600)
+    const hasSpecificPromptInContext = candidates.some(
+      (candidate) => candidate.index >= contextStart && candidate.index <= interactivePromptIndex
+    )
+    if (!hasSpecificPromptInContext) {
+      candidates.push({ reason: 'codex-interactive-prompt', index: interactivePromptIndex })
+    }
   }
-  return null
+  return candidates.length > 0
+    ? candidates.reduce((latest, candidate) =>
+        candidate.index > latest.index ? candidate : latest
+      )
+    : null
 }
 
 function buildTerminalWaitResult(
@@ -20139,9 +22104,22 @@ function classifyAgentTitle(title: string | null): 'agent' | 'management' | 'neu
   return detectAgentStatusFromTitle(title) !== null ? 'agent' : 'neutral'
 }
 
+function terminalTitleBlocksExplicitAgentStatus(title: string | null): boolean {
+  if (!title) {
+    return false
+  }
+  return isClaudeManagementTitle(title) || isShellProcess(title)
+}
+
 function getLatestAgentCandidateTitle(
   ...titles: { title: string | null | undefined; updatedAt: number | null | undefined }[]
 ): string | null {
+  return getLatestAgentCandidateTitleInfo(...titles)?.title ?? null
+}
+
+function getLatestAgentCandidateTitleInfo(
+  ...titles: { title: string | null | undefined; updatedAt: number | null | undefined }[]
+): { title: string; updatedAt: number } | null {
   let latest: { title: string; updatedAt: number } | null = null
   for (const candidate of titles) {
     const title = candidate.title?.trim()
@@ -20153,7 +22131,7 @@ function getLatestAgentCandidateTitle(
       latest = { title, updatedAt }
     }
   }
-  return latest?.title ?? null
+  return latest
 }
 
 function getSavedTabWorktreeStatus(title: string, hasPty: boolean): RuntimeWorktreeStatus {
@@ -20173,6 +22151,20 @@ function getDetectedWorktreeStatus(
   return hasPty ? 'active' : 'inactive'
 }
 
+function mapExplicitAgentStateToRuntimeTerminalStatus(
+  state: AgentStatusEntry['state']
+): NonNullable<RuntimeTerminalAgentStatus['status']> {
+  switch (state) {
+    case 'blocked':
+    case 'waiting':
+      return 'permission'
+    case 'working':
+      return 'working'
+    case 'done':
+      return 'idle'
+  }
+}
+
 function mergeWorktreeStatus(
   current: RuntimeWorktreeStatus,
   next: RuntimeWorktreeStatus
@@ -20190,36 +22182,61 @@ function normalizeTerminalChunk(
     return { text: chunk, pendingAnsi: '' }
   }
   const combined = `${pendingAnsi}${chunk}`
-  let text = ''
+  const parts: string[] = []
+  let textStart = 0
   for (let index = 0; index < combined.length; index += 1) {
     const char = combined[index]
     if (char === '\x1b') {
+      appendTerminalNormalizedSpan(parts, combined, textStart, index)
       if (index + 1 >= combined.length) {
-        return { text, pendingAnsi: combined.slice(index) }
+        return { text: parts.join(''), pendingAnsi: combined.slice(index) }
       }
       const parsed = parseAnsiControlSequence(combined, index)
       if (!parsed) {
         return {
-          text,
+          text: parts.join(''),
           pendingAnsi: trimPendingAnsiControl(combined.slice(index))
         }
       }
+      if (parsed.kind === 'csi' && isTerminalPreviewLineControl(parsed)) {
+        // Why: Codex can redraw status text with ANSI controls but no CR; keep
+        // those controls so the tail buffer overwrites the previous frame.
+        parts.push(combined.slice(index, parsed.endIndex + 1))
+      }
       index = parsed.endIndex
+      textStart = index + 1
       continue
     }
     if (char === '\r' && combined[index + 1] === '\n') {
-      text += '\n'
+      appendTerminalNormalizedSpan(parts, combined, textStart, index)
+      parts.push('\n')
       index += 1
+      textStart = index + 1
       continue
     }
     const code = combined.charCodeAt(index)
     if (code === 0x08 || code === 0x09 || code === 0x0a || code === 0x0d) {
-      text += char
-    } else if (isTerminalPreviewPrintableCodeUnit(code)) {
-      text += char
+      appendTerminalNormalizedSpan(parts, combined, textStart, index)
+      parts.push(char)
+      textStart = index + 1
+    } else if (!isTerminalPreviewPrintableCodeUnit(code)) {
+      appendTerminalNormalizedSpan(parts, combined, textStart, index)
+      textStart = index + 1
     }
   }
-  return { text, pendingAnsi: '' }
+  appendTerminalNormalizedSpan(parts, combined, textStart, combined.length)
+  return { text: parts.join(''), pendingAnsi: '' }
+}
+
+function appendTerminalNormalizedSpan(
+  parts: string[],
+  value: string,
+  start: number,
+  end: number
+): void {
+  if (end > start) {
+    parts.push(value.slice(start, end))
+  }
 }
 
 function isTerminalPreviewPrintableCodeUnit(code: number): boolean {
@@ -20250,6 +22267,27 @@ function trimPendingAnsiControl(value: string): string {
   const introducer = value.slice(0, Math.min(2, value.length))
   const suffixBudget = Math.max(0, MAX_TAIL_PENDING_ANSI_CHARS - introducer.length)
   return `${introducer}${value.slice(-suffixBudget)}`
+}
+
+function isTerminalPreviewLineControl(parsed: {
+  final: string
+  params: string
+  firstParam: number | null
+}): boolean {
+  if (!hasCanonicalNumericCsiParams(parsed.params)) {
+    return false
+  }
+  if (parsed.final === 'K') {
+    const mode = parsed.firstParam ?? 0
+    return mode === 0 || mode === 1 || mode === 2
+  }
+  return (
+    parsed.final === 'A' ||
+    parsed.final === 'G' ||
+    parsed.final === '`' ||
+    parsed.final === 'D' ||
+    parsed.final === 'C'
+  )
 }
 
 function maxTimestamp(left: number | null, right: number | null): number | null {

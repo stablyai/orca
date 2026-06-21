@@ -71,9 +71,10 @@ export function buildCommitMessagePrompt(
 
 export function splitGeneratedCommitMessage(message: string): GeneratedCommitMessage {
   const normalized = cleanGeneratedCommitMessage(message)
-  const [subjectLine = '', ...bodyLines] = normalized.split('\n')
+  const firstNewline = normalized.indexOf('\n')
+  const subjectLine = firstNewline === -1 ? normalized : normalized.slice(0, firstNewline)
   const subject = subjectLine.trim().replace(/[.]+$/g, '').slice(0, 72).trimEnd()
-  const body = bodyLines.join('\n').trim()
+  const body = firstNewline === -1 ? '' : normalized.slice(firstNewline + 1).trim()
   const safeSubject = subject.length > 0 ? subject : 'Update project files'
   return {
     subject: safeSubject,

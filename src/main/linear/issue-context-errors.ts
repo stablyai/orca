@@ -64,8 +64,7 @@ export function linearMessage(error: unknown): string {
 
 export function sanitizeLinearErrorMessage(message: string): string {
   // Why: provider text is useful in CLI errors, but raw SDK failures can embed secrets or user payloads.
-  return message
-    .split(/\r?\n\s+at\s+/)[0]
+  return stripLinearStackTrace(message)
     .replace(
       /(headers?\s*[:=]\s*)\{[^{}]*(?:authorization|token|api[-_]?key)[^{}]*\}/gi,
       '$1[REDACTED]'
@@ -76,4 +75,36 @@ export function sanitizeLinearErrorMessage(message: string): string {
     .replace(/((?:body|comment|description)\s*[:=]\s*)\{[\s\S]*?\}/gi, '$1[REDACTED]')
     .replace(/((?:body|comment|description)\s*[:=]\s*)(["']).*?\2/gi, '$1[REDACTED]')
     .trim()
+}
+
+function stripLinearStackTrace(message: string): string {
+  for (let index = 0; index < message.length; index += 1) {
+    const code = message.charCodeAt(index)
+    if (code !== 10 && code !== 13) {
+      continue
+    }
+
+    let candidateStart = index + 1
+    if (code === 13 && message.charCodeAt(candidateStart) === 10) {
+      candidateStart += 1
+    }
+    while (
+      candidateStart < message.length &&
+      isLinearStackWhitespace(message.charCodeAt(candidateStart))
+    ) {
+      candidateStart += 1
+    }
+    if (
+      message.startsWith('at', candidateStart) &&
+      isLinearStackWhitespace(message.charCodeAt(candidateStart + 2))
+    ) {
+      return message.slice(0, index)
+    }
+  }
+
+  return message
+}
+
+function isLinearStackWhitespace(code: number): boolean {
+  return code === 32 || (code >= 9 && code <= 13)
 }

@@ -143,6 +143,48 @@ Run summary: monitor automation completed successfully.
     )
   })
 
+  it('builds large response previews without broad regex captures', async () => {
+    const home = await createHermesHome()
+    const outputDir = join(home, 'cron', 'output', 'job-1')
+    await mkdir(outputDir, { recursive: true })
+    await writeFile(
+      join(outputDir, '2026-05-15_09-02-00.md'),
+      [
+        '# Cron Job: Monitor automation',
+        '',
+        '## Response',
+        '',
+        '```',
+        'hidden-token\n'.repeat(500),
+        '```',
+        '',
+        'Visible response text '.repeat(500),
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    const { readHermesCronOutputRunsPage } = await loadReader()
+    const execSpy = vi.spyOn(RegExp.prototype, 'exec')
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+    const page = await readHermesCronOutputRunsPage('job-1', { page: 1, pageSize: 25 })
+    const usedBroadCapture = execSpy.mock.contexts.some(
+      (pattern) => pattern instanceof RegExp && pattern.source.includes('[\\s\\S]')
+    )
+    const usedWhitespaceReplace = replaceSpy.mock.calls.some(
+      ([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+'
+    )
+
+    expect(usedBroadCapture).toBe(false)
+    expect(usedWhitespaceReplace).toBe(false)
+    expect((page.runs[0] as { output_preview?: string }).output_preview).toContain(
+      'Visible response text'
+    )
+    expect((page.runs[0] as { output_preview?: string }).output_preview).not.toContain(
+      'hidden-token'
+    )
+  })
+
   it('does not hydrate referenced logs outside Hermes home', async () => {
     const home = await createHermesHome()
     const outputDir = join(home, 'cron', 'output', 'job-1')

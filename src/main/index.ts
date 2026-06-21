@@ -56,6 +56,7 @@ import {
   patchPackagedProcessPath,
   shouldInstallManagedHooks
 } from './startup/configure-process'
+import { ensureVirtualDisplayForHeadlessServe } from './startup/ensure-virtual-display'
 import {
   shouldSuppressDevEducation,
   suppressDevEducationForStore
@@ -109,6 +110,7 @@ import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { EmulatorBridge } from './emulator/emulator-bridge'
 import { serveSimStateWatcher } from './emulator/serve-sim-state-watcher'
 import { browserManager } from './browser/browser-manager'
+import { OffscreenBrowserBackend } from './browser/offscreen-browser-backend'
 import { initializeBrowserSessionsForApp } from './browser/browser-session-startup'
 import { setUnreadDockBadgeCount } from './dock/unread-badge'
 import { AutomationService } from './automations/service'
@@ -164,6 +166,9 @@ let claudeRuntimeAuth: ClaudeRuntimeAuthService | null = null
 let runtime: OrcaRuntimeService | null = null
 let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
+// Why: set during early startup; gates whether headless serve installs the
+// offscreen browser backend (and thus advertises browser pane support).
+let headlessBrowserDisplayAvailable = false
 
 let starNag: StarNagService | null = null
 let agentAwakeService: AgentAwakeService | null = null
@@ -488,6 +493,10 @@ if (hasSingleInstanceLock) {
   })
   configureElectronNetworkCompatibility()
   enableMainProcessGpuFeatures()
+  // Why: headless serve backs browser panes with offscreen BrowserWindows, which
+  // need an X display on Linux. Ensure one (Xvfb) before whenReady; the result
+  // gates whether the offscreen backend is installed so capability stays honest.
+  headlessBrowserDisplayAvailable = ensureVirtualDisplayForHeadlessServe({ isServeMode })
 }
 
 ipcMain.handle('app:awaitFirstWindowStartupServices', async () => {
@@ -1319,7 +1328,14 @@ app.whenReady().then(async () => {
   rateLimits.setClaudeAuthPreparationResolver((target) =>
     claudeRuntimeAuth!.prepareForRateLimitFetch(target)
   )
-  rateLimits.setSettingsResolver(() => store!.getSettings())
+  rateLimits.setOpenCodeGoConfigResolver(() => {
+    const settings = store!.getSettings()
+    return {
+      sessionCookie: settings.opencodeSessionCookie,
+      workspaceIdOverride: settings.opencodeWorkspaceId
+    }
+  })
+  rateLimits.setGeminiCliOAuthEnabledResolver(() => store!.getSettings().geminiCliOAuthEnabled)
   keybindings = new KeybindingService({
     homePath: app.getPath('home'),
     getLegacyOverrides: () => store!.getSettings().keybindings
@@ -1629,6 +1645,13 @@ app.whenReady().then(async () => {
       (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
       store
     )
+    // Why: headless servers have no renderer to mount <webview> browser panes.
+    // Back them with main-process offscreen WebContents instead, so this host can
+    // own browser pages and advertise browser.headless.v1 — but only when a
+    // display is actually available (set up above), so the capability stays honest.
+    if (headlessBrowserDisplayAvailable) {
+      runtime.setOffscreenBrowserBackend(new OffscreenBrowserBackend(browserManager))
+    }
     // Why: headless servers have no renderer graph publisher. Publish an
     // explicit empty graph so status clients see a ready server while
     // renderer-only operations still fail at their own window boundary.
@@ -1714,6 +1737,9 @@ app.on('will-quit', (e) => {
   // Why: agent-browser daemon processes would otherwise linger after Orca quits,
   // holding ports and leaving stale session state on disk.
   runtime?.getAgentBrowserBridge()?.destroyAllSessions()
+  // Why: headless offscreen browser windows are main-process owned; tear them
+  // down explicitly on quit alongside the other browser/session shutdowns.
+  runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
   const emulatorShutdown = runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
   serveSimStateWatcher.stop()
   killAllPty()

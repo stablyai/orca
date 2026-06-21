@@ -1,8 +1,8 @@
-import { KO_KEY_OVERRIDES } from './locale-ko-key-overrides.mjs'
+import { mergeLocaleKeyOverrides } from './locale-key-override-merge.mjs'
 
 // Key-specific overrides from high-visibility UI audit (P0/P1/P2).
 // Why: some fixes depend on full key context, not English value alone.
-export const LOCALE_KEY_OVERRIDES = {
+const BASE_LOCALE_KEY_OVERRIDES = {
   // "Open in" is a submenu header for "open in <app>"; bare で開く reads as broken JP.
   'auto.components.sidebar.WorktreeOpenInMenu.8009ab69a6': { ja: 'アプリで開く' },
   // "Assigned to me" filter; the MT past-passive 割り当てられました reads as a sentence, not a filter label.
@@ -601,5 +601,9 @@ export const LOCALE_KEY_OVERRIDES = {
   },
   // Port forwarding "Forward" is 転送, not the browser-navigation 進む.
   'auto.components.right.sidebar.PortsPanel.c9d106547a': { ja: '転送' },
-  ...KO_KEY_OVERRIDES
+  // Worktree badge: stand-alone 主要な leaves the adnominal な dangling — align with the Tooltip's プライマリ.
+  'auto.components.sidebar.WorktreeCard.7d517f82e2': { ja: 'プライマリ' },
+  'auto.components.WorktreeJumpPalette.739bda980c': { ja: 'プライマリ' }
 }
+
+export const LOCALE_KEY_OVERRIDES = mergeLocaleKeyOverrides(BASE_LOCALE_KEY_OVERRIDES)

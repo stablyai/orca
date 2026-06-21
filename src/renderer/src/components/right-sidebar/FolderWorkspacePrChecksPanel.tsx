@@ -328,10 +328,7 @@ function formatWorktreeCount(count: number): string {
 
 function formatFailingCount(count: number): string {
   return count === 1
-    ? translate(
-        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.oneFailing',
-        '1 failing'
-      )
+    ? translate('auto.components.rightSidebar.FolderWorkspacePrChecksPanel.oneFailing', '1 failing')
     : translate(
         'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.failingCount',
         '{{value0}} failing',
@@ -341,10 +338,7 @@ function formatFailingCount(count: number): string {
 
 function formatPendingCount(count: number): string {
   return count === 1
-    ? translate(
-        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.onePending',
-        '1 pending'
-      )
+    ? translate('auto.components.rightSidebar.FolderWorkspacePrChecksPanel.onePending', '1 pending')
     : translate(
         'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.pendingCount',
         '{{value0}} pending',

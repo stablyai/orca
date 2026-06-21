@@ -92,4 +92,20 @@ describe('insertRichMarkdownImageFromPath', () => {
       '/folder-workspace'
     )
   })
+
+  it('skips editor mutation when the caller rejects the stale target after import', async () => {
+    const { editor, chain } = editorWithRunResult(true)
+
+    await insertRichMarkdownImageFromPath({
+      editor: editor as never,
+      filePath: '/repo/note.md',
+      sourcePath: '/tmp/image.png',
+      worktreeId: 'wt-1',
+      insertPos: 4,
+      canInsert: () => false
+    })
+
+    expect(chain).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+  })
 })

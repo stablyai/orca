@@ -247,25 +247,64 @@
   --orca-pane-title-separator: var(--terminal-pane-title-on-light-separator);
 }
 
-/* Floating tab style — no full-width background bar. The title sits as a
-   lightweight inline label so the terminal content isn't visually "capped."
-   Uses muted grey + monospace to read as metadata, not actionable text. */
+/* Floating title overlay. The title owns the top strip of the pane, while titled
+   panes reserve matching terminal height so the first row remains visible. */
+.pane-title-overlay-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
 .pane-title-bar {
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
+  width: 100%;
   height: var(--orca-pane-title-height);
-  z-index: 5; /* below drag handle (z:10) */
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   padding: 0 8px;
   font-size: 13px;
   font-family: var(--font-mono);
   color: var(--orca-pane-title-fg, rgb(255 255 255 / 0.52));
-  background: transparent;
-  border-bottom: none;
+  background: var(--orca-pane-title-bg, #000);
+  border-bottom: 1px solid var(--orca-pane-title-separator, rgb(255 255 255 / 0.06));
+  pointer-events: auto;
   user-select: none;
+}
+
+.pane-title-drag-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 12px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  opacity: 0;
+  background: color-mix(in srgb, var(--orca-pane-title-fg) 36%, transparent);
+  transition: opacity 150ms ease;
+}
+
+.pane-title-drag-handle::after {
+  content: '...';
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0;
+  color: var(--orca-pane-title-button-hover-fg);
+}
+
+.pane-title-drag-handle:hover {
+  opacity: 1;
+}
+
+.pane-title-drag-handle:active {
+  cursor: grabbing;
 }
 
 .session-restored-banner {
@@ -312,6 +351,7 @@
   flex-shrink: 0;
   margin-left: auto;
   color: var(--orca-pane-title-button-fg, rgb(255 255 255 / 0.3));
+  background: transparent;
   opacity: 0;
   transition:
     opacity 120ms ease,
@@ -324,7 +364,11 @@
   opacity: 1;
 }
 
-.pane-title-close:hover {
+.pane-title-close:hover,
+.pane-title-close:active,
+.pane-title-close[data-state='delayed-open'],
+.pane-title-close[data-state='instant-open'] {
+  background: transparent;
   color: var(--orca-pane-title-button-hover-fg, rgb(255 255 255 / 0.8));
 }
 
@@ -381,35 +425,4 @@
 .pane[data-has-title] .xterm-container {
   margin-top: var(--orca-pane-title-height);
   height: calc(100% - var(--orca-pane-title-height)); /* match margin-top */
-}
-
-/* Override the inline overflow:hidden set by pane-manager so the title
-   separator line can extend into the divider hit-padding zone.
-   overflow:clip behaves identically to overflow:hidden for content
-   clipping but supports overflow-clip-margin to widen the clip region.
-   The 5px margin matches the divider's hit-padding (10px total / 2). */
-.pane[data-has-title] {
-  overflow: clip !important;
-  overflow-clip-margin: 5px;
-}
-
-/* Title separator line — rendered on the .pane itself (not the portaled
-   title bar) so the line spans the full pane width into the divider zone. */
-.pane[data-has-title]::after {
-  content: '';
-  position: absolute;
-  top: var(--orca-pane-title-height);
-  left: -5px;
-  right: -5px;
-  height: 1px;
-  background: var(--orca-pane-title-separator, rgb(255 255 255 / 0.06));
-  z-index: 6;
-  pointer-events: none;
-}
-
-/* Hide the drag handle on titled panes — the title bar already provides
-   visual identification, and a grab-cursor strip right at the border
-   creates a confusing "looks draggable" affordance that misleads users. */
-.pane[data-has-title] .pane-drag-handle {
-  display: none;
 }

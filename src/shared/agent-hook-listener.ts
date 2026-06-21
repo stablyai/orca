@@ -311,6 +311,26 @@ type ExtractedPromptText = {
     | null
 }
 
+// Joins the `text` of an Anthropic-style content-block array ([{ type: 'text',
+// text }, ...]); plain string items are included too. Returns '' when nothing
+// textual is present so callers can fall through to the next prompt source.
+function contentBlockArrayText(value: unknown[]): string {
+  const parts: string[] = []
+  for (const item of value) {
+    if (typeof item === 'string') {
+      parts.push(item)
+      continue
+    }
+    if (item && typeof item === 'object') {
+      const text = (item as Record<string, unknown>).text
+      if (typeof text === 'string') {
+        parts.push(text)
+      }
+    }
+  }
+  return parts.join(' ').replace(/\s+/g, ' ').trim()
+}
+
 function extractPromptText(hookPayload: Record<string, unknown>): ExtractedPromptText {
   const candidateKeys = [
     'prompt',
@@ -328,6 +348,16 @@ function extractPromptText(hookPayload: Record<string, unknown>): ExtractedPromp
       // surrounding whitespace would otherwise leak into UI and caches.
       return { text: value.trim(), source: key as Exclude<ExtractedPromptText['source'], null> }
     }
+    // Why: Kimi Code sends UserPromptSubmit `prompt` as a content-block array
+    // ([{ type: 'text', text }]) rather than a string. Extract its text for the
+    // genuine prompt keys. `message` stays string-only: it is the ambiguous
+    // status/permission field that hasExplicitUserPrompt intentionally distrusts.
+    if (key !== 'message' && Array.isArray(value)) {
+      const text = contentBlockArrayText(value)
+      if (text.length > 0) {
+        return { text, source: key as Exclude<ExtractedPromptText['source'], null> }
+      }
+    }
   }
   // Why: OpenCode's plugin sends MessagePart events with { role, text }. When
   // role === 'user', the text *is* the prompt — surface it even though
@@ -342,10 +372,16 @@ function extractPromptText(hookPayload: Record<string, unknown>): ExtractedPromp
 }
 
 function stripGrokUserQueryWrapper(promptText: string): string {
-  const match = promptText.match(/^<user_query>([\s\S]*?)(?:<\/user_query>)?$/)
+  const opener = '<user_query>'
+  if (!promptText.startsWith(opener)) {
+    return promptText
+  }
+  const closer = '</user_query>'
+  const wrappedText = promptText.slice(opener.length)
+  const text = wrappedText.endsWith(closer) ? wrappedText.slice(0, -closer.length) : wrappedText
   // Why: Grok emits the submitted prompt wrapped in its internal
   // `<user_query>` envelope; the status cache should hold the user text.
-  return match ? match[1].trim() : promptText
+  return text.trim()
 }
 
 function resolvePrompt(
@@ -687,8 +723,12 @@ function extractAssistantContentText(content: unknown): string | undefined {
 }
 
 function extractAntigravityUserRequest(content: string): string | undefined {
-  const request = content.match(/<USER_REQUEST>\s*([\s\S]*?)\s*<\/USER_REQUEST>/)
-  const text = request ? request[1] : content
+  const opener = '<USER_REQUEST>'
+  const startIndex = content.indexOf(opener)
+  const bodyStartIndex = startIndex === -1 ? -1 : startIndex + opener.length
+  const endIndex = bodyStartIndex === -1 ? -1 : content.indexOf('</USER_REQUEST>', bodyStartIndex)
+  const text =
+    bodyStartIndex === -1 || endIndex === -1 ? content : content.slice(bodyStartIndex, endIndex)
   const trimmed = text.trim()
   return trimmed.length > 0 ? trimmed : undefined
 }
@@ -780,14 +820,12 @@ function readLastCommandCodeUserPromptEntryFromTranscript(
       }
       let lastPrompt: string | undefined
       let lastPromptOffset = 0
-      let lineStart = 0
-      for (const line of text.split('\n')) {
+      for (const { line, byteOffset } of iterateTranscriptLinesWithByteOffsets(text)) {
         const prompt = extractCommandCodeUserPromptFromLine(line.trim())
         if (prompt !== undefined) {
           lastPrompt = prompt
-          lastPromptOffset = textBasePosition + Buffer.byteLength(text.slice(0, lineStart), 'utf8')
+          lastPromptOffset = textBasePosition + byteOffset
         }
-        lineStart += line.length + 1
       }
       return lastPrompt
         ? {
@@ -805,6 +843,24 @@ function readLastCommandCodeUserPromptEntryFromTranscript(
     }
   } catch {
     return undefined
+  }
+}
+
+function* iterateTranscriptLinesWithByteOffsets(
+  text: string
+): Generator<{ line: string; byteOffset: number }> {
+  let lineStart = 0
+  let byteOffset = 0
+
+  for (let index = 0; index <= text.length; index++) {
+    if (index < text.length && text.charCodeAt(index) !== 10) {
+      continue
+    }
+
+    const line = text.slice(lineStart, index)
+    yield { line, byteOffset }
+    byteOffset += Buffer.byteLength(line, 'utf8') + (index < text.length ? 1 : 0)
+    lineStart = index + 1
   }
 }
 
@@ -1004,16 +1060,12 @@ function readLastTextFromTranscriptOnce(
           completeRegion = combined.subarray(firstNewline + 1)
         }
         if (completeRegion.length > 0) {
-          const lines = completeRegion.toString('utf8').split('\n')
-          for (let i = lines.length - 1; i >= 0; i--) {
-            const line = lines[i].trim()
-            if (line.length === 0) {
-              continue
-            }
-            const extracted = extractLineText(line)
-            if (extracted !== undefined) {
-              return extracted
-            }
+          const extracted = findLastExtractedTranscriptLineText(
+            completeRegion.toString('utf8'),
+            extractLineText
+          )
+          if (extracted !== undefined) {
+            return extracted
           }
         }
         carryBytes = nextCarry
@@ -1025,6 +1077,30 @@ function readLastTextFromTranscriptOnce(
   } catch {
     return undefined
   }
+}
+
+function findLastExtractedTranscriptLineText(
+  text: string,
+  extractLineText: (line: string) => string | undefined
+): string | undefined {
+  let lineEnd = text.length
+
+  for (let index = text.length - 1; index >= -1; index--) {
+    if (index >= 0 && text.charCodeAt(index) !== 10) {
+      continue
+    }
+
+    const line = text.slice(index + 1, lineEnd).trim()
+    if (line.length > 0) {
+      const extracted = extractLineText(line)
+      if (extracted !== undefined) {
+        return extracted
+      }
+    }
+    lineEnd = index
+  }
+
+  return undefined
 }
 
 function extractClaudeToolFields(
@@ -1804,6 +1880,9 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
   // typecheck here instead of silently falling through to `false`.
   switch (source) {
     case 'claude':
+    // Why: Kimi Code emits Claude-compatible hook events, so UserPromptSubmit
+    // is its new-turn boundary too.
+    case 'kimi':
       return eventName === 'UserPromptSubmit'
     case 'codex':
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
@@ -1895,6 +1974,8 @@ function extractToolFields(
   // typecheck here instead of silently routing through OpenCode's extractor.
   switch (source) {
     case 'claude':
+    // Why: Kimi Code uses Claude's tool_name/tool_input payload fields verbatim.
+    case 'kimi':
       return extractClaudeToolFields(eventName, hookPayload)
     case 'codex':
       return extractCodexToolFields(eventName, hookPayload)
@@ -2026,6 +2107,70 @@ function normalizeDevinEvent(
         resetOnNewTurn: isNewTurnEvent('devin', eventName)
       }),
       agentType: 'devin',
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
+      lastAssistantMessage: snapshot.lastAssistantMessage,
+      interrupted
+    })
+  )
+}
+
+// Why: Kimi's AskUserQuestion tool is auto-allowed, so it emits PreToolUse
+// instead of PermissionRequest while blocked on a human answer. Treat it as a
+// waiting state so the UI shows the attention icon instead of the working spinner.
+function isKimiUserInputTool(toolName: string | undefined): boolean {
+  return toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase() === 'askuserquestion'
+}
+
+// Why: Kimi Code emits Claude-compatible hook payloads and reuses Claude's
+// lifecycle event names (UserPromptSubmit/PreToolUse/Stop/...). Normalize them
+// into Orca's shared status states while attributing the status to Kimi so the
+// sidebar shows the Kimi icon and label instead of falling back to Claude.
+function normalizeKimiEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  const toolName = readString(hookPayload, 'tool_name')
+  const isUserInputTool = isKimiUserInputTool(toolName)
+
+  let stateName: 'working' | 'waiting' | 'done' | null = null
+  if (
+    eventName === 'UserPromptSubmit' ||
+    eventName === 'PostToolUse' ||
+    eventName === 'PostToolUseFailure' ||
+    (eventName === 'PreToolUse' && !isUserInputTool)
+  ) {
+    stateName = 'working'
+  } else if (eventName === 'PermissionRequest' || (eventName === 'PreToolUse' && isUserInputTool)) {
+    stateName = 'waiting'
+  } else if (eventName === 'Stop' || eventName === 'StopFailure') {
+    stateName = 'done'
+  }
+
+  if (!stateName) {
+    return null
+  }
+
+  const snapshot = resolveToolState(
+    state,
+    paneKey,
+    extractToolFields('kimi', eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent('kimi', eventName) }
+  )
+
+  const interrupted =
+    eventName === 'Stop' && hookPayload['is_interrupt'] === true ? true : undefined
+
+  return parseAgentStatusPayload(
+    JSON.stringify({
+      state: stateName,
+      prompt: resolvePrompt(state, paneKey, promptText, {
+        resetOnNewTurn: isNewTurnEvent('kimi', eventName)
+      }),
+      agentType: 'kimi',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
       lastAssistantMessage: snapshot.lastAssistantMessage,
@@ -2974,6 +3119,9 @@ export function normalizeHookPayload(
     case 'devin':
       payload = normalizeDevinEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
+    case 'kimi':
+      payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
   }
 
   // Why: connectionId stays null at the listener layer. The local server keeps
@@ -3027,7 +3175,8 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/grok': 'grok',
   '/hook/copilot': 'copilot',
   '/hook/hermes': 'hermes',
-  '/hook/devin': 'devin'
+  '/hook/devin': 'devin',
+  '/hook/kimi': 'kimi'
 })
 
 export function resolveHookSource(pathname: string): AgentHookSource | null {

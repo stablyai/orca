@@ -42,13 +42,11 @@ export type {
  *   3. Unresolved conflicts block the commit path entirely.
  *   4. Create PR intent can own the primary; manual prerequisites are
  *      exposed as a visible sibling action by CommitArea.
- *   5. Has partially staged files → "Stage All" to avoid hook-time partial
- *      stash conflicts.
- *   6. Has staged files + message → plain "Commit" (compound flows live in
+ *   5. Has staged files + message → plain "Commit" (compound flows live in
  *      the dropdown; after the commit lands, the clean-tree rung rotates
  *      the primary to the appropriate single remote action).
- *   7. Has staged files + no message → disabled "Commit" with a reason.
- *   8. Clean tree → adaptive remote action (or disabled "Commit" no-op).
+ *   6. Has staged files + no message → disabled "Commit" with a reason.
+ *   7. Clean tree → adaptive remote action (or disabled "Commit" no-op).
  *
  * An undefined upstream status means fetchUpstreamStatus has not resolved
  * yet for this worktree. We return a disabled Commit so the button has a
@@ -60,7 +58,6 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
     stagedCount,
     hasUnstagedChanges,
     hasStageableChanges,
-    hasPartiallyStagedChanges,
     hasMessage,
     hasUnresolvedConflicts,
     isCommitting,
@@ -122,23 +119,6 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
 
   const hasStaged = stagedCount > 0
   const hasOpenHostedReview = prState === 'open' || prState === 'draft'
-
-  // Why: partial staging can break hook-time restores during the intent flow;
-  // keep Stage All visible as a sibling prerequisite without replacing Create PR.
-  if (hasStaged && hasPartiallyStagedChanges) {
-    return {
-      kind: 'stage',
-      label: translate(
-        'auto.components.right.sidebar.source.control.primary.action.18a0fca877',
-        'Stage All'
-      ),
-      title: translate(
-        'auto.components.right.sidebar.source.control.primary.action.2d8f185fbc',
-        'Stage all changes before committing partially staged files'
-      ),
-      disabled: false
-    }
-  }
 
   // 5. Has staged files + message → plain Commit. The primary button never
   //    compounds ("Commit & Push" etc.) — after the commit lands, the primary
@@ -215,7 +195,6 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   if (!upstreamStatus.hasUpstream) {
     const unpublishedAction = resolveUnpublishedPrimaryAction({
       hasCurrentBranch,
-      branchCommitsAhead,
       isPRStateLoading,
       prState
     })

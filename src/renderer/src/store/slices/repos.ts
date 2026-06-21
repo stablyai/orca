@@ -1677,6 +1677,13 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         }
       }
 
+      // Why: route project removal through the canonical per-worktree purge so all
+      // ~30 worktree-scoped maps are evicted. removeProject previously hand-deleted
+      // only a handful (tabs/layouts/ptys), leaking the rest (unified tabs, groups,
+      // git status, browser, everActivated, …) per worktree of every removed repo.
+      // Runs before the repo-scoped set() below so the purge still sees tabsByWorktree.
+      get().purgeWorktreeTerminalState(worktreeIds)
+
       set((s) => {
         const nextWorktrees = { ...s.worktreesByRepo }
         delete nextWorktrees[projectId]

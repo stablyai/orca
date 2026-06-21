@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import {
+  AI_VAULT_SESSION_FILTER_QUERY_MAX_BYTES,
   filterAiVaultSessions,
   folderLabel,
   groupAiVaultSessions,
+  isAiVaultSessionFilterQueryTooLarge,
   parseVaultQuery
 } from './ai-vault-session-filters'
 
@@ -86,6 +88,65 @@ describe('filterAiVaultSessions', () => {
     expect(new Set(shownWhenAllowed)).toEqual(new Set(['claude:1', 'claude:empty']))
   })
 
+  it('matches visible preview message text', () => {
+    expect(
+      filterAiVaultSessions(
+        [
+          {
+            ...baseSession,
+            previewMessages: [
+              {
+                role: 'assistant',
+                text: 'The fixture ordering now matches the golden output.',
+                timestamp: null
+              }
+            ]
+          }
+        ],
+        {
+          query: 'fixture ordering',
+          agents: ['claude'],
+          scope: 'all',
+          sort: 'updated',
+          activeWorktreePath: null,
+          hideEmptySessions: true
+        }
+      ).map((session) => session.id)
+    ).toEqual(['claude:1'])
+  })
+
+  it('does not match hidden preview text when conversation turns are visible', () => {
+    expect(
+      filterAiVaultSessions(
+        [
+          {
+            ...baseSession,
+            previewMessages: [
+              {
+                role: 'user',
+                text: 'Please repair the screenshot comparison.',
+                timestamp: null
+              },
+              {
+                role: 'tool',
+                text: 'internal-build-cache-token',
+                timestamp: null
+              }
+            ]
+          }
+        ],
+        {
+          query: 'internal-build-cache-token',
+          agents: ['claude'],
+          scope: 'all',
+          sort: 'updated',
+          activeWorktreePath: null,
+          hideEmptySessions: true
+        }
+      )
+    ).toEqual([])
+  })
+
   it('matches Windows workspace paths case-insensitively', () => {
     expect(
       filterAiVaultSessions(
@@ -105,6 +166,36 @@ describe('filterAiVaultSessions', () => {
         }
       )
     ).toHaveLength(1)
+  })
+
+  it('returns no sessions for oversized pasted queries before reading session fields', () => {
+    const unreadableSession = { ...baseSession }
+    Object.defineProperty(unreadableSession, 'agent', {
+      get() {
+        throw new Error('session should not be scanned')
+      }
+    })
+
+    expect(
+      filterAiVaultSessions([unreadableSession], {
+        query: 'x'.repeat(AI_VAULT_SESSION_FILTER_QUERY_MAX_BYTES + 1),
+        agents: ['claude'],
+        scope: 'all',
+        sort: 'updated',
+        activeWorktreePath: null,
+        hideEmptySessions: false
+      })
+    ).toEqual([])
+  })
+})
+
+describe('isAiVaultSessionFilterQueryTooLarge', () => {
+  it('counts UTF-8 bytes rather than UTF-16 code units', () => {
+    expect(
+      isAiVaultSessionFilterQueryTooLarge(
+        'é'.repeat(AI_VAULT_SESSION_FILTER_QUERY_MAX_BYTES / 2 + 1)
+      )
+    ).toBe(true)
   })
 })
 

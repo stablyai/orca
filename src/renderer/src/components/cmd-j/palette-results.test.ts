@@ -1,10 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Globe, Settings } from 'lucide-react'
 import type { CmdJQuickAction } from './quick-actions'
 import {
+  CMD_J_PALETTE_QUERY_MAX_BYTES,
   buildCmdJActionResults,
   buildCmdJSettingsResults,
-  rankCmdJMiddleResults
+  isCmdJPaletteQueryTooLarge,
+  rankCmdJMiddleResults,
+  type CmdJActionResult,
+  type CmdJSettingsResult
 } from './palette-results'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 
@@ -157,6 +161,10 @@ function top(query: string): string | undefined {
   })[0]?.id
 }
 
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
 describe('Cmd+J palette middle-band ranking', () => {
   it.each([
     ['new terminal', 'new-terminal-tab'],
@@ -200,5 +208,54 @@ describe('Cmd+J palette middle-band ranking', () => {
   it('does not match settings on one-character or description-only queries', () => {
     expect(top('t')).toBeUndefined()
     expect(top('cookie import')).toBeUndefined()
+  })
+
+  it('normalizes accepted multiline pasted queries without regex replacement', () => {
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+
+    expect(top('  new\n\tterminal  ')).toBe('new-terminal-tab')
+
+    const usedWhitespaceReplace = replaceSpy.mock.calls.some(
+      ([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+'
+    )
+    expect(usedWhitespaceReplace).toBe(false)
+  })
+
+  it('rejects oversized pasted queries before reading candidate keywords', () => {
+    const oversizedQuery = 'secret-palette-query'.repeat(CMD_J_PALETTE_QUERY_MAX_BYTES)
+    const setting = {
+      id: 'settings:throwing',
+      kind: 'settings',
+      title: 'Throwing Setting',
+      description: '',
+      icon: Settings,
+      sectionId: 'general',
+      order: 0,
+      get configKeywords(): string[] {
+        throw new Error('oversized palette queries must not scan settings keywords')
+      }
+    } as CmdJSettingsResult
+    const action = {
+      id: 'throwing-action',
+      kind: 'action',
+      title: 'Throwing Action',
+      description: '',
+      icon: Globe,
+      order: 0,
+      isAvailable: available,
+      run: noopRun,
+      get verbKeywords(): string[] {
+        throw new Error('oversized palette queries must not scan action keywords')
+      }
+    } as CmdJActionResult
+
+    expect(isCmdJPaletteQueryTooLarge(oversizedQuery)).toBe(true)
+    expect(
+      rankCmdJMiddleResults({
+        query: oversizedQuery,
+        settingsResults: [setting],
+        actionResults: [action]
+      })
+    ).toEqual([])
   })
 })

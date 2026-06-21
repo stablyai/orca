@@ -10,6 +10,7 @@ import { commandCodeHookService } from '../command-code/hook-service'
 import { devinHookService } from '../devin/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
+import { kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 
 type RemoteManagedHookInstaller = readonly [
@@ -28,7 +29,8 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
   ['command-code', (sftp, remoteHome) => commandCodeHookService.installRemote(sftp, remoteHome)],
   ['grok', (sftp, remoteHome) => grokHookService.installRemote(sftp, remoteHome)],
   ['hermes', (sftp, remoteHome) => hermesHookService.installRemote(sftp, remoteHome)],
-  ['devin', (sftp, remoteHome) => devinHookService.installRemote(sftp, remoteHome)]
+  ['devin', (sftp, remoteHome) => devinHookService.installRemote(sftp, remoteHome)],
+  ['kimi', (sftp, remoteHome) => kimiHookService.installRemote(sftp, remoteHome)]
 ]
 
 export async function installRemoteManagedAgentHooks(

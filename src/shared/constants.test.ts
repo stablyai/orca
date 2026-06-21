@@ -21,6 +21,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').sourceControlViewMode).toBe('list')
   })
 
+  it('keeps Source Control changes first by default', () => {
+    expect(getDefaultSettings('/tmp').sourceControlGroupOrder).toBe('changes-first')
+  })
+
   it('keeps first-work branch auto-renaming on by default for new settings', () => {
     expect(getDefaultSettings('/tmp').autoRenameBranchFromWork).toBe(true)
     expect(getDefaultSettings('/tmp').autoRenameBranchFromWorkDefaultedOn).toBe(true)

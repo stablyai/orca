@@ -64,8 +64,10 @@ import {
   type MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { translate } from '@/i18n/i18n'
+import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 
 type ThreadReadFilter = 'all' | 'unread'
 type ActivityGroupBy = 'status' | 'project' | 'worktree' | 'agent'
@@ -420,7 +422,7 @@ function agentTitle(event: ActivityEvent): string {
 }
 
 function agentSummary(event: ActivityEvent): string {
-  const prompt = event.entry.prompt.trim()
+  const prompt = getAgentRowPrimaryText(event.entry)
   if (event.state === 'done') {
     const message = event.entry.lastAssistantMessage?.trim()
     return message || prompt || 'Completed the current turn.'
@@ -448,7 +450,7 @@ function paneTitleForEntry(entry: AgentStatusEntry, tab: TerminalTab): string {
   if (customTitle) {
     return customTitle
   }
-  const prompt = entry.prompt.trim()
+  const prompt = getAgentRowPrimaryText(entry)
   if (prompt) {
     return prompt
   }
@@ -989,12 +991,24 @@ export function groupActivityThreadsByStatus(threads: AgentPaneThread[]): Activi
 function threadSearchText(thread: AgentPaneThread): string {
   const latest = thread.latestEvent
   const stateLabel = threadAgentStateLabel(thread)
-  const currentPrompt = thread.currentAgentEntry?.prompt.trim() ?? ''
+  const currentPrompt = thread.currentAgentEntry
+    ? getAgentRowPrimaryText(thread.currentAgentEntry)
+    : ''
+  const rawCurrentPrompt = thread.currentAgentEntry?.prompt.trim() ?? ''
   const currentSummary = thread.currentAgentEntry?.lastAssistantMessage?.trim() ?? ''
   const latestEventText = latest
     ? `${agentTitle(latest)} ${agentSummary(latest)} ${agentMeta(latest)}`
     : ''
-  return `${thread.paneTitle} ${thread.worktree.displayName} ${thread.repo?.displayName ?? ''} ${formatAgentTypeLabel(thread.agentType)} ${stateLabel} ${currentPrompt} ${currentSummary} ${thread.responsePreview} ${latestEventText}`.toLowerCase()
+  return `${thread.paneTitle} ${thread.worktree.displayName} ${thread.repo?.displayName ?? ''} ${formatAgentTypeLabel(thread.agentType)} ${stateLabel} ${currentPrompt} ${rawCurrentPrompt} ${currentSummary} ${thread.responsePreview} ${latestEventText}`.toLowerCase()
+}
+
+export const ACTIVITY_SEARCH_QUERY_MAX_BYTES = 2 * 1024
+
+export function isActivitySearchQueryTooLarge(
+  query: string,
+  maxBytes = ACTIVITY_SEARCH_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
 export function activityThreadMatchesSearchQuery({
@@ -1004,8 +1018,14 @@ export function activityThreadMatchesSearchQuery({
   thread: AgentPaneThread
   searchQuery: string
 }): boolean {
-  const trimmedQuery = searchQuery.trim().toLowerCase()
-  return !trimmedQuery || threadSearchText(thread).includes(trimmedQuery)
+  if (isActivitySearchQueryTooLarge(searchQuery)) {
+    return false
+  }
+  const trimmedQuery = searchQuery.trim()
+  if (!trimmedQuery) {
+    return true
+  }
+  return threadSearchText(thread).includes(trimmedQuery.toLowerCase())
 }
 
 function ThreadAgentStateIndicator({ thread }: { thread: AgentPaneThread }): React.JSX.Element {
@@ -1341,7 +1361,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   }
 
   const visibleThreads = useMemo(() => {
-    const trimmedQuery = query.trim().toLowerCase()
+    const normalizedQuery = isActivitySearchQueryTooLarge(query) ? null : query.trim().toLowerCase()
     return allThreads.filter((thread) => {
       // Why: keep the just-selected thread visible even after auto-mark-read
       // flips it to read, otherwise clicking a row in unread-only mode makes it
@@ -1353,7 +1373,10 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       ) {
         return false
       }
-      return activityThreadMatchesSearchQuery({ thread, searchQuery: trimmedQuery })
+      if (normalizedQuery === null) {
+        return false
+      }
+      return activityThreadMatchesSearchQuery({ thread, searchQuery: normalizedQuery })
     })
   }, [allThreads, readFilter, query, effectiveSelectedPaneKey])
   const visibleThreadGroups = useMemo(

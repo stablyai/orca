@@ -201,7 +201,7 @@ export function ExperimentalPane({
         <SearchableSetting
           title={translate(
             'auto.components.settings.ExperimentalPane.agentHibernation.title',
-            'Agent hibernation'
+            'Agent sleep'
           )}
           description={translate(
             'auto.components.settings.ExperimentalPane.agentHibernation.description',
@@ -216,7 +216,7 @@ export function ExperimentalPane({
               <Label>
                 {translate(
                   'auto.components.settings.ExperimentalPane.agentHibernation.title',
-                  'Agent hibernation'
+                  'Agent sleep'
                 )}
               </Label>
               <p className="text-xs text-muted-foreground">
@@ -230,7 +230,7 @@ export function ExperimentalPane({
               checked={agentHibernationEnabled}
               ariaLabel={translate(
                 'auto.components.settings.ExperimentalPane.agentHibernation.toggleLabel',
-                'Toggle agent hibernation'
+                'Toggle agent sleep'
               )}
               onChange={() =>
                 updateSettings({
@@ -243,11 +243,11 @@ export function ExperimentalPane({
             <NumberField
               label={translate(
                 'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesLabel',
-                'Hibernate after'
+                'Sleep after'
               )}
               description={translate(
                 'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesDescription',
-                'How many idle minutes a completed background agent must wait before Orca can hibernate it.'
+                'How many idle minutes a completed background agent must wait before Orca can sleep it.'
               )}
               value={agentHibernationIdleMinutes}
               min={MIN_AGENT_HIBERNATION_IDLE_MS / MS_PER_MINUTE}

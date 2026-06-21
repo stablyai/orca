@@ -4,6 +4,10 @@ import { execFile, execFileSync } from 'child_process'
 import { existsSync, readFileSync, unlinkSync } from 'fs'
 import { connect, type Socket } from 'net'
 import { promisify } from 'util'
+import {
+  getProcessOutputFields,
+  iterateProcessOutputLines
+} from '../../shared/process-output-field-scanner'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from '../startup/startup-diagnostics'
 import { encodeNdjson } from './ndjson'
 import { getDaemonPidPath } from './daemon-spawner'
@@ -316,13 +320,8 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
 function getLinuxProcessStartedAtMs(pid: number): number | null {
   try {
     const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
-    const afterCommand = stat.slice(stat.lastIndexOf(')') + 2)
-    const fields = afterCommand.split(' ')
-    const startTicks = Number(fields[19])
-    const bootTimeLine = readFileSync('/proc/stat', 'utf8')
-      .split('\n')
-      .find((line) => line.startsWith('btime '))
-    const bootTimeSeconds = bootTimeLine ? Number(bootTimeLine.split(/\s+/)[1]) : Number.NaN
+    const startTicks = parseLinuxProcStartTicks(stat)
+    const bootTimeSeconds = parseLinuxBootTimeSeconds(readFileSync('/proc/stat', 'utf8'))
     const ticksPerSecond = Number(
       execFileSync('getconf', ['CLK_TCK'], { encoding: 'utf8', timeout: 1_000 }).trim()
     )
@@ -338,6 +337,26 @@ function getLinuxProcessStartedAtMs(pid: number): number | null {
   } catch {
     return null
   }
+}
+
+export function parseLinuxProcStartTicks(stat: string): number {
+  const commandEndIndex = stat.lastIndexOf(')')
+  if (commandEndIndex === -1) {
+    return Number.NaN
+  }
+
+  const fields = getProcessOutputFields(stat.slice(commandEndIndex + 1), 20)
+  return Number(fields[19])
+}
+
+export function parseLinuxBootTimeSeconds(procStat: string): number {
+  for (const line of iterateProcessOutputLines(procStat)) {
+    if (!line.startsWith('btime ')) {
+      continue
+    }
+    return Number(getProcessOutputFields(line, 2)[1])
+  }
+  return Number.NaN
 }
 
 export function getProcessStartedAtMs(pid: number): number | null {

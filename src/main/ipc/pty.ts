@@ -5,7 +5,14 @@ boundary. Splitting it by line count would scatter tightly coupled terminal
 process behavior across files without a cleaner ownership seam. */
 import { join, delimiter } from 'path'
 import { randomUUID } from 'crypto'
-import { type BrowserWindow, type WebContents, ipcMain, app } from 'electron'
+import {
+  type BrowserWindow,
+  type IpcMainEvent,
+  type IpcMainInvokeEvent,
+  type WebContents,
+  ipcMain,
+  app
+} from 'electron'
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
@@ -50,6 +57,10 @@ import {
   launchSourceSchema,
   requestKindSchema
 } from '../../shared/telemetry-events'
+import {
+  isTerminalInputTooLargeWithDeferredMeasurement,
+  iterateTerminalInputChunks
+} from '../../shared/terminal-input'
 import { isRemoteAgentHooksEnabled } from '../../shared/agent-hook-relay'
 import { createTerminalSessionStateSaveFailureMessage } from '../../shared/terminal-session-state-save-failure'
 import { readShellStartupEnvVar } from '../pty/shell-startup-env'
@@ -2656,7 +2667,85 @@ export function registerPtyHandlers(
     }
   )
 
-  const writePtyInput = (args: { id: string; data: string }): boolean => {
+  const writePtyProviderInputWithinLimit = (
+    provider: IPtyProvider,
+    id: string,
+    data: string
+  ): boolean | Promise<boolean> => {
+    const chunks = iterateTerminalInputChunks(data)
+    const first = chunks.next()
+    if (first.done) {
+      provider.write(id, data)
+      return true
+    }
+    const second = chunks.next()
+    if (second.done) {
+      provider.write(id, first.value)
+      return true
+    }
+    return writePtyProviderInputChunks(provider, id, chunks, first.value, second.value)
+  }
+
+  const writePtyProviderInput = (
+    provider: IPtyProvider,
+    id: string,
+    data: string
+  ): boolean | Promise<boolean> => {
+    try {
+      const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(data)
+      if (typeof tooLarge === 'boolean') {
+        return tooLarge ? false : writePtyProviderInputWithinLimit(provider, id, data)
+      }
+      return tooLarge
+        .then((result) => (result ? false : writePtyProviderInputWithinLimit(provider, id, data)))
+        .catch(() => false)
+    } catch {
+      return false
+    }
+  }
+
+  const writePtyProviderInputChunks = async (
+    provider: IPtyProvider,
+    id: string,
+    chunks: Iterator<string>,
+    firstChunk: string,
+    secondChunk: string
+  ): Promise<boolean> => {
+    try {
+      let chunk: IteratorResult<string> = { done: false, value: firstChunk }
+      let nextChunk: IteratorResult<string> = { done: false, value: secondChunk }
+      while (!chunk.done) {
+        provider.write(id, chunk.value)
+        if (!nextChunk.done) {
+          await new Promise((resolve) => setTimeout(resolve, 0))
+        }
+        chunk = nextChunk
+        nextChunk = chunks.next()
+      }
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  type PtyWritePayload = { id: string; data: string }
+
+  const isPtyWritePayload = (value: unknown): value is PtyWritePayload =>
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { id?: unknown }).id === 'string' &&
+    (value as { id: string }).id.length > 0 &&
+    typeof (value as { data?: unknown }).data === 'string'
+
+  const isPtyWriteEventFromMainWindow = (
+    event: IpcMainEvent | IpcMainInvokeEvent,
+    mainWebContents: WebContents
+  ): boolean =>
+    event.sender === mainWebContents &&
+    !mainWindow.isDestroyed() &&
+    !(typeof mainWebContents.isDestroyed === 'function' && mainWebContents.isDestroyed())
+
+  const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {
     // Why: defense-in-depth for the mobile-presence lock. The renderer's
     // xterm.onData guard already drops desktop keystrokes when mobile is
     // driving, but a stale view between the main-side state flip and the
@@ -2674,14 +2763,13 @@ export function registerPtyHandlers(
       const now = performance.now()
       lastInputAtByPty.set(args.id, now)
       interactiveOutputCharsByPty.set(args.id, 0)
-      provider.write(args.id, args.data)
-      return true
+      return writePtyProviderInput(provider, args.id, args.data)
     } catch {
       return false
     }
   }
 
-  const writePtyInputAccepted = (args: { id: string; data: string }): boolean => {
+  const writePtyInputAccepted = (args: PtyWritePayload): boolean | Promise<boolean> => {
     if (runtime?.getDriver(args.id).kind === 'mobile') {
       return false
     }
@@ -2700,17 +2788,22 @@ export function registerPtyHandlers(
       const now = performance.now()
       lastInputAtByPty.set(args.id, now)
       interactiveOutputCharsByPty.set(args.id, 0)
-      provider.write(args.id, args.data)
-      return true
+      return writePtyProviderInput(provider, args.id, args.data)
     } catch {
       return false
     }
   }
 
-  ipcMain.on('pty:write', (_event, args: { id: string; data: string }) => {
+  ipcMain.on('pty:write', (event, args: unknown) => {
+    if (!isPtyWriteEventFromMainWindow(event, mainWindow.webContents) || !isPtyWritePayload(args)) {
+      return
+    }
     writePtyInput(args)
   })
-  ipcMain.handle('pty:writeAccepted', (_event, args: { id: string; data: string }): boolean => {
+  ipcMain.handle('pty:writeAccepted', (event, args: unknown): boolean | Promise<boolean> => {
+    if (!isPtyWriteEventFromMainWindow(event, mainWindow.webContents) || !isPtyWritePayload(args)) {
+      return false
+    }
     return writePtyInputAccepted(args)
   })
 

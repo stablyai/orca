@@ -1,5 +1,6 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
+import { getProcessOutputFields } from '../shared/process-output-field-scanner'
 import { encodePowerShellCommand } from '../shared/powershell-command-encoding'
 import type { DetectedPort } from './port-scan-handler'
 import { buildRelayCommandEnv } from './relay-command-env'
@@ -101,7 +102,7 @@ export function parseWindowsNetstatOutput(output: string): DetectedPort[] {
   const rows: DetectedPort[] = []
 
   for (const line of output.split(/\r?\n/)) {
-    const fields = line.trim().split(/\s+/)
+    const fields = getProcessOutputFields(line, 5)
     if (fields.length < 5 || fields[0].toUpperCase() !== 'TCP') {
       continue
     }

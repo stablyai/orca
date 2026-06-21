@@ -37,7 +37,7 @@ import {
 import {
   assertWorktreeCleanForRemoval,
   forceDeleteLocalBranch,
-  listWorktrees as listGitWorktrees,
+  listWorktreesStrict as listGitWorktreesStrict,
   removeWorktree
 } from '../git/worktree'
 import { gitExecFileAsync } from '../git/runner'
@@ -1245,8 +1245,8 @@ export function registerWorktreeHandlers(
         const registeredWorktrees = repo.connectionId
           ? await provider!.listWorktrees(repo.path)
           : hasLocalWorktreeGitOptions
-            ? await listGitWorktrees(repo.path, localWorktreeGitOptions)
-            : await listGitWorktrees(repo.path)
+            ? await listGitWorktreesStrict(repo.path, localWorktreeGitOptions)
+            : await listGitWorktreesStrict(repo.path)
         const removedMeta = store.getWorktreeMeta(args.worktreeId)
         const removedPushTarget = removedMeta?.pushTarget
         const registeredWorktree = findRegisteredDeletableWorktree(
@@ -1519,10 +1519,10 @@ export function registerWorktreeHandlers(
             // (`.git/worktrees/<name>`) is still intact. Without pruning, `git worktree
             // list` continues to show the stale entry and the branch it had checked out
             // remains locked — other worktrees cannot check it out.
-            await gitExecFileAsync(
-              ['worktree', 'prune'],
-              getLocalProjectGitExecOptions(store, repo)
-            ).catch(() => {})
+            await gitExecFileAsync(['worktree', 'prune'], {
+              cwd: repo.path,
+              ...localWorktreeGitOptions
+            }).catch(() => {})
             await cleanupUnusedWorktreePushTargetRemote(
               repo.path,
               args.worktreeId,

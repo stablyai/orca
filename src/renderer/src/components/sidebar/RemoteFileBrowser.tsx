@@ -8,11 +8,13 @@ import {
   decideEnterAction,
   decideEscAction,
   filterEntries,
+  isRemoteFileBrowserPathResolveTextTooLarge,
   isPathMode,
   joinPath,
   parentPath,
   parsePathInput,
   resolveSegmentStep,
+  shouldDeferRemoteFileBrowserPasteResolve,
   type DirEntry
 } from './remote-file-browser-helpers'
 import { browseRuntimeServerDirectory } from '@/runtime/runtime-server-directory-browser'
@@ -362,6 +364,22 @@ export function RemoteFileBrowser({
       clearFileHint()
       setFilter(raw)
 
+      if (isRemoteFileBrowserPathResolveTextTooLarge(raw)) {
+        if (preview) {
+          setPreview(null)
+          previewGenRef.current++
+        }
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current)
+          debounceTimerRef.current = null
+        }
+        if (pasteResolveTimerRef.current) {
+          clearTimeout(pasteResolveTimerRef.current)
+          pasteResolveTimerRef.current = null
+        }
+        return
+      }
+
       if (!isPathMode(raw)) {
         // Leaving path mode: drop preview immediately so the committed
         // directory re-appears without a flicker.
@@ -409,7 +427,13 @@ export function RemoteFileBrowser({
   )
 
   const handleInputPaste = useCallback(
-    (_e: React.ClipboardEvent<HTMLInputElement>) => {
+    (e: React.ClipboardEvent<HTMLInputElement>) => {
+      if (e.defaultPrevented) {
+        return
+      }
+      if (shouldDeferRemoteFileBrowserPasteResolve(e.clipboardData.getData('text/plain'))) {
+        return
+      }
       // Paste resolves immediately; no debounce. React's onChange still fires
       // after the paste is applied to the input value, so we defer to the
       // next tick so `filter` reflects the pasted value.
@@ -423,7 +447,7 @@ export function RemoteFileBrowser({
           debounceTimerRef.current = null
         }
         const value = inputRef.current?.value ?? ''
-        if (isPathMode(value)) {
+        if (!isRemoteFileBrowserPathResolveTextTooLarge(value) && isPathMode(value)) {
           resolvePathInput(value)
         }
       }, 0)
@@ -576,6 +600,17 @@ export function RemoteFileBrowser({
   const displayEmptyDirCopy = isPreviewActive
     ? `${preview!.resolvedPath} is empty`
     : 'Empty directory'
+  const noMatchesFilter = isPreviewActive ? preview!.filter : filter
+  const displayNoMatchesCopy = isRemoteFileBrowserPathResolveTextTooLarge(noMatchesFilter)
+    ? translate(
+        'auto.components.sidebar.RemoteFileBrowser.largeInputNoMatches',
+        'No matches for this long input'
+      )
+    : translate(
+        'auto.components.sidebar.RemoteFileBrowser.00c4235c10',
+        "No matches for '{{value0}}'",
+        { value0: noMatchesFilter }
+      )
 
   // Disable Select folder while a non-empty path-mode preview is visible so
   // the committed directory isn't silently selected while the list shows a
@@ -697,13 +732,8 @@ export function RemoteFileBrowser({
             // Directory has contents; filter hides them all. Distinguishing
             // filter emptiness from directory emptiness keeps copy accurate.
             <div className="flex items-center justify-center h-full">
-              <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.sidebar.RemoteFileBrowser.00c4235c10',
-                  "No matches for '{{value0}}'",
-                  { value0: isPreviewActive ? preview!.filter : filter }
-                )}
-              </p>
+              <p className="text-xs text-muted-foreground">{displayNoMatchesCopy}</p>
+              <p className="text-xs text-muted-foreground">{displayNoMatchesCopy}</p>
             </div>
           ) : (
             displayEntries.map((entry) => {

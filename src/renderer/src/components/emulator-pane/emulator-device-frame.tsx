@@ -29,8 +29,8 @@ import { EmulatorScreenStreamContent } from './emulator-screen-stream-content'
 import { useEmulatorControlStream } from './use-emulator-control-stream'
 import { useEmulatorPaneSize } from './use-emulator-pane-size'
 import { useEmulatorScreenKeyboard } from './use-emulator-screen-keyboard'
+import { getEmulatorScreenAriaLabel } from './emulator-screen-aria-label'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
 
 type EmulatorDeviceFrameProps = {
   previewUrl?: string
@@ -43,9 +43,8 @@ type EmulatorDeviceFrameProps = {
   onGesture: (points: EmulatorGesturePoint[]) => void
 }
 
-const MAX_GESTURE_SAMPLES = 32
-const WHEEL_GESTURE_IDLE_MS = 80
-
+const MAX_GESTURE_SAMPLES = 32,
+  WHEEL_GESTURE_IDLE_MS = 80
 type PendingWheelGesture = {
   end: EmulatorScreenPoint
   live: boolean
@@ -79,9 +78,13 @@ export function EmulatorDeviceFrame({
   const [streamError, setStreamError] = useState(false)
   const [streamSize, setStreamSize] = useState<StreamSize | null>(null)
   const canInteract = isLive && !loading && !streamError
-  const { sendKeyboardFrames, sendTouch } = useEmulatorControlStream(wsUrl, canInteract)
+  const { cancelKeyboardFrames, sendKeyboardFrames, sendTouch } = useEmulatorControlStream(
+    wsUrl,
+    canInteract
+  )
   const { enableKeyboardCapture, handleBlur, handleKeyDown, handlePaste, keyboardCaptureActive } =
     useEmulatorScreenKeyboard({
+      cancelKeyboardFrames,
       canInteract,
       sendKeyboardFrames
     })
@@ -386,19 +389,7 @@ export function EmulatorDeviceFrame({
             role={isLive ? 'application' : undefined}
             tabIndex={isLive ? 0 : undefined}
             aria-keyshortcuts={keyboardCaptureActive ? 'Escape' : undefined}
-            aria-label={
-              isLive
-                ? keyboardCaptureActive
-                  ? translate(
-                      'auto.components.emulator.pane.emulator.device.frame.8f25ffaf8a',
-                      'Emulator screen, keyboard captured. Press Escape to release.'
-                    )
-                  : translate(
-                      'auto.components.emulator.pane.emulator.device.frame.9406c15775',
-                      'Emulator screen'
-                    )
-                : undefined
-            }
+            aria-label={getEmulatorScreenAriaLabel(isLive, keyboardCaptureActive)}
           >
             {/* Why: the stream is the actual emulator screen; fake in-screen
                 chrome doubles up with iOS's real status bar and makes bezels lie. */}

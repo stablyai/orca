@@ -132,6 +132,9 @@ function renderCard(
         onSmartLinearIssueSelect={() => {}}
         smartNameSelection={null}
         onClearSmartNameSelection={() => {}}
+        canReuseSelectedBranch={false}
+        reuseSelectedBranch={false}
+        onReuseSelectedBranchChange={() => {}}
         forkPushWarning={null}
         detectedAgentIds={null}
         onOpenAgentSettings={() => {}}
@@ -203,6 +206,64 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     ).toBe('Repo A,Repo B')
     expect(current.container.querySelector('[data-testid="repo-backed-source-trigger"]')).toBeNull()
     expect(current.container.querySelectorAll('[data-testid="project-combobox"]')).toHaveLength(1)
+  })
+
+  it('keeps the reuse-branch row collapsed until a local branch is reusable', () => {
+    // Why: the row stays mounted (for the smooth height transition) but is
+    // collapsed + aria-hidden when reuse isn't possible.
+    current = renderCard({ canReuseSelectedBranch: false })
+    const collapsedReuse = [...current.container.querySelectorAll('[aria-hidden="true"]')].find(
+      (el) => el.textContent?.includes('Reuse branch')
+    )
+    expect(collapsedReuse).toBeTruthy()
+
+    act(() => current?.root.unmount())
+    current?.container.remove()
+
+    current = renderCard({ canReuseSelectedBranch: true, reuseSelectedBranch: true })
+    const reuseLabel = [...current.container.querySelectorAll('label')].find((label) =>
+      label.textContent?.includes('Reuse branch')
+    )
+    expect(reuseLabel).toBeTruthy()
+    // Visible: not inside an aria-hidden (collapsed) wrapper.
+    expect(reuseLabel?.closest('[aria-hidden="true"]')).toBeNull()
+    expect(current.container.textContent).toContain(
+      'Check out the existing branch instead of creating a new one from it.'
+    )
+  })
+
+  it('emits the toggled value from the reuse checkbox in both directions', () => {
+    const clickReuseCheckbox = (): void => {
+      const reuseLabel = [...(current?.container.querySelectorAll('label') ?? [])].find((label) =>
+        label.textContent?.includes('Reuse branch')
+      )
+      const checkbox = reuseLabel?.querySelector<HTMLInputElement>('input[type="checkbox"]')
+      expect(checkbox).toBeTruthy()
+      act(() => checkbox?.click())
+    }
+
+    // Checked -> unchecked (opting out of reuse).
+    const offChanges: boolean[] = []
+    current = renderCard({
+      canReuseSelectedBranch: true,
+      reuseSelectedBranch: true,
+      onReuseSelectedBranchChange: (next) => offChanges.push(next)
+    })
+    clickReuseCheckbox()
+    expect(offChanges).toEqual([false])
+
+    act(() => current?.root.unmount())
+    current?.container.remove()
+
+    // Unchecked -> checked (opting into reuse — the action that pins the branch).
+    const onChanges: boolean[] = []
+    current = renderCard({
+      canReuseSelectedBranch: true,
+      reuseSelectedBranch: false,
+      onReuseSelectedBranchChange: (next) => onChanges.push(next)
+    })
+    clickReuseCheckbox()
+    expect(onChanges).toEqual([true])
   })
 
   it('does not disable folder workspace creation when only source lookup needs SSH', () => {

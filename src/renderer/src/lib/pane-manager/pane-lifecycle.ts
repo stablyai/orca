@@ -16,7 +16,7 @@ import type { PaneManagerOptions, ManagedPaneInternal } from './pane-manager-typ
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { DragReorderState } from './pane-drag-reorder'
 import type { DragReorderCallbacks } from './pane-drag-reorder'
-import { attachPaneDrag } from './pane-drag-reorder'
+import { attachPaneDrag } from './pane-drag-pointer'
 import { safeFit } from './pane-tree-ops'
 import {
   attachPaneFitResizeObserver,

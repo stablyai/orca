@@ -1,13 +1,12 @@
 import type React from 'react'
 import { Copy, Play } from 'lucide-react'
-import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { agentLabel } from './ai-vault-session-filters'
 import { translate } from '@/i18n/i18n'
+import { recentSessionConversationTurns } from './ai-vault-session-display'
 
 export function SessionInlineDetails({
   id,
@@ -23,26 +22,12 @@ export function SessionInlineDetails({
   resumeDisabled: boolean
 }): React.JSX.Element {
   const updatedAt = session.updatedAt ?? session.modifiedAt
-  const usage = translate(
-    'auto.components.right.sidebar.AiVaultSessionDetails.usageValue',
-    '{{value0}} msgs{{value1}}',
-    {
-      value0: session.messageCount,
-      value1:
-        session.totalTokens > 0
-          ? translate(
-              'auto.components.right.sidebar.AiVaultSessionDetails.tokenSuffix',
-              ' · {{value0}} tok',
-              { value0: formatTokenCount(session.totalTokens) }
-            )
-          : ''
-    }
-  )
+  const recentTurns = recentSessionConversationTurns(session, 3)
 
   return (
     <div
       id={id}
-      className="mt-2 rounded-md border border-sidebar-border bg-sidebar-accent/25 p-2"
+      className="mt-2 rounded-md border border-sidebar-border bg-sidebar-accent/25 p-2.5"
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
@@ -51,66 +36,62 @@ export function SessionInlineDetails({
         event.stopPropagation()
       }}
     >
-      <div className="flex min-w-0 items-start gap-2">
-        <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center text-muted-foreground">
-          <AgentIcon agent={session.agent} size={16} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="line-clamp-2 text-[12px] font-medium leading-4 text-foreground">
+      <div className="space-y-2.5">
+        <SessionReceiptSection
+          label={translate(
+            'auto.components.right.sidebar.AiVaultSessionDetails.originalAsk',
+            'Original ask'
+          )}
+        >
+          <div className="min-w-0 break-words text-[12px] font-medium leading-4 text-foreground [overflow-wrap:anywhere]">
             {session.title}
           </div>
-          <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-            {agentLabel(session.agent)}
-          </div>
-        </div>
-      </div>
+        </SessionReceiptSection>
 
-      <div className="mt-2 grid gap-1 text-[11px] leading-4">
-        <SessionDetailCopyRow
+        <SessionReceiptSection
           label={translate(
-            'auto.components.right.sidebar.AiVaultSessionDetails.updated',
-            'Updated'
+            'auto.components.right.sidebar.AiVaultSessionDetails.latestTurns',
+            'Latest turns'
           )}
-          value={formatDateTime(updatedAt)}
-        />
-        <SessionDetailCopyRow
-          label={translate(
-            'auto.components.right.sidebar.AiVaultSessionDetails.created',
-            'Created'
+        >
+          {recentTurns.length > 0 ? (
+            <div className="grid gap-1.5">
+              {recentTurns.map((turn, index) => (
+                <div
+                  key={`${turn.timestamp ?? 'turn'}-${index}`}
+                  className="grid min-w-0 grid-cols-[3.25rem_minmax(0,1fr)] gap-2 text-[11px] leading-4"
+                >
+                  <span className="text-muted-foreground">{conversationRoleLabel(turn.role)}</span>
+                  <span className="line-clamp-3 text-foreground/90">{turn.text}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-[11px] leading-4 text-muted-foreground">
+              {translate(
+                'auto.components.right.sidebar.AiVaultSessionDetails.noPreviewAvailable',
+                'No conversation preview available'
+              )}
+            </div>
           )}
-          value={formatDateTime(session.createdAt)}
-        />
-        {session.model ? (
-          <SessionDetailCopyRow
-            label={translate('auto.components.right.sidebar.AiVaultSessionDetails.model', 'Model')}
-            value={session.model}
-          />
-        ) : null}
-        {session.branch ? (
-          <SessionDetailCopyRow
-            label={translate(
-              'auto.components.right.sidebar.AiVaultSessionDetails.branch',
-              'Branch'
+        </SessionReceiptSection>
+
+        <div className="flex min-w-0 items-center gap-1.5 text-[11px] leading-4 text-muted-foreground">
+          <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
+            <AgentIcon agent={session.agent} size={14} />
+          </span>
+          <span className="min-w-0 truncate">{agentLabel(session.agent)}</span>
+          <span className="shrink-0 text-muted-foreground/55">·</span>
+          <span className="shrink-0">
+            {translate(
+              'auto.components.right.sidebar.AiVaultSessionDetails.messageCount',
+              '{{value0}} msgs',
+              { value0: session.messageCount }
             )}
-            value={session.branch}
-          />
-        ) : null}
-        <SessionDetailCopyRow
-          label={translate('auto.components.right.sidebar.AiVaultSessionDetails.usage', 'Usage')}
-          value={usage}
-        />
-        <SessionDetailCopyRow
-          label={translate(
-            'auto.components.right.sidebar.AiVaultSessionDetails.session',
-            'Session'
-          )}
-          copyLabel={translate(
-            'auto.components.right.sidebar.AiVaultSessionDetails.sessionId',
-            'Session ID'
-          )}
-          value={session.sessionId}
-          mono
-        />
+          </span>
+          <span className="shrink-0 text-muted-foreground/55">·</span>
+          <SessionTime value={updatedAt} />
+        </div>
       </div>
 
       <div className="mt-2 grid gap-1">
@@ -154,71 +135,19 @@ export function SessionInlineDetails({
   )
 }
 
-function SessionDetailCopyRow({
+function SessionReceiptSection({
   label,
-  copyLabel = label,
-  value,
-  mono = false
+  children
 }: {
   label: string
-  copyLabel?: string
-  value: string
-  mono?: boolean
+  children: React.ReactNode
 }): React.JSX.Element {
-  const handleCopy = (event: React.MouseEvent<HTMLButtonElement>): void => {
-    event.stopPropagation()
-    void window.api.ui
-      .writeClipboardText(value)
-      .then(() => {
-        toast.success(
-          translate('auto.components.right.sidebar.AiVaultPanel.valueCopied', '{{value0}} copied', {
-            value0: copyLabel
-          })
-        )
-      })
-      .catch(() => {
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.AiVaultPanel.valueCopyFailed',
-            'Unable to copy {{value0}}',
-            { value0: copyLabel }
-          )
-        )
-      })
-  }
-
   return (
-    <div className="grid min-w-0 grid-cols-[4.5rem_minmax(0,1fr)_1.5rem] items-center gap-2 rounded-sm px-1 py-0.5">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={cn('min-w-0 truncate text-foreground/90', mono && 'font-mono')}>
-        {value}
-      </span>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            draggable={false}
-            onClick={handleCopy}
-            aria-label={translate(
-              'auto.components.right.sidebar.AiVaultSessionDetails.copyDetailValue',
-              'Copy {{value0}}',
-              { value0: copyLabel }
-            )}
-            className="size-5 text-muted-foreground hover:text-foreground"
-          >
-            <Copy className="size-3" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4}>
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionDetails.copyDetailValue',
-            'Copy {{value0}}',
-            { value0: copyLabel }
-          )}
-        </TooltipContent>
-      </Tooltip>
+    <div className="grid gap-1">
+      <div className="text-[10px] font-semibold uppercase leading-3 text-muted-foreground">
+        {label}
+      </div>
+      {children}
     </div>
   )
 }
@@ -248,17 +177,6 @@ export function SessionTime({
       <time dateTime={date.toISOString()}>{formatTimeAgo(timestamp)}</time>
     </span>
   )
-}
-
-function formatDateTime(value: string | null): string {
-  if (!value) {
-    return translate('auto.components.right.sidebar.AiVaultSessionDetails.unknown', 'Unknown')
-  }
-  const timestamp = Date.parse(value)
-  if (!Number.isFinite(timestamp)) {
-    return translate('auto.components.right.sidebar.AiVaultSessionDetails.unknown', 'Unknown')
-  }
-  return new Date(timestamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -305,12 +223,18 @@ function formatTimeAgo(timestamp: number): string {
   )
 }
 
-export function formatTokenCount(value: number): string {
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}m`
+function conversationRoleLabel(role: AiVaultSession['previewMessages'][number]['role']): string {
+  if (role === 'user') {
+    return translate('auto.components.right.sidebar.AiVaultSessionDetails.userRole', 'You')
   }
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}k`
+  if (role === 'assistant') {
+    return translate('auto.components.right.sidebar.AiVaultSessionDetails.agentRole', 'Agent')
   }
-  return String(value)
+  if (role === 'tool') {
+    return translate('auto.components.right.sidebar.AiVaultSessionDetails.toolRole', 'Tool')
+  }
+  if (role === 'system') {
+    return translate('auto.components.right.sidebar.AiVaultSessionDetails.systemRole', 'System')
+  }
+  return translate('auto.components.right.sidebar.AiVaultSessionDetails.sessionRole', 'Session')
 }

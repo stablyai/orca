@@ -169,7 +169,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('agent hibernation coordinator', () => {
+describe('agent sleep coordinator', () => {
   it('hibernates an eligible background worktree after two stable ticks', async () => {
     vi.useFakeTimers()
     const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))

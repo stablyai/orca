@@ -21,9 +21,10 @@ default_platform(:ios)
 WORKSPACE = "ios/Orca.xcworkspace"
 SCHEME = "Orca"
 BUNDLE_ID = "com.stably.orca.mobile"
+TESTFLIGHT_GROUPS = ["peeps"].freeze
 
 platform :ios do
-  desc "Build, sign, and upload Orca Mobile to TestFlight"
+  desc "Build, sign, upload, and share Orca Mobile on TestFlight"
   lane :release do
     api_key = app_store_connect_api_key(
       key_id: ENV.fetch("ASC_KEY_ID"),
@@ -72,10 +73,12 @@ platform :ios do
 
     upload_to_testflight(
       api_key: api_key,
-      skip_waiting_for_build_processing: true,
-      # Why: the human still drafts "What's New" + review notes in the ASC web
-      # UI (see the mobile-app-store-release skill). CI only delivers the build.
-      distribute_external: false,
+      # Why: fastlane can only assign external TestFlight groups after Apple
+      # finishes processing the uploaded build.
+      skip_waiting_for_build_processing: false,
+      distribute_external: true,
+      groups: TESTFLIGHT_GROUPS,
+      notify_external_testers: true,
     )
   end
 end

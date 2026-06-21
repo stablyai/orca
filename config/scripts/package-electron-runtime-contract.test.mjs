@@ -223,9 +223,21 @@ describe('Electron runtime package contract', () => {
       readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
     )
     const steps = goldenWorkflow.jobs['golden-e2e'].steps
-    const linuxRunStep = steps.find((step) => step.name === 'Run golden E2E tests on Linux')
-    const macRunStep = steps.find((step) => step.name === 'Run golden E2E tests on macOS')
-    const windowsRunStep = steps.find((step) => step.name === 'Run golden E2E tests on Windows')
+    const goldenPlatformLabels = new Map([
+      ['linux', 'Linux'],
+      ['mac', 'macOS'],
+      ['windows', 'Windows']
+    ])
+    const goldenPlatforms = goldenWorkflow.jobs['golden-e2e'].strategy.matrix.include
+      .map(({ platform }) => platform)
+      .sort()
+    const goldenRunSteps = goldenPlatforms.map((platform) => {
+      const label = goldenPlatformLabels.get(platform)
+
+      expect(label, platform).toBeDefined()
+
+      return steps.find((step) => step.name === `Run golden E2E tests on ${label}`)
+    })
     const pullRequestPaths = goldenWorkflow.on.pull_request.paths
     const releaseGoldenJob = releaseWorkflow.jobs['terminal-rendering-golden']
     const releaseEvidenceJob = releaseWorkflow.jobs['terminal-rendering-release-evidence']
@@ -247,8 +259,8 @@ describe('Electron runtime package contract', () => {
     expect(packageScripts['test:e2e:terminal-rendering-release-evidence']).toContain(
       'terminal-long-table-scroll-restore.spec.ts'
     )
-    for (const runStep of [linuxRunStep, macRunStep, windowsRunStep]) {
-      expect(runStep.run).toContain('pnpm run test:e2e:terminal-rendering-golden')
+    for (const runStep of goldenRunSteps) {
+      expect(runStep?.run).toContain('pnpm run test:e2e:terminal-rendering-golden')
     }
     expect(pullRequestPaths).toContain('tests/e2e/terminal-raw-emoji-table-scroll-restore.spec.ts')
     expect(pullRequestPaths).toContain('tests/e2e/fixtures/terminal-emoji-table.md')
@@ -260,7 +272,7 @@ describe('Electron runtime package contract', () => {
     expect(publishReleaseNeeds).not.toContain('terminal-rendering-release-evidence')
     expect(releaseGoldenJob['continue-on-error']).toBeUndefined()
     expect(releaseGoldenJob.strategy.matrix.include.map(({ platform }) => platform).sort()).toEqual(
-      ['linux', 'mac', 'windows']
+      goldenPlatforms
     )
     expect(releaseGoldenJob.steps.map((step) => step.run ?? '')).toContain(
       'xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden'

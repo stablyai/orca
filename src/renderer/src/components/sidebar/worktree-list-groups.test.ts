@@ -1500,6 +1500,122 @@ describe('project groups', () => {
     ])
   })
 
+  it('falls back to repoOrder for grouped repos missing projectGroupOrder in manual mode', () => {
+    const group: ProjectGroup = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const repoA: Repo = { ...repo, id: 'repo-a', displayName: 'alpha', projectGroupId: group.id }
+    const repoB: Repo = { ...repo, id: 'repo-b', displayName: 'beta', projectGroupId: group.id }
+    const repoC: Repo = { ...repo, id: 'repo-c', displayName: 'gamma', projectGroupId: group.id }
+    const groupedMap = new Map([
+      [repoA.id, repoA],
+      [repoB.id, repoB],
+      [repoC.id, repoC]
+    ])
+    const repoOrder = new Map([
+      [repoA.id, 0],
+      [repoB.id, 1],
+      [repoC.id, 2]
+    ])
+
+    const rows = buildRows(
+      'repo',
+      [
+        { ...worktree, id: 'wt-a', repoId: repoA.id },
+        { ...worktree, id: 'wt-b', repoId: repoB.id },
+        { ...worktree, id: 'wt-c', repoId: repoC.id }
+      ],
+      groupedMap,
+      null,
+      new Set(),
+      repoOrder,
+      undefined,
+      'manual',
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [group]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:group-1',
+      'repo:repo-a',
+      'repo:repo-b',
+      'repo:repo-c'
+    ])
+  })
+
+  it('sorts a dragged project between repo-order fallbacks inside a group', () => {
+    const group: ProjectGroup = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const repoA: Repo = { ...repo, id: 'repo-a', displayName: 'alpha', projectGroupId: group.id }
+    const repoB: Repo = { ...repo, id: 'repo-b', displayName: 'beta', projectGroupId: group.id }
+    const repoC: Repo = {
+      ...repo,
+      id: 'repo-c',
+      displayName: 'gamma',
+      projectGroupId: group.id,
+      projectGroupOrder: 500
+    }
+    const groupedMap = new Map([
+      [repoA.id, repoA],
+      [repoB.id, repoB],
+      [repoC.id, repoC]
+    ])
+    const repoOrder = new Map([
+      [repoA.id, 0],
+      [repoB.id, 1],
+      [repoC.id, 2]
+    ])
+
+    const rows = buildRows(
+      'repo',
+      [
+        { ...worktree, id: 'wt-a', repoId: repoA.id },
+        { ...worktree, id: 'wt-b', repoId: repoB.id },
+        { ...worktree, id: 'wt-c', repoId: repoC.id }
+      ],
+      groupedMap,
+      null,
+      new Set(),
+      repoOrder,
+      undefined,
+      'manual',
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [group]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:group-1',
+      'repo:repo-a',
+      'repo:repo-c',
+      'repo:repo-b'
+    ])
+  })
+
   it('orders repos inside a Project Group by activity in recent mode, keeping tabOrder', () => {
     const groupA: ProjectGroup = {
       id: 'group-a',

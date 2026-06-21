@@ -52,6 +52,7 @@ import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { useShortcutKeyDetails, type ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { registerPendingEditorFlush } from './editor-pending-flush'
 import { editorShortcutMatches, installEditorSaveShortcut } from './editor-shortcuts'
+import { getIpynbCodeCellEditorHeight, getIpynbCodeCellPreviewLines } from './ipynb-code-cell-lines'
 import MonacoCodeExcerpt from './MonacoCodeExcerpt'
 import {
   deleteIpynbCell,
@@ -337,13 +338,9 @@ function CodeCell({
   onDeactivateRef.current = onDeactivate
   onSaveRequestRef.current = onSaveRequest
   const fontSize = computeEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel)
-  const lineCount = Math.max(3, source.split('\n').length + 1)
-  const editorHeight = Math.min(520, Math.max(96, lineCount * (fontSize + 8)))
+  const editorHeight = getIpynbCodeCellEditorHeight(source, fontSize)
   const isDark = resolveDocumentTheme(settings?.theme ?? 'system')
-  const lines = useMemo(
-    () => (source.length > 0 ? source.replace(/\n$/, '').split('\n') : ['']),
-    [source]
-  )
+  const lines = useMemo(() => getIpynbCodeCellPreviewLines(source), [source])
   const handleMount: OnMount = useCallback((editorInstance, monacoInstance) => {
     editorInstance.focus()
     const cleanupSaveShortcut = installEditorSaveShortcut(

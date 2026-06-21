@@ -16,7 +16,8 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 
 vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue([])
+  listWorktrees: vi.fn().mockResolvedValue([]),
+  listWorktreesStrict: vi.fn().mockResolvedValue([])
 }))
 vi.mock('../hooks', () => ({
   createSetupRunnerScript: vi.fn(),

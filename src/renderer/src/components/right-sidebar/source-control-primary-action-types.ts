@@ -59,9 +59,8 @@ export type PrimaryActionInputs = {
   // stale label that no longer matches what the slice is doing.
   inFlightRemoteOpKind?: RemoteOpKind | null
   hostedReviewCreation?: HostedReviewCreationEligibility | null
-  // Why: an unpublished branch is only worth publishing when it actually
-  // carries commits beyond the compare base. Undefined preserves the old
-  // behavior while the branch compare request is still unavailable/loading.
+  // Why: branch-compare counts feed Create Review intent eligibility and
+  // force-push labels; publishing itself can push the current HEAD even at 0.
   branchCommitsAhead?: number
   // Why: detached HEAD can look like an unpublished branch from upstream
   // status alone, but it has no branch ref that Publish Branch can push.

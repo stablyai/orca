@@ -2,10 +2,6 @@ import { homedir } from 'os'
 import { basename, dirname, join } from 'path'
 import { readFile } from 'fs/promises'
 
-const SESSION_PREVIEW_TEXT_LIMIT = 220
-const HIDDEN_USER_CONTEXT_BLOCK_PATTERN =
-  /<(?:codex_internal_context\b[^>]*|goal_context)>[\s\S]*?<\/(?:codex_internal_context|goal_context)>/gi
-
 export function timestampMs(value: unknown): number {
   if (typeof value === 'string') {
     const parsed = Date.parse(value)
@@ -57,99 +53,20 @@ export function extractModel(value: unknown): string | null {
   )
 }
 
+export {
+  extractContentText,
+  extractMessageText,
+  extractPreviewContentText,
+  normalizePreviewText,
+  normalizeTitleText
+} from './session-scanner-text-normalization'
+
 export function extractGitBranch(value: unknown): string | null {
   const git = asRecord(value)
   if (!git) {
     return null
   }
   return extractString(git.branch) || extractString(git.current_branch)
-}
-
-export function extractMessageText(value: unknown): string | null {
-  const message = asRecord(value)
-  if (!message) {
-    return null
-  }
-  return extractContentText(message.content)
-}
-
-export function extractContentText(value: unknown): string | null {
-  if (typeof value === 'string') {
-    return normalizeTitleText(value)
-  }
-  if (!Array.isArray(value)) {
-    return null
-  }
-  const parts: string[] = []
-  for (const item of value) {
-    if (typeof item === 'string') {
-      parts.push(item)
-      continue
-    }
-    const record = asRecord(item)
-    const text = extractString(record?.text) || extractString(record?.content)
-    if (text) {
-      parts.push(text)
-    }
-  }
-  return normalizeTitleText(parts.join(' '))
-}
-
-export function normalizeTitleText(value: string): string | null {
-  const withoutReminders = value
-    .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/gi, ' ')
-    .replace(HIDDEN_USER_CONTEXT_BLOCK_PATTERN, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-  if (!withoutReminders) {
-    return null
-  }
-  if (/^# AGENTS\.md instructions for\b/i.test(withoutReminders)) {
-    return null
-  }
-  if (/^<INSTRUCTIONS>/i.test(withoutReminders)) {
-    return null
-  }
-  return withoutReminders.length > 96 ? `${withoutReminders.slice(0, 93)}...` : withoutReminders
-}
-
-export function extractPreviewContentText(value: unknown): string | null {
-  if (typeof value === 'string') {
-    return normalizePreviewText(value)
-  }
-  if (!Array.isArray(value)) {
-    return null
-  }
-  const parts: string[] = []
-  for (const item of value) {
-    if (typeof item === 'string') {
-      parts.push(item)
-      continue
-    }
-    const record = asRecord(item)
-    const text = extractString(record?.text) || extractString(record?.content)
-    if (text) {
-      parts.push(text)
-    }
-  }
-  return normalizePreviewText(parts.join(' '))
-}
-
-export function normalizePreviewText(value: string): string | null {
-  const normalized = value
-    .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/gi, ' ')
-    .replace(HIDDEN_USER_CONTEXT_BLOCK_PATTERN, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-  if (!normalized) {
-    return null
-  }
-  if (/^# AGENTS\.md instructions for\b/i.test(normalized) || /^<INSTRUCTIONS>/i.test(normalized)) {
-    return null
-  }
-  return normalized.length > SESSION_PREVIEW_TEXT_LIMIT
-    ? `${normalized.slice(0, SESSION_PREVIEW_TEXT_LIMIT - 3)}...`
-    : normalized
 }
 
 export async function readJsonObjectIfExists(

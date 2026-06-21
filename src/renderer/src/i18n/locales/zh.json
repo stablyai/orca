@@ -530,7 +530,11 @@
       "useGlobalFileDrop": {
         "38c9f034ff": "无法上传删除的文件。",
         "d720e2f855": "部分已删除的文件无法上传。",
-        "245faa95b9": "没有可用于放置的文件的远程工作区路径。"
+        "245faa95b9": "没有可用于放置的文件的远程工作区路径。",
+        "nativeDropTooManyPathsDescription": "Drop {{value0}} or fewer files at a time.",
+        "nativeDropTooManyPaths": "Drop contains too many files.",
+        "nativeDropPathsTooLargeDescription": "Drop fewer files or use a shorter path list.",
+        "nativeDropPathsTooLarge": "Drop path list is too large."
       },
       "useIpcEvents": {
         "0e3cf53060": "未找到浏览器选项卡 {{value0}}",
@@ -609,13 +613,23 @@
         "f70ac54d38": "AI 提供商账户",
         "4121f7a0a2": "管理 AI Agent、设置默认值并自定义命令。",
         "b49abbd2f7": "Agents"
+      },
+      "useAppMenuPaste": {
+        "pasteTooLarge": "Paste is too large."
+      },
+      "useLargeTextControlPaste": {
+        "pasteTooLarge": "Paste is too large."
       }
     },
     "components": {
       "CodexRestartChip": {
         "9132779820": "关闭",
         "c72a5fb234": "重新启动",
-        "9263e75f49": "Codex 正在使用以前的账户"
+        "9263e75f49": "Codex 正在使用以前的账户",
+        "a4c8e1b2f7": "Codex is still signed in as {{value0}}",
+        "d3e8a1f4b2": "Account switched",
+        "e9b2c7d1a5": "Restart this session to use {{value0}}. Collapse to keep working with the current account.",
+        "f1a6c8e3b4": "Collapse"
       },
       "FirstLaunchBanner": {
         "b9e1b966c7": "关闭通知",
@@ -801,7 +815,8 @@
         "16c1abe76c": "标记已查看",
         "ba8e329d92": "取消标记已查看",
         "3f79ffc8b7": "打开 PR 详情以查看当前评审人。",
-        "5c1c973855": "移除评审人"
+        "5c1c973855": "移除评审人",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "GitLabItemDialog": {
         "65e784c1f1": "重新打开",
@@ -865,7 +880,8 @@
         "40c56b95e2": "{{value0}} 批准{{value1}} 剩余",
         "3a051b8ade": "工作项目",
         "32f8bef818": "无日志输出。",
-        "4168eb2c51": "解决"
+        "4168eb2c51": "解决",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "JiraIssueWorkspace": {
         "b0b92666c9": "评论",
@@ -899,7 +915,8 @@
         "54649eaeab": "+ 负责人",
         "2a829a2f00": "优先事项",
         "693be070d0": "过渡",
-        "ef21405c6d": "Jira 议题"
+        "ef21405c6d": "Jira 议题",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "Landing": {
         "76a95f7f47": "创建",
@@ -1021,7 +1038,8 @@
         "858d0630da": "关闭预览",
         "39883467f4": "Linear 议题",
         "fda549766e": "{{value0}} 发表评论",
-        "d71cd3003e": "+ 负责人"
+        "d71cd3003e": "+ 负责人",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "NewWorkspaceComposerCard": {
         "cbb47ee0dc": "仅适用于本地 Git 项目。",
@@ -1076,7 +1094,10 @@
         "setupKindFolder": "文件夹",
         "setupHostExistingFolderHelp": "链接已存在的检出目录，然后在该主机上创建此工作区。",
         "importingHostSetup": "导入中...",
-        "importHostSetup": "导入"
+        "importHostSetup": "导入",
+        "notePasteTooLarge": "Paste is too large for the note field.",
+        "reuseExistingBranch": "Reuse branch",
+        "reuseExistingBranchHint": "Check out the existing branch instead of creating a new one from it."
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "创建工作区之前选择项目、工作区名称和 Agent。"
@@ -1245,7 +1266,8 @@
         "50b8fb290f": "标记已查看",
         "2b4fdb880c": "取消标记已查看",
         "56ec6eafb7": "打开 PR 详情以查看当前评审人。",
-        "7f964a365a": "移除评审人"
+        "7f964a365a": "移除评审人",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "QuickOpen": {
         "1dbd3f59ff": "手机",
@@ -1657,7 +1679,7 @@
         "1628fd7dfa": "没有活动的工作树、设置、操作或打开的选项卡",
         "b781ae05e3": "键入以搜索工作树、设置、选项卡和操作。",
         "f60f8730be": "没有其他工作树可供切换",
-        "c4afa68159": "尝试工作树、设置、操作、页面标题、模拟器、URL、PR 或端口。",
+        "c4afa68159": "尝试工作树、设置、操作、标签页标题、智能体提示、URL、PR 或端口。",
         "dbd9d87eec": "没有结果符合您的搜索",
         "2c38630a01": "工作区不再存在",
         "7726ce9970": "手机模拟器选项卡不再存在",
@@ -1674,7 +1696,8 @@
         "recentWorktreesHeader": "最近的工作树",
         "settingsBadge": "设置",
         "actionBadge": "操作",
-        "paletteHostBadge": "主机：{{value0}}"
+        "paletteHostBadge": "主机：{{value0}}",
+        "workspaceTabMissing": "标签页不再存在"
       },
       "github": {
         "pr": {
@@ -1833,7 +1856,8 @@
                 "c3e829b4d9": "保存",
                 "463d030ae4": "删除",
                 "8564f58542": "编辑",
-                "5f104bf855": "还没有评论。"
+                "5f104bf855": "还没有评论。",
+                "commentTooLarge": "Comment is too large to submit safely."
               },
               "LabelsEditor": {
                 "34dd57d6c8": "加载中…",
@@ -1861,7 +1885,8 @@
           "b7e4a1c902": "粘贴、拖放或点击添加文件",
           "8f1c2d4e6a": "没有可预览的内容",
           "c91f0a2b14": "编写",
-          "d82b1e3f05": "预览"
+          "d82b1e3f05": "预览",
+          "imageUrlTooLarge": "Image URL is too large."
         },
         "IssueSourceSelector": {
           "d6aeb2012b": "显示议题来自",
@@ -1951,7 +1976,8 @@
           "f6a7b8c9d0": "关闭议题",
           "b1c2d3e4f5": "重新打开议题",
           "0a73f59e85": "发送评论",
-          "bf43425540": "评论"
+          "bf43425540": "评论",
+          "commentTooLarge": "Comment is too large to submit safely."
         },
         "GitHubWorkItemAssigneePopoverContent": {
           "cddd9b04a7": "加载负责人",
@@ -2281,6 +2307,7 @@
           "TerminalContextMenu": {
             "b4cdd9314e": "清晰的屏幕",
             "8c17d6786d": "关闭窗格",
+            "copyTerminalId": "Copy Terminal ID",
             "2cf85a6a55": "复制窗格 ID",
             "39809d152f": "设置标题...",
             "06c2b0f043": "均衡窗格大小",
@@ -2355,7 +2382,12 @@
                 "53f015fd85": "跳过 {{value0}} 符号链接 {{value1}}。",
                 "29c031b49a": "正在上传 {{value0}} 文件{{value1}} 到运行时...",
                 "0c77693641": "工作树尚未准备好 - 请稍后再试。",
-                "ce8248b835": "工作树路径不可用。"
+                "ce8248b835": "工作树路径不可用。",
+                "internalTooManyPaths": "Drop contains too many paths for a safe terminal paste.",
+                "internalPathsTooLarge": "Drop path list is too large for a safe terminal paste.",
+                "b4cf68e889": "Skipped {{value0}} {{value1}}.",
+                "writeTimeout": "File drop cancelled: terminal did not accept the path before the safety timeout.",
+                "writeRejected": "File drop cancelled: terminal could not accept the path."
               }
             }
           },
@@ -2364,7 +2396,15 @@
               "pane": {
                 "context": {
                   "menu": {
-                    "a29b9faa01": "已复制窗格 ID"
+                    "a29b9faa01": "已复制窗格 ID",
+                    "terminal": {
+                      "id": {
+                        "copied": "已复制终端 ID",
+                        "copy": {
+                          "failed": "无法复制终端 ID"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -2530,7 +2570,8 @@
                   "097a982ee0": "正在加载文件...",
                   "5a9c83c04b": "打开任何文件、URL、Agent...",
                   "90eb94dc48": "输入 http:// 或 https:// URL。",
-                  "5553b283ce": "输入 URL 或文件路径。"
+                  "5553b283ce": "输入 URL 或文件路径。",
+                  "queryTooLarge": "Search text is too large."
                 }
               },
               "menu": {
@@ -2671,13 +2712,11 @@
             "runtime_checking": "检查中",
             "runtime_online": "已连接",
             "runtime_unavailable": "已断开",
-            "runtime_available": "可用",
             "runtime_connect_unavailable": "远程主机不可达",
             "runtime_disconnect_failed": "断开连接失败",
             "runtime_reconnecting": "重新连接中",
             "runtime_last_close_reason": "Closed: {{value0}}",
-            "runtime_reconnect_attempt": "Attempt {{value0}}",
-            "runtime_channel_counts": "{{value0}} pending · {{value1}} streams"
+            "runtime_reconnect_attempt": "Attempt {{value0}}"
           },
           "StatusBar": {
             "9659e38343": "端口",
@@ -2872,7 +2911,11 @@
             "e740f92596": "刷新失败",
             "8418ec448d": "{{value0}} 用量无法刷新。智能体会话可能仍处于登录状态。",
             "45198c7d95": "1 rate-limit reset available",
-            "bce421cba3": "{{value0}} rate-limit resets available"
+            "bce421cba3": "{{value0}} rate-limit resets available",
+            "7ec6e030a0": "Next expires now",
+            "d1e442a9e5": "Expires now",
+            "6cf9eaed10": "Next expires in {{value0}}",
+            "20ad66aed1": "Expires in {{value0}}"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 主机"
@@ -3448,7 +3491,8 @@
           "f8b1deb1a4": "取消",
           "51001182e3": "空目录",
           "971d85cc84": "作为远程项目打开 · {{value0}}",
-          "00c4235c10": "没有匹配“{{value0}}”"
+          "00c4235c10": "没有匹配“{{value0}}”",
+          "largeInputNoMatches": "No matches for this long input"
         },
         "RemoveFolderDialog": {
           "4dc5b5065b": "移除",
@@ -3717,7 +3761,10 @@
           "93aebe4529": "文件夹",
           "0d224eff10": "主要工作树",
           "ca74db7550": "通过 SSH 远程项目",
-          "021538e1d1": "SSH 已断开连接"
+          "021538e1d1": "SSH 已断开连接",
+          "runtimeHostDisconnected": "Server disconnected",
+          "runtimeHostProject": "Project on Orca server",
+          "automationCreated": "Created by automation"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -3779,7 +3826,7 @@
           "e091caab15": "找不到该项目",
           "439fa94d53": "更新",
           "579b1a8e61": "从父级中删除",
-          "8d9cd19d09": "打开父工作区",
+          "8d9cd19d09": "打开父工作树",
           "d35dfeae58": "从组中删除",
           "76865d827f": "移至群组",
           "503ec0f8e6": "来自项目的新组",
@@ -3795,7 +3842,9 @@
           "8dacff1fe0": "马克·里德",
           "3baa7d6507": "别针",
           "697d0f6e1b": "取消固定",
-          "250de158fd": "移除工作区"
+          "250de158fd": "移除工作区",
+          "changeParentWorkspace": "更改父工作树...",
+          "setParentWorkspace": "设置父工作树..."
         },
         "WorktreeList": {
           "d880ea0744": "创建一个组并将该项目移入其中。",
@@ -3836,7 +3885,8 @@
           "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
           "7a8b9c0d1e": "Update required",
           "hostAuthNeeded": "Authentication needed",
-          "hostDisconnected": "Disconnected"
+          "hostDisconnected": "Disconnected",
+          "failedNestWorkspace": "无法嵌套工作区"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "取消",
@@ -4178,6 +4228,12 @@
           "c7d8e9f0a1": "已更新 {{value0}} 个",
           "d8e9f0a1b2": "已跳过 {{value0}} 个",
           "e9f0a1b2c3": "失败 {{value0}} 个"
+        },
+        "WorktreeParentPickerPopover": {
+          "failedSetParent": "无法设置父工作树",
+          "current": "当前",
+          "searchPlaceholder": "搜索工作树...",
+          "empty": "没有匹配的可用工作树。"
         }
       },
       "shared": {
@@ -4367,7 +4423,8 @@
           "agentPermissionsTooltip": "Custom agent arguments stay unchanged when switching modes.",
           "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
           "agentPermissionsYolo": "Yolo",
-          "agentPermissionsManual": "Manual"
+          "agentPermissionsManual": "Manual",
+          "3f1bdf3cb4": "Environment text is too large to parse safely."
         },
         "AppIconSelector": {
           "d5a112dc9b": "下一个图标",
@@ -4735,11 +4792,11 @@
           "agentHibernation": {
             "copy": "在配置的空闲时间后停止后台 agent 终端，并在你再次打开时恢复受支持的会话。我们仍在调校安全模型，此功能为实验性功能。",
             "description": "在配置的空闲时间后停止后台 agent 终端，并在你再次打开时恢复受支持的会话。",
-            "idleMinutesDescription": "已完成的后台 agent 在 Orca 可以将其休眠前需要等待的空闲分钟数。",
-            "idleMinutesLabel": "休眠等待时间",
+            "idleMinutesDescription": "已完成的后台 agent 在 Orca 可以将其睡眠前需要等待的空闲分钟数。",
+            "idleMinutesLabel": "睡眠等待时间",
             "idleMinutesSuffix": "分钟",
-            "title": "Agent 休眠",
-            "toggleLabel": "切换 agent 休眠"
+            "title": "Agent 睡眠",
+            "toggleLabel": "切换 agent 睡眠"
           },
           "newWorktreeCardStyle": {
             "copy": "预览更新后的 worktree 卡片布局、元数据位置、卡片显示菜单选项和状态呈现。",
@@ -4930,7 +4987,12 @@
           "f35007e6e8": "git 用户名",
           "3d172725cc": "没有任何",
           "1f32ba27a6": "自定义",
-          "a182c5125e": "git用户名"
+          "a182c5125e": "git用户名",
+          "sourceControlGroupOrderTitle": "源代码管理分组顺序",
+          "sourceControlGroupOrderDescription": "选择在源代码管理中优先显示“更改”、“已暂存更改”还是“未跟踪文件”。",
+          "changesFirst": "更改优先",
+          "stagedFirst": "已暂存优先",
+          "untrackedFirst": "未跟踪优先"
         },
         "HiddenExperimentalGroup": {
           "d0f914a528": "占位符切换",
@@ -5534,7 +5596,11 @@
           "bea897eec2": "在",
           "62511a575d": "使用全局",
           "30ae6dcce8": "全局默认是",
-          "cf5959c834": "启用源代码控制 AI"
+          "cf5959c834": "启用源代码控制 AI",
+          "show": "显示",
+          "hide": "隐藏",
+          "showActionsLabel": "显示源代码控制 AI 操作",
+          "visibilityHelper": "控制是否为此仓库显示源代码控制 AI 按钮。单独功能使用的生成会遵循这些功能各自的设置。全局默认值为 {{value0}}。"
         },
         "RepositorySourceControlAiHostedReviewDefaults": {
           "053ccfbf52": "离开",
@@ -5774,19 +5840,6 @@
           "82db1b7de4": "入门清单，已完成 {{value0}}/{{value1}}。显示设置指南。",
           "df38d612b7": "尚未添加项目。",
           "3e483e256b": "没有匹配的项目设置。"
-        },
-        "ShortcutBindingRow": {
-          "4a4c2c9d32": "添加快捷方式",
-          "87381fd8f8": "按键...",
-          "9cdaaa3d8f": "禁用快捷方式",
-          "3b62c142fa": "禁用 {{value0}}",
-          "f75335b155": "重置为默认值",
-          "4f2c9b2a05": "将 {{value0}} 重置为默认值",
-          "97dccee14e": "修改的",
-          "3b11ef3a43": "{{value0}} 快捷方式",
-          "f6579be67b": "更改快捷方式",
-          "6a7848fdac": "正在录制快捷键",
-          "a98d551407": "按下快捷键，或双击一个修饰键（例如 {{value0}}）。按 Esc 取消。"
         },
         "ShortcutFilterRail": {
           "28b63545bf": "状态",
@@ -6250,7 +6303,8 @@
           "ad5d036ecc": "无法请求麦克风权限。未启用语音听写。",
           "f9a9cf6928": "启用语音听写之前需要麦克风许可。",
           "1eac933202": "打开 macOS 隐私和安全。授予访问权限后再次启用听写。",
-          "cd9fe37556": "已授予麦克风权限"
+          "cd9fe37556": "已授予麦克风权限",
+          "6fa734ed95": "Delete {{value0}}"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "删除 {{value0}}",
@@ -6811,11 +6865,10 @@
               "agent": "agent",
               "agents": "agents",
               "description": "在配置的空闲时间后停止后台 agent 终端，并在再次打开时恢复受支持的会话。",
-              "hibernate": "休眠",
               "minutes": "分钟",
               "sleep": "睡眠",
               "terminal": "终端",
-              "title": "Agent 休眠"
+              "title": "Agent 睡眠"
             },
             "newWorktreeCardStyle": {
               "card": "卡片",
@@ -7032,7 +7085,15 @@
             "1d2fae1fa2": "git 用户名",
             "f83c8937c4": "分支命名",
             "5ecd91c5ef": "创建工作树时添加到分支名称的前缀。",
-            "68bd65fdb8": "分支前缀"
+            "68bd65fdb8": "分支前缀",
+            "sourceControlGroupOrderTitle": "源代码管理分组顺序",
+            "sourceControlGroupOrderDescription": "选择在源代码管理中优先显示“更改”、“已暂存更改”还是“未跟踪文件”。",
+            "groupOrder": "分组顺序",
+            "changesFirst": "更改优先",
+            "stagedFirst": "已暂存优先",
+            "untrackedFirst": "未跟踪优先",
+            "sourceControl": "源代码管理",
+            "gitChanges": "git 更改"
           }
         },
         "input": {
@@ -8014,11 +8075,12 @@
           "thisDevice": "This device"
         },
         "WorkspaceDirectorySetting": {
-          "1a2b3c4d5e": "Client default",
-          "2b3c4d5e6f": "Apply to",
-          "3c4d5e6f7a": "Overrides client default",
-          "4d5e6f7a8b": "Inherits the client default",
-          "5e6f7a8b9c": "重置"
+          "1a2b3c4d5e": "客户端默认值",
+          "2b3c4d5e6f": "应用于",
+          "3c4d5e6f7a": "覆盖客户端默认值",
+          "4d5e6f7a8b": "继承客户端默认值",
+          "5e6f7a8b9c": "重置",
+          "6f7a8b9cad": "使用相对路径（例如 .orca/worktrees）可让每个项目使用各自的位置，使用绝对路径则所有项目共用一个文件夹。"
         },
         "ProviderHostScopeControl": {
           "scope_label": "{{value0}}: {{value1}}",
@@ -8112,6 +8174,36 @@
           "d37e92a06b": "已设置 ORCA_DIAGNOSTICS_DISABLED=1，应用诊断已关闭。",
           "5ebb31e1fb": "正在 CI 中运行，诊断已关闭。",
           "e27c8d45bf": "诊断已被环境变量停用。"
+        },
+        "ShortcutCommandBlock": {
+          "eb72c52c28": "Press a shortcut, or double-tap a modifier (e.g. {{value0}}). Esc cancels.",
+          "70b5d25583": "{{value0}} shortcut",
+          "287e07ddde": "Modified",
+          "3c83cd7d1c": "Disabled",
+          "07939d084e": "Reset {{value0}} to default",
+          "9b02917027": "Reset to default",
+          "a799f90f82": "Disable {{value0}}",
+          "25e6e76618": "Disable shortcut",
+          "035a822ef0": "Add shortcut",
+          "a0e2ef0e61": "Add another shortcut for {{value0}}",
+          "245c83af24": "Add another shortcut",
+          "482a60225d": "Enable {{value0}}",
+          "6287677c37": "Enable",
+          "01481b964c": "Add shortcut for {{value0}}"
+        },
+        "ShortcutRecorderButton": {
+          "1a13bb054d": "Press shortcut keys for {{value0}}. Escape cancels.",
+          "3732775d74": "Add shortcut for {{value0}}",
+          "88764af2c1": "Change shortcut for {{value0}}",
+          "30feb099d6": "Change shortcut {{value0}} of {{value1}} for {{value2}}",
+          "5d982a2a1f": "Listening for shortcut",
+          "152e0bcd64": "Add shortcut",
+          "5bd56445da": "Change shortcut",
+          "f5ed5dcbf6": "Press keys…"
+        },
+        "ShortcutRemoveButton": {
+          "9e29aff18b": "Remove {{value0}} shortcut {{value1}}",
+          "2a9588b1c2": "Remove this binding"
         }
       },
       "right": {
@@ -8372,8 +8464,12 @@
             "cc06595a3b": "复制线路径",
             "3596b9668d": "复制路径"
           },
+          "SourceControlEntryContextMenu": {
+            "a1f2c8d901": "查看"
+          },
           "SourceControl": {
             "1406954883": "清除所有笔记...",
+            "conflictsSection": "冲突",
             "cc05b2d088": "在文件资源管理器中打开",
             "03194cfff4": "本地会话状态源自您在此处打开的冲突。",
             "413a3ba113": "冲突",
@@ -8698,6 +8794,11 @@
                 "066fedd446": "失败的工作",
                 "ae8a04ef17": "冲突文件详细信息不可用",
                 "73d0675356": "刷新冲突细节...",
+                "f5bc5c4cf1": "The hosting provider reports conflicts, but local Git did not reproduce them. Refresh the review or push the branch to recalculate mergeability.",
+                "5bc9bda2af": "Run from this worktree",
+                "e87fb3d929": "Copy mergeability refresh commands",
+                "1e53e45072": "Copied",
+                "084c516efb": "Copy commands",
                 "5dc3af25c0": "选择评论",
                 "d7a2f9c401": "Send unresolved {{value0}} comments",
                 "d91f2a6c39": "发送 {{value0}} 条已排队评论",
@@ -8780,7 +8881,8 @@
                   "f49e0a21e0": "代码",
                   "542bf6a7e2": "斜体",
                   "256300f8ea": "粗体",
-                  "87aff03d63": "正在发送..."
+                  "87aff03d63": "正在发送...",
+                  "commentTooLarge": "Comment is too large to submit safely."
                 }
               }
             }
@@ -8831,7 +8933,8 @@
                   "9e779995dd": "创建 {{value0}}",
                   "226b85a3a7": "fetch",
                   "323bb614aa": "Commit 并同步",
-                  "2b8e6595fd": "Commit"
+                  "2b8e6595fd": "Commit",
+                  "04d709801d": "Fetch from remote without merging"
                 }
               },
               "primary": {
@@ -9007,7 +9110,16 @@
             "daysAgo": "{{value0}} 天前",
             "monthsAgo": "{{value0}} 个月前",
             "yearsAgo": "{{value0}} 年前",
-            "sessionId": "会话 ID"
+            "sessionId": "会话 ID",
+            "originalAsk": "Original ask",
+            "latestTurns": "Latest turns",
+            "noPreviewAvailable": "No conversation preview available",
+            "messageCount": "{{value0}} msgs",
+            "userRole": "You",
+            "agentRole": "Agent",
+            "toolRole": "Tool",
+            "systemRole": "System",
+            "sessionRole": "Session"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "恢复 {{value0}} 会话",
@@ -9024,7 +9136,14 @@
             "hideDetails": "隐藏详情",
             "showDetails": "显示详情",
             "moreSessionActions": "更多会话操作",
-            "moreActions": "更多操作"
+            "moreActions": "更多操作",
+            "noPreviewAvailable": "No conversation preview available",
+            "dragToResume": "Drag to resume in a new tab",
+            "userRole": "You",
+            "agentRole": "Agent",
+            "toolRole": "Tool",
+            "systemRole": "System",
+            "sessionRole": "Session"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "查找文件",
@@ -10181,6 +10300,11 @@
                 }
               }
             }
+          },
+          "useEmulatorScreenKeyboard": {
+            "pasteTooLarge": "Paste is too large for emulator keyboard input.",
+            "unsupportedPasteText": "Emulator keyboard paste supports US keyboard text only.",
+            "pasteTargetUnavailable": "Emulator keyboard paste failed because the device is not ready."
           }
         }
       },
@@ -10432,7 +10556,8 @@
         },
         "MonacoEditor": {
           "68cb83f4a7": "在选定的文本上添加注释",
-          "fd68ae03b3": "在文件中搜索"
+          "fd68ae03b3": "在文件中搜索",
+          "largePasteTooLarge": "Paste is too large."
         },
         "MonacoGutterContextMenu": {
           "7b57b1b468": "复制远程 URL",
@@ -10713,6 +10838,9 @@
               }
             }
           }
+        },
+        "richMarkdownLargeTextPaste": {
+          "tooLarge": "Paste is too large."
         }
       },
       "diff": {
@@ -10729,7 +10857,8 @@
           "DiffCommentPopover": {
             "2b3ce6d394": "取消",
             "e05063cfc1": "行 {{value0}}",
-            "c845170b3b": "行 {{value0}}-{{value1}}"
+            "c845170b3b": "行 {{value0}}-{{value1}}",
+            "commentTooLarge": "Comment is too large to submit safely."
           },
           "useDiffCommentDecorator": {
             "995fa28b50": "此注"
@@ -10959,7 +11088,16 @@
             "ea6af700da": "{{value0}} 条注释",
             "c13693fe27": "{{value0}} 条注释",
             "074f0ed10b": "{{value0}} 条注释已准备好。请选择另一个元素或复制所有反馈。",
-            "a2164a6e5a": "{{value0}} 条注释已准备好。请选择另一个元素或复制所有反馈。"
+            "a2164a6e5a": "{{value0}} 条注释已准备好。请选择另一个元素或复制所有反馈。",
+            "9f6f2e8c19": "The downloaded file path is unavailable.",
+            "0c79b7634d": "Could not open the downloaded file. It may have been moved or deleted.",
+            "397d9dc923": "Could not show the downloaded file. It may have been moved or deleted.",
+            "39c04fed61": "Downloading paused",
+            "5c3d530a68": "Downloaded",
+            "4bb7424d6b": "Canceled",
+            "6e776f9ef9": "Download failed",
+            "756bfc25c9": "Open",
+            "09a9489aa5": "Show"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "取消",
@@ -11407,14 +11545,14 @@
           "summary": "已附加 {{value0}} 个 · 有 PR/MR {{value1}} 个 · 需注意 {{value2}} 个 · 等待中 {{value3}} 个 · 通过 {{value4}} 个 · 无 PR {{value5}} 个 · 未知 {{value6}} 个",
           "showDetails": "显示 {{value0}} 的 PR 检查详情",
           "hideDetails": "隐藏 {{value0}} 的 PR 检查详情",
-          "reviewChecks": "Review checks",
-          "allChecksPassing": "all checks passing",
-          "oneWorktree": "1 worktree",
-          "worktreeCount": "{{value0}} worktrees",
-          "oneFailing": "1 failing",
-          "failingCount": "{{value0}} failing",
-          "onePending": "1 pending",
-          "pendingCount": "{{value0}} pending"
+          "reviewChecks": "评审检查",
+          "allChecksPassing": "所有检查均通过",
+          "oneWorktree": "1 个工作树",
+          "worktreeCount": "{{value0}} 个工作树",
+          "oneFailing": "1 个失败",
+          "failingCount": "{{value0}} 个失败",
+          "onePending": "1 个等待中",
+          "pendingCount": "{{value0}} 个等待中"
         },
         "parentPrChecks": {
           "rowSummary": {

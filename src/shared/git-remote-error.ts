@@ -25,20 +25,20 @@ export function stripCredentialsFromMessage(message: string): string {
 
 export function formatSubmodulePushFailureDetail(message: string): string | null {
   const raw = stripCredentialsFromMessage(message)
-  const normalized = raw.replace(/\r\n/g, '\n').trim()
-  const normalizedMatch = normalized.match(NORMALIZED_SUBMODULE_PUSH_FAILURE_PATTERN)
+  const trimmed = raw.trim()
+  const normalizedMatch = trimmed.match(NORMALIZED_SUBMODULE_PUSH_FAILURE_PATTERN)
   if (normalizedMatch) {
     return normalizedMatch[1]
   }
-  if (!SUBMODULE_PUSH_FAILURE_SENTINEL_PATTERN.test(normalized)) {
+  if (!SUBMODULE_PUSH_FAILURE_SENTINEL_PATTERN.test(trimmed)) {
     return null
   }
 
   // Why: recursive push can hide the actionable nested rejection behind a
   // top-level "failed to push all needed submodules" fatal line.
-  const submoduleName = normalized.match(SUBMODULE_PUSH_FAILURE_PATTERN)?.[1]?.trim()
+  const submoduleName = trimmed.match(SUBMODULE_PUSH_FAILURE_PATTERN)?.[1]?.trim()
   const subject = submoduleName ? `Submodule '${submoduleName}'` : 'A submodule'
-  if (SUBMODULE_REMOTE_CHANGED_PATTERN.test(normalized)) {
+  if (SUBMODULE_REMOTE_CHANGED_PATTERN.test(trimmed)) {
     return `${subject} has remote changes. Pull inside the submodule, then try again.`
   }
   return `${subject} could not be pushed. Resolve the submodule push error, then try again.`
@@ -49,11 +49,34 @@ function extractTailLine(message: string): string {
   // followed by the full stderr. The meaningful diagnostic is typically the
   // last non-empty line; surfacing the full blob risks leaking local paths or
   // environment details to the UI.
-  const lines = message
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-  return lines.at(-1) ?? message
+  for (const rawLine of iterateLinesFromEnd(message)) {
+    const line = rawLine.trim()
+    if (line.length > 0) {
+      return line
+    }
+  }
+  return message
+}
+
+function* iterateLinesFromEnd(value: string): Generator<string> {
+  let lineEnd = value.length
+  let index = value.length - 1
+
+  while (index >= 0) {
+    const code = value.charCodeAt(index)
+    if (code !== 10 && code !== 13) {
+      index--
+      continue
+    }
+
+    const delimiterStart =
+      code === 10 && index > 0 && value.charCodeAt(index - 1) === 13 ? index - 1 : index
+    yield value.slice(index + 1, lineEnd)
+    lineEnd = delimiterStart
+    index = delimiterStart - 1
+  }
+
+  yield value.slice(0, lineEnd)
 }
 
 export type GitRemoteOperation = 'push' | 'pull' | 'fetch' | 'upstream'

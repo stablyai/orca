@@ -1059,6 +1059,23 @@ describe('worktree lineage state', () => {
     expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
   })
 
+  it('refetches lineage and rethrows when explicit parent assignment fails', async () => {
+    const store = createTestStore()
+    const lineage = makeLineage()
+    mockApi.worktrees.updateLineage.mockRejectedValueOnce(new Error('stale parent'))
+    mockApi.worktrees.listLineage.mockResolvedValue({ [lineage.worktreeId]: lineage })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await expect(
+      store.getState().assignWorktreeParent(lineage.worktreeId, {
+        parentWorktreeId: lineage.parentWorktreeId
+      })
+    ).rejects.toThrow('stale parent')
+
+    expect(mockApi.worktrees.listLineage).toHaveBeenCalled()
+    expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
+  })
+
   it('fetches raw lineage from the active remote runtime environment', async () => {
     const store = createTestStore()
     const lineage = makeLineage()
@@ -1123,6 +1140,174 @@ describe('worktree lineage state', () => {
     expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
     expect(store.getState().worktreesByRepo.repo1?.[0]).toEqual(updatedChild)
     expect(store.getState().sortEpoch).toBe(4)
+  })
+
+  it('assigns a parent through the active remote runtime environment and rethrows failures', async () => {
+    const store = createTestStore()
+    const lineage = makeLineage()
+    const child = makeWorktree({
+      id: lineage.worktreeId,
+      repoId: 'repo1',
+      path: '/remote/child'
+    })
+    const updatedChild = { ...child, lineage }
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-assign-parent',
+      ok: true,
+      result: { worktree: updatedChild },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [child] },
+      sortEpoch: 3
+    } as Partial<AppState>)
+
+    await store.getState().assignWorktreeParent(lineage.worktreeId, {
+      parentWorktreeId: lineage.parentWorktreeId
+    })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'worktree.set',
+      params: {
+        worktree: `id:${lineage.worktreeId}`,
+        parentWorktree: `id:${lineage.parentWorktreeId}`
+      },
+      timeoutMs: 15_000
+    })
+    expect(mockApi.worktrees.updateLineage).not.toHaveBeenCalled()
+    expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
+    expect(store.getState().worktreesByRepo.repo1?.[0]).toEqual(updatedChild)
+    expect(store.getState().sortEpoch).toBe(4)
+
+    runtimeEnvironmentCall
+      .mockRejectedValueOnce(new Error('remote lineage failed'))
+      .mockResolvedValueOnce({
+        id: 'rpc-lineage-refresh',
+        ok: true,
+        result: { lineage: {} },
+        _meta: { runtimeId: 'runtime-remote' }
+      })
+    await expect(
+      store.getState().assignWorktreeParent(lineage.worktreeId, {
+        parentWorktreeId: lineage.parentWorktreeId
+      })
+    ).rejects.toThrow('remote lineage failed')
+  })
+
+  it('assigns a parent through the worktree owner runtime when host-stamped', async () => {
+    const store = createTestStore()
+    const lineage = makeLineage()
+    const child = makeWorktree({
+      id: lineage.worktreeId,
+      repoId: 'repo1',
+      path: '/remote/child',
+      hostId: 'runtime:owner-env'
+    })
+    const updatedChild = { ...child, lineage }
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-owner-runtime-assign-parent',
+      ok: true,
+      result: { worktree: updatedChild },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,
+      worktreesByRepo: { repo1: [child] }
+    } as Partial<AppState>)
+
+    await store.getState().assignWorktreeParent(lineage.worktreeId, {
+      parentWorktreeId: lineage.parentWorktreeId
+    })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'owner-env',
+      method: 'worktree.set',
+      params: {
+        worktree: `id:${lineage.worktreeId}`,
+        parentWorktree: `id:${lineage.parentWorktreeId}`
+      },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('refreshes assignment failures through the worktree owner runtime when host-stamped', async () => {
+    const store = createTestStore()
+    const lineage = makeLineage()
+    const child = makeWorktree({
+      id: lineage.worktreeId,
+      repoId: 'repo1',
+      path: '/remote/child',
+      hostId: 'runtime:owner-env'
+    })
+    runtimeEnvironmentCall
+      .mockRejectedValueOnce(new Error('owner assignment failed'))
+      .mockResolvedValueOnce({
+        id: 'rpc-owner-runtime-lineage-refresh',
+        ok: true,
+        result: { lineage: { [lineage.worktreeId]: lineage } },
+        _meta: { runtimeId: 'runtime-remote' }
+      })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,
+      worktreesByRepo: { repo1: [child] }
+    } as Partial<AppState>)
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await expect(
+      store.getState().assignWorktreeParent(lineage.worktreeId, {
+        parentWorktreeId: lineage.parentWorktreeId
+      })
+    ).rejects.toThrow('owner assignment failed')
+
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
+      selector: 'owner-env',
+      method: 'worktree.lineageList',
+      params: undefined,
+      timeoutMs: 15_000
+    })
+    expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
+  })
+
+  it('removes stale owner-runtime lineage when host-stamped worktrees refresh empty', async () => {
+    const store = createTestStore()
+    const staleLineage = makeLineage()
+    const staleWorkspaceLineage = makeWorkspaceLineage({
+      childWorkspaceKey: worktreeWorkspaceKey(staleLineage.worktreeId)
+    })
+    const child = makeWorktree({
+      id: staleLineage.worktreeId,
+      repoId: 'repo1',
+      path: '/remote/child',
+      hostId: 'runtime:owner-env'
+    })
+    runtimeEnvironmentCall
+      .mockRejectedValueOnce(new Error('owner assignment failed'))
+      .mockResolvedValueOnce({
+        id: 'rpc-owner-runtime-lineage-refresh',
+        ok: true,
+        result: { lineage: {}, workspaceLineage: {} },
+        _meta: { runtimeId: 'runtime-remote' }
+      })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,
+      worktreesByRepo: { repo1: [child] },
+      worktreeLineageById: { [staleLineage.worktreeId]: staleLineage },
+      workspaceLineageByChildKey: {
+        [staleWorkspaceLineage.childWorkspaceKey]: staleWorkspaceLineage
+      }
+    } as Partial<AppState>)
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await expect(
+      store.getState().assignWorktreeParent(staleLineage.worktreeId, {
+        parentWorktreeId: staleLineage.parentWorktreeId
+      })
+    ).rejects.toThrow('owner assignment failed')
+
+    expect(store.getState().worktreeLineageById).toEqual({})
+    expect(store.getState().workspaceLineageByChildKey).toEqual({})
   })
 
   it('clears lineage through the active remote runtime environment', async () => {

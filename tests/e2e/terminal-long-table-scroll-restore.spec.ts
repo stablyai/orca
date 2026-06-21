@@ -21,6 +21,7 @@ import {
   waitForPtyColumnsAtMost,
   waitForRenderedTerminalColumnsAtMost
 } from './terminal-column-probes'
+import { nodeTerminalCommand } from './terminal-node-command'
 import { waitForPtyShellEcho } from './terminal-pty-readiness'
 
 type TerminalRenderDiagnostics = {
@@ -126,18 +127,16 @@ outputRows.push('|-' + widths.map((width) => '-'.repeat(width)).join('-|-') + '-
 for (let repeat = 0; repeat < 4; repeat += 1) {
   for (const row of rows) outputRows.push(line(row))
 }
-process.stdout.write('\\x1b[?2026h\\x1b[2J\\x1b[H')
-let index = 0
-const timer = setInterval(() => {
-  if (index < outputRows.length) {
-    process.stdout.write(outputRows[index] + '\\n')
-    index += 1
-    return
-  }
-  clearInterval(timer)
-  process.stdout.write('LONG_TABLE_SCROLL_RESTORE_${runId}\\n')
-  process.stdout.write('\\x1b[?2026l')
-}, 8)
+async function writeStdout(chunk) {
+  await new Promise((resolve) => process.stdout.write(chunk, resolve))
+  if (process.platform === 'win32') await new Promise((resolve) => setTimeout(resolve, 8))
+}
+await writeStdout('\\x1b[?2026h\\x1b[2J\\x1b[H')
+for (const row of outputRows) {
+  await writeStdout(row + '\\n')
+}
+await writeStdout('\\x1b[?2026l')
+await writeStdout('LONG_TABLE_SCROLL_RESTORE_${runId}\\n')
 `
 }
 
@@ -250,6 +249,10 @@ function renderRow(cells) {
   }
   return rows
 }
+async function writeStdout(chunk) {
+  await new Promise((resolve) => process.stdout.write(chunk, resolve))
+  if (process.platform === 'win32') await new Promise((resolve) => setTimeout(resolve, 8))
+}
 const parsedRows = table
   .split(/\\r?\\n/)
   .filter((row) => row.trim().startsWith('|') && !isSeparatorRow(row))
@@ -259,12 +262,13 @@ for (const [index, row] of parsedRows.entries()) {
   rendered.push(...renderRow(row))
   rendered.push(rule(index === parsedRows.length - 1 ? border.bottom : border.middle))
 }
-process.stdout.write('\\x1b[?2026h\\x1b[2J\\x1b[H')
-process.stdout.write(rendered.join('\\r\\n'))
-process.stdout.write('\\r\\n')
-process.stdout.write('\\r\\n${widthMarker}:' + generatedTableWidth + '\\r\\n')
-process.stdout.write('\\r\\n${marker}\\r\\n')
-process.stdout.write('\\x1b[?2026l')
+await writeStdout('\\x1b[?2026h\\x1b[2J\\x1b[H')
+for (const line of rendered) {
+  await writeStdout(line + '\\r\\n')
+}
+await writeStdout('\\x1b[?2026l')
+await writeStdout('${widthMarker}:' + generatedTableWidth + '\\r\\n')
+await writeStdout('${marker}\\r\\n')
 `
 }
 
@@ -286,12 +290,16 @@ function narrowSignerMarkdownTableScript(runId: string): string {
   ).flat()
   return `
 const rows = ${JSON.stringify(repeatedRows)}
-process.stdout.write('\\x1b[?2026h\\x1b[2J\\x1b[H')
-for (const row of rows) {
-  process.stdout.write(row + '\\r\\n')
+async function writeStdout(chunk) {
+  await new Promise((resolve) => process.stdout.write(chunk, resolve))
+  if (process.platform === 'win32') await new Promise((resolve) => setTimeout(resolve, 8))
 }
-process.stdout.write('${marker}\\r\\n')
-process.stdout.write('\\x1b[?2026l')
+await writeStdout('\\x1b[?2026h\\x1b[2J\\x1b[H')
+for (const row of rows) {
+  await writeStdout(row + '\\r\\n')
+}
+await writeStdout('\\x1b[?2026l')
+await writeStdout('${marker}\\r\\n')
 `
 }
 
@@ -613,7 +621,7 @@ test.describe('Terminal long table scroll restore repro', () => {
     writeFileSync(scriptPath, longMarkdownTableScript(runId))
 
     try {
-      await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
+      await sendToTerminal(orcaPage, ptyId, `${nodeTerminalCommand([scriptPath])}\r`)
       await orcaPage.waitForTimeout(80)
       await switchToWorktree(orcaPage, secondWorktreeId)
       await waitForActiveTerminalManager(orcaPage, 30_000)
@@ -682,7 +690,7 @@ test.describe('Terminal long table scroll restore repro', () => {
     writeFileSync(scriptPath, narrowSignerMarkdownTableScript(runId))
 
     try {
-      await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
+      await sendToTerminal(orcaPage, ptyId, `${nodeTerminalCommand([scriptPath])}\r`)
       await orcaPage.waitForTimeout(80)
       await switchToWorktree(orcaPage, secondWorktreeId)
       await waitForActiveTerminalManager(orcaPage, 30_000)
@@ -763,7 +771,7 @@ test.describe('Terminal long table scroll restore repro', () => {
     writeFileSync(scriptPath, emojiFixtureMarkdownTableScript(EMOJI_TABLE_FIXTURE, runId))
 
     try {
-      await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
+      await sendToTerminal(orcaPage, ptyId, `${nodeTerminalCommand([scriptPath])}\r`)
       await orcaPage.waitForTimeout(80)
       await switchToWorktree(orcaPage, secondWorktreeId)
       await waitForActiveTerminalManager(orcaPage, 30_000)

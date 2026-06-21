@@ -309,6 +309,31 @@ describe('pr-refresh-coordinator', () => {
     expect(outcome?.sequence).toBe(inFlight?.sequence)
   })
 
+  it('accepts merged fallback PRs for visible fallback refreshes', async () => {
+    const { refreshPRNow } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockResolvedValueOnce({
+      kind: 'found',
+      pr: makePR({ state: 'merged' }),
+      fetchedAt: Date.now()
+    })
+
+    await refreshPRNow(
+      makeCandidate({
+        fallbackPRNumber: 12,
+        fallbackPRSource: 'pr-cache'
+      })
+    )
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith(
+      '/repo',
+      'feature/test',
+      null,
+      null,
+      12,
+      { acceptMergedFallbackPR: true }
+    )
+  })
+
   it('does not coalesce local and SSH refreshes for the same branch', async () => {
     const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
     getPRForBranchOutcomeMock

@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { isConnectedRuntimeHostState, runtimeStatusForOverall } from './SshStatusSegment'
 
 describe('SshStatusSegment host status helpers', () => {
-  it('counts available remote servers as connected hosts', () => {
-    expect(runtimeStatusForOverall('available')).toBe('connected')
-    expect(isConnectedRuntimeHostState('available')).toBe(true)
+  it('counts connected remote servers as connected hosts', () => {
+    // Why: "connected" = attached/reachable (active-agnostic), matching Settings.
+    // There is no separate "available" state — a reachable host is just Connected.
+    expect(runtimeStatusForOverall('connected')).toBe('connected')
+    expect(isConnectedRuntimeHostState('connected')).toBe(true)
   })
 
   it('keeps reconnecting and disconnected remote servers out of the connected count', () => {

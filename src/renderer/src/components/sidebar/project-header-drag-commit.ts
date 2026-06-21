@@ -37,7 +37,13 @@ export function commitProjectHeaderDragDrop(args: {
       sourceIndex,
       siblingCount: siblings.length
     })
-    if (siblingDropIndex === sourceIndex) {
+    // Why: sourceIndex is the position in the original array (including the
+    // dragged item), but siblingDropIndex is the position in the filtered
+    // array. The equivalent position in the filtered array is the sourceIndex
+    // capped at siblings.length (since removing an item can only shift indices
+    // down by 1 when the removed item was before the insertion point).
+    const sourceIndexInSiblings = Math.min(sourceIndex, siblings.length)
+    if (siblingDropIndex === sourceIndexInSiblings) {
       return
     }
     const repoOrderRankById = new Map(

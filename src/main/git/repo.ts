@@ -4,6 +4,7 @@ import { existsSync, statSync } from 'fs'
 import { basename } from 'path'
 import { gitExecFileSync, gitExecFileAsync } from './runner'
 import type { BaseRefSearchResult } from '../../shared/types'
+import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
 import {
   buildHostedRemoteCommitUrl,
   buildHostedRemoteFileUrl,
@@ -363,13 +364,11 @@ export function getRemoteDrift(
       ['rev-list', '--left-right', '--count', `${localRef}...${remoteRef}`],
       gitExecOptions(repoPath, options)
     )
-    const [aheadStr, behindStr] = stdout.trim().split(/\s+/)
-    const ahead = Number(aheadStr)
-    const behind = Number(behindStr)
-    if (!Number.isFinite(ahead) || !Number.isFinite(behind)) {
+    const counts = parseGitRevListAheadBehindCounts(stdout)
+    if (counts.status !== 'ok') {
       return null
     }
-    return { ahead, behind }
+    return { ahead: counts.ahead, behind: counts.behind }
   } catch {
     return null
   }

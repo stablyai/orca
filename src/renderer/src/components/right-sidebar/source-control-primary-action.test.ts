@@ -253,15 +253,15 @@ describe('resolvePrimaryAction', () => {
     })
   })
 
-  it('does not offer Publish Branch when an unpublished branch has no commits ahead', () => {
+  it('offers Publish Branch when an unpublished branch has no commits ahead', () => {
     const result = resolvePrimaryAction(
       inputs({ upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }, branchCommitsAhead: 0 })
     )
     expect(result).toEqual({
-      kind: 'commit',
-      label: 'Commit',
-      title: 'Nothing to commit. Branch has no changes to publish.',
-      disabled: true
+      kind: 'publish',
+      label: 'Publish Branch',
+      title: 'Publish this branch to origin',
+      disabled: false
     })
   })
 
@@ -400,7 +400,7 @@ describe('resolvePrimaryAction', () => {
     expect(result.disabled).toBe(false)
   })
 
-  it('returns Stage All when a staged file also has unstaged changes', () => {
+  it('returns Commit when a staged file also has unstaged changes', () => {
     const result = resolvePrimaryAction(
       inputs({
         stagedCount: 1,
@@ -411,8 +411,8 @@ describe('resolvePrimaryAction', () => {
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
       })
     )
-    expect(result.kind).toBe('stage')
-    expect(result.label).toBe('Stage All')
+    expect(result.kind).toBe('commit')
+    expect(result.label).toBe('Commit')
     expect(result.disabled).toBe(false)
   })
 
@@ -442,7 +442,7 @@ describe('resolvePrimaryAction', () => {
     })
   })
 
-  it('keeps the partial-staging reason on the additive commit-area Stage All action', () => {
+  it('keeps the additive commit-area action on Commit for partially staged files', () => {
     const input = inputs({
       stagedCount: 1,
       hasUnstagedChanges: true,
@@ -461,9 +461,9 @@ describe('resolvePrimaryAction', () => {
 
     expect(resolvePrimaryAction(input).kind).toBe('create_pr_intent')
     expect(resolveCommitAreaPrimaryAction(input)).toEqual({
-      kind: 'stage',
-      label: 'Stage All',
-      title: 'Stage all changes before committing partially staged files',
+      kind: 'commit',
+      label: 'Commit',
+      title: 'Commit staged changes',
       disabled: false
     })
   })

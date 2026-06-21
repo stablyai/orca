@@ -9,6 +9,7 @@ import {
   recognizeAgentProcess,
   recognizeAgentProcessFromCommandLine
 } from '../shared/agent-process-recognition'
+import { getFirstCommandToken } from '../shared/command-token-scanner'
 import { isShellProcess } from '../shared/shell-process-detection'
 import {
   resolveWindowsAgentForegroundProcess,
@@ -197,7 +198,7 @@ function candidateScore(row: ProcessRow & { depth: number }): number {
 }
 
 function processCommandToken(command: string): string {
-  return command.trim().split(/\s+/, 1)[0] ?? ''
+  return getFirstCommandToken(command)
 }
 
 function candidateMatchesFallbackWrapper(candidate: ProcessRow, fallbackProcess: string): boolean {

@@ -4,12 +4,10 @@ import type { PRState } from '../../../../shared/types'
 
 export function resolveUnpublishedPrimaryAction({
   hasCurrentBranch,
-  branchCommitsAhead,
   isPRStateLoading,
   prState
 }: {
   hasCurrentBranch: boolean
-  branchCommitsAhead?: number
   isPRStateLoading?: boolean
   prState?: PRState | null
 }): PrimaryAction {
@@ -23,21 +21,6 @@ export function resolveUnpublishedPrimaryAction({
       title: translate(
         'auto.components.right.sidebar.source.control.primary.action.e61b0d7a3c',
         'Check out a branch before publishing commits.'
-      ),
-      disabled: true
-    }
-  }
-
-  if (branchCommitsAhead === 0) {
-    return {
-      kind: 'commit',
-      label: translate(
-        'auto.components.right.sidebar.source.control.primary.action.ed93b4f14f',
-        'Commit'
-      ),
-      title: translate(
-        'auto.components.right.sidebar.source.control.primary.action.acce237921',
-        'Nothing to commit. Branch has no changes to publish.'
       ),
       disabled: true
     }

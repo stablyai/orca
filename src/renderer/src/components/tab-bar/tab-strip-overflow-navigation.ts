@@ -1,39 +1,20 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { bindTabStripContentResizeObservers } from './tab-strip-content-resize-observers'
+import {
+  computeTabStripScrollMetrics,
+  sameTabStripScrollMetrics,
+  type TabStripScrollMetrics
+} from './tab-strip-scroll-metrics'
 
 const TAB_STRIP_SCROLL_FRACTION = 0.75
 const TAB_STRIP_MIN_SCROLL_STEP_PX = 120
 
-type TabStripOverflowState = {
-  hasOverflow: boolean
-  canScrollStart: boolean
-  canScrollEnd: boolean
-}
-
-const EMPTY_TAB_STRIP_OVERFLOW_STATE: TabStripOverflowState = {
+const EMPTY_TAB_STRIP_OVERFLOW_STATE: TabStripScrollMetrics = {
   hasOverflow: false,
   canScrollStart: false,
-  canScrollEnd: false
-}
-
-function readTabStripOverflowState(el: HTMLElement): TabStripOverflowState {
-  const maxScrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
-  const hasOverflow = maxScrollLeft > 1
-  return {
-    hasOverflow,
-    canScrollStart: hasOverflow && el.scrollLeft > 1,
-    canScrollEnd: hasOverflow && el.scrollLeft < maxScrollLeft - 1
-  }
-}
-
-function sameTabStripOverflowState(
-  left: TabStripOverflowState,
-  right: TabStripOverflowState
-): boolean {
-  return (
-    left.hasOverflow === right.hasOverflow &&
-    left.canScrollStart === right.canScrollStart &&
-    left.canScrollEnd === right.canScrollEnd
-  )
+  canScrollEnd: false,
+  thumbSizeFraction: 1,
+  thumbOffsetFraction: 0
 }
 
 export function useTabStripOverflowNavigation({
@@ -48,13 +29,13 @@ export function useTabStripOverflowNavigation({
   worktreeId: string
 }): {
   tabStripRef: RefObject<HTMLDivElement | null>
-  tabStripOverflowState: TabStripOverflowState
+  tabStripOverflowState: TabStripScrollMetrics
   scrollTabStrip: (direction: 'start' | 'end') => void
 } {
   const tabStripRef = useRef<HTMLDivElement>(null)
   const prevStripLenRef = useRef<{ worktreeId: string; len: number } | null>(null)
   const stickToEndRef = useRef(false)
-  const [tabStripOverflowState, setTabStripOverflowState] = useState<TabStripOverflowState>(
+  const [tabStripOverflowState, setTabStripOverflowState] = useState<TabStripScrollMetrics>(
     EMPTY_TAB_STRIP_OVERFLOW_STATE
   )
   const updateTabStripOverflowState = useCallback((): void => {
@@ -62,29 +43,25 @@ export function useTabStripOverflowNavigation({
     if (!el) {
       return
     }
-    const next = readTabStripOverflowState(el)
+    const next = computeTabStripScrollMetrics(el)
     setTabStripOverflowState((previous) =>
-      sameTabStripOverflowState(previous, next) ? previous : next
+      sameTabStripScrollMetrics(previous, next) ? previous : next
     )
   }, [])
-  const scrollTabStrip = useCallback(
-    (direction: 'start' | 'end'): void => {
-      const el = tabStripRef.current
-      if (!el) {
-        return
-      }
-      const scrollStep = Math.max(
-        TAB_STRIP_MIN_SCROLL_STEP_PX,
-        el.clientWidth * TAB_STRIP_SCROLL_FRACTION
-      )
-      el.scrollBy({
-        left: direction === 'start' ? -scrollStep : scrollStep,
-        behavior: 'smooth'
-      })
-      requestAnimationFrame(updateTabStripOverflowState)
-    },
-    [updateTabStripOverflowState]
-  )
+  const scrollTabStrip = useCallback((direction: 'start' | 'end'): void => {
+    const el = tabStripRef.current
+    if (!el) {
+      return
+    }
+    const scrollStep = Math.max(
+      TAB_STRIP_MIN_SCROLL_STEP_PX,
+      el.clientWidth * TAB_STRIP_SCROLL_FRACTION
+    )
+    el.scrollBy({
+      left: direction === 'start' ? -scrollStep : scrollStep,
+      behavior: 'smooth'
+    })
+  }, [])
 
   useEffect(() => {
     const el = tabStripRef.current
@@ -119,7 +96,7 @@ export function useTabStripOverflowNavigation({
     el.addEventListener('scroll', onScroll, { passive: true })
     onScroll()
 
-    const ro = new ResizeObserver(() => {
+    const handleStripResize = (): void => {
       updateTabStripOverflowState()
       // If the user is pinned to the right edge, keep it pinned even as tab
       // labels (e.g. "Terminal 5" -> branch name) expand and change scrollWidth.
@@ -127,12 +104,13 @@ export function useTabStripOverflowNavigation({
         return
       }
       el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
-    })
-    ro.observe(el)
+    }
+
+    const disconnectResizeObservers = bindTabStripContentResizeObservers(el, handleStripResize)
 
     return () => {
       el.removeEventListener('scroll', onScroll)
-      ro.disconnect()
+      disconnectResizeObservers()
     }
   }, [updateTabStripOverflowState])
 

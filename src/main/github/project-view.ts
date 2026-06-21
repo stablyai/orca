@@ -47,6 +47,10 @@ import type {
   ResolveProjectRefArgs,
   ResolveProjectRefResult
 } from '../../shared/github-project-types'
+import {
+  GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR,
+  isGitHubProjectRefInputTooLarge
+} from '../../shared/github-project-ref-input'
 
 // Re-export the public API so existing call sites (`./project-view`) keep
 // working unchanged. The split is internal-only.
@@ -1565,6 +1569,9 @@ export function parseProjectPaste(input: string): ParsedPaste | null {
   if (!trimmed) {
     return null
   }
+  if (isGitHubProjectRefInputTooLarge(trimmed)) {
+    return null
+  }
   // URL forms
   const urlRe =
     /^https?:\/\/github\.com\/(orgs|users)\/([^/]+)\/projects\/(\d+)(?:\/views\/(\d+))?/i
@@ -1686,13 +1693,20 @@ async function resolveOwnerType(
 export async function resolveProjectRef(
   args: ResolveProjectRefArgs
 ): Promise<ResolveProjectRefResult> {
-  if (typeof args.input !== 'string' || !args.input.trim()) {
+  const input = typeof args.input === 'string' ? args.input.trim() : ''
+  if (!input) {
     return {
       ok: false,
       error: { type: 'validation_error', message: 'Input required.' }
     }
   }
-  const parsed = parseProjectPaste(args.input)
+  if (isGitHubProjectRefInputTooLarge(input)) {
+    return {
+      ok: false,
+      error: { type: 'validation_error', message: GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR }
+    }
+  }
+  const parsed = parseProjectPaste(input)
   if (!parsed) {
     return {
       ok: false,

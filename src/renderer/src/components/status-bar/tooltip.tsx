@@ -43,6 +43,28 @@ export function formatResetCountdown(ms: number): string {
   return duration === 'now' ? 'Resets now' : `Resets in ${duration}`
 }
 
+export function formatResetCreditExpiry(
+  expiresAt: number | null | undefined,
+  count: number
+): string | null {
+  if (!expiresAt) {
+    return null
+  }
+  const duration = formatDuration(expiresAt - Date.now())
+  if (duration === 'now') {
+    return count > 1
+      ? translate('auto.components.status.bar.tooltip.7ec6e030a0', 'Next expires now')
+      : translate('auto.components.status.bar.tooltip.d1e442a9e5', 'Expires now')
+  }
+  return count > 1
+    ? translate('auto.components.status.bar.tooltip.6cf9eaed10', 'Next expires in {{value0}}', {
+        value0: duration
+      })
+    : translate('auto.components.status.bar.tooltip.20ad66aed1', 'Expires in {{value0}}', {
+        value0: duration
+      })
+}
+
 // ---------------------------------------------------------------------------
 // Shared icon component
 // ---------------------------------------------------------------------------
@@ -229,11 +251,13 @@ export function barColor(leftPct: number): string {
 export function ProviderPanel({
   p,
   inverted = false,
-  className
+  className,
+  showResetCredits = true
 }: {
   p: ProviderRateLimits | null
   inverted?: boolean
   className?: string
+  showResetCredits?: boolean
 }): React.JSX.Element {
   const textClass = inverted ? 'text-background' : 'text-foreground'
   const mutedClass = inverted ? 'text-background/60' : 'text-muted-foreground'
@@ -284,7 +308,14 @@ export function ProviderPanel({
   }
 
   const updatedAgo = p.updatedAt ? `Updated ${formatTimeAgo(p.updatedAt)}` : 'Not yet updated'
-  const resetCreditCount = p.provider === 'codex' ? p.rateLimitResetCredits?.availableCount : null
+  const resetCreditCount =
+    showResetCredits && p.provider === 'codex'
+      ? (p.rateLimitResetCredits?.availableCount ?? null)
+      : null
+  const resetCreditExpiry =
+    resetCreditCount != null
+      ? formatResetCreditExpiry(p.rateLimitResetCredits?.nextExpiresAt, resetCreditCount)
+      : null
 
   const PanelWindowSection = ({
     w,
@@ -341,6 +372,7 @@ export function ProviderPanel({
                 )}
           </div>
         ) : null}
+        {resetCreditExpiry ? <div className={faintClass}>{resetCreditExpiry}</div> : null}
       </div>
 
       <div className={`border-t ${dividerClass}`} />

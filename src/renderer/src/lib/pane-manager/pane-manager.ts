@@ -16,6 +16,7 @@ import {
   disposeDividersIn
 } from './pane-divider'
 import { cancelActivePaneDrag, createDragReorderState, handlePaneDrop } from './pane-drag-reorder'
+import { beginPaneDragFromPointerDown } from './pane-drag-pointer'
 import { createPaneDOM, openTerminal, setLigaturesEnabled, disposePane } from './pane-lifecycle'
 import { shouldFollowMouseFocus } from './focus-follows-mouse'
 import { getTerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
@@ -289,6 +290,10 @@ export class PaneManager {
 
   movePane(sourcePaneId: number, targetPaneId: number, zone: DropZone): void {
     handlePaneDrop(sourcePaneId, targetPaneId, zone, this.dragState, this.getDragCallbacks())
+  }
+
+  beginPaneDragFromPointerDown(paneId: number, handle: HTMLElement, event: PointerEvent): void {
+    beginPaneDragFromPointerDown(handle, paneId, this.dragState, this.getDragCallbacks(), event)
   }
 
   destroy(): void {

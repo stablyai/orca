@@ -69,6 +69,20 @@ describe('local workspace port scanner parsing', () => {
     ])
   })
 
+  it('parses Windows netstat rows without whitespace regex splitting', () => {
+    const splitSpy = vi.spyOn(String.prototype, 'split')
+    const ports = parseNetstatListeningOutput(
+      'TCP    127.0.0.1:3000         0.0.0.0:0              LISTENING       4242'
+    )
+    const usedWhitespaceFieldSplit = splitSpy.mock.calls.some(
+      ([separator]) => separator instanceof RegExp && separator.source.includes('\\s+')
+    )
+    splitSpy.mockRestore()
+
+    expect(ports).toEqual([{ host: '127.0.0.1', port: 3000, pid: 4242 }])
+    expect(usedWhitespaceFieldSplit).toBe(false)
+  })
+
   it('parses Linux proc tcp listeners', () => {
     const ports = parseProcNetTcp(
       [
@@ -78,6 +92,23 @@ describe('local workspace port scanner parsing', () => {
     )
 
     expect(ports).toEqual([{ host: '127.0.0.1', port: 3000, inode: 12345 }])
+  })
+
+  it('parses Linux proc rows without whitespace regex splitting', () => {
+    const splitSpy = vi.spyOn(String.prototype, 'split')
+    const ports = parseProcNetTcp(
+      [
+        '  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode',
+        '   0: 0100007F:0BB8 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000 0 12345'
+      ].join('\n')
+    )
+    const usedWhitespaceFieldSplit = splitSpy.mock.calls.some(
+      ([separator]) => separator instanceof RegExp && separator.source.includes('\\s+')
+    )
+    splitSpy.mockRestore()
+
+    expect(ports).toEqual([{ host: '127.0.0.1', port: 3000, inode: 12345 }])
+    expect(usedWhitespaceFieldSplit).toBe(false)
   })
 })
 
@@ -96,10 +127,8 @@ describe('attributePortToWorkspace', () => {
   })
 
   it('falls back to command-line path evidence', () => {
-    const owner = attributePortToWorkspace(
-      { commandLine: 'node /repo/worktrees/feature/node_modules/vite/bin/vite.js' },
-      worktrees
-    )
+    const commandPath = path.posix.resolve('/repo/worktrees/feature/node_modules/vite/bin/vite.js')
+    const owner = attributePortToWorkspace({ commandLine: `node ${commandPath}` }, worktrees)
 
     expect(owner).toMatchObject({
       worktreeId: 'repo::/repo/worktrees/feature',
@@ -109,7 +138,7 @@ describe('attributePortToWorkspace', () => {
 
   it('requires command-line path boundary evidence', () => {
     const owner = attributePortToWorkspace(
-      { commandLine: 'node /repo/worktrees/feature-other/server.js' },
+      { commandLine: `node ${path.posix.resolve('/repo/worktrees/feature-other/server.js')}` },
       [worktrees[1]]
     )
 

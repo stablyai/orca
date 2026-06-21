@@ -25,10 +25,13 @@ import {
   ConductorProgressIcon,
   ConductorReviewIcon
 } from './workspace-status-icons'
+import {
+  getEffectiveProjectGroupManualRank,
+  UNGROUPED_PROJECT_GROUP_KEY
+} from '../../../../shared/project-groups'
 import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
 import type { AppState } from '../../store/types'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '../../store/slices/github-cache-key'
-import { UNGROUPED_PROJECT_GROUP_KEY } from '../../../../shared/project-groups'
 import { getRepoDisplayLabelsByPath } from '@/lib/repo-display-labels'
 import { translate } from '@/i18n/i18n'
 import { getExecutionHostLabel, getRepoExecutionHostId } from '../../../../shared/execution-host'
@@ -1026,18 +1029,11 @@ export function buildRows(
       )
     }
     // Manual: within a Project Group, projects order by their per-group rank
-    // (projectGroupOrder), not the global repoOrder.
+    // (projectGroupOrder), falling back to global repoOrder when unset so drag
+    // midpoint commits and the rendered order stay aligned.
     return [...entries].sort((left, right) => {
-      const leftOrder = left[1].repo?.projectGroupOrder
-      const rightOrder = right[1].repo?.projectGroupOrder
-      const leftRank =
-        typeof leftOrder === 'number' && Number.isFinite(leftOrder)
-          ? leftOrder
-          : Number.POSITIVE_INFINITY
-      const rightRank =
-        typeof rightOrder === 'number' && Number.isFinite(rightOrder)
-          ? rightOrder
-          : Number.POSITIVE_INFINITY
+      const leftRank = getEffectiveProjectGroupManualRank(left[1].repo, repoOrder)
+      const rightRank = getEffectiveProjectGroupManualRank(right[1].repo, repoOrder)
       return leftRank - rightRank
     })
   }

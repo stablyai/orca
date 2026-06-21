@@ -269,6 +269,8 @@ describe('forge provider interface', () => {
       number: 7,
       status: 'success'
     })
-    expect(getPRForBranchMock).toHaveBeenCalledWith('/repo', '', null, 'ssh-1', 7)
+    expect(getPRForBranchMock).toHaveBeenCalledWith('/repo', '', null, 'ssh-1', 7, {
+      acceptMergedFallbackPR: true
+    })
   })
 })

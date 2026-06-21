@@ -74,6 +74,7 @@ const terminalTabSchema = z.object({
   quickCommandLabel: z.string().nullable().optional(),
   customTitle: z.string().nullable(),
   color: z.string().nullable(),
+  isPinned: z.boolean().optional(),
   sortOrder: z.number(),
   createdAt: z.number(),
   generation: z.number().optional(),

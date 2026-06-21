@@ -2,6 +2,7 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathSeparators
 } from '../../../../shared/cross-platform-path'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import type {
   AiVaultAgent,
   AiVaultGroup,
@@ -10,6 +11,7 @@ import type {
   AiVaultSort
 } from '../../../../shared/ai-vault-types'
 import { aiVaultAgentLabel } from '../../../../shared/ai-vault-types'
+import { sessionPreviewSearchText } from './ai-vault-session-display'
 
 export type AiVaultSessionFilterState = {
   query: string
@@ -32,10 +34,23 @@ type ParsedQuery = {
   pathTerms: string[]
 }
 
+export const AI_VAULT_SESSION_FILTER_QUERY_MAX_BYTES = 2 * 1024
+
+export function isAiVaultSessionFilterQueryTooLarge(
+  query: string,
+  maxBytes = AI_VAULT_SESSION_FILTER_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
+
 export function filterAiVaultSessions(
   sessions: readonly AiVaultSession[],
   filters: AiVaultSessionFilterState
 ): AiVaultSession[] {
+  if (isAiVaultSessionFilterQueryTooLarge(filters.query)) {
+    return []
+  }
+
   const agentSet = new Set(filters.agents)
   const parsedQuery = parseVaultQuery(filters.query)
 
@@ -129,7 +144,8 @@ function matchesQuery(session: AiVaultSession, parsed: ParsedQuery): boolean {
     session.branch,
     session.model,
     session.cwd,
-    session.filePath
+    session.filePath,
+    sessionPreviewSearchText(session)
   ]
     .filter(Boolean)
     .join(' ')

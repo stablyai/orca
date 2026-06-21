@@ -11,6 +11,7 @@ import {
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import type { GitStatusEntry } from '../../../../shared/types'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -2589,6 +2590,38 @@ describe('createEditorSlice combined diff exclusions', () => {
       expect.objectContaining({
         id: 'wt-1::all-diffs::uncommitted',
         skippedConflicts: [{ path: 'src/conflict.ts', conflictKind: 'both_modified' }]
+      })
+    )
+  })
+
+  it('uses a supplied combined diff entry snapshot instead of the whole area', () => {
+    const store = createEditorStore()
+    const normalEntry: GitStatusEntry = {
+      path: 'src/normal.ts',
+      status: 'modified',
+      area: 'unstaged'
+    }
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'merge',
+      entries: [
+        {
+          path: 'src/resolved.ts',
+          status: 'modified',
+          area: 'unstaged',
+          conflictKind: 'both_modified',
+          conflictStatus: 'resolved_locally'
+        },
+        normalEntry
+      ]
+    })
+    store.getState().openAllDiffs('wt-1', '/repo', undefined, 'unstaged', [normalEntry])
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        id: 'wt-1::all-diffs::uncommitted::unstaged',
+        uncommittedEntriesSnapshot: [normalEntry],
+        skippedConflicts: []
       })
     )
   })

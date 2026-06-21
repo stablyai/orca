@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import CommentMarkdown from './CommentMarkdown'
 import { getAgentDotState } from './worktree-card-agent-summary'
 import { translate } from '@/i18n/i18n'
+import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 
 const MARKDOWN_IMAGE_PATTERN = /!\[[^\]\n]*\]\([^)]+\)/
 
@@ -41,7 +42,7 @@ function lastEnteredDoneAt(agent: DashboardAgentRowData): number | null {
 }
 
 function getCompactAgentPrimary(agent: DashboardAgentRowData): string {
-  const prompt = agent.entry.prompt?.trim() ?? ''
+  const prompt = getAgentRowPrimaryText(agent.entry)
   return prompt || agentStateLabel(getAgentDotState(agent))
 }
 
@@ -199,9 +200,11 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       <span className="min-w-0 flex-1 truncate">
         {/* Why: the selected-row fill is strong enough to wash out the dimmed
             prompt/secondary text, so lift both toward full foreground when focused. */}
-        <span className={isFocusedPane ? 'text-foreground' : 'text-foreground/85'}>{primary}</span>
+        <span className={isFocusedPane ? 'text-foreground' : 'text-muted-foreground/90'}>
+          {primary}
+        </span>
         {secondary && (
-          <span className={isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/75'}>
+          <span className={isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/65'}>
             {' '}
             - {secondary}
           </span>

@@ -5,6 +5,7 @@ import type { BrowserTab as BrowserTabState, Tab, TabGroup } from '../../../../s
 import BrowserPane from './BrowserPane'
 import { tabGroupBodyAnchorName } from '../tab-group/tab-group-body-anchor'
 import { useBrowserAutomationVisibilityForAny } from './browser-automation-visibility'
+import { useBrowserMobileDriverForAny } from '@/lib/pane-manager/browser-mobile-driver-state'
 
 // Why: Electron `<webview>` destroys its guest contents whenever its DOM
 // parent changes. Rendering paintable BrowserPanes at the worktree level
@@ -38,27 +39,31 @@ type BrowserOverlaySlotProps = {
   // `activeGroupIdByWorktree` stale. The overlay slot re-implements that
   // focus sync directly, targeting the owning group.
   onFocusOwningGroup: ((groupId: string) => void) | undefined
+  isWorktreeActive: boolean
 }
 
 // Why: each overlay slot is memoized so its BrowserPane subtree only re-renders
-// when its own `browserTab`, `groupId`, or `isActive` changes. Without this,
-// any unrelated worktree mutation (terminal keystrokes, editor updates, etc.)
-// that re-renders the parent overlay layer would cascade into every
-// BrowserPane — defeating the "never reparent/reload the webview" goal of
-// this layer by constantly re-running props diffing on heavy subtrees.
+// when its own assignment, active state, or worktree visibility changes.
+// Without this, unrelated worktree mutations (terminal keystrokes, editor
+// updates, etc.) would cascade into every BrowserPane.
 const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   browserTab,
   groupId,
   isActive,
-  onFocusOwningGroup
+  onFocusOwningGroup,
+  isWorktreeActive
 }: BrowserOverlaySlotProps): React.JSX.Element {
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
-  const automationVisible = useBrowserAutomationVisibilityForAny(
+  const browserPageIds =
     browserTab.pageIds && browserTab.pageIds.length > 0
       ? browserTab.pageIds
       : [browserTab.activePageId ?? browserTab.id]
-  )
-  const isPaintable = isActive || automationVisible
+  const automationVisible = useBrowserAutomationVisibilityForAny(browserPageIds)
+  const mobileDriven = useBrowserMobileDriverForAny(browserPageIds)
+  const isPaintable = isActive || automationVisible || mobileDriven
+  // Why: hidden worktrees keep lightweight overlay slots mounted, but their
+  // Electron webviews must park unless a remote controller needs the guest.
+  const shouldMountPane = isWorktreeActive || automationVisible || mobileDriven
   // Why: each overlay pins itself to the owning TabGroupPanel's body via CSS
   // anchor positioning. `anchor()` resolves top/left relative to the viewport,
   // and the overlay's own `position: absolute` inside a positioned ancestor
@@ -108,9 +113,9 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
       onFocusCapture={handleFocus}
     >
       {/* Why: moving an Electron webview between DOM parents destroys the guest
-          document in some Electron builds. Keep every open browser mounted in
-          its stable overlay slot; CSS decides whether it is paintable. */}
-      <BrowserPane browserTab={browserTab} isActive={isActive} />
+          document in some Electron builds. Visible worktree browsers stay in
+          stable overlay slots; hidden worktrees park the heavy pane subtree. */}
+      {shouldMountPane ? <BrowserPane browserTab={browserTab} isActive={isActive} /> : null}
     </div>
   )
 })
@@ -192,6 +197,7 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
             groupId={assignment?.groupId}
             isActive={isActive}
             onFocusOwningGroup={focusOwningGroup}
+            isWorktreeActive={isWorktreeActive}
           />
         )
       })}
