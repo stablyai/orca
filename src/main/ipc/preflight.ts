@@ -149,6 +149,22 @@ function uniqueAgentIds(ids: Iterable<string>): string[] {
   return [...new Set(ids)]
 }
 
+// Why: jcode is Orca's own integrated chat agent. Its chat backend
+// (src/main/jcode/jcode-chat-session.ts) spawns the binary via a pinned
+// absolute path, so it does NOT depend on `which jcode` resolving at runtime.
+// PATH detection for ~/.cargo/bin is flaky on a cold GUI launch, which would
+// otherwise hide jcode from every launch surface (the tab "+" palette,
+// QuickLaunchButton, the new-workspace composer) since those gate on the
+// detected set. Force-include it on the LOCAL host only so it is always
+// launchable, while every other agent stays gated on real detection. Remote
+// (SSH) and WSL hosts use separate detection paths and must NOT be forced —
+// the local cargo binary is not present there.
+const ALWAYS_AVAILABLE_LOCAL_AGENT_IDS: readonly string[] = ['jcode']
+
+function withForcedLocalAgents(ids: Iterable<string>): string[] {
+  return uniqueAgentIds([...ids, ...ALWAYS_AVAILABLE_LOCAL_AGENT_IDS])
+}
+
 async function detectCommandRuntime(
   command: string,
   context?: PreflightRuntimeContext
@@ -192,7 +208,11 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
     id,
     installed: installedOnPath || installDirCommands.has(cmd)
   }))
-  return uniqueAgentIds(checks.filter((c) => c.installed).map((c) => c.id))
+  // Why: force-union jcode into the LOCAL detected set so it shows up and is
+  // launchable in every launch surface even when `which jcode` fails to resolve
+  // ~/.cargo/bin on a cold GUI launch. The WSL branch above returns before this
+  // point, so remote hosts are unaffected.
+  return withForcedLocalAgents(checks.filter((c) => c.installed).map((c) => c.id))
 }
 
 export type RefreshAgentsResult = {

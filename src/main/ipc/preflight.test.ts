@@ -487,7 +487,9 @@ describe('preflight', () => {
       throw new Error('not found')
     })
 
-    await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'cursor'])
+    // Why: jcode is force-unioned into the local detected set so Orca's own
+    // integrated chat agent is always launchable regardless of `which jcode`.
+    await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'cursor', 'jcode'])
   })
 
   it('detects agents via the install-dir resolver when which fails (stripped GUI PATH)', async () => {
@@ -517,7 +519,7 @@ describe('preflight', () => {
         )
     )
 
-    await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'codex', 'opencode'])
+    await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'codex', 'opencode', 'jcode'])
     expect(resolveCliCommandsMock).toHaveBeenCalledTimes(1)
   })
 
@@ -536,7 +538,7 @@ describe('preflight', () => {
       (commands: string[]) => new Map(commands.map((cmd) => [cmd, cmd]))
     )
 
-    await expect(detectInstalledAgents()).resolves.toEqual(['claude'])
+    await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'jcode'])
     expect(resolveCliCommandsMock).toHaveBeenCalledTimes(1)
     expect(resolveCliCommandsMock).toHaveBeenCalledWith(expect.not.arrayContaining(['claude']))
   })
@@ -553,7 +555,9 @@ describe('preflight', () => {
       throw new Error('EACCES: permission denied')
     })
 
-    await expect(detectInstalledAgents()).resolves.toEqual([])
+    // Why: even with zero real detections, jcode is force-unioned into the
+    // local set so the integrated chat agent is never hidden from launch surfaces.
+    await expect(detectInstalledAgents()).resolves.toEqual(['jcode'])
   })
 
   it('registers agent detection through the shared launch config commands', async () => {
@@ -572,7 +576,11 @@ describe('preflight', () => {
 
     registerPreflightHandlers()
 
-    await expect(handlers['preflight:detectAgents']()).resolves.toEqual(['openclaude', 'cursor'])
+    await expect(handlers['preflight:detectAgents']()).resolves.toEqual([
+      'openclaude',
+      'cursor',
+      'jcode'
+    ])
   })
 
   it('detects Mistral Vibe from the installed vibe executable', async () => {
@@ -586,7 +594,7 @@ describe('preflight', () => {
       throw new Error('not found')
     })
 
-    await expect(detectInstalledAgents()).resolves.toEqual(['mistral-vibe'])
+    await expect(detectInstalledAgents()).resolves.toEqual(['mistral-vibe', 'jcode'])
   })
 
   it('deduplicates Mistral Vibe when both current and legacy executables exist', async () => {
@@ -600,7 +608,7 @@ describe('preflight', () => {
       throw new Error('not found')
     })
 
-    await expect(detectInstalledAgents()).resolves.toEqual(['mistral-vibe'])
+    await expect(detectInstalledAgents()).resolves.toEqual(['mistral-vibe', 'jcode'])
   })
 
   it('sends aliased detection commands through the SSH remote preflight path', async () => {
@@ -821,7 +829,7 @@ describe('preflight', () => {
     }
 
     expect(result).toEqual({
-      agents: ['opencode'],
+      agents: ['opencode', 'jcode'],
       addedPathSegments: ['/Users/test/.opencode/bin'],
       shellHydrationOk: true,
       pathSource: 'shell_hydrate',
@@ -858,7 +866,7 @@ describe('preflight', () => {
 
     expect(result.shellHydrationOk).toBe(false)
     expect(result.addedPathSegments).toEqual([])
-    expect(result.agents).toEqual(['claude'])
+    expect(result.agents).toEqual(['claude', 'jcode'])
     // Why: drives the agent_picks `on_path:false` triage in dashboard 1562016.
     // Without these fields we cannot distinguish "hydration failed" from
     // "user genuinely doesn't have the binary."

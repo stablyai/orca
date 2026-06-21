@@ -120,6 +120,12 @@ function getBaseVersionManagerDirectories(platform: NodeJS.Platform, homePath: s
   // Why: bun uses ~/.bun/bin on all platforms for globally installed packages.
   directories.push(join(homePath, '.bun', 'bin'))
 
+  // Why: Rust/Cargo-installed binaries (e.g. Orca's integrated jcode agent)
+  // land in ~/.cargo/bin, which GUI-launched Orca often does not inherit on
+  // PATH. Probe it directly so cargo-installed CLIs resolve without a shell
+  // re-hydration. Same convention on all platforms.
+  directories.push(join(homePath, '.cargo', 'bin'))
+
   return directories
 }
 
