@@ -156,6 +156,76 @@ describe('benchmark artifact comparison', () => {
     ).toMatchObject({ status: 'improved', unit: 'ms' })
   })
 
+  it('aggregates duplicate Playwright scenario metrics before comparison', () => {
+    const dir = makeTempDir()
+    const baselinePath = writeArtifact(dir, 'baseline-playwright-duplicates.json', {
+      suites: [
+        {
+          specs: [
+            {
+              tests: [
+                {
+                  annotations: [
+                    {
+                      type: 'opencode-duplicate',
+                      description: 'median=80.0ms rendererQueuedChars=1000'
+                    },
+                    {
+                      type: 'opencode-duplicate',
+                      description: 'median=100.0ms rendererQueuedChars=1400'
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    })
+    const candidatePath = writeArtifact(dir, 'candidate-playwright-duplicates.json', {
+      suites: [
+        {
+          specs: [
+            {
+              tests: [
+                {
+                  annotations: [
+                    {
+                      type: 'opencode-duplicate',
+                      description: 'median=60.0ms rendererQueuedChars=800'
+                    },
+                    {
+                      type: 'opencode-duplicate',
+                      description: 'median=70.0ms rendererQueuedChars=1000'
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    })
+
+    const comparison = comparePaths(baselinePath, candidatePath)
+    const duplicateMedianMetrics = comparison.metrics.filter(
+      (metric) => metric.key === 'opencode-duplicate.median'
+    )
+
+    expect(duplicateMedianMetrics).toHaveLength(1)
+    expect(duplicateMedianMetrics[0]).toMatchObject({
+      absoluteDelta: -25,
+      baseline: 90,
+      candidate: 65,
+      percentDelta: -27.8,
+      status: 'improved',
+      unit: 'ms'
+    })
+    expect(
+      comparison.metrics.filter((metric) => metric.key === 'opencode-duplicate.rendererQueuedChars')
+    ).toHaveLength(1)
+  })
+
   it('supports higher-is-better metrics for generic summary artifacts', () => {
     const dir = makeTempDir()
     const baselinePath = writeArtifact(dir, 'generic-baseline.json', {

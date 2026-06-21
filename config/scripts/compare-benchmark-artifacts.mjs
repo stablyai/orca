@@ -116,7 +116,7 @@ function normalizeNumericObject(path, artifact, kind, values, unitForKey) {
 
 function normalizePlaywrightArtifact(path, artifact) {
   const rows = collectTerminalPerfRows(artifact, basename(path), { typePrefix: 'opencode-' })
-  const metrics = []
+  const groupedMetrics = new Map()
   for (const row of rows) {
     for (const [field, rawValue] of Object.entries(row)) {
       if (PLAYWRIGHT_METADATA_FIELDS.has(field)) {
@@ -126,19 +126,30 @@ function normalizePlaywrightArtifact(path, artifact) {
       if (parsed == null) {
         continue
       }
-      metrics.push({
-        direction: 'lower-is-better',
-        key: `${row.scenario}.${field}`,
+      const key = `${row.scenario}.${field}`
+      const metricGroup = groupedMetrics.get(key) ?? {
         unit: parsed.unit,
-        value: parsed.value
-      })
+        values: []
+      }
+      metricGroup.values.push(parsed.value)
+      groupedMetrics.set(key, metricGroup)
     }
   }
+  const metrics = [...groupedMetrics.entries()].map(([key, metricGroup]) => ({
+    direction: 'lower-is-better',
+    key,
+    unit: metricGroup.unit,
+    value: mean(metricGroup.values)
+  }))
   return {
     kind: 'playwright',
     label: artifactLabel(path, artifact),
     metrics
   }
+}
+
+function mean(values) {
+  return values.reduce((sum, value) => sum + value, 0) / values.length
 }
 
 function parseMetricValue(rawValue) {

@@ -4542,28 +4542,15 @@ function SourceControlInner(): React.JSX.Element {
   const refreshGitHistoryRef = useRef(refreshGitHistory)
   refreshGitHistoryRef.current = refreshGitHistory
 
-  const branchSummaryStatus = branchSummary?.status
-  const branchSummaryBaseRef = branchSummary?.baseRef
-  const branchSummaryCommitsAhead = branchSummary?.commitsAhead
-
-  const shouldPollCurrentBranchCompare = useMemo(() => {
-    if (!branchSummaryStatus || branchSummaryStatus === 'loading') {
-      return true
-    }
-    if (effectiveBaseRef && branchSummaryBaseRef !== effectiveBaseRef) {
-      return true
-    }
-    if (branchSummaryStatus === 'ready') {
-      return (branchSummaryCommitsAhead ?? 0) > 0 || branchEntries.length > 0
-    }
-    return branchSummaryStatus === 'error'
-  }, [
-    branchEntries.length,
-    branchSummaryBaseRef,
-    branchSummaryCommitsAhead,
-    branchSummaryStatus,
-    effectiveBaseRef
-  ])
+  const shouldPollCurrentBranchCompare = useMemo(
+    () =>
+      shouldPollBranchCompare({
+        summary: branchSummary ?? null,
+        branchEntryCount: branchEntries.length,
+        currentBaseRef: effectiveBaseRef
+      }),
+    [branchEntries.length, branchSummary, effectiveBaseRef]
+  )
 
   useEffect(() => {
     if (

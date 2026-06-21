@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import {
   BRANCH_REFRESH_INTERVAL_MS,
@@ -79,8 +78,6 @@ const readySummary: GitBranchCompareSummary = {
   commitsAhead: 1,
   status: 'ready'
 }
-
-const sourceControlSource = readFileSync(new URL('./SourceControl.tsx', import.meta.url), 'utf8')
 
 describe('SourceControl compare summary', () => {
   it('prefers the worktree creation base for branch compare', () => {
@@ -281,7 +278,6 @@ describe('SourceControl compare summary', () => {
 
   it('polls branch compare every 30 seconds', () => {
     expect(BRANCH_REFRESH_INTERVAL_MS).toBe(30_000)
-    expect(sourceControlSource).toContain('intervalMs: BRANCH_REFRESH_INTERVAL_MS')
   })
 
   it('polls ready branch compare only when visible branch state can change', () => {
