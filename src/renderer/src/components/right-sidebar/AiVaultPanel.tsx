@@ -48,6 +48,7 @@ export default function AiVaultPanel(): React.JSX.Element {
 
   const isRemoteWorktree = Boolean(activeRepo?.connectionId)
   const activeWorktreePath = activeWorktree?.path ?? null
+  // Why: AI Vault ownership is cwd-based, so we must consider live worktrees across all repos.
   const liveWorktrees = useMemo(() => Object.values(worktreesByRepo).flat(), [worktreesByRepo])
   const activeWorktreePaths = useMemo(
     () => deriveAiVaultWorkspaceScopePaths(activeWorktree ?? null, liveWorktrees),
