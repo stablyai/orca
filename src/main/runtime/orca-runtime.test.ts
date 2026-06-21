@@ -6998,6 +6998,61 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('does not report tui-idle while a name-only agent title keeps streaming output', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000_000)
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+
+      // 'Codex' is a name-only title → detectAgentStatusFromTitle defaults it to
+      // 'idle' even though the agent is actively working (the spinner and "esc to
+      // interrupt" live in the terminal body, not the OSC title). Pre-fix this
+      // made tui-idle satisfy in ~0s mid-work.
+      runtime.onPtyData('pty-bg', '\x1b]0;Codex\x07working 1\n', Date.now())
+
+      const waitPromise = runtime.waitForTerminal(handle, {
+        condition: 'tui-idle',
+        timeoutMs: 60_000
+      })
+      let settled = false
+      void waitPromise.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        }
+      )
+
+      // Keep streaming: each chunk refreshes lastOutputAt, so the debounce
+      // window never elapses and the wait must not resolve.
+      for (let i = 2; i <= 6; i++) {
+        runtime.onPtyData('pty-bg', `working ${i}\n`, Date.now())
+        await vi.advanceTimersByTimeAsync(2_000)
+      }
+      expect(settled).toBe(false)
+
+      // Agent finishes: output goes quiet. After >= TUI_IDLE_QUIESCENCE_MS the
+      // sustained-idle debounce elapses and the wait resolves.
+      await vi.advanceTimersByTimeAsync(4_000)
+      await expect(waitPromise).resolves.toMatchObject({
+        handle,
+        condition: 'tui-idle',
+        satisfied: true,
+        status: 'running'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('resolves tui-idle from a Codex ready prompt preview', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({

@@ -8228,12 +8228,13 @@ export class OrcaRuntimeService {
       if (condition === 'tui-idle' && ptyBlockedReason) {
         return buildPtyTerminalWaitBlockedResult(handle, condition, pty.pty, ptyBlockedReason)
       }
-      if (condition === 'tui-idle' && pty.pty.lastAgentStatus === 'idle') {
+      if (condition === 'tui-idle' && this.hasSustainedTuiIdle(pty.pty)) {
         return buildPtyTerminalWaitResult(handle, condition, pty.pty)
       }
       if (
         condition === 'tui-idle' &&
-        (this.getAdoptedPtyExplicitIdleStatus(pty.pty) === 'idle' ||
+        ((this.getAdoptedPtyExplicitIdleStatus(pty.pty) === 'idle' &&
+          !this.isTuiOutputActive(pty.pty)) ||
           isKnownReadyPromptPreview(ptyWaitText))
       ) {
         return buildPtyTerminalWaitResult(handle, condition, pty.pty)
@@ -8288,10 +8289,11 @@ export class OrcaRuntimeService {
               waiter,
               buildPtyTerminalWaitBlockedResult(handle, condition, live.pty, blockedReason)
             )
-          } else if (live.pty.lastAgentStatus === 'idle') {
+          } else if (this.hasSustainedTuiIdle(live.pty)) {
             this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
           } else if (
-            this.getAdoptedPtyExplicitIdleStatus(live.pty) === 'idle' ||
+            (this.getAdoptedPtyExplicitIdleStatus(live.pty) === 'idle' &&
+              !this.isTuiOutputActive(live.pty)) ||
             isKnownReadyPromptPreview(livePtyWaitText)
           ) {
             this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
@@ -8318,13 +8320,15 @@ export class OrcaRuntimeService {
     // detection that powers the renderer's "Task complete" notifications.
     // Why: only 'idle' satisfies tui-idle, not 'permission'. Permission means the
     // agent is blocked on user approval, not finished with its task.
-    if (condition === 'tui-idle' && leaf.lastAgentStatus === 'idle') {
+    if (condition === 'tui-idle' && this.hasSustainedTuiIdle(leaf)) {
       return buildTerminalWaitResult(handle, condition, leaf)
     }
     if (condition === 'tui-idle') {
       const fastPathTitle = leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title
       if (
-        (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
+        (fastPathTitle &&
+          detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle' &&
+          !this.isTuiOutputActive(leaf)) ||
         isKnownReadyPromptPreview(leafWaitText)
       ) {
         return buildTerminalWaitResult(handle, condition, leaf)
@@ -8390,7 +8394,7 @@ export class OrcaRuntimeService {
               waiter,
               buildTerminalWaitBlockedResult(handle, condition, live.leaf, blockedReason)
             )
-          } else if (live.leaf.lastAgentStatus === 'idle') {
+          } else if (this.hasSustainedTuiIdle(live.leaf)) {
             // Why: don't clear lastAgentStatus here. It's a factual record of the
             // last detected OSC state, not a one-shot signal. Clearing it causes
             // subsequent tui-idle waiters to hang even though the agent is idle —
@@ -8402,7 +8406,9 @@ export class OrcaRuntimeService {
             // preview/title until the waiter resolves or hits its timeout.
             const fastPathTitle = live.leaf.paneTitle ?? this.tabs.get(live.leaf.tabId)?.title
             if (
-              (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
+              (fastPathTitle &&
+                detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle' &&
+                !this.isTuiOutputActive(live.leaf)) ||
               isKnownReadyPromptPreview(liveLeafWaitText)
             ) {
               this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
@@ -17870,6 +17876,36 @@ export class OrcaRuntimeService {
     }
   }
 
+  // Why: a single OSC-title 'idle' sample is not proof an agent finished. Agents
+  // render their working spinner and "esc to interrupt" in the terminal BODY,
+  // and detectAgentStatusFromTitle() defaults a name-only agent title (e.g.
+  // "Devin", "Codex", "aider") to 'idle'. So an actively-working agent is
+  // routinely reported idle by its title alone, which made `terminal wait --for
+  // tui-idle` fire in ~0s mid-work. While output is still streaming, the
+  // terminal is by definition not idle regardless of what the title says.
+  private isTuiOutputActive(target: { lastOutputAt: number | null }): boolean {
+    if (!target.lastOutputAt) {
+      return false
+    }
+    return Date.now() - target.lastOutputAt < TUI_IDLE_QUIESCENCE_MS
+  }
+
+  // Why: treat a title-derived 'idle' status as satisfying tui-idle only after
+  // output has been quiet for TUI_IDLE_QUIESCENCE_MS — i.e. require *sustained*
+  // idle (debounce). A genuinely finished agent stops emitting, so the debounce
+  // window elapses; an agent that merely flashed an idle-looking title mid-work
+  // keeps producing output and never satisfies. Body-level prompt detection
+  // (isKnownReadyPromptPreview) is a direct "cursor at input prompt" signal and
+  // stays immediate; adopted/daemon handles with no PTY output stream
+  // (lastOutputAt == null) have nothing to debounce, so their title signal
+  // also stands.
+  private hasSustainedTuiIdle(target: {
+    lastAgentStatus: AgentStatus | null
+    lastOutputAt: number | null
+  }): boolean {
+    return target.lastAgentStatus === 'idle' && !this.isTuiOutputActive(target)
+  }
+
   private resolveTuiIdleWaiters(leaf: RuntimeLeafRecord): void {
     const handle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
     if (!handle) {
@@ -17880,7 +17916,10 @@ export class OrcaRuntimeService {
       return
     }
     for (const waiter of [...waiters]) {
-      if (waiter.condition === 'tui-idle') {
+      // Why: only resolve once idle is *sustained*. The transition fires the
+      // instant an idle-looking title arrives, which is itself fresh output; the
+      // fallback poll re-checks and resolves once output goes quiet.
+      if (waiter.condition === 'tui-idle' && this.hasSustainedTuiIdle(leaf)) {
         this.resolveWaiter(waiter, buildTerminalWaitResult(handle, 'tui-idle', leaf))
       }
     }
@@ -17915,7 +17954,8 @@ export class OrcaRuntimeService {
       return
     }
     for (const waiter of [...waiters]) {
-      if (waiter.condition === 'tui-idle') {
+      // Why: only resolve once idle is *sustained* (see resolveTuiIdleWaiters).
+      if (waiter.condition === 'tui-idle' && this.hasSustainedTuiIdle(pty)) {
         this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, 'tui-idle', pty))
       }
     }
@@ -17935,7 +17975,7 @@ export class OrcaRuntimeService {
       }
       let startedForegroundPoll = false
       try {
-        if (leaf.lastAgentStatus === 'idle') {
+        if (this.hasSustainedTuiIdle(leaf)) {
           if (waiter.pollInterval) {
             clearInterval(waiter.pollInterval)
             waiter.pollInterval = null
@@ -17948,7 +17988,7 @@ export class OrcaRuntimeService {
         const pollTitle = leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title
         if (pollTitle) {
           const titleStatus = detectExplicitIdleStatusFromTitle(pollTitle)
-          if (titleStatus === 'idle') {
+          if (titleStatus === 'idle' && !this.isTuiOutputActive(leaf)) {
             if (waiter.pollInterval) {
               clearInterval(waiter.pollInterval)
               waiter.pollInterval = null
@@ -18022,7 +18062,7 @@ export class OrcaRuntimeService {
       }
       let startedForegroundPoll = false
       try {
-        if (pty.lastAgentStatus === 'idle') {
+        if (this.hasSustainedTuiIdle(pty)) {
           if (waiter.pollInterval) {
             clearInterval(waiter.pollInterval)
             waiter.pollInterval = null
@@ -18046,7 +18086,8 @@ export class OrcaRuntimeService {
         // Why: background PTY handles can later be adopted by the renderer.
         // Use that live xterm title as the same readiness signal as leaf handles.
         if (
-          this.getAdoptedPtyExplicitIdleStatus(pty) === 'idle' ||
+          (this.getAdoptedPtyExplicitIdleStatus(pty) === 'idle' &&
+            !this.isTuiOutputActive(pty)) ||
           isKnownReadyPromptPreview(ptyWaitText)
         ) {
           if (waiter.pollInterval) {
