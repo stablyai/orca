@@ -776,6 +776,9 @@ export type PreloadApi = {
     loadConversation: (sessionKey: string) => Promise<JcodeConversationRecord | null>
     /** Remove a persisted conversation from disk. */
     deleteConversation: (sessionKey: string) => Promise<boolean>
+    /** Open a native multi-select file picker; resolves to ABSOLUTE paths (empty
+     *  array on cancel). Backs the composer "Add files" action. */
+    pickFiles: () => Promise<string[]>
   }
   /** Custom OpenAI-compatible provider profiles for jcode chat. */
   jcodeProviders: {

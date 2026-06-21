@@ -27,11 +27,37 @@ export type JcodeChatStopPayload = {
   sessionKey: string
 }
 
+/** An attachment the user added to a chat turn via the composer. Two kinds:
+ *  - 'file': an absolute LOCAL path chosen by the native picker or dropped onto
+ *    the pane. For remote-exec sessions the main process copies it to the remote
+ *    host and rewrites the referenced path before invoking jcode.
+ *  - 'text': an inline blob (e.g. a large paste) that should travel in the prompt
+ *    fenced, instead of bloating the textarea. */
+export type JcodeChatAttachment =
+  | {
+      kind: 'file'
+      /** Absolute local path. */
+      path: string
+      /** Display name (basename) for the chip. */
+      name: string
+    }
+  | {
+      kind: 'text'
+      /** Short label for the chip (e.g. "Pasted text"). */
+      name: string
+      /** The full text content; woven into the prompt fenced on send. */
+      content: string
+    }
+
 /** Payload the renderer sends over 'jcode-chat:send' to start one turn. */
 export type JcodeChatSendPayload = {
   /** Stable per-pane key (tab/worktree id) used to route events back. */
   sessionKey: string
   prompt: string
+  /** Files/text the user attached in the composer. The main process weaves them
+   *  into the prompt jcode actually receives (and, for remote-exec sessions,
+   *  copies local files to the remote host first). */
+  attachments?: JcodeChatAttachment[]
   /** jcode provider id, e.g. 'openai'. */
   provider?: string
   /** Named custom OpenAI-compatible provider profile (from `jcode provider add`).
@@ -103,6 +129,9 @@ export const JCODE_PROVIDERS_ADD_CHANNEL = 'jcodeProviders:add'
 export const JCODE_CHAT_SEND_CHANNEL = 'jcode-chat:send'
 export const JCODE_CHAT_STOP_CHANNEL = 'jcode-chat:stop'
 export const JCODE_CHAT_EVENT_CHANNEL = 'jcode-chat:event'
+/** Renderer -> main: open a native multi-select file picker; resolves to the
+ *  chosen ABSOLUTE paths (empty array on cancel). */
+export const JCODE_CHAT_PICK_FILES_CHANNEL = 'jcode-chat:pickFiles'
 
 // ─── Durable persistence (BUG 1/2) ─────────────────────────────────────────
 // jcode conversations are mirrored to disk in the main process so they survive

@@ -8,7 +8,8 @@ import {
   Plus,
   Puzzle,
   Slash,
-  Square
+  Square,
+  Type
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -25,36 +26,31 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import type { JcodeCustomProvider } from '../../../../shared/jcode-chat-types'
+import type { JcodeChatAttachment, JcodeCustomProvider } from '../../../../shared/jcode-chat-types'
 import {
   JCODE_PROVIDERS,
   buildProfileOptions,
   findProfileOption,
   findProviderOption
 } from './jcode-providers'
+import { SLASH_COMMANDS, filterSlashCommands, type SlashCommand } from './chat-slash-commands'
+import { ChatAttachmentChips, SlashCommandPopover } from './ChatComposerExtras'
+
+// Why: the composer is the Claude-app-style bottom bar. It owns the unsent
+// draft text (local state) and the auto-growing textarea, but the provider/model
+// selection AND the pending attachments are lifted to the chat-session-store via
+// props so they persist per sessionKey across tab switches. Keeping it a
+// separate component keeps ChatPane focused on the message list + send wiring.
+
+// Pasted text larger than this is auto-converted into a collapsible text
+// attachment chip instead of bloating the textarea.
+const LARGE_PASTE_THRESHOLD = 1200
 
 // Sentinel radio values for the special chip rows.
 const AUTO_VALUE = '__auto__'
 // Custom profiles are namespaced so their value never collides with a built-in
 // provider id in the shared radio group.
 const PROFILE_PREFIX = 'profile:'
-
-// Why: the composer is the Claude-app-style bottom bar. It owns the unsent
-// draft text (local state) and the auto-growing textarea, but the provider/model
-// selection is lifted to the chat-session-store via props so it persists per
-// sessionKey across tab switches. Keeping it a separate component keeps ChatPane
-// focused on the message list + send wiring.
-
-// A small, discoverable set of jcode slash commands. Selecting one inserts the
-// token into the draft so the user can complete it. jcode resolves the actual
-// skill; this is just an affordance.
-const SLASH_COMMANDS: { command: string; hint: string }[] = [
-  { command: '/init', hint: 'Summarize the project into context' },
-  { command: '/review', hint: 'Review the current diff' },
-  { command: '/security-review', hint: 'Audit changes for vulnerabilities' },
-  { command: '/run', hint: 'Run the app to verify a change' },
-  { command: '/compact', hint: 'Compact the conversation' }
-]
 
 export function ChatComposer({
   value,
@@ -66,7 +62,12 @@ export function ChatComposer({
   providerProfile,
   model,
   customProviders,
-  onSelectProvider
+  onSelectProvider,
+  attachments,
+  onAddFiles,
+  onAddText,
+  onRemoveAttachment,
+  onSlashAction
 }: {
   value: string
   onChange: (next: string) => void
@@ -86,10 +87,22 @@ export function ChatComposer({
     providerProfile?: string | undefined
     model?: string | undefined
   }) => void
+  /** Pending attachments for the next turn (files + text blobs). */
+  attachments: JcodeChatAttachment[]
+  /** Open the native file picker and attach the chosen absolute paths. */
+  onAddFiles: () => void
+  /** Attach a text blob (from "Add text" or a large paste). */
+  onAddText: (content: string, name?: string) => void
+  /** Remove a pending attachment by index. */
+  onRemoveAttachment: (index: number) => void
+  /** Run an orca-side "/" action (start new chat / reopen last). */
+  onSlashAction: (action: 'clear' | 'resume') => void
 }): React.JSX.Element {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  // Slash menu is shown when the draft is exactly a "/query" with no spaces yet.
+  const [slashOpen, setSlashOpen] = useState(false)
+  const [slashIndex, setSlashIndex] = useState(0)
 
   // Auto-grow the textarea up to a max height, then scroll internally.
   useEffect(() => {
@@ -101,29 +114,35 @@ export function ChatComposer({
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`
   }, [value])
 
-  const insertToken = useCallback(
-    (token: string) => {
-      const needsSpace = value.length > 0 && !value.endsWith(' ') && !value.endsWith('\n')
-      onChange(`${value}${needsSpace ? ' ' : ''}${token} `)
-      // Refocus so the user can keep typing after picking from a menu.
+  // Derive whether the "/" menu should be visible and which commands match.
+  const slashQuery =
+    value.startsWith('/') && !value.includes(' ') && !value.includes('\n')
+      ? value.slice(1).toLowerCase()
+      : null
+  const slashMatches = slashQuery === null ? [] : filterSlashCommands(slashQuery)
+
+  // Keep the menu open state in sync with whether there is a "/" query + matches.
+  useEffect(() => {
+    const shouldOpen = slashQuery !== null && slashMatches.length > 0
+    setSlashOpen(shouldOpen)
+    if (shouldOpen) {
+      setSlashIndex(0)
+    }
+  }, [slashQuery, slashMatches.length])
+
+  const runSlashCommand = useCallback(
+    (command: SlashCommand) => {
+      if (command.kind === 'template') {
+        onChange(command.template)
+      } else {
+        // Action: clear the "/command" draft, then run it.
+        onChange('')
+        onSlashAction(command.action)
+      }
+      setSlashOpen(false)
       window.requestAnimationFrame(() => textareaRef.current?.focus())
     },
-    [value, onChange]
-  )
-
-  const onPickFiles = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      const files = event.target.files
-      if (files && files.length > 0) {
-        const names = Array.from(files)
-          .map((file) => file.name)
-          .join(' ')
-        insertToken(names)
-      }
-      // Reset so picking the same file again re-fires change.
-      event.target.value = ''
-    },
-    [insertToken]
+    [onChange, onSlashAction]
   )
 
   const profileOptions = buildProfileOptions(customProviders)
@@ -144,44 +163,82 @@ export function ChatComposer({
   return (
     <div className="mx-auto w-full max-w-3xl">
       <div className="flex flex-col gap-1 rounded-2xl border border-input bg-background px-3 py-2 shadow-sm transition-colors focus-within:border-ring">
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          onKeyDown={(event) => {
-            // Why (BUG 3, IME): guard the Enter-to-send against IME composition.
-            // While composing Chinese/Japanese/etc., pressing Enter COMMITS the
-            // candidate — it must not trigger a send. `isComposing`/keyCode 229
-            // mark an in-progress composition; firing onSend() there both sends a
-            // half-typed prompt AND lets compositionend re-fill the textarea after
-            // ChatPane's setInput('') runs, so the box still shows text. Skipping
-            // send during composition fixes both the premature send and the
-            // text-not-cleared symptom.
-            if (
-              event.key === 'Enter' &&
-              !event.shiftKey &&
-              !event.nativeEvent.isComposing &&
-              event.keyCode !== 229
-            ) {
-              event.preventDefault()
-              onSend()
-            }
-          }}
-          placeholder="Message jcode…"
-          rows={1}
-          className="max-h-[200px] w-full resize-none bg-transparent px-1 py-1.5 text-sm outline-none placeholder:text-muted-foreground"
-        />
-        <div className="flex items-center gap-1.5">
-          {/* Hidden native picker for "Add files". Browser-native to avoid a new
-              IPC surface; we append the chosen file name(s) into the draft. */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={onPickFiles}
-          />
+        {/* Attachment chips above the textarea. */}
+        <ChatAttachmentChips attachments={attachments} onRemove={onRemoveAttachment} />
 
+        <div className="relative">
+          {slashOpen ? (
+            <SlashCommandPopover
+              matches={slashMatches}
+              activeIndex={slashIndex}
+              onHover={setSlashIndex}
+              onPick={runSlashCommand}
+            />
+          ) : null}
+
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            onPaste={(event) => {
+              // Auto-convert a very large paste into a collapsible text attachment
+              // so big content doesn't bloat the input box.
+              const text = event.clipboardData.getData('text')
+              if (text && text.length > LARGE_PASTE_THRESHOLD) {
+                event.preventDefault()
+                const firstLine = text.split('\n', 1)[0].trim().slice(0, 40)
+                onAddText(text, firstLine ? `Pasted: ${firstLine}…` : 'Pasted text')
+              }
+            }}
+            onKeyDown={(event) => {
+              // Slash menu keyboard nav takes priority while open.
+              if (slashOpen && slashMatches.length > 0) {
+                if (event.key === 'ArrowDown') {
+                  event.preventDefault()
+                  setSlashIndex((i) => (i + 1) % slashMatches.length)
+                  return
+                }
+                if (event.key === 'ArrowUp') {
+                  event.preventDefault()
+                  setSlashIndex((i) => (i - 1 + slashMatches.length) % slashMatches.length)
+                  return
+                }
+                if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) {
+                  event.preventDefault()
+                  runSlashCommand(slashMatches[slashIndex])
+                  return
+                }
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  setSlashOpen(false)
+                  return
+                }
+              }
+              // Why (BUG 3, IME): guard the Enter-to-send against IME composition.
+              // While composing Chinese/Japanese/etc., pressing Enter COMMITS the
+              // candidate — it must not trigger a send. `isComposing`/keyCode 229
+              // mark an in-progress composition; firing onSend() there both sends a
+              // half-typed prompt AND lets compositionend re-fill the textarea after
+              // ChatPane's setInput('') runs, so the box still shows text. Skipping
+              // send during composition fixes both the premature send and the
+              // text-not-cleared symptom.
+              if (
+                event.key === 'Enter' &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing &&
+                event.keyCode !== 229
+              ) {
+                event.preventDefault()
+                onSend()
+              }
+            }}
+            placeholder="Message jcode…  (type / for commands)"
+            rows={1}
+            className="max-h-[200px] w-full resize-none bg-transparent px-1 py-1.5 text-sm outline-none placeholder:text-muted-foreground"
+          />
+        </div>
+
+        <div className="flex items-center gap-1.5">
           {/* "+" menu */}
           <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
             <DropdownMenuTrigger asChild>
@@ -197,25 +254,36 @@ export function ChatComposer({
               <DropdownMenuItem
                 onSelect={() => {
                   // Defer so the menu closes before the OS dialog opens.
-                  window.requestAnimationFrame(() => fileInputRef.current?.click())
+                  window.requestAnimationFrame(() => onAddFiles())
                 }}
               >
                 <Paperclip className="size-4" />
-                Add files or photos
+                Add files
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => {
+                  window.requestAnimationFrame(() => {
+                    const text = window.prompt('Paste or type text to attach:')
+                    if (text && text.trim()) {
+                      const firstLine = text.split('\n', 1)[0].trim().slice(0, 40)
+                      onAddText(text, firstLine ? firstLine : 'Text')
+                    }
+                  })
+                }}
+              >
+                <Type className="size-4" />
+                Add text
               </DropdownMenuItem>
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>
                   <Slash className="size-4" />
-                  Slash commands
+                  Quick commands
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="min-w-[16rem]">
-                  {SLASH_COMMANDS.map((entry) => (
-                    <DropdownMenuItem
-                      key={entry.command}
-                      onSelect={() => insertToken(entry.command)}
-                    >
-                      <span className="font-medium">{entry.command}</span>
-                      <span className="ml-auto text-xs text-muted-foreground">{entry.hint}</span>
+                  {SLASH_COMMANDS.map((command) => (
+                    <DropdownMenuItem key={command.id} onSelect={() => runSlashCommand(command)}>
+                      <span className="font-medium">{command.label}</span>
+                      <span className="ml-auto text-xs text-muted-foreground">{command.hint}</span>
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuSubContent>
@@ -358,7 +426,7 @@ export function ChatComposer({
             <button
               type="button"
               onClick={onSend}
-              disabled={!value.trim()}
+              disabled={!value.trim() && attachments.length === 0}
               aria-label="Send"
               className={cn(
                 'flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity',

@@ -6,12 +6,15 @@ import type {
   JcodeConversationSummary,
   JcodeCustomProvider
 } from '../../../../shared/jcode-chat-types'
-import { reopenChatConversation } from '@/lib/launch-chat-agent-tab'
+import { launchChatAgentTab, reopenChatConversation } from '@/lib/launch-chat-agent-tab'
 import { JcodeToolCard } from './JcodeToolCard'
 import {
+  addChatAttachments,
+  clearChatAttachments,
   deleteChatConversation,
   hydrateChatSession,
   listChatConversations,
+  removeChatAttachment,
   setChatComposerSelection,
   setChatSessionContext,
   setChatStatusDetail,
@@ -196,7 +199,8 @@ export default function ChatPane({
     resumeSessionId,
     composerProvider,
     composerModel,
-    composerProviderProfile
+    composerProviderProfile,
+    pendingAttachments
   } = useChatSession(sessionKey)
   // Custom OpenAI-compatible profiles the user added in Settings. Defensive
   // against settings not yet hydrated.
@@ -233,17 +237,32 @@ export default function ChatPane({
 
   const send = useCallback(() => {
     const prompt = input.trim()
-    if (!prompt || isStreaming) {
+    const attachments = pendingAttachments
+    // Allow sending with attachments only (no typed text), but require at least
+    // one of the two.
+    if ((!prompt && attachments.length === 0) || isStreaming) {
       return
     }
-    startChatTurn(sessionKey, prompt)
+    // Record a transcript-visible user message. The main process weaves the
+    // attachment paths/text into the prompt jcode actually receives; here we
+    // append a short human-readable summary so the bubble reflects what was sent.
+    const summary =
+      attachments.length > 0
+        ? `${prompt ? `${prompt}\n\n` : ''}[Attached: ${attachments
+            .map((a) => a.name || (a.kind === 'file' ? a.path : 'text'))
+            .join(', ')}]`
+        : prompt
+    startChatTurn(sessionKey, summary)
     setInput('')
+    clearChatAttachments(sessionKey)
+    const sharedAttachments = attachments.length > 0 ? attachments : undefined
     if (composerProviderProfile) {
       // Custom OpenAI-compatible profile: main emits `--provider-profile <name>`
       // and OMITS `-p`. The model defaults to the profile's, overridable by -m.
       window.api.jcodeChat.send({
         sessionKey,
         prompt,
+        attachments: sharedAttachments,
         providerProfile: composerProviderProfile,
         model: composerModel,
         cwd,
@@ -254,6 +273,7 @@ export default function ChatPane({
       window.api.jcodeChat.send({
         sessionKey,
         prompt,
+        attachments: sharedAttachments,
         // composerProvider undefined ("Auto") falls back to this pane's default.
         provider: composerProvider ?? provider,
         model: composerModel ?? model,
@@ -264,6 +284,7 @@ export default function ChatPane({
     }
   }, [
     input,
+    pendingAttachments,
     isStreaming,
     sessionKey,
     provider,
@@ -284,8 +305,75 @@ export default function ChatPane({
     window.api.jcodeChat.stop({ sessionKey })
   }, [isStreaming, sessionKey])
 
+  // Native file picker -> attach the chosen ABSOLUTE paths as removable chips.
+  const addFiles = useCallback(() => {
+    void window.api.jcodeChat.pickFiles().then((paths) => {
+      if (paths.length === 0) {
+        return
+      }
+      addChatAttachments(
+        sessionKey,
+        paths.map((path) => ({
+          kind: 'file' as const,
+          path,
+          name: path.split('/').pop() || path
+        }))
+      )
+    })
+  }, [sessionKey])
+
+  const addText = useCallback(
+    (content: string, name?: string) => {
+      addChatAttachments(sessionKey, [{ kind: 'text', content, name: name?.trim() || 'Text' }])
+    },
+    [sessionKey]
+  )
+
+  // orca-side "/" actions: /clear opens a fresh chat tab; /resume reopens the
+  // most-recent OTHER conversation. Both are orca-provided, not jcode skills.
+  const runSlashAction = useCallback(
+    (action: 'clear' | 'resume') => {
+      if (action === 'clear') {
+        if (worktreeId) {
+          launchChatAgentTab({ agent: 'jcode', worktreeId })
+        }
+        return
+      }
+      void listChatConversations().then((rows) => {
+        const last = rows.find((row) => row.sessionKey !== sessionKey)
+        if (last) {
+          void reopenChatConversation({ conversation: last, fallbackWorktreeId: worktreeId })
+        }
+      })
+    },
+    [sessionKey, worktreeId]
+  )
+
+  // Native OS drag-and-drop of files onto the chat pane. The preload resolves
+  // dropped File objects to absolute paths (renderer cannot) and routes drops
+  // landing on a `data-native-file-drop-target="composer"` element here.
+  useEffect(() => {
+    const unsubscribe = window.api.ui.onFileDrop((data) => {
+      if (data.target !== 'composer' || !Array.isArray(data.paths) || data.paths.length === 0) {
+        return
+      }
+      addChatAttachments(
+        sessionKey,
+        data.paths.map((path) => ({
+          kind: 'file' as const,
+          path,
+          name: path.split('/').pop() || path
+        }))
+      )
+    })
+    return unsubscribe
+  }, [sessionKey])
+
   return (
-    <div className="flex h-full min-h-0 w-full flex-col bg-background text-foreground">
+    <div
+      className="flex h-full min-h-0 w-full flex-col bg-background text-foreground"
+      data-native-file-drop-target="composer"
+    >
       <RemoteExecBanner worktreeId={worktreeId} />
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
         {messages.length === 0 ? (
@@ -356,6 +444,11 @@ export default function ChatPane({
           model={composerModel}
           customProviders={customProviders}
           onSelectProvider={(selection) => setChatComposerSelection(sessionKey, selection)}
+          attachments={pendingAttachments}
+          onAddFiles={addFiles}
+          onAddText={addText}
+          onRemoveAttachment={(index) => removeChatAttachment(sessionKey, index)}
+          onSlashAction={runSlashAction}
         />
       </div>
     </div>

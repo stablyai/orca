@@ -11,6 +11,7 @@ import {
   JCODE_CHAT_EVENT_CHANNEL,
   JCODE_CHAT_LIST_CHANNEL,
   JCODE_CHAT_LOAD_CHANNEL,
+  JCODE_CHAT_PICK_FILES_CHANNEL,
   JCODE_CHAT_SAVE_CHANNEL,
   JCODE_CHAT_SEND_CHANNEL,
   JCODE_CHAT_STOP_CHANNEL,
@@ -451,7 +452,10 @@ const api = {
     loadConversation: (sessionKey: string): Promise<JcodeConversationRecord | null> =>
       ipcRenderer.invoke(JCODE_CHAT_LOAD_CHANNEL, sessionKey),
     deleteConversation: (sessionKey: string): Promise<boolean> =>
-      ipcRenderer.invoke(JCODE_CHAT_DELETE_CHANNEL, sessionKey)
+      ipcRenderer.invoke(JCODE_CHAT_DELETE_CHANNEL, sessionKey),
+    // Open a native multi-select file picker; resolves to ABSOLUTE paths (empty
+    // on cancel). Used by the composer "Add files" action.
+    pickFiles: (): Promise<string[]> => ipcRenderer.invoke(JCODE_CHAT_PICK_FILES_CHANNEL)
   },
 
   // Custom OpenAI-compatible provider profiles for jcode chat. `add` shells to

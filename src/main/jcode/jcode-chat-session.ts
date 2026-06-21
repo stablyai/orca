@@ -5,7 +5,7 @@
 // emits NDJSON then exits. Conversations continue via --resume <sessionId>,
 // captured from the 'start'/'done' events on a previous turn.
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { type BrowserWindow, ipcMain } from 'electron'
+import { type BrowserWindow, dialog, ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import {
@@ -13,6 +13,7 @@ import {
   JCODE_CHAT_EVENT_CHANNEL,
   JCODE_CHAT_LIST_CHANNEL,
   JCODE_CHAT_LOAD_CHANNEL,
+  JCODE_CHAT_PICK_FILES_CHANNEL,
   JCODE_CHAT_SAVE_CHANNEL,
   JCODE_CHAT_SEND_CHANNEL,
   JCODE_CHAT_STOP_CHANNEL,
@@ -27,6 +28,7 @@ import {
   loadConversation,
   saveConversation
 } from './jcode-conversation-store'
+import { resolveTurnPrompt, type RemoteExecResolution } from './jcode-attachments'
 
 // Why: jcode is installed via cargo; the absolute path avoids depending on the
 // (often empty under Electron) PATH. Mirrors the pinned tool path the desktop
@@ -48,7 +50,11 @@ function sendEvent(mainWindow: BrowserWindow, sessionKey: string, event: JcodeNd
   mainWindow.webContents.send(JCODE_CHAT_EVENT_CHANNEL, { sessionKey, event })
 }
 
-function buildArgs(payload: JcodeChatSendPayload, remoteExecHost: string | null): string[] {
+function buildArgs(
+  payload: JcodeChatSendPayload,
+  remoteExecHost: string | null,
+  resolvedPrompt: string
+): string[] {
   // A named custom profile (from `jcode provider add`) is selected with
   // `--provider-profile <name>` (which IMPLIES openai-compatible) and MUST NOT
   // also pass `-p`; doing both would be ambiguous. It takes precedence over the
@@ -76,18 +82,18 @@ function buildArgs(payload: JcodeChatSendPayload, remoteExecHost: string | null)
   if (remoteExecHost) {
     args.push('--remote-exec', remoteExecHost)
   }
-  args.push('--ndjson', payload.prompt)
+  args.push('--ndjson', resolvedPrompt)
   return args
 }
 
 /** Resolve the brain-local (M3) remote-exec host for a chat turn.
  *  Priority: the worktree's SSH target host when its folder workspace is
  *  `isRemoteExecOnly`, else the explicit `payload.remoteExecHost` override.
- *  Returns null when this turn should run fully local (no --remote-exec). */
-function resolveRemoteExecHost(
+ *  Returns host null when this turn should run fully local (no --remote-exec). */
+function resolveRemoteExec(
   store: Store | undefined,
   payload: JcodeChatSendPayload
-): string | null {
+): RemoteExecResolution {
   if (store && typeof payload.worktreeId === 'string') {
     const scope = parseWorkspaceKey(payload.worktreeId)
     if (scope?.type === 'folder') {
@@ -98,21 +104,22 @@ function resolveRemoteExecHost(
         // applies; fall back to the raw host. jcode resolves the host itself.
         const host = target?.configHost?.trim() || target?.host?.trim()
         if (host) {
-          return host
+          return { host, connectionId: workspace.connectionId }
         }
       }
     }
   }
-  return payload.remoteExecHost?.trim() || null
+  return { host: payload.remoteExecHost?.trim() || null, connectionId: null }
 }
 
-function startTurn(
+async function startTurn(
   mainWindow: BrowserWindow,
   store: Store | undefined,
   payload: JcodeChatSendPayload
-): void {
+): Promise<void> {
   const { sessionKey } = payload
-  const remoteExecHost = resolveRemoteExecHost(store, payload)
+  const remote = resolveRemoteExec(store, payload)
+  const remoteExecHost = remote.host
 
   // A fresh turn supersedes any pending Stop bookkeeping for this pane.
   stoppedKeys.delete(sessionKey)
@@ -127,9 +134,22 @@ function startTurn(
     }
   }
 
+  // Weave attachments into the prompt (copying local files to the remote host
+  // first for remote-exec sessions). Done before spawn so jcode sees the paths.
+  let resolvedPrompt: string
+  try {
+    resolvedPrompt = await resolveTurnPrompt(payload, remote)
+  } catch (error) {
+    sendEvent(mainWindow, sessionKey, {
+      type: 'error',
+      error: error instanceof Error ? error.message : String(error)
+    })
+    return
+  }
+
   let child: ChildProcessWithoutNullStreams
   try {
-    child = spawn(JCODE_BIN, buildArgs(payload, remoteExecHost), {
+    child = spawn(JCODE_BIN, buildArgs(payload, remoteExecHost, resolvedPrompt), {
       cwd: payload.cwd?.trim() || undefined,
       env: process.env
     })
@@ -218,7 +238,31 @@ export function registerJcodeChatHandlers(mainWindow: BrowserWindow, store?: Sto
     if (!payload || typeof payload.sessionKey !== 'string' || typeof payload.prompt !== 'string') {
       return
     }
-    startTurn(mainWindow, store, payload)
+    // startTurn is async (it may copy attachments to a remote host before spawn);
+    // it reports its own failures as 'error' events, so swallow here.
+    void startTurn(mainWindow, store, payload).catch((error) => {
+      sendEvent(mainWindow, payload.sessionKey, {
+        type: 'error',
+        error: error instanceof Error ? error.message : String(error)
+      })
+    })
+  })
+
+  // Native multi-select file picker for composer attachments. Returns ABSOLUTE
+  // paths (empty array on cancel) so the renderer can show removable chips and
+  // the main process can read/copy the files at send time.
+  ipcMain.removeHandler(JCODE_CHAT_PICK_FILES_CHANNEL)
+  ipcMain.handle(JCODE_CHAT_PICK_FILES_CHANNEL, async (event) => {
+    if (event.sender !== mainWindow.webContents) {
+      return []
+    }
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile', 'multiSelections']
+    })
+    if (result.canceled) {
+      return []
+    }
+    return result.filePaths
   })
 
   // Stop: kill the in-flight child for a pane. The 'close' handler then emits a
@@ -307,6 +351,7 @@ export function registerJcodeChatHandlers(mainWindow: BrowserWindow, store?: Sto
     stoppedKeys.clear()
     ipcMain.removeAllListeners(JCODE_CHAT_SEND_CHANNEL)
     ipcMain.removeAllListeners(JCODE_CHAT_STOP_CHANNEL)
+    ipcMain.removeHandler(JCODE_CHAT_PICK_FILES_CHANNEL)
     ipcMain.removeHandler(JCODE_CHAT_SAVE_CHANNEL)
     ipcMain.removeHandler(JCODE_CHAT_LIST_CHANNEL)
     ipcMain.removeHandler(JCODE_CHAT_LOAD_CHANNEL)

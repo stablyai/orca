@@ -4,6 +4,7 @@
    state contract is reviewable as one unit, mirroring persistence.ts. */
 import { useSyncExternalStore } from 'react'
 import type {
+  JcodeChatAttachment,
   JcodeChatEventMessage,
   JcodeConversationRecord,
   JcodeNdjsonEvent
@@ -57,6 +58,11 @@ export type ChatSessionState = {
    *  Mutually exclusive with composerProvider: when set, the turn is sent with
    *  `providerProfile` (-> `--provider-profile`) instead of `provider` (-> -p). */
   composerProviderProfile: string | undefined
+  /** Pending composer attachments (files + text blobs) for the NEXT turn.
+   *  Persisted per sessionKey so they survive a tab switch before send; cleared
+   *  by clearChatAttachments after the turn is dispatched. NOT persisted to disk
+   *  (they are folded into the prompt the transcript already records). */
+  pendingAttachments: JcodeChatAttachment[]
 }
 
 const EMPTY_SESSION: ChatSessionState = {
@@ -67,7 +73,8 @@ const EMPTY_SESSION: ChatSessionState = {
   streamingId: null,
   composerProvider: undefined,
   composerModel: undefined,
-  composerProviderProfile: undefined
+  composerProviderProfile: undefined,
+  pendingAttachments: []
 }
 
 const sessions = new Map<string, ChatSessionState>()
@@ -453,6 +460,47 @@ export function setChatComposerSelection(
     composerProviderProfile: selection.providerProfile,
     composerModel: 'model' in selection ? selection.model : state.composerModel
   }))
+}
+
+/** Append composer attachments (files and/or text blobs) for the next turn.
+ *  De-dupes file attachments by absolute path so re-picking the same file is a
+ *  no-op. Stored in the per-sessionKey external store so chips survive a tab
+ *  switch before the user hits send. */
+export function addChatAttachments(sessionKey: string, attachments: JcodeChatAttachment[]): void {
+  if (attachments.length === 0) {
+    return
+  }
+  setSession(sessionKey, (state) => {
+    const existingPaths = new Set(
+      state.pendingAttachments.filter((a) => a.kind === 'file').map((a) => a.path)
+    )
+    const next = state.pendingAttachments.slice()
+    for (const attachment of attachments) {
+      if (attachment.kind === 'file') {
+        if (existingPaths.has(attachment.path)) {
+          continue
+        }
+        existingPaths.add(attachment.path)
+      }
+      next.push(attachment)
+    }
+    return { ...state, pendingAttachments: next }
+  })
+}
+
+/** Remove one pending attachment by index (chip ✕). */
+export function removeChatAttachment(sessionKey: string, index: number): void {
+  setSession(sessionKey, (state) => ({
+    ...state,
+    pendingAttachments: state.pendingAttachments.filter((_, i) => i !== index)
+  }))
+}
+
+/** Clear all pending attachments (called after a turn is dispatched). */
+export function clearChatAttachments(sessionKey: string): void {
+  setSession(sessionKey, (state) =>
+    state.pendingAttachments.length === 0 ? state : { ...state, pendingAttachments: [] }
+  )
 }
 
 /** Drop a session's IN-MEMORY state. Called when its chat tab is closed so the
