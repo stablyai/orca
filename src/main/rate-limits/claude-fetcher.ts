@@ -671,7 +671,9 @@ export async function fetchClaudeRateLimits(
   }
 
   if (
-    (oauthCredentials.token || oauthCredentials.hasRefreshableCredentials) &&
+    (oauthCredentials.token ||
+      oauthCredentials.hasRefreshableCredentials ||
+      oauthCredentials.keychainUnavailable) &&
     credentialClassification.shouldAttemptCliFallback &&
     allowCliFallback
   ) {

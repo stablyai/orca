@@ -653,6 +653,31 @@ describe('fetchClaudeRateLimits', () => {
     expect(fetchViaPty).not.toHaveBeenCalled()
   })
 
+  it('uses CLI fallback when Keychain is unavailable in automatic mode', async () => {
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir: '/Users/test/.claude',
+      envPatch: {},
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentials).mockRejectedValueOnce(
+      new Error('security timed out after 3000ms')
+    )
+
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: { usedPercent: 56 },
+      usageMetadata: {
+        source: 'cli',
+        attemptedSources: ['cli'],
+        credentialSource: 'none'
+      }
+    })
+
+    expect(fetchViaPty).toHaveBeenCalledWith({ authPreparation })
+  })
+
   it('does not read inactive managed credentials from unowned auth paths', async () => {
     setPlatform('linux')
     tempDir = mkdtempSync(join(tmpdir(), 'orca-claude-fetcher-'))
