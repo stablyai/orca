@@ -1,4 +1,5 @@
-import { basename, win32 } from 'node:path'
+import { existsSync } from 'node:fs'
+import { basename, posix, win32 } from 'node:path'
 import { resolveCliCommand } from './codex-cli/command'
 import { getCmdExePath } from './win32-utils'
 
@@ -51,6 +52,19 @@ function isCompoundShellCommand(command: string): boolean {
   return /\s/.test(command)
 }
 
+function isExistingAbsoluteExecutable(
+  command: string,
+  platform: NodeJS.Platform,
+  fileExists: (path: string) => boolean
+): boolean {
+  // Why: a configured launcher can be an absolute path whose directories contain
+  // spaces (e.g. macOS "Application Support"). It is a single executable, not a
+  // compound command, so it must not be split on whitespace by the shell.
+  const isAbsolutePath =
+    platform === 'win32' ? win32.isAbsolute(command) : posix.isAbsolute(command)
+  return isAbsolutePath && fileExists(command)
+}
+
 function buildShellLaunchSpec(
   command: string,
   pathValue: string,
@@ -74,12 +88,16 @@ function buildShellLaunchSpec(
 export function resolveExternalEditorLaunchSpec(
   command: string | undefined,
   pathValue: string,
-  options: { platform?: NodeJS.Platform } = {}
+  options: { platform?: NodeJS.Platform; fileExists?: (path: string) => boolean } = {}
 ): ExternalEditorLaunchSpec {
   const platform = options.platform ?? process.platform
+  const fileExists = options.fileExists ?? existsSync
   const trimmed = command?.trim() || EXTERNAL_EDITOR_CLI_COMMAND
 
-  if (isCompoundShellCommand(trimmed)) {
+  if (
+    isCompoundShellCommand(trimmed) &&
+    !isExistingAbsoluteExecutable(trimmed, platform, fileExists)
+  ) {
     return buildShellLaunchSpec(trimmed, pathValue, platform)
   }
 
