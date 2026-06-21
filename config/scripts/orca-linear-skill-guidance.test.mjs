@@ -7,7 +7,7 @@ const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const canonicalSkillPath = join(projectDir, 'skills', 'orca-linear', 'SKILL.md')
 const legacySkillPath = join(projectDir, 'skills', 'linear-tickets', 'SKILL.md')
 const legacyIntro =
-  '`linear-tickets` is the legacy bundled name for `orca-linear`. Use the canonical `orca-linear` skill for new installs; this copy remains complete for old Orca versions and copied commands.'
+  '`linear-tickets` is the legacy bundled name for `orca-linear`. This copy remains complete; its CLI commands are identical to `orca-linear` and always use `orca linear ...`.'
 
 function skillBody(skill) {
   return skill.replace(/^---\n[\s\S]*?\n---\n\n/, '')
@@ -27,7 +27,7 @@ describe('orca-linear skill guidance', () => {
 
     expect(canonical).toContain('name: orca-linear')
     expect(legacy).toContain('name: linear-tickets')
-    expect(legacy).toContain('Legacy bundled name for `orca-linear`')
+    expect(legacy).toContain('Legacy bundled alias for')
     expect(normalizeLegacyBody(legacy)).toBe(skillBody(canonical))
   })
 

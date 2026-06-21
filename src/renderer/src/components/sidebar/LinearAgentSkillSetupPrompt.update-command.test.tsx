@@ -165,4 +165,21 @@ describe('LinearAgentSkillSetupPrompt update command', () => {
       expect.objectContaining({ installedCommand: 'npx skills update linear-tickets --global' })
     )
   })
+
+  it('prefers the canonical update command when both Linear skill names are installed', async () => {
+    mocks.skillState.skills = [
+      discoveredSkill({ name: 'orca-linear' }),
+      discoveredSkill({
+        name: 'linear-tickets',
+        directoryPath: '/Users/test/.agents/skills/linear-tickets',
+        skillFilePath: '/Users/test/.agents/skills/linear-tickets/SKILL.md'
+      })
+    ]
+
+    await renderPrompt()
+
+    expect(mocks.panelProps.at(-1)).toEqual(
+      expect.objectContaining({ installedCommand: 'npx skills update orca-linear --global' })
+    )
+  })
 })
