@@ -49,7 +49,9 @@ export function useMarkdownDocuments(
   const [markdownDocumentsByWorktree, setMarkdownDocumentsByWorktree] = useState<
     Record<string, MarkdownDocument[]>
   >({})
+  const markdownDocumentsByWorktreeRef = useRef(markdownDocumentsByWorktree)
   const requestRef = useRef(0)
+  markdownDocumentsByWorktreeRef.current = markdownDocumentsByWorktree
 
   const worktreePath = useMemo(() => {
     if (!worktreeId) {
@@ -81,7 +83,7 @@ export function useMarkdownDocuments(
         worktreePath
       )
       if (requestRef.current !== requestId) {
-        return documents
+        return markdownDocumentsByWorktreeRef.current[worktreeId] ?? []
       }
       setMarkdownDocumentsByWorktree((prev) => ({
         ...prev,

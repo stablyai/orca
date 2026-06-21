@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   listRuntimeMarkdownDocuments: vi.fn(),
   openFile: vi.fn(),
   openMarkdownPreview: vi.fn(),
+  onSave: vi.fn(),
   statRuntimePath: vi.fn(),
   toastError: vi.fn(),
   toastInfo: vi.fn(),
@@ -72,7 +73,7 @@ let latestHook: HookResult | null = null
 const roots: Root[] = []
 
 function HookProbe(): null {
-  latestHook = useMarkdownDocuments(activeFile, true, 'rich', vi.fn())
+  latestHook = useMarkdownDocuments(activeFile, true, 'rich', mocks.onSave)
   return null
 }
 
@@ -116,12 +117,14 @@ describe('useMarkdownDocuments', () => {
     mocks.listRuntimeMarkdownDocuments.mockReset()
     mocks.openFile.mockReset()
     mocks.openMarkdownPreview.mockReset()
+    mocks.onSave.mockReset()
     mocks.statRuntimePath.mockReset()
     mocks.toastError.mockReset()
     mocks.toastInfo.mockReset()
     mocks.toastSuccess.mockReset()
     mocks.toastWarning.mockReset()
     mocks.listRuntimeMarkdownDocuments.mockResolvedValue([])
+    mocks.onSave.mockResolvedValue(undefined)
     mocks.statRuntimePath.mockResolvedValue({ isDirectory: false })
   })
 
@@ -177,6 +180,44 @@ describe('useMarkdownDocuments', () => {
       description: 'notes/Topic.md, archive/Topic.md'
     })
     expect(mocks.openFile).not.toHaveBeenCalled()
+    expect(mocks.toastInfo).not.toHaveBeenCalled()
+  })
+
+  it('uses cached current documents when a doc-link refresh is superseded', async () => {
+    let resolveDocLinkRefresh = (_documents: MarkdownDocument[]): void => {}
+    let resolveSaveRefresh = (_documents: MarkdownDocument[]): void => {}
+    const docLinkRefresh = new Promise<MarkdownDocument[]>((resolve) => {
+      resolveDocLinkRefresh = resolve
+    })
+    const saveRefresh = new Promise<MarkdownDocument[]>((resolve) => {
+      resolveSaveRefresh = resolve
+    })
+    mocks.listRuntimeMarkdownDocuments
+      .mockResolvedValueOnce([])
+      .mockReturnValueOnce(docLinkRefresh)
+      .mockReturnValueOnce(saveRefresh)
+
+    await renderHookProbe()
+
+    hookResult().onOpenDocLink('Existing')
+    await flushPromises()
+    const savePromise = hookResult().mdSave('# updated')
+    await flushPromises()
+
+    resolveSaveRefresh([existingDocument])
+    await flushPromises()
+    resolveDocLinkRefresh([])
+    await flushPromises()
+    await savePromise
+
+    expect(mocks.openFile).toHaveBeenCalledWith({
+      filePath: existingDocument.filePath,
+      language: 'markdown',
+      mode: 'edit',
+      relativePath: existingDocument.relativePath,
+      runtimeEnvironmentId: null,
+      worktreeId: 'wt-1'
+    })
     expect(mocks.toastInfo).not.toHaveBeenCalled()
   })
 

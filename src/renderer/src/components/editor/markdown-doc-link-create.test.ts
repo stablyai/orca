@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { joinPath } from '@/lib/path'
 import {
   createMissingMarkdownDocLinkDocument,
   getInitialMarkdownDocLinkDocumentContent
@@ -12,13 +13,15 @@ describe('getInitialMarkdownDocLinkDocumentContent', () => {
 
 describe('createMissingMarkdownDocLinkDocument', () => {
   it('creates a missing markdown target and returns its document record', async () => {
+    const worktreePath = joinPath('repo', 'workspace')
+    const targetPath = joinPath(worktreePath, 'docs/setup guide.md')
     const pathExists = vi.fn().mockResolvedValue(false)
     const createPath = vi.fn().mockResolvedValue(undefined)
     const writeFile = vi.fn().mockResolvedValue(undefined)
     const context = {
       settings: { activeRuntimeEnvironmentId: null },
       worktreeId: 'wt-1',
-      worktreePath: '/repo'
+      worktreePath
     }
 
     await expect(
@@ -26,21 +29,23 @@ describe('createMissingMarkdownDocLinkDocument', () => {
         actions: { createPath, pathExists, writeFile },
         context,
         target: 'docs/setup guide#Install steps',
-        worktreePath: '/repo'
+        worktreePath
       })
     ).resolves.toEqual({
-      filePath: '/repo/docs/setup guide.md',
+      filePath: targetPath,
       relativePath: 'docs/setup guide.md',
       basename: 'setup guide.md',
       name: 'setup guide'
     })
 
-    expect(pathExists).toHaveBeenCalledWith(context, '/repo/docs/setup guide.md')
-    expect(createPath).toHaveBeenCalledWith(context, '/repo/docs/setup guide.md', 'file')
-    expect(writeFile).toHaveBeenCalledWith(context, '/repo/docs/setup guide.md', '# setup guide\n')
+    expect(pathExists).toHaveBeenCalledWith(context, targetPath)
+    expect(createPath).toHaveBeenCalledWith(context, targetPath, 'file')
+    expect(writeFile).toHaveBeenCalledWith(context, targetPath, '# setup guide\n')
   })
 
   it('opens an existing target without rewriting it', async () => {
+    const worktreePath = joinPath('repo', 'workspace')
+    const targetPath = joinPath(worktreePath, 'notes/todo.md')
     const pathExists = vi.fn().mockResolvedValue(true)
     const createPath = vi.fn()
     const writeFile = vi.fn()
@@ -51,17 +56,44 @@ describe('createMissingMarkdownDocLinkDocument', () => {
         context: {
           settings: { activeRuntimeEnvironmentId: null },
           worktreeId: 'wt-1',
-          worktreePath: '/repo'
+          worktreePath
         },
         target: 'notes/todo.md',
-        worktreePath: '/repo'
+        worktreePath
       })
     ).resolves.toMatchObject({
-      filePath: '/repo/notes/todo.md',
+      filePath: targetPath,
       relativePath: 'notes/todo.md'
     })
 
     expect(createPath).not.toHaveBeenCalled()
+    expect(writeFile).not.toHaveBeenCalled()
+  })
+
+  it('treats create-if-missing races as existing targets', async () => {
+    const worktreePath = joinPath('repo', 'workspace')
+    const targetPath = joinPath(worktreePath, 'notes/race.md')
+    const pathExists = vi.fn().mockResolvedValue(false)
+    const createPath = vi.fn().mockRejectedValue(new Error('EEXIST: file already exists'))
+    const writeFile = vi.fn()
+    const context = {
+      settings: { activeRuntimeEnvironmentId: null },
+      worktreeId: 'wt-1',
+      worktreePath
+    }
+
+    await expect(
+      createMissingMarkdownDocLinkDocument({
+        actions: { createPath, pathExists, writeFile },
+        context,
+        target: 'notes/race',
+        worktreePath
+      })
+    ).resolves.toMatchObject({
+      filePath: targetPath,
+      relativePath: 'notes/race.md'
+    })
+
     expect(writeFile).not.toHaveBeenCalled()
   })
 
@@ -76,10 +108,10 @@ describe('createMissingMarkdownDocLinkDocument', () => {
         context: {
           settings: { activeRuntimeEnvironmentId: null },
           worktreeId: 'wt-1',
-          worktreePath: '/repo'
+          worktreePath: joinPath('repo', 'workspace')
         },
         target: '../outside',
-        worktreePath: '/repo'
+        worktreePath: joinPath('repo', 'workspace')
       })
     ).resolves.toBeNull()
 

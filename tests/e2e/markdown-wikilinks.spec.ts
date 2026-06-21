@@ -10,6 +10,8 @@ import {
   waitForRichMarkdownEditor
 } from './helpers/markdown-ordered-list-exit'
 
+const DOC_LINK_CLICK_MODIFIER = process.platform === 'darwin' ? 'Meta' : 'Control'
+
 async function getRichMarkdownSource(page: Parameters<typeof waitForRichMarkdownEditor>[0]) {
   return page.evaluate(() => {
     const editor = document.querySelector('.rich-markdown-editor') as
@@ -28,7 +30,7 @@ async function clickDocLink(page: Parameters<typeof waitForRichMarkdownEditor>[0
     .locator('.rich-markdown-doc-link', { hasText: text })
     .first()
     .click({
-      modifiers: ['Control', 'Meta']
+      modifiers: [DOC_LINK_CLICK_MODIFIER]
     })
 }
 

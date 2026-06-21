@@ -34,6 +34,11 @@ function createMarkdownDocumentRecord(
   }
 }
 
+function isRuntimeFileExistsError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+  return message.includes('eexist') || message.includes('already exists')
+}
+
 export function getInitialMarkdownDocLinkDocumentContent(title: string): string {
   return `# ${title}\n`
 }
@@ -58,7 +63,14 @@ export async function createMissingMarkdownDocLinkDocument({
     return document
   }
 
-  await actions.createPath(context, document.filePath, 'file')
+  try {
+    await actions.createPath(context, document.filePath, 'file')
+  } catch (err) {
+    if (isRuntimeFileExistsError(err)) {
+      return document
+    }
+    throw err
+  }
   await actions.writeFile(
     context,
     document.filePath,

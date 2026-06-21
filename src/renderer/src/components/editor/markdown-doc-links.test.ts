@@ -247,6 +247,8 @@ describe('getCreatableMarkdownDocLinkTarget', () => {
     expect(getCreatableMarkdownDocLinkTarget('/absolute')).toBeNull()
     expect(getCreatableMarkdownDocLinkTarget('C:\\repo\\note')).toBeNull()
     expect(getCreatableMarkdownDocLinkTarget('bad|alias')).toBeNull()
+    expect(getCreatableMarkdownDocLinkTarget('bad\tname')).toBeNull()
+    expect(getCreatableMarkdownDocLinkTarget('bad\u007fname')).toBeNull()
   })
 })
 

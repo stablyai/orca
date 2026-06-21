@@ -67,6 +67,16 @@ export function getMarkdownDocLinkDocumentTarget(target: string): string {
   return target.slice(0, hashIndex)
 }
 
+function hasDocLinkControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code <= 31 || code === 127) {
+      return true
+    }
+  }
+  return false
+}
+
 export function getCreatableMarkdownDocLinkTarget(
   target: string
 ): CreatableMarkdownDocLinkTarget | null {
@@ -92,8 +102,8 @@ export function getCreatableMarkdownDocLinkTarget(
         !segment ||
         segment === '.' ||
         segment === '..' ||
-        segment.includes('\0') ||
-        /[\r\n#<>:"|?*[\]]/.test(segment)
+        hasDocLinkControlCharacter(segment) ||
+        /[#<>:"|?*[\]]/.test(segment)
     )
   ) {
     return null

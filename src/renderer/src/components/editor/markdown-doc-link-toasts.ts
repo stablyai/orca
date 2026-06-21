@@ -68,8 +68,12 @@ export function showAmbiguousMarkdownDocLinkToast(matches: MarkdownDocument[]): 
     .map((match) => match.relativePath)
     .join(', ')
   const overflowCount = matches.length - 3
-  const description =
-    overflowCount > 0 ? `${previewMatches}, +${overflowCount} more` : previewMatches
+  const overflowSuffix = translate(
+    'auto.components.editor.markdown.doc.link.toasts.2f55cdad12',
+    '+{{value0}} more',
+    { value0: overflowCount }
+  )
+  const description = overflowCount > 0 ? `${previewMatches}, ${overflowSuffix}` : previewMatches
 
   toast.warning(
     translate(
