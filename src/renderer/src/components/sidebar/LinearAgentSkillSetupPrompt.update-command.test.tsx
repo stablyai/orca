@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { join } from 'node:path'
 import { act, type ComponentProps, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
@@ -86,6 +87,15 @@ function discoveredSkill(overrides: Partial<DiscoveredSkill>): DiscoveredSkill {
   }
 }
 
+function legacyLinearSkillPath(overrides: Partial<DiscoveredSkill> = {}): DiscoveredSkill {
+  return discoveredSkill({
+    name: 'linear-tickets',
+    directoryPath: join('Users', 'test', '.agents', 'skills', 'linear-tickets'),
+    skillFilePath: join('Users', 'test', '.agents', 'skills', 'linear-tickets', 'SKILL.md'),
+    ...overrides
+  })
+}
+
 async function renderPrompt(
   props: Partial<ComponentProps<typeof LinearAgentSkillSetupPrompt>> = {}
 ): Promise<void> {
@@ -151,13 +161,7 @@ describe('LinearAgentSkillSetupPrompt update command', () => {
   })
 
   it('uses the legacy update command when only the legacy Linear skill is installed', async () => {
-    mocks.skillState.skills = [
-      discoveredSkill({
-        name: 'linear-tickets',
-        directoryPath: '/Users/test/.agents/skills/linear-tickets',
-        skillFilePath: '/Users/test/.agents/skills/linear-tickets/SKILL.md'
-      })
-    ]
+    mocks.skillState.skills = [legacyLinearSkillPath()]
 
     await renderPrompt()
 
@@ -167,14 +171,7 @@ describe('LinearAgentSkillSetupPrompt update command', () => {
   })
 
   it('prefers the canonical update command when both Linear skill names are installed', async () => {
-    mocks.skillState.skills = [
-      discoveredSkill({ name: 'orca-linear' }),
-      discoveredSkill({
-        name: 'linear-tickets',
-        directoryPath: '/Users/test/.agents/skills/linear-tickets',
-        skillFilePath: '/Users/test/.agents/skills/linear-tickets/SKILL.md'
-      })
-    ]
+    mocks.skillState.skills = [discoveredSkill({ name: 'orca-linear' }), legacyLinearSkillPath()]
 
     await renderPrompt()
 
