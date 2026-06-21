@@ -22,6 +22,8 @@ const targetPaths = new Map<string, string>()
 // Skip the current-file pre-parse for very large buffers (perf); fall back to
 // the worktree search.
 const SAME_FILE_PARSE_MAX_CHARS = 512 * 1024
+
+/** Record a URI→absolute-path mapping for a target we produced, evicting the oldest past {@link MAX_TARGETS}. */
 function rememberTarget(uriString: string, filePath: string): void {
   if (targetPaths.size >= MAX_TARGETS) {
     const oldest = targetPaths.keys().next().value
@@ -32,6 +34,7 @@ function rememberTarget(uriString: string, filePath: string): void {
   targetPaths.set(uriString, filePath)
 }
 
+/** Normalize a Monaco selection or position to a 1-based { line, column } (defaults to 1,1). */
 function positionLineColumn(selectionOrPosition?: Monaco.IRange | Monaco.IPosition): {
   line: number
   column: number
@@ -48,6 +51,10 @@ function positionLineColumn(selectionOrPosition?: Monaco.IRange | Monaco.IPositi
 // Survives HMR so only one provider + opener is ever active.
 type ProviderGlobal = typeof globalThis & { __treeSitterDefs?: Monaco.IDisposable }
 
+/**
+ * Register the cross-file Go-to-Definition provider and editor opener on Monaco,
+ * disposing any prior registration so only one stays active across HMR.
+ */
 export function registerTreeSitterDefinitions(
   monaco: MonacoApi,
   hooks: DefinitionProviderHooks

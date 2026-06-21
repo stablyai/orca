@@ -56,6 +56,7 @@ const resultCache = new Map<string, { at: number; locations: DefinitionLocation[
 // harmless.
 const DEF_KEYWORDS =
   /\b(def|class|function|func|fn|type|interface|struct|enum|trait|impl|module|namespace|const|let|var|val|public|private|protected|static|export|declare|sub|proc)\b/
+/** Heuristic over a grep match line: does it look like a DEFINITION of `symbol` (vs. a reference)? Used for ranking only — never excludes. */
 export function looksLikeDefinition(symbol: string, line: string): boolean {
   if (!line.includes(symbol)) {
     return false
@@ -70,6 +71,7 @@ export function looksLikeDefinition(symbol: string, line: string): boolean {
 }
 
 const defaultDeps: ResolverDeps = {
+  /** Grep the worktree for `symbol` (ripgrep via runtime RPC; works local + SSH), flagging files whose match line looks like a definition. */
   async search(symbol, ctx) {
     const result = await searchRuntimeFiles(
       {
@@ -93,6 +95,7 @@ const defaultDeps: ResolverDeps = {
       defLikely: f.matches?.some((m) => looksLikeDefinition(symbol, m.lineContent)) ?? false
     }))
   },
+  /** Read a candidate file's text via the runtime, returning null for binary or unreadable files. */
   async read(file, ctx) {
     try {
       const content = await readRuntimeFileContent({
@@ -107,12 +110,16 @@ const defaultDeps: ResolverDeps = {
       return null
     }
   },
+  /** Tree-sitter-extract the definition captures from file content for the given grammar. */
   extract: (grammarPath, content) => extractDefinitions(grammarPath as GrammarName, content)
 }
 
-// Find where `symbol` is DEFINED across the worktree: grep for the token
-// (ripgrep, works local + SSH), then tree-sitter-parse only the matching files
-// of the same language and keep the definition captures whose name matches.
+/**
+ * Find where `symbol` is DEFINED across the worktree: grep for the token
+ * (ripgrep, works local + SSH), then tree-sitter-parse only the matching files
+ * of the same language and keep the definition captures whose name matches.
+ * Degrades to an empty result on search failure rather than rejecting.
+ */
 export async function resolveDefinitions(
   symbol: string,
   ctx: ResolverContext,

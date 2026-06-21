@@ -35,6 +35,7 @@ const GRAMMAR_URL: Record<GrammarName, string> = {
 type LoadedGrammar = { language: Language; query: Query }
 
 let initPromise: Promise<void> | null = null
+/** Initialize the web-tree-sitter runtime exactly once (memoized across calls). */
 function ensureInit(): Promise<void> {
   if (!initPromise) {
     initPromise = Parser.init({ locateFile: () => treeSitterWasmUrl })
@@ -43,6 +44,7 @@ function ensureInit(): Promise<void> {
 }
 
 const grammarCache = new Map<GrammarName, Promise<LoadedGrammar>>()
+/** Load and cache a grammar plus its definitions query; a failed load is evicted so the next lookup can retry. */
 function loadGrammar(grammar: GrammarName): Promise<LoadedGrammar> {
   let entry = grammarCache.get(grammar)
   if (!entry) {
@@ -61,8 +63,10 @@ function loadGrammar(grammar: GrammarName): Promise<LoadedGrammar> {
 
 let sharedParser: Parser | null = null
 
-// Extract { name, line, column } for every definition captured by the grammar's
-// query. line/column are 1-based to match Monaco.
+/**
+ * Extract { name, line, column } for every definition captured by the grammar's
+ * query. line/column are 1-based to match Monaco.
+ */
 export async function extractDefinitions(
   grammar: GrammarName,
   code: string

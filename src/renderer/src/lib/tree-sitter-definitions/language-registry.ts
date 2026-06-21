@@ -4,8 +4,10 @@ import type { GrammarName } from './definition-queries'
 // across each other's files, so they resolve together as one family.
 const MONACO_NATIVE_GRAMMARS = new Set<GrammarName>(['typescript', 'tsx', 'javascript'])
 
-// Whether a candidate file's grammar can hold the definition for a symbol used
-// in a `from`-grammar file: same grammar, or both in the TS/JS family.
+/**
+ * Whether a candidate file's grammar can hold the definition for a symbol used
+ * in a `from`-grammar file: same grammar, or both in the TS/JS family.
+ */
 export function resolvesTogether(candidate: GrammarName, from: GrammarName): boolean {
   return (
     candidate === from ||
@@ -65,6 +67,7 @@ export const PROVIDER_LANGUAGE_IDS = [
   'shell'
 ] as const
 
+/** Map a file path to its tree-sitter grammar by extension, or null when unsupported. */
 export function grammarForPath(path: string): GrammarName | null {
   const lower = path.toLowerCase()
   const dot = lower.lastIndexOf('.')
