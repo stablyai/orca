@@ -3,11 +3,12 @@ discovery, canonicalization, and registered-worktree cache checks together so
 the security boundary is auditable end to end. */
 import { resolve, relative, dirname, basename, isAbsolute, sep } from 'path'
 import { realpathSync } from 'fs'
-import { realpath } from 'fs/promises'
+import { readFile, realpath, stat } from 'fs/promises'
 import type { Store } from '../persistence'
 import { isRepoRoot, listRepoWorktrees } from '../repo-worktrees'
 import { computeWorkspaceRoot, getWorktreePathSettings } from './worktree-logic'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import { parseGitmodules } from '../../shared/gitmodules-parser'
 import { getProjectGroupSubtreeIds } from '../../shared/project-groups'
 import type { FolderWorkspace, ProjectGroup, Repo } from '../../shared/types'
 
@@ -447,7 +448,60 @@ export async function resolveRegisteredWorktreePath(
     return normalizedTarget
   }
 
+  if (await isRegisteredSubmoduleGitRoot(normalizedTarget, store)) {
+    return normalizedTarget
+  }
+
   throw new Error('Access denied: unknown repository or worktree path')
+}
+
+async function isRegisteredSubmoduleGitRoot(targetPath: string, store: Store): Promise<boolean> {
+  const parentRoot = await findRegisteredWorktreeRootIncludingCanonical(targetPath, store)
+  if (!parentRoot || parentRoot === targetPath) {
+    return false
+  }
+  if (!(await hasGitMetadata(targetPath))) {
+    return false
+  }
+  const relativeSubmodulePath = relative(parentRoot, targetPath).split(sep).join('/')
+  try {
+    const gitmodules = parseGitmodules(await readFile(resolve(parentRoot, '.gitmodules'), 'utf8'))
+    return gitmodules.some((entry) => entry.path === relativeSubmodulePath)
+  } catch {
+    return false
+  }
+}
+
+async function findRegisteredWorktreeRootIncludingCanonical(
+  targetPath: string,
+  store: Store
+): Promise<string | null> {
+  const textualRoot = findRegisteredWorktreeRoot(targetPath)
+  if (textualRoot) {
+    return textualRoot
+  }
+  await ensureAuthorizedRootsCache(store)
+  const refreshedRoot = findRegisteredWorktreeRoot(targetPath)
+  if (refreshedRoot) {
+    return refreshedRoot
+  }
+  for (const root of registeredWorktreeRoots) {
+    const canonicalRoot = await normalizeExistingPath(root)
+    if (isDescendantOrEqual(targetPath, canonicalRoot)) {
+      registeredWorktreeRoots.add(canonicalRoot)
+      return canonicalRoot
+    }
+  }
+  return null
+}
+
+async function hasGitMetadata(targetPath: string): Promise<boolean> {
+  try {
+    const gitMetadata = await stat(resolve(targetPath, '.git'))
+    return gitMetadata.isFile() || gitMetadata.isDirectory()
+  } catch {
+    return false
+  }
 }
 
 function refreshRegisteredWorktreeRoots(): void {

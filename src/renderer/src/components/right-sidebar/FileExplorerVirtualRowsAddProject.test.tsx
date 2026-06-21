@@ -61,6 +61,7 @@ describe('FileExplorerVirtualRows add-as-project action', () => {
       dismissInlineInput: vi.fn(),
       folderStatusByRelativePath: new Map(),
       statusByRelativePath: new Map(),
+      submodulePaths: new Set(),
       ignoredByRelativePath: new Set(),
       expanded: new Set([directoryNode.path]),
       dirCache: {},

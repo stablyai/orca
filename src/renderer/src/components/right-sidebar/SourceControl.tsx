@@ -159,6 +159,7 @@ import {
   generateRuntimePullRequestFields,
   getRuntimeGitBranchCompare,
   getRuntimeGitHistory,
+  getRuntimeGitStatus,
   stageRuntimeGitPath,
   unstageRuntimeGitPath,
   type RuntimeGitContext,
@@ -179,7 +180,9 @@ import type {
   GitBranchCompareSummary,
   GitConflictOperation,
   GitPushTarget,
+  GitStatusResult,
   GitStatusEntry,
+  GitSubmoduleEntry,
   GitUpstreamStatus,
   SourceControlViewMode,
   TuiAgent
@@ -298,6 +301,11 @@ type SourceControlOperationTarget = RuntimeGitContext & {
   worktreeId: string
   pushTarget?: GitPushTarget
 }
+type SubmoduleSourceControlStatus = {
+  submodule: GitSubmoduleEntry
+  worktreePath: string
+  status: GitStatusResult
+}
 type HostedReviewCreatedContext = {
   repoPath: string
   repoId: string
@@ -412,6 +420,7 @@ function rewriteCompareBaseBranchFromCandidate(
 
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
+const EMPTY_GIT_SUBMODULES: GitSubmoduleEntry[] = []
 
 // Why: the "too many changes — add folder to .gitignore?" warning shows at most
 // once per worktree per session (the analog of a "Don't show again" gate), so a
@@ -735,6 +744,11 @@ function SourceControlInner(): React.JSX.Element {
       ? (s.gitStatusByWorktree[activeWorktreeId] ?? EMPTY_GIT_STATUS_ENTRIES)
       : EMPTY_GIT_STATUS_ENTRIES
   )
+  const gitSubmodules = useAppStore((s) =>
+    activeWorktreeId
+      ? (s.gitSubmodulesByWorktree?.[activeWorktreeId] ?? EMPTY_GIT_SUBMODULES)
+      : EMPTY_GIT_SUBMODULES
+  )
   const repositoryHuge = useAppStore((s) =>
     activeWorktreeId ? s.gitStatusHugeByWorktree?.[activeWorktreeId] : undefined
   )
@@ -834,6 +848,17 @@ function SourceControlInner(): React.JSX.Element {
   )
   const [diffCommentsExpanded, setDiffCommentsExpanded] = useState(false)
   const [diffCommentsCopied, showDiffCommentsCopied] = useCopyFeedbackState(false)
+  const [submoduleStatusByPath, setSubmoduleStatusByPath] = useState<
+    Record<string, SubmoduleSourceControlStatus>
+  >({})
+  const [submoduleCommitDrafts, setSubmoduleCommitDrafts] = useState<Record<string, string>>({})
+  const [submoduleCommitErrors, setSubmoduleCommitErrors] = useState<Record<string, string | null>>(
+    {}
+  )
+  const [submoduleCommitInFlight, setSubmoduleCommitInFlight] = useState<Record<string, boolean>>(
+    {}
+  )
+  const submoduleStatusRequestSeqRef = useRef(0)
   const [pendingDiffCommentsClear, setPendingDiffCommentsClear] =
     useState<PendingDiffCommentsClear | null>(null)
   const [isClearingDiffComments, setIsClearingDiffComments] = useState(false)
@@ -1083,6 +1108,77 @@ function SourceControlInner(): React.JSX.Element {
   const activeConnectionId = activeWorktreeId
     ? (getConnectionId(activeWorktreeId) ?? activeRepo?.connectionId ?? null)
     : null
+  const sourceControlGitSubmodules = useMemo((): GitSubmoduleEntry[] => {
+    if (gitSubmodules.length > 0) {
+      return gitSubmodules
+    }
+    return entries
+      .filter((entry) => entry.submodule)
+      .map((entry) => ({ name: entry.path, path: entry.path }))
+  }, [entries, gitSubmodules])
+  const gitSubmoduleSignature = useMemo(
+    () =>
+      sourceControlGitSubmodules
+        .map((submodule) => `${submodule.path}\0${submodule.name}`)
+        .join('\u0001'),
+    [sourceControlGitSubmodules]
+  )
+  const refreshSubmoduleSourceControlStatuses = useCallback(async (): Promise<void> => {
+    const requestSeq = submoduleStatusRequestSeqRef.current + 1
+    submoduleStatusRequestSeqRef.current = requestSeq
+
+    if (!activeWorktreeId || !worktreePath || sourceControlGitSubmodules.length === 0 || isFolder) {
+      setSubmoduleStatusByPath({})
+      return
+    }
+
+    const connectionId = activeConnectionId ?? undefined
+    const statuses = await Promise.all(
+      sourceControlGitSubmodules.map(
+        async (submodule): Promise<SubmoduleSourceControlStatus | null> => {
+          const submoduleWorktreePath = joinPath(worktreePath, submodule.path)
+          try {
+            const status = await getRuntimeGitStatus({
+              // Why: nested submodules are addressed by their own repo path while
+              // staying on the parent repo's owner host/SSH connection.
+              settings: activeRepoSettings,
+              worktreeId: null,
+              worktreePath: submoduleWorktreePath,
+              connectionId
+            })
+            return status.entries.length > 0
+              ? { submodule, worktreePath: submoduleWorktreePath, status }
+              : null
+          } catch (error) {
+            console.warn('[SourceControl] submodule git status failed', {
+              path: submodule.path,
+              error
+            })
+            return null
+          }
+        }
+      )
+    )
+
+    if (submoduleStatusRequestSeqRef.current !== requestSeq) {
+      return
+    }
+
+    const next: Record<string, SubmoduleSourceControlStatus> = {}
+    for (const item of statuses) {
+      if (item) {
+        next[item.submodule.path] = item
+      }
+    }
+    setSubmoduleStatusByPath(next)
+  }, [
+    activeConnectionId,
+    activeRepoSettings,
+    activeWorktreeId,
+    isFolder,
+    sourceControlGitSubmodules,
+    worktreePath
+  ])
   const activeSourceControlLaunchPlatform = resolveSourceControlLaunchPlatform({
     connectionId: activeConnectionId,
     worktreePath,
@@ -1157,6 +1253,13 @@ function SourceControlInner(): React.JSX.Element {
       console.warn('[SourceControl] post-mutation git status refresh failed', error)
     }
   }, [refreshActiveGitStatus])
+
+  useEffect(() => {
+    if (rightSidebarTab !== 'source-control') {
+      return
+    }
+    void refreshSubmoduleSourceControlStatuses()
+  }, [entries, gitSubmoduleSignature, refreshSubmoduleSourceControlStatuses, rightSidebarTab])
 
   // Why: when status is truncated at the entry limit, offer (once per worktree)
   // to .gitignore the folder most likely flooding it — the usual cause is a
@@ -1509,12 +1612,45 @@ function SourceControlInner(): React.JSX.Element {
     () => new Map(unfilteredDisplaySections.map((section) => [section.id, section])),
     [unfilteredDisplaySections]
   )
+  const submoduleSourceControlSections = useMemo(() => {
+    return Object.values(submoduleStatusByPath)
+      .sort((a, b) =>
+        a.submodule.path.localeCompare(b.submodule.path, undefined, { numeric: true })
+      )
+      .map((item) => {
+        const submoduleGroups: SourceControlEntryGroups = {
+          staged: [],
+          unstaged: [],
+          untracked: []
+        }
+        for (const entry of item.status.entries) {
+          submoduleGroups[entry.area].push(entry)
+        }
+        for (const area of SOURCE_CONTROL_AREAS) {
+          submoduleGroups[area].sort(compareGitStatusEntries)
+        }
+        const filteredSubmoduleGroups = filterSourceControlGroupedPathEntries(
+          submoduleGroups,
+          fileFilterState
+        )
+        const visibleSections = buildSourceControlDisplaySections(
+          filteredSubmoduleGroups,
+          sourceControlGroupOrder
+        )
+        const visibleEntries = visibleSections.flatMap((section) => section.items)
+        return {
+          ...item,
+          groups: submoduleGroups,
+          visibleEntries
+        }
+      })
+      .filter((section) => section.visibleEntries.length > 0)
+  }, [fileFilterState, sourceControlGroupOrder, submoduleStatusByPath])
 
   const filteredBranchEntries = useMemo(
     () => filterSourceControlPathEntries(branchEntries, fileFilterState),
     [branchEntries, fileFilterState]
   )
-
   const flatEntries = useMemo(() => {
     const arr: FlatEntry[] = []
     for (const section of displaySections) {
@@ -4807,6 +4943,228 @@ function SourceControlInner(): React.JSX.Element {
     [activeRepoSettings, worktreePath, activeWorktreeId, refreshActiveGitStatusAfterMutation]
   )
 
+  const handleOpenSubmoduleDiff = useCallback(
+    (
+      submoduleWorktreePath: string,
+      entry: GitStatusEntry,
+      event?: SourceControlRowOpenEvent
+    ): void => {
+      if (!activeWorktreeId) {
+        return
+      }
+      const targetGroupId = resolveSplitTargetGroupId(event)
+      const openAsPreview = shouldOpenSourceControlRowAsPreview(event, targetGroupId)
+      const language = detectLanguage(entry.path)
+      const filePath = joinPath(submoduleWorktreePath, entry.path)
+      if (language === 'markdown' && entry.area === 'unstaged') {
+        openFile(
+          {
+            filePath,
+            relativePath: entry.path,
+            worktreeId: activeWorktreeId,
+            language,
+            mode: 'edit'
+          },
+          { targetGroupId, preview: openAsPreview }
+        )
+        setEditorViewMode(filePath, 'changes')
+        return
+      }
+      openDiff(activeWorktreeId, filePath, entry.path, language, entry.area === 'staged', {
+        targetGroupId,
+        preview: openAsPreview
+      })
+    },
+    [activeWorktreeId, openDiff, openFile, resolveSplitTargetGroupId, setEditorViewMode]
+  )
+
+  const handleStageSubmodulePath = useCallback(
+    async (submoduleWorktreePath: string, filePath: string): Promise<void> => {
+      try {
+        await stageRuntimeGitPath(
+          {
+            // Why: submodule rows are normal git rows in the nested repo, not
+            // gitlink rows in the parent worktree.
+            settings: activeRepoSettings,
+            worktreeId: null,
+            worktreePath: submoduleWorktreePath,
+            connectionId: activeConnectionId ?? undefined
+          },
+          filePath
+        )
+        await refreshSubmoduleSourceControlStatuses()
+        await refreshActiveGitStatusAfterMutation()
+      } catch {
+        // git operation failed silently
+      }
+    },
+    [
+      activeConnectionId,
+      activeRepoSettings,
+      refreshActiveGitStatusAfterMutation,
+      refreshSubmoduleSourceControlStatuses
+    ]
+  )
+
+  const handleUnstageSubmodulePath = useCallback(
+    async (submoduleWorktreePath: string, filePath: string): Promise<void> => {
+      try {
+        await unstageRuntimeGitPath(
+          {
+            // Why: submodule rows are normal git rows in the nested repo, not
+            // gitlink rows in the parent worktree.
+            settings: activeRepoSettings,
+            worktreeId: null,
+            worktreePath: submoduleWorktreePath,
+            connectionId: activeConnectionId ?? undefined
+          },
+          filePath
+        )
+        await refreshSubmoduleSourceControlStatuses()
+        await refreshActiveGitStatusAfterMutation()
+      } catch {
+        // git operation failed silently
+      }
+    },
+    [
+      activeConnectionId,
+      activeRepoSettings,
+      refreshActiveGitStatusAfterMutation,
+      refreshSubmoduleSourceControlStatuses
+    ]
+  )
+
+  const handleStageAllSubmodulePaths = useCallback(
+    async (submoduleWorktreePath: string, filePaths: readonly string[]): Promise<void> => {
+      if (filePaths.length === 0) {
+        return
+      }
+      try {
+        await bulkStageRuntimeGitPaths(
+          {
+            // Why: submodule bulk actions must mutate the nested repo, not the
+            // parent repo that owns the gitlink row.
+            settings: activeRepoSettings,
+            worktreeId: null,
+            worktreePath: submoduleWorktreePath,
+            connectionId: activeConnectionId ?? undefined
+          },
+          [...filePaths]
+        )
+        await refreshSubmoduleSourceControlStatuses()
+        await refreshActiveGitStatusAfterMutation()
+      } catch {
+        // git operation failed silently
+      }
+    },
+    [
+      activeConnectionId,
+      activeRepoSettings,
+      refreshActiveGitStatusAfterMutation,
+      refreshSubmoduleSourceControlStatuses
+    ]
+  )
+
+  const handleUnstageAllSubmodulePaths = useCallback(
+    async (submoduleWorktreePath: string, filePaths: readonly string[]): Promise<void> => {
+      if (filePaths.length === 0) {
+        return
+      }
+      try {
+        await bulkUnstageRuntimeGitPaths(
+          {
+            // Why: submodule bulk actions must mutate the nested repo, not the
+            // parent repo that owns the gitlink row.
+            settings: activeRepoSettings,
+            worktreeId: null,
+            worktreePath: submoduleWorktreePath,
+            connectionId: activeConnectionId ?? undefined
+          },
+          [...filePaths]
+        )
+        await refreshSubmoduleSourceControlStatuses()
+        await refreshActiveGitStatusAfterMutation()
+      } catch {
+        // git operation failed silently
+      }
+    },
+    [
+      activeConnectionId,
+      activeRepoSettings,
+      refreshActiveGitStatusAfterMutation,
+      refreshSubmoduleSourceControlStatuses
+    ]
+  )
+
+  const handleCommitSubmodule = useCallback(
+    async (
+      submodulePath: string,
+      submoduleWorktreePath: string,
+      stagedEntries: readonly GitStatusEntry[]
+    ): Promise<void> => {
+      const message = (submoduleCommitDrafts[submodulePath] ?? '').trim()
+      if (!message || stagedEntries.length === 0 || submoduleCommitInFlight[submodulePath]) {
+        return
+      }
+      setSubmoduleCommitInFlight((prev) => ({ ...prev, [submodulePath]: true }))
+      setSubmoduleCommitErrors((prev) => ({ ...prev, [submodulePath]: null }))
+      try {
+        const result = await commitRuntimeGit(
+          {
+            // Why: VS Code models initialized submodules as their own SCM repos;
+            // commits must run in the nested repo, not the parent gitlink owner.
+            settings: activeRepoSettings,
+            worktreeId: null,
+            worktreePath: submoduleWorktreePath,
+            connectionId: activeConnectionId ?? undefined
+          },
+          message
+        )
+        if (!result.success) {
+          setSubmoduleCommitErrors((prev) => ({
+            ...prev,
+            [submodulePath]: result.error ?? 'Commit failed'
+          }))
+          return
+        }
+        setSubmoduleCommitDrafts((prev) => {
+          if ((prev[submodulePath] ?? '').trim() !== message) {
+            return prev
+          }
+          return { ...prev, [submodulePath]: '' }
+        })
+        await refreshSubmoduleSourceControlStatuses()
+        await refreshActiveGitStatusAfterMutation()
+      } catch (error) {
+        setSubmoduleCommitErrors((prev) => ({
+          ...prev,
+          [submodulePath]: error instanceof Error ? error.message : 'Commit failed'
+        }))
+      } finally {
+        setSubmoduleCommitInFlight((prev) => ({ ...prev, [submodulePath]: false }))
+      }
+    },
+    [
+      activeConnectionId,
+      activeRepoSettings,
+      refreshActiveGitStatusAfterMutation,
+      refreshSubmoduleSourceControlStatuses,
+      submoduleCommitDrafts,
+      submoduleCommitInFlight
+    ]
+  )
+
+  const requestDiscardSubmoduleEntry = useCallback(
+    (submoduleWorktreePath: string, entry: GitStatusEntry): void => {
+      setPendingDiscard({
+        kind: 'submodule-entry',
+        submoduleWorktreePath,
+        entry
+      })
+    },
+    []
+  )
+
   // Why: split into two variants — `discardSingle` throws so bulk callers can
   // aggregate failures into a single toast via `runDiscardAllForArea`'s
   // onError, while `handleDiscard` swallows for the per-row fire-and-forget UI
@@ -4903,6 +5261,57 @@ function SourceControlInner(): React.JSX.Element {
       }
     },
     [discardSingle, refreshActiveGitStatusAfterMutation]
+  )
+
+  const discardSubmoduleSingle = useCallback(
+    async (submoduleWorktreePath: string, filePath: string): Promise<void> => {
+      if (!activeWorktreeId) {
+        return
+      }
+      const runtimeEnvironmentId =
+        useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
+      await requestEditorSaveQuiesce({
+        worktreeId: activeWorktreeId,
+        worktreePath: submoduleWorktreePath,
+        relativePath: filePath,
+        runtimeEnvironmentId
+      })
+      await discardRuntimeGitPath(
+        {
+          // Why: submodule rows discard from the nested repo's working tree,
+          // not from the parent repo gitlink row.
+          settings: activeRepoSettings,
+          worktreeId: null,
+          worktreePath: submoduleWorktreePath,
+          connectionId: activeConnectionId ?? undefined
+        },
+        filePath
+      )
+      notifyEditorExternalFileChange({
+        worktreeId: activeWorktreeId,
+        worktreePath: submoduleWorktreePath,
+        relativePath: filePath,
+        runtimeEnvironmentId
+      })
+    },
+    [activeConnectionId, activeRepoSettings, activeWorktreeId]
+  )
+
+  const handleDiscardSubmoduleEntry = useCallback(
+    async (submoduleWorktreePath: string, filePath: string): Promise<void> => {
+      try {
+        await discardSubmoduleSingle(submoduleWorktreePath, filePath)
+        await refreshSubmoduleSourceControlStatuses()
+        await refreshActiveGitStatusAfterMutation()
+      } catch {
+        // Why: per-row discard is fire-and-forget for the UI, matching parent rows.
+      }
+    },
+    [
+      discardSubmoduleSingle,
+      refreshActiveGitStatusAfterMutation,
+      refreshSubmoduleSourceControlStatuses
+    ]
   )
 
   // Why: "Discard all" mirrors the per-row discard rules — it skips unresolved
@@ -5038,8 +5447,12 @@ function SourceControlInner(): React.JSX.Element {
       void handleDiscard(pending.entry.path)
       return
     }
+    if (pending.kind === 'submodule-entry') {
+      void handleDiscardSubmoduleEntry(pending.submoduleWorktreePath, pending.entry.path)
+      return
+    }
     void handleRevertAllInArea(pending.area, pending.paths)
-  }, [handleDiscard, handleRevertAllInArea, pendingDiscard])
+  }, [handleDiscard, handleDiscardSubmoduleEntry, handleRevertAllInArea, pendingDiscard])
 
   if (!activeWorktree || !activeRepo || !worktreePath) {
     return (
@@ -5066,9 +5479,14 @@ function SourceControlInner(): React.JSX.Element {
     filteredGrouped.staged.length > 0 ||
     filteredGrouped.unstaged.length > 0 ||
     filteredGrouped.untracked.length > 0
+  const hasFilteredSubmoduleEntries = submoduleSourceControlSections.length > 0
   const hasFilteredBranchEntries = filteredBranchEntries.length > 0
   const showGenericEmptyState =
-    !hasUncommittedEntries && branchSummary?.status === 'ready' && branchEntries.length === 0
+    !hasUncommittedEntries &&
+    !hasFilteredSubmoduleEntries &&
+    branchSummary?.status === 'ready' &&
+    branchEntries.length === 0
+  const showCleanBranchEmptyState = showGenericEmptyState
   const currentWorktreeId = activeWorktree.id
 
   return (
@@ -5297,7 +5715,7 @@ function SourceControlInner(): React.JSX.Element {
             </div>
           )}
 
-          {showGenericEmptyState && !normalizedFilter ? (
+          {showCleanBranchEmptyState && !normalizedFilter ? (
             <EmptyState
               heading="No changes on this branch"
               supportingText={`This workspace is clean and this branch has no changes ahead of ${branchSummary?.baseRef ?? 'base'}`}
@@ -5653,6 +6071,143 @@ function SourceControlInner(): React.JSX.Element {
               })}
             </>
           )}
+
+          {hasFilteredSubmoduleEntries &&
+            submoduleSourceControlSections.map((section) => {
+              const collapseKey = `submodule:${section.submodule.path}`
+              const isCollapsed = collapsedSections.has(collapseKey)
+              const stageAllPaths = section.visibleEntries
+                .filter(isStageableStatusEntry)
+                .map((entry) => entry.path)
+              const stagedEntries = section.groups.staged
+              const submoduleHasStageableChanges =
+                section.groups.unstaged.some(isStageableStatusEntry) ||
+                section.groups.untracked.some(isStageableStatusEntry)
+              const submoduleHasUnresolvedConflicts = section.visibleEntries.some(
+                (entry) => entry.conflictStatus === 'unresolved'
+              )
+              const submoduleCommitMessage = submoduleCommitDrafts[section.submodule.path] ?? ''
+              const submodulePrimaryAction = resolveSubmoduleRepositoryPrimaryAction({
+                stagedCount: stagedEntries.length,
+                hasStageableChanges: submoduleHasStageableChanges,
+                hasMessage: submoduleCommitMessage.trim().length > 0,
+                hasUnresolvedConflicts: submoduleHasUnresolvedConflicts,
+                isCommitting: submoduleCommitInFlight[section.submodule.path] ?? false
+              })
+              const unstageAllPaths = getUnstageAllPaths(section.visibleEntries)
+              const label = translate(
+                'auto.components.right.sidebar.SourceControl.submoduleRepoLabel',
+                '{{value0}} Git',
+                { value0: basename(section.submodule.path) || section.submodule.name }
+              )
+              return (
+                <div key={collapseKey}>
+                  <SectionHeader
+                    label={label}
+                    count={section.visibleEntries.length}
+                    conflictCount={
+                      section.visibleEntries.filter(
+                        (entry) => entry.conflictStatus === 'unresolved'
+                      ).length
+                    }
+                    isCollapsed={isCollapsed}
+                    onToggle={() => toggleSection(collapseKey)}
+                    actions={
+                      <div className="flex items-center can-hover:opacity-0 transition-opacity group-hover/section:opacity-100 focus-within:opacity-100">
+                        {stageAllPaths.length > 0 && !normalizedFilter ? (
+                          <ActionButton
+                            icon={Plus}
+                            title={translate(
+                              'auto.components.right.sidebar.SourceControl.24d2598eff',
+                              'Stage all'
+                            )}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void handleStageAllSubmodulePaths(section.worktreePath, stageAllPaths)
+                            }}
+                          />
+                        ) : null}
+                        {unstageAllPaths.length > 0 && !normalizedFilter ? (
+                          <ActionButton
+                            icon={Minus}
+                            title={translate(
+                              'auto.components.right.sidebar.SourceControl.9339382454',
+                              'Unstage all'
+                            )}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void handleUnstageAllSubmodulePaths(
+                                section.worktreePath,
+                                unstageAllPaths
+                              )
+                            }}
+                          />
+                        ) : null}
+                      </div>
+                    }
+                  />
+                  {!isCollapsed && (
+                    <SubmoduleRepositoryActions
+                      submodulePath={section.submodule.path}
+                      commitMessage={submoduleCommitMessage}
+                      commitError={submoduleCommitErrors[section.submodule.path] ?? null}
+                      isCommitting={submoduleCommitInFlight[section.submodule.path] ?? false}
+                      primaryAction={submodulePrimaryAction}
+                      onCommitMessageChange={(value) => {
+                        setSubmoduleCommitDrafts((prev) => ({
+                          ...prev,
+                          [section.submodule.path]: value
+                        }))
+                      }}
+                      onPrimaryAction={() => {
+                        if (submodulePrimaryAction.disabled) {
+                          return
+                        }
+                        if (submodulePrimaryAction.kind === 'stage') {
+                          void handleStageAllSubmodulePaths(section.worktreePath, stageAllPaths)
+                          return
+                        }
+                        void handleCommitSubmodule(
+                          section.submodule.path,
+                          section.worktreePath,
+                          stagedEntries
+                        )
+                      }}
+                    />
+                  )}
+                  {!isCollapsed &&
+                    section.visibleEntries.map((entry) => {
+                      const key = `${collapseKey}:${entry.area}::${entry.path}`
+                      return (
+                        <UncommittedEntryRow
+                          key={key}
+                          entryKey={key}
+                          entry={entry}
+                          currentWorktreeId={currentWorktreeId}
+                          worktreePath={section.worktreePath}
+                          selected={false}
+                          isOpenFile={false}
+                          onRevealInExplorer={revealInExplorer}
+                          connectionId={activeConnectionId}
+                          onOpen={(rowEntry, event) =>
+                            handleOpenSubmoduleDiff(section.worktreePath, rowEntry, event)
+                          }
+                          onStage={(filePath) =>
+                            handleStageSubmodulePath(section.worktreePath, filePath)
+                          }
+                          onUnstage={(filePath) =>
+                            handleUnstageSubmodulePath(section.worktreePath, filePath)
+                          }
+                          onDiscard={(rowEntry) =>
+                            requestDiscardSubmoduleEntry(section.worktreePath, rowEntry)
+                          }
+                          commentCount={0}
+                        />
+                      )
+                    })}
+                </div>
+              )
+            })}
 
           {shouldShowSourceControlCompareUnavailableCard(
             branchSummary,
@@ -6111,6 +6666,164 @@ function getCommitFailureKindLabel(summary: string): string | null {
   }
 
   return null
+}
+
+function resolveSubmoduleRepositoryPrimaryAction({
+  stagedCount,
+  hasStageableChanges,
+  hasMessage,
+  hasUnresolvedConflicts,
+  isCommitting
+}: {
+  stagedCount: number
+  hasStageableChanges: boolean
+  hasMessage: boolean
+  hasUnresolvedConflicts: boolean
+  isCommitting: boolean
+}): PrimaryAction {
+  const commitLabel = translate(
+    'auto.components.right.sidebar.SourceControl.submoduleCommit',
+    'Commit'
+  )
+  if (isCommitting) {
+    return {
+      kind: 'commit',
+      label: commitLabel,
+      title: translate(
+        'auto.components.right.sidebar.SourceControl.submoduleCommitInProgress',
+        'Commit in progress...'
+      ),
+      disabled: true
+    }
+  }
+  if (hasUnresolvedConflicts) {
+    return {
+      kind: 'commit',
+      label: commitLabel,
+      title: translate(
+        'auto.components.right.sidebar.SourceControl.submoduleResolveConflicts',
+        'Resolve conflicts before committing'
+      ),
+      disabled: true
+    }
+  }
+  if (stagedCount > 0 && hasMessage) {
+    return {
+      kind: 'commit',
+      label: commitLabel,
+      title: translate(
+        'auto.components.right.sidebar.SourceControl.submoduleCommitStaged',
+        'Commit staged submodule changes'
+      ),
+      disabled: false
+    }
+  }
+  if (stagedCount > 0) {
+    return {
+      kind: 'commit',
+      label: commitLabel,
+      title: translate(
+        'auto.components.right.sidebar.SourceControl.submoduleEnterMessage',
+        'Enter a commit message to commit'
+      ),
+      disabled: true
+    }
+  }
+  if (hasStageableChanges) {
+    return {
+      kind: 'stage',
+      label: translate(
+        'auto.components.right.sidebar.SourceControl.submoduleStageAll',
+        'Stage All'
+      ),
+      title: translate(
+        'auto.components.right.sidebar.SourceControl.submoduleStageAllTitle',
+        'Stage all submodule changes'
+      ),
+      disabled: false
+    }
+  }
+  return {
+    kind: 'commit',
+    label: commitLabel,
+    title: translate(
+      'auto.components.right.sidebar.SourceControl.submoduleNothingToCommit',
+      'Stage at least one submodule file to commit'
+    ),
+    disabled: true
+  }
+}
+
+function SubmoduleRepositoryActions({
+  submodulePath,
+  commitMessage,
+  commitError,
+  isCommitting,
+  primaryAction,
+  onCommitMessageChange,
+  onPrimaryAction
+}: {
+  submodulePath: string
+  commitMessage: string
+  commitError: string | null
+  isCommitting: boolean
+  primaryAction: PrimaryAction
+  onCommitMessageChange: (message: string) => void
+  onPrimaryAction: () => void
+}): React.JSX.Element {
+  const PrimaryIcon = primaryAction.kind === 'stage' ? Plus : Check
+  return (
+    <div className="px-3 pb-2" data-source-control-submodule-actions={submodulePath}>
+      <textarea
+        rows={1}
+        value={commitMessage}
+        disabled={isCommitting}
+        onChange={(event) => onCommitMessageChange(event.target.value)}
+        placeholder={translate(
+          'auto.components.right.sidebar.SourceControl.submoduleCommitMessage',
+          'Message'
+        )}
+        aria-label={translate(
+          'auto.components.right.sidebar.SourceControl.submoduleCommitMessageLabel',
+          'Submodule commit message'
+        )}
+        className="mt-0.5 min-h-9 w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+      />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="mt-1 flex">
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              disabled={primaryAction.disabled}
+              onClick={onPrimaryAction}
+              className="w-full px-3 text-[11px]"
+              title={primaryAction.title}
+            >
+              {isCommitting ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <PrimaryIcon className="size-3.5" aria-hidden="true" />
+              )}
+              {primaryAction.label}
+            </Button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={6} className="max-w-72">
+          {primaryAction.title}
+        </TooltipContent>
+      </Tooltip>
+      {commitError ? (
+        <div
+          role="alert"
+          className="mt-1 rounded-md border border-destructive/20 bg-card px-2 py-1.5 font-mono text-[11px] leading-4 text-destructive [overflow-wrap:anywhere]"
+        >
+          {commitError}
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 type CommitAreaProps = {

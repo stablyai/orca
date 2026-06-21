@@ -46,6 +46,10 @@ const mocks = vi.hoisted(() => {
     openConflictFile: vi.fn(),
     openBranchDiff: vi.fn(),
     createEmptySplitGroup: vi.fn(),
+    getRuntimeGitStatus: vi.fn(),
+    stageRuntimeGitPath: vi.fn(),
+    bulkStageRuntimeGitPaths: vi.fn(),
+    commitRuntimeGit: vi.fn(),
     discardRuntimeGitPath: vi.fn(),
     refreshGitStatusForWorktree: vi.fn(),
     requestEditorSaveQuiesce: vi.fn(),
@@ -85,6 +89,10 @@ vi.mock('@/runtime/runtime-git-client', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
+    getRuntimeGitStatus: mocks.calls.getRuntimeGitStatus,
+    stageRuntimeGitPath: mocks.calls.stageRuntimeGitPath,
+    bulkStageRuntimeGitPaths: mocks.calls.bulkStageRuntimeGitPaths,
+    commitRuntimeGit: mocks.calls.commitRuntimeGit,
     discardRuntimeGitPath: mocks.calls.discardRuntimeGitPath
   }
 })
@@ -139,6 +147,13 @@ function noopAsync(value: unknown = undefined): () => Promise<unknown> {
 function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
   vi.clearAllMocks()
   mocks.calls.createEmptySplitGroup.mockReturnValue('group-2')
+  mocks.calls.getRuntimeGitStatus.mockResolvedValue({
+    entries: [],
+    conflictOperation: 'unknown'
+  })
+  mocks.calls.stageRuntimeGitPath.mockResolvedValue(undefined)
+  mocks.calls.bulkStageRuntimeGitPaths.mockResolvedValue(undefined)
+  mocks.calls.commitRuntimeGit.mockResolvedValue({ success: true })
   mocks.calls.discardRuntimeGitPath.mockResolvedValue(undefined)
   mocks.calls.refreshGitStatusForWorktree.mockResolvedValue(undefined)
   mocks.calls.requestEditorSaveQuiesce.mockResolvedValue(undefined)
@@ -155,6 +170,7 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
     gitBranchCompareSummaryByWorktree: { [mocks.activeWorktree.id]: null },
     gitConflictOperationByWorktree: {},
     remoteStatusesByWorktree: {},
+    gitSubmodulesByWorktree: {},
     isRemoteOperationActive: false,
     inFlightRemoteOpKind: null,
     settings: null,
@@ -443,6 +459,229 @@ describe('SourceControl preview row opens', () => {
     )
     expect(stageButton).not.toBeNull()
     expect(stageButton?.getAttribute('aria-disabled')).toBe('true')
+  })
+
+  it('does not render clean submodules as source-control changes', () => {
+    resetState({
+      gitSubmodulesByWorktree: {
+        [mocks.activeWorktree.id]: [
+          {
+            name: 'vendor/lib',
+            path: 'vendor/lib',
+            url: 'https://example.com/lib.git'
+          }
+        ]
+      },
+      gitBranchCompareSummaryByWorktree: {
+        [mocks.activeWorktree.id]: branchSummary()
+      }
+    })
+    renderSourceControl()
+
+    const row = container.querySelector<HTMLDivElement>(
+      '[data-source-control-submodule-path="vendor/lib"]'
+    )
+    expect(container.textContent).not.toContain('Submodules')
+    expect(row).toBeNull()
+    expect(container.textContent).toContain('No changes on this branch')
+  })
+
+  it('renders dirty initialized submodules as stageable nested source-control sections', async () => {
+    resetState({
+      gitSubmodulesByWorktree: {
+        [mocks.activeWorktree.id]: [
+          {
+            name: 'packages/nested',
+            path: 'packages/nested',
+            url: 'https://example.com/nested.git'
+          }
+        ]
+      },
+      gitStatusByWorktree: {
+        [mocks.activeWorktree.id]: [
+          gitEntry({
+            path: 'packages/nested',
+            submodule: { commitChanged: false, trackedChanges: true, untrackedChanges: false }
+          })
+        ]
+      }
+    })
+    mocks.calls.getRuntimeGitStatus.mockResolvedValue({
+      entries: [
+        gitEntry({
+          path: 'README.md',
+          area: 'unstaged',
+          status: 'modified',
+          added: 3,
+          removed: 1
+        })
+      ],
+      conflictOperation: 'unknown'
+    })
+    renderSourceControl()
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('nested Git')
+    const nestedRow = container.querySelector<HTMLDivElement>(
+      '[data-source-control-path="README.md"]'
+    )
+    expect(nestedRow).not.toBeNull()
+    const stageButton = nestedRow?.querySelector<HTMLButtonElement>('button[aria-label="Stage"]')
+    expect(stageButton).not.toBeNull()
+
+    await act(async () => {
+      stageButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(mocks.calls.stageRuntimeGitPath).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: null,
+        worktreePath: '/repo/wt/packages/nested'
+      }),
+      'README.md'
+    )
+  })
+
+  it('renders a separate submodule repository action surface that stages in the nested repo', async () => {
+    resetState({
+      gitSubmodulesByWorktree: {
+        [mocks.activeWorktree.id]: [
+          {
+            name: 'packages/nested',
+            path: 'packages/nested',
+            url: 'https://example.com/nested.git'
+          }
+        ]
+      },
+      gitStatusByWorktree: {
+        [mocks.activeWorktree.id]: [
+          gitEntry({
+            path: 'packages/nested',
+            submodule: { commitChanged: false, trackedChanges: true, untrackedChanges: false }
+          })
+        ]
+      }
+    })
+    mocks.calls.getRuntimeGitStatus.mockResolvedValue({
+      entries: [
+        gitEntry({
+          path: 'README.md',
+          area: 'unstaged',
+          status: 'modified',
+          added: 3,
+          removed: 1
+        })
+      ],
+      conflictOperation: 'unknown'
+    })
+    renderSourceControl()
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    const actions = container.querySelector<HTMLDivElement>(
+      '[data-source-control-submodule-actions="packages/nested"]'
+    )
+    expect(actions).not.toBeNull()
+    const stageAllButton = [...(actions?.querySelectorAll<HTMLButtonElement>('button') ?? [])].find(
+      (button) => button.textContent?.includes('Stage All')
+    )
+    expect(stageAllButton).not.toBeNull()
+
+    await act(async () => {
+      stageAllButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(mocks.calls.bulkStageRuntimeGitPaths).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: null,
+        worktreePath: '/repo/wt/packages/nested'
+      }),
+      ['README.md']
+    )
+  })
+
+  it('commits staged submodule files from the separate submodule repository action surface', async () => {
+    resetState({
+      gitSubmodulesByWorktree: {
+        [mocks.activeWorktree.id]: [
+          {
+            name: 'packages/nested',
+            path: 'packages/nested',
+            url: 'https://example.com/nested.git'
+          }
+        ]
+      },
+      gitStatusByWorktree: {
+        [mocks.activeWorktree.id]: [
+          gitEntry({
+            path: 'packages/nested',
+            submodule: { commitChanged: false, trackedChanges: true, untrackedChanges: false }
+          })
+        ]
+      }
+    })
+    mocks.calls.getRuntimeGitStatus.mockResolvedValue({
+      entries: [
+        gitEntry({
+          path: 'README.md',
+          area: 'staged',
+          status: 'modified',
+          added: 3,
+          removed: 1
+        })
+      ],
+      conflictOperation: 'unknown'
+    })
+    renderSourceControl()
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    const actions = container.querySelector<HTMLDivElement>(
+      '[data-source-control-submodule-actions="packages/nested"]'
+    )
+    const message = actions?.querySelector<HTMLTextAreaElement>(
+      'textarea[aria-label="Submodule commit message"]'
+    )
+    expect(message).not.toBeNull()
+
+    await act(async () => {
+      if (message) {
+        const valueSetter = Object.getOwnPropertyDescriptor(
+          HTMLTextAreaElement.prototype,
+          'value'
+        )?.set
+        valueSetter?.call(message, 'fix nested readme')
+        message.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+      await Promise.resolve()
+    })
+
+    const commitButton = [...(actions?.querySelectorAll<HTMLButtonElement>('button') ?? [])].find(
+      (button) => button.textContent?.includes('Commit')
+    )
+    expect(commitButton).not.toBeNull()
+
+    await act(async () => {
+      commitButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(mocks.calls.commitRuntimeGit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: null,
+        worktreePath: '/repo/wt/packages/nested'
+      }),
+      'fix nested readme'
+    )
   })
 
   it('passes preview=true when a plain branch row click opens a branch diff tab', () => {

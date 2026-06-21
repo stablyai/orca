@@ -70,4 +70,36 @@ describe('getStatusOp', () => {
     expect(result.didHitLimit).toBeUndefined()
     expect(result.entries).toHaveLength(5)
   })
+
+  it('returns .gitmodules submodules for SSH status results', async () => {
+    await fs.writeFile(
+      path.join(tmpDir, '.gitmodules'),
+      [
+        '[submodule "vendor/lib"]',
+        '  path = vendor/lib',
+        '  url = https://example.com/lib.git'
+      ].join('\n')
+    )
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args.includes('status')) {
+        return {
+          stdout:
+            '# branch.oid abc123\n# branch.head main\n# branch.upstream origin/main\n# branch.ab +0 -0\n',
+          stderr: ''
+        }
+      }
+      throw new Error(`Unexpected git command: ${args.join(' ')}`)
+    })
+
+    const result = await getStatusOp(git, { worktreePath: tmpDir })
+
+    expect(result.entries).toEqual([])
+    expect(result.submodules).toEqual([
+      {
+        name: 'vendor/lib',
+        path: 'vendor/lib',
+        url: 'https://example.com/lib.git'
+      }
+    ])
+  })
 })

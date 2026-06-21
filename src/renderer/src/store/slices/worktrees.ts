@@ -980,6 +980,7 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
   'layoutByWorktree',
   'activeGroupIdByWorktree',
   'gitStatusByWorktree',
+  'gitSubmodulesByWorktree',
   'gitStatusHeadByWorktree',
   'gitIgnoredPathsByWorktree',
   'gitConflictOperationByWorktree',
@@ -1327,6 +1328,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     activeGroupIdByWorktree: omitByWorktree(s.activeGroupIdByWorktree),
     // Git status caches
     gitStatusByWorktree: omitByWorktree(s.gitStatusByWorktree),
+    gitSubmodulesByWorktree: omitByWorktree(s.gitSubmodulesByWorktree),
     // Why: keyed by worktreeId; re-keyed on rename but missed by both removal
     // paths, leaking an upstream-status entry per removed worktree.
     remoteStatusesByWorktree: omitByWorktree(s.remoteStatusesByWorktree),
@@ -2103,6 +2105,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         // request keys indefinitely in a long-lived renderer session.
         const nextGitStatusByWorktree = { ...s.gitStatusByWorktree }
         delete nextGitStatusByWorktree[worktreeId]
+        const nextGitSubmodulesByWorktree = { ...s.gitSubmodulesByWorktree }
+        delete nextGitSubmodulesByWorktree[worktreeId]
         const nextGitStatusHeadByWorktree = { ...s.gitStatusHeadByWorktree }
         delete nextGitStatusHeadByWorktree[worktreeId]
         const nextGitIgnoredPathsByWorktree = { ...s.gitIgnoredPathsByWorktree }
@@ -2254,6 +2258,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           expandedDirs: nextExpandedDirs,
           gitStatusHugeByWorktree: nextGitStatusHugeByWorktree,
           gitStatusByWorktree: nextGitStatusByWorktree,
+          gitSubmodulesByWorktree: nextGitSubmodulesByWorktree,
           gitStatusHeadByWorktree: nextGitStatusHeadByWorktree,
           gitIgnoredPathsByWorktree: nextGitIgnoredPathsByWorktree,
           gitConflictOperationByWorktree: nextGitConflictOperationByWorktree,

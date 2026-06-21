@@ -8321,7 +8321,8 @@
             "42e10cbf57": "复制相对路径",
             "b5d436aa30": "复制路径",
             "f9d7ca753d": "复制路径",
-            "3161c4e425": "文件夹"
+            "3161c4e425": "文件夹",
+            "submodule": "Submodule"
           },
           "FileExplorerToolbar": {
             "d238264654": "显示 Git 忽略的文件",
@@ -8600,6 +8601,7 @@
             "a0cc0e6b4e": "加载中",
             "9339382454": "全部取消暂存",
             "24d2598eff": "暂存全部",
+            "submoduleRepoLabel": "{{value0}} Git",
             "ce41708855": "全部丢弃",
             "2f609a2e7c": "删除所有未跟踪的",
             "9bb062a886": "未提交",
@@ -8668,7 +8670,17 @@
             "b715ef615b": "领先 {{value1}} {{value0}} 个提交",
             "c1a8f3e204": "落后 {{value0}} 1 个提交",
             "d2b9g4f315": "落后 {{value1}} {{value0}} 个提交",
-            "e9c2a5d416": "与 {{value0}} 同步"
+            "e9c2a5d416": "与 {{value0}} 同步",
+            "submoduleCommit": "Commit",
+            "submoduleCommitInProgress": "Commit in progress...",
+            "submoduleResolveConflicts": "Resolve conflicts before committing",
+            "submoduleCommitStaged": "Commit staged submodule changes",
+            "submoduleEnterMessage": "Enter a commit message to commit",
+            "submoduleStageAll": "Stage All",
+            "submoduleStageAllTitle": "Stage all submodule changes",
+            "submoduleNothingToCommit": "Stage at least one submodule file to commit",
+            "submoduleCommitMessage": "Message",
+            "submoduleCommitMessageLabel": "Submodule commit message"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的 Agent。",

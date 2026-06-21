@@ -22,6 +22,7 @@ import {
   type GitLineStats
 } from '../shared/git-uncommitted-line-stats'
 import { DEFAULT_GIT_STATUS_LIMIT } from '../shared/git-status-limit'
+import { parseGitmodules } from '../shared/gitmodules-parser'
 
 export async function resolveGitDir(worktreePath: string): Promise<string> {
   const dotGitPath = path.join(worktreePath, '.git')
@@ -68,6 +69,7 @@ export async function getStatusOp(
   branch?: string
   upstreamStatus?: GitUpstreamStatus
   ignoredPaths?: string[]
+  submodules?: Record<string, unknown>[]
   didHitLimit?: boolean
   statusLength?: number
 }> {
@@ -163,12 +165,23 @@ export async function getStatusOp(
 
   return {
     entries,
+    submodules: await getSubmodulesOp(worktreePath),
     conflictOperation,
     head,
     branch,
     upstreamStatus,
     ...(includeIgnored ? { ignoredPaths } : {}),
     ...(didHitLimit ? { didHitLimit: true, statusLength } : {})
+  }
+}
+
+async function getSubmodulesOp(worktreePath: string): Promise<Record<string, unknown>[]> {
+  try {
+    // Why: the relay runs beside the repository, including over SSH, so reading
+    // .gitmodules here preserves remote worktrees without a local path probe.
+    return parseGitmodules(await readFile(path.join(worktreePath, '.gitmodules'), 'utf8'))
+  } catch {
+    return []
   }
 }
 

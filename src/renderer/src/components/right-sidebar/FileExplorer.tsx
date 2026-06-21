@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
-import { basename, dirname } from '@/lib/path'
+import { basename, dirname, normalizeRelativePath } from '@/lib/path'
 import { useRuntimeFileListForWorktree } from '@/components/quick-open-file-list'
 import { folderRelativePathToIncludeGlob } from './file-search-include-pattern'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -82,6 +82,7 @@ function FileExplorerFiles(): React.JSX.Element {
   const makePreviewFilePermanent = useAppStore((s) => s.makePreviewFilePermanent)
   const activeFileId = useAppStore((s) => s.activeFileId)
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
+  const gitSubmodulesByWorktree = useAppStore((s) => s.gitSubmodulesByWorktree)
   const openFiles = useAppStore((s) => s.openFiles)
   const closeFile = useAppStore((s) => s.closeFile)
   const openModal = useAppStore((s) => s.openModal)
@@ -226,6 +227,17 @@ function FileExplorerFiles(): React.JSX.Element {
   const entries = useMemo(
     () => (activeWorktreeId ? (gitStatusByWorktree[activeWorktreeId] ?? []) : []),
     [activeWorktreeId, gitStatusByWorktree]
+  )
+  const submodulePaths = useMemo(
+    () =>
+      new Set(
+        activeWorktreeId
+          ? (gitSubmodulesByWorktree[activeWorktreeId] ?? []).map((entry) =>
+              normalizeRelativePath(entry.path)
+            )
+          : []
+      ),
+    [activeWorktreeId, gitSubmodulesByWorktree]
   )
   const statusByRelativePath = useMemo(() => buildStatusMap(entries), [entries])
   const folderStatusByRelativePath = useMemo(() => buildFolderStatusMap(entries), [entries])
@@ -680,6 +692,7 @@ function FileExplorerFiles(): React.JSX.Element {
                 dismissInlineInput={dismissInlineInput}
                 folderStatusByRelativePath={folderStatusByRelativePath}
                 statusByRelativePath={statusByRelativePath}
+                submodulePaths={submodulePaths}
                 ignoredByRelativePath={ignoredByRelativePath}
                 expanded={rowExpandedPaths}
                 canCollapseFolderSubtree={!hasNameFilter}

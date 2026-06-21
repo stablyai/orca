@@ -1,5 +1,5 @@
 import type * as NodePath from 'node:path'
-import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -172,6 +172,47 @@ describe('filesystem-auth path containment', () => {
       )
       await expect(resolveAuthorizedPath(join(folderPath, 'notes.md'), store)).resolves.toBe(
         join(await realpath(folderPath), 'notes.md')
+      )
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('authorizes registered .gitmodules submodule roots for git operations', async () => {
+    invalidateAuthorizedRootsCache()
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-submodule-'))
+    try {
+      const repoPath = join(tempRoot, 'repo')
+      const submodulePath = join(repoPath, 'vendor', 'lib')
+      await mkdir(submodulePath, { recursive: true })
+      await writeFile(
+        join(repoPath, '.gitmodules'),
+        '[submodule "vendor/lib"]\n\tpath = vendor/lib\n\turl = https://example.com/lib.git\n'
+      )
+      await writeFile(join(submodulePath, '.git'), 'gitdir: ../../.git/modules/vendor/lib\n')
+      const store = makeStore([{ ...repo, id: 'repo-temp', path: repoPath }])
+
+      await expect(resolveRegisteredWorktreePath(submodulePath, store)).resolves.toBe(
+        await realpath(submodulePath)
+      )
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('does not authorize arbitrary nested git roots that are not in .gitmodules', async () => {
+    invalidateAuthorizedRootsCache()
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-nested-git-'))
+    try {
+      const repoPath = join(tempRoot, 'repo')
+      const nestedPath = join(repoPath, 'vendor', 'other')
+      await mkdir(nestedPath, { recursive: true })
+      await writeFile(join(repoPath, '.gitmodules'), '')
+      await writeFile(join(nestedPath, '.git'), 'gitdir: ../../.git/modules/vendor/other\n')
+      const store = makeStore([{ ...repo, id: 'repo-temp', path: repoPath }])
+
+      await expect(resolveRegisteredWorktreePath(nestedPath, store)).rejects.toThrow(
+        'Access denied'
       )
     } finally {
       await rm(tempRoot, { recursive: true, force: true })

@@ -62,6 +62,7 @@ function virtualRowsElement(nodes: TreeNode[]): React.JSX.Element {
     dismissInlineInput: vi.fn(),
     folderStatusByRelativePath: new Map(),
     statusByRelativePath: new Map(),
+    submodulePaths: new Set(),
     ignoredByRelativePath: new Set(),
     expanded: new Set(),
     dirCache: {},

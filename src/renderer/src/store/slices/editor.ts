@@ -25,6 +25,7 @@ import type {
   GitPushTarget,
   GitStatusEntry,
   GitStatusResult,
+  GitSubmoduleEntry,
   PersistedOpenFile,
   Tab,
   TabGroup,
@@ -557,6 +558,7 @@ export type EditorSlice = {
 
   // Git status cache
   gitStatusByWorktree: Record<string, GitStatusEntry[]>
+  gitSubmodulesByWorktree: Record<string, GitSubmoduleEntry[]>
   gitStatusHeadByWorktree: Record<string, string>
   // Why: when status was truncated at the entry limit (a repo with an enormous
   // un-ignored folder), the SCM view shows a "too many changes" state and
@@ -3253,6 +3255,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   // Git status
   gitStatusByWorktree: {},
+  gitSubmodulesByWorktree: {},
   gitStatusHeadByWorktree: {},
   gitStatusHugeByWorktree: {},
   gitIgnoredPathsByWorktree: {},
@@ -3355,6 +3358,20 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const prevHuge = s.gitStatusHugeByWorktree[worktreeId]
       const nextHuge = status.didHitLimit ? { limit: nextEntries.length } : undefined
       const hugeUnchanged = (prevHuge?.limit ?? null) === (nextHuge?.limit ?? null)
+      const prevSubmodules = s.gitSubmodulesByWorktree[worktreeId]
+      const nextSubmodules = status.submodules ?? []
+      const submodulesUnchanged =
+        prevSubmodules !== undefined &&
+        prevSubmodules.length === nextSubmodules.length &&
+        prevSubmodules.every((entry, index) => {
+          const next = nextSubmodules[index]
+          return (
+            next !== undefined &&
+            entry.path === next.path &&
+            entry.name === next.name &&
+            entry.url === next.url
+          )
+        })
       const prevStatusHead = s.gitStatusHeadByWorktree[worktreeId]
       const nextStatusHead = getKnownGitHead(status.head)
       const statusHeadUnchanged = prevStatusHead === nextStatusHead
@@ -3375,6 +3392,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         operationUnchanged &&
         ignoredUnchanged &&
         hugeUnchanged &&
+        submodulesUnchanged &&
         statusHeadUnchanged &&
         !shouldInvalidateBranchCompare
       ) {
@@ -3417,6 +3435,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         gitStatusByWorktree: statusUnchanged
           ? s.gitStatusByWorktree
           : { ...s.gitStatusByWorktree, [worktreeId]: nextEntries },
+        gitSubmodulesByWorktree: submodulesUnchanged
+          ? s.gitSubmodulesByWorktree
+          : { ...s.gitSubmodulesByWorktree, [worktreeId]: nextSubmodules },
         gitIgnoredPathsByWorktree: ignoredUnchanged
           ? s.gitIgnoredPathsByWorktree
           : { ...s.gitIgnoredPathsByWorktree, [worktreeId]: nextIgnored },

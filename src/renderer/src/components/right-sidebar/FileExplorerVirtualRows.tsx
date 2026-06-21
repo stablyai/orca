@@ -17,6 +17,7 @@ type FileExplorerVirtualRowsProps = {
   dismissInlineInput: () => void
   folderStatusByRelativePath: Map<string, GitFileStatus | null>
   statusByRelativePath: Map<string, GitFileStatus>
+  submodulePaths: ReadonlySet<string>
   ignoredByRelativePath: Set<string>
   expanded: Set<string>
   canCollapseFolderSubtree?: boolean
@@ -59,6 +60,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     dismissInlineInput,
     folderStatusByRelativePath,
     statusByRelativePath,
+    submodulePaths,
     ignoredByRelativePath,
     expanded,
     canCollapseFolderSubtree = true,
@@ -135,6 +137,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
         const nodeStatus = n.isDirectory
           ? (folderStatusByRelativePath.get(normalizedRelativePath) ?? null)
           : (statusByRelativePath.get(normalizedRelativePath) ?? null)
+        const isSubmodule = n.isDirectory && submodulePaths.has(normalizedRelativePath)
         const isIgnored = shouldShowIgnoredDecoration(
           nodeStatus,
           ignoredByRelativePath,
@@ -165,6 +168,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               isFlashing={flashingPath === n.path}
               nodeStatus={nodeStatus}
               statusColor={nodeStatus ? STATUS_COLORS[nodeStatus] : null}
+              isSubmodule={isSubmodule}
               isIgnored={isIgnored}
               deleteShortcutLabel={deleteShortcutLabel}
               connectionId={connectionId}

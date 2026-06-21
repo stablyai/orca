@@ -20,6 +20,7 @@ import { translate } from '@/i18n/i18n'
 
 export type PendingDiscardConfirmation =
   | { kind: 'entry'; entry: GitStatusEntry }
+  | { kind: 'submodule-entry'; submoduleWorktreePath: string; entry: GitStatusEntry }
   | { kind: 'area'; area: DiscardAllArea; paths: readonly string[] }
 
 export function focusDiscardDialogConfirmButton(
@@ -48,7 +49,7 @@ export function SourceControlDiscardDialog({
     if (!pendingDiscard) {
       return null
     }
-    if (pendingDiscard.kind === 'entry') {
+    if (pendingDiscard.kind === 'entry' || pendingDiscard.kind === 'submodule-entry') {
       return getDiscardEntryConfirmationCopy(pendingDiscard.entry)
     }
     return getDiscardAreaConfirmationCopy(pendingDiscard.area, pendingDiscard.paths.length)
@@ -99,7 +100,7 @@ export function SourceControlDiscardDialog({
                   'files'
                 )}
           </div>
-        ) : pendingDiscard?.kind === 'entry' ? (
+        ) : pendingDiscard?.kind === 'entry' || pendingDiscard?.kind === 'submodule-entry' ? (
           <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs">
             <div className="break-all font-medium text-foreground">{pendingDiscard.entry.path}</div>
           </div>

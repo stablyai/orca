@@ -571,6 +571,41 @@ describe('getStatus', () => {
     ])
   })
 
+  it('lists .gitmodules entries even when git status has no changed entries', async () => {
+    readFileMock.mockImplementation(async (filePath: string) => {
+      if (filePath.endsWith('.gitmodules')) {
+        return [
+          '[submodule "vendor/lib"]',
+          '  path = vendor/lib',
+          '  url = https://example.com/lib.git',
+          '[submodule "vendor/missing"]',
+          '  path = vendor/missing'
+        ].join('\n')
+      }
+      return 'gitdir: /repo/.git/worktrees/feature\n'
+    })
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout:
+        '# branch.oid abc123\n# branch.head feature\n# branch.upstream origin/feature\n# branch.ab +0 -0\n'
+    })
+
+    const result = await getStatus('/repo')
+
+    expect(result.entries).toEqual([])
+    expect(result.submodules).toEqual([
+      {
+        name: 'vendor/lib',
+        path: 'vendor/lib',
+        url: 'https://example.com/lib.git'
+      },
+      {
+        name: 'vendor/missing',
+        path: 'vendor/missing'
+      }
+    ])
+  })
+
   it('omits ignored files by default and parses them when requested', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     existsSyncMock.mockReturnValue(false)
@@ -859,6 +894,7 @@ describe('getStatus', () => {
     await getStatus('/repo')
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(gitExecFileAsyncMock.mock.calls.some(([args]) => args.includes('diff'))).toBe(false)
   })
 
   it('truncates and flags didHitLimit when entries exceed the limit', async () => {
@@ -875,9 +911,9 @@ describe('getStatus', () => {
     expect(result.statusLength).toBeGreaterThan(10)
     // First `limit` entries are kept; the rest are dropped.
     expect(result.entries.length).toBe(10)
-    // attachLineStats (numstat) must be skipped when the limit was hit — only
-    // the single streamed status read should have happened.
+    // attachLineStats (numstat) must be skipped when the limit was hit.
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(gitExecFileAsyncMock.mock.calls.some(([args]) => args.includes('diff'))).toBe(false)
   })
 
   it('does not flag didHitLimit for a normal repo under the limit', async () => {

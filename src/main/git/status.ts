@@ -48,6 +48,7 @@ import { getLargeDiffRenderLimit } from '../../shared/large-diff-render-limit'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
 import { parseGitRevListFirstParentOid } from '../../shared/git-rev-list-output'
+import { parseGitmodules } from '../../shared/gitmodules-parser'
 
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
@@ -189,6 +190,7 @@ export async function getStatus(
 
   return {
     entries,
+    submodules: await getSubmodules(worktreePath),
     conflictOperation,
     head,
     branch,
@@ -208,6 +210,16 @@ export async function getStatus(
               : { hasUpstream: false, ahead: 0, behind: 0 })
         }
       : {})
+  }
+}
+
+async function getSubmodules(worktreePath: string): Promise<GitStatusResult['submodules']> {
+  try {
+    // Why: submodule folders are repository metadata from .gitmodules; parent
+    // worktree dirtiness still comes from ordinary porcelain status rows.
+    return parseGitmodules(await readFile(path.join(worktreePath, '.gitmodules'), 'utf8'))
+  } catch {
+    return []
   }
 }
 

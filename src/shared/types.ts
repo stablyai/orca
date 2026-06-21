@@ -54,6 +54,7 @@ export type {
   GitStagingArea,
   GitStatusEntry,
   GitStatusResult,
+  GitSubmoduleEntry,
   GitSubmoduleStatus,
   GitUncommittedEntry,
   GitUpstreamStatus

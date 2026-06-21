@@ -617,6 +617,7 @@ describe('FileExplorerRow collapse folder action', () => {
       dismissInlineInput: vi.fn(),
       folderStatusByRelativePath: new Map(),
       statusByRelativePath: new Map(),
+      submodulePaths: new Set(),
       ignoredByRelativePath: new Set(),
       expanded: new Set([directoryNode.path]),
       dirCache: {},
@@ -668,6 +669,7 @@ describe('FileExplorerRow collapse folder action', () => {
       dismissInlineInput: vi.fn(),
       folderStatusByRelativePath: new Map(),
       statusByRelativePath: new Map(),
+      submodulePaths: new Set(),
       ignoredByRelativePath: new Set(),
       expanded: new Set([directoryNode.path]),
       dirCache: {},
@@ -718,6 +720,7 @@ describe('FileExplorerRow collapse folder action', () => {
       dismissInlineInput: vi.fn(),
       folderStatusByRelativePath: new Map(),
       statusByRelativePath: new Map(),
+      submodulePaths: new Set(),
       ignoredByRelativePath: new Set(),
       expanded: new Set(),
       dirCache: {},
@@ -752,5 +755,56 @@ describe('FileExplorerRow collapse folder action', () => {
     const row = findFileExplorerRow(element)
 
     expect(row.props.connectionId).toBe('ssh-1')
+  })
+
+  it('marks matching directories as submodules in virtualized rows', () => {
+    const element = FileExplorerVirtualRows({
+      virtualizer: {
+        getTotalSize: () => 26,
+        getVirtualItems: () => [{ index: 0, key: 'src', start: 0 }],
+        measureElement: vi.fn()
+      } as never,
+      inlineInputIndex: -1,
+      rowProjection: createFileExplorerRowProjection([directoryNode]),
+      inlineInput: null,
+      handleInlineSubmit: vi.fn(),
+      dismissInlineInput: vi.fn(),
+      folderStatusByRelativePath: new Map([['src', 'modified']]),
+      statusByRelativePath: new Map(),
+      submodulePaths: new Set(['src']),
+      ignoredByRelativePath: new Set(),
+      expanded: new Set([directoryNode.path]),
+      dirCache: {},
+      selectedPaths: new Set(),
+      activeFileId: null,
+      flashingPath: null,
+      deleteShortcutLabel: 'Del',
+      onClick: vi.fn(),
+      onDoubleClick: vi.fn(),
+      onContextMenuSelect: vi.fn(),
+      onCopyPaths: vi.fn(),
+      onStartNew: vi.fn(),
+      onStartRename: vi.fn(),
+      onDuplicate: vi.fn(),
+      onAddFolderAsProject: vi.fn(),
+      canAddFolderAsProject: () => false,
+      onRequestDelete: vi.fn(),
+      onCollapseFolderSubtree: vi.fn(),
+      onFindInFolder: vi.fn(),
+      onMoveDrop: vi.fn(),
+      onDragTargetChange: vi.fn(),
+      onDragSourceChange: vi.fn(),
+      onDragExpandDir: vi.fn(),
+      onNativeDragTargetChange: vi.fn(),
+      onNativeDragExpandDir: vi.fn(),
+      dropTargetDir: null,
+      dragSourcePath: null,
+      nativeDropTargetDir: null
+    })
+
+    const row = findFileExplorerRow(element)
+
+    expect(row.props.isSubmodule).toBe(true)
+    expect(row.props.nodeStatus).toBe('modified')
   })
 })

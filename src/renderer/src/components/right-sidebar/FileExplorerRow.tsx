@@ -267,6 +267,7 @@ type FileExplorerRowProps = {
   selectedPaths: Set<string>
   nodeStatus: GitFileStatus | null
   statusColor: string | null
+  isSubmodule: boolean
   isIgnored: boolean
   deleteShortcutLabel: string
   connectionId?: string | null
@@ -359,6 +360,7 @@ export function FileExplorerRow({
   selectedPaths,
   nodeStatus,
   statusColor,
+  isSubmodule,
   isIgnored,
   deleteShortcutLabel,
   connectionId,
@@ -391,6 +393,10 @@ export function FileExplorerRow({
   const copyRelativePathShortcutLabel = useShortcutLabel('fileExplorer.copyRelativePath')
   const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
   const FileIcon = getFileTypeIcon(node.relativePath || node.name)
+  const submoduleLabel = translate(
+    'auto.components.right.sidebar.FileExplorerRow.submodule',
+    'Submodule'
+  )
   const rowDropDir = node.isDirectory ? node.path : targetDir
   const showRemoteDownloadAction = shouldShowRemoteDownloadAction(node, connectionId)
   const { setRowDragNode, handleDragOver, handleDragEnter, handleDragLeave, handleDrop } =
@@ -559,7 +565,15 @@ export function FileExplorerRow({
           >
             {node.name}
           </span>
-          {nodeStatus ? (
+          {isSubmodule ? (
+            <span
+              aria-label={submoduleLabel}
+              title={submoduleLabel}
+              className="ml-auto shrink-0 text-[10px] font-semibold tracking-wide text-muted-foreground mr-2"
+            >
+              S
+            </span>
+          ) : nodeStatus ? (
             <span
               className="ml-auto shrink-0 text-[10px] font-semibold tracking-wide mr-2"
               style={{ color: statusColor ?? undefined }}

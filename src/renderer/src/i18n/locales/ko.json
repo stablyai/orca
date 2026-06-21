@@ -8321,7 +8321,8 @@
             "42e10cbf57": "상대 경로 복사",
             "b5d436aa30": "경로 복사",
             "f9d7ca753d": "경로 복사",
-            "3161c4e425": "폴더"
+            "3161c4e425": "폴더",
+            "submodule": "Submodule"
           },
           "FileExplorerToolbar": {
             "d238264654": "Git이 무시한 파일 표시",
@@ -8600,6 +8601,7 @@
             "a0cc0e6b4e": "로드 중",
             "9339382454": "모두 언스테이징",
             "24d2598eff": "모두 스테이지",
+            "submoduleRepoLabel": "{{value0}} Git",
             "ce41708855": "모두 폐기",
             "2f609a2e7c": "추적되지 않은 모든 항목 삭제",
             "9bb062a886": "commit 되지 않음",
@@ -8668,7 +8670,17 @@
             "b715ef615b": "{{value1}}보다 {{value0}} commits 앞서 있음",
             "c1a8f3e204": "{{value0}}보다 1 commit 뒤처짐",
             "d2b9g4f315": "{{value1}}보다 {{value0}} commits 뒤처짐",
-            "e9c2a5d416": "{{value0}}와 동일한 상태"
+            "e9c2a5d416": "{{value0}}와 동일한 상태",
+            "submoduleCommit": "Commit",
+            "submoduleCommitInProgress": "Commit in progress...",
+            "submoduleResolveConflicts": "Resolve conflicts before committing",
+            "submoduleCommitStaged": "Commit staged submodule changes",
+            "submoduleEnterMessage": "Enter a commit message to commit",
+            "submoduleStageAll": "Stage All",
+            "submoduleStageAllTitle": "Stage all submodule changes",
+            "submoduleNothingToCommit": "Stage at least one submodule file to commit",
+            "submoduleCommitMessage": "Message",
+            "submoduleCommitMessageLabel": "Submodule commit message"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",

@@ -18,6 +18,12 @@ export type GitSubmoduleStatus = {
   untrackedChanges: boolean
 }
 
+export type GitSubmoduleEntry = {
+  name: string
+  path: string
+  url?: string
+}
+
 // Compatibility note for non-upgraded consumers:
 // Any consumer that has not been upgraded to read `conflictStatus` may still
 // render `modified` styling via the `status` field (which is a compatibility
@@ -49,6 +55,7 @@ export type GitStatusEntry = GitUncommittedEntry
 
 export type GitStatusResult = {
   entries: GitStatusEntry[]
+  submodules?: GitSubmoduleEntry[]
   conflictOperation: GitConflictOperation
   head?: string
   branch?: string
