@@ -211,6 +211,27 @@ describe('filterAiVaultSessions', () => {
     ).toHaveLength(1)
   })
 
+  it('matches WSL UNC workspace paths against Linux session cwd values', () => {
+    expect(
+      filterAiVaultSessions(
+        [
+          {
+            ...baseSession,
+            cwd: '/home/ada/repo/app'
+          }
+        ],
+        {
+          query: '',
+          agents: ['claude'],
+          scope: 'workspace',
+          sort: 'updated',
+          activeWorktreePaths: [String.raw`\\wsl.localhost\Ubuntu\home\ada\repo`],
+          hideEmptySessions: true
+        }
+      )
+    ).toHaveLength(1)
+  })
+
   it('returns no sessions for oversized pasted queries before reading session fields', () => {
     const unreadableSession = { ...baseSession }
     Object.defineProperty(unreadableSession, 'agent', {

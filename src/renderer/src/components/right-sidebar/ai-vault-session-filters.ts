@@ -5,6 +5,7 @@ import {
   normalizeRuntimePathSeparators
 } from '../../../../shared/cross-platform-path'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import type {
   AiVaultAgent,
   AiVaultGroup,
@@ -70,7 +71,9 @@ export function filterAiVaultSessions(
         const cwd = session.cwd
         if (
           !cwd ||
-          !filters.activeWorktreePaths.some((pathValue) => isPathInsideOrEqual(pathValue, cwd))
+          !filters.activeWorktreePaths.some((pathValue) =>
+            isAiVaultSessionInWorkspacePath(pathValue, cwd)
+          )
         ) {
           return false
         }
@@ -223,6 +226,21 @@ function addAiVaultWorkspaceScopePath(paths: string[], pathValue: string): void 
     return
   }
   paths.push(trimmedPath)
+}
+
+function isAiVaultSessionInWorkspacePath(workspacePath: string, sessionCwd: string): boolean {
+  if (isPathInsideOrEqual(workspacePath, sessionCwd)) {
+    return true
+  }
+
+  const workspaceWslPath = parseWslUncPath(workspacePath)
+  if (!workspaceWslPath) {
+    return false
+  }
+
+  // WSL agent transcripts record Linux cwd values even when Orca stores the
+  // active worktree as a Windows UNC path.
+  return isPathInsideOrEqual(workspaceWslPath.linuxPath, sessionCwd)
 }
 
 function isAiVaultWorkspaceScopePathClaimed(
