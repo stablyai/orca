@@ -1692,6 +1692,58 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
+  it('routes focused floating workspace maximize shortcuts from a custom binding on Linux', async () => {
+    vi.stubGlobal('navigator', { userAgent: 'Linux' })
+    ;(storeBox.state as FloatingPanelStoreState).keybindings = {
+      'floatingWorkspace.maximize': ['Ctrl+Alt+M']
+    } as unknown as KeybindingOverrides
+    const element = await renderPanel(true)
+    const { keydownListener, panelElement } = bindFocusedFloatingPanelKeydown(element)
+    const preventDefault = vi.fn()
+
+    keydownListener(
+      makeFocusedPanelKeyEvent({
+        altKey: true,
+        ctrlKey: true,
+        key: 'm',
+        preventDefault,
+        target: panelElement
+      })
+    )
+
+    expect(preventDefault).toHaveBeenCalledWith()
+    expect(getPanelStyleBounds(await renderPanel(true))).toEqual(
+      getMaximizedFloatingTerminalBounds()
+    )
+  })
+
+  it('routes focused floating workspace minify shortcuts from a custom binding on Windows', async () => {
+    vi.stubGlobal('navigator', { userAgent: 'Windows' })
+    ;(storeBox.state as FloatingPanelStoreState).keybindings = {
+      'floatingWorkspace.minify': ['Ctrl+Alt+J']
+    } as unknown as KeybindingOverrides
+    const element = await renderPanel(true)
+    const defaultBounds = getPanelStyleBounds(element)
+    const { keydownListener, panelElement } = bindFocusedFloatingPanelKeydown(element)
+    const preventDefault = vi.fn()
+
+    keydownListener(
+      makeFocusedPanelKeyEvent({
+        altKey: true,
+        ctrlKey: true,
+        key: 'j',
+        preventDefault,
+        target: panelElement
+      })
+    )
+
+    const compactBounds = getPanelStyleBounds(await renderPanel(true))
+    expect(preventDefault).toHaveBeenCalledWith()
+    expect(compactBounds).toEqual(getMinifiedFloatingTerminalBounds())
+    expect(compactBounds.width).toBeLessThan(defaultBounds.width)
+    expect(compactBounds.height).toBeLessThan(defaultBounds.height)
+  })
+
   it('keeps the empty floating workspace focused after Cmd+W closes the last tab', async () => {
     setFloatingTabs([makeTab({ id: 'tab-1' })])
     const element = await renderPanel(true)
