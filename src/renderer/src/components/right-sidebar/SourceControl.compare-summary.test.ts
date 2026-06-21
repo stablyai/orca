@@ -1,9 +1,13 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  BRANCH_REFRESH_INTERVAL_MS,
   CompareSummary,
   CompareSummaryToolbarButton,
+  refreshSourceControlAfterRemoteAction,
   resolveSourceControlBaseRef,
   resolveSourceControlPickerBaseRef,
+  shouldPollBranchCompare,
   shouldShowCompareSummary
 } from './SourceControl'
 import type { GitBranchCompareSummary } from '../../../../shared/types'
@@ -75,6 +79,8 @@ const readySummary: GitBranchCompareSummary = {
   commitsAhead: 1,
   status: 'ready'
 }
+
+const sourceControlSource = readFileSync(new URL('./SourceControl.tsx', import.meta.url), 'utf8')
 
 describe('SourceControl compare summary', () => {
   it('prefers the worktree creation base for branch compare', () => {
@@ -271,5 +277,86 @@ describe('SourceControl compare summary', () => {
     })
 
     expect(collectCompareSummaryToolbarLabels(node)).toEqual(['Change base ref', 'Retry'])
+  })
+
+  it('polls branch compare every 30 seconds', () => {
+    expect(BRANCH_REFRESH_INTERVAL_MS).toBe(30_000)
+    expect(sourceControlSource).toContain('intervalMs: BRANCH_REFRESH_INTERVAL_MS')
+  })
+
+  it('polls ready branch compare only when visible branch state can change', () => {
+    expect(
+      shouldPollBranchCompare({
+        summary: null,
+        branchEntryCount: 0
+      })
+    ).toBe(true)
+    expect(
+      shouldPollBranchCompare({
+        summary: { ...readySummary, commitsAhead: 0 },
+        branchEntryCount: 0
+      })
+    ).toBe(false)
+    expect(
+      shouldPollBranchCompare({
+        summary: { ...readySummary, commitsAhead: 0 },
+        branchEntryCount: 1
+      })
+    ).toBe(true)
+  })
+
+  it('polls stale branch compare base refs so repaired bases refresh', () => {
+    expect(
+      shouldPollBranchCompare({
+        summary: { ...readySummary, baseRef: 'origin/old', commitsAhead: 0 },
+        branchEntryCount: 0,
+        currentBaseRef: 'origin/main'
+      })
+    ).toBe(true)
+  })
+
+  it('keeps transient branch compare errors retryable but stops terminal statuses', () => {
+    expect(
+      shouldPollBranchCompare({
+        summary: { ...readySummary, status: 'error', errorMessage: 'Unable to compare' },
+        branchEntryCount: 0
+      })
+    ).toBe(true)
+    expect(
+      shouldPollBranchCompare({
+        summary: { ...readySummary, status: 'invalid-base' },
+        branchEntryCount: 0
+      })
+    ).toBe(false)
+    expect(
+      shouldPollBranchCompare({
+        summary: { ...readySummary, status: 'no-merge-base' },
+        branchEntryCount: 0
+      })
+    ).toBe(false)
+    expect(
+      shouldPollBranchCompare({
+        summary: { ...readySummary, status: 'unborn-head' },
+        branchEntryCount: 0
+      })
+    ).toBe(false)
+  })
+
+  it('keeps immediate refresh paths for remote actions', () => {
+    const refreshGitStatus = vi.fn(async () => {})
+    const refreshBranchCompare = vi.fn(async () => {})
+    const refreshGitHistory = vi.fn(async () => {})
+
+    refreshSourceControlAfterRemoteAction({
+      refreshGitStatus,
+      refreshBranchCompare,
+      refreshGitHistory
+    })
+
+    expect(refreshGitStatus).toHaveBeenCalledTimes(1)
+    expect(refreshBranchCompare).toHaveBeenCalledTimes(1)
+    expect(refreshGitHistory).toHaveBeenCalledTimes(1)
+    // Direct commit, manual, retry, and base-ref refresh paths remain component-level
+    // behavior covered by the existing UI wiring; keep this test on the pure helper.
   })
 })

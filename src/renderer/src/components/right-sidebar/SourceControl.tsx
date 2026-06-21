@@ -459,7 +459,9 @@ const CONFLICTS_SECTION_LABEL = {
   fallback: 'Conflicts'
 }
 
-const BRANCH_REFRESH_INTERVAL_MS = 5000
+// Why: 5s branch compare polling churned git subprocesses in large repos.
+// Explicit commit, remote, manual, and base-ref refresh paths still run immediately.
+export const BRANCH_REFRESH_INTERVAL_MS = 30_000
 // Why: row action buttons host Radix Tooltip triggers. Keeping the overlay
 // measurable prevents transient top-left tooltip placement during hover.
 const SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS =
@@ -1845,7 +1847,7 @@ function SourceControlInner(): React.JSX.Element {
         //
         // Then fire-and-forget refreshBranchCompare so the "Committed on
         // Branch" section repopulates as soon as the IPC returns instead of
-        // waiting up to 5 seconds for the next poll. Unawaited on purpose:
+        // waiting for the next poll. Unawaited on purpose:
         // compound flows (runCompoundCommitAction) need handleCommit to
         // resolve immediately so the push step starts without delay. Errors
         // here are best-effort — the polling tick will retry.
@@ -4384,8 +4386,8 @@ function SourceControlInner(): React.JSX.Element {
     // getBaseRefDefault corrected a stale cross-repo value).  Polling retries
     // — whether the previous result was 'ready' *or* an error — keep the
     // current UI visible until the new IPC result arrives.  Resetting to
-    // 'loading' on every 5-second poll when the compare is in an error state
-    // caused a visible loading→error→loading→error flicker.
+    // 'loading' on every poll when the compare is in an error state caused a
+    // visible loading→error→loading→error flicker.
     const baseRefChanged = existingSummary && existingSummary.baseRef !== effectiveBaseRef
     const shouldResetToLoading = !existingSummary || baseRefChanged
     if (shouldResetToLoading) {
@@ -4444,7 +4446,7 @@ function SourceControlInner(): React.JSX.Element {
     branchCompareInFlightRef.current = true
     const runPromise = (async (): Promise<void> => {
       // Why: branch compare shells out to git on a timer and can exceed the
-      // 5s poll interval on large repos. Keep one compare chain in flight and
+      // 30s poll interval on large repos. Keep one compare chain in flight and
       // collapse skipped ticks into one trailing refresh instead of stacking
       // subprocesses while preserving the await contract for direct callers.
       try {
@@ -4540,19 +4542,56 @@ function SourceControlInner(): React.JSX.Element {
   const refreshGitHistoryRef = useRef(refreshGitHistory)
   refreshGitHistoryRef.current = refreshGitHistory
 
+  const branchSummaryStatus = branchSummary?.status
+  const branchSummaryBaseRef = branchSummary?.baseRef
+  const branchSummaryCommitsAhead = branchSummary?.commitsAhead
+
+  const shouldPollCurrentBranchCompare = useMemo(() => {
+    if (!branchSummaryStatus || branchSummaryStatus === 'loading') {
+      return true
+    }
+    if (effectiveBaseRef && branchSummaryBaseRef !== effectiveBaseRef) {
+      return true
+    }
+    if (branchSummaryStatus === 'ready') {
+      return (branchSummaryCommitsAhead ?? 0) > 0 || branchEntries.length > 0
+    }
+    return branchSummaryStatus === 'error'
+  }, [
+    branchEntries.length,
+    branchSummaryBaseRef,
+    branchSummaryCommitsAhead,
+    branchSummaryStatus,
+    effectiveBaseRef
+  ])
+
   useEffect(() => {
-    if (!activeWorktreeId || !worktreePath || !isBranchVisible || !effectiveBaseRef || isFolder) {
+    if (
+      !activeWorktreeId ||
+      !worktreePath ||
+      !isBranchVisible ||
+      !effectiveBaseRef ||
+      isFolder ||
+      !shouldPollCurrentBranchCompare
+    ) {
       return
     }
 
     // Why: branch compare shells out to git every tick. The panel only needs
-    // background freshness while Orca is visible; hidden-window time should not
-    // burn subprocess work or timer wakeups.
+    // background freshness while Orca is visible and there is branch UI worth
+    // refreshing; hidden-window time should not burn subprocess work or timer wakeups.
     return installWindowVisibilityInterval({
       run: () => void refreshBranchCompareRef.current(),
       intervalMs: BRANCH_REFRESH_INTERVAL_MS
     })
-  }, [activeWorktreeId, effectiveBaseRef, isBranchVisible, isFolder, worktreePath])
+  }, [
+    activeWorktreeId,
+    effectiveBaseRef,
+    isBranchVisible,
+    isFolder,
+    shouldPollCurrentBranchCompare,
+    worktreePath
+  ])
 
   useEffect(() => {
     // Why: history shells out to git. Defer the first load until the user
@@ -6743,6 +6782,24 @@ export function CommitArea({
       )}
     </div>
   )
+}
+
+export function shouldPollBranchCompare(input: {
+  summary: GitBranchCompareSummary | null
+  branchEntryCount: number
+  currentBaseRef?: string | null
+}): boolean {
+  const { summary, branchEntryCount, currentBaseRef } = input
+  if (!summary || summary.status === 'loading') {
+    return true
+  }
+  if (currentBaseRef && summary.baseRef !== currentBaseRef) {
+    return true
+  }
+  if (summary.status === 'ready') {
+    return (summary.commitsAhead ?? 0) > 0 || branchEntryCount > 0
+  }
+  return summary.status === 'error'
 }
 
 export function shouldShowCompareSummary(summary: GitBranchCompareSummary | null): boolean {
