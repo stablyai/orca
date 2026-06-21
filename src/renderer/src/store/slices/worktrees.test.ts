@@ -730,7 +730,48 @@ describe('fetchWorktrees', () => {
 
     expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({ repoId: 'repo-ssh' })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([sshWorktree])
+    // Why: SSH worktrees are fetched via local IPC but belong to the SSH host;
+    // they must carry the repo's ssh host id, not the local default.
+    expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([
+      { ...sshWorktree, hostId: 'ssh:ssh-1' }
+    ])
+  })
+
+  it('stamps remote runtime worktrees with the owning repo runtime host', async () => {
+    const store = createTestStore()
+    // Why: a remote runtime returns its worktrees from its own perspective, so
+    // their hostId arrives as the default "local" even though they live remotely.
+    const remote = makeWorktree({
+      id: 'repo-remote::/remote/wt1',
+      repoId: 'repo-remote',
+      path: '/remote/wt1',
+      branch: 'refs/heads/remote',
+      hostId: 'local'
+    })
+    store.setState({
+      repos: [
+        {
+          id: 'repo-remote',
+          path: '/home/dvic/src/omarchy-dotfiles',
+          displayName: 'omarchy-dotfiles',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'runtime:env-1'
+        }
+      ]
+    } as Partial<AppState>)
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: makeDetectedResult('repo-remote', [remote]),
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+
+    await store.getState().fetchWorktrees('repo-remote')
+
+    expect(store.getState().worktreesByRepo['repo-remote']).toEqual([
+      { ...remote, hostId: 'runtime:env-1' }
+    ])
   })
 
   it('falls back to legacy remote worktree.list when detectedList is unavailable', async () => {
@@ -1140,6 +1181,50 @@ describe('worktree lineage state', () => {
     expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
     expect(store.getState().worktreesByRepo.repo1?.[0]).toEqual(updatedChild)
     expect(store.getState().sortEpoch).toBe(4)
+  })
+
+  it('stamps the owning runtime host onto worktrees returned by a remote lineage update', async () => {
+    const store = createTestStore()
+    const lineage = makeLineage({
+      worktreeId: 'repo-remote::/remote/child',
+      parentWorktreeId: 'repo-remote::/remote/parent'
+    })
+    const child = makeWorktree({
+      id: lineage.worktreeId,
+      repoId: 'repo-remote',
+      path: '/remote/child'
+    })
+    // Why: the remote returns the updated worktree from its own perspective, so
+    // it arrives with the default local host even though the repo is remote.
+    const updatedChild = { ...child, hostId: 'local' as const, lineage }
+    store.setState({
+      repos: [
+        {
+          id: 'repo-remote',
+          path: '/home/dvic/src/omarchy-dotfiles',
+          displayName: 'omarchy-dotfiles',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'runtime:env-1'
+        }
+      ],
+      worktreesByRepo: { 'repo-remote': [child] }
+    } as Partial<AppState>)
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-remote-lineage',
+      ok: true,
+      result: { worktree: updatedChild },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+
+    await store.getState().updateWorktreeLineage(lineage.worktreeId, {
+      parentWorktreeId: lineage.parentWorktreeId
+    })
+
+    expect(store.getState().worktreesByRepo['repo-remote']?.[0]).toEqual({
+      ...updatedChild,
+      hostId: 'runtime:env-1'
+    })
   })
 
   it('assigns a parent through the active remote runtime environment and rethrows failures', async () => {
@@ -1612,6 +1697,46 @@ describe('createWorktree base status merge', () => {
       linkedLinearIssue: 'ENG-123',
       workspaceStatus: 'in-review',
       pendingFirstAgentMessageRename: true
+    })
+  })
+
+  it('stamps the owning runtime host onto worktrees created on a remote runtime', async () => {
+    const store = createTestStore()
+    const created = makeWorktree({
+      id: 'repo-remote::/remote/feature',
+      repoId: 'repo-remote',
+      path: '/remote/feature',
+      // Why: the remote creates the worktree and reports it from its own
+      // perspective, so it comes back with the default local host.
+      hostId: 'local'
+    })
+    store.setState({
+      repos: [
+        {
+          id: 'repo-remote',
+          path: '/home/dvic/src/omarchy-dotfiles',
+          displayName: 'omarchy-dotfiles',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'runtime:env-1'
+        }
+      ]
+    } as Partial<AppState>)
+    runtimeEnvironmentCall.mockImplementation(({ method }: RuntimeEnvironmentCallRequest) =>
+      Promise.resolve({
+        id: 'rpc-remote-create',
+        ok: true,
+        result: method === 'worktree.create' ? { worktree: created } : null,
+        _meta: { runtimeId: 'runtime-remote' }
+      })
+    )
+
+    await store.getState().createWorktree('repo-remote', 'feature', 'origin/main')
+
+    expect(mockApi.worktrees.create).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo['repo-remote']?.[0]).toEqual({
+      ...created,
+      hostId: 'runtime:env-1'
     })
   })
 

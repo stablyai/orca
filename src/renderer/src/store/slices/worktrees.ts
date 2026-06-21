@@ -44,6 +44,7 @@ import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
@@ -345,8 +346,31 @@ function toVisibleWorktree(worktree: DetectedWorktreeListResult['worktrees'][num
   return base
 }
 
-function toVisibleWorktrees(result: DetectedWorktreeListResult): Worktree[] {
-  return result.worktrees.filter((worktree) => worktree.visible).map(toVisibleWorktree)
+// Why: runtime worktree payloads arrive from the owning host's own perspective,
+// so their hostId defaults to "local" even for remote checkouts. Re-stamp them
+// with the repo's execution host so per-worktree host resolution doesn't route
+// remote terminals to the local machine. Local-owned repos are left untouched,
+// so an explicit local worktree still overrides a runtime repo owner.
+function withRepoHostId<T extends { hostId?: ExecutionHostId }>(
+  worktree: T,
+  hostId: ExecutionHostId
+): T {
+  return hostId === LOCAL_EXECUTION_HOST_ID ? worktree : { ...worktree, hostId }
+}
+
+function repoHostId(state: Pick<AppState, 'repos'>, repoId: string): ExecutionHostId {
+  const repo = state.repos.find((entry) => entry.id === repoId)
+  return repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
+}
+
+function toVisibleWorktrees(
+  result: DetectedWorktreeListResult,
+  hostId: ExecutionHostId
+): Worktree[] {
+  return result.worktrees
+    .filter((worktree) => worktree.visible)
+    .map(toVisibleWorktree)
+    .map((worktree) => withRepoHostId(worktree, hostId))
 }
 
 function getHydratedSessionWorktreeIdsForRepo(state: AppState, repoId: string): string[] {
@@ -814,7 +838,13 @@ function applyWorktreeLineageUpdate(
       worktreesByRepo:
         result.target.kind === 'local' || !result.updatedRemoteWorktree
           ? s.worktreesByRepo
-          : replaceWorktreeInRepoLists(s.worktreesByRepo, result.updatedRemoteWorktree),
+          : replaceWorktreeInRepoLists(
+              s.worktreesByRepo,
+              withRepoHostId(
+                result.updatedRemoteWorktree,
+                repoHostId(s, getRepoIdFromWorktreeId(result.updatedRemoteWorktree.id))
+              )
+            ),
       sortEpoch: s.sortEpoch + 1
     }
   })
@@ -1422,7 +1452,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       if (options?.requireAuthoritative && !detected.authoritative) {
         return false
       }
-      const worktrees = toVisibleWorktrees(detected)
+      const worktrees = toVisibleWorktrees(detected, repoHostId(get(), repoId))
       const current = get().worktreesByRepo[repoId]
       if (areWorktreesEqual(current, worktrees)) {
         set((s) => {
@@ -1515,7 +1545,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             settingsForRepoOwner(get(), r.id),
             r.id
           )
-          const list = toVisibleWorktrees(detected)
+          const list = toVisibleWorktrees(detected, repoHostId(get(), r.id))
           const current = get().worktreesByRepo[r.id]
           if (
             !areWorktreesEqual(current, list) &&
@@ -1850,15 +1880,16 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           // then produces a duplicate entry in worktreesByRepo, which gives
           // React duplicate keys and can corrupt terminal DOM containers.
           set((s) => {
+            const createdWorktree = withRepoHostId(result.worktree, repoHostId(s, repoId))
             const current = s.worktreesByRepo[repoId] ?? []
-            const alreadyPresent = current.some((w) => w.id === result.worktree.id)
+            const alreadyPresent = current.some((w) => w.id === createdWorktree.id)
             const nextWorktrees = alreadyPresent
               ? current.map((worktree) =>
-                  worktree.id === result.worktree.id
-                    ? { ...worktree, ...result.worktree }
+                  worktree.id === createdWorktree.id
+                    ? { ...worktree, ...createdWorktree }
                     : worktree
                 )
-              : [...current, result.worktree]
+              : [...current, createdWorktree]
             return {
               worktreesByRepo: {
                 ...s.worktreesByRepo,
