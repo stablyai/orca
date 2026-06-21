@@ -95,4 +95,28 @@ describe('per-hunk index patching', () => {
       applyIndexPatch(repo, 'other.ts', buildHunkPatch(parsed, [0]), false)
     ).rejects.toThrow(/expected path/)
   })
+
+  // Why: git octal-quotes non-ASCII and leaves spaces literal; getFileDiffPatch
+  // forces core.quotePath=false so the header path still matches the validated one.
+  it.each(['my file.ts', 'café.ts'])('stages a hunk in a file named %s', async (name) => {
+    const repo = await mkdtemp(path.join(tmpdir(), 'orca-hunk-name-'))
+    tempRoots.push(repo)
+    execFileSync('git', ['init', '-q'], { cwd: repo })
+    execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: repo })
+    execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: repo })
+    await writeFile(path.join(repo, name), ORIGINAL)
+    execFileSync('git', ['add', '--', name], { cwd: repo })
+    execFileSync('git', ['commit', '-q', '-m', 'init'], { cwd: repo })
+    await writeFile(path.join(repo, name), MODIFIED)
+
+    const parsed = parseFileDiff(await getFileDiffPatch(repo, name, false))
+    expect(parsed.hunks.length).toBeGreaterThan(0)
+    await applyIndexPatch(repo, name, buildHunkPatch(parsed, [0]), false)
+
+    const cached = execFileSync('git', ['diff', '--cached', '--', name], {
+      cwd: repo,
+      encoding: 'utf8'
+    })
+    expect(cached).toContain('+2x')
+  })
 })

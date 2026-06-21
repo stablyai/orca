@@ -169,4 +169,12 @@ describe('patchTouchesOnlyPath', () => {
     )
     expect(patchTouchesOnlyPath(patch, 'dir\\x.ts')).toBe(true)
   })
+
+  // git leaves spaces literal and (with core.quotePath=false) non-ASCII literal.
+  it.each(['my file.ts', 'café.ts'])('accepts the unquoted path %s', (name) => {
+    const patch = [`diff --git a/${name} b/${name}`, `--- a/${name}`, `+++ b/${name}`, ''].join(
+      '\n'
+    )
+    expect(patchTouchesOnlyPath(patch, name)).toBe(true)
+  })
 })

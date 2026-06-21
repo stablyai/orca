@@ -214,7 +214,18 @@ export class GitHandler {
     }
     const staged = params.staged === true
     const { stdout } = await this.git(
-      ['diff', ...(staged ? ['--cached'] : []), '--no-color', '--no-ext-diff', '--', filePath],
+      // Why: core.quotePath=false keeps non-ASCII paths literal so the patch's
+      // file headers match the validated path (git octal-quotes them otherwise).
+      [
+        '-c',
+        'core.quotePath=false',
+        'diff',
+        ...(staged ? ['--cached'] : []),
+        '--no-color',
+        '--no-ext-diff',
+        '--',
+        filePath
+      ],
       worktreePath
     )
     return { patch: stdout }

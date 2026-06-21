@@ -1208,6 +1208,10 @@ export async function getFileDiffPatch(
 ): Promise<string> {
   const { stdout } = await gitExecFileAsync(
     [
+      // Why: emit paths literally (no octal-quoting of non-ASCII) so the patch's
+      // file headers match the validated path; git quotes unicode otherwise.
+      '-c',
+      'core.quotePath=false',
       'diff',
       ...(staged ? ['--cached'] : []),
       '--no-color',
