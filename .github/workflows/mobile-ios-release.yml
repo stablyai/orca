@@ -18,6 +18,10 @@ on:
         description: 'Optional exact iOS marketing version override, e.g. 0.0.15'
         required: false
         type: string
+      testflight_changelog:
+        description: 'Optional TestFlight external tester changelog'
+        required: false
+        type: string
 
 jobs:
   ios-build:
@@ -115,6 +119,7 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TESTFLIGHT_CHANGELOG: ${{ github.event.inputs.testflight_changelog }}
           # Keep fastlane non-interactive and quiet about analytics in CI.
           FASTLANE_SKIP_UPDATE_CHECK: '1'
           FASTLANE_HIDE_CHANGELOG: '1'

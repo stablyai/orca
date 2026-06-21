@@ -28,6 +28,7 @@ BUILD_OUTPUT_DIRECTORY = File.join(MOBILE_ROOT, "build")
 SCHEME = "Orca"
 BUNDLE_ID = "com.stably.orca.mobile"
 TESTFLIGHT_GROUPS = ["peeps"].freeze
+DEFAULT_TESTFLIGHT_CHANGELOG = "Latest Orca Mobile updates and fixes.".freeze
 
 def app_store_connect_api_key_from_env
   app_store_connect_api_key(
@@ -68,6 +69,11 @@ def resolve_requested_version(options, config)
 
   current_version = current_mobile_version(config)
   truthy_option?(options[:bump_patch]) ? bump_patch_version(current_version) : current_version
+end
+
+def testflight_changelog
+  changelog = ENV.fetch("TESTFLIGHT_CHANGELOG", "").strip
+  changelog.empty? ? DEFAULT_TESTFLIGHT_CHANGELOG : changelog
 end
 
 platform :ios do
@@ -143,6 +149,9 @@ platform :ios do
       distribute_external: true,
       groups: TESTFLIGHT_GROUPS,
       notify_external_testers: true,
+      # Why: fastlane requires release notes when distributing to external
+      # TestFlight testers, even for CI-triggered smoke releases.
+      changelog: testflight_changelog,
     )
   end
 end
