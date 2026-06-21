@@ -76,8 +76,14 @@ export function buildRemoteAttachmentDir(): string {
  *  `--remote-exec`) and the SSH connectionId backing it (for copying local
  *  attachments to the remote host). `connectionId` is only set when the host was
  *  derived from a workspace SSH target; an ad-hoc `remoteExecHost` override has no
- *  connection to copy through. */
-export type RemoteExecResolution = { host: string | null; connectionId: string | null }
+ *  connection to copy through. `remotePath` is the remote project working dir of
+ *  the workspace/worktree (used by a later phase to pass `-C <remotePath>` so the
+ *  remote bash runs in the project dir); null when unknown or for local turns. */
+export type RemoteExecResolution = {
+  host: string | null
+  connectionId: string | null
+  remotePath: string | null
+}
 
 /** Minimal single-quote shell escaping for a POSIX path argument. */
 function shellQuote(value: string): string {

@@ -8,7 +8,6 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import os from 'node:os'
 import { type BrowserWindow, dialog, ipcMain } from 'electron'
 import type { Store } from '../persistence'
-import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import {
   JCODE_CHAT_DELETE_CHANNEL,
   JCODE_CHAT_EVENT_CHANNEL,
@@ -29,7 +28,9 @@ import {
   loadConversation,
   saveConversation
 } from './jcode-conversation-store'
-import { resolveTurnPrompt, type RemoteExecResolution } from './jcode-attachments'
+import { resolveTurnPrompt } from './jcode-attachments'
+import { friendlyChildError } from './jcode-error-messages'
+import { resolveRemoteExec } from './jcode-remote-exec'
 import { applySkillInjection, registerJcodeSkillsHandler } from './jcode-skills'
 
 // Why: jcode is installed via cargo; the absolute path avoids depending on the
@@ -93,40 +94,6 @@ function buildArgs(
   }
   args.push('--ndjson', resolvedPrompt)
   return args
-}
-
-/** Resolve the brain-local (M3) remote-exec host for a chat turn.
- *  A jcode chat opened in ANY connectionId-remote folder workspace implies
- *  remote execution: jcode runs locally (local auth/model) but its bash/read
- *  tools execute on the remote host. So we emit --remote-exec whenever the
- *  worktree's folder workspace has an SSH connection — not only when the user
- *  manually toggled `isRemoteExecOnly`. (The folderPath of such a worktree is a
- *  REMOTE path that does not exist on the Mac, so running fully local would both
- *  crash the spawn and execute bash against a nonexistent local dir.)
- *  Falls back to the explicit `payload.remoteExecHost` override.
- *  Returns host null when this turn should run fully local (no --remote-exec). */
-function resolveRemoteExec(
-  store: Store | undefined,
-  payload: JcodeChatSendPayload
-): RemoteExecResolution {
-  if (store && typeof payload.worktreeId === 'string') {
-    const scope = parseWorkspaceKey(payload.worktreeId)
-    if (scope?.type === 'folder') {
-      const workspace = store.getFolderWorkspace(scope.folderWorkspaceId)
-      // Key off the SSH connection presence: any connectionId-remote worktree
-      // (whether or not isRemoteExecOnly was explicitly set) runs brain-local.
-      if (workspace?.connectionId) {
-        const target = store.getSshTarget(workspace.connectionId)
-        // Prefer the OpenSSH config alias so ~/.ssh/config (ProxyJump/identity)
-        // applies; fall back to the raw host. jcode resolves the host itself.
-        const host = target?.configHost?.trim() || target?.host?.trim()
-        if (host) {
-          return { host, connectionId: workspace.connectionId }
-        }
-      }
-    }
-  }
-  return { host: payload.remoteExecHost?.trim() || null, connectionId: null }
 }
 
 async function startTurn(
@@ -231,7 +198,10 @@ async function startTurn(
 
   child.on('error', (error: Error) => {
     activeChildren.delete(sessionKey)
-    sendEvent(mainWindow, sessionKey, { type: 'error', error: error.message })
+    sendEvent(mainWindow, sessionKey, {
+      type: 'error',
+      error: friendlyChildError(error.message, remoteExecHost)
+    })
   })
 
   child.on('close', (code: number | null) => {
@@ -250,10 +220,11 @@ async function startTurn(
       // User pressed Stop: a non-zero/kill exit is expected, not an error.
       sendEvent(mainWindow, sessionKey, { type: 'stopped' })
     } else if (code !== 0) {
+      const raw =
+        stderrBuffer.trim() || `jcode exited with code ${code === null ? 'null' : String(code)}`
       sendEvent(mainWindow, sessionKey, {
         type: 'error',
-        error:
-          stderrBuffer.trim() || `jcode exited with code ${code === null ? 'null' : String(code)}`
+        error: friendlyChildError(raw, remoteExecHost)
       })
     }
     // Always emit a terminal 'exit' so the renderer can finalize UI even when
