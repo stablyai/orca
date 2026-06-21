@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../../shared/types'
+import { escapeRegex } from '../../../../shared/string-utils'
 import { searchRuntimeFiles, readRuntimeFileContent } from '@/runtime/runtime-file-client'
 import { grammarForPath, resolvesTogether } from './language-registry'
 import { extractDefinitions } from './engine'
@@ -63,8 +64,9 @@ export function looksLikeDefinition(symbol: string, line: string): boolean {
     return true
   }
   // Top-level binding: `symbol = ...` / `symbol: T`. `=(?!=)` so a comparison
-  // like `symbol == x` isn't mistaken for an assignment.
-  return new RegExp(`(^|[^\\w.])${symbol}\\s*(?::|=(?!=))`).test(line)
+  // like `symbol == x` isn't mistaken for an assignment. Escape the symbol so
+  // metacharacters in valid identifiers (e.g. `$` in `$scope`) match literally.
+  return new RegExp(`(^|[^\\w.])${escapeRegex(symbol)}\\s*(?::|=(?!=))`).test(line)
 }
 
 const defaultDeps: ResolverDeps = {

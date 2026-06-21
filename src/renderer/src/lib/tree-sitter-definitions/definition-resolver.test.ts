@@ -176,6 +176,13 @@ describe('resolveDefinitions', () => {
     expect(looksLikeDefinition('foo', 'result = compute(foo)')).toBe(false) // pure reference
   })
 
+  it('matches symbols containing regex metacharacters literally', () => {
+    // `$` is a valid identifier char; it must not be treated as an end anchor
+    expect(looksLikeDefinition('$', '$ = 5')).toBe(true)
+    expect(looksLikeDefinition('$scope', '$scope: Scope = inject()')).toBe(true)
+    expect(looksLikeDefinition('$', 'call($)')).toBe(false) // pure reference
+  })
+
   it('returns empty (without searching) for an empty symbol', async () => {
     const search = vi.fn(async () => [])
     await expect(
