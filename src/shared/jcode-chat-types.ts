@@ -135,6 +135,53 @@ export type JcodeSkillsListPayload = {
 
 export const JCODE_SKILLS_LIST_CHANNEL = 'jcode-skills:list'
 
+// ─── MCP servers / connectors ───────────────────────────────────────────────
+// jcode loads stdio MCP servers from ~/.jcode/mcp.json (Claude-Desktop format:
+// { "servers": { "<name>": { command, args, env, shared } } }) and exposes their
+// tools to the agent. orca manages the GLOBAL file so the user can add/remove
+// connectors from the GUI. Remote/hosted MCP servers work via a stdio bridge,
+// e.g. command "npx", args ["mcp-remote", "https://…"].
+
+/** Renderer -> main: read the global ~/.jcode/mcp.json server list. */
+export const JCODE_MCP_GET_CHANNEL = 'jcodeMcp:get'
+/** Renderer -> main: overwrite the global ~/.jcode/mcp.json server list. */
+export const JCODE_MCP_SET_CHANNEL = 'jcodeMcp:set'
+
+/** One stdio MCP server entry (mirrors jcode's McpServerConfig). */
+export type JcodeMcpServer = {
+  /** Server name == its key in mcp.json. */
+  name: string
+  /** Executable to spawn (stdio transport), e.g. "npx" or an absolute path. */
+  command: string
+  /** Arguments passed to the command. */
+  args: string[]
+  /** Extra environment variables for the child process. */
+  env: Record<string, string>
+  /** Whether the server may be shared across sessions (jcode default: true). */
+  shared: boolean
+}
+
+/** Result of jcodeMcp:get. */
+export type JcodeMcpConfigResult = {
+  ok: boolean
+  error?: string
+  /** Servers from the global ~/.jcode/mcp.json (the file orca manages). */
+  servers: JcodeMcpServer[]
+  /** Absolute path to the managed file (shown in the UI). */
+  path?: string
+}
+
+/** Renderer -> main args for jcodeMcp:set. */
+export type JcodeMcpSetArgs = {
+  servers: JcodeMcpServer[]
+}
+
+/** Result of jcodeMcp:set. */
+export type JcodeMcpActionResult = {
+  ok: boolean
+  error?: string
+}
+
 /** Authentication style jcode uses for a custom OpenAI-compatible provider. */
 export type JcodeProviderAuth = 'bearer' | 'api-key' | 'none'
 
@@ -178,6 +225,36 @@ export type JcodeProviderActionResult = {
 
 export const JCODE_PROVIDERS_LIST_CHANNEL = 'jcodeProviders:list'
 export const JCODE_PROVIDERS_ADD_CHANNEL = 'jcodeProviders:add'
+/** Renderer -> main: shell `jcode model list --json` for the real model catalog
+ *  (provider/availability/routes) used by the composer's detailed model picker. */
+export const JCODE_MODELS_LIST_CHANNEL = 'jcodeProviders:listModels'
+
+/** One per-model route from `jcode model list --json`: which provider serves the
+ *  model, the auth method, and whether it's usable right now (authed). */
+export type JcodeModelRoute = {
+  /** Provider DISPLAY name as jcode reports it, e.g. "OpenAI", "Anthropic". */
+  provider: string
+  model: string
+  /** Auth method, e.g. "oauth" | "api_key". Informational. */
+  method?: string
+  /** True when this model can be used now (provider is authed). */
+  available: boolean
+}
+
+/** Parsed result of `jcode model list --json` for the composer picker. */
+export type JcodeModelCatalog = {
+  ok: boolean
+  /** Normalized error message when ok === false. */
+  error?: string
+  /** Currently resolved provider display name (what "Auto" picks). */
+  provider?: string
+  /** Currently resolved model id (what "Auto" picks). */
+  selectedModel?: string
+  /** Flat list of model ids in the resolved provider's catalog. */
+  models: string[]
+  /** Per-model provider + availability routing. */
+  routes: JcodeModelRoute[]
+}
 
 export const JCODE_CHAT_SEND_CHANNEL = 'jcode-chat:send'
 export const JCODE_CHAT_STOP_CHANNEL = 'jcode-chat:stop'

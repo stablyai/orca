@@ -176,7 +176,10 @@ export default function ChatPane({
   sessionKey,
   cwd,
   worktreeId,
-  provider = 'openai',
+  // "Auto" by default: jcode resolves the best authed provider/model, which the
+  // composer chip surfaces as "Auto → <model>". A real id is only passed when a
+  // caller pins one.
+  provider = 'auto',
   model
 }: {
   sessionKey: string

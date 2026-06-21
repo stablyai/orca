@@ -28,7 +28,7 @@ import {
   loadConversation,
   saveConversation
 } from './jcode-conversation-store'
-import { resolveTurnPrompt } from './jcode-attachments'
+import { resolveTurnPrompt, extractImagePaths, nonImageAttachments } from './jcode-attachments'
 import { resolveJcodeBin } from './jcode-binary'
 import { friendlyChildError } from './jcode-error-messages'
 import { resolveRemoteExec } from './jcode-remote-exec'
@@ -53,7 +53,8 @@ function buildArgs(
   payload: JcodeChatSendPayload,
   remoteExecHost: string | null,
   resolvedPrompt: string,
-  remotePath: string | null
+  remotePath: string | null,
+  imagePaths: string[]
 ): string[] {
   // A named custom profile (from `jcode provider add`) is selected with
   // `--provider-profile <name>` (which IMPLIES openai-compatible) and MUST NOT
@@ -64,7 +65,9 @@ function buildArgs(
   if (profile) {
     args = ['run', '--provider-profile', profile]
   } else {
-    const provider = payload.provider?.trim() || 'openai'
+    // "auto" lets jcode resolve the best authed provider (matches the composer's
+    // "Auto" chip). A concrete id is passed only when the user picks one.
+    const provider = payload.provider?.trim() || 'auto'
     args = ['run', '-p', provider]
   }
   if (payload.model?.trim()) {
@@ -93,6 +96,11 @@ function buildArgs(
   if (remoteExecHost) {
     args.push('--remote-exec', remoteExecHost)
   }
+  // Vision: image attachments are read LOCALLY by jcode and sent as image content
+  // blocks. Options must precede the positional <MESSAGE>, so push before --ndjson.
+  for (const imagePath of imagePaths) {
+    args.push('--image', imagePath)
+  }
   args.push('--ndjson', resolvedPrompt)
   return args
 }
@@ -119,17 +127,33 @@ async function startTurn(
     }
   }
 
-  // Weave attachments into the prompt (copying local files to the remote host
-  // first for remote-exec sessions). Done before spawn so jcode sees the paths.
+  // Vision: pull out image attachments — they ride `--image` (read LOCALLY by
+  // jcode, even under --remote-exec) instead of being woven into the prompt or
+  // copied to the remote host. Everything else still gets woven.
+  const allAttachments = payload.attachments ?? []
+  const imagePaths = extractImagePaths(allAttachments)
+  const promptPayload =
+    imagePaths.length > 0
+      ? { ...payload, attachments: nonImageAttachments(allAttachments) }
+      : payload
+
+  // Weave (non-image) attachments into the prompt (copying local files to the
+  // remote host first for remote-exec sessions). Done before spawn.
   let resolvedPrompt: string
   try {
-    resolvedPrompt = await resolveTurnPrompt(payload, remote)
+    resolvedPrompt = await resolveTurnPrompt(promptPayload, remote)
   } catch (error) {
     sendEvent(mainWindow, sessionKey, {
       type: 'error',
       error: error instanceof Error ? error.message : String(error)
     })
     return
+  }
+
+  // If the user attached only image(s) with no typed text, give the model a
+  // default instruction so the positional message isn't empty.
+  if (imagePaths.length > 0 && !resolvedPrompt.trim()) {
+    resolvedPrompt = 'Describe the attached image(s).'
   }
 
   // FEATURE B: prepend a selected skill's SKILL.md body (re-discovered from cwd +
@@ -154,7 +178,7 @@ async function startTurn(
   try {
     child = spawn(
       resolveJcodeBin(),
-      buildArgs(payload, remoteExecHost, resolvedPrompt, remote.remotePath),
+      buildArgs(payload, remoteExecHost, resolvedPrompt, remote.remotePath, imagePaths),
       {
         cwd: localSpawnCwd,
         env: process.env

@@ -18,6 +18,10 @@ import type {
   JcodeChatStopPayload,
   JcodeConversationRecord,
   JcodeConversationSummary,
+  JcodeMcpActionResult,
+  JcodeMcpConfigResult,
+  JcodeMcpSetArgs,
+  JcodeModelCatalog,
   JcodeProviderActionResult,
   JcodeProviderAddArgs,
   JcodeSkillsListPayload,
@@ -795,6 +799,15 @@ export type PreloadApi = {
     }>
     /** Add a custom profile via `jcode provider add` (API key over stdin). */
     add: (args: JcodeProviderAddArgs) => Promise<JcodeProviderActionResult>
+    /** Real model catalog from `jcode model list --json` for the detailed picker. */
+    listModels: () => Promise<JcodeModelCatalog>
+  }
+  /** MCP servers ("connectors") for jcode chat — the global ~/.jcode/mcp.json. */
+  jcodeMcp: {
+    /** Read the managed global MCP server list. */
+    get: () => Promise<JcodeMcpConfigResult>
+    /** Overwrite the managed global MCP server list. */
+    set: (args: JcodeMcpSetArgs) => Promise<JcodeMcpActionResult>
   }
   app: AppApi
   platform: {

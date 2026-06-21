@@ -15,6 +15,9 @@ import {
   JCODE_CHAT_SAVE_CHANNEL,
   JCODE_CHAT_SEND_CHANNEL,
   JCODE_CHAT_STOP_CHANNEL,
+  JCODE_MCP_GET_CHANNEL,
+  JCODE_MCP_SET_CHANNEL,
+  JCODE_MODELS_LIST_CHANNEL,
   JCODE_PROVIDERS_ADD_CHANNEL,
   JCODE_PROVIDERS_LIST_CHANNEL,
   JCODE_SKILLS_LIST_CHANNEL,
@@ -24,6 +27,10 @@ import {
   type JcodeChatStopPayload,
   type JcodeConversationRecord,
   type JcodeConversationSummary,
+  type JcodeMcpActionResult,
+  type JcodeMcpConfigResult,
+  type JcodeMcpSetArgs,
+  type JcodeModelCatalog,
   type JcodeProviderActionResult,
   type JcodeProviderAddArgs,
   type JcodeSkillsListPayload,
@@ -475,7 +482,15 @@ const api = {
       builtins: { id: string; display_name?: string; detail?: string; recommended?: boolean }[]
     }> => ipcRenderer.invoke(JCODE_PROVIDERS_LIST_CHANNEL),
     add: (args: JcodeProviderAddArgs): Promise<JcodeProviderActionResult> =>
-      ipcRenderer.invoke(JCODE_PROVIDERS_ADD_CHANNEL, args)
+      ipcRenderer.invoke(JCODE_PROVIDERS_ADD_CHANNEL, args),
+    listModels: (): Promise<JcodeModelCatalog> => ipcRenderer.invoke(JCODE_MODELS_LIST_CHANNEL)
+  },
+  // MCP servers ("connectors") for jcode chat — manages the global
+  // ~/.jcode/mcp.json that jcode loads stdio MCP servers from.
+  jcodeMcp: {
+    get: (): Promise<JcodeMcpConfigResult> => ipcRenderer.invoke(JCODE_MCP_GET_CHANNEL),
+    set: (args: JcodeMcpSetArgs): Promise<JcodeMcpActionResult> =>
+      ipcRenderer.invoke(JCODE_MCP_SET_CHANNEL, args)
   },
   app: {
     getIdentity: (): Promise<AppIdentity> => ipcRenderer.invoke('app:getIdentity'),

@@ -191,11 +191,33 @@ export const getAccountsJcodeProvidersSearchEntries = createLocalizedCatalog(() 
   }
 ])
 
+export const getAccountsJcodeMcpSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: '连接器 / MCP',
+    description:
+      'Connect MCP servers (connectors) so jcode can use their tools, like IBKR or a vault.',
+    keywords: [
+      'jcode',
+      'mcp',
+      'connector',
+      'connectors',
+      'server',
+      'tool',
+      'plugin',
+      'ibkr',
+      '连接器',
+      '插件',
+      'model context protocol'
+    ]
+  }
+])
+
 export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
   ...getAccountsCodexSearchEntries(),
   ...getAccountsGeminiSearchEntries(),
   ...getAccountsOpencodeSearchEntries(),
-  ...getAccountsJcodeProvidersSearchEntries()
+  ...getAccountsJcodeProvidersSearchEntries(),
+  ...getAccountsJcodeMcpSearchEntries()
 ])

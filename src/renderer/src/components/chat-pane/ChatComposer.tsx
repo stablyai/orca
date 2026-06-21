@@ -1,24 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import {
-  ArrowUp,
-  ChevronDown,
-  Mic,
-  Paperclip,
-  Plug,
-  Plus,
-  Puzzle,
-  Slash,
-  Square,
-  Type
-} from 'lucide-react'
+import { ArrowUp, Mic, Paperclip, Plug, Plus, Puzzle, Slash, Square, Type } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -27,15 +14,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { JcodeChatAttachment, JcodeCustomProvider } from '../../../../shared/jcode-chat-types'
-import {
-  JCODE_PROVIDERS,
-  buildProfileOptions,
-  findProfileOption,
-  findProviderOption
-} from './jcode-providers'
 import { SLASH_COMMANDS } from './chat-slash-commands'
 import { useChatSlashMenu } from './use-chat-slash-menu'
 import { ChatAttachmentChips, SkillChip, SlashCommandPopover } from './ChatComposerExtras'
+import { ChatModelPicker } from './ChatModelPicker'
 
 // Why: the composer is the Claude-app-style bottom bar. It owns the unsent
 // draft text (local state) and the auto-growing textarea, but the provider/model
@@ -46,12 +28,6 @@ import { ChatAttachmentChips, SkillChip, SlashCommandPopover } from './ChatCompo
 // Pasted text larger than this is auto-converted into a collapsible text
 // attachment chip instead of bloating the textarea.
 const LARGE_PASTE_THRESHOLD = 1200
-
-// Sentinel radio values for the special chip rows.
-const AUTO_VALUE = '__auto__'
-// Custom profiles are namespaced so their value never collides with a built-in
-// provider id in the shared radio group.
-const PROFILE_PREFIX = 'profile:'
 
 export function ChatComposer({
   value,
@@ -111,6 +87,10 @@ export function ChatComposer({
 }): React.JSX.Element {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  // "+menu" navigation: Connectors -> the MCP settings section; Plugins -> Skills.
+  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
+  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const openSkillsPage = useAppStore((s) => s.openSkillsPage)
 
   // FEATURE B: the "/" menu (orca quick commands + skills) is owned by the hook;
   // selecting a skill row arms it via onSelectSkill.
@@ -143,21 +123,6 @@ export function ChatComposer({
     el.style.height = 'auto'
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`
   }, [value])
-
-  const profileOptions = buildProfileOptions(customProviders)
-  // The active option is either a custom profile or a built-in provider.
-  const activeProfileOption = findProfileOption(customProviders, providerProfile)
-  const providerOption = activeProfileOption ?? findProviderOption(provider)
-  // Radio value: profile selection is namespaced; built-in is the raw id; Auto
-  // when neither is set.
-  const radioValue = providerProfile
-    ? `${PROFILE_PREFIX}${providerProfile}`
-    : (provider ?? AUTO_VALUE)
-  const chipLabel = providerOption
-    ? model
-      ? `${providerOption.label} · ${model}`
-      : providerOption.label
-    : 'Auto'
 
   return (
     <div className="mx-auto w-full max-w-3xl">
@@ -293,107 +258,34 @@ export function ChatComposer({
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
               <DropdownMenuSeparator />
-              <DropdownMenuItem disabled>
+              <DropdownMenuItem
+                onSelect={() => {
+                  openSettingsTarget({
+                    pane: 'accounts',
+                    repoId: null,
+                    sectionId: 'accounts-jcode-mcp'
+                  })
+                  openSettingsPage()
+                }}
+              >
                 <Plug className="size-4" />
-                Connectors
-                <span className="ml-auto text-xs text-muted-foreground">Soon</span>
+                连接器 / Connectors
               </DropdownMenuItem>
-              <DropdownMenuItem disabled>
+              <DropdownMenuItem onSelect={() => openSkillsPage()}>
                 <Puzzle className="size-4" />
-                Plugins
-                <span className="ml-auto text-xs text-muted-foreground">Soon</span>
+                技能 / Skills
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Provider / model chip ("Auto" by default) */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                {chipLabel}
-                <ChevronDown className="size-3.5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[15rem]">
-              <DropdownMenuLabel>Model</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={radioValue}
-                onValueChange={(next) => {
-                  if (next === AUTO_VALUE) {
-                    onSelectProvider({
-                      provider: undefined,
-                      providerProfile: undefined,
-                      model: undefined
-                    })
-                    return
-                  }
-                  if (next.startsWith(PROFILE_PREFIX)) {
-                    const name = next.slice(PROFILE_PREFIX.length)
-                    const option = findProfileOption(customProviders, name)
-                    onSelectProvider({
-                      provider: undefined,
-                      providerProfile: name,
-                      model: option?.models?.[0]
-                    })
-                    return
-                  }
-                  const option = findProviderOption(next)
-                  onSelectProvider({
-                    provider: next,
-                    providerProfile: undefined,
-                    model: option?.models?.[0]
-                  })
-                }}
-              >
-                <DropdownMenuRadioItem value={AUTO_VALUE}>
-                  Auto
-                  <span className="ml-auto text-xs text-muted-foreground">default</span>
-                </DropdownMenuRadioItem>
-                {JCODE_PROVIDERS.map((entry) => (
-                  <DropdownMenuRadioItem key={entry.id} value={entry.id}>
-                    {entry.label}
-                  </DropdownMenuRadioItem>
-                ))}
-                {profileOptions.length > 0 ? (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel>自定义 Provider</DropdownMenuLabel>
-                    {profileOptions.map((entry) => (
-                      <DropdownMenuRadioItem
-                        key={`${PROFILE_PREFIX}${entry.id}`}
-                        value={`${PROFILE_PREFIX}${entry.id}`}
-                      >
-                        {entry.label}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </>
-                ) : null}
-              </DropdownMenuRadioGroup>
-              {providerOption?.models && providerOption.models.length > 0 ? (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel>{providerOption.label} model</DropdownMenuLabel>
-                  <DropdownMenuRadioGroup
-                    value={model ?? providerOption.models[0]}
-                    onValueChange={(next) =>
-                      // Preserve whichever of provider/profile is active when only
-                      // the model changes.
-                      onSelectProvider({ provider, providerProfile, model: next })
-                    }
-                  >
-                    {providerOption.models.map((modelId) => (
-                      <DropdownMenuRadioItem key={modelId} value={modelId}>
-                        {modelId}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Provider / model chip ("Auto" by default) — detailed picker. */}
+          <ChatModelPicker
+            provider={provider}
+            providerProfile={providerProfile}
+            model={model}
+            customProviders={customProviders}
+            onSelectProvider={onSelectProvider}
+          />
 
           <div className="flex-1" />
 

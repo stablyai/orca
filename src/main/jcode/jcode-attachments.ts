@@ -47,6 +47,36 @@ export function weaveAttachmentsIntoPrompt(
   return `${base ? `${base}\n\n` : ''}${sections.join('\n\n')}`
 }
 
+// Image formats vision models accept directly. These attachments are sent to
+// jcode via `run --image <localPath>` (read locally, even under --remote-exec)
+// instead of being woven into the prompt as a path or copied to the remote host.
+const VISION_IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp'])
+
+/** True when a path looks like a vision-readable image. */
+export function isVisionImagePath(path: string): boolean {
+  const dot = path.lastIndexOf('.')
+  if (dot < 0) {
+    return false
+  }
+  return VISION_IMAGE_EXTENSIONS.has(path.slice(dot + 1).toLowerCase())
+}
+
+/** Local paths of image file attachments to pass via `jcode run --image`. */
+export function extractImagePaths(attachments: JcodeChatAttachment[]): string[] {
+  return attachments
+    .filter(
+      (a): a is Extract<JcodeChatAttachment, { kind: 'file' }> =>
+        a.kind === 'file' && isVisionImagePath(a.path)
+    )
+    .map((a) => a.path)
+}
+
+/** Attachments that still get woven into the prompt — everything EXCEPT vision
+ *  images (those go via --image so the model actually sees them). */
+export function nonImageAttachments(attachments: JcodeChatAttachment[]): JcodeChatAttachment[] {
+  return attachments.filter((a) => !(a.kind === 'file' && isVisionImagePath(a.path)))
+}
+
 /** Split a mixed attachment list into file vs text buckets, normalizing names. */
 export function partitionAttachments(attachments: JcodeChatAttachment[]): {
   files: { path: string; name: string }[]

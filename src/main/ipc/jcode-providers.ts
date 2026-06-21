@@ -9,17 +9,17 @@
 import { spawn } from 'node:child_process'
 import { ipcMain } from 'electron'
 import {
+  JCODE_MODELS_LIST_CHANNEL,
   JCODE_PROVIDERS_ADD_CHANNEL,
   JCODE_PROVIDERS_LIST_CHANNEL,
   type JcodeCustomProvider,
+  type JcodeModelCatalog,
+  type JcodeModelRoute,
   type JcodeProviderActionResult,
   type JcodeProviderAddArgs,
   type JcodeProviderAuth
 } from '../../shared/jcode-chat-types'
-
-// Mirrors the pinned absolute path used by jcode-chat-session.ts: jcode is
-// installed via cargo and Electron's PATH is often empty.
-const JCODE_BIN = '/Users/vinny/.cargo/bin/jcode'
+import { resolveJcodeBin } from '../jcode/jcode-binary'
 
 const NAME_RE = /^[a-zA-Z0-9_-]+$/
 const ALLOWED_AUTH: readonly JcodeProviderAuth[] = ['bearer', 'api-key', 'none']
@@ -77,7 +77,7 @@ function runJcode(
   return new Promise((resolve, reject) => {
     let child: ReturnType<typeof spawn>
     try {
-      child = spawn(JCODE_BIN, argv, { env: process.env })
+      child = spawn(resolveJcodeBin(), argv, { env: process.env })
     } catch (error) {
       reject(error instanceof Error ? error : new Error(String(error)))
       return
@@ -194,6 +194,71 @@ async function listProviders(): Promise<{
   }
 }
 
+/** Shell `jcode model list --json` and return the real model catalog (provider,
+ *  selected model, full model list, and per-model availability routes) that the
+ *  composer's detailed picker renders. We use the AUTO catalog (no `-p`) on
+ *  purpose: it returns the usable models for the resolved provider PLUS the
+ *  cross-provider routes with availability, and it never trips jcode's
+ *  interactive credential-approval gate that `-p claude` would. */
+async function listModels(): Promise<JcodeModelCatalog> {
+  let result: { code: number | null; stdout: string; stderr: string }
+  try {
+    result = await runJcode(['model', 'list', '--json', '--no-update'])
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+      models: [],
+      routes: []
+    }
+  }
+  if (result.code !== 0) {
+    return {
+      ok: false,
+      error: result.stderr.trim() || `jcode model list exited with code ${result.code}`,
+      models: [],
+      routes: []
+    }
+  }
+  try {
+    const parsed = JSON.parse(result.stdout) as {
+      provider?: string
+      selected_model?: string
+      models?: string[]
+      routes?: { provider?: string; model?: string; method?: string; available?: boolean }[]
+    }
+    const routes: JcodeModelRoute[] = Array.isArray(parsed.routes)
+      ? parsed.routes
+          .filter(
+            (r): r is { provider: string; model: string; method?: string; available?: boolean } =>
+              typeof r?.provider === 'string' && typeof r?.model === 'string'
+          )
+          .map((r) => ({
+            provider: r.provider,
+            model: r.model,
+            method: typeof r.method === 'string' ? r.method : undefined,
+            available: r.available === true
+          }))
+      : []
+    return {
+      ok: true,
+      provider: typeof parsed.provider === 'string' ? parsed.provider : undefined,
+      selectedModel: typeof parsed.selected_model === 'string' ? parsed.selected_model : undefined,
+      models: Array.isArray(parsed.models)
+        ? parsed.models.filter((m) => typeof m === 'string')
+        : [],
+      routes
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Failed to parse jcode model list output.',
+      models: [],
+      routes: []
+    }
+  }
+}
+
 export function registerJcodeProviderHandlers(): void {
   ipcMain.removeHandler(JCODE_PROVIDERS_ADD_CHANNEL)
   ipcMain.handle(JCODE_PROVIDERS_ADD_CHANNEL, (_event, raw: unknown) =>
@@ -202,4 +267,7 @@ export function registerJcodeProviderHandlers(): void {
 
   ipcMain.removeHandler(JCODE_PROVIDERS_LIST_CHANNEL)
   ipcMain.handle(JCODE_PROVIDERS_LIST_CHANNEL, () => listProviders())
+
+  ipcMain.removeHandler(JCODE_MODELS_LIST_CHANNEL)
+  ipcMain.handle(JCODE_MODELS_LIST_CHANNEL, () => listModels())
 }

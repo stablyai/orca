@@ -50,6 +50,7 @@ import { registerAgentHookHandlers } from './agent-hooks'
 import { registerAgentTrustHandlers } from './agent-trust'
 import { registerClaudeAccountHandlers } from './claude-accounts'
 import { registerJcodeProviderHandlers } from './jcode-providers'
+import { registerJcodeMcpHandlers } from './jcode-mcp'
 import { registerUpdaterHandlers } from '../window/attach-main-window-services'
 import {
   registerClipboardHandlers,
@@ -115,6 +116,7 @@ export function registerCoreHandlers(
   registerAgentTrustHandlers()
   registerClaudeAccountHandlers(claudeAccounts)
   registerJcodeProviderHandlers()
+  registerJcodeMcpHandlers()
   registerRateLimitHandlers(rateLimits)
   registerGitHubHandlers(store, stats)
   registerGitLabHandlers(store)

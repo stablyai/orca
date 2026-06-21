@@ -15,7 +15,7 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import { AlertTriangle, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { AlertTriangle, Loader2, Plug, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from '../status-bar/icons'
 import { toast } from 'sonner'
@@ -23,12 +23,17 @@ import {
   getAccountsClaudeSearchEntries,
   getAccountsCodexSearchEntries,
   getAccountsGeminiSearchEntries,
+  getAccountsJcodeMcpSearchEntries,
   getAccountsJcodeProvidersSearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsOpencodeSearchEntries,
   getAccountsPaneSearchEntries
 } from './accounts-search'
-import type { JcodeCustomProvider, JcodeProviderAuth } from '../../../../shared/jcode-chat-types'
+import type {
+  JcodeCustomProvider,
+  JcodeMcpServer,
+  JcodeProviderAuth
+} from '../../../../shared/jcode-chat-types'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 import { matchesSettingsSearch } from './settings-search'
@@ -414,6 +419,237 @@ function JcodeCustomProvidersSection({
           Add provider
         </Button>
       </div>
+    </SearchableSetting>
+  )
+}
+
+/** Parse a textarea of args (one per line) into a trimmed list. */
+function parseArgsText(text: string): string[] {
+  return text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+}
+
+/** Parse a textarea of "KEY=value" lines into an env map. */
+function parseEnvText(text: string): Record<string, string> {
+  const env: Record<string, string> = {}
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) {
+      continue
+    }
+    const eq = trimmed.indexOf('=')
+    if (eq <= 0) {
+      continue
+    }
+    const key = trimmed.slice(0, eq).trim()
+    const value = trimmed.slice(eq + 1).trim()
+    if (key) {
+      env[key] = value
+    }
+  }
+  return env
+}
+
+/** "连接器 / MCP" — add/list stdio MCP servers (connectors) for jcode chat. These
+ *  are written to the global ~/.jcode/mcp.json, which jcode loads automatically
+ *  and exposes the servers' tools to the agent. Remote/hosted connectors work
+ *  via a stdio bridge, e.g. command "npx" args ["mcp-remote", "https://…"]. */
+function JcodeMcpSection(): React.JSX.Element {
+  const [servers, setServers] = useState<JcodeMcpServer[]>([])
+  const [configPath, setConfigPath] = useState<string | undefined>(undefined)
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [name, setName] = useState('')
+  const [command, setCommand] = useState('')
+  const [argsText, setArgsText] = useState('')
+  const [envText, setEnvText] = useState('')
+
+  const reload = async (): Promise<void> => {
+    setLoading(true)
+    try {
+      const result = await window.api.jcodeMcp.get()
+      if (!result.ok) {
+        toast.error(result.error ?? 'Failed to read MCP config.')
+      }
+      setServers(result.servers)
+      setConfigPath(result.path)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void reload()
+  }, [])
+
+  const resetForm = (): void => {
+    setName('')
+    setCommand('')
+    setArgsText('')
+    setEnvText('')
+  }
+
+  const onAdd = async (): Promise<void> => {
+    if (!name.trim() || !command.trim()) {
+      toast.error('Name and command are required.')
+      return
+    }
+    setBusy(true)
+    try {
+      const next: JcodeMcpServer = {
+        name: name.trim(),
+        command: command.trim(),
+        args: parseArgsText(argsText),
+        env: parseEnvText(envText),
+        shared: true
+      }
+      const merged = [...servers.filter((s) => s.name !== next.name), next]
+      const result = await window.api.jcodeMcp.set({ servers: merged })
+      if (!result.ok) {
+        toast.error(result.error ?? 'Failed to save MCP server.')
+        return
+      }
+      toast.success(`Connected "${next.name}". Restart a chat to load its tools.`)
+      resetForm()
+      await reload()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const onRemove = async (serverName: string): Promise<void> => {
+    setBusy(true)
+    try {
+      const result = await window.api.jcodeMcp.set({
+        servers: servers.filter((s) => s.name !== serverName)
+      })
+      if (!result.ok) {
+        toast.error(result.error ?? 'Failed to remove MCP server.')
+        return
+      }
+      toast.success(`Removed "${serverName}".`)
+      await reload()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <SearchableSetting
+      title="连接器 / MCP"
+      description="Connect MCP servers so jcode can use their tools (e.g. a vault, a browser, or a broker like IBKR). Remote servers work via a stdio bridge: command npx, args mcp-remote then the URL."
+      keywords={[
+        'jcode',
+        'mcp',
+        'connector',
+        'connectors',
+        'server',
+        'tool',
+        'ibkr',
+        '连接器',
+        '插件',
+        'model context protocol'
+      ]}
+      className="space-y-3"
+    >
+      {loading ? (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="size-3.5 animate-spin" />
+          Loading…
+        </div>
+      ) : servers.length > 0 ? (
+        <div className="space-y-2">
+          {servers.map((server) => (
+            <div
+              key={server.name}
+              className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
+            >
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium">{server.name}</div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {server.command} {server.args.join(' ')}
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="xs"
+                disabled={busy}
+                onClick={() => void onRemove(server.name)}
+                className="h-7 shrink-0 text-xs text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">No connectors yet.</p>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1">
+          <Label>Name</Label>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="my-connector"
+            spellCheck={false}
+            className="text-xs"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label>Command</Label>
+          <Input
+            value={command}
+            onChange={(e) => setCommand(e.target.value)}
+            placeholder="npx"
+            spellCheck={false}
+            className="text-xs"
+          />
+        </div>
+        <div className="space-y-1 sm:col-span-2">
+          <Label>Args (one per line)</Label>
+          <textarea
+            value={argsText}
+            onChange={(e) => setArgsText(e.target.value)}
+            placeholder={'-y\n@modelcontextprotocol/server-filesystem\n/path/to/dir'}
+            spellCheck={false}
+            rows={3}
+            className="w-full resize-y rounded-md border border-input bg-background px-2 py-1.5 text-xs outline-none focus-visible:border-ring"
+          />
+        </div>
+        <div className="space-y-1 sm:col-span-2">
+          <Label>Env (KEY=value, one per line)</Label>
+          <textarea
+            value={envText}
+            onChange={(e) => setEnvText(e.target.value)}
+            placeholder={'API_KEY=...\nREGION=us'}
+            spellCheck={false}
+            rows={2}
+            className="w-full resize-y rounded-md border border-input bg-background px-2 py-1.5 text-xs outline-none focus-visible:border-ring"
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Button size="sm" disabled={busy} onClick={() => void onAdd()}>
+          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
+          Add connector
+        </Button>
+        <Button size="sm" variant="ghost" disabled={loading} onClick={() => void reload()}>
+          <RefreshCw className={`size-3.5 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
+      </div>
+
+      {configPath ? (
+        <p className="text-[11px] text-muted-foreground">
+          Stored in <code className="rounded bg-muted px-1 py-0.5">{configPath}</code>. Restart a
+          chat to pick up changes.
+        </p>
+      ) : null}
     </SearchableSetting>
   )
 }
@@ -1523,6 +1759,21 @@ export function AccountsPane({
           </p>
         </div>
         <JcodeCustomProvidersSection settings={settings} updateSettings={updateSettings} />
+      </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsJcodeMcpSearchEntries()) ? (
+      <section key="jcode-mcp" id="accounts-jcode-mcp" className="space-y-4 scroll-mt-6">
+        <div className="space-y-1">
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <Plug size={16} />
+            连接器 / MCP
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Connect MCP servers so jcode can use their tools — a vault, a browser, a broker like
+            IBKR. jcode loads them automatically and shows their tool calls in chat.
+          </p>
+        </div>
+        <JcodeMcpSection />
       </section>
     ) : null
   ].filter(Boolean)
