@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { resolveClaudeUsageRefreshPlan } from './claude-usage-refresh-plan'
 
 describe('resolveClaudeUsageRefreshPlan', () => {
-  it('uses CodexBar-style app auto ordering when CLI fallback is available', () => {
+  it('uses OAuth then CLI app auto ordering when CLI fallback is available', () => {
     expect(resolveClaudeUsageRefreshPlan({ allowCliFallback: true }).steps).toEqual([
       { source: 'oauth', reason: 'app-auto-preferred-oauth' },
       { source: 'cli', reason: 'app-auto-fallback-cli' }

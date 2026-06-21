@@ -793,8 +793,8 @@ export class RateLimitService {
   }
 
   private shouldAllowClaudePtyFallback(): boolean {
-    // Why: CodexBar-style auto recovery uses Claude CLI as the next source,
-    // but Windows hidden PTY support remains less reliable than host/WSL shells.
+    // Why: automatic recovery uses Claude CLI as the next source, but Windows
+    // hidden PTY support remains less reliable than host/WSL shells.
     return process.platform !== 'win32'
   }
 
