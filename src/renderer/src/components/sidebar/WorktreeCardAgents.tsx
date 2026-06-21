@@ -4,6 +4,7 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { resumeRetainedAgentByPaneKey } from '@/lib/resume-sleeping-agent-session'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/components/dashboard/useNow'
@@ -218,10 +219,20 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     },
     [worktreeId]
   )
-  const handleActivateRetainedAgent = useCallback(() => {
-    // Why: hibernation-retained rows are passive completion evidence. Activating
-    // the worktree would resume sleeping sessions, so the row itself is inert.
-  }, [])
+  const handleActivateRetainedAgent = useCallback(
+    (_tabId: string, paneKey: string) => {
+      // Why (GOAL 2): a retained row is a "done" agent whose tab/PTY is gone, so
+      // there is nothing to focus — the old no-op (and any stale tab activation)
+      // left the user looking at a blank terminal. When orca captured a
+      // resumable provider session for that done agent, relaunch it through the
+      // existing resume path (`<agent> --resume <id>`) so the prior Claude/Hermes
+      // session is restored in a fresh tab. If the row isn't resumable (no
+      // captured session), fall through to the prior inert behavior.
+      activateAndRevealWorktree(worktreeId)
+      resumeRetainedAgentByPaneKey(worktreeId, paneKey)
+    },
+    [worktreeId]
+  )
 
   // Why: own one 30s tick per non-empty inline list. Cards with zero agents
   // never mount this component (see WorktreeCardAgents), so idle worktrees

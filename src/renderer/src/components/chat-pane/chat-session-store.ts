@@ -23,6 +23,12 @@ import type { JcodeToolCall } from './JcodeToolCard'
 // ChatPane becomes a thin view that reads/writes this store, so unmount/remount
 // is lossless and --resume continuity survives tab switches.
 
+/** Fired on the renderer DOM whenever the durable jcode conversation set may
+ *  have changed (a turn boundary persisted, or a conversation was deleted).
+ *  Best-effort signal for lightweight "Recent chats" surfaces (e.g. the sidebar
+ *  per-worktree list) to re-fetch without polling. */
+export const JCODE_CHAT_CONVERSATIONS_CHANGED_EVENT = 'jcode-chat:conversations-changed'
+
 export type ChatRole = 'user' | 'assistant'
 
 export type ChatMessage = {
@@ -123,6 +129,13 @@ function schedulePersist(sessionKey: string): void {
       return
     }
     void window.api.jcodeChat.saveConversation({ record: buildRecord(sessionKey, state) })
+    // Why: notify best-effort listeners (e.g. the sidebar per-worktree "Recent
+    // chats" list) that the durable conversation set changed on a turn boundary,
+    // so they can re-fetch without polling. Renderer-only DOM event; harmless in
+    // non-DOM test envs guarded by the typeof check.
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new CustomEvent(JCODE_CHAT_CONVERSATIONS_CHANGED_EVENT))
+    }
   }, 250)
   saveTimers.set(sessionKey, timer)
 }
@@ -478,6 +491,9 @@ export function deleteChatConversation(sessionKey: string): void {
   listeners.delete(sessionKey)
   sessionContexts.delete(sessionKey)
   void window.api.jcodeChat.deleteConversation(sessionKey)
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    window.dispatchEvent(new CustomEvent(JCODE_CHAT_CONVERSATIONS_CHANGED_EVENT))
+  }
 }
 
 /** List persisted conversations (newest first) for a "Recent chats" surface. */

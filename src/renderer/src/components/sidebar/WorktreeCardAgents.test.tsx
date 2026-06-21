@@ -73,7 +73,8 @@ let capturedRowActivations: {
 
 const activationMocks = vi.hoisted(() => ({
   activateAndRevealWorktree: vi.fn(),
-  activateTabAndFocusPane: vi.fn()
+  activateTabAndFocusPane: vi.fn(),
+  resumeRetainedAgentByPaneKey: vi.fn()
 }))
 
 vi.mock('@/store', () => ({
@@ -98,6 +99,10 @@ vi.mock('@/lib/worktree-activation', () => ({
 
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
   activateTabAndFocusPane: activationMocks.activateTabAndFocusPane
+}))
+
+vi.mock('@/lib/resume-sleeping-agent-session', () => ({
+  resumeRetainedAgentByPaneKey: activationMocks.resumeRetainedAgentByPaneKey
 }))
 
 vi.mock('./useWorktreeAgentRows', () => ({
@@ -260,7 +265,12 @@ describe('WorktreeCardAgents', () => {
     expect(markup).toContain('data-pane-key="tab-1:2"')
   })
 
-  it('keeps retained completion rows passive when activated', async () => {
+  it('resumes a retained completion row when activated (GOAL 2)', async () => {
+    // Why: a retained "done" row's tab/PTY is gone, so there is no live pane to
+    // focus — activating it now reveals the worktree and attempts to restore the
+    // captured agent session via the resume path (instead of the old no-op that
+    // left the user staring at a blank terminal). The resume helper itself
+    // decides whether a session is actually resumable.
     mockAgentActivityDisplayMode = 'full'
     mockAgents = [mockAgent({ rowSource: 'retained', state: 'done' })]
     const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
@@ -269,8 +279,10 @@ describe('WorktreeCardAgents', () => {
     expect(capturedRowActivations).toHaveLength(1)
     capturedRowActivations[0].onActivate('tab-1', 'tab-1:1')
 
-    expect(activationMocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+    // No live tab to focus, but the worktree is revealed and resume is attempted.
     expect(activationMocks.activateTabAndFocusPane).not.toHaveBeenCalled()
+    expect(activationMocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1')
+    expect(activationMocks.resumeRetainedAgentByPaneKey).toHaveBeenCalledWith('wt-1', 'tab-1:1')
   })
 
   it('shows orchestration child agent rows under their parent by default', async () => {

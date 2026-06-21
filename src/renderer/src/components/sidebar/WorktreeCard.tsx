@@ -23,6 +23,7 @@ import WorktreeContextMenu from './WorktreeContextMenu'
 import { SshDisconnectedDialog } from './SshDisconnectedDialog'
 import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
 import WorktreeCardAgents from './WorktreeCardAgents'
+import WorktreeCardJcodeChats from './WorktreeCardJcodeChats'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
 import { cn } from '@/lib/utils'
 import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
@@ -1602,6 +1603,15 @@ const WorktreeCard = React.memo(function WorktreeCard({
             className={hasMetaRow || remoteBranchConflict ? 'mt-0' : '-mt-1'}
           />
         )}
+
+        {/* Why: jcode chats are headless chat tabs (no PTY / no agent-status
+             paneKey), so they never appear in WorktreeCardAgents above. Render
+             a distinct per-worktree "jcode 聊天" list sourced from the durable
+             conversation store; clicking a row reopens + rehydrates the chat.
+             Rendered unconditionally (not gated on showInlineAgentList) so chats
+             stay reachable even when the PTY-agent inline list is hidden; the
+             component self-hides when this worktree has no chats. */}
+        <WorktreeCardJcodeChats worktreeId={worktree.id} />
 
         {showLineageChildChip && (
           <div

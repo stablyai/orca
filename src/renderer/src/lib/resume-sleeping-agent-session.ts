@@ -11,6 +11,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import { collectSleepingAgentSessionRecordsForWorktree } from '@/store/slices/agent-status'
 import { translate } from '@/i18n/i18n'
 
 function getResumeLaunchPlatform(worktreeId: string): NodeJS.Platform {
@@ -87,6 +88,35 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
   state.setActiveTabType('terminal')
   appendTabToWorktreeOrder(record.worktreeId, tab.id)
   return true
+}
+
+/**
+ * Resume a single RETAINED ("done") agent row by its paneKey, restoring the
+ * past Claude/Hermes session instead of leaving the row inert.
+ *
+ * Why (GOAL 2, blank-terminal fix): a retained agent's tab/PTY is gone, so the
+ * sidebar's handleActivateRetainedAgent was an intentional no-op — clicking it
+ * did nothing (and a stale tab activation would render a blank terminal). But
+ * orca already captures a resumable session id for done agents: a retained
+ * entry whose agentType is resumable and that carries a providerSession can be
+ * converted into a SleepingAgentSessionRecord and relaunched through the SAME
+ * proven path worktree activation uses (buildAgentResumeStartupPlan ->
+ * `<agent> --resume <id>`), which makes the CLI replay/continue the prior
+ * session in a fresh terminal tab. This reuses collectSleepingAgentSessionRecordsForWorktree
+ * (no origin -> not filtered) so we don't duplicate the record-shaping logic.
+ *
+ * Returns true when a session was relaunched; false when the row is not
+ * resumable (no resumable agentType / no providerSession), in which case the
+ * caller should keep its prior inert behavior.
+ */
+export function resumeRetainedAgentByPaneKey(worktreeId: string, paneKey: string): boolean {
+  const state = useAppStore.getState()
+  const records = collectSleepingAgentSessionRecordsForWorktree(state, worktreeId, [paneKey])
+  const record = records[paneKey]
+  if (!record) {
+    return false
+  }
+  return launchSleepingAgentSession(record)
 }
 
 export function resumeSleepingAgentSessionsForWorktree(worktreeId: string): number {
