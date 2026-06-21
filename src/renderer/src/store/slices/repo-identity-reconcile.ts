@@ -1,3 +1,4 @@
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/types'
 
 // Why: after a drag-reorder we optimistically set `repos`, persist, and main
@@ -27,10 +28,10 @@ function areReposEqual(a: Repo, b: Repo): boolean {
 }
 
 export function reconcileFetchedRepos(previous: readonly Repo[], next: Repo[]): Repo[] {
-  const previousById = new Map(previous.map((repo) => [repo.id, repo]))
+  const previousByIdentity = new Map(previous.map((repo) => [getRepoIdentityKey(repo), repo]))
   let identical = next.length === previous.length
   const reconciled = next.map((repo, index) => {
-    const existing = previousById.get(repo.id)
+    const existing = previousByIdentity.get(getRepoIdentityKey(repo))
     if (existing && areReposEqual(existing, repo)) {
       if (existing !== previous[index]) {
         identical = false
@@ -41,4 +42,8 @@ export function reconcileFetchedRepos(previous: readonly Repo[], next: Repo[]): 
     return repo
   })
   return identical ? (previous as Repo[]) : reconciled
+}
+
+function getRepoIdentityKey(repo: Repo): string {
+  return `${getRepoExecutionHostId(repo)}\0${repo.id}`
 }

@@ -45,8 +45,12 @@ import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { selectProjectGroupRemovalTargets } from './project-group-removal-targets'
 import { getRepoIdFromWorktreeId } from './worktree-helpers'
-import { reconcileFetchedRepos } from './repo-identity-reconcile'
+import { mergeFetchedReposForHost } from './repo-host-refresh-merge'
 import { splitRepoReorderByHost } from './repo-reorder-host-split'
+import {
+  mergeProjectHostSetupCompatibility,
+  projectCompatibilityFromRepos
+} from './project-host-setup-compatibility-merge'
 import {
   assertRuntimeEnvironmentCapability,
   callRuntimeRpc,
@@ -381,80 +385,6 @@ async function assertProjectHostSetupMutationRuntimeCapabilities(
     WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY,
     'The selected Orca server does not support explicit workspace run hosts yet. Update Orca on the server and try again.',
     15_000
-  )
-}
-
-function projectCompatibilityFromRepos(
-  repos: readonly Repo[]
-): Pick<RepoSlice, 'projects' | 'projectHostSetups'> {
-  const projection = projectHostSetupProjectionFromRepos(repos)
-  return {
-    projects: projection.projects,
-    projectHostSetups: projection.setups
-  }
-}
-
-function mergeProjectHostSetupCompatibility(
-  derived: Pick<RepoSlice, 'projects' | 'projectHostSetups'>,
-  fetched: ProjectHostSetupProjection
-): Pick<RepoSlice, 'projects' | 'projectHostSetups'> {
-  const fetchedSetupOwners = new Set(fetched.setups.map(getProjectHostSetupOwnerKey))
-  const derivedSetups = derived.projectHostSetups.filter(
-    (setup) => !fetchedSetupOwners.has(getProjectHostSetupOwnerKey(setup))
-  )
-  const projectHostSetups = mergeById(derivedSetups, fetched.setups)
-  const setupProjectIds = new Set(projectHostSetups.map((setup) => setup.projectId))
-  const fetchedProjectIds = new Set(fetched.projects.map((project) => project.id))
-  return {
-    projects: mergeById(derived.projects, fetched.projects).filter(
-      (project) => fetchedProjectIds.has(project.id) || setupProjectIds.has(project.id)
-    ),
-    projectHostSetups
-  }
-}
-
-function getProjectHostSetupOwnerKey(setup: ProjectHostSetup): string {
-  return `${setup.hostId}:${setup.repoId ?? setup.id}`
-}
-
-function mergeById<T extends { id: string }>(base: readonly T[], overlay: readonly T[]): T[] {
-  const merged = [...base]
-  const indexById = new Map(merged.map((entry, index) => [entry.id, index]))
-  for (const entry of overlay) {
-    const index = indexById.get(entry.id)
-    if (index === undefined) {
-      indexById.set(entry.id, merged.length)
-      merged.push(entry)
-    } else {
-      merged[index] = entry
-    }
-  }
-  return merged
-}
-
-function mergeFetchedReposForHost(
-  previous: readonly Repo[],
-  fetched: Repo[],
-  hostId: string
-): Repo[] {
-  const fetchedIds = new Set(fetched.map((repo) => repo.id))
-  const preserved = previous.filter((repo) => {
-    const existingHostId = getRepoExecutionHostId(repo)
-    return existingHostId !== hostId || fetchedIds.has(repo.id)
-  })
-  const preservedById = new Map(preserved.map((repo) => [repo.id, repo]))
-  const merged = [...preserved]
-  for (const repo of fetched) {
-    const existingIndex = merged.findIndex((entry) => entry.id === repo.id)
-    if (existingIndex === -1) {
-      merged.push(repo)
-      continue
-    }
-    merged[existingIndex] = repo
-  }
-  return reconcileFetchedRepos(
-    previous,
-    merged.filter((repo) => preservedById.has(repo.id) || fetchedIds.has(repo.id))
   )
 }
 
