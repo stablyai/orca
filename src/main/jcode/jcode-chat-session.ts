@@ -5,6 +5,7 @@
 // emits NDJSON then exits. Conversations continue via --resume <sessionId>,
 // captured from the 'start'/'done' events on a previous turn.
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import os from 'node:os'
 import { type BrowserWindow, dialog, ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
@@ -70,7 +71,14 @@ function buildArgs(
   if (payload.model?.trim()) {
     args.push('-m', payload.model.trim())
   }
-  if (payload.cwd?.trim()) {
+  // jcode's `-C/--cwd` does a LOCAL std::env::set_current_dir for ANY value,
+  // independent of --remote-exec (startup.rs parse_and_prepare_args). For a
+  // remote turn payload.cwd is the REMOTE project path, which does not exist on
+  // the Mac, so passing -C would crash the local process with ENOENT. Omit -C
+  // for remote turns; the remote bash then runs in the remote login home (~).
+  // (A jcode-binary change is needed to make -C set ONLY the remote working dir
+  // under --remote-exec — see jcodeBinaryFollowup.) Local turns keep -C as-is.
+  if (!remoteExecHost && payload.cwd?.trim()) {
     args.push('-C', payload.cwd.trim())
   }
   if (payload.resumeSessionId?.trim()) {
@@ -87,8 +95,14 @@ function buildArgs(
 }
 
 /** Resolve the brain-local (M3) remote-exec host for a chat turn.
- *  Priority: the worktree's SSH target host when its folder workspace is
- *  `isRemoteExecOnly`, else the explicit `payload.remoteExecHost` override.
+ *  A jcode chat opened in ANY connectionId-remote folder workspace implies
+ *  remote execution: jcode runs locally (local auth/model) but its bash/read
+ *  tools execute on the remote host. So we emit --remote-exec whenever the
+ *  worktree's folder workspace has an SSH connection — not only when the user
+ *  manually toggled `isRemoteExecOnly`. (The folderPath of such a worktree is a
+ *  REMOTE path that does not exist on the Mac, so running fully local would both
+ *  crash the spawn and execute bash against a nonexistent local dir.)
+ *  Falls back to the explicit `payload.remoteExecHost` override.
  *  Returns host null when this turn should run fully local (no --remote-exec). */
 function resolveRemoteExec(
   store: Store | undefined,
@@ -98,7 +112,9 @@ function resolveRemoteExec(
     const scope = parseWorkspaceKey(payload.worktreeId)
     if (scope?.type === 'folder') {
       const workspace = store.getFolderWorkspace(scope.folderWorkspaceId)
-      if (workspace?.isRemoteExecOnly && workspace.connectionId) {
+      // Key off the SSH connection presence: any connectionId-remote worktree
+      // (whether or not isRemoteExecOnly was explicitly set) runs brain-local.
+      if (workspace?.connectionId) {
         const target = store.getSshTarget(workspace.connectionId)
         // Prefer the OpenSSH config alias so ~/.ssh/config (ProxyJump/identity)
         // applies; fall back to the raw host. jcode resolves the host itself.
@@ -147,10 +163,19 @@ async function startTurn(
     return
   }
 
+  // The Node child_process `cwd` MUST be a directory that exists on THIS (local)
+  // machine — jcode itself always runs locally, even for brain-local turns. For a
+  // remote worktree payload.cwd is the REMOTE project path (e.g. /home/srain/...)
+  // which does not exist on the Mac; passing it to spawn() throws `spawn ENOENT`.
+  // So for remote turns we anchor the local process at the user's home dir; the
+  // remote bash working dir is governed by --remote-exec, not this cwd. Local
+  // turns continue to spawn in the worktree's (local) folder path.
+  const localSpawnCwd = remoteExecHost ? os.homedir() : payload.cwd?.trim() || undefined
+
   let child: ChildProcessWithoutNullStreams
   try {
     child = spawn(JCODE_BIN, buildArgs(payload, remoteExecHost, resolvedPrompt), {
-      cwd: payload.cwd?.trim() || undefined,
+      cwd: localSpawnCwd,
       env: process.env
     })
   } catch (error) {
