@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import { Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { reopenChatConversation } from '@/lib/launch-chat-agent-tab'
+import { launchChatAgentTab, reopenChatConversation } from '@/lib/launch-chat-agent-tab'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import {
   deleteChatConversation,
   listChatConversations,
@@ -73,9 +75,16 @@ const WorktreeCardJcodeChats = React.memo(function WorktreeCardJcodeChats({
     }
   }, [refresh])
 
-  if (chats.length === 0) {
-    return null
-  }
+  // Start a NEW chat bound to THIS worktree. We activate the worktree FIRST
+  // (setActiveWorktree sets activeWorktreeId + activeWorkspaceKey together, which
+  // also resyncs them if a remote-project selection had left them split), so the
+  // new chat tab is created in — and visible under — the right project. This is
+  // the reliable, project-scoped creation path (mirrors how PTY agents launch
+  // from their worktree row), unlike the global "+" which uses the active state.
+  const startNewChat = useCallback(() => {
+    activateAndRevealWorktree(worktreeId)
+    launchChatAgentTab({ agent: 'jcode', worktreeId })
+  }, [worktreeId])
 
   const now = Date.now()
 
@@ -92,8 +101,19 @@ const WorktreeCardJcodeChats = React.memo(function WorktreeCardJcodeChats({
       aria-label="jcode chats"
       data-jcode-chats-list="true"
     >
-      <div className="px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-        jcode 聊天
+      <div className="flex items-center justify-between px-1">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          jcode 聊天
+        </span>
+        <button
+          type="button"
+          aria-label="在此项目新建 jcode 聊天"
+          title="在此项目新建 jcode 聊天"
+          className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-worktree-sidebar-accent hover:text-foreground"
+          onClick={startNewChat}
+        >
+          <Plus className="size-3" />
+        </button>
       </div>
       {chats.slice(0, MAX_CHATS).map((row) => (
         <div

@@ -25,7 +25,9 @@
 聊天核心(M0–M3)：注册 jcode agent、气泡视图、工具卡片+diff+流式+多轮(--resume)+停止、brain-local。
 之后：聊天 tab 头+切换/worktree切换不丢；Claude 风布局；中文 IME 修复；**对话磁盘持久化**(`src/main/jcode/jcode-conversation-store.ts`)+ Recent chats + 左侧项目栏「JCODE 聊天」可重开；**自定义 provider**(设置→AI提供商账户→自定义 Provider → `jcode provider add --api-key-stdin` → `--provider-profile`)；**附件**(原生选择器/文本/拖拽/跨设备 scp，**图片二进制安全**+25MB上限)；**`/` 菜单**(orca 快捷命令 + 项目级 `.claude/skills`)；jcode 强制进所有启动器(`preflight.ts` ALWAYS_AVAILABLE_LOCAL_AGENT_IDS)；**自动更新已关**；**远程 Git 项目修复**(`jcode-remote-exec.ts` 处理 worktree-scope，不再 ENOENT)；**报错人话**(`jcode-error-messages.ts`)；关 tab 杀进程；JCODE_BIN 走 PATH 解析。
 jcode 二进制：`--remote-exec` + `-C` 在 remote-exec 下只设远程目录(不本机 chdir)。
-**用户已确认：本地 + 远程 Git 项目聊天都能用了（"消息没什么问题了"）。**
+**用户已确认：本地 + 远程 Git 项目聊天都能用了（"消息没什么问题了"）。看图也实测成功（用户："测试成功"）。**
+
+**2026-06-22 收尾**：三个功能已提交 —— orca-study `a20a388`(jcode-integration)、jccode `feat/run-image-vision` 分支 `6571316`(从 main 切出)。另在 `~/orca-study/.claude/skills/` 建了 5 个开发流程技能(rebuild-app / verify-gates / add-chat-feature / jcode-kernel-change / probe-jcode)——**注意 `.gitignore:105` 把 `/.claude/skills/` 排除了,技能只在本机磁盘、不进 git(orca 约定:项目技能本地私有);jcode 的 `/` 菜单按文件系统发现,照常生效**。/Applications 的 app 是看图实测那次的构建;之后只做了纯重构(model picker 拆到 `ChatModelPicker.tsx` 过 max-lines 闸,行为不变),想让二进制==已提交源码可再跑一次 rebuild-app(非必须)。
 
 ## 4. 待办 / 已知问题
 - **✅ 远程 Git 项目 + 附件 + jcode 工具：已验证真能在 spark 上跑**(用户实测 bash/identify 都出结果)。自定义 provider 真实端点也能用(用户实测远程项目里工具在跑)。
