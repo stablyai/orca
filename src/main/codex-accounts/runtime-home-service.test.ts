@@ -143,6 +143,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     ...overrides,
     localWindowsRuntimeDefault: overrides.localWindowsRuntimeDefault ?? { kind: 'windows-host' },
     leftSidebarAppearanceMode: overrides.leftSidebarAppearanceMode ?? 'default',
+    jcodeCustomProviders: overrides.jcodeCustomProviders ?? [],
     appFontFamily,
     agentStatusHooksEnabled,
     tabAutoGenerateTitle
