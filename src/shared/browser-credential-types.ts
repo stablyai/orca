@@ -34,6 +34,9 @@ export type UpdateBrowserCredentialArgs = {
 
 export type BrowserCredentialSaveOutcome = 'created' | 'updated' | 'unchanged'
 
+/** Returned by BrowserCredentialVault.importMany — counts for added/skipped/invalid entries. */
+export type BrowserCredentialImportSummary = { added: number; skipped: number; invalid: number }
+
 export type BrowserCredentialVaultStatus = {
   available: boolean
   /** Present when available === false (e.g. no OS keyring on Linux). */

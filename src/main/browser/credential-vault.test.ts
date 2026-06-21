@@ -147,3 +147,31 @@ describe('BrowserCredentialVault', () => {
     expect(vault.save({ origin: 'about:blank', username: 'me', password: 'x' }).entry).toBeNull()
   })
 })
+
+describe('BrowserCredentialVault.importMany', () => {
+  it('adds new, skips existing host+user, counts invalid, and flushes once', () => {
+    const vault = makeVault()
+    vault.save({ origin: 'https://github.com', username: 'me', password: 'old' })
+    const summary = vault.importMany([
+      { origin: 'https://github.com', username: 'me', password: 'DIFFERENT' }, // skip (exists)
+      { origin: 'https://gitlab.com', username: 'me', password: 'pw' }, // add
+      { origin: 'about:blank', username: 'x', password: 'y' }, // invalid origin
+      { origin: 'https://x.com', username: '', password: 'y' } // invalid empty user
+    ])
+    expect(summary).toEqual({ added: 1, skipped: 1, invalid: 2 })
+    // skip-existing must NOT overwrite the stored password
+    const id = vault.matchesForOrigin('https://github.com')[0].id
+    expect(vault.reveal(id)).toBe('old')
+    expect(vault.matchesForOrigin('https://gitlab.com').length).toBe(1)
+  })
+
+  it('writes nothing when encryption is unavailable', () => {
+    const vault = makeVault(false)
+    expect(vault.importMany([{ origin: 'https://x.com', username: 'a', password: 'b' }])).toEqual({
+      added: 0,
+      skipped: 0,
+      invalid: 1
+    })
+    expect(() => readFileSync(join(dir, 'creds.json'), 'utf-8')).toThrow()
+  })
+})

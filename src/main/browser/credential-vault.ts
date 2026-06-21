@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { dirname } from 'path'
 import {
   type BrowserCredentialEntry,
+  type BrowserCredentialImportSummary,
   type BrowserCredentialSaveOutcome,
   type BrowserCredentialVaultStatus,
   type SaveBrowserCredentialArgs,
@@ -161,6 +162,36 @@ export class BrowserCredentialVault {
     }
     record.lastUsedAt = this.now()
     this.flush()
+  }
+
+  importMany(entries: SaveBrowserCredentialArgs[]): BrowserCredentialImportSummary {
+    // Why: never persist plaintext or create incomplete records when the OS keyring is absent.
+    if (!this.deps.encryptionAvailable()) {
+      return { added: 0, skipped: 0, invalid: entries.length }
+    }
+    const records = this.load()
+    let added = 0
+    let skipped = 0
+    let invalid = 0
+    for (const entry of entries) {
+      const origin = normalizeCredentialOrigin(entry.origin)
+      if (!origin || entry.username === '' || entry.password === '') {
+        invalid += 1
+        continue
+      }
+      const host = hostnameFromOrigin(origin)!
+      // Why: skip-existing conflict policy — importMany never overwrites a stored credential.
+      if (records.some((r) => r.hostname === host && r.username === entry.username)) {
+        skipped += 1
+        continue
+      }
+      records.push(this.makeRecord(origin, host, entry.username, entry.password))
+      added += 1
+    }
+    if (added > 0) {
+      this.flush()
+    }
+    return { added, skipped, invalid }
   }
 
   private encryptPassword(plaintext: string): string {
