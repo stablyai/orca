@@ -4,7 +4,8 @@ import { groupPRComments } from './pr-comment-groups'
 import {
   getPRCommentGroupActionState,
   isPRCommentGroupQueueableForAI,
-  partitionPRCommentGroupsForTriage
+  partitionPRCommentGroupsForTriage,
+  sortPRCommentGroupsForTimeline
 } from './pr-comment-action-state'
 
 function comment(overrides: Partial<PRComment> & { id: number }): PRComment {
@@ -48,5 +49,22 @@ describe('pr-comment-action-state', () => {
     const [group] = groupPRComments([comment({ id: 1, threadId: 't-unknown', path: 'src/a.ts' })])
     expect(getPRCommentGroupActionState(group!)).toBe('conversation')
     expect(isPRCommentGroupQueueableForAI(group!)).toBe(true)
+  })
+
+  it('sorts comment groups chronologically for timeline mode', () => {
+    const groups = groupPRComments([
+      comment({ id: 3, createdAt: '2026-06-16T12:00:00Z', body: 'third' }),
+      comment({ id: 1, createdAt: '2026-06-16T10:00:00Z', body: 'first' }),
+      comment({ id: 2, createdAt: '2026-06-16T11:00:00Z', body: 'second' })
+    ])
+
+    expect(
+      sortPRCommentGroupsForTimeline(groups).map((group) => getPRCommentGroupActionState(group))
+    ).toEqual(['conversation', 'conversation', 'conversation'])
+    expect(
+      sortPRCommentGroupsForTimeline(groups).map((group) =>
+        group.kind === 'standalone' ? group.comment.body : group.root.body
+      )
+    ).toEqual(['first', 'second', 'third'])
   })
 })

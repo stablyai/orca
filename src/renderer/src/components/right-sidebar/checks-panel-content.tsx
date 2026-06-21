@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   MoreHorizontal,
   Pencil,
+  SlidersHorizontal,
   Trash,
   X
 } from 'lucide-react'
@@ -39,6 +40,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
@@ -68,6 +72,7 @@ import {
   getPRCommentGroupActionState,
   isPRCommentGroupQueueableForAI,
   partitionPRCommentGroupsForTriage,
+  sortPRCommentGroupsForTimeline,
   type PRCommentGroupActionState
 } from '@/lib/pr-comment-action-state'
 import { formatPrCommentRelativeTime } from '@/lib/pr-comment-time'
@@ -95,6 +100,16 @@ import { useActiveWorktree } from '@/store/selectors'
 import { useAppStore } from '@/store'
 
 export const PullRequestIcon = GitPullRequest
+
+type PRCommentsListDisplayMode = 'triage' | 'timeline'
+
+const PR_COMMENT_LIST_DISPLAY_MODES: PRCommentsListDisplayMode[] = ['triage', 'timeline']
+
+function getPRCommentsListDisplayModeLabel(mode: PRCommentsListDisplayMode): string {
+  return mode === 'triage'
+    ? translate('auto.components.right.sidebar.checks.panel.content.8a621a2c4f', 'Grouped')
+    : translate('auto.components.right.sidebar.checks.panel.content.b13f85d75c', 'Timeline')
+}
 
 export const CHECK_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   success: CircleCheck,
@@ -1661,7 +1676,9 @@ function CommentRow({
   const relativeTime = formatPrCommentRelativeTime(comment.createdAt, Date.now())
   const authorLine = (
     <>
-      {comment.authorAvatarUrl ? (
+      {selectionControl ? (
+        <span className="flex shrink-0 items-center">{selectionControl}</span>
+      ) : comment.authorAvatarUrl ? (
         <img
           src={comment.authorAvatarUrl}
           alt={comment.author}
@@ -1750,7 +1767,6 @@ function CommentRow({
         comment.isResolved && presentation.resolvedContainer
       )}
     >
-      {selectionControl}
       <div className="flex-1 min-w-0">
         <div
           className={cn(
@@ -1884,7 +1900,10 @@ function PRCommentGroupView({
 
   const content =
     group.kind === 'standalone' ? (
-      <div className={surfaceClassName}>
+      <div
+        className={surfaceClassName}
+        data-testid={presentation.useCardLayout ? 'pr-comment-card' : undefined}
+      >
         <CommentRow
           comment={group.comment}
           isReply={false}
@@ -1897,7 +1916,10 @@ function PRCommentGroupView({
         {replyComposer}
       </div>
     ) : (
-      <div className={surfaceClassName}>
+      <div
+        className={surfaceClassName}
+        data-testid={presentation.useCardLayout ? 'pr-comment-card' : undefined}
+      >
         <CommentRow
           comment={group.root}
           isReply={false}
@@ -1912,12 +1934,12 @@ function PRCommentGroupView({
             {group.replies.map((reply) => (
               <CommentRow
                 key={reply.id}
+                {...sharedRowProps}
                 comment={reply}
                 isReply={true}
                 showResolve={false}
                 showReply={false}
                 isQueued={false}
-                {...sharedRowProps}
               />
             ))}
           </div>
@@ -2088,6 +2110,7 @@ export function PRCommentsList({
 }): React.JSX.Element {
   const presentation = React.useMemo(() => getPRCommentPresentationClasses(), [])
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
+  const [displayMode, setDisplayMode] = useState<PRCommentsListDisplayMode>('triage')
   const [replyingGroupId, setReplyingGroupId] = useState<string | null>(null)
   const [isAddingComment, setIsAddingComment] = useState(false)
   const addCommentSurfaceRef = useRef<HTMLDivElement>(null)
@@ -2109,6 +2132,8 @@ export function PRCommentsList({
   )
   const groups = React.useMemo(() => groupPRComments(visibleComments), [visibleComments])
   const triageGroups = React.useMemo(() => partitionPRCommentGroupsForTriage(groups), [groups])
+  // Why: triage mode prioritizes actionability; timeline restores the host discussion history.
+  const timelineGroups = React.useMemo(() => sortPRCommentGroupsForTimeline(groups), [groups])
   const canShowResolveWithAI = Boolean(
     onResolveSelectedCommentsWithAI && selectableGroups.length > 0
   )
@@ -2165,7 +2190,7 @@ export function PRCommentsList({
         )}
         checked={checked}
         onCheckedChange={(value) => toggleGroupSelection(groupId, value === true)}
-        className="mt-0.5"
+        className="shrink-0"
       />
     )
   }
@@ -2395,6 +2420,42 @@ export function PRCommentsList({
                 </TooltipContent>
               </Tooltip>
             )}
+            {comments.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label={translate(
+                      'auto.components.right.sidebar.checks.panel.content.f5cf324efa',
+                      'Comment display options'
+                    )}
+                  >
+                    <SlidersHorizontal className="size-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" side="bottom" sideOffset={6}>
+                  <DropdownMenuLabel>
+                    {translate(
+                      'auto.components.right.sidebar.checks.panel.content.5e6e5a13fa',
+                      'View'
+                    )}
+                  </DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={displayMode}
+                    onValueChange={(value) => setDisplayMode(value as PRCommentsListDisplayMode)}
+                  >
+                    {PR_COMMENT_LIST_DISPLAY_MODES.map((mode) => (
+                      <DropdownMenuRadioItem key={mode} value={mode}>
+                        {getPRCommentsListDisplayModeLabel(mode)}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
         {comments.length > 0 && (
@@ -2451,32 +2512,38 @@ export function PRCommentsList({
         </div>
       ) : (
         <div className={presentation.list}>
-          {triageGroups.open.length > 0 ? (
+          {displayMode === 'timeline' ? (
+            timelineGroups.map(renderCommentGroup)
+          ) : (
             <>
-              <div className={presentation.sectionTriageLabel}>
-                {translate(
-                  'auto.components.right.sidebar.checks.panel.content.c3a8e5d710',
-                  'Needs review · {{value0}}',
-                  { value0: triageGroups.open.length }
-                )}
-              </div>
-              {triageGroups.open.map(renderCommentGroup)}
+              {triageGroups.open.length > 0 ? (
+                <>
+                  <div className={presentation.sectionTriageLabel}>
+                    {translate(
+                      'auto.components.right.sidebar.checks.panel.content.c3a8e5d710',
+                      'Needs review · {{value0}}',
+                      { value0: triageGroups.open.length }
+                    )}
+                  </div>
+                  {triageGroups.open.map(renderCommentGroup)}
+                </>
+              ) : null}
+              {triageGroups.conversation.map(renderCommentGroup)}
+              <ResolvedCommentGroupsSection
+                groups={triageGroups.resolved}
+                replyingGroupId={replyingGroupId}
+                replyDisabled={commentsDisabled}
+                replyDisabledReason={commentsDisabledReason}
+                presentation={presentation}
+                onResolve={onResolve}
+                onStartReply={setReplyingGroupId}
+                onCancelReply={() => setReplyingGroupId(null)}
+                onReply={onReply}
+                onEditComment={onEditComment}
+                onDeleteComment={onDeleteComment}
+              />
             </>
-          ) : null}
-          {triageGroups.conversation.map(renderCommentGroup)}
-          <ResolvedCommentGroupsSection
-            groups={triageGroups.resolved}
-            replyingGroupId={replyingGroupId}
-            replyDisabled={commentsDisabled}
-            replyDisabledReason={commentsDisabledReason}
-            presentation={presentation}
-            onResolve={onResolve}
-            onStartReply={setReplyingGroupId}
-            onCancelReply={() => setReplyingGroupId(null)}
-            onReply={onReply}
-            onEditComment={onEditComment}
-            onDeleteComment={onDeleteComment}
-          />
+          )}
         </div>
       )}
       {onAddComment && comments.length > 0 && isAddingComment && renderAddCommentComposer(false)}

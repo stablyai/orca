@@ -1,5 +1,5 @@
 import type { PRCommentGroup } from './pr-comment-groups'
-import { getPRCommentGroupRoot } from './pr-comment-groups'
+import { getPRCommentGroupId, getPRCommentGroupRoot } from './pr-comment-groups'
 
 /** How a comment group should read in the PR sidebar triage UI. */
 export type PRCommentGroupActionState = 'open' | 'conversation' | 'resolved'
@@ -40,4 +40,19 @@ export function partitionPRCommentGroupsForTriage(groups: readonly PRCommentGrou
     }
   }
   return { open, conversation, resolved }
+}
+
+function groupTimelineMs(group: PRCommentGroup): number {
+  const ts = Date.parse(getPRCommentGroupRoot(group).createdAt)
+  return Number.isNaN(ts) ? 0 : ts
+}
+
+export function sortPRCommentGroupsForTimeline(
+  groups: readonly PRCommentGroup[]
+): PRCommentGroup[] {
+  return [...groups].sort(
+    (left, right) =>
+      groupTimelineMs(left) - groupTimelineMs(right) ||
+      getPRCommentGroupId(left).localeCompare(getPRCommentGroupId(right))
+  )
 }

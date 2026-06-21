@@ -8,6 +8,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }: { children: ReactNode }) => <>{children}</>,
   DropdownMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DropdownMenuLabel: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DropdownMenuItem: ({
     children,
     onSelect
@@ -18,6 +19,22 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
     <button
       type="button"
       role="menuitem"
+      onClick={() => onSelect?.({ preventDefault: () => {} } as unknown as Event)}
+    >
+      {children}
+    </button>
+  ),
+  DropdownMenuRadioGroup: ({ children }: { children: ReactNode }) => <>{children}</>,
+  DropdownMenuRadioItem: ({
+    children,
+    onSelect
+  }: {
+    children: ReactNode
+    onSelect?: (event: Event) => void
+  }) => (
+    <button
+      type="button"
+      role="menuitemradio"
       onClick={() => onSelect?.({ preventDefault: () => {} } as unknown as Event)}
     >
       {children}

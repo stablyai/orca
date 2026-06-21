@@ -42,7 +42,7 @@ const FIXTURE_COMMENTS: PRComment[] = [
 
 /** Seed an open PR on e2e-secondary with mixed comment triage states for sidebar tests. */
 export async function seedPRCommentsSidebarFixture(page: Page): Promise<PRCommentsSidebarSeed> {
-  return page.evaluate(async () => {
+  return page.evaluate(async (fixtureComments: PRComment[]) => {
     const store = window.__store
     if (!store) {
       throw new Error('window.__store is not available')
@@ -85,38 +85,7 @@ export async function seedPRCommentsSidebarFixture(page: Page): Promise<PRCommen
       }
     }
 
-    const comments: PRComment[] = [
-      {
-        id: 101,
-        author: 'alice',
-        authorAvatarUrl: '',
-        body: 'Please update this handler before merge.',
-        createdAt: '2026-05-14T10:00:00.000Z',
-        url: 'https://github.com/acme/orca/pull/73#discussion_r101',
-        threadId: 'thread-open',
-        path: 'src/handler.ts',
-        isResolved: false
-      },
-      {
-        id: 102,
-        author: 'bob',
-        authorAvatarUrl: '',
-        body: 'LGTM on the overall approach.',
-        createdAt: '2026-05-14T11:00:00.000Z',
-        url: 'https://github.com/acme/orca/pull/73#issuecomment-102'
-      },
-      {
-        id: 103,
-        author: 'carol',
-        authorAvatarUrl: '',
-        body: 'Already fixed upstream.',
-        createdAt: '2026-05-13T09:00:00.000Z',
-        url: 'https://github.com/acme/orca/pull/73#discussion_r103',
-        threadId: 'thread-resolved',
-        path: 'src/legacy.ts',
-        isResolved: true
-      }
-    ]
+    const comments = fixtureComments
 
     store.setState((current) => ({
       prCache: {
@@ -169,7 +138,7 @@ export async function seedPRCommentsSidebarFixture(page: Page): Promise<PRCommen
     window.localStorage.setItem('orca:pr-comment-presentation', 'cards')
 
     return { worktreeId: worktree.id, branch, prNumber }
-  })
+  }, FIXTURE_COMMENTS)
 }
 
 export { FIXTURE_COMMENTS }

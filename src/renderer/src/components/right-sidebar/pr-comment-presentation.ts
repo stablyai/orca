@@ -64,6 +64,9 @@ export function getPRCommentGroupSurfaceClasses(
   const classes = [presentation.group]
   if (options?.queued) {
     classes.push(presentation.groupQueued)
+    // Why: queued selection already owns the leading affordance; stacking the
+    // open rail next to its checkbox makes the card edge visually crowded.
+    return classes.join(' ')
   }
   if (actionState === 'open') {
     classes.push(presentation.groupOpen)
@@ -77,9 +80,9 @@ const MARKDOWN_BASE =
   'break-words [&_p]:my-1.5 [&_pre]:max-h-none [&_pre]:max-w-full [&_pre]:whitespace-pre-wrap [&_table]:w-full [&_table]:max-w-full'
 
 // Why: in light mode card and canvas are both #fff, so border-border alone disappears.
-// secondary + shadow-xs matches outline-button lift without inventing new tokens.
+// overflow-clip preserves rounded clipping without letting focused row actions scroll content.
 const COMMENT_CARD_SURFACE =
-  'overflow-hidden rounded-lg border border-border bg-secondary shadow-xs dark:bg-card dark:shadow-none'
+  'overflow-clip rounded-lg border border-border bg-secondary shadow-xs dark:bg-card dark:shadow-none'
 
 const COMMENT_CARD_DIVIDER = 'border-border dark:border-border/60'
 
@@ -136,7 +139,7 @@ export function getPRCommentPresentationClasses(
       avatarReply: `size-3.5 ${COMMENT_AVATAR}`,
       botBadge:
         'shrink-0 rounded border border-border bg-accent/40 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-muted-foreground',
-      pathBadge: 'min-w-0 truncate text-[10px] font-mono text-muted-foreground/60',
+      pathBadge: 'min-w-0 flex-1 truncate text-[10px] font-mono text-muted-foreground/60',
       time: 'hidden',
       resolvedContainer: 'opacity-50',
       repliesContainer: 'ml-3 border-l-2 border-border/50',
@@ -159,7 +162,7 @@ export function getPRCommentPresentationClasses(
         'shrink-0 rounded border border-ring/40 bg-accent px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground',
       groupOpen: 'border-l-2 border-l-status-success',
       groupQueued: 'ring-1 ring-ring/50',
-      groupResolved: 'opacity-60'
+      groupResolved: ''
     }
   }
 
@@ -167,7 +170,7 @@ export function getPRCommentPresentationClasses(
   const bodySize = isFocus ? 'text-[14px] leading-relaxed' : 'text-[13px] leading-relaxed'
   const authorSize = isFocus ? 'text-[14px]' : 'text-[13px]'
   const listGap = isFocus ? 'gap-3' : 'gap-2'
-  const bodyPadding = isFocus ? 'px-3.5 py-3' : 'px-3 py-2.5'
+  const bodyPadding = isFocus ? 'px-4 py-3' : 'px-4 py-2.5'
   const headerPadding = isFocus ? 'px-3.5 py-2.5' : 'px-3 py-2'
 
   return {
@@ -184,13 +187,13 @@ export function getPRCommentPresentationClasses(
     commentBody: `${bodyPadding} ${bodySize} text-foreground`,
     commentBodyReply: `${bodyPadding} ${bodySize} text-foreground`,
     commentBodyMarkdown: MARKDOWN_BASE,
-    author: `min-w-0 shrink truncate ${authorSize} font-semibold text-foreground`,
+    author: `shrink-0 ${authorSize} font-semibold text-foreground`,
     authorResolved: 'text-muted-foreground',
     avatar: `size-5 ${COMMENT_AVATAR}`,
     avatarReply: `size-4 ${COMMENT_AVATAR}`,
     botBadge:
       'shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground',
-    pathBadge: 'min-w-0 truncate text-[11px] font-mono text-muted-foreground',
+    pathBadge: 'min-w-0 flex-1 truncate text-[11px] font-mono text-muted-foreground',
     time: 'shrink-0 text-[11px] text-muted-foreground',
     resolvedContainer: 'opacity-60',
     repliesContainer: 'flex flex-col',
@@ -214,6 +217,6 @@ export function getPRCommentPresentationClasses(
       'shrink-0 rounded border border-ring/40 bg-accent px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground',
     groupOpen: 'border-l-2 border-l-status-success',
     groupQueued: 'ring-1 ring-ring/50',
-    groupResolved: 'opacity-60'
+    groupResolved: ''
   }
 }
