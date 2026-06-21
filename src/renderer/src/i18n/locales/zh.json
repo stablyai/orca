@@ -4787,7 +4787,7 @@
           "dd6f0a1d45": "宠物",
           "0e89a574ae": "右下角漂浮的动画宠物。",
           "agentHibernation": {
-            "copy": "在配置的空闲时间后停止后台 agent 终端，并在你再次打开时恢复受支持的会话。我们仍在调校安全模型，此功能为实验性功能。",
+            "copy": "在配置的空闲时间后停止后台 agent 终端，并在你再次打开时恢复受支持的会话。Agent 睡眠会保留由 Orca 启动的 agent 的启动选项。手动启动的 agent 可能会使用当前的 Orca 默认值恢复。我们仍在调校安全模型，此功能为实验性功能。",
             "description": "在配置的空闲时间后停止后台 agent 终端，并在你再次打开时恢复受支持的会话。",
             "idleMinutesDescription": "已完成的后台 agent 在 Orca 可以将其睡眠前需要等待的空闲分钟数。",
             "idleMinutesLabel": "睡眠等待时间",
@@ -6852,7 +6852,7 @@
             "agentHibernation": {
               "agent": "agent",
               "agents": "agents",
-              "description": "在配置的空闲时间后停止后台 agent 终端，并在再次打开时恢复受支持的会话。",
+              "description": "在配置的空闲时间后停止后台 agent 终端，并在再次打开时恢复受支持的会话。Agent 睡眠会保留由 Orca 启动的 agent 的启动选项；手动启动的 agent 可能会使用当前的 Orca 默认值恢复。",
               "minutes": "分钟",
               "sleep": "睡眠",
               "terminal": "终端",
