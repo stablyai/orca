@@ -48,7 +48,7 @@ describe('per-hunk index patching', () => {
     const parsed = parseFileDiff(patch)
     expect(parsed.hunks).toHaveLength(2)
 
-    await applyIndexPatch(repo, buildHunkPatch(parsed, [0]), false)
+    await applyIndexPatch(repo, 'file.txt', buildHunkPatch(parsed, [0]), false)
 
     expect(cachedDiff(repo)).toContain('+2x')
     expect(cachedDiff(repo)).not.toContain('+11x')
@@ -66,7 +66,7 @@ describe('per-hunk index patching', () => {
     const parsed = parseFileDiff(staged)
     expect(parsed.hunks).toHaveLength(2)
 
-    await applyIndexPatch(repo, buildHunkPatch(parsed, [0]), true)
+    await applyIndexPatch(repo, 'file.txt', buildHunkPatch(parsed, [0]), true)
 
     expect(cachedDiff(repo)).not.toContain('+2x')
     expect(cachedDiff(repo)).toContain('+11x')
@@ -78,7 +78,21 @@ describe('per-hunk index patching', () => {
     const parsed = parseFileDiff(patch)
     // Stage everything first so the worktree-vs-index hunk no longer applies.
     execFileSync('git', ['add', 'file.txt'], { cwd: repo })
+    const cachedBefore = cachedDiff(repo)
 
-    await expect(applyIndexPatch(repo, buildHunkPatch(parsed, [0]), false)).rejects.toThrow()
+    await expect(
+      applyIndexPatch(repo, 'file.txt', buildHunkPatch(parsed, [0]), false)
+    ).rejects.toThrow()
+    expect(cachedDiff(repo)).toBe(cachedBefore)
+  })
+
+  it('rejects a patch that targets a different path', async () => {
+    const repo = await createRepo()
+    const patch = await getFileDiffPatch(repo, 'file.txt', false)
+    const parsed = parseFileDiff(patch)
+
+    await expect(
+      applyIndexPatch(repo, 'other.ts', buildHunkPatch(parsed, [0]), false)
+    ).rejects.toThrow(/expected path/)
   })
 })

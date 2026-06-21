@@ -12,6 +12,7 @@ import {
   parseWorktreeList
 } from './git-handler-utils'
 import { parseNumstat } from '../shared/git-uncommitted-line-stats'
+import { patchTouchesOnlyPath } from '../shared/git-hunk-patch'
 import {
   computeDiff,
   branchCompare as branchCompareOp,
@@ -221,10 +222,14 @@ export class GitHandler {
 
   private async applyPatch(params: Record<string, unknown>, context?: RequestContext) {
     const worktreePath = params.worktreePath as string
+    const filePath = params.filePath as string
     const patch = params.patch as string
     const reverse = params.reverse === true
-    // Why: dedicated index-only op with fixed args — no path args and no exec
-    // allowlist surface; git apply itself rejects patch paths escaping the repo.
+    // Why: bind the patch to the expected path — git apply honors every file
+    // header it's given, so a stray patch could otherwise stage unrelated files.
+    if (!patchTouchesOnlyPath(patch, filePath)) {
+      throw new Error(`Patch does not match the expected path "${filePath}"`)
+    }
     await this.gitWithStdin(
       ['apply', '--cached', ...(reverse ? ['--reverse'] : [])],
       worktreePath,
@@ -247,6 +252,8 @@ export class GitHandler {
       })
       let stdout = ''
       let stderr = ''
+      let stdoutBytes = 0
+      let stderrBytes = 0
       let settled = false
       const finish = (error: Error | null): void => {
         if (settled) {
@@ -259,10 +266,24 @@ export class GitHandler {
         }
         resolve({ stdout, stderr })
       }
+      // Why: bound the buffers so a pathological git invocation can't blow up
+      // relay memory (mirrors the MAX_GIT_BUFFER cap on this.git()).
       child.stdout?.on('data', (chunk: Buffer) => {
+        stdoutBytes += chunk.byteLength
+        if (stdoutBytes > MAX_GIT_BUFFER) {
+          child.kill()
+          finish(new Error('git stdout exceeded maxBuffer.'))
+          return
+        }
         stdout += chunk.toString('utf-8')
       })
       child.stderr?.on('data', (chunk: Buffer) => {
+        stderrBytes += chunk.byteLength
+        if (stderrBytes > MAX_GIT_BUFFER) {
+          child.kill()
+          finish(new Error('git stderr exceeded maxBuffer.'))
+          return
+        }
         stderr += chunk.toString('utf-8')
       })
       child.on('error', finish)

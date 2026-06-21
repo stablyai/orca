@@ -1823,23 +1823,26 @@ export function registerFilesystemHandlers(
         connectionId?: string
       }
     ): Promise<void> => {
+      // Why: coerce to a strict boolean so a malformed payload (e.g. the string
+      // 'false') can't apply the patch in the wrong direction. Matches git:push.
+      const reverse = args.reverse === true
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
-        return provider.applyIndexPatch(args.worktreePath, args.patch, args.reverse)
+        return provider.applyIndexPatch(args.worktreePath, args.filePath, args.patch, reverse)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       // Why: confine to the worktree before applying, matching stage/unstage —
       // git apply also rejects patch paths escaping the repo as defense in depth.
-      validateGitRelativeFilePath(worktreePath, args.filePath)
+      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
-      await applyIndexPatch(worktreePath, args.patch, args.reverse, gitOptions)
+      await applyIndexPatch(worktreePath, filePath, args.patch, reverse, gitOptions)
     }
   )
 

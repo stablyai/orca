@@ -342,8 +342,13 @@ export class SshGitProvider implements IGitProvider {
     return result.patch
   }
 
-  async applyIndexPatch(worktreePath: string, patch: string, reverse: boolean): Promise<void> {
-    await this.mux.request('git.applyPatch', { worktreePath, patch, reverse })
+  async applyIndexPatch(
+    worktreePath: string,
+    filePath: string,
+    patch: string,
+    reverse: boolean
+  ): Promise<void> {
+    await this.mux.request('git.applyPatch', { worktreePath, filePath, patch, reverse })
   }
 
   async bulkStageFiles(worktreePath: string, filePaths: string[]): Promise<void> {

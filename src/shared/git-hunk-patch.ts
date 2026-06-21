@@ -110,3 +110,25 @@ export function buildHunkPatch(parsed: ParsedFileDiff, selectedIndexes: readonly
   // Why: git apply rejects a patch whose final hunk line lacks a terminator.
   return `${out.join('\n')}\n`
 }
+
+const DIFF_GIT_HEADER = /^diff --git a\/(.+) b\/(.+)$/
+
+function diffPatchPaths(patchText: string): string[] {
+  const paths = new Set<string>()
+  for (const line of patchText.split('\n')) {
+    const match = DIFF_GIT_HEADER.exec(line)
+    if (match) {
+      paths.add(match[1])
+      paths.add(match[2])
+    }
+  }
+  return [...paths]
+}
+
+/** True when `patch` only touches `filePath` — guards `git apply --cached`
+ * against a patch that would stage unrelated repo paths. */
+export function patchTouchesOnlyPath(patchText: string, filePath: string): boolean {
+  const want = filePath.replace(/\\/g, '/')
+  const paths = diffPatchPaths(patchText)
+  return paths.length > 0 && paths.every((path) => path === want)
+}

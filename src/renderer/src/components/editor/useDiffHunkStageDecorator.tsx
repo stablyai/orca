@@ -3,10 +3,8 @@ import * as monaco from 'monaco-editor'
 import type { editor as monacoEditor } from 'monaco-editor'
 import type { DiffHunk } from '../../../../shared/git-hunk-patch'
 
-// Reveals a single stage/unstage pill on hover over a hunk, anchored to the
-// hovered line and pinned to the editor's right edge. Absolute positioning (not
-// a view zone) keeps it out of the layout — so it can't desync the combined
-// diff's height virtualization or scroll horizontally with the content.
+/** Reveals a stage/unstage pill on hover over a hunk, pinned to the editor's
+ * right edge — absolute (not a view zone) so it stays out of the layout. */
 
 const BTN_HEIGHT = 18
 

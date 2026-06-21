@@ -734,6 +734,7 @@ export async function unstageRuntimeGitPath(
   )
 }
 
+/** Raw unified diff for one file, routed to the active runtime (local/SSH/env). */
 export async function getRuntimeGitFileDiffPatch(
   context: RuntimeGitContext,
   args: { filePath: string; staged: boolean }
@@ -761,6 +762,7 @@ export async function getRuntimeGitFileDiffPatch(
   return result.patch
 }
 
+/** Apply a hunk patch to the index (reverse unstages), routed to the runtime. */
 export async function applyRuntimeGitIndexPatch(
   context: RuntimeGitContext,
   args: { filePath: string; patch: string; reverse: boolean }

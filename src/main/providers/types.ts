@@ -180,7 +180,12 @@ export type IGitProvider = {
   stageFile(worktreePath: string, filePath: string): Promise<void>
   unstageFile(worktreePath: string, filePath: string): Promise<void>
   getFileDiffPatch(worktreePath: string, filePath: string, staged: boolean): Promise<string>
-  applyIndexPatch(worktreePath: string, patch: string, reverse: boolean): Promise<void>
+  applyIndexPatch(
+    worktreePath: string,
+    filePath: string,
+    patch: string,
+    reverse: boolean
+  ): Promise<void>
   bulkStageFiles(worktreePath: string, filePaths: string[]): Promise<void>
   bulkUnstageFiles(worktreePath: string, filePaths: string[]): Promise<void>
   discardChanges(worktreePath: string, filePath: string): Promise<void>

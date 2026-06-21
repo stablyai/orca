@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildHunkPatch, parseFileDiff } from './git-hunk-patch'
+import { buildHunkPatch, parseFileDiff, patchTouchesOnlyPath } from './git-hunk-patch'
 
 const TWO_HUNK = [
   'diff --git a/foo.ts b/foo.ts',
@@ -147,5 +147,26 @@ describe('buildHunkPatch', () => {
     const parsed = parseFileDiff(TWO_HUNK)
     expect(buildHunkPatch(parsed, [])).toBe('')
     expect(buildHunkPatch({ headerLines: [], hunks: parsed.hunks, isBinary: false }, [0])).toBe('')
+  })
+})
+
+describe('patchTouchesOnlyPath', () => {
+  it('accepts a patch whose only path matches', () => {
+    expect(patchTouchesOnlyPath(TWO_HUNK, 'foo.ts')).toBe(true)
+  })
+
+  it('rejects a patch that targets a different path', () => {
+    expect(patchTouchesOnlyPath(TWO_HUNK, 'bar.ts')).toBe(false)
+  })
+
+  it('rejects an empty / header-less patch', () => {
+    expect(patchTouchesOnlyPath('', 'foo.ts')).toBe(false)
+  })
+
+  it('normalizes backslashes in the expected path', () => {
+    const patch = ['diff --git a/dir/x.ts b/dir/x.ts', '--- a/dir/x.ts', '+++ b/dir/x.ts', ''].join(
+      '\n'
+    )
+    expect(patchTouchesOnlyPath(patch, 'dir\\x.ts')).toBe(true)
   })
 })

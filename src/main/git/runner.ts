@@ -1084,11 +1084,20 @@ export async function gitExecFileWithStdin(
       child.stderr?.on('data', onStderr)
       child.on('error', onError)
       child.on('close', onClose)
+      // Why: register before writing stdin and re-check — a signal that aborts in
+      // this window would otherwise be missed (a late listener doesn't fire
+      // retroactively on an already-aborted signal).
+      if (options.signal) {
+        options.signal.addEventListener('abort', onAbort, { once: true })
+        if (options.signal.aborted) {
+          onAbort()
+          return
+        }
+      }
       // Why: git can exit (e.g. malformed patch) before draining stdin, raising
       // EPIPE on the write. Swallow it — onClose already surfaces the failure.
       child.stdin?.on('error', () => {})
       child.stdin?.end(input)
-      options.signal?.addEventListener('abort', onAbort, { once: true })
     })
   })
 }

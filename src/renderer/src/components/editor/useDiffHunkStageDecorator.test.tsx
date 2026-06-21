@@ -122,8 +122,7 @@ describe('useDiffHunkStageDecorator', () => {
     expect(onApplyHunk).not.toHaveBeenCalled()
   })
 
-  it('mounts no button without an editor', async () => {
-    const { host } = makeEditor()
+  it('mounts no button anywhere without an editor', async () => {
     await render({
       editor: null,
       hunks: HUNKS,
@@ -131,6 +130,7 @@ describe('useDiffHunkStageDecorator', () => {
       disabled: false,
       onApplyHunk: vi.fn()
     })
-    expect(btn(host)).toBeNull()
+    // The hook appends to editor.getDomNode(); with no editor it must touch nothing.
+    expect(document.querySelector('.orca-diff-hunk-stage-btn')).toBeNull()
   })
 })

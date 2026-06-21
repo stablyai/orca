@@ -15,8 +15,8 @@ export type DiffSectionHunkStaging = {
   onApplied: () => void
 }
 
-// Wires per-hunk staging onto a working-tree diff section; inert for binary,
-// read-only, errored, or dirty sections that can't safely round-trip a patch.
+/** Wires per-hunk staging onto a working-tree diff section; inert for binary,
+ * read-only, errored, or dirty sections that can't safely round-trip a patch. */
 export function useDiffSectionHunkStaging({
   section,
   worktreeId,

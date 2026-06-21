@@ -827,6 +827,7 @@ export class RuntimeGitCommands {
     return { ok: true }
   }
 
+  /** Raw unified diff for one file in a runtime worktree (local or SSH). */
   async getRuntimeGitFileDiffPatch(
     worktreeSelector: string,
     filePath: string,
@@ -851,6 +852,7 @@ export class RuntimeGitCommands {
     }
   }
 
+  /** Apply a hunk patch to the index of a runtime worktree (reverse unstages). */
   async applyRuntimeGitIndexPatch(
     worktreeSelector: string,
     filePath: string,
@@ -858,18 +860,24 @@ export class RuntimeGitCommands {
     reverse: boolean
   ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    // Why: enforce the same worktree-confinement contract as other mutations,
-    // even though the patch body carries its own (git-validated) paths.
-    normalizeRuntimeGitRelativePath(filePath)
+    // Why: confine to the worktree, and bind the patch to this path so it can't
+    // stage unrelated files (enforced again in applyIndexPatch / the relay).
+    const relativePath = normalizeRuntimeGitRelativePath(filePath)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
         throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      await provider.applyIndexPatch(target.worktree.path, patch, reverse)
+      await provider.applyIndexPatch(target.worktree.path, relativePath, patch, reverse)
       return { ok: true }
     }
-    await applyIndexPatch(target.worktree.path, patch, reverse, localGitOptionsForTarget(target))
+    await applyIndexPatch(
+      target.worktree.path,
+      relativePath,
+      patch,
+      reverse,
+      localGitOptionsForTarget(target)
+    )
     return { ok: true }
   }
 

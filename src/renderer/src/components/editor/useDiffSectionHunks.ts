@@ -4,8 +4,8 @@ import { parseFileDiff, type ParsedFileDiff } from '../../../../shared/git-hunk-
 
 const EMPTY: ParsedFileDiff = { headerLines: [], hunks: [], isBinary: false }
 
-// Fetches the per-file unified diff and parses its hunks; refetches on
-// contentGeneration so anchors track the live file. git is the source of truth.
+/** Fetches the per-file unified diff and parses its hunks; refetches on
+ * contentGeneration so anchors track the live file. git is the source of truth. */
 export function useDiffSectionHunks(args: {
   enabled: boolean
   worktreeId?: string

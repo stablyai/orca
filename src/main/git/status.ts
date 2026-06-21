@@ -29,6 +29,7 @@ import {
   type GitLineStats
 } from '../../shared/git-uncommitted-line-stats'
 import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
+import { patchTouchesOnlyPath } from '../../shared/git-hunk-patch'
 import {
   gitExecFileAsync,
   gitExecFileAsyncBuffer,
@@ -1223,10 +1224,16 @@ export async function getFileDiffPatch(
  * atomic, so a stale patch fails cleanly instead of corrupting the index. */
 export async function applyIndexPatch(
   worktreePath: string,
+  filePath: string,
   patch: string,
   reverse: boolean,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
+  // Why: git apply honors every file header in the patch, so reject one that
+  // targets anything other than the validated path before it reaches the index.
+  if (!patchTouchesOnlyPath(patch, filePath)) {
+    throw new Error(`Patch does not match the expected path "${filePath}"`)
+  }
   await gitExecFileWithStdin(
     ['apply', '--cached', ...(reverse ? ['--reverse'] : [])],
     gitOptionsForWorktree(worktreePath, options),
