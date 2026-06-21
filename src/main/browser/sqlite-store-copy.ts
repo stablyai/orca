@@ -23,30 +23,35 @@ export type ChromiumStoreCopy = {
  */
 export function copyChromiumStoreToTemp(dbPath: string): ChromiumStoreCopy {
   const tempDir = mkdtempSync(join(tmpdir(), 'orca-cookie-import-'))
-  const tempDbPath = join(tempDir, basename(dbPath))
-
+  // Why: self-clean on partial failure — the caller can't clean a dir whose cleanup closure we never returned.
   const cleanup = (): void => {
     rmSync(tempDir, { recursive: true, force: true })
   }
+  try {
+    const tempDbPath = join(tempDir, basename(dbPath))
 
-  copyFileSync(dbPath, tempDbPath)
+    copyFileSync(dbPath, tempDbPath)
 
-  // Why: when the source browser is running, it uses WAL journal mode. The most
-  // recently written data (including fresh auth tokens) may only exist in the WAL
-  // sidecar, not yet flushed to the main DB. Copying WAL + SHM ensures our
-  // snapshot reflects the browser's current state.
-  for (const suffix of ['-wal', '-shm'] as const) {
-    const sidecar = dbPath + suffix
-    if (existsSync(sidecar)) {
-      try {
-        copyFileSync(sidecar, tempDbPath + suffix)
-      } catch {
-        // Why: sidecar copy is best-effort. The main DB alone may still have
-        // enough data for a usable session; missing the WAL just means we might
-        // miss the very latest writes.
+    // Why: when the source browser is running, it uses WAL journal mode. The most
+    // recently written data (including fresh auth tokens) may only exist in the WAL
+    // sidecar, not yet flushed to the main DB. Copying WAL + SHM ensures our
+    // snapshot reflects the browser's current state.
+    for (const suffix of ['-wal', '-shm'] as const) {
+      const sidecar = dbPath + suffix
+      if (existsSync(sidecar)) {
+        try {
+          copyFileSync(sidecar, tempDbPath + suffix)
+        } catch {
+          // Why: sidecar copy is best-effort. The main DB alone may still have
+          // enough data for a usable session; missing the WAL just means we might
+          // miss the very latest writes.
+        }
       }
     }
-  }
 
-  return { tempDir, tempDbPath, cleanup }
+    return { tempDir, tempDbPath, cleanup }
+  } catch (err) {
+    cleanup()
+    throw err
+  }
 }

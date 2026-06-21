@@ -1,6 +1,6 @@
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { copyChromiumStoreToTemp } from './sqlite-store-copy'
 
@@ -15,10 +15,34 @@ describe('copyChromiumStoreToTemp', () => {
     const db = join(dir, 'Login Data')
     writeFileSync(db, 'DBDATA')
     writeFileSync(`${db}-wal`, 'WAL')
+    writeFileSync(`${db}-shm`, 'SHM')
     const { tempDir, tempDbPath, cleanup } = copyChromiumStoreToTemp(db)
     expect(readFileSync(tempDbPath, 'utf8')).toBe('DBDATA')
     expect(readFileSync(`${tempDbPath}-wal`, 'utf8')).toBe('WAL')
+    expect(readFileSync(`${tempDbPath}-shm`, 'utf8')).toBe('SHM')
     cleanup()
     expect(existsSync(tempDir)).toBe(false)
+  })
+
+  it('tolerates missing sidecars without throwing', () => {
+    const db = join(dir, 'Login Data')
+    writeFileSync(db, 'DBDATA')
+    // Neither -wal nor -shm exists; should not throw
+    const { tempDbPath, cleanup } = copyChromiumStoreToTemp(db)
+    expect(readFileSync(tempDbPath, 'utf8')).toBe('DBDATA')
+    cleanup()
+  })
+
+  it('cleans up the temp dir when the main db copy fails (no leak)', () => {
+    const nonExistent = join(dir, 'does-not-exist')
+    // Snapshot before so pre-existing items with the same prefix don't falsely fail.
+    const before = new Set(
+      readdirSync(tmpdir()).filter((name) => name.startsWith('orca-cookie-import-'))
+    )
+    expect(() => copyChromiumStoreToTemp(nonExistent)).toThrow()
+    const after = readdirSync(tmpdir()).filter(
+      (name) => name.startsWith('orca-cookie-import-') && !before.has(name)
+    )
+    expect(after).toHaveLength(0)
   })
 })
