@@ -1,15 +1,18 @@
-/* eslint-disable max-lines -- Why: the jcode chat store keeps the NDJSON event
-   reducer, the live per-sessionKey external store, and its on-disk persistence
-   backing (snapshot/hydrate/list/delete) together so the full conversation
-   state contract is reviewable as one unit, mirroring persistence.ts. */
 import { useSyncExternalStore } from 'react'
 import type {
   JcodeChatAttachment,
   JcodeChatEventMessage,
-  JcodeConversationRecord,
-  JcodeNdjsonEvent
+  JcodeConversationRecord
 } from '../../../../shared/jcode-chat-types'
-import type { JcodeToolCall } from './JcodeToolCard'
+import { buildJcodeConversationRecord, chatMessagesFromRecord } from './chat-session-record'
+import { reduceJcodeEvent } from './chat-session-reducer'
+import type { ChatSessionContext, ChatSessionState } from './chat-session-types'
+export type {
+  ChatMessage,
+  ChatRole,
+  ChatSessionContext,
+  ChatSessionState
+} from './chat-session-types'
 
 // Why (BUG 1, persistence): the jcode chat conversation used to live in
 // ChatPane's component-local React state. Because TabGroupPanel only mounts
@@ -29,41 +32,6 @@ import type { JcodeToolCall } from './JcodeToolCard'
  *  Best-effort signal for lightweight "Recent chats" surfaces (e.g. the sidebar
  *  per-worktree list) to re-fetch without polling. */
 export const JCODE_CHAT_CONVERSATIONS_CHANGED_EVENT = 'jcode-chat:conversations-changed'
-
-export type ChatRole = 'user' | 'assistant'
-
-export type ChatMessage = {
-  id: string
-  role: ChatRole
-  text: string
-  /** Tool calls seen during this assistant turn, in arrival order. */
-  tools?: JcodeToolCall[]
-  isError?: boolean
-}
-
-export type ChatSessionState = {
-  messages: ChatMessage[]
-  isStreaming: boolean
-  statusDetail: string | null
-  /** jcode session id to pass as --resume on the next turn. */
-  resumeSessionId: string | undefined
-  /** Id of the assistant message currently being streamed into, if any. */
-  streamingId: string | null
-  /** Composer toolbar selection (Claude-style provider/model chip). Persisted
-   *  per sessionKey so it survives ChatPane unmount/remount on tab switches.
-   *  `undefined` provider means "Auto" (let ChatPane's default apply). */
-  composerProvider: string | undefined
-  composerModel: string | undefined
-  /** Selected custom provider profile name (from a `jcode provider add` profile).
-   *  Mutually exclusive with composerProvider: when set, the turn is sent with
-   *  `providerProfile` (-> `--provider-profile`) instead of `provider` (-> -p). */
-  composerProviderProfile: string | undefined
-  /** Pending composer attachments (files + text blobs) for the NEXT turn.
-   *  Persisted per sessionKey so they survive a tab switch before send; cleared
-   *  by clearChatAttachments after the turn is dispatched. NOT persisted to disk
-   *  (they are folded into the prompt the transcript already records). */
-  pendingAttachments: JcodeChatAttachment[]
-}
 
 const EMPTY_SESSION: ChatSessionState = {
   messages: [],
@@ -86,41 +54,11 @@ const listeners = new Map<string, Set<() => void>>()
 // stream. ChatPane registers it on mount via setChatSessionContext so a snapshot
 // written from anywhere (e.g. a turn that finished while the tab was hidden) is
 // complete. Sessions seeded by rehydrate are also marked here.
-type ChatSessionContext = { worktreeId?: string; cwd?: string }
 const sessionContexts = new Map<string, ChatSessionContext>()
 
 // Debounce timers per sessionKey so rapid turn-boundary saves coalesce and we
 // never write on every text_delta.
 const saveTimers = new Map<string, ReturnType<typeof setTimeout>>()
-
-/** First non-empty user message, trimmed, as a human title for "Recent chats". */
-function deriveTitle(state: ChatSessionState): string {
-  const firstUser = state.messages.find((m) => m.role === 'user' && m.text.trim())
-  const text = firstUser?.text.trim() ?? 'New chat'
-  return text.length > 80 ? `${text.slice(0, 77)}…` : text
-}
-
-function buildRecord(sessionKey: string, state: ChatSessionState): JcodeConversationRecord {
-  const ctx = sessionContexts.get(sessionKey)
-  return {
-    sessionKey,
-    worktreeId: ctx?.worktreeId,
-    cwd: ctx?.cwd,
-    title: deriveTitle(state),
-    updatedAt: Date.now(),
-    resumeSessionId: state.resumeSessionId,
-    composerProvider: state.composerProvider,
-    composerModel: state.composerModel,
-    composerProviderProfile: state.composerProviderProfile,
-    messages: state.messages.map((m) => ({
-      id: m.id,
-      role: m.role,
-      text: m.text,
-      ...(m.tools ? { tools: m.tools } : {}),
-      ...(m.isError ? { isError: m.isError } : {})
-    }))
-  }
-}
 
 /** Persist a session snapshot to disk (debounced). Called on turn boundaries.
  *  No-op for empty conversations so we don't create files for blank tabs. */
@@ -135,7 +73,9 @@ function schedulePersist(sessionKey: string): void {
     if (!state || state.messages.length === 0) {
       return
     }
-    void window.api.jcodeChat.saveConversation({ record: buildRecord(sessionKey, state) })
+    void window.api.jcodeChat.saveConversation({
+      record: buildJcodeConversationRecord(sessionKey, state, sessionContexts.get(sessionKey))
+    })
     // Why: notify best-effort listeners (e.g. the sidebar per-worktree "Recent
     // chats" list) that the durable conversation set changed on a turn boundary,
     // so they can re-fetch without polling. Renderer-only DOM event; harmless in
@@ -177,149 +117,6 @@ function setSession(
   emit(sessionKey)
 }
 
-function strField(event: JcodeNdjsonEvent, key: string): string | undefined {
-  const value = event[key]
-  return typeof value === 'string' ? value : undefined
-}
-
-/** Insert-or-update a tool call on the streaming assistant message by id. */
-function upsertTool(
-  state: ChatSessionState,
-  id: string,
-  mutate: (call: JcodeToolCall) => JcodeToolCall,
-  fallbackName = 'tool'
-): ChatSessionState {
-  const targetId = state.streamingId
-  if (!targetId) {
-    return state
-  }
-  return {
-    ...state,
-    messages: state.messages.map((m) => {
-      if (m.id !== targetId) {
-        return m
-      }
-      const tools = m.tools ?? []
-      const index = tools.findIndex((t) => t.id === id)
-      if (index === -1) {
-        const created = mutate({ id, name: fallbackName, rawInput: '', status: 'running' })
-        return { ...m, tools: [...tools, created] }
-      }
-      const next = tools.slice()
-      next[index] = mutate(next[index])
-      return { ...m, tools: next }
-    })
-  }
-}
-
-function appendToStreaming(
-  state: ChatSessionState,
-  mutate: (msg: ChatMessage) => ChatMessage
-): ChatSessionState {
-  const targetId = state.streamingId
-  if (!targetId) {
-    return state
-  }
-  return {
-    ...state,
-    messages: state.messages.map((m) => (m.id === targetId ? mutate(m) : m))
-  }
-}
-
-function finalizeTurn(state: ChatSessionState): ChatSessionState {
-  return { ...state, isStreaming: false, statusDetail: null, streamingId: null }
-}
-
-function reduceEvent(state: ChatSessionState, event: JcodeNdjsonEvent): ChatSessionState {
-  switch (event.type) {
-    case 'start': {
-      const id = strField(event, 'session_id')
-      return id ? { ...state, resumeSessionId: id } : state
-    }
-    case 'status_detail': {
-      const detail = strField(event, 'detail')
-      return detail ? { ...state, statusDetail: detail } : state
-    }
-    case 'connection_phase': {
-      const phase = strField(event, 'phase')
-      return phase ? { ...state, statusDetail: phase } : state
-    }
-    case 'text_delta': {
-      const text = strField(event, 'text') ?? ''
-      if (!text) {
-        return state
-      }
-      return appendToStreaming({ ...state, statusDetail: null }, (m) => ({
-        ...m,
-        text: m.text + text
-      }))
-    }
-    case 'tool_start': {
-      const id = strField(event, 'id') ?? `tool-${Date.now()}`
-      const name = strField(event, 'name') ?? 'tool'
-      return upsertTool(state, id, (call) => ({ ...call, name }), name)
-    }
-    case 'tool_input': {
-      const id = strField(event, 'id')
-      const delta = strField(event, 'delta') ?? ''
-      if (!id) {
-        return state
-      }
-      return upsertTool(state, id, (call) => ({ ...call, rawInput: call.rawInput + delta }))
-    }
-    case 'tool_exec': {
-      const id = strField(event, 'id') ?? `tool-${Date.now()}`
-      const name = strField(event, 'name') ?? 'tool'
-      return upsertTool(state, id, (call) => ({ ...call, status: 'running' }), name)
-    }
-    case 'tool_done': {
-      const id = strField(event, 'id')
-      const errorText = strField(event, 'error')
-      const output = strField(event, 'output')
-      if (!id) {
-        return state
-      }
-      return upsertTool(state, id, (call) => ({
-        ...call,
-        output: output ?? call.output,
-        error: errorText ?? undefined,
-        status: errorText ? 'error' : 'done'
-      }))
-    }
-    case 'done': {
-      const id = strField(event, 'session_id')
-      let next = id ? { ...state, resumeSessionId: id } : state
-      const finalText = strField(event, 'text')
-      if (finalText) {
-        next = appendToStreaming(next, (m) => (m.text ? m : { ...m, text: finalText }))
-      }
-      return finalizeTurn(next)
-    }
-    case 'error': {
-      const message =
-        strField(event, 'error') ?? strField(event, 'message') ?? 'Unknown jcode error'
-      const next = appendToStreaming(state, (m) => ({
-        ...m,
-        text: m.text + message,
-        isError: true
-      }))
-      return finalizeTurn(next)
-    }
-    case 'stopped': {
-      const next = appendToStreaming(state, (m) => ({
-        ...m,
-        text: m.text ? `${m.text}\n\n(stopped)` : '(stopped)'
-      }))
-      return finalizeTurn(next)
-    }
-    case 'exit': {
-      return state.streamingId ? finalizeTurn(state) : state
-    }
-    default:
-      return state
-  }
-}
-
 let ipcSubscribed = false
 
 /** Subscribe the module to the jcode chat IPC stream exactly once. Routes each
@@ -336,7 +133,7 @@ function ensureIpcSubscription(): void {
     if (!sessions.has(sessionKey)) {
       return
     }
-    setSession(sessionKey, (state) => reduceEvent(state, message.event))
+    setSession(sessionKey, (state) => reduceJcodeEvent(state, message.event))
     // Why (BUG 1): persist on turn boundaries (done/error/stopped/exit), not on
     // every text_delta, so we capture the final transcript + --resume id without
     // thrashing disk. 'start' is handled at startChatTurn (records the prompt).
@@ -414,13 +211,7 @@ export function hydrateChatSession(record: JcodeConversationRecord): void {
   })
   setSession(record.sessionKey, (state) => ({
     ...state,
-    messages: record.messages.map((m) => ({
-      id: m.id,
-      role: m.role,
-      text: m.text,
-      tools: Array.isArray(m.tools) ? (m.tools as JcodeToolCall[]) : undefined,
-      isError: m.isError
-    })),
+    messages: chatMessagesFromRecord(record),
     // A rehydrated turn is never mid-stream.
     isStreaming: false,
     statusDetail: null,
@@ -525,7 +316,9 @@ export function disposeChatSession(sessionKey: string): void {
   }
   const state = sessions.get(sessionKey)
   if (state && state.messages.length > 0) {
-    void window.api.jcodeChat.saveConversation({ record: buildRecord(sessionKey, state) })
+    void window.api.jcodeChat.saveConversation({
+      record: buildJcodeConversationRecord(sessionKey, state, sessionContexts.get(sessionKey))
+    })
   }
   sessions.delete(sessionKey)
   listeners.delete(sessionKey)
