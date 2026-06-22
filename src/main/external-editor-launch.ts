@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { basename, posix, win32 } from 'node:path'
 import { resolveCliCommand } from './codex-cli/command'
 import { getCmdExePath } from './win32-utils'
@@ -65,12 +66,36 @@ function stripMatchingQuotes(value: string): string {
   return trimmed
 }
 
-function isDirectExecutablePath(command: string, platform: NodeJS.Platform): boolean {
+function hasMatchingOuterQuotes(value: string): boolean {
+  const trimmed = value.trim()
+  const quote = trimmed[0]
+  return (quote === '"' || quote === "'") && trimmed.endsWith(quote)
+}
+
+function isWindowsExecutablePath(command: string): boolean {
+  return win32.isAbsolute(command) && /\.(?:cmd|exe|bat|com)$/i.test(command)
+}
+
+function isDirectExecutablePath(
+  command: string,
+  platform: NodeJS.Platform,
+  fileExists: (path: string) => boolean
+): boolean {
   const unquoted = stripMatchingQuotes(command)
   if (!/[\\/]/.test(unquoted)) {
     return false
   }
-  return platform === 'win32' ? win32.isAbsolute(unquoted) : posix.isAbsolute(unquoted)
+  const isAbsolutePath =
+    platform === 'win32' ? win32.isAbsolute(unquoted) : posix.isAbsolute(unquoted)
+  if (!isAbsolutePath) {
+    return false
+  }
+  if (!/\s/.test(unquoted) || hasMatchingOuterQuotes(command)) {
+    return true
+  }
+  // Why: unquoted POSIX paths can contain spaces, but so can shell commands
+  // with arguments. Only an existing path is safe to treat as one executable.
+  return platform === 'win32' ? isWindowsExecutablePath(unquoted) : fileExists(unquoted)
 }
 
 function shouldShowWindowsConsole(
@@ -119,12 +144,13 @@ function buildShellLaunchSpec(
 export function resolveExternalEditorLaunchSpec(
   command: string | undefined,
   pathValue: string,
-  options: { platform?: NodeJS.Platform } = {}
+  options: { platform?: NodeJS.Platform; fileExists?: (path: string) => boolean } = {}
 ): ExternalEditorLaunchSpec {
   const platform = options.platform ?? process.platform
+  const fileExists = options.fileExists ?? existsSync
   const trimmed = command?.trim() || EXTERNAL_EDITOR_CLI_COMMAND
 
-  if (isDirectExecutablePath(trimmed, platform)) {
+  if (isDirectExecutablePath(trimmed, platform, fileExists)) {
     const editorCommand = stripMatchingQuotes(trimmed)
     return {
       kind: 'executable',
