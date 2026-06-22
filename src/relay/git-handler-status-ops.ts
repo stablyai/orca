@@ -16,6 +16,10 @@ import {
   splitRemoteBranchName
 } from '../shared/git-effective-upstream'
 import {
+  cacheNoEffectiveUpstreamStatus,
+  readCachedNoEffectiveUpstreamStatus
+} from './git-status-upstream-negative-cache'
+import {
   applyLineStats,
   collectUntrackedAdditions,
   parseNumstat,
@@ -133,11 +137,17 @@ export async function getStatusOp(
 
     if (!didHitLimit) {
       if (shouldProbeEffectiveUpstreamStatus(branch, upstreamStatus?.upstreamName)) {
-        try {
-          upstreamStatus = await getEffectiveGitUpstreamStatus((args) => git(args, worktreePath))
-        } catch {
-          // Why: status polling should keep returning working-tree entries even
-          // if the richer upstream probe hits a transient SSH/git ref error.
+        const cachedStatus = readCachedNoEffectiveUpstreamStatus({ worktreePath, branch, head })
+        if (cachedStatus) {
+          upstreamStatus = cachedStatus
+        } else {
+          try {
+            upstreamStatus = await getEffectiveGitUpstreamStatus((args) => git(args, worktreePath))
+            cacheNoEffectiveUpstreamStatus({ worktreePath, branch, head }, upstreamStatus)
+          } catch {
+            // Why: status polling should keep returning working-tree entries even
+            // if the richer upstream probe hits a transient SSH/git ref error.
+          }
         }
       }
 

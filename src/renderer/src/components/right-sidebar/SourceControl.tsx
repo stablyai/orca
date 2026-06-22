@@ -459,7 +459,9 @@ const CONFLICTS_SECTION_LABEL = {
   fallback: 'Conflicts'
 }
 
-const BRANCH_REFRESH_INTERVAL_MS = 5000
+// Why: Windows AppHang traces showed visible source-control branch-compare
+// polling spawning git chains continuously; direct actions still refresh eagerly.
+const BRANCH_REFRESH_INTERVAL_MS = 60_000
 // Why: row action buttons host Radix Tooltip triggers. Keeping the overlay
 // measurable prevents transient top-left tooltip placement during hover.
 const SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS =
