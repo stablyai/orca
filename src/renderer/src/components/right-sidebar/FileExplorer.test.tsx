@@ -7,7 +7,10 @@ import { WorktreeOpenInMenuItems } from '@/components/sidebar/WorktreeOpenInMenu
 import { FileExplorerToolbar } from './FileExplorerToolbar'
 import { FileExplorerNameFilter } from './FileExplorerNameFilter'
 import { FileExplorerViewSwitch } from './FileExplorerViewSwitch'
-import { getNextNameFilterCollapsedPaths } from './file-explorer-name-filter-projection'
+import {
+  getNameFilterCollapsedPathsAfterExpand,
+  getNextNameFilterCollapsedPaths
+} from './file-explorer-name-filter-projection'
 import {
   downloadRemoteFile,
   FileExplorerRow,
@@ -289,6 +292,15 @@ describe('getNextNameFilterCollapsedPaths', () => {
 
     const expanded = getNextNameFilterCollapsedPaths(collapsed, '/repo/src', false)
     expect([...expanded]).toEqual([])
+  })
+
+  it('expands filtered folders without toggling unrelated collapsed paths', () => {
+    const expanded = getNameFilterCollapsedPathsAfterExpand(
+      new Set(['/repo/docs', '/repo/src']),
+      '/repo/src'
+    )
+
+    expect([...expanded]).toEqual(['/repo/docs'])
   })
 })
 

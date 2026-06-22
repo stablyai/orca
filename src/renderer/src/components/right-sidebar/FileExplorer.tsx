@@ -24,6 +24,7 @@ import { useFileSearchPanel } from './useFileSearchPanel'
 import { FileExplorerTreeStatus } from './FileExplorerTreeStatus'
 import { FileExplorerVirtualRows } from './FileExplorerVirtualRows'
 import {
+  getNameFilterCollapsedPathsAfterExpand,
   getNextNameFilterCollapsedPaths,
   isFileExplorerNameFilterQueryTooLarge
 } from './file-explorer-name-filter-projection'
@@ -455,6 +456,11 @@ function FileExplorerFiles(): React.JSX.Element {
     },
     [rowExpandedPaths]
   )
+  const handleExpandNameFilterDir = useCallback((dirPath: string) => {
+    setNameFilterCollapsedPaths((current) =>
+      getNameFilterCollapsedPathsAfterExpand(current, dirPath)
+    )
+  }, [])
   const { handleClick, handleDoubleClick, handleWheelCapture } = useFileExplorerHandlers({
     activeWorktreeId,
     openFile,
@@ -725,9 +731,11 @@ function FileExplorerFiles(): React.JSX.Element {
                 onMoveDrop={handleMoveDrop}
                 onDragTargetChange={setDropTargetDir}
                 onDragSourceChange={setDragSourcePath}
-                onDragExpandDir={handleDragExpandDir}
+                onDragExpandDir={hasNameFilter ? handleExpandNameFilterDir : handleDragExpandDir}
                 onNativeDragTargetChange={setNativeDropTargetDir}
-                onNativeDragExpandDir={handleNativeDragExpandDir}
+                onNativeDragExpandDir={
+                  hasNameFilter ? handleExpandNameFilterDir : handleNativeDragExpandDir
+                }
                 dropTargetDir={dropTargetDir}
                 dragSourcePath={dragSourcePath}
                 nativeDropTargetDir={nativeDropTargetDir}

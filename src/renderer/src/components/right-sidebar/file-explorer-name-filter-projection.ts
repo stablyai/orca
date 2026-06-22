@@ -30,6 +30,18 @@ export function getNextNameFilterCollapsedPaths(
   return next
 }
 
+export function getNameFilterCollapsedPathsAfterExpand(
+  collapsedPaths: ReadonlySet<string>,
+  dirPath: string
+): Set<string> {
+  if (!collapsedPaths.has(dirPath)) {
+    return new Set(collapsedPaths)
+  }
+  const next = new Set(collapsedPaths)
+  next.delete(dirPath)
+  return next
+}
+
 export function isFileExplorerNameFilterQueryTooLarge(
   query: string | undefined,
   maxBytes = FILE_EXPLORER_NAME_FILTER_QUERY_MAX_BYTES
