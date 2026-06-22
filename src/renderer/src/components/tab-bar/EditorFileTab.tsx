@@ -300,7 +300,7 @@ export default function EditorFileTab({
             }}
             onBlur={commitRename}
           />
-        ) : menuOpen ? (
+        ) : (
           <span
             className={`${TAB_LABEL_WIDTH_CLASSES}${file.isPreview ? ' italic' : ''}${file.externalMutation ? ' line-through' : ''}`}
             style={tabStatusColor ? { color: tabStatusColor } : undefined}
@@ -322,39 +322,6 @@ export default function EditorFileTab({
           >
             {tabLabel}
           </span>
-        ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span
-                className={`${TAB_LABEL_WIDTH_CLASSES}${file.isPreview ? ' italic' : ''}${file.externalMutation ? ' line-through' : ''}`}
-                style={tabStatusColor ? { color: tabStatusColor } : undefined}
-                onDoubleClick={(e) => {
-                  if (file.isPreview && onMakePermanent) {
-                    e.stopPropagation()
-                    onMakePermanent()
-                    return
-                  }
-                  // Why: preview tabs use double-click to become permanent. Scope
-                  // rename to non-preview filename text so preview promotion wins on
-                  // the tab label as well as the surrounding tab chrome.
-                  if (!canRename) {
-                    return
-                  }
-                  e.stopPropagation()
-                  openRenameInput()
-                }}
-              >
-                {tabLabel}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent
-              side="bottom"
-              sideOffset={6}
-              className="max-w-80 whitespace-normal break-words text-left"
-            >
-              {tabLabel}
-            </TooltipContent>
-          </Tooltip>
         )}
         {file.externalMutation && !isRenaming && (
           <span className="shrink-0 text-[10px] leading-none font-semibold tracking-wide text-muted-foreground">
@@ -399,7 +366,20 @@ export default function EditorFileTab({
           setMenuOpen(true)
         }}
       >
-        {tabRoot}
+        {isRenaming || menuOpen ? (
+          tabRoot
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>{tabRoot}</TooltipTrigger>
+            <TooltipContent
+              side="bottom"
+              sideOffset={6}
+              className="max-w-80 whitespace-normal break-words text-left"
+            >
+              {tabLabel}
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
       <EditorFileTabContextMenu

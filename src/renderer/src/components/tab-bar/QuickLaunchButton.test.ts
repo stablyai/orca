@@ -101,7 +101,9 @@ function renderAgentMenuItems(): string {
 
 function rowMarkup(html: string, label: string): string {
   const start = html.indexOf(`title="Launch ${label} in a new terminal"`)
+  expect(start).toBeGreaterThanOrEqual(0)
   const end = html.indexOf('</div>', start)
+  expect(end).toBeGreaterThan(start)
 
   return html.slice(start, end)
 }
