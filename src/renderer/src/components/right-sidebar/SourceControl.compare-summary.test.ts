@@ -235,7 +235,7 @@ describe('SourceControl compare summary', () => {
     expect(onRetry).toHaveBeenCalledTimes(1)
   })
 
-  it('omits the whole compare row when the branch has no commits ahead', () => {
+  it('keeps clean compare row visible with refresh controls', () => {
     const cleanSummary = { ...readySummary, commitsAhead: 0 }
     const node = CompareSummary({
       summary: cleanSummary,
@@ -243,11 +243,13 @@ describe('SourceControl compare summary', () => {
       onRetry: vi.fn()
     })
 
-    expect(shouldShowCompareSummary(cleanSummary)).toBe(false)
-    expect(node).toBeNull()
+    expect(shouldShowCompareSummary(cleanSummary)).toBe(true)
     const text = collectText(node)
-    expect(text).not.toContain('0 commits ahead')
-    expect(text).not.toContain('origin/main')
+    expect(text).toContain('0 ahead')
+    expect(collectCompareSummaryToolbarLabels(node)).toEqual([
+      'Change base ref',
+      'Refresh branch compare'
+    ])
   })
 
   it('keeps non-zero summary copy compact', () => {
@@ -280,23 +282,20 @@ describe('SourceControl compare summary', () => {
     expect(BRANCH_REFRESH_INTERVAL_MS).toBe(30_000)
   })
 
-  it('polls ready branch compare only when visible branch state can change', () => {
+  it('keeps ready branch compare polling active so external git changes wake clean state', () => {
     expect(
       shouldPollBranchCompare({
-        summary: null,
-        branchEntryCount: 0
+        summary: null
       })
     ).toBe(true)
     expect(
       shouldPollBranchCompare({
-        summary: { ...readySummary, commitsAhead: 0 },
-        branchEntryCount: 0
+        summary: { ...readySummary, commitsAhead: 0 }
       })
-    ).toBe(false)
+    ).toBe(true)
     expect(
       shouldPollBranchCompare({
-        summary: { ...readySummary, commitsAhead: 0 },
-        branchEntryCount: 1
+        summary: readySummary
       })
     ).toBe(true)
   })
@@ -305,7 +304,6 @@ describe('SourceControl compare summary', () => {
     expect(
       shouldPollBranchCompare({
         summary: { ...readySummary, baseRef: 'origin/old', commitsAhead: 0 },
-        branchEntryCount: 0,
         currentBaseRef: 'origin/main'
       })
     ).toBe(true)
@@ -314,26 +312,22 @@ describe('SourceControl compare summary', () => {
   it('keeps transient branch compare errors retryable but stops terminal statuses', () => {
     expect(
       shouldPollBranchCompare({
-        summary: { ...readySummary, status: 'error', errorMessage: 'Unable to compare' },
-        branchEntryCount: 0
+        summary: { ...readySummary, status: 'error', errorMessage: 'Unable to compare' }
       })
     ).toBe(true)
     expect(
       shouldPollBranchCompare({
-        summary: { ...readySummary, status: 'invalid-base' },
-        branchEntryCount: 0
+        summary: { ...readySummary, status: 'invalid-base' }
       })
     ).toBe(false)
     expect(
       shouldPollBranchCompare({
-        summary: { ...readySummary, status: 'no-merge-base' },
-        branchEntryCount: 0
+        summary: { ...readySummary, status: 'no-merge-base' }
       })
     ).toBe(false)
     expect(
       shouldPollBranchCompare({
-        summary: { ...readySummary, status: 'unborn-head' },
-        branchEntryCount: 0
+        summary: { ...readySummary, status: 'unborn-head' }
       })
     ).toBe(false)
   })

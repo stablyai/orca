@@ -36,7 +36,7 @@ export function getComputerUsePermissionStatus(): Promise<ComputerUsePermissionS
 
   const probePromise = getComputerUsePermissionStatusAsync()
     .catch((error: unknown) => {
-      if (error instanceof RuntimeClientError) {
+      if (error instanceof RuntimeClientError && isPermissionStatusLaunchFailure(error)) {
         rememberPermissionStatusLaunchFailure(error)
       }
       throw error
@@ -61,6 +61,13 @@ function getRecentPermissionStatusLaunchFailure(now = Date.now()): RuntimeClient
   return new RuntimeClientError(
     recentPermissionStatusLaunchFailure.code,
     recentPermissionStatusLaunchFailure.message
+  )
+}
+
+function isPermissionStatusLaunchFailure(error: RuntimeClientError): boolean {
+  return (
+    error.message.startsWith('Could not check permissions:') ||
+    error.message === 'Timed out launching permission helper'
   )
 }
 

@@ -311,7 +311,13 @@ export class HistoryManager {
     exitCode: number | null = null
   ): Promise<void> {
     for (const sessionId of sessionIds) {
-      await this.tombstoneSession(sessionId, exitCode)
+      try {
+        await this.tombstoneSession(sessionId, exitCode)
+      } catch (err) {
+        // Why: restart fanout must clean every session it can; one corrupt or
+        // unwritable meta file should not leave later sessions restorable.
+        this.handleWriteError(sessionId, err)
+      }
     }
   }
 

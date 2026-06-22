@@ -5,68 +5,115 @@ import { fileURLToPath } from 'node:url'
 
 const DEFAULT_ARTIFACT_ROOT = '.perf-validation'
 
-function playwrightCommand({ artifactDir, prefix, repeatEach, specs, variant }) {
-  return joinCommand([
-    'pnpm run ensure:electron-runtime && pnpm exec playwright test',
-    specs,
-    '--config tests/playwright.config.ts --project electron-headless --workers=1',
-    `--repeat-each=${repeatEach}`,
-    '--reporter=json',
-    `--output ${shellArg(joinArtifact(artifactDir, `playwright-${variant}`))}`,
-    `> ${shellArg(joinArtifact(artifactDir, `${prefix}-${variant}-playwright.json`))}`
-  ])
+const RUNNER_SCRIPT = 'config/scripts/run-perf-validation-pod.mjs'
+
+function playwrightRunPlan({ artifactDir, prefix, repeatEach, specs, variant }) {
+  const outputDir = joinArtifact(artifactDir, `playwright-${variant}`)
+  const stdoutFile = joinArtifact(artifactDir, `${prefix}-${variant}-playwright.json`)
+  return {
+    artifactPath: stdoutFile,
+    steps: [
+      { args: ['run', 'ensure:electron-runtime'], command: 'pnpm' },
+      {
+        args: [
+          'exec',
+          'playwright',
+          'test',
+          ...specs,
+          '--config',
+          'tests/playwright.config.ts',
+          '--project',
+          'electron-headless',
+          '--workers=1',
+          `--repeat-each=${repeatEach}`,
+          '--reporter=json',
+          '--output',
+          outputDir
+        ],
+        command: 'pnpm',
+        stdoutFile
+      }
+    ]
+  }
 }
 
 const PODS = {
   'ssh-relay-batching': {
     requiresDocker: true,
-    artifact: (variant) => `ssh-relay-${variant}.jsonl`,
-    command: (variant, { artifactDir }) =>
-      joinCommand([
-        envCommand(
-          'ORCA_E2E_SSH_DOCKER_PERF_JSON',
-          joinArtifact(artifactDir, `ssh-relay-${variant}.jsonl`)
-        ),
-        'pnpm run test:e2e:ssh-docker-perf -- --repeat-each=5 --reporter=json',
-        `--output ${shellArg(joinArtifact(artifactDir, `playwright-${variant}`))}`,
-        `> ${shellArg(joinArtifact(artifactDir, `ssh-relay-${variant}-playwright.json`))}`
-      ])
+    runPlan: (variant, { artifactDir }) => {
+      const stdoutFile = joinArtifact(artifactDir, `ssh-relay-${variant}-playwright.json`)
+      return {
+        artifactPath: joinArtifact(artifactDir, `ssh-relay-${variant}.jsonl`),
+        steps: [
+          {
+            args: [
+              'run',
+              'test:e2e:ssh-docker-perf',
+              '--',
+              '--repeat-each=5',
+              '--reporter=json',
+              '--output',
+              joinArtifact(artifactDir, `playwright-${variant}`)
+            ],
+            command: 'pnpm',
+            env: {
+              ORCA_E2E_SSH_DOCKER_PERF_JSON: joinArtifact(artifactDir, `ssh-relay-${variant}.jsonl`)
+            },
+            stdoutFile
+          }
+        ]
+      }
+    }
   },
   'git-status-coalescing': {
     requiresDocker: false,
-    artifact: (variant) => `git-status-${variant}.json`,
-    command: (variant, { artifactDir }) =>
-      joinCommand([
-        envCommand(
-          'ORCA_GIT_STATUS_COALESCING_BENCH_JSON',
-          joinArtifact(artifactDir, `git-status-${variant}.json`)
-        ),
-        'pnpm exec vitest run --config config/vitest.config.ts src/main/git/status.test.ts',
-        '-t "benchmarks concurrent status burst subprocess pressure"'
-      ])
+    runPlan: (variant, { artifactDir }) => ({
+      artifactPath: joinArtifact(artifactDir, `git-status-${variant}.json`),
+      steps: [
+        {
+          args: [
+            'exec',
+            'vitest',
+            'run',
+            '--config',
+            'config/vitest.config.ts',
+            'src/main/git/status.test.ts',
+            '-t',
+            'benchmarks concurrent status burst subprocess pressure'
+          ],
+          command: 'pnpm',
+          env: {
+            ORCA_GIT_STATUS_COALESCING_BENCH_JSON: joinArtifact(
+              artifactDir,
+              `git-status-${variant}.json`
+            )
+          }
+        }
+      ]
+    })
   },
   'terminal-scheduler-adaptive': {
     requiresDocker: false,
-    artifact: (variant) => `terminal-scheduler-${variant}-playwright.json`,
-    command: (variant, { artifactDir }) =>
-      playwrightCommand({
+    runPlan: (variant, { artifactDir }) =>
+      playwrightRunPlan({
         artifactDir,
         prefix: 'terminal-scheduler',
         repeatEach: 5,
-        specs:
-          'tests/e2e/terminal-output-scheduler.spec.ts tests/e2e/terminal-typing-latency.spec.ts',
+        specs: [
+          'tests/e2e/terminal-output-scheduler.spec.ts',
+          'tests/e2e/terminal-typing-latency.spec.ts'
+        ],
         variant
       })
   },
   'startup-hydration-overlap': {
     requiresDocker: false,
-    artifact: (variant) => `startup-hydration-${variant}-playwright.json`,
-    command: (variant, { artifactDir }) =>
-      playwrightCommand({
+    runPlan: (variant, { artifactDir }) =>
+      playwrightRunPlan({
         artifactDir,
         prefix: 'startup-hydration',
         repeatEach: 10,
-        specs: 'tests/e2e/startup-hydration-perf.spec.ts',
+        specs: ['tests/e2e/startup-hydration-perf.spec.ts'],
         variant
       })
   }
@@ -80,15 +127,19 @@ function joinCommand(parts) {
   return parts.join(' ')
 }
 
-function shellArg(value) {
-  if (/^[A-Za-z0-9_./:=@+-]+$/.test(value)) {
-    return value
-  }
-  return `'${value.replaceAll("'", "'\\''")}'`
-}
-
-function envCommand(name, value) {
-  return `${name}=${shellArg(value)}`
+function runnerCommand({ artifactRoot, pod, runId, variant }) {
+  return joinCommand([
+    'node',
+    RUNNER_SCRIPT,
+    '--pod',
+    pod,
+    '--run-id',
+    runId,
+    '--artifact-root',
+    artifactRoot,
+    '--variant',
+    variant
+  ])
 }
 
 function defaultRunId(now = new Date()) {
@@ -161,7 +212,7 @@ export function buildPerfValidationPodScaffold({
     throw new Error(`Unsupported pod: ${pod}`)
   }
   const artifactDir = joinArtifact(artifactRoot, runId, pod)
-  const commandContext = { artifactDir, cwd, pod, runId }
+  const commandContext = { artifactDir, artifactRoot, cwd, pod, runId }
   const preflightChecks = [
     { command: ['git', 'status', '--short'], name: 'git-clean' },
     { command: ['pnpm', '--version'], name: 'pnpm' }
@@ -170,18 +221,37 @@ export function buildPerfValidationPodScaffold({
     preflightChecks.push({ command: ['docker', 'info'], name: 'docker-daemon' })
   }
 
+  const baselineRunPlan = definition.runPlan('baseline', commandContext)
+  const candidateRunPlan = definition.runPlan('candidate', commandContext)
+
   return {
     artifactDir,
-    baselineArtifactPath: joinArtifact(artifactDir, definition.artifact('baseline')),
-    baselineCommand: definition.command('baseline', commandContext),
-    candidateArtifactPath: joinArtifact(artifactDir, definition.artifact('candidate')),
-    candidateCommand: definition.command('candidate', commandContext),
+    baselineArtifactPath: baselineRunPlan.artifactPath,
+    baselineCommand: runnerCommand({ artifactRoot, pod, runId, variant: 'baseline' }),
+    candidateArtifactPath: candidateRunPlan.artifactPath,
+    candidateCommand: runnerCommand({ artifactRoot, pod, runId, variant: 'candidate' }),
     pod,
     preflightChecks,
     resultPacketPath: joinArtifact(artifactDir, 'result-packet.json'),
     runId,
     worktreePath: cwd
   }
+}
+
+export function buildPerfValidationRunPlan(scaffold, variant) {
+  const definition = PODS[scaffold.pod]
+  if (!definition) {
+    throw new Error(`Unsupported pod: ${scaffold.pod}`)
+  }
+  if (!['baseline', 'candidate'].includes(variant)) {
+    throw new Error(`Unsupported variant: ${variant}`)
+  }
+  return definition.runPlan(variant, {
+    artifactDir: scaffold.artifactDir,
+    cwd: scaffold.worktreePath,
+    pod: scaffold.pod,
+    runId: scaffold.runId
+  })
 }
 
 function commandOutput(result, key) {

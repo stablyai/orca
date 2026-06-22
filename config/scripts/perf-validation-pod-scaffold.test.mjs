@@ -4,6 +4,7 @@ import {
   parsePerfValidationPodArgs,
   runPerfValidationPodPreflight
 } from './perf-validation-pod-scaffold.mjs'
+import { runPerfValidationPodVariant } from './run-perf-validation-pod.mjs'
 
 function makeSpawnSync(resultsByCommand) {
   const calls = []
@@ -43,7 +44,7 @@ describe('perf-validation-pod-scaffold', () => {
     })
   })
 
-  it('builds durable Playwright artifacts outside test-results', () => {
+  it('builds cross-platform Node runner commands with durable Playwright artifacts', () => {
     const scaffold = buildPerfValidationPodScaffold({
       artifactRoot: '.perf-validation',
       cwd: '/repo/worktree',
@@ -54,17 +55,41 @@ describe('perf-validation-pod-scaffold', () => {
     expect(scaffold.artifactDir).toBe(
       '.perf-validation/2026-06-21T23-00/terminal-scheduler-adaptive'
     )
-    expect(scaffold.baselineCommand).toContain(
-      '--output .perf-validation/2026-06-21T23-00/terminal-scheduler-adaptive/playwright-baseline'
+    expect(scaffold.baselineCommand).toBe(
+      'node config/scripts/run-perf-validation-pod.mjs --pod terminal-scheduler-adaptive --run-id 2026-06-21T23-00 --artifact-root .perf-validation --variant baseline'
     )
-    expect(scaffold.baselineCommand).toContain('--reporter=json')
-    expect(scaffold.baselineCommand).toContain(
-      '> .perf-validation/2026-06-21T23-00/terminal-scheduler-adaptive/terminal-scheduler-baseline-playwright.json'
+    expect(scaffold.baselineCommand).not.toMatch(/\s&&\s|>|\b[A-Za-z_][A-Za-z0-9_]*=/u)
+    expect(scaffold.baselineArtifactPath).toBe(
+      '.perf-validation/2026-06-21T23-00/terminal-scheduler-adaptive/terminal-scheduler-baseline-playwright.json'
     )
-    expect(scaffold.baselineCommand).not.toContain('> test-results/')
     expect(scaffold.resultPacketPath).toBe(
       '.perf-validation/2026-06-21T23-00/terminal-scheduler-adaptive/result-packet.json'
     )
+  })
+
+  it('builds Node runner commands without POSIX shell syntax for every pod', () => {
+    for (const pod of [
+      'ssh-relay-batching',
+      'git-status-coalescing',
+      'terminal-scheduler-adaptive',
+      'startup-hydration-overlap'
+    ]) {
+      const scaffold = buildPerfValidationPodScaffold({
+        artifactRoot: '.perf-validation',
+        pod,
+        runId: 'run-1'
+      })
+
+      expect(scaffold.baselineCommand).toBe(
+        `node config/scripts/run-perf-validation-pod.mjs --pod ${pod} --run-id run-1 --artifact-root .perf-validation --variant baseline`
+      )
+      expect(scaffold.candidateCommand).toBe(
+        `node config/scripts/run-perf-validation-pod.mjs --pod ${pod} --run-id run-1 --artifact-root .perf-validation --variant candidate`
+      )
+      expect(`${scaffold.baselineCommand}\n${scaffold.candidateCommand}`).not.toMatch(
+        /\s&&\s|>|\b[A-Za-z_][A-Za-z0-9_]*=/u
+      )
+    }
   })
 
   it('adds Docker daemon preflight only for the SSH relay pod', () => {
@@ -97,7 +122,11 @@ describe('perf-validation-pod-scaffold', () => {
       }
     })
 
-    const result = runPerfValidationPodPreflight({ scaffold, spawnSyncImpl })
+    const result = runPerfValidationPodPreflight({
+      mkdirSyncImpl: vi.fn(),
+      scaffold,
+      spawnSyncImpl
+    })
 
     expect(result.ok).toBe(false)
     expect(result.checks).toContainEqual(
@@ -107,6 +136,128 @@ describe('perf-validation-pod-scaffold', () => {
         reason: 'Cannot connect to the Docker daemon'
       })
     )
+  })
+
+  it('runs Playwright pods without shell redirection or POSIX env assignment', () => {
+    const scaffold = buildPerfValidationPodScaffold({
+      artifactRoot: '.perf-validation',
+      cwd: '/repo/worktree',
+      pod: 'terminal-scheduler-adaptive',
+      runId: 'run-1'
+    })
+    const writes = []
+    const { calls, spawnSyncImpl } = makeSpawnSync({
+      'pnpm run ensure:electron-runtime': { signal: null, status: 0, stdout: '', stderr: '' },
+      'pnpm exec playwright test tests/e2e/terminal-output-scheduler.spec.ts tests/e2e/terminal-typing-latency.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=5 --reporter=json --output .perf-validation/run-1/terminal-scheduler-adaptive/playwright-baseline':
+        {
+          signal: null,
+          status: 0,
+          stdout: '{"status":"passed"}\n',
+          stderr: ''
+        }
+    })
+
+    const result = runPerfValidationPodVariant({
+      scaffold,
+      mkdirSyncImpl: vi.fn(),
+      spawnSyncImpl,
+      variant: 'baseline',
+      writeFileSyncImpl: (file, content) => writes.push({ content, file })
+    })
+
+    expect(result).toEqual({ ok: true, status: 0 })
+    expect(calls).toEqual([
+      {
+        args: ['run', 'ensure:electron-runtime'],
+        command: 'pnpm',
+        options: { cwd: '/repo/worktree', encoding: 'utf8', env: process.env }
+      },
+      {
+        args: [
+          'exec',
+          'playwright',
+          'test',
+          'tests/e2e/terminal-output-scheduler.spec.ts',
+          'tests/e2e/terminal-typing-latency.spec.ts',
+          '--config',
+          'tests/playwright.config.ts',
+          '--project',
+          'electron-headless',
+          '--workers=1',
+          '--repeat-each=5',
+          '--reporter=json',
+          '--output',
+          '.perf-validation/run-1/terminal-scheduler-adaptive/playwright-baseline'
+        ],
+        command: 'pnpm',
+        options: { cwd: '/repo/worktree', encoding: 'utf8', env: process.env }
+      }
+    ])
+    expect(writes).toEqual([
+      {
+        content: '{"status":"passed"}\n',
+        file: '.perf-validation/run-1/terminal-scheduler-adaptive/terminal-scheduler-baseline-playwright.json'
+      }
+    ])
+  })
+
+  it('passes perf artifact paths through explicit env instead of inline shell assignment', () => {
+    const scaffold = buildPerfValidationPodScaffold({
+      artifactRoot: '.perf-validation',
+      cwd: '/repo/worktree',
+      pod: 'ssh-relay-batching',
+      runId: 'run-1'
+    })
+    const writes = []
+    const { calls, spawnSyncImpl } = makeSpawnSync({
+      'pnpm run test:e2e:ssh-docker-perf -- --repeat-each=5 --reporter=json --output .perf-validation/run-1/ssh-relay-batching/playwright-candidate':
+        {
+          signal: null,
+          status: 0,
+          stdout: '{"status":"passed"}\n',
+          stderr: ''
+        }
+    })
+
+    const result = runPerfValidationPodVariant({
+      env: { PATH: '/bin' },
+      scaffold,
+      mkdirSyncImpl: vi.fn(),
+      spawnSyncImpl,
+      variant: 'candidate',
+      writeFileSyncImpl: (file, content) => writes.push({ content, file })
+    })
+
+    expect(result).toEqual({ ok: true, status: 0 })
+    expect(calls).toEqual([
+      {
+        args: [
+          'run',
+          'test:e2e:ssh-docker-perf',
+          '--',
+          '--repeat-each=5',
+          '--reporter=json',
+          '--output',
+          '.perf-validation/run-1/ssh-relay-batching/playwright-candidate'
+        ],
+        command: 'pnpm',
+        options: {
+          cwd: '/repo/worktree',
+          encoding: 'utf8',
+          env: {
+            ORCA_E2E_SSH_DOCKER_PERF_JSON:
+              '.perf-validation/run-1/ssh-relay-batching/ssh-relay-candidate.jsonl',
+            PATH: '/bin'
+          }
+        }
+      }
+    ])
+    expect(writes).toEqual([
+      {
+        content: '{"status":"passed"}\n',
+        file: '.perf-validation/run-1/ssh-relay-batching/ssh-relay-candidate-playwright.json'
+      }
+    ])
   })
 
   it('rejects dirty worktrees before baseline artifacts are created', () => {
@@ -119,7 +270,11 @@ describe('perf-validation-pod-scaffold', () => {
       'pnpm --version': { signal: null, status: 0, stdout: '10.24.0\n', stderr: '' }
     })
 
-    const result = runPerfValidationPodPreflight({ scaffold, spawnSyncImpl })
+    const result = runPerfValidationPodPreflight({
+      mkdirSyncImpl: vi.fn(),
+      scaffold,
+      spawnSyncImpl
+    })
 
     expect(result.ok).toBe(false)
     expect(result.checks[0]).toEqual({

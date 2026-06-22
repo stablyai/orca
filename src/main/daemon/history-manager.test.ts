@@ -249,6 +249,28 @@ describe('HistoryManager', () => {
       expect(meta2.endedAt).not.toBeNull()
       expect(meta2.exitCode).toBe(-1)
     })
+
+    it.skipIf(process.platform === 'win32')(
+      'continues tombstoning later sessions after a write error',
+      async () => {
+        const errors: { sessionId: string; error: Error }[] = []
+        mgr = new HistoryManager(dir, {
+          onWriteError: (sessionId, error) => errors.push({ sessionId, error })
+        })
+        await mgr.openSession('blocked', { cwd: '/tmp/a', cols: 80, rows: 24 })
+        await mgr.openSession('later', { cwd: '/tmp/b', cols: 80, rows: 24 })
+        const blockedMetaPath = sessionPath(dir, 'blocked', 'meta.json')
+        chmodSync(blockedMetaPath, 0o444)
+
+        await mgr.tombstoneSessions(['blocked', 'later'], -1)
+
+        chmodSync(blockedMetaPath, 0o644)
+        const laterMeta = JSON.parse(readFileSync(sessionPath(dir, 'later', 'meta.json'), 'utf-8'))
+        expect(errors[0].sessionId).toBe('blocked')
+        expect(laterMeta.endedAt).not.toBeNull()
+        expect(laterMeta.exitCode).toBe(-1)
+      }
+    )
   })
 
   describe('dispose', () => {

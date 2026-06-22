@@ -180,6 +180,26 @@ describe('getComputerUsePermissionStatus', () => {
     expect(rm).toHaveBeenCalledTimes(1)
   })
 
+  it('does not back off status-file polling timeouts', async () => {
+    vi.useFakeTimers()
+    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
+    vi.mocked(stat).mockRejectedValue(new Error('missing'))
+
+    const timedOutStatus = getComputerUsePermissionStatus()
+    await vi.advanceTimersByTimeAsync(5_000)
+    await expect(timedOutStatus).rejects.toMatchObject({
+      name: 'RuntimeClientError',
+      code: 'accessibility_error',
+      message: 'Timed out checking permissions'
+    })
+
+    vi.mocked(stat).mockResolvedValue({} as Awaited<ReturnType<typeof stat>>)
+    await expect(getComputerUsePermissionStatus()).resolves.toMatchObject({
+      helperUnavailableReason: null
+    })
+    expect(spawn).toHaveBeenCalledTimes(2)
+  })
+
   it('wraps permission status helper launch failures', async () => {
     const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
     const child = {

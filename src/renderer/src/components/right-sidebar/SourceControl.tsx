@@ -460,7 +460,7 @@ const CONFLICTS_SECTION_LABEL = {
 }
 
 // Why: 5s branch compare polling churned git subprocesses in large repos.
-// Explicit commit, remote, manual, and base-ref refresh paths still run immediately.
+// Keep a 30s visible-window poll so clean hidden rows can wake after external git changes.
 export const BRANCH_REFRESH_INTERVAL_MS = 30_000
 // Why: row action buttons host Radix Tooltip triggers. Keeping the overlay
 // measurable prevents transient top-left tooltip placement during hover.
@@ -4546,10 +4546,9 @@ function SourceControlInner(): React.JSX.Element {
     () =>
       shouldPollBranchCompare({
         summary: branchSummary ?? null,
-        branchEntryCount: branchEntries.length,
         currentBaseRef: effectiveBaseRef
       }),
-    [branchEntries.length, branchSummary, effectiveBaseRef]
+    [branchSummary, effectiveBaseRef]
   )
 
   useEffect(() => {
@@ -4564,9 +4563,9 @@ function SourceControlInner(): React.JSX.Element {
       return
     }
 
-    // Why: branch compare shells out to git every tick. The panel only needs
-    // background freshness while Orca is visible and there is branch UI worth
-    // refreshing; hidden-window time should not burn subprocess work or timer wakeups.
+    // Why: branch compare shells out to git every tick. Keep the low-frequency
+    // visible-window poll even for clean hidden rows so external git changes
+    // eventually wake the branch state without requiring a manual refresh.
     return installWindowVisibilityInterval({
       run: () => void refreshBranchCompareRef.current(),
       intervalMs: BRANCH_REFRESH_INTERVAL_MS
@@ -6773,10 +6772,9 @@ export function CommitArea({
 
 export function shouldPollBranchCompare(input: {
   summary: GitBranchCompareSummary | null
-  branchEntryCount: number
   currentBaseRef?: string | null
 }): boolean {
-  const { summary, branchEntryCount, currentBaseRef } = input
+  const { summary, currentBaseRef } = input
   if (!summary || summary.status === 'loading') {
     return true
   }
@@ -6784,7 +6782,7 @@ export function shouldPollBranchCompare(input: {
     return true
   }
   if (summary.status === 'ready') {
-    return (summary.commitsAhead ?? 0) > 0 || branchEntryCount > 0
+    return true
   }
   return summary.status === 'error'
 }
@@ -6793,10 +6791,7 @@ export function shouldShowCompareSummary(summary: GitBranchCompareSummary | null
   if (!summary || summary.status === 'loading') {
     return true
   }
-  if (summary.status !== 'ready') {
-    return true
-  }
-  return typeof summary.commitsAhead === 'number' && summary.commitsAhead > 0
+  return true
 }
 
 export function CompareSummary({
@@ -6850,14 +6845,10 @@ export function CompareSummary({
   }
 
   const commitsAhead = summary.commitsAhead
-  const showCommitsAhead = typeof commitsAhead === 'number' && commitsAhead > 0
-  const commitsAheadTitle = showCommitsAhead
-    ? `${commitsAhead} ${commitsAhead === 1 ? 'commit' : 'commits'} ahead of ${summary.baseRef}`
-    : undefined
-
-  if (!showCommitsAhead) {
-    return null
-  }
+  const commitsAheadTitle =
+    typeof commitsAhead === 'number'
+      ? `${commitsAhead} ${commitsAhead === 1 ? 'commit' : 'commits'} ahead of ${summary.baseRef}`
+      : undefined
 
   return (
     <div className="flex items-center gap-2 text-xs text-muted-foreground">
