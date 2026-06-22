@@ -87,24 +87,53 @@ type ResolvedBrowserCommandTarget = {
 
 export type BrowserMouseModifier = 'cmd' | 'ctrl' | 'alt' | 'shift'
 
-function focusedValueSetExpression(
+// Why: a bulk `el.value`/`textContent` assignment is silently reverted by rich
+// editors (ProseMirror, Draft.js) whose MutationObservers only accept changes
+// that flow through the native beforeinput/input pipeline. execCommand
+// ('insertText') drives that pipeline, so it updates contenteditable editors
+// and controlled inputs alike. The value setter remains a fallback for plain
+// fields where execCommand is unavailable. Runs against document.activeElement,
+// which agent-browser's `focus` command reliably sets before this eval.
+function focusedTextInsertExpression(
   valueExpression: string,
-  options?: { append?: boolean; dispatchEvents?: boolean }
+  options?: { selectAll?: boolean }
 ): string {
-  const nextValue = options?.append
-    ? ["String(el.value ?? '') + ", valueExpression].join('')
-    : valueExpression
-  const dispatchEvents = options?.dispatchEvents
-    ? " el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true }));"
-    : ''
+  const selectAll = options?.selectAll ? 'true' : 'false'
   return [
-    '(() => { const el = document.activeElement; if (el) {' +
-      " const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set;",
-    ' const nextValue = ',
-    nextValue,
-    '; if (nativeSetter) { nativeSetter.call(el, nextValue); } else { el.value = nextValue; }',
-    dispatchEvents,
-    ' } })()'
+    '(() => {',
+    ' const el = document.activeElement;',
+    ' if (!el || el === document.body) { return; }',
+    ' const value = ',
+    valueExpression,
+    ';',
+    ` const selectAll = ${selectAll};`,
+    ' const isField =',
+    "   typeof el.value === 'string' && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');",
+    ' const isEditable =',
+    "   el.isContentEditable === true || (el.getAttribute && el.getAttribute('contenteditable') === 'true');",
+    ' if (selectAll) {',
+    "   if (isField && typeof el.select === 'function') { el.select(); }",
+    "   else if (isEditable && typeof window.getSelection === 'function') {",
+    '     const selection = window.getSelection();',
+    '     if (selection) { selection.selectAllChildren(el); }',
+    '   }',
+    ' }',
+    ' let usedExecCommand = false;',
+    ' try {',
+    "   usedExecCommand = document.execCommand('insertText', false, value) === true;",
+    ' } catch (error) { usedExecCommand = false; }',
+    ' if (usedExecCommand) { return; }',
+    "   const previous = selectAll ? '' : (isField ? String(el.value ?? '') : String(el.textContent ?? ''));",
+    '   const nextValue = previous + value;',
+    '   if (isField) {',
+    "     const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set;",
+    '     if (nativeSetter) { nativeSetter.call(el, nextValue); } else { el.value = nextValue; }',
+    '   } else if (isEditable) {',
+    '     el.textContent = nextValue;',
+    '   } else { return; }',
+    "   el.dispatchEvent(new Event('input', { bubbles: true }));",
+    "   el.dispatchEvent(new Event('change', { bubbles: true }));",
+    ' })()'
   ].join('')
 }
 
@@ -764,31 +793,33 @@ export class AgentBrowserBridge {
     await assertClipboardTextWriteWithinLimitWithYield(value)
     // Why: Input.insertText via Electron's debugger API does not deliver text to
     // focused inputs in webviews — this is a fundamental Electron limitation.
-    // Agent-browser's fill and click also fail for the same reason.
-    // Workaround: use agent-browser's focus to resolve the ref, then set the value
-    // directly via chunked JS and dispatch input/change events for React/framework compat.
+    // Workaround: focus the ref via agent-browser, then drive text through
+    // execCommand('insertText') so rich editors (ProseMirror, Draft.js) and
+    // controlled inputs reconcile it. The first chunk selects existing content
+    // so it is replaced; later chunks append. An empty value still runs one
+    // select-all pass to clear the field.
     return this.enqueueTargetedCommand(
       worktreeId,
       browserPageId,
       async (sessionName) => {
         await this.execAgentBrowser(sessionName, ['focus', element])
-        await this.execAgentBrowser(sessionName, [
-          'eval',
-          focusedValueSetExpression(JSON.stringify(''))
-        ])
+        let isFirstChunk = true
         for (const chunk of iterateBrowserTextInsertionChunks(
           value,
           AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
         )) {
           await this.execAgentBrowser(sessionName, [
             'eval',
-            focusedValueSetExpression(JSON.stringify(chunk), { append: true })
+            focusedTextInsertExpression(JSON.stringify(chunk), { selectAll: isFirstChunk })
+          ])
+          isFirstChunk = false
+        }
+        if (isFirstChunk) {
+          await this.execAgentBrowser(sessionName, [
+            'eval',
+            focusedTextInsertExpression(JSON.stringify(''), { selectAll: true })
           ])
         }
-        await this.execAgentBrowser(sessionName, [
-          'eval',
-          focusedValueSetExpression(JSON.stringify(''), { append: true, dispatchEvents: true })
-        ])
         return { filled: element } as BrowserFillResult
       },
       { requireScopedTarget: true }

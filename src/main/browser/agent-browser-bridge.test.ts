@@ -1438,18 +1438,21 @@ describe('AgentBrowserBridge', () => {
 
     await bridge.fill('@textarea', text)
 
-    const evalCalls = execFileMock.mock.calls.filter((call: unknown[]) =>
-      (call[1] as string[]).includes('eval')
-    )
-    const appendExpressions = evalCalls.slice(1, -1).map((call: unknown[]) => {
-      const args = call[1] as string[]
-      return args[args.indexOf('eval') + 1]
-    })
+    const chunkExpressions = execFileMock.mock.calls
+      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
+      .map((call: unknown[]) => {
+        const args = call[1] as string[]
+        return args[args.indexOf('eval') + 1]
+      })
 
-    expect(appendExpressions).toHaveLength(2)
-    expect(appendExpressions.some((expression) => expression.includes(text))).toBe(false)
-    expect(appendExpressions[0]).toContain('x'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES))
-    expect(appendExpressions[1]).toContain('tail')
+    // Why: each chunk is inserted as its own bounded eval; no chunk carries the
+    // full payload, and only the first chunk replaces existing content.
+    expect(chunkExpressions).toHaveLength(2)
+    expect(chunkExpressions.some((expression) => expression.includes(text))).toBe(false)
+    expect(chunkExpressions[0]).toContain('x'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES))
+    expect(chunkExpressions[0]).toContain('const selectAll = true')
+    expect(chunkExpressions[1]).toContain('tail')
+    expect(chunkExpressions[1]).toContain('const selectAll = false')
   })
 
   it.each([
