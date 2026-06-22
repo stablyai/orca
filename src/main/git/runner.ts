@@ -250,6 +250,7 @@ type GitExecOptions = {
   encoding?: BufferEncoding | 'buffer'
   maxBuffer?: number
   timeout?: number
+  stdin?: string
   env?: NodeJS.ProcessEnv
   signal?: AbortSignal
   wslDistro?: string
@@ -313,6 +314,7 @@ function killSpawnedCommandTree(child: ChildProcess): void {
 
 type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   timeout?: number
+  stdin?: string
 }
 
 function emptyExecFileOutput(options: ExecFileCaptureOptions): string | Buffer {
@@ -400,6 +402,10 @@ function execFileCapture(
     } catch (error) {
       finish(error instanceof Error ? error : new Error(String(error)))
       return
+    }
+
+    if (options.stdin !== undefined) {
+      child.stdin?.end(options.stdin)
     }
 
     // Why: Node's native execFile timeout waits for the child to exit after
@@ -740,6 +746,7 @@ export async function gitExecFileAsync(
           encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
           maxBuffer: options.maxBuffer,
           timeout: options.timeout,
+          stdin: options.stdin,
           // Why: never let a git read-path call block on an interactive prompt
           // (issue #5308) — fail fast instead of hanging the runtime.
           env: policy.env,
