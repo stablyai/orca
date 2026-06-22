@@ -1,13 +1,16 @@
-import { EventEmitter } from 'node:events'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { JCODE_CHAT_EVENT_CHANNEL, JCODE_CHAT_SEND_CHANNEL } from '../../shared/jcode-chat-types'
 import {
-  JCODE_CHAT_EVENT_CHANNEL,
-  JCODE_CHAT_SEND_CHANNEL,
-  type JcodeChatSendPayload
-} from '../../shared/jcode-chat-types'
+  cleanupTempFiles,
+  makeChildProcess,
+  makeMainWindow,
+  makeSshConnection,
+  makeTempFile,
+  payload,
+  VALID_REMOTE_ATTACHMENT_DIR,
+  waitUntil,
+  type MockSshConnection
+} from './jcode-attachments.test-fixtures'
 
 const {
   applySkillInjectionMock,
@@ -84,97 +87,10 @@ vi.mock('./jcode-skills', () => ({
 import { cleanupRemoteAttachmentDir, resolveTurnPrompt } from './jcode-attachments'
 import { registerJcodeChatHandlers } from './jcode-chat-session'
 
-type MockChannel = EventEmitter & { stderr: EventEmitter }
-const VALID_REMOTE_ATTACHMENT_DIR =
-  '/tmp/orca-jcode-attachments-00000000-0000-4000-8000-000000000000'
-
-function autoClosingChannel(exitCode = 0): MockChannel {
-  const channel = new EventEmitter() as MockChannel
-  channel.stderr = new EventEmitter()
-  setTimeout(() => {
-    channel.emit('exit', exitCode)
-    channel.emit('close')
-  }, 0)
-  return channel
-}
-
-function makeSshConnection(
-  options: {
-    status?: string
-    failCleanup?: boolean
-    commandExitCode?: (command: string) => number
-  } = {}
-) {
-  const status = options.status ?? 'connected'
-  return {
-    exec: vi.fn((command: string) => {
-      if (options.failCleanup && command.startsWith('rm -rf -- ')) {
-        return Promise.reject(new Error('cleanup failed'))
-      }
-      return Promise.resolve(autoClosingChannel(options.commandExitCode?.(command) ?? 0))
-    }),
-    getState: vi.fn(() => ({ status })),
-    writeFile: vi.fn(() => Promise.resolve())
-  }
-}
-
-function setSshConnection(connection: ReturnType<typeof makeSshConnection>): void {
+function setSshConnection(connection: MockSshConnection): void {
   getSshConnectionManagerMock.mockReturnValue({
     getConnection: vi.fn(() => connection)
   })
-}
-
-const tempDirs: string[] = []
-
-function makeTempFile(name: string, contents: string): string {
-  const dir = mkdtempSync(path.join(tmpdir(), 'orca-jcode-attachments-'))
-  tempDirs.push(dir)
-  const filePath = path.join(dir, name)
-  writeFileSync(filePath, contents)
-  return filePath
-}
-
-function payload(extra: Partial<JcodeChatSendPayload> = {}): JcodeChatSendPayload {
-  return { sessionKey: 'session-1', prompt: 'hello', ...extra }
-}
-
-function makeChildProcess() {
-  const child = new EventEmitter() as EventEmitter & {
-    killed: boolean
-    kill: ReturnType<typeof vi.fn>
-    stderr: EventEmitter & { setEncoding: ReturnType<typeof vi.fn> }
-    stdout: EventEmitter & { setEncoding: ReturnType<typeof vi.fn> }
-  }
-  child.killed = false
-  child.kill = vi.fn(() => {
-    child.killed = true
-    return true
-  })
-  child.stderr = Object.assign(new EventEmitter(), { setEncoding: vi.fn() })
-  child.stdout = Object.assign(new EventEmitter(), { setEncoding: vi.fn() })
-  return child
-}
-
-function makeMainWindow() {
-  const webContents = {
-    isDestroyed: vi.fn(() => false),
-    send: vi.fn()
-  }
-  return {
-    isDestroyed: vi.fn(() => false),
-    on: vi.fn(),
-    webContents
-  }
-}
-
-async function waitUntil(condition: () => boolean, message: string): Promise<void> {
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    if (condition()) {
-      return
-    }
-    await new Promise((resolve) => setTimeout(resolve, 0))
-  }
-  throw new Error(message)
 }
 
 beforeEach(() => {
@@ -197,9 +113,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true })
-  }
+  cleanupTempFiles()
 })
 
 describe('resolveTurnPrompt cleanup metadata', () => {
