@@ -37,6 +37,7 @@ let vault: Record<string, ReturnType<typeof vi.fn>>
 let browserManager: Record<string, ReturnType<typeof vi.fn>>
 
 beforeEach(() => {
+  vi.clearAllMocks()
   handleMock.mockReset()
   vault = {
     reveal: vi.fn().mockReturnValue('pw'),
@@ -144,9 +145,6 @@ describe('registerBrowserCredentialHandlers', () => {
   })
 
   it('rejects untrusted importFromBrowser', async () => {
-    // Clear calls recorded by the preceding trusted-import test since the
-    // vi.mock factory fn is shared across tests and not reset in beforeEach.
-    vi.mocked(importPasswordsFromBrowser).mockClear()
     const r = await handlerFor('browser:credentials:importFromBrowser')!(
       { sender: untrustedSender },
       { browserFamily: 'chrome' }

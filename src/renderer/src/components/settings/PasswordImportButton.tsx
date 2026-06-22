@@ -85,8 +85,11 @@ export function PasswordImportButton({
           browser.profiles.length > 1 ? (
             <DropdownMenuSub key={browser.family}>
               <DropdownMenuSubTrigger>
-                {translate('auto.components.settings.passwordImport.from_prefix', 'From ')}
-                {browser.label}
+                {translate(
+                  'auto.components.settings.passwordImport.from_browser',
+                  'From {{value0}}',
+                  { value0: browser.label }
+                )}
               </DropdownMenuSubTrigger>
               <DropdownMenuPortal>
                 <DropdownMenuSubContent>
@@ -106,8 +109,11 @@ export function PasswordImportButton({
               key={browser.family}
               onSelect={() => void handleImport(browser.family)}
             >
-              {translate('auto.components.settings.passwordImport.from_prefix', 'From ')}
-              {browser.label}
+              {translate(
+                'auto.components.settings.passwordImport.from_browser',
+                'From {{value0}}',
+                { value0: browser.label }
+              )}
             </DropdownMenuItem>
           )
         )}

@@ -7920,7 +7920,8 @@
           "success_toast": "Imported {{value0}} logins from {{value1}}{{value2}}. {{value3}} skipped, {{value4}} invalid.",
           "trigger_label": "Import from browser…",
           "from_prefix": "From ",
-          "no_browsers_found": "No supported browsers found"
+          "no_browsers_found": "No supported browsers found",
+          "from_browser": "From {{value0}}"
         }
       },
       "right": {

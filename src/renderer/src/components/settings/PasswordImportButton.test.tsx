@@ -23,7 +23,10 @@ import type {
 // ---------------------------------------------------------------------------
 
 vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string, _vars?: Record<string, unknown>) => fallback
+  translate: (_key: string, fallback: string, vars?: Record<string, unknown>) =>
+    vars
+      ? Object.entries(vars).reduce((s, [k, v]) => s.replace(`{{${k}}}`, String(v)), fallback)
+      : fallback
 }))
 
 const toastMocks = vi.hoisted(() => ({
