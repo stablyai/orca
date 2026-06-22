@@ -3,6 +3,21 @@ import type { ITerminalOptions } from '@xterm/xterm'
 type TerminalCursorStyle = NonNullable<ITerminalOptions['cursorStyle']>
 type TerminalCursorInactiveStyle = NonNullable<ITerminalOptions['cursorInactiveStyle']>
 
+export const DEFAULT_TERMINAL_SCROLL_SENSITIVITY = 1.15
+export const DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY = 5
+
+export function normalizeTerminalScrollSensitivity(value: number | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(10, Math.max(0.1, value))
+    : DEFAULT_TERMINAL_SCROLL_SENSITIVITY
+}
+
+export function normalizeTerminalFastScrollSensitivity(value: number | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(20, Math.max(1, value))
+    : DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY
+}
+
 export function resolveTerminalCursorInactiveStyle(
   cursorStyle: TerminalCursorStyle | undefined
 ): TerminalCursorInactiveStyle {
@@ -28,8 +43,8 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
     scrollback: 10000,
     // Why: Orca's default terminal cells are taller than many users' baseline
     // terminal, so a small multiplier keeps row-per-wheel movement familiar.
-    scrollSensitivity: 1.15,
-    fastScrollSensitivity: 5,
+    scrollSensitivity: DEFAULT_TERMINAL_SCROLL_SENSITIVITY,
+    fastScrollSensitivity: DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
     allowTransparency: false,
     // Why: on macOS, non-US layouts rely on Option to compose characters like @ and €.
     macOptionIsMeta: false,

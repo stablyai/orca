@@ -4,7 +4,12 @@ import type { IDisposable, Terminal } from '@xterm/xterm'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { consumePendingWebRuntimeSplitMirrorTelemetry } from '@/runtime/web-runtime-session'
-import { resolveTerminalCursorInactiveStyle } from '@/lib/pane-manager/pane-terminal-options'
+import {
+  normalizeTerminalFastScrollSensitivity,
+  normalizeTerminalScrollSensitivity,
+  resolveTerminalCursorInactiveStyle
+} from '@/lib/pane-manager/pane-terminal-options'
+import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-mouse-wheel'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
 import { useAppStore } from '@/store'
 import {
@@ -1067,11 +1072,19 @@ export function useTerminalPaneLifecycle({
           cursorStyle,
           cursorInactiveStyle: resolveTerminalCursorInactiveStyle(cursorStyle),
           cursorBlink: currentSettings?.terminalCursorBlink ?? true,
+          scrollSensitivity: normalizeTerminalScrollSensitivity(
+            currentSettings?.terminalScrollSensitivity
+          ),
+          fastScrollSensitivity: normalizeTerminalFastScrollSensitivity(
+            currentSettings?.terminalFastScrollSensitivity
+          ),
           macOptionIsMeta: effectiveMacOptionAsAltRef.current === 'true',
           lineHeight: currentSettings?.terminalLineHeight ?? 1,
           wordSeparator: currentSettings?.terminalWordSeparator
         }
       },
+      terminalTuiScrollSensitivity: () =>
+        normalizeTerminalTuiMouseWheelMultiplier(settingsRef.current?.terminalTuiScrollSensitivity),
       onLinkClick: (event, url) => {
         if (!event) {
           return

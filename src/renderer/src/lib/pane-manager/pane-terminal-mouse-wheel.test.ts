@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER,
+  normalizeTerminalTuiMouseWheelMultiplier,
   shouldMultiplyTerminalMouseWheel
 } from './pane-terminal-mouse-wheel'
 
@@ -26,6 +27,13 @@ function wheelEvent(init: Partial<WheelEventInit> = {}): WheelEvent {
 describe('terminal mouse wheel multiplier', () => {
   it('uses a three-report multiplier for TUI mouse wheel scrolling', () => {
     expect(TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER).toBe(3)
+  })
+
+  it('normalizes TUI wheel multipliers to the supported report range', () => {
+    expect(normalizeTerminalTuiMouseWheelMultiplier(undefined)).toBe(3)
+    expect(normalizeTerminalTuiMouseWheelMultiplier(0)).toBe(1)
+    expect(normalizeTerminalTuiMouseWheelMultiplier(4.4)).toBe(4)
+    expect(normalizeTerminalTuiMouseWheelMultiplier(20)).toBe(10)
   })
 
   it('multiplies discrete wheel events when mouse reporting is active', () => {

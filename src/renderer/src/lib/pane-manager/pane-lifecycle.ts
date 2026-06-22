@@ -131,6 +131,7 @@ export function createPaneDOM(
     container,
     xtermContainer,
     linkTooltip,
+    terminalTuiScrollSensitivity: options.terminalTuiScrollSensitivity,
     terminalGpuAcceleration: options.terminalGpuAcceleration ?? 'auto',
     gpuRenderingEnabled: ENABLE_WEBGL_RENDERER,
     webglAttachmentDeferred: false,
@@ -180,6 +181,7 @@ export function openTerminal(pane: ManagedPaneInternal): void {
     terminal,
     xtermContainer,
     linkTooltip,
+    terminalTuiScrollSensitivity,
     fitAddon,
     searchAddon,
     serializeAddon,
@@ -198,7 +200,9 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   terminal.loadAddon(serializeAddon)
   terminal.loadAddon(unicode11Addon)
   terminal.loadAddon(webLinksAddon)
-  attachTerminalMouseWheelMultiplier(terminal)
+  attachTerminalMouseWheelMultiplier(terminal, {
+    getTuiMouseWheelMultiplier: terminalTuiScrollSensitivity
+  })
 
   // Activate Orca's Unicode 11 width shim *before* any caller-driven write. CJK / emoji /
   // ZWJ codepoints get baked into the buffer at the active unicode version on

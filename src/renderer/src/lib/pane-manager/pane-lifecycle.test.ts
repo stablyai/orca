@@ -9,6 +9,10 @@ import {
 import { openTerminal } from './pane-lifecycle'
 import {
   buildDefaultTerminalOptions,
+  DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
+  DEFAULT_TERMINAL_SCROLL_SENSITIVITY,
+  normalizeTerminalFastScrollSensitivity,
+  normalizeTerminalScrollSensitivity,
   resolveTerminalCursorInactiveStyle
 } from './pane-terminal-options'
 
@@ -87,8 +91,19 @@ describe('buildDefaultTerminalOptions', () => {
   it('slightly increases default terminal wheel scrolling while preserving fast scroll', () => {
     const options = buildDefaultTerminalOptions()
 
-    expect(options.scrollSensitivity).toBe(1.15)
-    expect(options.fastScrollSensitivity).toBe(5)
+    expect(options.scrollSensitivity).toBe(DEFAULT_TERMINAL_SCROLL_SENSITIVITY)
+    expect(options.fastScrollSensitivity).toBe(DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY)
+  })
+
+  it('normalizes configurable terminal scroll sensitivity values', () => {
+    expect(normalizeTerminalScrollSensitivity(undefined)).toBe(DEFAULT_TERMINAL_SCROLL_SENSITIVITY)
+    expect(normalizeTerminalScrollSensitivity(0)).toBe(0.1)
+    expect(normalizeTerminalScrollSensitivity(20)).toBe(10)
+    expect(normalizeTerminalFastScrollSensitivity(undefined)).toBe(
+      DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY
+    )
+    expect(normalizeTerminalFastScrollSensitivity(0)).toBe(1)
+    expect(normalizeTerminalFastScrollSensitivity(25)).toBe(20)
   })
 
   it('only uses inactive outline for block cursors', () => {

@@ -5,8 +5,14 @@ const REPLAYED_WHEEL_EVENT_PROPERTY = '__orcaReplayedTerminalWheelEvent'
 const DOM_DELTA_PIXEL = 0
 
 export const TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER = 3
+export const TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER_MIN = 1
+export const TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER_MAX = 10
 
 type TerminalWheelTarget = Pick<Terminal, 'attachCustomWheelEventHandler' | 'element'>
+
+type TerminalMouseWheelMultiplierOptions = {
+  getTuiMouseWheelMultiplier?: () => number | undefined
+}
 
 type ReplayedWheelEvent = WheelEvent & {
   [REPLAYED_WHEEL_EVENT_PROPERTY]?: boolean
@@ -75,7 +81,22 @@ function cloneWheelEvent(event: WheelEvent): WheelEvent {
   return clone
 }
 
-export function attachTerminalMouseWheelMultiplier(terminal: TerminalWheelTarget): void {
+export function normalizeTerminalTuiMouseWheelMultiplier(value: number | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER
+  }
+  return Math.round(
+    Math.min(
+      TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER_MAX,
+      Math.max(TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER_MIN, value)
+    )
+  )
+}
+
+export function attachTerminalMouseWheelMultiplier(
+  terminal: TerminalWheelTarget,
+  options: TerminalMouseWheelMultiplierOptions = {}
+): void {
   terminal.attachCustomWheelEventHandler((event) => {
     if (!shouldMultiplyTerminalMouseWheel(event, terminal.element)) {
       return true
@@ -90,7 +111,10 @@ export function attachTerminalMouseWheelMultiplier(terminal: TerminalWheelTarget
     // Why: mouse-reporting TUIs receive wheel input as reports, not viewport
     // scrollback, so normal xterm scrollSensitivity cannot tune their speed.
     queueMicrotask(() => {
-      for (let i = 1; i < TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER; i++) {
+      const multiplier = normalizeTerminalTuiMouseWheelMultiplier(
+        options.getTuiMouseWheelMultiplier?.()
+      )
+      for (let i = 1; i < multiplier; i++) {
         target.dispatchEvent(cloneWheelEvent(event))
       }
     })
