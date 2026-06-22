@@ -46,12 +46,24 @@ function canReadOpenCodeSessions(db: SyncDatabase): boolean {
   )
 }
 
+function sessionColumnSelect(db: SyncDatabase, columnName: string): string {
+  return columnExists(db, 'session', columnName) ? `s.${columnName}` : 'NULL'
+}
+
+function canCountOpenCodeMessages(db: SyncDatabase): boolean {
+  return (
+    tableExists(db, 'message') &&
+    columnExists(db, 'message', 'session_id') &&
+    columnExists(db, 'message', 'data')
+  )
+}
+
 function buildSessionListQuery(db: SyncDatabase): string {
-  const modelSelect = columnExists(db, 'session', 'model') ? 's.model' : 'NULL'
-  const agentSelect = columnExists(db, 'session', 'agent') ? 's.agent' : 'NULL'
+  const modelSelect = sessionColumnSelect(db, 'model')
+  const agentSelect = sessionColumnSelect(db, 'agent')
   const tokenColumns = ['tokens_input', 'tokens_output', 'tokens_reasoning', 'tokens_cache_read']
   const tokenSelects = tokenColumns
-    .map((col) => (columnExists(db, 'session', col) ? `s.${col}` : '0'))
+    .map((col) => `${columnExists(db, 'session', col) ? `s.${col}` : '0'} AS ${col}`)
     .join(', ')
   const costSelect = columnExists(db, 'session', 'cost') ? 's.cost' : '0'
   const parentIdPredicate = columnExists(db, 'session', 'parent_id')
@@ -60,13 +72,17 @@ function buildSessionListQuery(db: SyncDatabase): string {
   const archivedPredicate = columnExists(db, 'session', 'time_archived')
     ? 'AND s.time_archived IS NULL'
     : ''
-  const messageCountSubquery = tableExists(db, 'message')
+  const messageCountSubquery = canCountOpenCodeMessages(db)
     ? `(SELECT COUNT(*) FROM message m
         WHERE m.session_id = s.id
           AND json_extract(m.data, '$.role') IN ('user','assistant'))`
     : '0'
 
-  return `SELECT s.id, s.title, s.directory, s.time_created, s.time_updated,
+  return `SELECT s.id,
+                 ${sessionColumnSelect(db, 'title')} AS title,
+                 ${sessionColumnSelect(db, 'directory')} AS directory,
+                 s.time_created,
+                 s.time_updated,
                  ${modelSelect} AS model_json, ${agentSelect} AS agent,
                  ${tokenSelects}, ${costSelect} AS cost,
                  ${messageCountSubquery} AS message_count
@@ -90,6 +106,23 @@ function rowToCandidate(row: SessionRow, dbPath: string): SessionFileCandidate {
     },
     codexHome: null
   }
+}
+
+function dedupeAndSortSqliteCandidates(candidates: SessionFileCandidate[]): SessionFileCandidate[] {
+  const candidatesBySessionId = new Map<string, SessionFileCandidate>()
+  for (const candidate of candidates) {
+    const parsed = splitOpenCodeSqliteCandidate(candidate.file.path)
+    if (!parsed) {
+      continue
+    }
+    const previous = candidatesBySessionId.get(parsed.sessionId)
+    if (!previous || candidate.file.mtimeMs > previous.file.mtimeMs) {
+      candidatesBySessionId.set(parsed.sessionId, candidate)
+    }
+  }
+  return [...candidatesBySessionId.values()].sort((left, right) => {
+    return right.file.mtimeMs - left.file.mtimeMs
+  })
 }
 
 /**
@@ -130,7 +163,7 @@ export async function listOpenCodeSqliteSessions(args: {
       db?.close()
     }
   }
-  return candidates
+  return dedupeAndSortSqliteCandidates(candidates)
 }
 
 // Why: extract the sessionId from a legacy file path like

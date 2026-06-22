@@ -3,11 +3,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../sqlite/sync-database'
-import {
-  buildOpenCodeSqliteCandidatePath,
-  looksLikeOpenCodeSqliteCandidate,
-  splitOpenCodeSqliteCandidate
-} from './session-scanner-opencode-sqlite-paths'
+import { buildOpenCodeSqliteCandidatePath } from './session-scanner-opencode-sqlite-paths'
 import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-discovery'
 import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
@@ -91,6 +87,14 @@ function applyOpenCodeSchema(db: Database.Database): void {
       icon_url_override TEXT
     );
   `)
+}
+
+function applyMinimalOpenCodeSchema(db: Database.Database): void {
+  db.exec(`CREATE TABLE session (
+    id TEXT PRIMARY KEY,
+    time_created INTEGER NOT NULL,
+    time_updated INTEGER NOT NULL
+  );`)
 }
 
 function insertSession(
@@ -185,47 +189,6 @@ function insertPart(
   ).run(args.id, args.messageId, args.sessionId, args.timeCreated, args.timeCreated, data)
 }
 
-describe('splitOpenCodeSqliteCandidate', () => {
-  it('splits a synthetic db#sessionId path', () => {
-    const result = splitOpenCodeSqliteCandidate('/data/opencode.db#ses_abc')
-    expect(result).toEqual({ dbPath: '/data/opencode.db', sessionId: 'ses_abc' })
-  })
-
-  it('splits a stable-db path', () => {
-    const result = splitOpenCodeSqliteCandidate('/data/opencode-stable.db#ses_xyz')
-    expect(result).toEqual({ dbPath: '/data/opencode-stable.db', sessionId: 'ses_xyz' })
-  })
-
-  it('rejects a path whose db basename is not opencode*.db', () => {
-    expect(splitOpenCodeSqliteCandidate('/data/random.db#ses_abc')).toBeNull()
-    expect(splitOpenCodeSqliteCandidate('/data/notes.txt#ses_abc')).toBeNull()
-  })
-
-  it('rejects a path without a separator', () => {
-    expect(splitOpenCodeSqliteCandidate('/data/opencode.db')).toBeNull()
-  })
-
-  it('rejects an empty sessionId', () => {
-    expect(splitOpenCodeSqliteCandidate('/data/opencode.db#')).toBeNull()
-  })
-})
-
-describe('looksLikeOpenCodeSqliteCandidate', () => {
-  it('returns true for a synthetic path', () => {
-    expect(looksLikeOpenCodeSqliteCandidate('/x/opencode.db#ses_1')).toBe(true)
-  })
-
-  it('returns false for a real filesystem path', () => {
-    expect(looksLikeOpenCodeSqliteCandidate('/x/storage/session/proj/ses_1.json')).toBe(false)
-  })
-})
-
-describe('buildOpenCodeSqliteCandidatePath', () => {
-  it('joins dbPath and sessionId with #', () => {
-    expect(buildOpenCodeSqliteCandidatePath('/d/opencode.db', 'ses_1')).toBe('/d/opencode.db#ses_1')
-  })
-})
-
 describe('listOpenCodeSqliteSessions', () => {
   it('returns candidates sorted by time_updated desc via the synthesized mtimeMs', async () => {
     const { db, path } = createTempDb()
@@ -256,6 +219,36 @@ describe('listOpenCodeSqliteSessions', () => {
     expect(candidates[0].file.mtimeMs).toBe(1_777_634_003_000)
     expect(candidates[0].file.path).toBe(buildOpenCodeSqliteCandidatePath(path, 'ses_new'))
     expect(candidates[1].file.path).toBe(buildOpenCodeSqliteCandidatePath(path, 'ses_old'))
+  })
+
+  it('dedups matching session ids across databases and keeps the newest row', async () => {
+    const { db: oldDb, path: oldPath } = createTempDb()
+    applyOpenCodeSchema(oldDb)
+    insertSession(oldDb, {
+      id: 'ses_duplicate',
+      title: 'Old duplicate',
+      timeCreated: 1_777_634_000_000,
+      timeUpdated: 1_777_634_001_000
+    })
+    oldDb.close()
+
+    const { db: newDb, path: newPath } = createTempDb()
+    applyOpenCodeSchema(newDb)
+    insertSession(newDb, {
+      id: 'ses_duplicate',
+      title: 'New duplicate',
+      timeCreated: 1_777_634_002_000,
+      timeUpdated: 1_777_634_003_000
+    })
+    newDb.close()
+
+    const candidates = await listOpenCodeSqliteSessions({
+      dbPaths: [oldPath, newPath],
+      limit: 10,
+      issues: []
+    })
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0].file.path).toBe(buildOpenCodeSqliteCandidatePath(newPath, 'ses_duplicate'))
   })
 
   it('excludes archived and child sessions', async () => {
@@ -313,6 +306,23 @@ describe('listOpenCodeSqliteSessions', () => {
     expect(issues).toHaveLength(1)
     expect(issues[0].agent).toBe('opencode')
     expect(issues[0].path).toBe('/nonexistent/opencode.db')
+  })
+
+  it('lists sessions from a minimal readable session table', async () => {
+    const { db, path } = createTempDb()
+    applyMinimalOpenCodeSchema(db)
+    db.prepare(`INSERT INTO session VALUES ('ses_minimal', 1777634000000, 1777634001000)`).run()
+    db.close()
+
+    const issues: AiVaultScanIssue[] = []
+    const candidates = await listOpenCodeSqliteSessions({
+      dbPaths: [path],
+      limit: 10,
+      issues
+    })
+    expect(issues).toEqual([])
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0].file.path).toBe(buildOpenCodeSqliteCandidatePath(path, 'ses_minimal'))
   })
 })
 
@@ -445,6 +455,27 @@ describe('parseOpenCodeSqliteSession', () => {
       platform: 'darwin'
     })
     expect(session).toBeNull()
+  })
+
+  it('parses a minimal readable session table without optional columns or messages', async () => {
+    const { db, path } = createTempDb()
+    applyMinimalOpenCodeSchema(db)
+    db.prepare(`INSERT INTO session VALUES ('ses_minimal', 1777634000000, 1777634001000)`).run()
+    db.close()
+
+    const session = await parseOpenCodeSqliteSession({
+      dbPath: path,
+      sessionId: 'ses_minimal',
+      platform: 'darwin'
+    })
+    expect(session).not.toBeNull()
+    expect(session!.sessionId).toBe('ses_minimal')
+    expect(session!.title).toBe('OpenCode ses_mini')
+    expect(session!.cwd).toBeNull()
+    expect(session!.model).toBeNull()
+    expect(session!.messageCount).toBe(0)
+    expect(session!.totalTokens).toBe(0)
+    expect(session!.previewMessages).toEqual([])
   })
 
   it('extracts model from older modelID schema', async () => {

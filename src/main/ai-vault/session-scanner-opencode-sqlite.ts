@@ -58,6 +58,46 @@ function canReadOpenCodeSessions(db: SyncDatabase): boolean {
   )
 }
 
+function sessionColumnSelect(db: SyncDatabase, columnName: string): string {
+  return columnExists(db, 'session', columnName) ? `s.${columnName}` : 'NULL'
+}
+
+function sessionNumberColumnSelect(db: SyncDatabase, columnName: string): string {
+  return columnExists(db, 'session', columnName) ? `s.${columnName}` : '0'
+}
+
+function canCountOpenCodeMessages(db: SyncDatabase): boolean {
+  return (
+    tableExists(db, 'message') &&
+    columnExists(db, 'message', 'session_id') &&
+    columnExists(db, 'message', 'data')
+  )
+}
+
+function buildSessionQuery(db: SyncDatabase): string {
+  const messageCountSubquery = canCountOpenCodeMessages(db)
+    ? `(SELECT COUNT(*) FROM message m
+        WHERE m.session_id = s.id
+          AND json_extract(m.data, '$.role') IN ('user','assistant'))`
+    : '0'
+  return `SELECT s.id,
+                 ${sessionColumnSelect(db, 'title')} AS title,
+                 ${sessionColumnSelect(db, 'directory')} AS directory,
+                 s.time_created,
+                 s.time_updated,
+                 ${sessionColumnSelect(db, 'model')} AS model_json,
+                 ${sessionColumnSelect(db, 'agent')} AS agent,
+                 ${sessionNumberColumnSelect(db, 'tokens_input')} AS tokens_input,
+                 ${sessionNumberColumnSelect(db, 'tokens_output')} AS tokens_output,
+                 ${sessionNumberColumnSelect(db, 'tokens_reasoning')} AS tokens_reasoning,
+                 ${sessionNumberColumnSelect(db, 'tokens_cache_read')} AS tokens_cache_read,
+                 ${sessionNumberColumnSelect(db, 'cost')} AS cost,
+                 ${messageCountSubquery} AS message_count
+          FROM session s
+          WHERE s.id = ?
+          LIMIT 1`
+}
+
 function extractModelId(modelJson: string | null): string | null {
   if (!modelJson) {
     return null
@@ -110,7 +150,14 @@ function extractPartText(partData: string): string | null {
 }
 
 function buildPreviewQuery(db: SyncDatabase): string | null {
-  if (!tableExists(db, 'message') || !tableExists(db, 'part')) {
+  if (
+    !canCountOpenCodeMessages(db) ||
+    !tableExists(db, 'part') ||
+    !columnExists(db, 'message', 'id') ||
+    !columnExists(db, 'part', 'message_id') ||
+    !columnExists(db, 'part', 'time_created') ||
+    !columnExists(db, 'part', 'data')
+  ) {
     return null
   }
   return `SELECT json_extract(m.data, '$.role') AS role,
@@ -151,21 +198,7 @@ export async function parseOpenCodeSqliteSession(args: {
     if (!canReadOpenCodeSessions(db)) {
       return null
     }
-    const row = db
-      .prepare(
-        `SELECT s.id, s.title, s.directory, s.time_created, s.time_updated,
-                s.model AS model_json, s.agent,
-                s.tokens_input, s.tokens_output, s.tokens_reasoning,
-                s.tokens_cache_read, s.cost,
-                (SELECT COUNT(*) FROM message m
-                  WHERE m.session_id = s.id
-                    AND json_extract(m.data, '$.role') IN ('user','assistant'))
-                  AS message_count
-         FROM session s
-         WHERE s.id = ?
-         LIMIT 1`
-      )
-      .get(sessionId) as SessionRow | undefined
+    const row = db.prepare(buildSessionQuery(db)).get(sessionId) as SessionRow | undefined
     if (!row || row.id !== sessionId) {
       return null
     }
@@ -224,8 +257,6 @@ export async function parseOpenCodeSqliteSession(args: {
     }
 
     return finalizeSession(accumulator, platform)
-  } catch {
-    return null
   } finally {
     db?.close()
   }
