@@ -239,6 +239,8 @@ import type {
   BrowserCredentialEntry,
   BrowserCredentialSaveOutcome,
   BrowserCredentialVaultStatus,
+  DetectedImportBrowser,
+  PasswordImportResult,
   SaveBrowserCredentialArgs,
   UpdateBrowserCredentialArgs
 } from '../shared/browser-credential-types'
@@ -478,6 +480,11 @@ export type BrowserApi = {
       enabled: boolean
     }) => Promise<boolean>
     fill: (args: { browserTabId: string; entryId: string; fieldId: string }) => Promise<boolean>
+    detectImportBrowsers: () => Promise<DetectedImportBrowser[]>
+    importFromBrowser: (args: {
+      browserFamily: string
+      browserProfile?: string
+    }) => Promise<PasswordImportResult>
   }
 }
 

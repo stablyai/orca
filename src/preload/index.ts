@@ -2183,7 +2183,10 @@ const api = {
       injectBridge: (args: { browserTabId: string; token: string; enabled: boolean }) =>
         ipcRenderer.invoke('browser:credentials:injectBridge', args),
       fill: (args: { browserTabId: string; entryId: string; fieldId: string }) =>
-        ipcRenderer.invoke('browser:credentials:fill', args)
+        ipcRenderer.invoke('browser:credentials:fill', args),
+      detectImportBrowsers: () => ipcRenderer.invoke('browser:credentials:detectImportBrowsers'),
+      importFromBrowser: (args: { browserFamily: string; browserProfile?: string }) =>
+        ipcRenderer.invoke('browser:credentials:importFromBrowser', args)
     }
   },
 

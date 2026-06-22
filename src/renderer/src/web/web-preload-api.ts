@@ -1602,7 +1602,13 @@ function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
       update: async () => null,
       delete: async () => false,
       injectBridge: async () => false,
-      fill: async () => false
+      fill: async () => false,
+      // Password import requires local Chromium profile access; not available in the web client.
+      detectImportBrowsers: async () => [],
+      importFromBrowser: async () => ({
+        ok: false,
+        reason: 'Password import is unavailable in the web client.'
+      })
     }
   } as unknown as NonNullable<Partial<PreloadApi>['browser']>
 }
