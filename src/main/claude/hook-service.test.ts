@@ -177,6 +177,34 @@ describe('ClaudeHookService.install', () => {
       rmSync(tmpHome, { recursive: true, force: true })
     }
   })
+
+  // Why: #6078 — Claude Code runs hooks through Git Bash, and an unquoted path
+  // with a space (e.g. `C:/Users/Jane Doe`) splits at the space. The managed
+  // command must invoke the .cmd through `cmd.exe /d /c call "..."` so Git Bash
+  // treats the whole path as one argument.
+  it.skipIf(process.platform !== 'win32')(
+    'wraps the managed hook command in cmd.exe to survive spaces in the profile path (#6078)',
+    () => {
+      const tmpHome = mkdtempSync(join(tmpdir(), 'orca claude home with spaces '))
+      vi.stubEnv('HOME', tmpHome)
+      vi.stubEnv('USERPROFILE', tmpHome)
+      try {
+        expect(new ClaudeHookService().install().state).toBe('installed')
+
+        const settings = JSON.parse(
+          readFileSync(join(tmpHome, '.claude', 'settings.json'), 'utf-8')
+        ) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
+
+        for (const eventName of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
+          const command = settings.hooks[eventName]?.[0]?.hooks?.[0]?.command
+          expect(command).toMatch(/^cmd\.exe \/d \/c call ".*claude-hook\.cmd"$/)
+        }
+      } finally {
+        vi.unstubAllEnvs()
+        rmSync(tmpHome, { recursive: true, force: true })
+      }
+    }
+  )
 })
 
 describe('ClaudeHookService.installRemote', () => {
