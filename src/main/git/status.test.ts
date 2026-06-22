@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: git status/discard/chunking behavior is verified together here to keep the command contract readable in one place. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as NodeFs from 'fs'
 import path from 'path'
 import {
   MAX_RENDERED_DIFF_COMBINED_CHARACTERS,
@@ -459,6 +460,74 @@ describe('getStatus', () => {
     // set only a `mockResolvedValueOnce` for the status output; this default
     // keeps those follow-up numstat calls from returning undefined.
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
+  })
+
+  it('benchmarks concurrent status burst subprocess pressure', async () => {
+    const benchPath = process.env.ORCA_GIT_STATUS_COALESCING_BENCH_JSON
+    if (!benchPath) {
+      return
+    }
+
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args.includes('status')) {
+        return Promise.resolve({ stdout: '' })
+      }
+      if (args.includes('--numstat')) {
+        return Promise.resolve({ stdout: '' })
+      }
+      return Promise.resolve({ stdout: '' })
+    })
+
+    const startedAt = performance.now()
+    await Promise.all(Array.from({ length: 10 }, () => getStatus('/repo')))
+    const durationMs = performance.now() - startedAt
+    const statusCommandCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) =>
+      (args as string[]).includes('status')
+    ).length
+    const { mkdirSync, writeFileSync } = await vi.importActual<typeof NodeFs>('fs')
+    mkdirSync(path.dirname(benchPath), { recursive: true })
+    writeFileSync(
+      benchPath,
+      JSON.stringify({
+        scenario: 'git-status-concurrent-burst',
+        concurrentCalls: 10,
+        statusCommandCalls,
+        durationMs
+      })
+    )
+  })
+
+  it('coalesces identical in-flight status reads without caching after settle', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    let statusCommandCalls = 0
+    const releaseStatusReads: (() => void)[] = []
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args.includes('status')) {
+        statusCommandCalls += 1
+        return new Promise<{ stdout: string }>((resolve) => {
+          releaseStatusReads.push(() => resolve({ stdout: '' }))
+        })
+      }
+      if (args.includes('--numstat')) {
+        return Promise.resolve({ stdout: '' })
+      }
+      return Promise.resolve({ stdout: '' })
+    })
+
+    const sharedRead = Promise.all([getStatus('/repo'), getStatus('/repo'), getStatus('/repo')])
+    await vi.waitFor(() => expect(statusCommandCalls).toBe(1))
+    releaseStatusReads.splice(0).forEach((release) => release())
+    await sharedRead
+    expect(statusCommandCalls).toBe(1)
+
+    const settledRead = getStatus('/repo')
+    await vi.waitFor(() => expect(statusCommandCalls).toBe(2))
+    releaseStatusReads.splice(0).forEach((release) => release())
+    await settledRead
+    expect(statusCommandCalls).toBe(2)
   })
 
   it('parses unmerged porcelain v2 entries into unresolved conflict rows', async () => {
