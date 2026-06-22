@@ -893,7 +893,13 @@ export function FloatingTerminalPanel({
     closeFloatingItems(
       currentGroupTabs
         .filter(
-          (tab) => tab.contentType !== 'terminal' && tab.contentType !== 'browser' && !tab.isPinned
+          (tab) =>
+            tab.contentType !== 'terminal' &&
+            tab.contentType !== 'browser' &&
+            // Why: simulator tabs are not files; "Close All Files" must leave
+            // the Mobile Emulator open like terminal/browser tabs do.
+            tab.contentType !== 'simulator' &&
+            !tab.isPinned
         )
         .map((tab) => tab.id)
     )

@@ -1734,6 +1734,62 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.closeFile).not.toHaveBeenCalledWith(tab.id)
   })
 
+  it('keeps simulator tabs open when closing all files', async () => {
+    const state = storeBox.state as FloatingPanelStoreState
+    const groupId = 'floating-group'
+    const file = makeFile({ id: 'file-a' })
+    const editorTab: Tab = {
+      id: 'tab-file-a',
+      entityId: file.id,
+      groupId,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      contentType: 'editor',
+      label: file.relativePath,
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    }
+    const simulatorTab: Tab = {
+      id: 'simulator-tab',
+      entityId: 'simulator-tab',
+      groupId,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      contentType: 'simulator',
+      label: 'Mobile Emulator',
+      customLabel: null,
+      color: null,
+      sortOrder: 1,
+      createdAt: 1
+    }
+    state.openFiles = [file]
+    state.unifiedTabsByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [editorTab, simulatorTab]
+    }
+    state.groupsByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [
+        {
+          id: groupId,
+          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+          activeTabId: editorTab.id,
+          tabOrder: [editorTab.id, simulatorTab.id],
+          recentTabIds: [editorTab.id, simulatorTab.id]
+        }
+      ]
+    }
+    state.activeGroupIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
+    state.tabBarOrderByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [editorTab.id, simulatorTab.id]
+    }
+
+    const element = await renderPanel(true)
+    const tabBar = findByTypeName(element, 'TabBar')
+    ;(tabBar.props.onCloseAllFiles as () => void)()
+
+    expect(mocks.closeFile).toHaveBeenCalledWith(file.id)
+    expect(mocks.closeUnifiedTab).not.toHaveBeenCalledWith(simulatorTab.id)
+  })
+
   it('routes floating terminal create and close through active web runtime sessions', async () => {
     const onOpenChange = vi.fn()
     setFloatingTabs([makeTab({ id: 'tab-1' })])
