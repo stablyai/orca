@@ -315,9 +315,26 @@ async function startMetro(worktree) {
     let output = ''
     let url = null
     let resolved = false
+    let exited = false
+    let rl = null
+    let rlErr = null
+
+    const metroResult = () => ({
+      process: metro,
+      url,
+      output,
+      isExited: () => exited,
+      closeOutput: () => {
+        rl?.close()
+        rlErr?.close()
+        metro.stdin?.destroy()
+        metro.stdout?.destroy()
+        metro.stderr?.destroy()
+      }
+    })
 
     // Parse Metro output for the development URL
-    const rl = readline.createInterface({ input: metro.stdout })
+    rl = readline.createInterface({ input: metro.stdout })
     rl.on('line', (line) => {
       output += line + '\n'
       process.stdout.write(colors.dim + line + colors.reset + '\n')
@@ -333,33 +350,37 @@ async function startMetro(worktree) {
 
         if (!options.waitForReady) {
           resolved = true
-          resolve({ process: metro, url, output })
+          resolve(metroResult())
         }
       }
 
       // Also check for the dev-client URL format directly
-      const urlMatch = line.match(/exp\+orca-mobile:\/\/expo-development-client\/\?url=(.+)/)
+      const urlMatch = line.match(/exp\+orca-mobile:\/\/expo-development-client\/\?url=([^\s]+)/)
       if (urlMatch && !resolved) {
         url = normalizeMetroUrl(decodeURIComponent(urlMatch[1]))
         logInfo(`Found Metro URL: ${url}`)
 
         if (!options.waitForReady) {
           resolved = true
-          resolve({ process: metro, url, output })
+          resolve(metroResult())
         }
       }
 
       // Also check for "packager-status:running" or ready indicator
-      if (line.includes('packager-status:running') || line.includes('Metro waiting')) {
+      if (
+        line.includes('packager-status:running') ||
+        line.includes('Metro waiting') ||
+        line.includes('Logs for your project will appear below')
+      ) {
         if (url && !resolved) {
           resolved = true
-          resolve({ process: metro, url, output })
+          resolve(metroResult())
         }
       }
     })
 
     // Also check stderr
-    const rlErr = readline.createInterface({ input: metro.stderr })
+    rlErr = readline.createInterface({ input: metro.stderr })
     rlErr.on('line', (line) => {
       output += line + '\n'
       process.stderr.write(colors.red + line + colors.reset + '\n')
@@ -373,12 +394,13 @@ async function startMetro(worktree) {
     })
 
     metro.on('exit', (code) => {
+      exited = true
       if (!resolved) {
         resolved = true
         if (code !== 0) {
           reject(new Error(`Metro exited with code ${code}`))
         } else {
-          resolve({ process: metro, url, output })
+          resolve(metroResult())
         }
       }
     })
@@ -510,11 +532,37 @@ async function main() {
 
     // Keep running until Metro exits
     await new Promise((resolve) => {
-      metro.process.on('exit', resolve)
-      process.on('SIGINT', () => {
+      let stopping = false
+      let stopTimeout = null
+      const finish = () => {
+        if (stopTimeout) {
+          clearTimeout(stopTimeout)
+        }
+        metro.process.off('exit', finish)
+        process.off('SIGINT', stopMetro)
+        process.off('SIGTERM', stopMetro)
+        metro.closeOutput?.()
+        resolve()
+      }
+      const stopMetro = () => {
+        if (stopping) {
+          finish()
+          return
+        }
+        stopping = true
         metro.process.kill('SIGINT')
-      })
+        stopTimeout = setTimeout(finish, 2000)
+        stopTimeout.unref?.()
+      }
+      metro.process.once('exit', finish)
+      if (metro.isExited()) {
+        finish()
+        return
+      }
+      process.once('SIGINT', stopMetro)
+      process.once('SIGTERM', stopMetro)
     })
+    process.exit(0)
   } catch (error) {
     logError(error.message)
     process.exit(1)
