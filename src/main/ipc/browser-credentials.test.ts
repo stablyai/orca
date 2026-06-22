@@ -24,6 +24,7 @@ vi.mock('../browser/password-import-service', () => ({
 }))
 
 import { registerBrowserCredentialHandlers } from './browser-credentials'
+import { importPasswordsFromBrowser } from '../browser/password-import-service'
 
 function handlerFor(channel: string) {
   return handleMock.mock.calls.find(([c]) => c === channel)?.[1]
@@ -140,5 +141,18 @@ describe('registerBrowserCredentialHandlers', () => {
       { browserFamily: 'chrome' }
     )
     expect(r).toMatchObject({ ok: true, added: 2 })
+  })
+
+  it('rejects untrusted importFromBrowser', async () => {
+    // Clear calls recorded by the preceding trusted-import test since the
+    // vi.mock factory fn is shared across tests and not reset in beforeEach.
+    vi.mocked(importPasswordsFromBrowser).mockClear()
+    const r = await handlerFor('browser:credentials:importFromBrowser')!(
+      { sender: untrustedSender },
+      { browserFamily: 'chrome' }
+    )
+    expect(r).toEqual({ ok: false, reason: 'untrusted' })
+    // the service must not run for untrusted callers
+    expect(importPasswordsFromBrowser).not.toHaveBeenCalled()
   })
 })
