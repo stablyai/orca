@@ -75,6 +75,33 @@ describe('DroidHookService', () => {
     expect(config.hooks.PreToolUse[0].hooks[0].command).not.toContain(userDataDir)
   })
 
+  // Why: #6078 — a Windows user profile path with a space used to be written
+  // verbatim as the hook command, so the agent split it at the space. The
+  // managed command must invoke the .cmd through `cmd.exe /d /c call "..."`.
+  it.skipIf(process.platform !== 'win32')(
+    'wraps the managed hook command in cmd.exe to survive spaces in the profile path (#6078)',
+    () => {
+      const spaceHome = join(tmpdir(), 'orca droid home with spaces')
+      mkdirSync(spaceHome, { recursive: true })
+      homedirMock.mockReturnValue(spaceHome)
+      try {
+        expect(new DroidHookService().install().state).toBe('installed')
+
+        const config = JSON.parse(
+          readFileSync(join(spaceHome, '.factory', 'settings.json'), 'utf8')
+        ) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
+
+        for (const eventName of ['SessionStart', 'UserPromptSubmit', 'Stop']) {
+          const command = config.hooks[eventName]?.[0]?.hooks?.[0]?.command
+          expect(command).toMatch(/^cmd\.exe \/d \/c call ".*droid-hook\.cmd"$/)
+          expect(command).toContain('orca droid home with spaces')
+        }
+      } finally {
+        rmSync(spaceHome, { recursive: true, force: true })
+      }
+    }
+  )
+
   it('reports partial when Factory has hooks disabled globally', () => {
     const configPath = join(homeDir, '.factory', 'settings.json')
     mkdirSync(dirname(configPath), { recursive: true })

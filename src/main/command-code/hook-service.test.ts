@@ -57,6 +57,31 @@ describe('CommandCodeHookService', () => {
     }
   })
 
+  // Why: #6078 — a Windows user profile path with a space used to be written
+  // verbatim as the hook command, so the agent split it at the space. The
+  // managed command must invoke the .cmd through `cmd.exe /d /c call "..."`.
+  it.skipIf(process.platform !== 'win32')(
+    'wraps the managed hook command in cmd.exe to survive spaces in the profile path (#6078)',
+    () => {
+      const spaceHome = join(tmpdir(), 'orca command-code home with spaces')
+      mkdirSync(spaceHome, { recursive: true })
+      homedirMock.mockReturnValue(spaceHome)
+      try {
+        expect(new CommandCodeHookService().install().state).toBe('installed')
+
+        const config = JSON.parse(
+          readFileSync(join(spaceHome, '.commandcode', 'settings.json'), 'utf8')
+        ) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
+
+        const command = config.hooks.PreToolUse[0].hooks[0].command
+        expect(command).toMatch(/^cmd\.exe \/d \/c call ".*command-code-hook\.cmd"$/)
+        expect(command).toContain('orca command-code home with spaces')
+      } finally {
+        rmSync(spaceHome, { recursive: true, force: true })
+      }
+    }
+  )
+
   it('installs a hook script that can recover the endpoint when Command Code strips token env', () => {
     new CommandCodeHookService().install()
 

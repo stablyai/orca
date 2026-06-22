@@ -8,6 +8,7 @@ import {
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
+  wrapWindowsHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
@@ -54,9 +55,12 @@ function getManagedScriptPath(): string {
 }
 
 function getManagedCommand(scriptPath: string): string {
-  // Why: Factory invokes the .cmd directly via cmd.exe (no bash), so native
-  // backslashes are correct on Windows. Matches the codex/cursor pattern.
-  return process.platform === 'win32' ? scriptPath : wrapPosixHookCommand(scriptPath)
+  // Why: Factory invokes the .cmd via cmd.exe, but the raw path still splits at
+  // whitespace when the user profile contains a space (e.g. `C:\Users\Jane Doe`).
+  // Wrapping in `cmd.exe /d /c call "..."` preserves the path as one argument. #6078.
+  return process.platform === 'win32'
+    ? wrapWindowsHookCommand(scriptPath)
+    : wrapPosixHookCommand(scriptPath)
 }
 
 function getManagedScript(): string {

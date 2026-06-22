@@ -106,6 +106,34 @@ describe('GeminiHookService', () => {
     expect(config.hooks.BeforeTool[0].hooks[0].command).toContain(managedHookPath)
   })
 
+  // Why: #6078 — a Windows user profile path with a space used to be written
+  // verbatim as the hook command, so the agent split it at the space. The
+  // managed command must invoke the .cmd through `cmd.exe /d /c call "..."`.
+  it.skipIf(process.platform !== 'win32')(
+    'wraps the managed hook command in cmd.exe to survive spaces in the profile path (#6078)',
+    () => {
+      const spaceHome = join(tmpdir(), 'orca gemini home with spaces')
+      mkdirSync(spaceHome, { recursive: true })
+      homedirMock.mockReturnValue(spaceHome)
+      try {
+        expect(new GeminiHookService().install().state).toBe('installed')
+
+        const config = JSON.parse(
+          readFileSync(join(spaceHome, '.gemini', 'settings.json'), 'utf8')
+        ) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
+
+        for (const eventName of ['BeforeAgent', 'AfterAgent', 'AfterTool']) {
+          const command = config.hooks[eventName]?.[0]?.hooks?.[0]?.command
+          expect(command).toMatch(/^cmd\.exe \/d \/c call ".*gemini-hook\.cmd"$/)
+          expect(command).toContain('orca gemini home with spaces')
+        }
+      } finally {
+        rmSync(spaceHome, { recursive: true, force: true })
+        homedirMock.mockReturnValue(homeDir)
+      }
+    }
+  )
+
   it('preserves user-authored PreToolUse hooks while sweeping stale managed Gemini hooks', () => {
     const managedHookFileName = process.platform === 'win32' ? 'gemini-hook.cmd' : 'gemini-hook.sh'
     const staleManagedHookPath =

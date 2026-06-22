@@ -74,6 +74,33 @@ describe('GrokHookService', () => {
     }
   })
 
+  // Why: #6078 — a Windows user profile path with a space used to be written
+  // verbatim as the hook command, so the agent split it at the space. The
+  // managed command must invoke the .cmd through `cmd.exe /d /c call "..."`.
+  it.skipIf(process.platform !== 'win32')(
+    'wraps the managed hook command in cmd.exe to survive spaces in the profile path (#6078)',
+    () => {
+      const spaceHome = join(tmpdir(), 'orca grok home with spaces')
+      mkdirSync(spaceHome, { recursive: true })
+      homedirMock.mockReturnValue(spaceHome)
+      try {
+        expect(new GrokHookService().install().state).toBe('installed')
+
+        const config = JSON.parse(
+          readFileSync(join(spaceHome, '.grok', 'hooks', 'orca-status.json'), 'utf8')
+        ) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
+
+        for (const eventName of ['SessionStart', 'UserPromptSubmit', 'Stop']) {
+          const command = config.hooks[eventName]?.[0]?.hooks?.[0]?.command
+          expect(command).toMatch(/^cmd\.exe \/d \/c call ".*grok-hook\.cmd"$/)
+          expect(command).toContain('orca grok home with spaces')
+        }
+      } finally {
+        rmSync(spaceHome, { recursive: true, force: true })
+      }
+    }
+  )
+
   it('preserves user-authored hook entries in the Orca Grok config file', () => {
     const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
     mkdirSync(dirname(configPath), { recursive: true })

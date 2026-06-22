@@ -75,6 +75,33 @@ describe('CursorHookService', () => {
     }
   })
 
+  // Why: #6078 — a Windows user profile path with a space used to be written
+  // verbatim as the hook command, so the agent split it at the space. The
+  // managed command must invoke the .cmd through `cmd.exe /d /c call "..."`.
+  it.skipIf(process.platform !== 'win32')(
+    'wraps the managed hook command in cmd.exe to survive spaces in the profile path (#6078)',
+    () => {
+      const spaceHome = join(tmpdir(), 'orca cursor home with spaces')
+      mkdirSync(spaceHome, { recursive: true })
+      homedirMock.mockReturnValue(spaceHome)
+      try {
+        expect(new CursorHookService().install().state).toBe('installed')
+
+        const config = JSON.parse(
+          readFileSync(join(spaceHome, '.cursor', 'hooks.json'), 'utf8')
+        ) as { hooks: Record<string, { command?: string }[]> }
+
+        for (const eventName of ['beforeSubmitPrompt', 'stop']) {
+          const command = config.hooks[eventName]?.[0]?.command
+          expect(command).toMatch(/^cmd\.exe \/d \/c call ".*cursor-hook\.cmd"$/)
+          expect(command).toContain('orca cursor home with spaces')
+        }
+      } finally {
+        rmSync(spaceHome, { recursive: true, force: true })
+      }
+    }
+  )
+
   it('preserves user-authored Cursor hook entries and removes stale managed entries', () => {
     const configPath = join(homeDir, '.cursor', 'hooks.json')
     mkdirSync(dirname(configPath), { recursive: true })
