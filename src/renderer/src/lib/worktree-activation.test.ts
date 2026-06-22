@@ -63,6 +63,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-2', {
       command: 'bash /tmp/repo/.git/orca/setup-runner.sh',
+      startupCommandDelivery: 'shell-ready',
       env: {
         ORCA_ROOT_PATH: '/tmp/repo',
         ORCA_WORKTREE_PATH: '/tmp/worktrees/wt-1'
@@ -326,6 +327,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.queueTabStartupCommand).not.toHaveBeenCalled()
     expect(store.queueTabSetupSplit).toHaveBeenCalledWith('tab-1', {
       command: 'bash /tmp/repo/.git/orca/setup-runner.sh',
+      startupCommandDelivery: 'shell-ready',
       env: { ORCA_ROOT_PATH: '/tmp/repo' },
       direction: 'vertical'
     })
@@ -355,6 +357,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
 
     expect(store.queueTabSetupSplit).toHaveBeenCalledWith('tab-1', {
       command: 'bash /tmp/repo/.git/orca/setup-runner.sh',
+      startupCommandDelivery: 'shell-ready',
       env: { ORCA_ROOT_PATH: '/tmp/repo' },
       direction: 'vertical'
     })
@@ -371,6 +374,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
 
     expect(store.queueTabSetupSplit).toHaveBeenCalledWith('tab-1', {
       command: 'bash /tmp/repo/.git/orca/setup-runner.sh',
+      startupCommandDelivery: 'shell-ready',
       env: { ORCA_ROOT_PATH: '/tmp/repo' },
       direction: 'horizontal'
     })
@@ -397,6 +401,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-2', {
       command: 'bash /tmp/repo/.git/orca/setup-runner.sh',
+      startupCommandDelivery: 'shell-ready',
       env: { ORCA_ROOT_PATH: '/tmp/repo' }
     })
     expect(store.queueTabSetupSplit).not.toHaveBeenCalled()

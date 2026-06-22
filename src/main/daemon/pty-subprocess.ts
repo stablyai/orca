@@ -501,7 +501,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       spawnCwd,
       getDefaultCwd(),
       sessionWslContext ?? preferredWslContext,
-      opts.command
+      opts.command,
+      opts.startupCommandDelivery
     )
     shellArgs = resolved.shellArgs
     spawnCwd = resolved.effectiveCwd
@@ -533,7 +534,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
               {
                 distro: codexHomeWslInfo.distro
               },
-              opts.command
+              opts.command,
+              opts.startupCommandDelivery
             )
             shellArgs = resolved.shellArgs
             spawnCwd = resolved.effectiveCwd

@@ -10,6 +10,7 @@ import {
   encodePowerShellCommand,
   getPowerShellOsc133Bootstrap
 } from '../powershell-osc133-bootstrap'
+import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 
 const CMD_EXE_COMMAND_LINE_MAX_CHARS = 8191
 const STARTUP_COMMAND_TEXT_MAX_CHARS = 6000
@@ -119,27 +120,30 @@ export function resolveWindowsShellLaunchArgs(
   cwd: string,
   defaultCwd: string,
   wslContext?: WindowsShellWslContext,
-  startupCommand?: string
+  startupCommand?: string,
+  startupCommandDelivery?: StartupCommandDelivery
 ): WindowsShellLaunchArgs {
   const shellBasename = pathWin32.basename(shellPath).toLowerCase()
+  const shellArgStartupCommand =
+    startupCommandDelivery === 'shell-ready' ? undefined : startupCommand
 
   if (shellBasename === 'cmd.exe') {
-    const shellArgStartupCommand = getCmdShellArgStartupCommand(startupCommand)
+    const cmdStartupCommand = getCmdShellArgStartupCommand(shellArgStartupCommand)
     return {
       shellArgs: [
         '/K',
-        shellArgStartupCommand
-          ? `${CMD_UTF8_SETUP_COMMAND} & ${shellArgStartupCommand}`
+        cmdStartupCommand
+          ? `${CMD_UTF8_SETUP_COMMAND} & ${cmdStartupCommand}`
           : CMD_UTF8_SETUP_COMMAND
       ],
-      ...(shellArgStartupCommand ? { startupCommandDeliveredInShellArgs: true } : {}),
+      ...(cmdStartupCommand ? { startupCommandDeliveredInShellArgs: true } : {}),
       effectiveCwd: cwd,
       validationCwd: cwd
     }
   }
 
   if (shellBasename === 'powershell.exe' || shellBasename === 'pwsh.exe') {
-    const powerShellCommand = getPowerShellEncodedCommand(startupCommand)
+    const powerShellCommand = getPowerShellEncodedCommand(shellArgStartupCommand)
     // Why: foreground-process status on Windows depends on OSC 133 C/D, and
     // PowerShell needs a prompt/readline bootstrap after profiles finish.
     return {

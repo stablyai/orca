@@ -406,7 +406,8 @@ export class LocalPtyProvider implements IPtyProvider {
         cwd,
         defaultCwd,
         worktreeWslContext ?? preferredWslContext,
-        args.command
+        args.command,
+        args.startupCommandDelivery
       )
       shellArgs = resolved.shellArgs
       effectiveCwd = resolved.effectiveCwd
@@ -502,9 +503,16 @@ export class LocalPtyProvider implements IPtyProvider {
             // Why: wsl.exe only imports non-default env vars named in WSLENV.
             addWslEnvKeys(finalEnv, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
             if (!launchWslDistro) {
-              const resolved = resolveWindowsShellLaunchArgs(shellPath, cwd, defaultCwd, {
-                distro: codexHomeWslInfo.distro
-              })
+              const resolved = resolveWindowsShellLaunchArgs(
+                shellPath,
+                cwd,
+                defaultCwd,
+                {
+                  distro: codexHomeWslInfo.distro
+                },
+                args.command,
+                args.startupCommandDelivery
+              )
               shellArgs = resolved.shellArgs
               effectiveCwd = resolved.effectiveCwd
               validationCwd = resolved.validationCwd

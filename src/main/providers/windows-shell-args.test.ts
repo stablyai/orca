@@ -36,6 +36,19 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
   })
 
+  it('keeps shell-ready cmd.exe startup commands on stdin delivery', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'cmd.exe',
+      'C:\\Users\\alice',
+      'C:\\Users\\alice',
+      undefined,
+      'bash C:\\repo\\.git\\orca\\setup-runner.sh',
+      'shell-ready'
+    )
+    expect(result.shellArgs).toEqual(['/K', 'chcp 65001 > nul'])
+    expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
+  })
+
   it('keeps large cmd.exe startup commands on stdin delivery', () => {
     const result = resolveWindowsShellLaunchArgs(
       'cmd.exe',
@@ -102,6 +115,23 @@ describe('resolveWindowsShellLaunchArgs', () => {
     const command = Buffer.from(result.shellArgs[3] ?? '', 'base64').toString('utf16le')
     expect(command).toContain('function Global:prompt')
     expect(command.trimEnd().endsWith("& 'codex' '--no-alt-screen'")).toBe(true)
+  })
+
+  it('keeps shell-ready PowerShell startup commands out of EncodedCommand', () => {
+    const startupCommand = '& "C:\\repo\\.git\\orca\\setup-runner.cmd"'
+    const result = resolveWindowsShellLaunchArgs(
+      'powershell.exe',
+      'C:\\Users\\alice',
+      'C:\\Users\\alice',
+      undefined,
+      startupCommand,
+      'shell-ready'
+    )
+    expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
+
+    const command = Buffer.from(result.shellArgs[3] ?? '', 'base64').toString('utf16le')
+    expect(command).toContain('function Global:prompt')
+    expect(command).not.toContain(startupCommand)
   })
 
   it('preserves complex PowerShell startup command text through EncodedCommand', () => {

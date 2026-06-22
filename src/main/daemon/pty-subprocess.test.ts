@@ -1340,6 +1340,36 @@ describe('createPtySubprocess', () => {
     expect(handle!.startupCommandDeliveredInShellArgs).toBe(true)
   })
 
+  it('keeps shell-ready Windows startup commands on PTY stdin delivery', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    let handle: ReturnType<typeof createPtySubprocess>
+    try {
+      handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe',
+        command: '& "C:\\repo\\.git\\orca\\setup-runner.cmd"',
+        startupCommandDelivery: 'shell-ready'
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const lastCall = spawnMock.mock.calls.at(-1)!
+    const encoded = String(lastCall[1][3])
+    const command = Buffer.from(encoded, 'base64').toString('utf16le')
+    expect(command).not.toContain('setup-runner.cmd')
+    expect(handle!.startupCommandDeliveredInShellArgs).toBeUndefined()
+  })
+
   it('keeps oversized Windows startup commands on PTY stdin delivery', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)

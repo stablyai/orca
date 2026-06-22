@@ -134,6 +134,7 @@ type UseTerminalPaneLifecycleDeps = {
    *  keeping the main terminal interactive. */
   setupSplit?: {
     command: string
+    startupCommandDelivery?: StartupCommandDelivery
     env?: Record<string, string>
     direction: SetupSplitDirection
   } | null
@@ -286,7 +287,11 @@ function hydrateTerminalScrollbackRefs(layout: TerminalLayoutSnapshot): {
     : { layout, hydrated }
 }
 
-type SplitStartupPayload = { command: string; env?: Record<string, string> }
+type SplitStartupPayload = {
+  command: string
+  startupCommandDelivery?: StartupCommandDelivery
+  env?: Record<string, string>
+}
 
 type SplitWithStartupDeps = {
   startup?: SplitStartupPayload | null
@@ -1186,7 +1191,11 @@ export function useTerminalPaneLifecycle({
       if (initialPane) {
         const setupPane = splitPaneWithOneShotStartup(
           ptyDeps,
-          { command: setupSplit.command, env: setupSplit.env },
+          {
+            command: setupSplit.command,
+            startupCommandDelivery: setupSplit.startupCommandDelivery,
+            env: setupSplit.env
+          },
           () => manager.splitPane(initialPane.id, setupSplit.direction)
         )
         issueAutomationAnchorPaneId = setupPane?.id ?? null

@@ -558,6 +558,7 @@ function queueSetupAndIssueCommands(
     const mode = useAppStore.getState().settings?.setupScriptLaunchMode ?? 'new-tab'
     const setupCommand = {
       command: buildSetupRunnerCommand(setup.runnerScriptPath),
+      startupCommandDelivery: 'shell-ready' as const,
       env: setup.envVars
     }
     if (mode === 'new-tab') {
