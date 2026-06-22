@@ -404,6 +404,8 @@ function execFileCapture(
       return
     }
 
+    child.once('error', (error) => finish(error))
+
     if (options.stdin !== undefined) {
       child.stdin?.end(options.stdin)
     }

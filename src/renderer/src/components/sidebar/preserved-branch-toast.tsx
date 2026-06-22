@@ -16,6 +16,37 @@ function preservedBranchToastId(branchName: string, expectedHead: string | undef
   return `preserved-branch:${branchName}:${expectedHead ?? 'unknown'}`
 }
 
+function getPreservedBranchTitle(isWorkspace: boolean): string {
+  return isWorkspace
+    ? translate('auto.store.slices.worktrees.5366d13eec', 'Workspace deleted, branch kept')
+    : translate('auto.store.slices.worktrees.2e17f825d4', 'Worktree deleted, branch kept')
+}
+
+function getPreservedBranchDescription(
+  branch: string,
+  targetName: string | undefined,
+  isWorkspace: boolean
+): string {
+  if (!targetName) {
+    return translate(
+      'auto.store.slices.worktrees.78e08cd877',
+      'Git could not safely delete branch "{{value0}}", so Orca kept it to avoid losing local commits.',
+      { value0: branch }
+    )
+  }
+  return isWorkspace
+    ? translate(
+        'auto.store.slices.worktrees.3b57982bf6',
+        'Git could not safely delete branch "{{value0}}" after deleting workspace "{{value1}}", so Orca kept it to avoid losing local commits.',
+        { value0: branch, value1: targetName }
+      )
+    : translate(
+        'auto.store.slices.worktrees.81f13f48d2',
+        'Git could not safely delete branch "{{value0}}" after deleting worktree "{{value1}}", so Orca kept it to avoid losing local commits.',
+        { value0: branch, value1: targetName }
+      )
+}
+
 // Why: Sonner's native action row pinches long branch/worktree names into a
 // narrow column. Keep the native toast frame, but give the body its own footer.
 function PreservedBranchToastBody({
@@ -57,20 +88,14 @@ export function showPreservedBranchToast(
     return
   }
 
-  const targetTitle = worktree?.isMainWorktree ? 'Workspace' : 'Worktree'
-  const targetLabel = targetTitle.toLowerCase()
+  const isWorkspace = worktree?.isMainWorktree === true
   const targetName = worktree?.displayName?.trim()
-  const deletedTarget = targetName ? ` after deleting ${targetLabel} "${targetName}"` : ''
   const expectedHead = preservedBranch.head
   const toastId = preservedBranchToastId(branch, expectedHead)
   const forceDeleteLabel = expectedHead
     ? translate('auto.store.slices.worktrees.e50495aae6', 'Force Delete Branch')
     : undefined
-  const description = translate(
-    'auto.store.slices.worktrees.d1d78a7baa',
-    'Git could not safely delete branch "{{value0}}"{{value1}}, so Orca kept it to avoid losing local commits.',
-    { value0: branch, value1: deletedTarget }
-  )
+  const description = getPreservedBranchDescription(branch, targetName, isWorkspace)
   const forceDelete = expectedHead
     ? (): void => {
         onForceDelete(branch, expectedHead)
@@ -78,21 +103,16 @@ export function showPreservedBranchToast(
       }
     : undefined
 
-  toast.warning(
-    translate('auto.store.slices.worktrees.4e6496f3d2', '{{value0}} deleted, branch kept', {
-      value0: targetTitle
-    }),
-    {
-      id: toastId,
-      description: (
-        <PreservedBranchToastBody
-          description={description}
-          forceDeleteLabel={forceDeleteLabel}
-          onForceDelete={forceDelete}
-        />
-      ),
-      dismissible: true,
-      ...(expectedHead ? { duration: Infinity } : {})
-    }
-  )
+  toast.warning(getPreservedBranchTitle(isWorkspace), {
+    id: toastId,
+    description: (
+      <PreservedBranchToastBody
+        description={description}
+        forceDeleteLabel={forceDeleteLabel}
+        onForceDelete={forceDelete}
+      />
+    ),
+    dismissible: true,
+    ...(expectedHead ? { duration: Infinity } : {})
+  })
 }

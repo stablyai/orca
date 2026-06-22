@@ -58,13 +58,30 @@ function execFileWithStdin(
   stdin: string
 ): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const child = execFile(command, args, options, (error, stdout, stderr) => {
+    let settled = false
+    const finish = (
+      error: Error | null,
+      stdout: string | Buffer = '',
+      stderr: string | Buffer = ''
+    ): void => {
+      if (settled) {
+        return
+      }
+      settled = true
       if (error) {
         reject(Object.assign(error, { stdout, stderr }))
         return
       }
       resolve({ stdout: String(stdout), stderr: String(stderr) })
+    }
+    const child = execFile(command, args, options, (error, stdout, stderr) => {
+      if (error) {
+        finish(error, stdout, stderr)
+        return
+      }
+      finish(null, stdout, stderr)
     })
+    child.once('error', (error) => finish(error))
     child.stdin?.end(stdin)
   })
 }
