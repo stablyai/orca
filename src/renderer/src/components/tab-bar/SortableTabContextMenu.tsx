@@ -3,7 +3,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger
@@ -139,12 +138,6 @@ export function SortableTabContextMenu({
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" sideOffset={0} align="start">
-        <DropdownMenuLabel>
-          {translate(
-            'auto.components.tab.bar.SortableTabContextMenu.thisTerminalTab',
-            'This terminal tab'
-          )}
-        </DropdownMenuLabel>
         <DropdownMenuItem onSelect={() => splitActiveTerminalPane('vertical')}>
           <PanelRightClose />
           {translate(
