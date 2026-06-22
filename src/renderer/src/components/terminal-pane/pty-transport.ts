@@ -21,6 +21,7 @@ import {
   ensurePtyDispatcher,
   getEagerPtyBufferHandle
 } from './pty-dispatcher'
+import { drainPreHandlerPtyData, drainPreHandlerPtyExit } from './pty-pre-handler-buffer'
 import type {
   PtyTransport,
   IpcPtyTransportOptions,
@@ -508,7 +509,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         storedCallbacks.onData?.(data)
       }
     })
-    ptyDataHandlers.set(id, (data, meta) => {
+    const dataHandler = (data: string, meta?: PtyDataMeta): void => {
       outputProcessor.processData(
         data,
         storedCallbacks,
@@ -518,7 +519,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         },
         meta
       )
-    })
+    }
+    ptyDataHandlers.set(id, dataHandler)
+    drainPreHandlerPtyData(id, dataHandler)
   }
 
   function clearAccumulatedState(): void {
@@ -635,7 +638,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   }
 
   function registerPtyExitHandler(id: string): void {
-    ptyExitHandlers.set(id, (code) => {
+    const exitHandler = (code: number): void => {
       clearAccumulatedState()
       connected = false
       ptyId = null
@@ -643,7 +646,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       storedCallbacks.onExit?.(code)
       storedCallbacks.onDisconnect?.()
       onPtyExit?.(id)
-    })
+    }
+    ptyExitHandlers.set(id, exitHandler)
     // Why: shutdownWorktreeTerminals bypasses the transport layer — it
     // kills PTYs directly via IPC without calling disconnect()/destroy().
     // This teardown callback lets unregisterPtyDataHandlers cancel
@@ -651,6 +655,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     // would otherwise fire stale notifications after the data handler
     // is removed but before the exit event arrives.
     ptyTeardownHandlers.set(id, clearAccumulatedState)
+    drainPreHandlerPtyExit(id, exitHandler)
   }
 
   return {
@@ -699,6 +704,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
         registerPtyDataHandler(spawnResult.id)
         registerPtyExitHandler(spawnResult.id)
+        if (!connected || ptyId !== spawnResult.id) {
+          return undefined
+        }
 
         storedCallbacks.onConnect?.()
         storedCallbacks.onStatus?.('shell')
@@ -769,6 +777,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       // recency sort order that reconnectPersistedTerminals preserved.
       registerPtyDataHandler(id)
       registerPtyExitHandler(id)
+      if (!connected || ptyId !== id) {
+        return
+      }
 
       // Why: hidden automation PTYs may have already rendered their TUI into
       // the eager buffer. Clear stale pane contents before replaying that

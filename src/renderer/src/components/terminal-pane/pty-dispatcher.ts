@@ -11,6 +11,11 @@ import type { ProjectExecutionRuntimeResolution } from '../../../../shared/proje
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import { ackPtyData, exposeE2eTerminalPtyAckGate } from './terminal-pty-ack-gate'
 import { clampUtf8Tail, type EagerBufferChunk } from './pty-eager-buffer-clamp'
+import {
+  bufferPreHandlerPtyData,
+  bufferPreHandlerPtyExit,
+  clearPreHandlerPtyState
+} from './pty-pre-handler-buffer'
 
 // ── Singleton PTY event dispatcher ───────────────────────────────────
 // One global IPC listener per channel, routes events to transports by
@@ -41,28 +46,6 @@ export const ptyDataHandlers = new Map<string, (data: string, meta?: PtyDataMeta
  *  active subscription; removal is by Set.delete inside the unsubscribe fn. */
 export const ptyDataSidecars = new Map<string, Set<(data: string) => void>>()
 
-/** Register a side-channel data watcher for a PTY without taking ownership
- *  of the primary handler. Returns an unsubscribe fn. ensurePtyDispatcher()
- *  is called automatically so the underlying IPC stream is wired up. */
-export function subscribeToPtyData(ptyId: string, watcher: (data: string) => void): () => void {
-  ensurePtyDispatcher()
-  let set = ptyDataSidecars.get(ptyId)
-  if (!set) {
-    set = new Set()
-    ptyDataSidecars.set(ptyId, set)
-  }
-  set.add(watcher)
-  return () => {
-    const current = ptyDataSidecars.get(ptyId)
-    if (!current) {
-      return
-    }
-    current.delete(watcher)
-    if (current.size === 0) {
-      ptyDataSidecars.delete(ptyId)
-    }
-  }
-}
 /** Per-PTY replay handlers for relay pty.attach replay data. Routed through
  *  a dedicated pty:replay IPC channel so the renderer can engage the replay
  *  guard and suppress xterm auto-replies during replay. */
@@ -105,6 +88,7 @@ export function unregisterPtyDataHandlers(ptyIds: string[]): PtyDataHandlerShutd
     ptyReplayHandlers.delete(id)
     ptyTeardownHandlers.get(id)?.()
     ptyTeardownHandlers.delete(id)
+    clearPreHandlerPtyState(id)
   }
   return snapshots
 }
@@ -142,7 +126,12 @@ export function ensurePtyDispatcher(): void {
         meta ??= {}
         meta.rawLength = payload.rawLength
       }
-      ptyDataHandlers.get(payload.id)?.(payload.data, meta)
+      const handler = ptyDataHandlers.get(payload.id)
+      if (handler) {
+        handler(payload.data, meta)
+      } else {
+        bufferPreHandlerPtyData(payload.id, payload.data, meta)
+      }
       const sidecars = ptyDataSidecars.get(payload.id)
       if (sidecars && sidecars.size > 0) {
         // Why: snapshot the Set before iterating because watchers commonly
@@ -168,7 +157,13 @@ export function ensurePtyDispatcher(): void {
     ptyReplayHandlers.get(payload.id)?.(payload.data)
   })
   window.api.pty.onExit((payload) => {
-    ptyExitHandlers.get(payload.id)?.(payload.code)
+    const handler = ptyExitHandlers.get(payload.id)
+    if (handler) {
+      clearPreHandlerPtyState(payload.id)
+      handler(payload.code)
+    } else {
+      bufferPreHandlerPtyExit(payload.id, payload.code)
+    }
     const sidecars = ptyExitSidecars.get(payload.id)
     if (sidecars && sidecars.size > 0) {
       const snapshot = Array.from(sidecars)
