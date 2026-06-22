@@ -1216,13 +1216,19 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         branchName,
         expectedHead
       }),
-    updateMeta: async ({ worktreeId, updates }) =>
-      (
+    updateMeta: async ({ worktreeId, updates }) => {
+      const rpcUpdates =
+        Object.prototype.hasOwnProperty.call(updates, 'pushTarget') &&
+        updates.pushTarget === undefined
+          ? { ...updates, pushTarget: null }
+          : updates
+      return (
         await callRuntimeResult<{ worktree: Worktree }>('worktree.set', {
           worktree: toRuntimeWorktreeSelector(worktreeId),
-          ...updates
+          ...rpcUpdates
         })
-      ).worktree,
+      ).worktree
+    },
     listLineage: async () =>
       await callRuntimeResult<{
         lineage: Record<string, WorktreeLineage>

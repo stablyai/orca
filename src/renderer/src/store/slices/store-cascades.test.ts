@@ -2697,6 +2697,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       [siblingLeaf]: 'pty-shell'
     })
     expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toMatchObject({
+      origin: 'worktree-sleep',
       providerSession: { key: 'session_id', id: 'target-session' }
     })
     expect(state.sleepingAgentSessionsByPaneKey[siblingPaneKey]).toBe(siblingSleepingRecordBefore)
@@ -3218,6 +3219,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   it('commits sleep state after exact runtime stop for runtime-backed PTYs', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
+    const now = Date.now()
     mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) =>
       Promise.resolve(
         createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
@@ -3245,12 +3247,12 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     store.getState().setAgentStatus(
       'tab-1:live',
       {
-        state: 'done',
+        state: 'working',
         prompt: 'resume live',
         agentType: 'codex'
       },
       'Codex',
-      { updatedAt: 1000, stateStartedAt: 1000 },
+      { updatedAt: now, stateStartedAt: now },
       { tabId: 'tab-1', worktreeId: wt },
       { providerSession: { key: 'session_id', id: 'live-session' } }
     )
@@ -3269,6 +3271,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       })
     )
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
+      origin: 'worktree-sleep',
       providerSession: { key: 'session_id', id: 'live-session' }
     })
     expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeUndefined()
@@ -3532,6 +3535,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   it('commits the pre-stop sleeping record when exact-stop exit clears live status', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
+    const now = Date.now()
     mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
       if (args.method === 'terminal.stopExact') {
         store.getState().removeAgentStatus('tab-1:live')
@@ -3565,12 +3569,12 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     store.getState().setAgentStatus(
       'tab-1:live',
       {
-        state: 'done',
+        state: 'working',
         prompt: 'resume live',
         agentType: 'codex'
       },
       'Codex',
-      { updatedAt: 1000, stateStartedAt: 1000 },
+      { updatedAt: now, stateStartedAt: now },
       { tabId: 'tab-1', worktreeId: wt },
       { providerSession: { key: 'session_id', id: 'live-session' } }
     )
@@ -3582,6 +3586,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
 
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
+      origin: 'worktree-sleep',
       providerSession: { key: 'session_id', id: 'live-session' }
     })
   })
@@ -3856,6 +3861,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   it('captures resumable provider session metadata before dropping sleep-time rows', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
+    const now = Date.now()
 
     seedStore(store, {
       worktreesByRepo: {
@@ -3875,7 +3881,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
         agentType: 'codex'
       },
       'Codex',
-      { updatedAt: 1000, stateStartedAt: 1000 },
+      { updatedAt: now, stateStartedAt: now },
       { tabId: 'tab-1', worktreeId: wt },
       { providerSession: { key: 'session_id', id: 'codex-session-1' } }
     )
@@ -3889,13 +3895,14 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       tabId: 'tab-1',
       worktreeId: wt,
       agent: 'codex',
+      origin: 'worktree-sleep',
       providerSession: { key: 'session_id', id: 'codex-session-1' },
       prompt: 'resume this',
       terminalTitle: 'Codex'
     })
   })
 
-  it('captures only allowlisted sleeping pane sessions when requested', async () => {
+  it('skips allowlisted done live sleeping pane sessions during manual sleep', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
 
@@ -3946,10 +3953,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
 
     const state = store.getState()
-    expect(state.sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
-      paneKey: 'tab-1:live',
-      providerSession: { key: 'session_id', id: 'live-session' }
-    })
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:live']).toBeUndefined()
     expect(state.sleepingAgentSessionsByPaneKey['tab-1:retained']).toBeUndefined()
   })
 
@@ -4076,6 +4080,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
     expect(state.sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
       paneKey: 'tab-1:live',
+      origin: 'worktree-sleep',
       providerSession: { key: 'session_id', id: 'live-session' }
     })
     expect(state.retainedAgentsByPaneKey['tab-1:retained']).toBeUndefined()
@@ -4140,6 +4145,9 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
 
     const state = store.getState()
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:interrupted']).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:working']).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:retained-only']).toBeUndefined()
     expect(state.retainedAgentsByPaneKey['tab-1:interrupted']).toBeUndefined()
     expect(state.retainedAgentsByPaneKey['tab-1:working']).toBeUndefined()
     expect(state.retainedAgentsByPaneKey['tab-1:retained-only']).toBeUndefined()

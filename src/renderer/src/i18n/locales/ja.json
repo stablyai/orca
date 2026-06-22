@@ -223,11 +223,11 @@
           "19db0085fb": "ローカルブランチが削除されました",
           "2b0afc7f14": "ローカル {{value0}} を最新の状態に維持できませんでした",
           "670864ab52": "ローカル {{value0}} を最新の状態に保つ",
-          "5366d13eec": "Workspace deleted, branch kept",
-          "2e17f825d4": "Worktree deleted, branch kept",
-          "78e08cd877": "Git could not safely delete branch \"{{value0}}\", so Orca kept it to avoid losing local commits.",
-          "3b57982bf6": "Git could not safely delete branch \"{{value0}}\" after deleting workspace \"{{value1}}\", so Orca kept it to avoid losing local commits.",
-          "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits."
+          "5366d13eec": "ワークスペースを削除しました、ブランチは保持されました",
+          "2e17f825d4": "ワークツリーを削除しました、ブランチは保持されました",
+          "78e08cd877": "Git はブランチ\"{{value0}}\"を安全に削除できなかったため、Orca はローカルコミットを失わないように保持しました。",
+          "3b57982bf6": "ワークスペース\"{{value1}}\"を削除した後、Git はブランチ\"{{value0}}\"を安全に削除できなかったため、Orca はローカルコミットを失わないように保持しました。",
+          "81f13f48d2": "ワークツリー\"{{value1}}\"を削除した後、Git はブランチ\"{{value0}}\"を安全に削除できなかったため、Orca はローカルコミットを失わないように保持しました。"
         },
         "repos": {
           "b7e14472ae": "フォルダーの追加に失敗しました",
@@ -2436,7 +2436,9 @@
             "9acaf92093": "ペインの操作",
             "1bce81dba6": "シミュレータ",
             "1ff1c77616": "ブラウザ",
-            "586d2ac445": "terminal"
+            "586d2ac445": "terminal",
+            "addSplitPane": "分割ペインを追加",
+            "closePaneColumn": "分割ペインを閉じる"
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "Drop onto a terminal pane to resume this session.",
@@ -2444,6 +2446,9 @@
             "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
             "openLocalWorkspace": "Open a local workspace before resuming a session.",
             "sessionQueued": "Session queued"
+          },
+          "TabGroupDropOverlay": {
+            "paneColumnLabel": "新しい分割"
           }
         },
         "bar": {
@@ -2514,7 +2519,9 @@
             "cb3eadefd2": "青",
             "20baa43c05": "なし",
             "60f958ec75": "ピンタブ",
-            "417722e9c2": "タブの固定を解除する"
+            "417722e9c2": "タブの固定を解除する",
+            "splitTerminalRight": "ターミナルを右に分割",
+            "splitTerminalDown": "ターミナルを下に分割"
           },
           "TabBar": {
             "b1a132357f": "新規タブ",
@@ -2606,6 +2613,13 @@
                 }
               }
             }
+          },
+          "TabWorkspaceLayoutMenuSection": {
+            "right": "右",
+            "left": "左",
+            "down": "下",
+            "up": "上",
+            "moveToPaneColumn": "タブを分割へ移動"
           }
         }
       },
@@ -8817,11 +8831,21 @@
                 "084c516efb": "Copy commands",
                 "5dc3af25c0": "コメントを選択",
                 "d7a2f9c401": "Send unresolved {{value0}} comments",
-                "d91f2a6c39": "キュー内の {{value0}} 件のコメントを送信",
+                "d91f2a6c39": "キュー内の {{value0}} 件のコメントを AI に送信",
                 "a6de3e5a20": "キュー内のコメントをクリア",
                 "49ea0937e4": "コメントを解決リストに追加",
                 "9fecebb29d": "追加",
-                "b8c4e2a1f7": "View full logs"
+                "b8c4e2a1f7": "View full logs",
+                "f8a2c91d04": "Queue for agent",
+                "b4e8a1c902": "Queued",
+                "7c1f0a2b11": "Open",
+                "e8b4c1a903": "Resolved · {{value0}}",
+                "c3a8e5d710": "Needs review · {{value0}}",
+                "a7f0c7e8d1": "Queue",
+                "8a621a2c4f": "Grouped",
+                "b13f85d75c": "Timeline",
+                "f5cf324efa": "Comment display options",
+                "5e6e5a13fa": "View"
               },
               "empty": {
                 "state": {
@@ -9127,15 +9151,15 @@
             "monthsAgo": "{{value0}}mo ago",
             "yearsAgo": "{{value0}}y ago",
             "sessionId": "セッション ID",
-            "originalAsk": "Original ask",
-            "latestTurns": "Latest turns",
-            "noPreviewAvailable": "No conversation preview available",
-            "messageCount": "{{value0}} msgs",
-            "userRole": "You",
-            "agentRole": "Agent",
-            "toolRole": "Tool",
-            "systemRole": "System",
-            "sessionRole": "Session"
+            "originalAsk": "最初の依頼",
+            "latestTurns": "最新のやり取り",
+            "noPreviewAvailable": "会話プレビューはありません",
+            "messageCount": "{{value0}} 件のメッセージ",
+            "userRole": "あなた",
+            "agentRole": "エージェント",
+            "toolRole": "ツール",
+            "systemRole": "システム",
+            "sessionRole": "セッション"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "Resume {{value0}} session",
@@ -9153,13 +9177,13 @@
             "showDetails": "詳細を表示",
             "moreSessionActions": "セッションのその他の操作",
             "moreActions": "その他の操作",
-            "noPreviewAvailable": "No conversation preview available",
-            "dragToResume": "Drag to resume in a new tab",
-            "userRole": "You",
-            "agentRole": "Agent",
-            "toolRole": "Tool",
-            "systemRole": "System",
-            "sessionRole": "Session"
+            "noPreviewAvailable": "会話プレビューはありません",
+            "dragToResume": "新しいタブで再開するにはドラッグ",
+            "userRole": "あなた",
+            "agentRole": "エージェント",
+            "toolRole": "ツール",
+            "systemRole": "システム",
+            "sessionRole": "セッション"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "ファイルを検索",

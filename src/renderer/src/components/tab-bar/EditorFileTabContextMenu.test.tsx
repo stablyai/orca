@@ -18,6 +18,18 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuShortcut: function DropdownMenuShortcut(props: { children?: unknown }) {
     return { type: 'DropdownMenuShortcut', props }
   },
+  DropdownMenuLabel: function DropdownMenuLabel(props: { children?: unknown }) {
+    return { type: 'DropdownMenuLabel', props }
+  },
+  DropdownMenuSub: function DropdownMenuSub(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSub', props }
+  },
+  DropdownMenuSubContent: function DropdownMenuSubContent(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubContent', props }
+  },
+  DropdownMenuSubTrigger: function DropdownMenuSubTrigger(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubTrigger', props }
+  },
   DropdownMenuTrigger: function DropdownMenuTrigger(props: { children?: unknown }) {
     return { type: 'DropdownMenuTrigger', props }
   }
@@ -58,9 +70,33 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
 }))
 
 const useAppStoreMock = Object.assign(
-  (selector: (state: { settings: Record<string, unknown> }) => unknown) =>
-    selector({ settings: {} }),
-  { getState: () => ({ settings: {} }) }
+  (
+    selector: (state: {
+      settings: Record<string, unknown>
+      unifiedTabsByWorktree: Record<string, unknown[]>
+      groupsByWorktree: Record<string, unknown[]>
+    }) => unknown
+  ) =>
+    selector({
+      settings: {},
+      unifiedTabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', groupId: 'group-1' }]
+      },
+      groupsByWorktree: {
+        'wt-1': [{ id: 'group-1', tabOrder: ['tab-1', 'tab-2'] }]
+      }
+    }),
+  {
+    getState: () => ({
+      settings: {},
+      unifiedTabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', groupId: 'group-1' }]
+      },
+      groupsByWorktree: {
+        'wt-1': [{ id: 'group-1', tabOrder: ['tab-1', 'tab-2'] }]
+      }
+    })
+  }
 )
 
 vi.mock('@/store', () => ({
@@ -151,6 +187,8 @@ async function renderMenu(): Promise<unknown> {
       isDirty: false,
       mode: 'edit'
     },
+    unifiedTabId: 'tab-1',
+    groupId: 'group-1',
     isPinned: false,
     isRenaming: false,
     hasTabsToRight: false,
@@ -166,7 +204,6 @@ async function renderMenu(): Promise<unknown> {
     onClose: vi.fn(),
     onCloseAll: vi.fn(),
     onCloseToRight: vi.fn(),
-    onSplitGroup: vi.fn(),
     onOpenMarkdownPreview: vi.fn()
   })
 }

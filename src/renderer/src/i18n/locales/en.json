@@ -2436,7 +2436,9 @@
             "9acaf92093": "Pane Actions",
             "1bce81dba6": "simulator",
             "1ff1c77616": "browser",
-            "586d2ac445": "terminal"
+            "586d2ac445": "terminal",
+            "addSplitPane": "Add split pane",
+            "closePaneColumn": "Close split pane"
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "Drop onto a terminal pane to resume this session.",
@@ -2444,6 +2446,9 @@
             "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
             "openLocalWorkspace": "Open a local workspace before resuming a session.",
             "sessionQueued": "Session queued"
+          },
+          "TabGroupDropOverlay": {
+            "paneColumnLabel": "New split"
           }
         },
         "bar": {
@@ -2514,7 +2519,9 @@
             "cb3eadefd2": "Blue",
             "20baa43c05": "None",
             "60f958ec75": "Pin Tab",
-            "417722e9c2": "Unpin Tab"
+            "417722e9c2": "Unpin Tab",
+            "splitTerminalRight": "Split terminal right",
+            "splitTerminalDown": "Split terminal down"
           },
           "TabBar": {
             "b1a132357f": "New tab",
@@ -2606,6 +2613,13 @@
                 }
               }
             }
+          },
+          "TabWorkspaceLayoutMenuSection": {
+            "right": "Right",
+            "left": "Left",
+            "down": "Down",
+            "up": "Up",
+            "moveToPaneColumn": "Move Tab to Split"
           }
         }
       },
@@ -8818,10 +8832,20 @@
                 "084c516efb": "Copy commands",
                 "5dc3af25c0": "Select comment",
                 "d7a2f9c401": "Send unresolved {{value0}} comments",
-                "d91f2a6c39": "Send {{value0}} queued comments",
+                "d91f2a6c39": "Send {{value0}} queued comments to AI",
                 "a6de3e5a20": "Clear queued comments",
                 "49ea0937e4": "Add comment to resolve list",
-                "9fecebb29d": "Add"
+                "9fecebb29d": "Add",
+                "f8a2c91d04": "Queue for agent",
+                "b4e8a1c902": "Queued",
+                "7c1f0a2b11": "Open",
+                "e8b4c1a903": "Resolved · {{value0}}",
+                "c3a8e5d710": "Needs review · {{value0}}",
+                "a7f0c7e8d1": "Queue",
+                "8a621a2c4f": "Grouped",
+                "b13f85d75c": "Timeline",
+                "f5cf324efa": "Comment display options",
+                "5e6e5a13fa": "View"
               },
               "empty": {
                 "state": {

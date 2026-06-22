@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { Globe, X, ExternalLink, Columns2, Rows2, Copy, Pin, PinOff } from 'lucide-react'
+import { Globe, X, ExternalLink, Copy, Pin, PinOff } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,11 +20,14 @@ import {
   getDropIndicatorClasses,
   getTabRootStateClasses,
   getTabStripBorderClasses,
+  showsTabSelectionChrome,
   type DropIndicator
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
+import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
+import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 
 function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
@@ -107,7 +110,6 @@ export default function BrowserTab({
   onActivate,
   onClose,
   onCloseToRight,
-  onSplitGroup,
   onDuplicate,
   onTogglePin,
   dragData,
@@ -121,7 +123,6 @@ export default function BrowserTab({
   onActivate: () => void
   onClose: () => void
   onCloseToRight: () => void
-  onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   onDuplicate: () => void
   onTogglePin: () => void
   dragData: TabDragItemData
@@ -170,6 +171,11 @@ export default function BrowserTab({
     return () => window.removeEventListener('blur', dismiss)
   }, [menuOpen])
 
+  const { isPressed, onPointerDown: onTabPointerDown } = useTabStripPointerActivation({
+    onActivate
+  })
+  const showsSelectionChrome = showsTabSelectionChrome(isActive, isPressed)
+
   const tabRoot = (
     <div
       ref={setNodeRef}
@@ -177,13 +183,12 @@ export default function BrowserTab({
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...listeners}
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive, isPressed)}`}
       onPointerDown={(e) => {
-        if (e.button !== 0) {
-          return
-        }
-        onActivate()
-        listeners?.onPointerDown?.(e)
+        onTabPointerDown(
+          e,
+          listeners?.onPointerDown as ((event: React.PointerEvent<Element>) => void) | undefined
+        )
       }}
       onMouseDown={(e) => {
         if (e.button === 1) {
@@ -202,7 +207,7 @@ export default function BrowserTab({
         }
       }}
     >
-      {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
+      {showsSelectionChrome && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
       {/* Why: the browser tab icon is the only non-terminal, non-editor
           surface in the tab strip. Coloring the Globe blue (matching the
           in-app browser's identity and the default tab insertion bar)
@@ -219,7 +224,7 @@ export default function BrowserTab({
       {!isPinned && (
         <button
           className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
-            isActive
+            showsSelectionChrome
               ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
               : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
           }`}
@@ -276,23 +281,6 @@ export default function BrowserTab({
           sideOffset={0}
           align="start"
         >
-          <DropdownMenuItem onSelect={() => onSplitGroup('up', tab.id)}>
-            <Rows2 className="mr-1.5 size-3.5" />
-            {translate('auto.components.tab.bar.BrowserTab.96354ed249', 'Split Up')}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onSplitGroup('down', tab.id)}>
-            <Rows2 className="mr-1.5 size-3.5" />
-            {translate('auto.components.tab.bar.BrowserTab.2186a8407c', 'Split Down')}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onSplitGroup('left', tab.id)}>
-            <Columns2 className="mr-1.5 size-3.5" />
-            {translate('auto.components.tab.bar.BrowserTab.7e8106899f', 'Split Left')}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onSplitGroup('right', tab.id)}>
-            <Columns2 className="mr-1.5 size-3.5" />
-            {translate('auto.components.tab.bar.BrowserTab.966feb9ad5', 'Split Right')}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={onDuplicate}>
             <Copy className="mr-1.5 size-3.5" />
             {translate('auto.components.tab.bar.BrowserTab.5d6e89891f', 'Duplicate Tab')}
@@ -308,6 +296,10 @@ export default function BrowserTab({
               ? translate('auto.components.tab.bar.BrowserTab.c5aaee8c39', 'Unpin Tab')
               : translate('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
           </DropdownMenuItem>
+          <TabWorkspaceLayoutMenuSection
+            unifiedTabId={dragData.unifiedTabId}
+            groupId={dragData.groupId}
+          />
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
             {translate('auto.components.tab.bar.BrowserTab.1611a1324b', 'Close')}

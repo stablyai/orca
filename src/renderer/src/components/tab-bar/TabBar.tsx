@@ -75,6 +75,7 @@ import { translate } from '@/i18n/i18n'
 import { TabStripScrollIndicator } from './TabStripScrollIndicator'
 import { getTabStripScrollMaskClassName } from './tab-strip-scroll-metrics'
 import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
+import { useTabStripDragScrollHandlers } from './tab-strip-drag-scroll'
 
 const isWindows = navigator.userAgent.includes('Windows')
 const isMacOs = navigator.userAgent.includes('Mac')
@@ -137,10 +138,6 @@ type TabBarProps = {
   onMakePreviewFilePermanent?: (fileId: string, tabId?: string) => void
   onPinFile?: (fileId: string, tabId?: string) => void
   tabBarOrder?: string[]
-  onCreateSplitGroup?: (
-    direction: 'left' | 'right' | 'up' | 'down',
-    sourceVisibleTabId?: string
-  ) => void
   hoveredTabInsertion?: HoveredTabInsertion | null
   /** Floating workspace panels are rounded; skip tab top borders that clash with the curve. */
   tabStripChrome?: 'default' | 'floating-panel'
@@ -266,7 +263,6 @@ function TabBarInner({
   onMakePreviewFilePermanent,
   onPinFile,
   tabBarOrder,
-  onCreateSplitGroup,
   hoveredTabInsertion,
   tabStripChrome = 'default'
 }: TabBarProps): React.JSX.Element {
@@ -981,6 +977,10 @@ function TabBarInner({
     tabCount: orderedItems.length,
     worktreeId
   })
+  const tabStripDragScroll = useTabStripDragScrollHandlers(scrollTabStrip, {
+    start: tabStripOverflowState.canScrollStart,
+    end: tabStripOverflowState.canScrollEnd
+  })
 
   return (
     <div
@@ -1005,8 +1005,13 @@ function TabBarInner({
                 'auto.components.tab.bar.TabBar.7a9b4af2af',
                 'Scroll tabs left'
               )}
-              disabled={!tabStripOverflowState.canScrollStart}
+              aria-disabled={!tabStripOverflowState.canScrollStart}
+              disabled={
+                !tabStripDragScroll.isTabDragActive && !tabStripOverflowState.canScrollStart
+              }
               onClick={() => scrollTabStrip('start')}
+              onPointerEnter={tabStripDragScroll.onDragScrollStartEnter}
+              onPointerLeave={tabStripDragScroll.onDragScrollLeave}
             >
               <ChevronLeft className="size-3.5" />
             </Button>
@@ -1069,6 +1074,8 @@ function TabBarInner({
                   <SortableTab
                     key={item.id}
                     tab={terminalTab}
+                    unifiedTabId={item.unifiedTabId}
+                    groupId={resolvedGroupId}
                     tabCount={orderedItems.length}
                     hasTabsToRight={index < orderedItems.length - 1}
                     isActive={
@@ -1085,9 +1092,6 @@ function TabBarInner({
                     onSetTabColor={onSetTabColor}
                     onTogglePin={() => togglePinned(item)}
                     onToggleExpand={onTogglePaneExpand}
-                    onSplitGroup={(direction, sourceVisibleTabId) =>
-                      onCreateSplitGroup?.(direction, sourceVisibleTabId)
-                    }
                     dragData={dragData}
                     dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
                     includeTopTabBorder={includeTopTabBorder}
@@ -1105,9 +1109,6 @@ function TabBarInner({
                     onActivate={() => onActivateBrowserTab?.(item.id)}
                     onClose={() => onCloseBrowserTab?.(item.id)}
                     onCloseToRight={() => onCloseToRight(item.id)}
-                    onSplitGroup={(direction, sourceVisibleTabId) =>
-                      onCreateSplitGroup?.(direction, sourceVisibleTabId)
-                    }
                     onDuplicate={() => onDuplicateBrowserTab?.(item.id)}
                     onTogglePin={() => togglePinned(item)}
                     dragData={dragData}
@@ -1143,9 +1144,6 @@ function TabBarInner({
                     onCloseAll={() => onCloseAllFiles?.()}
                     onMakePermanent={() => {}}
                     onTogglePin={() => togglePinned(item)}
-                    onSplitGroup={(direction, sourceVisibleTabId) =>
-                      onCreateSplitGroup?.(direction, sourceVisibleTabId)
-                    }
                     dragData={dragData}
                     dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
                     includeTopTabBorder={includeTopTabBorder}
@@ -1171,9 +1169,6 @@ function TabBarInner({
                     onMakePreviewFilePermanent?.(item.data.id, item.data.tabId)
                   }
                   onTogglePin={() => togglePinned(item)}
-                  onSplitGroup={(direction, sourceVisibleTabId) =>
-                    onCreateSplitGroup?.(direction, sourceVisibleTabId)
-                  }
                   dragData={dragData}
                   dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
                   includeTopTabBorder={includeTopTabBorder}
@@ -1196,8 +1191,11 @@ function TabBarInner({
                 'auto.components.tab.bar.TabBar.232e075b07',
                 'Scroll tabs right'
               )}
-              disabled={!tabStripOverflowState.canScrollEnd}
+              aria-disabled={!tabStripOverflowState.canScrollEnd}
+              disabled={!tabStripDragScroll.isTabDragActive && !tabStripOverflowState.canScrollEnd}
               onClick={() => scrollTabStrip('end')}
+              onPointerEnter={tabStripDragScroll.onDragScrollEndEnter}
+              onPointerLeave={tabStripDragScroll.onDragScrollLeave}
             >
               <ChevronRight className="size-3.5" />
             </Button>

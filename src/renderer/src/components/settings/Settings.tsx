@@ -51,7 +51,7 @@ import { AdvancedPane } from './AdvancedPane'
 import { SettingsSidebar } from './SettingsSidebar'
 import { SettingsSetupGuidePane } from './SettingsSetupGuidePane'
 import { ActiveSettingsSectionProvider, SettingsSection } from './SettingsSection'
-import { matchesSettingsSearch } from './settings-search'
+import { getSettingsSectionSearchEntries, rankSettingsSearchItems } from './settings-search'
 import { cn } from '@/lib/utils'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import { registerWindowCloseGuard } from '../window-close-request-coordinator'
@@ -135,6 +135,12 @@ const SETTINGS_NAV_GROUPS = [
   }
 ] as const
 
+type SettingsNavGroupDefinition = (typeof SETTINGS_NAV_GROUPS)[number]
+
+const SETTINGS_NAV_GROUP_BY_ID = new Map<string, SettingsNavGroupDefinition>(
+  SETTINGS_NAV_GROUPS.map((group) => [group.id, group])
+)
+
 const SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID = 'shortcuts-escape-confirm'
 const SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS = 2200
 
@@ -147,6 +153,27 @@ function getSettingsSectionId(pane: SettingsNavTarget, repoId: string | null): s
 
 function getFallbackVisibleSection(sections: SettingsNavSection[]): SettingsNavSection | undefined {
   return sections.at(0)
+}
+
+function getSettingsNavGroupDefinitionsForSearch(
+  sections: readonly SettingsNavSection[],
+  query: string
+): readonly SettingsNavGroupDefinition[] {
+  if (query.trim() === '') {
+    return SETTINGS_NAV_GROUPS
+  }
+  const seenGroupIds = new Set<string>()
+  return sections.flatMap((section) => {
+    if (section.id.startsWith('repo-') || seenGroupIds.has(section.group)) {
+      return []
+    }
+    const group = SETTINGS_NAV_GROUP_BY_ID.get(section.group)
+    if (!group) {
+      return []
+    }
+    seenGroupIds.add(section.group)
+    return [group]
+  })
 }
 
 function getSkillNavInstallStatus(skill: {
@@ -632,21 +659,26 @@ function Settings(): React.JSX.Element {
     () => new Map(navSections.map((section) => [section.id, section] as const)),
     [navSections]
   )
-  const getSectionSearchEntries = (sectionId: string) =>
-    navSectionById.get(sectionId)?.searchEntries ?? []
+  const getSectionSearchEntries = (sectionId: string) => {
+    const section = navSectionById.get(sectionId)
+    return section ? getSettingsSectionSearchEntries(section) : []
+  }
 
-  const visibleNavSections = useMemo(
-    () =>
-      navSections.filter((section) =>
-        section.id === 'git' && hasUnsavedSourceControlAiPromptChanges
-          ? true
-          : matchesSettingsSearch(settingsSearchQuery, [
-              { title: section.title, description: section.description },
-              ...section.searchEntries
-            ])
-      ),
-    [hasUnsavedSourceControlAiPromptChanges, navSections, settingsSearchQuery]
-  )
+  const visibleNavSections = useMemo(() => {
+    const rankedSections = rankSettingsSearchItems(
+      settingsSearchQuery,
+      navSections,
+      getSettingsSectionSearchEntries
+    ).map(({ item }) => item)
+    if (
+      !hasUnsavedSourceControlAiPromptChanges ||
+      rankedSections.some((section) => section.id === 'git')
+    ) {
+      return rankedSections
+    }
+    const gitSection = navSectionById.get('git')
+    return gitSection ? [...rankedSections, gitSection] : rankedSections
+  }, [hasUnsavedSourceControlAiPromptChanges, navSectionById, navSections, settingsSearchQuery])
   const visibleSectionIds = useMemo(
     () => new Set(visibleNavSections.map((section) => section.id)),
     [visibleNavSections]
@@ -964,11 +996,17 @@ function Settings(): React.JSX.Element {
   }
 
   const generalNavSections = visibleNavSections.filter((section) => !section.id.startsWith('repo-'))
-  const generalNavGroups: SettingsNavGroup[] = SETTINGS_NAV_GROUPS.map((group) => ({
-    id: group.id,
-    title: translate(group.titleKey, group.titleDefault),
-    sections: generalNavSections.filter((section) => section.group === group.id)
-  })).filter((group) => group.sections.length > 0 || group.id === 'setup')
+  const generalNavGroupDefinitions = getSettingsNavGroupDefinitionsForSearch(
+    visibleNavSections,
+    settingsSearchQuery
+  )
+  const generalNavGroups: SettingsNavGroup[] = generalNavGroupDefinitions
+    .map((group) => ({
+      id: group.id,
+      title: translate(group.titleKey, group.titleDefault),
+      sections: generalNavSections.filter((section) => section.group === group.id)
+    }))
+    .filter((group) => group.sections.length > 0 || group.id === 'setup')
   const repoNavSections = visibleNavSections
     .filter((section) => section.id.startsWith('repo-'))
     .map((section) => {
@@ -1475,9 +1513,7 @@ function Settings(): React.JSX.Element {
                       )}
                       searchEntries={getSectionSearchEntries('mobile')}
                     >
-                      {isSectionMounted('mobile') ? (
-                        <MobileSettingsPane settings={settings} updateSettings={updateSettings} />
-                      ) : null}
+                      {isSectionMounted('mobile') ? <MobileSettingsPane /> : null}
                     </SettingsSection>
                   </>
                 ) : null}

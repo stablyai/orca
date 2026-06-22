@@ -223,11 +223,11 @@
           "19db0085fb": "로컬 브랜치가 삭제되었습니다.",
           "2b0afc7f14": "로컬 {{value0}}을(를) 최신 상태로 유지할 수 없습니다.",
           "670864ab52": "로컬 {{value0}}을 최신 상태로 유지",
-          "5366d13eec": "Workspace deleted, branch kept",
-          "2e17f825d4": "Worktree deleted, branch kept",
-          "78e08cd877": "Git could not safely delete branch \"{{value0}}\", so Orca kept it to avoid losing local commits.",
-          "3b57982bf6": "Git could not safely delete branch \"{{value0}}\" after deleting workspace \"{{value1}}\", so Orca kept it to avoid losing local commits.",
-          "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits."
+          "5366d13eec": "워크스페이스가 삭제되었고 브랜치는 유지되었습니다",
+          "2e17f825d4": "워크트리가 삭제되었고 브랜치는 유지되었습니다",
+          "78e08cd877": "Git이 \"{{value0}}\" 브랜치를 안전하게 삭제할 수 없어 Orca가 로컬 커밋 손실을 방지하기 위해 유지했습니다.",
+          "3b57982bf6": "\"{{value1}}\" 워크스페이스를 삭제한 후 Git이 \"{{value0}}\" 브랜치를 안전하게 삭제할 수 없어 Orca가 로컬 커밋 손실을 방지하기 위해 유지했습니다.",
+          "81f13f48d2": "\"{{value1}}\" 워크트리를 삭제한 후 Git이 \"{{value0}}\" 브랜치를 안전하게 삭제할 수 없어 Orca가 로컬 커밋 손실을 방지하기 위해 유지했습니다."
         },
         "repos": {
           "b7e14472ae": "폴더를 추가하지 못했습니다.",
@@ -2436,7 +2436,9 @@
             "9acaf92093": "창 작업",
             "1bce81dba6": "시뮬레이터",
             "1ff1c77616": "브라우저",
-            "586d2ac445": "terminal"
+            "586d2ac445": "terminal",
+            "addSplitPane": "분할 창 추가",
+            "closePaneColumn": "분할 창 닫기"
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "이 세션을 재개하려면 terminal 창에 놓으세요.",
@@ -2444,6 +2446,9 @@
             "localWorkspacesOnly": "기록에서 재개하기는 로컬 워크스페이스에서만 사용할 수 있습니다.",
             "openLocalWorkspace": "세션을 재개하기 전에 로컬 워크스페이스를 여세요.",
             "sessionQueued": "세션이 대기열에 추가됨"
+          },
+          "TabGroupDropOverlay": {
+            "paneColumnLabel": "새 분할"
           }
         },
         "bar": {
@@ -2514,7 +2519,9 @@
             "cb3eadefd2": "파란색",
             "20baa43c05": "없음",
             "60f958ec75": "탭 고정",
-            "417722e9c2": "탭 고정 해제"
+            "417722e9c2": "탭 고정 해제",
+            "splitTerminalRight": "터미널을 오른쪽으로 분할",
+            "splitTerminalDown": "터미널을 아래로 분할"
           },
           "TabBar": {
             "b1a132357f": "새 탭",
@@ -2606,6 +2613,13 @@
                 }
               }
             }
+          },
+          "TabWorkspaceLayoutMenuSection": {
+            "right": "오른쪽",
+            "left": "왼쪽",
+            "down": "아래",
+            "up": "위",
+            "moveToPaneColumn": "탭을 분할로 이동"
           }
         }
       },
@@ -8817,11 +8831,21 @@
                 "084c516efb": "Copy commands",
                 "5dc3af25c0": "댓글 선택",
                 "d7a2f9c401": "해결되지 않은 댓글 {{value0}}개 보내기",
-                "d91f2a6c39": "대기 중인 댓글 {{value0}}개 보내기",
+                "d91f2a6c39": "대기 중인 댓글 {{value0}}개를 AI로 보내기",
                 "a6de3e5a20": "대기 중인 댓글 지우기",
                 "49ea0937e4": "댓글을 해결 목록에 추가",
                 "9fecebb29d": "추가",
-                "b8c4e2a1f7": "전체 로그 보기"
+                "b8c4e2a1f7": "전체 로그 보기",
+                "f8a2c91d04": "Queue for agent",
+                "b4e8a1c902": "Queued",
+                "7c1f0a2b11": "Open",
+                "e8b4c1a903": "Resolved · {{value0}}",
+                "c3a8e5d710": "Needs review · {{value0}}",
+                "a7f0c7e8d1": "Queue",
+                "8a621a2c4f": "Grouped",
+                "b13f85d75c": "Timeline",
+                "f5cf324efa": "Comment display options",
+                "5e6e5a13fa": "View"
               },
               "empty": {
                 "state": {
@@ -9127,15 +9151,15 @@
             "monthsAgo": "{{value0}}개월 전",
             "yearsAgo": "{{value0}}년 전",
             "sessionId": "세션 ID",
-            "originalAsk": "Original ask",
-            "latestTurns": "Latest turns",
-            "noPreviewAvailable": "No conversation preview available",
-            "messageCount": "{{value0}} msgs",
-            "userRole": "You",
-            "agentRole": "Agent",
-            "toolRole": "Tool",
-            "systemRole": "System",
-            "sessionRole": "Session"
+            "originalAsk": "원래 요청",
+            "latestTurns": "최근 대화",
+            "noPreviewAvailable": "대화 미리보기를 사용할 수 없습니다",
+            "messageCount": "메시지 {{value0}}개",
+            "userRole": "나",
+            "agentRole": "에이전트",
+            "toolRole": "도구",
+            "systemRole": "시스템",
+            "sessionRole": "세션"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "{{value0}} 세션 재개",
@@ -9153,13 +9177,13 @@
             "showDetails": "세부정보 표시",
             "moreSessionActions": "세션 추가 작업",
             "moreActions": "추가 작업",
-            "noPreviewAvailable": "No conversation preview available",
-            "dragToResume": "Drag to resume in a new tab",
-            "userRole": "You",
-            "agentRole": "Agent",
-            "toolRole": "Tool",
-            "systemRole": "System",
-            "sessionRole": "Session"
+            "noPreviewAvailable": "대화 미리보기를 사용할 수 없습니다",
+            "dragToResume": "새 탭에서 재개하려면 드래그",
+            "userRole": "나",
+            "agentRole": "에이전트",
+            "toolRole": "도구",
+            "systemRole": "시스템",
+            "sessionRole": "세션"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "파일 찾기",

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildWindowsPtyCompatibilityOptions,
+  isLocalNativeWindowsConpty,
   isLocalNativeWindowsPty
 } from './windows-pty-compatibility'
 
@@ -103,6 +104,79 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
         connectionId: 'ssh-1',
         cwd: 'C:\\repo',
         shellOverride: 'powershell.exe'
+      })
+    ).toBe(false)
+  })
+})
+
+describe('isLocalNativeWindowsConpty', () => {
+  // A genuine local native Windows ConPTY (Windows UA, no SSH connectionId,
+  // Windows cwd) on a 'local' execution host must keep the ConPTY workarounds.
+  const localNativeWindowsContext = {
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+    connectionId: null,
+    cwd: 'C:\\repo',
+    shellOverride: 'powershell.exe'
+  } as const
+  const remoteServePaneOnWindowsClientContext = {
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+    connectionId: null,
+    cwd: '/home/me/repo',
+    shellOverride: null
+  } as const
+
+  it('treats a local-execution-host Windows pane as a native ConPTY', () => {
+    expect(
+      isLocalNativeWindowsConpty({ ...localNativeWindowsContext, executionHostId: 'local' })
+    ).toBe(true)
+  })
+
+  it('does NOT treat a remote-runtime (serve) pane as a native ConPTY even when the raw Windows heuristic matches', () => {
+    // Regression: a serve-hosted pane on a Windows client has no SSH connectionId
+    // and a Linux cwd, so isLocalNativeWindowsPty returns true. Without the
+    // execution-host gate, ConPTY transient cursor-show (?25h) stripping is
+    // wrongly applied and the agent cursor disappears.
+    expect(isLocalNativeWindowsPty(remoteServePaneOnWindowsClientContext)).toBe(true)
+    expect(
+      isLocalNativeWindowsConpty({
+        ...remoteServePaneOnWindowsClientContext,
+        executionHostId: 'runtime:my-serve'
+      })
+    ).toBe(false)
+  })
+
+  it('does NOT treat an SSH-runtime pane as a native ConPTY', () => {
+    expect(
+      isLocalNativeWindowsConpty({
+        ...localNativeWindowsContext,
+        executionHostId: 'ssh:my-host'
+      })
+    ).toBe(false)
+  })
+
+  it('stays false on a local host when the pane is not a native Windows PTY', () => {
+    // Non-Windows client: the raw heuristic is false, so the gate result is false
+    // regardless of the local execution host.
+    expect(
+      isLocalNativeWindowsConpty({
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)',
+        connectionId: null,
+        cwd: '/repo',
+        shellOverride: null,
+        executionHostId: 'local'
+      })
+    ).toBe(false)
+  })
+
+  it('does not let a local execution host re-enable protection the raw heuristic already suppressed', () => {
+    // Guards the AND: even on a 'local' host, a Windows pane excluded for a
+    // non-execution-host reason (here an SSH connectionId) must stay false, so a
+    // future refactor cannot make the local host bypass the raw checks.
+    expect(
+      isLocalNativeWindowsConpty({
+        ...localNativeWindowsContext,
+        connectionId: 'ssh-1',
+        executionHostId: 'local'
       })
     ).toBe(false)
   })

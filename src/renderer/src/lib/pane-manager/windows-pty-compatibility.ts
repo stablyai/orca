@@ -1,5 +1,6 @@
 import type { ITerminalOptions } from '@xterm/xterm'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 
 export type WindowsPtyCompatibilityContext = {
   userAgent?: string
@@ -56,4 +57,22 @@ export function isLocalNativeWindowsPty(context: WindowsPtyCompatibilityContext)
     return false
   }
   return true
+}
+
+/**
+ * Whether a pane is a genuine local native Windows ConPTY that needs the ConPTY
+ * cursor/synchronized-output workarounds.
+ *
+ * Why this is gated on the execution host: a serve/remote-runtime pane on a
+ * Windows client has no SSH `connectionId` and a Linux `cwd`, so
+ * `isLocalNativeWindowsPty` misfires and classifies it as local. The execution
+ * host is the authoritative signal: only a `'local'` host is a real local
+ * native PTY. Remote panes resolve to `runtime:<env>` (or `ssh:<target>`) and
+ * must be excluded, otherwise ConPTY transient cursor-show (`?25h`) stripping is
+ * wrongly applied to them and a repainting agent's cursor disappears.
+ */
+export function isLocalNativeWindowsConpty(
+  context: WindowsPtyCompatibilityContext & { executionHostId: ExecutionHostId }
+): boolean {
+  return context.executionHostId === LOCAL_EXECUTION_HOST_ID && isLocalNativeWindowsPty(context)
 }

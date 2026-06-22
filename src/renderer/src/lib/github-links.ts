@@ -24,6 +24,11 @@ function matchGitHubItemPath(url: URL): RegExpExecArray | null {
   return GH_ITEM_PATH_RE.exec(url.pathname.replace(/\/+$/, ''))
 }
 
+function parseGitHubItemNumber(value: string): number | null {
+  const parsed = Number.parseInt(value, 10)
+  return parsed > 0 ? parsed : null
+}
+
 /**
  * Parses a GitHub issue/PR reference from plain input.
  * Supports issue/PR numbers (e.g. "42"), "#42", and full GitHub URLs.
@@ -36,7 +41,7 @@ export function parseGitHubIssueOrPRNumber(input: string): number | null {
 
   const numeric = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed
   if (/^\d+$/.test(numeric)) {
-    return Number.parseInt(numeric, 10)
+    return parseGitHubItemNumber(numeric)
   }
 
   let url: URL
@@ -55,7 +60,7 @@ export function parseGitHubIssueOrPRNumber(input: string): number | null {
     return null
   }
 
-  return Number.parseInt(match[4], 10)
+  return parseGitHubItemNumber(match[4])
 }
 
 /**
@@ -87,11 +92,15 @@ export function parseGitHubIssueOrPRLink(input: string): {
   if (!match) {
     return null
   }
+  const number = parseGitHubItemNumber(match[4])
+  if (number === null) {
+    return null
+  }
 
   return {
     slug: { owner: match[1], repo: match[2] },
     type: match[3].toLowerCase() === 'pull' ? 'pr' : 'issue',
-    number: Number.parseInt(match[4], 10)
+    number
   }
 }
 

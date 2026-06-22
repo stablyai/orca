@@ -16,6 +16,7 @@ import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
 import { PickerListDrawer } from './PickerListDrawer'
 import { MobileAgentIcon } from './MobileAgentIcon'
+import { MobileWorkspaceNameInput } from './MobileWorkspaceNameInput'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
 import { deriveWorkspaceSshGate, workspaceSshStatusLabel } from '../tasks/workspace-ssh-gate'
 import { WORKTREE_CREATE_TIMEOUT_MS } from '../tasks/workspace-create-timeout'
@@ -751,18 +752,15 @@ function NewWorktreeModalContent({
               <Text style={styles.label}>
                 Workspace Name <Text style={styles.labelHint}>[Optional]</Text>
               </Text>
-              <TextInput
+              <MobileWorkspaceNameInput
                 style={styles.input}
                 value={name}
                 onChangeText={(t) => {
                   setName(t)
                   setError('')
                 }}
-                placeholder="Workspace name"
                 placeholderTextColor={colors.textMuted}
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoFocus={repos.length <= 1}
+                shouldAutoFocus={visible && !loading && repos.length > 0}
                 returnKeyType="done"
                 onSubmitEditing={() => {
                   if (canCreate) {

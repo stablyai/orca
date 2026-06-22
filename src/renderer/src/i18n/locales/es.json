@@ -223,11 +223,11 @@
           "19db0085fb": "Sucursal local eliminada",
           "2b0afc7f14": "No se pudo mantener actualizado el {{value0}} local",
           "670864ab52": "Mantener actualizado el {{value0}} local",
-          "5366d13eec": "Workspace deleted, branch kept",
-          "2e17f825d4": "Worktree deleted, branch kept",
-          "78e08cd877": "Git could not safely delete branch \"{{value0}}\", so Orca kept it to avoid losing local commits.",
-          "3b57982bf6": "Git could not safely delete branch \"{{value0}}\" after deleting workspace \"{{value1}}\", so Orca kept it to avoid losing local commits.",
-          "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits."
+          "5366d13eec": "Espacio de trabajo eliminado, rama conservada",
+          "2e17f825d4": "Árbol de trabajo eliminado, rama conservada",
+          "78e08cd877": "Git no pudo eliminar de forma segura la rama \"{{value0}}\", por lo que Orca la conservó para evitar perder commits locales.",
+          "3b57982bf6": "Git no pudo eliminar de forma segura la rama \"{{value0}}\" después de eliminar el espacio de trabajo \"{{value1}}\", por lo que Orca la conservó para evitar perder commits locales.",
+          "81f13f48d2": "Git no pudo eliminar de forma segura la rama \"{{value0}}\" después de eliminar el árbol de trabajo \"{{value1}}\", por lo que Orca la conservó para evitar perder commits locales."
         },
         "repos": {
           "b7e14472ae": "No se pudo agregar la carpeta",
@@ -2436,7 +2436,9 @@
             "9acaf92093": "Acciones del panel",
             "1bce81dba6": "simulador",
             "1ff1c77616": "navegador",
-            "586d2ac445": "terminal"
+            "586d2ac445": "terminal",
+            "addSplitPane": "Agregar panel dividido",
+            "closePaneColumn": "Cerrar panel dividido"
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "Drop onto a terminal pane to resume this session.",
@@ -2444,6 +2446,9 @@
             "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
             "openLocalWorkspace": "Open a local workspace before resuming a session.",
             "sessionQueued": "Session queued"
+          },
+          "TabGroupDropOverlay": {
+            "paneColumnLabel": "Nueva división"
           }
         },
         "bar": {
@@ -2514,7 +2519,9 @@
             "cb3eadefd2": "Azul",
             "20baa43c05": "Ninguno",
             "60f958ec75": "Pestaña Fijar",
-            "417722e9c2": "Desanclar pestaña"
+            "417722e9c2": "Desanclar pestaña",
+            "splitTerminalRight": "Dividir terminal a la derecha",
+            "splitTerminalDown": "Dividir terminal hacia abajo"
           },
           "TabBar": {
             "b1a132357f": "Nueva pestaña",
@@ -2606,6 +2613,13 @@
                 }
               }
             }
+          },
+          "TabWorkspaceLayoutMenuSection": {
+            "right": "Derecha",
+            "left": "Izquierda",
+            "down": "Abajo",
+            "up": "Arriba",
+            "moveToPaneColumn": "Mover pestaña a división"
           }
         }
       },
@@ -8817,11 +8831,21 @@
                 "084c516efb": "Copy commands",
                 "5dc3af25c0": "Seleccionar comentario",
                 "d7a2f9c401": "Send unresolved {{value0}} comments",
-                "d91f2a6c39": "Enviar {{value0}} comentarios en cola",
+                "d91f2a6c39": "Enviar {{value0}} comentarios en cola a la IA",
                 "a6de3e5a20": "Borrar comentarios en cola",
                 "49ea0937e4": "Agregar comentario a la lista de resolución",
                 "9fecebb29d": "Agregar",
-                "b8c4e2a1f7": "View full logs"
+                "b8c4e2a1f7": "View full logs",
+                "f8a2c91d04": "Queue for agent",
+                "b4e8a1c902": "Queued",
+                "7c1f0a2b11": "Open",
+                "e8b4c1a903": "Resolved · {{value0}}",
+                "c3a8e5d710": "Needs review · {{value0}}",
+                "a7f0c7e8d1": "Queue",
+                "8a621a2c4f": "Grouped",
+                "b13f85d75c": "Timeline",
+                "f5cf324efa": "Comment display options",
+                "5e6e5a13fa": "View"
               },
               "empty": {
                 "state": {
@@ -9127,15 +9151,15 @@
             "monthsAgo": "{{value0}}mo ago",
             "yearsAgo": "{{value0}}y ago",
             "sessionId": "ID de sesión",
-            "originalAsk": "Original ask",
-            "latestTurns": "Latest turns",
-            "noPreviewAvailable": "No conversation preview available",
-            "messageCount": "{{value0}} msgs",
-            "userRole": "You",
-            "agentRole": "Agent",
-            "toolRole": "Tool",
-            "systemRole": "System",
-            "sessionRole": "Session"
+            "originalAsk": "Solicitud original",
+            "latestTurns": "Últimos turnos",
+            "noPreviewAvailable": "No hay vista previa de conversación disponible",
+            "messageCount": "{{value0}} mensajes",
+            "userRole": "Tú",
+            "agentRole": "Agente",
+            "toolRole": "Herramienta",
+            "systemRole": "Sistema",
+            "sessionRole": "Sesión"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "Resume {{value0}} session",
@@ -9153,13 +9177,13 @@
             "showDetails": "Mostrar detalles",
             "moreSessionActions": "Más acciones de sesión",
             "moreActions": "Más acciones",
-            "noPreviewAvailable": "No conversation preview available",
-            "dragToResume": "Drag to resume in a new tab",
-            "userRole": "You",
-            "agentRole": "Agent",
-            "toolRole": "Tool",
-            "systemRole": "System",
-            "sessionRole": "Session"
+            "noPreviewAvailable": "No hay vista previa de conversación disponible",
+            "dragToResume": "Arrastra para reanudar en una pestaña nueva",
+            "userRole": "Tú",
+            "agentRole": "Agente",
+            "toolRole": "Herramienta",
+            "systemRole": "Sistema",
+            "sessionRole": "Sesión"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "Buscar archivos",

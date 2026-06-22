@@ -443,6 +443,21 @@ function metadataForAttempt(input: {
   }
 }
 
+function classifyClaudeCliUsageFailure(
+  limits: ProviderRateLimits
+): UsageRateLimitFailureKind | undefined {
+  if (!limits.error) {
+    return undefined
+  }
+  if (/rate limited/i.test(limits.error)) {
+    return 'rate-limited'
+  }
+  if (/plan usage is unavailable|usage is unavailable/i.test(limits.error)) {
+    return 'usage-unavailable'
+  }
+  return 'cli-unavailable'
+}
+
 async function fetchClaudeUsageViaCli(input: {
   authPreparation?: ClaudeRuntimeAuthPreparation
   oauthCredentials: OAuthCredentialReadResult
@@ -456,7 +471,8 @@ async function fetchClaudeUsageViaCli(input: {
       attemptedSources: input.attempts.attemptedSources,
       oauthCredentials: input.oauthCredentials,
       authPreparation: input.authPreparation,
-      source: 'cli'
+      source: 'cli',
+      failureKind: classifyClaudeCliUsageFailure(limits)
     })
   )
 }

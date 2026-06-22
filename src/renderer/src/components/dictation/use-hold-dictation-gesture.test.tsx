@@ -72,6 +72,13 @@ async function renderProbe(): Promise<void> {
   })
 }
 
+function beginHold(init: KeyboardEventInit = {}): void {
+  act(() => {
+    dispatchKeyDown({ key: 'e', code: 'KeyE', metaKey: true, ...init })
+  })
+  dictationStateRef.current = 'listening'
+}
+
 beforeEach(() => {
   setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)')
   dictationStateRef = createRef<DictationState>() as MutableRefObject<DictationState>
@@ -103,10 +110,7 @@ describe('useHoldDictationGesture', () => {
   it('stops when the shortcut key is released after the modifier', async () => {
     await renderProbe()
 
-    act(() => {
-      dispatchKeyDown({ key: 'e', code: 'KeyE', metaKey: true })
-    })
-    dictationStateRef.current = 'listening'
+    beginHold()
 
     act(() => {
       dispatchKeyUp({ key: 'e', code: 'KeyE', metaKey: false })
@@ -117,13 +121,24 @@ describe('useHoldDictationGesture', () => {
     expect(holdGestureActiveRef.current).toBe(false)
   })
 
+  it('stops after a layout-aware shortcut key release drops the modifier flag', async () => {
+    await renderProbe()
+
+    beginHold({ key: 'e', code: 'KeyD' })
+
+    act(() => {
+      dispatchKeyUp({ key: 'e', code: 'KeyD', metaKey: false })
+    })
+
+    expect(startDictation).toHaveBeenCalledTimes(1)
+    expect(stopDictation).toHaveBeenCalledTimes(1)
+    expect(holdGestureActiveRef.current).toBe(false)
+  })
+
   it('stops when the required modifier is released before the shortcut key', async () => {
     await renderProbe()
 
-    act(() => {
-      dispatchKeyDown({ key: 'e', code: 'KeyE', metaKey: true })
-    })
-    dictationStateRef.current = 'listening'
+    beginHold()
 
     act(() => {
       dispatchKeyUp({ key: 'Meta', code: 'MetaLeft', metaKey: false })
@@ -137,10 +152,7 @@ describe('useHoldDictationGesture', () => {
   it('ignores unrelated key releases while the shortcut is held', async () => {
     await renderProbe()
 
-    act(() => {
-      dispatchKeyDown({ key: 'e', code: 'KeyE', metaKey: true })
-    })
-    dictationStateRef.current = 'listening'
+    beginHold()
 
     act(() => {
       dispatchKeyUp({ key: 'x', code: 'KeyX', metaKey: true })
@@ -149,5 +161,69 @@ describe('useHoldDictationGesture', () => {
     expect(startDictation).toHaveBeenCalledTimes(1)
     expect(stopDictation).not.toHaveBeenCalled()
     expect(holdGestureActiveRef.current).toBe(true)
+  })
+
+  it('ignores modifier releases that were not part of the accepted chord', async () => {
+    await renderProbe()
+
+    beginHold()
+
+    act(() => {
+      dispatchKeyUp({ key: 'Shift', code: 'ShiftLeft', metaKey: true, shiftKey: false })
+    })
+
+    expect(startDictation).toHaveBeenCalledTimes(1)
+    expect(stopDictation).not.toHaveBeenCalled()
+    expect(holdGestureActiveRef.current).toBe(true)
+  })
+
+  it('falls back to key identity when the accepted keydown has no code', async () => {
+    await renderProbe()
+
+    beginHold({ code: '' })
+
+    act(() => {
+      dispatchKeyUp({ key: 'a', code: '', metaKey: true })
+    })
+
+    expect(stopDictation).not.toHaveBeenCalled()
+    expect(holdGestureActiveRef.current).toBe(true)
+
+    act(() => {
+      dispatchKeyUp({ key: 'e', code: '', metaKey: false })
+    })
+
+    expect(startDictation).toHaveBeenCalledTimes(1)
+    expect(stopDictation).toHaveBeenCalledTimes(1)
+    expect(holdGestureActiveRef.current).toBe(false)
+  })
+
+  it('falls back to key identity when the release has no code', async () => {
+    await renderProbe()
+
+    beginHold()
+
+    act(() => {
+      dispatchKeyUp({ key: 'e', code: '', metaKey: false })
+    })
+
+    expect(startDictation).toHaveBeenCalledTimes(1)
+    expect(stopDictation).toHaveBeenCalledTimes(1)
+    expect(holdGestureActiveRef.current).toBe(false)
+  })
+
+  it('stops on non-Mac when the shortcut key is released after Ctrl has dropped', async () => {
+    setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
+    await renderProbe()
+
+    beginHold({ ctrlKey: true, metaKey: false })
+
+    act(() => {
+      dispatchKeyUp({ key: 'e', code: 'KeyE', ctrlKey: false, metaKey: false })
+    })
+
+    expect(startDictation).toHaveBeenCalledTimes(1)
+    expect(stopDictation).toHaveBeenCalledTimes(1)
+    expect(holdGestureActiveRef.current).toBe(false)
   })
 })

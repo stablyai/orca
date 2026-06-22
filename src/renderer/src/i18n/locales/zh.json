@@ -223,11 +223,11 @@
           "19db0085fb": "本地分支已删除",
           "2b0afc7f14": "无法使本地 {{value0}} 保持最新",
           "670864ab52": "使本地 {{value0}} 保持最新",
-          "5366d13eec": "Workspace deleted, branch kept",
-          "2e17f825d4": "Worktree deleted, branch kept",
-          "78e08cd877": "Git could not safely delete branch \"{{value0}}\", so Orca kept it to avoid losing local commits.",
-          "3b57982bf6": "Git could not safely delete branch \"{{value0}}\" after deleting workspace \"{{value1}}\", so Orca kept it to avoid losing local commits.",
-          "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits."
+          "5366d13eec": "工作区已删除，分支已保留",
+          "2e17f825d4": "工作树已删除，分支已保留",
+          "78e08cd877": "Git 无法安全删除分支\"{{value0}}\"，因此 Orca 将其保留以避免丢失本地提交。",
+          "3b57982bf6": "删除工作区\"{{value1}}\"后，Git 无法安全删除分支\"{{value0}}\"，因此 Orca 将其保留以避免丢失本地提交。",
+          "81f13f48d2": "删除工作树\"{{value1}}\"后，Git 无法安全删除分支\"{{value0}}\"，因此 Orca 将其保留以避免丢失本地提交。"
         },
         "repos": {
           "b7e14472ae": "添加文件夹失败",
@@ -2436,7 +2436,9 @@
             "9acaf92093": "窗格操作",
             "1bce81dba6": "模拟器",
             "1ff1c77616": "浏览器",
-            "586d2ac445": "terminal"
+            "586d2ac445": "terminal",
+            "addSplitPane": "添加拆分窗格",
+            "closePaneColumn": "关闭拆分窗格"
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "拖放到 terminal 面板以恢复此会话。",
@@ -2444,6 +2446,9 @@
             "localWorkspacesOnly": "从历史恢复仅支持本地工作区。",
             "openLocalWorkspace": "恢复会话前请先打开一个本地工作区。",
             "sessionQueued": "会话已排队"
+          },
+          "TabGroupDropOverlay": {
+            "paneColumnLabel": "新建拆分"
           }
         },
         "bar": {
@@ -2514,7 +2519,9 @@
             "cb3eadefd2": "Blue",
             "20baa43c05": "没有任何",
             "60f958ec75": "引脚标签",
-            "417722e9c2": "取消固定标签"
+            "417722e9c2": "取消固定标签",
+            "splitTerminalRight": "向右拆分终端",
+            "splitTerminalDown": "向下拆分终端"
           },
           "TabBar": {
             "b1a132357f": "新标签页",
@@ -2606,6 +2613,13 @@
                 }
               }
             }
+          },
+          "TabWorkspaceLayoutMenuSection": {
+            "right": "右",
+            "left": "左",
+            "down": "下",
+            "up": "上",
+            "moveToPaneColumn": "将标签页移至拆分"
           }
         }
       },
@@ -8817,11 +8831,21 @@
                 "084c516efb": "Copy commands",
                 "5dc3af25c0": "选择评论",
                 "d7a2f9c401": "Send unresolved {{value0}} comments",
-                "d91f2a6c39": "发送 {{value0}} 条已排队评论",
+                "d91f2a6c39": "发送 {{value0}} 条已排队评论给 AI",
                 "a6de3e5a20": "清除已排队评论",
                 "49ea0937e4": "将评论添加到解决列表",
                 "9fecebb29d": "添加",
-                "b8c4e2a1f7": "View full logs"
+                "b8c4e2a1f7": "View full logs",
+                "f8a2c91d04": "Queue for agent",
+                "b4e8a1c902": "Queued",
+                "7c1f0a2b11": "Open",
+                "e8b4c1a903": "Resolved · {{value0}}",
+                "c3a8e5d710": "Needs review · {{value0}}",
+                "a7f0c7e8d1": "Queue",
+                "8a621a2c4f": "Grouped",
+                "b13f85d75c": "Timeline",
+                "f5cf324efa": "Comment display options",
+                "5e6e5a13fa": "View"
               },
               "empty": {
                 "state": {
@@ -9127,15 +9151,15 @@
             "monthsAgo": "{{value0}} 个月前",
             "yearsAgo": "{{value0}} 年前",
             "sessionId": "会话 ID",
-            "originalAsk": "Original ask",
-            "latestTurns": "Latest turns",
-            "noPreviewAvailable": "No conversation preview available",
-            "messageCount": "{{value0}} msgs",
-            "userRole": "You",
-            "agentRole": "Agent",
-            "toolRole": "Tool",
-            "systemRole": "System",
-            "sessionRole": "Session"
+            "originalAsk": "原始请求",
+            "latestTurns": "最近轮次",
+            "noPreviewAvailable": "没有可用的对话预览",
+            "messageCount": "{{value0}} 条消息",
+            "userRole": "你",
+            "agentRole": "智能体",
+            "toolRole": "工具",
+            "systemRole": "系统",
+            "sessionRole": "会话"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "恢复 {{value0}} 会话",
@@ -9153,13 +9177,13 @@
             "showDetails": "显示详情",
             "moreSessionActions": "更多会话操作",
             "moreActions": "更多操作",
-            "noPreviewAvailable": "No conversation preview available",
-            "dragToResume": "Drag to resume in a new tab",
-            "userRole": "You",
-            "agentRole": "Agent",
-            "toolRole": "Tool",
-            "systemRole": "System",
-            "sessionRole": "Session"
+            "noPreviewAvailable": "没有可用的对话预览",
+            "dragToResume": "拖动以在新标签页中恢复",
+            "userRole": "你",
+            "agentRole": "智能体",
+            "toolRole": "工具",
+            "systemRole": "系统",
+            "sessionRole": "会话"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "查找文件",

@@ -13388,7 +13388,8 @@ export class OrcaRuntimeService {
 
   async updateManagedWorktreeMeta(
     worktreeSelector: string,
-    updates: Partial<WorktreeMeta> & {
+    updates: Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
+      pushTarget?: GitPushTarget | null
       lineage?: {
         parentWorktree?: string
         noParent?: boolean
@@ -13400,6 +13401,26 @@ export class OrcaRuntimeService {
     }
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     const { lineage, ...metaUpdates } = updates
+    const shouldClearPushTarget =
+      Object.prototype.hasOwnProperty.call(metaUpdates, 'pushTarget') &&
+      metaUpdates.pushTarget === null
+    const normalizedMetaUpdates: Partial<WorktreeMeta> = shouldClearPushTarget
+      ? { ...metaUpdates, pushTarget: undefined }
+      : (metaUpdates as Partial<WorktreeMeta>)
+    const persistedMetaUpdates: Partial<WorktreeMeta> = omitUndefinedProperties(
+      normalizedMetaUpdates.displayName !== undefined
+        ? {
+            ...normalizedMetaUpdates,
+            pendingFirstAgentMessageRename: false,
+            firstAgentMessageRenameError: null
+          }
+        : normalizedMetaUpdates
+    )
+    if (shouldClearPushTarget) {
+      // Why: omitUndefinedProperties protects ordinary optional RPC fields, but
+      // pushTarget:null is an explicit request to remove persisted target metadata.
+      persistedMetaUpdates.pushTarget = undefined
+    }
     if (lineage?.noParent === true) {
       this.store.removeWorktreeLineage?.(worktree.id)
       this.store.removeWorkspaceLineage?.(worktreeWorkspaceKey(worktree.id))
@@ -13439,20 +13460,7 @@ export class OrcaRuntimeService {
         createdAt
       })
     }
-    this.store.setWorktreeMeta(
-      worktree.id,
-      stripOrcaProvenanceMetaUpdates(
-        omitUndefinedProperties(
-          metaUpdates.displayName !== undefined
-            ? {
-                ...metaUpdates,
-                pendingFirstAgentMessageRename: false,
-                firstAgentMessageRenameError: null
-              }
-            : metaUpdates
-        )
-      )
-    )
+    this.store.setWorktreeMeta(worktree.id, stripOrcaProvenanceMetaUpdates(persistedMetaUpdates))
     // Why: unlike renderer-initiated optimistic updates, CLI callers need an
     // explicit push so the editor refreshes metadata changed outside the UI.
     this.invalidateResolvedWorktreeCache()
