@@ -1513,9 +1513,7 @@ function Settings(): React.JSX.Element {
                       )}
                       searchEntries={getSectionSearchEntries('mobile')}
                     >
-                      {isSectionMounted('mobile') ? (
-                        <MobileSettingsPane settings={settings} updateSettings={updateSettings} />
-                      ) : null}
+                      {isSectionMounted('mobile') ? <MobileSettingsPane /> : null}
                     </SettingsSection>
                   </>
                 ) : null}
