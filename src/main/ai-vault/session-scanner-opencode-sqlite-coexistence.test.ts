@@ -168,6 +168,7 @@ describe('scanAiVaultSessions — OpenCode SQLite + legacy file coexistence', ()
     expect(legacyEntry).toBeDefined()
     expect(legacyEntry!.title).toBe('SQLite session')
     expect(legacyEntry!.cwd).toBe('/tmp/sqlite')
+    expect(legacyEntry!.filePath).toBe(dbPath)
     expect(legacyEntry!.totalTokens).toBe(150)
     expect(legacyEntry!.resumeCommand).toBe(
       "cd '/tmp/sqlite' && opencode --session 'legacy-session'"

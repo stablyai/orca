@@ -188,7 +188,6 @@ function insertPart(
      VALUES (?, ?, ?, ?, ?, ?)`
   ).run(args.id, args.messageId, args.sessionId, args.timeCreated, args.timeCreated, data)
 }
-
 describe('listOpenCodeSqliteSessions', () => {
   it('returns candidates sorted by time_updated desc via the synthesized mtimeMs', async () => {
     const { db, path } = createTempDb()
@@ -250,7 +249,6 @@ describe('listOpenCodeSqliteSessions', () => {
     expect(candidates).toHaveLength(1)
     expect(candidates[0].file.path).toBe(buildOpenCodeSqliteCandidatePath(newPath, 'ses_duplicate'))
   })
-
   it('excludes archived and child sessions', async () => {
     const { db, path } = createTempDb()
     applyOpenCodeSchema(db)
@@ -379,6 +377,7 @@ describe('parseOpenCodeSqliteSession', () => {
     expect(session).not.toBeNull()
     expect(session!.agent).toBe('opencode')
     expect(session!.sessionId).toBe('ses_1')
+    expect(session!.filePath).toBe(path)
     expect(session!.title).toBe('OpenCode title')
     expect(session!.cwd).toBe('/tmp/opencode')
     expect(session!.model).toBe('glm-5.2')
@@ -470,6 +469,7 @@ describe('parseOpenCodeSqliteSession', () => {
     })
     expect(session).not.toBeNull()
     expect(session!.sessionId).toBe('ses_minimal')
+    expect(session!.filePath).toBe(path)
     expect(session!.title).toBe('OpenCode ses_mini')
     expect(session!.cwd).toBeNull()
     expect(session!.model).toBeNull()

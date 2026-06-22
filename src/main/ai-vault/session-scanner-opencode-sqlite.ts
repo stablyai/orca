@@ -5,7 +5,6 @@ import {
   finalizeSession,
   updateTimeline
 } from './session-scanner-accumulator'
-import { buildOpenCodeSqliteCandidatePath } from './session-scanner-opencode-sqlite-paths'
 import { normalizeTitleText } from './session-scanner-values'
 import SyncDatabase from '../sqlite/sync-database'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
@@ -203,15 +202,16 @@ export async function parseOpenCodeSqliteSession(args: {
       return null
     }
 
-    const candidatePath = buildOpenCodeSqliteCandidatePath(dbPath, sessionId)
     const mtimeMs =
       typeof row.time_updated === 'number' && row.time_updated > 0
         ? row.time_updated
         : row.time_created
+    // Why: discovery uses a synthetic db#session path only for parser routing.
+    // The UI's log open/reveal actions need a real filesystem path.
     const accumulator = createAccumulator({
       agent: 'opencode',
       file: {
-        path: candidatePath,
+        path: dbPath,
         mtimeMs,
         modifiedAt: new Date(mtimeMs).toISOString()
       },
