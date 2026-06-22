@@ -3306,6 +3306,188 @@ describe('registerPtyHandlers', () => {
     )
   })
 
+  it('refreshes captured native Agent Teams env for renderer PTY spawns', async () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const runtime = {
+      setPtyController: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_agent_teams'),
+      prepareClaudeAgentTeamsLeaderForHandle: vi.fn(async () => ({
+        env: {
+          CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+          PATH: `/tmp/fresh-agent-teams${delimiter}/usr/bin`,
+          TMUX: '/tmp/orca-claude-agent-teams/team-fresh,0,1',
+          TMUX_PANE: '%1',
+          ORCA_AGENT_TEAMS_TEAM_ID: 'team-fresh',
+          ORCA_AGENT_TEAMS_TOKEN: 'fresh-token'
+        }
+      })),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' })),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24,
+      cwd: '/repo',
+      command: 'claude --teammate-mode auto --resume claude-session',
+      tabId: 'tab-1',
+      leafId,
+      worktreeId: 'wt-1',
+      env: {
+        ORCA_PANE_KEY: `tab-1:${leafId}`,
+        ORCA_TAB_ID: 'tab-1',
+        ORCA_WORKTREE_ID: 'wt-1',
+        CLAUDE_PROFILE: 'captured',
+        PATH: `/tmp/stale-agent-teams${delimiter}/usr/bin`,
+        TMUX: '/tmp/orca-claude-agent-teams/team-stale,0,1',
+        ORCA_AGENT_TEAMS_TEAM_ID: 'team-stale',
+        ORCA_AGENT_TEAMS_TOKEN: 'stale-token',
+        TERM_PROGRAM: 'Orca',
+        ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/stale-attribution'
+      },
+      launchConfig: {
+        agentCommand: 'claude --teammate-mode auto',
+        agentArgs: '',
+        agentEnv: {
+          CLAUDE_PROFILE: 'captured',
+          ORCA_AGENT_TEAMS_TEAM_ID: 'team-stale',
+          ORCA_AGENT_TEAMS_TOKEN: 'stale-token'
+        }
+      },
+      launchAgent: 'claude'
+    })) as { launchConfig?: { agentEnv: Record<string, string> } }
+
+    const spawnOptions = spawnMock.mock.calls.at(-1)?.[2] as { env: Record<string, string> }
+    expect(runtime.prepareClaudeAgentTeamsLeaderForHandle).toHaveBeenCalledWith({
+      handle: 'term_agent_teams',
+      baseEnv: expect.objectContaining({
+        CLAUDE_PROFILE: 'captured',
+        ORCA_AGENT_TEAMS_TEAM_ID: 'team-stale'
+      })
+    })
+    expect(spawnOptions.env).toMatchObject({
+      CLAUDE_PROFILE: 'captured',
+      CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+      ORCA_TERMINAL_HANDLE: 'term_agent_teams',
+      ORCA_AGENT_TEAMS_TEAM_ID: 'team-fresh',
+      ORCA_AGENT_TEAMS_TOKEN: 'fresh-token',
+      TMUX: '/tmp/orca-claude-agent-teams/team-fresh,0,1',
+      TMUX_PANE: '%1'
+    })
+    expect(spawnOptions.env.PATH.split(delimiter)[0]).toBe('/tmp/fresh-agent-teams')
+    expect(spawnOptions.env.TERM_PROGRAM).toBeUndefined()
+    expect(spawnOptions.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    expect(result.launchConfig?.agentEnv).toMatchObject({
+      CLAUDE_PROFILE: 'captured',
+      CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+      ORCA_AGENT_TEAMS_TEAM_ID: 'team-fresh',
+      ORCA_AGENT_TEAMS_TOKEN: 'fresh-token',
+      TMUX: '/tmp/orca-claude-agent-teams/team-fresh,0,1'
+    })
+    expect(runtime.registerPreAllocatedHandleForPty).toHaveBeenCalledWith(
+      expect.any(String),
+      'term_agent_teams'
+    )
+  })
+
+  it('refreshes native Agent Teams env when captured teammate mode lives in launch args', async () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const runtime = {
+      setPtyController: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_agent_teams'),
+      prepareClaudeAgentTeamsLeaderForHandle: vi.fn(async () => ({
+        env: {
+          CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+          ORCA_AGENT_TEAMS_TEAM_ID: 'team-fresh',
+          ORCA_AGENT_TEAMS_TOKEN: 'fresh-token'
+        }
+      })),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' })),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24,
+      cwd: '/repo',
+      command: 'claude --resume claude-session',
+      tabId: 'tab-1',
+      leafId,
+      worktreeId: 'wt-1',
+      env: {
+        ORCA_PANE_KEY: `tab-1:${leafId}`,
+        ORCA_TAB_ID: 'tab-1',
+        ORCA_WORKTREE_ID: 'wt-1'
+      },
+      launchConfig: {
+        agentCommand: 'claude',
+        agentArgs: '--teammate-mode auto',
+        agentEnv: {}
+      },
+      launchAgent: 'claude'
+    })
+
+    expect(runtime.prepareClaudeAgentTeamsLeaderForHandle).toHaveBeenCalledWith({
+      handle: 'term_agent_teams',
+      baseEnv: expect.any(Object)
+    })
+  })
+
+  it('does not echo launch config for provider reattach results', async () => {
+    const spawn = vi.fn(async () => ({ id: 'ssh-reattach', isReattach: true }))
+    registerSshPtyProvider('ssh-reattach-1', {
+      spawn,
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn(),
+      acknowledgeDataEvent: vi.fn()
+    } as never)
+    const runtime = {
+      setPtyController: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
+      registerPreAllocatedHandleForPty: vi.fn()
+    }
+
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const result = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      connectionId: 'ssh-reattach-1',
+      launchConfig: {
+        agentCommand: 'codex --model gpt-5',
+        agentArgs: '--model gpt-5',
+        agentEnv: { CODEX_PROFILE: 'captured' }
+      }
+    })) as { id: string; isReattach?: boolean; launchConfig?: unknown }
+
+    expect(result).toMatchObject({ id: 'ssh-reattach', isReattach: true })
+    expect(result.launchConfig).toBeUndefined()
+  })
+
   it('reuses the runtime background handle in local PTY spawn env', async () => {
     type RuntimeSpawnController = {
       spawn(args: {
@@ -4873,17 +5055,49 @@ describe('registerPtyHandlers', () => {
 
       mockProc.emitData('\x1b]777;orca-shell-ready\x07')
       await Promise.resolve()
-      vi.advanceTimersByTime(49)
+      vi.advanceTimersByTime(50)
       await Promise.resolve()
       expect(mockProc.proc.write).not.toHaveBeenCalled()
 
-      vi.advanceTimersByTime(1)
+      vi.advanceTimersByTime(150)
       await Promise.resolve()
       expect(mockProc.proc.write).toHaveBeenCalledWith("codex 'linked issue context'\n")
     } finally {
       vi.useRealTimers()
     }
   })
+
+  posixOnlyIt(
+    'uses the short settle path for delivery-hinted Codex when prompt follows the marker',
+    async () => {
+      vi.useFakeTimers()
+      const mockProc = createMockProc()
+      spawnMock.mockReturnValue(mockProc.proc)
+
+      try {
+        registerPtyHandlers(mainWindow as never)
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp',
+          command: "codex 'linked issue context'",
+          startupCommandDelivery: 'shell-ready'
+        })
+
+        mockProc.emitData('\x1b]777;orca-shell-ready\x07\r\nuser@host % ')
+        await Promise.resolve()
+        vi.advanceTimersByTime(29)
+        await Promise.resolve()
+        expect(mockProc.proc.write).not.toHaveBeenCalled()
+
+        vi.advanceTimersByTime(1)
+        await Promise.resolve()
+        expect(mockProc.proc.write).toHaveBeenCalledWith("codex 'linked issue context'\n")
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
 
   posixOnlyIt('waits for shell-ready when Codex uses the native prefill flag', async () => {
     vi.useFakeTimers()

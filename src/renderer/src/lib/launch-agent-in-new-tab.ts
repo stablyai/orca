@@ -181,6 +181,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         launchCommand: draftLaunchPlan.launchCommand,
         expectedProcess: draftLaunchPlan.expectedProcess,
         followupPrompt: null,
+        launchConfig: draftLaunchPlan.launchConfig,
         ...(draftLaunchPlan.startupCommandDelivery
           ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
           : {}),
@@ -239,6 +240,9 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       ...(hasPrompt
         ? {
             command: startupPlan.launchCommand,
+            ...(startupPlan.env ? { env: startupPlan.env } : {}),
+            launchConfig: startupPlan.launchConfig,
+            launchAgent: agent,
             ...(startupPlan.startupCommandDelivery
               ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
               : {})
@@ -286,6 +290,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
+    launchConfig: startupPlan.launchConfig,
+    launchAgent: agent,
     ...(startupPlan.startupCommandDelivery
       ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
       : {}),

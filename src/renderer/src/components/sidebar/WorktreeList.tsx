@@ -221,6 +221,10 @@ import { buildImportedWorktreesCardCandidates } from './imported-worktrees-card-
 import {
   WORKTREE_SECTION_HEADER_PADDING_LEFT,
   LINEAGE_CHILDREN_INLINE_OFFSET,
+  getFolderBackedRepoWorktreeCardContentIndent,
+  getFolderBackedRepoWorktreeCardSurfaceInset,
+  getFolderWorkspaceCardContentIndent,
+  getFolderWorkspaceCardSurfaceInset,
   getLineageChildrenInlineStyle,
   getLineageNestedRowGeometry,
   getProjectGroupHeaderPaddingLeft,
@@ -1213,6 +1217,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const settings = useAppStore((s) => s.settings)
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
   const reorderRepos = useAppStore((s) => s.reorderRepos)
+  const folderBackedProjectGroupIds = useMemo(
+    () =>
+      new Set(
+        projectGroups
+          .filter((group) => group.createdFrom === 'folder-scan')
+          .map((group) => group.id)
+      ),
+    [projectGroups]
+  )
 
   useEffect(
     () =>
@@ -4191,14 +4204,25 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               const lineageToggleGroupKey = itemRow.lineageGroupKey
               const experimentalNewWorktreeCardStyle =
                 settings?.experimentalNewWorktreeCardStyle === true
+              const projectGroupId = itemRow.repo?.projectGroupId
+              const isFolderBackedRepoChild =
+                groupBy === 'repo' &&
+                Boolean(projectGroupId && folderBackedProjectGroupIds.has(projectGroupId))
               // Why: experimental in-card lineage inherits the parent surface;
               // legacy cards keep the old depth-based nested row geometry.
               const paddingDepth = nested ? Math.max(0, itemRow.depth - 1) : itemRow.depth
-              const inheritedCardContentIndent = getWorktreeCardContentIndent({
-                isGrouped: groupBy !== 'none',
-                groupDepth: itemRow.groupDepth,
-                lineageDepth: 0
-              })
+              const getCardContentIndent = (lineageDepth: number): number =>
+                isFolderBackedRepoChild
+                  ? getFolderBackedRepoWorktreeCardContentIndent({
+                      groupDepth: itemRow.groupDepth,
+                      lineageDepth
+                    })
+                  : getWorktreeCardContentIndent({
+                      isGrouped: groupBy !== 'none',
+                      groupDepth: itemRow.groupDepth,
+                      lineageDepth
+                    })
+              const inheritedCardContentIndent = getCardContentIndent(0)
               const nestedLineageGeometry = nested
                 ? getLineageNestedRowGeometry({
                     experimentalNewWorktreeCardStyle,
@@ -4208,17 +4232,25 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 : null
               // Why: grouped rows inherit their project/group header depth,
               // while the card surface still spans the full hit/background row.
-              const paddingLeft = getWorktreeCardContentIndent({
-                isGrouped: !nested && groupBy !== 'none',
-                groupDepth: itemRow.groupDepth,
-                lineageDepth: paddingDepth
-              })
+              const paddingLeft =
+                nested && groupBy !== 'none'
+                  ? getWorktreeCardContentIndent({
+                      isGrouped: false,
+                      groupDepth: itemRow.groupDepth,
+                      lineageDepth: paddingDepth
+                    })
+                  : getCardContentIndent(paddingDepth)
               const surfaceInset = nested
                 ? nestedLineageGeometry!.surfaceInset
-                : getWorktreeCardSurfaceInset({
-                    isGrouped: groupBy !== 'none',
-                    groupDepth: itemRow.groupDepth
-                  })
+                : isFolderBackedRepoChild
+                  ? getFolderBackedRepoWorktreeCardSurfaceInset({
+                      groupDepth: itemRow.groupDepth,
+                      lineageDepth: paddingDepth
+                    })
+                  : getWorktreeCardSurfaceInset({
+                      isGrouped: groupBy !== 'none',
+                      groupDepth: itemRow.groupDepth
+                    })
               const cardContentIndent = nested
                 ? nestedLineageGeometry!.cardContentIndent
                 : Math.max(0, paddingLeft - surfaceInset)
@@ -4458,18 +4490,29 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 folderWorkspacePathStatus?.exists === false &&
                 (isConfirmedStaleFolderPathStatus(folderWorkspacePathStatus) ||
                   folderWorkspacePathStatus.reason === 'ambiguous-connection')
-              const contentIndent = getWorktreeCardContentIndent({
-                isGrouped: groupBy !== 'none',
-                groupDepth: folderWorkspaceRow.groupDepth,
-                lineageDepth: folderWorkspaceRow.depth
-              })
+              const isFolderBackedWorkspaceChild =
+                groupBy === 'repo' && folderWorkspaceRow.projectGroup.createdFrom === 'folder-scan'
+              const contentIndent = isFolderBackedWorkspaceChild
+                ? getFolderWorkspaceCardContentIndent({
+                    groupDepth: folderWorkspaceRow.groupDepth
+                  })
+                : getWorktreeCardContentIndent({
+                    isGrouped: groupBy !== 'none',
+                    groupDepth: folderWorkspaceRow.groupDepth,
+                    lineageDepth: folderWorkspaceRow.depth
+                  })
               // Why: folder workspace surfaces should step inward with their
               // project-group nesting, matching lineage child card surfaces
               // instead of spanning from the sidebar edge at every depth.
-              const surfaceInset = getWorktreeCardSurfaceInset({
-                isGrouped: groupBy !== 'none',
-                groupDepth: folderWorkspaceRow.groupDepth
-              })
+              const surfaceInset = isFolderBackedWorkspaceChild
+                ? getFolderWorkspaceCardSurfaceInset({
+                    isGrouped: true,
+                    groupDepth: folderWorkspaceRow.groupDepth
+                  })
+                : getWorktreeCardSurfaceInset({
+                    isGrouped: groupBy !== 'none',
+                    groupDepth: folderWorkspaceRow.groupDepth
+                  })
               const insetContentIndent = Math.max(0, contentIndent - surfaceInset)
               return (
                 <div

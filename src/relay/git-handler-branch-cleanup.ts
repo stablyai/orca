@@ -12,7 +12,8 @@ export async function deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure(
   branchName: string,
   branchHead: string
 ): Promise<boolean> {
-  const runGit = (args: string[]) => git(args, repoPath)
+  const runGit = (args: string[], options?: { stdin?: string }) =>
+    options ? git(args, repoPath, options) : git(args, repoPath)
   const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
   await refreshBranchCleanupTargetRefs(runGit, targetRefs)
   // Why: SSH worktrees hit the same squash-merge shape as local worktrees.

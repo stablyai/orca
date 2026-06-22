@@ -37,6 +37,13 @@ type ClaudeAuthPreparationResolver = (
   target?: ClaudeAccountSelectionTarget
 ) => Promise<ClaudeRuntimeAuthPreparation>
 
+type OpenCodeGoRateLimitConfig = {
+  sessionCookie: string
+  workspaceIdOverride: string
+}
+
+type GeminiCliOAuthEnabledResolver = () => boolean
+
 // Why: Claude's subscription usage endpoint has a tight request budget. Quota
 // state is informational, so prefer keeping a recent snapshot over polling it
 // into 429s during long focused Orca sessions.
@@ -98,13 +105,8 @@ export class RateLimitService {
     runtime: 'host',
     wslDistro: null
   }
-  private settingsResolver:
-    | (() => {
-        opencodeSessionCookie: string
-        opencodeWorkspaceId: string
-        geminiCliOAuthEnabled?: boolean
-      })
-    | null = null
+  private openCodeGoConfigResolver: (() => OpenCodeGoRateLimitConfig) | null = null
+  private geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
   private inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
   private inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
   private inactiveClaudeCache = new Map<string, ProviderRateLimits>()
@@ -142,14 +144,12 @@ export class RateLimitService {
     this.claudeFetchTarget = normalizeClaudeAccountSelectionTarget(target)
   }
 
-  setSettingsResolver(
-    resolver: () => {
-      opencodeSessionCookie: string
-      opencodeWorkspaceId: string
-      geminiCliOAuthEnabled?: boolean
-    }
-  ): void {
-    this.settingsResolver = resolver
+  setOpenCodeGoConfigResolver(resolver: () => OpenCodeGoRateLimitConfig): void {
+    this.openCodeGoConfigResolver = resolver
+  }
+
+  setGeminiCliOAuthEnabledResolver(resolver: GeminiCliOAuthEnabledResolver): void {
+    this.geminiCliOAuthEnabledResolver = resolver
   }
 
   setInactiveClaudeAccountsResolver(resolver: () => InactiveClaudeAccountInfo[]): void {
@@ -792,6 +792,12 @@ export class RateLimitService {
     return process.platform !== 'win32'
   }
 
+  private shouldAllowClaudePtyFallback(): boolean {
+    // Why: automatic recovery uses Claude CLI as the next source, but Windows
+    // hidden PTY support remains less reliable than host/WSL shells.
+    return process.platform !== 'win32'
+  }
+
   private withFetchingStatus(
     current: ProviderRateLimits | null,
     provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi'
@@ -819,10 +825,10 @@ export class RateLimitService {
     const codexProvenance = this.getCodexProvenance(codexTarget, codexHomePath)
     const codexGeneration = this.codexFetchGeneration
     const previousState = this.state
-    const settings = this.settingsResolver?.()
-    const cookie = settings?.opencodeSessionCookie ?? ''
-    const workspaceIdOverride = settings?.opencodeWorkspaceId ?? ''
-    const geminiCliOAuthEnabled = settings?.geminiCliOAuthEnabled ?? false
+    const openCodeGoConfig = this.openCodeGoConfigResolver?.()
+    const cookie = openCodeGoConfig?.sessionCookie ?? ''
+    const workspaceIdOverride = openCodeGoConfig?.workspaceIdOverride ?? ''
+    const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
 
     // Detect if configuration changed — if it did, we must discard any stale
     // data because it belongs to a different session/workspace.
@@ -855,9 +861,7 @@ export class RateLimitService {
       await Promise.allSettled([
         fetchClaudeRateLimits({
           authPreparation: claudeAuthPreparation,
-          // Why: active quota refreshes run on startup/focus/timers. They must
-          // never spawn hidden Claude Code, which can trigger macOS App Data TCC.
-          allowPtyFallback: false
+          allowPtyFallback: this.shouldAllowClaudePtyFallback()
         }),
         missingWslCodexHome ??
           fetchCodexRateLimits({
@@ -1032,9 +1036,7 @@ export class RateLimitService {
 
     const claude = await fetchClaudeRateLimits({
       authPreparation: claudeAuthPreparation,
-      // Why: account-change refreshes share the same automatic active quota
-      // surface as startup/timer refreshes, so keep them API-only as well.
-      allowPtyFallback: false
+      allowPtyFallback: this.shouldAllowClaudePtyFallback()
     }).catch(
       (err): ProviderRateLimits => ({
         provider: 'claude',
@@ -1069,7 +1071,14 @@ export class RateLimitService {
   ): ProviderRateLimits {
     // Fresh data is fine — use it
     if (fresh.status === 'ok') {
-      return fresh
+      return {
+        ...fresh,
+        usageMetadata: {
+          ...fresh.usageMetadata,
+          lastSuccessfulSource:
+            fresh.usageMetadata?.source ?? fresh.usageMetadata?.lastSuccessfulSource
+        }
+      }
     }
 
     // Explicitly unavailable — user likely cleared a setting. Discard any stale
@@ -1103,7 +1112,13 @@ export class RateLimitService {
     return {
       ...previous,
       error: fresh.error,
-      status: 'error'
+      status: 'error',
+      usageMetadata: {
+        ...previous.usageMetadata,
+        ...fresh.usageMetadata,
+        lastSuccessfulSource:
+          previous.usageMetadata?.lastSuccessfulSource ?? previous.usageMetadata?.source
+      }
     }
   }
 

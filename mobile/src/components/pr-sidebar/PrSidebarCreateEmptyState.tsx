@@ -25,6 +25,7 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
   const [prefill, setPrefill] = useState<MobilePrPrefill | null>(null)
   const [mode, setMode] = useState<Mode>('choose')
   const [loading, setLoading] = useState(false)
+  const [createWarning, setCreateWarning] = useState<string | null>(null)
   // A persisted linkedPR while the branch shows no PR means the linked PR could
   // not be resolved. Mention it, but keep link editing out of this desktop-parity
   // create surface.
@@ -56,6 +57,7 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
     if (!client || loading) {
       return
     }
+    setCreateWarning(null)
     setLoading(true)
     try {
       // Git-status fields are best-effort here (the sidebar has no working-tree
@@ -90,8 +92,9 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
           prefill={prefill}
           head={gitBranch}
           onCancel={() => setMode('choose')}
-          onCreated={(url) => {
+          onCreated={(url, warning) => {
             setMode('choose')
+            setCreateWarning(warning ?? null)
             openMobilePrUrl(url)
             onCreated()
           }}
@@ -144,6 +147,7 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
               ? `${gitBranch} is not linked to an open PR.`
               : 'The current branch is not linked to an open PR.'}
         </Text>
+        {createWarning ? <Text style={styles.bodyText}>{createWarning}</Text> : null}
       </View>
     </View>
   )

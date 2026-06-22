@@ -16,14 +16,27 @@ export function buildAiVaultResumeCommandForWorktree(args: {
   commandOverride?: string | null
 }): string {
   const platform = getAiVaultResumePlatform(args.state, args.worktreeId)
+  const codexHome = getAiVaultResumeCodexHome(args.session.codexHome, platform)
   return buildAiVaultResumeCommand({
     agent: args.session.agent,
     sessionId: args.session.sessionId,
     cwd: args.session.cwd,
     platform,
     commandOverride: args.commandOverride,
-    codexHome: args.session.codexHome
+    codexHome
   })
+}
+
+function getAiVaultResumeCodexHome(
+  codexHome: string | null,
+  platform: NodeJS.Platform
+): string | null {
+  // Why: WSL UNC Codex homes must be POSIX when invoking Linux commands.
+  // Keep original paths unchanged for non-Linux targets.
+  if (!codexHome || platform !== 'linux') {
+    return codexHome
+  }
+  return parseWslUncPath(codexHome)?.linuxPath ?? codexHome
 }
 
 export function getAiVaultResumePlatform(

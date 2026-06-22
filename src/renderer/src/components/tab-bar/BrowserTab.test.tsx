@@ -36,6 +36,13 @@ vi.mock('@dnd-kit/sortable', () => ({
   })
 }))
 
+vi.mock('./tab-strip-pointer-activation', () => ({
+  useTabStripPointerActivation: () => ({
+    isPressed: false,
+    onPointerDown: vi.fn()
+  })
+}))
+
 vi.mock('lucide-react', () => ({
   Columns2: function Columns2(props: Record<string, unknown>) {
     return { type: 'Columns2', props }
@@ -75,6 +82,21 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   },
   DropdownMenuSeparator: function DropdownMenuSeparator() {
     return { type: 'DropdownMenuSeparator', props: {} }
+  },
+  DropdownMenuShortcut: function DropdownMenuShortcut(props: { children?: unknown }) {
+    return { type: 'DropdownMenuShortcut', props }
+  },
+  DropdownMenuLabel: function DropdownMenuLabel(props: { children?: unknown }) {
+    return { type: 'DropdownMenuLabel', props }
+  },
+  DropdownMenuSub: function DropdownMenuSub(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSub', props }
+  },
+  DropdownMenuSubContent: function DropdownMenuSubContent(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubContent', props }
+  },
+  DropdownMenuSubTrigger: function DropdownMenuSubTrigger(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubTrigger', props }
   },
   DropdownMenuTrigger: function DropdownMenuTrigger(props: { children?: unknown }) {
     return { type: 'DropdownMenuTrigger', props }
@@ -133,7 +155,6 @@ async function renderBrowserTab(tab: BrowserTabState): Promise<unknown> {
     onActivate: () => {},
     onClose: () => {},
     onCloseToRight: () => {},
-    onSplitGroup: () => {},
     onDuplicate: () => {},
     onTogglePin: () => {},
     dragData: {

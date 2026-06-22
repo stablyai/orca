@@ -1,6 +1,11 @@
 import type { DropZone, ManagedPaneInternal } from './pane-manager-types'
 import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
-import { handlePaneDrop, hideDropOverlay, showDropOverlay } from './pane-drag-reorder'
+import {
+  handlePaneDrop,
+  hideDropOverlay,
+  isPaneDropNoOp,
+  showDropOverlay
+} from './pane-drag-reorder'
 
 const DRAG_THRESHOLD = 5
 
@@ -161,6 +166,15 @@ function updateDropTarget(
 
   const rect = targetPane.container.getBoundingClientRect()
   const zone = resolveDropZone(clientX, clientY, rect)
+  const sourcePaneId = state.dragSourcePaneId
+  if (
+    sourcePaneId !== null &&
+    isPaneDropNoOp(sourcePaneId, targetPane.id, zone, callbacks.getPanes())
+  ) {
+    overlay.style.display = 'none'
+    state.currentDropTarget = null
+    return
+  }
   state.currentDropTarget = { paneId: targetPane.id, zone }
   positionDropOverlay(overlay, rect, zone)
 }

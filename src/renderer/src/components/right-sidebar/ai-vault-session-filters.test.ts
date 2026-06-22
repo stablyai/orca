@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import {
   AI_VAULT_SESSION_FILTER_QUERY_MAX_BYTES,
+  deriveAiVaultWorkspaceScopePaths,
   filterAiVaultSessions,
   folderLabel,
   groupAiVaultSessions,
@@ -50,10 +51,52 @@ describe('filterAiVaultSessions', () => {
         agents: ['claude'],
         scope: 'workspace',
         sort: 'updated',
-        activeWorktreePath: '/Users/ada/repo',
+        activeWorktreePaths: ['/Users/ada/repo'],
         hideEmptySessions: true
       }).map((session) => session.id)
     ).toEqual(['claude:1'])
+  })
+
+  it('matches workspace sessions under prior renamed worktree paths', () => {
+    const sessions: AiVaultSession[] = [
+      {
+        ...baseSession,
+        id: 'claude:old-path',
+        cwd: '/Users/ada/workspaces/orca/bream/src'
+      },
+      {
+        ...baseSession,
+        id: 'claude:other-path',
+        cwd: '/Users/ada/workspaces/other/bream'
+      }
+    ]
+
+    expect(
+      filterAiVaultSessions(sessions, {
+        query: '',
+        agents: ['claude'],
+        scope: 'workspace',
+        sort: 'updated',
+        activeWorktreePaths: [
+          '/Users/ada/workspaces/orca/fix-agent-history',
+          '/Users/ada/workspaces/orca/bream'
+        ],
+        hideEmptySessions: true
+      }).map((session) => session.id)
+    ).toEqual(['claude:old-path'])
+  })
+
+  it('returns no workspace matches when active workspace paths are empty', () => {
+    expect(
+      filterAiVaultSessions([baseSession], {
+        query: '',
+        agents: ['claude'],
+        scope: 'workspace',
+        sort: 'updated',
+        activeWorktreePaths: [],
+        hideEmptySessions: true
+      })
+    ).toEqual([])
   })
 
   it('hides empty metadata-only sessions when requested', () => {
@@ -71,7 +114,7 @@ describe('filterAiVaultSessions', () => {
         agents: ['claude'],
         scope: 'all',
         sort: 'updated',
-        activeWorktreePath: null,
+        activeWorktreePaths: [],
         hideEmptySessions: true
       }).map((session) => session.id)
     ).toEqual(['claude:1'])
@@ -81,7 +124,7 @@ describe('filterAiVaultSessions', () => {
       agents: ['claude'],
       scope: 'all',
       sort: 'updated',
-      activeWorktreePath: null,
+      activeWorktreePaths: [],
       hideEmptySessions: false
     }).map((session) => session.id)
 
@@ -108,7 +151,7 @@ describe('filterAiVaultSessions', () => {
           agents: ['claude'],
           scope: 'all',
           sort: 'updated',
-          activeWorktreePath: null,
+          activeWorktreePaths: [],
           hideEmptySessions: true
         }
       ).map((session) => session.id)
@@ -140,7 +183,7 @@ describe('filterAiVaultSessions', () => {
           agents: ['claude'],
           scope: 'all',
           sort: 'updated',
-          activeWorktreePath: null,
+          activeWorktreePaths: [],
           hideEmptySessions: true
         }
       )
@@ -161,7 +204,28 @@ describe('filterAiVaultSessions', () => {
           agents: ['claude'],
           scope: 'workspace',
           sort: 'updated',
-          activeWorktreePath: 'c:\\users\\ada\\repo',
+          activeWorktreePaths: ['c:\\users\\ada\\repo'],
+          hideEmptySessions: true
+        }
+      )
+    ).toHaveLength(1)
+  })
+
+  it('matches WSL UNC workspace paths against Linux session cwd values', () => {
+    expect(
+      filterAiVaultSessions(
+        [
+          {
+            ...baseSession,
+            cwd: '/home/ada/repo/app'
+          }
+        ],
+        {
+          query: '',
+          agents: ['claude'],
+          scope: 'workspace',
+          sort: 'updated',
+          activeWorktreePaths: [String.raw`\\wsl.localhost\Ubuntu\home\ada\repo`],
           hideEmptySessions: true
         }
       )
@@ -182,10 +246,116 @@ describe('filterAiVaultSessions', () => {
         agents: ['claude'],
         scope: 'all',
         sort: 'updated',
-        activeWorktreePath: null,
+        activeWorktreePaths: [],
         hideEmptySessions: false
       })
     ).toEqual([])
+  })
+})
+
+describe('deriveAiVaultWorkspaceScopePaths', () => {
+  it('includes current and same-repo prior filesystem paths', () => {
+    expect(
+      deriveAiVaultWorkspaceScopePaths({
+        id: 'repo1::/Users/ada/workspaces/orca/fix-agent-history',
+        repoId: 'repo1',
+        path: '/Users/ada/workspaces/orca/fix-agent-history',
+        priorWorktreeIds: ['repo1::/Users/ada/workspaces/orca/bream']
+      })
+    ).toEqual(['/Users/ada/workspaces/orca/fix-agent-history', '/Users/ada/workspaces/orca/bream'])
+  })
+
+  it('strips folder-workspace instance suffixes from prior ids', () => {
+    expect(
+      deriveAiVaultWorkspaceScopePaths({
+        id: 'repo1::/Users/ada/folders/orca',
+        repoId: 'repo1',
+        path: '/Users/ada/folders/orca',
+        priorWorktreeIds: [
+          'repo1::/Users/ada/folders/old-orca::workspace:123e4567-e89b-12d3-a456-426614174000'
+        ]
+      })
+    ).toEqual(['/Users/ada/folders/orca', '/Users/ada/folders/old-orca'])
+  })
+
+  it('ignores malformed, different-repo, relative, empty, and duplicate aliases', () => {
+    expect(
+      deriveAiVaultWorkspaceScopePaths({
+        id: 'repo1::C:\\Users\\Ada\\Repo',
+        repoId: 'repo1',
+        path: 'C:\\Users\\Ada\\Repo',
+        priorWorktreeIds: [
+          'not-a-worktree-id',
+          'repo2::C:\\Users\\Ada\\OldRepo',
+          'repo1::relative/path',
+          'repo1::',
+          'repo1::c:\\users\\ada\\repo',
+          'repo1::C:\\Users\\Ada\\OldRepo'
+        ]
+      })
+    ).toEqual(['C:\\Users\\Ada\\Repo', 'C:\\Users\\Ada\\OldRepo'])
+  })
+
+  it('ignores prior paths claimed by another live worktree in the same repo', () => {
+    expect(
+      deriveAiVaultWorkspaceScopePaths(
+        {
+          id: 'repo1::/Users/ada/workspaces/orca/fix-agent-history',
+          repoId: 'repo1',
+          path: '/Users/ada/workspaces/orca/fix-agent-history',
+          priorWorktreeIds: [
+            'repo1::/Users/ada/workspaces/orca/bream',
+            'repo1::/Users/ada/workspaces/orca/unclaimed-old-path'
+          ]
+        },
+        [
+          {
+            id: 'repo1::/Users/ada/workspaces/orca/fix-agent-history',
+            repoId: 'repo1',
+            path: '/Users/ada/workspaces/orca/fix-agent-history'
+          },
+          {
+            id: 'repo1::/Users/ada/workspaces/orca/bream',
+            repoId: 'repo1',
+            path: '/Users/ada/workspaces/orca/bream'
+          }
+        ]
+      )
+    ).toEqual([
+      '/Users/ada/workspaces/orca/fix-agent-history',
+      '/Users/ada/workspaces/orca/unclaimed-old-path'
+    ])
+  })
+
+  it('ignores prior paths claimed by another live worktree in a different repo', () => {
+    expect(
+      deriveAiVaultWorkspaceScopePaths(
+        {
+          id: 'repo1::/Users/ada/workspaces/orca/fix-agent-history',
+          repoId: 'repo1',
+          path: '/Users/ada/workspaces/orca/fix-agent-history',
+          priorWorktreeIds: [
+            'repo1::/Users/ada/workspaces/orca/bream',
+            'repo1::/Users/ada/workspaces/orca/unclaimed-old-path'
+          ]
+        },
+        [
+          {
+            id: 'repo1::/Users/ada/workspaces/orca/fix-agent-history',
+            repoId: 'repo1',
+            path: '/Users/ada/workspaces/orca/fix-agent-history'
+          },
+          {
+            id: 'repo2::/Users/ada/workspaces/orca/bream',
+            repoId: 'repo2',
+            path: '/Users/ada/workspaces/orca/bream'
+          }
+        ]
+      )
+    ).toEqual([
+      '/Users/ada/workspaces/orca/fix-agent-history',
+      '/Users/ada/workspaces/orca/unclaimed-old-path'
+    ])
   })
 })
 

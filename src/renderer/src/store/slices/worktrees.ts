@@ -40,10 +40,12 @@ import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualized
 import { branchName } from '@/lib/git-utils'
 import { markInputQuietSchedulerInput, scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
+import { showPreservedBranchToast } from '@/components/sidebar/preserved-branch-toast'
 import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
@@ -67,6 +69,7 @@ const WORKTREE_REFRESH_CONCURRENCY = 5
 const pendingActivationTerminalPrepCancels = new Map<string, () => void>()
 const detachedHeadAutoDerivedDisplayNames = new Map<string, string>()
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
+const hostedReviewPushTargetLookupsInFlight = new Set<string>()
 
 async function mapReposForWorktreeRefresh<T>(
   repos: readonly { id: string }[],
@@ -149,42 +152,6 @@ function showLocalBaseRefRefreshToast(result: LocalBaseRefRefreshResult | undefi
   )
 }
 
-function showPreservedBranchToast(
-  result: RemoveWorktreeResult | undefined,
-  worktree: Pick<Worktree, 'displayName' | 'isMainWorktree'> | undefined,
-  onForceDelete: (branchName: string, expectedHead: string) => void
-): void {
-  const preservedBranch = result?.preservedBranch
-  const branch = preservedBranch?.branchName
-  if (!branch) {
-    return
-  }
-  const targetTitle = worktree?.isMainWorktree ? 'Workspace' : 'Worktree'
-  const targetLabel = targetTitle.toLowerCase()
-  const targetName = worktree?.displayName?.trim()
-  const deletedTarget = targetName ? ` after deleting ${targetLabel} "${targetName}"` : ''
-  const expectedHead = preservedBranch.head
-  const action = expectedHead
-    ? {
-        label: translate('auto.store.slices.worktrees.e50495aae6', 'Force Delete Branch'),
-        onClick: () => onForceDelete(branch, expectedHead)
-      }
-    : undefined
-  toast.warning(
-    translate('auto.store.slices.worktrees.4e6496f3d2', '{{value0}} deleted, branch kept', {
-      value0: targetTitle
-    }),
-    {
-      description: translate(
-        'auto.store.slices.worktrees.d1d78a7baa',
-        'Git could not safely delete branch "{{value0}}"{{value1}}, so Orca kept it to avoid losing local commits.',
-        { value0: branch, value1: deletedTarget }
-      ),
-      ...(action ? { action } : {})
-    }
-  )
-}
-
 function arraysShallowEqual(a: string[] | undefined, b: string[] | undefined): boolean {
   if (a === b) {
     return true
@@ -263,6 +230,7 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.pushTarget?.remoteUrl === candidate.pushTarget?.remoteUrl &&
       worktree.sparseBaseRef === candidate.sparseBaseRef &&
       arraysShallowEqual(worktree.sparseDirectories, candidate.sparseDirectories) &&
+      arraysShallowEqual(worktree.priorWorktreeIds, candidate.priorWorktreeIds) &&
       (worktree as WorktreeWithLineage).parentWorktreeId ===
         (candidate as WorktreeWithLineage).parentWorktreeId &&
       arraysShallowEqual(
@@ -345,8 +313,31 @@ function toVisibleWorktree(worktree: DetectedWorktreeListResult['worktrees'][num
   return base
 }
 
-function toVisibleWorktrees(result: DetectedWorktreeListResult): Worktree[] {
-  return result.worktrees.filter((worktree) => worktree.visible).map(toVisibleWorktree)
+// Why: runtime worktree payloads arrive from the owning host's own perspective,
+// so their hostId defaults to "local" even for remote checkouts. Re-stamp them
+// with the repo's execution host so per-worktree host resolution doesn't route
+// remote terminals to the local machine. Local-owned repos are left untouched,
+// so an explicit local worktree still overrides a runtime repo owner.
+function withRepoHostId<T extends { hostId?: ExecutionHostId }>(
+  worktree: T,
+  hostId: ExecutionHostId
+): T {
+  return hostId === LOCAL_EXECUTION_HOST_ID ? worktree : { ...worktree, hostId }
+}
+
+function repoHostId(state: Pick<AppState, 'repos'>, repoId: string): ExecutionHostId {
+  const repo = state.repos.find((entry) => entry.id === repoId)
+  return repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
+}
+
+function toVisibleWorktrees(
+  result: DetectedWorktreeListResult,
+  hostId: ExecutionHostId
+): Worktree[] {
+  return result.worktrees
+    .filter((worktree) => worktree.visible)
+    .map(toVisibleWorktree)
+    .map((worktree) => withRepoHostId(worktree, hostId))
 }
 
 function getHydratedSessionWorktreeIdsForRepo(state: AppState, repoId: string): string[] {
@@ -814,7 +805,13 @@ function applyWorktreeLineageUpdate(
       worktreesByRepo:
         result.target.kind === 'local' || !result.updatedRemoteWorktree
           ? s.worktreesByRepo
-          : replaceWorktreeInRepoLists(s.worktreesByRepo, result.updatedRemoteWorktree),
+          : replaceWorktreeInRepoLists(
+              s.worktreesByRepo,
+              withRepoHostId(
+                result.updatedRemoteWorktree,
+                repoHostId(s, getRepoIdFromWorktreeId(result.updatedRemoteWorktree.id))
+              )
+            ),
       sortEpoch: s.sortEpoch + 1
     }
   })
@@ -919,12 +916,15 @@ async function persistWorktreeMeta(
   await callRuntimeRpc(
     target,
     'worktree.set',
-    { worktree: toRuntimeWorktreeSelector(worktreeId), ...updates },
+    {
+      worktree: toRuntimeWorktreeSelector(worktreeId),
+      ...encodePushTargetClearForRuntimeRpc(updates)
+    },
     { timeoutMs: 15_000 }
   )
 }
 
-async function resolveLinkedPrPushTarget(
+async function resolveGitHubReviewPushTarget(
   settings: AppState['settings'],
   repoId: string,
   prNumber: number
@@ -952,6 +952,140 @@ async function resolveLinkedPrPushTarget(
     )
     return undefined
   }
+}
+
+async function resolveGitLabReviewPushTarget(
+  settings: AppState['settings'],
+  repoId: string,
+  mrIid: number
+): Promise<GitPushTarget | undefined> {
+  try {
+    const target = getActiveRuntimeTarget(settings)
+    const result =
+      target.kind === 'local'
+        ? await window.api.worktrees.resolveMrBase({ repoId, mrIid })
+        : await callRuntimeRpc<
+            | { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget }
+            | {
+                error: string
+              }
+          >(target, 'worktree.resolveMrBase', { repo: repoId, mrIid }, { timeoutMs: 30_000 })
+    if ('error' in result) {
+      console.warn(`Failed to resolve push target for MR !${mrIid}: ${result.error}`)
+      return undefined
+    }
+    return result.pushTarget
+  } catch (error) {
+    console.warn(
+      `Failed to resolve push target for MR !${mrIid}:`,
+      error instanceof Error ? error.message : error
+    )
+    return undefined
+  }
+}
+
+function getHostedReviewPushTargetLookup(worktree: Worktree): {
+  key: string
+  resolve: (settings: AppState['settings']) => Promise<GitPushTarget | undefined>
+} | null {
+  const hostScope = worktree.hostId ?? ''
+  if (isPositiveHostedReviewNumber(worktree.linkedPR)) {
+    const prNumber = worktree.linkedPR
+    return {
+      key: `${worktree.id}:${hostScope}:github:${prNumber}`,
+      resolve: (settings) => resolveGitHubReviewPushTarget(settings, worktree.repoId, prNumber)
+    }
+  }
+  if (isPositiveHostedReviewNumber(worktree.linkedGitLabMR)) {
+    const mrIid = worktree.linkedGitLabMR
+    return {
+      key: `${worktree.id}:${hostScope}:gitlab:${mrIid}`,
+      resolve: (settings) => resolveGitLabReviewPushTarget(settings, worktree.repoId, mrIid)
+    }
+  }
+  return null
+}
+
+function isPositiveHostedReviewNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
+}
+
+type HostedReviewLinkKey =
+  | 'linkedPR'
+  | 'linkedGitLabMR'
+  | 'linkedBitbucketPR'
+  | 'linkedAzureDevOpsPR'
+  | 'linkedGiteaPR'
+
+const HOSTED_REVIEW_LINK_KEYS: readonly HostedReviewLinkKey[] = [
+  'linkedPR',
+  'linkedGitLabMR',
+  'linkedBitbucketPR',
+  'linkedAzureDevOpsPR',
+  'linkedGiteaPR'
+]
+
+function getPositiveHostedReviewLinkUpdateKey(
+  updates: Partial<WorktreeMeta>
+): HostedReviewLinkKey | null {
+  for (const key of HOSTED_REVIEW_LINK_KEYS) {
+    if (isPositiveHostedReviewNumber(updates[key])) {
+      return key
+    }
+  }
+  return null
+}
+
+function clearOlderHostedReviewLinksForReplacement(
+  updates: Partial<WorktreeMeta>,
+  existingWorktree: Worktree
+): Partial<WorktreeMeta> {
+  const replacementKey = getPositiveHostedReviewLinkUpdateKey(updates)
+  if (!replacementKey) {
+    return updates
+  }
+  let normalized = updates
+  for (const key of HOSTED_REVIEW_LINK_KEYS) {
+    if (key === replacementKey || existingWorktree[key] == null) {
+      continue
+    }
+    // Why: one branch can only push to one hosted-review head; keeping older
+    // provider links lets stale metadata win the target lookup after replacement.
+    normalized = normalized === updates ? { ...updates } : normalized
+    normalized[key] = null
+  }
+  return normalized
+}
+
+function getHostedReviewLinkForMetaRefresh(
+  updates: Partial<WorktreeMeta>,
+  existingWorktree: Worktree | undefined,
+  key: HostedReviewLinkKey
+): number | null {
+  return Object.prototype.hasOwnProperty.call(updates, key)
+    ? (updates[key] ?? null)
+    : (existingWorktree?.[key] ?? null)
+}
+
+function hasExplicitPushTargetClear(updates: Partial<WorktreeMeta>): boolean {
+  return (
+    Object.prototype.hasOwnProperty.call(updates, 'pushTarget') && updates.pushTarget === undefined
+  )
+}
+
+type RuntimeWorktreeMetaUpdates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
+  pushTarget?: GitPushTarget | null
+}
+
+function encodePushTargetClearForRuntimeRpc(
+  updates: Partial<WorktreeMeta>
+): RuntimeWorktreeMetaUpdates {
+  if (!hasExplicitPushTargetClear(updates)) {
+    return updates
+  }
+  // Why: remote runtime RPC is JSON-shaped and drops undefined fields, so use
+  // null as the wire-only signal for clearing persisted pushTarget metadata.
+  return { ...updates, pushTarget: null }
 }
 
 // Every worktree-id-keyed store map the rename path re-keys on a folder move, so a
@@ -1422,7 +1556,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       if (options?.requireAuthoritative && !detected.authoritative) {
         return false
       }
-      const worktrees = toVisibleWorktrees(detected)
+      const worktrees = toVisibleWorktrees(detected, repoHostId(get(), repoId))
       const current = get().worktreesByRepo[repoId]
       if (areWorktreesEqual(current, worktrees)) {
         set((s) => {
@@ -1515,7 +1649,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             settingsForRepoOwner(get(), r.id),
             r.id
           )
-          const list = toVisibleWorktrees(detected)
+          const list = toVisibleWorktrees(detected, repoHostId(get(), r.id))
           const current = get().worktreesByRepo[r.id]
           if (
             !areWorktreesEqual(current, list) &&
@@ -1835,6 +1969,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                       ? {
                           startupCommand: startup.command,
                           ...(startup.env ? { startupEnv: startup.env } : {}),
+                          ...(startup.launchConfig
+                            ? { startupLaunchConfig: startup.launchConfig }
+                            : {}),
                           ...(startup.startupCommandDelivery
                             ? { startupCommandDelivery: startup.startupCommandDelivery }
                             : {}),
@@ -1850,15 +1987,16 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           // then produces a duplicate entry in worktreesByRepo, which gives
           // React duplicate keys and can corrupt terminal DOM containers.
           set((s) => {
+            const createdWorktree = withRepoHostId(result.worktree, repoHostId(s, repoId))
             const current = s.worktreesByRepo[repoId] ?? []
-            const alreadyPresent = current.some((w) => w.id === result.worktree.id)
+            const alreadyPresent = current.some((w) => w.id === createdWorktree.id)
             const nextWorktrees = alreadyPresent
               ? current.map((worktree) =>
-                  worktree.id === result.worktree.id
-                    ? { ...worktree, ...result.worktree }
+                  worktree.id === createdWorktree.id
+                    ? { ...worktree, ...createdWorktree }
                     : worktree
                 )
-              : [...current, result.worktree]
+              : [...current, createdWorktree]
             return {
               worktreesByRepo: {
                 ...s.worktreesByRepo,
@@ -2389,37 +2527,55 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       }
       return
     }
+    const normalizedUpdates = existingWorktree
+      ? clearOlderHostedReviewLinksForReplacement(updates, existingWorktree)
+      : updates
     // Why: manual PR linking only supplies the PR number. Resolve the PR head
     // branch here so Push targets the review branch, but don't repeat that
     // network lookup for no-op linkedPR metadata saves.
-    const linkedPrForPushTarget =
-      typeof updates.linkedPR === 'number' && Number.isFinite(updates.linkedPR)
-        ? updates.linkedPR
-        : null
+    const linkedPrForPushTarget = isPositiveHostedReviewNumber(normalizedUpdates.linkedPR)
+      ? normalizedUpdates.linkedPR
+      : null
     const resolvedPushTarget =
       linkedPrForPushTarget !== null &&
-      updates.pushTarget === undefined &&
+      normalizedUpdates.pushTarget === undefined &&
       existingWorktree &&
       existingWorktree.linkedPR !== linkedPrForPushTarget &&
       !existingWorktree.pushTarget
-        ? await resolveLinkedPrPushTarget(
-            settingsForRepoOwner(get(), existingWorktree.repoId),
+        ? await resolveGitHubReviewPushTarget(
+            settingsForWorktreeOwner(get(), worktreeId),
             existingWorktree.repoId,
             linkedPrForPushTarget
           )
         : undefined
+    const existingHostedReviewPushTargetLookup = existingWorktree
+      ? getHostedReviewPushTargetLookup(existingWorktree)
+      : null
+    const nextHostedReviewPushTargetLookup = existingWorktree
+      ? getHostedReviewPushTargetLookup({ ...existingWorktree, ...normalizedUpdates })
+      : null
+    // Why: a pushTarget derived from one linked review must not keep steering
+    // pushes after that review is unlinked or replaced by another provider/id.
+    const shouldClearStaleHostedReviewPushTarget =
+      Boolean(existingWorktree?.pushTarget) &&
+      normalizedUpdates.pushTarget === undefined &&
+      resolvedPushTarget === undefined &&
+      existingHostedReviewPushTargetLookup !== null &&
+      existingHostedReviewPushTargetLookup.key !== nextHostedReviewPushTargetLookup?.key
     const worktreeForUpdate = get().getKnownWorktreeById(worktreeId)
     if (shouldApplyUpdate && !shouldApplyUpdate(worktreeForUpdate)) {
       return
     }
     const shouldRefreshHostedReview =
-      (updates.linkedPR === null && worktreeForUpdate?.linkedPR !== null) ||
-      (updates.linkedGitLabMR === null && (worktreeForUpdate?.linkedGitLabMR ?? null) !== null) ||
-      (updates.linkedBitbucketPR === null &&
+      (normalizedUpdates.linkedPR === null && worktreeForUpdate?.linkedPR !== null) ||
+      (normalizedUpdates.linkedGitLabMR === null &&
+        (worktreeForUpdate?.linkedGitLabMR ?? null) !== null) ||
+      (normalizedUpdates.linkedBitbucketPR === null &&
         (worktreeForUpdate?.linkedBitbucketPR ?? null) !== null) ||
-      (updates.linkedAzureDevOpsPR === null &&
+      (normalizedUpdates.linkedAzureDevOpsPR === null &&
         (worktreeForUpdate?.linkedAzureDevOpsPR ?? null) !== null) ||
-      (updates.linkedGiteaPR === null && (worktreeForUpdate?.linkedGiteaPR ?? null) !== null)
+      (normalizedUpdates.linkedGiteaPR === null &&
+        (worktreeForUpdate?.linkedGiteaPR ?? null) !== null)
     const reviewRepo = shouldRefreshHostedReview
       ? get().repos.find((repo) => repo.id === worktreeForUpdate?.repoId)
       : undefined
@@ -2431,8 +2587,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     // ranking even though the user just touched it. Bumping the timestamp
     // keeps the recency signal fresh so the worktree holds its position.
     const targetEnriched = resolvedPushTarget
-      ? { ...updates, pushTarget: resolvedPushTarget }
-      : updates
+      ? { ...normalizedUpdates, pushTarget: resolvedPushTarget }
+      : shouldClearStaleHostedReviewPushTarget
+        ? { ...normalizedUpdates, pushTarget: undefined }
+        : normalizedUpdates
     const renameCleared =
       'displayName' in targetEnriched
         ? {
@@ -2535,24 +2693,36 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     try {
       await persistWorktreeMeta(settingsForWorktreeOwner(get(), worktreeId), worktreeId, enriched)
       if (reviewRepo && reviewBranch && typeof get().fetchHostedReviewForBranch === 'function') {
-        // Why: the old cache entry may have been populated solely by linkedPR.
-        // Force a no-linked refetch so an in-flight linked lookup cannot keep
-        // showing the manually removed PR.
+        // Why: the old cache entry may have been populated by the previous
+        // provider link. Refetch against the post-update links so stale lookups
+        // cannot keep showing the removed review.
         void get().fetchHostedReviewForBranch(reviewRepo.path, reviewBranch, {
           repoId: reviewRepo.id,
-          linkedGitHubPR: null,
-          linkedGitLabMR:
-            updates.linkedGitLabMR === null ? null : (worktreeForUpdate?.linkedGitLabMR ?? null),
-          linkedBitbucketPR:
-            updates.linkedBitbucketPR === null
-              ? null
-              : (worktreeForUpdate?.linkedBitbucketPR ?? null),
-          linkedAzureDevOpsPR:
-            updates.linkedAzureDevOpsPR === null
-              ? null
-              : (worktreeForUpdate?.linkedAzureDevOpsPR ?? null),
-          linkedGiteaPR:
-            updates.linkedGiteaPR === null ? null : (worktreeForUpdate?.linkedGiteaPR ?? null),
+          linkedGitHubPR: getHostedReviewLinkForMetaRefresh(
+            targetEnriched,
+            worktreeForUpdate,
+            'linkedPR'
+          ),
+          linkedGitLabMR: getHostedReviewLinkForMetaRefresh(
+            targetEnriched,
+            worktreeForUpdate,
+            'linkedGitLabMR'
+          ),
+          linkedBitbucketPR: getHostedReviewLinkForMetaRefresh(
+            targetEnriched,
+            worktreeForUpdate,
+            'linkedBitbucketPR'
+          ),
+          linkedAzureDevOpsPR: getHostedReviewLinkForMetaRefresh(
+            targetEnriched,
+            worktreeForUpdate,
+            'linkedAzureDevOpsPR'
+          ),
+          linkedGiteaPR: getHostedReviewLinkForMetaRefresh(
+            targetEnriched,
+            worktreeForUpdate,
+            'linkedGiteaPR'
+          ),
           force: true
         })
       }
@@ -2563,6 +2733,37 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       }
       console.error('Failed to update worktree meta:', err)
       void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+    }
+  },
+
+  ensureHostedReviewPushTarget: async (worktreeId) => {
+    const worktree = get().getKnownWorktreeById(worktreeId)
+    if (!worktree || worktree.pushTarget) {
+      return
+    }
+    const lookup = getHostedReviewPushTargetLookup(worktree)
+    if (!lookup || hostedReviewPushTargetLookupsInFlight.has(lookup.key)) {
+      return
+    }
+    hostedReviewPushTargetLookupsInFlight.add(lookup.key)
+    try {
+      const resolvedPushTarget = await lookup.resolve(settingsForWorktreeOwner(get(), worktreeId))
+      if (!resolvedPushTarget) {
+        return
+      }
+      const current = get().getKnownWorktreeById(worktreeId)
+      if (!current || current.pushTarget) {
+        return
+      }
+      const currentLookup = getHostedReviewPushTargetLookup(current)
+      if (currentLookup?.key !== lookup.key) {
+        return
+      }
+      // Why: old linked-review worktrees can lose metadata while their branch
+      // tracks a helper ref; restoring the review head target keeps push/status aligned.
+      await get().updateWorktreeMeta(worktreeId, { pushTarget: resolvedPushTarget })
+    } finally {
+      hostedReviewPushTargetLookupsInFlight.delete(lookup.key)
     }
   },
 

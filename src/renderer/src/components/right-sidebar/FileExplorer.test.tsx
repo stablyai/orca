@@ -8,6 +8,10 @@ import { FileExplorerToolbar } from './FileExplorerToolbar'
 import { FileExplorerNameFilter } from './FileExplorerNameFilter'
 import { FileExplorerViewSwitch } from './FileExplorerViewSwitch'
 import {
+  getNameFilterCollapsedPathsAfterExpand,
+  getNextNameFilterCollapsedPaths
+} from './file-explorer-name-filter-projection'
+import {
   downloadRemoteFile,
   FileExplorerRow,
   shouldShowCollapseFolderAction,
@@ -279,6 +283,25 @@ beforeEach(() => {
   toastErrorMock.mockReset()
   toastSuccessMock.mockReset()
   delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
+})
+
+describe('getNextNameFilterCollapsedPaths', () => {
+  it('collapses expanded filtered folders and expands collapsed filtered folders', () => {
+    const collapsed = getNextNameFilterCollapsedPaths(new Set(), '/repo/src', true)
+    expect([...collapsed]).toEqual(['/repo/src'])
+
+    const expanded = getNextNameFilterCollapsedPaths(collapsed, '/repo/src', false)
+    expect([...expanded]).toEqual([])
+  })
+
+  it('expands filtered folders without toggling unrelated collapsed paths', () => {
+    const expanded = getNameFilterCollapsedPathsAfterExpand(
+      new Set(['/repo/docs', '/repo/src']),
+      '/repo/src'
+    )
+
+    expect([...expanded]).toEqual(['/repo/docs'])
+  })
 })
 
 describe('FileExplorerToolbar', () => {

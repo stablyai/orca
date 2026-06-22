@@ -31,7 +31,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readPersistedState(dataPath: string): PersistedState {
   if (!existsSync(dataPath)) {
-    return getDefaultPersistedState(homedir())
+    const defaults = getDefaultPersistedState(homedir())
+    return {
+      ...defaults,
+      settings: {
+        ...defaults.settings,
+        // Why: offline CLI can create the first profile before desktop load;
+        // match the Store fresh-install default instead of pinning old cards.
+        experimentalNewWorktreeCardStyle: true
+      }
+    }
   }
   try {
     const parsed = JSON.parse(readFileSync(dataPath, 'utf-8'))
@@ -74,9 +83,14 @@ function readEnabledFromDisk(): boolean {
 function updateEnabledOnDisk(enabled: boolean): string {
   const dataPath = getDataPath()
   const state = readPersistedState(dataPath)
+  const experimentalNewWorktreeCardStyle =
+    state.settings?.experimentalNewWorktreeCardStyle ?? state.onboarding?.closedAt === null
   state.settings = {
     ...getDefaultPersistedState(homedir()).settings,
     ...state.settings,
+    // Why: offline CLI can run before Store.load(); mirror its open-onboarding
+    // default without overriding a saved user opt-out.
+    experimentalNewWorktreeCardStyle,
     agentStatusHooksEnabled: enabled
   }
   writePersistedState(dataPath, state)

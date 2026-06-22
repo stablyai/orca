@@ -15,7 +15,7 @@ vi.mock('@/components/tab-bar/group-tab-order', () => ({
 }))
 
 vi.mock('@/lib/connection-context', () => ({
-  getConnectionId: () => null
+  getConnectionIdForFile: () => null
 }))
 
 type WindowStub = {

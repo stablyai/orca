@@ -398,6 +398,90 @@ branch refs/heads/main
     expect(calls).toContain('git config --remove-section branch.feature/test')
   })
 
+  it('deletes a squash-merged branch with branch-only merge commits via expected head', async () => {
+    mockGitCommands({
+      'git worktree list --porcelain -z': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/feature/test
+`
+      },
+      'git worktree list --porcelain -z#2': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+`
+      },
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+`
+      },
+      'git branch -d -- feature/test': {
+        error: new Error('branch delete failed'),
+        stderr: 'error: the branch feature/test is not fully merged'
+      },
+      'git config --get branch.feature/test.base': {
+        stdout: 'refs/remotes/origin/main\n'
+      },
+      'git rev-parse --verify --quiet refs/remotes/origin/main^{commit}': {
+        stdout: 'target123\n'
+      },
+      'git merge-tree --write-tree target123 refs/heads/feature/test': {
+        stdout: 'merged-tree\n'
+      },
+      'git rev-parse --verify --quiet target123^{tree}': {
+        stdout: 'target-tree\n'
+      },
+      'git rev-list --right-only --merges --count target123...refs/heads/feature/test': {
+        stdout: '1\n'
+      },
+      'git merge-base target123 refs/heads/feature/test': {
+        stdout: 'base123\n'
+      },
+      'git diff base123 refs/heads/feature/test': {
+        stdout: 'branch net diff\n'
+      },
+      'git patch-id --stable#1': {
+        stdout: 'patch123 0000000000000000000000000000000000000000\n'
+      },
+      'git rev-list --ancestry-path --max-count=201 base123..target123': {
+        stdout: 'squash123\n'
+      },
+      'git show --format= squash123': {
+        stdout: 'squash diff\n'
+      },
+      'git patch-id --stable#2': {
+        stdout: 'patch123 squash123\n'
+      },
+      'git merge-tree --write-tree squash123 refs/heads/feature/test': {
+        stdout: 'squash-tree\n'
+      },
+      'git rev-parse --verify --quiet squash123^{tree}': {
+        stdout: 'squash-tree\n'
+      }
+    })
+
+    await expect(removeWorktree('/repo', '/repo-feature')).resolves.toEqual({})
+
+    const calls = getGitCalls()
+    expect(calls).toContain('git update-ref -d refs/heads/feature/test def456')
+    expect(calls).toContain('git config --remove-section branch.feature/test')
+    expect(gitExecFileAsyncMock.mock.calls).toContainEqual([
+      ['patch-id', '--stable'],
+      { cwd: '/repo', stdin: 'branch net diff\n' }
+    ])
+    expect(gitExecFileAsyncMock.mock.calls).toContainEqual([
+      ['patch-id', '--stable'],
+      { cwd: '/repo', stdin: 'squash diff\n' }
+    ])
+  })
+
   it('refreshes the saved remote base before deleting a safe-delete-rejected branch', async () => {
     mockGitCommands({
       'git worktree list --porcelain -z': {

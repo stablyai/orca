@@ -520,6 +520,9 @@ export type RuntimeWorktreePsSummary = {
   repo: string
   path: string
   branch: string
+  isArchived: boolean
+  isMainWorktree: boolean
+  hasHostSidebarActivity: boolean
   parentWorktreeId: string | null
   childWorktreeIds: string[]
   displayName: string
