@@ -144,6 +144,61 @@ describe('terminal drop path writer', () => {
     )
   })
 
+  it('falls back to shell escaping for image paths with POSIX shell metacharacters', async () => {
+    const sendInput = vi.fn(() => true)
+    const sendInputAccepted = vi.fn(async () => true)
+    const { manager, pane } = createManager()
+    const transport = createTransport(sendInput, 'pty-1', sendInputAccepted)
+
+    await writeTerminalDropPathsToCapturedTarget({
+      dropTarget: { paneId: pane.id, leafId: pane.leafId, ptyId: 'pty-1', transport } as never,
+      manager: manager as never,
+      paneTransports: new Map([[pane.id, transport]]) as never,
+      paths: ['/repo/a.png; touch /tmp/pwned #.png'],
+      targetShell: 'posix'
+    })
+
+    expect(sendInputAccepted).toHaveBeenCalledWith("'/repo/a.png; touch /tmp/pwned #.png' ")
+  })
+
+  it('falls back to shell escaping for image paths with Windows shell metacharacters', async () => {
+    const sendInput = vi.fn(() => true)
+    const sendInputAccepted = vi.fn(async () => true)
+    const { manager, pane } = createManager()
+    const transport = createTransport(sendInput, 'pty-1', sendInputAccepted)
+
+    await writeTerminalDropPathsToCapturedTarget({
+      dropTarget: { paneId: pane.id, leafId: pane.leafId, ptyId: 'pty-1', transport } as never,
+      manager: manager as never,
+      paneTransports: new Map([[pane.id, transport]]) as never,
+      paths: ['C:\\Users\\me\\Pictures\\a&b.png'],
+      targetShell: 'windows'
+    })
+
+    expect(sendInputAccepted).toHaveBeenCalledWith('"C:\\Users\\me\\Pictures\\a&b.png" ')
+  })
+
+  it('separates an image paste from a following image path that must be shell escaped', async () => {
+    const sendInput = vi.fn(() => true)
+    const sendInputAccepted = vi.fn(async () => true)
+    const { manager, pane } = createManager()
+    const transport = createTransport(sendInput, 'pty-1', sendInputAccepted)
+
+    await writeTerminalDropPathsToCapturedTarget({
+      dropTarget: { paneId: pane.id, leafId: pane.leafId, ptyId: 'pty-1', transport } as never,
+      manager: manager as never,
+      paneTransports: new Map([[pane.id, transport]]) as never,
+      paths: ['/repo/shot.png', '/repo/a.png; touch /tmp/pwned #.png'],
+      targetShell: 'posix'
+    })
+
+    expect(sendInputAccepted).toHaveBeenNthCalledWith(
+      1,
+      `${wrapTerminalBracketedPasteText('/repo/shot.png')} `
+    )
+    expect(sendInputAccepted).toHaveBeenNthCalledWith(2, "'/repo/a.png; touch /tmp/pwned #.png' ")
+  })
+
   it('times out dropped path writes that never receive PTY acknowledgement', async () => {
     vi.useFakeTimers()
     try {
