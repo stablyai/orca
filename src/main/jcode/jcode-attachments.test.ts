@@ -88,21 +88,30 @@ type MockChannel = EventEmitter & { stderr: EventEmitter }
 const VALID_REMOTE_ATTACHMENT_DIR =
   '/tmp/orca-jcode-attachments-00000000-0000-4000-8000-000000000000'
 
-function autoClosingChannel(): MockChannel {
+function autoClosingChannel(exitCode = 0): MockChannel {
   const channel = new EventEmitter() as MockChannel
   channel.stderr = new EventEmitter()
-  setTimeout(() => channel.emit('close'), 0)
+  setTimeout(() => {
+    channel.emit('exit', exitCode)
+    channel.emit('close')
+  }, 0)
   return channel
 }
 
-function makeSshConnection(options: { status?: string; failCleanup?: boolean } = {}) {
+function makeSshConnection(
+  options: {
+    status?: string
+    failCleanup?: boolean
+    commandExitCode?: (command: string) => number
+  } = {}
+) {
   const status = options.status ?? 'connected'
   return {
     exec: vi.fn((command: string) => {
       if (options.failCleanup && command.startsWith('rm -rf -- ')) {
         return Promise.reject(new Error('cleanup failed'))
       }
-      return Promise.resolve(autoClosingChannel())
+      return Promise.resolve(autoClosingChannel(options.commandExitCode?.(command) ?? 0))
     }),
     getState: vi.fn(() => ({ status })),
     writeFile: vi.fn(() => Promise.resolve())
@@ -220,6 +229,42 @@ describe('resolveTurnPrompt cleanup metadata', () => {
     expect(connection.exec).toHaveBeenCalledWith(expect.stringMatching(/^umask 077 && mkdir -- '/))
     expect(connection.exec).not.toHaveBeenCalledWith(expect.stringContaining('mkdir -p'))
   })
+
+  it('treats remote temp directory creation failure as an attachment copy failure', async () => {
+    const filePath = makeTempFile('note.txt', 'attachment contents')
+    const connection = makeSshConnection({
+      commandExitCode: (command) => (command.startsWith('umask 077 && mkdir -- ') ? 1 : 0)
+    })
+    setSshConnection(connection)
+
+    const result = await resolveTurnPrompt(
+      payload({ attachments: [{ kind: 'file', path: filePath, name: 'note.txt' }] }),
+      { host: 'remote-host', connectionId: 'conn-1', remotePath: '/remote/project' }
+    )
+
+    expect(result.cleanup).toBeNull()
+    expect(connection.writeFile).not.toHaveBeenCalled()
+    expect(result.prompt).toContain('could NOT be copied to the remote host')
+    expect(result.prompt).toContain(filePath)
+  })
+
+  it('does not report a copied attachment when remote base64 decode fails', async () => {
+    const filePath = makeTempFile('note.txt', 'attachment contents')
+    const connection = makeSshConnection({
+      commandExitCode: (command) => (command.includes('base64 -d') ? 1 : 0)
+    })
+    setSshConnection(connection)
+
+    const result = await resolveTurnPrompt(
+      payload({ attachments: [{ kind: 'file', path: filePath, name: 'note.txt' }] }),
+      { host: 'remote-host', connectionId: 'conn-1', remotePath: '/remote/project' }
+    )
+
+    expect(result.cleanup?.remoteDir).toMatch(/^\/tmp\/orca-jcode-attachments-[0-9a-f-]{36}$/)
+    expect(result.prompt).toContain('could NOT be copied to the remote host')
+    expect(result.prompt).toContain(filePath)
+    expect(result.prompt).not.toContain(`${result.cleanup?.remoteDir}/note.txt`)
+  })
 })
 
 describe('cleanupRemoteAttachmentDir', () => {
@@ -255,6 +300,38 @@ describe('cleanupRemoteAttachmentDir', () => {
 })
 
 describe('jcode chat session attachment cleanup', () => {
+  it('keeps remote-exec image attachments local via --image', async () => {
+    const filePath = makeTempFile('photo.png', 'image bytes')
+    const connection = makeSshConnection()
+    const child = makeChildProcess()
+    const mainWindow = makeMainWindow()
+    setSshConnection(connection)
+    spawnMock.mockReturnValue(child)
+    resolveRemoteExecMock.mockReturnValue({
+      host: 'remote-host',
+      connectionId: 'conn-1',
+      remotePath: '/remote/project'
+    })
+
+    registerJcodeChatHandlers(mainWindow as never)
+    const sendHandler = ipcListeners.get(JCODE_CHAT_SEND_CHANNEL)
+    if (!sendHandler) {
+      throw new Error('send handler was not registered')
+    }
+    sendHandler(
+      { sender: mainWindow.webContents },
+      payload({ attachments: [{ kind: 'file', path: filePath, name: 'photo.png' }] })
+    )
+
+    await waitUntil(() => spawnMock.mock.calls.length === 1, 'jcode was not spawned')
+
+    const args = spawnMock.mock.calls[0]?.[1] as string[]
+    expect(args).toContain('--image')
+    expect(args).toContain(filePath)
+    expect(connection.writeFile).not.toHaveBeenCalled()
+    expect(connection.exec).not.toHaveBeenCalled()
+  })
+
   it('cleans remote uploads after child close without surfacing cleanup failure', async () => {
     const filePath = makeTempFile('turn.txt', 'remote turn')
     const connection = makeSshConnection({ failCleanup: true })
@@ -289,5 +366,40 @@ describe('jcode chat session attachment cleanup', () => {
       .filter(([channel]) => channel === JCODE_CHAT_EVENT_CHANNEL)
       .map(([, message]) => (message as { event: { type: string } }).event.type)
     expect(eventTypes).toEqual(['exit'])
+  })
+
+  it('cleans remote uploads when child spawn throws', async () => {
+    const filePath = makeTempFile('turn.txt', 'remote turn')
+    const connection = makeSshConnection()
+    const mainWindow = makeMainWindow()
+    setSshConnection(connection)
+    spawnMock.mockImplementation(() => {
+      throw new Error('spawn failed')
+    })
+    resolveRemoteExecMock.mockReturnValue({
+      host: 'remote-host',
+      connectionId: 'conn-1',
+      remotePath: '/remote/project'
+    })
+
+    registerJcodeChatHandlers(mainWindow as never)
+    const sendHandler = ipcListeners.get(JCODE_CHAT_SEND_CHANNEL)
+    if (!sendHandler) {
+      throw new Error('send handler was not registered')
+    }
+    sendHandler(
+      { sender: mainWindow.webContents },
+      payload({ attachments: [{ kind: 'file', path: filePath, name: 'turn.txt' }] })
+    )
+
+    await waitUntil(
+      () => connection.exec.mock.calls.some(([command]) => command.startsWith('rm -rf -- ')),
+      'cleanup command was not attempted'
+    )
+
+    const eventTypes = mainWindow.webContents.send.mock.calls
+      .filter(([channel]) => channel === JCODE_CHAT_EVENT_CHANNEL)
+      .map(([, message]) => (message as { event: { type: string } }).event.type)
+    expect(eventTypes).toEqual(['error'])
   })
 })

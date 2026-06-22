@@ -2,7 +2,8 @@ import { useSyncExternalStore } from 'react'
 import type {
   JcodeChatAttachment,
   JcodeChatEventMessage,
-  JcodeConversationRecord
+  JcodeConversationRecord,
+  JcodeConversationSummary
 } from '../../../../shared/jcode-chat-types'
 import { buildJcodeConversationRecord, chatMessagesFromRecord } from './chat-session-record'
 import { reduceJcodeEvent } from './chat-session-reducer'
@@ -60,6 +61,15 @@ const sessionContexts = new Map<string, ChatSessionContext>()
 // never write on every text_delta.
 const saveTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
+function getJcodeChatApi(): typeof window.api.jcodeChat | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+  // Why: sidebar/card tests and web shells can render without Electron preload;
+  // persisted jcode chats are simply unavailable in that environment.
+  return window.api?.jcodeChat ?? null
+}
+
 /** Persist a session snapshot to disk (debounced). Called on turn boundaries.
  *  No-op for empty conversations so we don't create files for blank tabs. */
 function schedulePersist(sessionKey: string): void {
@@ -73,7 +83,7 @@ function schedulePersist(sessionKey: string): void {
     if (!state || state.messages.length === 0) {
       return
     }
-    void window.api.jcodeChat.saveConversation({
+    void getJcodeChatApi()?.saveConversation({
       record: buildJcodeConversationRecord(sessionKey, state, sessionContexts.get(sessionKey))
     })
     // Why: notify best-effort listeners (e.g. the sidebar per-worktree "Recent
@@ -125,8 +135,12 @@ function ensureIpcSubscription(): void {
   if (ipcSubscribed) {
     return
   }
+  const api = getJcodeChatApi()
+  if (!api) {
+    return
+  }
   ipcSubscribed = true
-  window.api.jcodeChat.onEvent((message: JcodeChatEventMessage) => {
+  api.onEvent((message: JcodeChatEventMessage) => {
     const sessionKey = message.sessionKey
     // Only reduce for sessions we know about (a chat tab that has sent at least
     // one prompt). Ignore stray events for unknown keys.
@@ -308,7 +322,8 @@ export function disposeChatSession(sessionKey: string): void {
   // tab mid-turn leaves the spawned jcode process running (and burning tokens)
   // with no UI attached to it. The main-side handler safely no-ops when there is
   // no active child, so calling it unconditionally is harmless.
-  window.api.jcodeChat.stop({ sessionKey })
+  const api = getJcodeChatApi()
+  api?.stop({ sessionKey })
   const pending = saveTimers.get(sessionKey)
   if (pending) {
     clearTimeout(pending)
@@ -316,7 +331,7 @@ export function disposeChatSession(sessionKey: string): void {
   }
   const state = sessions.get(sessionKey)
   if (state && state.messages.length > 0) {
-    void window.api.jcodeChat.saveConversation({
+    void api?.saveConversation({
       record: buildJcodeConversationRecord(sessionKey, state, sessionContexts.get(sessionKey))
     })
   }
@@ -336,22 +351,20 @@ export function deleteChatConversation(sessionKey: string): void {
   sessions.delete(sessionKey)
   listeners.delete(sessionKey)
   sessionContexts.delete(sessionKey)
-  void window.api.jcodeChat.deleteConversation(sessionKey)
+  void getJcodeChatApi()?.deleteConversation(sessionKey)
   if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
     window.dispatchEvent(new CustomEvent(JCODE_CHAT_CONVERSATIONS_CHANGED_EVENT))
   }
 }
 
 /** List persisted conversations (newest first) for a "Recent chats" surface. */
-export async function listChatConversations(): Promise<
-  Awaited<ReturnType<typeof window.api.jcodeChat.listConversations>>
-> {
-  return window.api.jcodeChat.listConversations()
+export async function listChatConversations(): Promise<JcodeConversationSummary[]> {
+  return (await getJcodeChatApi()?.listConversations()) ?? []
 }
 
 /** Load a persisted conversation record (transcript + context) by sessionKey. */
 export async function loadChatConversation(
   sessionKey: string
 ): Promise<JcodeConversationRecord | null> {
-  return window.api.jcodeChat.loadConversation(sessionKey)
+  return (await getJcodeChatApi()?.loadConversation(sessionKey)) ?? null
 }

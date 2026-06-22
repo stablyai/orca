@@ -25,7 +25,7 @@ import {
   type JcodeSkillsListPayload,
   type JcodeSkillsListResult
 } from '../../shared/jcode-chat-types'
-import { getLiveSshConnection, runRemoteCapture, type SshConnection } from './jcode-attachments'
+import { getLiveSshConnection, runRemoteCapture, type SshConnection } from './jcode-ssh-command'
 
 /** Split a SKILL.md into its YAML frontmatter object + instruction body. A file
  *  with no leading `---` frontmatter yields empty frontmatter and the whole text

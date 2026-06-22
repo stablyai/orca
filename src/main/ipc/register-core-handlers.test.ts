@@ -33,6 +33,8 @@ const {
   registerAgentHookHandlersMock,
   registerAgentTrustHandlersMock,
   registerClaudeAccountHandlersMock,
+  registerJcodeProviderHandlersMock,
+  registerJcodeMcpHandlersMock,
   registerClipboardHandlersMock,
   setTrustedClipboardRendererWebContentsIdMock,
   registerUpdaterHandlersMock,
@@ -84,6 +86,8 @@ const {
   registerAgentHookHandlersMock: vi.fn(),
   registerAgentTrustHandlersMock: vi.fn(),
   registerClaudeAccountHandlersMock: vi.fn(),
+  registerJcodeProviderHandlersMock: vi.fn(),
+  registerJcodeMcpHandlersMock: vi.fn(),
   registerClipboardHandlersMock: vi.fn(),
   setTrustedClipboardRendererWebContentsIdMock: vi.fn(),
   registerUpdaterHandlersMock: vi.fn(),
@@ -259,6 +263,14 @@ vi.mock('./claude-accounts', () => ({
   registerClaudeAccountHandlers: registerClaudeAccountHandlersMock
 }))
 
+vi.mock('./jcode-providers', () => ({
+  registerJcodeProviderHandlers: registerJcodeProviderHandlersMock
+}))
+
+vi.mock('./jcode-mcp', () => ({
+  registerJcodeMcpHandlers: registerJcodeMcpHandlersMock
+}))
+
 vi.mock('../window/attach-main-window-services', () => ({
   registerUpdaterHandlers: registerUpdaterHandlersMock
 }))
@@ -328,6 +340,8 @@ describe('registerCoreHandlers', () => {
     registerAgentHookHandlersMock.mockReset()
     registerAgentTrustHandlersMock.mockReset()
     registerClaudeAccountHandlersMock.mockReset()
+    registerJcodeProviderHandlersMock.mockReset()
+    registerJcodeMcpHandlersMock.mockReset()
     registerClipboardHandlersMock.mockReset()
     setTrustedClipboardRendererWebContentsIdMock.mockReset()
     registerUpdaterHandlersMock.mockReset()
@@ -390,6 +404,8 @@ describe('registerCoreHandlers', () => {
     expect(registerAgentHookHandlersMock).toHaveBeenCalledWith(runtime)
     expect(registerPetHandlersMock).toHaveBeenCalled()
     expect(registerClaudeAccountHandlersMock).toHaveBeenCalledWith(claudeAccounts)
+    expect(registerJcodeProviderHandlersMock).toHaveBeenCalled()
+    expect(registerJcodeMcpHandlersMock).toHaveBeenCalled()
     expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerLinearHandlersMock).toHaveBeenCalled()

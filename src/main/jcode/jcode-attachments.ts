@@ -12,7 +12,7 @@ import { randomUUID } from 'node:crypto'
 import { readFile, stat } from 'node:fs/promises'
 import { basename, posix as pathPosix } from 'node:path'
 import type { JcodeChatAttachment, JcodeChatSendPayload } from '../../shared/jcode-chat-types'
-import { getSshConnectionManager } from '../ipc/ssh'
+import { getLiveSshConnection, runRemoteCommand, shellQuote } from './jcode-ssh-command'
 
 /** A file attachment after any path rewriting (e.g. local -> remote temp). */
 export type ResolvedFileAttachment = {
@@ -124,11 +124,6 @@ export type ResolvedTurnPrompt = {
   cleanup: RemoteAttachmentCleanupTarget | null
 }
 
-/** Minimal single-quote shell escaping for a POSIX path argument. */
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`
-}
-
 const REMOTE_ATTACHMENT_PREFIX = '/tmp/orca-jcode-attachments-'
 const REMOTE_ATTACHMENT_SUFFIX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
@@ -148,44 +143,6 @@ function safeRemoteAttachmentDir(remoteDir: string): string | null {
  *  main process (read + base64) and bloat the SSH channel; refuse them with a
  *  clear note instead. 25 MiB matches the cap surfaced to the user. */
 export const MAX_REMOTE_ATTACHMENT_BYTES = 25 * 1024 * 1024
-
-/** Run a remote command over an SSH connection and resolve when it closes.
- *  Best-effort: rejects only on channel-open failure. */
-function runRemoteCommand(
-  conn: NonNullable<
-    ReturnType<NonNullable<ReturnType<typeof getSshConnectionManager>>['getConnection']>
-  >,
-  command: string
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    conn
-      .exec(command)
-      .then((channel) => {
-        channel.on('close', () => resolve())
-        channel.on('error', (err: Error) => reject(err))
-        // Drain so the channel can close.
-        channel.on('data', () => {})
-        channel.stderr?.on('data', () => {})
-      })
-      .catch(reject)
-  })
-}
-
-/** A live SSH connection object (as returned by the connection manager). */
-export type SshConnection = NonNullable<
-  ReturnType<NonNullable<ReturnType<typeof getSshConnectionManager>>['getConnection']>
->
-
-/** Resolve a live, connected SSH connection by id, or null. Shared by the skill
- *  discovery module so it can read remote `.claude/skills` over the same SSH
- *  transport that attachment copying uses. */
-export function getLiveSshConnection(connectionId: string): SshConnection | null {
-  const conn = getSshConnectionManager()?.getConnection(connectionId)
-  if (!conn || conn.getState().status !== 'connected') {
-    return null
-  }
-  return conn
-}
 
 export async function cleanupRemoteAttachmentDir(
   connectionId: string | null | undefined,
@@ -207,49 +164,6 @@ export async function cleanupRemoteAttachmentDir(
   } catch {
     // Best-effort cleanup must never change the chat result.
   }
-}
-
-/** Run a remote command over SSH and CAPTURE its stdout (unlike runRemoteCommand,
- *  which discards output). Resolves with the accumulated stdout on a zero exit;
- *  resolves with null on any non-zero/failed exit so callers can treat a missing
- *  file or directory as "no skills here" rather than throwing. Best-effort, with
- *  a bound so a hung channel can't stall skill discovery forever. */
-export function runRemoteCapture(conn: SshConnection, command: string): Promise<string | null> {
-  const TIMEOUT_MS = 10_000
-  return new Promise((resolve) => {
-    conn
-      .exec(command)
-      .then((channel) => {
-        let stdout = ''
-        let exitCode: number | null = null
-        let settled = false
-        const finish = (value: string | null): void => {
-          if (settled) {
-            return
-          }
-          settled = true
-          if (timer) {
-            clearTimeout(timer)
-          }
-          resolve(value)
-        }
-        const timer = setTimeout(() => finish(null), TIMEOUT_MS)
-        if (typeof timer.unref === 'function') {
-          timer.unref()
-        }
-        channel.on('data', (data: Buffer) => {
-          stdout += data.toString()
-        })
-        channel.stderr?.on('data', () => {})
-        channel.on('exit', (code: number | null) => {
-          exitCode = code
-        })
-        channel.on('close', () => finish(exitCode === 0 ? stdout : null))
-        channel.on('error', () => finish(null))
-        channel.stderr?.on('error', () => {})
-      })
-      .catch(() => resolve(null))
-  })
 }
 
 /** Resolve the final prompt string for a turn by weaving in any attachments.
@@ -350,8 +264,8 @@ async function copyFilesToRemote(
   if (files.length === 0) {
     return { resolved, failed, oversize, remoteDir: null }
   }
-  const conn = getSshConnectionManager()?.getConnection(connectionId)
-  if (!conn || conn.getState().status !== 'connected') {
+  const conn = getLiveSshConnection(connectionId)
+  if (!conn) {
     return { resolved, failed: [...files], oversize, remoteDir: null }
   }
   const remoteDir = buildRemoteAttachmentDir()
