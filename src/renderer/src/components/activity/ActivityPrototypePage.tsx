@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: this prototype keeps the real-data adapter
 and current visual skeleton together until the next refinement pass decides
 which pieces become production modules. */
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
   Bell,
@@ -1028,6 +1028,57 @@ export function activityThreadMatchesSearchQuery({
   return threadSearchText(thread).includes(trimmedQuery.toLowerCase())
 }
 
+export function isActivityFilterFocusShortcut(
+  event: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey'>,
+  isMac = navigator.userAgent.includes('Mac')
+): boolean {
+  if (event.key.toLowerCase() !== 'f' || event.shiftKey || event.altKey) {
+    return false
+  }
+  return isMac ? event.metaKey : event.ctrlKey
+}
+
+export function shouldIgnoreActivityFilterFocusShortcutTarget(
+  target: Element | null,
+  terminalPortalTargets: (HTMLElement | null)[]
+): boolean {
+  if (!target) {
+    return false
+  }
+  if (target.classList.contains('xterm-helper-textarea')) {
+    return true
+  }
+  return terminalPortalTargets.some((portalTarget) => portalTarget?.contains(target) ?? false)
+}
+
+export function handleActivityFilterFocusShortcut({
+  activeElement,
+  event,
+  input,
+  isMac,
+  terminalPortalTargets
+}: {
+  activeElement: Element | null
+  event: Pick<
+    KeyboardEvent,
+    'altKey' | 'ctrlKey' | 'key' | 'metaKey' | 'preventDefault' | 'shiftKey'
+  >
+  input: Pick<HTMLInputElement, 'focus' | 'select'> | null
+  isMac?: boolean
+  terminalPortalTargets: (HTMLElement | null)[]
+}): boolean {
+  if (shouldIgnoreActivityFilterFocusShortcutTarget(activeElement, terminalPortalTargets)) {
+    return false
+  }
+  if (!isActivityFilterFocusShortcut(event, isMac)) {
+    return false
+  }
+  event.preventDefault()
+  input?.focus()
+  input?.select()
+  return true
+}
+
 function ThreadAgentStateIndicator({ thread }: { thread: AgentPaneThread }): React.JSX.Element {
   const state = threadAgentState(thread)
   const label = threadAgentStateLabel(thread)
@@ -1283,6 +1334,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   const [readFilter, setReadFilter] = useState<ThreadReadFilter>('all')
   const [groupBy, setGroupBy] = useState<ActivityGroupBy>('status')
   const [query, setQuery] = useState('')
+  const activityFilterInputRef = useRef<HTMLInputElement | null>(null)
   const [compactMode, setCompactMode] = useState(false)
   const [selectedPaneKey, setSelectedPaneKey] = useState<string | null>(null)
   const [displayedPaneKey, setDisplayedPaneKey] = useState<string | null>(null)
@@ -1555,6 +1607,20 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     }
   }, [])
 
+  useEffect(() => {
+    const focusActivityFilter = (event: KeyboardEvent): void => {
+      handleActivityFilterFocusShortcut({
+        activeElement: document.activeElement,
+        event,
+        input: activityFilterInputRef.current,
+        terminalPortalTargets: [activePortalTargetEl, inactivePortalTargetEl]
+      })
+    }
+
+    window.addEventListener('keydown', focusActivityFilter)
+    return () => window.removeEventListener('keydown', focusActivityFilter)
+  }, [activePortalTargetEl, inactivePortalTargetEl])
+
   const markThreadRead = (thread: AgentPaneThread): void => {
     storeData.acknowledgeAgents([thread.paneKey])
   }
@@ -1660,6 +1726,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
               <div className="relative min-w-0 flex-1">
                 <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
+                  ref={activityFilterInputRef}
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder={translate(
