@@ -296,9 +296,10 @@ function getSettingsTargetFromSectionId(sectionId: string): {
 }
 
 export default function WorktreeJumpPalette(): React.JSX.Element | null {
-  // Why: subscribe this palette to language changes; translated memo contents
-  // recompute on the rerender without using i18n.language as a fake dependency.
-  useTranslation()
+  // Why: key memos of baked translated catalogs on i18n.language so a language
+  // switch recomputes them; the useTranslation() rerender alone cannot
+  // invalidate a memo, leaving stale-language labels until remount.
+  const { i18n } = useTranslation()
   const visible = useAppStore((s) => s.activeModal === 'worktree-palette')
   const closeModal = useAppStore((s) => s.closeModal)
   const openModal = useAppStore((s) => s.openModal)
@@ -739,7 +740,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     () => buildCmdJSettingsResults(settingsSections),
     [settingsSections]
   )
-  const actionResults = useMemo(() => buildCmdJActionResults(getCmdJQuickActions()), [])
+  const actionResults = useMemo(
+    () => buildCmdJActionResults(getCmdJQuickActions()),
+    [i18n.language]
+  )
 
   const prefetchCreateWorkspaceBaseForComposer = useCallback((initialRepoId?: string): void => {
     const state = useAppStore.getState()

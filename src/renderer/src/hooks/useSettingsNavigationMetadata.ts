@@ -498,9 +498,10 @@ export function buildSettingsNavigationMetadata({
 }
 
 export function useSettingsNavigationMetadata(): SettingsNavSection[] {
-  // Why: subscribe metadata consumers to language changes; translated memo
-  // contents refresh on rerender without depending on i18n.language directly.
-  useTranslation()
+  // Why: key the memo on i18n.language so a language switch recomputes the
+  // baked translated metadata; the useTranslation() rerender alone cannot
+  // invalidate the memo, leaving stale-language section titles until remount.
+  const { i18n } = useTranslation()
   const repos = useAppStore((state) => state.repos)
   const activeRuntimeEnvironmentId = useAppStore(
     (state) => state.settings?.activeRuntimeEnvironmentId
@@ -527,6 +528,6 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
         isWebClient,
         repos
       }),
-    [isMac, isWindows, isWindowsTerminalHost, isWebClient, repos]
+    [i18n.language, isMac, isWindows, isWindowsTerminalHost, isWebClient, repos]
   )
 }
