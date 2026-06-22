@@ -10,13 +10,9 @@ import { execCommand } from './ssh-relay-deploy-helpers'
 // Node 8/10/12 and crash the relay on launch. Gate every candidate on this.
 const MIN_NODE_MAJOR = 18
 
-// Why: version-manager shells are the reliable discovery path — nvm/mise/asdf
-// hook into shell init files and only expose node via PATH after sourcing.
-// A login shell under the user's $SHELL sources the right init files for their
-// configuration, which is where these managers put their activation hooks.
-// Give it a short timeout: interactive configs (conda prompts, etc.) can hang
-// a login shell, and we don't want one slow shell config to block the whole
-// resolution.
+// Why: the login-shell fallback catches custom PATH setups in ~/.profile that
+// the path probes don't cover. Interactive configs (conda prompts, etc.) can
+// hang a login shell, so keep this short.
 const LOGIN_SHELL_PROBE_TIMEOUT_MS = 8_000
 
 export async function resolveRemoteNodePath(
@@ -27,68 +23,36 @@ export async function resolveRemoteNodePath(
     return resolveRemoteWindowsNodePath(conn)
   }
 
-  // Strategy 1: ask the user's own login shell where node is. This is the only
-  // path that runs version-manager init hooks (nvm.sh, `mise activate`,
-  // `asdf.sh`), so it finds node even when the manager puts nothing on PATH
-  // directly. We deliberately bypass wrapRemoteCommandForPosixShell here so
-  // the user's shell — not /bin/sh — parses the command and sources its own
-  // init files.
-  const loginShellPath = await tryResolveViaLoginShell(conn)
-  if (loginShellPath) {
-    return loginShellPath
-  }
-
-  // Strategy 2: probe well-known version-manager install directories directly.
-  // Covers users whose login shell hangs/times out, whose shell init is
-  // misconfigured, or whose $SHELL doesn't match the manager they use.
+  // Strategy 1: probe well-known install directories for every common Node
+  // version manager (nvm, fnm, mise, asdf, volta, n) plus system locations.
+  // This doesn't depend on shell startup-file semantics — bash -lc skips
+  // .bashrc and zsh -lc skips .zshrc, but those are exactly the files where
+  // nvm/mise/asdf hooks live. Probing directories directly is deterministic.
   const probedPath = await tryResolveViaKnownPaths(conn)
   if (probedPath) {
     return probedPath
   }
 
+  // Strategy 2 (fallback): ask the user's login shell. Catches custom PATH
+  // setups in ~/.profile / ~/.bash_profile that the probes don't cover.
+  const loginShellPath = await tryResolveViaLoginShell(conn)
+  if (loginShellPath) {
+    return loginShellPath
+  }
+
   throwNodeNotFound()
 }
 
-// Run `command -v node` under the user's login shell, then verify the result
-// meets the minimum version. Returns null on any failure (shell missing, no
-// node found, version too old, timeout) so callers fall through to path probes.
-async function tryResolveViaLoginShell(conn: SshConnection): Promise<string | null> {
-  try {
-    // Why: $SHELL is the user's configured login shell (set by chsh / passwd).
-    // Using it — rather than hardcoding bash — means zsh users whose nvm/mise
-    // hooks live in ~/.zshrc get found too. We fall back to sh if $SHELL is
-    // unset (rare, e.g. restricted accounts).
-    const shellResult = await execCommand(conn, 'echo "${SHELL:-/bin/sh}"', {
-      timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS
-    })
-    const shell = shellResult.trim().split('\n')[0]
-    if (!shell) {
-      return null
-    }
-
-    const nodePath = await execCommand(conn, `${shellEscape(shell)} -lc 'command -v node'`, {
-      wrapCommand: false,
-      timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS
-    })
-    const candidate = nodePath.trim().split('\n')[0]
-    if (!candidate) {
-      return null
-    }
-
-    if (await nodeMeetsVersionRequirement(conn, candidate)) {
-      console.log(`[ssh-relay] Found node via login shell (${shell}): ${candidate}`)
-      return candidate
-    }
-  } catch {
-    // Fall through to path probes.
-  }
-  return null
-}
-
 // Probe the on-disk install directories of every common Node version manager
-// plus system package-manager locations. Returns the first candidate that
-// both exists and meets the minimum version.
+// plus system package-manager locations. Every probe runs unconditionally
+// (joined by newlines, not ||) so a missing directory prints nothing rather
+// than short-circuiting later probes. Returns the first candidate that meets
+// the minimum version.
 async function tryResolveViaKnownPaths(conn: SshConnection): Promise<string | null> {
+  // Why: joining with newlines instead of `||` is intentional. An empty
+  // `ls | sort -V | tail -1` exits 0 even when it finds nothing, so an `||`
+  // chain would stop at that clause and never check fnm/mise/asdf/volta.
+  // With newlines every probe runs and contributes whatever path it finds.
   const script = [
     // System / package-manager installs.
     'command -v node 2>/dev/null',
@@ -112,34 +76,67 @@ async function tryResolveViaKnownPaths(conn: SshConnection): Promise<string | nu
     'command -v $HOME/.volta/bin/node 2>/dev/null',
     // n: installs into /usr/local or a user-local prefix.
     'command -v /usr/local/n/versions/node/*/bin/node 2>/dev/null'
-  ].join(' || ')
+  ].join('\n')
 
   try {
     const result = await execCommand(conn, script)
-    const candidates = result
-      .trim()
-      .split('\n')
-      .filter((line) => line.length > 0)
-
-    // Why: the `||` chain exits 0 as soon as one clause prints a path, so the
-    // first line is our candidate. But if the shell emits multiple lines (some
-    // managers leave stale shims), validate each in order and keep the first
-    // that meets the version gate.
-    for (const candidate of candidates) {
+    const seen = new Set<string>()
+    for (const line of result.split('\n')) {
+      const candidate = line.trim()
+      if (!candidate || seen.has(candidate)) {
+        continue
+      }
+      seen.add(candidate)
       if (await nodeMeetsVersionRequirement(conn, candidate)) {
         console.log(`[ssh-relay] Found node via path probe: ${candidate}`)
         return candidate
       }
     }
   } catch {
-    // All probes failed.
+    // Fall through to login shell.
+  }
+  return null
+}
+
+// Run `command -v node` under the user's login shell, then verify the result
+// meets the minimum version. Returns null on any failure (shell missing, no
+// node found, version too old, timeout) so callers fall through to the error.
+async function tryResolveViaLoginShell(conn: SshConnection): Promise<string | null> {
+  try {
+    // Why: $SHELL is the user's configured login shell (set by chsh / passwd).
+    // Using it — rather than hardcoding bash — means zsh/fish users whose
+    // custom PATH hooks live in profile files get coverage too. We fall back
+    // to sh if $SHELL is unset (rare, e.g. restricted accounts).
+    const shellResult = await execCommand(conn, 'echo "${SHELL:-/bin/sh}"', {
+      timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS
+    })
+    const shell = shellResult.trim().split('\n')[0]
+    if (!shell) {
+      return null
+    }
+
+    const nodePath = await execCommand(conn, `${shellEscape(shell)} -lc 'command -v node'`, {
+      wrapCommand: false,
+      timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS
+    })
+    const candidate = nodePath.trim().split('\n')[0]
+    if (!candidate) {
+      return null
+    }
+
+    if (await nodeMeetsVersionRequirement(conn, candidate)) {
+      console.log(`[ssh-relay] Found node via login shell (${shell}): ${candidate}`)
+      return candidate
+    }
+  } catch {
+    // Fall through.
   }
   return null
 }
 
 // Returns true if `nodePath` runs and reports Node >= MIN_NODE_MAJOR.
-// Caches nothing — this runs at most twice per resolution (login shell + first
-// path-probe candidate), and the exec round-trip dominates.
+// Caches nothing — this runs at most a few times per resolution (one per
+// candidate), and the exec round-trip dominates.
 async function nodeMeetsVersionRequirement(
   conn: SshConnection,
   nodePath: string
