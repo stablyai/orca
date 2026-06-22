@@ -59,7 +59,7 @@ async function runAgentHooksOff(userDataPath: string): Promise<void> {
   getDefaultUserDataPathMock.mockReturnValue(userDataPath)
   await AGENT_HOOK_HANDLERS['agent hooks off']({
     flags: new Map(),
-    client: createOfflineClient() as HandlerContext['client'],
+    client: createOfflineClient() as unknown as HandlerContext['client'],
     cwd: userDataPath,
     json: true
   })
