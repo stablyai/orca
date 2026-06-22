@@ -260,6 +260,7 @@ export function FloatingTerminalPanel({
   const pendingEditorCloseQueueRef = useRef<string[]>([])
   const saveDialogFileIdRef = useRef<string | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
+  const shouldRestorePanelFocusAfterWindowFocusRef = useRef(false)
   const doubleTapDetectorRef = useRef<ModifierDoubleTapDetector | null>(null)
   if (!doubleTapDetectorRef.current) {
     doubleTapDetectorRef.current = new ModifierDoubleTapDetector()
@@ -1404,6 +1405,7 @@ export function FloatingTerminalPanel({
 
   useEffect(() => {
     if (!open || typeof document === 'undefined') {
+      shouldRestorePanelFocusAfterWindowFocusRef.current = false
       return
     }
 
@@ -1424,21 +1426,41 @@ export function FloatingTerminalPanel({
       const panel = panelRef.current
       const active = document.activeElement
       if (!panel || !(active instanceof HTMLElement) || !panel.contains(active)) {
+        shouldRestorePanelFocusAfterWindowFocusRef.current = false
         return
       }
+      shouldRestorePanelFocusAfterWindowFocusRef.current = true
       // Why: browser webviews focus out-of-process and do not emit renderer
       // pointerdown events, so release floating ownership on renderer blur too.
       setFloatingTerminalInputFocusedInMain(false)
       active.blur()
     }
+    const handleWindowFocus = (): void => {
+      if (!shouldRestorePanelFocusAfterWindowFocusRef.current) {
+        return
+      }
+      shouldRestorePanelFocusAfterWindowFocusRef.current = false
+      const panel = panelRef.current
+      const active = document.activeElement
+      if (!panel || (active instanceof HTMLElement && panel.contains(active))) {
+        return
+      }
+      // Why: macOS app switching can blur the floating panel without a click.
+      // Restore panel ownership so Cmd/Ctrl+W cannot fall through to main tabs.
+      focusPanelForShortcuts(false)
+    }
 
     document.addEventListener('pointerdown', handleOutsidePointerDown, true)
     window.addEventListener('blur', handleWindowBlur)
+    window.addEventListener('focus', handleWindowFocus)
     return () => {
+      shouldRestorePanelFocusAfterWindowFocusRef.current = false
       document.removeEventListener('pointerdown', handleOutsidePointerDown, true)
       window.removeEventListener('blur', handleWindowBlur)
+      window.removeEventListener('focus', handleWindowFocus)
     }
-  }, [open])
+  }, [focusPanelForShortcuts, open])
+
   const handleDragStart = (event: React.PointerEvent<HTMLDivElement>): void => {
     if (maximized) {
       return

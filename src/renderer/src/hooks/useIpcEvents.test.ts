@@ -2202,7 +2202,7 @@ describe('useIpcEvents browser tab close routing', () => {
     tabId: string | null
     worktreeId?: string
   }) => void
-  type CloseActiveTabListener = () => void
+  type CloseActiveTabListener = (payload?: { browserTabId?: string }) => void
   type CloseTerminalListener = (data: { tabId: string; paneRuntimeId?: number | null }) => void
   type CloseSessionTabListener = (data: { tabId: string; worktreeId: string }) => void
 
@@ -2528,6 +2528,29 @@ describe('useIpcEvents browser tab close routing', () => {
     onConfirm()
 
     expect(closeBrowserTab).toHaveBeenCalledWith('workspace-1')
+  })
+
+  it('closes the browser tab that emitted a guest Cmd+W event', async () => {
+    const closeActiveTabListenerRef: { current: CloseActiveTabListener | null } = { current: null }
+    const closeBrowserTab = vi.fn()
+
+    await useIpcEventsForCloseRouting({
+      closeActiveTabListenerRef,
+      getState: () => ({
+        activeBrowserTabId: 'main-browser',
+        browserTabsByWorktree: {
+          'wt-1': [{ id: 'main-browser' }],
+          floating: [{ id: 'floating-browser' }]
+        },
+        closeBrowserTab,
+        unifiedTabsByWorktree: {}
+      })
+    })
+
+    closeActiveTabListenerRef.current?.({ browserTabId: 'floating-browser' })
+
+    expect(closeBrowserTab).toHaveBeenCalledWith('floating-browser')
+    expect(closeBrowserTab).not.toHaveBeenCalledWith('main-browser')
   })
 
   it('confirms CLI workspace browser closes and replies after confirmation', async () => {

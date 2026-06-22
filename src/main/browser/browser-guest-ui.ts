@@ -415,7 +415,7 @@ export function setupGuestShortcutForwarding(args: {
       // renderer-owned parked webview's goForward() path directly.
       renderer.send('ui:browserHistoryNavigate', 'forward')
     } else if (keybindingMatchesAction('tab.close', input, process.platform, keybindings)) {
-      renderer.send('ui:closeActiveTab')
+      renderer.send('ui:closeActiveTab', { browserTabId })
     } else if (keybindingMatchesAction('tab.nextSameType', input, process.platform, keybindings)) {
       renderer.send('ui:switchTab', 1)
     } else if (
