@@ -61,10 +61,14 @@ type EffectiveUpstreamStatusCacheEntry = {
 
 const effectiveUpstreamStatusCache = new Map<string, EffectiveUpstreamStatusCacheEntry>()
 const effectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatus>>()
+const statusReadsInFlight = new Map<string, Promise<GitStatusResult>>()
 
+// Why: status tests reuse this reset hook, so every cross-call memoization layer
+// must reset together even though the historical name mentions upstream only.
 export function clearEffectiveUpstreamStatusCacheForTests(): void {
   effectiveUpstreamStatusCache.clear()
   effectiveUpstreamStatusInFlight.clear()
+  statusReadsInFlight.clear()
 }
 
 export type GetStatusOptions = GitRuntimeOptions & {
@@ -80,6 +84,38 @@ export type GetStatusOptions = GitRuntimeOptions & {
  * Parse `git status --porcelain=v2` output into structured entries.
  */
 export async function getStatus(
+  worktreePath: string,
+  options: GetStatusOptions = {}
+): Promise<GitStatusResult> {
+  // Why: dedupe only concurrent identical reads; after settle, callers must
+  // execute a fresh status read rather than observing a cached result.
+  const cacheKey = getStatusReadKey(worktreePath, options)
+  const inFlightStatus = statusReadsInFlight.get(cacheKey)
+  if (inFlightStatus) {
+    return inFlightStatus
+  }
+
+  const statusPromise = runGetStatus(worktreePath, options)
+  statusReadsInFlight.set(cacheKey, statusPromise)
+  try {
+    return await statusPromise
+  } finally {
+    if (statusReadsInFlight.get(cacheKey) === statusPromise) {
+      statusReadsInFlight.delete(cacheKey)
+    }
+  }
+}
+
+function getStatusReadKey(worktreePath: string, options: GetStatusOptions): string {
+  // Why: each key part can change the output shape or runtime routing.
+  const limit =
+    typeof options.limit === 'number' && Number.isInteger(options.limit) && options.limit >= 0
+      ? options.limit
+      : DEFAULT_GIT_STATUS_LIMIT
+  return [worktreePath, options.wslDistro ?? '', options.includeIgnored === true, limit].join('\0')
+}
+
+async function runGetStatus(
   worktreePath: string,
   options: GetStatusOptions = {}
 ): Promise<GitStatusResult> {
