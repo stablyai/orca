@@ -269,10 +269,9 @@ describe('applyWebSessionTabsSnapshot', () => {
     ).toBe(true)
   })
 
-  it('syncs active session tabs for desktop remote runtime clients only when the worktree is remote-owned', () => {
+  it('syncs active session tabs for desktop remote runtime clients using the worktree owner', () => {
     expect(
       shouldSyncRuntimeSessionTabs({
-        activeRuntimeEnvironmentId: ENV,
         activeWorktreeId: WT,
         activeWorktreeRuntimeEnvironmentId: ENV,
         workspaceSessionReady: true
@@ -280,7 +279,6 @@ describe('applyWebSessionTabsSnapshot', () => {
     ).toBe(true)
     expect(
       shouldSyncRuntimeSessionTabs({
-        activeRuntimeEnvironmentId: ENV,
         activeWorktreeId: WT,
         activeWorktreeRuntimeEnvironmentId: null,
         workspaceSessionReady: true
@@ -288,25 +286,22 @@ describe('applyWebSessionTabsSnapshot', () => {
     ).toBe(false)
     expect(
       shouldSyncRuntimeSessionTabs({
-        activeRuntimeEnvironmentId: ENV,
         activeWorktreeId: WT,
         activeWorktreeRuntimeEnvironmentId: 'other-env',
         workspaceSessionReady: true
       })
-    ).toBe(false)
+    ).toBe(true)
     expect(
       shouldSyncRuntimeSessionTabs({
-        activeRuntimeEnvironmentId: ENV,
         activeWorktreeRuntimeEnvironmentId: ENV,
         workspaceSessionReady: true
       })
     ).toBe(false)
     expect(
       shouldSyncRuntimeSessionTabs({
-        activeRuntimeEnvironmentId: null,
         activeWorktreeId: WT,
         activeWorktreeRuntimeEnvironmentId: ENV,
-        workspaceSessionReady: true
+        workspaceSessionReady: false
       })
     ).toBe(false)
   })

@@ -128,6 +128,7 @@ function getShortcutPlatform(): NodeJS.Platform {
 }
 
 const BROWSER_AUTOMATION_BOOTSTRAP_LEASE_MS = 10_000
+const RUNTIME_PROJECT_REFRESH_CONCURRENCY = 5
 const browserAutomationBootstrapLeaseByPageId = new Map<string, { token: string; timer: number }>()
 
 function isPinnedSessionTab(store: AppState, worktreeId: string, visibleId: string): boolean {
@@ -713,6 +714,17 @@ function getRuntimeClientEventEnvironmentIds(): string[] {
   return [...ids]
 }
 
+function getReachableRuntimeEnvironmentIds(): string[] {
+  const state = useAppStore.getState()
+  const ids: string[] = []
+  for (const [environmentId, status] of state.runtimeStatusByEnvironmentId ?? []) {
+    if (status?.status) {
+      ids.push(environmentId)
+    }
+  }
+  return ids
+}
+
 export function buildRuntimeClientEventEnvironmentKey(environmentIds: string[]): string {
   return [...new Set(environmentIds)].sort().join('\u0000')
 }
@@ -725,6 +737,51 @@ export function getNewlyConnectedRuntimeEnvironmentIds(
 ): string[] {
   const known = new Set(previous)
   return [...new Set(next)].filter((environmentId) => !known.has(environmentId))
+}
+
+export function getRuntimeProjectRefreshEnvironmentIds(args: {
+  previousDesired: readonly string[]
+  nextDesired: readonly string[]
+  previousReachable: readonly string[]
+  nextReachable: readonly string[]
+}): string[] {
+  return [
+    ...new Set([
+      ...getNewlyConnectedRuntimeEnvironmentIds(args.previousDesired, args.nextDesired),
+      ...getNewlyConnectedRuntimeEnvironmentIds(args.previousReachable, args.nextReachable)
+    ])
+  ]
+}
+
+async function refreshRuntimeProjectWorktrees(repos: readonly { id: string }[]): Promise<void> {
+  let nextIndex = 0
+  const failures: { repoId: string; error: unknown }[] = []
+  const workerCount = Math.min(RUNTIME_PROJECT_REFRESH_CONCURRENCY, repos.length)
+
+  // Why: one coalesced remote repo event can still represent many repos; keep the
+  // expensive worktree probes bounded so idle refresh never floods the renderer.
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < repos.length) {
+        const index = nextIndex
+        nextIndex += 1
+        const repoId = repos[index].id
+        try {
+          await useAppStore.getState().fetchWorktrees(repoId)
+        } catch (error) {
+          failures.push({ repoId, error })
+        }
+      }
+    })
+  )
+  if (failures.length > 0) {
+    throw new AggregateError(
+      failures.map((failure) => failure.error),
+      `Failed to refresh ${failures.length} runtime project worktree(s): ${failures
+        .map((failure) => failure.repoId)
+        .join(', ')}`
+    )
+  }
 }
 
 function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined): string | null {
@@ -866,7 +923,7 @@ export function useIpcEvents(): void {
     const runtimeProjectRefreshScheduler = createRuntimeProjectRefreshScheduler({
       refresh: async (environmentId) => {
         const repos = await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
-        await Promise.all(repos.map((repo) => useAppStore.getState().fetchWorktrees(repo.id)))
+        await refreshRuntimeProjectWorktrees(repos)
         await useAppStore.getState().fetchWorktreeLineage()
       },
       onError: (error) => {
@@ -920,21 +977,34 @@ export function useIpcEvents(): void {
     let runtimeClientEventEnvironmentKey = buildRuntimeClientEventEnvironmentKey(
       runtimeClientEventEnvironmentIds
     )
+    let reachableRuntimeEnvironmentIds = getReachableRuntimeEnvironmentIds()
+    let reachableRuntimeEnvironmentKey = buildRuntimeClientEventEnvironmentKey(
+      reachableRuntimeEnvironmentIds
+    )
     unsubs.push(
       useAppStore.subscribe(() => {
         const nextEnvironmentIds = getRuntimeClientEventEnvironmentIds()
         const nextKey = buildRuntimeClientEventEnvironmentKey(nextEnvironmentIds)
-        if (nextKey === runtimeClientEventEnvironmentKey) {
+        const nextReachableEnvironmentIds = getReachableRuntimeEnvironmentIds()
+        const nextReachableKey = buildRuntimeClientEventEnvironmentKey(nextReachableEnvironmentIds)
+        if (
+          nextKey === runtimeClientEventEnvironmentKey &&
+          nextReachableKey === reachableRuntimeEnvironmentKey
+        ) {
           return
         }
-        for (const environmentId of getNewlyConnectedRuntimeEnvironmentIds(
-          runtimeClientEventEnvironmentIds,
-          nextEnvironmentIds
-        )) {
+        for (const environmentId of getRuntimeProjectRefreshEnvironmentIds({
+          previousDesired: runtimeClientEventEnvironmentIds,
+          nextDesired: nextEnvironmentIds,
+          previousReachable: reachableRuntimeEnvironmentIds,
+          nextReachable: nextReachableEnvironmentIds
+        })) {
           runtimeProjectRefreshScheduler.request(environmentId)
         }
         runtimeClientEventEnvironmentIds = nextEnvironmentIds
         runtimeClientEventEnvironmentKey = nextKey
+        reachableRuntimeEnvironmentIds = nextReachableEnvironmentIds
+        reachableRuntimeEnvironmentKey = nextReachableKey
         runtimeClientEventsSync.sync()
       })
     )

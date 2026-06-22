@@ -241,17 +241,15 @@ export function shouldRespawnWebRuntimeTerminalAfterWake(args: {
 }
 
 export function shouldSyncRuntimeSessionTabs(args: {
-  activeRuntimeEnvironmentId: string | null | undefined
   activeWorktreeId?: string | null
   activeWorktreeRuntimeEnvironmentId?: string | null
   workspaceSessionReady: boolean
 }): boolean {
-  const environmentId = args.activeRuntimeEnvironmentId?.trim()
+  const environmentId = args.activeWorktreeRuntimeEnvironmentId?.trim()
   if (!environmentId || !args.workspaceSessionReady) {
     return false
   }
-  const worktreeEnvironmentId = args.activeWorktreeRuntimeEnvironmentId?.trim()
-  return Boolean(args.activeWorktreeId?.trim() && worktreeEnvironmentId === environmentId)
+  return Boolean(args.activeWorktreeId?.trim())
 }
 
 export function shouldSyncAllRuntimeSessionTabs(args: {
@@ -2460,10 +2458,9 @@ export function useWebSessionTabsSync(): void {
   }, [activeRuntimeEnvironmentId, isWebClient, workspaceSessionReady])
 
   useEffect(() => {
-    const environmentId = activeRuntimeEnvironmentId?.trim()
+    const environmentId = activeWorktreeRuntimeEnvironmentId?.trim()
     if (
       !shouldSyncRuntimeSessionTabs({
-        activeRuntimeEnvironmentId,
         activeWorktreeId,
         activeWorktreeRuntimeEnvironmentId,
         workspaceSessionReady
@@ -2577,10 +2574,5 @@ export function useWebSessionTabsSync(): void {
       disposed = true
       unsubscribe?.()
     }
-  }, [
-    activeRuntimeEnvironmentId,
-    activeWorktreeId,
-    activeWorktreeRuntimeEnvironmentId,
-    workspaceSessionReady
-  ])
+  }, [activeWorktreeId, activeWorktreeRuntimeEnvironmentId, workspaceSessionReady])
 }

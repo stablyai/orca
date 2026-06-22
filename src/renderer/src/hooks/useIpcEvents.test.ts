@@ -5,6 +5,7 @@ import {
   buildRuntimeClientEventEnvironmentKey,
   buildNewWorkspaceShortcutModalData,
   getNewlyConnectedRuntimeEnvironmentIds,
+  getRuntimeProjectRefreshEnvironmentIds,
   openNewWorkspaceFromShortcut,
   resolveBrowserSessionTabTarget,
   resolveZoomTarget
@@ -50,6 +51,30 @@ describe('getNewlyConnectedRuntimeEnvironmentIds', () => {
       'env-a',
       'env-b'
     ])
+  })
+})
+
+describe('getRuntimeProjectRefreshEnvironmentIds', () => {
+  it('refreshes when an already-desired runtime becomes reachable', () => {
+    expect(
+      getRuntimeProjectRefreshEnvironmentIds({
+        previousDesired: ['env-a'],
+        nextDesired: ['env-a'],
+        previousReachable: [],
+        nextReachable: ['env-a']
+      })
+    ).toEqual(['env-a'])
+  })
+
+  it('deduplicates runtimes that are both newly desired and newly reachable', () => {
+    expect(
+      getRuntimeProjectRefreshEnvironmentIds({
+        previousDesired: [],
+        nextDesired: ['env-a'],
+        previousReachable: [],
+        nextReachable: ['env-a']
+      })
+    ).toEqual(['env-a'])
   })
 })
 
