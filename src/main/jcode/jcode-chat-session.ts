@@ -1,9 +1,5 @@
-// Why: jcode's chat-bubble view (M1) needs CLEAN newline-delimited JSON on
-// stdout, so it is spawned with node child_process — NOT a PTY. A PTY would
-// inject terminal control sequences and line-wrapping that corrupt the JSON
-// stream. Each `jcode run ... --ndjson <prompt>` invocation is one-shot: it
-// emits NDJSON then exits. Conversations continue via --resume <sessionId>,
-// captured from the 'start'/'done' events on a previous turn.
+// Why: chat bubbles need clean NDJSON stdout, so jcode runs as child_process,
+// not a PTY. Each turn is one-shot; conversation continuity uses --resume.
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import os from 'node:os'
 import { type BrowserWindow, dialog, ipcMain } from 'electron'
@@ -28,7 +24,12 @@ import {
   loadConversation,
   saveConversation
 } from './jcode-conversation-store'
-import { resolveTurnPrompt, extractImagePaths, nonImageAttachments } from './jcode-attachments'
+import {
+  cleanupRemoteAttachmentDir,
+  resolveTurnPrompt,
+  extractImagePaths,
+  nonImageAttachments
+} from './jcode-attachments'
 import { resolveJcodeBin } from './jcode-binary'
 import { friendlyChildError } from './jcode-error-messages'
 import { resolveRemoteExec } from './jcode-remote-exec'
@@ -56,35 +57,21 @@ function buildArgs(
   remotePath: string | null,
   imagePaths: string[]
 ): string[] {
-  // A named custom profile (from `jcode provider add`) is selected with
-  // `--provider-profile <name>` (which IMPLIES openai-compatible) and MUST NOT
-  // also pass `-p`; doing both would be ambiguous. It takes precedence over the
-  // built-in `-p provider` path. `-m model` still overrides the profile default.
+  // Custom profiles imply openai-compatible; passing both profile and -p would
+  // be ambiguous. `-m model` still overrides the profile default.
   const profile = payload.providerProfile?.trim()
-  let args: string[]
-  if (profile) {
-    args = ['run', '--provider-profile', profile]
-  } else {
-    // "auto" lets jcode resolve the best authed provider (matches the composer's
-    // "Auto" chip). A concrete id is passed only when the user picks one.
-    const provider = payload.provider?.trim() || 'auto'
-    args = ['run', '-p', provider]
-  }
+  // "auto" matches the composer chip; concrete ids are used only when selected.
+  const args = profile
+    ? ['run', '--provider-profile', profile]
+    : ['run', '-p', payload.provider?.trim() || 'auto']
   if (payload.model?.trim()) {
     args.push('-m', payload.model.trim())
   }
-  // jcode's `-C/--cwd` behavior is now remote-exec-aware (startup.rs
-  // parse_and_prepare_args + run_single_message_command): under --remote-exec it
-  // does NOT chdir locally but instead seeds the session working_dir so the remote
-  // bash `cd`s into the project dir. So for a remote turn we pass -C <remotePath>
-  // (the worktree's remote folderPath from resolveRemoteExec) — the remote bash
-  // then runs in the project dir instead of the remote login home (~). For a local
-  // turn -C is the local project path as before.
-  if (remoteExecHost) {
-    if (remotePath?.trim()) {
-      args.push('-C', remotePath.trim())
-    }
-  } else if (payload.cwd?.trim()) {
+  // Under --remote-exec, -C seeds the remote session working_dir instead of
+  // chdiring locally. Local turns keep using the local project path.
+  if (remoteExecHost && remotePath?.trim()) {
+    args.push('-C', remotePath.trim())
+  } else if (!remoteExecHost && payload.cwd?.trim()) {
     args.push('-C', payload.cwd.trim())
   }
   if (payload.resumeSessionId?.trim()) {
@@ -98,9 +85,7 @@ function buildArgs(
   }
   // Vision: image attachments are read LOCALLY by jcode and sent as image content
   // blocks. Options must precede the positional <MESSAGE>, so push before --ndjson.
-  for (const imagePath of imagePaths) {
-    args.push('--image', imagePath)
-  }
+  args.push(...imagePaths.flatMap((imagePath) => ['--image', imagePath]))
   args.push('--ndjson', resolvedPrompt)
   return args
 }
@@ -137,11 +122,13 @@ async function startTurn(
       ? { ...payload, attachments: nonImageAttachments(allAttachments) }
       : payload
 
-  // Weave (non-image) attachments into the prompt (copying local files to the
-  // remote host first for remote-exec sessions). Done before spawn.
+  // Weave non-image attachments into the prompt; remote turns may upload files first.
   let resolvedPrompt: string
+  let attachmentCleanup: { connectionId: string; remoteDir: string } | null = null
   try {
-    resolvedPrompt = await resolveTurnPrompt(promptPayload, remote)
+    const turnPrompt = await resolveTurnPrompt(promptPayload, remote)
+    resolvedPrompt = turnPrompt.prompt
+    attachmentCleanup = turnPrompt.cleanup
   } catch (error) {
     sendEvent(mainWindow, sessionKey, {
       type: 'error',
@@ -156,8 +143,6 @@ async function startTurn(
     resolvedPrompt = 'Describe the attached image(s).'
   }
 
-  // FEATURE B: prepend a selected skill's SKILL.md body (re-discovered from cwd +
-  // worktreeId so remote skills resolve over SSH). Non-fatal if missing.
   resolvedPrompt = await applySkillInjection(
     payload.skillName,
     resolvedPrompt,
@@ -165,13 +150,8 @@ async function startTurn(
     store
   )
 
-  // The Node child_process `cwd` MUST be a directory that exists on THIS (local)
-  // machine — jcode itself always runs locally, even for brain-local turns. For a
-  // remote worktree payload.cwd is the REMOTE project path (e.g. /home/srain/...)
-  // which does not exist on the Mac; passing it to spawn() throws `spawn ENOENT`.
-  // So for remote turns we anchor the local process at the user's home dir; the
-  // remote bash working dir is governed by --remote-exec, not this cwd. Local
-  // turns continue to spawn in the worktree's (local) folder path.
+  // jcode runs locally even for brain-local turns, so remote worktrees must not
+  // become spawn cwd; --remote-exec owns the remote bash working directory.
   const localSpawnCwd = remoteExecHost ? os.homedir() : payload.cwd?.trim() || undefined
 
   let child: ChildProcessWithoutNullStreams
@@ -185,6 +165,7 @@ async function startTurn(
       }
     )
   } catch (error) {
+    void cleanupRemoteAttachmentDir(attachmentCleanup?.connectionId, attachmentCleanup?.remoteDir)
     sendEvent(mainWindow, sessionKey, {
       type: 'error',
       error: error instanceof Error ? error.message : String(error)
@@ -208,8 +189,7 @@ async function startTurn(
       stdoutBuffer = stdoutBuffer.slice(newlineIndex + 1)
       if (line) {
         try {
-          const event = JSON.parse(line) as JcodeNdjsonEvent
-          sendEvent(mainWindow, sessionKey, event)
+          sendEvent(mainWindow, sessionKey, JSON.parse(line) as JcodeNdjsonEvent)
         } catch {
           // Why: non-JSON noise on stdout (banners, etc.) is forwarded as a
           // text_delta so it is visible rather than silently dropped.
@@ -259,6 +239,7 @@ async function startTurn(
     // Always emit a terminal 'exit' so the renderer can finalize UI even when
     // jcode forgot to emit a 'done' (e.g. crash mid-turn).
     sendEvent(mainWindow, sessionKey, { type: 'exit', code })
+    void cleanupRemoteAttachmentDir(attachmentCleanup?.connectionId, attachmentCleanup?.remoteDir)
   })
 }
 
@@ -322,12 +303,7 @@ export function registerJcodeChatHandlers(mainWindow: BrowserWindow, store?: Sto
     }
   })
 
-  // ─── Durable persistence (BUG 1/2) ──────────────────────────────────────
-  // The renderer reduces NDJSON events into full conversation state (messages +
-  // tool cards + --resume id) already, so the simplest faithful backing store is
-  // to let it send a snapshot on turn boundaries and persist that verbatim. This
-  // avoids re-deriving the tool-card shape in main and keeps tool/diff rendering
-  // identical after rehydrate.
+  // Renderer snapshots are already the conversation truth, including tool cards.
   ipcMain.removeHandler(JCODE_CHAT_SAVE_CHANNEL)
   ipcMain.handle(JCODE_CHAT_SAVE_CHANNEL, (event, raw: unknown) => {
     if (event.sender !== mainWindow.webContents) {

@@ -9,7 +9,7 @@
 // caller copies each local file to a remote temp dir first and passes the rewritten
 // REMOTE path here; this module stays transport-agnostic and only formats text.
 import { readFile, stat } from 'node:fs/promises'
-import { basename } from 'node:path'
+import { basename, posix as pathPosix } from 'node:path'
 import type { JcodeChatAttachment, JcodeChatSendPayload } from '../../shared/jcode-chat-types'
 import { getSshConnectionManager } from '../ipc/ssh'
 
@@ -115,9 +115,29 @@ export type RemoteExecResolution = {
   remotePath: string | null
 }
 
+export type RemoteAttachmentCleanupTarget = {
+  connectionId: string
+  remoteDir: string
+}
+
+export type ResolvedTurnPrompt = {
+  prompt: string
+  cleanup: RemoteAttachmentCleanupTarget | null
+}
+
 /** Minimal single-quote shell escaping for a POSIX path argument. */
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+const REMOTE_ATTACHMENT_ROOT = '/tmp/orca-jcode-attachments/'
+
+function safeRemoteAttachmentDir(remoteDir: string): string | null {
+  if (remoteDir.includes('\0')) {
+    return null
+  }
+  const normalized = pathPosix.normalize(remoteDir)
+  return normalized.startsWith(REMOTE_ATTACHMENT_ROOT) ? normalized : null
 }
 
 /** Per-file size cap for remote attachment transfer. Large files would block the
@@ -161,6 +181,28 @@ export function getLiveSshConnection(connectionId: string): SshConnection | null
     return null
   }
   return conn
+}
+
+export async function cleanupRemoteAttachmentDir(
+  connectionId: string | null | undefined,
+  remoteDir: string | null | undefined
+): Promise<void> {
+  if (!connectionId || !remoteDir) {
+    return
+  }
+  const safeDir = safeRemoteAttachmentDir(remoteDir)
+  if (!safeDir) {
+    return
+  }
+  const conn = getLiveSshConnection(connectionId)
+  if (!conn) {
+    return
+  }
+  try {
+    await runRemoteCommand(conn, `rm -rf -- ${shellQuote(safeDir)}`)
+  } catch {
+    // Best-effort cleanup must never change the chat result.
+  }
 }
 
 /** Run a remote command over SSH and CAPTURE its stdout (unlike runRemoteCommand,
@@ -216,10 +258,10 @@ export function runRemoteCapture(conn: SshConnection, command: string): Promise<
 export async function resolveTurnPrompt(
   payload: JcodeChatSendPayload,
   remote: RemoteExecResolution
-): Promise<string> {
+): Promise<ResolvedTurnPrompt> {
   const attachments = payload.attachments ?? []
   if (attachments.length === 0) {
-    return payload.prompt
+    return { prompt: payload.prompt, cleanup: null }
   }
   const { files, texts } = partitionAttachments(attachments)
 
@@ -234,18 +276,27 @@ export async function resolveTurnPrompt(
           'The following local files could NOT be sent to the remote host (no SSH connection available); ' +
           `they are not readable by the remote agent:\n${files.map((f) => `- ${f.path}`).join('\n')}`
       }
-      return weaveAttachmentsIntoPrompt(payload.prompt, [], [...texts, note])
+      return {
+        prompt: weaveAttachmentsIntoPrompt(payload.prompt, [], [...texts, note]),
+        cleanup: null
+      }
     }
-    return weaveAttachmentsIntoPrompt(
-      payload.prompt,
-      files.map((f) => ({ path: f.path, name: f.name })),
-      texts
-    )
+    return {
+      prompt: weaveAttachmentsIntoPrompt(
+        payload.prompt,
+        files.map((f) => ({ path: f.path, name: f.name })),
+        texts
+      ),
+      cleanup: null
+    }
   }
 
   // Remote-exec session with a live workspace SSH connection: copy each local
   // file to a remote temp dir and reference the remote path.
-  const { resolved, failed, oversize } = await copyFilesToRemote(files, remote.connectionId)
+  const { resolved, failed, oversize, remoteDir } = await copyFilesToRemote(
+    files,
+    remote.connectionId
+  )
   const extraTexts = [...texts]
   if (oversize.length > 0) {
     const capMb = Math.round(MAX_REMOTE_ATTACHMENT_BYTES / (1024 * 1024))
@@ -264,7 +315,10 @@ export async function resolveTurnPrompt(
         `by the remote agent:\n${failed.map((f) => `- ${f.path}`).join('\n')}`
     })
   }
-  return weaveAttachmentsIntoPrompt(payload.prompt, resolved, extraTexts)
+  return {
+    prompt: weaveAttachmentsIntoPrompt(payload.prompt, resolved, extraTexts),
+    cleanup: remoteDir ? { connectionId: remote.connectionId, remoteDir } : null
+  }
 }
 
 /** Copy local files to a fresh remote temp dir over an SSH connection. Returns
@@ -284,22 +338,23 @@ async function copyFilesToRemote(
   resolved: ResolvedFileAttachment[]
   failed: { path: string; name: string }[]
   oversize: { path: string; name: string }[]
+  remoteDir: string | null
 }> {
   const resolved: ResolvedFileAttachment[] = []
   const failed: { path: string; name: string }[] = []
   const oversize: { path: string; name: string }[] = []
   if (files.length === 0) {
-    return { resolved, failed, oversize }
+    return { resolved, failed, oversize, remoteDir: null }
   }
   const conn = getSshConnectionManager()?.getConnection(connectionId)
   if (!conn || conn.getState().status !== 'connected') {
-    return { resolved, failed: [...files], oversize }
+    return { resolved, failed: [...files], oversize, remoteDir: null }
   }
   const remoteDir = buildRemoteAttachmentDir()
   try {
     await runRemoteCommand(conn, `mkdir -p ${shellQuote(remoteDir)}`)
   } catch {
-    return { resolved, failed: [...files], oversize }
+    return { resolved, failed: [...files], oversize, remoteDir: null }
   }
   for (const file of files) {
     try {
@@ -324,5 +379,5 @@ async function copyFilesToRemote(
       failed.push(file)
     }
   }
-  return { resolved, failed, oversize }
+  return { resolved, failed, oversize, remoteDir }
 }
