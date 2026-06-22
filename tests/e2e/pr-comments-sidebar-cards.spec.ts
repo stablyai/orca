@@ -114,7 +114,10 @@ test.describe('PR comments sidebar cards view', () => {
     const positions = await Promise.all(
       comments.map(async (comment) => {
         const box = await comment.boundingBox()
-        return box?.y ?? Number.POSITIVE_INFINITY
+        if (!box) {
+          throw new Error(`Comment not visible: ${await comment.textContent()}`)
+        }
+        return box.y
       })
     )
 
@@ -132,9 +135,9 @@ test.describe('PR comments sidebar cards view', () => {
       hasText: 'Please update this handler before merge.'
     })
     await openThreadCard.hover()
-    const firstActionsMenu = orcaPage.getByRole('button', { name: 'More comment actions' }).first()
-    await firstActionsMenu.evaluate((element) => (element as HTMLElement).focus())
-    await firstActionsMenu.press('Enter')
+    const actionsMenu = openThreadCard.getByRole('button', { name: 'More comment actions' })
+    await actionsMenu.evaluate((element) => (element as HTMLElement).focus())
+    await actionsMenu.press('Enter')
     await orcaPage.getByRole('menuitem', { name: 'Queue for agent' }).click({ force: true })
 
     await expect(orcaPage.getByRole('button', { name: 'Send 1 queued comments' })).toBeVisible()
@@ -167,9 +170,9 @@ test.describe('PR comments sidebar cards view', () => {
     })
 
     await openThreadCard.hover()
-    const firstActionsMenu = orcaPage.getByRole('button', { name: 'More comment actions' }).first()
-    await firstActionsMenu.evaluate((element) => (element as HTMLElement).focus())
-    await firstActionsMenu.press('Enter')
+    const actionsMenu = openThreadCard.getByRole('button', { name: 'More comment actions' })
+    await actionsMenu.evaluate((element) => (element as HTMLElement).focus())
+    await actionsMenu.press('Enter')
     await expect(orcaPage.getByRole('menuitem', { name: 'Queue for agent' })).toBeVisible()
 
     await expectOpenTextNotShiftedLeft(

@@ -57,14 +57,15 @@ describe('pr-comment-action-state', () => {
       comment({ id: 1, createdAt: '2026-06-16T10:00:00Z', body: 'first' }),
       comment({ id: 2, createdAt: '2026-06-16T11:00:00Z', body: 'second' })
     ])
+    const sorted = sortPRCommentGroupsForTimeline(groups)
 
+    expect(sorted.map((group) => getPRCommentGroupActionState(group))).toEqual([
+      'conversation',
+      'conversation',
+      'conversation'
+    ])
     expect(
-      sortPRCommentGroupsForTimeline(groups).map((group) => getPRCommentGroupActionState(group))
-    ).toEqual(['conversation', 'conversation', 'conversation'])
-    expect(
-      sortPRCommentGroupsForTimeline(groups).map((group) =>
-        group.kind === 'standalone' ? group.comment.body : group.root.body
-      )
+      sorted.map((group) => (group.kind === 'standalone' ? group.comment.body : group.root.body))
     ).toEqual(['first', 'second', 'third'])
   })
 })
