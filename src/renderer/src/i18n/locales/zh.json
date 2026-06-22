@@ -3227,7 +3227,7 @@
         "SparseCheckoutPresetSelect": {
           "c4ac80151d": "新预设",
           "7c3275d307": "编辑 {{value0}}",
-          "c7f9b3f0c1": "离开",
+          "c7f9b3f0c1": "关",
           "8b12c0850a": "保存",
           "de8fce5854": "取消",
           "ddbcaef7be": "src/渲染器包/ui",
@@ -3820,7 +3820,7 @@
           "e888362def": "状态： 关闭",
           "f394b3e86e": "状态：合并",
           "af2b07bda5": "州：{{value0}}",
-          "29df45afa2": "先生"
+          "29df45afa2": "MR"
         },
         "WorktreeCardPorts": {
           "34f733dda2": "转到工作树",
@@ -3854,8 +3854,8 @@
           "84cdbb7e30": "移至状态",
           "56cde9e8e6": "将状态移至",
           "f50603c6b2": "标记为未读",
-          "8dacff1fe0": "马克·里德",
-          "3baa7d6507": "别针",
+          "8dacff1fe0": "标记为已读",
+          "3baa7d6507": "固定",
           "697d0f6e1b": "取消固定",
           "250de158fd": "移除工作区",
           "changeParentWorkspace": "更改父工作树...",
@@ -5036,7 +5036,7 @@
           "2c0330ec3e": "对于私有存储库，并设置",
           "e678d89e8c": "ORCA_GITEA_TOKEN",
           "d9467ab026": "公共仓库通过其 git 远程检测。设置",
-          "4ab9b96925": "吉泰亚",
+          "4ab9b96925": "Gitea",
           "953b7bf6f7": "Azure DevOps 凭据已配置，但无法进行身份验证。检查令牌、API 基本 URL 和存储库权限，如果环境变量发生更改，则重新启动 Orca。",
           "6f317f5132": "仅当 Orca 无法从 git 远程派生 API 基本 URL 时。",
           "ae6b7f5f40": "ORCA_AZURE_DEVOPS_API_BASE_URL",
@@ -5608,8 +5608,8 @@
           "f9941f0caf": "例如ollama 运行 llama3.1 {提示}"
         },
         "RepositorySourceControlAiEnablement": {
-          "84233d1bb3": "离开",
-          "bea897eec2": "在",
+          "84233d1bb3": "关",
+          "bea897eec2": "开",
           "62511a575d": "使用全局",
           "30ae6dcce8": "全局默认是",
           "cf5959c834": "启用源代码控制 AI",
@@ -5619,8 +5619,8 @@
           "visibilityHelper": "控制是否为此仓库显示源代码控制 AI 按钮。单独功能使用的生成会遵循这些功能各自的设置。全局默认值为 {{value0}}。"
         },
         "RepositorySourceControlAiHostedReviewDefaults": {
-          "053ccfbf52": "离开",
-          "777443bf89": "在",
+          "053ccfbf52": "关",
+          "777443bf89": "开",
           "ffc3b26b26": "使用全局",
           "a68849a859": "全局默认是",
           "aa6ee4b7d6": "托管评审创建默认值",
@@ -6077,8 +6077,8 @@
           "abcb4dd019": "Terminal Cursor",
           "70beb1bbc7": "预览",
           "31f6e61085": "目前连字",
-          "870377082f": "离开",
-          "84bd22f2cd": "在",
+          "870377082f": "关",
+          "84bd22f2cd": "开",
           "bc9ff84d61": "自动",
           "be8da35e7f": "字体连字",
           "4b1f29598e": "自动 - 对“{{value0}}”禁用。",
@@ -6097,8 +6097,8 @@
           "048aac8a64": "Terminal 排版",
           "4415beb958": "已禁用",
           "4e7d41a9f0": "已启用",
-          "e90afcc44f": "离开",
-          "16c471ee03": "在"
+          "e90afcc44f": "关",
+          "16c471ee03": "开"
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "像素",
@@ -6109,7 +6109,7 @@
           "4263e940e0": "按 JIS 日元 (¥) 键会发送反斜杠 (\\\\)。",
           "19f4935159": "JIS 日元 (¥) 至 反斜杠 (\\\\)",
           "1c337bef4a": "控制按 JIS 日元 (¥) 键是否发送反斜杠 (\\\\)。",
-          "3fe1c5bfe0": "离开",
+          "3fe1c5bfe0": "关",
           "c73d510938": "正确的",
           "e7aec1fd60": "左边",
           "badb1219fc": "两个都",
@@ -6156,7 +6156,7 @@
           "8eefeaa3da": "焦点跟随鼠标",
           "96fe15def8": "terminal 窗格的鼠标和剪贴板行为。",
           "45721f3e67": "Terminal 交互",
-          "9c0b1c1792": "在",
+          "9c0b1c1792": "开",
           "c1fc9e9444": "GPU加速",
           "e0996d141a": "Auto 尝试使用 WebGL，并针对不受支持或有风险的渲染器使用 DOM 回退。",
           "7eaccc1424": "始终尝试将 WebGL 用于 terminal 窗格。",
@@ -6185,8 +6185,8 @@
           "16753eea48": "在 Windows 上，右键单击粘贴剪贴板。 Ctrl+右键单击打开上下文菜单。",
           "9c178cf8aa": "右键单击粘贴",
           "af0c3b6e39": "在 Windows 上，右键单击将剪贴板粘贴到 terminal 中。使用 Ctrl+右键单击打开上下文菜单。",
-          "29154326bb": "在",
-          "ab20575a8a": "离开",
+          "29154326bb": "开",
+          "ab20575a8a": "关",
           "ab3a1f9068": "执行程序",
           "ask_before_closing_running_terminals_title": "关闭运行中的 Terminal 前询问",
           "ask_before_closing_running_terminals_description": "在关闭有运行中命令或 agent 的 terminal 前显示确认。"
@@ -9677,7 +9677,7 @@
                 "14e144f7a7": "GitLab API预算",
                 "3e2c982cfa": "向左，重置于",
                 "ea8ad0bae8": "的",
-                "0a891e8935": "休息API",
+                "0a891e8935": "REST API",
                 "953f7c6062": "此 GitLab 主机未返回速率限制标头。",
                 "budget_scope_prefix": "Budget scope"
               }
@@ -11305,7 +11305,7 @@
           "587a4b205c": "下一步",
           "761a35834d": "自动化",
           "73f630b49d": "取消",
-          "1b586f0e2b": "在",
+          "1b586f0e2b": "开",
           "02a33e3204": "从",
           "9adfab2596": "删除外部自动化",
           "1e2e41392f": "不要再问",
