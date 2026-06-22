@@ -45,8 +45,18 @@ vi.mock('./SidebarToolbar', () => ({
 }))
 
 vi.mock('./WorkspaceKanbanDrawer', () => ({
-  default: ({ leftSidebarStyle }: { leftSidebarStyle?: CSSProperties }) => (
-    <div data-testid="workspace-kanban-drawer" style={leftSidebarStyle} />
+  default: ({
+    leftSidebarStyle,
+    statusBarVisible
+  }: {
+    leftSidebarStyle?: CSSProperties
+    statusBarVisible: boolean
+  }) => (
+    <div
+      data-testid="workspace-kanban-drawer"
+      data-status-bar-visible={String(statusBarVisible)}
+      style={leftSidebarStyle}
+    />
   )
 }))
 
@@ -76,7 +86,7 @@ vi.mock('./useWorkspaceBoardPanel', () => ({
 
 import Sidebar from './index'
 
-function setSidebarState(settings: GlobalSettings): void {
+function setSidebarState(settings: GlobalSettings, statusBarVisible = true): void {
   mocks.state = {
     activeModal: null,
     fetchAllWorktrees: vi.fn(),
@@ -84,7 +94,8 @@ function setSidebarState(settings: GlobalSettings): void {
     setSidebarWidth: vi.fn(),
     settings,
     sidebarOpen: true,
-    sidebarWidth: 320
+    sidebarWidth: 320,
+    statusBarVisible
   }
 }
 
@@ -111,5 +122,14 @@ describe('Sidebar', () => {
     expect(markup).toContain('--worktree-sidebar-foreground:#f0f4f8')
     expect(markup).toContain('data-testid="workspace-kanban-drawer"')
     expect(markup.match(/--worktree-sidebar:#101820/g)).toHaveLength(2)
+  })
+
+  it('passes status bar visibility into the workspace board drawer', () => {
+    setSidebarState(getDefaultSettings('/tmp'), false)
+
+    const markup = renderSidebar()
+
+    expect(markup).toContain('data-testid="workspace-kanban-drawer"')
+    expect(markup).toContain('data-status-bar-visible="false"')
   })
 })

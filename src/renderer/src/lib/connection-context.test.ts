@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Repo } from '../../../shared/types'
 import { useAppStore } from '@/store'
-import { getConnectionId } from './connection-context'
+import { getConnectionId, getConnectionIdForFile } from './connection-context'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 
 const initialState = useAppStore.getInitialState()
@@ -192,6 +192,7 @@ describe('getConnectionId', () => {
   })
 
   it('returns undefined for folder workspaces with mixed local and SSH repos', () => {
+    const workspaceKey = folderWorkspaceKey('folder-workspace-1')
     useAppStore.setState({
       folderWorkspaces: [
         {
@@ -240,7 +241,12 @@ describe('getConnectionId', () => {
       worktreesByRepo: {}
     })
 
-    expect(getConnectionId(folderWorkspaceKey('folder-workspace-1'))).toBeUndefined()
+    expect(getConnectionId(workspaceKey)).toBeUndefined()
+    expect(getConnectionIdForFile(workspaceKey, '/home/neil/platform/api/src/index.ts')).toBe(
+      'ssh-1'
+    )
+    expect(getConnectionIdForFile(workspaceKey, '/home/neil/platform/web/src/index.ts')).toBeNull()
+    expect(getConnectionIdForFile(workspaceKey, '/home/neil/platform/README.md')).toBeUndefined()
   })
 
   it('keeps explicit folder workspace provenance isolated from unrelated same-path SSH repos', () => {
@@ -309,5 +315,61 @@ describe('getConnectionId', () => {
     })
 
     expect(getConnectionId(folderWorkspaceKey('folder-workspace-1'))).toBe('ssh-1')
+  })
+
+  it('keeps normalized same-path folder repo ambiguity when resolving files', () => {
+    const workspaceKey = folderWorkspaceKey('folder-workspace-1')
+    useAppStore.setState({
+      folderWorkspaces: [
+        {
+          id: 'folder-workspace-1',
+          projectGroupId: 'group-1',
+          name: 'Platform workspace',
+          folderPath: '/home/neil/platform',
+          linkedTask: null,
+          comment: '',
+          isArchived: false,
+          isUnread: false,
+          isPinned: false,
+          sortOrder: 1,
+          lastActivityAt: 0,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      projectGroups: [
+        {
+          id: 'group-1',
+          name: 'Platform',
+          parentPath: '/home/neil/platform',
+          parentGroupId: null,
+          createdFrom: 'folder-scan',
+          tabOrder: 0,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      repos: [
+        makeRepo({
+          id: 'repo-ssh-1',
+          path: '/home/neil/platform/api',
+          projectGroupId: 'group-1',
+          connectionId: 'ssh-1'
+        }),
+        makeRepo({
+          id: 'repo-ssh-2',
+          path: '/home/neil/platform/api/',
+          projectGroupId: 'group-1',
+          connectionId: 'ssh-2'
+        })
+      ],
+      worktreesByRepo: {}
+    })
+
+    expect(
+      getConnectionIdForFile(workspaceKey, '/home/neil/platform/api/src/index.ts')
+    ).toBeUndefined()
   })
 })

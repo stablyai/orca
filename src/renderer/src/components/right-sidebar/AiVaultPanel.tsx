@@ -4,7 +4,12 @@ import { buildAiVaultResumeCommandForWorktree } from '@/lib/ai-vault-resume-comm
 import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
-import { agentLabel, filterAiVaultSessions, groupAiVaultSessions } from './ai-vault-session-filters'
+import {
+  agentLabel,
+  deriveAiVaultWorkspaceScopePaths,
+  filterAiVaultSessions,
+  groupAiVaultSessions
+} from './ai-vault-session-filters'
 import {
   AI_VAULT_AGENTS,
   type AiVaultAgent,
@@ -25,6 +30,7 @@ export default function AiVaultPanel(): React.JSX.Element {
   const activeWorktree = useActiveWorktree()
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const agentCmdOverrides = useAppStore((s) => s.settings?.agentCmdOverrides ?? {})
+  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState<AiVaultScope>('workspace')
   const [sort, setSort] = useState<AiVaultSort>('updated')
@@ -42,6 +48,12 @@ export default function AiVaultPanel(): React.JSX.Element {
 
   const isRemoteWorktree = Boolean(activeRepo?.connectionId)
   const activeWorktreePath = activeWorktree?.path ?? null
+  // Why: AI Vault ownership is cwd-based, so we must consider live worktrees across all repos.
+  const liveWorktrees = useMemo(() => Object.values(worktreesByRepo).flat(), [worktreesByRepo])
+  const activeWorktreePaths = useMemo(
+    () => deriveAiVaultWorkspaceScopePaths(activeWorktree ?? null, liveWorktrees),
+    [activeWorktree, liveWorktrees]
+  )
   const hasAllAgentsSelected = agents.length === AI_VAULT_AGENTS.length
   const viewAdjustmentCount =
     (hasAllAgentsSelected ? 0 : 1) +
@@ -107,10 +119,10 @@ export default function AiVaultPanel(): React.JSX.Element {
         agents,
         scope,
         sort,
-        activeWorktreePath,
+        activeWorktreePaths,
         hideEmptySessions
       }),
-    [activeWorktreePath, agents, hideEmptySessions, query, scope, sessions, sort]
+    [activeWorktreePaths, agents, hideEmptySessions, query, scope, sessions, sort]
   )
 
   const groups = useMemo(

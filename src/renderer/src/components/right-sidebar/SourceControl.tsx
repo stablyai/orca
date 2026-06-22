@@ -168,6 +168,7 @@ import {
 import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
+import { resolveCreateReviewDraftTitle } from './create-review-draft-title'
 import { GitHistoryPanel, type GitHistoryPanelState } from './GitHistoryPanel'
 import { useGitHistoryCommitActions } from './useGitHistoryCommitActions'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
@@ -189,7 +190,6 @@ import type {
   HostedReviewProvider
 } from '../../../../shared/hosted-review'
 import { resolveHostedReviewCreationProvider } from '../../../../shared/hosted-review-creation-providers'
-import { humanizeBranchSlug } from '../../../../shared/branch-name-from-work'
 import { STATUS_COLORS, STATUS_LABELS } from './status-display'
 import { isCustomAgentId } from '../../../../shared/commit-message-agent-spec'
 import {
@@ -252,6 +252,13 @@ import {
   shouldShowSourceControlCompareUnavailableCard,
   SourceControlHeaderToolbar
 } from './source-control-header-toolbar'
+import {
+  hasPositiveHostedReviewNumberLink,
+  hasResolvableHostedReviewPushTargetLink,
+  hasUsableHostedReviewPushTarget,
+  resolveHostedReviewActionUpstreamStatus,
+  resolveHostedReviewStateForActions
+} from './source-control-hosted-review-push-target'
 export { HostedReviewHeaderLink } from './hosted-review-header-chrome'
 import {
   createRunningCommitMessageGenerationRecord,
@@ -265,6 +272,8 @@ import {
 import {
   createRunningPullRequestGenerationRecord,
   getPullRequestGenerationRecordKey,
+  getPullRequestGenerationSeedRestoreKey,
+  markPullRequestGenerationTerminalSeedRestored,
   resolvePullRequestGenerationCancel,
   resolvePullRequestGenerationFailure,
   resolvePullRequestGenerationSuccess,
@@ -781,6 +790,7 @@ function SourceControlInner(): React.JSX.Element {
   const beginGitBranchCompareRequest = useAppStore((s) => s.beginGitBranchCompareRequest)
   const setGitBranchCompareResult = useAppStore((s) => s.setGitBranchCompareResult)
   const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
+  const ensureHostedReviewPushTarget = useAppStore((s) => s.ensureHostedReviewPushTarget)
   const setUpstreamStatus = useAppStore((s) => s.setUpstreamStatus)
   const pushBranch = useAppStore((s) => s.pushBranch)
   const pullBranch = useAppStore((s) => s.pullBranch)
@@ -1106,6 +1116,10 @@ function SourceControlInner(): React.JSX.Element {
     activePullRequestGenerationRecordCandidate.context.branch === branchName
       ? activePullRequestGenerationRecordCandidate
       : null
+  const activePullRequestGenerationSeedRestoreKey = getPullRequestGenerationSeedRestoreKey({
+    recordKey: activePullRequestGenerationKey,
+    record: activePullRequestGenerationRecord
+  })
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   // Why: gate polling on both the active tab AND the sidebar being open.
   // The sidebar now stays mounted when closed (for performance), so without
@@ -1403,12 +1417,14 @@ function SourceControlInner(): React.JSX.Element {
     linkedGitLabMR,
     linkedGiteaPR
   ])
-  const hasLinkedHostedReview =
-    (linkedGitHubPR ?? fallbackGitHubPRNumber) !== null ||
-    linkedGitLabMR !== null ||
-    linkedBitbucketPR !== null ||
-    linkedAzureDevOpsPR !== null ||
-    linkedGiteaPR !== null
+  const hasHostedReviewLink = hasPositiveHostedReviewNumberLink({
+    linkedGitHubPR,
+    fallbackGitHubPR: fallbackGitHubPRNumber,
+    linkedGitLabMR,
+    linkedBitbucketPR,
+    linkedAzureDevOpsPR,
+    linkedGiteaPR
+  })
   // Why: when activeRepo.connectionId is truthy, neither the SourceControl
   // effect below nor WorktreeCard.tsx fetches hostedReview for this branch,
   // so hostedReviewEntry would stay undefined forever and would permanently
@@ -1416,7 +1432,59 @@ function SourceControlInner(): React.JSX.Element {
   // and no upstream. Skip the loading state for those repos so the publish
   // gate doesn't latch.
   const isHostedReviewStateLoading =
-    !activeRepo?.connectionId && hasLinkedHostedReview && hostedReviewEntry === undefined
+    !activeRepo?.connectionId && hasHostedReviewLink && hostedReviewEntry === undefined
+  const hasResolvableReviewPushTargetLink = hasResolvableHostedReviewPushTargetLink({
+    linkedGitHubPR,
+    linkedGitLabMR
+  })
+  useEffect(() => {
+    // Why: resolving review heads can hit provider/SSH APIs, so keep it tied
+    // to the visible Source Control branch view like the adjacent PR polling.
+    if (!isBranchVisible || isFolder || !activeWorktreeId || activeWorktree?.pushTarget) {
+      return
+    }
+    if (!hasResolvableReviewPushTargetLink) {
+      return
+    }
+    void ensureHostedReviewPushTarget(activeWorktreeId)
+  }, [
+    activeWorktree?.pushTarget,
+    activeWorktreeId,
+    ensureHostedReviewPushTarget,
+    hasResolvableReviewPushTargetLink,
+    isBranchVisible,
+    isFolder,
+    linkedGitHubPR,
+    linkedGitLabMR
+  ])
+  const canUseHostedReviewPushTarget = hasUsableHostedReviewPushTarget({
+    pushTarget: activeWorktree?.pushTarget,
+    upstreamStatus: remoteStatus,
+    hasResolvableHostedReviewPushTargetLink: hasResolvableReviewPushTargetLink
+  })
+  const hostedReviewStateForActions = resolveHostedReviewStateForActions({
+    hostedReviewState: hostedReview?.state ?? null,
+    hasResolvableHostedReviewPushTargetLink: hasResolvableReviewPushTargetLink
+  })
+  const remoteStatusForActions: typeof remoteStatus = useMemo(
+    () =>
+      resolveHostedReviewActionUpstreamStatus({
+        hasHostedReviewLink,
+        hasResolvableHostedReviewPushTargetLink: hasResolvableReviewPushTargetLink,
+        hostedReviewState: hostedReviewStateForActions,
+        isHostedReviewStateLoading,
+        canUseHostedReviewPushTarget,
+        upstreamStatus: remoteStatus
+      }),
+    [
+      canUseHostedReviewPushTarget,
+      hasHostedReviewLink,
+      hasResolvableReviewPushTargetLink,
+      hostedReviewStateForActions,
+      isHostedReviewStateLoading,
+      remoteStatus
+    ]
+  )
   useEffect(() => {
     if (
       !isBranchVisible ||
@@ -2670,6 +2738,22 @@ function SourceControlInner(): React.JSX.Element {
       })
     })
   }, [activePullRequestGenerationKey, prGenerationRecords, updatePullRequestGenerationRecord])
+  const handlePullRequestGenerationSeedRestored = useCallback((): void => {
+    if (!activePullRequestGenerationKey || !activePullRequestGenerationRecord) {
+      return
+    }
+    const requestId = activePullRequestGenerationRecord.context.requestId
+    updatePullRequestGenerationRecord(activePullRequestGenerationKey, (record) =>
+      markPullRequestGenerationTerminalSeedRestored({
+        record,
+        requestId
+      })
+    )
+  }, [
+    activePullRequestGenerationKey,
+    activePullRequestGenerationRecord,
+    updatePullRequestGenerationRecord
+  ])
 
   const {
     aiGenerationEnabled: prAiGenerationEnabled,
@@ -2711,6 +2795,10 @@ function SourceControlInner(): React.JSX.Element {
     generation: {
       generating: activePullRequestGenerationRecord?.status === 'running',
       generateError: activePullRequestGenerationRecord?.error ?? null,
+      seedRestoreKey: activePullRequestGenerationSeedRestoreKey,
+      seed: activePullRequestGenerationRecord?.seed ?? null,
+      seedFieldRevisions: activePullRequestGenerationRecord?.seedFieldRevisions ?? null,
+      onSeedRestored: handlePullRequestGenerationSeedRestored,
       onGenerate: (fields, fieldRevisions, overrides) => {
         void handleGeneratePullRequestFieldsForActive(fields, fieldRevisions, overrides)
       },
@@ -3091,13 +3179,12 @@ function SourceControlInner(): React.JSX.Element {
         return false
       }
 
-      const fallbackTitle =
-        eligibility.title?.trim() ||
-        humanizeBranchSlug(stripBaseRef(token.branch).split('/').pop()?.replace(/_/g, '-') ?? '') ||
-        stripBaseRef(token.branch)
       let fields = {
         base,
-        title: fallbackTitle,
+        title: resolveCreateReviewDraftTitle({
+          branch: token.branch,
+          eligibilityTitle: eligibility.title
+        }),
         body: eligibility.body ?? prBody,
         draft: resolvedPrCreationDefaults.draft
       }
@@ -3746,16 +3833,15 @@ function SourceControlInner(): React.JSX.Element {
       hasUnresolvedConflicts: unresolvedConflicts.length > 0,
       isCommitting,
       isRemoteOperationActive: isRemoteOperationActive || isAbortingOperation,
-      upstreamStatus: remoteStatus,
-      prState: hostedReview?.state ?? null,
+      upstreamStatus: remoteStatusForActions,
+      prState: hostedReviewStateForActions,
       isPRStateLoading: isHostedReviewStateLoading,
       inFlightRemoteOpKind,
       hostedReviewCreation,
       branchCommitsAhead:
         branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
       hasCurrentBranch: Boolean(branchName),
-      canPushLinkedReviewWithoutUpstream:
-        Boolean(activeWorktree?.pushTarget) || remoteStatus?.hasConfiguredPushTarget === true,
+      canPushLinkedReviewWithoutUpstream: canUseHostedReviewPushTarget,
       isPrIntentInFlight: isCreatePrIntentInFlight
     })
   }, [
@@ -3770,13 +3856,13 @@ function SourceControlInner(): React.JSX.Element {
     inFlightRemoteOpKind,
     hostedReviewCreation,
     isHostedReviewStateLoading,
-    hostedReview?.state,
-    activeWorktree?.pushTarget,
+    hostedReviewStateForActions,
+    canUseHostedReviewPushTarget,
     isCreatePrIntentInFlight,
     branchSummary?.commitsAhead,
     branchSummary?.status,
     branchName,
-    remoteStatus,
+    remoteStatusForActions,
     unresolvedConflicts.length
   ])
 
@@ -3865,8 +3951,8 @@ function SourceControlInner(): React.JSX.Element {
         isCommitting,
         isRemoteOperationActive: isRemoteOperationActive || isAbortingOperation,
         conflictOperation,
-        upstreamStatus: remoteStatus,
-        prState: hostedReview?.state ?? null,
+        upstreamStatus: remoteStatusForActions,
+        prState: hostedReviewStateForActions,
         isPRStateLoading: isHostedReviewStateLoading,
         inFlightRemoteOpKind,
         hostedReviewCreation,
@@ -3874,8 +3960,7 @@ function SourceControlInner(): React.JSX.Element {
         branchCommitsAhead:
           branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
         hasCurrentBranch: Boolean(branchName),
-        canPushLinkedReviewWithoutUpstream:
-          Boolean(activeWorktree?.pushTarget) || remoteStatus?.hasConfiguredPushTarget === true,
+        canPushLinkedReviewWithoutUpstream: canUseHostedReviewPushTarget,
         rebaseBaseRef: effectiveBaseRef
       }),
     [
@@ -3893,14 +3978,14 @@ function SourceControlInner(): React.JSX.Element {
       isCreatingPr,
       isCreatePrIntentInFlight,
       isHostedReviewStateLoading,
-      hostedReview?.state,
+      hostedReviewStateForActions,
       prGenerating,
-      activeWorktree?.pushTarget,
+      canUseHostedReviewPushTarget,
       branchSummary?.commitsAhead,
       branchSummary?.status,
       branchName,
       effectiveBaseRef,
-      remoteStatus,
+      remoteStatusForActions,
       unresolvedConflicts.length
     ]
   )

@@ -26,6 +26,7 @@ import {
   sanitizeRecentTabIds,
   updateGroup
 } from './tab-group-state'
+import { isPaneColumnSplitDropNoOp } from './pane-column-split-drop-no-op'
 import { buildHydratedTabState, pruneTabGroupLayoutForGroups } from './tabs-hydration'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -1378,18 +1379,49 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         }
         return group
       })
+      let nextLayoutByWorktree = state.layoutByWorktree
+      let nextActiveGroupIdByWorktreeResolved = nextActiveGroupIdByWorktree
+      let filteredGroups = nextGroups
+      if (sourceOrder.length === 0) {
+        filteredGroups = nextGroups.filter((group) => group.id !== sourceGroup.id)
+        const collapsedState = collapseGroupLayout(
+          nextLayoutByWorktree,
+          nextActiveGroupIdByWorktreeResolved,
+          worktreeId,
+          sourceGroup.id,
+          targetGroupId
+        )
+        nextLayoutByWorktree = collapsedState.layoutByWorktree
+        nextActiveGroupIdByWorktreeResolved = collapsedState.activeGroupIdByWorktree
+      }
+      const nextGroupsByWorktree = {
+        ...state.groupsByWorktree,
+        [worktreeId]: filteredGroups
+      }
+      const nextUnifiedTabsByWorktree = {
+        ...state.unifiedTabsByWorktree,
+        [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
+          candidate.id === tabId ? { ...candidate, groupId: targetGroupId } : candidate
+        )
+      }
       return {
-        unifiedTabsByWorktree: {
-          ...state.unifiedTabsByWorktree,
-          [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
-            candidate.id === tabId ? { ...candidate, groupId: targetGroupId } : candidate
-          )
-        },
-        groupsByWorktree: {
-          ...state.groupsByWorktree,
-          [worktreeId]: nextGroups
-        },
-        activeGroupIdByWorktree: nextActiveGroupIdByWorktree
+        unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
+        groupsByWorktree: nextGroupsByWorktree,
+        layoutByWorktree: nextLayoutByWorktree,
+        activeGroupIdByWorktree: nextActiveGroupIdByWorktreeResolved,
+        ...(state.activeWorktreeId === worktreeId
+          ? buildActiveSurfacePatch(
+              {
+                ...state,
+                unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
+                groupsByWorktree: nextGroupsByWorktree,
+                layoutByWorktree: nextLayoutByWorktree,
+                activeGroupIdByWorktree: nextActiveGroupIdByWorktreeResolved
+              },
+              worktreeId,
+              nextActiveGroupIdByWorktreeResolved[worktreeId] ?? null
+            )
+          : {})
       }
     })
     if (moved && opts?.recordInteraction !== false) {
@@ -1418,11 +1450,20 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       if (!isSplitDrop && tab.groupId === target.groupId) {
         return {}
       }
-      if (isSplitDrop && tab.groupId === target.groupId && sourceGroup.tabOrder.length <= 1) {
-        // Why: dragging the final tab in a group onto that same group's edge
-        // would create a transient sibling only to collapse the source
-        // immediately, leaving the layout unchanged while still churning focus
-        // and group IDs. Treat that as a no-op instead of faking a split.
+      const layout = state.layoutByWorktree[worktreeId]
+      if (
+        isSplitDrop &&
+        isPaneColumnSplitDropNoOp({
+          sourceGroupId: sourceGroup.id,
+          targetGroupId: target.groupId,
+          splitDirection: target.splitDirection!,
+          sourceTabCount: sourceGroup.tabOrder.length,
+          layout
+        })
+      ) {
+        // Why: dragging the final tab in a group onto that same group's edge,
+        // or onto the adjacent sibling's matching edge, creates a transient
+        // column only to collapse the emptied source immediately.
         return {}
       }
 

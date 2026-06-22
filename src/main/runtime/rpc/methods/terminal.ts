@@ -25,6 +25,7 @@ import {
   isTerminalInputTooLargeWithYield
 } from '../../../../shared/terminal-input'
 import { measureClipboardTextByteLength } from '../../../../shared/clipboard-text'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 
 // Why: when a mobile client subscribes the server resizes the PTY to phone
 // dims and serializes the buffer. Sending only the visible screen meant
@@ -614,6 +615,15 @@ const TerminalCreateParams = z.object({
   command: OptionalString,
   startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
   env: z.record(z.string(), z.string()).optional(),
+  launchConfig: z
+    .object({
+      agentCommand: z.string().optional(),
+      agentArgs: z.string(),
+      agentEnv: z.record(z.string(), z.string())
+    })
+    .optional(),
+  launchToken: OptionalString,
+  launchAgent: z.string().refine(isTuiAgent).optional(),
   title: OptionalString,
   focus: z.unknown().optional(),
   rendererBacked: z.unknown().optional(),
@@ -984,6 +994,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         command: params.command,
         startupCommandDelivery: params.startupCommandDelivery,
         env: params.env,
+        ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
+        ...(params.launchToken ? { launchToken: params.launchToken } : {}),
+        ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
         title: params.title,
         focus: params.focus === true,
         rendererBacked: params.rendererBacked === true,

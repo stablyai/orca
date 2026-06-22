@@ -386,6 +386,34 @@ describe('upsertHookTrustEntries', () => {
     expect(written).toContain(`trusted_hash = "${computeTrustedHash(entry)}"`)
   })
 
+  it('collapses a literal-string hook table before writing the canonical basic-string table', () => {
+    const sourcePath = 'C:\\Users\\me\\AppData\\Roaming\\orca\\codex-runtime-home\\home\\hooks.json'
+    const key = `${sourcePath}:session_start:0:0`
+    const original = [
+      `[hooks.state.'${key}']`,
+      'enabled = false',
+      'trusted_hash = "sha256:LITERAL"',
+      ''
+    ].join('\r\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    const entry: CodexTrustEntry = {
+      sourcePath,
+      eventLabel: 'session_start',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'echo session'
+    }
+    upsertHookTrustEntries(configPath, [entry])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).not.toContain(`[hooks.state.'${key}']`)
+    expect(written.match(/\[hooks\.state\./g)).toHaveLength(1)
+    expect(written).toContain(`[hooks.state."${escapeTomlString(key)}"]`)
+    expect(written).toContain('enabled = false')
+    expect(written).toContain(`trusted_hash = "${computeTrustedHash(entry)}"`)
+  })
+
   it('writes a .bak file before overwriting an existing config', () => {
     writeFileSync(configPath, 'model = "old"\n', 'utf-8')
     upsertHookTrustEntries(configPath, [
@@ -947,6 +975,44 @@ describe('removeHookTrustEntries', () => {
     expect(written).toContain('sha256:OTHER')
   })
 
+  it('removes a literal-string hook table for the requested key', () => {
+    const key = 'C:\\x\\hooks.json:session_start:0:0'
+    const original = [
+      `[hooks.state.'${key}']`,
+      'enabled = true',
+      'trusted_hash = "sha256:LITERAL"',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    removeHookTrustEntries(configPath, [key])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).not.toContain(`[hooks.state.'${key}']`)
+    expect(written).not.toContain('sha256:LITERAL')
+  })
+
+  it('removes mixed quoting duplicates for the requested key', () => {
+    const key = 'C:\\x\\hooks.json:session_start:0:0'
+    const original = [
+      `[hooks.state.'${key}']`,
+      'enabled = true',
+      'trusted_hash = "sha256:LITERAL"',
+      '',
+      `[hooks.state."${escapeTomlString(key)}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:BASIC"',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    removeHookTrustEntries(configPath, [key])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).not.toContain(`[hooks.state.'${key}']`)
+    expect(written).not.toContain(`[hooks.state."${escapeTomlString(key)}"]`)
+  })
+
   it('does not remove the target hook header text inside a multi-line string', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = [
@@ -1129,6 +1195,20 @@ describe('readHookTrustEntries', () => {
 
     const result = readHookTrustEntries(configPath)
     expect(result.get('C:\\foo\\hooks.json:pre_tool_use:0:0')?.trustedHash).toBe('sha256:WIN')
+  })
+
+  it('reads a literal-string hook table key', () => {
+    const key = 'C:\\foo\\hooks.json:session_start:0:0'
+    const original = [
+      `[hooks.state.'${key}']`,
+      'enabled = false',
+      'trusted_hash = "sha256:LITERAL"',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    const result = readHookTrustEntries(configPath)
+    expect(result.get(key)).toEqual({ trustedHash: 'sha256:LITERAL', enabled: false })
   })
 
   it('reads entries from a CRLF-terminated config', () => {

@@ -3,6 +3,7 @@ import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
+import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../../shared/types'
@@ -16,6 +17,8 @@ export function buildDirectWorkItemStartupOpts(
   startup?: {
     command: string
     env?: Record<string, string>
+    launchConfig?: SleepingAgentLaunchConfig
+    launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery
     telemetry?: AgentStartedTelemetry
   }
@@ -31,6 +34,8 @@ export function buildDirectWorkItemStartupOpts(
     startup: {
       command: plan.launchCommand,
       ...(plan.env ? { env: plan.env } : {}),
+      launchConfig: plan.launchConfig,
+      ...(agent ? { launchAgent: agent } : {}),
       ...(plan.startupCommandDelivery
         ? { startupCommandDelivery: plan.startupCommandDelivery }
         : {}),

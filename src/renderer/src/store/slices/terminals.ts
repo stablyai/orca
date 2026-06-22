@@ -11,6 +11,7 @@ import type {
   WorkspaceKey,
   WorkspaceSessionState
 } from '../../../../shared/types'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   folderWorkspaceKey,
@@ -59,6 +60,7 @@ import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-co
 import {
   collectHibernatedCompletionEvidenceForWorktree,
   collectSleepingAgentSessionRecordsForWorktree,
+  removeSleepingRecordsReplacedByManualWorktreeSleep,
   type AgentStatusWorktreeShutdownReason
 } from './agent-status'
 
@@ -295,6 +297,9 @@ export type TerminalSlice = {
       delivery?: 'terminal-paste'
       startupCommandDelivery?: StartupCommandDelivery
       env?: Record<string, string>
+      launchConfig?: SleepingAgentLaunchConfig
+      launchToken?: string
+      launchAgent?: TuiAgent
       /** Initial prompt-start status for agents that lack native prompt hooks. */
       initialAgentStatus?: { agent: TuiAgent; prompt: string }
       /** Show the restored-session banner when this startup command mounts. */
@@ -447,6 +452,9 @@ export type TerminalSlice = {
       delivery?: 'terminal-paste'
       startupCommandDelivery?: StartupCommandDelivery
       env?: Record<string, string>
+      launchConfig?: SleepingAgentLaunchConfig
+      launchToken?: string
+      launchAgent?: TuiAgent
       initialAgentStatus?: { agent: TuiAgent; prompt: string }
       showSessionRestoredBanner?: boolean
       telemetry?: AgentStartedTelemetry
@@ -457,6 +465,9 @@ export type TerminalSlice = {
     delivery?: 'terminal-paste'
     startupCommandDelivery?: StartupCommandDelivery
     env?: Record<string, string>
+    launchConfig?: SleepingAgentLaunchConfig
+    launchToken?: string
+    launchAgent?: TuiAgent
     initialAgentStatus?: { agent: TuiAgent; prompt: string }
     showSessionRestoredBanner?: boolean
     telemetry?: AgentStartedTelemetry
@@ -1717,7 +1728,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     const sleepingAgentSessionRecords = collectSleepingAgentSessionRecordsForWorktree(
       state,
       worktreeId,
-      paneKeys
+      {
+        paneKeys,
+        captureMode: 'completed-agent-hibernation'
+      }
     )
     const retainedCompletionEvidence = collectHibernatedCompletionEvidenceForWorktree(
       state,
@@ -1902,7 +1916,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     const expectedRuntimePtyIds = sortedUniquePtyIds(opts?.expectedRuntimePtyIds)
     const shutdownPtyIds = sortedUniquePtyIds([...ptyIds, ...expectedRuntimePtyIds])
     const sleepingAgentSessionRecords = keepIdentifiers
-      ? collectSleepingAgentSessionRecordsForWorktree(get(), worktreeId, opts?.sleepingPaneKeys)
+      ? collectSleepingAgentSessionRecordsForWorktree(get(), worktreeId, {
+          paneKeys: opts?.sleepingPaneKeys,
+          ...(shutdownReason === 'manual-sleep' ? { captureMode: 'manual-worktree-sleep' } : {}),
+          ...(shutdownReason === 'auto-hibernate-completed-agent'
+            ? { captureMode: 'completed-agent-hibernation' }
+            : {})
+        })
       : {}
     const retainedCompletionEvidence =
       shutdownReason === 'auto-hibernate-completed-agent'
@@ -2168,12 +2188,22 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
 
     if (keepIdentifiers) {
-      set((s) => ({
-        sleepingAgentSessionsByPaneKey: {
-          ...s.sleepingAgentSessionsByPaneKey,
-          ...sleepingAgentSessionRecords
+      set((s) => {
+        const base =
+          shutdownReason === 'manual-sleep'
+            ? removeSleepingRecordsReplacedByManualWorktreeSleep(
+                s.sleepingAgentSessionsByPaneKey,
+                worktreeId,
+                opts?.sleepingPaneKeys
+              ).records
+            : s.sleepingAgentSessionsByPaneKey
+        return {
+          sleepingAgentSessionsByPaneKey: {
+            ...base,
+            ...sleepingAgentSessionRecords
+          }
         }
-      }))
+      })
     } else {
       get().clearSleepingAgentSessionsByWorktree(worktreeId)
     }
@@ -2328,10 +2358,18 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   queueTabStartupCommand: (tabId, startup) => {
+    // Why: launchToken is only meaningful for tracked launch-config reuse;
+    // plain startup commands must not mint or carry a synthetic token.
+    const launchToken = startup.launchConfig
+      ? (startup.launchToken ?? createBrowserUuid())
+      : undefined
     set((s) => ({
       pendingStartupByTabId: {
         ...s.pendingStartupByTabId,
-        [tabId]: startup
+        [tabId]: {
+          ...startup,
+          ...(launchToken ? { launchToken } : {})
+        }
       }
     }))
   },

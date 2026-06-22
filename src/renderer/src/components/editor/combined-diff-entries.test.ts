@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { getCombinedBranchEntries, getCombinedUncommittedEntries } from './combined-diff-entries'
+import {
+  getCombinedBranchEntries,
+  getCombinedUncommittedEntries,
+  shouldAutoReloadCombinedDiffFromGitStatus
+} from './combined-diff-entries'
 import type { GitBranchChangeEntry, GitStatusEntry } from '../../../../shared/types'
 
 describe('getCombinedUncommittedEntries', () => {
@@ -56,5 +60,40 @@ describe('getCombinedBranchEntries', () => {
     const liveEntries: GitBranchChangeEntry[] = [{ path: 'src/live.ts', status: 'modified' }]
 
     expect(getCombinedBranchEntries(undefined, liveEntries)).toEqual(liveEntries)
+  })
+})
+
+describe('shouldAutoReloadCombinedDiffFromGitStatus', () => {
+  it('does not auto-reload snapshot-backed uncommitted diffs', () => {
+    expect(
+      shouldAutoReloadCombinedDiffFromGitStatus({
+        mode: 'uncommitted',
+        hasUncommittedEntriesSnapshot: true
+      })
+    ).toBe(false)
+  })
+
+  it('keeps the legacy live-entry uncommitted path reloadable', () => {
+    expect(
+      shouldAutoReloadCombinedDiffFromGitStatus({
+        mode: 'uncommitted',
+        hasUncommittedEntriesSnapshot: false
+      })
+    ).toBe(true)
+  })
+
+  it('does not use git status to reload branch or commit combined diffs', () => {
+    expect(
+      shouldAutoReloadCombinedDiffFromGitStatus({
+        mode: 'branch',
+        hasUncommittedEntriesSnapshot: false
+      })
+    ).toBe(false)
+    expect(
+      shouldAutoReloadCombinedDiffFromGitStatus({
+        mode: 'commit',
+        hasUncommittedEntriesSnapshot: false
+      })
+    ).toBe(false)
   })
 })

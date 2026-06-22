@@ -1159,6 +1159,19 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         setupDecision: args.setupDecision,
         createdWithAgent: args.createdWithAgent,
         pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
+        ...(args.startup
+          ? {
+              startupCommand: args.startup.command,
+              ...(args.startup.env ? { startupEnv: args.startup.env } : {}),
+              ...(args.startup.launchConfig
+                ? { startupLaunchConfig: args.startup.launchConfig }
+                : {}),
+              ...(args.startup.startupCommandDelivery
+                ? { startupCommandDelivery: args.startup.startupCommandDelivery }
+                : {}),
+              activate: true
+            }
+          : {}),
         parentWorkspace: args.parentWorkspace,
         workspaceStatus: args.workspaceStatus,
         manualOrder: args.manualOrder,
@@ -1203,13 +1216,19 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         branchName,
         expectedHead
       }),
-    updateMeta: async ({ worktreeId, updates }) =>
-      (
+    updateMeta: async ({ worktreeId, updates }) => {
+      const rpcUpdates =
+        Object.prototype.hasOwnProperty.call(updates, 'pushTarget') &&
+        updates.pushTarget === undefined
+          ? { ...updates, pushTarget: null }
+          : updates
+      return (
         await callRuntimeResult<{ worktree: Worktree }>('worktree.set', {
           worktree: toRuntimeWorktreeSelector(worktreeId),
-          ...updates
+          ...rpcUpdates
         })
-      ).worktree,
+      ).worktree
+    },
     listLineage: async () =>
       await callRuntimeResult<{
         lineage: Record<string, WorktreeLineage>
@@ -1587,8 +1606,6 @@ function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
     onActivateView: () => noopUnsubscribe,
     onPaneFocus: () => noopUnsubscribe,
     onOpenLinkInOrcaTab: () => noopUnsubscribe,
-    acceptDownload: () =>
-      Promise.resolve({ ok: false, reason: 'Downloads are handled by the server browser.' }),
     cancelDownload: () => Promise.resolve(false),
     setGrabMode: () =>
       Promise.resolve({

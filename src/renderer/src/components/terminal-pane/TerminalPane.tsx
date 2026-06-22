@@ -3,11 +3,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import type { IDisposable } from '@xterm/xterm'
-import { X } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { isUnifiedTabPinned } from '@/store/pinned-tab-close-guard'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useLinkRoutingPreferenceDialog } from '@/components/link-routing-preference-dialog'
 import { DaemonActionDialog, useDaemonActions } from '@/components/shared/useDaemonActions'
 import {
@@ -41,6 +38,8 @@ import { MobileDriverOverlay } from './MobileDriverOverlay'
 import { TerminalErrorToast } from './TerminalErrorToast'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import TerminalContextMenu from './TerminalContextMenu'
+import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
+import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
 import { SessionRestoredBannerPortals } from './SessionRestoredBannerPortals'
 import { useSessionRestoredBannerDismiss } from './useSessionRestoredBannerDismiss'
@@ -98,6 +97,7 @@ import {
 import type { TerminalQuickCommand, TerminalQuickCommandScope } from '../../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager-registry'
 import {
   getTerminalQuickCommandScope,
   isTerminalQuickCommandComplete,
@@ -139,7 +139,6 @@ import {
 import { getCachedTerminalTabForWorktree } from './terminal-tab-lookup'
 import { getCachedTerminalGroupIdForWorktree } from './terminal-unified-tab-lookup'
 import { useRepoById } from '@/store/selectors'
-import { translate } from '@/i18n/i18n'
 
 type TerminalPaneProps = {
   tabId: string
@@ -1763,12 +1762,22 @@ export default function TerminalPane({
       panes: manager.getPanes(),
       paneTitles,
       renamingPaneId,
-      sessionRestoredBannerPaneIds
+      sessionRestoredBannerPaneIds,
+      reservePaneHeaderSpace: isActive && (isVisible || shouldMeasureHiddenStartup)
     })
     if (needsFit) {
       fitPanes(manager)
     }
-  }, [paneCount, paneLayoutRevision, paneTitles, renamingPaneId, sessionRestoredBannerPaneIds])
+  }, [
+    paneCount,
+    paneLayoutRevision,
+    paneTitles,
+    renamingPaneId,
+    sessionRestoredBannerPaneIds,
+    isActive,
+    isVisible,
+    shouldMeasureHiddenStartup
+  ])
 
   const syncPaneTitleOverlayRects = useCallback((): void => {
     const manager = managerRef.current
@@ -2137,20 +2146,31 @@ export default function TerminalPane({
     return [...ptyIds]
   }, [])
 
-  const restorePaneTerminalFit = useCallback(async (pane: ManagedPane): Promise<void> => {
-    // Why: local and remote runtime PTYs use different transports, but the
-    // desktop reclaim button should have one visible recovery behavior.
-    const id = paneTransportsRef.current.get(pane.id)?.getPtyId()
-    if (!id) {
-      return
-    }
-    const restored = await restoreTerminalFitToDesktop(id, settingsRef.current ?? undefined)
-    if (restored) {
-      // Why: after the overlay unmounts, focus would otherwise stay on the
-      // removed button/body instead of the terminal the user just reclaimed.
-      pane.terminal.focus()
-    }
+  const scheduleRestoredTerminalRefit = useCallback((): void => {
+    // Why: desktop-fit events can clear runtime state before xterm has repainted;
+    // restore actions get one settled-frame pass that does not depend on focus.
+    requestAnimationFrame(refitAndRefreshAllTerminalPanes)
+    window.setTimeout(refitAndRefreshAllTerminalPanes, 100)
   }, [])
+
+  const restorePaneTerminalFit = useCallback(
+    async (pane: ManagedPane): Promise<void> => {
+      // Why: local and remote runtime PTYs use different transports, but the
+      // desktop reclaim button should have one visible recovery behavior.
+      const id = paneTransportsRef.current.get(pane.id)?.getPtyId()
+      if (!id) {
+        return
+      }
+      const restored = await restoreTerminalFitToDesktop(id, settingsRef.current ?? undefined)
+      if (restored) {
+        scheduleRestoredTerminalRefit()
+        // Why: after the overlay unmounts, focus would otherwise stay on the
+        // removed button/body instead of the terminal the user just reclaimed.
+        pane.terminal.focus()
+      }
+    },
+    [scheduleRestoredTerminalRefit]
+  )
 
   const restoreAllTerminalFits = useCallback(
     async (focusPane: ManagedPane): Promise<void> => {
@@ -2161,10 +2181,11 @@ export default function TerminalPane({
         settingsRef.current ?? undefined
       )
       if (restored) {
+        scheduleRestoredTerminalRefit()
         focusPane.terminal.focus()
       }
     },
-    [getMobileOwnedTerminalPtyIds]
+    [getMobileOwnedTerminalPtyIds, scheduleRestoredTerminalRefit]
   )
 
   const terminalShouldHandleMiddleClick = useCallback(
@@ -2297,6 +2318,33 @@ export default function TerminalPane({
     managerRef.current?.setActivePane(paneId, { focus: false })
   }, [])
 
+  const splitTerminalPaneFromHeader = useCallback(
+    (pane: ManagedPane, direction: 'vertical' | 'horizontal') => {
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      splitTerminalPaneWithInheritedCwd({
+        manager,
+        getManager: () => managerRef.current,
+        paneTransports: paneTransportsRef.current,
+        paneCwdMap: paneCwdRef.current,
+        fallbackCwd: cwd ?? '',
+        pane,
+        direction,
+        source: 'context_menu'
+      })
+    },
+    [cwd]
+  )
+
+  const beginPaneDragFromHeader = useCallback(
+    (paneId: number, handle: HTMLElement, event: PointerEvent) => {
+      managerRef.current?.beginPaneDragFromPointerDown(paneId, handle, event)
+    },
+    []
+  )
+
   const effectiveAppearance = settings
     ? resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
     : null
@@ -2336,13 +2384,13 @@ export default function TerminalPane({
   }
 
   const activePane = managerRef.current?.getActivePane()
+  const managedPanes = managerRef.current?.getPanes() ?? []
   return (
     <>
       <div
         ref={setContainerRef}
         className="absolute inset-0 min-h-0 min-w-0"
         data-native-file-drop-target="terminal"
-        data-contextual-tour-target="terminal-pane-split-target"
         data-terminal-tab-id={tabId}
         data-pane-title-surface={titleUsesLightSurface ? 'light' : 'dark'}
         style={terminalContainerStyle}
@@ -2462,159 +2510,38 @@ export default function TerminalPane({
           }
         }}
       />
-      {/* Title bars live in Orca-owned React DOM rather than xterm's pane
-          subtree. The pane still reserves title height for terminal layout,
-          while editor controls stay outside xterm's helper textarea focus zone. */}
-      <div
-        className="pane-title-overlay-layer"
-        data-pane-title-surface={titleUsesLightSurface ? 'light' : 'dark'}
-        style={{
-          display: terminalContentVisible ? undefined : 'none',
-          ['--orca-pane-title-bg' as string]: paneTitleBackground,
-          ...hiddenStartupStyle
-        }}
-      >
-        {(managerRef.current?.getPanes() ?? []).map((pane) => {
-          const title = paneTitles[pane.id]
-          const isEditing = renamingPaneId === pane.id
-          const overlayRect = paneTitleOverlayRects[pane.id]
-          if ((!title && !isEditing) || !overlayRect) {
-            return null
-          }
-          return (
-            <div
-              key={`pane-title-${pane.leafId}`}
-              className="pane-title-bar"
-              data-native-file-drop-target="terminal"
-              data-terminal-tab-id={tabId}
-              data-pane-prevent-terminal-focus=""
-              {...(isEditing ? { 'data-editing': '' } : {})}
-              onPointerDownCapture={() => activatePaneTitleInteraction(pane.id)}
-              onDragOver={(event) => {
-                activatePaneTitleInteraction(pane.id)
-                if (
-                  event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) ||
-                  event.dataTransfer.types.includes(WORKSPACE_FILE_PATHS_MIME)
-                ) {
-                  event.preventDefault()
-                  event.dataTransfer.dropEffect = 'copy'
-                }
-              }}
-              onDrop={(event) => {
-                if (
-                  !event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) &&
-                  !event.dataTransfer.types.includes(WORKSPACE_FILE_PATHS_MIME)
-                ) {
-                  return
-                }
-                event.preventDefault()
-                event.stopPropagation()
-                activatePaneTitleInteraction(pane.id)
-                const manager = managerRef.current
-                if (!manager) {
-                  return
-                }
-                void handleInternalTerminalFileDrop({
-                  manager,
-                  paneTransports: paneTransportsRef.current,
-                  worktreeId,
-                  tabId,
-                  cwd,
-                  dataTransfer: event.dataTransfer,
-                  dropTarget: event.target
-                })
-              }}
-              onContextMenuCapture={(event) => contextMenu.onPaneTitleContextMenu(event, pane.id)}
-              style={{
-                left: overlayRect.left,
-                top: overlayRect.top,
-                width: overlayRect.width
-              }}
-            >
-              {isEditing ? (
-                <input
-                  ref={renameInputRef}
-                  className="pane-title-input"
-                  aria-label={translate(
-                    'auto.components.terminal.pane.TerminalPane.7dbbfcbecc',
-                    'Pane title'
-                  )}
-                  placeholder={translate(
-                    'auto.components.terminal.pane.TerminalPane.7dbbfcbecc',
-                    'Pane title'
-                  )}
-                  value={renameValue}
-                  onChange={(e) => setRenameValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      handleRenameSubmit()
-                    } else if (e.key === 'Escape') {
-                      handleRenameCancel()
-                    }
-                  }}
-                  onBlur={handleRenameBlur}
-                />
-              ) : (
-                <>
-                  {paneCount > 1 && (
-                    <div
-                      className="pane-title-drag-handle"
-                      aria-hidden="true"
-                      onPointerDown={(event) => {
-                        managerRef.current?.beginPaneDragFromPointerDown(
-                          pane.id,
-                          event.currentTarget,
-                          event.nativeEvent
-                        )
-                      }}
-                    />
-                  )}
-                  <button
-                    type="button"
-                    className="pane-title-text"
-                    onClick={() => handleStartRename(pane.id)}
-                    aria-label={translate(
-                      'auto.components.terminal.pane.TerminalPane.cc5a2dc706',
-                      'Edit pane title: {{value0}}',
-                      { value0: title }
-                    )}
-                  >
-                    {title}
-                  </button>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        className="pane-title-close"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleRemoveTitle(pane.id)
-                        }}
-                        aria-label={translate(
-                          'auto.components.terminal.pane.TerminalPane.f984ab2a30',
-                          'Remove pane title: {{value0}}',
-                          { value0: title }
-                        )}
-                      >
-                        <X className="size-3" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" sideOffset={4}>
-                      {translate(
-                        'auto.components.terminal.pane.TerminalPane.ac112e9036',
-                        'Remove title'
-                      )}
-                    </TooltipContent>
-                  </Tooltip>
-                </>
-              )}
-            </div>
-          )
-        })}
-      </div>
-      {(managerRef.current?.getPanes() ?? []).map((pane) => {
+      <TerminalPaneHeaderOverlay
+        tabId={tabId}
+        worktreeId={worktreeId}
+        cwd={cwd ?? ''}
+        showAlwaysOnHeaders={isActive && terminalContentVisible}
+        paneCount={paneCount}
+        activePaneId={activePane?.id}
+        panes={managedPanes}
+        paneTitles={paneTitles}
+        paneTitleOverlayRects={paneTitleOverlayRects}
+        renamingPaneId={renamingPaneId}
+        renameValue={renameValue}
+        renameInputRef={renameInputRef}
+        titleUsesLightSurface={titleUsesLightSurface}
+        paneTitleBackground={paneTitleBackground}
+        terminalContentVisible={terminalContentVisible}
+        hiddenStartupStyle={hiddenStartupStyle}
+        managerRef={managerRef}
+        paneTransportsRef={paneTransportsRef}
+        onSplitPane={splitTerminalPaneFromHeader}
+        onBeginPaneDrag={beginPaneDragFromHeader}
+        onActivatePaneTitleInteraction={activatePaneTitleInteraction}
+        onPaneTitleContextMenu={contextMenu.onPaneTitleContextMenu}
+        onStartRename={handleStartRename}
+        onRemoveTitle={handleRemoveTitle}
+        onClosePane={handleRequestClosePane}
+        onRenameValueChange={setRenameValue}
+        onRenameSubmit={handleRenameSubmit}
+        onRenameCancel={handleRenameCancel}
+        onRenameBlur={handleRenameBlur}
+      />
+      {managedPanes.map((pane) => {
         // Why: pane IDs can collide across tabs (e.g. tab 0 pane 1 and tab 1
         // pane 1). Using the transport's actual ptyId avoids showing banners
         // on the wrong pane when IDs overlap.

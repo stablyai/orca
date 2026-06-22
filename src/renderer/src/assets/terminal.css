@@ -217,11 +217,12 @@
   border: 2px solid rgba(59, 130, 246, 0.5);
   border-radius: 4px;
   pointer-events: none;
-  transition:
-    left 80ms ease,
-    top 80ms ease,
-    width 80ms ease,
-    height 80ms ease;
+}
+
+.tab-drop-overlay__label {
+  font-size: 11px;
+  color: var(--primary-foreground);
+  background: color-mix(in srgb, var(--chart-2) 20%, transparent);
 }
 
 /* ── Pane title bar ──────────────────────────────────── */
@@ -278,9 +279,9 @@
 .pane-title-drag-handle {
   position: absolute;
   top: 0;
-  left: 0;
-  right: 0;
-  height: 12px;
+  left: 50%;
+  width: 32px;
+  height: var(--orca-pane-title-height);
   z-index: 2;
   display: flex;
   align-items: center;
@@ -288,6 +289,7 @@
   cursor: grab;
   opacity: 0;
   background: color-mix(in srgb, var(--orca-pane-title-fg) 36%, transparent);
+  transform: translateX(-50%);
   transition: opacity 150ms ease;
 }
 
@@ -347,6 +349,12 @@
   outline-offset: 1px;
 }
 
+.pane-title-bar[data-chromeless] {
+  background: transparent;
+  border-bottom: none;
+  padding: 0 4px;
+}
+
 .pane-title-close {
   flex-shrink: 0;
   margin-left: auto;
@@ -358,6 +366,24 @@
     color 120ms ease;
 }
 
+.pane-title-actions {
+  position: relative;
+  z-index: 3;
+}
+
+.pane-title-split-trigger {
+  color: var(--orca-pane-title-button-fg, rgb(255 255 255 / 0.3));
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.pane-title-bar[data-active-pane] .pane-title-split-trigger,
+.pane-title-bar[data-active-pane] .pane-title-close,
+.pane-title-bar:hover .pane-title-split-trigger,
+.pane-title-bar:focus-within .pane-title-split-trigger {
+  opacity: 1;
+}
+
 .pane-title-bar:hover .pane-title-close,
 .pane-title-bar:focus-within .pane-title-close,
 .pane-title-close:focus-visible {
@@ -367,7 +393,11 @@
 .pane-title-close:hover,
 .pane-title-close:active,
 .pane-title-close[data-state='delayed-open'],
-.pane-title-close[data-state='instant-open'] {
+.pane-title-close[data-state='instant-open'],
+.pane-title-split-trigger:hover,
+.pane-title-split-trigger:active,
+.pane-title-split-trigger[data-state='delayed-open'],
+.pane-title-split-trigger[data-state='instant-open'] {
   background: transparent;
   color: var(--orca-pane-title-button-hover-fg, rgb(255 255 255 / 0.8));
 }

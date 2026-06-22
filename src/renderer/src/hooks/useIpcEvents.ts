@@ -78,10 +78,12 @@ import {
   releaseBrowserAutomationVisibility
 } from '@/components/browser-pane/browser-automation-visibility'
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
+import { closeMobileSessionTabInStore } from '@/runtime/mobile-session-tab-close'
+import { createWorktreeChangeRefreshQueue } from './worktree-change-refresh-queue'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
 import { createRuntimeClientEventsSync } from './runtime-client-events-sync'
 import { detectLanguage } from '@/lib/language-detect'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
 import { track } from '@/lib/telemetry'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
@@ -807,6 +809,8 @@ export function useIpcEvents(): void {
         afterState.removeWorkspaceSpaceWorktrees(removed)
       }
     }
+    const worktreeChangeRefreshQueue = createWorktreeChangeRefreshQueue(handleWorktreesChanged)
+    unsubs.push(worktreeChangeRefreshQueue.dispose)
 
     const activateNotifiedWorktree = async (
       {
@@ -867,7 +871,7 @@ export function useIpcEvents(): void {
       }
       if (event.type === 'worktreesChanged') {
         void ensureRuntimeEventRepoKnown(environmentId, event.repoId).then(() =>
-          handleWorktreesChanged(event.repoId)
+          worktreeChangeRefreshQueue.enqueue({ repoId: event.repoId })
         )
         return
       }
@@ -935,7 +939,7 @@ export function useIpcEvents(): void {
           }
           // A folder rename changes the worktree id; handleWorktreesChanged
           // re-keys state and shields it from the deletion diff (see there).
-          await handleWorktreesChanged(data.repoId, data.renamed)
+          worktreeChangeRefreshQueue.enqueue(data)
         }
       )
     )
@@ -1205,6 +1209,10 @@ export function useIpcEvents(): void {
           requestId,
           worktreeId,
           command,
+          env,
+          launchConfig,
+          launchToken,
+          launchAgent,
           title,
           ptyId,
           activate,
@@ -1287,6 +1295,19 @@ export function useIpcEvents(): void {
               store.setTabCustomTitle(tab.id, title, { recordInteraction: false })
             }
             if (leafId && ptyId) {
+              const launchPaneKey = tryMakePaneKey(tab.id, leafId)
+              if (launchConfig) {
+                if (launchPaneKey) {
+                  store.registerAgentLaunchConfig(launchPaneKey, launchConfig, {
+                    ...(launchAgent ? { agentType: launchAgent } : {}),
+                    ...(launchToken ? { launchToken } : {}),
+                    tabId: tab.id,
+                    leafId
+                  })
+                }
+              } else if (!splitFromLeafId && launchPaneKey) {
+                store.clearAgentLaunchConfig(launchPaneKey)
+              }
               if (splitFromLeafId) {
                 // Why: runtime-spawned split PTYs already carry the parent tab's
                 // paneKey. Reusing the existing tab preserves native split-pane
@@ -1341,7 +1362,13 @@ export function useIpcEvents(): void {
               }
             }
             if (command) {
-              store.queueTabStartupCommand(tab.id, { command })
+              store.queueTabStartupCommand(tab.id, {
+                command,
+                ...(env ? { env } : {}),
+                ...(launchConfig ? { launchConfig } : {}),
+                ...(launchToken ? { launchToken } : {}),
+                ...(launchAgent ? { launchAgent } : {})
+              })
             }
             if (requestId) {
               window.api.ui.replyTerminalCreate({
@@ -1448,6 +1475,10 @@ export function useIpcEvents(): void {
           if (data.command) {
             store.queueTabStartupCommand(tab.id, {
               command: data.command,
+              ...(data.env ? { env: data.env } : {}),
+              ...(data.launchConfig ? { launchConfig: data.launchConfig } : {}),
+              ...(data.launchToken ? { launchToken: data.launchToken } : {}),
+              ...(data.launchAgent ? { launchAgent: data.launchAgent } : {}),
               ...(data.startupCommandDelivery
                 ? { startupCommandDelivery: data.startupCommandDelivery }
                 : {})
@@ -1577,7 +1608,10 @@ export function useIpcEvents(): void {
         guardPinnedTabClose({
           isPinned: isPinnedSessionTab(store, worktreeId, tabId),
           tabLabel: resolvePinnedTabLabel(store, worktreeId, tabId),
-          onClose: () => useAppStore.getState().closeUnifiedTab(tabId)
+          onClose: () => {
+            const currentStore = useAppStore.getState()
+            closeMobileSessionTabInStore(currentStore, worktreeId, tabId)
+          }
         })
       })
     )
@@ -2738,7 +2772,12 @@ export function useIpcEvents(): void {
           worktreeId: statusWorktreeId,
           terminalHandle: data.terminalHandle
         },
-        data.providerSession ? { providerSession: data.providerSession } : undefined
+        data.providerSession || data.launchToken
+          ? {
+              ...(data.providerSession ? { providerSession: data.providerSession } : {}),
+              ...(data.launchToken ? { launchToken: data.launchToken } : {})
+            }
+          : undefined
       )
       applyResolvedAgentTerminalTitleToTab(store, data.paneKey, title, terminalTitle)
       if (options?.replay !== true && statusWorktreeId) {
@@ -3008,6 +3047,14 @@ function hasRuntimeBackedWorktreeAttribution(data: AgentStatusIpcPayload): boole
     (typeof data.terminalHandle === 'string' && data.terminalHandle.length > 0) ||
     data.orchestration !== undefined
   )
+}
+
+function tryMakePaneKey(tabId: string, leafId: string): string | null {
+  try {
+    return makePaneKey(tabId, leafId)
+  } catch {
+    return null
+  }
 }
 
 function applyResolvedAgentTerminalTitleToTab(

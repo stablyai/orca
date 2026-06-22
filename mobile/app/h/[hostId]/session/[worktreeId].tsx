@@ -162,6 +162,7 @@ import {
 } from '../../../../src/session/mobile-clipboard-image'
 import { useMobileImageAttachment } from '../../../../src/session/use-mobile-image-attachment'
 import { classifyMobileArtifact } from '../../../../src/session/mobile-artifact-kind'
+import { useLiveWorktreeName } from '../../../../src/session/use-live-worktree-name'
 import {
   buildMarkdownDiskFallbackDoc,
   shouldReadMarkdownFromDiskAfterReadTabFailure
@@ -841,7 +842,7 @@ export default function SessionScreen() {
   const {
     hostId,
     worktreeId,
-    name: worktreeName,
+    name: routeWorktreeName,
     created,
     warning: createdWarning
   } = useLocalSearchParams<{
@@ -860,6 +861,12 @@ export default function SessionScreen() {
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const forceReconnectHost = useForceReconnect()
+  const worktreeName = useLiveWorktreeName({
+    client,
+    connState,
+    routeName: routeWorktreeName,
+    worktreeId
+  })
   // Master-detail host state (U5/KTD2): on wide layouts a tapped panel docks beside the
   // session content; on narrow it stays null and the icons push full-screen routes.
   const { isWideLayout } = useResponsiveLayout()

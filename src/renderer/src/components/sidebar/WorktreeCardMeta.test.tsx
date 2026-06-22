@@ -27,6 +27,27 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }))
 
 describe('WorktreeCardDetailsHover', () => {
+  it('wraps workspace and branch identity so long names stay readable in the hover panel', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardDetailsHover
+        branchName="bug-hold-to-talk-speech-to-text-option-no-longer-works"
+        workspaceTitle="[Bug]: Hold-to-talk speech-to-text option no longer works"
+        issue={null}
+        linearIssue={null}
+        review={null}
+        comment={null}
+        onEditIssue={vi.fn()}
+        onEditComment={vi.fn()}
+      >
+        <span>Workspace card</span>
+      </WorktreeCardDetailsHover>
+    )
+
+    expect(markup).toContain('break-words')
+    expect(markup).not.toContain('truncate font-mono')
+    expect(markup).not.toContain('truncate text-[13px]')
+  })
+
   it('puts workspace title before branch identity and metadata details', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardDetailsHover

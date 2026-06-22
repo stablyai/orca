@@ -97,7 +97,6 @@ export function useTabGroupWorkspaceModel({
   const closeBrowserTab = useAppStore((state) => state.closeBrowserTab)
   const setActiveBrowserTab = useAppStore((state) => state.setActiveBrowserTab)
   const setActiveWorktree = useAppStore((state) => state.setActiveWorktree)
-  const dropUnifiedTab = useAppStore((state) => state.dropUnifiedTab)
   const createEmptySplitGroup = useAppStore((state) => state.createEmptySplitGroup)
   const setTabCustomTitle = useAppStore((state) => state.setTabCustomTitle)
   const setTabColor = useAppStore((state) => state.setTabColor)
@@ -456,52 +455,25 @@ export function useTabGroupWorkspaceModel({
   )
 
   const createSplitGroup = useCallback(
-    (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId?: string) => {
-      const sourceTab =
-        groupTabs.find((candidate) =>
-          candidate.contentType === 'terminal' || candidate.contentType === 'browser'
-            ? candidate.entityId === sourceVisibleTabId
-            : candidate.id === sourceVisibleTabId
-        ) ?? activeTab
-
+    (direction: 'left' | 'right' | 'up' | 'down') => {
       focusGroup(worktreeId, groupId)
-      if (!sourceTab) {
+      const newGroupId = createEmptySplitGroup(worktreeId, groupId, direction)
+      if (!newGroupId) {
         return
       }
-
-      // Why: for terminals specifically, splitting a single-tab group should
-      // still produce a useful split — spawn a fresh terminal in the new pane
-      // and leave the existing one behind. Moving the only tab would collapse
-      // the split immediately (see the same-group guard in dropUnifiedTab),
-      // giving the user nothing; a new terminal preserves the old shortcut
-      // flow without duplicating a persistent tab like editors/browsers would.
-      if (sourceTab.contentType === 'terminal' && groupTabs.length <= 1) {
-        const newGroupId = createEmptySplitGroup(worktreeId, groupId, direction)
-        if (!newGroupId) {
-          return
-        }
-        const terminal = createTab(worktreeId, newGroupId)
-        recordTerminalTabGroupSplit(terminal)
-        setActiveTab(terminal.id)
-        setActiveTabType('terminal')
-        return
-      }
-
-      // Why: split actions MOVE the source tab into the new pane rather than
-      // leaving a duplicate in the origin. Delegating to dropUnifiedTab reuses
-      // the same split+move path as drag-to-split so keyboard/menu splits and
-      // drag splits stay behaviorally identical, including collapsing the
-      // origin group if its last tab is the one we just moved.
-      dropUnifiedTab(sourceTab.id, { groupId, splitDirection: direction })
+      // Why: the tab-strip Split pane control adds a split pane to the right of
+      // the group that owns the button. Dragging tabs can still open other
+      // directions; this entry point always seeds a fresh terminal.
+      const terminal = createTab(worktreeId, newGroupId)
+      recordTerminalTabGroupSplit(terminal)
+      setActiveTab(terminal.id)
+      setActiveTabType('terminal')
     },
     [
-      activeTab,
       createEmptySplitGroup,
       createTab,
-      dropUnifiedTab,
       focusGroup,
       groupId,
-      groupTabs,
       setActiveTab,
       setActiveTabType,
       worktreeId

@@ -111,6 +111,7 @@ export function planSourceControlAgentActionLaunch(args: {
         launchCommand: draftLaunchPlan.launchCommand,
         expectedProcess: draftLaunchPlan.expectedProcess,
         followupPrompt: null,
+        launchConfig: draftLaunchPlan.launchConfig,
         ...(draftLaunchPlan.startupCommandDelivery
           ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
           : {}),

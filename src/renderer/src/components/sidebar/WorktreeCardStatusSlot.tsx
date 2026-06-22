@@ -31,6 +31,33 @@ const BRANCH_STATUS_LABEL = 'Branch'
 // the centered activity dots in the shared status column.
 const compactReviewAndBranchStatusIconClassName = 'size-[13px] translate-x-px'
 const branchStatusIconClassName = `${compactReviewAndBranchStatusIconClassName} text-muted-foreground/70`
+// Why: a left-edge badge overlays unread on the status glyph without widening
+// the lane or indenting the title; ring-sidebar cuts the dot out from busy icons.
+const newCardUnreadAlertClassName =
+  'pointer-events-none absolute left-0 top-1/2 size-[6px] -translate-y-1/2 rounded-full bg-amber-500 ring-2 ring-sidebar'
+
+function overlayNewCardUnreadStatus(
+  status: React.JSX.Element,
+  showUnreadAlert: boolean
+): React.JSX.Element {
+  if (!showUnreadAlert) {
+    return status
+  }
+
+  return (
+    <span
+      data-worktree-status-lane-unread=""
+      className="relative inline-flex size-5 shrink-0 items-center justify-center"
+    >
+      {status}
+      <span
+        data-worktree-unread-alert=""
+        className={newCardUnreadAlertClassName}
+        aria-hidden="true"
+      />
+    </span>
+  )
+}
 
 function getReviewStatusTooltip(review: WorktreeCardPrDisplay): string {
   const label = getReviewLabel(review)
@@ -65,7 +92,7 @@ export function WorktreeCardStatusSlot({
   onPointerDown,
   prDisplay = null,
   newCardStyle = false,
-  hasBranchIdentity = true,
+  hasBranchIdentity = false,
   className
 }: WorktreeCardStatusSlotProps): React.JSX.Element | null {
   const status = useWorktreeActivityStatus(worktreeId)
@@ -87,6 +114,8 @@ export function WorktreeCardStatusSlot({
       : canShowBranchStatus
         ? BRANCH_STATUS_LABEL
         : statusLabel
+  const passiveStatusTooltip =
+    newCardStyle && isUnread ? `${passiveStatusLabel} · Unread` : passiveStatusLabel
   const reviewStatusIconClassName = compactReviewAndBranchStatusIconClassName
   const branchStatusIcon = <GitBranch className={branchStatusIconClassName} aria-hidden="true" />
   const passiveStatus =
@@ -99,11 +128,11 @@ export function WorktreeCardStatusSlot({
               className={reviewStatusIconClassName}
               variant="generic"
             />
-            <span className="sr-only">{passiveStatusLabel}</span>
+            <span className="sr-only">{passiveStatusTooltip}</span>
           </span>
         </TooltipTrigger>
         <TooltipContent side="right" sideOffset={8}>
-          <span>{passiveStatusLabel}</span>
+          <span>{passiveStatusTooltip}</span>
         </TooltipContent>
       </Tooltip>
     ) : canShowBranchStatus ? (
@@ -111,11 +140,11 @@ export function WorktreeCardStatusSlot({
         <TooltipTrigger asChild>
           <span className={cn('inline-flex size-5 items-center justify-center p-0.5', className)}>
             {branchStatusIcon}
-            <span className="sr-only">{passiveStatusLabel}</span>
+            <span className="sr-only">{passiveStatusTooltip}</span>
           </span>
         </TooltipTrigger>
         <TooltipContent side="right" sideOffset={8}>
-          <span>{passiveStatusLabel}</span>
+          <span>{passiveStatusTooltip}</span>
         </TooltipContent>
       </Tooltip>
     ) : newCardStyle && showStatus ? (
@@ -123,7 +152,7 @@ export function WorktreeCardStatusSlot({
         <span className={cn('inline-flex size-5 items-center justify-center', className)}>
           <StatusIndicator status={status} aria-hidden="true" />
         </span>
-        <span className="sr-only">{statusLabel}</span>
+        <span className="sr-only">{passiveStatusTooltip}</span>
       </>
     ) : (
       <>
@@ -139,7 +168,7 @@ export function WorktreeCardStatusSlot({
   }
 
   if (!unreadActionEnabled) {
-    return passiveStatus
+    return overlayNewCardUnreadStatus(passiveStatus, newCardStyle && isUnread && showStatus)
   }
 
   const actionLabel = isUnread ? 'Mark as read' : 'Mark as unread'

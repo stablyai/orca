@@ -237,7 +237,12 @@ function registerRuntimeWindowLifecycle(
       })
     },
     createTerminal: (worktreeId, opts) =>
-      send('ui:createTerminal', { worktreeId, command: opts.command, title: opts.title }),
+      send('ui:createTerminal', {
+        worktreeId,
+        command: opts.command,
+        ...(opts.env ? { env: opts.env } : {}),
+        title: opts.title
+      }),
     revealTerminalSession: (worktreeId, opts) =>
       new Promise((resolve, reject) => {
         const requestId = randomUUID()
@@ -266,6 +271,9 @@ function registerRuntimeWindowLifecycle(
           worktreeId,
           ptyId: opts.ptyId,
           title: opts.title ?? undefined,
+          ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
+          ...(opts.launchToken ? { launchToken: opts.launchToken } : {}),
+          ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
           activate: opts.activate !== false,
           // Why: pre-minted tabId from main keeps the renderer's tab id aligned
           // with the paneKey baked into the PTY env at spawn time, so hook

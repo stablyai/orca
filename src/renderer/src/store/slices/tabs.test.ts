@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Tab, TabGroup } from '../../../../shared/types'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultUIState } from '../../../../shared/constants'
+import { buildMobileSessionTabSnapshots } from '../../runtime/sync-runtime-graph'
+import { closeMobileSessionTabInStore } from '../../runtime/mobile-session-tab-close'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -102,7 +104,7 @@ const mockApi = {
 // @ts-expect-error -- mock
 globalThis.window = { api: mockApi }
 
-import { createTestStore } from './store-test-helpers'
+import { createTestStore, makeOpenFile, makeTabGroup, makeUnifiedTab } from './store-test-helpers'
 
 const WT = 'repo1::/tmp/feature'
 
@@ -293,6 +295,133 @@ describe('TabsSlice', () => {
     it('returns null for nonexistent tab', () => {
       const result = store.getState().closeUnifiedTab('nonexistent')
       expect(result).toBeNull()
+    })
+
+    it('removes a mobile-closed markdown tab from open files so it is not republished', () => {
+      const groupId = 'editor-group'
+      const file = makeOpenFile({
+        id: '/tmp/feature/README.md',
+        filePath: '/tmp/feature/README.md',
+        relativePath: 'README.md',
+        language: 'markdown',
+        worktreeId: WT
+      })
+      const tab = makeUnifiedTab({
+        id: 'readme-unified',
+        entityId: file.id,
+        contentType: 'editor',
+        label: 'README.md',
+        worktreeId: WT,
+        groupId
+      })
+      store.setState({
+        openFiles: [file],
+        unifiedTabsByWorktree: { [WT]: [tab] },
+        groupsByWorktree: {
+          [WT]: [
+            makeTabGroup({
+              id: groupId,
+              worktreeId: WT,
+              activeTabId: tab.id,
+              tabOrder: [tab.id],
+              recentTabIds: [tab.id]
+            })
+          ]
+        },
+        activeGroupIdByWorktree: { [WT]: groupId },
+        activeFileId: file.id,
+        activeFileIdByWorktree: { [WT]: file.id },
+        activeWorktreeId: WT,
+        activeTabType: 'editor',
+        activeTabTypeByWorktree: { [WT]: 'editor' }
+      })
+
+      expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs).toMatchObject([
+        { id: tab.id, type: 'markdown', filePath: file.filePath }
+      ])
+
+      expect(closeMobileSessionTabInStore(store.getState(), WT, tab.id)).toBe(true)
+
+      expect(store.getState().openFiles).toEqual([])
+      expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs ?? []).toEqual([])
+    })
+
+    it('removes a mobile-closed regular file tab from open files so fallback closes do not resurrect', () => {
+      const groupId = 'editor-group'
+      const file = makeOpenFile({
+        id: '/tmp/feature/src/app.ts',
+        filePath: '/tmp/feature/src/app.ts',
+        relativePath: 'src/app.ts',
+        language: 'typescript',
+        worktreeId: WT
+      })
+      const tab = makeUnifiedTab({
+        id: 'app-unified',
+        entityId: file.id,
+        contentType: 'editor',
+        label: 'app.ts',
+        worktreeId: WT,
+        groupId
+      })
+      store.setState({
+        openFiles: [file],
+        unifiedTabsByWorktree: { [WT]: [tab] },
+        groupsByWorktree: {
+          [WT]: [
+            makeTabGroup({
+              id: groupId,
+              worktreeId: WT,
+              activeTabId: tab.id,
+              tabOrder: [tab.id],
+              recentTabIds: [tab.id]
+            })
+          ]
+        },
+        activeGroupIdByWorktree: { [WT]: groupId },
+        activeFileId: file.id,
+        activeFileIdByWorktree: { [WT]: file.id },
+        activeWorktreeId: WT,
+        activeTabType: 'editor',
+        activeTabTypeByWorktree: { [WT]: 'editor' }
+      })
+
+      expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs).toMatchObject([
+        { id: tab.id, type: 'file', filePath: file.filePath }
+      ])
+
+      expect(closeMobileSessionTabInStore(store.getState(), WT, tab.id)).toBe(true)
+
+      expect(store.getState().openFiles).toEqual([])
+      expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs ?? []).toEqual([])
+    })
+
+    it('closes a mobile fallback file-id tab after the unified wrapper is already gone', () => {
+      const file = makeOpenFile({
+        id: '/tmp/feature/src/app.ts',
+        filePath: '/tmp/feature/src/app.ts',
+        relativePath: 'src/app.ts',
+        language: 'typescript',
+        worktreeId: WT
+      })
+      store.setState({
+        openFiles: [file],
+        unifiedTabsByWorktree: { [WT]: [] },
+        groupsByWorktree: { [WT]: [] },
+        activeFileId: file.id,
+        activeFileIdByWorktree: { [WT]: file.id },
+        activeWorktreeId: WT,
+        activeTabType: 'editor',
+        activeTabTypeByWorktree: { [WT]: 'editor' }
+      })
+
+      expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs).toMatchObject([
+        { id: file.id, type: 'file', filePath: file.filePath }
+      ])
+
+      expect(closeMobileSessionTabInStore(store.getState(), WT, file.id)).toBe(true)
+
+      expect(store.getState().openFiles).toEqual([])
+      expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs ?? []).toEqual([])
     })
 
     it('activates the previously-active tab (MRU) instead of the visual neighbor', () => {
@@ -846,9 +975,7 @@ describe('TabsSlice', () => {
       const state = store.getState()
       const moved = state.unifiedTabsByWorktree[WT].find((item) => item.id === tab.id)
       expect(moved?.groupId).toBe(targetGroupId)
-      expect(
-        state.groupsByWorktree[WT].find((group) => group.id === sourceGroupId)?.tabOrder
-      ).toEqual([])
+      expect(state.groupsByWorktree[WT].find((group) => group.id === sourceGroupId)).toBeUndefined()
       expect(
         state.groupsByWorktree[WT].find((group) => group.id === targetGroupId)?.tabOrder
       ).toEqual([tab.id])
@@ -1070,6 +1197,40 @@ describe('TabsSlice', () => {
       expect(state.groupsByWorktree[WT]).toHaveLength(1)
       expect(state.groupsByWorktree[WT][0].tabOrder).toEqual([onlyTab.id])
       expect(state.layoutByWorktree[WT]).toEqual({ type: 'leaf', groupId: sourceGroupId })
+    })
+
+    it('treats splitting the only tab onto the adjacent sibling edge as a no-op', () => {
+      store.getState().createUnifiedTab(WT, 'editor', {
+        id: 'file-a.ts',
+        label: 'file-a.ts'
+      })
+      const right = store.getState().createUnifiedTab(WT, 'terminal', {
+        id: 'terminal-1',
+        label: 'Terminal 1'
+      })
+      const leftGroupId = store.getState().groupsByWorktree[WT][0].id
+
+      expect(
+        store.getState().dropUnifiedTab(right.id, {
+          groupId: leftGroupId,
+          splitDirection: 'right'
+        })
+      ).toBe(true)
+
+      const rightGroupId = store
+        .getState()
+        .unifiedTabsByWorktree[WT].find((tab) => tab.id === right.id)?.groupId
+      expect(rightGroupId).toBeTruthy()
+
+      const moved = store.getState().dropUnifiedTab(right.id, {
+        groupId: leftGroupId,
+        splitDirection: 'right'
+      })
+
+      expect(moved).toBe(false)
+      expect(
+        store.getState().unifiedTabsByWorktree[WT].find((tab) => tab.id === right.id)?.groupId
+      ).toBe(rightGroupId)
     })
   })
 

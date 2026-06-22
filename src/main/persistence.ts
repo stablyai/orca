@@ -1048,6 +1048,10 @@ function resolveSetupGuideSidebarDismissedOnLoad(
   return onboarding.closedAt !== null || persistedDismissed === true
 }
 
+function shouldDefaultNewWorktreeCardStyleOn(onboarding: OnboardingState): boolean {
+  return onboarding.closedAt === null
+}
+
 // Why: read a settings field that was removed from GlobalSettings but can
 // still exist on disk. One-shot use for the inline-agents migration.
 function readDeprecatedExperimentFlag(parsed: PersistedState | undefined): boolean {
@@ -2653,6 +2657,16 @@ export class Store {
         if (!parsed.onboarding) {
           this.loadNeedsSave = true
         }
+        const defaultNewWorktreeCardStyle =
+          shouldDefaultNewWorktreeCardStyleOn(normalizedOnboarding)
+        const migratedExperimentalNewWorktreeCardStyle =
+          parsed.settings?.experimentalNewWorktreeCardStyle ?? defaultNewWorktreeCardStyle
+        if (
+          parsed.settings?.experimentalNewWorktreeCardStyle === undefined &&
+          defaultNewWorktreeCardStyle
+        ) {
+          this.loadNeedsSave = true
+        }
         const normalizedProjectGroups = normalizeProjectGroups(parsed.projectGroups)
         const loadedCompactWorktreeCards =
           parsed.settings?.compactWorktreeCards ??
@@ -2705,6 +2719,9 @@ export class Store {
             ...migratedTerminalCursorStyle,
             experimentalActivity: migratedExperimentalActivity,
             experimentalActivityDefaultedOffForAllUsers: true,
+            // Why: open first-run onboarding is the local fresh-install signal;
+            // closed/backfilled onboarding identifies existing profiles.
+            experimentalNewWorktreeCardStyle: migratedExperimentalNewWorktreeCardStyle,
             // Why: compact worktree cards graduated from Experimental; preserve
             // the old opt-in for profiles written during the rollout.
             compactWorktreeCards: loadedCompactWorktreeCards,
@@ -2977,7 +2994,18 @@ export class Store {
     }
 
     if (result === null) {
-      result = getDefaultPersistedState(homedir())
+      const defaults = getDefaultPersistedState(homedir())
+      const isFreshDefaultProfile =
+        !fileExistedOnLoad && shouldDefaultNewWorktreeCardStyleOn(defaults.onboarding)
+      result = {
+        ...defaults,
+        settings: {
+          ...defaults.settings,
+          // Why: a corrupt existing data file also falls back to defaults; only
+          // the absent-file path is a true fresh install.
+          experimentalNewWorktreeCardStyle: isFreshDefaultProfile
+        }
+      }
     }
 
     const workspaceSession = pruneWorkspaceSessionBrowserHistory(

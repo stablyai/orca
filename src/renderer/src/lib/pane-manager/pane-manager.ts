@@ -165,6 +165,18 @@ export class PaneManager {
     fitAllPanesInternal(this.panes)
   }
 
+  refreshAllPanes(): void {
+    for (const pane of this.panes.values()) {
+      try {
+        if (pane.terminal.rows > 0) {
+          pane.terminal.refresh(0, pane.terminal.rows - 1)
+        }
+      } catch {
+        // Why: restore-all repaint is best-effort while panes are mounting or tearing down.
+      }
+    }
+  }
+
   equalizePaneSizes(): void {
     if (this.panes.size < 2) {
       return

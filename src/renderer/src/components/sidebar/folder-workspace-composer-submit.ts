@@ -95,6 +95,7 @@ function buildFolderWorkspaceLinkedStartupPlan(args: {
       launchCommand: draftLaunchPlan.launchCommand,
       expectedProcess: draftLaunchPlan.expectedProcess,
       followupPrompt: null,
+      launchConfig: draftLaunchPlan.launchConfig,
       ...(draftLaunchPlan.startupCommandDelivery
         ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
         : {}),
@@ -228,6 +229,8 @@ export async function submitFolderWorkspaceCreate({
       ? {
           command: startupPlan.launchCommand,
           ...(startupPlan.env ? { env: startupPlan.env } : {}),
+          launchConfig: startupPlan.launchConfig,
+          launchAgent: quickAgent,
           ...(startupPlan.startupCommandDelivery
             ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
             : {}),

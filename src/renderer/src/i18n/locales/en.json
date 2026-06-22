@@ -222,7 +222,12 @@
           "0216895fb5": "Failed to delete branch",
           "19db0085fb": "Local branch deleted",
           "2b0afc7f14": "Could not keep local {{value0}} up to date",
-          "670864ab52": "Keeping local {{value0}} up to date"
+          "670864ab52": "Keeping local {{value0}} up to date",
+          "5366d13eec": "Workspace deleted, branch kept",
+          "2e17f825d4": "Worktree deleted, branch kept",
+          "78e08cd877": "Git could not safely delete branch \"{{value0}}\", so Orca kept it to avoid losing local commits.",
+          "3b57982bf6": "Git could not safely delete branch \"{{value0}}\" after deleting workspace \"{{value1}}\", so Orca kept it to avoid losing local commits.",
+          "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits."
         },
         "repos": {
           "b7e14472ae": "Failed to add folder",
@@ -2322,8 +2327,7 @@
             "f3eeb1de13": "Copy",
             "c2f0b72b8d": "Insert",
             "925f49f210": "Expand Pane",
-            "df766809e0": "Collapse Pane",
-            "copyTerminalId": "Copy Terminal ID"
+            "df766809e0": "Collapse Pane"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "Restart daemon",
@@ -2432,7 +2436,9 @@
             "9acaf92093": "Pane Actions",
             "1bce81dba6": "simulator",
             "1ff1c77616": "browser",
-            "586d2ac445": "terminal"
+            "586d2ac445": "terminal",
+            "addSplitPane": "Add split pane",
+            "closePaneColumn": "Close split pane"
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "Drop onto a terminal pane to resume this session.",
@@ -2440,6 +2446,9 @@
             "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
             "openLocalWorkspace": "Open a local workspace before resuming a session.",
             "sessionQueued": "Session queued"
+          },
+          "TabGroupDropOverlay": {
+            "paneColumnLabel": "New split"
           }
         },
         "bar": {
@@ -2510,7 +2519,9 @@
             "cb3eadefd2": "Blue",
             "20baa43c05": "None",
             "60f958ec75": "Pin Tab",
-            "417722e9c2": "Unpin Tab"
+            "417722e9c2": "Unpin Tab",
+            "splitTerminalRight": "Split terminal right",
+            "splitTerminalDown": "Split terminal down"
           },
           "TabBar": {
             "b1a132357f": "New tab",
@@ -2602,6 +2613,13 @@
                 }
               }
             }
+          },
+          "TabWorkspaceLayoutMenuSection": {
+            "right": "Right",
+            "left": "Left",
+            "down": "Down",
+            "up": "Up",
+            "moveToPaneColumn": "Move Tab to Split"
           }
         }
       },
@@ -2916,7 +2934,17 @@
             "7ec6e030a0": "Next expires now",
             "d1e442a9e5": "Expires now",
             "6cf9eaed10": "Next expires in {{value0}}",
-            "20ad66aed1": "Expires in {{value0}}"
+            "20ad66aed1": "Expires in {{value0}}",
+            "0d8d7cfe15": "Waiting for Claude session",
+            "1804cd8c3f": "Refreshing sign-in",
+            "f8f0f9d8cc": "Network issue",
+            "bf2e739f18": "Sign-in unavailable",
+            "f8b8dbed85": "Usage unavailable",
+            "3d3c9c0c1f": "Claude usage will refresh after the live Claude terminal rotates its credentials.",
+            "42fdd4da1d": "Claude sign-in is being refreshed. Agent sessions may still be signed in.",
+            "c06c1d215d": "Claude usage could not be refreshed because the network request failed.",
+            "cabdc2a9e0": "Claude sign-in credentials could not be read.",
+            "a7517cccb6": "Claude usage is unavailable right now."
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -3878,7 +3906,8 @@
           "697d0f6e1b": "Unpin",
           "250de158fd": "Remove Workspace",
           "changeParentWorkspace": "Change Parent Worktree...",
-          "setParentWorkspace": "Set Parent Worktree..."
+          "setParentWorkspace": "Set Parent Worktree...",
+          "workspaceSection": "Workspace"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -4803,7 +4832,7 @@
           "a05bcdaf57": "Agents View",
           "f63ea281e3": "Threaded left-sidebar feed for agent completions and blocking states.",
           "agentHibernation": {
-            "copy": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again. Experimental while we tune the safety model.",
+            "copy": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again. Agent sleep preserves launch options for agents started by Orca. Manually started agents may resume with your current Orca defaults. Experimental while we tune the safety model.",
             "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again.",
             "idleMinutesDescription": "How many idle minutes a completed background agent must wait before Orca can sleep it.",
             "idleMinutesLabel": "Sleep after",
@@ -6900,7 +6929,7 @@
             "agentHibernation": {
               "agent": "agent",
               "agents": "agents",
-              "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again.",
+              "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again. Agent sleep preserves launch options for agents started by Orca; manually started agents may resume with current Orca defaults.",
               "minutes": "minutes",
               "sleep": "sleep",
               "terminal": "terminal",
@@ -8469,8 +8498,8 @@
             "a1f2c8d901": "View"
           },
           "SourceControl": {
-            "conflictsSection": "Conflicts",
             "1406954883": "Clear all notes...",
+            "conflictsSection": "Conflicts",
             "cc05b2d088": "Open in File Explorer",
             "03194cfff4": "Local session state derived from a conflict you opened here.",
             "413a3ba113": "conflict",
@@ -8796,12 +8825,27 @@
                 "066fedd446": "Failed jobs",
                 "ae8a04ef17": "Conflict file details are unavailable",
                 "73d0675356": "Refreshing conflict details…",
+                "f5bc5c4cf1": "The hosting provider reports conflicts, but local Git did not reproduce them. Refresh the review or push the branch to recalculate mergeability.",
+                "5bc9bda2af": "Run from this worktree",
+                "e87fb3d929": "Copy mergeability refresh commands",
+                "1e53e45072": "Copied",
+                "084c516efb": "Copy commands",
                 "5dc3af25c0": "Select comment",
                 "d7a2f9c401": "Send unresolved {{value0}} comments",
-                "d91f2a6c39": "Send {{value0}} queued comments",
+                "d91f2a6c39": "Send {{value0}} queued comments to AI",
                 "a6de3e5a20": "Clear queued comments",
                 "49ea0937e4": "Add comment to resolve list",
-                "9fecebb29d": "Add"
+                "9fecebb29d": "Add",
+                "f8a2c91d04": "Queue for agent",
+                "b4e8a1c902": "Queued",
+                "7c1f0a2b11": "Open",
+                "e8b4c1a903": "Resolved · {{value0}}",
+                "c3a8e5d710": "Needs review · {{value0}}",
+                "a7f0c7e8d1": "Queue",
+                "8a621a2c4f": "Grouped",
+                "b13f85d75c": "Timeline",
+                "f5cf324efa": "Comment display options",
+                "5e6e5a13fa": "View"
               },
               "empty": {
                 "state": {
@@ -9183,9 +9227,6 @@
                 "copyCommand": "Copy command"
               }
             }
-          },
-          "SourceControlEntryContextMenu": {
-            "a1f2c8d901": "View"
           }
         }
       },
@@ -11087,7 +11128,16 @@
             "ea6af700da": "{{value0}} annotation",
             "c13693fe27": "{{value0}} annotations",
             "074f0ed10b": "{{value0}} annotation ready. Select another element or copy all feedback.",
-            "a2164a6e5a": "{{value0}} annotations ready. Select another element or copy all feedback."
+            "a2164a6e5a": "{{value0}} annotations ready. Select another element or copy all feedback.",
+            "9f6f2e8c19": "The downloaded file path is unavailable.",
+            "0c79b7634d": "Could not open the downloaded file. It may have been moved or deleted.",
+            "397d9dc923": "Could not show the downloaded file. It may have been moved or deleted.",
+            "39c04fed61": "Downloading paused",
+            "5c3d530a68": "Downloaded",
+            "4bb7424d6b": "Canceled",
+            "6e776f9ef9": "Download failed",
+            "756bfc25c9": "Open",
+            "09a9489aa5": "Show"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancel",

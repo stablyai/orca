@@ -22,6 +22,12 @@ export type AgentProviderSessionMetadata = {
   id: string
 }
 
+export type SleepingAgentLaunchConfig = {
+  agentCommand?: string
+  agentArgs: string
+  agentEnv: Record<string, string>
+}
+
 export type SleepingAgentSessionRecord = {
   paneKey: string
   tabId?: string
@@ -34,7 +40,9 @@ export type SleepingAgentSessionRecord = {
   updatedAt: number
   terminalTitle?: string
   lastAssistantMessage?: string
+  interrupted?: boolean
   connectionId?: string | null
+  launchConfig?: SleepingAgentLaunchConfig
   /** How the record was captured. Worktree-sleep records (legacy records have
    *  no origin) are consumed by worktree activation, which opens a fresh tab.
    *  Quit/live records describe panes that still exist in the restored session,

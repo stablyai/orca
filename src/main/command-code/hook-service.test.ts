@@ -75,6 +75,7 @@ describe('CommandCodeHookService', () => {
       expect(script).toContain('__orca_fill_from_endpoint_file')
       expect(script).toContain('[ "$__orca_endpoint_port" != "$ORCA_AGENT_HOOK_PORT" ]')
       expect(script).toContain('ORCA_PANE_KEY')
+      expect(script).toContain('ORCA_AGENT_LAUNCH_TOKEN')
       expect(script).toContain('orca-dev/agent-hooks')
       expect(script).toContain('endpoint_port=')
     }

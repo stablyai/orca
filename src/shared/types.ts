@@ -30,7 +30,7 @@ import type {
 } from './source-control-ai-types'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { AgentKind, LaunchSource, RequestKind } from './telemetry-events'
-import type { SleepingAgentSessionRecord } from './agent-session-resume'
+import type { SleepingAgentLaunchConfig, SleepingAgentSessionRecord } from './agent-session-resume'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
 import type { TerminalCustomTheme } from './terminal-custom-themes'
 import type { UiLanguage } from './ui-language'
@@ -493,6 +493,8 @@ export type Worktree = {
   baseRef?: string
   /** Remote/branch Orca should publish review commits to when it created this worktree. */
   pushTarget?: GitPushTarget
+  /** Path-derived worktree ids this worktree had before folder renames. */
+  priorWorktreeIds?: string[]
   workspaceStatus?: WorkspaceStatus
   diffComments?: DiffComment[]
   mobileDiffReview?: MobileDiffReviewState
@@ -1067,6 +1069,7 @@ export type PRConflictSummary = {
   baseCommit: string
   commitsBehind: number
   files: string[]
+  localMergeState?: 'clean'
 }
 
 export type GitHubRepositoryIdentity = { owner: string; repo: string }
@@ -1892,6 +1895,9 @@ export type WorktreeSetupLaunch = {
 export type WorktreeStartupLaunch = {
   command: string
   env?: Record<string, string>
+  launchConfig?: SleepingAgentLaunchConfig
+  launchToken?: string
+  launchAgent?: TuiAgent
   startupCommandDelivery?: StartupCommandDelivery
   telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
 }

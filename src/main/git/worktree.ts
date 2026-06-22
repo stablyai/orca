@@ -944,7 +944,11 @@ async function deleteAlreadyMergedBranchAfterSafeDeleteFailure(
   branchHead: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<boolean> {
-  const runGit = (args: string[]) => gitExecFileAsync(args, gitExecOptions(repoPath, options))
+  const runGit = (args: string[], execOptions?: { stdin?: string }) =>
+    gitExecFileAsync(args, {
+      ...gitExecOptions(repoPath, options),
+      ...(execOptions?.stdin !== undefined ? { stdin: execOptions.stdin } : {})
+    })
   const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
   await refreshBranchCleanupTargetRefs(runGit, targetRefs)
   // Why: squash merges rewrite commit IDs, so `branch -d` can reject a branch

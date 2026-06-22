@@ -9,7 +9,8 @@ import {
   readAiVaultSessionDragData
 } from '@/lib/ai-vault-session-drag'
 import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
-import { resolveDropZone, type TabDropZone } from './useTabDragSplit'
+import { resolveDropZone } from './tab-drop-zone'
+import type { TabDropZone } from './useTabDragSplit'
 import { translate } from '@/i18n/i18n'
 
 type PaneDropTarget = {

@@ -372,6 +372,90 @@ describe('WorktreeCard compact hover details', () => {
     expect(markup).toContain('Reviewer handoff note')
   })
 
+  it('keeps long workspace and branch identity in whole-card hover details when the branch row is hidden', async () => {
+    settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }
+    worktreeCardProperties = ['status', 'comment']
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          branch: 'bug-hold-to-talk-speech-to-text-option-no-longer-works',
+          displayName: '[Bug]: Hold-to-talk speech-to-text option no longer works',
+          comment: 'Reviewer handoff note'
+        })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).not.toContain('data-worktree-card-meta-row=""')
+    expectParentBodyIsHoverTrigger(markup)
+    expect(markup).toContain('[Bug]: Hold-to-talk speech-to-text option no longer works')
+    expect(markup).toContain('bug-hold-to-talk-speech-to-text-option-no-longer-works')
+    expect(markup).toContain('Reviewer handoff note')
+  })
+
+  it('repeats a long workspace title inside the whole-card hover when branch is already visible', async () => {
+    settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }
+    worktreeCardProperties = ['status', 'branch', 'comment']
+    const longTitle =
+      'Investigate why the worktree hover card title disappears behind single-line truncation'
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ displayName: longTitle, comment: 'Reviewer handoff note' })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expectParentBodyIsHoverTrigger(markup)
+    expect(markup.match(new RegExp(longTitle, 'g'))).toHaveLength(2)
+    expect(markup).toContain('feature/local-branch')
+    expect(markup).toContain('Reviewer handoff note')
+  })
+
+  it('uses whole-card hover for identity-only new card worktrees with branch row visible', async () => {
+    settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }
+    worktreeCardProperties = ['status', 'branch']
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ displayName: 'Readable identity only' })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('data-worktree-card-meta-row=""')
+    expectParentBodyIsHoverTrigger(markup)
+    expect(markup.match(/data-hover-open-delay="100"/g)).toHaveLength(1)
+    expect(markup.match(/Readable identity only/g)).toHaveLength(2)
+    expect(markup).toContain('feature/local-branch')
+    expect(markup).not.toContain('Workspace metadata')
+    expect(markup).not.toContain('Live Ports')
+  })
+
+  it('does not duplicate workspace identity when trimmed title equals branch', async () => {
+    settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }
+    worktreeCardProperties = ['status', 'branch']
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ displayName: '  feature/local-branch  ' })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expectParentBodyIsHoverTrigger(markup)
+    expect(markup.match(/feature\/local-branch/g)).toHaveLength(3)
+  })
+
   it('keeps detailed metadata hover scoped to metadata icons by default', async () => {
     settings = { compactWorktreeCards: false }
     worktreeCardProperties = ['status', 'issue', 'linear-issue', 'comment', 'ports']

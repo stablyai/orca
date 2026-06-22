@@ -5,19 +5,33 @@ const reactHookRuntime = vi.hoisted(() => ({
   index: 0
 }))
 
-const storeState = vi.hoisted(() => ({
-  agentStatusByPaneKey: {},
-  clearTabLaunchAgent: vi.fn(),
-  ptyIdsByTabId: {} as Record<string, string[]>,
-  renamingTabId: null as string | null,
-  repos: [],
-  setRenamingTabId: vi.fn((tabId: string | null) => {
-    storeState.renamingTabId = tabId
-  }),
-  terminalLayoutsByTabId: {},
-  worktreesByRepo: {},
-  unreadTerminalTabs: {} as Record<string, boolean>
-}))
+const storeState = vi.hoisted(
+  (): {
+    agentStatusByPaneKey: Record<string, unknown>
+    clearTabLaunchAgent: ReturnType<typeof vi.fn>
+    ptyIdsByTabId: Record<string, string[]>
+    renamingTabId: string | null
+    keybindings: Record<string, unknown>
+    repos: unknown[]
+    setRenamingTabId: ReturnType<typeof vi.fn>
+    terminalLayoutsByTabId: Record<string, unknown>
+    worktreesByRepo: Record<string, unknown>
+    unreadTerminalTabs: Record<string, boolean>
+  } => ({
+    agentStatusByPaneKey: {},
+    clearTabLaunchAgent: vi.fn(),
+    ptyIdsByTabId: {} as Record<string, string[]>,
+    renamingTabId: null as string | null,
+    keybindings: {},
+    repos: [],
+    setRenamingTabId: vi.fn((tabId: string | null) => {
+      storeState.renamingTabId = tabId
+    }),
+    terminalLayoutsByTabId: {},
+    worktreesByRepo: {},
+    unreadTerminalTabs: {} as Record<string, boolean>
+  })
+)
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
@@ -57,12 +71,25 @@ vi.mock('@dnd-kit/sortable', () => ({
   })
 }))
 
+vi.mock('./tab-strip-pointer-activation', () => ({
+  useTabStripPointerActivation: () => ({
+    isPressed: false,
+    onPointerDown: vi.fn()
+  })
+}))
+
 vi.mock('lucide-react', () => ({
   Columns2: function Columns2(props: Record<string, unknown>) {
     return { type: 'Columns2', props }
   },
   Minimize2: function Minimize2(props: Record<string, unknown>) {
     return { type: 'Minimize2', props }
+  },
+  PanelBottomClose: function PanelBottomClose(props: Record<string, unknown>) {
+    return { type: 'PanelBottomClose', props }
+  },
+  PanelRightClose: function PanelRightClose(props: Record<string, unknown>) {
+    return { type: 'PanelRightClose', props }
   },
   Pin: function Pin(props: Record<string, unknown>) {
     return { type: 'Pin', props }
@@ -78,6 +105,10 @@ vi.mock('lucide-react', () => ({
   }
 }))
 
+vi.mock('@/hooks/useShortcutLabel', () => ({
+  formatShortcutLabel: () => '⌘⇧\\'
+}))
+
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: function DropdownMenu(props: { children?: unknown }) {
     return { type: 'DropdownMenu', props }
@@ -90,6 +121,21 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   },
   DropdownMenuSeparator: function DropdownMenuSeparator() {
     return { type: 'DropdownMenuSeparator', props: {} }
+  },
+  DropdownMenuShortcut: function DropdownMenuShortcut(props: { children?: unknown }) {
+    return { type: 'DropdownMenuShortcut', props }
+  },
+  DropdownMenuLabel: function DropdownMenuLabel(props: { children?: unknown }) {
+    return { type: 'DropdownMenuLabel', props }
+  },
+  DropdownMenuSub: function DropdownMenuSub(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSub', props }
+  },
+  DropdownMenuSubContent: function DropdownMenuSubContent(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubContent', props }
+  },
+  DropdownMenuSubTrigger: function DropdownMenuSubTrigger(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubTrigger', props }
   },
   DropdownMenuTrigger: function DropdownMenuTrigger(props: { children?: unknown }) {
     return props.children
@@ -130,15 +176,26 @@ vi.mock('./drop-indicator', () => ({
   ACTIVE_TAB_INDICATOR_CLASSES: 'active-tab-indicator',
   getDropIndicatorClasses: () => '',
   getTabStripBorderClasses: () => '',
-  getTabRootStateClasses: () => ''
+  getTabRootStateClasses: () => '',
+  showsTabSelectionChrome: () => true
 }))
 
 vi.mock('./middle-button-default-guard', () => ({
   preventMiddleButtonDefault: vi.fn()
 }))
 
+const useAppStoreExport = (selector: (state: typeof storeState) => unknown) => selector(storeState)
+useAppStoreExport.getState = () => ({
+  unifiedTabsByWorktree: {
+    'wt-1': [{ id: 'terminal-tab-1', groupId: 'group-1' }]
+  },
+  groupsByWorktree: {
+    'wt-1': [{ id: 'group-1', tabOrder: ['terminal-tab-1', 'tab-2'] }]
+  }
+})
+
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: typeof storeState) => unknown) => selector(storeState)
+  useAppStore: useAppStoreExport
 }))
 
 type ReactElementLike = {
@@ -162,6 +219,8 @@ async function renderSortableTab(): Promise<unknown> {
   const module = await import('./SortableTab')
   return module.default({
     tab: makeTerminalTab() as never,
+    unifiedTabId: 'terminal-tab-1',
+    groupId: 'group-1',
     tabCount: 1,
     hasTabsToRight: false,
     isActive: true,
@@ -175,7 +234,6 @@ async function renderSortableTab(): Promise<unknown> {
     onSetTabColor: vi.fn(),
     onTogglePin: vi.fn(),
     onToggleExpand: vi.fn(),
-    onSplitGroup: vi.fn(),
     dragData: {
       kind: 'tab',
       worktreeId: 'wt-1',

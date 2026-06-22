@@ -191,7 +191,8 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
         agent: 'aider',
         launchCommand: 'aider',
         expectedProcess: 'aider',
-        followupPrompt: 'fix the spinner'
+        followupPrompt: 'fix the spinner',
+        launchConfig: { agentArgs: '', agentEnv: {} }
       }
     })
 
@@ -208,7 +209,8 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
         agent: 'aider',
         launchCommand: 'aider',
         expectedProcess: 'aider',
-        followupPrompt: 'fix the spinner'
+        followupPrompt: 'fix the spinner',
+        launchConfig: { agentArgs: '', agentEnv: {} }
       }
     })
 
@@ -225,7 +227,8 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
           agent: 'aider',
           launchCommand: 'aider',
           expectedProcess: 'aider',
-          followupPrompt: 'fix the spinner'
+          followupPrompt: 'fix the spinner',
+          launchConfig: { agentArgs: '', agentEnv: {} }
         }
       })
     ).resolves.toBeUndefined()
@@ -241,6 +244,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
         launchCommand: 'claude',
         expectedProcess: 'claude',
         followupPrompt: null,
+        launchConfig: { agentArgs: '', agentEnv: {} },
         draftPrompt: 'review this before sending'
       }
     })
@@ -266,6 +270,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
         launchCommand: 'codex',
         expectedProcess: 'codex',
         followupPrompt: null,
+        launchConfig: { agentArgs: '', agentEnv: {} },
         draftPrompt: 'Linear context draft'
       }
     })
