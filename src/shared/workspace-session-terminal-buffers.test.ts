@@ -61,6 +61,35 @@ function makeSession(overrides: Partial<WorkspaceSessionState> = {}): WorkspaceS
   }
 }
 
+function makeRuntimeSession(): WorkspaceSessionState {
+  return makeSession({
+    tabsByWorktree: {
+      'runtime-repo::/runtime/worktree': [
+        {
+          id: 'runtime-tab',
+          title: 'runtime',
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1,
+          ptyId: 'runtime-pty',
+          worktreeId: 'runtime-repo::/runtime/worktree'
+        }
+      ]
+    },
+    terminalLayoutsByTabId: {
+      'runtime-tab': {
+        root: null,
+        activeLeafId: null,
+        expandedLeafId: null,
+        buffersByLeafId: { 'pane:1': 'runtime-scrollback' },
+        scrollbackRefsByLeafId: { 'pane:1': 'v1-runtime' },
+        ptyIdsByLeafId: { 'pane:1': 'runtime-pty' }
+      }
+    }
+  })
+}
+
 describe('pruneLocalTerminalScrollbackBuffers', () => {
   it('classifies which worktrees need renderer-captured scrollback', () => {
     const repos = [
@@ -80,6 +109,50 @@ describe('pruneLocalTerminalScrollbackBuffers', () => {
     expect(
       shouldPreserveTerminalScrollbackBuffers('unknown-repo::/maybe-remote/worktree', repos)
     ).toBe(true)
+  })
+
+  it('preserves runtime-host scrollback without requiring an SSH connection ID', () => {
+    expect(
+      shouldPreserveTerminalScrollbackBuffers('runtime-repo::/runtime/worktree', [
+        {
+          id: 'runtime-repo',
+          connectionId: null,
+          executionHostId: 'runtime:env-1'
+        }
+      ])
+    ).toBe(true)
+
+    const result = pruneLocalTerminalScrollbackBuffers(makeRuntimeSession(), [
+      {
+        id: 'runtime-repo',
+        connectionId: null,
+        executionHostId: 'runtime:env-1'
+      }
+    ])
+
+    expect(result.terminalLayoutsByTabId['runtime-tab'].buffersByLeafId).toEqual({
+      'pane:1': 'runtime-scrollback'
+    })
+    expect(result.terminalLayoutsByTabId['runtime-tab'].scrollbackRefsByLeafId).toEqual({
+      'pane:1': 'v1-runtime'
+    })
+  })
+
+  it('drops scrollback for explicitly local execution hosts', () => {
+    const result = pruneLocalTerminalScrollbackBuffers(makeRuntimeSession(), [
+      {
+        id: 'runtime-repo',
+        connectionId: null,
+        executionHostId: 'local'
+      }
+    ])
+
+    expect(result.terminalLayoutsByTabId['runtime-tab']).toEqual({
+      root: null,
+      activeLeafId: null,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { 'pane:1': 'runtime-pty' }
+    })
   })
 
   it('drops local scrollback while preserving SSH scrollback and PTY bindings', () => {
