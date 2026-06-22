@@ -43,6 +43,17 @@ import {
 } from './helpers/store'
 import { pressShortcut } from './helpers/shortcuts'
 
+const SHELL_SAFE_NODE_ENV_TOKEN_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
+
+function buildNodeEnvPrintCommand(marker: string, envName: string): string {
+  if (!SHELL_SAFE_NODE_ENV_TOKEN_RE.test(marker) || !SHELL_SAFE_NODE_ENV_TOKEN_RE.test(envName)) {
+    throw new Error('buildNodeEnvPrintCommand only accepts shell-safe identifier tokens')
+  }
+  // Why: the E2E terminal shell is PowerShell on Windows and POSIX elsewhere;
+  // use Node's process.env so this assertion does not depend on shell syntax.
+  return `node -e "process.stdout.write('${marker}=' + (process.env.${envName} || '') + '\\n')"`
+}
+
 async function setPaneTitleFromTerminalMenu(page: Page, title: string): Promise<void> {
   await openTerminalContextMenu(page)
   await page.getByText('Set Title…', { exact: true }).click()
@@ -332,7 +343,7 @@ test.describe('Terminal Panes', () => {
     const ptyId = await discoverActivePtyId(orcaPage)
     const marker = `ORCA_PANE_KEY_E2E_${Date.now()}`
 
-    await execInTerminal(orcaPage, ptyId, `printf '${marker}=%s\\n' "$ORCA_PANE_KEY"`)
+    await execInTerminal(orcaPage, ptyId, buildNodeEnvPrintCommand(marker, 'ORCA_PANE_KEY'))
     await waitForTerminalOutput(orcaPage, `${marker}=${expectedPaneKey}`)
 
     expect(activeLeafId).toMatch(UUID_RE)

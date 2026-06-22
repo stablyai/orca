@@ -148,6 +148,15 @@ type MockTransport = {
   serializeBuffer?: ReturnType<typeof vi.fn>
 }
 
+class MockCustomEvent<T> extends Event {
+  detail: T
+
+  constructor(type: string, init: { detail: T }) {
+    super(type)
+    this.detail = init.detail
+  }
+}
+
 const scheduleRuntimeGraphSync = vi.fn()
 const shouldSeedCacheTimerOnInitialTitle = vi.fn(() => false)
 
@@ -652,6 +661,56 @@ describe('connectPanePty', () => {
         cacheKey: 'repo1:windows-host'
       }
     })
+  })
+
+  it('coalesces terminal resize forwarding while a pane resize hold is active', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { holdPtyResizesForPaneSubtrees } =
+      await import('@/lib/pane-manager/pane-pty-resize-hold')
+    const originalCustomEvent = globalThis.CustomEvent
+    globalThis.CustomEvent = MockCustomEvent as unknown as typeof CustomEvent
+    const transport = createMockTransport('pty-id')
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+    const capturedOnResize: {
+      current: ((size: { cols: number; rows: number }) => void) | null
+    } = { current: null }
+    ;(pane.terminal.onResize as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      (listener: (size: { cols: number; rows: number }) => void) => {
+        capturedOnResize.current = listener
+        return { dispose: vi.fn() }
+      }
+    )
+    try {
+      const disposable = connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks(6)
+      transport.resize.mockClear()
+      if (!capturedOnResize.current) {
+        throw new Error('expected terminal resize listener to be registered')
+      }
+
+      const root = {
+        classList: { contains: () => false },
+        querySelectorAll: () => [pane.container]
+      } as unknown as HTMLElement
+      const releaseResizeHold = holdPtyResizesForPaneSubtrees([root])
+
+      capturedOnResize.current({ cols: 100, rows: 30 })
+      capturedOnResize.current({ cols: 120, rows: 32 })
+
+      expect(transport.resize).not.toHaveBeenCalledWith(100, 30)
+      expect(transport.resize).not.toHaveBeenCalledWith(120, 32)
+
+      releaseResizeHold.flush()
+
+      expect(transport.resize).toHaveBeenCalledTimes(1)
+      expect(transport.resize).toHaveBeenCalledWith(120, 32)
+      disposable.dispose()
+    } finally {
+      globalThis.CustomEvent = originalCustomEvent
+    }
   })
 
   it('observes live terminal GitHub PR URLs before agent completion', async () => {

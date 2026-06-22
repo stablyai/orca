@@ -1,7 +1,13 @@
 /* eslint-disable max-lines -- Why: this prototype keeps the real-data adapter
 and current visual skeleton together until the next refinement pass decides
 which pieces become production modules. */
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  defaultRangeExtractor,
+  useVirtualizer,
+  type Range,
+  type VirtualItem
+} from '@tanstack/react-virtual'
 import { useShallow } from 'zustand/react/shallow'
 import {
   Bell,
@@ -53,6 +59,13 @@ import {
   setActivityTerminalPortals,
   type ActivityTerminalPortalTarget
 } from './activity-terminal-portal'
+import {
+  ACTIVITY_THREAD_VIRTUALIZER_OVERSCAN,
+  buildActivityThreadVirtualRows,
+  estimateActivityThreadVirtualRowSize,
+  getActiveActivityThreadStickyIndex,
+  getActivityThreadStickyIndexes
+} from './activity-thread-virtual-rows'
 import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
@@ -126,6 +139,10 @@ type ActivityThreadGroup = {
   state?: AgentStatusState
   threads: AgentPaneThread[]
 }
+
+type ActivityThreadVirtualRowModel = ReturnType<
+  typeof buildActivityThreadVirtualRows<AgentPaneThread, ActivityThreadGroup>
+>[number]
 
 type ActivityTerminalPortalReadiness = {
   target: HTMLElement | null
@@ -1047,7 +1064,7 @@ function ThreadAgentStateIndicator({ thread }: { thread: AgentPaneThread }): Rea
 
 function ActivityStatusGroupHeader({ group }: { group: ActivityThreadGroup }): React.JSX.Element {
   return (
-    <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/95 px-3 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+    <div className="flex items-center gap-2 border-b border-border bg-background/95 px-3 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       {group.state ? (
         <span className="inline-flex size-4 shrink-0 items-center justify-center">
           <AgentStateDot state={group.state} size="sm" />
@@ -1279,6 +1296,69 @@ function ThreadRow({
   )
 }
 
+function ActivityThreadVirtualRow({
+  row,
+  virtualItem,
+  activeStickyIndex,
+  selectedPaneKey,
+  compactMode,
+  canJumpToWorktree,
+  measureElement,
+  onSelectThread,
+  onJumpToWorkspace,
+  onMarkThreadUnread
+}: {
+  row: ActivityThreadVirtualRowModel
+  virtualItem: VirtualItem
+  activeStickyIndex: number | null
+  selectedPaneKey: string | null
+  compactMode: boolean
+  canJumpToWorktree: (worktreeId: string) => boolean
+  measureElement: (node: HTMLDivElement | null) => void
+  onSelectThread: (thread: AgentPaneThread) => void
+  onJumpToWorkspace: (thread: AgentPaneThread) => void
+  onMarkThreadUnread: (thread: AgentPaneThread) => void
+}): React.JSX.Element {
+  const isActiveSticky = row.kind === 'group' && activeStickyIndex === virtualItem.index
+  return (
+    <div
+      ref={measureElement}
+      data-index={virtualItem.index}
+      className={cn('left-0 w-full', isActiveSticky ? 'sticky z-20' : 'absolute')}
+      style={
+        isActiveSticky
+          ? { top: 0 }
+          : {
+              top: 0,
+              transform: `translateY(${virtualItem.start}px)`
+            }
+      }
+    >
+      {row.kind === 'group' ? (
+        <section
+          aria-label={translate(
+            'auto.components.activity.ActivityPrototypePage.a2b4437bfb',
+            '{{value0}} activity',
+            { value0: row.group.label }
+          )}
+        >
+          <ActivityStatusGroupHeader group={row.group} />
+        </section>
+      ) : (
+        <ThreadRow
+          thread={row.thread}
+          selected={row.thread.paneKey === selectedPaneKey}
+          onSelect={() => onSelectThread(row.thread)}
+          onJump={() => onJumpToWorkspace(row.thread)}
+          onMarkUnread={() => onMarkThreadUnread(row.thread)}
+          canJump={canJumpToWorktree(row.thread.worktree.id)}
+          compactMode={compactMode}
+        />
+      )}
+    </div>
+  )
+}
+
 export default function ActivityPrototypePage(): React.JSX.Element {
   const [readFilter, setReadFilter] = useState<ThreadReadFilter>('all')
   const [groupBy, setGroupBy] = useState<ActivityGroupBy>('status')
@@ -1290,6 +1370,8 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     useState<ActivityTerminalPortalSlotId>('primary')
   const [primaryPortalTargetEl, setPrimaryPortalTargetEl] = useState<HTMLElement | null>(null)
   const [secondaryPortalTargetEl, setSecondaryPortalTargetEl] = useState<HTMLElement | null>(null)
+  const threadScrollParentRef = useRef<HTMLDivElement | null>(null)
+  const activeStickyThreadGroupIndexRef = useRef<number | null>(null)
   // Why (default width): the thread cards are the primary surface in the
   // Activity view; the terminal is supplementary. A narrow list squeezed the
   // prompts to truncated single-liners and made the per-card actions feel
@@ -1346,6 +1428,10 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [storeData, agentStatusEpoch]
   )
+  const canJumpToWorktree = useCallback(
+    (worktreeId: string) => storeData.worktreeMap.has(worktreeId),
+    [storeData.worktreeMap]
+  )
 
   const allThreads = useMemo(
     () => buildAgentPaneThreads({ events: allEvents, liveAgentByPaneKey }),
@@ -1383,6 +1469,50 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     () => buildActivityThreadGroups(visibleThreads, groupBy),
     [visibleThreads, groupBy]
   )
+  const virtualThreadRows = useMemo(
+    () =>
+      buildActivityThreadVirtualRows<AgentPaneThread, ActivityThreadGroup>(
+        visibleThreadGroups,
+        (thread) => thread.paneKey
+      ),
+    [visibleThreadGroups]
+  )
+  const stickyThreadGroupIndexes = useMemo(
+    () => getActivityThreadStickyIndexes(virtualThreadRows),
+    [virtualThreadRows]
+  )
+  const threadRowVirtualizer = useVirtualizer({
+    count: virtualThreadRows.length,
+    getScrollElement: () => threadScrollParentRef.current,
+    getItemKey: (index) => virtualThreadRows[index]?.key ?? index,
+    estimateSize: (index) =>
+      estimateActivityThreadVirtualRowSize(virtualThreadRows[index], compactMode),
+    overscan: ACTIVITY_THREAD_VIRTUALIZER_OVERSCAN,
+    rangeExtractor: useCallback(
+      (range: Range) => {
+        // Why: keep the nearest previous group header mounted so the active
+        // sticky header remains stable while virtual rows scroll underneath.
+        const activeStickyIndex = getActiveActivityThreadStickyIndex(
+          stickyThreadGroupIndexes,
+          range.startIndex
+        )
+        activeStickyThreadGroupIndexRef.current = activeStickyIndex
+        if (activeStickyIndex === null) {
+          return defaultRangeExtractor(range)
+        }
+        const next = new Set([activeStickyIndex, ...defaultRangeExtractor(range)])
+        return [...next].sort((a, b) => a - b)
+      },
+      [stickyThreadGroupIndexes]
+    )
+  })
+  const virtualThreadItems = threadRowVirtualizer.getVirtualItems()
+
+  useLayoutEffect(() => {
+    // Why: compact mode changes row height without changing row identity, so
+    // TanStack's measured cache must be refreshed when the density flips.
+    threadRowVirtualizer.measure()
+  }, [compactMode, threadRowVirtualizer])
 
   const selectedThread = effectiveSelectedPaneKey
     ? (allThreads.find((thread) => thread.paneKey === effectiveSelectedPaneKey) ?? null)
@@ -1793,31 +1923,33 @@ export default function ActivityPrototypePage(): React.JSX.Element {
               </DropdownMenu>
             </div>
           </div>
-          <div className="min-h-0 flex-1 overflow-auto scrollbar-sleek">
-            {visibleThreadGroups.map((group) => (
-              <section
-                key={group.key}
-                aria-label={translate(
-                  'auto.components.activity.ActivityPrototypePage.a2b4437bfb',
-                  '{{value0}} activity',
-                  { value0: group.label }
-                )}
-              >
-                <ActivityStatusGroupHeader group={group} />
-                {group.threads.map((thread) => (
-                  <ThreadRow
-                    key={thread.paneKey}
-                    thread={thread}
-                    selected={thread.paneKey === selectedThread?.paneKey}
-                    onSelect={() => selectThread(thread)}
-                    onJump={() => jumpToWorkspace(thread)}
-                    onMarkUnread={() => markThreadUnread(thread)}
-                    canJump={storeData.worktreeMap.has(thread.worktree.id)}
+          <div ref={threadScrollParentRef} className="min-h-0 flex-1 overflow-auto scrollbar-sleek">
+            <div
+              className="relative w-full"
+              style={{ height: `${threadRowVirtualizer.getTotalSize()}px` }}
+            >
+              {virtualThreadItems.map((virtualItem) => {
+                const row = virtualThreadRows[virtualItem.index]
+                if (!row) {
+                  return null
+                }
+                return (
+                  <ActivityThreadVirtualRow
+                    key={virtualItem.key}
+                    row={row}
+                    virtualItem={virtualItem}
+                    activeStickyIndex={activeStickyThreadGroupIndexRef.current}
+                    selectedPaneKey={selectedThread?.paneKey ?? null}
                     compactMode={compactMode}
+                    canJumpToWorktree={canJumpToWorktree}
+                    measureElement={threadRowVirtualizer.measureElement}
+                    onSelectThread={selectThread}
+                    onJumpToWorkspace={jumpToWorkspace}
+                    onMarkThreadUnread={markThreadUnread}
                   />
-                ))}
-              </section>
-            ))}
+                )
+              })}
+            </div>
             {visibleThreads.length === 0 ? (
               <div className="px-3 py-8 text-sm text-muted-foreground">
                 {translate(

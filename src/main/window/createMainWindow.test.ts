@@ -239,6 +239,49 @@ describe('createMainWindow', () => {
     expect(attachGuestPoliciesMock).toHaveBeenCalledWith(guest)
   })
 
+  it('notifies the renderer when the window minimizes and restores', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn(),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => false),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      unmaximize: vi.fn(),
+      minimize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null, { deferLoad: true })
+
+    windowHandlers.minimize?.()
+    windowHandlers.restore?.()
+
+    expect(webContents.send).toHaveBeenCalledWith('window:minimized-changed', true)
+    expect(webContents.send).toHaveBeenCalledWith('window:minimized-changed', false)
+  })
+
   it('sets platform-specific titlebar and frame options for every desktop platform', () => {
     for (const [platform, expected] of [
       ['darwin', { titleBarStyle: 'hiddenInset', frame: undefined }],

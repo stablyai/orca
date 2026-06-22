@@ -1,5 +1,6 @@
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { safeFit } from './pane-tree-ops'
+import { isTerminalContainerResizeSettling } from './terminal-container-resize-settle'
 
 type ProposedDimensions = {
   cols: number
@@ -40,6 +41,9 @@ export function attachPaneFitResizeObserver(pane: ManagedPaneInternal): void {
     if (pane.pendingObservedFitRafId !== null) {
       return
     }
+    if (isTerminalContainerResizeSettling()) {
+      return
+    }
     if (!hasVisibleFitGeometry(pane)) {
       return
     }
@@ -53,6 +57,10 @@ export function attachPaneFitResizeObserver(pane: ManagedPaneInternal): void {
     let frameCount = 0
     const waitForStableGrid = (): void => {
       pane.pendingObservedFitRafId = requestAnimationFrame(() => {
+        if (isTerminalContainerResizeSettling()) {
+          pane.pendingObservedFitRafId = null
+          return
+        }
         if (!hasVisibleFitGeometry(pane)) {
           pane.pendingObservedFitRafId = null
           return
