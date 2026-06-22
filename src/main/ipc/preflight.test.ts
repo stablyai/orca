@@ -13,7 +13,9 @@ const {
   getAzureDevOpsAuthStatusMock,
   getGiteaAuthStatusMock,
   resolveCliCommandsMock,
-  mergePersistedWindowsPathMock
+  mergePersistedWindowsPathMock,
+  resolveJcodeBinMock,
+  hasJcodeBinEnvOverrideMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   execFileMock: vi.fn(),
@@ -25,7 +27,9 @@ const {
   getAzureDevOpsAuthStatusMock: vi.fn(),
   getGiteaAuthStatusMock: vi.fn(),
   resolveCliCommandsMock: vi.fn(),
-  mergePersistedWindowsPathMock: vi.fn()
+  mergePersistedWindowsPathMock: vi.fn(),
+  resolveJcodeBinMock: vi.fn(),
+  hasJcodeBinEnvOverrideMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -73,6 +77,11 @@ vi.mock('../gitea/client', () => ({
   getGiteaAuthStatus: getGiteaAuthStatusMock
 }))
 
+vi.mock('../jcode/jcode-binary', () => ({
+  resolveJcodeBin: resolveJcodeBinMock,
+  hasJcodeBinEnvOverride: hasJcodeBinEnvOverrideMock
+}))
+
 import {
   _resetPreflightCache,
   detectInstalledAgents,
@@ -111,6 +120,10 @@ describe('preflight', () => {
     getAzureDevOpsAuthStatusMock.mockReset()
     getGiteaAuthStatusMock.mockReset()
     mergePersistedWindowsPathMock.mockReset()
+    resolveJcodeBinMock.mockReset()
+    hasJcodeBinEnvOverrideMock.mockReset()
+    resolveJcodeBinMock.mockReturnValue('/opt/orca/bin/jcode')
+    hasJcodeBinEnvOverrideMock.mockReturnValue(false)
     // Why: existing tests should keep treating `which` as the only source
     // unless a case explicitly exercises the install-dir fallback.
     resolveCliCommandsMock.mockReset()
@@ -487,8 +500,8 @@ describe('preflight', () => {
       throw new Error('not found')
     })
 
-    // Why: jcode is force-unioned into the local detected set so Orca's own
-    // integrated chat agent is always launchable regardless of `which jcode`.
+    // Why: test setup simulates a local jcode binary resolved outside PATH, so
+    // the integrated chat agent remains launchable when generic detection misses it.
     await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'cursor', 'jcode'])
   })
 
@@ -555,8 +568,36 @@ describe('preflight', () => {
       throw new Error('EACCES: permission denied')
     })
 
-    // Why: even with zero real detections, jcode is force-unioned into the
-    // local set so the integrated chat agent is never hidden from launch surfaces.
+    await expect(detectInstalledAgents()).resolves.toEqual(['jcode'])
+  })
+
+  it('does not force-add jcode when the resolver only returns the bare command', async () => {
+    resolveJcodeBinMock.mockReturnValue('jcode')
+    execFileAsyncMock.mockImplementation(async (command) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      throw new Error('not found')
+    })
+    resolveCliCommandsMock.mockImplementation(
+      (commands: string[]) => new Map(commands.map((cmd) => [cmd, cmd]))
+    )
+
+    await expect(detectInstalledAgents()).resolves.toEqual([])
+  })
+
+  it('force-adds jcode when the resolver returns a real local binary path', async () => {
+    resolveJcodeBinMock.mockReturnValue('/opt/orca/bin/jcode')
+    execFileAsyncMock.mockImplementation(async (command) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      throw new Error('not found')
+    })
+    resolveCliCommandsMock.mockImplementation(
+      (commands: string[]) => new Map(commands.map((cmd) => [cmd, cmd]))
+    )
+
     await expect(detectInstalledAgents()).resolves.toEqual(['jcode'])
   })
 

@@ -1,5 +1,5 @@
 // Why: when the jcode child errors or exits non-zero, the chat surfaces the raw
-// message (e.g. `spawn /Users/vinny/.cargo/bin/jcode ENOENT`) as a red bubble.
+// message (e.g. `spawn /tmp/orca-jcode-bin/jcode ENOENT`) as a red bubble.
 // For a non-technical user that is noise. This maps common failures to a plain-
 // language, actionable lead line (Chinese) while keeping the raw detail appended
 // in parentheses so a power user can still diagnose.
@@ -12,7 +12,7 @@
 export function friendlyChildError(raw: string, host: string | null): string {
   const detail = raw.trim()
   const lower = detail.toLowerCase()
-  // jcode binary missing on PATH / at the pinned cargo path.
+  // jcode binary missing on PATH or at the configured absolute path.
   if (lower.includes('enoent') && lower.includes('jcode')) {
     return `找不到 jcode 程序 — 请确认已安装 jcode（${detail}）`
   }

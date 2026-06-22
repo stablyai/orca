@@ -3,7 +3,7 @@ import { friendlyChildError } from './jcode-error-messages'
 
 describe('friendlyChildError', () => {
   it('maps jcode ENOENT to a "找不到 jcode" message keeping the raw detail', () => {
-    const msg = friendlyChildError('spawn /Users/vinny/.cargo/bin/jcode ENOENT', null)
+    const msg = friendlyChildError('spawn /tmp/orca-jcode-bin/jcode ENOENT', null)
     expect(msg).toContain('找不到 jcode 程序')
     expect(msg).toContain('ENOENT')
   })
