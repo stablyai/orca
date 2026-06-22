@@ -20,6 +20,7 @@ type RepoRefreshState = {
 }
 
 export type WorktreeChangeRefreshQueue = {
+  dispose: () => void
   enqueue: (event: WorktreeChangeEvent) => void
 }
 
@@ -27,11 +28,12 @@ export function createWorktreeChangeRefreshQueue(
   handler: WorktreeChangeRefreshHandler
 ): WorktreeChangeRefreshQueue {
   const states = new Map<string, RepoRefreshState>()
+  let disposed = false
 
   const drain = async (repoId: string, state: RepoRefreshState): Promise<void> => {
     state.running = true
     try {
-      while (state.queue.length > 0) {
+      while (!disposed && state.queue.length > 0) {
         const next = state.queue.shift()
         try {
           await handler(repoId, next?.renamed)
@@ -41,7 +43,7 @@ export function createWorktreeChangeRefreshQueue(
       }
     } finally {
       state.running = false
-      if (state.queue.length === 0) {
+      if (disposed || state.queue.length === 0) {
         states.delete(repoId)
       } else {
         void drain(repoId, state)
@@ -50,7 +52,15 @@ export function createWorktreeChangeRefreshQueue(
   }
 
   return {
+    dispose() {
+      disposed = true
+      states.clear()
+    },
+
     enqueue(event) {
+      if (disposed) {
+        return
+      }
       let state = states.get(event.repoId)
       if (!state) {
         state = { running: false, queue: [] }

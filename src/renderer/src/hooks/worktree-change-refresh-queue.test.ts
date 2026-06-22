@@ -139,4 +139,30 @@ describe('createWorktreeChangeRefreshQueue', () => {
     expect(handler).toHaveBeenNthCalledWith(2, 'repo-1', renamed)
     expect(handler).toHaveBeenNthCalledWith(3, 'repo-1', undefined)
   })
+
+  it('drops queued trailing refreshes after disposal', async () => {
+    const firstRefresh = deferred()
+    const handler = vi.fn().mockReturnValueOnce(firstRefresh.promise).mockResolvedValue(undefined)
+    const queue = createWorktreeChangeRefreshQueue(handler)
+
+    queue.enqueue({ repoId: 'repo-1' })
+    queue.enqueue({ repoId: 'repo-1' })
+    queue.dispose()
+
+    firstRefresh.resolve()
+    await flushPromises()
+
+    expect(handler).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores new events after disposal', async () => {
+    const handler = vi.fn(() => Promise.resolve())
+    const queue = createWorktreeChangeRefreshQueue(handler)
+
+    queue.dispose()
+    queue.enqueue({ repoId: 'repo-1' })
+    await flushPromises()
+
+    expect(handler).not.toHaveBeenCalled()
+  })
 })
