@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { basename, dirname } from 'node:path'
+import { basename, dirname, isAbsolute, relative } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { collectTerminalPerfRows } from './terminal-perf-report-annotations.mjs'
 
@@ -229,6 +229,13 @@ export function compareBenchmarkArtifacts({
       skippedMetrics.push({ key: baselineMetric.key, reason: 'missing candidate metric' })
       continue
     }
+    if (baselineMetric.unit !== candidateMetric.unit) {
+      skippedMetrics.push({
+        key: baselineMetric.key,
+        reason: `unit mismatch (${formatUnitLabel(baselineMetric.unit)} vs ${formatUnitLabel(candidateMetric.unit)})`
+      })
+      continue
+    }
     const direction = higherIsBetter.has(baselineMetric.key)
       ? 'higher-is-better'
       : baselineMetric.direction
@@ -250,18 +257,29 @@ export function compareBenchmarkArtifacts({
     createdAt: now().toISOString(),
     title,
     baseline: {
-      path: baselinePath,
+      path: benchmarkDisplayPath(baselinePath),
       label: baseline.label,
       kind: baseline.kind
     },
     candidate: {
-      path: candidatePath,
+      path: benchmarkDisplayPath(candidatePath),
       label: candidate.label,
       kind: candidate.kind
     },
     metrics,
     skippedMetrics
   }
+}
+
+function benchmarkDisplayPath(path, cwd = process.cwd()) {
+  if (!isAbsolute(path)) {
+    return path
+  }
+  const relativePath = relative(cwd, path)
+  if (relativePath && !relativePath.startsWith('..') && !isAbsolute(relativePath)) {
+    return relativePath
+  }
+  return basename(path)
 }
 
 function isComparableMetric(metric) {
@@ -287,6 +305,10 @@ function compareMetric(baselineMetric, candidateMetric, direction) {
   }
 }
 
+function formatUnitLabel(unit) {
+  return unit === '' ? 'none' : unit
+}
+
 function roundOneDecimal(value) {
   return Math.round(value * 10) / 10
 }
@@ -303,10 +325,10 @@ function metricStatus(absoluteDelta, direction) {
 
 export function formatBenchmarkComparisonMarkdown(comparison) {
   const lines = [
-    `# ${comparison.title}`,
+    `# ${markdownText(comparison.title)}`,
     '',
-    `Baseline: \`${comparison.baseline.label}\` (\`${comparison.baseline.path}\`)`,
-    `Candidate: \`${comparison.candidate.label}\` (\`${comparison.candidate.path}\`)`,
+    `Baseline: ${markdownText(comparison.baseline.label)} (${markdownText(comparison.baseline.path)})`,
+    `Candidate: ${markdownText(comparison.candidate.label)} (${markdownText(comparison.candidate.path)})`,
     `Generated: ${comparison.createdAt}`,
     '',
     '| Metric | Baseline | Candidate | Delta | Delta % | Result |',
@@ -314,16 +336,26 @@ export function formatBenchmarkComparisonMarkdown(comparison) {
   ]
   for (const metric of comparison.metrics) {
     lines.push(
-      `| ${metric.key} | ${formatMetricValue(metric.baseline, metric.unit)} | ${formatMetricValue(metric.candidate, metric.unit)} | ${formatMetricValue(metric.absoluteDelta, metric.unit)} | ${formatPercent(metric.percentDelta)} | ${metric.status} |`
+      `| ${markdownTableCell(metric.key)} | ${formatMetricValue(metric.baseline, metric.unit)} | ${formatMetricValue(metric.candidate, metric.unit)} | ${formatMetricValue(metric.absoluteDelta, metric.unit)} | ${formatPercent(metric.percentDelta)} | ${metric.status} |`
     )
   }
   if (comparison.skippedMetrics.length > 0) {
     lines.push('', '## Skipped metrics')
     for (const skippedMetric of comparison.skippedMetrics) {
-      lines.push(`- ${skippedMetric.key}: ${skippedMetric.reason}`)
+      lines.push(`- ${markdownText(skippedMetric.key)}: ${markdownText(skippedMetric.reason)}`)
     }
   }
   return `${lines.join('\n')}\n`
+}
+
+function markdownText(value) {
+  return String(value ?? '')
+    .replace(/\s*\r?\n\s*/g, ' ')
+    .replace(/[\\`*_{}<>()#+.!-]|\[|\]/g, '\\$&')
+}
+
+function markdownTableCell(value) {
+  return markdownText(value).replaceAll('|', '\\|')
 }
 
 function formatMetricValue(value, unit) {

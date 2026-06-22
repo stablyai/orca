@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   compareBenchmarkArtifacts,
+  formatBenchmarkComparisonMarkdown,
   parseBenchmarkComparisonArgs
 } from './compare-benchmark-artifacts.mjs'
 
@@ -226,6 +227,60 @@ describe('benchmark artifact comparison', () => {
     ).toHaveLength(1)
   })
 
+  it('skips unit mismatches instead of comparing incompatible metrics', () => {
+    const dir = makeTempDir()
+    const baselinePath = writeArtifact(dir, 'baseline-playwright-units.json', {
+      suites: [
+        {
+          specs: [
+            {
+              tests: [
+                {
+                  annotations: [
+                    {
+                      type: 'opencode-units',
+                      description: 'median=80.0ms rendererQueuedChars=1000'
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    })
+    const candidatePath = writeArtifact(dir, 'candidate-playwright-units.json', {
+      suites: [
+        {
+          specs: [
+            {
+              tests: [
+                {
+                  annotations: [
+                    {
+                      type: 'opencode-units',
+                      description: 'median=60 rendererQueuedChars=800'
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    })
+
+    const comparison = comparePaths(baselinePath, candidatePath)
+
+    expect(comparison.metrics.map((metric) => metric.key)).toEqual([
+      'opencode-units.rendererQueuedChars'
+    ])
+    expect(comparison.skippedMetrics).toContainEqual({
+      key: 'opencode-units.median',
+      reason: 'unit mismatch (ms vs count)'
+    })
+  })
+
   it('supports higher-is-better metrics for generic summary artifacts', () => {
     const dir = makeTempDir()
     const baselinePath = writeArtifact(dir, 'generic-baseline.json', {
@@ -300,6 +355,72 @@ describe('benchmark artifact comparison', () => {
     expect(existsSync(markdownPath)).toBe(true)
     expect(existsSync(jsonPath)).toBe(true)
     expect(JSON.parse(readFileSync(jsonPath, 'utf8')).schemaVersion).toBe(1)
+  })
+
+  it('redacts absolute input paths from generated reports', () => {
+    const dir = makeTempDir()
+    const baselinePath = writeArtifact(dir, 'absolute-baseline.json', {
+      label: 'baseline',
+      summaryMedianMs: { totalToDidFinishLoad: 100 }
+    })
+    const candidatePath = writeArtifact(dir, 'absolute-candidate.json', {
+      label: 'candidate',
+      summaryMedianMs: { totalToDidFinishLoad: 40 }
+    })
+    const markdownPath = join(dir, 'comparison.md')
+    const jsonPath = join(dir, 'comparison.json')
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        scriptPath,
+        '--baseline',
+        baselinePath,
+        '--candidate',
+        candidatePath,
+        '--output',
+        markdownPath,
+        '--json-output',
+        jsonPath
+      ],
+      { cwd: process.cwd(), encoding: 'utf8' }
+    )
+    const json = JSON.parse(readFileSync(jsonPath, 'utf8'))
+    const markdown = readFileSync(markdownPath, 'utf8')
+
+    expect(result.status).toBe(0)
+    expect(json.baseline.path).toBe('absolute-baseline.json')
+    expect(json.candidate.path).toBe('absolute-candidate.json')
+    expect(markdown).not.toContain(dir)
+    expect(result.stdout).not.toContain(dir)
+  })
+
+  it('escapes artifact-controlled Markdown fields in reports', () => {
+    const markdown = formatBenchmarkComparisonMarkdown({
+      title: 'Compare\n[Injected](https://example.test)',
+      createdAt: '2026-06-21T12:00:00.000Z',
+      baseline: { label: 'base\n<label>', path: 'base|path', kind: 'summary' },
+      candidate: { label: 'candidate', path: 'candidate.md', kind: 'summary' },
+      metrics: [
+        {
+          key: 'summary.value|with-pipe',
+          unit: '',
+          baseline: 1,
+          candidate: 2,
+          absoluteDelta: 1,
+          percentDelta: 100,
+          status: 'regressed'
+        }
+      ],
+      skippedMetrics: [{ key: 'missing\nmetric', reason: 'missing | candidate' }]
+    })
+
+    expect(markdown).toContain('# Compare \\[Injected\\]\\(https://example\\.test\\)')
+    expect(markdown).toContain('Baseline: base \\<label\\> (base|path)')
+    expect(markdown).toContain(
+      '| summary\\.value\\|with\\-pipe | 1.0 | 2.0 | 1.0 | 100.0% | regressed |'
+    )
+    expect(markdown).toContain('- missing metric: missing | candidate')
   })
 
   it('fails unsupported artifacts in the CLI', () => {

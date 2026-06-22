@@ -4546,10 +4546,9 @@ function SourceControlInner(): React.JSX.Element {
     () =>
       shouldPollBranchCompare({
         summary: branchSummary ?? null,
-        branchEntryCount: branchEntries.length,
         currentBaseRef: effectiveBaseRef
       }),
-    [branchEntries.length, branchSummary, effectiveBaseRef]
+    [branchSummary, effectiveBaseRef]
   )
 
   useEffect(() => {
@@ -6773,10 +6772,9 @@ export function CommitArea({
 
 export function shouldPollBranchCompare(input: {
   summary: GitBranchCompareSummary | null
-  branchEntryCount: number
   currentBaseRef?: string | null
 }): boolean {
-  const { summary, branchEntryCount, currentBaseRef } = input
+  const { summary, currentBaseRef } = input
   if (!summary || summary.status === 'loading') {
     return true
   }
@@ -6784,9 +6782,9 @@ export function shouldPollBranchCompare(input: {
     return true
   }
   if (summary.status === 'ready') {
-    return (summary.commitsAhead ?? 0) > 0 || branchEntryCount > 0
+    return true
   }
-  return summary.status === 'error'
+  return true
 }
 
 export function shouldShowCompareSummary(summary: GitBranchCompareSummary | null): boolean {

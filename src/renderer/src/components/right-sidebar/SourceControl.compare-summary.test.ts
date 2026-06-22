@@ -280,23 +280,20 @@ describe('SourceControl compare summary', () => {
     expect(BRANCH_REFRESH_INTERVAL_MS).toBe(30_000)
   })
 
-  it('polls ready branch compare only when visible branch state can change', () => {
+  it('polls ready branch compare at the reduced interval so external changes refresh', () => {
     expect(
       shouldPollBranchCompare({
-        summary: null,
-        branchEntryCount: 0
+        summary: null
       })
     ).toBe(true)
     expect(
       shouldPollBranchCompare({
-        summary: { ...readySummary, commitsAhead: 0 },
-        branchEntryCount: 0
+        summary: { ...readySummary, commitsAhead: 0 }
       })
-    ).toBe(false)
+    ).toBe(true)
     expect(
       shouldPollBranchCompare({
-        summary: { ...readySummary, commitsAhead: 0 },
-        branchEntryCount: 1
+        summary: { ...readySummary, commitsAhead: 1 }
       })
     ).toBe(true)
   })
@@ -305,37 +302,32 @@ describe('SourceControl compare summary', () => {
     expect(
       shouldPollBranchCompare({
         summary: { ...readySummary, baseRef: 'origin/old', commitsAhead: 0 },
-        branchEntryCount: 0,
         currentBaseRef: 'origin/main'
       })
     ).toBe(true)
   })
 
-  it('keeps transient branch compare errors retryable but stops terminal statuses', () => {
+  it('keeps branch compare errors retryable so external git repairs refresh', () => {
     expect(
       shouldPollBranchCompare({
-        summary: { ...readySummary, status: 'error', errorMessage: 'Unable to compare' },
-        branchEntryCount: 0
+        summary: { ...readySummary, status: 'error', errorMessage: 'Unable to compare' }
       })
     ).toBe(true)
     expect(
       shouldPollBranchCompare({
-        summary: { ...readySummary, status: 'invalid-base' },
-        branchEntryCount: 0
+        summary: { ...readySummary, status: 'invalid-base' }
       })
-    ).toBe(false)
+    ).toBe(true)
     expect(
       shouldPollBranchCompare({
-        summary: { ...readySummary, status: 'no-merge-base' },
-        branchEntryCount: 0
+        summary: { ...readySummary, status: 'no-merge-base' }
       })
-    ).toBe(false)
+    ).toBe(true)
     expect(
       shouldPollBranchCompare({
-        summary: { ...readySummary, status: 'unborn-head' },
-        branchEntryCount: 0
+        summary: { ...readySummary, status: 'unborn-head' }
       })
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('keeps immediate refresh paths for remote actions', () => {
