@@ -90,8 +90,16 @@ function runMacCustomIconCommand(
 }
 
 function clearMacCustomIconMetadata(execFile: ExecFile, appBundlePath: string): void {
-  execFile('/usr/bin/xattr', ['-d', 'com.apple.FinderInfo', appBundlePath], () => {})
-  execFile('/usr/bin/xattr', ['-d', 'com.apple.ResourceFork', appBundlePath], () => {})
+  const clearAttribute = (attribute: string): void => {
+    execFile('/usr/bin/xattr', ['-d', attribute, appBundlePath], (error) => {
+      if (error && !error.message.includes('No such xattr')) {
+        console.warn(`[app-icon] failed to clear macOS dock icon metadata ${attribute}:`, error)
+      }
+    })
+  }
+
+  clearAttribute('com.apple.FinderInfo')
+  clearAttribute('com.apple.ResourceFork')
 }
 
 export function persistMacDockIcon(value: unknown, options: PersistMacDockIconOptions = {}): void {

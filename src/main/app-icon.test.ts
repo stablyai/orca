@@ -129,4 +129,37 @@ describe('app icon selection', () => {
       expect.any(Function)
     )
   })
+
+  it('warns for non-benign failures when clearing Finder custom icon metadata', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const execFile = vi.fn(
+      (
+        _file: string,
+        args: string[],
+        optionsOrCallback: unknown,
+        callback?: (error: Error | null) => void
+      ) => {
+        const onComplete =
+          typeof optionsOrCallback === 'function'
+            ? (optionsOrCallback as (error: Error | null) => void)
+            : callback
+        onComplete?.(new Error(args[1] === 'com.apple.FinderInfo' ? 'No such xattr' : 'EACCES'))
+      }
+    )
+
+    persistMacDockIcon('classic', {
+      appBundlePath: '/Applications/Orca.app',
+      execFile,
+      isDevApp: false,
+      platform: 'darwin'
+    })
+
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[app-icon] failed to clear macOS dock icon metadata com.apple.ResourceFork:',
+      expect.any(Error)
+    )
+
+    warnSpy.mockRestore()
+  })
 })
