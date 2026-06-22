@@ -1045,9 +1045,8 @@ export function shouldIgnoreActivityFilterFocusShortcutTarget(
   if (!target) {
     return false
   }
-  if (target.classList.contains('xterm-helper-textarea')) {
-    return true
-  }
+  // Why: the workspace terminal stays mounted while Activity is open; only the
+  // Activity-portaled terminal should keep Cmd/Ctrl+F for terminal search.
   return terminalPortalTargets.some((portalTarget) => portalTarget?.contains(target) ?? false)
 }
 
@@ -1061,7 +1060,14 @@ export function handleActivityFilterFocusShortcut({
   activeElement: Element | null
   event: Pick<
     KeyboardEvent,
-    'altKey' | 'ctrlKey' | 'key' | 'metaKey' | 'preventDefault' | 'shiftKey'
+    | 'altKey'
+    | 'ctrlKey'
+    | 'key'
+    | 'metaKey'
+    | 'preventDefault'
+    | 'shiftKey'
+    | 'stopImmediatePropagation'
+    | 'stopPropagation'
   >
   input: Pick<HTMLInputElement, 'focus' | 'select'> | null
   isMac?: boolean
@@ -1077,6 +1083,10 @@ export function handleActivityFilterFocusShortcut({
     return false
   }
   event.preventDefault()
+  // Why: hidden workspace xterms can retain focus behind Activity; capture-phase
+  // handling must stop the chord before xterm forwards it to a local/SSH PTY.
+  event.stopPropagation()
+  event.stopImmediatePropagation()
   input.focus()
   input.select()
   return true
@@ -1620,8 +1630,8 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       })
     }
 
-    window.addEventListener('keydown', focusActivityFilter)
-    return () => window.removeEventListener('keydown', focusActivityFilter)
+    window.addEventListener('keydown', focusActivityFilter, { capture: true })
+    return () => window.removeEventListener('keydown', focusActivityFilter, { capture: true })
   }, [activePortalTargetEl, inactivePortalTargetEl])
 
   const markThreadRead = (thread: AgentPaneThread): void => {

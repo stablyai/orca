@@ -770,6 +770,8 @@ describe('activity filter focus shortcut', () => {
 
   it('prevents default, focuses, and selects only for handled filter shortcuts', () => {
     let prevented = 0
+    let stopped = 0
+    let stoppedImmediate = 0
     let focused = 0
     let selected = 0
     const input = {
@@ -786,6 +788,9 @@ describe('activity filter focus shortcut', () => {
     const terminalElement = {
       classList: { contains: (className: string) => className === 'xterm-helper-textarea' }
     } as unknown as Element
+    const terminalPortalTarget = {
+      contains: (target: Element) => target === terminalElement
+    } as unknown as HTMLElement
 
     expect(
       handleActivityFilterFocusShortcut({
@@ -798,6 +803,12 @@ describe('activity filter focus shortcut', () => {
           altKey: false,
           preventDefault: () => {
             prevented += 1
+          },
+          stopPropagation: () => {
+            stopped += 1
+          },
+          stopImmediatePropagation: () => {
+            stoppedImmediate += 1
           }
         },
         input,
@@ -806,6 +817,8 @@ describe('activity filter focus shortcut', () => {
       })
     ).toBe(true)
     expect(prevented).toBe(1)
+    expect(stopped).toBe(1)
+    expect(stoppedImmediate).toBe(1)
     expect(focused).toBe(1)
     expect(selected).toBe(1)
 
@@ -820,14 +833,22 @@ describe('activity filter focus shortcut', () => {
           altKey: false,
           preventDefault: () => {
             prevented += 1
+          },
+          stopPropagation: () => {
+            stopped += 1
+          },
+          stopImmediatePropagation: () => {
+            stoppedImmediate += 1
           }
         },
         input,
         isMac: true,
-        terminalPortalTargets: []
+        terminalPortalTargets: [terminalPortalTarget]
       })
     ).toBe(false)
     expect(prevented).toBe(1)
+    expect(stopped).toBe(1)
+    expect(stoppedImmediate).toBe(1)
     expect(focused).toBe(1)
     expect(selected).toBe(1)
   })
@@ -849,6 +870,12 @@ describe('activity filter focus shortcut', () => {
           altKey: false,
           preventDefault: () => {
             prevented += 1
+          },
+          stopPropagation: () => {
+            throw new Error('unavailable input must not stop propagation')
+          },
+          stopImmediatePropagation: () => {
+            throw new Error('unavailable input must not stop immediate propagation')
           }
         },
         input: null,
@@ -870,12 +897,18 @@ describe('activity filter focus shortcut', () => {
       classList: { contains: () => false }
     } as unknown as Element
     const portalTarget = {
-      contains: (target: Element) => target === portalChild
+      contains: (target: Element) => target === portalChild || target === terminalTextarea
     } as unknown as HTMLElement
+    const hiddenWorkbenchTerminal = {
+      classList: { contains: (className: string) => className === 'xterm-helper-textarea' }
+    } as unknown as Element
     expect(shouldIgnoreActivityFilterFocusShortcutTarget(terminalTextarea, [portalTarget])).toBe(
       true
     )
     expect(shouldIgnoreActivityFilterFocusShortcutTarget(portalChild, [portalTarget])).toBe(true)
     expect(shouldIgnoreActivityFilterFocusShortcutTarget(outside, [portalTarget])).toBe(false)
+    expect(
+      shouldIgnoreActivityFilterFocusShortcutTarget(hiddenWorkbenchTerminal, [portalTarget])
+    ).toBe(false)
   })
 })
