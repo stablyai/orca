@@ -45,3 +45,16 @@ jcode 二进制：`--remote-exec` + `-C` 在 remote-exec 下只设远程目录(�
 - 命令给**纯净可复制**(无行内 `#` 注释)。
 - 偏好 GUI / 非技术语言 / 中文。
 - 自动更新别让用户点(已在代码关掉；未签名版本也装不上)。
+
+## 7. 2026-06-22 closeout validation evidence
+- 当前分支：`jcode-integration`。收尾提交已覆盖 scrollbar gate、localization gate、jcode session store 拆分、jcode binary resolution、remote attachment lifecycle cleanup/hardening、remote upload command exit-code 校验、附件测试 fixture 拆分。
+- `export PATH="/usr/local/bin:$PATH"; /usr/local/bin/node /Users/vinny/.local/bin/pnpm run typecheck`：PASS。
+- `export PATH="/usr/local/bin:$PATH"; /usr/local/bin/node /Users/vinny/.local/bin/pnpm run lint`：PASS；包含 `lint:switch-exhaustiveness`、`check:styled-scrollbars`、`verify:localization-catalog`、`verify:localization-coverage`。
+- `export PATH="/usr/local/bin:$PATH"; /usr/local/bin/node /Users/vinny/.local/bin/pnpm exec vitest run --config config/vitest.config.ts src/main/jcode/jcode-attachments.test.ts src/main/jcode/jcode-remote-exec.test.ts`：PASS，2 files / 16 tests。
+- `export PATH="/usr/local/bin:$PATH"; /usr/local/bin/node /Users/vinny/.local/bin/pnpm run test`：FAIL only in non-jcode PTY tests during full-suite concurrency/resource load: `src/main/daemon/node-pty-fd-leak.test.ts` timed out, `src/main/daemon/shell-ready.test.ts` had 3 marker assertions, `src/main/pty/omp-shell-wrapper.node-pty.test.ts` had 3 bash PTY timeouts. Focused rerun of those exact 3 files passed: 3 files / 27 tests. Treat as documented full-suite PTY flake until reproduced outside concurrent full run.
+- `export PATH="/usr/local/bin:$PATH"; /usr/local/bin/node /Users/vinny/.local/bin/pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/node-pty-fd-leak.test.ts src/main/daemon/shell-ready.test.ts src/main/pty/omp-shell-wrapper.node-pty.test.ts`：PASS，3 files / 27 tests.
+- `export PATH="/usr/local/bin:$PATH"; /usr/local/bin/node /Users/vinny/.local/bin/pnpm run build:unpack`：PASS. Built `dist/mac-arm64/Orca.app`, version `1.4.89-rc.0`, size about `1.0G`, ad-hoc signed, notarization skipped by config.
+- Manual GUI smoke was not performed in this pass. User-side checks still recommended before daily use: open rebuilt app, start jcode local chat, start remote SSH project chat, send image attachment, verify model picker, verify MCP settings read/write.
+- Remote/fork hygiene: `git remote -v` still shows `origin=https://github.com/stablyai/orca` for fetch and push. No user-owned fork remote is configured, so do not push from this checkout until a fork remote is added.
+- Product-direction decision: keep this Orca fork as the current closeout target while SSH project management, worktrees, review UI, and existing Orca shell are core value. Re-open the jcode-desktop direction only if the durable product narrows to a Claude-app-style chat shell and Orca's terminal/worktree architecture becomes net drag again.
+- Residual non-blocking limitation: remote attachment upload assumes POSIX remote tools and paths (`/tmp`, `mkdir`, `base64 -d`, `rm`). Unsupported SSH targets fail closed and report attachments as not copied; no live SSH integration test was run in this closeout pass.
