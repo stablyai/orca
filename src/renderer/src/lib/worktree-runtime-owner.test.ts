@@ -98,11 +98,12 @@ describe('getExplicitRuntimeEnvironmentIdForWorktree', () => {
         'runtime-repo::wt-local-override'
       )
     ).toBeNull()
-    expect(getRuntimeEnvironmentIdForWorktree(hostOverrideState, 'runtime-repo::wt-local-override'))
-      .toBeNull()
-    expect(getExecutionHostIdForWorktree(hostOverrideState, 'runtime-repo::wt-local-override')).toBe(
-      'local'
-    )
+    expect(
+      getRuntimeEnvironmentIdForWorktree(hostOverrideState, 'runtime-repo::wt-local-override')
+    ).toBeNull()
+    expect(
+      getExecutionHostIdForWorktree(hostOverrideState, 'runtime-repo::wt-local-override')
+    ).toBe('local')
     expect(
       getExplicitRuntimeEnvironmentIdForWorktree(
         hostOverrideState,

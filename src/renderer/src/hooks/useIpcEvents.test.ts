@@ -1929,15 +1929,18 @@ describe('useIpcEvents browser tab close routing', () => {
   }) => void
   type CloseActiveTabListener = () => void
   type CloseTerminalListener = (data: { tabId: string; paneRuntimeId?: number | null }) => void
+  type CloseSessionTabListener = (data: { tabId: string; worktreeId: string }) => void
 
   async function useIpcEventsForCloseRouting({
     closeActiveTabListenerRef,
+    closeSessionTabListenerRef,
     closeTerminalListenerRef,
     getState,
     requestTabCloseListenerRef,
     replyTabClose = vi.fn()
   }: {
     closeActiveTabListenerRef?: { current: CloseActiveTabListener | null }
+    closeSessionTabListenerRef?: { current: CloseSessionTabListener | null }
     closeTerminalListenerRef?: { current: CloseTerminalListener | null }
     getState: () => Record<string, unknown>
     requestTabCloseListenerRef?: { current: RequestTabCloseListener | null }
@@ -1987,6 +1990,7 @@ describe('useIpcEvents browser tab close routing', () => {
           activeBrowserTabIdByWorktree: { 'wt-1': 'workspace-1' },
           browserTabsByWorktree: { 'wt-1': [{ id: 'workspace-1' }] },
           browserPagesByWorkspace: {},
+          openFiles: [],
           unifiedTabsByWorktree: {},
           closeBrowserTab: vi.fn(),
           closeBrowserPage: vi.fn(),
@@ -2053,7 +2057,12 @@ describe('useIpcEvents browser tab close routing', () => {
           onRenameTerminal: () => () => {},
           onFocusTerminal: () => () => {},
           onFocusEditorTab: () => () => {},
-          onCloseSessionTab: () => () => {},
+          onCloseSessionTab: (listener: CloseSessionTabListener) => {
+            if (closeSessionTabListenerRef) {
+              closeSessionTabListenerRef.current = listener
+            }
+            return () => {}
+          },
           onMoveSessionTab: () => () => {},
           onOpenFileFromMobile: () => () => {},
           onOpenDiffFromMobile: () => () => {},
@@ -2139,6 +2148,62 @@ describe('useIpcEvents browser tab close routing', () => {
     const { useIpcEvents: registerIpcEvents } = await import('./useIpcEvents')
     registerIpcEvents()
   }
+
+  it('removes the file from openFiles when a companion closes an editor session tab', async () => {
+    const closeSessionTabListenerRef: { current: CloseSessionTabListener | null } = {
+      current: null
+    }
+    const closeFile = vi.fn()
+    const closeUnifiedTab = vi.fn()
+
+    await useIpcEventsForCloseRouting({
+      closeSessionTabListenerRef,
+      getState: () => ({
+        closeFile,
+        closeUnifiedTab,
+        browserTabsByWorktree: {},
+        unifiedTabsByWorktree: {
+          'wt-1': [{ id: 'host-tab-1', entityId: 'file-1', contentType: 'editor', isPinned: false }]
+        }
+      })
+    })
+
+    closeSessionTabListenerRef.current?.({ tabId: 'host-tab-1', worktreeId: 'wt-1' })
+
+    // Why: closeUnifiedTab alone would leave the file in openFiles, which the host
+    // republishes — so the editor close must go through closeFile.
+    expect(closeFile).toHaveBeenCalledWith('file-1')
+    expect(closeUnifiedTab).not.toHaveBeenCalled()
+  })
+
+  it('keeps closeUnifiedTab for a non-editor session tab closed by a companion', async () => {
+    const closeSessionTabListenerRef: { current: CloseSessionTabListener | null } = {
+      current: null
+    }
+    const closeFile = vi.fn()
+    const closeUnifiedTab = vi.fn()
+
+    await useIpcEventsForCloseRouting({
+      closeSessionTabListenerRef,
+      getState: () => ({
+        closeFile,
+        closeUnifiedTab,
+        browserTabsByWorktree: {},
+        unifiedTabsByWorktree: {
+          'wt-1': [
+            { id: 'sim-tab-1', entityId: 'sim-1', contentType: 'simulator', isPinned: false }
+          ]
+        }
+      })
+    })
+
+    closeSessionTabListenerRef.current?.({ tabId: 'sim-tab-1', worktreeId: 'wt-1' })
+
+    // Why: only editor tabs need the closeFile (openFiles) path; other content types
+    // must keep closeUnifiedTab so the editor-only routing stays scoped.
+    expect(closeUnifiedTab).toHaveBeenCalledWith('sim-tab-1')
+    expect(closeFile).not.toHaveBeenCalled()
+  })
 
   it('delegates terminal close IPC without a pane id to the shared terminal close flow', async () => {
     const closeTerminalListenerRef: { current: CloseTerminalListener | null } = { current: null }

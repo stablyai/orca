@@ -806,12 +806,8 @@ describe('TabBar PowerShell launch wiring', () => {
       onTogglePaneExpand: () => {}
     })
 
-    expect(
-      findDropdownMenuItemByText(expandNode(element), 'New Terminal: PowerShell')
-    ).toBeNull()
-    expect(
-      findDropdownMenuItemByText(expandNode(element), 'New Terminal: CMD Prompt')
-    ).toBeNull()
+    expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal: PowerShell')).toBeNull()
+    expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal: CMD Prompt')).toBeNull()
     expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal: WSL')).toBeNull()
     expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal')).not.toBeNull()
   })

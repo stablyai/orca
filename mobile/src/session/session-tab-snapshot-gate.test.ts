@@ -8,9 +8,9 @@ import {
 describe('acceptSessionSnapshot', () => {
   it('accepts a newer version from the same publisher and advances the floor', () => {
     const marker: AppliedSnapshotMarker = { epoch: 'renderer:a', version: 5 }
-    expect(acceptSessionSnapshot({ publicationEpoch: 'renderer:a', snapshotVersion: 6 }, marker)).toBe(
-      true
-    )
+    expect(
+      acceptSessionSnapshot({ publicationEpoch: 'renderer:a', snapshotVersion: 6 }, marker)
+    ).toBe(true)
     expect(marker).toEqual({ epoch: 'renderer:a', version: 6 })
   })
 
