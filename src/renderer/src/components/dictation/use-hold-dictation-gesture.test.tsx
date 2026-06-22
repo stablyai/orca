@@ -134,6 +134,24 @@ describe('useHoldDictationGesture', () => {
     expect(holdGestureActiveRef.current).toBe(false)
   })
 
+  it('keeps dictating when a redundant modifier instance is released while the chord is held', async () => {
+    await renderProbe()
+
+    act(() => {
+      dispatchKeyDown({ key: 'e', code: 'KeyE', metaKey: true })
+    })
+    dictationStateRef.current = 'listening'
+
+    // A second Cmd is released, but Cmd(left)+E remain held so metaKey is still true.
+    act(() => {
+      dispatchKeyUp({ key: 'Meta', code: 'MetaRight', metaKey: true })
+    })
+
+    expect(startDictation).toHaveBeenCalledTimes(1)
+    expect(stopDictation).not.toHaveBeenCalled()
+    expect(holdGestureActiveRef.current).toBe(true)
+  })
+
   it('ignores unrelated key releases while the shortcut is held', async () => {
     await renderProbe()
 

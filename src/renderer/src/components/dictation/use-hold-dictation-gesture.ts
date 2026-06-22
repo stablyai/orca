@@ -45,15 +45,18 @@ function keyReleased(e: KeyboardEvent, gesture: HoldReleaseGesture): boolean {
 }
 
 function requiredModifierReleased(e: KeyboardEvent, gesture: HoldReleaseGesture): boolean {
+  // Why: a keyup for one modifier instance (e.g. the right Cmd) still reports
+  // the modifier as active when another instance (left Cmd) is held. Only treat
+  // it as released when the live modifier state is actually no longer set.
   switch (e.key) {
     case 'Meta':
-      return gesture.metaKey
+      return gesture.metaKey && !e.metaKey
     case 'Control':
-      return gesture.ctrlKey
+      return gesture.ctrlKey && !e.ctrlKey
     case 'Alt':
-      return gesture.altKey
+      return gesture.altKey && !e.altKey
     case 'Shift':
-      return gesture.shiftKey
+      return gesture.shiftKey && !e.shiftKey
     default:
       return false
   }
