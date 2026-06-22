@@ -24,6 +24,7 @@ import type { SessionInfo } from '../daemon/types'
 import { listRegisteredPtys, registerPty } from './pty-registry'
 import { listRepoWorktrees } from '../repo-worktrees'
 import { parsePtySessionId } from '../../shared/pty-session-id-format'
+import { getRepoWorktreeIdAliases, makeRepoWorktreeKey } from '../../shared/worktree-id'
 import type { Store } from '../persistence'
 
 // Why: `attachMainWindowServices` runs on every macOS dock re-activation
@@ -69,11 +70,10 @@ export async function hydrateLocalPtyRegistryAtBoot(store: Pick<Store, 'getRepos
     // renderer-side union still covers that case.
     hasHydrated = true
 
-    // Why: build a worktree-id → connectionId map so we can SSH-gate each
-    // session before registering. Live git enumeration matches the path
-    // shape used by `mintPtySessionId` (`${repoId}::${path}`).
+    // Why: build a worktree-id → canonical worktree-id map so old daemon
+    // sessions (`repoId::path`) hydrate into the new host-qualified bucket.
     const repos = store.getRepos()
-    const repoConnectionIdByWorktreeId = new Map<string, string | null>()
+    const canonicalWorktreeIdByAlias = new Map<string, string>()
 
     for (const repo of repos) {
       const connectionId = repo.connectionId ?? null
@@ -84,8 +84,10 @@ export async function hydrateLocalPtyRegistryAtBoot(store: Pick<Store, 'getRepos
       }
       const worktrees = await listRepoWorktrees(repo)
       for (const wt of worktrees) {
-        const worktreeId = `${repo.id}::${wt.path}`
-        repoConnectionIdByWorktreeId.set(worktreeId, connectionId)
+        const canonicalWorktreeId = makeRepoWorktreeKey(repo, wt.path)
+        for (const alias of getRepoWorktreeIdAliases(repo, wt.path)) {
+          canonicalWorktreeIdByAlias.set(alias, canonicalWorktreeId)
+        }
       }
     }
 
@@ -114,15 +116,13 @@ export async function hydrateLocalPtyRegistryAtBoot(store: Pick<Store, 'getRepos
       // `src/main/ipc/pty.ts`. If the repo isn't in the store, skip the
       // session: we can't prove it's local, and the renderer-side union
       // still surfaces the session at the cost of a missing pid sample.
-      if (!repoConnectionIdByWorktreeId.has(worktreeId)) {
-        continue
-      }
-      if (repoConnectionIdByWorktreeId.get(worktreeId)) {
+      const canonicalWorktreeId = canonicalWorktreeIdByAlias.get(worktreeId)
+      if (!canonicalWorktreeId) {
         continue
       }
       registerPty({
         ptyId: info.sessionId,
-        worktreeId,
+        worktreeId: canonicalWorktreeId,
         sessionId: info.sessionId,
         paneKey: null,
         pid:

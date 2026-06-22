@@ -10,6 +10,7 @@ import type {
   Repo,
   WorktreeMeta
 } from '../../shared/types'
+import { makeRepoWorktreeKey } from '../../shared/worktree-id'
 
 const {
   listRepoWorktreesMock,
@@ -453,7 +454,7 @@ describe('workspace cleanup scan', () => {
     expect(result.errors).toEqual([])
     expect(result.candidates).toHaveLength(LARGE_WORKTREE_COUNT)
     expect(result.candidates[0]).toMatchObject({
-      worktreeId: 'repo-1::/repo-feature-0',
+      worktreeId: makeRepoWorktreeKey(REPO, '/repo-feature-0'),
       path: '/repo-feature-0',
       branch: 'feature-0',
       tier: 'review',
@@ -463,7 +464,7 @@ describe('workspace cleanup scan', () => {
       }
     })
     expect(result.candidates[LARGE_WORKTREE_COUNT - 1]).toMatchObject({
-      worktreeId: `repo-1::/repo-feature-${LARGE_WORKTREE_COUNT - 1}`,
+      worktreeId: makeRepoWorktreeKey(REPO, `/repo-feature-${LARGE_WORKTREE_COUNT - 1}`),
       path: `/repo-feature-${LARGE_WORKTREE_COUNT - 1}`,
       branch: `feature-${LARGE_WORKTREE_COUNT - 1}`
     })

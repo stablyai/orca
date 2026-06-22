@@ -76,7 +76,8 @@ import {
   mergeWorktree,
   areWorktreePathsEqual
 } from './worktree-logic'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
+import { getRepoIdFromWorktreeId, makeRepoWorktreeKey } from '../../shared/worktree-id'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import {
   cleanupUnusedWorktreePushTargetRemoteWithExec,
@@ -205,6 +206,13 @@ function recordWorkspaceLineageForCreatedWorktree(
     capture: { source: 'active-workspace', confidence: 'explicit' },
     createdAt
   })
+}
+
+function getRepoWorktreeId(
+  repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>,
+  path: string
+): string {
+  return makeRepoWorktreeKey(repo, path)
 }
 
 function countNonEmptyGitOutputLines(output: string): number {
@@ -1447,7 +1455,7 @@ export async function createRemoteWorktree(
   validateWorkspaceLineageParentBeforeCreate(
     store,
     args.parentWorkspace,
-    worktreeWorkspaceKey(`${repo.id}::${remotePath}`)
+    worktreeWorkspaceKey(getRepoWorktreeId(repo, remotePath))
   )
 
   const sparseDirectories = args.sparseCheckout
@@ -1616,7 +1624,7 @@ export async function createRemoteWorktree(
     throw new Error('Worktree created but not found in listing')
   }
 
-  const worktreeId = `${repo.id}::${created.path}`
+  const worktreeId = getRepoWorktreeId(repo, created.path)
   const now = Date.now()
   // Why: PR/MR-created worktrees can start from a head ref/SHA while Source
   // Control must compare against the review target branch.
@@ -1690,7 +1698,11 @@ export async function createRemoteWorktree(
   }
   const { worktree } = timing.timeSync('persist_metadata', () => {
     const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
-    return { worktree: mergeWorktree(repo.id, created, meta) }
+    return {
+      worktree: mergeWorktree(repo.id, created, meta, undefined, {
+        hostId: getRepoExecutionHostId(repo)
+      })
+    }
   })
   const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
 
@@ -2055,7 +2067,7 @@ export async function createLocalWorktree(
   validateWorkspaceLineageParentBeforeCreate(
     store,
     args.parentWorkspace,
-    worktreeWorkspaceKey(`${repo.id}::${worktreePath}`)
+    worktreeWorkspaceKey(getRepoWorktreeId(repo, worktreePath))
   )
 
   if (remoteTrackingRefresh) {
@@ -2223,7 +2235,7 @@ export async function createLocalWorktree(
     throw new Error('Worktree created but not found in listing')
   }
 
-  const worktreeId = `${repo.id}::${created.path}`
+  const worktreeId = getRepoWorktreeId(repo, created.path)
   const now = Date.now()
   // Why: PR/MR-created worktrees can start from a head ref/SHA while Source
   // Control must compare against the review target branch.
@@ -2287,7 +2299,11 @@ export async function createLocalWorktree(
   }
   const { worktree } = timing.timeSync('persist_metadata', () => {
     const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
-    return { worktree: mergeWorktree(repo.id, created, meta) }
+    return {
+      worktree: mergeWorktree(repo.id, created, meta, undefined, {
+        hostId: getRepoExecutionHostId(repo)
+      })
+    }
   })
   const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
   // Why: creation already paid for `git worktree list`; seed the exact roots

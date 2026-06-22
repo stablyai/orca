@@ -3,7 +3,7 @@ import { AlertCircle, FileCode2, LoaderCircle, Plus, RefreshCw } from 'lucide-re
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { Repo, Worktree } from '../../../../shared/types'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId, makeRepoWorktreeKey } from '../../../../shared/worktree-id'
 import {
   canInspectLocalMcpConfigRoot,
   inspectMcpConfigContent,
@@ -63,9 +63,26 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
     return (
       worktreesForRepo.find((worktree) => worktree.isMainWorktree) ??
       worktreesForRepo.find((worktree) => worktree.path === repo.path) ??
-      worktreesForRepo[0] ?? { id: `${repo.id}::${repo.path}`, path: repo.path }
+      worktreesForRepo[0] ?? {
+        id: makeRepoWorktreeKey(
+          {
+            id: repo.id,
+            connectionId: repo.connectionId,
+            executionHostId: repo.executionHostId
+          },
+          repo.path
+        ),
+        path: repo.path
+      }
     )
-  }, [activeWorktreeId, repo.id, repo.path, worktreesForRepo])
+  }, [
+    activeWorktreeId,
+    repo.connectionId,
+    repo.executionHostId,
+    repo.id,
+    repo.path,
+    worktreesForRepo
+  ])
   const targetWorktreeId = targetWorktree.id
   const targetRootPath = targetWorktree.path
   const detectedCount = useMemo(() => configs.filter((config) => config.exists).length, [configs])

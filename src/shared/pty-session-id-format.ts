@@ -11,8 +11,31 @@
  * can import.
  */
 
+import { normalizeExecutionHostId } from './execution-host'
+
 export const PTY_SESSION_ID_SEPARATOR = '@@'
 export const WORKTREE_ID_SEPARATOR = '::'
+const WORKTREE_KEY_PREFIX = 'orca-worktree://v1?'
+
+function isCanonicalWorktreeKey(candidate: string): boolean {
+  if (!candidate.startsWith(WORKTREE_KEY_PREFIX)) {
+    return false
+  }
+  const params = new URLSearchParams(candidate.slice(WORKTREE_KEY_PREFIX.length))
+  const keys = [...params.keys()]
+  return (
+    keys.length === 3 &&
+    keys[0] === 'hostId' &&
+    keys[1] === 'repoId' &&
+    keys[2] === 'path' &&
+    params.getAll('hostId').length === 1 &&
+    params.getAll('repoId').length === 1 &&
+    params.getAll('path').length === 1 &&
+    normalizeExecutionHostId(params.get('hostId')) !== null &&
+    (params.get('repoId')?.length ?? 0) > 0 &&
+    (params.get('path')?.length ?? 0) > 0
+  )
+}
 
 /**
  * Recover the owning worktreeId from a minted session id.
@@ -30,6 +53,9 @@ export function parsePtySessionId(sessionId: string): { worktreeId: string | nul
     return { worktreeId: null }
   }
   const candidate = sessionId.slice(0, idx)
+  if (isCanonicalWorktreeKey(candidate)) {
+    return { worktreeId: candidate }
+  }
   // Why: require non-empty halves on both sides of `::` so degenerate
   // ids like `::@@…`, `repo::@@…`, or `::path@@…` don't synthesize a
   // phantom worktreeId for memory attribution.

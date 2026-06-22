@@ -12,6 +12,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/types'
+import { makeRepoWorktreeKey } from '../../shared/worktree-id'
 import type { SessionInfo } from '../daemon/types'
 import type { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
 import type { Store } from '../persistence'
@@ -220,7 +221,16 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
     const entry = listRegisteredPtys().find((p) => p.ptyId === ptyId)
     expect(entry).toBeDefined()
     expect(entry!.pid).toBe(4242)
-    expect(entry!.worktreeId).toBe('repo-a::/local/Triton')
+    expect(entry!.worktreeId).toBe(
+      makeRepoWorktreeKey(
+        {
+          id: 'repo-a',
+          connectionId: null,
+          executionHostId: null
+        },
+        '/local/Triton'
+      )
+    )
   })
 
   it('hydrates large daemon session lists', async () => {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { makeWorktreeKey } from '../../shared/worktree-id'
 import { isSafePtySessionId, mintPtySessionId, parsePtySessionId } from './pty-session-id'
 
 const USER_DATA = '/tmp/orca-userdata'
@@ -38,6 +39,15 @@ describe('isSafePtySessionId', () => {
     // rejected `/` would break every real daemon spawn.
     const id = mintPtySessionId('repo-abc123::/Users/thebr/work/wt-1')
     expect(isSafePtySessionId(id, USER_DATA)).toBe(true)
+  })
+
+  it('accepts minted ids with host-qualified worktree keys', () => {
+    const worktreeId = makeWorktreeKey({
+      hostId: 'local',
+      repoId: 'repo-abc123',
+      path: '/Users/thebr/work/wt-1'
+    })
+    expect(isSafePtySessionId(mintPtySessionId(worktreeId), USER_DATA)).toBe(true)
   })
 
   it('accepts caller-supplied path-shaped ids that stay inside userData', () => {
@@ -84,6 +94,15 @@ describe('isSafePtySessionId', () => {
 describe('parsePtySessionId', () => {
   it('round-trips a minted id back to its worktreeId', () => {
     const wt = 'repo-abc::/Users/me/wt/feature'
+    expect(parsePtySessionId(mintPtySessionId(wt))).toEqual({ worktreeId: wt })
+  })
+
+  it('round-trips a minted host-qualified worktree key back to its worktreeId', () => {
+    const wt = makeWorktreeKey({
+      hostId: 'runtime:gpu',
+      repoId: 'repo-abc',
+      path: '/srv/orca/worktree'
+    })
     expect(parsePtySessionId(mintPtySessionId(wt))).toEqual({ worktreeId: wt })
   })
 

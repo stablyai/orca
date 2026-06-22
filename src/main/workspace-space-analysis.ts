@@ -24,6 +24,8 @@ import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
 import { getSshGitProvider } from './providers/ssh-git-dispatch'
 import { createFolderWorktree, listRepoWorktrees } from './repo-worktrees'
 import { mergeWorktree } from './ipc/worktree-logic'
+import { getRepoExecutionHostId } from '../shared/execution-host'
+import { makeRepoWorktreeKey } from '../shared/worktree-id'
 
 const WORKTREE_SCAN_CONCURRENCY = 3
 const LOCAL_FS_CONCURRENCY = 48
@@ -797,8 +799,10 @@ async function listWorktreesForSpaceScan(
 }
 
 function mergeForSpaceScan(repo: Repo, gitWorktree: GitWorktreeInfo, store: Store): Worktree {
-  const worktreeId = `${repo.id}::${gitWorktree.path}`
-  return mergeWorktree(repo.id, gitWorktree, store.getWorktreeMeta(worktreeId), repo.displayName)
+  const worktreeId = makeRepoWorktreeKey(repo, gitWorktree.path)
+  return mergeWorktree(repo.id, gitWorktree, store.getWorktreeMeta(worktreeId), repo.displayName, {
+    hostId: getRepoExecutionHostId(repo)
+  })
 }
 
 function reportProgress(

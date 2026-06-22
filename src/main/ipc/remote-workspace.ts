@@ -18,7 +18,12 @@ import type {
 } from '../../shared/remote-workspace-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { WorkspaceSessionState } from '../../shared/types'
-import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../shared/worktree-id'
+import {
+  getRepoIdFromWorktreeId,
+  makeRepoWorktreeKey,
+  splitWorktreeId
+} from '../../shared/worktree-id'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
 import { getRemoteWorkspaceNamespace } from './remote-workspace-namespace'
 import { registerRemoteWorkspaceNotificationHandler } from './remote-workspace-events'
 
@@ -224,6 +229,11 @@ function getExplicitHydratedTargetIds(value: unknown): Set<string> | null {
 }
 
 function targetForWorktree(store: Store, worktreeId: string): string | null {
+  const parsed = splitWorktreeId(worktreeId)
+  if (parsed?.hostId) {
+    const host = parseExecutionHostId(parsed.hostId)
+    return host?.kind === 'ssh' ? host.targetId : null
+  }
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   return store.getRepo(repoId)?.connectionId ?? null
 }
@@ -248,11 +258,11 @@ function importSessionForTarget(
   return importRemoteWorkspaceSession(remote, {
     resolveWorktreeId: (worktreePath) => {
       for (const repo of repoById.values()) {
-        const candidate = `${repo.id}::${worktreePath}`
+        const candidate = makeRepoWorktreeKey(repo, worktreePath)
         // Main does not own the live worktree list for SSH repos, so resolve
         // against repo identity only. Renderer hydration later validates IDs
         // against its fetched worktree list before panes mount.
-        if (splitWorktreeId(candidate)) {
+        if (splitWorktreeId(candidate)?.hostId === getRepoExecutionHostId(repo)) {
           return candidate
         }
       }

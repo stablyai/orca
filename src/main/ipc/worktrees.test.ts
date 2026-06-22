@@ -4,8 +4,17 @@ import { lstat, mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 import type { CreateWorktreeResult } from '../../shared/types'
+import { makeRepoWorktreeKey } from '../../shared/worktree-id'
 
 const ORIGINAL_PLATFORM = process.platform
+
+function localWorktreeKey(path: string, repoId = 'repo-1'): string {
+  return makeRepoWorktreeKey({ id: repoId, connectionId: null, executionHostId: null }, path)
+}
+
+function sshWorktreeKey(path: string, repoId = 'repo-ssh', connectionId = 'conn-1'): string {
+  return makeRepoWorktreeKey({ id: repoId, connectionId, executionHostId: null }, path)
+}
 
 function setPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', {
@@ -249,6 +258,7 @@ describe('registerWorktreeHandlers', () => {
     getWorktreeMeta: vi.fn(),
     getAllWorktreeMeta: vi.fn(),
     setWorktreeMeta: vi.fn(),
+    migrateWorktreeIdentity: vi.fn(),
     getProjectHostSetups: vi.fn(),
     removeWorktreeMeta: vi.fn(),
     getAllWorktreeLineage: vi.fn(),
@@ -319,6 +329,7 @@ describe('registerWorktreeHandlers', () => {
       store.getWorktreeMeta,
       store.getAllWorktreeMeta,
       store.setWorktreeMeta,
+      store.migrateWorktreeIdentity,
       store.getProjectHostSetups,
       store.removeWorktreeMeta,
       store.getAllWorktreeLineage,
@@ -699,7 +710,7 @@ describe('registerWorktreeHandlers', () => {
     })
 
     const persistedMeta = store.setWorktreeMeta.mock.calls.find(
-      ([worktreeId]) => worktreeId === 'repo-1::/workspace/improve-dashboard'
+      ([worktreeId]) => worktreeId === localWorktreeKey('/workspace/improve-dashboard')
     )?.[1]
     expect(persistedMeta).toBeDefined()
     expect(persistedMeta).not.toHaveProperty('automationProvenance')
@@ -778,7 +789,7 @@ describe('registerWorktreeHandlers', () => {
       false
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::../worktrees/feature',
+      localWorktreeKey('../worktrees/feature'),
       expect.objectContaining({
         orcaCreationWorkspaceLayout: { path: '../worktrees', nestWorkspaces: false }
       })
@@ -884,7 +895,9 @@ describe('registerWorktreeHandlers', () => {
     expect(addWorktreeMock).not.toHaveBeenCalled()
     expect(result.worktree).toEqual(
       expect.objectContaining({
-        id: expect.stringMatching(/^repo-folder::\/workspace\/folder::workspace:[0-9a-f-]{36}$/),
+        id: expect.stringMatching(
+          /^orca-worktree:\/\/v1\?hostId=local&repoId=repo-folder&path=%2Fworkspace%2Ffolder::workspace:[0-9a-f-]{36}$/
+        ),
         repoId: 'repo-folder',
         path: '/workspace/folder',
         displayName: 'folder-session',
@@ -934,7 +947,7 @@ describe('registerWorktreeHandlers', () => {
 
     expect(runtimeStub.createTerminal).toHaveBeenNthCalledWith(
       1,
-      'id:repo-1::/workspace/improve-dashboard',
+      `id:${localWorktreeKey('/workspace/improve-dashboard')}`,
       {
         command: 'claude --prefill test',
         env: { ORCA_AGENT_MODE: 'direct' },
@@ -950,7 +963,7 @@ describe('registerWorktreeHandlers', () => {
     )
     expect(runtimeStub.createTerminal).toHaveBeenNthCalledWith(
       2,
-      'id:repo-1::/workspace/improve-dashboard',
+      `id:${localWorktreeKey('/workspace/improve-dashboard')}`,
       {
         title: 'Setup',
         command: 'bash /workspace/repo/.git/orca/setup-runner.sh',
@@ -1019,7 +1032,7 @@ describe('registerWorktreeHandlers', () => {
       { checkoutExistingBranch: true }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/fix-bug-0',
+      localWorktreeKey('/workspace/fix-bug-0'),
       expect.objectContaining({ preserveBranchOnDelete: true })
     )
     expect(result).toMatchObject({
@@ -1079,7 +1092,7 @@ describe('registerWorktreeHandlers', () => {
       { checkoutExistingBranch: true }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/my-folder',
+      localWorktreeKey('/workspace/my-folder'),
       expect.objectContaining({ preserveBranchOnDelete: true })
     )
     expect(result).toMatchObject({
@@ -1209,7 +1222,7 @@ describe('registerWorktreeHandlers', () => {
       { cwd: '/workspace/fix-title' }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/fix-title',
+      localWorktreeKey('/workspace/fix-title'),
       expect.objectContaining({
         baseRef: 'refs/remotes/origin/main',
         linkedPR: 42
@@ -1248,7 +1261,7 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/fix-title',
+      localWorktreeKey('/workspace/fix-title'),
       expect.objectContaining({
         baseRef: 'refs/remotes/origin/main',
         linkedGitLabMR: 7
@@ -1298,7 +1311,7 @@ describe('registerWorktreeHandlers', () => {
       false
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/bitbucket-title',
+      localWorktreeKey('/workspace/bitbucket-title'),
       expect.objectContaining({ linkedBitbucketPR: 11 })
     )
     expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
@@ -1536,7 +1549,7 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/improve-dashboard',
+      localWorktreeKey('/workspace/improve-dashboard'),
       expect.objectContaining({
         displayName: 'Fix: dashboards for PRs'
       })
@@ -1570,7 +1583,7 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/improve-dashboard',
+      localWorktreeKey('/workspace/improve-dashboard'),
       expect.objectContaining({
         linkedIssue: 123,
         linkedPR: 456,
@@ -1607,7 +1620,7 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/improve-dashboard',
+      localWorktreeKey('/workspace/improve-dashboard'),
       expect.objectContaining({
         createdWithAgent: 'codex'
       })
@@ -1663,7 +1676,7 @@ describe('registerWorktreeHandlers', () => {
       { cwd: '/workspace/improve-dashboard' }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/improve-dashboard',
+      localWorktreeKey('/workspace/improve-dashboard'),
       expect.objectContaining({
         pushTarget: expect.objectContaining({
           remoteName: 'pr-prateek-orca',
@@ -1720,7 +1733,7 @@ describe('registerWorktreeHandlers', () => {
       expect.any(Object)
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/improve-dashboard',
+      localWorktreeKey('/workspace/improve-dashboard'),
       expect.objectContaining({
         pushTarget: expect.objectContaining({
           remoteName: 'pr-contributor-orca',
@@ -2247,7 +2260,7 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-ssh::/remote/improve-dashboard',
+      sshWorktreeKey('/remote/improve-dashboard'),
       expect.objectContaining({
         linkedIssue: 123,
         linkedPR: 456,
@@ -2823,7 +2836,7 @@ describe('registerWorktreeHandlers', () => {
       '/remote/sparse-dashboard'
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-ssh::/remote/sparse-dashboard',
+      sshWorktreeKey('/remote/sparse-dashboard'),
       expect.objectContaining({
         sparseDirectories: ['apps/mobile', 'packages/shared'],
         baseRef: 'refs/remotes/origin/main',
@@ -3620,9 +3633,9 @@ describe('registerWorktreeHandlers', () => {
     resolveFetch()
     const result = (await createPromise) as CreateWorktreeResult
     expect(addWorktreeMock).toHaveBeenCalled()
-    expect(result.worktree.id).toBe('repo-1::/workspace/improve-dashboard')
+    expect(result.worktree.id).toBe(localWorktreeKey('/workspace/improve-dashboard'))
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/improve-dashboard',
+      localWorktreeKey('/workspace/improve-dashboard'),
       expect.objectContaining({ baseRef: 'refs/remotes/origin/main' })
     )
   })
@@ -3684,7 +3697,7 @@ describe('registerWorktreeHandlers', () => {
     )
     expect(result).toEqual(
       expect.objectContaining({
-        worktree: expect.objectContaining({ id: 'repo-1::/workspace/improve-dashboard' })
+        worktree: expect.objectContaining({ id: localWorktreeKey('/workspace/improve-dashboard') })
       })
     )
   })
@@ -3739,7 +3752,7 @@ describe('registerWorktreeHandlers', () => {
       }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/improve-dashboard',
+      localWorktreeKey('/workspace/improve-dashboard'),
       expect.objectContaining({ baseRef: 'refs/remotes/origin/main' })
     )
     expect(result.localBaseRefUpdateSuggestion).toEqual({
@@ -3797,7 +3810,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('lists a synthetic worktree for folder-mode repos', async () => {
-    const rootWorktreeId = 'repo-1::/workspace/folder'
+    const rootWorktreeId = localWorktreeKey('/workspace/folder')
     const priorWorktreeIds = ['repo-1::/workspace/old-folder']
     const rootMeta = makeWorktreeMeta({
       instanceId: 'folder-instance',
@@ -3892,7 +3905,7 @@ describe('registerWorktreeHandlers', () => {
 
     expect(listed).toEqual([
       expect.objectContaining({
-        id: 'repo-ssh::/remote/feature-wt',
+        id: sshWorktreeKey('/remote/feature-wt'),
         repoId: 'repo-ssh',
         path: '/remote/feature-wt',
         head: '',
@@ -3922,8 +3935,7 @@ describe('registerWorktreeHandlers', () => {
         ]
       })
     ])
-    expect(store.getWorktreeMeta).not.toHaveBeenCalled()
-    expect(store.setWorktreeMeta).toHaveBeenCalledWith('repo-ssh::/remote/feature-wt', {
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(sshWorktreeKey('/remote/feature-wt'), {
       projectId: 'repo:repo-ssh',
       hostId: 'ssh:conn-1',
       projectHostSetupId: 'repo-ssh'
@@ -3956,7 +3968,7 @@ describe('registerWorktreeHandlers', () => {
     expect(provider.listWorktrees).toHaveBeenCalledWith('/remote/repo')
     expect(listed).toEqual([
       expect.objectContaining({
-        id: 'repo-ssh::/remote/feature-wt',
+        id: sshWorktreeKey('/remote/feature-wt'),
         displayName: 'Feature workspace',
         lastActivityAt: 42
       })
@@ -3996,7 +4008,7 @@ describe('registerWorktreeHandlers', () => {
 
     expect(listed).toEqual([
       expect.objectContaining({
-        id: 'repo-ssh::/remote/feature-wt',
+        id: sshWorktreeKey('/remote/feature-wt'),
         displayName: 'Good row'
       })
     ])
@@ -4088,11 +4100,11 @@ describe('registerWorktreeHandlers', () => {
     expect(listed).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: 'repo-ssh::/remote/feature-wt',
+          id: sshWorktreeKey('/remote/feature-wt'),
           displayName: 'Remote cached'
         }),
         expect.objectContaining({
-          id: 'repo-local::/workspace/local',
+          id: localWorktreeKey('/workspace/local', 'repo-local'),
           branch: 'refs/heads/main'
         })
       ])
@@ -4126,8 +4138,8 @@ describe('registerWorktreeHandlers', () => {
 
     expect(store.getAllWorktreeMeta).toHaveBeenCalledTimes(1)
     expect(listed).toEqual([
-      expect.objectContaining({ id: 'repo-ssh-a::/remote/a/one' }),
-      expect.objectContaining({ id: 'repo-ssh-b::/remote/b/two' })
+      expect.objectContaining({ id: sshWorktreeKey('/remote/a/one', 'repo-ssh-a', 'conn-1') }),
+      expect.objectContaining({ id: sshWorktreeKey('/remote/b/two', 'repo-ssh-b', 'conn-2') })
     ])
   })
 
@@ -4153,6 +4165,10 @@ describe('registerWorktreeHandlers', () => {
       lastActivityAt: 1_700_000_000_000
     }
     store.setWorktreeMeta.mockReturnValue(stampedMeta)
+    const expectedWorktreeId = makeRepoWorktreeKey(
+      { id: 'repo-1', connectionId: null, executionHostId: null },
+      '/workspace/discovered-wt'
+    )
 
     const listed = (await handlers['worktrees:list'](null, { repoId: 'repo-1' })) as {
       id: string
@@ -4160,7 +4176,7 @@ describe('registerWorktreeHandlers', () => {
     }[]
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/discovered-wt',
+      expectedWorktreeId,
       expect.objectContaining({
         lastActivityAt: expect.any(Number),
         projectId: 'repo:repo-1',
@@ -4169,9 +4185,61 @@ describe('registerWorktreeHandlers', () => {
       })
     )
     expect(listed[0]).toMatchObject({
-      id: 'repo-1::/workspace/discovered-wt',
+      id: expectedWorktreeId,
       lastActivityAt: 1_700_000_000_000
     })
+  })
+
+  it('migrates matching legacy worktree metadata to the host-qualified key on discovery', async () => {
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/legacy-wt',
+        head: 'abc123',
+        branch: 'refs/heads/feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const legacyWorktreeId = 'repo-1::/workspace/legacy-wt'
+    const canonicalWorktreeId = makeRepoWorktreeKey(
+      { id: 'repo-1', connectionId: null, executionHostId: null },
+      '/workspace/legacy-wt'
+    )
+    const legacyMeta = makeWorktreeMeta({
+      instanceId: 'legacy-instance',
+      hostId: 'local',
+      lastActivityAt: 42
+    })
+    store.getWorktreeMeta.mockImplementation((worktreeId: string) => {
+      if (worktreeId === legacyWorktreeId) {
+        return legacyMeta
+      }
+      return undefined
+    })
+    store.setWorktreeMeta.mockReturnValue({
+      ...legacyMeta,
+      projectId: 'repo:repo-1',
+      projectHostSetupId: 'repo-1'
+    })
+
+    const listed = (await handlers['worktrees:list'](null, { repoId: 'repo-1' })) as {
+      id: string
+      lastActivityAt: number
+    }[]
+
+    expect(store.migrateWorktreeIdentity).toHaveBeenCalledWith(
+      legacyWorktreeId,
+      canonicalWorktreeId
+    )
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      canonicalWorktreeId,
+      expect.objectContaining({
+        projectId: 'repo:repo-1',
+        hostId: 'local',
+        projectHostSetupId: 'repo-1'
+      })
+    )
+    expect(listed[0]).toMatchObject({ id: canonicalWorktreeId, lastActivityAt: 42 })
   })
 
   it('backfills project-host ownership without re-stamping lastActivityAt for existing meta', async () => {
@@ -4214,8 +4282,12 @@ describe('registerWorktreeHandlers', () => {
       hostId?: string
       projectHostSetupId?: string
     }[]
+    const expectedWorktreeId = makeRepoWorktreeKey(
+      { id: 'repo-1', connectionId: null, executionHostId: null },
+      '/workspace/existing-wt'
+    )
 
-    expect(store.setWorktreeMeta).toHaveBeenCalledWith('repo-1::/workspace/existing-wt', {
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(expectedWorktreeId, {
       projectId: 'repo:repo-1',
       hostId: 'local',
       projectHostSetupId: 'repo-1'
@@ -4285,12 +4357,16 @@ describe('registerWorktreeHandlers', () => {
       hostId?: string
       projectHostSetupId?: string
     }[]
+    const expectedWorktreeId = makeRepoWorktreeKey(
+      { id: 'repo-1', connectionId: null, executionHostId: null },
+      '/workspace/existing-wt'
+    )
 
-    expect(store.setWorktreeMeta).toHaveBeenCalledWith('repo-1::/workspace/existing-wt', {
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(expectedWorktreeId, {
       projectId: 'github:stablyai/orca'
     })
     expect(listed[0]).toMatchObject({
-      id: 'repo-1::/workspace/existing-wt',
+      id: expectedWorktreeId,
       projectId: 'github:stablyai/orca',
       hostId: 'local',
       projectHostSetupId: 'repo-1',
@@ -4393,14 +4469,18 @@ describe('registerWorktreeHandlers', () => {
       projectHostSetupId?: string
       lastActivityAt: number
     }[]
+    const expectedWorktreeId = makeRepoWorktreeKey(
+      { id: 'repo-ssh', connectionId: 'ssh-target-1', executionHostId: null },
+      '/remote/orca'
+    )
 
     expect(getSshGitProviderMock).toHaveBeenCalledWith('ssh-target-1')
-    expect(store.setWorktreeMeta).toHaveBeenCalledWith('repo-ssh::/remote/orca', {
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(expectedWorktreeId, {
       projectId: 'github:stablyai/orca'
     })
     expect(listed).toEqual([
       expect.objectContaining({
-        id: 'repo-ssh::/remote/orca',
+        id: expectedWorktreeId,
         projectId: 'github:stablyai/orca',
         hostId: 'ssh:ssh-target-1',
         projectHostSetupId: 'repo-ssh',
@@ -4473,9 +4553,13 @@ describe('registerWorktreeHandlers', () => {
       id: string
       instanceId?: string
     }[]
+    const expectedWorktreeId = makeRepoWorktreeKey(
+      { id: 'repo-1', connectionId: null, executionHostId: null },
+      '/workspace/existing-wt'
+    )
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/existing-wt',
+      expectedWorktreeId,
       expect.objectContaining({
         instanceId: expect.any(String),
         projectId: 'repo:repo-1',
@@ -4520,11 +4604,15 @@ describe('registerWorktreeHandlers', () => {
       projectHostSetupId: 'repo-1',
       lastActivityAt: 1_700_000_000_000
     })
+    const expectedWorktreeId = makeRepoWorktreeKey(
+      { id: 'repo-1', connectionId: null, executionHostId: null },
+      '/workspace/folder'
+    )
 
     await handlers['worktrees:list'](null, { repoId: 'repo-1' })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/folder',
+      expectedWorktreeId,
       expect.objectContaining({
         lastActivityAt: expect.any(Number),
         projectId: 'repo:repo-1',
@@ -4549,6 +4637,10 @@ describe('registerWorktreeHandlers', () => {
     ])
     store.getWorktreeMeta.mockReturnValue(undefined)
     store.setWorktreeMeta.mockReturnValue({ lastActivityAt: 1_700_000_000_000 })
+    const expectedWorktreeId = makeRepoWorktreeKey(
+      { id: 'repo-1', connectionId: null, executionHostId: null },
+      '/workspace/discovered-wt'
+    )
 
     const listed = (await handlers['worktrees:listAll'](null, undefined)) as {
       id: string
@@ -4556,11 +4648,11 @@ describe('registerWorktreeHandlers', () => {
     }[]
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/discovered-wt',
+      expectedWorktreeId,
       expect.objectContaining({ lastActivityAt: expect.any(Number) })
     )
     expect(listed[0]).toMatchObject({
-      id: 'repo-1::/workspace/discovered-wt',
+      id: expectedWorktreeId,
       lastActivityAt: 1_700_000_000_000
     })
   })
@@ -4901,7 +4993,7 @@ describe('registerWorktreeHandlers', () => {
       false
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/improve-dashboard',
+      localWorktreeKey('/workspace/improve-dashboard'),
       expect.objectContaining({
         sparseDirectories: ['packages/web', 'apps/api'],
         sparseBaseRef: 'origin/main',
@@ -4947,7 +5039,7 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/improve-dashboard',
+      localWorktreeKey('/workspace/improve-dashboard'),
       expect.objectContaining({
         sparseDirectories: ['packages/web'],
         sparseBaseRef: 'origin/main',
@@ -4984,7 +5076,7 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/improve-dashboard',
+      localWorktreeKey('/workspace/improve-dashboard'),
       expect.objectContaining({
         sparseDirectories: ['packages/web'],
         sparseBaseRef: 'origin/main',

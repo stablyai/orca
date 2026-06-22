@@ -19,7 +19,14 @@ import type {
   WorktreeMeta
 } from '../../shared/types'
 import { mergeWorktree } from './worktree-logic'
-import { splitWorktreeId } from '../../shared/worktree-id'
+import {
+  getRepoWorktreeIdAliases,
+  isRepoWorktreeIdAlias,
+  makeRepoWorktreeKey,
+  parseWorktreeKey,
+  splitWorktreeId
+} from '../../shared/worktree-id'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
   applyWorkspaceCleanupPolicy,
@@ -266,13 +273,17 @@ async function scanRepoWorkspaces(args: {
 
   const worktrees = gitWorktrees
     .map((gitWorktree) => {
-      const worktreeId = `${repo.id}::${gitWorktree.path}`
-      const meta = store.getWorktreeMeta(worktreeId)
-      return mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
+      const worktreeId = makeRepoWorktreeKey(repo, gitWorktree.path)
+      const meta =
+        store.getWorktreeMeta(worktreeId) ??
+        store.getWorktreeMeta(`${repo.id}::${gitWorktree.path}`)
+      return mergeWorktree(repo.id, gitWorktree, meta, repo.displayName, {
+        hostId: getRepoExecutionHostId(repo)
+      })
     })
     .filter((worktree) => {
       if (targetWorktreeId) {
-        return worktree.id === targetWorktreeId
+        return isRepoWorktreeIdAlias(repo, worktree.path, targetWorktreeId)
       }
       return (
         !repoIsFolder &&
@@ -287,7 +298,9 @@ async function scanRepoWorkspaces(args: {
       worktree,
       scannedAt,
       provider,
-      skipGit: skipGitWorktreeIds.has(worktree.id),
+      skipGit: [...getRepoWorktreeIdAliases(repo, worktree.path)].some((id) =>
+        skipGitWorktreeIds.has(id)
+      ),
       forceGitCheck: Boolean(targetWorktreeId)
     }).catch((error) => {
       console.error('Workspace cleanup candidate scan failed', error)
@@ -530,20 +543,38 @@ function synthesizeDisconnectedSshCandidates(
   targetWorktreeId?: string
 ): WorkspaceCleanupCandidate[] {
   const repoWorktreePrefix = `${repo.id}::`
+  const repoHostId = getRepoExecutionHostId(repo)
+  const isRepoWorktreeId = (worktreeId: string): boolean => {
+    const parsed = parseWorktreeKey(worktreeId)
+    if (parsed) {
+      return parsed.repoId === repo.id && parsed.hostId === repoHostId
+    }
+    return worktreeId.startsWith(repoWorktreePrefix)
+  }
   if (targetWorktreeId) {
-    if (!targetWorktreeId.startsWith(repoWorktreePrefix)) {
+    if (!isRepoWorktreeId(targetWorktreeId)) {
       return []
     }
     // Why: focused delete preflight names one workspace already; walking all
     // persisted metadata is unnecessary for disconnected SSH repos.
-    const meta = store.getWorktreeMeta(targetWorktreeId)
+    const parsed = splitWorktreeId(targetWorktreeId)
+    const canonicalTargetId =
+      parsed && parsed.repoId === repo.id
+        ? makeRepoWorktreeKey(repo, parsed.worktreePath)
+        : targetWorktreeId
+    const legacyTargetId =
+      parsed && parsed.repoId === repo.id ? `${repo.id}::${parsed.worktreePath}` : targetWorktreeId
+    const meta =
+      store.getWorktreeMeta(targetWorktreeId) ??
+      store.getWorktreeMeta(canonicalTargetId) ??
+      store.getWorktreeMeta(legacyTargetId)
     return meta ? [createDisconnectedSshCandidate(repo, scannedAt, targetWorktreeId, meta)] : []
   }
 
   const candidates: WorkspaceCleanupCandidate[] = []
   const allMeta = store.getAllWorktreeMeta()
   for (const worktreeId in allMeta) {
-    if (!Object.hasOwn(allMeta, worktreeId) || !worktreeId.startsWith(repoWorktreePrefix)) {
+    if (!Object.hasOwn(allMeta, worktreeId) || !isRepoWorktreeId(worktreeId)) {
       continue
     }
     const meta = allMeta[worktreeId]

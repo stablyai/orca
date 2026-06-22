@@ -113,7 +113,13 @@ import {
 } from '../worktree-removal-safety'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
-import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree-id'
+import {
+  FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
+  makeLegacyWorktreeId,
+  makeRepoWorktreeKey,
+  parseWorktreeKey
+} from '../../shared/worktree-id'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
 import {
   getLocalProjectGitExecOptions,
@@ -173,6 +179,39 @@ function dedupeGitWorktreesByPath(gitWorktrees: GitWorktreeInfo[]): GitWorktreeI
     uniqueGitWorktrees.push(gitWorktree)
   }
   return uniqueGitWorktrees
+}
+
+function getRepoWorktreeId(
+  repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>,
+  path: string
+): string {
+  return makeRepoWorktreeKey(repo, path)
+}
+
+function getRepoLegacyWorktreeId(repo: Pick<Repo, 'id'>, path: string): string {
+  return makeLegacyWorktreeId(repo.id, path)
+}
+
+function migrateLegacyWorktreeMetaIfSafe(store: Store, repo: Repo, path: string): void {
+  const canonicalId = getRepoWorktreeId(repo, path)
+  if (store.getWorktreeMeta(canonicalId)) {
+    return
+  }
+  const legacyId = getRepoLegacyWorktreeId(repo, path)
+  const legacyMeta = store.getWorktreeMeta(legacyId)
+  if (!legacyMeta) {
+    return
+  }
+  const repoHostId = getRepoExecutionHostId(repo)
+  if (legacyMeta.hostId !== undefined && legacyMeta.hostId !== repoHostId) {
+    return
+  }
+  store.migrateWorktreeIdentity(legacyId, canonicalId)
+}
+
+function isCanonicalWorktreeIdForRepoHost(repo: Repo, worktreeId: string): boolean {
+  const parsed = parseWorktreeKey(worktreeId)
+  return parsed?.repoId === repo.id && parsed.hostId === getRepoExecutionHostId(repo)
 }
 
 function getProjectHostSetupMetaUpdates(
@@ -428,14 +467,17 @@ function pruneLineageForMissingRepoWorktrees(
   ) {
     return
   }
-  const liveIds = new Set(gitWorktrees.map((worktree) => `${repo.id}::${worktree.path}`))
+  const liveIds = new Set(gitWorktrees.map((worktree) => getRepoWorktreeId(repo, worktree.path)))
+  const legacyLiveIds = new Set(
+    gitWorktrees.map((worktree) => getRepoLegacyWorktreeId(repo, worktree.path))
+  )
   const repoPrefix = `${repo.id}::`
   for (const childWorkspaceKey of Object.keys(store.getAllWorkspaceLineage?.() ?? {})) {
     const childScope = parseWorkspaceKey(childWorkspaceKey)
     if (
       childScope?.type === 'worktree' &&
       childScope.worktreeId.startsWith(repoPrefix) &&
-      !liveIds.has(childScope.worktreeId)
+      !legacyLiveIds.has(childScope.worktreeId)
     ) {
       if (isWorkspaceKey(childWorkspaceKey)) {
         store.removeWorkspaceLineage?.(childWorkspaceKey)
@@ -443,7 +485,10 @@ function pruneLineageForMissingRepoWorktrees(
     }
   }
   for (const [childId, lineage] of Object.entries(store.getAllWorktreeLineage())) {
-    if (childId.startsWith(repoPrefix) && !liveIds.has(childId)) {
+    if (
+      (childId.startsWith(repoPrefix) && !legacyLiveIds.has(childId)) ||
+      (isCanonicalWorktreeIdForRepoHost(repo, childId) && !liveIds.has(childId))
+    ) {
       // Why: path-derived IDs can disappear and later be reused by a different
       // checkout. Once a successful scan proves the child is gone, drop its
       // lineage so a future same-path worktree cannot inherit it. Missing
@@ -452,7 +497,10 @@ function pruneLineageForMissingRepoWorktrees(
       store.removeWorktreeLineage(childId)
       store.removeWorkspaceLineage?.(worktreeWorkspaceKey(childId))
     }
-    if (lineage.parentWorktreeId.startsWith(repoPrefix) && !liveIds.has(lineage.parentWorktreeId)) {
+    if (
+      lineage.parentWorktreeId.startsWith(repoPrefix) &&
+      !legacyLiveIds.has(lineage.parentWorktreeId)
+    ) {
       const parentMeta = store.getWorktreeMeta(lineage.parentWorktreeId)
       if (!parentMeta || parentMeta.instanceId === lineage.parentWorktreeInstanceId) {
         // Why: keep the child lineage so the UI can show "Missing parent", but
@@ -517,13 +565,16 @@ function listDisconnectedSshWorktrees(
 ): ReturnType<typeof mergeWorktree>[] {
   const byWorktreeId = new Map<string, ReturnType<typeof mergeWorktree>>()
   for (const candidate of metaIndex.get(repo.id) ?? []) {
-    const ownershipUpdates = getProjectHostSetupMetaUpdates(store, repo, candidate.meta)
+    migrateLegacyWorktreeMetaIfSafe(store, repo, candidate.path)
+    const canonicalId = getRepoWorktreeId(repo, candidate.path)
+    const candidateMeta = store.getWorktreeMeta(canonicalId) ?? candidate.meta
+    const ownershipUpdates = getProjectHostSetupMetaUpdates(store, repo, candidateMeta)
     const meta =
       Object.keys(ownershipUpdates).length > 0
-        ? { ...candidate.meta, ...ownershipUpdates }
-        : candidate.meta
+        ? { ...candidateMeta, ...ownershipUpdates }
+        : candidateMeta
     if (Object.keys(ownershipUpdates).length > 0) {
-      store.setWorktreeMeta(candidate.id, ownershipUpdates)
+      store.setWorktreeMeta(canonicalId, ownershipUpdates)
     }
     const worktree = mergeWorktree(
       repo.id,
@@ -545,9 +596,12 @@ function buildDetectedGitWorktrees(
   const knownOrcaLayouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
   const isLegacyRepoForVisibility = isLegacyRepoForExternalWorktreeVisibility(repo)
   return dedupeGitWorktreesByPath(gitWorktrees).map((gitWorktree) => {
-    const worktreeId = `${repo.id}::${gitWorktree.path}`
+    migrateLegacyWorktreeMetaIfSafe(store, repo, gitWorktree.path)
+    const worktreeId = getRepoWorktreeId(repo, gitWorktree.path)
     let meta = store.getWorktreeMeta(worktreeId)
-    const worktree = mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
+    const worktree = mergeWorktree(repo.id, gitWorktree, meta, repo.displayName, {
+      hostId: getRepoExecutionHostId(repo)
+    })
     const detected = toDetectedWorktree({
       repo,
       worktree,
@@ -563,7 +617,9 @@ function buildDetectedGitWorktrees(
     meta = resolveWorktreeMetaWithDiscoveryBackfill(store, repo, worktreeId)
     return toDetectedWorktree({
       repo,
-      worktree: mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
+      worktree: mergeWorktree(repo.id, gitWorktree, meta, repo.displayName, {
+        hostId: getRepoExecutionHostId(repo)
+      }),
       meta,
       settings,
       knownOrcaLayouts,
@@ -577,21 +633,32 @@ function stampAndMergeVisibleDetectedWorktree(
   repo: Repo,
   detected: DetectedWorktree
 ) {
+  migrateLegacyWorktreeMetaIfSafe(store, repo, detected.path)
   const meta = resolveWorktreeMetaWithDiscoveryBackfill(store, repo, detected.id)
-  return mergeWorktree(repo.id, detected, meta, repo.displayName)
+  return mergeWorktree(repo.id, detected, meta, repo.displayName, {
+    hostId: getRepoExecutionHostId(repo)
+  })
 }
 
 function getFolderWorkspaceRootId(repo: Repo): string {
-  return `${repo.id}::${repo.path}`
+  return getRepoWorktreeId(repo, repo.path)
 }
 
 function getFolderWorkspaceInstanceId(repo: Repo, instanceId: string): string {
   return `${getFolderWorkspaceRootId(repo)}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}${instanceId}`
 }
 
+function getLegacyFolderWorkspaceRootId(repo: Repo): string {
+  return getRepoLegacyWorktreeId(repo, repo.path)
+}
+
 function getFolderWorkspaceInstanceIdentity(repo: Repo, worktreeId: string): string {
   const prefix = `${getFolderWorkspaceRootId(repo)}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
-  return worktreeId.startsWith(prefix) ? worktreeId.slice(prefix.length) : randomUUID()
+  const legacyPrefix = `${getLegacyFolderWorkspaceRootId(repo)}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
+  if (worktreeId.startsWith(prefix)) {
+    return worktreeId.slice(prefix.length)
+  }
+  return worktreeId.startsWith(legacyPrefix) ? worktreeId.slice(legacyPrefix.length) : randomUUID()
 }
 
 function isFolderWorkspaceIdForRepo(repo: Repo, worktreeId: string): boolean {
@@ -600,6 +667,44 @@ function isFolderWorkspaceIdForRepo(repo: Repo, worktreeId: string): boolean {
     worktreeId === rootId ||
     worktreeId.startsWith(`${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`)
   )
+}
+
+function isLegacyFolderWorkspaceIdForRepo(repo: Repo, worktreeId: string): boolean {
+  const rootId = getLegacyFolderWorkspaceRootId(repo)
+  return (
+    worktreeId === rootId ||
+    worktreeId.startsWith(`${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`)
+  )
+}
+
+function isFolderWorkspaceRootIdForRepo(repo: Repo, worktreeId: string): boolean {
+  return (
+    worktreeId === getFolderWorkspaceRootId(repo) ||
+    worktreeId === getLegacyFolderWorkspaceRootId(repo)
+  )
+}
+
+function getCanonicalFolderWorkspaceId(repo: Repo, worktreeId: string): string {
+  if (!isLegacyFolderWorkspaceIdForRepo(repo, worktreeId)) {
+    return worktreeId
+  }
+  const instanceId = getFolderWorkspaceInstanceIdentity(repo, worktreeId)
+  return worktreeId === getLegacyFolderWorkspaceRootId(repo)
+    ? getFolderWorkspaceRootId(repo)
+    : getFolderWorkspaceInstanceId(repo, instanceId)
+}
+
+function migrateLegacyFolderWorkspaceMetaIfSafe(store: Store, repo: Repo): void {
+  for (const [worktreeId, meta] of Object.entries(store.getAllWorktreeMeta())) {
+    if (!isLegacyFolderWorkspaceIdForRepo(repo, worktreeId)) {
+      continue
+    }
+    const repoHostId = getRepoExecutionHostId(repo)
+    if (meta.hostId !== undefined && meta.hostId !== repoHostId) {
+      continue
+    }
+    store.migrateWorktreeIdentity(worktreeId, getCanonicalFolderWorkspaceId(repo, worktreeId))
+  }
 }
 
 function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: WorktreeMeta): Worktree {
@@ -648,6 +753,7 @@ function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: WorktreeMeta
 }
 
 function listFolderWorkspaces(store: Store, repo: Repo): Worktree[] {
+  migrateLegacyFolderWorkspaceMetaIfSafe(store, repo)
   const rootId = getFolderWorkspaceRootId(repo)
   const allMeta = store.getAllWorktreeMeta()
   const ids = Object.keys(allMeta).filter((worktreeId) =>
@@ -1216,7 +1322,7 @@ export function registerWorktreeHandlers(
           throw new Error(`Repo not found: ${repoId}`)
         }
         if (isFolderRepo(repo)) {
-          if (args.worktreeId === getFolderWorkspaceRootId(repo)) {
+          if (isFolderWorkspaceRootIdForRepo(repo, args.worktreeId)) {
             throw new Error(
               'Cannot delete the project root workspace. Remove the folder project instead.'
             )

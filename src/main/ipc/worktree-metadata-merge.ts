@@ -1,5 +1,10 @@
 import { basename } from 'path'
 import type { GitWorktreeInfo, Worktree, WorktreeMeta } from '../../shared/types'
+import {
+  makeLegacyWorktreeId,
+  makeWorktreeKey,
+  type ParsedCanonicalWorktreeKey
+} from '../../shared/worktree-id'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import { getLinkedWorkItemMetadata } from './worktree-linked-work-item-metadata'
 
@@ -10,15 +15,19 @@ export function mergeWorktree(
   repoId: string,
   git: GitWorktreeInfo,
   meta: WorktreeMeta | undefined,
-  defaultDisplayName?: string
+  defaultDisplayName?: string,
+  canonical?: Pick<ParsedCanonicalWorktreeKey, 'hostId'>
 ): Worktree {
   const branchShort = git.branch.replace(/^refs\/heads\//, '')
+  const hostId = meta?.hostId ?? canonical?.hostId
   return {
-    id: `${repoId}::${git.path}`,
+    id: hostId
+      ? makeWorktreeKey({ hostId, repoId, path: git.path })
+      : makeLegacyWorktreeId(repoId, git.path),
     ...(meta?.instanceId !== undefined ? { instanceId: meta.instanceId } : {}),
     repoId,
     ...(meta?.projectId !== undefined ? { projectId: meta.projectId } : {}),
-    ...(meta?.hostId !== undefined ? { hostId: meta.hostId } : {}),
+    ...(hostId !== undefined ? { hostId } : {}),
     ...(meta?.projectHostSetupId !== undefined
       ? { projectHostSetupId: meta.projectHostSetupId }
       : {}),

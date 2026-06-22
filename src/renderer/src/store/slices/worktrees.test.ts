@@ -82,7 +82,7 @@ const mockApi = {
 // @ts-expect-error -- test shim
 globalThis.window = { api: mockApi }
 
-import { createWorktreeSlice } from './worktrees'
+import { createWorktreeSlice, WORKTREE_ID_KEYED_MAP_KEYS } from './worktrees'
 import type { PendingWorktreeCreation } from '@/lib/pending-worktree-creation'
 import { getHostedReviewCacheKey } from './hosted-review'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
@@ -92,6 +92,7 @@ import {
 } from '../../components/browser-pane/webview-registry'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { makeWorktreeKey } from '../../../../shared/worktree-id'
 
 function resetRemoteRuntimeMocks() {
   clearRuntimeCompatibilityCacheForTests()
@@ -4448,6 +4449,34 @@ describe('setWorktreesPinnedAndReveal', () => {
 describe('migrateWorktreeIdentity', () => {
   const OLD = 'repo1::/ws/cunner'
   const NEW = 'repo1::/ws/worktree-creation-spinner'
+  const CANONICAL = makeWorktreeKey({ hostId: 'local', repoId: 'repo1', path: '/ws/cunner' })
+
+  function makeMigrationMapValue(
+    key: (typeof WORKTREE_ID_KEYED_MAP_KEYS)[number],
+    worktreeId: string
+  ): unknown {
+    switch (key) {
+      case 'worktreeLineageById':
+        return makeLineage({ worktreeId, parentWorktreeId: 'repo1::/ws/parent' })
+      case 'tabsByWorktree':
+        return [{ id: 'tab1', worktreeId }]
+      case 'browserTabsByWorktree':
+        return [{ id: 'browser1', worktreeId }]
+      case 'recentlyClosedBrowserTabsByWorktree':
+        return [
+          {
+            workspace: { id: 'closed-browser', worktreeId },
+            pages: [{ id: 'closed-page', worktreeId }]
+          }
+        ]
+      case 'unifiedTabsByWorktree':
+        return [{ id: 'unified1', worktreeId }]
+      case 'groupsByWorktree':
+        return [{ id: 'group1', worktreeId }]
+      default:
+        return { marker: key }
+    }
+  }
 
   it('re-keys worktree-scoped maps, pointers, the Set, and openFiles old->new', () => {
     const store = createTestStore()
@@ -4528,6 +4557,50 @@ describe('migrateWorktreeIdentity', () => {
     expect(s.sleepingAgentSessionsByPaneKey['tab1:leaf']?.worktreeId).toBe(NEW)
     // Tab-id-keyed state is untouched — the tab survives with the same id.
     expect(s.terminalLayoutsByTabId.tab1).toBeDefined()
+  })
+
+  it('moves every declared worktree-id keyed map and lineage relationship to the canonical id', () => {
+    const store = createTestStore()
+    const childId = 'repo1::/ws/child'
+    const mapState = Object.fromEntries(
+      WORKTREE_ID_KEYED_MAP_KEYS.map((key) => [key, { [OLD]: makeMigrationMapValue(key, OLD) }])
+    ) as Partial<AppState>
+
+    store.setState({
+      ...mapState,
+      worktreeLineageById: {
+        [OLD]: makeLineage({ worktreeId: OLD, parentWorktreeId: 'repo1::/ws/parent' }),
+        [childId]: makeLineage({ worktreeId: childId, parentWorktreeId: OLD })
+      },
+      workspaceLineageByChildKey: {
+        [worktreeWorkspaceKey(OLD)]: makeWorkspaceLineage({
+          childWorkspaceKey: worktreeWorkspaceKey(OLD),
+          parentWorkspaceKey: folderWorkspaceKey('folder-parent')
+        }),
+        [worktreeWorkspaceKey(childId)]: makeWorkspaceLineage({
+          childWorkspaceKey: worktreeWorkspaceKey(childId),
+          parentWorkspaceKey: worktreeWorkspaceKey(OLD)
+        })
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().migrateWorktreeIdentity(OLD, CANONICAL)
+    const s = store.getState()
+
+    for (const key of WORKTREE_ID_KEYED_MAP_KEYS) {
+      const map = s[key] as Record<string, unknown>
+      expect(map[OLD], `${key} retained the legacy key`).toBeUndefined()
+      expect(map[CANONICAL], `${key} did not receive the canonical key`).toBeDefined()
+    }
+    expect(s.worktreeLineageById[CANONICAL]).toMatchObject({ worktreeId: CANONICAL })
+    expect(s.worktreeLineageById[childId]).toMatchObject({ parentWorktreeId: CANONICAL })
+    expect(s.workspaceLineageByChildKey[worktreeWorkspaceKey(OLD)]).toBeUndefined()
+    expect(s.workspaceLineageByChildKey[worktreeWorkspaceKey(CANONICAL)]).toMatchObject({
+      childWorkspaceKey: worktreeWorkspaceKey(CANONICAL)
+    })
+    expect(s.workspaceLineageByChildKey[worktreeWorkspaceKey(childId)]).toMatchObject({
+      parentWorkspaceKey: worktreeWorkspaceKey(CANONICAL)
+    })
   })
 
   it('is a no-op when the ids match', () => {
