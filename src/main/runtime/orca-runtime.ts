@@ -14646,21 +14646,22 @@ export class OrcaRuntimeService {
     if (!mutationId) {
       return this.runCreateMobileSessionTerminal(worktreeSelector, opts)
     }
+    const mutationKey = `${worktreeSelector}\0${mutationId}`
     // Why: a retried create (double-tap, reconnect replay) with the same
     // idempotency key must return the in-flight operation instead of spawning a
     // duplicate terminal. Settled entries are dropped so a later retry — after a
     // failure or after the result is consumed — can start a fresh create.
-    const inflight = this.mobileTerminalCreateByMutationId.get(mutationId)
+    const inflight = this.mobileTerminalCreateByMutationId.get(mutationKey)
     if (inflight) {
       return inflight
     }
     const run = this.runCreateMobileSessionTerminal(worktreeSelector, opts)
-    this.mobileTerminalCreateByMutationId.set(mutationId, run)
+    this.mobileTerminalCreateByMutationId.set(mutationKey, run)
     void run
       .catch(() => {})
       .finally(() => {
-        if (this.mobileTerminalCreateByMutationId.get(mutationId) === run) {
-          this.mobileTerminalCreateByMutationId.delete(mutationId)
+        if (this.mobileTerminalCreateByMutationId.get(mutationKey) === run) {
+          this.mobileTerminalCreateByMutationId.delete(mutationKey)
         }
       })
     return run
