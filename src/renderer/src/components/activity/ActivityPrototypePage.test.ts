@@ -754,6 +754,18 @@ describe('activity filter focus shortcut', () => {
         true
       )
     ).toBe(false)
+    expect(
+      isActivityFilterFocusShortcut(
+        { key: 'f', metaKey: true, ctrlKey: true, shiftKey: false, altKey: false },
+        true
+      )
+    ).toBe(false)
+    expect(
+      isActivityFilterFocusShortcut(
+        { key: 'f', metaKey: true, ctrlKey: true, shiftKey: false, altKey: false },
+        false
+      )
+    ).toBe(false)
   })
 
   it('prevents default, focuses, and selects only for handled filter shortcuts', () => {
@@ -818,6 +830,33 @@ describe('activity filter focus shortcut', () => {
     expect(prevented).toBe(1)
     expect(focused).toBe(1)
     expect(selected).toBe(1)
+  })
+
+  it('does not prevent default when the filter input is unavailable', () => {
+    let prevented = 0
+    const activeElement = {
+      classList: { contains: () => false }
+    } as unknown as Element
+
+    expect(
+      handleActivityFilterFocusShortcut({
+        activeElement,
+        event: {
+          key: 'f',
+          metaKey: true,
+          ctrlKey: false,
+          shiftKey: false,
+          altKey: false,
+          preventDefault: () => {
+            prevented += 1
+          }
+        },
+        input: null,
+        isMac: true,
+        terminalPortalTargets: []
+      })
+    ).toBe(false)
+    expect(prevented).toBe(0)
   })
 
   it('ignores shortcut handling while terminal-owned elements have focus', () => {

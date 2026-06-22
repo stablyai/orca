@@ -1035,7 +1035,7 @@ export function isActivityFilterFocusShortcut(
   if (event.key.toLowerCase() !== 'f' || event.shiftKey || event.altKey) {
     return false
   }
-  return isMac ? event.metaKey : event.ctrlKey
+  return isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
 }
 
 export function shouldIgnoreActivityFilterFocusShortcutTarget(
@@ -1073,9 +1073,12 @@ export function handleActivityFilterFocusShortcut({
   if (!isActivityFilterFocusShortcut(event, isMac)) {
     return false
   }
+  if (!input) {
+    return false
+  }
   event.preventDefault()
-  input?.focus()
-  input?.select()
+  input.focus()
+  input.select()
   return true
 }
 
