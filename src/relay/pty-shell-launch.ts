@@ -3,6 +3,7 @@ import { homedir } from 'os'
 import { dirname, join } from 'path'
 import { getPosixOmpShellWrapper } from '../main/pty/omp-shell-wrapper'
 import {
+  getPosixCodexShellWrapper,
   getZshFinalZdotdirRestoreBlock,
   getZshShellReadyMarkerRegistrationBlock,
   getZshStartupFileSourceBlock
@@ -11,6 +12,7 @@ import {
 const RELAY_SHELL_READY_DIR = '.orca-relay/shell-ready'
 const POSIX_LOGIN_ARGS = ['-l']
 const SHELL_READY_MARKER_ESCAPED = '\\033]777;orca-shell-ready\\007'
+const ORCA_CODEX_HISTORY_PERSISTENCE_NONE = 'ORCA_CODEX_HISTORY_PERSISTENCE_NONE'
 
 export type RelayShellLaunchConfig = {
   args: string[]
@@ -38,9 +40,19 @@ function windowsShellArgs(shellName: string): string[] | null {
   return null
 }
 
-function hasOverlayRestoreEnv(env: Record<string, string>): boolean {
+function isCodexLaunchCommand(command: string | undefined): boolean {
+  return typeof command === 'string' && /^\s*codex(?:\s|$)/.test(command)
+}
+
+function hasOverlayRestoreEnv(env: Record<string, string>, command?: string): boolean {
+  // Why: zsh relay wrappers are usually skipped without overlay vars, but
+  // Codex launches still need wrapper materialization to enforce no-history mode.
   return Boolean(
-    env.ORCA_OPENCODE_CONFIG_DIR || env.ORCA_REMOTE_CLI_BIN_DIR || env.ORCA_OMP_STATUS_EXTENSION
+    env.ORCA_OPENCODE_CONFIG_DIR ||
+    env.ORCA_REMOTE_CLI_BIN_DIR ||
+    env.ORCA_OMP_STATUS_EXTENSION ||
+    env.ORCA_CODEX_HOME ||
+    isCodexLaunchCommand(command)
   )
 }
 
@@ -102,6 +114,7 @@ if [[ ! -o login ]]; then
   [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
   [[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
   ${getPosixOmpShellWrapper()}
+  ${getPosixCodexShellWrapper({ includeHistoryOnlyMarker: true })}
 fi
 if [[ ! -o login ]]; then
 ${getZshFinalZdotdirRestoreBlock('"${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"')}
@@ -117,6 +130,7 @@ ${getZshStartupFileSourceBlock({
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 [[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
 ${getPosixOmpShellWrapper()}
+${getPosixCodexShellWrapper({ includeHistoryOnlyMarker: true })}
 ${getZshFinalZdotdirRestoreBlock('"${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"')}
 ${getZshShellReadyMarkerRegistrationBlock(SHELL_READY_MARKER_ESCAPED)}
 `
@@ -133,6 +147,7 @@ fi
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 [[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
 ${getPosixOmpShellWrapper()}
+${getPosixCodexShellWrapper({ includeHistoryOnlyMarker: true })}
 # Why: SSH bash sessions need the same command lifecycle markers as local
 # bash so agent rows stop showing "working" when the foreground command exits.
 __orca_osc133_precmd() {
@@ -240,9 +255,28 @@ trap '__orca_osc133_preexec' DEBUG
 export function getRelayShellLaunchConfig(
   shellPath: string,
   env: Record<string, string>,
-  platform: NodeJS.Platform = process.platform,
-  options: { emitReadyMarker?: boolean } = {}
+  platformOrCommand: NodeJS.Platform | string = process.platform,
+  options: { emitReadyMarker?: boolean; command?: string } = {}
 ): RelayShellLaunchConfig {
+  const platformNames = new Set<NodeJS.Platform>([
+    'aix',
+    'android',
+    'cygwin',
+    'darwin',
+    'freebsd',
+    'haiku',
+    'linux',
+    'netbsd',
+    'openbsd',
+    'sunos',
+    'win32'
+  ])
+  const platform = platformNames.has(platformOrCommand as NodeJS.Platform)
+    ? (platformOrCommand as NodeJS.Platform)
+    : process.platform
+  const command = platformNames.has(platformOrCommand as NodeJS.Platform)
+    ? options.command
+    : platformOrCommand
   const shellName = shellBasename(shellPath)
   const emitReadyMarker = options.emitReadyMarker === true
   if (platform === 'win32') {
@@ -256,7 +290,7 @@ export function getRelayShellLaunchConfig(
   }
   // Why: preserve plain zsh startup fast path; only force wrappers when
   // shell-ready or overlay env restoration is requested.
-  if (shellName === 'zsh' && !hasOverlayRestoreEnv(env) && !emitReadyMarker) {
+  if (shellName === 'zsh' && !hasOverlayRestoreEnv(env, command) && !emitReadyMarker) {
     return { args: POSIX_LOGIN_ARGS, env: {} }
   }
 
@@ -269,13 +303,17 @@ export function getRelayShellLaunchConfig(
       env: {
         ORCA_ORIG_ZDOTDIR: resolveOriginalZdotdir(env),
         ZDOTDIR: join(root, 'zsh'),
-        ...(emitReadyMarker ? { ORCA_SHELL_READY_MARKER: '1' } : {})
+        ...(emitReadyMarker ? { ORCA_SHELL_READY_MARKER: '1' } : {}),
+        ...(isCodexLaunchCommand(command) ? { [ORCA_CODEX_HISTORY_PERSISTENCE_NONE]: '1' } : {})
       }
     }
   }
 
   return {
     args: ['--rcfile', join(root, 'bash', 'rcfile')],
-    env: emitReadyMarker ? { ORCA_SHELL_READY_MARKER: '1' } : {}
+    env: {
+      ...(emitReadyMarker ? { ORCA_SHELL_READY_MARKER: '1' } : {}),
+      ...(isCodexLaunchCommand(command) ? { [ORCA_CODEX_HISTORY_PERSISTENCE_NONE]: '1' } : {})
+    }
   }
 }

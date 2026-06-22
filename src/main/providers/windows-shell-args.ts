@@ -44,6 +44,89 @@ export type WindowsShellWslContext = {
   treatPosixCwdAsWsl?: boolean
 }
 
+const CODEX_HISTORY_DISABLED_BASH_BOOTSTRAP =
+  // Why: Codex applies later/subcommand -c overrides last; keep safety after user args.
+  'if [[ -n "${ORCA_CODEX_HOME:-}" ]]; then codex() { local -a _orca_codex_args; local _orca_codex_inserted=0; local _orca_codex_arg; export CODEX_HOME="${ORCA_CODEX_HOME}"; for _orca_codex_arg in "$@"; do if [[ "${_orca_codex_inserted}" == "0" && "${_orca_codex_arg}" == "--" ]]; then _orca_codex_args+=(-c \'history.persistence="none"\'); _orca_codex_inserted=1; fi; _orca_codex_args+=("${_orca_codex_arg}"); done; if [[ "${_orca_codex_inserted}" == "0" ]]; then _orca_codex_args+=(-c \'history.persistence="none"\'); fi; command codex "${_orca_codex_args[@]}"; }; export -f codex; fi'
+const CODEX_HISTORY_DISABLED_WSL_SH_BOOTSTRAP = `if [ -n "\${ORCA_CODEX_HOME:-}" ]; then
+  if ! _orca_codex_bin=$(mktemp -d "\${TMPDIR:-/tmp}/orca-codex-history.XXXXXX"); then
+    echo "failed to create Orca Codex wrapper directory" >&2
+    exit 1
+  fi
+  if ! chmod 700 "\${_orca_codex_bin}"; then
+    rm -rf "\${_orca_codex_bin}"
+    echo "failed to secure Orca Codex wrapper directory" >&2
+    exit 1
+  fi
+  if ! cat > "\${_orca_codex_bin}/codex" <<'__ORCA_CODEX_WRAPPER__'
+#!/bin/sh
+_orca_wrapper_dir="\${ORCA_CODEX_WRAPPER_DIR:-}"
+_orca_original_path="\${PATH:-}"
+_orca_search_path=""
+_orca_old_ifs=$IFS
+IFS=:
+for _orca_path_entry in \${_orca_original_path}; do
+  if [ -n "\${_orca_wrapper_dir}" ] && [ "\${_orca_path_entry}" = "\${_orca_wrapper_dir}" ]; then
+    continue
+  fi
+  if [ -z "\${_orca_search_path}" ]; then
+    _orca_search_path="\${_orca_path_entry}"
+  else
+    _orca_search_path="\${_orca_search_path}:\${_orca_path_entry}"
+  fi
+done
+IFS=$_orca_old_ifs
+_orca_real_codex=$(PATH="\${_orca_search_path}" command -v codex 2>/dev/null || true)
+if [ -z "\${_orca_real_codex}" ]; then
+  echo "codex executable not found" >&2
+  exit 127
+fi
+_orca_codex_inserted=0
+export CODEX_HOME="\${ORCA_CODEX_HOME}"
+# Why: Codex applies later/subcommand -c overrides last; keep safety after user args.
+_orca_remaining=$#
+while [ "\${_orca_remaining}" -gt 0 ]; do
+  _orca_codex_arg=$1
+  shift
+  _orca_remaining=$((_orca_remaining - 1))
+  if [ "\${_orca_codex_inserted}" = "0" ] && [ "\${_orca_codex_arg}" = "--" ]; then
+    set -- "$@" -c 'history.persistence="none"'
+    _orca_codex_inserted=1
+  fi
+  set -- "$@" "\${_orca_codex_arg}"
+done
+if [ "\${_orca_codex_inserted}" = "0" ]; then
+  set -- "$@" -c 'history.persistence="none"'
+fi
+exec "\${_orca_real_codex}" "$@"
+__ORCA_CODEX_WRAPPER__
+  then
+    rm -rf "\${_orca_codex_bin}"
+    echo "failed to write Orca Codex wrapper" >&2
+    exit 1
+  fi
+  if ! chmod +x "\${_orca_codex_bin}/codex"; then
+    rm -rf "\${_orca_codex_bin}"
+    echo "failed to make Orca Codex wrapper executable" >&2
+    exit 1
+  fi
+  export ORCA_CODEX_WRAPPER_DIR="\${_orca_codex_bin}"
+  export PATH="\${_orca_codex_bin}:$PATH"
+  _orca_cleanup_codex_wrapper_dir() {
+    # Why: only delete wrapper dirs created by this bootstrap, never arbitrary paths.
+    case "\${ORCA_CODEX_WRAPPER_DIR:-}" in
+      */orca-codex-history.*) rm -rf "\${ORCA_CODEX_WRAPPER_DIR}" ;;
+    esac
+  }
+  trap _orca_cleanup_codex_wrapper_dir 0
+fi`
+
+export function getWslCodexHistoryBootstrap(): string {
+  return CODEX_HISTORY_DISABLED_WSL_SH_BOOTSTRAP
+}
+const CODEX_HISTORY_DISABLED_CMD_BOOTSTRAP =
+  // Why: Codex applies later/subcommand -c overrides last; keep safety after user args.
+  "if defined ORCA_CODEX_HOME doskey codex=powershell.exe -NoLogo -Command \"$$orcaCodexCommand=Get-Command codex -CommandType Application -ErrorAction SilentlyContinue ^| Select-Object -First 1;if($$null -eq $$orcaCodexCommand){throw 'codex executable not found'};$$orcaCodexArgs=[System.Collections.Generic.List[string]]::new();$$orcaCodexInserted=$$false;foreach($$arg in $$args){if(-not $$orcaCodexInserted -and $$arg -eq '--'){[void]$$orcaCodexArgs.Add('-c');[void]$$orcaCodexArgs.Add('history.persistence=none');$$orcaCodexInserted=$$true};[void]$$orcaCodexArgs.Add($$arg)};if(-not $$orcaCodexInserted){[void]$$orcaCodexArgs.Add('-c');[void]$$orcaCodexArgs.Add('history.persistence=none')};$$env:CODEX_HOME=$$env:ORCA_CODEX_HOME;& $$orcaCodexCommand.Source @($$orcaCodexArgs.ToArray())\" $*"
+
 /**
  * Returns a startup command that is safe to embed in cmd.exe launch args.
  *
@@ -97,7 +180,7 @@ function buildWslShellArgs(linuxCwd: string, distro?: string): string[] {
   const setupCommand = [
     `cd ${quotePosixShell(linuxCwd)}`,
     'export PATH="$HOME/.local/bin:$PATH"',
-    buildWslInteractiveLoginShellCommand()
+    buildWslInteractiveLoginShellCommand(getWslCodexHistoryBootstrap())
   ].join(' && ')
   // Why: WSL users often customize zsh rather than bash; launch the distro's
   // login shell so terminal PATH matches the environment Orca detects.
@@ -125,13 +208,11 @@ export function resolveWindowsShellLaunchArgs(
 
   if (shellBasename === 'cmd.exe') {
     const shellArgStartupCommand = getCmdShellArgStartupCommand(startupCommand)
+    const setupCommand = shellArgStartupCommand
+      ? `${CMD_UTF8_SETUP_COMMAND} & ${CODEX_HISTORY_DISABLED_CMD_BOOTSTRAP} & ${shellArgStartupCommand}`
+      : `${CMD_UTF8_SETUP_COMMAND} & ${CODEX_HISTORY_DISABLED_CMD_BOOTSTRAP}`
     return {
-      shellArgs: [
-        '/K',
-        shellArgStartupCommand
-          ? `${CMD_UTF8_SETUP_COMMAND} & ${shellArgStartupCommand}`
-          : CMD_UTF8_SETUP_COMMAND
-      ],
+      shellArgs: ['/K', setupCommand],
       ...(shellArgStartupCommand ? { startupCommandDeliveredInShellArgs: true } : {}),
       effectiveCwd: cwd,
       validationCwd: cwd
@@ -154,7 +235,7 @@ export function resolveWindowsShellLaunchArgs(
 
   if (isWindowsGitBashShellPath(shellPath)) {
     return {
-      shellArgs: ['--login', '-i'],
+      shellArgs: ['-c', `${CODEX_HISTORY_DISABLED_BASH_BOOTSTRAP}; exec bash --login -i`],
       effectiveCwd: cwd,
       validationCwd: cwd
     }

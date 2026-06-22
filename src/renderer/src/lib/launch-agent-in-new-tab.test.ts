@@ -7,6 +7,7 @@ const mockSetTabBarOrder = vi.fn()
 const mockSetAgentStatus = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
 const mockTrack = vi.fn()
+const mockPlatformState = vi.hoisted(() => ({ clientPlatform: 'linux' as NodeJS.Platform }))
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
@@ -99,11 +100,18 @@ vi.mock('@/runtime/web-runtime-session', () => ({
   isWebTerminalSurfaceTabId: vi.fn(() => false)
 }))
 
+vi.mock('@/lib/new-workspace', () => ({
+  get CLIENT_PLATFORM() {
+    return mockPlatformState.clientPlatform
+  }
+}))
+
 describe('launchAgentInNewTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockIsWebRuntimeSessionActive.mockReturnValue(false)
     mockCreateWebRuntimeSessionTerminal.mockResolvedValue(true)
+    mockPlatformState.clientPlatform = 'linux'
     store.activeRepoId = 'repo-1'
     store.activeWorktreeId = 'wt-1'
     store.settings = {
@@ -237,7 +245,8 @@ describe('launchAgentInNewTab', () => {
       environmentId: 'web-runtime',
       targetGroupId: 'group-1',
       activate: true,
-      command: "codex '--model' 'gpt-5' '--reasoning-effort' 'high' 'fix the spinner'",
+      command:
+        "codex '--model' 'gpt-5' '--reasoning-effort' 'high' -c history.persistence=none 'fix the spinner'",
       env: { CODEX_PROFILE: 'captured' },
       startupCommandDelivery: 'shell-ready',
       launchConfig: {
@@ -374,6 +383,26 @@ describe('launchAgentInNewTab', () => {
     )
   })
 
+  it('uses POSIX quoting for SSH tabs even on a Windows client', async () => {
+    mockPlatformState.clientPlatform = 'win32'
+    store.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      prompt: "don't drop quotes"
+    })
+
+    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({
+        command:
+          "codex '--dangerously-bypass-approvals-and-sandbox' -c history.persistence=none 'don'\\''t drop quotes'"
+      })
+    )
+  })
+
   it('falls back to post-ready draft paste when a Windows inline draft would be too large', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
     const prompt = 'x'.repeat(25_000)
@@ -467,7 +496,7 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "codex '--model' 'gpt-5.5'"
+        command: "codex '--model' 'gpt-5.5' -c history.persistence=none"
       })
     )
   })

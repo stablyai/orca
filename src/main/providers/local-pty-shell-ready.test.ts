@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawnSync } from 'child_process'
 import { tmpdir } from 'os'
 import { join, dirname } from 'path'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'fs'
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'fs'
 import type * as pty from 'node-pty'
 import type * as LocalPtyShellReadyModule from './local-pty-shell-ready'
 import {
@@ -13,6 +13,7 @@ import {
   scanForShellReady,
   writeStartupCommandWhenShellReady
 } from './local-pty-shell-ready'
+import { getPosixCodexShellWrapper } from '../shell-templates'
 
 const { getUserDataPathMock } = vi.hoisted(() => ({
   getUserDataPathMock: vi.fn<() => string>()
@@ -228,6 +229,26 @@ const describePosix = process.platform === 'win32' ? describe.skip : describe
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
 const itWithBash = hasBash ? it : it.skip
 
+function createFakeCodexBin(tempDir: string): string {
+  const binDir = join(tempDir, 'bin')
+  mkdirSync(binDir, { recursive: true })
+  const codexPath = join(binDir, 'codex')
+  writeFileSync(
+    codexPath,
+    `#!/usr/bin/env bash
+printf 'CODEX_HOME=%s\\n' "$CODEX_HOME"
+i=0
+for arg in "$@"; do
+  printf 'ARG%s=%s\\n' "$i" "$arg"
+  i=$((i + 1))
+done
+`,
+    'utf-8'
+  )
+  chmodSync(codexPath, 0o755)
+  return binDir
+}
+
 function runInteractiveBashRcfile(rcfileContent: string, tempDir: string): string {
   const rcfile = join(tempDir, 'bash-osc133-rcfile')
   writeFileSync(rcfile, rcfileContent)
@@ -252,6 +273,110 @@ function runInteractiveBashRcfile(rcfileContent: string, tempDir: string): strin
   expect(result.status).toBe(0)
   return result.stdout
 }
+
+describePosix('Codex POSIX shell wrapper', () => {
+  itWithBash('restores CODEX_HOME at invocation and keeps the safety override last', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-codex-wrapper-'))
+    try {
+      const fakeBin = createFakeCodexBin(tempDir)
+      const result = spawnSync(
+        'bash',
+        [
+          '-c',
+          `${getPosixCodexShellWrapper()}
+export CODEX_HOME=/profile-reset
+codex -c 'history.persistence="save-all"' resume session-1`
+        ],
+        {
+          env: {
+            ...process.env,
+            ORCA_CODEX_HOME: '/orca-managed-home',
+            PATH: `${fakeBin}:${process.env.PATH ?? '/usr/bin:/bin'}`
+          },
+          encoding: 'utf8'
+        }
+      )
+
+      expect(result.status).toBe(0)
+      expect(result.stdout).toContain('CODEX_HOME=/orca-managed-home')
+      expect(result.stdout).toContain('ARG0=-c')
+      expect(result.stdout).toContain('ARG1=history.persistence="save-all"')
+      expect(result.stdout).toContain('ARG4=-c')
+      expect(result.stdout).toContain('ARG5=history.persistence="none"')
+      expect(result.stdout.indexOf('ARG1=history.persistence="save-all"')).toBeLessThan(
+        result.stdout.indexOf('ARG5=history.persistence="none"')
+      )
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  itWithBash('inserts the safety override before a user option terminator', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-codex-wrapper-'))
+    try {
+      const fakeBin = createFakeCodexBin(tempDir)
+      const result = spawnSync(
+        'bash',
+        [
+          '-c',
+          `${getPosixCodexShellWrapper()}
+codex resume -c 'history.persistence="save-all"' -- --help`
+        ],
+        {
+          env: {
+            ...process.env,
+            ORCA_CODEX_HOME: '/orca-managed-home',
+            PATH: `${fakeBin}:${process.env.PATH ?? '/usr/bin:/bin'}`
+          },
+          encoding: 'utf8'
+        }
+      )
+
+      expect(result.status).toBe(0)
+      expect(result.stdout).toContain('ARG0=resume')
+      expect(result.stdout).toContain('ARG1=-c')
+      expect(result.stdout).toContain('ARG2=history.persistence="save-all"')
+      expect(result.stdout).toContain('ARG3=-c')
+      expect(result.stdout).toContain('ARG4=history.persistence="none"')
+      expect(result.stdout).toContain('ARG5=--')
+      expect(result.stdout).toContain('ARG6=--help')
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  itWithBash('does not wrap direct non-Orca Codex usage', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-codex-wrapper-'))
+    try {
+      const fakeBin = createFakeCodexBin(tempDir)
+      const result = spawnSync(
+        'bash',
+        [
+          '-c',
+          `${getPosixCodexShellWrapper()}
+export CODEX_HOME=/user-home
+codex -c 'history.persistence="save-all"' resume session-1`
+        ],
+        {
+          env: {
+            ...process.env,
+            ORCA_CODEX_HOME: '',
+            PATH: `${fakeBin}:${process.env.PATH ?? '/usr/bin:/bin'}`
+          },
+          encoding: 'utf8'
+        }
+      )
+
+      expect(result.status).toBe(0)
+      expect(result.stdout).toContain('CODEX_HOME=/user-home')
+      expect(result.stdout).toContain('ARG0=-c')
+      expect(result.stdout).toContain('ARG1=history.persistence="save-all"')
+      expect(result.stdout).not.toContain('history.persistence="none"')
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+})
 
 function expectBashOsc133Lifecycle(output: string): void {
   const oscA = '\x1b]133;A\x07'
@@ -440,6 +565,7 @@ describePosix('local PTY shell-ready launch config', () => {
     const codexRestoreLine =
       '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
     const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
+    const codexWrapperLine = 'command codex "${_orca_codex_args[@]}"'
     const ompWrapperLine = 'command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"'
     expect(zshrc).toContain(restoreLine)
     expect(zlogin).toContain(restoreLine)
@@ -456,6 +582,12 @@ describePosix('local PTY shell-ready launch config', () => {
     expect(zshrc).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
     expect(zlogin).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
     expect(bashRc).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
+    expect(zshrc).toContain(codexWrapperLine)
+    expect(zlogin).toContain(codexWrapperLine)
+    expect(bashRc).toContain(codexWrapperLine)
+    expect(zshrc).toContain('export CODEX_HOME="${ORCA_CODEX_HOME}"')
+    expect(zlogin).toContain('export CODEX_HOME="${ORCA_CODEX_HOME}"')
+    expect(bashRc).toContain('export CODEX_HOME="${ORCA_CODEX_HOME}"')
     expect(zshrc).toContain(ompWrapperLine)
     expect(zlogin).toContain(ompWrapperLine)
     expect(bashRc).toContain(ompWrapperLine)
@@ -756,6 +888,7 @@ export ZDOTDIR="$HOME/.config/zsh"
       }
       delete cleanEnv.ZDOTDIR
       delete cleanEnv.ORCA_ORIG_ZDOTDIR
+      delete cleanEnv.ORCA_ATTRIBUTION_SHIM_DIR
       delete cleanEnv.MY_VAR
       cleanEnv.ZDOTDIR = config.env.ZDOTDIR
 

@@ -148,3 +148,34 @@ export ZDOTDIR="$_orca_home"
 unset _orca_home
 `
 }
+
+export function getPosixCodexShellWrapper({
+  includeHistoryOnlyMarker = false
+}: { includeHistoryOnlyMarker?: boolean } = {}): string {
+  const condition = includeHistoryOnlyMarker
+    ? '[[ -n "${ORCA_CODEX_HOME:-}" || "${ORCA_CODEX_HISTORY_PERSISTENCE_NONE:-0}" == "1" ]]'
+    : '[[ -n "${ORCA_CODEX_HOME:-}" ]]'
+  return `# Why: Codex composer recall reads CODEX_HOME/history.jsonl globally.
+# Orca resume should rely on replayed session prompts, not unrelated sessions.
+if ${condition}; then
+  codex() {
+    local -a _orca_codex_args
+    local _orca_codex_inserted=0
+    local _orca_codex_arg
+    [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
+    # Why: Codex applies later/subcommand -c overrides last; keep safety after user args.
+    for _orca_codex_arg in "$@"; do
+      if [[ "\${_orca_codex_inserted}" == "0" && "\${_orca_codex_arg}" == "--" ]]; then
+        _orca_codex_args+=(-c 'history.persistence="none"')
+        _orca_codex_inserted=1
+      fi
+      _orca_codex_args+=("\${_orca_codex_arg}")
+    done
+    if [[ "\${_orca_codex_inserted}" == "0" ]]; then
+      _orca_codex_args+=(-c 'history.persistence="none"')
+    fi
+    command codex "\${_orca_codex_args[@]}"
+  }
+fi
+`
+}

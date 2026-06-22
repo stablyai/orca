@@ -3,23 +3,23 @@ import {
   encodePowerShellCommand,
   getPowerShellOsc133Bootstrap
 } from '../powershell-osc133-bootstrap'
-import {
-  buildWslInteractiveLoginShellCommand,
-  escapeWslShCommandForWindows
-} from '../../shared/wsl-login-shell-command'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 
-function expectedWslArgs(linuxCwd: string, distro?: string): string[] {
-  const command = `cd '${linuxCwd}' && export PATH="$HOME/.local/bin:$PATH" && ${buildWslInteractiveLoginShellCommand()}`
-  const shellArgs = ['--', 'sh', '-c', escapeWslShCommandForWindows(command)]
-  return distro ? ['-d', distro, ...shellArgs] : shellArgs
-}
+const CODEX_HISTORY_DISABLED_GIT_BASH_FRAGMENT = 'command codex "${_orca_codex_args[@]}"'
+const CODEX_HISTORY_DISABLED_WSL_SH_FRAGMENT = 'ORCA_CODEX_WRAPPER_DIR="\\${_orca_codex_bin}"'
+const CODEX_HISTORY_DISABLED_CMD_FRAGMENT = 'doskey codex=powershell.exe -NoLogo -Command'
 
 describe('resolveWindowsShellLaunchArgs', () => {
   it('returns cmd.exe args with chcp 65001 for UTF-8 output', () => {
     const result = resolveWindowsShellLaunchArgs('cmd.exe', 'C:\\Users\\alice', 'C:\\Users\\alice')
-    expect(result.shellArgs).toEqual(['/K', 'chcp 65001 > nul'])
+    expect(result.shellArgs).toEqual(['/K', expect.stringContaining('chcp 65001 > nul')])
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
+    expect(result.shellArgs[1]).toContain(CODEX_HISTORY_DISABLED_CMD_FRAGMENT)
+    expect(result.shellArgs[1]).toContain("$$arg -eq '--'")
+    expect(result.shellArgs[1]).toContain('$$env:CODEX_HOME=$$env:ORCA_CODEX_HOME')
+    expect(result.shellArgs[1]).toContain('$$orcaCodexArgs')
+    expect(result.shellArgs[1]).toContain("Add('history.persistence=none')")
+    expect(result.shellArgs[1]).toContain('" $*')
     expect(result.effectiveCwd).toBe('C:\\Users\\alice')
     expect(result.validationCwd).toBe('C:\\Users\\alice')
   })
@@ -32,7 +32,9 @@ describe('resolveWindowsShellLaunchArgs', () => {
       undefined,
       'codex --no-alt-screen'
     )
-    expect(result.shellArgs).toEqual(['/K', 'chcp 65001 > nul & codex --no-alt-screen'])
+    expect(result.shellArgs).toEqual(['/K', expect.stringContaining('chcp 65001 > nul')])
+    expect(result.shellArgs[1]).toContain(CODEX_HISTORY_DISABLED_CMD_FRAGMENT)
+    expect(result.shellArgs[1]).toContain('& codex --no-alt-screen')
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
   })
 
@@ -44,7 +46,8 @@ describe('resolveWindowsShellLaunchArgs', () => {
       undefined,
       `codex ${'x'.repeat(7000)}`
     )
-    expect(result.shellArgs).toEqual(['/K', 'chcp 65001 > nul'])
+    expect(result.shellArgs).toEqual(['/K', expect.stringContaining('chcp 65001 > nul')])
+    expect(result.shellArgs[1]).toContain(CODEX_HISTORY_DISABLED_CMD_FRAGMENT)
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
   })
 
@@ -156,7 +159,13 @@ describe('resolveWindowsShellLaunchArgs', () => {
       'C:\\Users\\alice'
     )
 
-    expect(result.shellArgs).toEqual(['--login', '-i'])
+    expect(result.shellArgs).toEqual([
+      '-c',
+      expect.stringContaining(CODEX_HISTORY_DISABLED_GIT_BASH_FRAGMENT)
+    ])
+    expect(result.shellArgs[1]).toContain('_orca_codex_arg}" == "--"')
+    expect(result.shellArgs[1]).toContain('export CODEX_HOME="${ORCA_CODEX_HOME}"')
+    expect(result.shellArgs[1]).toContain('exec bash --login -i')
     expect(result.effectiveCwd).toBe('C:\\Users\\alice\\code')
     expect(result.validationCwd).toBe('C:\\Users\\alice\\code')
   })
@@ -181,8 +190,13 @@ describe('resolveWindowsShellLaunchArgs', () => {
       undefined,
       'codex'
     )
-    expect(result.shellArgs).toEqual(expectedWslArgs('/mnt/c/Users/alice/code'))
+    expect(result.shellArgs).toEqual(['--', 'sh', '-c', expect.any(String)])
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
+    expect(result.shellArgs[3]).toContain(CODEX_HISTORY_DISABLED_WSL_SH_FRAGMENT)
+    expect(result.shellArgs[3]).toContain('cat > "\\${_orca_codex_bin}/codex"')
+    expect(result.shellArgs[3]).toContain('history.persistence="none"')
+    expect(result.shellArgs[3]).toContain("cd '/mnt/c/Users/alice/code'")
+    expect(result.shellArgs[3]).toContain('exec "\\$_orca_wsl_shell" -ilc')
     // Why: WSL cannot cd into a Windows path, so node-pty must start from the
     // user's Windows home and we inject the Linux cd into the shellArgs above.
     expect(result.effectiveCwd).toBe('C:\\Users\\alice')
@@ -194,7 +208,8 @@ describe('resolveWindowsShellLaunchArgs', () => {
     // The injected sh cmd must not break out of the surrounding single quotes
     // when the path contains a ' character.
     expect(result.shellArgs[3]).toContain("cd '/mnt/c/weird'\\''path'")
-    expect(result.shellArgs[3]).toContain('exec "\\$_orca_wsl_shell" -l')
+    expect(result.shellArgs[3]).toContain('exec "\\$_orca_wsl_shell" -ilc')
+    expect(result.shellArgs[3]).toContain(CODEX_HISTORY_DISABLED_WSL_SH_FRAGMENT)
   })
 
   it('falls back to /mnt/c when cwd is not a drive-letter path', () => {
@@ -202,6 +217,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result.shellArgs[3]).toContain(
       'cd \'/mnt/c\' && export PATH="\\$HOME/.local/bin:\\$PATH"'
     )
+    expect(result.shellArgs[3]).toContain(CODEX_HISTORY_DISABLED_WSL_SH_FRAGMENT)
   })
 
   it('keeps WSL UNC worktree cwd inside the matching distro', () => {
@@ -217,7 +233,9 @@ describe('resolveWindowsShellLaunchArgs', () => {
         '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo',
         'C:\\Users\\alice'
       )
-      expect(result.shellArgs).toEqual(expectedWslArgs('/home/alice/repo', 'Ubuntu'))
+      expect(result.shellArgs).toEqual(['-d', 'Ubuntu', '--', 'sh', '-c', expect.any(String)])
+      expect(result.shellArgs[5]).toContain(CODEX_HISTORY_DISABLED_WSL_SH_FRAGMENT)
+      expect(result.shellArgs[5]).toContain("cd '/home/alice/repo'")
       expect(result.effectiveCwd).toBe('C:\\Users\\alice')
       expect(result.validationCwd).toBe('\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo')
     } finally {
@@ -236,7 +254,9 @@ describe('resolveWindowsShellLaunchArgs', () => {
       { distro: 'Ubuntu', treatPosixCwdAsWsl: true }
     )
 
-    expect(result.shellArgs).toEqual(expectedWslArgs('/home/alice/repo/subdir', 'Ubuntu'))
+    expect(result.shellArgs).toEqual(['-d', 'Ubuntu', '--', 'sh', '-c', expect.any(String)])
+    expect(result.shellArgs[5]).toContain(CODEX_HISTORY_DISABLED_WSL_SH_FRAGMENT)
+    expect(result.shellArgs[5]).toContain("cd '/home/alice/repo/subdir'")
     expect(result.effectiveCwd).toBe('C:\\Users\\alice')
     expect(result.validationCwd).toBe('\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo\\subdir')
   })

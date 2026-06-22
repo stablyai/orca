@@ -26,6 +26,32 @@ try {
 if ($env:ORCA_OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR }
 ${getPowerShellOmpShellWrapper()}
 if ($env:ORCA_CODEX_HOME) { $env:CODEX_HOME = $env:ORCA_CODEX_HOME }
+if ($env:ORCA_CODEX_HOME) {
+    # Why: Codex composer recall reads CODEX_HOME/history.jsonl globally.
+    # Orca resume should rely on replayed session prompts, not unrelated sessions.
+    function Global:codex {
+        $env:CODEX_HOME = $env:ORCA_CODEX_HOME
+        $codexCommand = Get-Command codex -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($null -eq $codexCommand) {
+            throw "codex executable not found"
+        }
+        $codexArgs = [System.Collections.Generic.List[string]]::new()
+        $codexInserted = $false
+        foreach ($arg in $args) {
+            if (-not $codexInserted -and $arg -eq '--') {
+                [void]$codexArgs.Add('-c')
+                [void]$codexArgs.Add('history.persistence="none"')
+                $codexInserted = $true
+            }
+            [void]$codexArgs.Add($arg)
+        }
+        if (-not $codexInserted) {
+            [void]$codexArgs.Add('-c')
+            [void]$codexArgs.Add('history.persistence="none"')
+        }
+        & $codexCommand.Source @($codexArgs.ToArray())
+    }
+}
 
 $Global:__OrcaOsc133State = @{
     OriginalPrompt = $function:prompt

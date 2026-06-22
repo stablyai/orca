@@ -48,7 +48,7 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe('claude "fix ^"quoted^" ^& ^%PATH^%"')
   })
 
-  it('does not launch Codex with the Orca profile when agent status hooks are enabled', () => {
+  it('disables Codex prompt history without launching with the Orca profile', () => {
     const plan = buildAgentStartupPlan({
       agent: 'codex',
       prompt: 'fix it',
@@ -56,8 +56,9 @@ describe('tui agent startup plans', () => {
       platform: 'linux'
     })
 
-    expect(plan?.launchCommand).toBe("codex 'fix it'")
+    expect(plan?.launchCommand).toBe("codex -c history.persistence=none 'fix it'")
     expect(plan?.startupCommandDelivery).toBe('shell-ready')
+    expect(plan?.launchCommand).not.toContain('--profile')
   })
 
   it('keeps plain empty Codex startup on the fast delivery path', () => {
@@ -71,7 +72,7 @@ describe('tui agent startup plans', () => {
 
     expect(plan).toEqual({
       agent: 'codex',
-      launchCommand: 'codex',
+      launchCommand: 'codex -c history.persistence=none',
       expectedProcess: 'codex',
       followupPrompt: null,
       launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} }
@@ -147,7 +148,7 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("claude --dangerously-skip-permissions 'fix it'")
   })
 
-  it('leaves Codex command overrides untouched', () => {
+  it('adds Codex history isolation after command overrides', () => {
     const plan = buildAgentStartupPlan({
       agent: 'codex',
       prompt: 'fix it',
@@ -155,7 +156,52 @@ describe('tui agent startup plans', () => {
       platform: 'linux'
     })
 
-    expect(plan?.launchCommand).toBe("codex --profile work 'fix it'")
+    expect(plan?.launchCommand).toBe(
+      "codex --profile work -c history.persistence=none 'fix it'"
+    )
+  })
+
+  it('adds Codex history isolation to non-bare command overrides', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: 'fix it',
+      cmdOverrides: { codex: 'npx codex' },
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("npx codex -c history.persistence=none 'fix it'")
+  })
+
+  it('adds Codex history isolation before an option terminator in overrides', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: 'fix it',
+      cmdOverrides: { codex: 'npx codex --' },
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("npx codex -c history.persistence=none -- 'fix it'")
+  })
+
+  it('adds Codex history isolation using the target shell quoting', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'codex',
+        prompt: 'fix it',
+        cmdOverrides: { codex: 'codex.cmd' },
+        platform: 'win32'
+      })?.launchCommand
+    ).toBe("codex.cmd -c history.persistence=none 'fix it'")
+
+    expect(
+      buildAgentStartupPlan({
+        agent: 'codex',
+        prompt: 'fix it',
+        cmdOverrides: { codex: 'codex.cmd' },
+        platform: 'win32',
+        shell: 'cmd'
+      })?.launchCommand
+    ).toBe('codex.cmd -c history.persistence=none "fix it"')
   })
 
   it('builds Windows resume plans that PowerShell can invoke', () => {
@@ -166,7 +212,7 @@ describe('tui agent startup plans', () => {
       platform: 'win32'
     })
 
-    expect(plan?.launchCommand).toBe("codex 'resume' 's1'")
+    expect(plan?.launchCommand).toBe("codex -c history.persistence=none 'resume' 's1'")
   })
 
   it('honors command overrides when building POSIX resume plans', () => {
@@ -177,7 +223,9 @@ describe('tui agent startup plans', () => {
       platform: 'linux'
     })
 
-    expect(plan?.launchCommand).toBe("codex --profile work 'resume' 's1'")
+    expect(plan?.launchCommand).toBe(
+      "codex --profile work -c history.persistence=none 'resume' 's1'"
+    )
   })
 
   it('uses a captured launch command when building resume plans after overrides change', () => {
@@ -189,7 +237,9 @@ describe('tui agent startup plans', () => {
       platform: 'linux'
     })
 
-    expect(plan?.launchCommand).toBe("codex --profile captured 'resume' 's1'")
+    expect(plan?.launchCommand).toBe(
+      "codex --profile captured -c history.persistence=none 'resume' 's1'"
+    )
     expect(plan?.launchConfig).toEqual({
       agentCommand: 'codex --profile captured',
       agentArgs: '',

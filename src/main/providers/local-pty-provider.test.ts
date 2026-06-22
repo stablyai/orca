@@ -449,6 +449,7 @@ describe('LocalPtyProvider', () => {
       ])
       expect(spawnCall[1][5]).toContain('exec "\\$_orca_wsl_shell" -l')
       expect(spawnCall[2].env.HISTFILE).toContain('terminal-history-wsl/Debian')
+      expect(spawnCall[1][5]).toContain('history.persistence="none"')
     })
 
     it('marks Orca terminal handle for WSL import when buildSpawnEnv opts in', async () => {
@@ -648,7 +649,7 @@ describe('LocalPtyProvider', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Program Files\\Git\\bin\\bash.exe',
-        ['--login', '-i'],
+        ['-c', expect.stringContaining('history.persistence="none"')],
         expect.objectContaining({
           cwd: 'C:\\Users\\jin\\repo',
           env: expect.objectContaining({

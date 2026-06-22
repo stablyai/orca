@@ -137,6 +137,7 @@ export class CodexRuntimeHomeService {
       )
     }
     this.syncForCurrentSelection()
+    this.removeRuntimePromptHistory()
     syncSystemCodexResourcesIntoManagedHome()
     syncSystemConfigIntoManagedCodexHome()
     // Why: historical Codex sessions can be large; bridge them after launch
@@ -190,6 +191,7 @@ export class CodexRuntimeHomeService {
       )
     }
     this.syncForCurrentSelection()
+    this.removeRuntimePromptHistory()
     syncSystemCodexResourcesIntoManagedHome()
     syncSystemConfigIntoManagedCodexHome()
     return this.getRuntimeHomePath()
@@ -485,6 +487,7 @@ export class CodexRuntimeHomeService {
     this.wslRuntimeHomePathByDistro.set(distro, runtimeHomePath)
 
     mkdirSync(runtimeHomePath, { recursive: true })
+    this.removePromptHistoryAtPath(runtimeHomePath)
     this.safeMigrateLegacyWslActiveHomePointer(distro, runtimeHomePath)
     this.seedWslRuntimeHome(runtimeHomePath, activeAccount, distro)
 
@@ -1141,7 +1144,7 @@ export class CodexRuntimeHomeService {
       if (!accountId) {
         continue
       }
-      this.migrateLegacyHistory(managedHomePath)
+      this.removeLegacyPromptHistory(managedHomePath)
       this.migrateLegacySessions(managedHomePath, accountId)
     }
 
@@ -1174,30 +1177,20 @@ export class CodexRuntimeHomeService {
     return managedHomes.sort()
   }
 
-  private migrateLegacyHistory(managedHomePath: string): void {
+  private removeLegacyPromptHistory(managedHomePath: string): void {
+    // Why: Codex resume in Orca shares session files only. Prompt recall history
+    // is global per CODEX_HOME and can leak unrelated resume prompts.
     const legacyHistoryPath = join(managedHomePath, 'history.jsonl')
-    if (!existsSync(legacyHistoryPath)) {
-      return
-    }
+    rmSync(legacyHistoryPath, { force: true })
+    this.removeRuntimePromptHistory()
+  }
 
-    const runtimeHistoryPath = join(this.getRuntimeHomePath(), 'history.jsonl')
-    const existingLines = existsSync(runtimeHistoryPath)
-      ? readFileSync(runtimeHistoryPath, 'utf-8').split('\n').filter(Boolean)
-      : []
-    const mergedLines = [...existingLines]
-    const seenLines = new Set(existingLines)
-    for (const line of readFileSync(legacyHistoryPath, 'utf-8').split('\n')) {
-      if (!line || seenLines.has(line)) {
-        continue
-      }
-      seenLines.add(line)
-      mergedLines.push(line)
-    }
+  private removeRuntimePromptHistory(): void {
+    this.removePromptHistoryAtPath(this.getRuntimeHomePath())
+  }
 
-    if (mergedLines.length === 0) {
-      return
-    }
-    writeFileAtomically(runtimeHistoryPath, `${mergedLines.join('\n')}\n`)
+  private removePromptHistoryAtPath(homePath: string): void {
+    rmSync(join(homePath, 'history.jsonl'), { force: true })
   }
 
   private migrateLegacySessions(managedHomePath: string, accountId: string): void {

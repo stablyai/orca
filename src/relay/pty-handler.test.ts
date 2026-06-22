@@ -817,6 +817,48 @@ describe('PtyHandler', () => {
     }
   )
 
+  it.skipIf(process.platform === 'win32')(
+    'wraps bash Codex startup spawns to disable prompt history on SSH',
+    async () => {
+      const oldShell = process.env.SHELL
+      const oldHome = process.env.HOME
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-pty-codex-launch-'))
+
+      process.env.SHELL = '/bin/bash'
+      process.env.HOME = homeDir
+      try {
+        if (!existsSync('/bin/bash')) {
+          return
+        }
+
+        await dispatcher.callRequest('pty.spawn', {
+          command: 'codex',
+          env: { HOME: homeDir }
+        })
+
+        const shellArgs = mockPtySpawn.mock.calls[0][1]
+        const spawnOptions = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+        const rcfile = join(homeDir, '.orca-relay', 'shell-ready', 'bash', 'rcfile')
+
+        expect(shellArgs).toEqual(['--rcfile', rcfile])
+        expect(spawnOptions.env.ORCA_CODEX_HISTORY_PERSISTENCE_NONE).toBe('1')
+        expect(readFileSync(rcfile, 'utf8')).toContain('history.persistence="none"')
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+        if (oldHome === undefined) {
+          delete process.env.HOME
+        } else {
+          process.env.HOME = oldHome
+        }
+        rmSync(homeDir, { recursive: true, force: true })
+      }
+    }
+  )
+
   it('revive restores pane identity env alongside hook-server coordinates', async () => {
     await dispatcher.callRequest('pty.spawn', {
       cols: 90,

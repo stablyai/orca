@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { spawnSync } from 'child_process'
@@ -8,16 +8,24 @@ import { getRelayShellLaunchConfig } from './pty-shell-launch'
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
 const itWithBash = hasBash ? it : it.skip
 
-function runInteractiveBashRcfile(rcfile: string, homeDir: string): string {
+function runInteractiveBashRcfile(
+  rcfile: string,
+  homeDir: string,
+  input = 'true\nfalse\nexit 0\n',
+  pathPrefix?: string,
+  envOverrides: Record<string, string> = {}
+): string {
   const result = spawnSync(
     'bash',
     ['-lc', 'bash --noprofile --rcfile "$1" -i 2>&1', 'bash', rcfile],
     {
-      input: 'true\nfalse\nexit 0\n',
+      input,
       encoding: 'utf8',
       env: {
         ...process.env,
         HOME: homeDir,
+        ...envOverrides,
+        ...(pathPrefix ? { PATH: `${pathPrefix}:${process.env.PATH ?? '/usr/bin:/bin'}` } : {}),
         TERM: process.env.TERM || 'xterm'
       },
       timeout: 5000
@@ -27,6 +35,25 @@ function runInteractiveBashRcfile(rcfile: string, homeDir: string): string {
   expect(result.error).toBeUndefined()
   expect(result.status).toBe(0)
   return result.stdout
+}
+
+function createFakeCodexBin(tempDir: string): string {
+  const binDir = join(tempDir, 'bin')
+  mkdirSync(binDir, { recursive: true })
+  const codexPath = join(binDir, 'codex')
+  writeFileSync(
+    codexPath,
+    `#!/usr/bin/env bash
+i=0
+for arg in "$@"; do
+  printf 'ARG%s=%s\\n' "$i" "$arg"
+  i=$((i + 1))
+done
+`,
+    'utf8'
+  )
+  chmodSync(codexPath, 0o755)
+  return binDir
 }
 
 function expectBashOsc133Lifecycle(output: string): void {
@@ -169,6 +196,20 @@ describe('getRelayShellLaunchConfig', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
+    'wraps relay zsh for remote Codex startup commands without overlay env',
+    () => {
+      const config = getRelayShellLaunchConfig('/bin/zsh', { HOME: homeDir }, 'codex')
+      const zshRoot = join(homeDir, '.orca-relay', 'shell-ready', 'zsh')
+      const zlogin = readFileSync(join(zshRoot, '.zlogin'), 'utf8')
+
+      expect(config.args).toEqual(['-l'])
+      expect(config.env.ZDOTDIR).toBe(zshRoot)
+      expect(config.env.ORCA_CODEX_HISTORY_PERSISTENCE_NONE).toBe('1')
+      expect(zlogin).toContain('history.persistence="none"')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
     'enables the shell-ready marker for requested bash startup delivery',
     () => {
       const config = getRelayShellLaunchConfig('/bin/bash', { HOME: homeDir }, 'linux', {
@@ -181,6 +222,27 @@ describe('getRelayShellLaunchConfig', () => {
       expect(bashRc).toContain('printf "\\033]777;orca-shell-ready\\007"')
     }
   )
+
+  itWithBash('relay bash Codex wrapper inserts history override before --', () => {
+    const config = getRelayShellLaunchConfig('/bin/bash', { HOME: homeDir }, 'codex')
+    const fakeBin = createFakeCodexBin(homeDir)
+    const output = runInteractiveBashRcfile(
+      config.args[1] as string,
+      homeDir,
+      'codex resume -c \'history.persistence="save-all"\' -- --help\nexit 0\n',
+      fakeBin,
+      config.env
+    )
+
+    expect(config.env.ORCA_CODEX_HISTORY_PERSISTENCE_NONE).toBe('1')
+    expect(output).toContain('ARG0=resume')
+    expect(output).toContain('ARG1=-c')
+    expect(output).toContain('ARG2=history.persistence="save-all"')
+    expect(output).toContain('ARG3=-c')
+    expect(output).toContain('ARG4=history.persistence="none"')
+    expect(output).toContain('ARG5=--')
+    expect(output).toContain('ARG6=--help')
+  })
 
   itWithBash('runs the relay bash wrapper without fake C/D markers before the first prompt', () => {
     const config = getRelayShellLaunchConfig('/bin/bash', { HOME: homeDir })

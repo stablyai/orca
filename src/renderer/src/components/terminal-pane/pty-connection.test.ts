@@ -3346,7 +3346,8 @@ describe('connectPanePty', () => {
       expect(transport.connect).toHaveBeenNthCalledWith(
         2,
         expect.objectContaining({
-          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+          command:
+            "codex '--dangerously-bypass-approvals-and-sandbox' -c history.persistence=none 'resume' 'codex-session-1'",
           env: expect.objectContaining({
             ORCA_PANE_KEY: paneKey,
             ORCA_TAB_ID: 'tab-1',
@@ -3357,7 +3358,7 @@ describe('connectPanePty', () => {
         })
       )
       expect(transport.sendInput).toHaveBeenCalledWith(
-        "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'\r"
+        "codex '--dangerously-bypass-approvals-and-sandbox' -c history.persistence=none 'resume' 'codex-session-1'\r"
       )
     } finally {
       globalThis.setTimeout = originalSetTimeout
@@ -3632,7 +3633,8 @@ describe('connectPanePty', () => {
     expect(transport.connect).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: 'lost-pty',
-        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+        command:
+          "codex '--dangerously-bypass-approvals-and-sandbox' -c history.persistence=none 'resume' 'codex-session-1'",
         env: expect.objectContaining({
           ORCA_PANE_KEY: paneKey,
           ORCA_TAB_ID: 'tab-1',
@@ -3715,7 +3717,7 @@ describe('connectPanePty', () => {
       expect.objectContaining({
         sessionId: 'lost-pty',
         command:
-          "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'\\''s'",
+          "codex '--dangerously-bypass-approvals-and-sandbox' -c history.persistence=none 'resume' 'codex-session-1'\\''s'",
         env: expect.objectContaining({
           ORCA_PANE_KEY: paneKey,
           ORCA_TAB_ID: 'tab-1',
@@ -3792,7 +3794,8 @@ describe('connectPanePty', () => {
     expect(transport.connect).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: 'lost-pty',
-        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+        command:
+          "codex '--dangerously-bypass-approvals-and-sandbox' -c history.persistence=none 'resume' 'codex-session-1'",
         env: expect.objectContaining({
           ORCA_PANE_KEY: paneKey,
           ORCA_TAB_ID: 'tab-1',
@@ -3875,7 +3878,8 @@ describe('connectPanePty', () => {
     expect(transport.connect).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: 'lost-pty',
-        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'"
+        command:
+          "codex '--dangerously-bypass-approvals-and-sandbox' -c history.persistence=none 'resume' 'codex-session-1'"
       })
     )
     expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(legacyPaneKey)
@@ -4022,7 +4026,8 @@ describe('connectPanePty', () => {
     expect(transport.connect).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: 'lost-pty',
-        command: "codex '--model' 'gpt-5' '--reasoning-effort' 'high' 'resume' 'codex-session-1'",
+        command:
+          "codex '--model' 'gpt-5' '--reasoning-effort' 'high' -c history.persistence=none 'resume' 'codex-session-1'",
         env: expect.objectContaining({
           CODEX_PROFILE: 'captured',
           ORCA_PANE_KEY: paneKey,
@@ -4116,7 +4121,8 @@ describe('connectPanePty', () => {
     expect(transport.connect).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: 'lost-pty',
-        command: "codex '--model' 'gpt-5-mini' 'resume' 'codex-session-1'",
+        command:
+          "codex '--model' 'gpt-5-mini' -c history.persistence=none 'resume' 'codex-session-1'",
         env: expect.objectContaining({
           ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
         })
@@ -4211,7 +4217,7 @@ describe('connectPanePty', () => {
     expect(transport.connect).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: 'lost-pty',
-        command: "codex '--model' 'current' 'resume' 'codex-session-1'"
+        command: "codex '--model' 'current' -c history.persistence=none 'resume' 'codex-session-1'"
       })
     )
     expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledWith(
@@ -4371,7 +4377,7 @@ describe('connectPanePty', () => {
       createManager(1) as never,
       createDeps({
         startup: {
-          command: "codex 'resume' 'codex-session-1'",
+          command: "codex -c history.persistence=none 'resume' 'codex-session-1'",
           showSessionRestoredBanner: true
         }
       }) as never
@@ -4387,7 +4393,9 @@ describe('connectPanePty', () => {
       expect.stringContaining('--- session restored ---'),
       expect.any(Function)
     )
-    expect(createdTransportOptions[0]?.command).toBe("codex 'resume' 'codex-session-1'")
+    expect(createdTransportOptions[0]?.command).toBe(
+      "codex -c history.persistence=none 'resume' 'codex-session-1'"
+    )
   })
 
   it('does not consume the sleeping record when daemon reattach returns a live snapshot', async () => {
@@ -6705,7 +6713,8 @@ describe('connectPanePty', () => {
     expect(transport.connect).toHaveBeenCalledTimes(1)
     expect(transport.connect).toHaveBeenCalledWith(
       expect.objectContaining({
-        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+        command:
+          "codex '--dangerously-bypass-approvals-and-sandbox' -c history.persistence=none 'resume' 'codex-session-1'",
         launchAgent: 'codex',
         launchConfig: {
           agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox'",

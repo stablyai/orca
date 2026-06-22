@@ -225,13 +225,14 @@ function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayl
 
   const state = useAppStore.getState()
   const repo = state.repos.find((entry) => entry.id === worktree.repoId)
+  // Why: reopened SSH worktrees spawn agents on the remote shell, so startup
+  // command construction must use that runtime's platform quoting.
   const launchPlatform = repo
     ? getAgentLaunchPlatformForRepo(
         repo,
         repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(state, worktree.id)
       )
     : CLIENT_PLATFORM
-
   const startupPlan = buildAgentStartupPlan({
     agent,
     prompt: '',

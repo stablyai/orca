@@ -195,6 +195,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     // rehydrates their repo link; preserve the source repo connection.
     const launchConnectionId = createdConnectionId ?? repoConnectionId
     const latestStore = useAppStore.getState()
+    // Why: SSH repos execute in a remote shell, so startup argv/quoting
+    // must use the runtime platform rather than the local client platform.
     const launchPlatform =
       args.launchPlatform ??
       resolveSourceControlLaunchPlatform({

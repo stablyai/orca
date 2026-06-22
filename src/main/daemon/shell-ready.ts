@@ -12,6 +12,7 @@ import {
 } from '../powershell-osc133-bootstrap'
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
 import {
+  getPosixCodexShellWrapper,
   getZshEnvTemplate,
   getZshFinalZdotdirRestoreBlock,
   getZshShellReadyMarkerRegistrationBlock,
@@ -117,6 +118,7 @@ __orca_restore_agent_teams_path
 ${getPosixOmpShellWrapper()}
 # Why: Codex must keep using Orca's runtime CODEX_HOME after profile scripts.
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
+${getPosixCodexShellWrapper()}
 # Why: emit OSC 133 C/D so terminal-command-lifecycle can drop stale agent
 # status when the foreground command exits — mirrors the zsh daemon wrapper.
 # Without this, bash users (default on most Linux distros) keep a stuck
@@ -228,6 +230,7 @@ if [[ ! -o login ]]; then
   [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
   ${getPosixOmpShellWrapper()}
   [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
+  ${getPosixCodexShellWrapper()}
 fi
 __orca_osc133_precmd() {
   local exit_code=$?
@@ -290,6 +293,7 @@ __orca_restore_agent_teams_path
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 ${getPosixOmpShellWrapper()}
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
+${getPosixCodexShellWrapper()}
 ${getZshShellReadyMarkerRegistrationBlock(SHELL_READY_MARKER)}
 ${getZshFinalZdotdirRestoreBlock()}
 `

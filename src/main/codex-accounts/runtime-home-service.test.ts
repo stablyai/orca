@@ -732,6 +732,21 @@ describe('CodexRuntimeHomeService', () => {
     expect(existsSync(getRuntimeCodexHomePath())).toBe(true)
   })
 
+  it('removes prompt history from the Orca-managed runtime home while preserving sessions', async () => {
+    const runtimeHomePath = getRuntimeCodexHomePath()
+    writeFileSync(join(runtimeHomePath, 'history.jsonl'), '{"text":"unrelated"}\n', 'utf-8')
+    mkdirSync(join(runtimeHomePath, 'sessions'), { recursive: true })
+    writeFileSync(join(runtimeHomePath, 'sessions', 'session-1.jsonl'), '{"id":"session-1"}\n')
+    const store = createStore(createSettings())
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    expect(service.prepareForCodexLaunch()).toBe(runtimeHomePath)
+
+    expect(existsSync(join(runtimeHomePath, 'history.jsonl'))).toBe(false)
+    expect(existsSync(join(runtimeHomePath, 'sessions', 'session-1.jsonl'))).toBe(true)
+  })
+
   it('uses the same host CODEX_HOME after switching managed Codex accounts', async () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
     const account1Auth = createCodexAuthJson('one@example.com', 'acct-1', 'one')
@@ -1173,9 +1188,7 @@ describe('CodexRuntimeHomeService', () => {
     expect(readFileSync(join(getRuntimeCodexHomePath(), 'hooks.json'), 'utf-8')).toBe(
       '{"hooks":{"Stop":[]}}\n'
     )
-    expect(readFileSync(join(getRuntimeCodexHomePath(), 'history.jsonl'), 'utf-8')).toBe(
-      '{"id":"runtime"}\n'
-    )
+    expect(existsSync(join(getRuntimeCodexHomePath(), 'history.jsonl'))).toBe(false)
     expect(existsSync(join(getRuntimeCodexHomePath(), 'sessions'))).toBe(false)
     expectResourceLinkedOrCopied(
       join(getRuntimeCodexHomePath(), 'skills'),
@@ -2230,7 +2243,7 @@ describe('CodexRuntimeHomeService', () => {
     expect(warnSpy).toHaveBeenCalled()
   })
 
-  it('imports legacy managed-home history into the shared runtime history', async () => {
+  it('removes legacy managed-home history instead of importing it into runtime', async () => {
     const runtimeHomePath = getRuntimeCodexHomePath()
     const runtimeHistoryPath = join(runtimeHomePath, 'history.jsonl')
     writeFileSync(runtimeHistoryPath, '{"id":"shared-1"}\n', 'utf-8')
@@ -2249,9 +2262,8 @@ describe('CodexRuntimeHomeService', () => {
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     new CodexRuntimeHomeService(store as never)
 
-    expect(readFileSync(runtimeHistoryPath, 'utf-8')).toBe(
-      '{"id":"shared-1"}\n{"id":"managed-2"}\n'
-    )
+    expect(existsSync(runtimeHistoryPath)).toBe(false)
+    expect(existsSync(join(managedHomePath, 'history.jsonl'))).toBe(false)
     expect(existsSync(join(testState.userDataDir, 'codex-runtime-home', 'migration-v1.json'))).toBe(
       true
     )
@@ -2372,7 +2384,7 @@ describe('CodexRuntimeHomeService', () => {
     new CodexRuntimeHomeService(store as never)
 
     const runtimeHistoryPath = join(getRuntimeCodexHomePath(), 'history.jsonl')
-    expect(readFileSync(runtimeHistoryPath, 'utf-8')).toContain('legacy-1')
+    expect(existsSync(runtimeHistoryPath)).toBe(false)
 
     writeFileSync(
       join(managedHomePath, 'history.jsonl'),
@@ -2384,7 +2396,7 @@ describe('CodexRuntimeHomeService', () => {
     const mod2 = await import('./runtime-home-service')
     new mod2.CodexRuntimeHomeService(store as never)
 
-    expect(readFileSync(runtimeHistoryPath, 'utf-8')).not.toContain('legacy-2')
+    expect(existsSync(runtimeHistoryPath)).toBe(false)
   })
 
   it('clears system-default snapshot via clearSystemDefaultSnapshot', async () => {

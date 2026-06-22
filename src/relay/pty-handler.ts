@@ -437,6 +437,7 @@ export class PtyHandler {
     // Why: only explicit shell-ready hints are trusted here; native Codex
     // prefill detection still auto-enables readiness through the predicate.
     const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv, process.platform, {
+      command,
       emitReadyMarker: shouldUseShellReadyStartupDelivery({
         command,
         startupCommandDelivery:

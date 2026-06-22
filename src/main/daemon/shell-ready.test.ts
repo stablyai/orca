@@ -475,6 +475,7 @@ describePosix('daemon shell-ready launch config', () => {
     const codexRestoreLine =
       '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
     const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
+    const codexWrapperLine = 'command codex "${_orca_codex_args[@]}"'
     const ompWrapperLine = 'command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"'
     expect(zshrc).toContain(restoreLine)
     expect(zlogin).toContain(restoreLine)
@@ -491,6 +492,12 @@ describePosix('daemon shell-ready launch config', () => {
     expect(zshrc).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
     expect(zlogin).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
     expect(bashRc).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
+    expect(zshrc).toContain(codexWrapperLine)
+    expect(zlogin).toContain(codexWrapperLine)
+    expect(bashRc).toContain(codexWrapperLine)
+    expect(zshrc).toContain('export CODEX_HOME="${ORCA_CODEX_HOME}"')
+    expect(zlogin).toContain('export CODEX_HOME="${ORCA_CODEX_HOME}"')
+    expect(bashRc).toContain('export CODEX_HOME="${ORCA_CODEX_HOME}"')
     expect(zshrc).toContain(ompWrapperLine)
     expect(zlogin).toContain(ompWrapperLine)
     expect(bashRc).toContain(ompWrapperLine)

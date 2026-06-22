@@ -80,7 +80,7 @@ export async function launchAgentBackgroundSession(
   const launchPlatform = repo
     ? getAgentLaunchPlatformForRepo(
         repo,
-        repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(store, worktreeId)
+          repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(store, worktreeId)
       )
     : CLIENT_PLATFORM
   const trimmedPrompt = prompt?.trim() ?? ''

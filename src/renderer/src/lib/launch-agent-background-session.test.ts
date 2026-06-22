@@ -19,6 +19,7 @@ const mockSubscribeToPtyData = vi.fn()
 const mockSubscribeToPtyExit = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
 const mockMarkTrusted = vi.fn()
+const mockPlatformState = vi.hoisted(() => ({ clientPlatform: 'linux' as NodeJS.Platform }))
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
 function expectStablePaneSpawn(): string {
@@ -87,6 +88,12 @@ vi.mock('@/lib/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mockPasteDraftWhenAgentReady
 }))
 
+vi.mock('@/lib/new-workspace', () => ({
+  get CLIENT_PLATFORM() {
+    return mockPlatformState.clientPlatform
+  }
+}))
+
 vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   registerEagerPtyBuffer: mockRegisterEagerPtyBuffer,
   subscribeToPtyExit: mockSubscribeToPtyExit
@@ -100,6 +107,7 @@ describe('launchAgentBackgroundSession', () => {
   beforeEach(() => {
     clearRuntimeCompatibilityCacheForTests()
     vi.clearAllMocks()
+    mockPlatformState.clientPlatform = 'linux'
     mockRuntimeEnvironmentTransportCall.mockImplementation(
       (args) =>
         createCompatibleRuntimeStatusResponseIfNeeded(args) ?? mockRuntimeEnvironmentCall(args)
@@ -461,7 +469,8 @@ describe('launchAgentBackgroundSession', () => {
 
       expect(mockSpawn.mock.calls[0]?.[0]).toEqual(
         expect.objectContaining({
-          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'",
+          command:
+            "codex '--dangerously-bypass-approvals-and-sandbox' -c history.persistence=none 'run the automation'",
           startupCommandDelivery: 'shell-ready'
         })
       )
@@ -475,7 +484,45 @@ describe('launchAgentBackgroundSession', () => {
 
       expect(mockWrite).toHaveBeenCalledWith(
         'pty-1',
-        "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'\r"
+        "codex '--dangerously-bypass-approvals-and-sandbox' -c history.persistence=none 'run the automation'\r"
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('uses POSIX quoting for Windows-client SSH background Codex prompts', async () => {
+    vi.useFakeTimers()
+    try {
+      mockPlatformState.clientPlatform = 'win32'
+      state.settings = {
+        ...state.settings,
+        agentCmdOverrides: { codex: 'npx codex' }
+      }
+      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+      const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+      await launchAgentBackgroundSession({
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        prompt: "don't drop quotes",
+        title: 'Nightly audit'
+      })
+
+      expect(mockSpawn.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({
+          command:
+            "npx codex '--dangerously-bypass-approvals-and-sandbox' -c history.persistence=none 'don'\\''t drop quotes'",
+          startupCommandDelivery: 'shell-ready'
+        })
+      )
+      const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
+      dataSidecar('\x1b]777;orca-shell-ready\x07user@remote repo % ')
+      vi.advanceTimersByTime(50)
+
+      expect(mockWrite).toHaveBeenCalledWith(
+        'pty-1',
+        "npx codex '--dangerously-bypass-approvals-and-sandbox' -c history.persistence=none 'don'\\''t drop quotes'\r"
       )
     } finally {
       vi.useRealTimers()
@@ -501,7 +548,7 @@ describe('launchAgentBackgroundSession', () => {
       expect(mockSpawn.mock.calls[0]?.[0]).toEqual(
         expect.objectContaining({
           command:
-            "codex --prefill 'draft from override' '--dangerously-bypass-approvals-and-sandbox'"
+            "codex --prefill 'draft from override' '--dangerously-bypass-approvals-and-sandbox' -c history.persistence=none"
         })
       )
       expect(mockSpawn.mock.calls[0]?.[0]).not.toHaveProperty('startupCommandDelivery')
@@ -515,7 +562,7 @@ describe('launchAgentBackgroundSession', () => {
 
       expect(mockWrite).toHaveBeenCalledWith(
         'pty-1',
-        "codex --prefill 'draft from override' '--dangerously-bypass-approvals-and-sandbox'\r"
+        "codex --prefill 'draft from override' '--dangerously-bypass-approvals-and-sandbox' -c history.persistence=none\r"
       )
     } finally {
       vi.useRealTimers()

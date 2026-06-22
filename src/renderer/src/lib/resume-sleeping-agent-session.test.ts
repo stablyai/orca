@@ -213,7 +213,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const resumedTab = state.tabsByWorktree['wt-1']?.[0]
     const startup = state.pendingStartupByTabId[resumedTab!.id]
     expect(startup?.command).toBe(
-      "codex --profile captured '--model' 'gpt-5' '--reasoning-effort' 'high' 'resume' 'sess-1'"
+      "codex --profile captured '--model' 'gpt-5' '--reasoning-effort' 'high' -c history.persistence=none 'resume' 'sess-1'"
     )
     expect(startup?.env).toEqual({ CODEX_PROFILE: 'captured' })
     expect(startup?.command).not.toContain('changed')

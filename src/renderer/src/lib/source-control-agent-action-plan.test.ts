@@ -37,7 +37,7 @@ describe('planSourceControlAgentActionLaunch', () => {
     })
 
     expect(result.ok && result.delivery).toBe('paste-submit')
-    expect(result.ok && result.commandLabel).toBe('codex')
+    expect(result.ok && result.commandLabel).toBe('codex -c history.persistence=none')
     expect(result.ok && result.summary).toContain('pastes and submits')
     expect(result.ok && result.caveat).toContain('PATH')
   })
@@ -52,7 +52,9 @@ describe('planSourceControlAgentActionLaunch', () => {
       platform: 'linux'
     })
 
-    expect(result.ok && result.commandLabel).toBe("codex '--model' 'gpt-5.5'")
+    expect(result.ok && result.commandLabel).toBe(
+      "codex '--model' 'gpt-5.5' -c history.persistence=none"
+    )
   })
 
   it('rejects invalid per-action CLI arguments', () => {

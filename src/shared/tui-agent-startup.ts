@@ -14,6 +14,7 @@ import {
   type AgentStartupShell
 } from './tui-agent-startup-shell'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from './tui-agent-config'
+import { withCodexHistoryPersistenceDisabled } from './tui-agent-codex-history'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { TuiAgent } from './types'
 
@@ -90,6 +91,10 @@ export function buildAgentStartupPlan(args: {
     ...args,
     agentCommand: baseCommand.command
   })
+  const launchBaseCommand = withCodexHistoryPersistenceDisabled({
+    agent,
+    baseCommand: baseCommand.command
+  })
 
   if (!trimmedPrompt) {
     if (!allowEmptyPromptLaunch) {
@@ -97,7 +102,7 @@ export function buildAgentStartupPlan(args: {
     }
     return {
       agent,
-      launchCommand: baseCommand.command,
+      launchCommand: launchBaseCommand,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
@@ -110,7 +115,7 @@ export function buildAgentStartupPlan(args: {
   if (config.promptInjectionMode === 'argv') {
     return {
       agent,
-      launchCommand: `${baseCommand.command} ${quotedPrompt}`,
+      launchCommand: `${launchBaseCommand} ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
@@ -122,7 +127,7 @@ export function buildAgentStartupPlan(args: {
   if (config.promptInjectionMode === 'flag-prompt') {
     return {
       agent,
-      launchCommand: `${baseCommand.command} --prompt ${quotedPrompt}`,
+      launchCommand: `${launchBaseCommand} --prompt ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
@@ -133,7 +138,7 @@ export function buildAgentStartupPlan(args: {
   if (config.promptInjectionMode === 'flag-prompt-interactive') {
     return {
       agent,
-      launchCommand: `${baseCommand.command} --prompt-interactive ${quotedPrompt}`,
+      launchCommand: `${launchBaseCommand} --prompt-interactive ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
@@ -144,7 +149,7 @@ export function buildAgentStartupPlan(args: {
   if (config.promptInjectionMode === 'flag-interactive') {
     return {
       agent,
-      launchCommand: `${baseCommand.command} -i ${quotedPrompt}`,
+      launchCommand: `${launchBaseCommand} -i ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
@@ -154,7 +159,7 @@ export function buildAgentStartupPlan(args: {
 
   return {
     agent,
-    launchCommand: baseCommand.command,
+    launchCommand: launchBaseCommand,
     expectedProcess: config.expectedProcess,
     followupPrompt: trimmedPrompt,
     launchConfig,
@@ -195,11 +200,15 @@ export function buildAgentResumeStartupPlan(args: {
     ...args,
     agentCommand: baseCommand.command
   })
+  const launchBaseCommand = withCodexHistoryPersistenceDisabled({
+    agent: args.agent,
+    baseCommand: baseCommand.command
+  })
   const resumeArgs = argv
     .slice(1)
     .map((arg) => quoteStartupArg(arg, shell))
     .join(' ')
-  const launchCommand = resumeArgs ? `${baseCommand.command} ${resumeArgs}` : baseCommand.command
+  const launchCommand = resumeArgs ? `${launchBaseCommand} ${resumeArgs}` : launchBaseCommand
   return {
     agent: args.agent,
     launchCommand,
@@ -265,12 +274,16 @@ export function buildAgentDraftLaunchPlan(args: {
     ...args,
     agentCommand: baseCommand.command
   })
+  const launchBaseCommand = withCodexHistoryPersistenceDisabled({
+    agent,
+    baseCommand: baseCommand.command
+  })
   let plan: AgentDraftLaunchPlan | null = null
   if (config.draftPromptFlag) {
     const quoted = quoteStartupArg(trimmed, shell)
     plan = {
       agent,
-      launchCommand: `${baseCommand.command} ${config.draftPromptFlag} ${quoted}`,
+      launchCommand: `${launchBaseCommand} ${config.draftPromptFlag} ${quoted}`,
       expectedProcess: config.expectedProcess,
       launchConfig,
       // Why: native draft flags carry user text on argv and must survive rc-file startup.
@@ -281,7 +294,7 @@ export function buildAgentDraftLaunchPlan(args: {
     const clearVar = clearEnvCommand(config.draftPromptEnvVar, shell)
     plan = {
       agent,
-      launchCommand: `${baseCommand.command}${commandSeparator(shell)}${clearVar}`,
+      launchCommand: `${launchBaseCommand}${commandSeparator(shell)}${clearVar}`,
       expectedProcess: config.expectedProcess,
       launchConfig,
       env: { ...args.agentEnv, [config.draftPromptEnvVar]: trimmed }
