@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import type { DragEndEvent, DragMoveEvent, DragOverEvent } from '@dnd-kit/core'
 import type { TabDragItemData } from './useTabDragSplit'
 
-/** Outer fraction of a tab chip where drops reorder; the center opens a pane column. */
+/** Outer fraction of a tab chip where drops reorder; the center opens a split. */
 export const TAB_REORDER_EDGE_FRACTION = 0.3
 
 export type TabPaneColumnSplitTarget = {
@@ -49,7 +49,7 @@ export function resolveTabPaneColumnSplitOverTab(
   const edge = event.over.rect.width * TAB_REORDER_EDGE_FRACTION
   const localX = center.x - event.over.rect.left
   if (localX > edge && localX < event.over.rect.width - edge) {
-    // Why: tab-on-tab pane splits only apply within one pane column. Dragging
+    // Why: tab-on-tab pane splits only apply within one split pane. Dragging
     // across existing split panes should insert at a tab slot instead.
     if (activeData.groupId !== overData.groupId) {
       return null

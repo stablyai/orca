@@ -212,11 +212,10 @@ describe('SortableTabContextMenu', () => {
     })
   })
 
-  it('renders workspace pane-column actions and routes directions to the move path', () => {
+  it('renders split actions and routes directions to the move path', () => {
     storeMock.dropUnifiedTab.mockReturnValue(true)
     const { container } = renderMenu()
 
-    expect(container.textContent).toContain('Workspace layout')
     expect(container.textContent).toContain('Move Tab to Split')
 
     act(() => getButton(container, 'Right').click())
@@ -226,7 +225,7 @@ describe('SortableTabContextMenu', () => {
     })
   })
 
-  it('hides workspace pane-column actions for a single-tab group', () => {
+  it('hides split actions for a single-tab group', () => {
     storeMock.state = {
       ...storeMock.state,
       groupsByWorktree: {
@@ -242,6 +241,6 @@ describe('SortableTabContextMenu', () => {
     }
     const { container } = renderMenu()
 
-    expect(container.textContent).not.toContain('Workspace layout')
+    expect(container.textContent).not.toContain('Move Tab to Split')
   })
 })

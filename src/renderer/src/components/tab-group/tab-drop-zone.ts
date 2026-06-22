@@ -36,7 +36,7 @@ export function resolveDropZone(
   return localY < rect.height / 2 ? 'up' : 'down'
 }
 
-/** Outer band of a pane column panel where drags open a new split pane. */
+/** Outer band of a split pane panel where drags open another split. */
 export function resolvePaneColumnEdgeZone(
   panelRect: PaneRect,
   point: { x: number; y: number },

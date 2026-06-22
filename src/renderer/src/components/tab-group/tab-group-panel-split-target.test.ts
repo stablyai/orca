@@ -304,7 +304,7 @@ describe('resolvePanelEdgePaneColumnSplit', () => {
     ).toBeNull()
   })
 
-  it('suppresses adjacent sibling pane-column splits that would collapse back to the current layout', () => {
+  it('suppresses adjacent sibling split drops that would collapse back to the current layout', () => {
     const group1Panel = {
       left: 0,
       top: 0,

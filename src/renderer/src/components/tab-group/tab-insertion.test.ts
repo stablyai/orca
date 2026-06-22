@@ -131,7 +131,7 @@ describe('resolveTabInsertion', () => {
     })
   })
 
-  it('returns null when cursor is in the center pane-column split zone within the same pane', () => {
+  it('returns null when cursor is in the center split zone within the same pane', () => {
     const overData = makeDragData({
       unifiedTabId: 'tab-over',
       visibleTabId: 'tab-over',
@@ -165,7 +165,7 @@ describe('resolveTabInsertion', () => {
 })
 
 describe('resolveTabPaneColumnSplitOverTab', () => {
-  it('returns a pane-column split target in the tab center zone within the same pane', () => {
+  it('returns a split target in the tab center zone within the same pane', () => {
     const overData = makeDragData({
       unifiedTabId: 'tab-over',
       visibleTabId: 'tab-over',

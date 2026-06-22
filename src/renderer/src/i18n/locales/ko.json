@@ -2433,7 +2433,7 @@
             "1ff1c77616": "브라우저",
             "586d2ac445": "terminal",
             "addSplitPane": "분할 창 추가",
-            "closePaneColumn": "창 열 닫기"
+            "closePaneColumn": "분할 창 닫기"
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "이 세션을 재개하려면 terminal 창에 놓으세요.",
@@ -2443,7 +2443,7 @@
             "sessionQueued": "세션이 대기열에 추가됨"
           },
           "TabGroupDropOverlay": {
-            "paneColumnLabel": "새 창 열"
+            "paneColumnLabel": "새 분할"
           }
         },
         "bar": {
@@ -2615,7 +2615,6 @@
             "left": "왼쪽",
             "down": "아래",
             "up": "위",
-            "workspaceLayout": "작업 공간 레이아웃",
             "moveToPaneColumn": "탭을 분할로 이동"
           }
         }

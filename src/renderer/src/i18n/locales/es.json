@@ -2433,7 +2433,7 @@
             "1ff1c77616": "navegador",
             "586d2ac445": "terminal",
             "addSplitPane": "Agregar panel dividido",
-            "closePaneColumn": "Cerrar columna de panel"
+            "closePaneColumn": "Cerrar panel dividido"
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "Drop onto a terminal pane to resume this session.",
@@ -2443,7 +2443,7 @@
             "sessionQueued": "Session queued"
           },
           "TabGroupDropOverlay": {
-            "paneColumnLabel": "Nueva columna de panel"
+            "paneColumnLabel": "Nueva división"
           }
         },
         "bar": {
@@ -2615,7 +2615,6 @@
             "left": "Izquierda",
             "down": "Abajo",
             "up": "Arriba",
-            "workspaceLayout": "Diseño del espacio de trabajo",
             "moveToPaneColumn": "Mover pestaña a división"
           }
         }

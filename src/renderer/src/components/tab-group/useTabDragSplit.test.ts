@@ -213,7 +213,7 @@ describe('canDropTabIntoPaneBody', () => {
     ).toBe(true)
   })
 
-  it('rejects tab-on-tab pane-column splits across groups', () => {
+  it('rejects tab-on-tab split drops across groups', () => {
     expect(
       canDropTabForPaneColumnSplit({
         activeDrag: makeDragData('group-1'),

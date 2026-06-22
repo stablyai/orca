@@ -35,10 +35,7 @@ export default function TabGroupDropOverlay({
     >
       {showPaneColumnLabel && zone !== 'center' ? (
         <span className="tab-drop-overlay__label pointer-events-none absolute bottom-2 left-2 rounded-sm px-1.5 py-0.5 font-medium">
-          {translate(
-            'auto.components.tab.group.TabGroupDropOverlay.paneColumnLabel',
-            'New pane column'
-          )}
+          {translate('auto.components.tab.group.TabGroupDropOverlay.paneColumnLabel', 'New split')}
         </span>
       ) : null}
     </div>

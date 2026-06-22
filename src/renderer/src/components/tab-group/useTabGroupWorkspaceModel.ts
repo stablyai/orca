@@ -461,7 +461,7 @@ export function useTabGroupWorkspaceModel({
       if (!newGroupId) {
         return
       }
-      // Why: the tab-strip Split pane control adds a pane column to the right of
+      // Why: the tab-strip Split pane control adds a split pane to the right of
       // the group that owns the button. Dragging tabs can still open other
       // directions; this entry point always seeds a fresh terminal.
       const terminal = createTab(worktreeId, newGroupId)

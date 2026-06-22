@@ -2433,7 +2433,7 @@
             "1ff1c77616": "浏览器",
             "586d2ac445": "terminal",
             "addSplitPane": "添加拆分窗格",
-            "closePaneColumn": "关闭窗格列"
+            "closePaneColumn": "关闭拆分窗格"
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "Drop onto a terminal pane to resume this session.",
@@ -2443,7 +2443,7 @@
             "sessionQueued": "Session queued"
           },
           "TabGroupDropOverlay": {
-            "paneColumnLabel": "新窗格列"
+            "paneColumnLabel": "新建拆分"
           }
         },
         "bar": {
@@ -2615,7 +2615,6 @@
             "left": "左",
             "down": "下",
             "up": "上",
-            "workspaceLayout": "工作区布局",
             "moveToPaneColumn": "将标签页移至拆分"
           }
         }

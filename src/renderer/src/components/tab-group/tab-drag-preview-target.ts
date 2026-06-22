@@ -21,9 +21,9 @@ export function resolveDragPreviewTabId({
   const sourcePreDragTabId = preDragActiveTabIdByGroup[sourceGroupId] ?? null
 
   if (isTabDragData(overData) && overData.unifiedTabId !== activeDrag.unifiedTabId) {
-    // Why: tab-strip hovers target pane-column splits or reorder slots. Previewing
+    // Why: tab-strip hovers target split drops or reorder slots. Previewing
     // the hovered tab's content reads like an in-tab split even though the drop
-    // opens a new workspace pane column.
+    // opens a new split.
     return { groupId: sourceGroupId, tabId: sourcePreDragTabId }
   }
 

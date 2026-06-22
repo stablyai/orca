@@ -1,5 +1,4 @@
 import {
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -39,12 +38,6 @@ export function TabWorkspaceLayoutMenuSection({
   return (
     <>
       <DropdownMenuSeparator />
-      <DropdownMenuLabel>
-        {translate(
-          'auto.components.tab.bar.TabWorkspaceLayoutMenuSection.workspaceLayout',
-          'Workspace layout'
-        )}
-      </DropdownMenuLabel>
       <DropdownMenuSub>
         <DropdownMenuSubTrigger>
           {translate(

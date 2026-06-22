@@ -24,7 +24,7 @@ export function canMoveTabToNewPaneColumnFromState(
       return false
     }
     // Why: mirror dropUnifiedTab — splitting the only tab in a group onto an
-    // adjacent pane column is a layout no-op the store rejects.
+    // adjacent split pane is a layout no-op the store rejects.
     return group.tabOrder.length > 1
   }
   return false

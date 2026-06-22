@@ -86,7 +86,7 @@ describe('tab-move-to-pane-column', () => {
     ).toBe(false)
   })
 
-  it('creates a sibling pane column via dropUnifiedTab', () => {
+  it('creates a sibling split pane via dropUnifiedTab', () => {
     const dropUnifiedTab = vi.fn(() => true)
     useAppStore.setState({ dropUnifiedTab } as Partial<ReturnType<typeof useAppStore.getState>>)
 

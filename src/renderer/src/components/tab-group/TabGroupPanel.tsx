@@ -179,12 +179,12 @@ export default function TabGroupPanel({
 
   const menuButtonClassName =
     'my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
-  // Why: every pane column owns its own split affordance (VS Code-style). The
+  // Why: every split pane owns its own split affordance (VS Code-style). The
   // button always splits right; up/down and left stay on tab drag.
   const splitPaneButtonClassName = `${menuButtonClassName} ${
     isFocused ? 'opacity-100' : 'opacity-70 hover:opacity-100'
   }`
-  // Why: focused-only — quick commands and Close pane column stay with the
+  // Why: focused-only — quick commands and Close split pane stay with the
   // active pane so unfocused strips stay compact aside from the split control.
   const focusedActionChromeClassName = `flex shrink-0 items-center gap-0.5 overflow-hidden transition-[opacity] duration-150 ${
     isFocused ? 'ml-1.5 pointer-events-auto opacity-100' : 'pointer-events-none opacity-0 w-0'
@@ -251,7 +251,7 @@ export default function TabGroupPanel({
             />
           ) : null}
           <div className="min-w-0 flex-1 h-full">{tabBar}</div>
-          {/* Why: pane-scoped layout actions belong with each pane column instead
+          {/* Why: pane-scoped layout actions belong with each split pane instead
               of the global tab-bar `+`, which should keep opening tabs exactly
               as before. Split-right is one click (VS Code-style); close-group
               stays on the focused pane only. */}
@@ -317,7 +317,7 @@ export default function TabGroupPanel({
                         <X className="size-4" />
                         {translate(
                           'auto.components.tab.group.TabGroupPanel.closePaneColumn',
-                          'Close pane column'
+                          'Close split pane'
                         )}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
