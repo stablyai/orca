@@ -161,14 +161,22 @@ describe('ClaudeHookService.install', () => {
       )
       expect(legacyCommands).toContain('/usr/local/bin/user-hook')
       expect(
-        legacyCommands.some((command: string) => command.includes(CLAUDE_SCRIPT_FILE_NAME))
+        legacyCommands.some((command: string) =>
+          process.platform === 'win32'
+            ? command.startsWith('powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ')
+            : command.includes(CLAUDE_SCRIPT_FILE_NAME)
+        )
       ).toBe(true)
       expect(
         legacyCommands.some((command: string) =>
           command.includes('/Users/old/.orca/agent-hooks/claude-hook.sh')
         )
       ).toBe(false)
-      expect(legacy.hooks.StopFailure[0].hooks[0].command).toContain(CLAUDE_SCRIPT_FILE_NAME)
+      expect(legacy.hooks.StopFailure[0].hooks[0].command).toMatch(
+        process.platform === 'win32'
+          ? /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+          : new RegExp(CLAUDE_SCRIPT_FILE_NAME)
+      )
       expect(
         readFileSync(join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME), 'utf-8')
       ).toContain('DEVIN_PROJECT_DIR')
@@ -180,10 +188,10 @@ describe('ClaudeHookService.install', () => {
 
   // Why: #6078 — Claude Code runs hooks through Git Bash, and an unquoted path
   // with a space (e.g. `C:/Users/Jane Doe`) splits at the space. The managed
-  // command must invoke the .cmd through `cmd.exe /d /c call "..."` so Git Bash
-  // treats the whole path as one argument.
+  // command must use an encoded launcher so Git Bash/cmd.exe never splits or
+  // expands the raw path before invoking the managed .cmd.
   it.skipIf(process.platform !== 'win32')(
-    'wraps the managed hook command in cmd.exe to survive spaces in the profile path (#6078)',
+    'wraps the managed hook command to survive spaces in the profile path (#6078)',
     () => {
       const tmpHome = mkdtempSync(join(tmpdir(), 'orca claude home with spaces '))
       vi.stubEnv('HOME', tmpHome)
@@ -197,7 +205,9 @@ describe('ClaudeHookService.install', () => {
 
         for (const eventName of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
           const command = settings.hooks[eventName]?.[0]?.hooks?.[0]?.command
-          expect(command).toMatch(/^cmd\.exe \/d \/c call ".*claude-hook\.cmd"$/)
+          expect(command).toMatch(
+            /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+          )
         }
       } finally {
         vi.unstubAllEnvs()
@@ -315,7 +325,14 @@ describe('OpenClaudeHookService-compatible install', () => {
       const parsed = JSON.parse(readFileSync(openClaudeSettings, 'utf-8'))
       for (const event of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
         const command = parsed.hooks[event][0].hooks[0].command as string
-        expect(command).toContain(OPENCLAUDE_SCRIPT_FILE_NAME)
+        if (process.platform === 'win32') {
+          expect(command).toMatch(
+            /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+          )
+        } else {
+          expect(command).toContain(OPENCLAUDE_SCRIPT_FILE_NAME)
+          expect(command).toMatch(/^if \[ -x /)
+        }
       }
       expect(
         readFileSync(join(tmpHome, '.orca', 'agent-hooks', OPENCLAUDE_SCRIPT_FILE_NAME), 'utf-8')

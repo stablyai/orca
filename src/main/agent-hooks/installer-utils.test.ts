@@ -168,6 +168,11 @@ describe('createManagedCommandMatcher', () => {
     ).toBe(true)
   })
 
+  it('matches encoded Windows launcher commands by decoding their script path', () => {
+    const command = wrapWindowsHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\claude-hook.cmd')
+    expect(match(command)).toBe(true)
+  })
+
   it('matches the legacy per-userData script path AND the new shared ~/.orca path', () => {
     // Why: install() must sweep old per-userData commands when migrating to
     // the shared ~/.orca script path, or stale launchers keep failing.
@@ -334,23 +339,54 @@ describe('wrapPosixHookCommand', () => {
 })
 
 describe('wrapWindowsHookCommand', () => {
-  it('invokes the .cmd through cmd.exe with a quoted path', () => {
-    expect(wrapWindowsHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd')).toBe(
-      'cmd.exe /d /c call "C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd"'
+  function decodeWindowsHookCommand(command: string): string {
+    const encodedCommand = command.match(/ -EncodedCommand (\S+)$/)?.[1]
+    expect(encodedCommand).toBeTruthy()
+    return Buffer.from(encodedCommand!, 'base64').toString('utf16le')
+  }
+
+  it('invokes the .cmd through an encoded PowerShell command', () => {
+    const command = wrapWindowsHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd')
+    expect(command).toMatch(/^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/)
+    expect(decodeWindowsHookCommand(command)).toBe(
+      "& 'C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd'; exit $LASTEXITCODE"
     )
   })
 
   // Why: a user profile path like `C:\Users\Jane Doe` is the regression from
   // #6078 — the raw path used to be split at the space. The wrapper must keep
-  // the whole path as one quoted argument so cmd.exe invokes the right file.
+  // the whole path inside the encoded command so shells do not split it.
   it('preserves spaces in the script path (user profile with space case)', () => {
     const cmd = wrapWindowsHookCommand('C:\\Users\\Jorge Silva\\.orca\\agent-hooks\\codex-hook.cmd')
-    expect(cmd).toBe(
-      'cmd.exe /d /c call "C:\\Users\\Jorge Silva\\.orca\\agent-hooks\\codex-hook.cmd"'
+    expect(decodeWindowsHookCommand(cmd)).toBe(
+      "& 'C:\\Users\\Jorge Silva\\.orca\\agent-hooks\\codex-hook.cmd'; exit $LASTEXITCODE"
     )
-    // Why: the path must appear inside one pair of double quotes, not split.
-    expect(cmd.match(/"/g)?.length).toBe(2)
   })
+
+  it('keeps cmd.exe percent expansion and caret escapes out of the command line', () => {
+    const cmd = wrapWindowsHookCommand('C:\\Users\\%ORCA_TEST%\\a^b\\codex-hook.cmd')
+    expect(cmd).not.toContain('%ORCA_TEST%')
+    expect(cmd).not.toContain('^')
+    expect(decodeWindowsHookCommand(cmd)).toBe(
+      "& 'C:\\Users\\%ORCA_TEST%\\a^b\\codex-hook.cmd'; exit $LASTEXITCODE"
+    )
+  })
+
+  it.skipIf(process.platform !== 'win32')(
+    'executes a script path containing a cmd.exe caret literally',
+    () => {
+      const scriptDir = join(tmpDir, 'home with ^ caret', '.orca', 'agent-hooks')
+      mkdirSync(scriptDir, { recursive: true })
+      const scriptPath = join(scriptDir, 'codex-hook.cmd')
+      writeFileSync(scriptPath, '@echo off\r\nexit /b 7\r\n', 'utf-8')
+
+      const result = spawnSync('cmd.exe', ['/d', '/c', wrapWindowsHookCommand(scriptPath)], {
+        env: { ...process.env, ORCA_WRAP_TEST: 'expanded' }
+      })
+
+      expect(result.status).toBe(7)
+    }
+  )
 })
 
 describe('buildWindowsAgentHookPostCommand', () => {

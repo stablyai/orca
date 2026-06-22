@@ -70,16 +70,23 @@ describe('DroidHookService', () => {
     expect(config.hooks.PreToolUse[0].matcher).toBe('*')
     expect(config.hooks.PermissionRequest[0].matcher).toBe('*')
     expect(config.hooks.UserPromptSubmit[0].matcher).toBeUndefined()
-    expect(config.hooks.PreToolUse[0].hooks[0].command).toContain('droid-hook')
-    expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
+    expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(
+      process.platform === 'win32'
+        ? /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+        : /droid-hook/
+    )
+    if (process.platform !== 'win32') {
+      expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
+    }
     expect(config.hooks.PreToolUse[0].hooks[0].command).not.toContain(userDataDir)
   })
 
   // Why: #6078 — a Windows user profile path with a space used to be written
   // verbatim as the hook command, so the agent split it at the space. The
-  // managed command must invoke the .cmd through `cmd.exe /d /c call "..."`.
+  // managed command must use an encoded launcher so the path never appears raw
+  // on the cmd.exe command line.
   it.skipIf(process.platform !== 'win32')(
-    'wraps the managed hook command in cmd.exe to survive spaces in the profile path (#6078)',
+    'wraps the managed hook command to survive spaces in the profile path (#6078)',
     () => {
       const spaceHome = join(tmpdir(), 'orca droid home with spaces')
       mkdirSync(spaceHome, { recursive: true })
@@ -93,8 +100,9 @@ describe('DroidHookService', () => {
 
         for (const eventName of ['SessionStart', 'UserPromptSubmit', 'Stop']) {
           const command = config.hooks[eventName]?.[0]?.hooks?.[0]?.command
-          expect(command).toMatch(/^cmd\.exe \/d \/c call ".*droid-hook\.cmd"$/)
-          expect(command).toContain('orca droid home with spaces')
+          expect(command).toMatch(
+            /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+          )
         }
       } finally {
         rmSync(spaceHome, { recursive: true, force: true })

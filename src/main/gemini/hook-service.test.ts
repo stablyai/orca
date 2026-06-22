@@ -100,17 +100,22 @@ describe('GeminiHookService', () => {
     expect(config.hooks.PreToolUse).toBeUndefined()
     expect(config.hooks.BeforeAgent).toHaveLength(2)
     expect(config.hooks.BeforeAgent[0].hooks[0].command).toBe('echo user-before-agent')
-    expect(config.hooks.BeforeAgent[1].hooks[0].command).toContain(managedHookPath)
-    expect(config.hooks.AfterAgent[0].hooks[0].command).toContain(managedHookPath)
-    expect(config.hooks.AfterTool[0].hooks[0].command).toContain(managedHookPath)
-    expect(config.hooks.BeforeTool[0].hooks[0].command).toContain(managedHookPath)
+    const managedCommandPattern =
+      process.platform === 'win32'
+        ? /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+        : new RegExp(managedHookPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    expect(config.hooks.BeforeAgent[1].hooks[0].command).toMatch(managedCommandPattern)
+    expect(config.hooks.AfterAgent[0].hooks[0].command).toMatch(managedCommandPattern)
+    expect(config.hooks.AfterTool[0].hooks[0].command).toMatch(managedCommandPattern)
+    expect(config.hooks.BeforeTool[0].hooks[0].command).toMatch(managedCommandPattern)
   })
 
   // Why: #6078 — a Windows user profile path with a space used to be written
   // verbatim as the hook command, so the agent split it at the space. The
-  // managed command must invoke the .cmd through `cmd.exe /d /c call "..."`.
+  // managed command must use an encoded launcher so the path never appears raw
+  // on the cmd.exe command line.
   it.skipIf(process.platform !== 'win32')(
-    'wraps the managed hook command in cmd.exe to survive spaces in the profile path (#6078)',
+    'wraps the managed hook command to survive spaces in the profile path (#6078)',
     () => {
       const spaceHome = join(tmpdir(), 'orca gemini home with spaces')
       mkdirSync(spaceHome, { recursive: true })
@@ -124,8 +129,9 @@ describe('GeminiHookService', () => {
 
         for (const eventName of ['BeforeAgent', 'AfterAgent', 'AfterTool']) {
           const command = config.hooks[eventName]?.[0]?.hooks?.[0]?.command
-          expect(command).toMatch(/^cmd\.exe \/d \/c call ".*gemini-hook\.cmd"$/)
-          expect(command).toContain('orca gemini home with spaces')
+          expect(command).toMatch(
+            /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+          )
         }
       } finally {
         rmSync(spaceHome, { recursive: true, force: true })
@@ -175,6 +181,10 @@ describe('GeminiHookService', () => {
 
     expect(status.state).toBe('installed')
     expect(preToolCommands).toEqual(['echo user-authored'])
-    expect(config.hooks.BeforeTool[0].hooks[0].command).toContain(managedHookFileName)
+    expect(config.hooks.BeforeTool[0].hooks[0].command).toMatch(
+      process.platform === 'win32'
+        ? /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+        : new RegExp(managedHookFileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    )
   })
 })

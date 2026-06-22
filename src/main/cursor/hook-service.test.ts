@@ -58,8 +58,14 @@ describe('CursorHookService', () => {
     expect(Object.keys(config.hooks).sort()).toEqual([...CURSOR_EVENTS].sort())
     for (const eventName of CURSOR_EVENTS) {
       const definition = config.hooks[eventName]?.[0]
-      expect(definition?.command).toContain('cursor-hook')
-      expect(definition?.command).toContain(join(homeDir, '.orca'))
+      expect(definition?.command).toMatch(
+        process.platform === 'win32'
+          ? /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+          : /cursor-hook/
+      )
+      if (process.platform !== 'win32') {
+        expect(definition?.command).toContain(join(homeDir, '.orca'))
+      }
       expect(definition?.hooks).toBeUndefined()
     }
 
@@ -77,9 +83,10 @@ describe('CursorHookService', () => {
 
   // Why: #6078 — a Windows user profile path with a space used to be written
   // verbatim as the hook command, so the agent split it at the space. The
-  // managed command must invoke the .cmd through `cmd.exe /d /c call "..."`.
+  // managed command must use an encoded launcher so the path never appears raw
+  // on the cmd.exe command line.
   it.skipIf(process.platform !== 'win32')(
-    'wraps the managed hook command in cmd.exe to survive spaces in the profile path (#6078)',
+    'wraps the managed hook command to survive spaces in the profile path (#6078)',
     () => {
       const spaceHome = join(tmpdir(), 'orca cursor home with spaces')
       mkdirSync(spaceHome, { recursive: true })
@@ -93,8 +100,9 @@ describe('CursorHookService', () => {
 
         for (const eventName of ['beforeSubmitPrompt', 'stop']) {
           const command = config.hooks[eventName]?.[0]?.command
-          expect(command).toMatch(/^cmd\.exe \/d \/c call ".*cursor-hook\.cmd"$/)
-          expect(command).toContain('orca cursor home with spaces')
+          expect(command).toMatch(
+            /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+          )
         }
       } finally {
         rmSync(spaceHome, { recursive: true, force: true })
@@ -134,7 +142,11 @@ describe('CursorHookService', () => {
     const promptCommands = config.hooks.beforeSubmitPrompt.map((definition) => definition.command)
     expect(promptCommands).toContain('/usr/local/bin/user-hook')
     expect(
-      promptCommands.filter((command) => command?.includes(CURSOR_SCRIPT_FILE_NAME))
+      promptCommands.filter((command) =>
+        process.platform === 'win32'
+          ? command?.startsWith('powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ')
+          : command?.includes(CURSOR_SCRIPT_FILE_NAME)
+      )
     ).toHaveLength(1)
     expect(config.hooks.retiredEvent.map((definition) => definition.command)).toEqual([
       '/usr/local/bin/retired-user-hook'
