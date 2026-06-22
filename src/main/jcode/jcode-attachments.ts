@@ -8,6 +8,7 @@
 // tools execute on the REMOTE host, so a local path is meaningless there. The
 // caller copies each local file to a remote temp dir first and passes the rewritten
 // REMOTE path here; this module stays transport-agnostic and only formats text.
+import { randomUUID } from 'node:crypto'
 import { readFile, stat } from 'node:fs/promises'
 import { basename, posix as pathPosix } from 'node:path'
 import type { JcodeChatAttachment, JcodeChatSendPayload } from '../../shared/jcode-chat-types'
@@ -95,11 +96,9 @@ export function partitionAttachments(attachments: JcodeChatAttachment[]): {
 }
 
 /** Build a unique-ish remote temp directory name for one chat turn's uploads.
- *  Kept short + filesystem-safe; uniqueness comes from the timestamp + random. */
+ *  Created directly under /tmp so no shared app temp parent can be symlinked. */
 export function buildRemoteAttachmentDir(): string {
-  const stamp = Date.now().toString(36)
-  const rand = Math.random().toString(36).slice(2, 8)
-  return `/tmp/orca-jcode-attachments/${stamp}-${rand}`
+  return `/tmp/orca-jcode-attachments-${randomUUID()}`
 }
 
 /** brain-local (M3) resolution for a chat turn: the remote-exec host (for
@@ -130,14 +129,19 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
-const REMOTE_ATTACHMENT_ROOT = '/tmp/orca-jcode-attachments/'
+const REMOTE_ATTACHMENT_PREFIX = '/tmp/orca-jcode-attachments-'
+const REMOTE_ATTACHMENT_SUFFIX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 function safeRemoteAttachmentDir(remoteDir: string): string | null {
   if (remoteDir.includes('\0')) {
     return null
   }
   const normalized = pathPosix.normalize(remoteDir)
-  return normalized.startsWith(REMOTE_ATTACHMENT_ROOT) ? normalized : null
+  if (normalized !== remoteDir || !normalized.startsWith(REMOTE_ATTACHMENT_PREFIX)) {
+    return null
+  }
+  const suffix = normalized.slice(REMOTE_ATTACHMENT_PREFIX.length)
+  return REMOTE_ATTACHMENT_SUFFIX.test(suffix) ? normalized : null
 }
 
 /** Per-file size cap for remote attachment transfer. Large files would block the
@@ -352,7 +356,7 @@ async function copyFilesToRemote(
   }
   const remoteDir = buildRemoteAttachmentDir()
   try {
-    await runRemoteCommand(conn, `mkdir -p ${shellQuote(remoteDir)}`)
+    await runRemoteCommand(conn, `umask 077 && mkdir -- ${shellQuote(remoteDir)}`)
   } catch {
     return { resolved, failed: [...files], oversize, remoteDir: null }
   }

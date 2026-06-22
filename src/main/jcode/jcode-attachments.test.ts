@@ -85,6 +85,8 @@ import { cleanupRemoteAttachmentDir, resolveTurnPrompt } from './jcode-attachmen
 import { registerJcodeChatHandlers } from './jcode-chat-session'
 
 type MockChannel = EventEmitter & { stderr: EventEmitter }
+const VALID_REMOTE_ATTACHMENT_DIR =
+  '/tmp/orca-jcode-attachments-00000000-0000-4000-8000-000000000000'
 
 function autoClosingChannel(): MockChannel {
   const channel = new EventEmitter() as MockChannel
@@ -209,12 +211,14 @@ describe('resolveTurnPrompt cleanup metadata', () => {
     )
 
     expect(result.cleanup?.connectionId).toBe('conn-1')
-    expect(result.cleanup?.remoteDir).toMatch(/^\/tmp\/orca-jcode-attachments\//)
+    expect(result.cleanup?.remoteDir).toMatch(/^\/tmp\/orca-jcode-attachments-[0-9a-f-]{36}$/)
     expect(result.prompt).toContain(`${result.cleanup?.remoteDir}/note.txt`)
     expect(connection.writeFile).toHaveBeenCalledWith(
       `${result.cleanup?.remoteDir}/note.txt.b64`,
       Buffer.from('attachment contents').toString('base64')
     )
+    expect(connection.exec).toHaveBeenCalledWith(expect.stringMatching(/^umask 077 && mkdir -- '/))
+    expect(connection.exec).not.toHaveBeenCalledWith(expect.stringContaining('mkdir -p'))
   })
 })
 
@@ -223,7 +227,7 @@ describe('cleanupRemoteAttachmentDir', () => {
     const connection = makeSshConnection({ status: 'disconnected' })
     setSshConnection(connection)
 
-    await cleanupRemoteAttachmentDir('conn-1', '/tmp/orca-jcode-attachments/stale')
+    await cleanupRemoteAttachmentDir('conn-1', VALID_REMOTE_ATTACHMENT_DIR)
 
     expect(connection.exec).not.toHaveBeenCalled()
   })
@@ -234,6 +238,8 @@ describe('cleanupRemoteAttachmentDir', () => {
 
     await cleanupRemoteAttachmentDir('conn-1', '/tmp/orca-other/stale')
     await cleanupRemoteAttachmentDir('conn-1', '/tmp/orca-jcode-attachments/../outside')
+    await cleanupRemoteAttachmentDir('conn-1', '/tmp/orca-jcode-attachments/stale')
+    await cleanupRemoteAttachmentDir('conn-1', `${VALID_REMOTE_ATTACHMENT_DIR}/child`)
 
     expect(connection.exec).not.toHaveBeenCalled()
   })
@@ -242,11 +248,9 @@ describe('cleanupRemoteAttachmentDir', () => {
     const connection = makeSshConnection()
     setSshConnection(connection)
 
-    await cleanupRemoteAttachmentDir('conn-1', "/tmp/orca-jcode-attachments/dir with 'quote")
+    await cleanupRemoteAttachmentDir('conn-1', VALID_REMOTE_ATTACHMENT_DIR)
 
-    expect(connection.exec).toHaveBeenCalledWith(
-      "rm -rf -- '/tmp/orca-jcode-attachments/dir with '\\''quote'"
-    )
+    expect(connection.exec).toHaveBeenCalledWith(`rm -rf -- '${VALID_REMOTE_ATTACHMENT_DIR}'`)
   })
 })
 
