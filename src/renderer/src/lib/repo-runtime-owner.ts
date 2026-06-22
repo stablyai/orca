@@ -1,4 +1,9 @@
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  toRuntimeExecutionHostId
+} from '../../../shared/execution-host'
 import type { GlobalSettings, Repo } from '../../../shared/types'
 
 export type RepoRuntimeOwnerState = {
@@ -13,13 +18,25 @@ export function getRuntimeEnvironmentIdForRepo(
   if (!repoId) {
     return null
   }
-  const repo = state.repos?.find((entry) => entry.id === repoId)
+  const repos = state.repos?.filter((entry) => entry.id === repoId) ?? []
+  const repo = getActiveHostRepo(state, repos) ?? repos[0]
   const hasExplicitOwner = Boolean(repo?.executionHostId?.trim() || repo?.connectionId?.trim())
   if (repo && hasExplicitOwner) {
     const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
     return parsed?.kind === 'runtime' ? parsed.environmentId : null
   }
   return state.settings?.activeRuntimeEnvironmentId?.trim() || null
+}
+
+function getActiveHostRepo(
+  state: RepoRuntimeOwnerState,
+  repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
+): Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | undefined {
+  const activeRuntimeId = state.settings?.activeRuntimeEnvironmentId?.trim()
+  const activeHostId = activeRuntimeId
+    ? toRuntimeExecutionHostId(activeRuntimeId)
+    : LOCAL_EXECUTION_HOST_ID
+  return repos.find((repo) => getRepoExecutionHostId(repo) === activeHostId)
 }
 
 export function getSettingsForRepoRuntimeOwner(

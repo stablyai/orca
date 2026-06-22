@@ -43,4 +43,21 @@ describe('splitRepoReorderByHost', () => {
     })
     expect(groups).toEqual([{ hostId: 'local', orderedIds: ['a'] }])
   })
+
+  it('keeps duplicate repo ids assigned to their distinct hosts', () => {
+    const groups = splitRepoReorderByHost(
+      ['github:stablyai/orca', 'local-a', 'github:stablyai/orca'],
+      [
+        repo('github:stablyai/orca', 'runtime:env-1'),
+        repo('local-a', 'local'),
+        repo('github:stablyai/orca', 'runtime:env-2')
+      ],
+      { activeRuntimeEnvironmentId: null }
+    )
+    expect(groups).toEqual([
+      { hostId: 'runtime:env-1', orderedIds: ['github:stablyai/orca'] },
+      { hostId: 'local', orderedIds: ['local-a'] },
+      { hostId: 'runtime:env-2', orderedIds: ['github:stablyai/orca'] }
+    ])
+  })
 })
