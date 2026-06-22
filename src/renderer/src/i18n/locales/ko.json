@@ -223,11 +223,11 @@
           "19db0085fb": "로컬 브랜치가 삭제되었습니다.",
           "2b0afc7f14": "로컬 {{value0}}을(를) 최신 상태로 유지할 수 없습니다.",
           "670864ab52": "로컬 {{value0}}을 최신 상태로 유지",
-          "5366d13eec": "Workspace deleted, branch kept",
-          "2e17f825d4": "Worktree deleted, branch kept",
-          "78e08cd877": "Git could not safely delete branch \"{{value0}}\", so Orca kept it to avoid losing local commits.",
-          "3b57982bf6": "Git could not safely delete branch \"{{value0}}\" after deleting workspace \"{{value1}}\", so Orca kept it to avoid losing local commits.",
-          "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits."
+          "5366d13eec": "워크스페이스가 삭제되었고 브랜치는 유지되었습니다",
+          "2e17f825d4": "워크트리가 삭제되었고 브랜치는 유지되었습니다",
+          "78e08cd877": "Git이 \"{{value0}}\" 브랜치를 안전하게 삭제할 수 없어 Orca가 로컬 커밋 손실을 방지하기 위해 유지했습니다.",
+          "3b57982bf6": "\"{{value1}}\" 워크스페이스를 삭제한 후 Git이 \"{{value0}}\" 브랜치를 안전하게 삭제할 수 없어 Orca가 로컬 커밋 손실을 방지하기 위해 유지했습니다.",
+          "81f13f48d2": "\"{{value1}}\" 워크트리를 삭제한 후 Git이 \"{{value0}}\" 브랜치를 안전하게 삭제할 수 없어 Orca가 로컬 커밋 손실을 방지하기 위해 유지했습니다."
         },
         "repos": {
           "b7e14472ae": "폴더를 추가하지 못했습니다.",

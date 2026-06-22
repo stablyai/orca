@@ -223,11 +223,11 @@
           "19db0085fb": "Sucursal local eliminada",
           "2b0afc7f14": "No se pudo mantener actualizado el {{value0}} local",
           "670864ab52": "Mantener actualizado el {{value0}} local",
-          "5366d13eec": "Workspace deleted, branch kept",
-          "2e17f825d4": "Worktree deleted, branch kept",
-          "78e08cd877": "Git could not safely delete branch \"{{value0}}\", so Orca kept it to avoid losing local commits.",
-          "3b57982bf6": "Git could not safely delete branch \"{{value0}}\" after deleting workspace \"{{value1}}\", so Orca kept it to avoid losing local commits.",
-          "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits."
+          "5366d13eec": "Espacio de trabajo eliminado, rama conservada",
+          "2e17f825d4": "Árbol de trabajo eliminado, rama conservada",
+          "78e08cd877": "Git no pudo eliminar de forma segura la rama \"{{value0}}\", por lo que Orca la conservó para evitar perder commits locales.",
+          "3b57982bf6": "Git no pudo eliminar de forma segura la rama \"{{value0}}\" después de eliminar el espacio de trabajo \"{{value1}}\", por lo que Orca la conservó para evitar perder commits locales.",
+          "81f13f48d2": "Git no pudo eliminar de forma segura la rama \"{{value0}}\" después de eliminar el árbol de trabajo \"{{value1}}\", por lo que Orca la conservó para evitar perder commits locales."
         },
         "repos": {
           "b7e14472ae": "No se pudo agregar la carpeta",

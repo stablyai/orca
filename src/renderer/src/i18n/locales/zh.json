@@ -223,11 +223,11 @@
           "19db0085fb": "本地分支已删除",
           "2b0afc7f14": "无法使本地 {{value0}} 保持最新",
           "670864ab52": "使本地 {{value0}} 保持最新",
-          "5366d13eec": "Workspace deleted, branch kept",
-          "2e17f825d4": "Worktree deleted, branch kept",
-          "78e08cd877": "Git could not safely delete branch \"{{value0}}\", so Orca kept it to avoid losing local commits.",
-          "3b57982bf6": "Git could not safely delete branch \"{{value0}}\" after deleting workspace \"{{value1}}\", so Orca kept it to avoid losing local commits.",
-          "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits."
+          "5366d13eec": "工作区已删除，分支已保留",
+          "2e17f825d4": "工作树已删除，分支已保留",
+          "78e08cd877": "Git 无法安全删除分支\"{{value0}}\"，因此 Orca 将其保留以避免丢失本地提交。",
+          "3b57982bf6": "删除工作区\"{{value1}}\"后，Git 无法安全删除分支\"{{value0}}\"，因此 Orca 将其保留以避免丢失本地提交。",
+          "81f13f48d2": "删除工作树\"{{value1}}\"后，Git 无法安全删除分支\"{{value0}}\"，因此 Orca 将其保留以避免丢失本地提交。"
         },
         "repos": {
           "b7e14472ae": "添加文件夹失败",
