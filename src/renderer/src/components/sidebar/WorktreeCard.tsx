@@ -64,6 +64,7 @@ import {
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { getFlushWorktreeCardPaddingLeft } from './worktree-list-indentation'
+import { resolveSidebarSectionHeaderAppearance } from './sidebar-section-header-appearance'
 import { translate } from '@/i18n/i18n'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -1155,8 +1156,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
       : undefined
   // Why: sidebar rows need a small surface inset, while their content remains
   // aligned with the pre-inset layout and the repo header hierarchy.
+  const flushCardContentPullback =
+    resolveSidebarSectionHeaderAppearance(settings).flushCardContentPullback
   const cardPaddingLeft = flushSurface
-    ? getFlushWorktreeCardPaddingLeft(contentIndent)
+    ? getFlushWorktreeCardPaddingLeft(contentIndent, flushCardContentPullback)
     : contentIndent > 0
       ? `calc(0.125rem + ${contentIndent}px)`
       : null

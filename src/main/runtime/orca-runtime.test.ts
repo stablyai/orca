@@ -1124,27 +1124,30 @@ computeWorktreePathMock.mockImplementation(
 ensurePathWithinWorkspaceMock.mockImplementation((targetPath: string) => targetPath)
 
 describe('OrcaRuntimeService', () => {
-  it('projects worktree card display settings to paired clients', () => {
+  it('projects sidebar worktree display settings to paired clients', () => {
     const runtime = new OrcaRuntimeService({
       ...store,
       getSettings: () => ({
         ...store.getSettings(),
         experimentalNewWorktreeCardStyle: true,
-        compactWorktreeCards: true
+        compactWorktreeCards: true,
+        experimentalLargerSidebarSections: true
       })
     } as never)
 
     expect(runtime.getClientSettings()).toMatchObject({
       experimentalNewWorktreeCardStyle: true,
-      compactWorktreeCards: true
+      compactWorktreeCards: true,
+      experimentalLargerSidebarSections: true
     })
   })
 
-  it('accepts worktree card display setting updates from paired clients', () => {
+  it('accepts sidebar worktree display setting updates from paired clients', () => {
     let settings = {
       ...store.getSettings(),
       experimentalNewWorktreeCardStyle: false,
-      compactWorktreeCards: false
+      compactWorktreeCards: false,
+      experimentalLargerSidebarSections: false
     }
     const updateSettings = vi.fn((updates: Partial<typeof settings>) => {
       settings = { ...settings, ...updates }
@@ -1159,19 +1162,26 @@ describe('OrcaRuntimeService', () => {
     expect(
       runtime.updateClientSettings({
         experimentalNewWorktreeCardStyle: true,
-        compactWorktreeCards: true
+        compactWorktreeCards: true,
+        experimentalLargerSidebarSections: true
       })
     ).toMatchObject({
       experimentalNewWorktreeCardStyle: true,
-      compactWorktreeCards: true
+      compactWorktreeCards: true,
+      experimentalLargerSidebarSections: true
     })
     expect(updateSettings).toHaveBeenCalledWith(
-      { experimentalNewWorktreeCardStyle: true, compactWorktreeCards: true },
+      {
+        experimentalNewWorktreeCardStyle: true,
+        compactWorktreeCards: true,
+        experimentalLargerSidebarSections: true
+      },
       { notifyListeners: true }
     )
     expect(runtime.getClientSettings()).toMatchObject({
       experimentalNewWorktreeCardStyle: true,
-      compactWorktreeCards: true
+      compactWorktreeCards: true,
+      experimentalLargerSidebarSections: true
     })
   })
 

@@ -4833,6 +4833,12 @@
             "description": "预览更新后的 worktree 卡片布局、元数据位置、卡片显示菜单选项和状态呈现。",
             "title": "新卡片样式",
             "toggleLabel": "切换新卡片样式"
+          },
+          "largerSidebarSections": {
+            "copy": "增大项目和分区标题文字、仓库图标，并将分组工作区卡片略微向左对齐。",
+            "description": "在 worktree 侧边栏中预览更大的项目和分区标题。",
+            "title": "更大的侧边栏分区",
+            "toggleLabel": "切换更大的侧边栏分区"
           }
         },
         "FloatingWorkspacePane": {
@@ -6910,6 +6916,17 @@
               "title": "新卡片样式",
               "worktree": "worktree",
               "worktrees": "worktrees"
+            },
+            "largerSidebarSections": {
+              "description": "在 worktree 侧边栏中预览更大的项目和分区标题，包括仓库图标。",
+              "headers": "标题",
+              "icons": "图标",
+              "projects": "项目",
+              "repo": "仓库",
+              "sections": "分区",
+              "sidebar": "侧边栏",
+              "title": "更大的侧边栏分区",
+              "typography": "排版"
             }
           }
         },

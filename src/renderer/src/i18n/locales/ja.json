@@ -4833,6 +4833,12 @@
             "description": "更新された worktree カードのレイアウト、メタデータ配置、カード表示メニュー項目、ステータス表示をプレビューします。",
             "title": "新しいカードスタイル",
             "toggleLabel": "新しいカードスタイルを切り替え"
+          },
+          "largerSidebarSections": {
+            "copy": "プロジェクトとセクションのヘッダー文字、リポジトリアイコンを大きくし、グループ化されたワークスペースカードを少し左に寄せます。",
+            "description": "worktree サイドバーで大きめのプロジェクトヘッダーとセクションヘッダーをプレビューします。",
+            "title": "サイドバーセクションを大きく表示",
+            "toggleLabel": "サイドバーセクションの大きめ表示を切り替え"
           }
         },
         "FloatingWorkspacePane": {
@@ -6947,6 +6953,17 @@
               "title": "新しいカードスタイル",
               "worktree": "worktree",
               "worktrees": "worktrees"
+            },
+            "largerSidebarSections": {
+              "description": "worktree サイドバーでリポジトリアイコンを含む大きめのプロジェクトヘッダーとセクションヘッダーをプレビューします。",
+              "headers": "ヘッダー",
+              "icons": "アイコン",
+              "projects": "プロジェクト",
+              "repo": "リポジトリ",
+              "sections": "セクション",
+              "sidebar": "サイドバー",
+              "title": "サイドバーセクションを大きく表示",
+              "typography": "タイポグラフィ"
             }
           }
         },

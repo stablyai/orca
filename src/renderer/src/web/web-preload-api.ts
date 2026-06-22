@@ -2714,6 +2714,10 @@ async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
     if (typeof result.settings.compactWorktreeCards === 'boolean') {
       runtimeSettings.compactWorktreeCards = result.settings.compactWorktreeCards
     }
+    if (typeof result.settings.experimentalLargerSidebarSections === 'boolean') {
+      runtimeSettings.experimentalLargerSidebarSections =
+        result.settings.experimentalLargerSidebarSections
+    }
     const next = mergeSettings(local, runtimeSettings)
     writeJson(SETTINGS_STORAGE_KEY, next)
     return next
@@ -2736,6 +2740,9 @@ async function syncRuntimeBackedSettings(
   }
   if (typeof updates.compactWorktreeCards === 'boolean') {
     runtimeUpdates.compactWorktreeCards = updates.compactWorktreeCards
+  }
+  if (typeof updates.experimentalLargerSidebarSections === 'boolean') {
+    runtimeUpdates.experimentalLargerSidebarSections = updates.experimentalLargerSidebarSections
   }
   if (Object.keys(runtimeUpdates).length === 0) {
     return localNext

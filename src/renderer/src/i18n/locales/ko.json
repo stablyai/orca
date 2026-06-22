@@ -4833,6 +4833,12 @@
             "description": "업데이트된 워크트리 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다.",
             "title": "새 카드 스타일",
             "toggleLabel": "새 카드 스타일 전환"
+          },
+          "largerSidebarSections": {
+            "copy": "프로젝트 및 섹션 헤더 글자와 저장소 아이콘을 키우고, 그룹화된 워크스페이스 카드를 약간 왼쪽으로 당깁니다.",
+            "description": "worktree 사이드바에서 더 큰 프로젝트 및 섹션 헤더를 미리 봅니다.",
+            "title": "더 큰 사이드바 섹션",
+            "toggleLabel": "더 큰 사이드바 섹션 전환"
           }
         },
         "FloatingWorkspacePane": {
@@ -6910,6 +6916,17 @@
               "title": "새 카드 스타일",
               "worktree": "worktree",
               "worktrees": "worktrees"
+            },
+            "largerSidebarSections": {
+              "description": "worktree 사이드바에서 저장소 아이콘을 포함한 더 큰 프로젝트 및 섹션 헤더를 미리 봅니다.",
+              "headers": "헤더",
+              "icons": "아이콘",
+              "projects": "프로젝트",
+              "repo": "저장소",
+              "sections": "섹션",
+              "sidebar": "사이드바",
+              "title": "더 큰 사이드바 섹션",
+              "typography": "타이포그래피"
             }
           }
         },

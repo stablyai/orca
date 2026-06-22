@@ -7,6 +7,7 @@ import SidebarWorkspaceOptionsMenu from './SidebarWorkspaceOptionsMenu'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { openWorkspaceCreationComposerWithTourHandoff } from '../contextual-tours/workspace-creation-tour-handoff'
 import { translate } from '@/i18n/i18n'
+import { getSidebarTopSectionTitleClassName } from './sidebar-section-header-appearance'
 
 type SidebarHeaderProps = {
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
@@ -19,13 +20,16 @@ const SidebarHeader = React.memo(function SidebarHeader({
   const newWorktreeShortcutLabel = useShortcutLabel('workspace.create')
   const groupBy = useAppStore((s) => s.groupBy)
   const canCreateWorkspace = useAppStore((s) => s.repos.length > 0)
+  const largerSidebarSections = useAppStore(
+    (s) => s.settings?.experimentalLargerSidebarSections === true
+  )
   const sidebarTitle = groupBy === 'repo' ? 'Projects' : 'Workspaces'
 
   return (
     <div className="mt-2 flex h-8 items-center justify-between px-2 gap-2">
       <div className="flex min-w-0 items-center gap-1">
         <span
-          className="pl-2 pr-0.5 text-xs font-semibold text-muted-foreground/80 select-none"
+          className={getSidebarTopSectionTitleClassName(largerSidebarSections)}
           data-sidebar-section-title={groupBy === 'repo' ? 'projects' : 'workspaces'}
         >
           {sidebarTitle}

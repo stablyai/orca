@@ -4848,7 +4848,13 @@
           },
           "ca2219fe5e": "Shows a small animated pet pinned to the bottom-right corner. Pick a character (Claudino, OpenCode, Gremlin) or upload your own PNG, APNG, GIF, WebP, JPG, or SVG from the status-bar pet menu. Hide it any time from the same menu without disabling this setting.",
           "dd6f0a1d45": "Pet",
-          "0e89a574ae": "Floating animated pet in the bottom-right corner."
+          "0e89a574ae": "Floating animated pet in the bottom-right corner.",
+          "largerSidebarSections": {
+            "copy": "Increases project and section header type, repo icons, and slightly pulls grouped workspace cards left.",
+            "description": "Preview larger project and section headers in the worktree sidebar.",
+            "title": "Larger sidebar sections",
+            "toggleLabel": "Toggle larger sidebar sections"
+          }
         },
         "FloatingWorkspacePane": {
           "aeaf76fda9": "Status Bar",
@@ -6962,7 +6968,18 @@
             "b54cea709b": "sidekick",
             "051203d37c": "pet",
             "6b5a56ac35": "Floating animated pet in the bottom-right corner.",
-            "87d99e634b": "Pet"
+            "87d99e634b": "Pet",
+            "largerSidebarSections": {
+              "description": "Preview larger project and section headers in the worktree sidebar, including repo icons.",
+              "headers": "headers",
+              "icons": "icons",
+              "projects": "projects",
+              "repo": "repo",
+              "sections": "sections",
+              "sidebar": "sidebar",
+              "title": "Larger sidebar sections",
+              "typography": "typography"
+            }
           }
         },
         "floating": {

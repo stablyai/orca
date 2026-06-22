@@ -1,8 +1,7 @@
-import { GROUP_HEADER_ROW_HEIGHT } from './worktree-list-virtual-rows'
+import { resolveSidebarSectionHeaderAppearance } from './sidebar-section-header-appearance'
 
-const WORKTREE_REVEAL_TOP_CLEARANCE = 6
 export const WORKTREE_SIDEBAR_REVEAL_TOP_INSET =
-  GROUP_HEADER_ROW_HEIGHT + WORKTREE_REVEAL_TOP_CLEARANCE
+  resolveSidebarSectionHeaderAppearance(null).revealTopInset
 
 type SidebarRevealBounds = {
   start: number
@@ -38,7 +37,8 @@ export function getScrollTopToRevealBounds(
 export function revealElementInScrollContainer(
   container: HTMLElement,
   element: Element,
-  behavior: ScrollBehavior
+  behavior: ScrollBehavior,
+  topInset = WORKTREE_SIDEBAR_REVEAL_TOP_INSET
 ): boolean {
   if (!container.contains(element)) {
     return false
@@ -46,7 +46,7 @@ export function revealElementInScrollContainer(
   const nextScrollTop = getScrollTopToRevealBounds(
     container,
     getElementScrollBounds(container, element),
-    WORKTREE_SIDEBAR_REVEAL_TOP_INSET
+    topInset
   )
   if (nextScrollTop !== null) {
     container.scrollTo({ top: Math.max(0, nextScrollTop), behavior })

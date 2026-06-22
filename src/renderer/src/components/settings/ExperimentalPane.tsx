@@ -6,6 +6,7 @@ import { matchesSettingsSearch } from './settings-search'
 import { getExperimentalPaneSearchEntries, getExperimentalSearchEntry } from './experimental-search'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
 import { NumberField, SettingsSwitch } from './SettingsFormControls'
+import { LargerSidebarSectionsSetting } from './LargerSidebarSectionsSetting'
 import { translate } from '@/i18n/i18n'
 import {
   MAX_AGENT_HIBERNATION_IDLE_MS,
@@ -47,8 +48,12 @@ export function ExperimentalPane({
   const showNewWorktreeCardStyle = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().newWorktreeCardStyle
   ])
+  const showLargerSidebarSections = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().largerSidebarSections
+  ])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
   const newWorktreeCardStyleEnabled = settings.experimentalNewWorktreeCardStyle === true
+  const largerSidebarSectionsEnabled = settings.experimentalLargerSidebarSections === true
   // Why: the planner owns ms-based bounds/defaults; the UI edits minutes
   // while displaying the same effective clamped value the planner will use.
   const agentHibernationIdleMinutes = Math.round(
@@ -311,6 +316,17 @@ export function ExperimentalPane({
             />
           </div>
         </SearchableSetting>
+      ) : null}
+
+      {showLargerSidebarSections ? (
+        <LargerSidebarSectionsSetting
+          enabled={largerSidebarSectionsEnabled}
+          onToggle={() =>
+            updateSettings({
+              experimentalLargerSidebarSections: !largerSidebarSectionsEnabled
+            })
+          }
+        />
       ) : null}
 
       {showWorktreeSymlinks ? (

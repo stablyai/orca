@@ -95,6 +95,7 @@ describe('worktree list indentation', () => {
 
   it('pulls flush card content back by the tuned inset gap', () => {
     expect(getFlushWorktreeCardPaddingLeft(20)).toBe('max(2px, calc(20px - 4px))')
+    expect(getFlushWorktreeCardPaddingLeft(20, 8)).toBe('max(2px, calc(20px - 8px))')
   })
 
   it('keeps flush card content off the sidebar edge without indentation', () => {

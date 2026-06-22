@@ -22,6 +22,7 @@ import {
 import { buildAgentRowLineageTree } from '@/components/dashboard/agent-row-lineage-model'
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
 import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
+import { resolveSidebarSectionHeaderAppearance } from './sidebar-section-header-appearance'
 import { translate } from '@/i18n/i18n'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
@@ -37,7 +38,10 @@ function revealCompactAgentCard(agentListRoot: HTMLElement | null): void {
   if (!(sidebarElement instanceof HTMLElement) || !worktreeOptionElement) {
     return
   }
-  revealElementInScrollContainer(sidebarElement, worktreeOptionElement, 'auto')
+  const topInset = resolveSidebarSectionHeaderAppearance(
+    useAppStore.getState().settings
+  ).revealTopInset
+  revealElementInScrollContainer(sidebarElement, worktreeOptionElement, 'auto', topInset)
 }
 
 type Props = {

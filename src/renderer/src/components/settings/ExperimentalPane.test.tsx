@@ -120,6 +120,39 @@ describe('ExperimentalPane', () => {
     root.unmount()
   })
 
+  it('renders larger sidebar sections as an off-by-default searchable experimental switch', () => {
+    const settings = getDefaultSettings('/tmp')
+    const markup = renderToStaticMarkup(
+      <ExperimentalPane settings={settings} updateSettings={vi.fn()} />
+    )
+
+    expect(settings.experimentalLargerSidebarSections).toBe(false)
+    expect(markup).toContain('Larger sidebar sections')
+    expect(markup).toContain('aria-checked="false"')
+    expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).toContain(
+      'Larger sidebar sections'
+    )
+  })
+
+  it('enables larger sidebar sections through the experimental switch', async () => {
+    const updateSettings = vi.fn()
+    const { root, container } = await renderExperimentalPane({ updateSettings })
+
+    const switchButton = container.querySelector<HTMLButtonElement>(
+      '#experimental-larger-sidebar-sections button[role="switch"]'
+    )
+    if (!switchButton) {
+      throw new Error('Larger sidebar sections switch was not rendered')
+    }
+
+    await act(async () => {
+      switchButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ experimentalLargerSidebarSections: true })
+    root.unmount()
+  })
+
   it('enables new card style through the experimental switch', async () => {
     const updateSettings = vi.fn()
     const { root, container } = await renderExperimentalPane({ updateSettings })

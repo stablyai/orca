@@ -753,6 +753,7 @@ type RuntimeStore = {
     githubProjects?: GlobalSettings['githubProjects']
     experimentalNewWorktreeCardStyle?: GlobalSettings['experimentalNewWorktreeCardStyle']
     compactWorktreeCards?: GlobalSettings['compactWorktreeCards']
+    experimentalLargerSidebarSections?: GlobalSettings['experimentalLargerSidebarSections']
     gitlabProjects?: GlobalSettings['gitlabProjects']
     experimentalWorktreeSymlinks?: boolean
     mobileAutoRestoreFitMs?: number | null
@@ -2167,6 +2168,7 @@ export class OrcaRuntimeService {
     | 'githubProjects'
     | 'experimentalNewWorktreeCardStyle'
     | 'compactWorktreeCards'
+    | 'experimentalLargerSidebarSections'
   > {
     if (!this.store?.getSettings) {
       throw new Error('runtime_unavailable')
@@ -2186,7 +2188,8 @@ export class OrcaRuntimeService {
       defaultLinearTeamSelection: settings.defaultLinearTeamSelection ?? null,
       githubProjects: settings.githubProjects,
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
-      compactWorktreeCards: settings.compactWorktreeCards === true
+      compactWorktreeCards: settings.compactWorktreeCards === true,
+      experimentalLargerSidebarSections: settings.experimentalLargerSidebarSections === true
     }
   }
 
@@ -2206,6 +2209,7 @@ export class OrcaRuntimeService {
       | 'githubProjects'
       | 'experimentalNewWorktreeCardStyle'
       | 'compactWorktreeCards'
+      | 'experimentalLargerSidebarSections'
     >
   ): Pick<
     GlobalSettings,
@@ -2223,6 +2227,7 @@ export class OrcaRuntimeService {
     | 'githubProjects'
     | 'experimentalNewWorktreeCardStyle'
     | 'compactWorktreeCards'
+    | 'experimentalLargerSidebarSections'
   > {
     if (!this.store?.getSettings || !this.store.updateSettings) {
       throw new Error('runtime_unavailable')

@@ -1,9 +1,10 @@
 import { defaultRangeExtractor } from '@tanstack/react-virtual'
 import type { Range, VirtualItem } from '@tanstack/react-virtual'
 import type { HostSectionRow } from './host-section-rows'
+import { DEFAULT_SIDEBAR_SECTION_HEADER_ROW_HEIGHT } from './sidebar-section-header-appearance'
 import { PINNED_GROUP_KEY } from './worktree-list-groups'
 
-export const GROUP_HEADER_ROW_HEIGHT = 28
+export const GROUP_HEADER_ROW_HEIGHT = DEFAULT_SIDEBAR_SECTION_HEADER_ROW_HEIGHT
 export const HOST_HEADER_ROW_HEIGHT = 32
 const SECONDARY_GROUP_HEADER_TOP_MARGIN = 4
 const IMPORTED_WORKTREES_LINE_ROW_HEIGHT = 36
@@ -30,7 +31,8 @@ export function estimateRenderRowSize(
   rows: readonly RenderRow[],
   index: number,
   firstHeaderIndex: number,
-  _activeStickyHeaderIndex: number | null
+  _activeStickyHeaderIndex: number | null,
+  groupHeaderRowHeight = GROUP_HEADER_ROW_HEIGHT
 ): number {
   const row = rows[index]
   if (row?.type === 'host-header') {
@@ -47,7 +49,7 @@ export function estimateRenderRowSize(
   }
   if (row?.type === 'header') {
     return (
-      GROUP_HEADER_ROW_HEIGHT +
+      groupHeaderRowHeight +
       (shouldUseHeaderTopSpacing({
         rows,
         index,

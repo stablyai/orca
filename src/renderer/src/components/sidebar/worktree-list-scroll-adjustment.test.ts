@@ -219,6 +219,12 @@ describe('estimateRenderRowSize', () => {
     expect(activeSize).toBe(32)
   })
 
+  it('uses the larger experimental section header height when requested', () => {
+    const rows = [makeHeaderRow('first'), makeHeaderRow('second')]
+
+    expect(estimateRenderRowSize(rows, 1, 0, null, 32)).toBe(36)
+  })
+
   it('estimates imported worktree line rows with a stable compact height', () => {
     const rows = [makeHeaderRow('repo:repo-1'), makeImportedCardRow()]
 
