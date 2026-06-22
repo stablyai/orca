@@ -4,6 +4,10 @@ import type {
   SaveBrowserCredentialArgs,
   UpdateBrowserCredentialArgs
 } from '../../shared/browser-credential-types'
+import {
+  detectPasswordImportBrowsers,
+  importPasswordsFromBrowser
+} from '../browser/password-import-service'
 
 type BrowserManagerLike = {
   injectPasswordBridge: (browserTabId: string, token: string, enabled: boolean) => Promise<boolean>
@@ -36,7 +40,9 @@ export function registerBrowserCredentialHandlers({
     'browser:credentials:update',
     'browser:credentials:delete',
     'browser:credentials:injectBridge',
-    'browser:credentials:fill'
+    'browser:credentials:fill',
+    'browser:credentials:detectImportBrowsers',
+    'browser:credentials:importFromBrowser'
   ]
   channels.forEach((c) => ipcMain.removeHandler(c))
 
@@ -97,5 +103,18 @@ export function registerBrowserCredentialHandlers({
       }
       return ok
     }
+  )
+
+  // Why: filesystem paths are never accepted from the renderer — only a family
+  // name and an optional profile id; the service validates the profile id itself.
+  ipcMain.handle('browser:credentials:detectImportBrowsers', (e) =>
+    isTrusted(e.sender) ? detectPasswordImportBrowsers() : []
+  )
+  ipcMain.handle(
+    'browser:credentials:importFromBrowser',
+    (e, args: { browserFamily: string; browserProfile?: string }) =>
+      isTrusted(e.sender)
+        ? importPasswordsFromBrowser(vault, args)
+        : { ok: false, reason: 'untrusted' }
   )
 }

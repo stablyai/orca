@@ -7,6 +7,21 @@ const { handleMock, removeHandlerMock } = vi.hoisted(() => ({
 vi.mock('electron', () => ({
   ipcMain: { handle: handleMock, removeHandler: removeHandlerMock }
 }))
+vi.mock('../browser/password-import-service', () => ({
+  detectPasswordImportBrowsers: vi
+    .fn()
+    .mockReturnValue([
+      { family: 'chrome', label: 'Google Chrome', profiles: [], selectedProfile: 'Default' }
+    ]),
+  importPasswordsFromBrowser: vi.fn().mockReturnValue({
+    ok: true,
+    browserLabel: 'Google Chrome',
+    profileLabel: 'Default',
+    added: 2,
+    skipped: 1,
+    invalid: 0
+  })
+}))
 
 import { registerBrowserCredentialHandlers } from './browser-credentials'
 
@@ -110,5 +125,20 @@ describe('registerBrowserCredentialHandlers', () => {
     )
     expect(result).toBe(false)
     expect(browserManager.injectPasswordBridge).not.toHaveBeenCalled()
+  })
+
+  it('rejects untrusted detectImportBrowsers', async () => {
+    const r = await handlerFor('browser:credentials:detectImportBrowsers')!({
+      sender: untrustedSender
+    })
+    expect(r).toEqual([])
+  })
+
+  it('imports from browser for a trusted caller', async () => {
+    const r = await handlerFor('browser:credentials:importFromBrowser')!(
+      { sender: trustedSender },
+      { browserFamily: 'chrome' }
+    )
+    expect(r).toMatchObject({ ok: true, added: 2 })
   })
 })
