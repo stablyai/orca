@@ -15,7 +15,7 @@ import { runPreflightCommandInWsl } from './preflight-wsl-command'
 import { detectCommandsInInstallDirs } from './local-agent-install-dir-detection'
 import { buildLocalPreflightEnv } from './preflight-local-env'
 import { getPreflightWslTarget, type PreflightRuntimeContext } from './preflight-runtime-target'
-import { hasJcodeBinEnvOverride, resolveJcodeBin } from '../jcode/jcode-binary'
+import { resolveJcodeBin } from '../jcode/jcode-binary'
 const execFileAsync = promisify(execFile)
 const PREFLIGHT_COMMAND_TIMEOUT_MS = 5000
 
@@ -152,8 +152,7 @@ function uniqueAgentIds(ids: Iterable<string>): string[] {
 
 // Why: a bare resolver result means preflight should not advertise jcode on a fresh host.
 function withResolvableLocalJcode(ids: Iterable<string>): string[] {
-  const shouldAddJcode = resolveJcodeBin() !== 'jcode' || hasJcodeBinEnvOverride()
-  return uniqueAgentIds(shouldAddJcode ? [...ids, 'jcode'] : ids)
+  return uniqueAgentIds(resolveJcodeBin() === 'jcode' ? ids : [...ids, 'jcode'])
 }
 
 async function detectCommandRuntime(

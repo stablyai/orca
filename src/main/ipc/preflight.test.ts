@@ -14,8 +14,7 @@ const {
   getGiteaAuthStatusMock,
   resolveCliCommandsMock,
   mergePersistedWindowsPathMock,
-  resolveJcodeBinMock,
-  hasJcodeBinEnvOverrideMock
+  resolveJcodeBinMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   execFileMock: vi.fn(),
@@ -28,8 +27,7 @@ const {
   getGiteaAuthStatusMock: vi.fn(),
   resolveCliCommandsMock: vi.fn(),
   mergePersistedWindowsPathMock: vi.fn(),
-  resolveJcodeBinMock: vi.fn(),
-  hasJcodeBinEnvOverrideMock: vi.fn()
+  resolveJcodeBinMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -78,8 +76,7 @@ vi.mock('../gitea/client', () => ({
 }))
 
 vi.mock('../jcode/jcode-binary', () => ({
-  resolveJcodeBin: resolveJcodeBinMock,
-  hasJcodeBinEnvOverride: hasJcodeBinEnvOverrideMock
+  resolveJcodeBin: resolveJcodeBinMock
 }))
 
 import {
@@ -121,9 +118,7 @@ describe('preflight', () => {
     getGiteaAuthStatusMock.mockReset()
     mergePersistedWindowsPathMock.mockReset()
     resolveJcodeBinMock.mockReset()
-    hasJcodeBinEnvOverrideMock.mockReset()
     resolveJcodeBinMock.mockReturnValue('/opt/orca/bin/jcode')
-    hasJcodeBinEnvOverrideMock.mockReturnValue(false)
     // Why: existing tests should keep treating `which` as the only source
     // unless a case explicitly exercises the install-dir fallback.
     resolveCliCommandsMock.mockReset()
@@ -571,7 +566,9 @@ describe('preflight', () => {
     await expect(detectInstalledAgents()).resolves.toEqual(['jcode'])
   })
 
-  it('does not force-add jcode when the resolver only returns the bare command', async () => {
+  it('does not force-add jcode when an env override is rejected by the resolver', async () => {
+    const originalOverride = process.env.ORCA_JCODE_BIN
+    process.env.ORCA_JCODE_BIN = '/tmp/orca-missing-jcode'
     resolveJcodeBinMock.mockReturnValue('jcode')
     execFileAsyncMock.mockImplementation(async (command) => {
       if (command !== 'which') {
@@ -583,7 +580,15 @@ describe('preflight', () => {
       (commands: string[]) => new Map(commands.map((cmd) => [cmd, cmd]))
     )
 
-    await expect(detectInstalledAgents()).resolves.toEqual([])
+    try {
+      await expect(detectInstalledAgents()).resolves.toEqual([])
+    } finally {
+      if (originalOverride === undefined) {
+        delete process.env.ORCA_JCODE_BIN
+      } else {
+        process.env.ORCA_JCODE_BIN = originalOverride
+      }
+    }
   })
 
   it('force-adds jcode when the resolver returns a real local binary path', async () => {

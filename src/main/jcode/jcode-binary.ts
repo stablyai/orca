@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { statSync } from 'node:fs'
+import { accessSync, constants, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 
@@ -21,12 +21,20 @@ export type JcodeBinResolutionEnvironment = {
   platform?: NodeJS.Platform
   homeDir?: string
   execFileSync?: ExecFileSyncText
-  isExistingFile?: (candidate: string) => boolean
+  isRunnableFile?: (candidate: string) => boolean
 }
 
-function isExistingFile(candidate: string): boolean {
+function isRunnableFile(candidate: string, platform: NodeJS.Platform): boolean {
   try {
-    return statSync(candidate).isFile()
+    if (!statSync(candidate).isFile()) {
+      return false
+    }
+    // Why: Windows has extension-based execution semantics; for jcode.exe,
+    // regular-file existence is the portable check Node can rely on here.
+    if (platform !== 'win32') {
+      accessSync(candidate, constants.X_OK)
+    }
+    return true
   } catch {
     return false
   }
@@ -34,10 +42,6 @@ function isExistingFile(candidate: string): boolean {
 
 function pathForPlatform(platform: NodeJS.Platform): PathTools {
   return platform === 'win32' ? path.win32 : path.posix
-}
-
-export function hasJcodeBinEnvOverride(env: NodeJS.ProcessEnv = process.env): boolean {
-  return Boolean(env[JCODE_BIN_ENV]?.trim())
 }
 
 function getLoginShell(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): string | null {
@@ -54,13 +58,13 @@ function getLoginShell(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): strin
 function findExistingAbsolutePath(
   output: string,
   pathTools: PathTools,
-  fileExists: (candidate: string) => boolean
+  fileIsRunnable: (candidate: string) => boolean
 ): string | null {
   return (
     output
       .split(/\r?\n/)
       .map((line) => line.trim())
-      .find((line) => pathTools.isAbsolute(line) && fileExists(line)) ?? null
+      .find((line) => pathTools.isAbsolute(line) && fileIsRunnable(line)) ?? null
   )
 }
 
@@ -69,10 +73,10 @@ export function resolveJcodeBinForEnvironment({
   platform = process.platform,
   homeDir = homedir(),
   execFileSync: runExecFileSync = execFileSync as ExecFileSyncText,
-  isExistingFile: fileExists = isExistingFile
+  isRunnableFile: fileIsRunnable = (candidate) => isRunnableFile(candidate, platform)
 }: JcodeBinResolutionEnvironment = {}): string {
   const envOverride = env[JCODE_BIN_ENV]?.trim()
-  if (envOverride && fileExists(envOverride)) {
+  if (envOverride && fileIsRunnable(envOverride)) {
     return envOverride
   }
 
@@ -86,7 +90,7 @@ export function resolveJcodeBinForEnvironment({
           timeout: LOGIN_SHELL_TIMEOUT_MS
         }),
         pathTools,
-        fileExists
+        fileIsRunnable
       )
       if (commandPath) {
         return commandPath
@@ -98,7 +102,7 @@ export function resolveJcodeBinForEnvironment({
 
   const cargoBinaryName = platform === 'win32' ? 'jcode.exe' : JCODE_COMMAND
   const cargoCandidate = pathTools.join(homeDir, '.cargo', 'bin', cargoBinaryName)
-  if (fileExists(cargoCandidate)) {
+  if (fileIsRunnable(cargoCandidate)) {
     return cargoCandidate
   }
 
