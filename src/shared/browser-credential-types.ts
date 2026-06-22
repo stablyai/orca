@@ -64,6 +64,26 @@ export type BrowserPasswordCaptureEvent = {
 
 export type BrowserPasswordBridgeEvent = BrowserPasswordDetectEvent | BrowserPasswordCaptureEvent
 
+/** A Chromium browser detected as having importable passwords on this machine. */
+export type DetectedImportBrowser = {
+  family: string
+  label: string
+  profiles: { name: string; directory: string }[]
+  selectedProfile: string
+}
+
+/** Result of a password import attempt. */
+export type PasswordImportResult =
+  | {
+      ok: true
+      browserLabel: string
+      profileLabel: string
+      added: number
+      skipped: number
+      invalid: number
+    }
+  | { ok: false; reason: string }
+
 export function isBrowserPasswordBridgeEvent(value: unknown): value is BrowserPasswordBridgeEvent {
   if (!value || typeof value !== 'object') {
     return false
