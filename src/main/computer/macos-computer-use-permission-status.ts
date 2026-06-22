@@ -15,9 +15,61 @@ import {
 import { RuntimeClientError } from './runtime-client-error'
 
 const PERMISSION_STATUS_HELPER_LAUNCH_TIMEOUT_MS = 5_000
+const PERMISSION_STATUS_FAILURE_BACKOFF_MS = 10_000
+
+let permissionStatusProbePromise: Promise<ComputerUsePermissionStatusResult> | null = null
+let recentPermissionStatusLaunchFailure: {
+  expiresAt: number
+  code: string
+  message: string
+} | null = null
 
 export function getComputerUsePermissionStatus(): Promise<ComputerUsePermissionStatusResult> {
-  return getComputerUsePermissionStatusAsync()
+  if (permissionStatusProbePromise) {
+    return permissionStatusProbePromise
+  }
+
+  const recentFailure = getRecentPermissionStatusLaunchFailure()
+  if (recentFailure) {
+    return Promise.reject(recentFailure)
+  }
+
+  const probePromise = getComputerUsePermissionStatusAsync()
+    .catch((error: unknown) => {
+      if (error instanceof RuntimeClientError) {
+        rememberPermissionStatusLaunchFailure(error)
+      }
+      throw error
+    })
+    .finally(() => {
+      if (permissionStatusProbePromise === probePromise) {
+        permissionStatusProbePromise = null
+      }
+    })
+  permissionStatusProbePromise = probePromise
+  return probePromise
+}
+
+function getRecentPermissionStatusLaunchFailure(now = Date.now()): RuntimeClientError | null {
+  if (!recentPermissionStatusLaunchFailure) {
+    return null
+  }
+  if (now >= recentPermissionStatusLaunchFailure.expiresAt) {
+    recentPermissionStatusLaunchFailure = null
+    return null
+  }
+  return new RuntimeClientError(
+    recentPermissionStatusLaunchFailure.code,
+    recentPermissionStatusLaunchFailure.message
+  )
+}
+
+function rememberPermissionStatusLaunchFailure(error: RuntimeClientError, now = Date.now()): void {
+  recentPermissionStatusLaunchFailure = {
+    expiresAt: now + PERMISSION_STATUS_FAILURE_BACKOFF_MS,
+    code: error.code,
+    message: error.message
+  }
 }
 
 async function getComputerUsePermissionStatusAsync(): Promise<ComputerUsePermissionStatusResult> {

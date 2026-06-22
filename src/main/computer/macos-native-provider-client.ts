@@ -26,9 +26,8 @@ import {
 import { validateComputerProviderActionParams } from './computer-provider-action-validation'
 import { normalizeComputerActionResult } from './computer-action-verification-normalization'
 import { RuntimeClientError } from './runtime-client-error'
-
+import { NativeProviderStartupFailureBackoff } from './macos-native-provider-startup-failure-backoff'
 const REQUEST_TIMEOUT_MS = 60_000
-
 export class MacOSNativeProviderClient {
   private socket: net.Socket | null = null
   private socketStartPromise: Promise<net.Socket> | null = null
@@ -41,6 +40,7 @@ export class MacOSNativeProviderClient {
   private providerCapabilities: ComputerProviderCapabilities | null = null
   private socketListenerCleanup: (() => void) | null = null
   private socketStartGeneration = 0
+  private readonly socketStartFailureBackoff = new NativeProviderStartupFailureBackoff()
   async listApps(): Promise<ComputerListAppsResult> {
     return (await this.call('listApps', {})) as ComputerListAppsResult
   }
@@ -71,6 +71,7 @@ export class MacOSNativeProviderClient {
     this.socketStartGeneration++
     this.providerCapabilities = null
     this.socketBuffer = ''
+    this.socketStartFailureBackoff.clear()
     this.cleanupActiveSocketListeners()
     if (socket && !socket.destroyed) {
       const id = this.nextId++
@@ -176,10 +177,22 @@ export class MacOSNativeProviderClient {
     if (this.socketStartPromise) {
       return await this.socketStartPromise
     }
+    const recentFailure = this.socketStartFailureBackoff.get()
+    if (recentFailure) {
+      throw recentFailure
+    }
     const socketStartPromise = this.startSocket(helperExecutablePath)
     this.socketStartPromise = socketStartPromise
     try {
-      return await socketStartPromise
+      const socket = await socketStartPromise
+      this.socketStartFailureBackoff.clear()
+      return socket
+    } catch (error) {
+      const wrapped = this.socketStartFailureBackoff.normalize(error)
+      if (this.socketStartFailureBackoff.shouldRemember(wrapped)) {
+        this.socketStartFailureBackoff.remember(wrapped)
+      }
+      throw wrapped
     } finally {
       if (this.socketStartPromise === socketStartPromise) {
         this.socketStartPromise = null
@@ -253,27 +266,23 @@ export class MacOSNativeProviderClient {
   }
   private handleTransportError(socket: net.Socket, error: Error): void {
     // Why: stale socket errors can arrive after shutdown/restart.
-    if (this.socket !== socket) {
-      return
-    }
-    this.cleanupActiveSocketListeners()
-    // Why: an active transport error makes the helper socket unreliable for the next request.
-    this.socket = null
-    this.socketBuffer = ''
-    if (!socket.destroyed) {
-      socket.destroy()
-    }
-    this.cleanupSocketDirectory()
-    this.rejectPending(new RuntimeClientError('accessibility_error', error.message))
+    this.invalidateActiveSocket(
+      socket,
+      new RuntimeClientError('accessibility_error', error.message)
+    )
   }
   private invalidateActiveSocketAfterWriteFailure(
     socket: net.Socket,
     error: RuntimeClientError
   ): void {
+    this.invalidateActiveSocket(socket, error)
+  }
+  private invalidateActiveSocket(socket: net.Socket, error: RuntimeClientError): void {
     if (this.socket !== socket) {
       return
     }
     this.cleanupActiveSocketListeners()
+    // Why: an active transport error makes the helper socket unreliable for the next request.
     this.socket = null
     this.socketBuffer = ''
     if (!socket.destroyed) {

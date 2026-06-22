@@ -117,6 +117,180 @@ describe('MacOSNativeProviderClient', () => {
     vi.useRealTimers()
   })
 
+  it('coalesces concurrent native provider startup attempts', async () => {
+    const pendingConnects: {
+      resolve: (socket: FakeSocket) => void
+    }[] = []
+    connectMacOSProviderSocketMock.mockImplementation(
+      async () =>
+        await new Promise<FakeSocket>((resolve) => {
+          pendingConnects.push({ resolve })
+        })
+    )
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+
+    const firstCall = client.capabilities()
+    const secondCall = client.capabilities()
+    await vi.waitFor(() => expect(pendingConnects).toHaveLength(1))
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(connectMacOSProviderSocketMock).toHaveBeenCalledTimes(1)
+
+    const socket = new FakeSocket()
+    pendingConnects[0]!.resolve(socket)
+    await vi.waitFor(() => expect(socket.writes).toHaveLength(2))
+
+    const firstRequest = JSON.parse(socket.writes[0]!) as { id: number }
+    const secondRequest = JSON.parse(socket.writes[1]!) as { id: number }
+    const capabilities = { protocolVersion: 1, supports: {} }
+    socket.emit(
+      'data',
+      `${JSON.stringify({ id: firstRequest.id, ok: true, result: capabilities })}\n`
+    )
+    socket.emit(
+      'data',
+      `${JSON.stringify({ id: secondRequest.id, ok: true, result: capabilities })}\n`
+    )
+
+    await expect(firstCall).resolves.toEqual(capabilities)
+    await expect(secondCall).resolves.toEqual(capabilities)
+  })
+
+  it('backs off recent native provider startup failures without spawning another helper', async () => {
+    connectMacOSProviderSocketMock.mockRejectedValueOnce(new Error('socket did not open'))
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+
+    await expect(client.capabilities()).rejects.toMatchObject({
+      code: 'accessibility_error',
+      message: 'socket did not open'
+    })
+    await expect(client.capabilities()).rejects.toMatchObject({
+      code: 'accessibility_error',
+      message: 'socket did not open'
+    })
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    const thirdCall = client.capabilities()
+    await vi.waitFor(() => expect(sockets).toHaveLength(1))
+    const socket = sockets[0]!
+    await vi.waitFor(() => expect(socket.writes).toHaveLength(1))
+    const request = JSON.parse(socket.writes[0]!) as { id: number }
+    socket.emit(
+      'data',
+      `${JSON.stringify({
+        id: request.id,
+        ok: true,
+        result: { protocolVersion: 1, supports: {} }
+      })}\n`
+    )
+
+    await expect(thirdCall).resolves.toMatchObject({ protocolVersion: 1 })
+    expect(spawnMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not remember superseded startup as a launch failure', async () => {
+    const pendingConnects: {
+      resolve: (socket: FakeSocket) => void
+    }[] = []
+    connectMacOSProviderSocketMock.mockImplementation(
+      async () =>
+        await new Promise<FakeSocket>((resolve) => {
+          pendingConnects.push({ resolve })
+        })
+    )
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+
+    const firstCall = client.capabilities()
+    await vi.waitFor(() => expect(pendingConnects).toHaveLength(1))
+    client.shutdown()
+
+    const secondCall = client.capabilities()
+    await vi.waitFor(() => expect(pendingConnects).toHaveLength(2))
+    const secondSocket = new FakeSocket()
+    pendingConnects[1]!.resolve(secondSocket)
+    await vi.waitFor(() => expect(secondSocket.writes).toHaveLength(1))
+    const secondRequest = JSON.parse(secondSocket.writes[0]!) as { id: number }
+
+    pendingConnects[0]!.resolve(new FakeSocket())
+    await expect(firstCall).rejects.toThrow('native macOS provider startup was superseded')
+    secondSocket.emit(
+      'data',
+      `${JSON.stringify({
+        id: secondRequest.id,
+        ok: true,
+        result: macOSProviderCapabilities()
+      })}\n`
+    )
+    await expect(secondCall).resolves.toMatchObject({ protocolVersion: 1 })
+
+    secondSocket.emit('close')
+    const thirdCall = client.action('click', {
+      app: 'TextEdit',
+      elementIndex: 0
+    })
+    await vi.waitFor(() => expect(pendingConnects).toHaveLength(3))
+    const thirdSocket = new FakeSocket()
+    pendingConnects[2]!.resolve(thirdSocket)
+    await vi.waitFor(() => expect(thirdSocket.writes).toHaveLength(1))
+    const thirdRequest = JSON.parse(thirdSocket.writes[0]!) as { id: number }
+    thirdSocket.emit(
+      'data',
+      `${JSON.stringify({
+        id: thirdRequest.id,
+        ok: true,
+        result: {
+          snapshot: {},
+          action: { path: 'native', actionName: 'AXPress', fallbackReason: null }
+        }
+      })}\n`
+    )
+
+    await expect(thirdCall).resolves.toMatchObject({
+      action: { path: 'native', actionName: 'AXPress' }
+    })
+  })
+
+  it('does not back off native action errors after startup succeeds', async () => {
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+
+    const actionCall = client.action('click', {
+      app: 'TextEdit',
+      elementIndex: 0
+    })
+    await vi.waitFor(() => expect(sockets).toHaveLength(1))
+    const socket = sockets[0]!
+    await vi.waitFor(() => expect(socket.writes).toHaveLength(1))
+    const handshakeRequest = JSON.parse(socket.writes[0]!) as { id: number }
+    socket.emit(
+      'data',
+      `${JSON.stringify({
+        id: handshakeRequest.id,
+        ok: true,
+        result: macOSProviderCapabilities()
+      })}\n`
+    )
+    await vi.waitFor(() => expect(socket.writes).toHaveLength(2))
+    const actionRequest = JSON.parse(socket.writes[1]!) as { id: number }
+    socket.emit(
+      'data',
+      `${JSON.stringify({
+        id: actionRequest.id,
+        ok: false,
+        error: { code: 'action_failed', message: 'native action failed' }
+      })}\n`
+    )
+
+    await expect(actionCall).rejects.toMatchObject({
+      code: 'action_failed',
+      message: 'native action failed'
+    })
+    await expect(client.capabilities()).resolves.toMatchObject({ protocolVersion: 1 })
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+  })
   it('ignores stale socket data, close, and error after a replacement socket starts', async () => {
     const { MacOSNativeProviderClient } = await loadClientModule()
     const client = new MacOSNativeProviderClient()

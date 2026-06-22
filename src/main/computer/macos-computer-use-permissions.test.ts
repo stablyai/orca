@@ -150,6 +150,64 @@ describe('openComputerUsePermissions', () => {
     )
   })
 
+  it('shares the prerequisite status probe while preserving targeted setup launches', async () => {
+    resolveHelperAppPathMock.mockReturnValue('/Applications/Orca Computer Use.app')
+    mockPermissionStatus('{"accessibility":"not-granted","screenshots":"not-granted"}')
+
+    await expect(
+      Promise.all([
+        openComputerUsePermissions('accessibility'),
+        openComputerUsePermissions('screenshots')
+      ])
+    ).resolves.toHaveLength(2)
+
+    const openCalls = vi.mocked(spawn).mock.calls.filter(([command]) => command === '/usr/bin/open')
+    const statusLaunches = openCalls.filter(([, args]) =>
+      (args as string[]).includes('--permission-status-file')
+    )
+    const accessibilityLaunches = openCalls.filter(([, args]) => {
+      const helperArgs = args as string[]
+      return helperArgs.includes('--permission') && helperArgs.includes('accessibility')
+    })
+    const screenshotsLaunches = openCalls.filter(([, args]) => {
+      const helperArgs = args as string[]
+      return helperArgs.includes('--permission') && helperArgs.includes('screenshots')
+    })
+    expect(statusLaunches).toHaveLength(1)
+    expect(accessibilityLaunches).toHaveLength(1)
+    expect(screenshotsLaunches).toHaveLength(1)
+    expect(spawnSync).toHaveBeenCalledWith(
+      '/usr/bin/pkill',
+      ['-f', 'orca-computer-use-macos[[:space:]]+--permission([[:space:]]|$)'],
+      { stdio: 'ignore' }
+    )
+    expect(spawnSync).toHaveBeenCalledWith(
+      '/usr/bin/pkill',
+      ['-f', 'orca-computer-use-macos[[:space:]]+--permissions([[:space:]]|$)'],
+      { stdio: 'ignore' }
+    )
+
+    const setupLaunchOrders = vi.mocked(spawn).mock.invocationCallOrder.filter((_, index) => {
+      const args = vi.mocked(spawn).mock.calls[index]?.[1] as string[] | undefined
+      return args?.includes('--permission')
+    })
+    const pkillCalls = vi.mocked(spawnSync).mock.calls
+    for (const setupLaunchOrder of setupLaunchOrders) {
+      const priorPkillPatterns = vi
+        .mocked(spawnSync)
+        .mock.invocationCallOrder.flatMap((order, index) => {
+          const pattern = pkillCalls[index]?.[1]?.[1]
+          return order < setupLaunchOrder && pattern ? [pattern] : []
+        })
+      expect(priorPkillPatterns).toContain(
+        'orca-computer-use-macos[[:space:]]+--permission([[:space:]]|$)'
+      )
+      expect(priorPkillPatterns).toContain(
+        'orca-computer-use-macos[[:space:]]+--permissions([[:space:]]|$)'
+      )
+    }
+  })
+
   it('launches a targeted permission helper even when that permission is already granted', async () => {
     resolveHelperAppPathMock.mockReturnValue('/Applications/Orca Computer Use.app')
     mockPermissionStatus('{"accessibility":"granted","screenshots":"not-granted"}')

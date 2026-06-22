@@ -44,6 +44,7 @@ describe('getComputerUsePermissionStatus', () => {
   const originalPlatform = process.platform
 
   beforeEach(() => {
+    vi.resetModules()
     vi.mocked(spawn).mockClear()
     vi.mocked(spawnSync).mockClear()
     vi.mocked(execFileSync).mockReset()
@@ -66,6 +67,117 @@ describe('getComputerUsePermissionStatus', () => {
   afterEach(() => {
     vi.useRealTimers()
     setPlatform(originalPlatform)
+  })
+
+  it('coalesces concurrent permission status probes into one helper launch', async () => {
+    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
+    mockPermissionStatus('{"accessibility":"granted","screenshots":"not-granted"}')
+
+    const firstStatus = getComputerUsePermissionStatus()
+    const secondStatus = getComputerUsePermissionStatus()
+
+    await expect(firstStatus).resolves.toMatchObject({
+      helperUnavailableReason: null,
+      permissions: [
+        { id: 'accessibility', status: 'granted' },
+        { id: 'screenshots', status: 'not-granted' }
+      ]
+    })
+    await expect(secondStatus).resolves.toMatchObject({
+      helperUnavailableReason: null,
+      permissions: [
+        { id: 'accessibility', status: 'granted' },
+        { id: 'screenshots', status: 'not-granted' }
+      ]
+    })
+    expect(spawn).toHaveBeenCalledTimes(1)
+    expect(spawn).toHaveBeenCalledWith(
+      '/usr/bin/open',
+      [
+        '-n',
+        '/Applications/Orca Computer Use.app',
+        '--args',
+        '--permission-status-file',
+        permissionStatusPath
+      ],
+      { stdio: ['ignore', 'pipe', 'pipe'] }
+    )
+    expect(mkdtemp).toHaveBeenCalledTimes(1)
+    expect(rm).toHaveBeenCalledTimes(1)
+    expect(rm).toHaveBeenCalledWith(permissionStatusTempDir, {
+      recursive: true,
+      force: true
+    })
+  })
+
+  it('backs off recent permission status launch failures with a stable error', async () => {
+    vi.useFakeTimers()
+    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
+    const child = {
+      stdout: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
+      stderr: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
+      on: vi.fn((event: string, callback: (error: Error) => void) => {
+        if (event === 'error') {
+          queueMicrotask(() => callback(new Error('spawn ENOENT /private/path')))
+        }
+        return child
+      }),
+      off: vi.fn(() => child),
+      unref: vi.fn()
+    }
+    vi.mocked(spawn).mockImplementationOnce(() => child as unknown as ReturnType<typeof spawn>)
+
+    const expectedError = {
+      name: 'RuntimeClientError',
+      code: 'accessibility_error',
+      message: 'Could not check permissions: failed to launch helper'
+    }
+    await expect(getComputerUsePermissionStatus()).rejects.toMatchObject(expectedError)
+    await expect(getComputerUsePermissionStatus()).rejects.toMatchObject(expectedError)
+    expect(spawn).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    await expect(getComputerUsePermissionStatus()).resolves.toMatchObject({
+      helperUnavailableReason: null
+    })
+    expect(spawn).toHaveBeenCalledTimes(2)
+  })
+
+  it('shares an in-flight permission status launch failure across concurrent callers', async () => {
+    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
+    const handlers: { error?: (error: Error) => void } = {}
+    const child = {
+      stdout: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
+      stderr: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
+      on: vi.fn((event: string, callback: (error: Error) => void) => {
+        if (event === 'error') {
+          handlers.error = callback
+        }
+        return child
+      }),
+      off: vi.fn(() => child),
+      unref: vi.fn()
+    }
+    vi.mocked(spawn).mockImplementationOnce(() => child as unknown as ReturnType<typeof spawn>)
+
+    const firstStatus = getComputerUsePermissionStatus()
+    const secondStatus = getComputerUsePermissionStatus()
+    await vi.waitFor(() => expect(handlers.error).toBeDefined())
+    handlers.error?.(new Error('spawn ENOENT /private/path'))
+
+    const results = await Promise.allSettled([firstStatus, secondStatus])
+    for (const result of results) {
+      expect(result.status).toBe('rejected')
+      if (result.status === 'rejected') {
+        expect(result.reason).toMatchObject({
+          name: 'RuntimeClientError',
+          code: 'accessibility_error',
+          message: 'Could not check permissions: failed to launch helper'
+        })
+      }
+    }
+    expect(spawn).toHaveBeenCalledTimes(1)
+    expect(rm).toHaveBeenCalledTimes(1)
   })
 
   it('wraps permission status helper launch failures', async () => {
