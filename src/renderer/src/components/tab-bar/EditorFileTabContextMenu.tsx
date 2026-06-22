@@ -81,7 +81,11 @@ export function EditorFileTabContextMenu({
   onCloseToRight,
   onOpenMarkdownPreview
 }: EditorFileTabContextMenuProps): React.JSX.Element {
+  const renameShortcut = useShortcutLabel('tab.rename')
+  const closeShortcut = useShortcutLabel('tab.close')
   const closeAllShortcut = useShortcutLabel('tab.closeAll')
+  const showRenameShortcut = renameShortcut !== 'Unassigned'
+  const showCloseShortcut = closeShortcut !== 'Unassigned'
   const showCloseAllShortcut = closeAllShortcut !== 'Unassigned'
 
   return (
@@ -116,6 +120,9 @@ export function EditorFileTabContextMenu({
         >
           <Pencil className="mr-1.5 size-3.5" />
           {translate('auto.components.tab.bar.EditorFileTabContextMenu.68cc610e7f', 'Rename')}
+          {showRenameShortcut ? (
+            <DropdownMenuShortcut>{renameShortcut}</DropdownMenuShortcut>
+          ) : null}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onTogglePin}>
@@ -128,6 +135,7 @@ export function EditorFileTabContextMenu({
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
           {translate('auto.components.tab.bar.EditorFileTabContextMenu.1ba8492c5b', 'Close')}
+          {showCloseShortcut ? <DropdownMenuShortcut>{closeShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onCloseAll}>
           {translate(

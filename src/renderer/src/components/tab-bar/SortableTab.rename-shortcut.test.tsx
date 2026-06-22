@@ -119,11 +119,11 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuItem: function DropdownMenuItem(props: { children?: unknown }) {
     return { type: 'DropdownMenuItem', props }
   },
-  DropdownMenuSeparator: function DropdownMenuSeparator() {
-    return { type: 'DropdownMenuSeparator', props: {} }
-  },
   DropdownMenuShortcut: function DropdownMenuShortcut(props: { children?: unknown }) {
     return { type: 'DropdownMenuShortcut', props }
+  },
+  DropdownMenuSeparator: function DropdownMenuSeparator() {
+    return { type: 'DropdownMenuSeparator', props: {} }
   },
   DropdownMenuLabel: function DropdownMenuLabel(props: { children?: unknown }) {
     return { type: 'DropdownMenuLabel', props }

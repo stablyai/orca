@@ -271,6 +271,8 @@ function TabBarInner({
   const newBrowserShortcut = useShortcutLabel('tab.newBrowser')
   const newSimulatorShortcut = useShortcutLabel('tab.newSimulator')
   const newFileShortcut = useShortcutLabel('tab.newMarkdown')
+  const openMarkdownShortcut = useShortcutLabel('tab.openMarkdown')
+  const showOpenMarkdownShortcut = openMarkdownShortcut !== 'Unassigned'
   const generatedTabTitlesEnabled = useAppStore((s) => s.settings?.tabAutoGenerateTitle === true)
   const mobileEmulatorEnabled = useAppStore((s) => s.settings?.mobileEmulatorEnabled !== false)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
@@ -759,6 +761,9 @@ function TabBarInner({
       >
         <FileText className="size-4 text-muted-foreground" />
         {translate('auto.components.tab.bar.TabBar.4f327c8b3d', 'Open Markdown...')}
+        {showOpenMarkdownShortcut ? (
+          <DropdownMenuShortcut>{openMarkdownShortcut}</DropdownMenuShortcut>
+        ) : null}
       </DropdownMenuItem>
     ) : null
   const mobileEmulatorIntroMenuBlock =

@@ -13,6 +13,7 @@ import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { requestActiveTerminalPaneSplit } from './request-active-terminal-pane-split'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 
 const TAB_COLORS = [
   {
@@ -126,6 +127,10 @@ export function SortableTabContextMenu({
     }
     requestActiveTerminalPaneSplit({ tabId: tab.id, direction })
   }
+  const closeShortcut = useShortcutLabel('tab.close')
+  const renameShortcut = useShortcutLabel('tab.rename')
+  const showCloseShortcut = closeShortcut !== 'Unassigned'
+  const showRenameShortcut = renameShortcut !== 'Unassigned'
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
@@ -165,6 +170,7 @@ export function SortableTabContextMenu({
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => !isPinned && onClose(tab.id)} disabled={isPinned}>
           {translate('auto.components.tab.bar.SortableTabContextMenu.89359a36f7', 'Close')}
+          {showCloseShortcut ? <DropdownMenuShortcut>{closeShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onCloseOthers(tab.id)} disabled={tabCount <= 1}>
           {translate('auto.components.tab.bar.SortableTabContextMenu.8d16f9cd30', 'Close Others')}
@@ -178,6 +184,9 @@ export function SortableTabContextMenu({
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onRenameOpen}>
           {translate('auto.components.tab.bar.SortableTabContextMenu.2f697b3c31', 'Change Title')}
+          {showRenameShortcut ? (
+            <DropdownMenuShortcut>{renameShortcut}</DropdownMenuShortcut>
+          ) : null}
         </DropdownMenuItem>
         <div className="px-2 pt-1.5 pb-1">
           <div className="text-xs font-medium text-muted-foreground mb-1.5">
