@@ -314,11 +314,13 @@ export function shouldShowRemoteDownloadAction(
   )
 }
 
-export function shouldShowCopyFileAction(connectionId?: string | null): boolean {
+export function shouldShowCopyFileAction(connectionId?: string | null, selectionSize = 1): boolean {
   // Why: the OS file clipboard only holds local files — remote (SSH) files
   // don't exist on this machine, and the web client has no native clipboard.
   return (
-    !connectionId && (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
+    !connectionId &&
+    selectionSize === 1 &&
+    (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
   )
 }
 
@@ -401,7 +403,7 @@ export function FileExplorerRow({
   const FileIcon = getFileTypeIcon(node.relativePath || node.name)
   const rowDropDir = node.isDirectory ? node.path : targetDir
   const showRemoteDownloadAction = shouldShowRemoteDownloadAction(node, connectionId)
-  const showCopyFileAction = shouldShowCopyFileAction(connectionId)
+  const showCopyFileAction = shouldShowCopyFileAction(connectionId, selectionSize)
   const { setRowDragNode, handleDragOver, handleDragEnter, handleDragLeave, handleDrop } =
     useFileExplorerRowDrag({
       rowDropDir,

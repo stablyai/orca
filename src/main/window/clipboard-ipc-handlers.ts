@@ -7,6 +7,8 @@ import {
 } from 'electron'
 import { spawn } from 'node:child_process'
 import { stat } from 'node:fs/promises'
+import type { Store } from '../persistence'
+import { isENOENT, PATH_ACCESS_DENIED_MESSAGE, resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import {
   assertClipboardTextWriteWithinLimitWithYield,
   assertClipboardTextWithinLimitWithYield,
@@ -42,7 +44,7 @@ function runCommand(command: string, args: string[], stdin?: string): Promise<vo
   })
 }
 
-export function registerClipboardHandlers(): void {
+export function registerClipboardHandlers(store: Store): void {
   ipcMain.removeHandler('clipboard:readText')
   ipcMain.removeHandler('clipboard:readSelectionText')
   ipcMain.removeHandler('clipboard:writeText')
@@ -84,12 +86,16 @@ export function registerClipboardHandlers(): void {
     return writeFileToClipboard(filePath, {
       platform: process.platform,
       desktop: process.env.XDG_CURRENT_DESKTOP,
-      pathExists: async (path) => {
+      resolveFilePath: async (path) => {
         try {
-          await stat(path)
-          return true
-        } catch {
-          return false
+          const authorizedPath = await resolveAuthorizedPath(path, store)
+          await stat(authorizedPath)
+          return { ok: true, path: authorizedPath }
+        } catch (error) {
+          if (error instanceof Error && error.message === PATH_ACCESS_DENIED_MESSAGE) {
+            return { ok: false, reason: 'access-denied' }
+          }
+          return { ok: false, reason: isENOENT(error) ? 'not-found' : 'invalid-path' }
         }
       },
       writeBuffer: (format, buffer) => clipboard.writeBuffer(format, buffer),

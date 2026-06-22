@@ -5,7 +5,7 @@ function makeDeps(overrides: Partial<ClipboardFileDeps> = {}): ClipboardFileDeps
   return {
     platform: 'darwin',
     desktop: undefined,
-    pathExists: async () => true,
+    resolveFilePath: async (path) => ({ ok: true, path }),
     writeBuffer: vi.fn(),
     runCommand: vi.fn(async () => {}),
     ...overrides
@@ -24,8 +24,20 @@ describe('writeFileToClipboard', () => {
 
   it('rejects files that no longer exist', async () => {
     expect(
-      await writeFileToClipboard('/repo/gone.png', makeDeps({ pathExists: async () => false }))
+      await writeFileToClipboard(
+        '/repo/gone.png',
+        makeDeps({ resolveFilePath: async () => ({ ok: false, reason: 'not-found' }) })
+      )
     ).toEqual({ ok: false, reason: 'not-found' })
+  })
+
+  it('rejects files outside authorized local roots', async () => {
+    expect(
+      await writeFileToClipboard(
+        '/etc/passwd',
+        makeDeps({ resolveFilePath: async () => ({ ok: false, reason: 'access-denied' }) })
+      )
+    ).toEqual({ ok: false, reason: 'access-denied' })
   })
 
   it('writes a public.file-url buffer on macOS', async () => {
@@ -40,6 +52,31 @@ describe('writeFileToClipboard', () => {
     expect(format).toBe('public.file-url')
     // spaces are percent-encoded into the file URL
     expect(buffer.toString('utf8')).toBe('file:///repo/a%20b.png')
+  })
+
+  it('reports a failure when the macOS clipboard write throws', async () => {
+    const writeBuffer = vi.fn(() => {
+      throw new Error('clipboard unavailable')
+    })
+    await expect(
+      writeFileToClipboard('/repo/a.png', makeDeps({ platform: 'darwin', writeBuffer }))
+    ).resolves.toEqual({ ok: false, reason: 'clipboard-write-failed' })
+  })
+
+  it('uses the authorized resolved path for clipboard payloads', async () => {
+    const writeBuffer = vi.fn()
+    await writeFileToClipboard(
+      '/repo/link.png',
+      makeDeps({
+        platform: 'darwin',
+        resolveFilePath: async () => ({ ok: true, path: '/repo/actual.png' }),
+        writeBuffer
+      })
+    )
+    expect(writeBuffer).toHaveBeenCalledWith(
+      'public.file-url',
+      Buffer.from('file:///repo/actual.png', 'utf8')
+    )
   })
 
   it('shells out to Set-Clipboard on Windows, escaping quotes', async () => {

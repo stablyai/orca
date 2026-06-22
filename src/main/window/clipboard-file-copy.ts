@@ -10,7 +10,9 @@ export type ClipboardFileDeps = {
   // Linux only: the active desktop ($XDG_CURRENT_DESKTOP). KDE and GNOME-family
   // file managers disagree on the clipboard format, so it picks the payload.
   desktop?: string
-  pathExists: (path: string) => Promise<boolean>
+  resolveFilePath: (
+    path: string
+  ) => Promise<{ ok: true; path: string } | { ok: false; reason: string }>
   writeBuffer: (format: string, buffer: Buffer) => void
   runCommand: (command: string, args: string[], stdin?: string) => Promise<void>
 }
@@ -26,22 +28,28 @@ export async function writeFileToClipboard(
   if (typeof filePath !== 'string' || !isAbsolute(filePath)) {
     return { ok: false, reason: 'invalid-path' }
   }
-  if (!(await deps.pathExists(filePath))) {
-    return { ok: false, reason: 'not-found' }
+  const resolvedFile = await deps.resolveFilePath(filePath)
+  if (!resolvedFile.ok) {
+    return { ok: false, reason: resolvedFile.reason }
   }
+  const clipboardPath = resolvedFile.path
 
   if (deps.platform === 'darwin') {
     // macOS reads `public.file-url` and synthesizes the legacy file types Finder
     // needs, so a single buffer is enough.
-    deps.writeBuffer('public.file-url', Buffer.from(pathToFileURL(filePath).href, 'utf8'))
-    return { ok: true }
+    try {
+      deps.writeBuffer('public.file-url', Buffer.from(pathToFileURL(clipboardPath).href, 'utf8'))
+      return { ok: true }
+    } catch {
+      return { ok: false, reason: 'clipboard-write-failed' }
+    }
   }
 
   if (deps.platform === 'win32') {
     // Set-Clipboard -LiteralPath populates CF_HDROP, which Explorer pastes as a
     // file. Single-quote escaping for the PowerShell string literal. Guard the
     // spawn so a missing/erroring PowerShell surfaces as a result, not a throw.
-    const escaped = filePath.replace(/'/g, "''")
+    const escaped = clipboardPath.replace(/'/g, "''")
     try {
       await deps.runCommand('powershell.exe', [
         '-NoProfile',
@@ -58,7 +66,7 @@ export async function writeFileToClipboard(
   // Linux: best-effort and desktop-dependent. GNOME-family managers
   // (Nautilus/Nemo/Caja) read the "copied-files" payload that carries the
   // explicit copy verb; KDE/Qt managers (Dolphin) read text/uri-list instead.
-  const fileUrl = pathToFileURL(filePath).href
+  const fileUrl = pathToFileURL(clipboardPath).href
   const [mime, payload] = /kde/i.test(deps.desktop ?? '')
     ? ['text/uri-list', `${fileUrl}\r\n`]
     : ['x-special/gnome-copied-files', `copy\n${fileUrl}`]
