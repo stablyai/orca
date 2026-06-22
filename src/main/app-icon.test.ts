@@ -36,11 +36,19 @@ vi.mock('../../resources/app-icons/orca-watercolor.png?asset', () => ({
   default: 'watercolor-icon'
 }))
 
+vi.mock('../../resources/app-icons/orca-watercolor.png?asset&asarUnpack', () => ({
+  default: 'watercolor-icon-unpacked'
+}))
+
 vi.mock('../../resources/app-icons/orca-blue.png?asset', () => ({
   default: 'blue-icon'
 }))
 
-import { applyAppIcon, getAppIconPath } from './app-icon'
+vi.mock('../../resources/app-icons/orca-blue.png?asset&asarUnpack', () => ({
+  default: 'blue-icon-unpacked'
+}))
+
+import { applyAppIcon, getAppIconPath, persistMacDockIcon } from './app-icon'
 
 describe('app icon selection', () => {
   beforeEach(() => {
@@ -75,5 +83,50 @@ describe('app icon selection', () => {
       expect(dockSetIconMock).not.toHaveBeenCalled()
     }
     expect(windowSetIconMock).toHaveBeenCalledWith(image)
+  })
+
+  it('persists a custom macOS dock icon to the app bundle for inactive Dock pins', () => {
+    const execFile = vi.fn()
+
+    persistMacDockIcon('watercolor', {
+      appBundlePath: '/Applications/Orca.app',
+      execFile,
+      isDevApp: false,
+      platform: 'darwin'
+    })
+
+    expect(execFile).toHaveBeenCalledWith(
+      '/usr/bin/osascript',
+      expect.arrayContaining(['-e', expect.stringContaining('setIcon:image forFile:appPath')]),
+      expect.objectContaining({
+        env: expect.objectContaining({
+          ORCA_APP_BUNDLE_PATH: '/Applications/Orca.app',
+          ORCA_APP_ICON_PATH: 'watercolor-icon-unpacked'
+        })
+      }),
+      expect.any(Function)
+    )
+  })
+
+  it('clears Finder custom icon metadata when switching macOS back to the classic icon', () => {
+    const execFile = vi.fn()
+
+    persistMacDockIcon('classic', {
+      appBundlePath: '/Applications/Orca.app',
+      execFile,
+      isDevApp: false,
+      platform: 'darwin'
+    })
+
+    expect(execFile).toHaveBeenCalledWith(
+      '/usr/bin/xattr',
+      ['-d', 'com.apple.FinderInfo', '/Applications/Orca.app'],
+      expect.any(Function)
+    )
+    expect(execFile).toHaveBeenCalledWith(
+      '/usr/bin/xattr',
+      ['-d', 'com.apple.ResourceFork', '/Applications/Orca.app'],
+      expect.any(Function)
+    )
   })
 })
