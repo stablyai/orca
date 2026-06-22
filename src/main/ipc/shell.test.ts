@@ -306,19 +306,29 @@ describe('registerShellHandlers', () => {
       ])
     })
 
-    it('shows the Windows console for NeoVim executable launchers', async () => {
+    it('shows the Windows console for NeoVim executable launchers on Windows', async () => {
+      const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const workspacePath = resolve('workspace')
       const handler = getHandler('shell:openInExternalEditor')
       const nvimPath = 'C:\\Program Files\\Neovim\\bin\\nvim.exe'
 
-      await expect(handler({}, workspacePath, nvimPath)).resolves.toEqual({ ok: true })
-      expect(resolveCliCommandMock).not.toHaveBeenCalled()
-      expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith(nvimPath, [normalize(workspacePath)])
-      expect(spawnMock).toHaveBeenCalledWith(nvimPath, [normalize(workspacePath)], {
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: false
-      })
+      try {
+        await expect(handler({}, workspacePath, nvimPath)).resolves.toEqual({ ok: true })
+        expect(resolveCliCommandMock).not.toHaveBeenCalled()
+        expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith(nvimPath, [
+          normalize(workspacePath)
+        ])
+        expect(spawnMock).toHaveBeenCalledWith(nvimPath, [normalize(workspacePath)], {
+          detached: true,
+          stdio: 'ignore',
+          windowsHide: false
+        })
+      } finally {
+        if (platformDescriptor) {
+          Object.defineProperty(process, 'platform', platformDescriptor)
+        }
+      }
     })
 
     it('forces Cursor launcher folders into a new window', async () => {
