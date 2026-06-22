@@ -106,6 +106,14 @@ export function wrapPosixHookCommand(scriptPath: string, env: Record<string, str
   return `if [ -x ${quoted} ]; then ${invocation}; fi`
 }
 
+// Why: Windows splits a raw hook command on whitespace, so a user profile path
+// like `C:\Users\Jane Doe` makes the agent try to execute `C:\Users\Jane` and
+// fail with exit code 1. Invoking the .cmd through `cmd.exe /d /c call` with a
+// quoted path survives spaces; `/d` disables AutoRun registry hooks. #6078.
+export function wrapWindowsHookCommand(scriptPath: string): string {
+  return `cmd.exe /d /c call "${scriptPath}"`
+}
+
 export function buildWindowsAgentHookPostCommand(source: AgentHookSource): string {
   // Why: Windows PowerShell 5.1 defaults redirected stdin/request bodies to the
   // active code page. Hook payloads are UTF-8 JSON, so force UTF-8 on both read

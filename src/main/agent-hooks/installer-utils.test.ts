@@ -20,6 +20,7 @@ import {
   hookDefinitionHasManagedCommand,
   removeManagedCommands,
   wrapPosixHookCommand,
+  wrapWindowsHookCommand,
   writeManagedScript,
   writeHooksJson,
   type HooksConfig
@@ -330,6 +331,26 @@ describe('wrapPosixHookCommand', () => {
       expect(result.status).toBe(7)
     }
   )
+})
+
+describe('wrapWindowsHookCommand', () => {
+  it('invokes the .cmd through cmd.exe with a quoted path', () => {
+    expect(wrapWindowsHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd')).toBe(
+      'cmd.exe /d /c call "C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd"'
+    )
+  })
+
+  // Why: a user profile path like `C:\Users\Jane Doe` is the regression from
+  // #6078 — the raw path used to be split at the space. The wrapper must keep
+  // the whole path as one quoted argument so cmd.exe invokes the right file.
+  it('preserves spaces in the script path (user profile with space case)', () => {
+    const cmd = wrapWindowsHookCommand('C:\\Users\\Jorge Silva\\.orca\\agent-hooks\\codex-hook.cmd')
+    expect(cmd).toBe(
+      'cmd.exe /d /c call "C:\\Users\\Jorge Silva\\.orca\\agent-hooks\\codex-hook.cmd"'
+    )
+    // Why: the path must appear inside one pair of double quotes, not split.
+    expect(cmd.match(/"/g)?.length).toBe(2)
+  })
 })
 
 describe('buildWindowsAgentHookPostCommand', () => {

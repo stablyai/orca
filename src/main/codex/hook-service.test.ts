@@ -127,6 +127,39 @@ describe('CodexHookService', () => {
     expect(trustConfig).toContain(':permission_request:0:0')
   })
 
+  // Why: #6078 — a Windows user profile path like `C:\Users\Jane Doe` used to
+  // be written verbatim as the hook command, so Codex split it at the space and
+  // the hook exited with code 1. The managed command must invoke the .cmd
+  // through `cmd.exe /d /c call` with a quoted path so spaces survive.
+  it.skipIf(process.platform !== 'win32')(
+    'wraps the managed hook command in cmd.exe when the profile path contains a space (#6078)',
+    () => {
+      const spaceHome = join(tmpdir(), 'orca home with spaces')
+      mkdirSync(spaceHome, { recursive: true })
+      homedirMock.mockReturnValue(spaceHome)
+      try {
+        const systemCodexHome = join(spaceHome, '.codex')
+        mkdirSync(systemCodexHome, { recursive: true })
+
+        const status = new CodexHookService().install()
+        expect(status.state).toBe('installed')
+
+        const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
+        const hooksConfig = JSON.parse(
+          readFileSync(join(managedCodexHome, 'hooks.json'), 'utf-8')
+        ) as { hooks: Record<string, { hooks?: { command?: string }[] }[]> }
+
+        for (const eventName of ['SessionStart', 'UserPromptSubmit', 'Stop']) {
+          const command = hooksConfig.hooks[eventName]?.[0]?.hooks?.[0]?.command
+          expect(command).toMatch(/^cmd\.exe \/d \/c call ".*codex-hook\.cmd"$/)
+          expect(command).toContain('orca home with spaces')
+        }
+      } finally {
+        rmSync(spaceHome, { recursive: true, force: true })
+      }
+    }
+  )
+
   it('keeps hooks isolated by Orca userData instead of mutating system ~/.codex', () => {
     const systemCodexHome = join(tmpHome, '.codex')
     const systemHooksPath = join(systemCodexHome, 'hooks.json')
