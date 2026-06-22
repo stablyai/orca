@@ -1,7 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { mkdtempSync, rmSync, readFileSync, existsSync, chmodSync } from 'fs'
+import {
+  mkdtempSync,
+  rmSync,
+  readFileSync,
+  existsSync,
+  chmodSync,
+  mkdirSync,
+  writeFileSync
+} from 'fs'
 import { HistoryManager } from './history-manager'
 import type { TerminalSnapshot, TerminalModes } from './types'
 import { getHistorySessionDirName } from './history-paths'
@@ -192,6 +200,54 @@ describe('HistoryManager', () => {
 
       expect(dataA.snapshotAnsi).toBe('session-a')
       expect(dataB.snapshotAnsi).toBe('session-b')
+    })
+  })
+
+  describe('tombstoneSession', () => {
+    it('marks a writer-backed open session ended', async () => {
+      await mgr.openSession('sess-1', { cwd: '/tmp', cols: 80, rows: 24 })
+
+      await mgr.tombstoneSession('sess-1', -1)
+
+      const meta = JSON.parse(readFileSync(sessionPath(dir, 'sess-1', 'meta.json'), 'utf-8'))
+      expect(meta.endedAt).not.toBeNull()
+      expect(meta.exitCode).toBe(-1)
+    })
+
+    it('marks a writerless session ended', async () => {
+      const sessionDir = join(dir, getHistorySessionDirName('writerless'))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/tmp',
+          cols: 80,
+          rows: 24,
+          startedAt: '2026-04-15T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+
+      await mgr.tombstoneSession('writerless')
+
+      const meta = JSON.parse(readFileSync(sessionPath(dir, 'writerless', 'meta.json'), 'utf-8'))
+      expect(meta.endedAt).not.toBeNull()
+      expect(meta.exitCode).toBeNull()
+    })
+
+    it('tombstoneSessions marks each session ended', async () => {
+      await mgr.openSession('sess-1', { cwd: '/tmp/a', cols: 80, rows: 24 })
+      await mgr.openSession('sess-2', { cwd: '/tmp/b', cols: 80, rows: 24 })
+
+      await mgr.tombstoneSessions(['sess-1', 'sess-2'], -1)
+
+      const meta1 = JSON.parse(readFileSync(sessionPath(dir, 'sess-1', 'meta.json'), 'utf-8'))
+      const meta2 = JSON.parse(readFileSync(sessionPath(dir, 'sess-2', 'meta.json'), 'utf-8'))
+      expect(meta1.endedAt).not.toBeNull()
+      expect(meta1.exitCode).toBe(-1)
+      expect(meta2.endedAt).not.toBeNull()
+      expect(meta2.exitCode).toBe(-1)
     })
   })
 

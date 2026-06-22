@@ -5,6 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
 import { HistoryReader } from './history-reader'
 import { getHistorySessionDirName } from './history-paths'
 import type { SessionMeta } from './history-manager'
+import { encodeLogBatch, encodeLogHeader } from './terminal-history-log'
 
 function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'history-reader-test-'))
@@ -267,6 +268,32 @@ describe('HistoryReader', () => {
 
       const restorable = reader.listRestorable()
       expect(restorable).toEqual(['alive'])
+    })
+
+    it('skips endedAt:null sessions with no restore payload', () => {
+      const sessionDir = join(dir, getHistorySessionDirName('meta-only'))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(join(sessionDir, 'meta.json'), JSON.stringify(makeMeta()))
+
+      expect(reader.listRestorable()).toEqual([])
+    })
+
+    it('keeps endedAt:null sessions with checkpoint payload', () => {
+      writeSessionWithCheckpoint(dir, 'checkpoint-alive', makeMeta(), makeCheckpoint())
+
+      expect(reader.listRestorable()).toEqual(['checkpoint-alive'])
+    })
+
+    it('keeps endedAt:null sessions with incremental log payload', () => {
+      const sessionDir = join(dir, getHistorySessionDirName('log-alive'))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(join(sessionDir, 'meta.json'), JSON.stringify(makeMeta()))
+      writeFileSync(
+        join(sessionDir, 'output.log'),
+        Buffer.concat([encodeLogHeader(0), encodeLogBatch(0, [{ kind: 'output', data: 'data' }])])
+      )
+
+      expect(reader.listRestorable()).toEqual(['log-alive'])
     })
 
     it('returns empty array when no sessions exist', () => {

@@ -250,7 +250,7 @@ vi.mock('./daemon-pty-adapter', () => ({
       this.options = opts
       this.callOrder = []
       this.getActiveSessionIds = vi.fn(() => [] as string[])
-      this.fanoutSyntheticExits = vi.fn(() => {
+      this.fanoutSyntheticExits = vi.fn(async () => {
         this.callOrder.push('fanoutSyntheticExits')
       })
       this.listProcesses = vi.fn(async () => [])
@@ -383,7 +383,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     originalAdapter.getActiveSessionIds.mockImplementation(() => [...activeIds])
 
     const order: string[] = []
-    originalAdapter.fanoutSyntheticExits.mockImplementation(() => {
+    originalAdapter.fanoutSyntheticExits.mockImplementation(async () => {
       order.push('fanout')
       activeIds = []
     })
@@ -401,6 +401,31 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     // The load-bearing ordering invariant: the synthetic exits must reach
     // the renderer *before* listeners are torn down. Step 1 before Step 2.
     expect(order).toEqual(['fanout', 'unbind'])
+  })
+
+  it('awaits synthetic exit cleanup before unbinding listeners', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    const originalAdapter = adapterInstances[0]
+    let resolveFanout: (() => void) | undefined
+    const fanoutDeferred = new Promise<void>((resolve) => {
+      resolveFanout = resolve
+    })
+    originalAdapter.fanoutSyntheticExits.mockImplementation(async () => {
+      await fanoutDeferred
+    })
+
+    const restart = mod.restartDaemon()
+    await Promise.resolve()
+
+    expect(unbindLocalProviderListenersMock).not.toHaveBeenCalled()
+
+    resolveFanout?.()
+    await restart
+
+    expect(unbindLocalProviderListenersMock).toHaveBeenCalled()
+    expect(originalAdapter.fanoutSyntheticExits).toHaveBeenCalledWith(-1)
   })
 
   it('reuses the existing DaemonSpawner across restart (resetHandle + ensureRunning on same instance)', async () => {
@@ -591,7 +616,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     // load-bearing observable is `resetHandle` — it fires *after* cleanup
     // returns. So we instrument the spawner instead.
     const trace: string[] = []
-    originalAdapter.fanoutSyntheticExits.mockImplementation(() => trace.push('fanout'))
+    originalAdapter.fanoutSyntheticExits.mockImplementation(async () => {
+      trace.push('fanout')
+    })
     unbindLocalProviderListenersMock.mockImplementation(() => trace.push('unbind'))
     originalSpawner.resetHandle.mockImplementation(() => trace.push('resetHandle'))
     const originalEnsureRunning = originalSpawner.ensureRunning

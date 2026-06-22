@@ -299,6 +299,22 @@ export class HistoryManager {
     }
   }
 
+  async tombstoneSession(sessionId: string, exitCode: number | null = null): Promise<void> {
+    this.writers.delete(sessionId)
+    this.disabledSessions.delete(sessionId)
+    const dir = join(this.basePath, getHistorySessionDirName(sessionId))
+    this.updateMeta(dir, { endedAt: new Date().toISOString(), exitCode })
+  }
+
+  async tombstoneSessions(
+    sessionIds: Iterable<string>,
+    exitCode: number | null = null
+  ): Promise<void> {
+    for (const sessionId of sessionIds) {
+      await this.tombstoneSession(sessionId, exitCode)
+    }
+  }
+
   async removeSession(sessionId: string): Promise<void> {
     this.writers.delete(sessionId)
     this.disabledSessions.delete(sessionId)

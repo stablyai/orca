@@ -1,5 +1,5 @@
 import { join } from 'path'
-import { readFileSync, existsSync, readdirSync } from 'fs'
+import { readFileSync, existsSync, readdirSync, statSync } from 'fs'
 import type { SessionMeta } from './history-manager'
 import type { TerminalCheckpointFile, TerminalModes } from './types'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
@@ -90,12 +90,56 @@ export class HistoryReader {
         continue
       }
       const meta = this.readMeta(sessionId)
-      if (meta && meta.endedAt === null) {
+      if (meta && meta.endedAt === null && this.hasRestorablePayload(sessionId)) {
         restorable.push(sessionId)
       }
     }
 
     return restorable
+  }
+
+  private hasRestorablePayload(sessionId: string): boolean {
+    const sessionDir = join(this.basePath, getHistorySessionDirName(sessionId))
+    return (
+      this.hasCheckpointPayload(sessionDir) ||
+      this.hasIncrementalLogPayload(sessionDir) ||
+      this.hasLegacyScrollbackPayload(sessionDir)
+    )
+  }
+
+  private hasCheckpointPayload(sessionDir: string): boolean {
+    try {
+      const checkpoint = JSON.parse(readFileSync(join(sessionDir, 'checkpoint.json'), 'utf-8'))
+      return (
+        (typeof checkpoint.snapshotAnsi === 'string' && checkpoint.snapshotAnsi.length > 0) ||
+        (typeof checkpoint.scrollbackAnsi === 'string' && checkpoint.scrollbackAnsi.length > 0)
+      )
+    } catch {
+      return false
+    }
+  }
+
+  private hasIncrementalLogPayload(sessionDir: string): boolean {
+    let logBuffer: Buffer
+    try {
+      logBuffer = readFileSync(join(sessionDir, 'output.log'))
+    } catch {
+      return false
+    }
+    const log = decodeTerminalHistoryLog(logBuffer)
+    return log !== null && log.batches.some((batch) => batch.records.length > 0)
+  }
+
+  private hasLegacyScrollbackPayload(sessionDir: string): boolean {
+    return this.fileHasBytes(join(sessionDir, 'scrollback.bin'))
+  }
+
+  private fileHasBytes(path: string): boolean {
+    try {
+      return statSync(path).size > 0
+    } catch {
+      return false
+    }
   }
 
   // Why a scratch emulator: replaying base + raw records through the same

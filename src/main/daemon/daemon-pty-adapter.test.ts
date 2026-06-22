@@ -4,6 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'fs'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
+import { HistoryReader } from './history-reader'
 import { DaemonServer } from './daemon-server'
 import { getHistorySessionDirName } from './history-paths'
 import type { SubprocessHandle } from './session'
@@ -769,12 +770,11 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(true)
 
       await historyAdapter.shutdown(id, { immediate: true })
-      await new Promise((r) => setTimeout(r, 50))
 
       expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(false)
     })
 
-    it('writes a final checkpoint before keepHistory shutdown', async () => {
+    it('does not remove or tombstone history on keepHistory shutdown', async () => {
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
 
       const { id } = await historyAdapter.spawn({
@@ -788,11 +788,15 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       lastSubprocess._simulateData('fresh output before sleep\r\n')
       await historyAdapter.shutdown(id, { immediate: true, keepHistory: true })
 
+      const sessionDir = join(historyDir, getHistorySessionDirName(id))
+      const meta = JSON.parse(readFileSync(join(sessionDir, 'meta.json'), 'utf-8'))
+      expect(existsSync(sessionDir)).toBe(true)
+      expect(meta.endedAt).toBeNull()
       expect(checkpointSpy).toHaveBeenCalledWith(
         id,
         expect.objectContaining({ snapshotAnsi: expect.stringContaining('fresh output') })
       )
-      expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(true)
+      expect(new HistoryReader(historyDir).detectColdRestore(id)).not.toBeNull()
     })
 
     it('returns cold restore data when disk history has unclean shutdown', async () => {
@@ -1296,7 +1300,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(active).toHaveLength(2)
     })
 
-    it('emits a synthetic exit for every active id with the supplied code', () => {
+    it('emits a synthetic exit for every active id with the supplied code', async () => {
       const exits: { id: string; code: number }[] = []
       adapter.onExit((payload) => exits.push(payload))
 
@@ -1306,7 +1310,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         internals.activeSessionIds.add(id)
       }
 
-      adapter.fanoutSyntheticExits(-1)
+      await adapter.fanoutSyntheticExits(-1)
 
       expect(exits).toHaveLength(3)
       expect(exits.map((e) => e.id).sort()).toEqual([...ids].sort())
@@ -1315,22 +1319,22 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
-    it('clears activeSessionIds after fanout so a second call is a no-op', () => {
+    it('clears activeSessionIds after fanout so a second call is a no-op', async () => {
       const exits: { id: string; code: number }[] = []
       adapter.onExit((payload) => exits.push(payload))
 
       const internals = adapter as unknown as { activeSessionIds: Set<string> }
       internals.activeSessionIds.add('sess-a')
 
-      adapter.fanoutSyntheticExits(-1)
+      await adapter.fanoutSyntheticExits(-1)
       expect(exits).toHaveLength(1)
       expect(adapter.getActiveSessionIds()).toEqual([])
 
-      adapter.fanoutSyntheticExits(-1)
+      await adapter.fanoutSyntheticExits(-1)
       expect(exits).toHaveLength(1)
     })
 
-    it('propagates to every registered exit listener in order', () => {
+    it('propagates to every registered exit listener in order', async () => {
       const aExits: { id: string; code: number }[] = []
       const bExits: { id: string; code: number }[] = []
       adapter.onExit((payload) => aExits.push(payload))
@@ -1339,10 +1343,54 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const internals = adapter as unknown as { activeSessionIds: Set<string> }
       internals.activeSessionIds.add('sess-a')
 
-      adapter.fanoutSyntheticExits(-1)
+      await adapter.fanoutSyntheticExits(-1)
 
       expect(aExits).toEqual([{ id: 'sess-a', code: -1 }])
       expect(bExits).toEqual([{ id: 'sess-a', code: -1 }])
+    })
+
+    it('clears dirty, checkpoint, cold restore, initial cwd, and tombstones history', async () => {
+      const historyDir = join(dir, 'history')
+      const historyAdapter = new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        historyPath: historyDir
+      })
+      try {
+        const exits: { id: string; code: number }[] = []
+        historyAdapter.onExit((payload) => exits.push(payload))
+
+        const { id } = await historyAdapter.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '/fanout-cwd',
+          sessionId: 'fanout-history'
+        })
+        const internals = historyAdapter as unknown as {
+          dirtySessionVersions: Map<string, number>
+          sessionsNeedingFullCheckpoint: Set<string>
+          coldRestoreCache: Map<string, { scrollback: string; cwd: string; oscLinks?: unknown[] }>
+          initialCwds: Map<string, string>
+        }
+
+        lastSubprocess._simulateData('dirty output\r\n')
+        await waitFor(() => internals.dirtySessionVersions.has(id))
+        internals.sessionsNeedingFullCheckpoint.add(id)
+        internals.coldRestoreCache.set(id, { scrollback: 'restore', cwd: '/fanout-cwd' })
+        expect(internals.initialCwds.get(id)).toBe('/fanout-cwd')
+
+        await historyAdapter.fanoutSyntheticExits(-1)
+
+        expect(historyAdapter.getActiveSessionIds()).toEqual([])
+        expect(internals.dirtySessionVersions.has(id)).toBe(false)
+        expect(internals.sessionsNeedingFullCheckpoint.has(id)).toBe(false)
+        expect(internals.coldRestoreCache.has(id)).toBe(false)
+        expect(internals.initialCwds.has(id)).toBe(false)
+        expect(new HistoryReader(historyDir).detectColdRestore(id)).toBeNull()
+        expect(exits).toEqual([{ id, code: -1 }])
+      } finally {
+        historyAdapter.dispose()
+      }
     })
   })
 })

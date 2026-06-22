@@ -315,9 +315,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // re-spawns and the cold-restore reader needs the dir intact. Caller
     // indicates intent via opts.keepHistory.
     if (this.historyManager && !opts.keepHistory) {
-      void this.historyManager
-        .removeSession(id)
-        .catch((err) => console.warn('[history] removeSession failed:', id, err))
+      try {
+        await this.historyManager.removeSession(id)
+      } catch (err) {
+        console.warn('[history] removeSession failed:', id, err)
+      }
     }
 
     // Why: tombstone rejects reattach against a session the user explicitly
@@ -485,13 +487,24 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // writes to a disposed adapter forever. Reuses the existing exitListeners
   // path so downstream cleanup (clearProviderPtyState, markClaudePtyExited,
   // renderer pty:exit) runs exactly as it does on natural exit.
-  fanoutSyntheticExits(code: number): void {
+  async fanoutSyntheticExits(code: number): Promise<void> {
     const ids = [...this.activeSessionIds]
     this.activeSessionIds.clear()
     this.dirtySessionVersions.clear()
     this.stopCheckpointTimer()
     for (const id of ids) {
       this.coldRestoreCache.delete(id)
+      this.sessionsNeedingFullCheckpoint.delete(id)
+      this.initialCwds.delete(id)
+    }
+    if (this.historyManager) {
+      try {
+        await this.historyManager.tombstoneSessions(ids, code)
+      } catch (err) {
+        console.warn('[history] tombstoneSessions failed during synthetic exit fanout:', err)
+      }
+    }
+    for (const id of ids) {
       // Why: listener throws are intentionally *not* caught — matches the
       // natural onExit fanout in setupEventRouting, so synthetic exits don't
       // diverge in error semantics from real ones. A throwing listener is a
@@ -828,7 +841,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
     // Why: replacing the daemon kills its sessions without daemon-side exit
     // fanout. Emit exits first so renderer panes do not write to dead PTYs.
-    this.fanoutSyntheticExits(-1)
+    await this.fanoutSyntheticExits(-1)
     if (!this.respawnPromise) {
       this.respawnPromise = this.doRespawn(
         '[daemon] macOS system resolver unavailable - respawning daemon'

@@ -478,7 +478,7 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
   // without this the renderer would never see exits and would black-hole
   // writes against the disposed adapter.
   const killedCount = currentOnly.getActiveSessionIds().length
-  currentOnly.fanoutSyntheticExits(-1)
+  await currentOnly.fanoutSyntheticExits(-1)
 
   // Step 2: detach renderer listeners from the current adapter. Must happen
   // AFTER step 1 so the synthesized exits actually reach the renderer, and
