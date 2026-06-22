@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+import { parseWorkspaceSession } from '../../../shared/workspace-session-schema'
 import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
@@ -320,6 +321,94 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(launched).toBe(1)
     expect(resumedTab?.launchAgent).toBe('claude')
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
+  })
+
+  it('resumes intentional completed worktree-sleep records', () => {
+    const record = makeRecord({ origin: 'worktree-sleep', state: 'done' })
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [] },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    } as never)
+
+    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
+
+    expect(launched).toBe(1)
+    expect(useAppStore.getState().tabsByWorktree['wt-1']?.[0]?.launchAgent).toBe('claude')
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
+  })
+
+  it('clears stale manual records without launching a tab', () => {
+    const record = makeRecord({ capturedAt: 3_000_000, updatedAt: 1 })
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [] },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    } as never)
+
+    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
+
+    expect(launched).toBe(0)
+    expect(useAppStore.getState().tabsByWorktree['wt-1']).toEqual([])
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
+  })
+
+  it('clears interrupted manual records without launching a tab', () => {
+    const record = makeRecord({ origin: 'worktree-sleep', interrupted: true })
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [] },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    } as never)
+
+    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
+
+    expect(launched).toBe(0)
+    expect(useAppStore.getState().tabsByWorktree['wt-1']).toEqual([])
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
+  })
+
+  it('clears hydrated interrupted worktree-sleep records without launching a tab', () => {
+    const parsed = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab-1:leaf-1': makeRecord({
+          state: 'done',
+          origin: 'worktree-sleep',
+          interrupted: true
+        })
+      }
+    })
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) {
+      throw new Error(parsed.error)
+    }
+    const record = parsed.value.sleepingAgentSessionsByPaneKey!['tab-1:leaf-1']!
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [] },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    } as never)
+
+    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
+
+    expect(launched).toBe(0)
+    expect(useAppStore.getState().tabsByWorktree['wt-1']).toEqual([])
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
+  })
+
+  it('clears legacy completed live records without launching a tab', () => {
+    const record = makeRecord({ state: 'done' })
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [] },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    } as never)
+
+    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
+
+    expect(launched).toBe(0)
+    expect(useAppStore.getState().tabsByWorktree['wt-1']).toEqual([])
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
   it('uses WSL resume quoting for Windows-path projects forced to WSL', () => {
