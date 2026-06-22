@@ -145,13 +145,22 @@ describe('store selectors', () => {
         createdAt: 3
       },
       {
+        id: 'simulator-1',
+        entityId: 'simulator-1',
+        worktreeId,
+        contentType: 'simulator',
+        label: 'Mobile Emulator',
+        sortOrder: 3,
+        createdAt: 4
+      },
+      {
         id: 'unified-stale-terminal',
         entityId: 'missing-term',
         worktreeId,
         contentType: 'terminal',
         label: 'Stale',
-        sortOrder: 3,
-        createdAt: 4
+        sortOrder: 4,
+        createdAt: 5
       }
     ] as AppState['unifiedTabsByWorktree'][string]
     const state = {
@@ -161,10 +170,10 @@ describe('store selectors', () => {
       unifiedTabsByWorktree: { [worktreeId]: unifiedTabs }
     } satisfies Parameters<typeof selectFloatingVisibleTabCount>[0]
 
-    expect(selectFloatingVisibleTabCount(state)).toBe(3)
+    expect(selectFloatingVisibleTabCount(state)).toBe(4)
     expect(openFileScans).toBe(1)
 
-    expect(selectFloatingVisibleTabCount({ ...state })).toBe(3)
+    expect(selectFloatingVisibleTabCount({ ...state })).toBe(4)
     expect(openFileScans).toBe(1)
   })
 

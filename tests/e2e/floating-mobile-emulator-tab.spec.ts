@@ -37,7 +37,7 @@ type E2EWindow = typeof window & {
 }
 
 async function seedFloatingSimulatorTab(page: Page): Promise<SeededSimulatorTab> {
-  return page.evaluate((worktreeId) => {
+  const tab = await page.evaluate((worktreeId) => {
     const store = (window as E2EWindow).__store
     if (!store) {
       throw new Error('Store unavailable')
@@ -65,6 +65,14 @@ async function seedFloatingSimulatorTab(page: Page): Promise<SeededSimulatorTab>
     refreshedState.activateTab(tab.id)
     return { id: tab.id }
   }, FLOATING_WORKTREE_ID)
+  // Why: the toggle listener closes over floatingTerminalEnabled; wait for
+  // React to commit the enabled floating panel before dispatching the event.
+  await page.waitForFunction(
+    (panelSelector) => Boolean(document.querySelector(panelSelector)),
+    PANEL_SELECTOR,
+    { timeout: 30_000 }
+  )
+  return tab
 }
 
 async function openFloatingPanelIfNeeded(page: Page): Promise<void> {
