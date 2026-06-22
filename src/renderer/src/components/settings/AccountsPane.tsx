@@ -607,6 +607,7 @@ function JcodeMcpSection(): React.JSX.Element {
         ...translateSearchKeyword('jcode.settings.accounts.keyword.server', 'server'),
         ...translateSearchKeyword('jcode.settings.accounts.keyword.tool', 'tool'),
         ...translateSearchKeyword('jcode.settings.accounts.keyword.ibkr', 'ibkr'),
+        'plugin',
         ...translateSearchKeyword('jcode.settings.accounts.keyword.connectorZh', '连接器'),
         ...translateSearchKeyword('jcode.settings.accounts.keyword.pluginZh', '插件'),
         ...translateSearchKeyword(
