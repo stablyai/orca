@@ -10,7 +10,10 @@ import {
   JiraIntegrationCard,
   LinearIntegrationCard
 } from '@/components/settings/task-tracker-integration-cards'
-import { IntegrationCardPresentationProvider } from '@/components/settings/integration-card-presentation'
+import {
+  IntegrationCardGroup,
+  IntegrationCardPresentationProvider
+} from '@/components/settings/integration-card-presentation'
 import { useIntegrationProviderStatusRefresh } from '@/components/settings/use-integration-provider-status-refresh'
 import { IntegrationStep } from './connect-integration-step'
 import {
@@ -118,11 +121,13 @@ export function ConnectIntegrationsList(): React.JSX.Element {
           onToggle={() => setReviewReopened((value) => !value)}
           canToggle={reviewCanToggle}
         >
-          <GitHubIntegrationCard />
-          <GitLabIntegrationCard />
-          <BitbucketIntegrationCard />
-          <AzureDevOpsIntegrationCard />
-          <GiteaIntegrationCard />
+          <IntegrationCardGroup>
+            <GitHubIntegrationCard />
+            <GitLabIntegrationCard />
+            <BitbucketIntegrationCard />
+            <AzureDevOpsIntegrationCard />
+            <GiteaIntegrationCard />
+          </IntegrationCardGroup>
         </IntegrationStep>
 
         <IntegrationStep
@@ -166,16 +171,20 @@ export function ConnectIntegrationsList(): React.JSX.Element {
             })
           }
         >
-          <LinearIntegrationCard />
-          <JiraIntegrationCard />
-          <p className="px-1 pt-1 text-[12px] leading-snug text-muted-foreground">
+          <IntegrationCardGroup>
+            <LinearIntegrationCard />
+            <JiraIntegrationCard />
+          </IntegrationCardGroup>
+          <p className="px-1 pt-0.5 text-[12px] leading-snug text-muted-foreground">
             {translate(
               'auto.components.feature.wall.ConnectIntegrationsList.code_host_tasks_caption',
               "Your code host's issues also work as tasks."
             )}
           </p>
-          <GitHubIntegrationCard />
-          <GitLabIntegrationCard />
+          <IntegrationCardGroup>
+            <GitHubIntegrationCard />
+            <GitLabIntegrationCard />
+          </IntegrationCardGroup>
         </IntegrationStep>
       </div>
     </IntegrationCardPresentationProvider>
