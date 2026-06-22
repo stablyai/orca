@@ -3,9 +3,12 @@ import {
   registerLivePaneManager,
   unregisterLivePaneManager
 } from '@/lib/pane-manager/pane-manager-registry'
-import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-paste-recovery'
+import {
+  maybeScheduleWebglAtlasRecoveryForPaste,
+  schedulePasteWebglAtlasRecovery
+} from './terminal-webgl-paste-recovery'
 
-describe('terminal image paste WebGL recovery', () => {
+describe('terminal paste WebGL recovery', () => {
   const registeredManagers: { resetWebglTextureAtlases(): void }[] = []
 
   function registerManager(): { resetWebglTextureAtlases: Mock<() => void> } {
@@ -38,7 +41,7 @@ describe('terminal image paste WebGL recovery', () => {
     const manager = registerManager()
     const otherManager = registerManager()
 
-    scheduleImagePasteWebglAtlasRecovery()
+    schedulePasteWebglAtlasRecovery()
 
     expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
     rafCallbacks[0]?.(0)
@@ -56,7 +59,7 @@ describe('terminal image paste WebGL recovery', () => {
     vi.stubGlobal('requestAnimationFrame', undefined)
     const manager = registerManager()
 
-    scheduleImagePasteWebglAtlasRecovery()
+    schedulePasteWebglAtlasRecovery()
 
     expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
     vi.advanceTimersByTime(0)
@@ -80,7 +83,31 @@ describe('terminal image paste WebGL recovery', () => {
     registerLivePaneManager(manager)
     registeredManagers.push(manager)
 
-    expect(() => scheduleImagePasteWebglAtlasRecovery()).not.toThrow()
+    expect(() => schedulePasteWebglAtlasRecovery()).not.toThrow()
     expect(() => vi.runAllTimers()).not.toThrow()
+  })
+
+  describe('maybeScheduleWebglAtlasRecoveryForPaste', () => {
+    it('recovers the atlas after a bracketed paste (image or corrupting text)', () => {
+      vi.useFakeTimers()
+      vi.stubGlobal('requestAnimationFrame', undefined)
+      const manager = registerManager()
+
+      maybeScheduleWebglAtlasRecoveryForPaste({ bracketed: true })
+
+      vi.advanceTimersByTime(500)
+      expect(manager.resetWebglTextureAtlases).toHaveBeenCalled()
+    })
+
+    it('skips recovery for a direct (non-bracketed) paste', () => {
+      vi.useFakeTimers()
+      vi.stubGlobal('requestAnimationFrame', undefined)
+      const manager = registerManager()
+
+      maybeScheduleWebglAtlasRecoveryForPaste({ bracketed: false })
+
+      vi.advanceTimersByTime(500)
+      expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
+    })
   })
 })

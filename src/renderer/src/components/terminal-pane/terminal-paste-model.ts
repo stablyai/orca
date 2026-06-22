@@ -46,7 +46,6 @@ export type TerminalPastePlan = {
 export type TerminalPasteTextOptions = {
   forceBracketedPaste?: boolean
   forceBracketedPasteForMultiline?: boolean
-  recoverImagePasteWebglAtlas?: boolean
 }
 
 export type TerminalPasteExecutionReason =
