@@ -1181,8 +1181,8 @@ function ThreadRow({
           {/* Why (bell matches WorktreeCard pattern): unread → amber filled
               bell as a static, non-interactive cue (selecting the thread
               auto-marks it read, so a Mark-read button would be redundant);
-              read → outline Bell that fades in on row hover and acts as
-              Mark-unread. Bare button (no shadcn outline) so it reads as
+              read → outline Bell that fades in on row hover/focus and acts
+              as Mark-unread. Bare button (no shadcn outline) so it reads as
               an inline cue rather than a discrete control square. */}
           <span className="inline-flex size-4 shrink-0 items-center justify-center">
             {thread.unread ? (
@@ -1213,7 +1213,7 @@ function ThreadRow({
                       'Mark thread unread'
                     )}
                   >
-                    <Bell className="size-3 text-muted-foreground/40 can-hover:opacity-0 transition-opacity group-hover:opacity-100 group-hover/unread:opacity-100" />
+                    <Bell className="size-3 text-muted-foreground/40 can-hover:opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 group-hover/unread:opacity-100" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="left">
@@ -1237,13 +1237,13 @@ function ThreadRow({
             on the title row already holds the unread/Mark-unread state, so
             the navigation action gets its own slot down here aligned with
             the worktree name. On hover-capable pointers, the hidden state
-            keeps the worktree-name's flex-1 width stable across hover. */}
+            keeps the worktree-name's flex-1 width stable until hover or keyboard focus. */}
         {canJump ? (
           <span
             className={cn(
               'ml-auto inline-flex shrink-0 items-center transition-opacity',
               'can-hover:pointer-events-none can-hover:invisible can-hover:opacity-0',
-              'group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100'
+              'group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:visible group-focus-within:opacity-100'
             )}
           >
             <Tooltip>
