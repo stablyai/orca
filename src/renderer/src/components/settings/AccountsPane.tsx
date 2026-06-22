@@ -37,6 +37,7 @@ import type {
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 import { matchesSettingsSearch } from './settings-search'
+import { translateSearchKeyword } from './settings-search-keywords'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import {
   Dialog,
@@ -276,7 +277,12 @@ function JcodeCustomProvidersSection({
 
   const onAdd = async (): Promise<void> => {
     if (!name.trim() || !baseUrl.trim() || !model.trim()) {
-      toast.error('Name, base URL, and model are required.')
+      toast.error(
+        translate(
+          'jcode.settings.accounts.providers.requiredFields',
+          'Name, base URL, and model are required.'
+        )
+      )
       return
     }
     setBusy(true)
@@ -289,7 +295,10 @@ function JcodeCustomProvidersSection({
         apiKey: apiKey.length > 0 ? apiKey : undefined
       })
       if (!result.ok || !result.provider) {
-        toast.error(result.error ?? 'Failed to add provider.')
+        toast.error(
+          result.error ??
+            translate('jcode.settings.accounts.providers.addFailed', 'Failed to add provider.')
+        )
         return
       }
       // Mirror the non-secret profile into settings (upsert by name).
@@ -298,7 +307,11 @@ function JcodeCustomProvidersSection({
         result.provider
       ]
       updateSettings({ jcodeCustomProviders: next })
-      toast.success(`Added provider "${result.provider.name}".`)
+      toast.success(
+        translate('jcode.settings.accounts.providers.added', 'Added provider "{{value0}}".', {
+          value0: result.provider.name
+        })
+      )
       resetForm()
     } finally {
       setBusy(false)
@@ -309,24 +322,31 @@ function JcodeCustomProvidersSection({
     updateSettings({
       jcodeCustomProviders: providers.filter((p) => p.name !== providerName)
     })
-    toast.success(`Removed provider "${providerName}".`)
+    toast.success(
+      translate('jcode.settings.accounts.providers.removed', 'Removed provider "{{value0}}".', {
+        value0: providerName
+      })
+    )
   }
 
   return (
     <SearchableSetting
-      title="自定义 Provider"
-      description="Add a custom OpenAI-compatible provider (base URL + API key + model) for jcode chat."
+      title={translate('jcode.settings.accounts.providers.title', 'Custom provider')}
+      description={translate(
+        'jcode.settings.accounts.providers.formDescription',
+        'Add a custom OpenAI-compatible provider for jcode chat.'
+      )}
       keywords={[
-        'jcode',
-        'provider',
-        'custom',
-        'openai',
-        'compatible',
-        'base url',
-        'api key',
-        'endpoint',
-        'gateway',
-        '自定义'
+        ...translateSearchKeyword('jcode.settings.accounts.keyword.jcode', 'jcode'),
+        ...translateSearchKeyword('jcode.settings.accounts.keyword.provider', 'provider'),
+        ...translateSearchKeyword('jcode.settings.accounts.keyword.custom', 'custom'),
+        ...translateSearchKeyword('jcode.settings.accounts.keyword.openai', 'openai'),
+        ...translateSearchKeyword('jcode.settings.accounts.keyword.compatible', 'compatible'),
+        ...translateSearchKeyword('jcode.settings.accounts.keyword.baseUrl', 'base url'),
+        ...translateSearchKeyword('jcode.settings.accounts.keyword.apiKey', 'api key'),
+        ...translateSearchKeyword('jcode.settings.accounts.keyword.endpoint', 'endpoint'),
+        ...translateSearchKeyword('jcode.settings.accounts.keyword.gateway', 'gateway'),
+        ...translateSearchKeyword('jcode.settings.accounts.keyword.customZh', '自定义')
       ]}
       className="space-y-3"
     >
@@ -358,56 +378,71 @@ function JcodeCustomProvidersSection({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
-          <Label>Name</Label>
+          <Label>{translate('jcode.settings.accounts.providers.nameLabel', 'Name')}</Label>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="my-gateway"
+            placeholder={translate(
+              'jcode.settings.accounts.providers.namePlaceholder',
+              'my-gateway'
+            )}
             spellCheck={false}
             className="text-xs"
           />
         </div>
         <div className="space-y-1">
-          <Label>Model</Label>
+          <Label>{translate('jcode.settings.accounts.providers.modelLabel', 'Model')}</Label>
           <Input
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            placeholder="gpt-4o"
+            placeholder={translate('jcode.settings.accounts.providers.modelPlaceholder', 'gpt-4o')}
             spellCheck={false}
             className="text-xs"
           />
         </div>
         <div className="space-y-1 sm:col-span-2">
-          <Label>Base URL</Label>
+          <Label>{translate('jcode.settings.accounts.providers.baseUrlLabel', 'Base URL')}</Label>
           <Input
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
-            placeholder="https://llm.example.com/v1"
+            placeholder={translate(
+              'jcode.settings.accounts.providers.baseUrlPlaceholder',
+              'https://llm.example.com/v1'
+            )}
             spellCheck={false}
             className="text-xs"
           />
         </div>
         <div className="space-y-1 sm:col-span-2">
-          <Label>API Key</Label>
+          <Label>{translate('jcode.settings.accounts.providers.apiKeyLabel', 'API Key')}</Label>
           <Input
             type="password"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
-            placeholder="sk-… (stored in jcode's private env file)"
+            placeholder={translate(
+              'jcode.settings.accounts.providers.apiKeyPlaceholder',
+              "sk-... (stored in jcode's private env file)"
+            )}
             spellCheck={false}
             className="text-xs"
           />
         </div>
         <div className="space-y-1">
-          <Label>Auth</Label>
+          <Label>{translate('jcode.settings.accounts.providers.authLabel', 'Auth')}</Label>
           <Select value={auth} onValueChange={(v) => setAuth(v as JcodeProviderAuth)}>
             <SelectTrigger className="text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="bearer">Bearer</SelectItem>
-              <SelectItem value="api-key">API key header</SelectItem>
-              <SelectItem value="none">None</SelectItem>
+              <SelectItem value="bearer">
+                {translate('jcode.settings.accounts.providers.authBearer', 'Bearer')}
+              </SelectItem>
+              <SelectItem value="api-key">
+                {translate('jcode.settings.accounts.providers.authApiKeyHeader', 'API key header')}
+              </SelectItem>
+              <SelectItem value="none">
+                {translate('jcode.settings.accounts.providers.authNone', 'None')}
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -416,7 +451,7 @@ function JcodeCustomProvidersSection({
       <div>
         <Button size="sm" disabled={busy} onClick={() => void onAdd()}>
           {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
-          Add provider
+          {translate('jcode.settings.accounts.providers.addProvider', 'Add provider')}
         </Button>
       </div>
     </SearchableSetting>
@@ -471,7 +506,10 @@ function JcodeMcpSection(): React.JSX.Element {
     try {
       const result = await window.api.jcodeMcp.get()
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to read MCP config.')
+        toast.error(
+          result.error ??
+            translate('jcode.settings.accounts.mcp.readFailed', 'Failed to read MCP config.')
+        )
       }
       setServers(result.servers)
       setConfigPath(result.path)
@@ -493,7 +531,9 @@ function JcodeMcpSection(): React.JSX.Element {
 
   const onAdd = async (): Promise<void> => {
     if (!name.trim() || !command.trim()) {
-      toast.error('Name and command are required.')
+      toast.error(
+        translate('jcode.settings.accounts.mcp.requiredFields', 'Name and command are required.')
+      )
       return
     }
     setBusy(true)
@@ -508,10 +548,19 @@ function JcodeMcpSection(): React.JSX.Element {
       const merged = [...servers.filter((s) => s.name !== next.name), next]
       const result = await window.api.jcodeMcp.set({ servers: merged })
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to save MCP server.')
+        toast.error(
+          result.error ??
+            translate('jcode.settings.accounts.mcp.saveFailed', 'Failed to save MCP server.')
+        )
         return
       }
-      toast.success(`Connected "${next.name}". Restart a chat to load its tools.`)
+      toast.success(
+        translate(
+          'jcode.settings.accounts.mcp.connected',
+          'Connected "{{value0}}". Restart a chat to load its tools.',
+          { value0: next.name }
+        )
+      )
       resetForm()
       await reload()
     } finally {
@@ -526,10 +575,17 @@ function JcodeMcpSection(): React.JSX.Element {
         servers: servers.filter((s) => s.name !== serverName)
       })
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to remove MCP server.')
+        toast.error(
+          result.error ??
+            translate('jcode.settings.accounts.mcp.removeFailed', 'Failed to remove MCP server.')
+        )
         return
       }
-      toast.success(`Removed "${serverName}".`)
+      toast.success(
+        translate('jcode.settings.accounts.mcp.removed', 'Removed "{{value0}}".', {
+          value0: serverName
+        })
+      )
       await reload()
     } finally {
       setBusy(false)
@@ -538,26 +594,32 @@ function JcodeMcpSection(): React.JSX.Element {
 
   return (
     <SearchableSetting
-      title="连接器 / MCP"
-      description="Connect MCP servers so jcode can use their tools (e.g. a vault, a browser, or a broker like IBKR). Remote servers work via a stdio bridge: command npx, args mcp-remote then the URL."
+      title={translate('jcode.settings.accounts.mcp.title', 'MCP connectors')}
+      description={translate(
+        'jcode.settings.accounts.mcp.formDescription',
+        'Connect MCP servers so jcode can use their tools.'
+      )}
       keywords={[
-        'jcode',
-        'mcp',
-        'connector',
-        'connectors',
-        'server',
-        'tool',
-        'ibkr',
-        '连接器',
-        '插件',
-        'model context protocol'
+        ...translateSearchKeyword('jcode.settings.accounts.keyword.jcode', 'jcode'),
+        ...translateSearchKeyword('jcode.settings.accounts.keyword.mcp', 'mcp'),
+        ...translateSearchKeyword('jcode.settings.accounts.keyword.connector', 'connector'),
+        ...translateSearchKeyword('jcode.settings.accounts.keyword.connectors', 'connectors'),
+        ...translateSearchKeyword('jcode.settings.accounts.keyword.server', 'server'),
+        ...translateSearchKeyword('jcode.settings.accounts.keyword.tool', 'tool'),
+        ...translateSearchKeyword('jcode.settings.accounts.keyword.ibkr', 'ibkr'),
+        ...translateSearchKeyword('jcode.settings.accounts.keyword.connectorZh', '连接器'),
+        ...translateSearchKeyword('jcode.settings.accounts.keyword.pluginZh', '插件'),
+        ...translateSearchKeyword(
+          'jcode.settings.accounts.keyword.modelContextProtocol',
+          'model context protocol'
+        )
       ]}
       className="space-y-3"
     >
       {loading ? (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="size-3.5 animate-spin" />
-          Loading…
+          {translate('jcode.settings.accounts.mcp.loading', 'Loading...')}
         </div>
       ) : servers.length > 0 ? (
         <div className="space-y-2">
@@ -585,47 +647,57 @@ function JcodeMcpSection(): React.JSX.Element {
           ))}
         </div>
       ) : (
-        <p className="text-xs text-muted-foreground">No connectors yet.</p>
+        <p className="text-xs text-muted-foreground">
+          {translate('jcode.settings.accounts.mcp.empty', 'No connectors yet.')}
+        </p>
       )}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
-          <Label>Name</Label>
+          <Label>{translate('jcode.settings.accounts.mcp.nameLabel', 'Name')}</Label>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="my-connector"
+            placeholder={translate('jcode.settings.accounts.mcp.namePlaceholder', 'my-connector')}
             spellCheck={false}
             className="text-xs"
           />
         </div>
         <div className="space-y-1">
-          <Label>Command</Label>
+          <Label>{translate('jcode.settings.accounts.mcp.commandLabel', 'Command')}</Label>
           <Input
             value={command}
             onChange={(e) => setCommand(e.target.value)}
-            placeholder="npx"
+            placeholder={translate('jcode.settings.accounts.mcp.commandPlaceholder', 'npx')}
             spellCheck={false}
             className="text-xs"
           />
         </div>
         <div className="space-y-1 sm:col-span-2">
-          <Label>Args (one per line)</Label>
+          <Label>{translate('jcode.settings.accounts.mcp.argsLabel', 'Args (one per line)')}</Label>
           <textarea
             value={argsText}
             onChange={(e) => setArgsText(e.target.value)}
-            placeholder={'-y\n@modelcontextprotocol/server-filesystem\n/path/to/dir'}
+            placeholder={translate(
+              'jcode.settings.accounts.mcp.argsPlaceholder',
+              '-y\n@modelcontextprotocol/server-filesystem\n/path/to/dir'
+            )}
             spellCheck={false}
             rows={3}
             className="w-full resize-y rounded-md border border-input bg-background px-2 py-1.5 text-xs outline-none focus-visible:border-ring"
           />
         </div>
         <div className="space-y-1 sm:col-span-2">
-          <Label>Env (KEY=value, one per line)</Label>
+          <Label>
+            {translate('jcode.settings.accounts.mcp.envLabel', 'Env (KEY=value, one per line)')}
+          </Label>
           <textarea
             value={envText}
             onChange={(e) => setEnvText(e.target.value)}
-            placeholder={'API_KEY=...\nREGION=us'}
+            placeholder={translate(
+              'jcode.settings.accounts.mcp.envPlaceholder',
+              'API_KEY=...\nREGION=us'
+            )}
             spellCheck={false}
             rows={2}
             className="w-full resize-y rounded-md border border-input bg-background px-2 py-1.5 text-xs outline-none focus-visible:border-ring"
@@ -636,18 +708,22 @@ function JcodeMcpSection(): React.JSX.Element {
       <div className="flex items-center gap-2">
         <Button size="sm" disabled={busy} onClick={() => void onAdd()}>
           {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
-          Add connector
+          {translate('jcode.settings.accounts.mcp.addConnector', 'Add connector')}
         </Button>
         <Button size="sm" variant="ghost" disabled={loading} onClick={() => void reload()}>
           <RefreshCw className={`size-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
+          {translate('jcode.settings.accounts.mcp.refresh', 'Refresh')}
         </Button>
       </div>
 
       {configPath ? (
         <p className="text-[11px] text-muted-foreground">
-          Stored in <code className="rounded bg-muted px-1 py-0.5">{configPath}</code>. Restart a
-          chat to pick up changes.
+          {translate('jcode.settings.accounts.mcp.storedIn', 'Stored in')}{' '}
+          <code className="rounded bg-muted px-1 py-0.5">{configPath}</code>.{' '}
+          {translate(
+            'jcode.settings.accounts.mcp.restartChatForChanges',
+            'Restart a chat to pick up changes.'
+          )}
         </p>
       ) : null}
     </SearchableSetting>
@@ -1751,11 +1827,13 @@ export function AccountsPane({
         <div className="space-y-1">
           <h3 className="flex items-center gap-2 text-sm font-semibold">
             <OpenAIIcon size={16} />
-            自定义 Provider
+            {translate('jcode.settings.accounts.providers.title', 'Custom provider')}
           </h3>
           <p className="text-xs text-muted-foreground">
-            Add a custom OpenAI-compatible endpoint (base URL + API key + model) and pick it in the
-            jcode chat composer.
+            {translate(
+              'jcode.settings.accounts.providers.sectionDescription',
+              'Add a custom OpenAI-compatible endpoint and pick it in the jcode chat composer.'
+            )}
           </p>
         </div>
         <JcodeCustomProvidersSection settings={settings} updateSettings={updateSettings} />
@@ -1766,11 +1844,13 @@ export function AccountsPane({
         <div className="space-y-1">
           <h3 className="flex items-center gap-2 text-sm font-semibold">
             <Plug size={16} />
-            连接器 / MCP
+            {translate('jcode.settings.accounts.mcp.title', 'MCP connectors')}
           </h3>
           <p className="text-xs text-muted-foreground">
-            Connect MCP servers so jcode can use their tools — a vault, a browser, a broker like
-            IBKR. jcode loads them automatically and shows their tool calls in chat.
+            {translate(
+              'jcode.settings.accounts.mcp.sectionDescription',
+              'Connect MCP servers so jcode can use their tools in chat.'
+            )}
           </p>
         </div>
         <JcodeMcpSection />

@@ -8,6 +8,7 @@
 // Skills).
 
 import type { JcodeSkill } from '../../../../shared/jcode-chat-types'
+import { translate } from '@/i18n/i18n'
 
 export type SlashCommand =
   | { id: string; label: string; hint: string; kind: 'template'; template: string }
@@ -26,34 +27,84 @@ export type SlashCommand =
 export const SLASH_COMMANDS: SlashCommand[] = [
   {
     id: 'explain',
-    label: '/explain',
-    hint: 'Explain this code',
+    get label() {
+      return translate('jcode.chat.slash.explain.label', '/explain')
+    },
+    get hint() {
+      return translate('jcode.chat.slash.explain.hint', 'Explain this code')
+    },
     kind: 'template',
-    template: 'Explain how the code in this project works, focusing on '
+    get template() {
+      return translate(
+        'jcode.chat.slash.explain.template',
+        'Explain how the code in this project works, focusing on '
+      )
+    }
   },
   {
     id: 'review',
-    label: '/review',
-    hint: 'Review for bugs',
+    get label() {
+      return translate('jcode.chat.slash.review.label', '/review')
+    },
+    get hint() {
+      return translate('jcode.chat.slash.review.hint', 'Review for bugs')
+    },
     kind: 'template',
-    template: 'Review the current changes for bugs, edge cases, and correctness issues.'
+    get template() {
+      return translate(
+        'jcode.chat.slash.review.template',
+        'Review the current changes for bugs, edge cases, and correctness issues.'
+      )
+    }
   },
   {
     id: 'tests',
-    label: '/tests',
-    hint: 'Write tests',
+    get label() {
+      return translate('jcode.chat.slash.tests.label', '/tests')
+    },
+    get hint() {
+      return translate('jcode.chat.slash.tests.hint', 'Write tests')
+    },
     kind: 'template',
-    template: 'Write tests covering '
+    get template() {
+      return translate('jcode.chat.slash.tests.template', 'Write tests covering ')
+    }
   },
   {
     id: 'summarize',
-    label: '/summarize',
-    hint: 'Summarize',
+    get label() {
+      return translate('jcode.chat.slash.summarize.label', '/summarize')
+    },
+    get hint() {
+      return translate('jcode.chat.slash.summarize.hint', 'Summarize')
+    },
     kind: 'template',
-    template: 'Summarize '
+    get template() {
+      return translate('jcode.chat.slash.summarize.template', 'Summarize ')
+    }
   },
-  { id: 'clear', label: '/clear', hint: 'Start a new chat', kind: 'action', action: 'clear' },
-  { id: 'resume', label: '/resume', hint: 'Reopen last chat', kind: 'action', action: 'resume' }
+  {
+    id: 'clear',
+    get label() {
+      return translate('jcode.chat.slash.clear.label', '/clear')
+    },
+    get hint() {
+      return translate('jcode.chat.slash.clear.hint', 'Start a new chat')
+    },
+    kind: 'action',
+    action: 'clear'
+  },
+  {
+    id: 'resume',
+    get label() {
+      return translate('jcode.chat.slash.resume.label', '/resume')
+    },
+    get hint() {
+      return translate('jcode.chat.slash.resume.hint', 'Reopen last chat')
+    },
+    kind: 'action',
+    action: 'resume'
+  }
 ]
 
 /** Truncate a long skill description to a single menu-friendly line. */
@@ -62,12 +113,22 @@ function truncate(text: string, max = 80): string {
   return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean
 }
 
+function skillSourceLabel(source: JcodeSkill['source']): string {
+  if (source === 'project') {
+    return translate('jcode.chat.slash.skillSource.project', 'Project skill')
+  }
+  if (source === 'global') {
+    return translate('jcode.chat.slash.skillSource.global', 'Global skill')
+  }
+  return translate('jcode.chat.slash.skillSource.plugin', 'Plugin skill')
+}
+
 /** Map a discovered skill to a slash-menu command. */
 export function skillToCommand(skill: JcodeSkill): SlashCommand {
   return {
     id: `skill:${skill.name}`,
     label: `/${skill.name}`,
-    hint: truncate(skill.description) || skill.source,
+    hint: truncate(skill.description) || skillSourceLabel(skill.source),
     kind: 'skill',
     skillName: skill.name,
     source: skill.source

@@ -3,6 +3,7 @@
 // to show the command + its output the way the jcode-desktop prototype does, and
 // any output that looks like a unified diff is rendered with the diff colorizer.
 import { useState } from 'react'
+import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { UnifiedDiff, looksLikeUnifiedDiff } from './jcode-diff'
 
@@ -100,7 +101,9 @@ export function JcodeToolCard({ call }: { call: JcodeToolCall }): React.JSX.Elem
           ) : call.output !== undefined && call.output !== '' ? (
             <OutputBlock text={call.output} />
           ) : call.status === 'running' ? (
-            <div className={cn('text-muted-foreground')}>running…</div>
+            <div className={cn('text-muted-foreground')}>
+              {translate('jcode.chat.toolCard.running', 'Running...')}
+            </div>
           ) : null}
         </div>
       ) : null}

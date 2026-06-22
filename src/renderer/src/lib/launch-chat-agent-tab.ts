@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../shared/types'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
@@ -33,7 +34,7 @@ export function launchChatAgentTab(args: {
   const store = useAppStore.getState()
   const chatTab = store.createUnifiedTab(worktreeId, 'chat', {
     ...(groupId ? { targetGroupId: groupId } : {}),
-    label: 'jcode',
+    label: translate('jcode.chat.tabLabel', 'jcode'),
     ...(quickCommandLabel !== undefined ? { quickCommandLabel } : {}),
     activate: true
   })
@@ -106,7 +107,7 @@ export async function reopenChatConversation(args: {
     // Critical: reuse the stored sessionKey as the tab id so store keys match.
     id: conversation.sessionKey,
     ...(groupId ? { targetGroupId: groupId } : {}),
-    label: 'jcode',
+    label: translate('jcode.chat.tabLabel', 'jcode'),
     activate: true
   })
   store.setActiveTabType('editor')

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { ChatProjectBadge } from './ChatProjectBadge'
 import { RecentChats } from './ChatRecentChats'
@@ -128,13 +129,25 @@ export default function ChatPane({
     }
     const extras: string[] = []
     if (selectedSkillName) {
-      extras.push(`skill: ${selectedSkillName}`)
+      extras.push(
+        translate('jcode.chat.transcript.skillSummary', 'Skill: {{value0}}', {
+          value0: selectedSkillName
+        })
+      )
     }
     if (attachments.length > 0) {
       extras.push(
-        `Attached: ${attachments
-          .map((a) => a.name || (a.kind === 'file' ? a.path : 'text'))
-          .join(', ')}`
+        translate('jcode.chat.transcript.attachmentSummary', 'Attached: {{value0}}', {
+          value0: attachments
+            .map(
+              (a) =>
+                a.name ||
+                (a.kind === 'file'
+                  ? a.path
+                  : translate('jcode.chat.attachment.defaultTextName', 'Text'))
+            )
+            .join(', ')
+        })
       )
     }
     if (extras.length > 0) {
@@ -196,7 +209,7 @@ export default function ChatPane({
     if (!isStreaming) {
       return
     }
-    setChatStatusDetail(sessionKey, 'Stopping…')
+    setChatStatusDetail(sessionKey, translate('jcode.chat.status.stopping', 'Stopping...'))
     window.api.jcodeChat.stop({ sessionKey })
   }, [isStreaming, sessionKey])
 
@@ -219,7 +232,13 @@ export default function ChatPane({
 
   const addText = useCallback(
     (content: string, name?: string) => {
-      addChatAttachments(sessionKey, [{ kind: 'text', content, name: name?.trim() || 'Text' }])
+      addChatAttachments(sessionKey, [
+        {
+          kind: 'text',
+          content,
+          name: name?.trim() || translate('jcode.chat.attachment.defaultTextName', 'Text')
+        }
+      ])
     },
     [sessionKey]
   )
@@ -273,9 +292,14 @@ export default function ChatPane({
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-            <div className="text-base font-medium text-foreground">Message jcode to start</div>
+            <div className="text-base font-medium text-foreground">
+              {translate('jcode.chat.empty.title', 'Message jcode to start')}
+            </div>
             <div className="mt-1 text-sm text-muted-foreground">
-              Replies stream in. Tool calls and diffs render inline.
+              {translate(
+                'jcode.chat.empty.description',
+                'Replies stream in. Tool calls and diffs render inline.'
+              )}
             </div>
             <RecentChats worktreeId={worktreeId} excludeSessionKey={sessionKey} />
           </div>

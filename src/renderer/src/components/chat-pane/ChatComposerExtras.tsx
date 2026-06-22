@@ -1,11 +1,17 @@
 import { FileText, Paperclip, Puzzle, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 import type { JcodeChatAttachment } from '../../../../shared/jcode-chat-types'
 import type { SlashCommand } from './chat-slash-commands'
 
 /** A short, human label for an attachment chip. */
 function attachmentLabel(attachment: JcodeChatAttachment): string {
-  return attachment.name || (attachment.kind === 'file' ? attachment.path : 'text')
+  return (
+    attachment.name ||
+    (attachment.kind === 'file'
+      ? attachment.path
+      : translate('jcode.chat.attachment.defaultTextName', 'Text'))
+  )
 }
 
 /** Removable chips for the composer's pending attachments (files + text blobs),
@@ -36,7 +42,7 @@ export function ChatAttachmentChips({
           <span className="truncate">{attachmentLabel(attachment)}</span>
           <button
             type="button"
-            aria-label="Remove attachment"
+            aria-label={translate('jcode.chat.attachment.removeAria', 'Remove attachment')}
             className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
             onClick={() => onRemove(index)}
           >
@@ -100,10 +106,12 @@ export function SkillChip({
     <div className="flex flex-wrap gap-1.5 px-1 pb-1">
       <span className="inline-flex max-w-[16rem] items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-xs text-foreground">
         <Puzzle className="size-3 shrink-0 text-primary" />
-        <span className="truncate">skill: {name}</span>
+        <span className="truncate">
+          {translate('jcode.chat.skillChip.prefix', 'Skill:')} {name}
+        </span>
         <button
           type="button"
-          aria-label="Remove skill"
+          aria-label={translate('jcode.chat.skillChip.removeAria', 'Remove skill')}
           className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
           onClick={onRemove}
         >
@@ -139,7 +147,7 @@ export function SlashCommandPopover({
       {commands.length > 0 ? (
         <>
           <div className="border-b border-border px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            Orca quick commands
+            {translate('jcode.chat.slash.commandsHeading', 'Orca quick commands')}
           </div>
           {commands.map((command, i) => (
             <SlashRow
@@ -156,7 +164,7 @@ export function SlashCommandPopover({
       {skills.length > 0 ? (
         <>
           <div className="border-y border-border px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            Skills
+            {translate('jcode.chat.slash.skillsHeading', 'Skills')}
           </div>
           {skills.map((command, i) => (
             <SlashRow
@@ -173,7 +181,10 @@ export function SlashCommandPopover({
       ) : null}
       {degraded ? (
         <div className="border-t border-border px-2.5 py-1.5 text-[11px] text-muted-foreground">
-          Project skills on the remote host were unavailable; showing global skills only.
+          {translate(
+            'jcode.chat.slash.projectSkillsUnavailable',
+            'Project skills on the remote host were unavailable; showing global skills only.'
+          )}
         </div>
       ) : null}
     </div>

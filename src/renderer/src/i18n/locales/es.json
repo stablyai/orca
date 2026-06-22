@@ -2307,7 +2307,7 @@
           "TerminalContextMenu": {
             "b4cdd9314e": "Borrar pantalla",
             "8c17d6786d": "Cerrar panel",
-            "copyTerminalId": "Copiar ID de terminal",
+            "copyTerminalId": "Copy Terminal ID",
             "2cf85a6a55": "Copiar ID del panel",
             "39809d152f": "Establecer título…",
             "06c2b0f043": "Igualar tamaños de paneles",
@@ -2322,8 +2322,7 @@
             "f3eeb1de13": "Copiar",
             "c2f0b72b8d": "Insertar",
             "925f49f210": "Expandir panel",
-            "df766809e0": "Contraer panel",
-            "copyTerminalId": "Copy Terminal ID"
+            "df766809e0": "Contraer panel"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "Reiniciar demonio",
@@ -6006,7 +6005,9 @@
           "c77f1abfe3": "Terminar con terminales remotos",
           "18968ede9e": "Error",
           "f0871e6bfb": "conectar",
-          "47e94bd6ba": "conectado"
+          "47e94bd6ba": "conectado",
+          "idleNotConnected": "Not connected",
+          "idleNotConnectedHint": "Click “Connect” to start a session (brain-local needs no connection)."
         },
         "SshTargetDestructiveActions": {
           "7e66942808": "Esto detendrá las sesiones de terminal activas en este destino SSH. Volver a conectarlos no los restaurará.",
@@ -8469,8 +8470,8 @@
             "a1f2c8d901": "Ver"
           },
           "SourceControl": {
-            "conflictsSection": "Conflictos",
             "1406954883": "Borrar todas las notas...",
+            "conflictsSection": "Conflictos",
             "cc05b2d088": "Abrir en el Explorador de archivos",
             "03194cfff4": "Estado de la sesión local derivado de un conflicto que abrió aquí.",
             "413a3ba113": "conflicto",
@@ -9106,7 +9107,16 @@
             "daysAgo": "{{value0}}d ago",
             "monthsAgo": "{{value0}}mo ago",
             "yearsAgo": "{{value0}}y ago",
-            "sessionId": "ID de sesión"
+            "sessionId": "ID de sesión",
+            "originalAsk": "Original ask",
+            "latestTurns": "Latest turns",
+            "noPreviewAvailable": "No conversation preview available",
+            "messageCount": "{{value0}} msgs",
+            "userRole": "You",
+            "agentRole": "Agent",
+            "toolRole": "Tool",
+            "systemRole": "System",
+            "sessionRole": "Session"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "Resume {{value0}} session",
@@ -9123,7 +9133,14 @@
             "hideDetails": "Ocultar detalles",
             "showDetails": "Mostrar detalles",
             "moreSessionActions": "Más acciones de sesión",
-            "moreActions": "Más acciones"
+            "moreActions": "Más acciones",
+            "noPreviewAvailable": "No conversation preview available",
+            "dragToResume": "Drag to resume in a new tab",
+            "userRole": "You",
+            "agentRole": "Agent",
+            "toolRole": "Tool",
+            "systemRole": "System",
+            "sessionRole": "Session"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "Buscar archivos",
@@ -9167,9 +9184,6 @@
                 "copyCommand": "Copy command"
               }
             }
-          },
-          "SourceControlEntryContextMenu": {
-            "a1f2c8d901": "Ver"
           }
         }
       },
@@ -11661,6 +11675,189 @@
           "91b5c8d7e6": "GitLab"
         }
       }
+    }
+  },
+  "jcode": {
+    "chat": {
+      "attachment": {
+        "pastedWithPreview": "Pasted: {{value0}}…",
+        "pastedText": "Pasted text",
+        "defaultTextName": "Text",
+        "removeAria": "Remove attachment"
+      },
+      "composer": {
+        "placeholder": "Message jcode... (type / for commands)",
+        "addMenuAria": "Add to message",
+        "addFiles": "Add files",
+        "textPrompt": "Paste or type text to attach:",
+        "addText": "Add text",
+        "quickCommands": "Quick commands",
+        "connectors": "Connectors",
+        "skills": "Skills",
+        "voiceInputAria": "Voice input",
+        "voiceSkillRequired": "Voice transcription requires a voice skill",
+        "stopAria": "Stop",
+        "sendAria": "Send"
+      },
+      "skillChip": {
+        "prefix": "Skill:",
+        "removeAria": "Remove skill"
+      },
+      "slash": {
+        "commandsHeading": "Orca quick commands",
+        "skillsHeading": "Skills",
+        "projectSkillsUnavailable": "Project skills on the remote host were unavailable; showing global skills only.",
+        "explain": {
+          "label": "/explain",
+          "hint": "Explain this code",
+          "template": "Explain how the code in this project works, focusing on "
+        },
+        "review": {
+          "label": "/review",
+          "hint": "Review for bugs",
+          "template": "Review the current changes for bugs, edge cases, and correctness issues."
+        },
+        "tests": {
+          "label": "/tests",
+          "hint": "Write tests",
+          "template": "Write tests covering "
+        },
+        "summarize": {
+          "label": "/summarize",
+          "hint": "Summarize",
+          "template": "Summarize "
+        },
+        "clear": {
+          "label": "/clear",
+          "hint": "Start a new chat"
+        },
+        "resume": {
+          "label": "/resume",
+          "hint": "Reopen last chat"
+        },
+        "skillSource": {
+          "project": "Project skill",
+          "global": "Global skill",
+          "plugin": "Plugin skill"
+        }
+      },
+      "modelPicker": {
+        "auto": "Auto",
+        "modelLabel": "Model",
+        "autoSelect": "Auto-select",
+        "signInRequired": "Sign in required",
+        "customProvider": "Custom provider",
+        "moreProviders": "More providers",
+        "modelListError": "Unable to read model list",
+        "refreshModels": "Refresh model list"
+      },
+      "transcript": {
+        "skillSummary": "Skill: {{value0}}",
+        "attachmentSummary": "Attached: {{value0}}"
+      },
+      "status": {
+        "stopping": "Stopping..."
+      },
+      "empty": {
+        "title": "Message jcode to start",
+        "description": "Replies stream in. Tool calls and diffs render inline."
+      },
+      "projectBadge": {
+        "fallbackProject": "Workspace",
+        "remoteWithHost": "Remote · {{value0}}",
+        "local": "Local",
+        "handsRemoteOn": "Hands remote: on",
+        "handsRemoteOff": "Hands remote: off",
+        "brainLocalAuto": "brain-local (auto)"
+      },
+      "recents": {
+        "heading": "Recent chats",
+        "deleteAria": "Delete chat",
+        "delete": "Delete"
+      },
+      "toolCard": {
+        "running": "Running..."
+      },
+      "provider": {
+        "jcodeSubscription": "Jcode Subscription",
+        "claude": "Claude",
+        "openai": "OpenAI",
+        "gemini": "Gemini",
+        "openrouter": "OpenRouter",
+        "openaiCompatible": "OpenAI-compatible"
+      },
+      "tabLabel": "jcode"
+    },
+    "settings": {
+      "accounts": {
+        "providers": {
+          "requiredFields": "Name, base URL, and model are required.",
+          "addFailed": "Failed to add provider.",
+          "added": "Added provider \"{{value0}}\".",
+          "removed": "Removed provider \"{{value0}}\".",
+          "title": "Custom provider",
+          "formDescription": "Add a custom OpenAI-compatible provider for jcode chat.",
+          "nameLabel": "Name",
+          "namePlaceholder": "my-gateway",
+          "modelLabel": "Model",
+          "modelPlaceholder": "gpt-4o",
+          "baseUrlLabel": "Base URL",
+          "baseUrlPlaceholder": "https://llm.example.com/v1",
+          "apiKeyLabel": "API Key",
+          "apiKeyPlaceholder": "sk-... (stored in jcode's private env file)",
+          "authLabel": "Auth",
+          "authBearer": "Bearer",
+          "authApiKeyHeader": "API key header",
+          "authNone": "None",
+          "addProvider": "Add provider",
+          "sectionDescription": "Add a custom OpenAI-compatible endpoint and pick it in the jcode chat composer.",
+          "description": "Add a custom OpenAI-compatible provider for jcode chat."
+        },
+        "mcp": {
+          "readFailed": "Failed to read MCP config.",
+          "requiredFields": "Name and command are required.",
+          "saveFailed": "Failed to save MCP server.",
+          "connected": "Connected \"{{value0}}\". Restart a chat to load its tools.",
+          "removeFailed": "Failed to remove MCP server.",
+          "removed": "Removed \"{{value0}}\".",
+          "title": "MCP connectors",
+          "formDescription": "Connect MCP servers so jcode can use their tools.",
+          "loading": "Loading...",
+          "empty": "No connectors yet.",
+          "nameLabel": "Name",
+          "namePlaceholder": "my-connector",
+          "commandLabel": "Command",
+          "commandPlaceholder": "npx",
+          "argsLabel": "Args (one per line)",
+          "argsPlaceholder": "-y\n@modelcontextprotocol/server-filesystem\n/path/to/dir",
+          "envLabel": "Env (KEY=value, one per line)",
+          "envPlaceholder": "API_KEY=...\nREGION=us",
+          "addConnector": "Add connector",
+          "refresh": "Refresh",
+          "storedIn": "Stored in",
+          "restartChatForChanges": "Restart a chat to pick up changes.",
+          "sectionDescription": "Connect MCP servers so jcode can use their tools in chat.",
+          "description": "Connect MCP servers so jcode can use their tools."
+        }
+      }
+    },
+    "sidebar": {
+      "chats": {
+        "time": {
+          "justNow": "just now",
+          "minutesAgo": "{{value0}}m ago",
+          "hoursAgo": "{{value0}}h ago",
+          "daysAgo": "{{value0}}d ago"
+        },
+        "groupAria": "jcode chats",
+        "heading": "jcode chats",
+        "newChatAria": "New jcode chat here",
+        "newChatTitle": "New jcode chat here",
+        "deleteAria": "Delete chat"
+      }
+    },
+    "agentCatalog": {
+      "label": "J-Code"
     }
   }
 }

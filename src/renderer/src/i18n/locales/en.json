@@ -2322,8 +2322,7 @@
             "f3eeb1de13": "Copy",
             "c2f0b72b8d": "Insert",
             "925f49f210": "Expand Pane",
-            "df766809e0": "Collapse Pane",
-            "copyTerminalId": "Copy Terminal ID"
+            "df766809e0": "Collapse Pane"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "Restart daemon",
@@ -8471,8 +8470,8 @@
             "a1f2c8d901": "View"
           },
           "SourceControl": {
-            "conflictsSection": "Conflicts",
             "1406954883": "Clear all notes...",
+            "conflictsSection": "Conflicts",
             "cc05b2d088": "Open in File Explorer",
             "03194cfff4": "Local session state derived from a conflict you opened here.",
             "413a3ba113": "conflict",
@@ -9185,9 +9184,6 @@
                 "copyCommand": "Copy command"
               }
             }
-          },
-          "SourceControlEntryContextMenu": {
-            "a1f2c8d901": "View"
           }
         }
       },
@@ -11679,6 +11675,189 @@
           "91b5c8d7e6": "GitLab"
         }
       }
+    }
+  },
+  "jcode": {
+    "chat": {
+      "attachment": {
+        "pastedWithPreview": "Pasted: {{value0}}…",
+        "pastedText": "Pasted text",
+        "defaultTextName": "Text",
+        "removeAria": "Remove attachment"
+      },
+      "composer": {
+        "placeholder": "Message jcode... (type / for commands)",
+        "addMenuAria": "Add to message",
+        "addFiles": "Add files",
+        "textPrompt": "Paste or type text to attach:",
+        "addText": "Add text",
+        "quickCommands": "Quick commands",
+        "connectors": "Connectors",
+        "skills": "Skills",
+        "voiceInputAria": "Voice input",
+        "voiceSkillRequired": "Voice transcription requires a voice skill",
+        "stopAria": "Stop",
+        "sendAria": "Send"
+      },
+      "skillChip": {
+        "prefix": "Skill:",
+        "removeAria": "Remove skill"
+      },
+      "slash": {
+        "commandsHeading": "Orca quick commands",
+        "skillsHeading": "Skills",
+        "projectSkillsUnavailable": "Project skills on the remote host were unavailable; showing global skills only.",
+        "explain": {
+          "label": "/explain",
+          "hint": "Explain this code",
+          "template": "Explain how the code in this project works, focusing on "
+        },
+        "review": {
+          "label": "/review",
+          "hint": "Review for bugs",
+          "template": "Review the current changes for bugs, edge cases, and correctness issues."
+        },
+        "tests": {
+          "label": "/tests",
+          "hint": "Write tests",
+          "template": "Write tests covering "
+        },
+        "summarize": {
+          "label": "/summarize",
+          "hint": "Summarize",
+          "template": "Summarize "
+        },
+        "clear": {
+          "label": "/clear",
+          "hint": "Start a new chat"
+        },
+        "resume": {
+          "label": "/resume",
+          "hint": "Reopen last chat"
+        },
+        "skillSource": {
+          "project": "Project skill",
+          "global": "Global skill",
+          "plugin": "Plugin skill"
+        }
+      },
+      "modelPicker": {
+        "auto": "Auto",
+        "modelLabel": "Model",
+        "autoSelect": "Auto-select",
+        "signInRequired": "Sign in required",
+        "customProvider": "Custom provider",
+        "moreProviders": "More providers",
+        "modelListError": "Unable to read model list",
+        "refreshModels": "Refresh model list"
+      },
+      "transcript": {
+        "skillSummary": "Skill: {{value0}}",
+        "attachmentSummary": "Attached: {{value0}}"
+      },
+      "status": {
+        "stopping": "Stopping..."
+      },
+      "empty": {
+        "title": "Message jcode to start",
+        "description": "Replies stream in. Tool calls and diffs render inline."
+      },
+      "projectBadge": {
+        "fallbackProject": "Workspace",
+        "remoteWithHost": "Remote · {{value0}}",
+        "local": "Local",
+        "handsRemoteOn": "Hands remote: on",
+        "handsRemoteOff": "Hands remote: off",
+        "brainLocalAuto": "brain-local (auto)"
+      },
+      "recents": {
+        "heading": "Recent chats",
+        "deleteAria": "Delete chat",
+        "delete": "Delete"
+      },
+      "toolCard": {
+        "running": "Running..."
+      },
+      "provider": {
+        "jcodeSubscription": "Jcode Subscription",
+        "claude": "Claude",
+        "openai": "OpenAI",
+        "gemini": "Gemini",
+        "openrouter": "OpenRouter",
+        "openaiCompatible": "OpenAI-compatible"
+      },
+      "tabLabel": "jcode"
+    },
+    "settings": {
+      "accounts": {
+        "providers": {
+          "requiredFields": "Name, base URL, and model are required.",
+          "addFailed": "Failed to add provider.",
+          "added": "Added provider \"{{value0}}\".",
+          "removed": "Removed provider \"{{value0}}\".",
+          "title": "Custom provider",
+          "formDescription": "Add a custom OpenAI-compatible provider for jcode chat.",
+          "nameLabel": "Name",
+          "namePlaceholder": "my-gateway",
+          "modelLabel": "Model",
+          "modelPlaceholder": "gpt-4o",
+          "baseUrlLabel": "Base URL",
+          "baseUrlPlaceholder": "https://llm.example.com/v1",
+          "apiKeyLabel": "API Key",
+          "apiKeyPlaceholder": "sk-... (stored in jcode's private env file)",
+          "authLabel": "Auth",
+          "authBearer": "Bearer",
+          "authApiKeyHeader": "API key header",
+          "authNone": "None",
+          "addProvider": "Add provider",
+          "sectionDescription": "Add a custom OpenAI-compatible endpoint and pick it in the jcode chat composer.",
+          "description": "Add a custom OpenAI-compatible provider for jcode chat."
+        },
+        "mcp": {
+          "readFailed": "Failed to read MCP config.",
+          "requiredFields": "Name and command are required.",
+          "saveFailed": "Failed to save MCP server.",
+          "connected": "Connected \"{{value0}}\". Restart a chat to load its tools.",
+          "removeFailed": "Failed to remove MCP server.",
+          "removed": "Removed \"{{value0}}\".",
+          "title": "MCP connectors",
+          "formDescription": "Connect MCP servers so jcode can use their tools.",
+          "loading": "Loading...",
+          "empty": "No connectors yet.",
+          "nameLabel": "Name",
+          "namePlaceholder": "my-connector",
+          "commandLabel": "Command",
+          "commandPlaceholder": "npx",
+          "argsLabel": "Args (one per line)",
+          "argsPlaceholder": "-y\n@modelcontextprotocol/server-filesystem\n/path/to/dir",
+          "envLabel": "Env (KEY=value, one per line)",
+          "envPlaceholder": "API_KEY=...\nREGION=us",
+          "addConnector": "Add connector",
+          "refresh": "Refresh",
+          "storedIn": "Stored in",
+          "restartChatForChanges": "Restart a chat to pick up changes.",
+          "sectionDescription": "Connect MCP servers so jcode can use their tools in chat.",
+          "description": "Connect MCP servers so jcode can use their tools."
+        }
+      }
+    },
+    "sidebar": {
+      "chats": {
+        "time": {
+          "justNow": "just now",
+          "minutesAgo": "{{value0}}m ago",
+          "hoursAgo": "{{value0}}h ago",
+          "daysAgo": "{{value0}}d ago"
+        },
+        "groupAria": "jcode chats",
+        "heading": "jcode chats",
+        "newChatAria": "New jcode chat here",
+        "newChatTitle": "New jcode chat here",
+        "deleteAria": "Delete chat"
+      }
+    },
+    "agentCatalog": {
+      "label": "J-Code"
     }
   }
 }

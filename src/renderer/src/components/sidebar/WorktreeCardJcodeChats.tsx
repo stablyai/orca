@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 import { launchChatAgentTab, reopenChatConversation } from '@/lib/launch-chat-agent-tab'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import {
@@ -16,18 +17,20 @@ const MAX_CHATS = 4
 function formatTimeAgo(ts: number, now: number): string {
   const delta = now - ts
   if (delta < 60_000) {
-    return 'just now'
+    return translate('jcode.sidebar.chats.time.justNow', 'just now')
   }
   const minutes = Math.floor(delta / 60_000)
   if (minutes < 60) {
-    return `${minutes}m ago`
+    return translate('jcode.sidebar.chats.time.minutesAgo', '{{value0}}m ago', {
+      value0: minutes
+    })
   }
   const hours = Math.floor(minutes / 60)
   if (hours < 24) {
-    return `${hours}h ago`
+    return translate('jcode.sidebar.chats.time.hoursAgo', '{{value0}}h ago', { value0: hours })
   }
   const days = Math.floor(hours / 24)
-  return `${days}d ago`
+  return translate('jcode.sidebar.chats.time.daysAgo', '{{value0}}d ago', { value0: days })
 }
 
 type Props = {
@@ -98,17 +101,17 @@ const WorktreeCardJcodeChats = React.memo(function WorktreeCardJcodeChats({
       onMouseDown={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
       role="group"
-      aria-label="jcode chats"
+      aria-label={translate('jcode.sidebar.chats.groupAria', 'jcode chats')}
       data-jcode-chats-list="true"
     >
       <div className="flex items-center justify-between px-1">
         <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-          jcode 聊天
+          {translate('jcode.sidebar.chats.heading', 'jcode chats')}
         </span>
         <button
           type="button"
-          aria-label="在此项目新建 jcode 聊天"
-          title="在此项目新建 jcode 聊天"
+          aria-label={translate('jcode.sidebar.chats.newChatAria', 'New jcode chat here')}
+          title={translate('jcode.sidebar.chats.newChatTitle', 'New jcode chat here')}
           className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-worktree-sidebar-accent hover:text-foreground"
           onClick={startNewChat}
         >
@@ -138,7 +141,7 @@ const WorktreeCardJcodeChats = React.memo(function WorktreeCardJcodeChats({
           </button>
           <button
             type="button"
-            aria-label="Delete chat"
+            aria-label={translate('jcode.sidebar.chats.deleteAria', 'Delete chat')}
             className="shrink-0 rounded px-1 text-[10px] leading-none text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover/jcode-chat-row:opacity-100"
             onClick={() => {
               deleteChatConversation(row.sessionKey)

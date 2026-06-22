@@ -282,7 +282,7 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
   },
   {
     id: 'jcode',
-    label: 'J-Code',
+    label: translate('jcode.agentCatalog.label', 'J-Code'),
     cmd: 'jcode',
     homepageUrl: 'https://github.com/1jehuang/jcode'
   }

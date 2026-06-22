@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowUp, Mic, Paperclip, Plug, Plus, Puzzle, Slash, Square, Type } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import {
   DropdownMenu,
@@ -156,7 +157,14 @@ export function ChatComposer({
               if (text && text.length > LARGE_PASTE_THRESHOLD) {
                 event.preventDefault()
                 const firstLine = text.split('\n', 1)[0].trim().slice(0, 40)
-                onAddText(text, firstLine ? `Pasted: ${firstLine}…` : 'Pasted text')
+                onAddText(
+                  text,
+                  firstLine
+                    ? translate('jcode.chat.attachment.pastedWithPreview', 'Pasted: {{value0}}…', {
+                        value0: firstLine
+                      })
+                    : translate('jcode.chat.attachment.pastedText', 'Pasted text')
+                )
               }
             }}
             onKeyDown={(event) => {
@@ -201,7 +209,10 @@ export function ChatComposer({
                 onSend()
               }
             }}
-            placeholder="Message jcode…  (type / for commands)"
+            placeholder={translate(
+              'jcode.chat.composer.placeholder',
+              'Message jcode... (type / for commands)'
+            )}
             rows={1}
             className="max-h-[200px] w-full resize-none bg-transparent px-1 py-1.5 text-sm outline-none placeholder:text-muted-foreground"
           />
@@ -213,7 +224,7 @@ export function ChatComposer({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                aria-label="Add to message"
+                aria-label={translate('jcode.chat.composer.addMenuAria', 'Add to message')}
                 className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <Plus className="size-4" />
@@ -227,26 +238,33 @@ export function ChatComposer({
                 }}
               >
                 <Paperclip className="size-4" />
-                Add files
+                {translate('jcode.chat.composer.addFiles', 'Add files')}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() => {
                   window.requestAnimationFrame(() => {
-                    const text = window.prompt('Paste or type text to attach:')
+                    const text = window.prompt(
+                      translate('jcode.chat.composer.textPrompt', 'Paste or type text to attach:')
+                    )
                     if (text && text.trim()) {
                       const firstLine = text.split('\n', 1)[0].trim().slice(0, 40)
-                      onAddText(text, firstLine ? firstLine : 'Text')
+                      onAddText(
+                        text,
+                        firstLine
+                          ? firstLine
+                          : translate('jcode.chat.attachment.defaultTextName', 'Text')
+                      )
                     }
                   })
                 }}
               >
                 <Type className="size-4" />
-                Add text
+                {translate('jcode.chat.composer.addText', 'Add text')}
               </DropdownMenuItem>
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>
                   <Slash className="size-4" />
-                  Quick commands
+                  {translate('jcode.chat.composer.quickCommands', 'Quick commands')}
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="min-w-[16rem]">
                   {SLASH_COMMANDS.map((command) => (
@@ -269,11 +287,11 @@ export function ChatComposer({
                 }}
               >
                 <Plug className="size-4" />
-                连接器 / Connectors
+                {translate('jcode.chat.composer.connectors', 'Connectors')}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => openSkillsPage()}>
                 <Puzzle className="size-4" />
-                技能 / Skills
+                {translate('jcode.chat.composer.skills', 'Skills')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -297,14 +315,19 @@ export function ChatComposer({
                   <button
                     type="button"
                     disabled
-                    aria-label="Voice input"
+                    aria-label={translate('jcode.chat.composer.voiceInputAria', 'Voice input')}
                     className="flex size-8 cursor-not-allowed items-center justify-center rounded-full text-muted-foreground opacity-50"
                   >
                     <Mic className="size-4" />
                   </button>
                 </span>
               </TooltipTrigger>
-              <TooltipContent>语音转写需安装语音技能</TooltipContent>
+              <TooltipContent>
+                {translate(
+                  'jcode.chat.composer.voiceSkillRequired',
+                  'Voice transcription requires a voice skill'
+                )}
+              </TooltipContent>
             </Tooltip>
           </TooltipProvider>
 
@@ -313,7 +336,7 @@ export function ChatComposer({
             <button
               type="button"
               onClick={onStop}
-              aria-label="Stop"
+              aria-label={translate('jcode.chat.composer.stopAria', 'Stop')}
               className="flex size-8 items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-90"
             >
               <Square className="size-3.5 fill-current" />
@@ -323,7 +346,7 @@ export function ChatComposer({
               type="button"
               onClick={onSend}
               disabled={!value.trim() && attachments.length === 0 && !selectedSkillName}
-              aria-label="Send"
+              aria-label={translate('jcode.chat.composer.sendAria', 'Send')}
               className={cn(
                 'flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity',
                 'disabled:cursor-not-allowed disabled:opacity-40'

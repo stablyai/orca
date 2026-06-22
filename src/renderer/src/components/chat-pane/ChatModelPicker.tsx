@@ -1,6 +1,7 @@
 import { Fragment } from 'react'
 import { Check, ChevronDown, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -62,6 +63,7 @@ export function ChatModelPicker({
   const profileOptions = buildProfileOptions(customProviders)
   const activeProfileOption = findProfileOption(customProviders, providerProfile)
   const isAuto = !provider && !providerProfile
+  const autoLabel = translate('jcode.chat.modelPicker.auto', 'Auto')
   // Chip: show the concrete model when one is picked (Claude/Codex style), else
   // the provider label, else "Auto".
   const chipLabel = providerProfile
@@ -72,7 +74,7 @@ export function ChatModelPicker({
       ? model
       : provider
         ? (findProviderOption(provider)?.label ?? provider)
-        : 'Auto'
+        : autoLabel
 
   return (
     <DropdownMenu>
@@ -89,7 +91,9 @@ export function ChatModelPicker({
         align="start"
         className="max-h-[60vh] min-w-[17rem] overflow-y-auto scrollbar-sleek"
       >
-        <DropdownMenuLabel>模型 Model</DropdownMenuLabel>
+        <DropdownMenuLabel>
+          {translate('jcode.chat.modelPicker.modelLabel', 'Model')}
+        </DropdownMenuLabel>
 
         {/* Auto — show what jcode actually resolves it to. */}
         <DropdownMenuItem
@@ -98,9 +102,11 @@ export function ChatModelPicker({
           }
         >
           <Check className={cn('size-3.5', isAuto ? 'opacity-100' : 'opacity-0')} />
-          <span className="font-medium">Auto</span>
+          <span className="font-medium">{autoLabel}</span>
           <span className="ml-auto text-xs text-muted-foreground">
-            {catalog?.selectedModel ? `→ ${catalog.selectedModel}` : '自动选择'}
+            {catalog?.selectedModel
+              ? `→ ${catalog.selectedModel}`
+              : translate('jcode.chat.modelPicker.autoSelect', 'Auto-select')}
           </span>
         </DropdownMenuItem>
 
@@ -130,7 +136,7 @@ export function ChatModelPicker({
                   </span>
                   {!entry.available ? (
                     <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
-                      需登录
+                      {translate('jcode.chat.modelPicker.signInRequired', 'Sign in required')}
                     </span>
                   ) : null}
                 </DropdownMenuItem>
@@ -144,7 +150,7 @@ export function ChatModelPicker({
           <>
             <DropdownMenuSeparator />
             <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              自定义 Provider
+              {translate('jcode.chat.modelPicker.customProvider', 'Custom provider')}
             </DropdownMenuLabel>
             {profileOptions.map((entry) => {
               const active = providerProfile === entry.id
@@ -177,7 +183,9 @@ export function ChatModelPicker({
           <>
             <DropdownMenuSeparator />
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger>更多 Provider</DropdownMenuSubTrigger>
+              <DropdownMenuSubTrigger>
+                {translate('jcode.chat.modelPicker.moreProviders', 'More providers')}
+              </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="max-h-[50vh] overflow-y-auto scrollbar-sleek">
                 {otherProviders.map((entry) => {
                   const active = !providerProfile && provider === entry.id && !model
@@ -206,7 +214,8 @@ export function ChatModelPicker({
           <>
             <DropdownMenuSeparator />
             <div className="px-2 py-1.5 text-[11px] text-muted-foreground">
-              无法读取模型列表{catalog.error ? `:${catalog.error}` : ''}
+              {translate('jcode.chat.modelPicker.modelListError', 'Unable to read model list')}
+              {catalog.error ? `: ${catalog.error}` : ''}
             </div>
           </>
         ) : null}
@@ -220,7 +229,7 @@ export function ChatModelPicker({
           }}
         >
           <RefreshCw className={cn('size-3.5', catalogLoading && 'animate-spin')} />
-          刷新模型列表
+          {translate('jcode.chat.modelPicker.refreshModels', 'Refresh model list')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

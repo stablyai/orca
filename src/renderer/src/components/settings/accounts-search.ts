@@ -173,41 +173,48 @@ export const getAccountsOpencodeSearchEntries = createLocalizedCatalog(() => [
 
 export const getAccountsJcodeProvidersSearchEntries = createLocalizedCatalog(() => [
   {
-    title: '自定义 Provider',
-    description:
-      'Add a custom OpenAI-compatible provider (base URL + API key + model) for jcode chat.',
+    title: translate('jcode.settings.accounts.providers.title', 'Custom provider'),
+    description: translate(
+      'jcode.settings.accounts.providers.description',
+      'Add a custom OpenAI-compatible provider for jcode chat.'
+    ),
     keywords: [
-      'jcode',
-      'provider',
-      'custom',
-      'openai',
-      'compatible',
-      'base url',
-      'api key',
-      'endpoint',
-      'gateway',
-      '自定义'
+      ...translateSearchKeyword('jcode.settings.accounts.keyword.jcode', 'jcode'),
+      ...translateSearchKeyword('jcode.settings.accounts.keyword.provider', 'provider'),
+      ...translateSearchKeyword('jcode.settings.accounts.keyword.custom', 'custom'),
+      ...translateSearchKeyword('jcode.settings.accounts.keyword.openai', 'openai'),
+      ...translateSearchKeyword('jcode.settings.accounts.keyword.compatible', 'compatible'),
+      ...translateSearchKeyword('jcode.settings.accounts.keyword.baseUrl', 'base url'),
+      ...translateSearchKeyword('jcode.settings.accounts.keyword.apiKey', 'api key'),
+      ...translateSearchKeyword('jcode.settings.accounts.keyword.endpoint', 'endpoint'),
+      ...translateSearchKeyword('jcode.settings.accounts.keyword.gateway', 'gateway'),
+      ...translateSearchKeyword('jcode.settings.accounts.keyword.customZh', '自定义')
     ]
   }
 ])
 
 export const getAccountsJcodeMcpSearchEntries = createLocalizedCatalog(() => [
   {
-    title: '连接器 / MCP',
-    description:
-      'Connect MCP servers (connectors) so jcode can use their tools, like IBKR or a vault.',
+    title: translate('jcode.settings.accounts.mcp.title', 'MCP connectors'),
+    description: translate(
+      'jcode.settings.accounts.mcp.description',
+      'Connect MCP servers so jcode can use their tools.'
+    ),
     keywords: [
-      'jcode',
-      'mcp',
-      'connector',
-      'connectors',
-      'server',
-      'tool',
-      'plugin',
-      'ibkr',
-      '连接器',
-      '插件',
-      'model context protocol'
+      ...translateSearchKeyword('jcode.settings.accounts.keyword.jcode', 'jcode'),
+      ...translateSearchKeyword('jcode.settings.accounts.keyword.mcp', 'mcp'),
+      ...translateSearchKeyword('jcode.settings.accounts.keyword.connector', 'connector'),
+      ...translateSearchKeyword('jcode.settings.accounts.keyword.connectors', 'connectors'),
+      ...translateSearchKeyword('jcode.settings.accounts.keyword.server', 'server'),
+      ...translateSearchKeyword('jcode.settings.accounts.keyword.tool', 'tool'),
+      ...translateSearchKeyword('jcode.settings.accounts.keyword.plugin', 'plugin'),
+      ...translateSearchKeyword('jcode.settings.accounts.keyword.ibkr', 'ibkr'),
+      ...translateSearchKeyword('jcode.settings.accounts.keyword.connectorZh', '连接器'),
+      ...translateSearchKeyword('jcode.settings.accounts.keyword.pluginZh', '插件'),
+      ...translateSearchKeyword(
+        'jcode.settings.accounts.keyword.modelContextProtocol',
+        'model context protocol'
+      )
     ]
   }
 ])

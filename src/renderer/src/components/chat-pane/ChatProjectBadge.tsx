@@ -1,5 +1,6 @@
 import { Cloud, Monitor } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
@@ -58,7 +59,7 @@ export function ChatProjectBadge({
     repo?.displayName ||
     (folderWorkspace?.folderPath ? folderWorkspace.folderPath.split('/').pop() : undefined) ||
     (path ? path.split('/').pop() : undefined) ||
-    '工作区'
+    translate('jcode.chat.projectBadge.fallbackProject', 'Workspace')
   const isRemote = !!connectionId
   // The folder-workspace toggle (brain-local on/off) is only meaningful for a
   // folder workspace bound to SSH; a remote git worktree is always brain-local.
@@ -85,7 +86,11 @@ export function ChatProjectBadge({
             isRemote ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
           )}
         >
-          {isRemote ? `远程 · ${hostLabel}` : '本地'}
+          {isRemote
+            ? translate('jcode.chat.projectBadge.remoteWithHost', 'Remote · {{value0}}', {
+                value0: hostLabel ?? ''
+              })
+            : translate('jcode.chat.projectBadge.local', 'Local')}
         </span>
       </div>
       {showFolderToggle ? (
@@ -101,10 +106,14 @@ export function ChatProjectBadge({
               : 'bg-muted text-foreground hover:bg-muted/80'
           )}
         >
-          {folderEnabled ? 'Hands remote: on' : 'Hands remote: off'}
+          {folderEnabled
+            ? translate('jcode.chat.projectBadge.handsRemoteOn', 'Hands remote: on')
+            : translate('jcode.chat.projectBadge.handsRemoteOff', 'Hands remote: off')}
         </button>
       ) : isRemote ? (
-        <span className="shrink-0 text-[10px] text-muted-foreground">brain-local（自动）</span>
+        <span className="shrink-0 text-[10px] text-muted-foreground">
+          {translate('jcode.chat.projectBadge.brainLocalAuto', 'brain-local (auto)')}
+        </span>
       ) : null}
     </div>
   )

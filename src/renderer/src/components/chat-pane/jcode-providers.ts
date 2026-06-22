@@ -5,6 +5,7 @@
 // in the chat-session-store, which falls back to ChatPane's default provider.
 
 import { useEffect, useState } from 'react'
+import { translate } from '@/i18n/i18n'
 import type { JcodeCustomProvider, JcodeModelCatalog } from '../../../../shared/jcode-chat-types'
 
 export type JcodeProviderOption = {
@@ -22,12 +23,45 @@ export type JcodeProviderOption = {
 /** Curated subset of `jcode provider list`, covering the common cases the brief
  *  asks for plus a few high-traffic ones. Not exhaustive on purpose. */
 export const JCODE_PROVIDERS: JcodeProviderOption[] = [
-  { id: 'jcode', label: 'Jcode Subscription' },
-  { id: 'claude', label: 'Claude', models: ['claude-opus-4-8', 'claude-sonnet-4-5'] },
-  { id: 'openai', label: 'OpenAI', models: ['gpt-5.5', 'gpt-5-mini'] },
-  { id: 'gemini', label: 'Gemini', models: ['gemini-2.5-pro', 'gemini-2.5-flash'] },
-  { id: 'openrouter', label: 'OpenRouter' },
-  { id: 'openai-compatible', label: 'OpenAI-compatible' }
+  {
+    id: 'jcode',
+    get label() {
+      return translate('jcode.chat.provider.jcodeSubscription', 'Jcode Subscription')
+    }
+  },
+  {
+    id: 'claude',
+    get label() {
+      return translate('jcode.chat.provider.claude', 'Claude')
+    },
+    models: ['claude-opus-4-8', 'claude-sonnet-4-5']
+  },
+  {
+    id: 'openai',
+    get label() {
+      return translate('jcode.chat.provider.openai', 'OpenAI')
+    },
+    models: ['gpt-5.5', 'gpt-5-mini']
+  },
+  {
+    id: 'gemini',
+    get label() {
+      return translate('jcode.chat.provider.gemini', 'Gemini')
+    },
+    models: ['gemini-2.5-pro', 'gemini-2.5-flash']
+  },
+  {
+    id: 'openrouter',
+    get label() {
+      return translate('jcode.chat.provider.openrouter', 'OpenRouter')
+    }
+  },
+  {
+    id: 'openai-compatible',
+    get label() {
+      return translate('jcode.chat.provider.openaiCompatible', 'OpenAI-compatible')
+    }
+  }
 ]
 
 export function findProviderOption(id: string | undefined): JcodeProviderOption | undefined {
