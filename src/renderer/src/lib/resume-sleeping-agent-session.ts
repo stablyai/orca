@@ -14,6 +14,7 @@ import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-r
 import type { TerminalTab } from '../../../shared/types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
 
 function getResumeLaunchPlatform(worktreeId: string): NodeJS.Platform {
   const state = useAppStore.getState()
@@ -187,6 +188,18 @@ function recordPaneIsOwnedByPreservedPane(
   )
 }
 
+function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): boolean {
+  if (record.interrupted === true) {
+    return true
+  }
+  if (!record.origin && record.state === 'done') {
+    return true
+  }
+  return (
+    record.state !== 'done' && record.capturedAt - record.updatedAt > AGENT_STATUS_STALE_AFTER_MS
+  )
+}
+
 export function resumeSleepingAgentSessionsForWorktree(worktreeId: string): number {
   const state = useAppStore.getState()
   const worktreeRecords = Object.values(state.sleepingAgentSessionsByPaneKey)
@@ -207,6 +220,10 @@ export function resumeSleepingAgentSessionsForWorktree(worktreeId: string): numb
   let launched = 0
   for (const record of records) {
     const claimKey = getProviderSessionClaimKey(record)
+    if (isInvalidWorktreeActivationRecord(record)) {
+      state.clearSleepingAgentSession(record.paneKey)
+      continue
+    }
     if (paneOwnedClaimKeys.has(claimKey)) {
       if (!recordPaneIsOwnedByPreservedPane(record, state)) {
         state.clearSleepingAgentSession(record.paneKey)

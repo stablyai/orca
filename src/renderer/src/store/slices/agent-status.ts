@@ -344,21 +344,94 @@ function sleepingRecordFromEntry(args: {
       ? { lastAssistantMessage: args.entry.lastAssistantMessage }
       : {}),
     ...(args.launchConfig ? { launchConfig: copyLaunchConfig(args.launchConfig) } : {}),
+    ...(args.entry.interrupted ? { interrupted: true } : {}),
     ...(args.origin ? { origin: args.origin } : {})
   }
+}
+
+type CollectSleepingAgentSessionRecordsOptions = {
+  paneKeys?: readonly string[]
+  captureMode?: 'manual-worktree-sleep' | 'completed-agent-hibernation'
+}
+
+function normalizeSleepingAgentSessionCollectOptions(
+  options: readonly string[] | CollectSleepingAgentSessionRecordsOptions | undefined
+): CollectSleepingAgentSessionRecordsOptions {
+  if (!options) {
+    return {}
+  }
+  return Array.isArray(options)
+    ? { paneKeys: options }
+    : (options as CollectSleepingAgentSessionRecordsOptions)
+}
+
+function isValidManualSleepLiveAgentEntry(
+  state: AppState,
+  entry: AgentStatusEntry,
+  capturedAt: number
+): boolean {
+  if (entry.interrupted === true || entry.state === 'done') {
+    return false
+  }
+  const lastInputAt = state.lastTerminalInputAtByPaneKey[entry.paneKey]
+  if (
+    typeof lastInputAt === 'number' &&
+    Number.isFinite(lastInputAt) &&
+    lastInputAt > entry.updatedAt
+  ) {
+    return false
+  }
+  return isExplicitAgentStatusFresh(entry, capturedAt, AGENT_STATUS_STALE_AFTER_MS)
+}
+
+function isValidCompletedAgentHibernationEntry(entry: AgentStatusEntry): boolean {
+  return entry.state === 'done' && entry.interrupted !== true
+}
+
+export function removeSleepingRecordsReplacedByManualWorktreeSleep(
+  records: Record<string, SleepingAgentSessionRecord>,
+  worktreeId: string,
+  paneKeys?: readonly string[]
+): { records: Record<string, SleepingAgentSessionRecord>; changed: boolean } {
+  const allowedPaneKeys = paneKeys ? new Set(paneKeys) : null
+  let next = records
+  let changed = false
+  for (const [paneKey, record] of Object.entries(records)) {
+    if (record.worktreeId !== worktreeId || (allowedPaneKeys && !allowedPaneKeys.has(paneKey))) {
+      continue
+    }
+    if (next === records) {
+      next = { ...records }
+    }
+    delete next[paneKey]
+    changed = true
+  }
+  return { records: next, changed }
 }
 
 export function collectSleepingAgentSessionRecordsForWorktree(
   state: AppState,
   worktreeId: string,
-  paneKeys?: string[]
+  options?: readonly string[] | CollectSleepingAgentSessionRecordsOptions
 ): Record<string, SleepingAgentSessionRecord> {
   const capturedAt = Date.now()
-  const allowedPaneKeys = paneKeys ? new Set(paneKeys) : null
+  const collectOptions = normalizeSleepingAgentSessionCollectOptions(options)
+  const allowedPaneKeys = collectOptions.paneKeys ? new Set(collectOptions.paneKeys) : null
+  const isManualWorktreeSleep = collectOptions.captureMode === 'manual-worktree-sleep'
+  const isCompletedAgentHibernation = collectOptions.captureMode === 'completed-agent-hibernation'
+  const isWorktreeOwnedCapture = isManualWorktreeSleep || isCompletedAgentHibernation
+  // Why: hibernated completions are intentional worktree-owned records; wake
+  // treats originless completed records as ambiguous legacy captures.
+  const origin: SleepingAgentSessionRecord['origin'] | undefined = isWorktreeOwnedCapture
+    ? 'worktree-sleep'
+    : undefined
   const tabPrefixes = (state.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
   const records: Record<string, SleepingAgentSessionRecord> = {}
 
   for (const retained of Object.values(state.retainedAgentsByPaneKey)) {
+    if (isCompletedAgentHibernation) {
+      continue
+    }
     if (allowedPaneKeys && !allowedPaneKeys.has(retained.entry.paneKey)) {
       continue
     }
@@ -371,7 +444,8 @@ export function collectSleepingAgentSessionRecordsForWorktree(
       worktreeId,
       tab: retained.tab,
       capturedAt,
-      launchConfig: getLaunchConfigForEntry(state, retained.entry)
+      launchConfig: getLaunchConfigForEntry(state, retained.entry),
+      origin
     })
     if (record) {
       records[record.paneKey] = record
@@ -387,12 +461,19 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (!belongsToWorktree) {
       continue
     }
+    if (isManualWorktreeSleep && !isValidManualSleepLiveAgentEntry(state, entry, capturedAt)) {
+      continue
+    }
+    if (isCompletedAgentHibernation && !isValidCompletedAgentHibernationEntry(entry)) {
+      continue
+    }
     const record = sleepingRecordFromEntry({
       state,
       entry,
       worktreeId,
       capturedAt,
-      launchConfig: getLaunchConfigForEntry(state, entry)
+      launchConfig: getLaunchConfigForEntry(state, entry),
+      origin
     })
     if (record) {
       records[record.paneKey] = record
@@ -1787,11 +1868,17 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
 
     captureSleepingAgentSessionsByWorktree: (worktreeId, paneKeys) => {
       set((s) => {
-        const records = collectSleepingAgentSessionRecordsForWorktree(s, worktreeId, paneKeys)
-        const next: Record<string, SleepingAgentSessionRecord> = {
-          ...s.sleepingAgentSessionsByPaneKey
-        }
-        let changed = false
+        const records = collectSleepingAgentSessionRecordsForWorktree(s, worktreeId, {
+          paneKeys,
+          captureMode: 'manual-worktree-sleep'
+        })
+        const replaced = removeSleepingRecordsReplacedByManualWorktreeSleep(
+          s.sleepingAgentSessionsByPaneKey,
+          worktreeId,
+          paneKeys
+        )
+        const next: Record<string, SleepingAgentSessionRecord> = { ...replaced.records }
+        let changed = replaced.changed
 
         for (const record of Object.values(records)) {
           if (next[record.paneKey] !== record) {

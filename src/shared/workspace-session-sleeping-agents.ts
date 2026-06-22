@@ -77,6 +77,7 @@ const sleepingAgentSessionRecordSchema = z.object({
   updatedAt: z.number().finite().positive(),
   terminalTitle: z.string().optional(),
   lastAssistantMessage: z.string().optional(),
+  interrupted: z.boolean().optional(),
   connectionId: z.string().nullable().optional(),
   launchConfig: sleepingAgentLaunchConfigSchema.optional(),
   origin: z.enum(['worktree-sleep', 'quit', 'live']).optional()

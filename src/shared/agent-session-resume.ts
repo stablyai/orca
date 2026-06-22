@@ -40,6 +40,7 @@ export type SleepingAgentSessionRecord = {
   updatedAt: number
   terminalTitle?: string
   lastAssistantMessage?: string
+  interrupted?: boolean
   connectionId?: string | null
   launchConfig?: SleepingAgentLaunchConfig
   /** How the record was captured. Worktree-sleep records (legacy records have

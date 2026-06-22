@@ -810,6 +810,7 @@ export function useIpcEvents(): void {
       }
     }
     const worktreeChangeRefreshQueue = createWorktreeChangeRefreshQueue(handleWorktreesChanged)
+    unsubs.push(worktreeChangeRefreshQueue.dispose)
 
     const activateNotifiedWorktree = async (
       {
