@@ -1435,6 +1435,47 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.createTab).not.toHaveBeenCalled()
   })
 
+  it('restores floating panel focus after returning from another app', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    const element = await renderPanel(true)
+    const panel = findByProp(element, 'data-floating-terminal-panel')
+    const activeElement = { blur: vi.fn() }
+    const panelElement = {
+      contains: vi.fn((node: unknown) => node === activeElement),
+      focus: vi.fn()
+    }
+    const outsideElement = {}
+    Object.setPrototypeOf(activeElement, HTMLElement.prototype)
+    Object.setPrototypeOf(outsideElement, HTMLElement.prototype)
+    attachRef(panel.props.ref, panelElement)
+    const documentStub = {
+      activeElement,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    }
+    vi.stubGlobal('document', documentStub)
+    runEffects()
+    panelElement.focus.mockClear()
+    const blurListeners = vi
+      .mocked(window.addEventListener)
+      .mock.calls.filter(([type]) => type === 'blur')
+      .map(([, listener]) => listener as () => void)
+    const focusListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([type]) => type === 'focus')?.[1] as (() => void) | undefined
+    const blurListener = blurListeners.at(-1)
+    if (!blurListener || !focusListener) {
+      throw new Error('window focus listeners not registered')
+    }
+
+    blurListener()
+    documentStub.activeElement = outsideElement as never
+    focusListener()
+
+    expect(activeElement.blur).toHaveBeenCalledWith()
+    expect(panelElement.focus).toHaveBeenCalledWith({ preventScroll: true })
+  })
+
   it('routes focused floating tab switch shortcuts to the floating workspace', async () => {
     setFloatingTabs([makeTab({ id: 'tab-1' }), makeTab({ id: 'tab-2' })])
     const element = await renderPanel(true)
