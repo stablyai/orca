@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildRuntimeClientEventEnvironmentKey,
   buildNewWorkspaceShortcutModalData,
+  getNewlyConnectedRuntimeEnvironmentIds,
   openNewWorkspaceFromShortcut,
   resolveBrowserSessionTabTarget,
   resolveZoomTarget
@@ -32,6 +33,23 @@ describe('buildRuntimeClientEventEnvironmentKey', () => {
     expect(buildRuntimeClientEventEnvironmentKey(['env-b', 'env-a', 'env-b'])).toBe(
       buildRuntimeClientEventEnvironmentKey(['env-a', 'env-b'])
     )
+  })
+})
+
+describe('getNewlyConnectedRuntimeEnvironmentIds', () => {
+  it('returns only environments that became connected', () => {
+    expect(getNewlyConnectedRuntimeEnvironmentIds(['env-a'], ['env-a', 'env-b'])).toEqual(['env-b'])
+  })
+
+  it('ignores environments that disconnected or stayed connected', () => {
+    expect(getNewlyConnectedRuntimeEnvironmentIds(['env-a', 'env-b'], ['env-a'])).toEqual([])
+  })
+
+  it('treats every environment as new when none were connected before', () => {
+    expect(getNewlyConnectedRuntimeEnvironmentIds([], ['env-a', 'env-a', 'env-b'])).toEqual([
+      'env-a',
+      'env-b'
+    ])
   })
 })
 

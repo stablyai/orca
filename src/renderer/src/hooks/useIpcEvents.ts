@@ -717,8 +717,14 @@ export function buildRuntimeClientEventEnvironmentKey(environmentIds: string[]):
   return [...new Set(environmentIds)].sort().join('\u0000')
 }
 
-function getRuntimeClientEventEnvironmentKey(): string {
-  return buildRuntimeClientEventEnvironmentKey(getRuntimeClientEventEnvironmentIds())
+/** Ids in `next` not in `previous` — runtime environments that just became
+ *  connected. Exported to unit-test the on-connect discovery trigger. */
+export function getNewlyConnectedRuntimeEnvironmentIds(
+  previous: readonly string[],
+  next: readonly string[]
+): string[] {
+  const known = new Set(previous)
+  return [...new Set(next)].filter((environmentId) => !known.has(environmentId))
 }
 
 function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined): string | null {
@@ -902,13 +908,32 @@ export function useIpcEvents(): void {
     })
 
     runtimeClientEventsSync.sync()
-    let runtimeClientEventEnvironmentKey = getRuntimeClientEventEnvironmentKey()
+    // Why: PR #2 removed desktop's eager session-sync discovery and there is no
+    // on-connect repo fetch, so remote projects only appeared after the user
+    // opened the Add-Project dropdown. Seed discovery for runtimes already
+    // connected at mount, and for each newly-connected one below. The scheduler
+    // debounces/throttles, so this stays cheap even with chatty status updates.
+    let runtimeClientEventEnvironmentIds = getRuntimeClientEventEnvironmentIds()
+    for (const environmentId of runtimeClientEventEnvironmentIds) {
+      runtimeProjectRefreshScheduler.request(environmentId)
+    }
+    let runtimeClientEventEnvironmentKey = buildRuntimeClientEventEnvironmentKey(
+      runtimeClientEventEnvironmentIds
+    )
     unsubs.push(
       useAppStore.subscribe(() => {
-        const nextKey = getRuntimeClientEventEnvironmentKey()
+        const nextEnvironmentIds = getRuntimeClientEventEnvironmentIds()
+        const nextKey = buildRuntimeClientEventEnvironmentKey(nextEnvironmentIds)
         if (nextKey === runtimeClientEventEnvironmentKey) {
           return
         }
+        for (const environmentId of getNewlyConnectedRuntimeEnvironmentIds(
+          runtimeClientEventEnvironmentIds,
+          nextEnvironmentIds
+        )) {
+          runtimeProjectRefreshScheduler.request(environmentId)
+        }
+        runtimeClientEventEnvironmentIds = nextEnvironmentIds
         runtimeClientEventEnvironmentKey = nextKey
         runtimeClientEventsSync.sync()
       })
