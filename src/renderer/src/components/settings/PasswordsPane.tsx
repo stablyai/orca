@@ -12,6 +12,7 @@ import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormContr
 import { getPasswordsPaneSearchEntries } from './passwords-search'
 import { PasswordRow } from './PasswordRow'
 import { AddPasswordForm } from './AddPasswordForm'
+import { PasswordImportButton } from './PasswordImportButton'
 import { translate } from '@/i18n/i18n'
 
 export { getPasswordsPaneSearchEntries }
@@ -173,16 +174,19 @@ export function PasswordsPane({ settings, updateSettings }: PasswordsPaneProps):
 
       {/* Saved logins list */}
       <section className="space-y-3">
-        <SettingsSubsectionHeader
-          title={translate(
-            'auto.components.settings.PasswordsPane.saved_logins_title',
-            'Saved Logins'
-          )}
-          description={translate(
-            'auto.components.settings.PasswordsPane.saved_logins_description',
-            'Manage usernames and passwords stored by Orca.'
-          )}
-        />
+        <div className="flex items-start justify-between gap-3">
+          <SettingsSubsectionHeader
+            title={translate(
+              'auto.components.settings.PasswordsPane.saved_logins_title',
+              'Saved Logins'
+            )}
+            description={translate(
+              'auto.components.settings.PasswordsPane.saved_logins_description',
+              'Manage usernames and passwords stored by Orca.'
+            )}
+          />
+          <PasswordImportButton disabled={vaultUnavailable} onImported={loadEntries} />
+        </div>
         {loadingEntries ? (
           <p className="text-xs text-muted-foreground">
             {translate('auto.components.settings.PasswordsPane.loading', 'Loading…')}
