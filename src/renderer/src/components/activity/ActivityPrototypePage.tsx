@@ -1131,7 +1131,7 @@ function ThreadRow({
         // ~3px of internal space above the cap-height that isn't present
         // below the secondary badge row. Symmetric py made the top read
         // heavier; the smaller top pad visually evens the row.
-        'group relative flex w-full cursor-pointer flex-col gap-1 border-b border-border px-3 pt-2.5 pb-3 text-left transition-colors',
+        'group/thread-row relative flex w-full cursor-pointer flex-col gap-1 border-b border-border px-3 pt-2.5 pb-3 text-left transition-colors',
         selected
           ? 'bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:bg-white/[0.10] dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
           : 'hover:bg-accent/40'
@@ -1213,7 +1213,7 @@ function ThreadRow({
                       'Mark thread unread'
                     )}
                   >
-                    <Bell className="size-3 text-muted-foreground/40 can-hover:opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 group-hover/unread:opacity-100" />
+                    <Bell className="size-3 text-muted-foreground/40 can-hover:opacity-0 transition-opacity group-hover/thread-row:opacity-100 group-focus-within/thread-row:opacity-100 group-hover/unread:opacity-100" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="left">
@@ -1243,7 +1243,7 @@ function ThreadRow({
             className={cn(
               'ml-auto inline-flex shrink-0 items-center transition-opacity',
               'can-hover:pointer-events-none can-hover:invisible can-hover:opacity-0',
-              'group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:visible group-focus-within:opacity-100'
+              'group-hover/thread-row:pointer-events-auto group-hover/thread-row:visible group-hover/thread-row:opacity-100 group-focus-within/thread-row:pointer-events-auto group-focus-within/thread-row:visible group-focus-within/thread-row:opacity-100'
             )}
           >
             <Tooltip>
