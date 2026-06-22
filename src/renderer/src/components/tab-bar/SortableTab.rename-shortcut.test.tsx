@@ -106,7 +106,9 @@ vi.mock('lucide-react', () => ({
 }))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
-  formatShortcutLabel: () => '⌘⇧\\'
+  formatShortcutLabel: () => '⌘⇧\\',
+  useOptionalShortcutLabel: () => '⌘W',
+  useShortcutKeyDetails: () => ({ keys: ['⌘', 'W'], doubleTap: false })
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({

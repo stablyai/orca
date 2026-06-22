@@ -2496,7 +2496,8 @@
           "SortableTab": {
             "ab19f603eb": "Cambiar nombre de pestaña {{value0}}",
             "6df69d9388": "Cerrar pestaña {{value0}}",
-            "fdb2691425": "Contraer panel"
+            "fdb2691425": "Contraer panel",
+            "95db5f2f7d": "Close tab"
           },
           "SortableTabContextMenu": {
             "35e8892fd0": "Color de pestaña",
@@ -2620,6 +2621,10 @@
             "down": "Abajo",
             "up": "Arriba",
             "moveToPaneColumn": "Mover pestaña a división"
+          },
+          "EditorFileTabCloseButton": {
+            "4655cf570e": "Close tab",
+            "a768f428f1": "Close tab"
           }
         }
       },

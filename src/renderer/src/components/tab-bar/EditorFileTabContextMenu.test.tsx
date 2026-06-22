@@ -66,7 +66,7 @@ vi.mock('@/i18n/i18n', () => ({
 // Why: the menu reads live shortcut bindings; stub them to fixed labels so
 // the test asserts each assigned action surfaces its own shortcut chip.
 vi.mock('@/hooks/useShortcutLabel', () => ({
-  useShortcutLabel: shortcutLabelMock
+  useOptionalShortcutLabel: shortcutLabelMock
 }))
 
 const useAppStoreMock = Object.assign(
@@ -208,7 +208,7 @@ async function renderMenu(): Promise<unknown> {
   })
 }
 
-function assignedShortcutLabel(actionId: string): string {
+function assignedShortcutLabel(actionId: string): string | null {
   switch (actionId) {
     case 'tab.rename':
       return '⌘R'
@@ -217,7 +217,7 @@ function assignedShortcutLabel(actionId: string): string {
     case 'tab.closeAll':
       return '⌘⌥W'
     default:
-      return 'Unassigned'
+      return null
   }
 }
 
@@ -262,7 +262,7 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
   })
 
   it('hides the shortcut chip when close-all is unassigned', async () => {
-    shortcutLabelMock.mockReturnValue('Unassigned')
+    shortcutLabelMock.mockReturnValue(null)
 
     const tree = expandNode(await renderMenu())
 

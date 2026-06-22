@@ -2496,7 +2496,8 @@
           "SortableTab": {
             "ab19f603eb": "탭 이름 바꾸기 {{value0}}",
             "6df69d9388": "탭 닫기 {{value0}}",
-            "fdb2691425": "창 축소"
+            "fdb2691425": "창 축소",
+            "95db5f2f7d": "Close tab"
           },
           "SortableTabContextMenu": {
             "35e8892fd0": "탭 색상",
@@ -2620,6 +2621,10 @@
             "down": "아래",
             "up": "위",
             "moveToPaneColumn": "탭을 분할로 이동"
+          },
+          "EditorFileTabCloseButton": {
+            "4655cf570e": "Close tab",
+            "a768f428f1": "Close tab"
           }
         }
       },

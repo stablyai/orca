@@ -2496,7 +2496,8 @@
           "SortableTab": {
             "ab19f603eb": "Rename tab {{value0}}",
             "6df69d9388": "Close tab {{value0}}",
-            "fdb2691425": "Collapse pane"
+            "fdb2691425": "Collapse pane",
+            "95db5f2f7d": "Close tab"
           },
           "SortableTabContextMenu": {
             "35e8892fd0": "Tab Color",
@@ -2620,6 +2621,10 @@
             "down": "Down",
             "up": "Up",
             "moveToPaneColumn": "Move Tab to Split"
+          },
+          "EditorFileTabCloseButton": {
+            "4655cf570e": "Close tab",
+            "a768f428f1": "Close tab"
           }
         }
       },

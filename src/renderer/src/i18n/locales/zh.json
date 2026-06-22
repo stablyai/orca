@@ -2496,7 +2496,8 @@
           "SortableTab": {
             "ab19f603eb": "重命名选项卡 {{value0}}",
             "6df69d9388": "关闭选项卡 {{value0}}",
-            "fdb2691425": "折叠窗格"
+            "fdb2691425": "折叠窗格",
+            "95db5f2f7d": "Close tab"
           },
           "SortableTabContextMenu": {
             "35e8892fd0": "标签颜色",
@@ -2620,6 +2621,10 @@
             "down": "下",
             "up": "上",
             "moveToPaneColumn": "将标签页移至拆分"
+          },
+          "EditorFileTabCloseButton": {
+            "4655cf570e": "Close tab",
+            "a768f428f1": "Close tab"
           }
         }
       },

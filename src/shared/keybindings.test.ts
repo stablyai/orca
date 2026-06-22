@@ -459,6 +459,34 @@ describe('keybindings', () => {
     expect(getEffectiveKeybindingsForAction(maximizeAction, 'win32')).toEqual([])
   })
 
+  it('captures and round-trips the macOS Option-composed maximize chord', () => {
+    const maximizeAction = 'floatingWorkspace.maximize' as KeybindingActionId
+
+    // Why: macOS Option+A composes to a glyph (å), so capture must resolve the
+    // chord through the physical-code fallback rather than the composed key,
+    // matching the matcher so a user override round-trips to the same binding.
+    const macComposedMaximize = {
+      key: 'å',
+      code: 'KeyA',
+      meta: true,
+      control: false,
+      alt: true,
+      shift: true
+    }
+    expect(keybindingFromInput(macComposedMaximize, 'darwin')).toEqual({
+      ok: true,
+      value: 'Mod+Alt+Shift+A'
+    })
+    expect(keybindingMatchesAction(maximizeAction, macComposedMaximize, 'darwin')).toBe(true)
+    // The captured override formats back to the same effective shortcut.
+    expect(
+      getEffectiveKeybindingsForAction(maximizeAction, 'darwin', {
+        [maximizeAction]: ['Mod+Alt+Shift+A']
+      })
+    ).toEqual(['Mod+Alt+Shift+A'])
+    expect(formatKeybindingList(['Mod+Alt+Shift+A'], 'darwin')).toBe('⌘⌥⇧A')
+  })
+
   it('leaves floating workspace minimize unassigned because floating terminal toggle owns show and hide', () => {
     const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
     const minimizeAction = 'floatingWorkspace.minimize' as KeybindingActionId

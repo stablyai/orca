@@ -2496,7 +2496,8 @@
           "SortableTab": {
             "ab19f603eb": "タブ {{value0}} の名前を変更します",
             "6df69d9388": "タブ {{value0}} を閉じる",
-            "fdb2691425": "ペインを折りたたむ"
+            "fdb2691425": "ペインを折りたたむ",
+            "95db5f2f7d": "Close tab"
           },
           "SortableTabContextMenu": {
             "35e8892fd0": "タブの色",
@@ -2620,6 +2621,10 @@
             "down": "下",
             "up": "上",
             "moveToPaneColumn": "タブを分割へ移動"
+          },
+          "EditorFileTabCloseButton": {
+            "4655cf570e": "Close tab",
+            "a768f428f1": "Close tab"
           }
         }
       },
