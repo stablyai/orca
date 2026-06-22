@@ -37,7 +37,7 @@ export async function writeTerminalDropPathsToCapturedTarget({
 }): Promise<TerminalDropPathWriteResult> {
   let sentAnyPath = false
   let pathsWritten = 0
-  for (const path of paths) {
+  for (const [index, path] of paths.entries()) {
     // Why: acknowledged PTY writes are async, so a multi-path drop can outlive
     // the pane or PTY it originally targeted.
     const liveTransport = getCurrentTerminalDropTransport(manager, paneTransports, dropTarget)
@@ -50,8 +50,16 @@ export async function writeTerminalDropPathsToCapturedTarget({
     // Shell-escaping would corrupt the file-existence check those tools run on
     // the pasted path, so images bypass it. Non-image drops keep the original
     // shell-escaped, space-separated behaviour for use in shell commands.
+    //
+    // Image payloads carry no trailing space of their own, so when an image is
+    // immediately followed by a non-image path the two would otherwise collide
+    // (`<bracketed-paste>/repo/a.ts`). Add a single separating space in that
+    // case only — back-to-back image pastes are self-delimiting and a stray
+    // space between them would land in the TUI input.
+    const nextPath = paths[index + 1]
+    const needsSeparatorAfterImage = nextPath !== undefined && !isImageDropPath(nextPath)
     const payload = isImageDropPath(path)
-      ? wrapTerminalBracketedPasteText(path)
+      ? `${wrapTerminalBracketedPasteText(path)}${needsSeparatorAfterImage ? ' ' : ''}`
       : `${shellEscapePath(path, targetShell)} `
     const writeResult = await runTerminalPasteOperationWithTimeout(
       () => writeTerminalPastePtyInput(liveTransport, payload),
