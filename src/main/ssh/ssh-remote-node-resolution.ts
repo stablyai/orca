@@ -44,39 +44,54 @@ export async function resolveRemoteNodePath(
 }
 
 // Probe the on-disk install directories of every common Node version manager
-// plus system package-manager locations. Every probe runs unconditionally
-// (joined by newlines, not ||) so a missing directory prints nothing rather
-// than short-circuiting later probes. Returns the first candidate that meets
-// the minimum version.
+// plus system package-manager locations. Every probe runs unconditionally so
+// a missing directory prints nothing rather than short-circuiting later
+// probes. Returns the first candidate that meets the minimum version.
 async function tryResolveViaKnownPaths(conn: SshConnection): Promise<string | null> {
-  // Why: joining with newlines instead of `||` is intentional. An empty
-  // `ls | sort -V | tail -1` exits 0 even when it finds nothing, so an `||`
-  // chain would stop at that clause and never check fnm/mise/asdf/volta.
-  // With newlines every probe runs and contributes whatever path it finds.
-  const script = [
-    // System / package-manager installs.
-    'command -v node 2>/dev/null',
-    'command -v /usr/local/bin/node 2>/dev/null',
-    'command -v /opt/homebrew/bin/node 2>/dev/null',
-    'command -v $HOME/.local/bin/node 2>/dev/null',
-    // nvm: respect $NVM_DIR (common dotfiles override it); fall back to the
-    // default ~/.nvm. `ls -1` sorts alphabetically, which misorders versions
-    // (v9 > v18); pipe through `sort -V` so we pick the highest version.
-    'ls -1 ${NVM_DIR:-$HOME/.nvm}/versions/node/*/bin/node 2>/dev/null | sort -V | tail -1',
-    // fnm: default alias symlink, then versioned dirs as a fallback.
-    'command -v $HOME/.fnm/aliases/default/bin/node 2>/dev/null',
-    'ls -1 $HOME/.fnm/node-versions/*/installation/bin/node 2>/dev/null | sort -V | tail -1',
-    // mise (formerly rtx): shims dir, then versioned installs.
-    'command -v $HOME/.local/share/mise/shims/node 2>/dev/null',
-    'ls -1 $HOME/.local/share/mise/installs/node/*/bin/node 2>/dev/null | sort -V | tail -1',
-    // asdf: shims dir, then versioned installs.
-    'command -v $HOME/.asdf/shims/node 2>/dev/null',
-    'ls -1 $HOME/.asdf/installs/nodejs/*/bin/node 2>/dev/null | sort -V | tail -1',
-    // volta: single bin dir with the active version symlinked in.
-    'command -v $HOME/.volta/bin/node 2>/dev/null',
-    // n: installs into /usr/local or a user-local prefix.
-    'command -v /usr/local/n/versions/node/*/bin/node 2>/dev/null'
-  ].join('\n')
+  const script = `
+command -v node 2>/dev/null
+nvm_dirs=\${NVM_DIR:-"$HOME/.nvm"}
+for nvm_file in "$HOME/.profile" "$HOME/.bash_profile" "$HOME/.bashrc" "$HOME/.zprofile" "$HOME/.zshrc"
+do
+  [ -r "$nvm_file" ] || continue
+  nvm_dir_from_file=$(sed -n 's/^[[:space:]]*export[[:space:]][[:space:]]*NVM_DIR[[:space:]]*=[[:space:]]*//p; s/^[[:space:]]*NVM_DIR[[:space:]]*=[[:space:]]*//p' "$nvm_file" | tail -n 1)
+  case "$nvm_dir_from_file" in
+    \\"*\\") nvm_dir_from_file=\${nvm_dir_from_file#\\"}; nvm_dir_from_file=\${nvm_dir_from_file%%\\"*} ;;
+    \\'*\\') nvm_dir_from_file=\${nvm_dir_from_file#\\'}; nvm_dir_from_file=\${nvm_dir_from_file%%\\'*} ;;
+    *) nvm_dir_from_file=\${nvm_dir_from_file%%[[:space:]]*} ;;
+  esac
+  case "$nvm_dir_from_file" in
+    '$HOME'*) nvm_dir_from_file="$HOME\${nvm_dir_from_file#'$HOME'}" ;;
+    "~/"*) nvm_dir_from_file="$HOME/\${nvm_dir_from_file#\\~/}" ;;
+  esac
+  [ -n "$nvm_dir_from_file" ] && nvm_dirs="$nvm_dirs
+$nvm_dir_from_file"
+done
+printf '%s\\n' "$nvm_dirs" | while IFS= read -r nvm_dir
+do
+  [ -n "$nvm_dir" ] || continue
+  for candidate in "$nvm_dir"/versions/node/*/bin/node
+  do
+    [ -x "$candidate" ] && printf '%s\\n' "$candidate"
+  done
+done
+for candidate in \\
+  /usr/local/bin/node \\
+  /opt/homebrew/bin/node \\
+  "$HOME/.local/bin/node" \\
+  "$HOME/.fnm/aliases/default/bin/node" \\
+  "$HOME/.fnm/node-versions"/*/installation/bin/node \\
+  "$HOME/.local/share/mise/shims/node" \\
+  "$HOME/.local/share/mise/installs/node"/*/bin/node \\
+  "$HOME/.asdf/shims/node" \\
+  "$HOME/.asdf/installs/nodejs"/*/bin/node \\
+  "$HOME/.volta/bin/node" \\
+  /usr/local/n/versions/node/*/bin/node
+do
+  [ -x "$candidate" ] && printf '%s\\n' "$candidate"
+done
+true
+`
 
   try {
     const result = await execCommand(conn, script)
@@ -115,7 +130,7 @@ async function tryResolveViaLoginShell(conn: SshConnection): Promise<string | nu
       return null
     }
 
-    const nodePath = await execCommand(conn, `${shellEscape(shell)} -lc 'command -v node'`, {
+    const nodePath = await execCommand(conn, buildCommandInShell(shell, 'command -v node'), {
       wrapCommand: false,
       timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS
     })
@@ -132,6 +147,14 @@ async function tryResolveViaLoginShell(conn: SshConnection): Promise<string | nu
     // Fall through.
   }
   return null
+}
+
+function buildCommandInShell(shell: string, command: string): string {
+  const shellName = shell.split('/').at(-1)
+  // Why: dash and POSIX sh do not require `-l`; when $SHELL falls back to
+  // /bin/sh, prefer a portable command over login-shell semantics.
+  const mode = shellName === 'sh' || shellName === 'dash' ? '-c' : '-lc'
+  return `${shellEscape(shell)} ${mode} ${shellEscape(command)}`
 }
 
 // Returns true if `nodePath` runs and reports Node >= MIN_NODE_MAJOR.
