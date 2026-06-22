@@ -457,7 +457,7 @@ describe('resolveActivePaneColumnSplitTarget', () => {
     ).toBeNull()
   })
 
-  it('attaches cached panel bounds to same-group tab-strip pane split targets', () => {
+  it('does not create a split target while hovering over another tab in the same strip', () => {
     const panelRect = rect({ left: 500, top: 0, width: 400, height: 600 })
     mockTabGroupGeometry([
       {
@@ -501,10 +501,10 @@ describe('resolveActivePaneColumnSplitTarget', () => {
         getDragPointer: () => ({ x: 560, y: 16 }),
         geometry
       })
-    ).toEqual(expect.objectContaining({ groupId: 'group-1', zone: 'right', panelRect }))
+    ).toBeNull()
   })
 
-  it('ignores stale same-group tab split targets after the pointer leaves the panel', () => {
+  it('ignores same-group tab hovers after the pointer leaves the panel', () => {
     const panelRect = rect({ left: 500, top: 0, width: 400, height: 600 })
     mockTabGroupGeometry([
       {

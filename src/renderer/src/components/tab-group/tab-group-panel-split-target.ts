@@ -1,14 +1,12 @@
 import type { DragEndEvent, DragMoveEvent, DragOverEvent } from '@dnd-kit/core'
 import type { TabGroup, TabGroupLayoutNode } from '../../../../shared/types'
 import { isPaneColumnSplitDropNoOp } from '../../store/slices/pane-column-split-drop-no-op'
-import { resolveTabPaneColumnSplitOverTab, type TabPaneColumnSplitTarget } from './tab-insertion'
 import {
   resolvePaneColumnEdgeZone,
   TAB_GROUP_TAB_STRIP_HEIGHT_PX,
   type PaneColumnSplitTarget
 } from './tab-drop-zone'
 import {
-  canDropTabForPaneColumnSplit,
   canDropTabIntoPaneBody,
   isPaneDropData,
   isTabDragData,
@@ -26,7 +24,7 @@ export type TabGroupPanelGeometrySnapshot = {
   byGroupId: Map<string, TabGroupPanelGeometryEntry>
 }
 
-export type ActivePaneColumnSplitTarget = (PaneColumnSplitTarget | TabPaneColumnSplitTarget) & {
+export type ActivePaneColumnSplitTarget = PaneColumnSplitTarget & {
   panelRect?: DOMRect
 }
 
@@ -232,28 +230,11 @@ export function resolveActivePaneColumnSplitTarget({
   const panelHit = findTabGroupPanelUnderPointer(worktreeId, pointer, { geometry })
 
   if (isTabDragData(overData)) {
-    const tabSplit = resolveTabPaneColumnSplitOverTab(event, isTabDragData, () => pointer)
-    if (
-      tabSplit &&
-      panelHit?.groupId === tabSplit.groupId &&
-      canDropTabForPaneColumnSplit({
-        activeDrag: activeData,
-        groupsByWorktree,
-        targetGroupId: tabSplit.groupId,
-        worktreeId
-      })
-    ) {
-      return {
-        ...tabSplit,
-        panelRect: geometry?.byGroupId.get(tabSplit.groupId)?.panelRect
-      }
-    }
-    // Why: cross-pane tab-strip drags target insertion slots. Body-edge splits
-    // stay on the pane content area, not the tab row.
-    if (activeData.groupId !== overData.groupId) {
-      if (!panelHit || pointer.y < panelHit.panelRect.top + TAB_GROUP_TAB_STRIP_HEIGHT_PX) {
-        return null
-      }
+    // Why: tab-strip drags target reorder/insertion slots. Split creation stays
+    // on pane/body edges so hovering over a tab never surprises the user with a
+    // new split.
+    if (!panelHit || pointer.y < panelHit.panelRect.top + TAB_GROUP_TAB_STRIP_HEIGHT_PX) {
+      return null
     }
   }
 
