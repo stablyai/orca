@@ -135,7 +135,7 @@ export function SlashCommandPopover({
   degraded?: boolean
 }): React.JSX.Element {
   return (
-    <div className="absolute bottom-full left-0 z-20 mb-1 max-h-72 w-full max-w-sm overflow-y-auto rounded-lg border border-border bg-popover shadow-md">
+    <div className="absolute bottom-full left-0 z-20 mb-1 max-h-72 w-full max-w-sm overflow-y-auto scrollbar-sleek rounded-lg border border-border bg-popover shadow-md">
       {commands.length > 0 ? (
         <>
           <div className="border-b border-border px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">

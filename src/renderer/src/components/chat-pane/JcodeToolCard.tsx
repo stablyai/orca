@@ -51,7 +51,7 @@ function OutputBlock({ text }: { text: string }): React.JSX.Element {
     return <UnifiedDiff text={text} />
   }
   return (
-    <pre className="max-h-72 overflow-auto rounded-md bg-background/60 p-2 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words">
+    <pre className="max-h-72 overflow-auto scrollbar-sleek rounded-md bg-background/60 p-2 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words">
       {text}
     </pre>
   )

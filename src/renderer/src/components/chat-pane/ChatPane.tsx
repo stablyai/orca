@@ -270,7 +270,7 @@ export default function ChatPane({
       data-native-file-drop-target="composer"
     >
       <ChatProjectBadge worktreeId={worktreeId} cwd={cwd} />
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center px-6 text-center">
             <div className="text-base font-medium text-foreground">Message jcode to start</div>

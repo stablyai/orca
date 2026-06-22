@@ -85,7 +85,10 @@ export function ChatModelPicker({
           <ChevronDown className="size-3.5" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="max-h-[60vh] min-w-[17rem] overflow-y-auto">
+      <DropdownMenuContent
+        align="start"
+        className="max-h-[60vh] min-w-[17rem] overflow-y-auto scrollbar-sleek"
+      >
         <DropdownMenuLabel>模型 Model</DropdownMenuLabel>
 
         {/* Auto — show what jcode actually resolves it to. */}
@@ -175,7 +178,7 @@ export function ChatModelPicker({
             <DropdownMenuSeparator />
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>更多 Provider</DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="max-h-[50vh] overflow-y-auto">
+              <DropdownMenuSubContent className="max-h-[50vh] overflow-y-auto scrollbar-sleek">
                 {otherProviders.map((entry) => {
                   const active = !providerProfile && provider === entry.id && !model
                   return (
