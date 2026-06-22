@@ -48,6 +48,57 @@ export function getWorktreeCardContentIndent(args: {
   return (groupSteps + clampDepth(args.lineageDepth)) * SIDEBAR_TREE_INDENT + projectCardIndent
 }
 
+export function getFolderBackedRepoWorktreeCardContentIndent(args: {
+  groupDepth: number
+  lineageDepth: number
+}): number {
+  // Why: folder-scanned groups indent repo headers by the compact header step;
+  // worktree rows should follow that rhythm instead of adding a full tree step.
+  return (
+    getProjectGroupHeaderPaddingLeft(args.groupDepth) +
+    PROJECT_GROUP_HEADER_BASE_PADDING +
+    clampDepth(args.lineageDepth) * SIDEBAR_TREE_INDENT
+  )
+}
+
+export function getFolderBackedRepoWorktreeCardSurfaceInset(args: {
+  groupDepth: number
+  lineageDepth: number
+}): number {
+  const contentAnchor = getFolderBackedRepoWorktreeCardContentIndent(args)
+  const genericSurfaceInset = getWorktreeCardSurfaceInset({
+    isGrouped: true,
+    groupDepth: args.groupDepth
+  })
+  const maxSurfaceInset =
+    contentAnchor - WORKTREE_CARD_SURFACE_MARGIN - FLUSH_CARD_MIN_CONTENT_INSET
+
+  // Why: compact folder-backed repo rows still use flush-card margin/padding;
+  // cap the surface before those fixed insets overshoot the target anchor.
+  return Math.min(genericSurfaceInset, Math.max(0, maxSurfaceInset))
+}
+
+export function getFolderWorkspaceCardContentIndent(args: { groupDepth: number }): number {
+  const parentGroupDepth = Math.max(0, clampDepth(args.groupDepth) - 1)
+  // Why: folder workspaces are direct children of their owning folder group,
+  // so they advance by the same compact header step as group -> repo.
+  return getProjectGroupHeaderPaddingLeft(parentGroupDepth) + PROJECT_GROUP_HEADER_INDENT
+}
+
+export function getFolderWorkspaceCardSurfaceInset(args: {
+  isGrouped: boolean
+  groupDepth: number
+}): number {
+  const contentAnchor = getFolderWorkspaceCardContentIndent({ groupDepth: args.groupDepth })
+  const genericSurfaceInset = getWorktreeCardSurfaceInset(args)
+  const maxSurfaceInset =
+    contentAnchor - WORKTREE_CARD_SURFACE_MARGIN - FLUSH_CARD_MIN_CONTENT_INSET
+
+  // Why: flush cards add their own margin and minimum padding, so deep folder
+  // workspace surfaces must be capped to keep the final content anchor compact.
+  return Math.min(genericSurfaceInset, Math.max(0, maxSurfaceInset))
+}
+
 export function getWorktreeCardSurfaceInset(args: {
   isGrouped: boolean
   groupDepth: number

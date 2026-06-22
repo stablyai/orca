@@ -361,6 +361,82 @@ describe('buildRows with pinned worktrees', () => {
     ])
   })
 
+  it('orders project identity headers by the manual repo order anchor', () => {
+    const analyticsProject: Project = {
+      ...project,
+      id: 'github:stablyai/analytics',
+      displayName: 'Analytics',
+      sourceRepoIds: ['repo-analytics']
+    }
+    const analyticsRepo: Repo = {
+      ...repo,
+      id: 'repo-analytics',
+      path: '/tmp/analytics',
+      displayName: 'analytics',
+      upstream: { owner: 'stablyai', repo: 'analytics' }
+    }
+    const analyticsWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-analytics',
+      repoId: analyticsRepo.id,
+      displayName: 'analytics'
+    }
+    const analyticsSetup: ProjectHostSetup = {
+      ...projectHostSetups[0]!,
+      id: analyticsRepo.id,
+      projectId: analyticsProject.id,
+      repoId: analyticsRepo.id,
+      path: analyticsRepo.path,
+      displayName: analyticsRepo.displayName
+    }
+    const repoOrder = new Map([
+      [repo.id, 0],
+      [remoteRepo.id, 1],
+      [analyticsRepo.id, 2]
+    ])
+
+    const rows = buildRows(
+      'repo',
+      [worktree, analyticsWorktree, remoteWorktree],
+      new Map([
+        [repo.id, repo],
+        [remoteRepo.id, remoteRepo],
+        [analyticsRepo.id, analyticsRepo]
+      ]),
+      null,
+      new Set(),
+      repoOrder,
+      undefined,
+      'manual',
+      {},
+      new Map([
+        [worktree.id, worktree],
+        [remoteWorktree.id, remoteWorktree],
+        [analyticsWorktree.id, analyticsWorktree]
+      ]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      [],
+      {
+        projects: [project, analyticsProject],
+        projectHostSetups: [...projectHostSetups, analyticsSetup]
+      }
+    )
+
+    const headers = rows.filter((row) => row.type === 'header')
+    expect(headers.map((row) => row.key)).toEqual([
+      'project:github:stablyai/orca',
+      'project:github:stablyai/analytics'
+    ])
+    expect(headers[0]).toMatchObject({
+      key: 'project:github:stablyai/orca',
+      repo: { id: repo.id, badgeColor: repo.badgeColor }
+    })
+  })
+
   it('splits same-host checkouts of one project into separate per-setup groups', () => {
     // Why: multiple local clones/worktrees of one repo share the GitHub slug, so
     // collapsing to the project would merge them into one arbitrarily-named group.
@@ -1497,6 +1573,122 @@ describe('project groups', () => {
       'project-group:group-1',
       'repo:repo-b',
       'repo:repo-a'
+    ])
+  })
+
+  it('falls back to repoOrder for grouped repos missing projectGroupOrder in manual mode', () => {
+    const group: ProjectGroup = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const repoA: Repo = { ...repo, id: 'repo-a', displayName: 'alpha', projectGroupId: group.id }
+    const repoB: Repo = { ...repo, id: 'repo-b', displayName: 'beta', projectGroupId: group.id }
+    const repoC: Repo = { ...repo, id: 'repo-c', displayName: 'gamma', projectGroupId: group.id }
+    const groupedMap = new Map([
+      [repoA.id, repoA],
+      [repoB.id, repoB],
+      [repoC.id, repoC]
+    ])
+    const repoOrder = new Map([
+      [repoA.id, 0],
+      [repoB.id, 1],
+      [repoC.id, 2]
+    ])
+
+    const rows = buildRows(
+      'repo',
+      [
+        { ...worktree, id: 'wt-a', repoId: repoA.id },
+        { ...worktree, id: 'wt-b', repoId: repoB.id },
+        { ...worktree, id: 'wt-c', repoId: repoC.id }
+      ],
+      groupedMap,
+      null,
+      new Set(),
+      repoOrder,
+      undefined,
+      'manual',
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [group]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:group-1',
+      'repo:repo-a',
+      'repo:repo-b',
+      'repo:repo-c'
+    ])
+  })
+
+  it('sorts a dragged project between repo-order fallbacks inside a group', () => {
+    const group: ProjectGroup = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const repoA: Repo = { ...repo, id: 'repo-a', displayName: 'alpha', projectGroupId: group.id }
+    const repoB: Repo = { ...repo, id: 'repo-b', displayName: 'beta', projectGroupId: group.id }
+    const repoC: Repo = {
+      ...repo,
+      id: 'repo-c',
+      displayName: 'gamma',
+      projectGroupId: group.id,
+      projectGroupOrder: 500
+    }
+    const groupedMap = new Map([
+      [repoA.id, repoA],
+      [repoB.id, repoB],
+      [repoC.id, repoC]
+    ])
+    const repoOrder = new Map([
+      [repoA.id, 0],
+      [repoB.id, 1],
+      [repoC.id, 2]
+    ])
+
+    const rows = buildRows(
+      'repo',
+      [
+        { ...worktree, id: 'wt-a', repoId: repoA.id },
+        { ...worktree, id: 'wt-b', repoId: repoB.id },
+        { ...worktree, id: 'wt-c', repoId: repoC.id }
+      ],
+      groupedMap,
+      null,
+      new Set(),
+      repoOrder,
+      undefined,
+      'manual',
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [group]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:group-1',
+      'repo:repo-a',
+      'repo:repo-c',
+      'repo:repo-b'
     ])
   })
 

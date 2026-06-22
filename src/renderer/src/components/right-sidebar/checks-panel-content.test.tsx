@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { PRCheckDetail, PRComment, PRInfo } from '../../../../shared/types'
 import {
+  buildMergeabilityRecalculationCommands,
   CheckJobLogTail,
   ChecksList,
   ConflictTriageStrip,
@@ -41,6 +42,16 @@ function renderNotice(pr: PRInfo, isRefreshingConflictDetails = false): string {
 }
 
 describe('MergeConflictNotice', () => {
+  it('builds safe mergeability recalculation commands', () => {
+    expect(buildMergeabilityRecalculationCommands()).toBe(
+      [
+        'git fetch origin',
+        'git commit --allow-empty --only -m "chore: refresh PR mergeability"',
+        'git push'
+      ].join('\n')
+    )
+  })
+
   it('does not claim conflict details are refreshing after the refresh has settled', () => {
     const markup = renderNotice(makePR())
 
@@ -52,6 +63,47 @@ describe('MergeConflictNotice', () => {
     const markup = renderNotice(makePR(), true)
 
     expect(markup).toContain('Refreshing conflict details')
+  })
+
+  it('explains when the hosting provider reports conflicts but local git simulates a clean merge', () => {
+    const markup = renderNotice(
+      makePR({
+        conflictSummary: {
+          baseRef: 'main',
+          baseCommit: 'abc1234',
+          commitsBehind: 1,
+          files: [],
+          localMergeState: 'clean'
+        }
+      })
+    )
+
+    expect(markup).toContain('local Git did not reproduce them')
+    expect(markup).toContain('Run from this worktree')
+    expect(markup).toContain('hosting provider reports conflicts')
+    expect(markup).toContain('git fetch origin')
+    expect(markup).toContain('git commit --allow-empty --only')
+    expect(markup).toContain('git push')
+    expect(markup).toContain('Copy commands')
+    expect(markup).not.toContain('Conflict file details are unavailable')
+  })
+
+  it('does not interpolate shell-sensitive base refs into copyable commands', () => {
+    const markup = renderNotice(
+      makePR({
+        conflictSummary: {
+          baseRef: 'release/$USER;echo unsafe',
+          baseCommit: 'abc1234',
+          commitsBehind: 1,
+          files: [],
+          localMergeState: 'clean'
+        }
+      })
+    )
+
+    expect(markup).toContain('git fetch origin')
+    expect(markup).not.toContain('$USER')
+    expect(markup).not.toContain('echo unsafe')
   })
 
   it('hides when the conflicting file list is available', () => {

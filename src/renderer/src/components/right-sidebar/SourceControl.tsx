@@ -168,6 +168,7 @@ import {
 import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
+import { resolveCreateReviewDraftTitle } from './create-review-draft-title'
 import { GitHistoryPanel, type GitHistoryPanelState } from './GitHistoryPanel'
 import { useGitHistoryCommitActions } from './useGitHistoryCommitActions'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
@@ -189,7 +190,6 @@ import type {
   HostedReviewProvider
 } from '../../../../shared/hosted-review'
 import { resolveHostedReviewCreationProvider } from '../../../../shared/hosted-review-creation-providers'
-import { humanizeBranchSlug } from '../../../../shared/branch-name-from-work'
 import { STATUS_COLORS, STATUS_LABELS } from './status-display'
 import { isCustomAgentId } from '../../../../shared/commit-message-agent-spec'
 import {
@@ -265,6 +265,8 @@ import {
 import {
   createRunningPullRequestGenerationRecord,
   getPullRequestGenerationRecordKey,
+  getPullRequestGenerationSeedRestoreKey,
+  markPullRequestGenerationTerminalSeedRestored,
   resolvePullRequestGenerationCancel,
   resolvePullRequestGenerationFailure,
   resolvePullRequestGenerationSuccess,
@@ -1106,6 +1108,10 @@ function SourceControlInner(): React.JSX.Element {
     activePullRequestGenerationRecordCandidate.context.branch === branchName
       ? activePullRequestGenerationRecordCandidate
       : null
+  const activePullRequestGenerationSeedRestoreKey = getPullRequestGenerationSeedRestoreKey({
+    recordKey: activePullRequestGenerationKey,
+    record: activePullRequestGenerationRecord
+  })
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   // Why: gate polling on both the active tab AND the sidebar being open.
   // The sidebar now stays mounted when closed (for performance), so without
@@ -2670,6 +2676,22 @@ function SourceControlInner(): React.JSX.Element {
       })
     })
   }, [activePullRequestGenerationKey, prGenerationRecords, updatePullRequestGenerationRecord])
+  const handlePullRequestGenerationSeedRestored = useCallback((): void => {
+    if (!activePullRequestGenerationKey || !activePullRequestGenerationRecord) {
+      return
+    }
+    const requestId = activePullRequestGenerationRecord.context.requestId
+    updatePullRequestGenerationRecord(activePullRequestGenerationKey, (record) =>
+      markPullRequestGenerationTerminalSeedRestored({
+        record,
+        requestId
+      })
+    )
+  }, [
+    activePullRequestGenerationKey,
+    activePullRequestGenerationRecord,
+    updatePullRequestGenerationRecord
+  ])
 
   const {
     aiGenerationEnabled: prAiGenerationEnabled,
@@ -2711,6 +2733,10 @@ function SourceControlInner(): React.JSX.Element {
     generation: {
       generating: activePullRequestGenerationRecord?.status === 'running',
       generateError: activePullRequestGenerationRecord?.error ?? null,
+      seedRestoreKey: activePullRequestGenerationSeedRestoreKey,
+      seed: activePullRequestGenerationRecord?.seed ?? null,
+      seedFieldRevisions: activePullRequestGenerationRecord?.seedFieldRevisions ?? null,
+      onSeedRestored: handlePullRequestGenerationSeedRestored,
       onGenerate: (fields, fieldRevisions, overrides) => {
         void handleGeneratePullRequestFieldsForActive(fields, fieldRevisions, overrides)
       },
@@ -3091,13 +3117,12 @@ function SourceControlInner(): React.JSX.Element {
         return false
       }
 
-      const fallbackTitle =
-        eligibility.title?.trim() ||
-        humanizeBranchSlug(stripBaseRef(token.branch).split('/').pop()?.replace(/_/g, '-') ?? '') ||
-        stripBaseRef(token.branch)
       let fields = {
         base,
-        title: fallbackTitle,
+        title: resolveCreateReviewDraftTitle({
+          branch: token.branch,
+          eligibilityTitle: eligibility.title
+        }),
         body: eligibility.body ?? prBody,
         draft: resolvedPrCreationDefaults.draft
       }

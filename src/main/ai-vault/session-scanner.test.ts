@@ -252,6 +252,76 @@ describe('scanAiVaultSessions', () => {
     })
   })
 
+  it('indexes WSL home session roots', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-wsl-'))
+    tempRoots.push(root)
+    const roots = isolatedScanRoots(root)
+    const wslHome = join(root, 'wsl', 'Ubuntu', 'home', 'ada')
+    await mkdir(join(wslHome, '.claude', 'projects', 'repo'), { recursive: true })
+    await mkdir(
+      join(wslHome, '.local', 'share', 'orca', 'codex-runtime-home', 'home', 'sessions'),
+      {
+        recursive: true
+      }
+    )
+
+    await writeFile(
+      join(wslHome, '.claude', 'projects', 'repo', 'claude-wsl.jsonl'),
+      jsonLines([
+        {
+          type: 'user',
+          sessionId: 'claude-wsl',
+          timestamp: '2026-06-10T10:00:00.000Z',
+          cwd: '/home/ada/repo',
+          message: { role: 'user', content: 'Claude WSL title' }
+        }
+      ])
+    )
+    await writeFile(
+      join(
+        wslHome,
+        '.local',
+        'share',
+        'orca',
+        'codex-runtime-home',
+        'home',
+        'sessions',
+        'codex-wsl.jsonl'
+      ),
+      jsonLines([
+        {
+          timestamp: '2026-06-10T10:01:00.000Z',
+          type: 'session_meta',
+          payload: { id: 'codex-wsl', cwd: '/home/ada/repo' }
+        },
+        {
+          timestamp: '2026-06-10T10:01:01.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'text', text: 'Codex WSL title' }]
+          }
+        }
+      ])
+    )
+
+    const result = await scanAiVaultSessions({
+      ...roots,
+      wslHomeDirs: [wslHome],
+      platform: 'win32'
+    })
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions.map((session) => session.title).sort()).toEqual([
+      'Claude WSL title',
+      'Codex WSL title'
+    ])
+    expect(result.sessions.find((session) => session.agent === 'codex')?.codexHome).toBe(
+      join(wslHome, '.local', 'share', 'orca', 'codex-runtime-home', 'home')
+    )
+  })
+
   it('skips hidden Codex context blocks when choosing session titles', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-hidden-context-'))
     tempRoots.push(root)

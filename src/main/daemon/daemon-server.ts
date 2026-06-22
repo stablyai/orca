@@ -384,7 +384,8 @@ export class DaemonServer {
         // those bytes on top of a snapshot that already contains them.
         return this.host.takePendingOutput(
           request.payload.sessionId,
-          request.payload.includeSnapshot === true
+          request.payload.includeSnapshot === true,
+          { teardownSnapshot: request.payload.teardownSnapshot === true }
         )
 
       case 'ping':

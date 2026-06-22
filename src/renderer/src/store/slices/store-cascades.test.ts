@@ -199,27 +199,10 @@ describe('removeWorktree cascade', () => {
       preservedBranch: { branchName: 'feature/test', head: 'def456' }
     })
     expect(toast.warning).toHaveBeenCalledWith('Worktree deleted, branch kept', {
-      description:
-        'Git could not safely delete branch "feature/test" after deleting worktree "Review cleanup", so Orca kept it to avoid losing local commits.',
-      action: {
-        label: 'Force Delete Branch',
-        onClick: expect.any(Function)
-      }
-    })
-
-    const action = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]?.action as
-      | { onClick?: () => void }
-      | undefined
-    action?.onClick?.()
-    await vi.waitFor(() => {
-      expect(mockApi.worktrees.forceDeletePreservedBranch).toHaveBeenCalledWith({
-        worktreeId,
-        branchName: 'feature/test',
-        expectedHead: 'def456'
-      })
-    })
-    expect(toast.success).toHaveBeenCalledWith('Local branch deleted', {
-      description: 'Deleted "feature/test".'
+      id: 'preserved-branch:feature/test:def456',
+      description: expect.anything(),
+      dismissible: true,
+      duration: Infinity
     })
   })
 

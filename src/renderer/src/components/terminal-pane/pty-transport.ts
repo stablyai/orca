@@ -435,6 +435,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     cwd,
     env,
     command,
+    launchConfig,
+    launchToken,
+    launchAgent,
     startupCommandDelivery,
     connectionId,
     worktreeId,
@@ -667,9 +670,20 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           cols: options.cols ?? 80,
           rows: options.rows ?? 24,
           cwd,
-          env,
-          command,
-          ...(startupCommandDelivery ? { startupCommandDelivery } : {}),
+          env: options.env ?? env,
+          command: options.command ?? command,
+          ...((options.launchConfig ?? launchConfig)
+            ? { launchConfig: options.launchConfig ?? launchConfig }
+            : {}),
+          ...((options.launchToken ?? launchToken)
+            ? { launchToken: options.launchToken ?? launchToken }
+            : {}),
+          ...((options.launchAgent ?? launchAgent)
+            ? { launchAgent: options.launchAgent ?? launchAgent }
+            : {}),
+          ...((options.startupCommandDelivery ?? startupCommandDelivery)
+            ? { startupCommandDelivery: options.startupCommandDelivery ?? startupCommandDelivery }
+            : {}),
           ...(connectionId ? { connectionId } : {}),
           ...(options.sessionId ? { sessionId: options.sessionId } : {}),
           worktreeId,
@@ -706,6 +720,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         if (spawnResult.isReattach || spawnResult.coldRestore || spawnResult.sessionExpired) {
           return {
             id: spawnResult.id,
+            ...(spawnResult.launchConfig ? { launchConfig: spawnResult.launchConfig } : {}),
             snapshot: spawnResult.snapshot,
             snapshotCols: spawnResult.snapshotCols,
             snapshotRows: spawnResult.snapshotRows,
@@ -713,6 +728,12 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             sessionExpired: spawnResult.sessionExpired,
             coldRestore: spawnResult.coldRestore,
             replay: spawnResult.replay
+          } satisfies PtyConnectResult
+        }
+        if (spawnResult.launchConfig) {
+          return {
+            id: spawnResult.id,
+            launchConfig: spawnResult.launchConfig
           } satisfies PtyConnectResult
         }
         return spawnResult.id

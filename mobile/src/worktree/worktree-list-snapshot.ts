@@ -27,6 +27,9 @@ function areWorktreesEqual(left: Worktree, right: Worktree): boolean {
     left.branch === right.branch &&
     left.displayName === right.displayName &&
     left.path === right.path &&
+    (left.isArchived ?? false) === (right.isArchived ?? false) &&
+    (left.isMainWorktree ?? false) === (right.isMainWorktree ?? false) &&
+    (left.hasHostSidebarActivity ?? false) === (right.hasHostSidebarActivity ?? false) &&
     left.liveTerminalCount === right.liveTerminalCount &&
     left.hasAttachedPty === right.hasAttachedPty &&
     left.preview === right.preview &&

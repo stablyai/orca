@@ -8,6 +8,8 @@ import {
   resolveBrowserSessionTabTarget,
   resolveZoomTarget
 } from './useIpcEvents'
+import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
+import type { TuiAgent } from '../../../shared/types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 
 const { closeTerminalTabMock } = vi.hoisted(() => ({
@@ -1246,6 +1248,8 @@ describe('useIpcEvents updater integration', () => {
     const revealWorktreeInSidebar = vi.fn()
     const setTabCustomTitle = vi.fn()
     const queueTabStartupCommand = vi.fn()
+    const registerAgentLaunchConfig = vi.fn()
+    const clearAgentLaunchConfig = vi.fn()
     const updateTabPtyId = vi.fn()
     const setTabLayout = vi.fn()
     const setTabBarOrder = vi.fn()
@@ -1265,6 +1269,8 @@ describe('useIpcEvents updater integration', () => {
       revealWorktreeInSidebar,
       setTabCustomTitle,
       queueTabStartupCommand,
+      registerAgentLaunchConfig,
+      clearAgentLaunchConfig,
       updateTabPtyId,
       setTabLayout,
       tabsByWorktree: {} as Record<string, { id: string; ptyId?: string | null; title?: string }[]>,
@@ -1304,6 +1310,8 @@ describe('useIpcEvents updater integration', () => {
             requestId?: string
             worktreeId: string
             command?: string
+            launchConfig?: SleepingAgentLaunchConfig
+            launchAgent?: TuiAgent
             title?: string
             ptyId?: string
             activate?: boolean
@@ -1328,6 +1336,8 @@ describe('useIpcEvents updater integration', () => {
             afterTabId?: string
             targetGroupId?: string
             command?: string
+            launchConfig?: SleepingAgentLaunchConfig
+            launchAgent?: TuiAgent
             title?: string
             activate?: boolean
           }) => void)
@@ -1422,6 +1432,8 @@ describe('useIpcEvents updater integration', () => {
               requestId?: string
               worktreeId: string
               command?: string
+              launchConfig?: SleepingAgentLaunchConfig
+              launchAgent?: TuiAgent
               title?: string
               ptyId?: string
               activate?: boolean
@@ -1447,6 +1459,8 @@ describe('useIpcEvents updater integration', () => {
               afterTabId?: string
               targetGroupId?: string
               command?: string
+              launchConfig?: SleepingAgentLaunchConfig
+              launchAgent?: TuiAgent
               title?: string
               activate?: boolean
             }) => void
@@ -1602,6 +1616,11 @@ describe('useIpcEvents updater integration', () => {
       targetGroupId: 'group-left',
       title: 'Codex',
       command: 'codex',
+      launchConfig: {
+        agentArgs: '--model gpt-5',
+        agentEnv: { CODEX_PROFILE: 'request' }
+      },
+      launchAgent: 'codex',
       activate: false
     })
 
@@ -1623,7 +1642,14 @@ describe('useIpcEvents updater integration', () => {
     expect(setTabCustomTitle).toHaveBeenCalledWith('tab-new', 'Codex', {
       recordInteraction: false
     })
-    expect(queueTabStartupCommand).toHaveBeenCalledWith('tab-new', { command: 'codex' })
+    expect(queueTabStartupCommand).toHaveBeenCalledWith('tab-new', {
+      command: 'codex',
+      launchConfig: {
+        agentArgs: '--model gpt-5',
+        agentEnv: { CODEX_PROFILE: 'request' }
+      },
+      launchAgent: 'codex'
+    })
     expect(replyTerminalCreate).toHaveBeenCalledWith({
       requestId: 'req-renderer-backed',
       tabId: 'tab-new',
@@ -1631,15 +1657,34 @@ describe('useIpcEvents updater integration', () => {
     })
 
     createTab.mockClear()
+    registerAgentLaunchConfig.mockClear()
     createTerminalListenerRef.current({
       worktreeId: 'wt-2',
-      ptyId: 'pty-bg'
+      ptyId: 'pty-bg',
+      leafId: '55555555-5555-4555-8555-555555555555',
+      launchConfig: {
+        agentArgs: '--model gpt-5',
+        agentEnv: { CODEX_PROFILE: 'adopted' }
+      },
+      launchAgent: 'codex'
     })
 
     expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
       initialPtyId: 'pty-bg',
       activate: true
     })
+    expect(registerAgentLaunchConfig).toHaveBeenCalledWith(
+      makePaneKey('tab-new', '55555555-5555-4555-8555-555555555555'),
+      {
+        agentArgs: '--model gpt-5',
+        agentEnv: { CODEX_PROFILE: 'adopted' }
+      },
+      {
+        agentType: 'codex',
+        tabId: 'tab-new',
+        leafId: '55555555-5555-4555-8555-555555555555'
+      }
+    )
 
     createTab.mockClear()
     setActiveView.mockClear()

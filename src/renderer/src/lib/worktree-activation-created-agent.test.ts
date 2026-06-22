@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Worktree } from '../../../shared/types'
 import { getDefaultSettings } from '../../../shared/constants'
 import { useAppStore } from '@/store'
 import {
@@ -8,6 +7,10 @@ import {
 } from './worktree-activation'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync'
 import { resetWebRuntimeWakeTerminalRespawnForTests } from '@/runtime/web-runtime-wake-terminal-respawn'
+import {
+  makeCreatedAgentWorktree as makeWorktree,
+  seedAlreadyActiveWorktree
+} from '@/lib/worktree-activation-created-agent-test-state'
 
 const initialAppStoreState = useAppStore.getState()
 
@@ -18,121 +21,6 @@ afterEach(() => {
   resetWebRuntimeWakeTerminalRespawnForTests()
   useAppStore.setState(initialAppStoreState, true)
 })
-
-function makeWorktree(): Worktree {
-  return {
-    id: 'repo-1::/workspace/feature',
-    repoId: 'repo-1',
-    path: '/workspace/feature',
-    head: 'abc123',
-    branch: 'refs/heads/feature',
-    isBare: false,
-    isMainWorktree: false,
-    displayName: 'feature',
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 0,
-    createdWithAgent: 'codex'
-  }
-}
-
-function seedAlreadyActiveWorktree(
-  worktree: Worktree,
-  overrides: Partial<ReturnType<typeof useAppStore.getState>> = {}
-): {
-  markWorktreeVisited: ReturnType<typeof vi.fn>
-  recordWorktreeVisit: ReturnType<typeof vi.fn>
-  revealWorktreeInSidebar: ReturnType<typeof vi.fn>
-} {
-  const markWorktreeVisited = vi.fn()
-  const recordWorktreeVisit = vi.fn()
-  const revealWorktreeInSidebar = vi.fn()
-
-  useAppStore.setState({
-    repos: [
-      {
-        id: worktree.repoId,
-        path: '/workspace/repo',
-        displayName: 'repo',
-        badgeColor: '#000000',
-        addedAt: 0
-      }
-    ],
-    worktreesByRepo: { [worktree.repoId]: [worktree] },
-    activeRepoId: worktree.repoId,
-    activeView: 'terminal',
-    activeWorktreeId: worktree.id,
-    activeTabId: 'tab-1',
-    activeTabType: 'terminal',
-    tabsByWorktree: {
-      [worktree.id]: [
-        {
-          id: 'tab-1',
-          ptyId: 'pty-1',
-          worktreeId: worktree.id,
-          title: 'Terminal 1',
-          customTitle: null,
-          color: null,
-          sortOrder: 0,
-          createdAt: 1
-        }
-      ]
-    },
-    ptyIdsByTabId: { 'tab-1': ['pty-1'] },
-    unifiedTabsByWorktree: {
-      [worktree.id]: [
-        {
-          id: 'tab-1',
-          entityId: 'tab-1',
-          groupId: 'group-1',
-          worktreeId: worktree.id,
-          contentType: 'terminal',
-          label: 'Terminal 1',
-          customLabel: null,
-          color: null,
-          sortOrder: 0,
-          createdAt: 1
-        }
-      ]
-    },
-    groupsByWorktree: {
-      [worktree.id]: [
-        {
-          id: 'group-1',
-          worktreeId: worktree.id,
-          activeTabId: 'tab-1',
-          tabOrder: ['tab-1']
-        }
-      ]
-    },
-    activeGroupIdByWorktree: { [worktree.id]: 'group-1' },
-    activeTabTypeByWorktree: { [worktree.id]: 'terminal' },
-    everActivatedWorktreeIds: new Set([worktree.id]),
-    openFiles: [],
-    browserTabsByWorktree: {},
-    activeFileIdByWorktree: {},
-    activeBrowserTabIdByWorktree: {},
-    activeTabIdByWorktree: { [worktree.id]: 'tab-1' },
-    tabBarOrderByWorktree: {},
-    settings: {
-      agentCmdOverrides: {},
-      setupScriptLaunchMode: 'new-tab'
-    } as unknown as ReturnType<typeof useAppStore.getState>['settings'],
-    markWorktreeVisited,
-    recordWorktreeVisit,
-    refreshGitHubForWorktreeIfStale: vi.fn(),
-    revealWorktreeInSidebar,
-    ...overrides
-  })
-
-  return { markWorktreeVisited, recordWorktreeVisit, revealWorktreeInSidebar }
-}
 
 describe('activateAndRevealWorktree created agent reopen', () => {
   it('does not restamp focus recency when reselecting the already-active terminal worktree', () => {
@@ -210,6 +98,13 @@ describe('activateAndRevealWorktree created agent reopen', () => {
     expect(state.pendingStartupByTabId[reopenedTab!.id]).toEqual({
       command: "codex '--dangerously-bypass-approvals-and-sandbox'",
       env: {},
+      launchAgent: 'codex',
+      launchConfig: {
+        agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox'",
+        agentArgs: '--dangerously-bypass-approvals-and-sandbox',
+        agentEnv: {}
+      },
+      launchToken: expect.any(String),
       telemetry: {
         agent_kind: 'codex',
         launch_source: 'sidebar',
@@ -282,7 +177,7 @@ describe('activateAndRevealWorktree created agent reopen', () => {
     expect(state.pendingStartupByTabId[reopenedTab!.id]?.command).not.toContain("'don''t'")
   })
 
-  it('automatically resumes sleeping agent sessions when activating a slept worktree', () => {
+  it('does not duplicate a sleeping agent session owned by a preserved slept pane', () => {
     const worktree = makeWorktree()
     const revealWorktreeInSidebar = vi.fn()
 
@@ -355,17 +250,12 @@ describe('activateAndRevealWorktree created agent reopen', () => {
     const resumedTab = state.tabsByWorktree[worktree.id]?.find((tab) => tab.id !== 'slept-tab')
 
     expect(result).toEqual({ primaryTabId: null })
-    expect(resumedTab?.launchAgent).toBe('codex')
-    expect(state.pendingStartupByTabId[resumedTab!.id]).toEqual({
-      command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
-      showSessionRestoredBanner: true,
-      telemetry: {
-        agent_kind: 'codex',
-        launch_source: 'sidebar',
-        request_kind: 'resume'
-      }
+    expect(resumedTab).toBeUndefined()
+    expect(state.pendingStartupByTabId).toEqual({})
+    expect(state.sleepingAgentSessionsByPaneKey['slept-tab:0']).toMatchObject({
+      paneKey: 'slept-tab:0',
+      providerSession: { key: 'session_id', id: 'codex-session-1' }
     })
-    expect(state.sleepingAgentSessionsByPaneKey['slept-tab:0']).toBeUndefined()
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id)
   })
 

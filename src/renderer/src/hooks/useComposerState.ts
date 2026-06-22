@@ -3062,6 +3062,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           ? {
               command: startupPlan.launchCommand,
               ...(startupPlan.env ? { env: startupPlan.env } : {}),
+              launchConfig: startupPlan.launchConfig,
+              launchAgent: tuiAgent,
               ...(startupPlan.startupCommandDelivery
                 ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
                 : {}),
@@ -3127,6 +3129,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               startup: {
                 command: startupPlan.launchCommand,
                 ...(startupPlan.env ? { env: startupPlan.env } : {}),
+                launchConfig: startupPlan.launchConfig,
+                launchAgent: tuiAgent,
                 ...(startupPlan.startupCommandDelivery
                   ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
                   : {}),
@@ -3410,6 +3414,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             launchCommand: draftLaunchPlan.launchCommand,
             expectedProcess: draftLaunchPlan.expectedProcess,
             followupPrompt: null,
+            launchConfig: draftLaunchPlan.launchConfig,
             ...(draftLaunchPlan.startupCommandDelivery
               ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
               : {}),
@@ -3444,6 +3449,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             ? {
                 command: startupPlan.launchCommand,
                 ...(startupPlan.env ? { env: startupPlan.env } : {}),
+                launchConfig: startupPlan.launchConfig,
+                ...(agent ? { launchAgent: agent } : {}),
                 ...(startupPlan.startupCommandDelivery
                   ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
                   : {}),

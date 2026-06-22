@@ -169,6 +169,31 @@ describe('TerminalHost', () => {
       )
     })
 
+    it('uses the short daemon settle path when marker and prompt arrive together', async () => {
+      vi.useFakeTimers()
+      try {
+        await host.createOrAttach({
+          sessionId: 'session-1',
+          cols: 80,
+          rows: 24,
+          command: 'echo hello',
+          shellReadySupported: true,
+          streamClient: { onData: vi.fn(), onExit: vi.fn() }
+        })
+
+        lastSubprocess._onDataCb?.('\x1b]777;orca-shell-ready\x07\r\nuser@host $ ')
+        vi.advanceTimersByTime(29)
+        expect(lastSubprocess.write).not.toHaveBeenCalled()
+
+        vi.advanceTimersByTime(1)
+        expect(lastSubprocess.write).toHaveBeenCalledWith(
+          process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
+        )
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it('does not write startup commands already embedded in shell args', async () => {
       spawnFn = vi.fn(() => {
         const sub = createMockSubprocess({
@@ -384,6 +409,29 @@ describe('TerminalHost', () => {
       // below). See docs/fix-pty-fd-leak.md.
       expect(lastSubprocess.forceKill).toHaveBeenCalled()
       expect(lastSubprocess.dispose).toHaveBeenCalled()
+    })
+
+    it('releases held shell-ready marker prefixes before final checkpoint', async () => {
+      host.dispose()
+      const onFinalCheckpoint = vi.fn()
+      host = new TerminalHost({
+        spawnSubprocess: spawnFn as MockSpawnFn,
+        onFinalCheckpoint
+      })
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        shellReadySupported: true,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      lastSubprocess._onDataCb?.('\x1b]777;orca-shell-ready')
+      host.dispose()
+
+      expect(onFinalCheckpoint).toHaveBeenCalledWith('session-1', expect.any(Object), [
+        { kind: 'output', data: '\x1b]777;orca-shell-ready' }
+      ])
     })
 
     it('does not list exited sessions', async () => {

@@ -222,7 +222,12 @@
           "0216895fb5": "브랜치를 삭제하지 못했습니다.",
           "19db0085fb": "로컬 브랜치가 삭제되었습니다.",
           "2b0afc7f14": "로컬 {{value0}}을(를) 최신 상태로 유지할 수 없습니다.",
-          "670864ab52": "로컬 {{value0}}을 최신 상태로 유지"
+          "670864ab52": "로컬 {{value0}}을 최신 상태로 유지",
+          "5366d13eec": "Workspace deleted, branch kept",
+          "2e17f825d4": "Worktree deleted, branch kept",
+          "78e08cd877": "Git could not safely delete branch \"{{value0}}\", so Orca kept it to avoid losing local commits.",
+          "3b57982bf6": "Git could not safely delete branch \"{{value0}}\" after deleting workspace \"{{value1}}\", so Orca kept it to avoid losing local commits.",
+          "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits."
         },
         "repos": {
           "b7e14472ae": "폴더를 추가하지 못했습니다.",
@@ -2307,7 +2312,7 @@
           "TerminalContextMenu": {
             "b4cdd9314e": "화면 지우기",
             "8c17d6786d": "창 닫기",
-            "copyTerminalId": "터미널 ID 복사",
+            "copyTerminalId": "Copy Terminal ID",
             "2cf85a6a55": "창 ID 복사",
             "39809d152f": "제목 설정…",
             "06c2b0f043": "창 크기 균등화",
@@ -2930,7 +2935,17 @@
             "7ec6e030a0": "Next expires now",
             "d1e442a9e5": "Expires now",
             "6cf9eaed10": "Next expires in {{value0}}",
-            "20ad66aed1": "Expires in {{value0}}"
+            "20ad66aed1": "Expires in {{value0}}",
+            "0d8d7cfe15": "Waiting for Claude session",
+            "1804cd8c3f": "Refreshing sign-in",
+            "f8f0f9d8cc": "Network issue",
+            "bf2e739f18": "Sign-in unavailable",
+            "f8b8dbed85": "Usage unavailable",
+            "3d3c9c0c1f": "Claude usage will refresh after the live Claude terminal rotates its credentials.",
+            "42fdd4da1d": "Claude sign-in is being refreshed. Agent sessions may still be signed in.",
+            "c06c1d215d": "Claude usage could not be refreshed because the network request failed.",
+            "cabdc2a9e0": "Claude sign-in credentials could not be read.",
+            "a7517cccb6": "Claude usage is unavailable right now."
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 호스트"
@@ -3859,7 +3874,8 @@
           "697d0f6e1b": "고정 해제",
           "250de158fd": "워크스페이스 제거",
           "changeParentWorkspace": "상위 워크트리 변경...",
-          "setParentWorkspace": "상위 워크트리 설정..."
+          "setParentWorkspace": "상위 워크트리 설정...",
+          "workspaceSection": "워크스페이스"
         },
         "WorktreeList": {
           "d880ea0744": "그룹을 만들고 이 프로젝트를 그룹으로 이동하세요.",
@@ -4805,7 +4821,7 @@
           "dd6f0a1d45": "애완 동물",
           "0e89a574ae": "오른쪽 하단에 떠 있는 애니메이션 애완동물.",
           "agentHibernation": {
-            "copy": "설정된 유휴 시간이 지난 백그라운드 agent terminals을 중지하고, 다시 열 때 지원되는 세션을 재개합니다. 안전 모델을 조정하는 동안 제공되는 실험적 기능입니다.",
+            "copy": "설정된 유휴 시간이 지난 백그라운드 agent terminals을 중지하고, 다시 열 때 지원되는 세션을 재개합니다. Agent 최대 절전은 Orca에서 시작한 agent의 시작 옵션을 보존합니다. 수동으로 시작한 agent는 현재 Orca 기본값으로 재개될 수 있습니다. 안전 모델을 조정하는 동안 제공되는 실험적 기능입니다.",
             "description": "설정된 유휴 시간이 지난 백그라운드 agent terminals을 중지하고, 다시 열 때 지원되는 세션을 재개합니다.",
             "idleMinutesDescription": "완료된 백그라운드 agent를 Orca가 최대 절전 모드로 전환하기 전에 기다릴 유휴 시간(분)입니다.",
             "idleMinutesLabel": "최대 절전까지",
@@ -6879,7 +6895,7 @@
             "agentHibernation": {
               "agent": "agent",
               "agents": "agents",
-              "description": "설정된 유휴 시간이 지난 백그라운드 agent terminals을 중지하고, 다시 열 때 지원되는 세션을 재개합니다.",
+              "description": "설정된 유휴 시간이 지난 백그라운드 agent terminals을 중지하고, 다시 열 때 지원되는 세션을 재개합니다. Agent 최대 절전은 Orca에서 시작한 agent의 시작 옵션을 보존합니다. 수동으로 시작한 agent는 현재 Orca 기본값으로 재개될 수 있습니다.",
               "minutes": "분",
               "sleep": "절전",
               "terminal": "terminal",
@@ -8809,6 +8825,11 @@
                 "066fedd446": "실패한 작업",
                 "ae8a04ef17": "충돌 파일 세부정보를 사용할 수 없습니다.",
                 "73d0675356": "충돌 세부정보 새로고침 중…",
+                "f5bc5c4cf1": "The hosting provider reports conflicts, but local Git did not reproduce them. Refresh the review or push the branch to recalculate mergeability.",
+                "5bc9bda2af": "Run from this worktree",
+                "e87fb3d929": "Copy mergeability refresh commands",
+                "1e53e45072": "Copied",
+                "084c516efb": "Copy commands",
                 "5dc3af25c0": "댓글 선택",
                 "d7a2f9c401": "해결되지 않은 댓글 {{value0}}개 보내기",
                 "d91f2a6c39": "대기 중인 댓글 {{value0}}개 보내기",
@@ -11098,7 +11119,16 @@
             "ea6af700da": "{{value0}}개 주석",
             "c13693fe27": "{{value0}}개 주석",
             "074f0ed10b": "{{value0}}개 주석이 준비되었습니다. 다른 요소를 선택하거나 모든 피드백을 복사하세요.",
-            "a2164a6e5a": "{{value0}}개 주석이 준비되었습니다. 다른 요소를 선택하거나 모든 피드백을 복사하세요."
+            "a2164a6e5a": "{{value0}}개 주석이 준비되었습니다. 다른 요소를 선택하거나 모든 피드백을 복사하세요.",
+            "9f6f2e8c19": "The downloaded file path is unavailable.",
+            "0c79b7634d": "Could not open the downloaded file. It may have been moved or deleted.",
+            "397d9dc923": "Could not show the downloaded file. It may have been moved or deleted.",
+            "39c04fed61": "Downloading paused",
+            "5c3d530a68": "Downloaded",
+            "4bb7424d6b": "Canceled",
+            "6e776f9ef9": "Download failed",
+            "756bfc25c9": "Open",
+            "09a9489aa5": "Show"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "취소",

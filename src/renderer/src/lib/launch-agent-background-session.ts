@@ -130,6 +130,13 @@ export async function launchAgentBackgroundSession(
   // browser contexts — the LAN web client served over plain HTTP.
   const leafId = createBrowserUuid()
   const paneKey = makePaneKey(tab.id, leafId)
+  const launchToken = createBrowserUuid()
+  store.registerAgentLaunchConfig(paneKey, startupPlan.launchConfig, {
+    agentType: agent,
+    launchToken,
+    tabId: tab.id,
+    leafId
+  })
   // Why: `title` labels the tab/worktree entry. Pane titles render as an
   // in-terminal title row, so background sessions must not persist it there.
   store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId))
@@ -137,7 +144,8 @@ export async function launchAgentBackgroundSession(
     ...startupPlan.env,
     ORCA_PANE_KEY: paneKey,
     ORCA_TAB_ID: tab.id,
-    ORCA_WORKTREE_ID: worktreeId
+    ORCA_WORKTREE_ID: worktreeId,
+    ORCA_AGENT_LAUNCH_TOKEN: launchToken
   }
   const sshConnectionId = repo?.connectionId ?? null
   const sshStartupDelivery = createSshBackgroundStartupDelivery({
@@ -166,6 +174,9 @@ export async function launchAgentBackgroundSession(
         {
           worktree: toRuntimeWorktreeSelector(worktreeId),
           command: startupPlan.launchCommand,
+          launchConfig: startupPlan.launchConfig,
+          launchToken,
+          launchAgent: agent,
           ...(startupPlan.startupCommandDelivery
             ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
             : {}),
@@ -188,6 +199,9 @@ export async function launchAgentBackgroundSession(
           ? {}
           : { startupCommandDelivery: startupPlan.startupCommandDelivery }),
         env: paneEnv,
+        launchConfig: startupPlan.launchConfig,
+        launchToken,
+        launchAgent: agent,
         connectionId: sshConnectionId,
         worktreeId,
         tabId: tab.id,
@@ -199,6 +213,14 @@ export async function launchAgentBackgroundSession(
         }
       })
       ptyId = result.id
+      if (result.launchConfig) {
+        store.registerAgentLaunchConfig(paneKey, result.launchConfig, {
+          agentType: agent,
+          launchToken,
+          tabId: tab.id,
+          leafId
+        })
+      }
     }
   } catch (error) {
     store.closeTab(tab.id, { recordInteraction: false })
@@ -209,11 +231,18 @@ export async function launchAgentBackgroundSession(
   if (agent === 'command-code' && hasPrompt && !isFollowupPath) {
     // Why: Command Code does not expose a prompt-start hook; seed working for
     // hidden prompt launches so sidebar/activity surfaces do not stay idle.
-    store.setAgentStatus(paneKey, {
-      state: 'working',
-      prompt: trimmedPrompt,
-      agentType: agent
-    })
+    store.setAgentStatus(
+      paneKey,
+      {
+        state: 'working',
+        prompt: trimmedPrompt,
+        agentType: agent
+      },
+      undefined,
+      undefined,
+      undefined,
+      { launchConfig: startupPlan.launchConfig, launchToken }
+    )
   }
   let exitHandled = false
   let unsubscribeExit = (): void => {}
@@ -227,6 +256,7 @@ export async function launchAgentBackgroundSession(
     unsubscribeData()
     sshStartupDelivery.clear()
     useAppStore.getState().clearTabPtyId(tab.id, ptyId)
+    useAppStore.getState().clearAgentLaunchConfig(paneKey)
     onExit?.(ptyId, code)
   }
   const processAgentStatus = createAgentStatusOscProcessor()
@@ -236,7 +266,9 @@ export async function launchAgentBackgroundSession(
     sshStartupDelivery.schedule(ptyId)
     const processed = processAgentStatus(data)
     for (const payload of processed.payloads) {
-      useAppStore.getState().setAgentStatus(paneKey, payload, undefined)
+      useAppStore.getState().setAgentStatus(paneKey, payload, undefined, undefined, undefined, {
+        launchToken
+      })
       onAgentStatus?.(payload)
     }
   }

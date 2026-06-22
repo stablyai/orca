@@ -222,7 +222,12 @@
           "0216895fb5": "ブランチの削除に失敗しました",
           "19db0085fb": "ローカルブランチが削除されました",
           "2b0afc7f14": "ローカル {{value0}} を最新の状態に維持できませんでした",
-          "670864ab52": "ローカル {{value0}} を最新の状態に保つ"
+          "670864ab52": "ローカル {{value0}} を最新の状態に保つ",
+          "5366d13eec": "Workspace deleted, branch kept",
+          "2e17f825d4": "Worktree deleted, branch kept",
+          "78e08cd877": "Git could not safely delete branch \"{{value0}}\", so Orca kept it to avoid losing local commits.",
+          "3b57982bf6": "Git could not safely delete branch \"{{value0}}\" after deleting workspace \"{{value1}}\", so Orca kept it to avoid losing local commits.",
+          "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits."
         },
         "repos": {
           "b7e14472ae": "フォルダーの追加に失敗しました",
@@ -2307,7 +2312,7 @@
           "TerminalContextMenu": {
             "b4cdd9314e": "クリアスクリーン",
             "8c17d6786d": "ペインを閉じる",
-            "copyTerminalId": "Terminal ID をコピー",
+            "copyTerminalId": "Copy Terminal ID",
             "2cf85a6a55": "ペインIDのコピー",
             "39809d152f": "タイトルを設定…",
             "06c2b0f043": "ペインのサイズを均等化する",
@@ -2930,7 +2935,17 @@
             "7ec6e030a0": "Next expires now",
             "d1e442a9e5": "Expires now",
             "6cf9eaed10": "Next expires in {{value0}}",
-            "20ad66aed1": "Expires in {{value0}}"
+            "20ad66aed1": "Expires in {{value0}}",
+            "0d8d7cfe15": "Waiting for Claude session",
+            "1804cd8c3f": "Refreshing sign-in",
+            "f8f0f9d8cc": "Network issue",
+            "bf2e739f18": "Sign-in unavailable",
+            "f8b8dbed85": "Usage unavailable",
+            "3d3c9c0c1f": "Claude usage will refresh after the live Claude terminal rotates its credentials.",
+            "42fdd4da1d": "Claude sign-in is being refreshed. Agent sessions may still be signed in.",
+            "c06c1d215d": "Claude usage could not be refreshed because the network request failed.",
+            "cabdc2a9e0": "Claude sign-in credentials could not be read.",
+            "a7517cccb6": "Claude usage is unavailable right now."
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -3859,7 +3874,8 @@
           "697d0f6e1b": "固定を解除する",
           "250de158fd": "Remove Workspace",
           "changeParentWorkspace": "親ワークツリーを変更...",
-          "setParentWorkspace": "親ワークツリーを設定..."
+          "setParentWorkspace": "親ワークツリーを設定...",
+          "workspaceSection": "ワークスペース"
         },
         "WorktreeList": {
           "d880ea0744": "グループを作成し、このプロジェクトをそのグループに移動します。",
@@ -4805,7 +4821,7 @@
           "dd6f0a1d45": "ペット",
           "0e89a574ae": "右下隅に浮かぶアニメーションのペット。",
           "agentHibernation": {
-            "copy": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、対応しているセッションは再度開いたときに再開します。安全モデルを調整中の実験的機能です。",
+            "copy": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、対応しているセッションは再度開いたときに再開します。Agent のスリープは、Orca から起動した agent の起動オプションを保持します。手動で起動した agent は、現在の Orca のデフォルトで再開される場合があります。安全モデルを調整中の実験的機能です。",
             "description": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、対応しているセッションは再度開いたときに再開します。",
             "idleMinutesDescription": "完了したバックグラウンド agent を Orca がスリープ状態にできるまで待つアイドル時間（分）。",
             "idleMinutesLabel": "スリープまで",
@@ -6916,7 +6932,7 @@
             "agentHibernation": {
               "agent": "agent",
               "agents": "agents",
-              "description": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、再度開いたときに対応セッションを再開します。",
+              "description": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、再度開いたときに対応セッションを再開します。Agent のスリープは Orca から起動した agent の起動オプションを保持します。手動で起動した agent は現在の Orca のデフォルトで再開される場合があります。",
               "minutes": "分",
               "sleep": "スリープ",
               "terminal": "terminal",
@@ -8809,6 +8825,11 @@
                 "066fedd446": "失敗したジョブ",
                 "ae8a04ef17": "競合ファイルの詳細は利用できません",
                 "73d0675356": "競合の詳細を更新しています…",
+                "f5bc5c4cf1": "The hosting provider reports conflicts, but local Git did not reproduce them. Refresh the review or push the branch to recalculate mergeability.",
+                "5bc9bda2af": "Run from this worktree",
+                "e87fb3d929": "Copy mergeability refresh commands",
+                "1e53e45072": "Copied",
+                "084c516efb": "Copy commands",
                 "5dc3af25c0": "コメントを選択",
                 "d7a2f9c401": "Send unresolved {{value0}} comments",
                 "d91f2a6c39": "キュー内の {{value0}} 件のコメントを送信",
@@ -11098,7 +11119,16 @@
             "ea6af700da": "{{value0}} 件の注釈",
             "c13693fe27": "{{value0}} 件の注釈",
             "074f0ed10b": "{{value0}} 件の注釈が準備できました。別の要素を選択するか、すべてのフィードバックをコピーしてください。",
-            "a2164a6e5a": "{{value0}} 件の注釈が準備できました。別の要素を選択するか、すべてのフィードバックをコピーしてください。"
+            "a2164a6e5a": "{{value0}} 件の注釈が準備できました。別の要素を選択するか、すべてのフィードバックをコピーしてください。",
+            "9f6f2e8c19": "The downloaded file path is unavailable.",
+            "0c79b7634d": "Could not open the downloaded file. It may have been moved or deleted.",
+            "397d9dc923": "Could not show the downloaded file. It may have been moved or deleted.",
+            "39c04fed61": "Downloading paused",
+            "5c3d530a68": "Downloaded",
+            "4bb7424d6b": "Canceled",
+            "6e776f9ef9": "Download failed",
+            "756bfc25c9": "Open",
+            "09a9489aa5": "Show"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "キャンセル",

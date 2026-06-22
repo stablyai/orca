@@ -1606,7 +1606,18 @@ describe('web worktree preload API', () => {
       name: 'review-pr-42',
       baseBranch: TEST_COMMIT_OID,
       compareBaseRef: 'refs/remotes/origin/main',
-      setupDecision: 'inherit'
+      setupDecision: 'inherit',
+      createdWithAgent: 'codex',
+      startup: {
+        command: "codex 'summarize repo'",
+        env: { ORCA_AGENT_MODE: 'direct' },
+        launchConfig: {
+          agentCommand: 'codex',
+          agentArgs: '--model gpt-5',
+          agentEnv: { ORCA_AGENT_MODE: 'direct' }
+        },
+        startupCommandDelivery: 'shell-ready'
+      }
     })
     await globals.window.api.worktrees.resolvePrBase({
       repoId: 'repo-1',
@@ -1629,7 +1640,17 @@ describe('web worktree preload API', () => {
         params: expect.objectContaining({
           repo: 'repo-1',
           baseBranch: TEST_COMMIT_OID,
-          compareBaseRef: 'refs/remotes/origin/main'
+          compareBaseRef: 'refs/remotes/origin/main',
+          createdWithAgent: 'codex',
+          startupCommand: "codex 'summarize repo'",
+          startupEnv: { ORCA_AGENT_MODE: 'direct' },
+          startupLaunchConfig: {
+            agentCommand: 'codex',
+            agentArgs: '--model gpt-5',
+            agentEnv: { ORCA_AGENT_MODE: 'direct' }
+          },
+          startupCommandDelivery: 'shell-ready',
+          activate: true
         })
       },
       {

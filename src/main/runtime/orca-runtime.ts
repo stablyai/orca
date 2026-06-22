@@ -111,6 +111,7 @@ import type {
   WorkspaceSessionState,
   DirEntry
 } from '../../shared/types'
+import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import { toRuntimeActivateWorktreeEvent } from '../../shared/runtime-client-events'
 import type {
@@ -296,6 +297,11 @@ import {
   ensureClaudeAgentTeamsShimDir,
   resolveClaudeAgentTeamsShimBin
 } from './claude-agent-teams-shim-env'
+import {
+  addClaudeTeammateModeAuto,
+  addClaudeTeammateModeInProcess,
+  type ClaudeAgentTeamsMode
+} from '../../shared/claude-agent-teams-tmux-compat'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
 import { collectMemorySnapshot } from '../memory/collector'
 import { BrowserWindow, ipcMain } from 'electron'
@@ -877,6 +883,9 @@ type RuntimePtyWorktreeRecord = {
   // spawn-time tab/pane identity so later reveals can adopt under the env key.
   tabId: string | null
   paneKey: string | null
+  launchConfig: SleepingAgentLaunchConfig | null
+  launchToken: string | null
+  launchAgent: TuiAgent | null
   connected: boolean
   disconnectedAt: number | null
   lastExitCode: number | null
@@ -896,6 +905,36 @@ type RuntimePtyWorktreeRecord = {
   tailLinesTotal: number
   preview: string
   waitBlockedAt: number | null
+}
+
+function copySleepingAgentLaunchConfig(
+  config: SleepingAgentLaunchConfig
+): SleepingAgentLaunchConfig {
+  return {
+    ...(config.agentCommand ? { agentCommand: config.agentCommand } : {}),
+    agentArgs: config.agentArgs,
+    agentEnv: { ...config.agentEnv }
+  }
+}
+
+function inferCapturedClaudeAgentTeamsMode(
+  launchConfig: SleepingAgentLaunchConfig | undefined,
+  command: string | undefined,
+  currentMode: ClaudeAgentTeamsMode | undefined
+): ClaudeAgentTeamsMode | undefined {
+  const capturedCommand = launchConfig?.agentCommand?.trim() || command?.trim() || ''
+  const capturedArgs = launchConfig?.agentArgs?.trim() ?? ''
+  const capturedLaunch = `${capturedCommand} ${capturedArgs}`.trim()
+  if (/(^|\s)--teammate-mode(?:=|\s+)auto(?:\s|$)/.test(capturedLaunch)) {
+    return 'native-panes-shim'
+  }
+  if (/(^|\s)--teammate-mode(?:=|\s+)in-process(?:\s|$)/.test(capturedLaunch)) {
+    return 'in-process'
+  }
+  if (launchConfig && /(^|\s)--resume(?:\s|=|$)/.test(command?.trim() ?? '')) {
+    return 'off'
+  }
+  return currentMode
 }
 
 export type RuntimeTerminalAgentStatusEvent = {
@@ -1021,12 +1060,18 @@ type RuntimeNotifier = {
     startup?: WorktreeStartupLaunch,
     defaultTabs?: CreateWorktreeResult['defaultTabs']
   ): void
-  createTerminal(worktreeId: string, opts: { command?: string; title?: string }): void
+  createTerminal(
+    worktreeId: string,
+    opts: { command?: string; env?: Record<string, string>; title?: string }
+  ): void
   revealTerminalSession?(
     worktreeId: string,
     opts: {
       ptyId: string
       title?: string | null
+      launchConfig?: SleepingAgentLaunchConfig
+      launchToken?: string
+      launchAgent?: TuiAgent
       activate?: boolean
       tabId?: string
       leafId?: string
@@ -1226,6 +1271,7 @@ function mergeRuntimeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     ...(meta.automationProvenance !== undefined
       ? { automationProvenance: meta.automationProvenance }
       : {}),
+    ...(meta.priorWorktreeIds !== undefined ? { priorWorktreeIds: meta.priorWorktreeIds } : {}),
     workspaceStatus: meta.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
     diffComments: meta.diffComments,
     mobileDiffReview: meta.mobileDiffReview
@@ -3595,6 +3641,7 @@ export class OrcaRuntimeService {
           await this.createHeadlessMobileSessionTerminal(
             worktreeId,
             true,
+            undefined,
             undefined,
             undefined,
             undefined,
@@ -8425,7 +8472,11 @@ export class OrcaRuntimeService {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
     }
-    const resolvedWorktrees = await this.listResolvedWorktrees()
+    const resolvedWorktrees = (await this.listResolvedWorktrees()).filter((worktree) =>
+      this.isRuntimeWorktreeVisible(worktree)
+    )
+    // Why: worktree.ps backs the mobile sidebar, so it must use the same
+    // host-owned imported-worktree visibility gate as worktree.list/desktop.
     await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
     const repoById = new Map((this.store?.getRepos() ?? []).map((repo) => [repo.id, repo]))
     const summaries = new Map<string, RuntimeWorktreePsSummary>()
@@ -8463,6 +8514,9 @@ export class OrcaRuntimeService {
         repo: repo?.displayName ?? worktree.repoId,
         path: worktree.path,
         branch: worktree.branch,
+        isArchived: worktree.isArchived,
+        isMainWorktree: worktree.isMainWorktree,
+        hasHostSidebarActivity: false,
         parentWorktreeId: worktree.parentWorktreeId,
         childWorktreeIds: worktree.childWorktreeIds,
         displayName: worktree.displayName,
@@ -8500,6 +8554,9 @@ export class OrcaRuntimeService {
         repo: projectGroup.name,
         path: worktree.path,
         branch: worktree.branch,
+        isArchived: worktree.isArchived,
+        isMainWorktree: worktree.isMainWorktree,
+        hasHostSidebarActivity: false,
         parentWorktreeId: null,
         childWorktreeIds: [],
         displayName: worktree.displayName,
@@ -8533,6 +8590,9 @@ export class OrcaRuntimeService {
       }
       if (leaf.ptyId) {
         countedPtyIds.add(leaf.ptyId)
+      }
+      if (leaf.ptyId && leaf.connected) {
+        summary.hasHostSidebarActivity = true
       }
       const previousLastOutputAt = summary.lastOutputAt
       summary.liveTerminalCount += 1
@@ -8589,6 +8649,9 @@ export class OrcaRuntimeService {
       // still needs those worktrees to show as terminal-bearing entries.
       summary.liveTerminalCount = Math.max(summary.liveTerminalCount, tabs.length)
       summary.hasAttachedPty = summary.hasAttachedPty || tabs.some((tab) => tab.ptyId !== null)
+      if (tabs.some((tab) => tab.ptyId !== null && this.ptysById.get(tab.ptyId)?.connected)) {
+        summary.hasHostSidebarActivity = true
+      }
       for (const tab of tabs) {
         summary.status = mergeWorktreeStatus(
           summary.status,
@@ -11392,6 +11455,7 @@ export class OrcaRuntimeService {
         agent,
         startup: {
           command: draftLaunchPlan.launchCommand,
+          launchConfig: draftLaunchPlan.launchConfig,
           ...(draftLaunchPlan.startupCommandDelivery
             ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
             : {}),
@@ -11416,6 +11480,7 @@ export class OrcaRuntimeService {
       agent,
       startup: {
         command: startupPlan.launchCommand,
+        launchConfig: startupPlan.launchConfig,
         ...(startupPlan.startupCommandDelivery
           ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
           : {}),
@@ -11456,6 +11521,7 @@ export class OrcaRuntimeService {
       agent,
       startup: {
         command: startupPlan.launchCommand,
+        launchConfig: startupPlan.launchConfig,
         ...(startupPlan.startupCommandDelivery
           ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
           : {}),
@@ -11880,6 +11946,10 @@ export class OrcaRuntimeService {
           const terminal = await this.createTerminal(`id:${worktree.id}`, {
             command: effectiveStartup.command,
             env: effectiveStartup.env,
+            ...(effectiveStartup.launchConfig
+              ? { launchConfig: effectiveStartup.launchConfig }
+              : {}),
+            ...(effectiveCreatedWithAgent ? { launchAgent: effectiveCreatedWithAgent } : {}),
             startupCommandDelivery: effectiveStartup.startupCommandDelivery,
             telemetry: effectiveStartup.telemetry
           })
@@ -12463,6 +12533,8 @@ export class OrcaRuntimeService {
         const terminal = await this.createTerminal(`id:${worktree.id}`, {
           command: effectiveStartup.command,
           env: effectiveStartup.env,
+          ...(effectiveStartup.launchConfig ? { launchConfig: effectiveStartup.launchConfig } : {}),
+          ...(effectiveCreatedWithAgent ? { launchAgent: effectiveCreatedWithAgent } : {}),
           startupCommandDelivery: effectiveStartup.startupCommandDelivery,
           telemetry: effectiveStartup.telemetry
         })
@@ -12722,6 +12794,8 @@ export class OrcaRuntimeService {
         const terminal = await this.createTerminal(`path:${result.worktree.path}`, {
           command: args.startup.command,
           env: args.startup.env,
+          ...(args.startup.launchConfig ? { launchConfig: args.startup.launchConfig } : {}),
+          ...(args.createdWithAgent ? { launchAgent: args.createdWithAgent } : {}),
           startupCommandDelivery: args.startup.startupCommandDelivery,
           telemetry: args.startup.telemetry
         })
@@ -14282,6 +14356,9 @@ export class OrcaRuntimeService {
     opts: {
       command?: string
       env?: Record<string, string>
+      launchConfig?: WorktreeStartupLaunch['launchConfig']
+      launchToken?: string
+      launchAgent?: TuiAgent
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
       telemetry?: WorktreeStartupLaunch['telemetry']
       title?: string
@@ -14334,10 +14411,20 @@ export class OrcaRuntimeService {
       const tabId = canAdoptPaneIdentity ? (hintedTabId as string) : randomUUID()
       const leafId = canAdoptPaneIdentity ? (opts.leafId as string) : randomUUID()
       const paneKey = makePaneKey(tabId, leafId)
-      const baseEnv = opts.env ?? {}
+      const launchToken = opts.launchConfig ? (opts.launchToken ?? randomUUID()) : undefined
+      const baseEnv = {
+        ...opts.env,
+        ...(launchToken ? { ORCA_AGENT_LAUNCH_TOKEN: launchToken } : {})
+      }
+      const claudeAgentTeamsMode = this.store?.getSettings?.().claudeAgentTeamsMode
+      const effectiveClaudeAgentTeamsMode = inferCapturedClaudeAgentTeamsMode(
+        opts.launchConfig,
+        opts.command,
+        claudeAgentTeamsMode
+      )
       const agentTeamsPlan = await buildClaudeAgentTeamsLaunchPlan({
         command: opts.command,
-        mode: this.store?.getSettings?.().claudeAgentTeamsMode,
+        mode: effectiveClaudeAgentTeamsMode,
         baseEnv: {
           ...process.env,
           ...baseEnv
@@ -14353,6 +14440,21 @@ export class OrcaRuntimeService {
             shimBin
           }).env
       })
+      const effectiveLaunchConfig =
+        opts.launchConfig && agentTeamsPlan
+          ? {
+              ...opts.launchConfig,
+              agentCommand: opts.launchConfig.agentCommand
+                ? effectiveClaudeAgentTeamsMode === 'in-process' || process.platform === 'win32'
+                  ? addClaudeTeammateModeInProcess(opts.launchConfig.agentCommand)
+                  : addClaudeTeammateModeAuto(opts.launchConfig.agentCommand)
+                : agentTeamsPlan.command,
+              agentEnv: {
+                ...opts.launchConfig.agentEnv,
+                ...agentTeamsPlan.env
+              }
+            }
+          : opts.launchConfig
       const env = this.buildTerminalWorkspaceEnv(
         workspace,
         baseEnv,
@@ -14392,6 +14494,11 @@ export class OrcaRuntimeService {
         }
         pty.tabId = tabId
         pty.paneKey = paneKey
+        pty.launchConfig = effectiveLaunchConfig
+          ? copySleepingAgentLaunchConfig(effectiveLaunchConfig)
+          : null
+        pty.launchToken = launchToken ?? null
+        pty.launchAgent = opts.launchAgent ?? null
       }
       const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
       if (pty && opts.deferMobileSessionPublish !== true) {
@@ -14412,6 +14519,9 @@ export class OrcaRuntimeService {
           await this.notifier.revealTerminalSession(workspace.id, {
             ptyId: result.id,
             title: opts.title ?? null,
+            ...(effectiveLaunchConfig ? { launchConfig: effectiveLaunchConfig } : {}),
+            ...(launchToken ? { launchToken } : {}),
+            ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
             activate: opts.activate === true,
             tabId,
             leafId
@@ -14462,6 +14572,10 @@ export class OrcaRuntimeService {
         requestId,
         worktreeId,
         command: opts.command,
+        ...(opts.env ? { env: opts.env } : {}),
+        ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
+        ...(opts.launchToken ? { launchToken: opts.launchToken } : {}),
+        ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
         startupCommandDelivery: opts.startupCommandDelivery,
         title: opts.title,
         activate: opts.focus === true || opts.activate === true
@@ -14499,6 +14613,8 @@ export class OrcaRuntimeService {
     return await this.createTerminal(`id:${worktree.id}`, {
       command: startup.startup.command,
       env: startup.startup.env,
+      ...(startup.startup.launchConfig ? { launchConfig: startup.startup.launchConfig } : {}),
+      launchAgent: startup.agent,
       startupCommandDelivery: startup.startup.startupCommandDelivery,
       telemetry: startup.startup.telemetry,
       title: opts.title
@@ -14511,8 +14627,11 @@ export class OrcaRuntimeService {
       afterTabId?: string
       targetGroupId?: string
       command?: string
+      env?: Record<string, string>
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
       agent?: TuiAgent
+      launchConfig?: SleepingAgentLaunchConfig
+      launchAgent?: TuiAgent
       activate?: boolean
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
@@ -14529,7 +14648,7 @@ export class OrcaRuntimeService {
       }
       afterDesktopTabId = anchor.type === 'terminal' ? anchor.parentTabId : anchor.id
     }
-    const command = await this.resolveMobileSessionTerminalCommand(workspace, opts)
+    const startupCommand = await this.resolveMobileSessionTerminalCommand(workspace, opts)
 
     const win = this.getAvailableAuthoritativeWindow()
     if (!win) {
@@ -14537,11 +14656,13 @@ export class OrcaRuntimeService {
         worktreeId,
         opts.activate !== false,
         opts.afterTabId,
-        command,
-        opts.startupCommandDelivery,
+        startupCommand.command,
+        startupCommand.env,
+        startupCommand.startupCommandDelivery,
         undefined,
-        opts.agent,
-        opts.targetGroupId
+        startupCommand.launchAgent,
+        opts.targetGroupId,
+        startupCommand.launchConfig
       )
     }
     const requestId = randomUUID()
@@ -14572,8 +14693,11 @@ export class OrcaRuntimeService {
         worktreeId,
         afterTabId: afterDesktopTabId,
         targetGroupId: opts.targetGroupId,
-        command,
-        startupCommandDelivery: opts.startupCommandDelivery,
+        command: startupCommand.command,
+        ...(startupCommand.env ? { env: startupCommand.env } : {}),
+        ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
+        ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
+        startupCommandDelivery: startupCommand.startupCommandDelivery,
         activate: opts.activate
       })
     })
@@ -14586,10 +14710,29 @@ export class OrcaRuntimeService {
 
   private async resolveMobileSessionTerminalCommand(
     workspace: TerminalWorkspaceLaunchScope,
-    opts: { command?: string; agent?: TuiAgent }
-  ): Promise<string | undefined> {
+    opts: {
+      command?: string
+      env?: Record<string, string>
+      startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
+      agent?: TuiAgent
+      launchConfig?: SleepingAgentLaunchConfig
+      launchAgent?: TuiAgent
+    }
+  ): Promise<{
+    command?: string
+    env?: Record<string, string>
+    startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
+    launchConfig?: SleepingAgentLaunchConfig
+    launchAgent?: TuiAgent
+  }> {
     if (opts.command || !opts.agent) {
-      return opts.command
+      return {
+        command: opts.command,
+        env: opts.env,
+        launchConfig: opts.launchConfig,
+        launchAgent: opts.launchAgent,
+        startupCommandDelivery: opts.startupCommandDelivery
+      }
     }
     if (!this.store) {
       throw new Error('runtime_unavailable')
@@ -14622,7 +14765,13 @@ export class OrcaRuntimeService {
     } else {
       this.markLocalWorkspaceTrustedForAgent(opts.agent, workspace.path)
     }
-    return startupPlan.launchCommand
+    return {
+      command: startupPlan.launchCommand,
+      env: startupPlan.env,
+      launchConfig: startupPlan.launchConfig,
+      launchAgent: opts.agent,
+      startupCommandDelivery: startupPlan.startupCommandDelivery
+    }
   }
 
   private async createHeadlessMobileSessionTerminal(
@@ -14630,10 +14779,12 @@ export class OrcaRuntimeService {
     activate: boolean,
     afterTabId?: string,
     command?: string,
+    env?: Record<string, string>,
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery'],
     identity?: { tabId: string; leafId: string; sessionId?: string },
     launchAgent?: TuiAgent,
-    targetGroupId?: string
+    targetGroupId?: string,
+    launchConfig?: SleepingAgentLaunchConfig
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
     // Why: SshPtyProvider treats sessionId as a relay reattach request. Only
@@ -14643,6 +14794,9 @@ export class OrcaRuntimeService {
     const terminal = await this.createTerminal(`id:${worktreeId}`, {
       focus: false,
       command,
+      env,
+      ...(launchConfig ? { launchConfig } : {}),
+      ...(launchAgent ? { launchAgent } : {}),
       startupCommandDelivery,
       ...(identity
         ? {
@@ -14935,6 +15089,11 @@ export class OrcaRuntimeService {
       const revealed = await this.notifier?.revealTerminalSession?.(pty.pty.worktreeId, {
         ptyId: pty.pty.ptyId,
         title: getLatestPtyTitle(pty.pty),
+        ...(pty.pty.launchConfig
+          ? { launchConfig: copySleepingAgentLaunchConfig(pty.pty.launchConfig) }
+          : {}),
+        ...(pty.pty.launchToken ? { launchToken: pty.pty.launchToken } : {}),
+        ...(pty.pty.launchAgent ? { launchAgent: pty.pty.launchAgent } : {}),
         ...(pty.pty.tabId !== null ? { tabId: pty.pty.tabId } : {}),
         ...(parsedPaneKey ? { leafId: parsedPaneKey.leafId } : {})
       })
@@ -15119,6 +15278,16 @@ export class OrcaRuntimeService {
     if (!handle) {
       throw new Error('claude_agent_teams_requires_orca_terminal')
     }
+    return await this.prepareClaudeAgentTeamsLeaderForHandle({
+      handle,
+      baseEnv: args.baseEnv
+    })
+  }
+
+  async prepareClaudeAgentTeamsLeaderForHandle(args: {
+    handle: string
+    baseEnv?: Record<string, string>
+  }): Promise<{ env: Record<string, string> }> {
     const baseEnv = {
       ...process.env,
       ...args.baseEnv
@@ -15126,7 +15295,7 @@ export class OrcaRuntimeService {
     const shimDir = await ensureClaudeAgentTeamsShimDir()
     const shimBin = resolveClaudeAgentTeamsShimBin(baseEnv)
     return this.claudeAgentTeams.createLaunchEnv({
-      leaderHandle: handle,
+      leaderHandle: args.handle,
       baseEnv,
       shimDir,
       shimBin
@@ -16352,6 +16521,9 @@ export class OrcaRuntimeService {
         connectionId: state.connectionId ?? parseAppSshPtyId(ptyId)?.connectionId ?? null,
         tabId: state.tabId ?? null,
         paneKey: state.paneKey ?? null,
+        launchConfig: null,
+        launchToken: null,
+        launchAgent: null,
         connected: state.connected ?? true,
         disconnectedAt: state.connected === false ? Date.now() : null,
         lastExitCode: null,

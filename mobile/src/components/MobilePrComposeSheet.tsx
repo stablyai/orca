@@ -11,7 +11,7 @@ type Props = {
   // Head branch — enables the base≠head guard and the "from <branch>" hint.
   head?: string | null
   onClose: () => void
-  onCreated: (url: string) => void
+  onCreated: (url: string, warning?: string) => void
 }
 
 // BottomDrawer wrapper around the inline compose form, for full-screen roots

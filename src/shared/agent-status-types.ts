@@ -168,6 +168,7 @@ export type ParsedAgentStatusPayload = Omit<AgentStatusPayload, 'prompt'> & { pr
  */
 export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   paneKey: string
+  launchToken?: string
   terminalHandle?: string
   tabId?: string
   worktreeId?: string

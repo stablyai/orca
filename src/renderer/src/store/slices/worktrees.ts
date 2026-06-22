@@ -40,6 +40,7 @@ import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualized
 import { branchName } from '@/lib/git-utils'
 import { markInputQuietSchedulerInput, scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
+import { showPreservedBranchToast } from '@/components/sidebar/preserved-branch-toast'
 import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
@@ -149,42 +150,6 @@ function showLocalBaseRefRefreshToast(result: LocalBaseRefRefreshResult | undefi
   )
 }
 
-function showPreservedBranchToast(
-  result: RemoveWorktreeResult | undefined,
-  worktree: Pick<Worktree, 'displayName' | 'isMainWorktree'> | undefined,
-  onForceDelete: (branchName: string, expectedHead: string) => void
-): void {
-  const preservedBranch = result?.preservedBranch
-  const branch = preservedBranch?.branchName
-  if (!branch) {
-    return
-  }
-  const targetTitle = worktree?.isMainWorktree ? 'Workspace' : 'Worktree'
-  const targetLabel = targetTitle.toLowerCase()
-  const targetName = worktree?.displayName?.trim()
-  const deletedTarget = targetName ? ` after deleting ${targetLabel} "${targetName}"` : ''
-  const expectedHead = preservedBranch.head
-  const action = expectedHead
-    ? {
-        label: translate('auto.store.slices.worktrees.e50495aae6', 'Force Delete Branch'),
-        onClick: () => onForceDelete(branch, expectedHead)
-      }
-    : undefined
-  toast.warning(
-    translate('auto.store.slices.worktrees.4e6496f3d2', '{{value0}} deleted, branch kept', {
-      value0: targetTitle
-    }),
-    {
-      description: translate(
-        'auto.store.slices.worktrees.d1d78a7baa',
-        'Git could not safely delete branch "{{value0}}"{{value1}}, so Orca kept it to avoid losing local commits.',
-        { value0: branch, value1: deletedTarget }
-      ),
-      ...(action ? { action } : {})
-    }
-  )
-}
-
 function arraysShallowEqual(a: string[] | undefined, b: string[] | undefined): boolean {
   if (a === b) {
     return true
@@ -263,6 +228,7 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.pushTarget?.remoteUrl === candidate.pushTarget?.remoteUrl &&
       worktree.sparseBaseRef === candidate.sparseBaseRef &&
       arraysShallowEqual(worktree.sparseDirectories, candidate.sparseDirectories) &&
+      arraysShallowEqual(worktree.priorWorktreeIds, candidate.priorWorktreeIds) &&
       (worktree as WorktreeWithLineage).parentWorktreeId ===
         (candidate as WorktreeWithLineage).parentWorktreeId &&
       arraysShallowEqual(
@@ -1835,6 +1801,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                       ? {
                           startupCommand: startup.command,
                           ...(startup.env ? { startupEnv: startup.env } : {}),
+                          ...(startup.launchConfig
+                            ? { startupLaunchConfig: startup.launchConfig }
+                            : {}),
                           ...(startup.startupCommandDelivery
                             ? { startupCommandDelivery: startup.startupCommandDelivery }
                             : {}),

@@ -9,6 +9,7 @@ describe('resolveExternalEditorLaunchSpec', () => {
     })
     expect(spec).toEqual({
       kind: 'executable',
+      hideWindowsConsole: true,
       spawnCmd: expect.any(String),
       spawnArgs: ['--new-window', '/tmp/workspace']
     })
@@ -21,6 +22,7 @@ describe('resolveExternalEditorLaunchSpec', () => {
       })
     ).toEqual({
       kind: 'shell',
+      hideWindowsConsole: true,
       spawnCmd: '/bin/sh',
       spawnArgs: ['-c', "open -a \"Typora\" '/tmp/note'\\''s.md'"]
     })
@@ -31,6 +33,7 @@ describe('resolveExternalEditorLaunchSpec', () => {
       resolveExternalEditorLaunchSpec('start "" notepad', 'C:\\note.md', { platform: 'win32' })
     ).toEqual({
       kind: 'shell',
+      hideWindowsConsole: true,
       spawnCmd: getCmdExePath(),
       spawnArgs: ['/d', '/s', '/c', 'start "" notepad C:\\note.md']
     })
@@ -41,8 +44,52 @@ describe('resolveExternalEditorLaunchSpec', () => {
       resolveExternalEditorLaunchSpec('start "" notepad', 'C:\\my notes.md', { platform: 'win32' })
     ).toEqual({
       kind: 'shell',
+      hideWindowsConsole: true,
       spawnCmd: getCmdExePath(),
       spawnArgs: ['/d', '/s', '/c', 'start "" notepad "C:\\my notes.md"']
+    })
+  })
+
+  it('treats unquoted Windows executable paths with spaces as executable launchers', () => {
+    expect(
+      resolveExternalEditorLaunchSpec(
+        'C:\\Program Files\\Neovim\\bin\\nvim.exe',
+        'C:\\workspaces\\orca',
+        { platform: 'win32' }
+      )
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: false,
+      spawnCmd: 'C:\\Program Files\\Neovim\\bin\\nvim.exe',
+      spawnArgs: ['C:\\workspaces\\orca']
+    })
+  })
+
+  it('treats quoted Windows executable paths with spaces as executable launchers', () => {
+    expect(
+      resolveExternalEditorLaunchSpec(
+        '"C:\\Program Files\\Neovim\\bin\\nvim.exe"',
+        'C:\\workspaces\\orca',
+        { platform: 'win32' }
+      )
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: false,
+      spawnCmd: 'C:\\Program Files\\Neovim\\bin\\nvim.exe',
+      spawnArgs: ['C:\\workspaces\\orca']
+    })
+  })
+
+  it('shows the Windows console for NeoVim shell commands with arguments', () => {
+    expect(
+      resolveExternalEditorLaunchSpec('nvim --clean', 'C:\\workspaces\\orca', {
+        platform: 'win32'
+      })
+    ).toEqual({
+      kind: 'shell',
+      hideWindowsConsole: false,
+      spawnCmd: getCmdExePath(),
+      spawnArgs: ['/d', '/s', '/c', 'nvim --clean C:\\workspaces\\orca']
     })
   })
 })

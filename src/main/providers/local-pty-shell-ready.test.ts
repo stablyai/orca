@@ -97,9 +97,8 @@ describe('writeStartupCommandWhenShellReady', () => {
     writeStartupCommandWhenShellReady(ready, proc, 'claude', () => {})
 
     await ready
-    // flush path waits for a post-ready data chunk (prompt draw) then 30ms,
-    // or falls back after 50ms if no data arrives.
-    vi.advanceTimersByTime(50)
+    proc._emitData('\r\nuser@host % ')
+    vi.advanceTimersByTime(30)
     await Promise.resolve()
 
     expect(proc._writes).toEqual(['claude\n'])
@@ -112,7 +111,8 @@ describe('writeStartupCommandWhenShellReady', () => {
     writeStartupCommandWhenShellReady(ready, proc, 'claude', () => {})
 
     await ready
-    vi.advanceTimersByTime(50)
+    proc._emitData('\r\nPS> ')
+    vi.advanceTimersByTime(30)
     await Promise.resolve()
 
     expect(proc._writes).toEqual(['claude\r'])
@@ -125,10 +125,45 @@ describe('writeStartupCommandWhenShellReady', () => {
     writeStartupCommandWhenShellReady(ready, proc, 'claude\n', () => {})
 
     await ready
-    vi.advanceTimersByTime(50)
+    proc._emitData('\r\nPS> ')
+    vi.advanceTimersByTime(30)
     await Promise.resolve()
 
     expect(proc._writes).toEqual(['claude\n'])
+  })
+
+  it('keeps the no-prompt fallback conservative to avoid duplicate shell echo', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    const proc = createMockProc()
+    const ready = Promise.resolve()
+    writeStartupCommandWhenShellReady(ready, proc, 'codex', () => {})
+
+    await ready
+    vi.advanceTimersByTime(50)
+    await Promise.resolve()
+
+    expect(proc._writes).toEqual([])
+
+    vi.advanceTimersByTime(150)
+    await Promise.resolve()
+
+    expect(proc._writes).toEqual(['codex\n'])
+  })
+
+  it('uses the short settle delay when marker scan already observed post-marker bytes', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    const proc = createMockProc()
+    const ready = Promise.resolve({ postMarkerBytesObserved: true })
+    writeStartupCommandWhenShellReady(ready, proc, 'codex', () => {})
+
+    await ready
+    vi.advanceTimersByTime(29)
+    await Promise.resolve()
+    expect(proc._writes).toEqual([])
+
+    vi.advanceTimersByTime(1)
+    await Promise.resolve()
+    expect(proc._writes).toEqual(['codex\n'])
   })
 })
 
@@ -138,11 +173,53 @@ describe('scanForShellReady', () => {
 
     expect(scanForShellReady(state, 'before \x1b]777;orca-shell-readyx')).toEqual({
       output: 'before \x1b]777;orca-shell-readyx',
-      matched: false
+      matched: false,
+      postMarkerBytesObserved: false
     })
     expect(scanForShellReady(state, ' after')).toEqual({
       output: ' after',
-      matched: false
+      matched: false,
+      postMarkerBytesObserved: false
+    })
+  })
+
+  it('reports post-marker bytes only when bytes follow the BEL terminator in the matching call', () => {
+    let state = createShellReadyScanState()
+    expect(scanForShellReady(state, 'before \x1b]777;orca-shell-ready\x07')).toEqual({
+      output: 'before ',
+      matched: true,
+      postMarkerBytesObserved: false
+    })
+
+    state = createShellReadyScanState()
+    expect(scanForShellReady(state, 'before \x1b]777;orca-shell-ready\x07% ')).toEqual({
+      output: 'before % ',
+      matched: true,
+      postMarkerBytesObserved: true
+    })
+
+    state = createShellReadyScanState()
+    expect(scanForShellReady(state, 'before \x1b]777;orca-shell-ready')).toEqual({
+      output: 'before ',
+      matched: false,
+      postMarkerBytesObserved: false
+    })
+    expect(scanForShellReady(state, '\x07')).toEqual({
+      output: '',
+      matched: true,
+      postMarkerBytesObserved: false
+    })
+
+    state = createShellReadyScanState()
+    expect(scanForShellReady(state, '\x1b]777;orca-shell-ready')).toEqual({
+      output: '',
+      matched: false,
+      postMarkerBytesObserved: false
+    })
+    expect(scanForShellReady(state, '\x07% ')).toEqual({
+      output: '% ',
+      matched: true,
+      postMarkerBytesObserved: true
     })
   })
 })

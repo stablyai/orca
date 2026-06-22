@@ -341,7 +341,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.App.62ca9895a7': { ko: '스페이스', zh: '空间', ja: 'スペース' },
   'settings.appearance.statusBar.kimiToggleDescription': {
     ko: '활성 워크스페이스의 Kimi 구독 사용량을 표시합니다.',
-    zh: 'Kimi 订阅',
+    zh: '显示当前工作区的 Kimi 订阅使用情况。',
     ja: 'Kimi サブスクリプション'
   },
   'auto.components.mobile.MobileHero.cd4e5e816f': {
@@ -541,12 +541,12 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.editor.EditorContent.e4b074749d': {
     ko: '머리말',
-    zh: '前线事项',
+    zh: '前言',
     ja: 'フロントマター'
   },
   'auto.components.editor.MarkdownPreview.2b2b31382c': {
     ko: '머리말',
-    zh: '前线事项',
+    zh: '前言',
     ja: 'フロントマター'
   },
   'auto.components.settings.IntegrationsPane.c0c8575e05': {

@@ -795,6 +795,27 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(true)
     })
 
+    it('persists final take records that are not represented in the snapshot', async () => {
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
+      const { id } = await historyAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/home/user',
+        command: 'printf ready',
+        env: { SHELL: '/bin/zsh' },
+        sessionId: 'sleep-checkpoint-tail'
+      })
+      const appendSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'appendIncrements')
+
+      lastSubprocess._simulateData('\x1b]777;orca-shell-ready')
+      await historyAdapter.shutdown(id, { immediate: true, keepHistory: true })
+
+      expect(appendSpy).toHaveBeenCalledWith(id, expect.any(Number), [
+        { kind: 'output', data: '\x1b]777;orca-shell-ready' }
+      ])
+    })
+
     it('returns cold restore data when disk history has unclean shutdown', async () => {
       // Simulate a previous daemon crash: write history files without endedAt
       const sessionId = 'cold-restore-test'

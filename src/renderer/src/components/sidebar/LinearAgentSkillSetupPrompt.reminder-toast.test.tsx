@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/agent-feature-install-commands'
 import {
   LinearAgentSkillSetupPrompt,
   _linearAgentSkillSetupPromptInternalsForTests
@@ -17,9 +18,10 @@ const mocks = vi.hoisted(() => ({
     installed: false,
     loading: false,
     error: null as string | null,
+    skills: [],
     refresh: vi.fn(async () => {})
   },
-  useInstalledAgentSkill: vi.fn(),
+  useInstalledAgentSkillNames: vi.fn(),
   getCliStatus: vi.fn(),
   getWslCliStatus: vi.fn(),
   ensureCli: vi.fn(async () => null as CliInstallStatus | null),
@@ -36,9 +38,9 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('@/hooks/useInstalledAgentSkills', () => ({
-  GLOBAL_AGENT_SKILL_SOURCE_KINDS: ['home'],
-  useInstalledAgentSkill: mocks.useInstalledAgentSkill
+vi.mock('@/hooks/useInstalledAgentSkills', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useInstalledAgentSkillNames: mocks.useInstalledAgentSkillNames
 }))
 
 vi.mock('@/lib/agent-skill-cli-prerequisite', () => ({
@@ -152,10 +154,11 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
     mocks.skillState.installed = false
     mocks.skillState.loading = false
     mocks.skillState.error = null
+    mocks.skillState.skills = []
     mocks.skillState.refresh.mockReset()
     mocks.skillState.refresh.mockImplementation(async () => {})
-    mocks.useInstalledAgentSkill.mockReset()
-    mocks.useInstalledAgentSkill.mockReturnValue(mocks.skillState)
+    mocks.useInstalledAgentSkillNames.mockReset()
+    mocks.useInstalledAgentSkillNames.mockReturnValue(mocks.skillState)
     mocks.getCliStatus.mockReset()
     mocks.getCliStatus.mockResolvedValue(
       cliStatus({ state: 'not_installed', pathConfigured: false })
@@ -194,6 +197,10 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
     await snoozeInitialModal({ linked: true, remote: false, surface: 'modal' })
     await renderPrompt({ linked: true, remote: false, surface: 'modal' })
 
+    expect(mocks.useInstalledAgentSkillNames).toHaveBeenCalledWith(
+      LINEAR_AGENT_SKILL_NAMES,
+      expect.objectContaining({ enabled: true, sourceKinds: ['home'] })
+    )
     expect(document.body.textContent).not.toContain(
       'Enable agents to read and edit the attached Linear ticket.'
     )

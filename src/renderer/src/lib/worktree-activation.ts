@@ -9,6 +9,7 @@ import type {
 } from '../../../shared/types'
 import type { EventProps } from '../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
+import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { buildSetupRunnerCommand } from './setup-runner'
 import { buildAgentStartupPlan } from './tui-agent-startup'
@@ -62,6 +63,9 @@ export type AgentStartedTelemetry = EventProps<'agent_started'>
 export type WorktreeStartupPayload = {
   command: string
   env?: Record<string, string>
+  launchConfig?: SleepingAgentLaunchConfig
+  launchToken?: string
+  launchAgent?: TuiAgent
   startupCommandDelivery?: StartupCommandDelivery
   initialAgentStatus?: { agent: TuiAgent; prompt: string }
   telemetry?: AgentStartedTelemetry
@@ -103,6 +107,8 @@ type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
     startup: {
       command: string
       env?: Record<string, string>
+      launchConfig?: SleepingAgentLaunchConfig
+      launchToken?: string
       initialAgentStatus?: { agent: TuiAgent; prompt: string }
       showSessionRestoredBanner?: boolean
       telemetry?: AgentStartedTelemetry
@@ -242,6 +248,8 @@ function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayl
   return {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
+    launchConfig: startupPlan.launchConfig,
+    launchAgent: agent,
     ...(startupPlan.startupCommandDelivery
       ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
       : {}),

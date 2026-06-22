@@ -73,7 +73,8 @@ describe('tui agent startup plans', () => {
       agent: 'codex',
       launchCommand: 'codex',
       expectedProcess: 'codex',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} }
     })
   })
 
@@ -113,7 +114,8 @@ describe('tui agent startup plans', () => {
       agent: 'openclaude',
       launchCommand: "openclaude 'fix it'",
       expectedProcess: 'openclaude',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: { agentCommand: 'openclaude', agentArgs: '', agentEnv: {} }
     })
   })
 
@@ -129,7 +131,8 @@ describe('tui agent startup plans', () => {
       agent: 'mistral-vibe',
       launchCommand: 'vibe',
       expectedProcess: 'vibe',
-      followupPrompt: 'fix it'
+      followupPrompt: 'fix it',
+      launchConfig: { agentCommand: 'vibe', agentArgs: '', agentEnv: {} }
     })
   })
 
@@ -177,6 +180,23 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("codex --profile work 'resume' 's1'")
   })
 
+  it('uses a captured launch command when building resume plans after overrides change', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: { codex: 'codex --profile changed' },
+      agentCommand: 'codex --profile captured',
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("codex --profile captured 'resume' 's1'")
+    expect(plan?.launchConfig).toEqual({
+      agentCommand: 'codex --profile captured',
+      agentArgs: '',
+      agentEnv: {}
+    })
+  })
+
   it('appends shell-quoted CLI arguments before prompt delivery flags', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',
@@ -215,6 +235,25 @@ describe('tui agent startup plans', () => {
 
     expect(plan?.launchCommand).toBe('goose')
     expect(plan?.env).toEqual({ GOOSE_MODE: 'auto' })
+    expect(plan?.launchConfig).toEqual({
+      agentCommand: 'goose',
+      agentArgs: '',
+      agentEnv: { GOOSE_MODE: 'auto' }
+    })
+  })
+
+  it('captures empty args and env as explicit launch config values', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'claude',
+      prompt: '',
+      cmdOverrides: {},
+      agentArgs: '',
+      agentEnv: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true
+    })
+
+    expect(plan?.launchConfig).toEqual({ agentCommand: 'claude', agentArgs: '', agentEnv: {} })
   })
 
   it('does not append the unsupported OpenCode TUI skip-permissions arg', () => {
@@ -330,7 +369,29 @@ describe('tui agent startup plans', () => {
       agent: 'devin',
       launchCommand: "devin '--permission-mode' 'bypass'",
       expectedProcess: 'devin',
-      followupPrompt: 'fix the tests'
+      followupPrompt: 'fix the tests',
+      launchConfig: {
+        agentCommand: "devin '--permission-mode' 'bypass'",
+        agentArgs: '--permission-mode bypass',
+        agentEnv: {}
+      }
+    })
+  })
+
+  it('excludes transient draft prompt env from launch config', () => {
+    const plan = buildAgentDraftLaunchPlan({
+      agent: 'pi',
+      draft: 'prefill text',
+      cmdOverrides: {},
+      agentEnv: { ORCA_AGENT_MODE: 'managed' },
+      platform: 'linux'
+    })
+
+    expect(plan?.env).toEqual({ ORCA_AGENT_MODE: 'managed', ORCA_PI_PREFILL: 'prefill text' })
+    expect(plan?.launchConfig).toEqual({
+      agentCommand: 'pi',
+      agentArgs: '',
+      agentEnv: { ORCA_AGENT_MODE: 'managed' }
     })
   })
 

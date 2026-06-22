@@ -97,6 +97,7 @@ import {
 import type { TerminalQuickCommand, TerminalQuickCommandScope } from '../../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager-registry'
 import {
   getTerminalQuickCommandScope,
   isTerminalQuickCommandComplete,
@@ -2169,6 +2170,8 @@ export default function TerminalPane({
         settingsRef.current ?? undefined
       )
       if (restored) {
+        requestAnimationFrame(refitAndRefreshAllTerminalPanes)
+        window.setTimeout(refitAndRefreshAllTerminalPanes, 100)
         focusPane.terminal.focus()
       }
     },

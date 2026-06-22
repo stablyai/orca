@@ -63,6 +63,7 @@ function prRecord(worktreeId: string, worktreePath: string): PullRequestGenerati
     context: { worktreeId, worktreePath, requestId: 1, repoId: REPO, branch: BRANCH },
     seed: { base: 'main', title: 'Title', body: 'Body', draft: false },
     seedFieldRevisions: { base: 0, title: 0, body: 0, draft: 0 },
+    requiresPushBeforeCreate: false,
     status: 'succeeded',
     result: null,
     error: null,

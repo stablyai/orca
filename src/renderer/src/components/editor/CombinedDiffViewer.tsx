@@ -11,7 +11,7 @@ import { useAppStore } from '@/store'
 import { joinPath } from '@/lib/path'
 import { detectLanguage } from '@/lib/language-detect'
 import { setWithLRU } from '@/lib/scroll-cache'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId, getConnectionIdForFile } from '@/lib/connection-context'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { writeRuntimeFile } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
@@ -55,7 +55,11 @@ import {
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
   type EditorPathMutationTarget
 } from './editor-autosave'
-import { getCombinedBranchEntries, getCombinedUncommittedEntries } from './combined-diff-entries'
+import {
+  getCombinedBranchEntries,
+  getCombinedUncommittedEntries,
+  shouldAutoReloadCombinedDiffFromGitStatus
+} from './combined-diff-entries'
 import { getCombinedDiffCommitMessageBody } from './combined-diff-commit-message'
 import { getDiffSectionEstimatedHeight, isIntrinsicHeightImageDiff } from './diff-section-layout'
 import { getLargeDiffRenderLimit } from './large-diff-render-limit'
@@ -387,6 +391,11 @@ export default function CombinedDiffViewer({
   )
   const entries = isBranchMode ? branchEntries : isCommitMode ? commitEntries : uncommittedEntries
   const treeMode = isBranchMode ? 'branch' : isCommitMode ? 'commit' : 'uncommitted'
+  const hasUncommittedEntriesSnapshot = file.uncommittedEntriesSnapshot !== undefined
+  const shouldAutoReloadFromGitStatus = shouldAutoReloadCombinedDiffFromGitStatus({
+    mode: treeMode,
+    hasUncommittedEntriesSnapshot
+  })
   const entrySignature = React.useMemo(
     () =>
       JSON.stringify({
@@ -820,15 +829,15 @@ export default function CombinedDiffViewer({
   )
 
   const combinedGitStatusSignature = React.useMemo(() => {
-    if (treeMode !== 'uncommitted') {
+    if (!shouldAutoReloadFromGitStatus) {
       return ''
     }
     return buildCombinedGitStatusSignature(sections, gitStatusEntries)
-  }, [gitStatusEntries, sections, treeMode])
+  }, [gitStatusEntries, sections, shouldAutoReloadFromGitStatus])
   const prevCombinedGitStatusSignatureRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (treeMode !== 'uncommitted') {
+    if (!shouldAutoReloadFromGitStatus) {
       prevCombinedGitStatusSignatureRef.current = null
       return
     }
@@ -843,7 +852,7 @@ export default function CombinedDiffViewer({
     for (const index of loadedIndicesRef.current) {
       requestCombinedDiffSectionReload(index)
     }
-  }, [combinedGitStatusSignature, requestCombinedDiffSectionReload, treeMode])
+  }, [combinedGitStatusSignature, requestCombinedDiffSectionReload, shouldAutoReloadFromGitStatus])
 
   useEffect(() => {
     if (treeMode !== 'uncommitted') {
@@ -965,7 +974,7 @@ export default function CombinedDiffViewer({
       const content = modifiedEditor?.getValue() ?? section.modifiedContent
       const absolutePath = joinPath(file.filePath, section.path)
       try {
-        const connectionId = getConnectionId(file.worktreeId) ?? undefined
+        const connectionId = getConnectionIdForFile(file.worktreeId, absolutePath) ?? undefined
         const state = useAppStore.getState()
         const worktree = file.worktreeId
           ? findWorktreeById(state.worktreesByRepo, file.worktreeId)

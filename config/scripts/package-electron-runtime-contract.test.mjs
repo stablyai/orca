@@ -243,6 +243,8 @@ describe('Electron runtime package contract', () => {
     const releaseEvidenceJob = releaseWorkflow.jobs['terminal-rendering-release-evidence']
     const releaseBuildNeeds = releaseWorkflow.jobs.build.needs
     const publishReleaseNeeds = releaseWorkflow.jobs['publish-release'].needs
+    // Why: Windows release evidence is temporarily paused for CI runner PTY readiness.
+    const releaseEvidencePlatforms = ['linux', 'mac']
 
     expect(packageScripts['test:e2e:terminal-rendering-golden']).toContain(
       '@terminal-rendering-golden'
@@ -280,7 +282,7 @@ describe('Electron runtime package contract', () => {
     expect(releaseEvidenceJob['continue-on-error']).toBe(true)
     expect(
       releaseEvidenceJob.strategy.matrix.include.map(({ platform }) => platform).sort()
-    ).toEqual(['linux', 'mac', 'windows'])
+    ).toEqual(releaseEvidencePlatforms)
     expect(releaseEvidenceJob.steps.map((step) => step.run ?? '')).toContain(
       'xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-release-evidence'
     )

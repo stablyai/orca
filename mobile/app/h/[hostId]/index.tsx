@@ -77,12 +77,12 @@ import {
   type WorkspaceViewSettings
 } from '../../../src/worktree/workspace-view-settings'
 import {
-  buildSections,
   getWorktreeStatus,
   isWorktreePinned,
   type FilterState,
   type Worktree
 } from '../../../src/worktree/workspace-list-sections'
+import { useWorkspaceSections } from '../../../src/worktree/use-workspace-sections'
 import { areWorktreeListsEqual } from '../../../src/worktree/worktree-list-snapshot'
 import { repoColor } from '../../../src/worktree/repo-color'
 import {
@@ -154,6 +154,7 @@ export function HostScreen({
   const now = useNow(30_000)
   const [repoColorsByName, setRepoColorsByName] = useState<Map<string, string>>(new Map())
   const [repoIconsByName, setRepoIconsByName] = useState<Map<string, RepoIcon>>(new Map())
+  const [repoSummaries, setRepoSummaries] = useState<RepoSummary[]>([])
   const [hostName, setHostName] = useState('')
   const [error, setError] = useState('')
   const [compatVerdict, setCompatVerdict] = useState<CompatVerdict>({ kind: 'ok' })
@@ -171,8 +172,6 @@ export function HostScreen({
   // repo ids (desktop's PersistedUIState), but the section headers/rows key on
   // displayName, so we bridge the two here.
   const [repoIdsByName, setRepoIdsByName] = useState<Map<string, string>>(new Map())
-
-  // Modals
   const [showSortPicker, setShowSortPicker] = useState(false)
   const [showGroupPicker, setShowGroupPicker] = useState(false)
   const [showFilterModal, setShowFilterModal] = useState(false)
@@ -187,11 +186,8 @@ export function HostScreen({
   const leaveHost = useCallback(() => {
     leaveHostRoute(router)
   }, [router])
-
-  // Persisted pin state
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set())
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
-
   // Why: snapshot of the synced view settings so the focus-effect ui.get merge
   // and the optimistic ui.set writes read the latest values without forcing the
   // callbacks to re-create on every state change.
@@ -201,10 +197,11 @@ export function HostScreen({
     hideSleeping: false,
     hideDefaultBranch: false,
     filterRepoIds: [],
-    collapsedGroups: []
+    collapsedGroups: [],
+    workspaceHostScope: undefined,
+    visibleWorkspaceHostIds: undefined
   })
 
-  // Keep the snapshot ref aligned with the individual view-setting states.
   useEffect(() => {
     viewStateRef.current = {
       groupMode,
@@ -212,7 +209,9 @@ export function HostScreen({
       hideSleeping: filters.hideSleeping,
       hideDefaultBranch: filters.hideDefaultBranch,
       filterRepoIds: [...filters.filterRepoIds],
-      collapsedGroups: [...collapsedGroups]
+      collapsedGroups: [...collapsedGroups],
+      workspaceHostScope: viewStateRef.current.workspaceHostScope,
+      visibleWorkspaceHostIds: viewStateRef.current.visibleWorkspaceHostIds
     }
   }, [groupMode, sortMode, filters, collapsedGroups])
 
@@ -330,6 +329,7 @@ export function HostScreen({
     setCompatVerdict({ kind: 'ok' })
     setRepoColorsByName(new Map())
     setRepoIconsByName(new Map())
+    setRepoSummaries([])
     repoMetadataFetchedAtRef.current = 0
     // Why: re-seed from the current host's cache on every hostId change.
     // The useState initializer only runs on first mount, so if Expo Router
@@ -378,8 +378,8 @@ export function HostScreen({
         return
       }
       fetchRepoMetadataInFlightRef.current = true
-      const requestClient = client
-      const requestHostId = hostId
+      const requestClient = client,
+        requestHostId = hostId
       try {
         const repoResponse = await requestClient.sendRequest('repo.list')
         if (clientRef.current !== requestClient || hostId !== requestHostId || !repoResponse.ok) {
@@ -388,6 +388,7 @@ export function HostScreen({
         const repoResult = (repoResponse as RpcSuccess).result as { repos: RepoSummary[] }
         repoMetadataFetchedAtRef.current = Date.now()
         setCachedRepos(requestHostId, repoResult.repos)
+        setRepoSummaries(repoResult.repos)
         setRepoColorsByName(
           new Map(
             repoResult.repos.map((repo) => [
@@ -785,24 +786,6 @@ export function HostScreen({
     })
   }, [connState, worktrees, lastKnownWorktrees, sleptIds, optimisticActiveWorktreeId])
 
-  const uniqueRepos = useMemo(() => {
-    const repos = new Map<string, { id: string; color: string }>()
-    for (const w of displayWorktrees) {
-      if (!repos.has(w.repo)) {
-        repos.set(w.repo, {
-          id: repoIdsByName.get(w.repo) ?? w.repoId,
-          color: repoColorsByName.get(w.repo) ?? repoColor(w.repo)
-        })
-      }
-    }
-    return [...repos.entries()].map(([name, { id, color }]) => ({ name, id, color }))
-  }, [displayWorktrees, repoColorsByName, repoIdsByName])
-
-  const uniqueRepoColors = useMemo(
-    () => new Map(uniqueRepos.map((repo) => [repo.name, repo.color])),
-    [uniqueRepos]
-  )
-
   const toggleCollapsed = useCallback(
     (title: string) => {
       const next = new Set(viewStateRef.current.collapsedGroups)
@@ -815,20 +798,20 @@ export function HostScreen({
     },
     [persistViewSettings]
   )
-
-  const rawSections = useMemo(
-    () => buildSections(displayWorktrees, sortMode, filters, search, groupMode, pinnedIds),
-    [displayWorktrees, sortMode, filters, search, groupMode, pinnedIds]
-  )
-
-  const sections = useMemo(
-    () =>
-      rawSections.map((s) => ({
-        ...s,
-        data: collapsedGroups.has(s.title) ? [] : s.data
-      })),
-    [rawSections, collapsedGroups]
-  )
+  const { sections, rawSections, uniqueRepos, uniqueRepoColors } = useWorkspaceSections({
+    displayWorktrees,
+    sortMode,
+    filters,
+    search,
+    groupMode,
+    pinnedIds,
+    repoIdsByName,
+    repoSummaries,
+    repoColorsByName,
+    collapsedGroups,
+    workspaceHostScope: viewStateRef.current.workspaceHostScope,
+    visibleWorkspaceHostIds: viewStateRef.current.visibleWorkspaceHostIds
+  })
   const existingWorktreePaths = useMemo(() => worktrees.map((w) => w.path), [worktrees])
 
   const { sectionListRef, onScrollToIndexFailed } = useActiveWorktreeScroll(sections)
