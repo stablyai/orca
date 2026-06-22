@@ -1674,89 +1674,131 @@ function CommentRow({
   const trimmedDraft = draft.trim()
   const canSaveEdit = !submittingEdit && trimmedDraft.length > 0 && trimmedDraft !== comment.body
   const relativeTime = formatPrCommentRelativeTime(comment.createdAt, Date.now())
-  const authorLine = (
-    <>
-      {selectionControl ? (
-        <span className="flex shrink-0 items-center">{selectionControl}</span>
-      ) : comment.authorAvatarUrl ? (
-        <img
-          src={comment.authorAvatarUrl}
-          alt={comment.author}
-          className={cn(isReply ? presentation.avatarReply : presentation.avatar)}
-        />
-      ) : (
-        <div className={cn(isReply ? presentation.avatarReply : presentation.avatar)} aria-hidden />
+
+  const authorAvatar = comment.authorAvatarUrl ? (
+    <img
+      src={comment.authorAvatarUrl}
+      alt={comment.author}
+      className={cn(isReply ? presentation.avatarReply : presentation.avatar)}
+    />
+  ) : (
+    <div className={cn(isReply ? presentation.avatarReply : presentation.avatar)} aria-hidden />
+  )
+
+  const authorName = (
+    <span className={cn(presentation.author, comment.isResolved && presentation.authorResolved)}>
+      {comment.author}
+    </span>
+  )
+  const authorLead = selectionControl ? (
+    <span className="flex shrink-0 items-center">{selectionControl}</span>
+  ) : (
+    authorAvatar
+  )
+
+  const commentActions = !editing ? (
+    <div className="flex shrink-0 items-center gap-0.5 can-hover:opacity-0 group-hover/comment:opacity-100 transition-opacity">
+      {showResolve &&
+        comment.threadId != null &&
+        onResolve &&
+        (actionState === 'open' || actionState === 'resolved') && (
+          <ResolveButton
+            threadId={comment.threadId}
+            isResolved={comment.isResolved ?? false}
+            onResolve={onResolve}
+          />
+        )}
+      {showReply && onReply && (
+        <button
+          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          title={
+            replyDisabled
+              ? replyDisabledReason
+              : translate('auto.components.right.sidebar.checks.panel.content.c1f6fc006a', 'Reply')
+          }
+          disabled={replyDisabled}
+          onClick={(event) => {
+            event.stopPropagation()
+            onReply(comment)
+          }}
+        >
+          {translate('auto.components.right.sidebar.checks.panel.content.c1f6fc006a', 'Reply')}
+        </button>
       )}
-      <span className={cn(presentation.author, comment.isResolved && presentation.authorResolved)}>
-        {comment.author}
-      </span>
-      {relativeTime ? (
-        <span className={presentation.time} aria-hidden={presentation.time === 'hidden'}>
-          {presentation.useCardLayout ? `· ${relativeTime}` : relativeTime}
-        </span>
-      ) : null}
-      {automated && (
-        <span className={presentation.botBadge}>
-          {translate('auto.components.right.sidebar.checks.panel.content.2ba0a32bdd', 'bot')}
-        </span>
-      )}
-      {!isReply && comment.path && (
-        <span className={presentation.pathBadge}>
-          {comment.path.split('/').pop()}
-          {formatLineRange(comment) && `:${formatLineRange(comment)}`}
-        </span>
-      )}
-      {!isReply ? (
+      <CopyButton text={buildCopyText(comment)} />
+      <CommentMoreMenu
+        comment={comment}
+        onStartEdit={canMutateComment && onEditComment ? handleStartEdit : undefined}
+        onDelete={canMutateComment && onDeleteComment ? handleDelete : undefined}
+        onQueueForAgent={!isReply ? onQueueForAgent : undefined}
+      />
+    </div>
+  ) : null
+
+  const cardMetaRow =
+    presentation.useCardLayout && !isReply ? (
+      <div className={presentation.commentHeaderMeta}>
+        {relativeTime ? <span>{relativeTime}</span> : null}
+        {automated ? (
+          <span className={presentation.botBadge}>
+            {translate('auto.components.right.sidebar.checks.panel.content.2ba0a32bdd', 'bot')}
+          </span>
+        ) : null}
+        {comment.path ? (
+          <span className={presentation.pathBadge} title={comment.path}>
+            {comment.path.split('/').pop()}
+            {formatLineRange(comment) && `:${formatLineRange(comment)}`}
+          </span>
+        ) : null}
         <PRCommentActionBadge
           actionState={actionState}
           isQueued={isQueued}
           presentation={presentation}
         />
-      ) : null}
-      <div className="flex-1" />
-      {!editing && (
-        <div className="flex items-center gap-0.5 can-hover:opacity-0 group-hover/comment:opacity-100 transition-opacity">
-          {showResolve &&
-            comment.threadId != null &&
-            onResolve &&
-            (actionState === 'open' || actionState === 'resolved') && (
-              <ResolveButton
-                threadId={comment.threadId}
-                isResolved={comment.isResolved ?? false}
-                onResolve={onResolve}
-              />
-            )}
-          {showReply && onReply && (
-            <button
-              className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              title={
-                replyDisabled
-                  ? replyDisabledReason
-                  : translate(
-                      'auto.components.right.sidebar.checks.panel.content.c1f6fc006a',
-                      'Reply'
-                    )
-              }
-              disabled={replyDisabled}
-              onClick={(event) => {
-                event.stopPropagation()
-                onReply(comment)
-              }}
-            >
-              {translate('auto.components.right.sidebar.checks.panel.content.c1f6fc006a', 'Reply')}
-            </button>
-          )}
-          <CopyButton text={buildCopyText(comment)} />
-          <CommentMoreMenu
-            comment={comment}
-            onStartEdit={canMutateComment && onEditComment ? handleStartEdit : undefined}
-            onDelete={canMutateComment && onDeleteComment ? handleDelete : undefined}
-            onQueueForAgent={!isReply ? onQueueForAgent : undefined}
-          />
+      </div>
+    ) : null
+
+  const authorLine =
+    presentation.useCardLayout && !isReply ? (
+      <>
+        <div className={presentation.commentHeaderPrimary}>
+          {authorLead}
+          {authorName}
+          {commentActions}
         </div>
-      )}
-    </>
-  )
+        {cardMetaRow}
+      </>
+    ) : (
+      <>
+        {authorLead}
+        {authorName}
+        {relativeTime ? (
+          <span className={presentation.time} aria-hidden={presentation.time === 'hidden'}>
+            {presentation.useCardLayout ? `· ${relativeTime}` : relativeTime}
+          </span>
+        ) : null}
+        {automated && (
+          <span className={presentation.botBadge}>
+            {translate('auto.components.right.sidebar.checks.panel.content.2ba0a32bdd', 'bot')}
+          </span>
+        )}
+        {!isReply && comment.path && (
+          <span className={presentation.pathBadge}>
+            {comment.path.split('/').pop()}
+            {formatLineRange(comment) && `:${formatLineRange(comment)}`}
+          </span>
+        )}
+        {!isReply ? (
+          <PRCommentActionBadge
+            actionState={actionState}
+            isQueued={isQueued}
+            presentation={presentation}
+          />
+        ) : null}
+        <div className="flex-1" />
+        {commentActions}
+      </>
+    )
 
   return (
     <div
@@ -1900,10 +1942,7 @@ function PRCommentGroupView({
 
   const content =
     group.kind === 'standalone' ? (
-      <div
-        className={surfaceClassName}
-        data-testid={presentation.useCardLayout ? 'pr-comment-card' : undefined}
-      >
+      <div className={surfaceClassName} data-testid="pr-comment-group">
         <CommentRow
           comment={group.comment}
           isReply={false}
@@ -1916,10 +1955,7 @@ function PRCommentGroupView({
         {replyComposer}
       </div>
     ) : (
-      <div
-        className={surfaceClassName}
-        data-testid={presentation.useCardLayout ? 'pr-comment-card' : undefined}
-      >
+      <div className={surfaceClassName} data-testid="pr-comment-group">
         <CommentRow
           comment={group.root}
           isReply={false}

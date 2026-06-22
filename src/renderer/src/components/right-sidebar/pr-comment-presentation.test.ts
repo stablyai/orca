@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_PR_COMMENT_PRESENTATION_VARIANT,
@@ -32,6 +34,7 @@ describe('pr-comment-presentation', () => {
   })
 
   it('falls back to the default variant when localStorage is unset', () => {
+    window.localStorage.removeItem('orca:pr-comment-presentation')
     expect(resolvePRCommentPresentationVariant()).toBe(DEFAULT_PR_COMMENT_PRESENTATION_VARIANT)
   })
 })

@@ -7,7 +7,7 @@ export type PRCommentsSidebarSeed = {
   prNumber: number
 }
 
-const FIXTURE_COMMENTS: PRComment[] = [
+export const FIXTURE_COMMENTS: PRComment[] = [
   {
     id: 101,
     author: 'alice',
@@ -140,5 +140,3 @@ export async function seedPRCommentsSidebarFixture(page: Page): Promise<PRCommen
     return { worktreeId: worktree.id, branch, prNumber }
   }, FIXTURE_COMMENTS)
 }
-
-export { FIXTURE_COMMENTS }
