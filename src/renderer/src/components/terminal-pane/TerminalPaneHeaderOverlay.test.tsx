@@ -3,6 +3,7 @@
  */
 import { act, createRef, type ReactNode, type RefObject } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
@@ -65,7 +66,7 @@ function renderOverlay({
       <TerminalPaneHeaderOverlay
         tabId="tab-1"
         worktreeId="wt-1"
-        cwd="/tmp"
+        cwd={path.join(path.sep, 'tmp')}
         showAlwaysOnHeaders={showAlwaysOnHeaders}
         paneCount={paneCount}
         activePaneId={1}
