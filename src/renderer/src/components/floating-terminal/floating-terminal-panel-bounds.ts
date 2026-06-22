@@ -134,16 +134,6 @@ export function getMaximizedFloatingTerminalBounds(): FloatingTerminalPanelBound
   }
 }
 
-export function getMinifiedFloatingTerminalBounds(): FloatingTerminalPanelBounds {
-  const viewport = getViewport()
-  return clampFloatingTerminalBounds({
-    left: viewport.width - MIN_PANEL_WIDTH - DEFAULT_RIGHT_GAP,
-    top: viewport.height - MIN_PANEL_HEIGHT - DEFAULT_BOTTOM_GAP,
-    width: MIN_PANEL_WIDTH,
-    height: MIN_PANEL_HEIGHT
-  })
-}
-
 export function hasUsableFloatingTerminalPanelViewport(): boolean {
   const viewport = getViewport()
   return (

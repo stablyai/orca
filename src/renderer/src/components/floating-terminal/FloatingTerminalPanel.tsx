@@ -84,7 +84,6 @@ import {
   getDefaultFloatingTerminalCommittedBounds,
   getDefaultFloatingTerminalBounds,
   getMaximizedFloatingTerminalBounds,
-  getMinifiedFloatingTerminalBounds,
   persistFloatingTerminalPanelBounds,
   readPersistedFloatingTerminalPanelBounds,
   resolveFloatingTerminalPanelCommittedBounds,
@@ -95,6 +94,7 @@ import {
   type FloatingTerminalPanelBoundsSource
 } from './floating-terminal-panel-bounds'
 import { translate } from '@/i18n/i18n'
+import { consumeFloatingTerminalOpenMaximizedIntent } from '@/lib/floating-terminal'
 const EMPTY_TERMINAL_TABS: TerminalTab[] = []
 const EMPTY_BROWSER_TABS: BrowserTabState[] = []
 const EMPTY_GROUPS: TabGroup[] = []
@@ -979,12 +979,31 @@ export function FloatingTerminalPanel({
     setMaximized(true)
   }, [bounds, maximized])
 
-  const minifyPanel = useCallback(() => {
-    restoreBoundsRef.current = null
+  const maximizePanel = useCallback(() => {
+    // Why: idempotent maximize used by the open-into-maximized intent. Unlike
+    // toggleMaximized it never restores, and only stashes restore bounds on the
+    // first transition so a redundant call cannot clobber the saved size.
+    if (maximized) {
+      return
+    }
+    restoreBoundsRef.current = {
+      committedBounds: committedBoundsRef.current,
+      renderedBounds: bounds,
+      source: boundsSourceRef.current
+    }
     stagedBoundsRef.current = null
-    setMaximized(false)
-    commitUserBounds(getMinifiedFloatingTerminalBounds())
-  }, [commitUserBounds])
+    setBounds(getMaximizedFloatingTerminalBounds())
+    setMaximized(true)
+  }, [bounds, maximized])
+
+  useEffect(() => {
+    // Why: when App opens the panel via Cmd+Opt+Shift+A while it was closed,
+    // it records a one-shot intent; honor it once the panel is open so it
+    // starts maximized regardless of its last saved size.
+    if (open && consumeFloatingTerminalOpenMaximizedIntent()) {
+      maximizePanel()
+    }
+  }, [open, maximizePanel])
 
   const handleFloatingPanelShortcutAction = useCallback(
     (input: FloatingPanelShortcutInput, consume: () => void): boolean => {
@@ -1078,11 +1097,6 @@ export function FloatingTerminalPanel({
         toggleMaximized()
         return true
       }
-      if (matchesFloatingChrome('floatingWorkspace.minify')) {
-        consume()
-        minifyPanel()
-        return true
-      }
       if (matchesFloatingChrome('floatingWorkspace.minimize')) {
         consume()
         onOpenChange(false)
@@ -1099,7 +1113,6 @@ export function FloatingTerminalPanel({
       createFloatingMarkdownTab,
       createFloatingTerminalTab,
       focusPanelForShortcutsAfterClose,
-      minifyPanel,
       onOpenChange,
       openFloatingMarkdownTab,
       toggleMaximized,
@@ -1153,13 +1166,6 @@ export function FloatingTerminalPanel({
         ) !== null ||
         keybindingMatchesAction(
           'floatingWorkspace.maximize',
-          nativeEvent,
-          platform,
-          state.keybindings,
-          floatingChromeMatchOptions
-        ) ||
-        keybindingMatchesAction(
-          'floatingWorkspace.minify',
           nativeEvent,
           platform,
           state.keybindings,

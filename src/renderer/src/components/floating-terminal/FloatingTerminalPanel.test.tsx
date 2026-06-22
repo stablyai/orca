@@ -12,9 +12,12 @@ import {
   clampFloatingTerminalBounds,
   getDefaultFloatingTerminalBounds,
   getMaximizedFloatingTerminalBounds,
-  getMinifiedFloatingTerminalBounds,
   type FloatingTerminalPanelBounds
 } from './floating-terminal-panel-bounds'
+import {
+  consumeFloatingTerminalOpenMaximizedIntent,
+  requestFloatingTerminalOpenMaximized
+} from '@/lib/floating-terminal'
 
 type EffectCallback = () => void | (() => void)
 
@@ -690,6 +693,9 @@ describe('FloatingTerminalPanel close behavior', () => {
     hookRuntime.values = []
     saveDialogBox.fileId = null
     resetStore()
+    // Why: the open-maximized intent is a module singleton; drain any leftover
+    // from a prior test so it cannot bleed into an unrelated render.
+    consumeFloatingTerminalOpenMaximizedIntent()
     mocks.createTab.mockReturnValue(makeTab({ id: 'created-tab' }))
     mocks.createWebRuntimeSessionBrowserTab.mockResolvedValue(false)
     mocks.createWebRuntimeSessionTerminal.mockResolvedValue(false)
@@ -1641,32 +1647,33 @@ describe('FloatingTerminalPanel close behavior', () => {
     )
   })
 
-  it('routes focused floating workspace minify shortcuts to compact visible bounds', async () => {
-    ;(storeBox.state as FloatingPanelStoreState).keybindings = {
-      'floatingWorkspace.minify': ['Ctrl+Alt+J']
-    } as unknown as KeybindingOverrides
-    const onOpenChange = vi.fn()
-    const element = await renderPanel(true, onOpenChange)
-    const defaultBounds = getPanelStyleBounds(element)
-    const { keydownListener, panelElement } = bindFocusedFloatingPanelKeydown(element)
-    const preventDefault = vi.fn()
+  it('opens maximized when the open-maximized intent is set, ignoring saved bounds', async () => {
+    const savedBounds = { left: 120, top: 96, width: 760, height: 420 }
+    getMockedLocalStorage().getItem.mockImplementation((key: string) =>
+      key === FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY ? JSON.stringify(savedBounds) : null
+    )
+    requestFloatingTerminalOpenMaximized()
 
-    keydownListener(
-      makeFocusedPanelKeyEvent({
-        altKey: true,
-        ctrlKey: true,
-        key: 'j',
-        preventDefault,
-        target: panelElement
-      })
+    await renderPanel(true)
+    runEffects()
+
+    expect(getPanelStyleBounds(await renderPanel(true))).toEqual(
+      getMaximizedFloatingTerminalBounds()
+    )
+    // Why: the intent is one-shot and must be consumed by the open transition.
+    expect(consumeFloatingTerminalOpenMaximizedIntent()).toBe(false)
+  })
+
+  it('does not maximize on open when no intent is set', async () => {
+    const savedBounds = { left: 120, top: 96, width: 760, height: 420 }
+    getMockedLocalStorage().getItem.mockImplementation((key: string) =>
+      key === FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY ? JSON.stringify(savedBounds) : null
     )
 
-    const compactBounds = getPanelStyleBounds(await renderPanel(true))
-    expect(preventDefault).toHaveBeenCalledWith()
-    expect(compactBounds).toEqual(getMinifiedFloatingTerminalBounds())
-    expect(compactBounds.width).toBeLessThan(defaultBounds.width)
-    expect(compactBounds.height).toBeLessThan(defaultBounds.height)
-    expect(onOpenChange).not.toHaveBeenCalled()
+    const element = await renderPanel(true)
+    runEffects()
+
+    expect(getPanelStyleBounds(element)).toEqual(savedBounds)
   })
 
   it('routes focused floating workspace minimize shortcuts to close the panel', async () => {
@@ -1715,33 +1722,6 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(getPanelStyleBounds(await renderPanel(true))).toEqual(
       getMaximizedFloatingTerminalBounds()
     )
-  })
-
-  it('routes focused floating workspace minify shortcuts from a custom binding on Windows', async () => {
-    vi.stubGlobal('navigator', { userAgent: 'Windows' })
-    ;(storeBox.state as FloatingPanelStoreState).keybindings = {
-      'floatingWorkspace.minify': ['Ctrl+Alt+J']
-    } as unknown as KeybindingOverrides
-    const element = await renderPanel(true)
-    const defaultBounds = getPanelStyleBounds(element)
-    const { keydownListener, panelElement } = bindFocusedFloatingPanelKeydown(element)
-    const preventDefault = vi.fn()
-
-    keydownListener(
-      makeFocusedPanelKeyEvent({
-        altKey: true,
-        ctrlKey: true,
-        key: 'j',
-        preventDefault,
-        target: panelElement
-      })
-    )
-
-    const compactBounds = getPanelStyleBounds(await renderPanel(true))
-    expect(preventDefault).toHaveBeenCalledWith()
-    expect(compactBounds).toEqual(getMinifiedFloatingTerminalBounds())
-    expect(compactBounds.width).toBeLessThan(defaultBounds.width)
-    expect(compactBounds.height).toBeLessThan(defaultBounds.height)
   })
 
   it('keeps the empty floating workspace focused after Cmd+W closes the last tab', async () => {

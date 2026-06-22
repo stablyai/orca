@@ -51,7 +51,6 @@ export type KeybindingActionId =
   | 'sidebar.focusWorktreeList'
   | 'floatingTerminal.toggle'
   | 'floatingWorkspace.maximize'
-  | 'floatingWorkspace.minify'
   | 'floatingWorkspace.minimize'
   | 'zoom.in'
   | 'zoom.out'
@@ -426,34 +425,12 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       'maximize',
       'expand'
     ],
-    // Why: macOS only. On Windows/Linux, Ctrl+Alt+Arrow is commonly
-    // reserved by the OS or desktop environment.
+    // Why: pairs with the floatingTerminal.toggle chord (Cmd+Opt+A) so
+    // maximize/restore lives on the same key anchor and stays one-handed,
+    // instead of the two-hand reach to Cmd+Opt+ArrowUp. macOS-only default;
+    // Linux/Windows stay unbound for users to assign.
     defaultBindings: {
-      darwin: ['Mod+Alt+ArrowUp'],
-      linux: [],
-      win32: []
-    },
-    allowInTerminal: true
-  },
-  {
-    id: 'floatingWorkspace.minify',
-    title: 'Minify Floating Workspace Panel',
-    group: 'Global',
-    scope: 'global',
-    searchKeywords: [
-      'shortcut',
-      'floating',
-      'workspace',
-      'panel',
-      'floating workspace',
-      'workspace panel',
-      'minify',
-      'compact'
-    ],
-    // Why: macOS only, same as maximize. On Windows/Linux, Ctrl+Alt+Arrow is
-    // commonly reserved by the OS or desktop environment.
-    defaultBindings: {
-      darwin: ['Mod+Alt+ArrowDown'],
+      darwin: ['Mod+Alt+Shift+A'],
       linux: [],
       win32: []
     },

@@ -61,7 +61,10 @@ import { onOnboardingReopened } from './components/onboarding/show-onboarding-ev
 import { shouldShowOnboarding } from './components/onboarding/should-show-onboarding'
 import { MarkdownTemplatePicker } from './components/editor/MarkdownTemplatePicker'
 import { FloatingTerminalToggleButton } from './components/floating-terminal/FloatingTerminalToggleButton'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
+import {
+  TOGGLE_FLOATING_TERMINAL_EVENT,
+  requestFloatingTerminalOpenMaximized
+} from '@/lib/floating-terminal'
 import {
   isFloatingWorkspacePanelFocused,
   isFloatingWorkspacePanelShortcut,
@@ -1394,6 +1397,7 @@ function App(): React.JSX.Element {
     activeView,
     activeWorktreeId,
     actions,
+    floatingTerminalEnabled,
     floatingTerminalOpen,
     floatingVisibleTabCount,
     keybindings,
@@ -1408,6 +1412,7 @@ function App(): React.JSX.Element {
     activeView,
     activeWorktreeId,
     actions,
+    floatingTerminalEnabled,
     floatingTerminalOpen,
     floatingVisibleTabCount,
     keybindings,
@@ -1425,6 +1430,7 @@ function App(): React.JSX.Element {
         activeView,
         activeWorktreeId,
         actions,
+        floatingTerminalEnabled,
         floatingTerminalOpen,
         floatingVisibleTabCount,
         keybindings,
@@ -1517,6 +1523,22 @@ function App(): React.JSX.Element {
       ) {
         input.preventDefault()
         setFloatingTerminalOpenWithFocus(false)
+        return
+      }
+
+      // Why: when the floating workspace is closed, its own keydown handler is
+      // unmounted and cannot claim Cmd+Opt+Shift+A. Honor the maximize chord
+      // here by opening the panel with a one-shot intent so it mounts straight
+      // into the maximized state. While the panel is open, this is a no-op: the
+      // panel's handler owns the maximize/restore toggle.
+      if (
+        !floatingTerminalOpen &&
+        matchShortcut('floatingWorkspace.maximize') &&
+        floatingTerminalEnabled
+      ) {
+        input.preventDefault()
+        requestFloatingTerminalOpenMaximized()
+        setFloatingTerminalOpenWithFocus(true)
         return
       }
 

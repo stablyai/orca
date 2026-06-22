@@ -443,7 +443,6 @@ describe('keybindings', () => {
   it('defines floating workspace panel action metadata', () => {
     const actionIds = [
       'floatingWorkspace.maximize' as KeybindingActionId,
-      'floatingWorkspace.minify' as KeybindingActionId,
       'floatingWorkspace.minimize' as KeybindingActionId
     ] as const
 
@@ -452,16 +451,12 @@ describe('keybindings', () => {
     }
   })
 
-  it('assigns floating workspace maximize and minify defaults only on macOS', () => {
+  it('assigns the floating workspace maximize default only on macOS', () => {
     const maximizeAction = 'floatingWorkspace.maximize' as KeybindingActionId
-    const minifyAction = 'floatingWorkspace.minify' as KeybindingActionId
 
-    expect(getEffectiveKeybindingsForAction(maximizeAction, 'darwin')).toEqual(['Mod+Alt+ArrowUp'])
-    expect(getEffectiveKeybindingsForAction(minifyAction, 'darwin')).toEqual(['Mod+Alt+ArrowDown'])
+    expect(getEffectiveKeybindingsForAction(maximizeAction, 'darwin')).toEqual(['Mod+Alt+Shift+A'])
     expect(getEffectiveKeybindingsForAction(maximizeAction, 'linux')).toEqual([])
     expect(getEffectiveKeybindingsForAction(maximizeAction, 'win32')).toEqual([])
-    expect(getEffectiveKeybindingsForAction(minifyAction, 'linux')).toEqual([])
-    expect(getEffectiveKeybindingsForAction(minifyAction, 'win32')).toEqual([])
   })
 
   it('leaves floating workspace minimize unassigned because floating terminal toggle owns show and hide', () => {
