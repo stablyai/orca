@@ -4873,17 +4873,49 @@ describe('registerPtyHandlers', () => {
 
       mockProc.emitData('\x1b]777;orca-shell-ready\x07')
       await Promise.resolve()
-      vi.advanceTimersByTime(49)
+      vi.advanceTimersByTime(50)
       await Promise.resolve()
       expect(mockProc.proc.write).not.toHaveBeenCalled()
 
-      vi.advanceTimersByTime(1)
+      vi.advanceTimersByTime(150)
       await Promise.resolve()
       expect(mockProc.proc.write).toHaveBeenCalledWith("codex 'linked issue context'\n")
     } finally {
       vi.useRealTimers()
     }
   })
+
+  posixOnlyIt(
+    'uses the short settle path for delivery-hinted Codex when prompt follows the marker',
+    async () => {
+      vi.useFakeTimers()
+      const mockProc = createMockProc()
+      spawnMock.mockReturnValue(mockProc.proc)
+
+      try {
+        registerPtyHandlers(mainWindow as never)
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp',
+          command: "codex 'linked issue context'",
+          startupCommandDelivery: 'shell-ready'
+        })
+
+        mockProc.emitData('\x1b]777;orca-shell-ready\x07\r\nuser@host % ')
+        await Promise.resolve()
+        vi.advanceTimersByTime(29)
+        await Promise.resolve()
+        expect(mockProc.proc.write).not.toHaveBeenCalled()
+
+        vi.advanceTimersByTime(1)
+        await Promise.resolve()
+        expect(mockProc.proc.write).toHaveBeenCalledWith("codex 'linked issue context'\n")
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
 
   posixOnlyIt('waits for shell-ready when Codex uses the native prefill flag', async () => {
     vi.useFakeTimers()
