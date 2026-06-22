@@ -16,6 +16,7 @@ import {
   FileExplorerRow,
   shouldShowCollapseFolderAction,
   shouldShowFindInFolderAction,
+  shouldShowCopyFileAction,
   shouldShowRemoteDownloadAction
 } from './FileExplorerRow'
 import { FileExplorerVirtualRows } from './FileExplorerVirtualRows'
@@ -572,6 +573,16 @@ describe('FileExplorerRow collapse folder action', () => {
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
 
     expect(shouldShowRemoteDownloadAction(fileNode, 'ssh-1')).toBe(false)
+  })
+
+  it('shows OS file copy only for single local desktop selections', () => {
+    expect(shouldShowCopyFileAction(null, 1)).toBe(true)
+    expect(shouldShowCopyFileAction(undefined, 2)).toBe(false)
+    expect(shouldShowCopyFileAction('ssh-1', 1)).toBe(false)
+
+    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+
+    expect(shouldShowCopyFileAction(null, 1)).toBe(false)
   })
 
   it('calls the preload download API and shows success only when not canceled', async () => {
