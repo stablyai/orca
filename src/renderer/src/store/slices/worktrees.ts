@@ -15,7 +15,8 @@ import type {
   RemoveWorktreeResult,
   WorktreeLineage,
   WorkspaceLineage,
-  WorktreeMeta
+  WorktreeMeta,
+  Repo
 } from '../../../../shared/types'
 import type { RuntimeWorktreeListResult } from '../../../../shared/runtime-types'
 import {
@@ -45,6 +46,7 @@ import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
@@ -69,9 +71,14 @@ const pendingActivationTerminalPrepCancels = new Map<string, () => void>()
 const detachedHeadAutoDerivedDisplayNames = new Map<string, string>()
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
 
+type WorktreeRefreshRepo = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
+type WorktreeRefreshResult =
+  | { repoId: string; ok: boolean; detected: DetectedWorktreeListResult }
+  | { repoId: string; ok: false }
+
 async function mapReposForWorktreeRefresh<T>(
-  repos: readonly { id: string }[],
-  mapper: (repo: { id: string }) => Promise<T>
+  repos: readonly WorktreeRefreshRepo[],
+  mapper: (repo: WorktreeRefreshRepo) => Promise<T>
 ): Promise<T[]> {
   const results = Array<T>(repos.length)
   let nextIndex = 0
@@ -313,6 +320,94 @@ function toVisibleWorktree(worktree: DetectedWorktreeListResult['worktrees'][num
 
 function toVisibleWorktrees(result: DetectedWorktreeListResult): Worktree[] {
   return result.worktrees.filter((worktree) => worktree.visible).map(toVisibleWorktree)
+}
+
+function worktreeBelongsToHost(
+  worktree: Pick<Worktree, 'hostId'>,
+  hostId: ExecutionHostId,
+  treatHostlessAsLocal: boolean
+) {
+  if (worktree.hostId) {
+    return worktree.hostId === hostId
+  }
+  return treatHostlessAsLocal ? hostId === LOCAL_EXECUTION_HOST_ID : true
+}
+
+function withWorktreeHost<T extends Worktree>(worktree: T, hostId: ExecutionHostId): T {
+  return worktree.hostId || hostId === LOCAL_EXECUTION_HOST_ID ? worktree : { ...worktree, hostId }
+}
+
+function withDetectedWorktreeHost(
+  result: DetectedWorktreeListResult,
+  hostId: ExecutionHostId
+): DetectedWorktreeListResult {
+  return {
+    ...result,
+    worktrees: result.worktrees.map((worktree) => withWorktreeHost(worktree, hostId))
+  }
+}
+
+function spliceHostWorktrees<T extends Worktree>(
+  previous: readonly T[],
+  fetched: readonly T[],
+  hostId: ExecutionHostId,
+  treatHostlessAsLocal: boolean
+): T[] {
+  const firstHostIndex = previous.findIndex((worktree) =>
+    worktreeBelongsToHost(worktree, hostId, treatHostlessAsLocal)
+  )
+  const preserved = previous.filter(
+    (worktree) => !worktreeBelongsToHost(worktree, hostId, treatHostlessAsLocal)
+  )
+  if (firstHostIndex === -1) {
+    return [...preserved, ...fetched]
+  }
+  const insertAt = Math.min(firstHostIndex, preserved.length)
+  return [...preserved.slice(0, insertAt), ...fetched, ...preserved.slice(insertAt)]
+}
+
+function mergeDetectedWorktreesForHost(
+  previous: DetectedWorktreeListResult | undefined,
+  fetched: DetectedWorktreeListResult,
+  hostId: ExecutionHostId,
+  treatHostlessAsLocal: boolean
+): DetectedWorktreeListResult {
+  const fetchedWithHost = withDetectedWorktreeHost(fetched, hostId)
+  if (!previous) {
+    return fetchedWithHost
+  }
+  const preserved = previous.worktrees.filter(
+    (worktree) => !worktreeBelongsToHost(worktree, hostId, treatHostlessAsLocal)
+  )
+  return {
+    ...fetchedWithHost,
+    authoritative:
+      preserved.length > 0
+        ? previous.authoritative && fetchedWithHost.authoritative
+        : fetchedWithHost.authoritative,
+    worktrees: spliceHostWorktrees(
+      previous.worktrees,
+      fetchedWithHost.worktrees,
+      hostId,
+      treatHostlessAsLocal
+    )
+  }
+}
+
+function mergeVisibleWorktreesForHost(
+  previous: readonly Worktree[] | undefined,
+  fetched: readonly Worktree[],
+  hostId: ExecutionHostId,
+  treatHostlessAsLocal: boolean
+): Worktree[] {
+  const fetchedWithHost = fetched.map((worktree) => withWorktreeHost(worktree, hostId))
+  return spliceHostWorktrees(previous ?? [], fetchedWithHost, hostId, treatHostlessAsLocal)
+}
+
+function shouldTreatHostlessWorktreesAsLocal(state: Pick<AppState, 'repos'>, repoId: string) {
+  return state.repos.some(
+    (repo) => repo.id === repoId && getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
+  )
 }
 
 function getHydratedSessionWorktreeIdsForRepo(state: AppState, repoId: string): string[] {
@@ -569,31 +664,44 @@ function replaceWorktreeInRepoLists(
   }
 }
 
-function settingsForRepoOwner(state: Pick<AppState, 'repos' | 'settings'>, repoId: string) {
-  const repo = state.repos.find((entry) => entry.id === repoId)
+function getRepoOwnerForWorktreeRefresh(
+  state: Pick<AppState, 'repos' | 'settings'>,
+  repoId: string,
+  ownerHostId?: ExecutionHostId
+) {
+  const candidates = state.repos.filter((entry) => entry.id === repoId)
+  if (ownerHostId) {
+    return candidates.find((repo) => getRepoExecutionHostId(repo) === ownerHostId)
+  }
+  const focusedHostId = getSettingsFocusedExecutionHostId(state.settings)
+  return candidates.find((repo) => getRepoExecutionHostId(repo) === focusedHostId) ?? candidates[0]
+}
+
+function settingsForRepoOwner(
+  state: Pick<AppState, 'repos' | 'settings'>,
+  repoId: string,
+  ownerHostId?: ExecutionHostId
+) {
+  const repo = getRepoOwnerForWorktreeRefresh(state, repoId, ownerHostId)
   if (!repo) {
     return state.settings
   }
-  if (!repo.executionHostId && !repo.connectionId) {
+  if (!ownerHostId && !repo.executionHostId && !repo.connectionId) {
     return state.settings
   }
-  const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
-  if (parsed?.kind === 'runtime') {
-    return state.settings
-      ? { ...state.settings, activeRuntimeEnvironmentId: parsed.environmentId }
-      : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
+  return settingsForExecutionHostOwner(state.settings, getRepoExecutionHostId(repo))
+}
+
+function getRepoOwnerHostIdForWorktreeRefresh(
+  state: Pick<AppState, 'repos' | 'settings'>,
+  repoId: string,
+  ownerHostId?: ExecutionHostId
+): ExecutionHostId {
+  if (ownerHostId) {
+    return ownerHostId
   }
-  if (parsed?.kind === 'local' && state.settings?.activeRuntimeEnvironmentId) {
-    return { ...state.settings, activeRuntimeEnvironmentId: null }
-  }
-  if (parsed?.kind !== 'ssh') {
-    return state.settings
-  }
-  // Why: SSH repos are owned by the desktop client/SSH provider, not the
-  // currently focused runtime server.
-  return state.settings
-    ? { ...state.settings, activeRuntimeEnvironmentId: null }
-    : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
+  const repo = getRepoOwnerForWorktreeRefresh(state, repoId)
+  return repo ? getRepoExecutionHostId(repo) : getSettingsFocusedExecutionHostId(state.settings)
 }
 
 function settingsForExecutionHostOwner(
@@ -1383,15 +1491,29 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
   fetchWorktrees: async (repoId, options) => {
     try {
-      const settings = settingsForRepoOwner(get(), repoId)
-      const detected = await listDetectedWorktreesForRepo(settings, repoId)
-      if (options?.requireAuthoritative && !detected.authoritative) {
+      const ownerHostId = getRepoOwnerHostIdForWorktreeRefresh(get(), repoId, options?.ownerHostId)
+      const settings = settingsForRepoOwner(get(), repoId, ownerHostId)
+      const detectedForHost = await listDetectedWorktreesForRepo(settings, repoId)
+      if (options?.requireAuthoritative && !detectedForHost.authoritative) {
         return false
       }
-      const worktrees = toVisibleWorktrees(detected)
+      const worktreesForHost = toVisibleWorktrees(detectedForHost)
       const current = get().worktreesByRepo[repoId]
-      if (areWorktreesEqual(current, worktrees)) {
+      const treatHostlessAsLocal = shouldTreatHostlessWorktreesAsLocal(get(), repoId)
+      const nextWorktrees = mergeVisibleWorktreesForHost(
+        current,
+        worktreesForHost,
+        ownerHostId,
+        treatHostlessAsLocal
+      )
+      if (areWorktreesEqual(current, nextWorktrees)) {
         set((s) => {
+          const detected = mergeDetectedWorktreesForHost(
+            s.detectedWorktreesByRepo[repoId],
+            detectedForHost,
+            ownerHostId,
+            shouldTreatHostlessWorktreesAsLocal(s, repoId)
+          )
           const removedIds = getRemovedWorktreeIdsAfterAuthoritativeScan(s, repoId, detected)
           if (
             areDetectedWorktreeResultsEqual(s.detectedWorktreesByRepo[repoId], detected) &&
@@ -1405,7 +1527,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           }
         })
         await refreshRemoteWorktreeLineageBestEffort(settings, set)
-        return detected.authoritative
+        return detectedForHost.authoritative
       }
 
       // Why: `git worktree list` can fail transiently (e.g. concurrent git
@@ -1415,14 +1537,42 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // badge then shows raw worktree IDs instead of display names, and click-
       // to-navigate silently fails because findWorktreeById returns undefined.
       // Keep the stale-but-correct data until the next successful refresh.
-      if (!detected.authoritative && worktrees.length === 0 && current && current.length > 0) {
+      const currentForHost = current?.filter((worktree) =>
+        worktreeBelongsToHost(worktree, ownerHostId, treatHostlessAsLocal)
+      )
+      if (
+        !detectedForHost.authoritative &&
+        worktreesForHost.length === 0 &&
+        currentForHost &&
+        currentForHost.length > 0
+      ) {
         set((s) => ({
-          detectedWorktreesByRepo: { ...s.detectedWorktreesByRepo, [repoId]: detected }
+          detectedWorktreesByRepo: {
+            ...s.detectedWorktreesByRepo,
+            [repoId]: mergeDetectedWorktreesForHost(
+              s.detectedWorktreesByRepo[repoId],
+              detectedForHost,
+              ownerHostId,
+              shouldTreatHostlessWorktreesAsLocal(s, repoId)
+            )
+          }
         }))
         return false
       }
 
       set((s) => {
+        const detected = mergeDetectedWorktreesForHost(
+          s.detectedWorktreesByRepo[repoId],
+          detectedForHost,
+          ownerHostId,
+          shouldTreatHostlessWorktreesAsLocal(s, repoId)
+        )
+        const worktrees = mergeVisibleWorktreesForHost(
+          s.worktreesByRepo[repoId],
+          worktreesForHost,
+          ownerHostId,
+          shouldTreatHostlessWorktreesAsLocal(s, repoId)
+        )
         // Why: hidden worktrees are not in worktreesByRepo. Purge decisions
         // must diff against the previous authoritative detected list so hiding
         // does not delete state, and deleting a hidden worktree still does.
@@ -1439,7 +1589,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
       })
       await refreshRemoteWorktreeLineageBestEffort(settings, set)
-      return detected.authoritative
+      return detectedForHost.authoritative
     } catch (err) {
       console.error(`Failed to fetch worktrees for repo ${repoId}:`, err)
       return false
@@ -1453,7 +1603,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     // calls just need to refresh each repo's cached list. No need to
     // double-probe the IPC for the per-repo success signal.
     if (get().hasHydratedWorktreePurge) {
-      await mapReposForWorktreeRefresh(repos, (r) => get().fetchWorktrees(r.id))
+      await mapReposForWorktreeRefresh(repos, (r) =>
+        get().fetchWorktrees(r.id, { ownerHostId: getRepoExecutionHostId(r) })
+      )
       return
     }
 
@@ -1470,34 +1622,67 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     // then apply that same payload to state instead of listing each repo again.
     const results = await mapReposForWorktreeRefresh(
       repos,
-      async (
-        r
-      ): Promise<
-        | { repoId: string; ok: boolean; detected: DetectedWorktreeListResult }
-        | { repoId: string; ok: false }
-      > => {
+      async (r): Promise<WorktreeRefreshResult> => {
         try {
-          const detected = await listDetectedWorktreesForRepo(
-            settingsForRepoOwner(get(), r.id),
+          const ownerHostId = getRepoExecutionHostId(r)
+          const detectedForHost = await listDetectedWorktreesForRepo(
+            settingsForRepoOwner(get(), r.id, ownerHostId),
             r.id
           )
-          const list = toVisibleWorktrees(detected)
+          const list = toVisibleWorktrees(detectedForHost)
           const current = get().worktreesByRepo[r.id]
+          const treatHostlessAsLocal = shouldTreatHostlessWorktreesAsLocal(get(), r.id)
+          const nextWorktrees = mergeVisibleWorktreesForHost(
+            current,
+            list,
+            ownerHostId,
+            treatHostlessAsLocal
+          )
           if (
-            !areWorktreesEqual(current, list) &&
-            !(list.length === 0 && current && current.length > 0 && !detected.authoritative)
+            !areWorktreesEqual(current, nextWorktrees) &&
+            !(
+              list.length === 0 &&
+              current?.some((worktree) =>
+                worktreeBelongsToHost(worktree, ownerHostId, treatHostlessAsLocal)
+              ) &&
+              !detectedForHost.authoritative
+            )
           ) {
-            set((s) => ({
-              worktreesByRepo: { ...s.worktreesByRepo, [r.id]: list },
-              detectedWorktreesByRepo: { ...s.detectedWorktreesByRepo, [r.id]: detected },
-              sortEpoch: s.sortEpoch + 1
-            }))
+            set((s) => {
+              const detected = mergeDetectedWorktreesForHost(
+                s.detectedWorktreesByRepo[r.id],
+                detectedForHost,
+                ownerHostId,
+                shouldTreatHostlessWorktreesAsLocal(s, r.id)
+              )
+              return {
+                worktreesByRepo: {
+                  ...s.worktreesByRepo,
+                  [r.id]: mergeVisibleWorktreesForHost(
+                    s.worktreesByRepo[r.id],
+                    list,
+                    ownerHostId,
+                    shouldTreatHostlessWorktreesAsLocal(s, r.id)
+                  )
+                },
+                detectedWorktreesByRepo: { ...s.detectedWorktreesByRepo, [r.id]: detected },
+                sortEpoch: s.sortEpoch + 1
+              }
+            })
           } else {
             set((s) => ({
-              detectedWorktreesByRepo: { ...s.detectedWorktreesByRepo, [r.id]: detected }
+              detectedWorktreesByRepo: {
+                ...s.detectedWorktreesByRepo,
+                [r.id]: mergeDetectedWorktreesForHost(
+                  s.detectedWorktreesByRepo[r.id],
+                  detectedForHost,
+                  ownerHostId,
+                  shouldTreatHostlessWorktreesAsLocal(s, r.id)
+                )
+              }
             }))
           }
-          return { repoId: r.id, ok: detected.authoritative, detected }
+          return { repoId: r.id, ok: detectedForHost.authoritative, detected: detectedForHost }
         } catch (err) {
           console.error(`Failed to fetch worktrees for repo ${r.id}:`, err)
           return { repoId: r.id, ok: false as const }
@@ -1517,11 +1702,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     // Why: floating is persisted renderer state, but not a repo worktree that
     // authoritative runtime scans can return.
     validIds.add(FLOATING_TERMINAL_WORKTREE_ID)
-    for (const result of Object.values(get().detectedWorktreesByRepo)) {
-      if (!result.authoritative) {
+    for (const result of results) {
+      if (!('detected' in result) || !result.ok) {
         continue
       }
-      for (const w of result.worktrees) {
+      for (const w of result.detected.worktrees) {
         validIds.add(w.id)
       }
     }

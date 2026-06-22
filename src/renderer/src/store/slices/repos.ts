@@ -220,7 +220,9 @@ function worktreeBelongsToOwner(
   includeLegacyWorktrees: boolean
 ): boolean {
   const hostId = worktree.hostId?.trim()
-  return hostId ? hostId === ownerHostId : includeLegacyWorktrees
+  return hostId
+    ? hostId === ownerHostId
+    : includeLegacyWorktrees || ownerHostId === LOCAL_EXECUTION_HOST_ID
 }
 
 function queueReposById(repos: readonly Repo[]): Map<string, Repo[]> {
@@ -452,12 +454,9 @@ async function assertProjectHostSetupMutationRuntimeCapabilities(
   )
 }
 
-async function fetchReposForTarget(
-  target: ReturnType<typeof getActiveRuntimeTarget>,
-  currentRepos: readonly Repo[]
-): Promise<{
+async function fetchReposForTarget(target: ReturnType<typeof getActiveRuntimeTarget>): Promise<{
   repos: Repo[]
-  projectCompatibility: Pick<RepoSlice, 'projects' | 'projectHostSetups'>
+  fetchedProjectCompatibility: ProjectHostSetupProjection
   hostId: ReturnType<typeof getRuntimeTargetHostId>
 }> {
   const fetchedRepos =
@@ -471,13 +470,7 @@ async function fetchReposForTarget(
   const hostId = getRuntimeTargetHostId(target)
   const repos = fetchedRepos.map((repo) => repoWithFetchedOwner(repo, target))
   const fetchedProjectCompatibility = await fetchProjectHostSetupCompatibility(target, repos)
-  const reconciledRepos = mergeFetchedReposForHost(currentRepos, repos, hostId)
-  const projectCompatibility = mergeProjectHostSetupCompatibility(
-    projectCompatibilityFromRepos(reconciledRepos),
-    fetchedProjectCompatibility
-  )
-
-  return { repos: reconciledRepos, projectCompatibility, hostId }
+  return { repos, fetchedProjectCompatibility, hostId }
 }
 
 function settingsForRepoOwner(state: Pick<AppState, 'repos' | 'settings'>, repoId: string) {
@@ -494,9 +487,7 @@ function getRepoMutationOwnerHostId(
   targetHostId: string
 ): string {
   const candidates = repos.filter((repo) => repo.id === repoId)
-  const targetOwned = candidates.find(
-    (repo) => hasExplicitRepoOwner(repo) && getRepoExecutionHostId(repo) === targetHostId
-  )
+  const targetOwned = candidates.find((repo) => getRepoExecutionHostId(repo) === targetHostId)
   if (targetOwned) {
     return targetHostId
   }
@@ -504,11 +495,21 @@ function getRepoMutationOwnerHostId(
   return explicitOwner ? getRepoExecutionHostId(explicitOwner) : targetHostId
 }
 
-function isRepoMutationTarget(repo: Repo, repoId: string, ownerHostId: string): boolean {
+function isRepoMutationTarget(
+  repo: Repo,
+  repoId: string,
+  ownerHostId: string,
+  hasExplicitSameIdRepo: boolean
+): boolean {
   if (repo.id !== repoId) {
     return false
   }
-  return !hasExplicitRepoOwner(repo) || getRepoExecutionHostId(repo) === ownerHostId
+  // Why: legacy rows without an owner are local unless no host-stamped sibling
+  // exists; otherwise remote mutations can still collapse an older local row.
+  if (hasExplicitRepoOwner(repo) || hasExplicitSameIdRepo) {
+    return getRepoExecutionHostId(repo) === ownerHostId
+  }
+  return true
 }
 
 function getFolderWorkspacePathStatusScopeKey(request: FolderWorkspacePathStatusRequest): string {
@@ -754,12 +755,13 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   fetchRepos: async () => {
     try {
       const target = getActiveRuntimeTarget(get().settings)
-      const {
-        repos: reconciledRepos,
-        projectCompatibility,
-        hostId
-      } = await fetchReposForTarget(target, get().repos)
+      const { repos, fetchedProjectCompatibility, hostId } = await fetchReposForTarget(target)
       set((s) => {
+        const reconciledRepos = mergeFetchedReposForHost(s.repos, repos, hostId)
+        const projectCompatibility = mergeProjectHostSetupCompatibility(
+          projectCompatibilityFromRepos(reconciledRepos),
+          fetchedProjectCompatibility
+        )
         const validRepoIds = new Set(reconciledRepos.map((repo) => repo.id))
         return {
           repos: reconciledRepos,
@@ -775,7 +777,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       })
       scheduleSafeAutoForkSync(
         get,
-        reconciledRepos.filter((repo) => getRepoExecutionHostId(repo) === hostId)
+        repos.filter((repo) => getRepoExecutionHostId(repo) === hostId)
       )
     } catch (err) {
       console.error('Failed to fetch repos:', err)
@@ -785,25 +787,26 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   fetchRuntimeEnvironmentRepos: async (environmentId) => {
     try {
       const target = { kind: 'environment' as const, environmentId }
-      const {
-        repos: reconciledRepos,
-        projectCompatibility,
-        hostId
-      } = await fetchReposForTarget(target, get().repos)
-      const validRepoIds = new Set(reconciledRepos.map((repo) => repo.id))
-      set((s) => ({
-        repos: reconciledRepos,
-        ...projectCompatibility,
-        activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
-        filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
-        setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
-          s.setupScriptPromptDismissedRepoIds,
-          validRepoIds
+      const { repos, fetchedProjectCompatibility, hostId } = await fetchReposForTarget(target)
+      set((s) => {
+        const reconciledRepos = mergeFetchedReposForHost(s.repos, repos, hostId)
+        const projectCompatibility = mergeProjectHostSetupCompatibility(
+          projectCompatibilityFromRepos(reconciledRepos),
+          fetchedProjectCompatibility
         )
-      }))
-      const fetchedHostRepos = reconciledRepos.filter(
-        (repo) => getRepoExecutionHostId(repo) === hostId
-      )
+        const validRepoIds = new Set(reconciledRepos.map((repo) => repo.id))
+        return {
+          repos: reconciledRepos,
+          ...projectCompatibility,
+          activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
+          filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
+          setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
+            s.setupScriptPromptDismissedRepoIds,
+            validRepoIds
+          )
+        }
+      })
+      const fetchedHostRepos = repos.filter((repo) => getRepoExecutionHostId(repo) === hostId)
       scheduleSafeAutoForkSync(get, fetchedHostRepos)
       return fetchedHostRepos
     } catch (err) {
@@ -1659,8 +1662,13 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId))
       const targetHostId = getRuntimeTargetHostId(target)
       const ownerHostId = getRepoMutationOwnerHostId(get().repos, projectId, targetHostId)
+      const hasExplicitSameIdRepo = get().repos.some(
+        (repo) => repo.id === projectId && hasExplicitRepoOwner(repo)
+      )
       const removeAllRepoWorktreeState = !get().repos.some(
-        (repo) => repo.id === projectId && !isRepoMutationTarget(repo, projectId, ownerHostId)
+        (repo) =>
+          repo.id === projectId &&
+          !isRepoMutationTarget(repo, projectId, ownerHostId, hasExplicitSameIdRepo)
       )
       await (target.kind === 'local'
         ? window.api.repos.remove({ repoId: projectId })
@@ -1668,7 +1676,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
       get().clearOrcaHookTrustForRepo(projectId)
       const repoPath = get().repos.find((repo) =>
-        isRepoMutationTarget(repo, projectId, ownerHostId)
+        isRepoMutationTarget(repo, projectId, ownerHostId, hasExplicitSameIdRepo)
       )?.path
       get().evictGitHubRepoCaches(projectId, repoPath)
       const { clearRepoSlugCacheEntry } = await import('../../lib/repo-slug-index')
@@ -1788,7 +1796,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           }
         }
         const nextRepos = s.repos.filter(
-          (repo) => !isRepoMutationTarget(repo, projectId, ownerHostId)
+          (repo) => !isRepoMutationTarget(repo, projectId, ownerHostId, hasExplicitSameIdRepo)
         )
         const removedLastRepoWithId = !nextRepos.some((repo) => repo.id === projectId)
         return {
@@ -1874,6 +1882,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId))
     const targetHostId = getRuntimeTargetHostId(target)
     const ownerHostId = getRepoMutationOwnerHostId(get().repos, projectId, targetHostId)
+    const hasExplicitSameIdRepo = get().repos.some(
+      (repo) => repo.id === projectId && hasExplicitRepoOwner(repo)
+    )
     const updateKey = `${ownerHostId}\0${projectId}`
     const applyRepoUpdate = async () => {
       try {
@@ -1890,7 +1901,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
               ).repo
         set((s) => {
           const nextRepos = s.repos.map((r) => {
-            if (!isRepoMutationTarget(r, projectId, ownerHostId)) {
+            if (!isRepoMutationTarget(r, projectId, ownerHostId, hasExplicitSameIdRepo)) {
               return r
             }
             if (updatedRepo) {

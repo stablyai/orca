@@ -136,6 +136,55 @@ describe('repo slice same-id host mutations', () => {
     expect(reposRemove).not.toHaveBeenCalled()
   })
 
+  it('removes legacy local worktrees without dropping a same-id runtime sibling', async () => {
+    const legacyLocalRepo = { ...baseRepo, path: '/local/orca', displayName: 'Local Orca' }
+    const envRepo = runtimeRepo('env-1', '/env-one/orca', 'Orca on env one')
+    const legacyLocalWorktree = makeWorktree({
+      id: `${repoId}::/local/wt`,
+      repoId,
+      path: '/local/wt'
+    })
+    const envWorktree = makeWorktree({
+      id: `${repoId}::/env-one/wt`,
+      repoId,
+      path: '/env-one/wt',
+      hostId: 'runtime:env-1'
+    })
+    const store = createTestStore()
+    store.setState({
+      repos: [legacyLocalRepo, envRepo],
+      worktreesByRepo: { [repoId]: [legacyLocalWorktree, envWorktree] },
+      tabsByWorktree: {
+        [legacyLocalWorktree.id]: [
+          { id: 'tab-local', worktreeId: legacyLocalWorktree.id }
+        ] as never,
+        [envWorktree.id]: [{ id: 'tab-env', worktreeId: envWorktree.id }] as never
+      },
+      ptyIdsByTabId: {
+        'tab-local': ['local-pty'],
+        'tab-env': ['remote:env-one']
+      },
+      lastVisitedAtByWorktreeId: {
+        [legacyLocalWorktree.id]: 1,
+        [envWorktree.id]: 2
+      }
+    })
+
+    await store.getState().removeProject(repoId)
+
+    expect(reposRemove).toHaveBeenCalledWith({ repoId })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'repo.rm' })
+    )
+    expect(store.getState().repos).toEqual([envRepo])
+    expect(store.getState().worktreesByRepo[repoId]).toEqual([envWorktree])
+    expect(store.getState().tabsByWorktree[legacyLocalWorktree.id]).toBeUndefined()
+    expect(store.getState().tabsByWorktree[envWorktree.id]).toEqual([
+      { id: 'tab-env', worktreeId: envWorktree.id }
+    ])
+    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ [envWorktree.id]: 2 })
+  })
+
   it('keeps same-id repos from distinct hosts when reordering', async () => {
     const envOneRepo = runtimeRepo('env-1', '/env-one/orca', 'Orca on env one')
     const envTwoRepo = runtimeRepo('env-2', '/env-two/orca', 'Orca on env two')

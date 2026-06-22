@@ -83,4 +83,20 @@ describe('mergeFetchedReposForHost', () => {
       'runtime:env-a': ['same-id']
     })
   })
+
+  it('applies the fetched order for the refreshed host', () => {
+    const local = repo('local-a', 'local')
+    const runtimeA = repo('runtime-a', 'runtime:env-a')
+    const runtimeB = repo('runtime-b', 'runtime:env-a')
+    const runtimeC = repo('runtime-c', 'runtime:env-a')
+    const previous = [local, runtimeA, runtimeB, runtimeC]
+
+    const merged = mergeFetchedReposForHost(
+      previous,
+      [runtimeC, runtimeB, runtimeA],
+      'runtime:env-a'
+    )
+
+    expect(merged).toEqual([local, runtimeC, runtimeB, runtimeA])
+  })
 })

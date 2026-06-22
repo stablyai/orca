@@ -77,6 +77,16 @@ const projectsListHostSetups = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   reposList.mockReset()
@@ -272,6 +282,106 @@ describe('repo slice multi-host refresh', () => {
       expect.arrayContaining([
         expect.objectContaining({ hostId: 'local', repoId: localProjectRepo.id }),
         expect.objectContaining({ hostId: 'runtime:env-1', repoId: runtimeProjectRepo.id })
+      ])
+    )
+  })
+
+  it('does not update a legacy local repo when the active runtime owns a same-id row', async () => {
+    const legacyLocalRepo = { ...localRepo }
+    const runtimeOwnedRepo = { ...runtimeRepo, executionHostId: 'runtime:env-1' as const }
+    runtimeEnvironmentCall.mockImplementation((request: RuntimeEnvironmentCallRequest) => {
+      if (request.method === 'repo.update') {
+        const updates = (request as unknown as { params: { updates: Partial<Repo> } }).params
+          .updates
+        return Promise.resolve({
+          id: 'repo-update',
+          ok: true,
+          result: { repo: { ...runtimeRepo, ...updates } },
+          _meta: { runtimeId: 'runtime-remote' }
+        })
+      }
+      throw new Error(`Unexpected runtime method: ${request.method}`)
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [legacyLocalRepo, runtimeOwnedRepo]
+    })
+
+    const updated = await store.getState().updateRepo(runtimeRepo.id, {
+      displayName: 'remote renamed'
+    })
+
+    expect(updated).toBe(true)
+    expect(reposUpdate).not.toHaveBeenCalled()
+    expect(store.getState().repos).toEqual([
+      expect.objectContaining({
+        id: localRepo.id,
+        displayName: localRepo.displayName
+      }),
+      expect.objectContaining({
+        id: runtimeRepo.id,
+        displayName: 'remote renamed',
+        executionHostId: 'runtime:env-1'
+      })
+    ])
+  })
+
+  it('merges concurrent local and runtime refreshes against the latest repo state', async () => {
+    const localList = deferred<Repo[]>()
+    const runtimeList = deferred<{
+      id: string
+      ok: true
+      result: { repos: Repo[] }
+      _meta: { runtimeId: string }
+    }>()
+    reposList.mockReturnValue(localList.promise)
+    runtimeEnvironmentCall.mockImplementation((request: RuntimeEnvironmentCallRequest) => {
+      if (request.method === 'repo.list') {
+        return runtimeList.promise
+      }
+      if (request.method === 'project.list') {
+        return Promise.resolve({
+          id: 'project-list',
+          ok: true,
+          result: { projects: [] },
+          _meta: { runtimeId: 'runtime-remote' }
+        })
+      }
+      if (request.method === 'projectHostSetup.list') {
+        return Promise.resolve({
+          id: 'setup-list',
+          ok: true,
+          result: { setups: [] },
+          _meta: { runtimeId: 'runtime-remote' }
+        })
+      }
+      throw new Error(`Unexpected runtime method: ${request.method}`)
+    })
+    const store = createTestStore()
+
+    const localRefresh = store.getState().fetchRepos()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
+    const runtimeRefresh = store.getState().fetchRepos()
+
+    runtimeList.resolve({
+      id: 'repo-list',
+      ok: true,
+      result: { repos: [runtimeRepo] },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    await runtimeRefresh
+    expect(store.getState().repos).toEqual([
+      expect.objectContaining({ id: runtimeRepo.id, executionHostId: 'runtime:env-1' })
+    ])
+
+    localList.resolve([localRepo])
+    await localRefresh
+
+    expect(store.getState().repos).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: localRepo.id, executionHostId: 'local' }),
+        expect.objectContaining({ id: runtimeRepo.id, executionHostId: 'runtime:env-1' })
       ])
     )
   })
