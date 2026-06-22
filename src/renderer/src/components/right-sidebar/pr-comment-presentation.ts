@@ -51,6 +51,8 @@ export type PRCommentPresentationClasses = {
   statusBadgeOpen: string
   statusBadgeResolved: string
   statusBadgeQueued: string
+  commentHeaderPrimary: string
+  commentHeaderMeta: string
   groupOpen: string
   groupQueued: string
   groupResolved: string
@@ -65,7 +67,7 @@ export function getPRCommentGroupSurfaceClasses(
   if (options?.queued) {
     classes.push(presentation.groupQueued)
   }
-  if (actionState === 'open') {
+  if (actionState === 'open' && presentation.groupOpen) {
     classes.push(presentation.groupOpen)
   } else if (actionState === 'resolved') {
     classes.push(presentation.groupResolved)
@@ -157,6 +159,8 @@ export function getPRCommentPresentationClasses(
         'shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground',
       statusBadgeQueued:
         'shrink-0 rounded border border-ring/40 bg-accent px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground',
+      commentHeaderPrimary: 'flex min-w-0 items-center gap-1.5',
+      commentHeaderMeta: '',
       groupOpen: 'border-l-2 border-l-status-success',
       groupQueued: 'ring-1 ring-ring/50',
       groupResolved: 'opacity-60'
@@ -169,6 +173,7 @@ export function getPRCommentPresentationClasses(
   const listGap = isFocus ? 'gap-3' : 'gap-2'
   const bodyPadding = isFocus ? 'px-3.5 py-3' : 'px-3 py-2.5'
   const headerPadding = isFocus ? 'px-3.5 py-2.5' : 'px-3 py-2'
+  const metaIndent = isFocus ? 'pl-8' : 'pl-7'
 
   return {
     variant,
@@ -179,18 +184,18 @@ export function getPRCommentPresentationClasses(
     groupThread: '',
     commentRow: 'group/comment',
     commentRowReply: `border-t ${COMMENT_CARD_DIVIDER} bg-muted/25 dark:bg-muted/10`,
-    commentHeader: `flex min-w-0 items-center gap-2 border-b ${COMMENT_CARD_DIVIDER} ${headerPadding}`,
+    commentHeader: `flex flex-col gap-1 border-b ${COMMENT_CARD_DIVIDER} ${headerPadding}`,
     commentHeaderReply: `flex min-w-0 items-center gap-2 ${headerPadding}`,
     commentBody: `${bodyPadding} ${bodySize} text-foreground`,
     commentBodyReply: `${bodyPadding} ${bodySize} text-foreground`,
     commentBodyMarkdown: MARKDOWN_BASE,
-    author: `min-w-0 shrink truncate ${authorSize} font-semibold text-foreground`,
+    author: `min-w-0 flex-1 truncate ${authorSize} font-semibold text-foreground`,
     authorResolved: 'text-muted-foreground',
     avatar: `size-5 ${COMMENT_AVATAR}`,
     avatarReply: `size-4 ${COMMENT_AVATAR}`,
     botBadge:
       'shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground',
-    pathBadge: 'min-w-0 truncate text-[11px] font-mono text-muted-foreground',
+    pathBadge: 'min-w-0 max-w-full truncate font-mono text-muted-foreground',
     time: 'shrink-0 text-[11px] text-muted-foreground',
     resolvedContainer: 'opacity-60',
     repliesContainer: 'flex flex-col',
@@ -212,7 +217,13 @@ export function getPRCommentPresentationClasses(
       'shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground',
     statusBadgeQueued:
       'shrink-0 rounded border border-ring/40 bg-accent px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground',
-    groupOpen: 'border-l-2 border-l-status-success',
+    commentHeaderPrimary: 'flex min-w-0 items-center gap-2',
+    commentHeaderMeta: cn(
+      metaIndent,
+      'flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground'
+    ),
+    // Why: open state is conveyed by the status badge; a green card rail reads noisy in the sidebar.
+    groupOpen: '',
     groupQueued: 'ring-1 ring-ring/50',
     groupResolved: 'opacity-60'
   }
