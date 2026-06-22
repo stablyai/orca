@@ -200,4 +200,32 @@ describe('project-host workspace target resolution', () => {
       reason: 'setup-not-ready'
     })
   })
+
+  it('resolves an explicit same-id setup on the requested host', () => {
+    const repos = [
+      makeRepo('orca-local'),
+      makeRepo('orca-runtime', { executionHostId: 'runtime:gpu' })
+    ]
+    const projects = [makeProject('github:stablyai/orca', ['orca-local', 'orca-runtime'])]
+    const projectHostSetups = [
+      makeSetup('shared-setup', 'github:stablyai/orca', 'local', 'orca-local'),
+      makeSetup('shared-setup', 'github:stablyai/orca', 'runtime:gpu', 'orca-runtime')
+    ]
+
+    expect(
+      resolveWorkspaceCreationTarget({
+        eligibleRepos: repos,
+        projects,
+        projectHostSetups,
+        projectHostSetupId: 'shared-setup',
+        hostId: 'runtime:gpu'
+      })
+    ).toMatchObject({
+      status: 'ready',
+      target: {
+        hostId: 'runtime:gpu',
+        repoId: 'orca-runtime'
+      }
+    })
+  })
 })

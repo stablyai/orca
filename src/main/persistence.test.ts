@@ -2896,6 +2896,51 @@ describe('Store', () => {
     })
   })
 
+  it('updates same-id project host setup metadata on the requested host', async () => {
+    const independentProject = makeProject({
+      id: 'cloud-project',
+      displayName: 'Cloud Project'
+    })
+    const localSetup = makeProjectHostSetup({
+      id: 'shared-setup',
+      projectId: independentProject.id,
+      hostId: 'local',
+      displayName: 'Local'
+    })
+    const runtimeSetup = makeProjectHostSetup({
+      id: 'shared-setup',
+      projectId: independentProject.id,
+      hostId: 'runtime:gpu-vm',
+      displayName: 'GPU VM'
+    })
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      projects: [independentProject],
+      projectHostSetups: [localSetup, runtimeSetup]
+    })
+    const store = await createStore()
+
+    const result = store.updateProjectHostSetup({
+      setupId: 'shared-setup',
+      hostId: 'runtime:gpu-vm',
+      updates: { displayName: 'GPU VM renamed' }
+    })
+
+    expect(result?.setup).toMatchObject({
+      id: 'shared-setup',
+      hostId: 'runtime:gpu-vm',
+      displayName: 'GPU VM renamed'
+    })
+    expect(store.getProjectHostSetups()).toEqual([
+      expect.objectContaining({ id: 'shared-setup', hostId: 'local', displayName: 'Local' }),
+      expect.objectContaining({
+        id: 'shared-setup',
+        hostId: 'runtime:gpu-vm',
+        displayName: 'GPU VM renamed'
+      })
+    ])
+  })
+
   it('creates independent project host setup records for provisioning flows', async () => {
     const store = await createStore()
     store.addRepo({
@@ -3027,6 +3072,40 @@ describe('Store', () => {
     expect(result).toEqual({ project: independentProject, setup: independentSetup })
     expect(store.getProjects()).toEqual([independentProject])
     expect(store.getProjectHostSetups()).toEqual([])
+  })
+
+  it('deletes only the same-id project host setup on the requested host', async () => {
+    const independentProject = makeProject({
+      id: 'cloud-project',
+      displayName: 'Cloud Project'
+    })
+    const localSetup = makeProjectHostSetup({
+      id: 'shared-setup',
+      projectId: independentProject.id,
+      hostId: 'local',
+      displayName: 'Local'
+    })
+    const runtimeSetup = makeProjectHostSetup({
+      id: 'shared-setup',
+      projectId: independentProject.id,
+      hostId: 'runtime:gpu-vm',
+      displayName: 'GPU VM'
+    })
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      projects: [independentProject],
+      projectHostSetups: [localSetup, runtimeSetup]
+    })
+    const store = await createStore()
+
+    const result = store.deleteProjectHostSetup({
+      setupId: 'shared-setup',
+      hostId: 'runtime:gpu-vm'
+    })
+
+    expect(result).toEqual({ project: independentProject, setup: runtimeSetup })
+    expect(store.getProjects()).toEqual([independentProject])
+    expect(store.getProjectHostSetups()).toEqual([localSetup])
   })
 
   it('deletes repo-backed project host setups by removing the compatibility repo', async () => {

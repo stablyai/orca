@@ -3298,7 +3298,7 @@ export class Store {
   }
 
   updateProjectHostSetup(args: ProjectHostSetupUpdateArgs): ProjectHostSetupUpdateResult | null {
-    const setup = this.state.projectHostSetups.find((entry) => entry.id === args.setupId)
+    const setup = this.findProjectHostSetup(args)
     if (!setup) {
       return null
     }
@@ -3323,7 +3323,7 @@ export class Store {
   }
 
   deleteProjectHostSetup(args: ProjectHostSetupDeleteArgs): ProjectHostSetupDeleteResult | null {
-    const setup = this.state.projectHostSetups.find((entry) => entry.id === args.setupId)
+    const setup = this.findProjectHostSetup(args)
     if (!setup) {
       return null
     }
@@ -3338,9 +3338,7 @@ export class Store {
       this.removeProject(repo.id)
       return { project, setup, repo: this.hydrateRepo(repo) }
     }
-    this.state.projectHostSetups = this.state.projectHostSetups.filter(
-      (entry) => entry.id !== setup.id
-    )
+    this.state.projectHostSetups = this.state.projectHostSetups.filter((entry) => entry !== setup)
     this.scheduleSave()
     return { project, setup }
   }
@@ -3818,9 +3816,27 @@ export class Store {
       return null
     }
     return {
-      setup: this.state.projectHostSetups.find((entry) => entry.id === setup.id) ?? setup,
+      setup:
+        this.state.projectHostSetups.find(
+          (entry) => entry.id === setup.id && entry.hostId === setup.hostId
+        ) ?? setup,
       repo: updatedRepo
     }
+  }
+
+  private findProjectHostSetup(
+    args: Pick<ProjectHostSetupUpdateArgs, 'setupId' | 'hostId'>
+  ): ProjectHostSetup | undefined {
+    if (args.hostId === undefined) {
+      return this.state.projectHostSetups.find((entry) => entry.id === args.setupId)
+    }
+    const hostId = normalizeExecutionHostId(args.hostId)
+    if (!hostId) {
+      throw new Error(`Invalid host ID: ${args.hostId}`)
+    }
+    return this.state.projectHostSetups.find(
+      (entry) => entry.id === args.setupId && entry.hostId === hostId
+    )
   }
 
   private updateIndependentProjectHostSetup(

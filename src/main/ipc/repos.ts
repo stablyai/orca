@@ -720,6 +720,18 @@ const ProjectHostSetupCreateIpcArgs = z.object({
 
 const ProjectHostSetupUpdateIpcArgs = z.object({
   setupId: z.string().min(1),
+  hostId: z
+    .string()
+    .min(1)
+    .transform((value, ctx) => {
+      const hostId = normalizeExecutionHostId(value)
+      if (!hostId) {
+        ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
+        return z.NEVER
+      }
+      return hostId
+    })
+    .optional(),
   updates: z.object({
     displayName: z.string().optional(),
     path: z.string().optional(),
@@ -734,7 +746,19 @@ const ProjectHostSetupUpdateIpcArgs = z.object({
 })
 
 const ProjectHostSetupDeleteIpcArgs = z.object({
-  setupId: z.string().min(1)
+  setupId: z.string().min(1),
+  hostId: z
+    .string()
+    .min(1)
+    .transform((value, ctx) => {
+      const hostId = normalizeExecutionHostId(value)
+      if (!hostId) {
+        ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
+        return z.NEVER
+      }
+      return hostId
+    })
+    .optional()
 })
 
 const FolderWorkspaceLinkedTaskArgs = z

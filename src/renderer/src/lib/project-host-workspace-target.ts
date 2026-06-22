@@ -123,7 +123,9 @@ export function resolveWorkspaceCreationTarget(
   const setups = model?.setups ?? []
 
   if (projectHostSetupId) {
-    const setup = setups.find((entry) => entry.id === projectHostSetupId)
+    const setup = setups.find(
+      (entry) => entry.id === projectHostSetupId && (!hostId || entry.hostId === hostId)
+    )
     if (!setup) {
       return { status: 'unavailable', reason: 'setup-not-found' }
     }
