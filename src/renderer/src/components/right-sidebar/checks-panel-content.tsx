@@ -1884,7 +1884,7 @@ function PRCommentGroupView({
 
   const content =
     group.kind === 'standalone' ? (
-      <div className={surfaceClassName}>
+      <div className={surfaceClassName} data-testid="pr-comment-group">
         <CommentRow
           comment={group.comment}
           isReply={false}
@@ -1897,7 +1897,7 @@ function PRCommentGroupView({
         {replyComposer}
       </div>
     ) : (
-      <div className={surfaceClassName}>
+      <div className={surfaceClassName} data-testid="pr-comment-group">
         <CommentRow
           comment={group.root}
           isReply={false}
