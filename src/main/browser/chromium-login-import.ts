@@ -36,6 +36,7 @@ export function readChromiumLogins(
         if (!origin || !enc || enc.length === 0) {
           continue
         }
+        // Passwords don't carry the cookie domain-HMAC prefix, so never strip.
         const decrypted = decryptChromiumValue(Buffer.from(enc), keyResult)
         if (!decrypted) {
           continue

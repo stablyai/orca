@@ -1195,6 +1195,11 @@ export async function importCookiesFromBrowser(
     if (sourceRows.length === 0) {
       stagingDb.close()
       stagingDb = null
+      try {
+        unlinkSync(stagingCookiesPath)
+      } catch {
+        /* best-effort */
+      }
       cleanupTmpDir()
       return { ok: false, reason: `No cookies found in ${browser.label}.` }
     }
@@ -1257,7 +1262,7 @@ export async function importCookiesFromBrowser(
 
       let decryptedValue: Buffer
       if (encBuf && encBuf.length > 0) {
-        const raw = decryptChromiumValue(encBuf, sourceKey)
+        const raw = decryptChromiumValue(encBuf, sourceKey, { stripHmacPrefix: true })
         if (!raw) {
           skipped++
           continue

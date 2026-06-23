@@ -23,6 +23,8 @@ export const PBKDF2_SALT = 'saltysalt'
 // Detection: the HMAC is a hash, so roughly half its bytes are non-printable
 // ASCII. Real cookie values are overwhelmingly printable. If ≥8 of the first
 // 32 bytes are non-printable, it's an HMAC prefix.
+// This prefix is COOKIE-specific (domain-binding). Login Data passwords do NOT
+// carry it — stripping is opt-in to avoid truncating long/non-ASCII passwords.
 const CHROMIUM_COOKIE_HMAC_LEN = 32
 
 export function hasHmacPrefix(buf: Buffer): boolean {
@@ -44,7 +46,8 @@ export function stripHmac(buf: Buffer): Buffer {
 
 export function decryptChromiumValue(
   encryptedBuffer: Buffer,
-  keyResult: EncryptionKeyResult
+  keyResult: EncryptionKeyResult,
+  opts: { stripHmacPrefix?: boolean } = {}
 ): Buffer | null {
   if (!encryptedBuffer || encryptedBuffer.length === 0) {
     return null
@@ -55,7 +58,11 @@ export function decryptChromiumValue(
   }
 
   if (keyResult.mode === 'aes-256-gcm') {
-    return decryptAes256Gcm(encryptedBuffer.subarray(3), keyResult.key)
+    return decryptAes256Gcm(
+      encryptedBuffer.subarray(3),
+      keyResult.key,
+      opts.stripHmacPrefix ?? false
+    )
   }
 
   // AES-128-CBC (macOS and Linux)
@@ -77,7 +84,7 @@ export function decryptChromiumValue(
       const decipher = createDecipheriv('aes-128-cbc', key, iv)
       decipher.setAutoPadding(true)
       const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()])
-      return stripHmac(decrypted)
+      return opts.stripHmacPrefix ? stripHmac(decrypted) : decrypted
     } catch {
       continue
     }
@@ -85,7 +92,11 @@ export function decryptChromiumValue(
   return null
 }
 
-export function decryptAes256Gcm(payload: Buffer, key: Buffer): Buffer | null {
+export function decryptAes256Gcm(
+  payload: Buffer,
+  key: Buffer,
+  stripHmacPrefix = false
+): Buffer | null {
   // Why: Windows AES-256-GCM layout is: [12-byte nonce][ciphertext][16-byte auth tag]
   if (payload.length < 12 + 16) {
     return null
@@ -97,7 +108,7 @@ export function decryptAes256Gcm(payload: Buffer, key: Buffer): Buffer | null {
     const decipher = createDecipheriv('aes-256-gcm', key, nonce)
     decipher.setAuthTag(authTag)
     const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()])
-    return stripHmac(decrypted)
+    return stripHmacPrefix ? stripHmac(decrypted) : decrypted
   } catch {
     return null
   }
