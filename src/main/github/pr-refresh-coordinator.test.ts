@@ -401,6 +401,69 @@ describe('pr-refresh-coordinator', () => {
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(4)
   })
 
+  it('wakes for visible budget spacing before a capped active burst opens', async () => {
+    const { enqueuePRRefresh, reportVisiblePRRefreshCandidates } =
+      await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockResolvedValue({
+      kind: 'upstream-error',
+      errorType: 'unknown',
+      message: 'missing upstream',
+      fetchedAt: Date.now()
+    })
+
+    reportVisiblePRRefreshCandidates(
+      [
+        makeCandidate({
+          cacheKey: '/repo::feature/visible-first',
+          branch: 'feature/visible-first',
+          worktreeId: 'wt-visible-first'
+        })
+      ],
+      1,
+      1
+    )
+    await vi.advanceTimersByTimeAsync(0)
+
+    for (let index = 0; index < 10; index += 1) {
+      enqueuePRRefresh(
+        makeCandidate({
+          cacheKey: `/repo::feature/${index}`,
+          branch: `feature/${index}`,
+          worktreeId: `wt-${index}`
+        }),
+        'active',
+        80,
+        1
+      )
+    }
+    reportVisiblePRRefreshCandidates(
+      [
+        makeCandidate({
+          cacheKey: '/repo::feature/visible-second',
+          branch: 'feature/visible-second',
+          worktreeId: 'wt-visible-second'
+        })
+      ],
+      2,
+      1
+    )
+
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(4)
+
+    await vi.advanceTimersByTimeAsync(9_999)
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(4)
+
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(getPRForBranchOutcomeMock.mock.calls.map((call) => call[1])).toContain(
+      'feature/visible-second'
+    )
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(5)
+  })
+
   it('does not consume active burst slots for rate-limit pauses', async () => {
     const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
     getRateLimitMock

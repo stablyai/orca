@@ -129,13 +129,23 @@ function recordPRRefreshQueueDiagnostic(
   })
 }
 
-export function clearVisiblePRRefreshWindow(windowId: number): void {
-  if (!visibleByWindow.delete(windowId)) {
-    return
+function clearActiveBurstWindow(windowId: number): void {
+  const windowPrefix = `${windowId}::`
+  for (const scope of Array.from(activeStartsByScope.keys())) {
+    if (scope.startsWith(windowPrefix)) {
+      activeStartsByScope.delete(scope)
+    }
   }
-  // Why: visible follow-ups are owned by the renderer that reported them.
-  // If that WebContents is destroyed, no later visibility report may arrive.
-  removeInvisibleVisibleRefreshes()
+}
+
+export function clearVisiblePRRefreshWindow(windowId: number): void {
+  const hadVisibleRefreshes = visibleByWindow.delete(windowId)
+  clearActiveBurstWindow(windowId)
+  if (hadVisibleRefreshes) {
+    // Why: visible follow-ups are owned by the renderer that reported them.
+    // If that WebContents is destroyed, no later visibility report may arrive.
+    removeInvisibleVisibleRefreshes()
+  }
 }
 
 function nextSequence(): number {
@@ -542,6 +552,19 @@ function isActiveBurstDelayed(entry: QueueEntry): boolean {
   return entry.reason === 'active' && nextActiveBurstDelay(entry) > 0
 }
 
+function nextQueuedWakeDelay(excludedKey: string): number | null {
+  const now = Date.now()
+  let nextDelay = Number.POSITIVE_INFINITY
+  for (const entry of queue.values()) {
+    if (entry.key === excludedKey) {
+      continue
+    }
+    const delay = entry.dueAt > now ? entry.dueAt - now : entryDelay(entry)
+    nextDelay = Math.min(nextDelay, delay)
+  }
+  return Number.isFinite(nextDelay) ? Math.max(0, nextDelay) : null
+}
+
 function scheduleDrain(delay = 0): void {
   if (drainTimer) {
     clearTimeout(drainTimer)
@@ -602,7 +625,7 @@ async function drainQueue(): Promise<void> {
             diagnosticsCounters.backgroundPauses += 1
             recordPRRefreshQueueDiagnostic('background-pause', next.reason)
           }
-          scheduleDrain(delay)
+          scheduleDrain(Math.min(delay, nextQueuedWakeDelay(next.key) ?? delay))
           return
         }
       }
