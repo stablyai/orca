@@ -7762,91 +7762,84 @@ export default function TaskPage(): React.JSX.Element {
                         })}
                       </div>
                     ) : null}
-                    {/* Why: the repo combobox filters Items mode by repo. In
-                        Project mode the row set comes from the project's
-                        view filter (server-side), so this control would be
-                        inert — hide it to avoid suggesting it does
-                        something. */}
-                    {githubMode !== 'project' && (
-                      <>
-                        <div className="min-w-0 max-w-[220px] shrink-0">
-                          <TaskProjectSourceCombobox
-                            groups={taskPickerGroups}
-                            selected={repoSelection}
-                            getRepoHostLabel={getTaskPickerRepoHostLabel}
-                            onChange={(next) => {
-                              const normalized = normalizeTaskRepoSelection(eligibleRepos, next)
-                              setRepoSelection(normalized)
-                              void updateSettings({ defaultRepoSelection: [...normalized] }).catch(
-                                () => {
-                                  toast.error(
-                                    translate(
-                                      'auto.components.TaskPage.dfd72673e7',
-                                      'Failed to save project selection.'
-                                    )
-                                  )
-                                }
-                              )
-                            }}
-                            onSelectAll={() => {
-                              const allIds = new Set(taskPickerRepos.map((r) => r.id))
-                              setRepoSelection(allIds)
-                              void updateSettings({ defaultRepoSelection: null }).catch(() => {
-                                toast.error(
-                                  translate(
-                                    'auto.components.TaskPage.dfd72673e7',
-                                    'Failed to save project selection.'
-                                  )
+                    {/* Why: Project rows are now repo-scoped too, so the
+                        selection must stay visible in both GitHub modes. */}
+                    <div className="min-w-0 max-w-[220px] shrink-0">
+                      <TaskProjectSourceCombobox
+                        groups={taskPickerGroups}
+                        selected={repoSelection}
+                        getRepoHostLabel={getTaskPickerRepoHostLabel}
+                        onChange={(next) => {
+                          const normalized = normalizeTaskRepoSelection(eligibleRepos, next)
+                          setRepoSelection(normalized)
+                          void updateSettings({ defaultRepoSelection: [...normalized] }).catch(
+                            () => {
+                              toast.error(
+                                translate(
+                                  'auto.components.TaskPage.dfd72673e7',
+                                  'Failed to save project selection.'
                                 )
-                              })
-                            }}
-                            triggerClassName="h-8 w-auto max-w-[220px] rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
-                          />
-                        </div>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon-sm"
-                              onClick={() => {
-                                if (!selectedGitHubRepoExternalLink?.url) {
-                                  return
-                                }
-                                void window.api.shell.openUrl(selectedGitHubRepoExternalLink.url)
-                              }}
-                              aria-label={
-                                selectedGitHubRepoExternalLink
-                                  ? translate(
-                                      'auto.components.TaskPage.8d1e17a3ef',
-                                      'Open {{value0}} in GitHub',
-                                      { value0: selectedGitHubRepoExternalLink.label }
-                                    )
-                                  : translate(
-                                      'auto.components.TaskPage.d1132848f8',
-                                      'Select one GitHub project to open in GitHub'
-                                    )
-                              }
-                              className="h-8 w-8 rounded-md border-border/50 bg-muted/50 text-foreground shadow-sm transition hover:bg-muted/50"
-                            >
-                              <ExternalLink className="size-3.5" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" sideOffset={6}>
-                            {selectedGitHubRepoExternalLink
+                              )
+                            }
+                          )
+                        }}
+                        onSelectAll={() => {
+                          const allIds = new Set(taskPickerRepos.map((r) => r.id))
+                          setRepoSelection(allIds)
+                          void updateSettings({ defaultRepoSelection: null }).catch(() => {
+                            toast.error(
+                              translate(
+                                'auto.components.TaskPage.dfd72673e7',
+                                'Failed to save project selection.'
+                              )
+                            )
+                          })
+                        }}
+                        triggerClassName="h-8 w-auto max-w-[220px] rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
+                      />
+                    </div>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon-sm"
+                          onClick={() => {
+                            if (!selectedGitHubRepoExternalLink?.url) {
+                              return
+                            }
+                            void window.api.shell.openUrl(selectedGitHubRepoExternalLink.url)
+                          }}
+                          aria-label={
+                            selectedGitHubRepoExternalLink
                               ? translate(
                                   'auto.components.TaskPage.8d1e17a3ef',
                                   'Open {{value0}} in GitHub',
                                   { value0: selectedGitHubRepoExternalLink.label }
                                 )
                               : translate(
-                                  'auto.components.TaskPage.bc46d8204e',
-                                  'Select one project to open in GitHub'
-                                )}
-                          </TooltipContent>
-                        </Tooltip>
-                      </>
-                    )}
+                                  'auto.components.TaskPage.d1132848f8',
+                                  'Select one GitHub project to open in GitHub'
+                                )
+                          }
+                          className="h-8 w-8 rounded-md border-border/50 bg-muted/50 text-foreground shadow-sm transition hover:bg-muted/50"
+                        >
+                          <ExternalLink className="size-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        {selectedGitHubRepoExternalLink
+                          ? translate(
+                              'auto.components.TaskPage.8d1e17a3ef',
+                              'Open {{value0}} in GitHub',
+                              { value0: selectedGitHubRepoExternalLink.label }
+                            )
+                          : translate(
+                              'auto.components.TaskPage.bc46d8204e',
+                              'Select one project to open in GitHub'
+                            )}
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 ) : null}
 
