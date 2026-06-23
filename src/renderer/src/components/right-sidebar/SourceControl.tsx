@@ -128,6 +128,8 @@ import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { formatDiffComment, formatDiffComments } from '@/lib/diff-comments-format'
 import { getDiffCommentLineLabel, getDiffCommentSource } from '@/lib/diff-comment-compat'
 import { DiffNotesSendMenu } from '@/components/editor/DiffNotesSendMenu'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import {
   countPendingDiffCommentsClear,
   formatPendingDiffCommentsClearDescription,
@@ -774,6 +776,7 @@ function SourceControlInner(): React.JSX.Element {
   const isRemoteOperationActive = useAppStore((s) => s.isRemoteOperationActive)
   const inFlightRemoteOpKind = useAppStore((s) => s.inFlightRemoteOpKind)
   const settings = useAppStore((s) => s.settings)
+  const keybindings = useAppStore((s) => s.keybindings)
   // Why: git/file mutations and repo metadata requests belong to the repo
   // OWNER host, not the currently focused host in the sidebar.
   const activeRepoSettings = useMemo(
@@ -4426,6 +4429,77 @@ function SourceControlInner(): React.JSX.Element {
         void runCreatePrIntent()
     }
   }, [handleActionInvoke, handleStageAllPrimary, primaryAction.kind, runCreatePrIntent])
+
+  useEffect(() => {
+    if (!rightSidebarOpen || rightSidebarTab !== 'source-control') {
+      return
+    }
+
+    const handleSourceControlShortcut = (event: KeyboardEvent): void => {
+      if (event.repeat || event.isComposing) {
+        return
+      }
+
+      const input = {
+        key: event.key,
+        code: event.code,
+        control: event.ctrlKey,
+        meta: event.metaKey,
+        alt: event.altKey,
+        shift: event.shiftKey
+      }
+      const platform = getShortcutPlatform()
+      const matches = (actionId: Parameters<typeof keybindingMatchesAction>[0]): boolean =>
+        keybindingMatchesAction(actionId, input, platform, keybindings)
+
+      if (matches('sourceControl.stageAll')) {
+        event.preventDefault()
+        void handleStageAllPrimary()
+        return
+      }
+      if (matches('sourceControl.generateCommitMessage')) {
+        event.preventDefault()
+        handleGenerateCommitMessageClick()
+        return
+      }
+      if (matches('sourceControl.commit')) {
+        event.preventDefault()
+        void handleCommit()
+        return
+      }
+      if (matches('sourceControl.commitPush')) {
+        event.preventDefault()
+        void runCompoundCommitAction('push')
+        return
+      }
+      if (matches('sourceControl.commitSync')) {
+        event.preventDefault()
+        void runCompoundCommitAction('sync')
+        return
+      }
+      if (matches('sourceControl.push')) {
+        event.preventDefault()
+        void runRemoteAction('push')
+        return
+      }
+      if (matches('sourceControl.sync')) {
+        event.preventDefault()
+        void runRemoteAction('sync')
+      }
+    }
+
+    window.addEventListener('keydown', handleSourceControlShortcut)
+    return () => window.removeEventListener('keydown', handleSourceControlShortcut)
+  }, [
+    handleCommit,
+    handleGenerateCommitMessageClick,
+    handleStageAllPrimary,
+    keybindings,
+    rightSidebarOpen,
+    rightSidebarTab,
+    runCompoundCommitAction,
+    runRemoteAction
+  ])
 
   const handleCreatePrHeaderClick = useCallback((): void => {
     if (!createPrHeaderAction || createPrHeaderAction.disabled) {

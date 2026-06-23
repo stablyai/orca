@@ -223,6 +223,7 @@ describe('keybindings', () => {
     expect(getEffectiveKeybindingsForAction('workspace.rename', 'darwin')).toEqual(['Mod+Alt+R'])
     expect(getEffectiveKeybindingsForAction('workspace.rename', 'linux')).toEqual([])
     expect(formatKeybindingList(['Mod+Alt+R'], 'darwin')).toBe('⌘⌥R')
+    expect(getKeybindingDefinition('tab.rename')?.searchKeywords).toContain('set title')
     expect(
       keybindingMatchesAction(
         'tab.rename',
@@ -286,6 +287,41 @@ describe('keybindings', () => {
         actionIds: ['workspace.rename', 'tab.rename']
       }
     ])
+  })
+
+  it('defines configurable source control shortcuts without default chords', () => {
+    const sourceControlActions: KeybindingActionId[] = [
+      'sourceControl.stageAll',
+      'sourceControl.generateCommitMessage',
+      'sourceControl.commit',
+      'sourceControl.commitPush',
+      'sourceControl.commitSync',
+      'sourceControl.push',
+      'sourceControl.sync'
+    ]
+
+    for (const actionId of sourceControlActions) {
+      expect(getKeybindingDefinition(actionId)?.group).toBe('Source Control')
+      expect(getEffectiveKeybindingsForAction(actionId, 'darwin')).toEqual([])
+      expect(getEffectiveKeybindingsForAction(actionId, 'linux')).toEqual([])
+      expect(getEffectiveKeybindingsForAction(actionId, 'win32')).toEqual([])
+    }
+
+    expect(
+      keybindingMatchesAction(
+        'sourceControl.commitSync',
+        {
+          key: 'p',
+          code: 'KeyP',
+          meta: true,
+          control: true,
+          alt: false,
+          shift: false
+        },
+        'darwin',
+        { 'sourceControl.commitSync': ['Ctrl+Cmd+P'] }
+      )
+    ).toBe(true)
   })
 
   it('defines browser history shortcuts for Logitech side-button remaps', () => {

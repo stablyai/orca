@@ -11,6 +11,7 @@ export type KeybindingScope =
   | 'browser'
   | 'editor'
   | 'fileExplorer'
+  | 'sourceControl'
   | 'composer'
   | 'settings'
 
@@ -93,6 +94,13 @@ export type KeybindingActionId =
   | 'fileExplorer.copyPath'
   | 'fileExplorer.copyRelativePath'
   | 'fileExplorer.delete'
+  | 'sourceControl.stageAll'
+  | 'sourceControl.generateCommitMessage'
+  | 'sourceControl.commit'
+  | 'sourceControl.commitPush'
+  | 'sourceControl.commitSync'
+  | 'sourceControl.push'
+  | 'sourceControl.sync'
   | 'settings.search'
   | 'terminal.copySelection'
   | 'terminal.paste'
@@ -605,7 +613,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     group: 'Tabs',
     scope: 'tabs',
     conflictGroup: 'workspace-shell',
-    searchKeywords: ['shortcut', 'tab', 'rename', 'title', 'label'],
+    searchKeywords: ['shortcut', 'tab', 'rename', 'title', 'set title', 'label'],
     // Why: macOS only. Cmd+R is free in the app/terminal focus zone (the
     // browser pane owns its own Cmd+R reload). On Windows/Linux Ctrl+R is the
     // shell reverse-search, so it is left unbound for explicit user binding.
@@ -849,6 +857,70 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       win32: ['Delete']
     },
     allowBareKeybindings: true
+  },
+  {
+    id: 'sourceControl.stageAll',
+    title: 'Stage all changes',
+    group: 'Source Control',
+    scope: 'sourceControl',
+    searchKeywords: ['shortcut', 'source control', 'git', 'stage', 'stage all', 'changes'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'sourceControl.generateCommitMessage',
+    title: 'Generate commit message',
+    group: 'Source Control',
+    scope: 'sourceControl',
+    searchKeywords: [
+      'shortcut',
+      'source control',
+      'git',
+      'commit',
+      'message',
+      'generate',
+      'ai'
+    ],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'sourceControl.commit',
+    title: 'Commit staged changes',
+    group: 'Source Control',
+    scope: 'sourceControl',
+    searchKeywords: ['shortcut', 'source control', 'git', 'commit', 'staged', 'changes'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'sourceControl.commitPush',
+    title: 'Commit and push',
+    group: 'Source Control',
+    scope: 'sourceControl',
+    searchKeywords: ['shortcut', 'source control', 'git', 'commit', 'push', 'publish'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'sourceControl.commitSync',
+    title: 'Commit and sync',
+    group: 'Source Control',
+    scope: 'sourceControl',
+    searchKeywords: ['shortcut', 'source control', 'git', 'commit', 'sync', 'pull', 'push'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'sourceControl.push',
+    title: 'Push branch',
+    group: 'Source Control',
+    scope: 'sourceControl',
+    searchKeywords: ['shortcut', 'source control', 'git', 'push', 'branch'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'sourceControl.sync',
+    title: 'Sync branch',
+    group: 'Source Control',
+    scope: 'sourceControl',
+    searchKeywords: ['shortcut', 'source control', 'git', 'sync', 'pull', 'push', 'branch'],
+    defaultBindings: platformBindings([])
   },
   {
     id: 'settings.search',
