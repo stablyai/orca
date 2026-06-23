@@ -293,6 +293,47 @@ describe('registerGitHubHandlers', () => {
     expect(getIssueMock).not.toHaveBeenCalled()
   })
 
+  it('skips stale visible PR refresh candidates without rejecting the batch', async () => {
+    registerGitHubHandlers(store as never, stats as never)
+
+    expect(
+      handlers['gh:reportVisiblePRRefreshCandidates'](
+        { sender: { id: 7, once: vi.fn() } },
+        {
+          generation: 1,
+          candidates: [
+            {
+              cacheKey: '/workspace/repo::feature/live',
+              repoPath: '/workspace/repo',
+              branch: 'feature/live',
+              repoKind: 'git',
+              repoId: 'repo-1'
+            },
+            {
+              cacheKey: '/workspace/missing::feature/stale',
+              repoPath: '/workspace/missing',
+              branch: 'feature/stale',
+              repoKind: 'git',
+              repoId: 'repo-missing'
+            }
+          ]
+        }
+      )
+    ).toBe(true)
+
+    expect(reportVisiblePRRefreshCandidatesMock).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          repoPath: '/workspace/repo',
+          repoId: 'repo-1',
+          branch: 'feature/live'
+        })
+      ],
+      1,
+      7
+    )
+  })
+
   it('rejects GitHub source context from a different host', async () => {
     registerGitHubHandlers(store as never, stats as never)
 
