@@ -2595,10 +2595,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // reconnectPersistedTerminals() after all eager PTY spawns complete.
       // This prevents TerminalPane from mounting and spawning duplicate PTYs
       // before the reconnect phase has set ptyId on each tab.
-      // Why: fall back to deriving the list from tabsByWorktree ptyIds when
-      // activeWorktreeIdsOnShutdown is absent (upgrade from older build).
-      // The raw tabs still carry ptyId values before clearTransientTerminalState
-      // nulls them, so we can infer which worktrees had active terminals.
+      // Why: match the pre-idle-runtime-optimization startup contract.
+      // activeWorktreeIdsOnShutdown is authoritative when present; persisted
+      // tab/layout PTY IDs are wake hints, not a broader active-workspace list.
       const shutdownIds =
         session.activeWorktreeIdsOnShutdown ??
         Object.entries(session.tabsByWorktree)
@@ -2794,8 +2793,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       pendingReconnectTabByWorktree,
       pendingReconnectPtyIdByTabId,
       terminalLayoutsByTabId,
-      tabsByWorktree,
-      activeWorktreeId
+      tabsByWorktree
     } = get()
     const ids = pendingReconnectWorktreeIds ?? []
 
@@ -2869,15 +2867,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           `[reconnect-terminals] tab=${tabId} tabLevelPtyId=${tabLevelPtyId} supportsDeferredReattach=${supportsDeferredReattach} hasLeafMappings=${hasLeafMappings}`
         )
         if (tabLevelPtyId) {
-          const shouldAdvertiseLivePtys = worktreeId === activeWorktreeId
           set((s) => {
             const next = { ...s.tabsByWorktree }
             if (!next[worktreeId]) {
               return {}
             }
-            next[worktreeId] = next[worktreeId].map((t) =>
-              t.id === tabId ? { ...t, ptyId: tabLevelPtyId } : t
-            )
 
             // Why: populate ptyIdsByTabId so the sessions status segment
             // can map daemon session IDs back to tabs (for bound/orphan
@@ -2885,20 +2879,19 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
             // appear as orphans until the terminal pane mounts.
             const allPtyIds = hasLeafMappings
               ? (Object.values(leafPtyMap).filter(Boolean) as string[])
-              : [tabLevelPtyId]
+              : [tabLevelPtyId!]
+            next[worktreeId] = next[worktreeId].map((t) =>
+              t.id === tabId ? { ...t, ptyId: tabLevelPtyId } : t
+            )
             return {
               tabsByWorktree: next,
-              ...(shouldAdvertiseLivePtys
-                ? {
-                    // Why: inactive worktrees only need wake hints. Publishing
-                    // their PTYs as live at startup starts global session/status
-                    // machinery before the user opens that workspace.
-                    ptyIdsByTabId: {
-                      ...s.ptyIdsByTabId,
-                      [tabId]: allPtyIds
-                    }
-                  }
-                : {})
+              // Why: hide-sleeping uses ptyIdsByTabId as the liveness source.
+              // Restored daemon sessions are still running even before their
+              // pane remounts, so background workspaces must advertise them.
+              ptyIdsByTabId: {
+                ...s.ptyIdsByTabId,
+                [tabId]: allPtyIds
+              }
             }
           })
         }

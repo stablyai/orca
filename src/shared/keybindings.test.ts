@@ -21,6 +21,7 @@ import {
   normalizeKeybindingListForAction,
   normalizeKeybindingList
 } from './keybindings'
+import type { KeybindingActionId, KeybindingPlatform } from './keybindings'
 import { ALL_TUI_AGENTS } from './tui-agent-display-names'
 
 describe('keybindings', () => {
@@ -250,6 +251,22 @@ describe('keybindings', () => {
         'linux'
       )
     ).toBe(false)
+    expect(
+      keybindingMatchesAction(
+        'tab.rename',
+        {
+          key: 'r',
+          code: 'KeyR',
+          meta: true,
+          control: false,
+          alt: false,
+          shift: false
+        },
+        'darwin',
+        undefined,
+        { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+      )
+    ).toBe(false)
 
     // Why: tab.rename (Mod+R) intentionally shares its binding with
     // browser.reload, but the two live in different scopes (tabs vs browser),
@@ -439,6 +456,101 @@ describe('keybindings', () => {
     )
   })
 
+  it('keeps the sleeping-workspaces toggle unassigned until users customize it', () => {
+    const binding = {
+      key: 's',
+      code: 'KeyS',
+      control: true,
+      meta: false,
+      alt: true,
+      shift: false
+    }
+
+    // Ships unbound on every platform (issue #5209): assign-it-yourself.
+    expect(getEffectiveKeybindingsForAction('sidebar.sleepingWorkspaces.toggle', 'darwin')).toEqual(
+      []
+    )
+    expect(getEffectiveKeybindingsForAction('sidebar.sleepingWorkspaces.toggle', 'linux')).toEqual(
+      []
+    )
+    expect(getEffectiveKeybindingsForAction('sidebar.sleepingWorkspaces.toggle', 'win32')).toEqual(
+      []
+    )
+    expect(keybindingMatchesAction('sidebar.sleepingWorkspaces.toggle', binding, 'linux')).toBe(
+      false
+    )
+    expect(
+      keybindingMatchesAction('sidebar.sleepingWorkspaces.toggle', binding, 'linux', {
+        'sidebar.sleepingWorkspaces.toggle': ['Mod+Alt+S']
+      })
+    ).toBe(true)
+
+    const definition = getKeybindingDefinition('sidebar.sleepingWorkspaces.toggle')
+    expect(definition?.title).toBe('Toggle Sleeping Workspaces')
+    expect(definition?.searchKeywords).toEqual(
+      expect.arrayContaining(['sleeping', 'workspaces', 'filter'])
+    )
+  })
+
+  it('defines floating workspace panel action metadata', () => {
+    const actionIds = [
+      'floatingWorkspace.maximize' as KeybindingActionId,
+      'floatingWorkspace.minimize' as KeybindingActionId
+    ] as const
+
+    for (const actionId of actionIds) {
+      expect(getKeybindingDefinition(actionId), actionId).toMatchObject({ id: actionId })
+    }
+  })
+
+  it('assigns the floating workspace maximize default only on macOS', () => {
+    const maximizeAction = 'floatingWorkspace.maximize' as KeybindingActionId
+
+    expect(getEffectiveKeybindingsForAction(maximizeAction, 'darwin')).toEqual(['Mod+Alt+Shift+A'])
+    expect(getEffectiveKeybindingsForAction(maximizeAction, 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction(maximizeAction, 'win32')).toEqual([])
+  })
+
+  it('captures and round-trips the macOS Option-composed maximize chord', () => {
+    const maximizeAction = 'floatingWorkspace.maximize' as KeybindingActionId
+
+    // Why: macOS Option+A composes to a glyph (å), so capture must resolve the
+    // chord through the physical-code fallback rather than the composed key,
+    // matching the matcher so a user override round-trips to the same binding.
+    const macComposedMaximize = {
+      key: 'å',
+      code: 'KeyA',
+      meta: true,
+      control: false,
+      alt: true,
+      shift: true
+    }
+    expect(keybindingFromInput(macComposedMaximize, 'darwin')).toEqual({
+      ok: true,
+      value: 'Mod+Alt+Shift+A'
+    })
+    expect(keybindingMatchesAction(maximizeAction, macComposedMaximize, 'darwin')).toBe(true)
+    // The captured override formats back to the same effective shortcut.
+    expect(
+      getEffectiveKeybindingsForAction(maximizeAction, 'darwin', {
+        [maximizeAction]: ['Mod+Alt+Shift+A']
+      })
+    ).toEqual(['Mod+Alt+Shift+A'])
+    expect(formatKeybindingList(['Mod+Alt+Shift+A'], 'darwin')).toBe('⌘⌥⇧A')
+  })
+
+  it('leaves floating workspace minimize unassigned because floating terminal toggle owns show and hide', () => {
+    const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
+    const minimizeAction = 'floatingWorkspace.minimize' as KeybindingActionId
+
+    for (const platform of platforms) {
+      expect(getEffectiveKeybindingsForAction(minimizeAction, platform)).toEqual([])
+    }
+    expect(getEffectiveKeybindingsForAction('floatingTerminal.toggle', 'darwin')).toEqual([
+      'Mod+Alt+A'
+    ])
+  })
+
   it('defines a macOS-only default for the new agent tab shortcut', () => {
     expect(getEffectiveKeybindingsForAction('tab.newAgent', 'darwin')).toEqual(['Mod+Alt+T'])
     expect(getEffectiveKeybindingsForAction('tab.newAgent', 'linux')).toEqual([])
@@ -531,6 +643,32 @@ describe('keybindings', () => {
         { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
       )
     ).toBe(true)
+  })
+
+  it('keeps floating workspace tab shortcuts active in app focus even with terminal-first policy configured', () => {
+    const panelFocus = {
+      context: 'app',
+      terminalShortcutPolicy: 'terminal-first'
+    } as const
+
+    expect(
+      keybindingMatchesAction(
+        'tab.rename',
+        { key: 'r', code: 'KeyR', meta: true, control: false, alt: false, shift: false },
+        'darwin',
+        undefined,
+        panelFocus
+      )
+    ).toBe(true)
+    expect(
+      matchKeybindingDigitIndex(
+        'tab.selectByIndex',
+        { key: '4', code: 'Digit4', meta: false, control: false, alt: true, shift: false },
+        'linux',
+        undefined,
+        panelFocus
+      )
+    ).toBe(3)
   })
 
   it('keeps terminal-allowed app shortcuts active in terminal-first mode', () => {

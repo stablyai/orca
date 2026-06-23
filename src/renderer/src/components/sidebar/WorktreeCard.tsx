@@ -45,7 +45,10 @@ import {
 import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCardPorts'
 import { writeWorkspaceDragData } from './workspace-status'
 import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
-import { getWorktreeCardTitleDisplay } from './worktree-card-title-display'
+import {
+  coerceWorktreeCardVisibleTitle,
+  getWorktreeCardTitleDisplay
+} from './worktree-card-title-display'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
@@ -63,7 +66,10 @@ import {
 } from './workspace-delete-quick-action'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
-import { getFlushWorktreeCardPaddingLeft } from './worktree-list-indentation'
+import {
+  getFlushWorktreeCardPaddingLeft,
+  getNewCardStyleParentContentMarginLeft
+} from './worktree-list-indentation'
 import { translate } from '@/i18n/i18n'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -502,7 +508,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
     issueTitle: issueDisplay?.title,
     reviewTitle: prDisplay?.title
   })
-  const visibleCardTitle = newCardStyle ? cardTitleDisplay : worktree.displayName
+  const legacyCardTitleDisplay = coerceWorktreeCardVisibleTitle(worktree.displayName)
+  const visibleCardTitle = newCardStyle ? cardTitleDisplay : legacyCardTitleDisplay
   const isDeleting = deleteState?.isDeleting ?? false
   const deleteModifierPressed = useWorkspaceDeleteModifierPressed()
 
@@ -1155,11 +1162,16 @@ const WorktreeCard = React.memo(function WorktreeCard({
       : undefined
   // Why: sidebar rows need a small surface inset, while their content remains
   // aligned with the pre-inset layout and the repo header hierarchy.
+  const applyNewCardStyleStatusLaneOffset = newCardStyle && showCombinedStatusSlot
   const cardPaddingLeft = flushSurface
-    ? getFlushWorktreeCardPaddingLeft(contentIndent)
+    ? getFlushWorktreeCardPaddingLeft(contentIndent, applyNewCardStyleStatusLaneOffset)
     : contentIndent > 0
       ? `calc(0.125rem + ${contentIndent}px)`
       : null
+  const parentContentMarginLeft =
+    flushSurface && applyNewCardStyleStatusLaneOffset
+      ? getNewCardStyleParentContentMarginLeft(contentIndent)
+      : 0
   const cardStyle = cardPaddingLeft ? { paddingLeft: cardPaddingLeft } : undefined
   const detailsAndPortsContent =
     hasDetails || hasPorts ? (
@@ -1223,6 +1235,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
         'flex w-full min-w-0 gap-0.5 pl-0',
         titleOnlyCard ? 'items-center' : 'items-start'
       )}
+      style={
+        parentContentMarginLeft < 0 ? { marginLeft: `${parentContentMarginLeft}px` } : undefined
+      }
       data-worktree-card-parent-content=""
     >
       {showCombinedStatusSlot ? (

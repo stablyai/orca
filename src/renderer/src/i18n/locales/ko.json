@@ -1703,7 +1703,10 @@
         "settingsBadge": "설정",
         "actionBadge": "작업",
         "paletteHostBadge": "호스트: {{value0}}",
-        "workspaceTabMissing": "탭이 더 이상 존재하지 않습니다"
+        "workspaceTabMissing": "탭이 더 이상 존재하지 않습니다",
+        "projectsGroupsHeader": "Projects & Groups",
+        "projectBadge": "Project",
+        "repoGroupBadge": "Repo group"
       },
       "github": {
         "pr": {
@@ -1846,7 +1849,10 @@
             "22df63c393": "토큰에 대한 하위 이슈 데이터를 사용할 수 없습니다.",
             "067119985c": "GitHub 검색, 예: assignee:@me is:open",
             "1850fceac8": "{{value0}}/{{value1}}이(가) Orca에 추가되어 있지 않습니다. 작업을 시작하려면 추가하거나 GitHub에서 여세요.",
-            "1aa7c952b9": "프로젝트 보기"
+            "1aa7c952b9": "프로젝트 보기",
+            "f352abf7c3": "Repository list is updating.",
+            "1ce21b8cff": "This item is outside the selected repositories.",
+            "030de75bc5": "This item matches multiple selected repositories."
           },
           "slug": {
             "dialog": {
@@ -2313,7 +2319,7 @@
           "TerminalContextMenu": {
             "b4cdd9314e": "화면 지우기",
             "8c17d6786d": "창 닫기",
-            "copyTerminalId": "Copy Terminal ID",
+            "copyTerminalId": "터미널 ID 복사",
             "2cf85a6a55": "창 ID 복사",
             "39809d152f": "제목 설정…",
             "06c2b0f043": "창 크기 균등화",
@@ -2405,7 +2411,7 @@
                     "a29b9faa01": "창 ID가 복사되었습니다.",
                     "terminal": {
                       "id": {
-                        "copied": "터미널 ID가 복사되었습니다",
+                        "copied": "터미널 ID를 복사했습니다",
                         "copy": {
                           "failed": "터미널 ID를 복사할 수 없습니다"
                         }
@@ -2497,7 +2503,8 @@
           "SortableTab": {
             "ab19f603eb": "탭 이름 바꾸기 {{value0}}",
             "6df69d9388": "탭 닫기 {{value0}}",
-            "fdb2691425": "창 축소"
+            "fdb2691425": "창 축소",
+            "95db5f2f7d": "탭 닫기"
           },
           "SortableTabContextMenu": {
             "35e8892fd0": "탭 색상",
@@ -2621,6 +2628,10 @@
             "down": "아래",
             "up": "위",
             "moveToPaneColumn": "탭을 분할로 이동"
+          },
+          "EditorFileTabCloseButton": {
+            "4655cf570e": "탭 닫기",
+            "a768f428f1": "탭 닫기"
           }
         }
       },
@@ -3800,7 +3811,8 @@
           "1b0a156717": "Agents"
         },
         "WorktreeCardReviewDetailSection": {
-          "reviewHeader": "{{value0}} #{{value1}}"
+          "reviewHeader": "{{value0}} #{{value1}}",
+          "copyLink": "Copy link"
         },
         "WorktreeCardMeta": {
           "3e65e11cc6": "워크스페이스 메타데이터",
@@ -3827,7 +3839,13 @@
           "checkingAutomationAvailability": "자동화 사용 가능 여부 확인 중...",
           "automationMissing": "자동화를 더 이상 사용할 수 없습니다.",
           "automationRunMissing": "실행 기록을 더 이상 사용할 수 없습니다.",
-          "automationAvailabilityUnavailable": "자동화 사용 가능 여부를 확인할 수 없습니다."
+          "automationAvailabilityUnavailable": "자동화 사용 가능 여부를 확인할 수 없습니다.",
+          "moreIssueActions": "More issue actions",
+          "copyLink": "Copy link",
+          "copyLinkSuccess": "{{value0}} copied",
+          "copyLinkFailure": "Failed to copy link",
+          "issueLinkLabel": "Issue link",
+          "reviewLinkLabel": "{{value0}} link"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "상태: 열림",
@@ -3917,7 +3935,8 @@
           "7a8b9c0d1e": "업데이트 필요",
           "hostAuthNeeded": "인증 필요",
           "hostDisconnected": "Disconnected",
-          "failedNestWorkspace": "워크스페이스를 중첩하지 못했습니다"
+          "failedNestWorkspace": "워크스페이스를 중첩하지 못했습니다",
+          "sidebarRowMissing": "Target no longer exists"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "취소",
@@ -6204,7 +6223,19 @@
           "ab20575a8a": "끄기",
           "ab3a1f9068": "wsl.exe",
           "ask_before_closing_running_terminals_title": "실행 중인 Terminals을 닫기 전에 확인",
-          "ask_before_closing_running_terminals_description": "실행 중인 명령이나 agent가 있는 terminal을 닫기 전에 확인 창을 표시합니다."
+          "ask_before_closing_running_terminals_description": "실행 중인 명령이나 agent가 있는 terminal을 닫기 전에 확인 창을 표시합니다.",
+          "scrollSpeed": {
+            "title": "스크롤 속도",
+            "description": "일반 터미널 스크롤백, 수정 키 빠른 스크롤, 전체 화면 TUI 휠 속도를 조정합니다.",
+            "helper": "휠 입력이 스크롤백과 마우스 인식 터미널 앱에서 느껴지는 방식을 조정합니다.",
+            "reset": "재설정",
+            "normal": "일반",
+            "normalDescription": "스크롤백 휠 배율.",
+            "fast": "빠름",
+            "fastDescription": "수정 키로 스크롤할 때 적용되는 추가 배율.",
+            "tui": "TUI",
+            "tuiDescription": "전체 화면 터미널 앱을 위한 개별 휠 보고."
+          }
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "{{value0}} 테마 미리보기",
@@ -7840,7 +7871,11 @@
               "keyword_custom": "custom"
             },
             "ask_before_closing_running_terminals_title": "실행 중인 Terminals을 닫기 전에 확인",
-            "ask_before_closing_running_terminals_description": "실행 중인 명령이나 agent가 있는 terminal을 닫기 전에 확인을 표시합니다."
+            "ask_before_closing_running_terminals_description": "실행 중인 명령이나 agent가 있는 terminal을 닫기 전에 확인을 표시합니다.",
+            "scrollSpeed": {
+              "title": "스크롤 속도",
+              "description": "일반 터미널 스크롤백, 수정 키 빠른 스크롤, 전체 화면 TUI 휠 속도를 조정합니다."
+            }
           },
           "windows": {
             "search": {
@@ -9115,7 +9150,10 @@
             "hideEmptySessions": "빈 세션 숨기기",
             "workspaceScope": "워크스페이스",
             "worktreeScope": "워크트리",
-            "globalScope": "전역"
+            "globalScope": "전역",
+            "projectScope": "프로젝트",
+            "currentProjectLower": "현재 프로젝트",
+            "project": "프로젝트"
           },
           "AiVaultSessionDetails": {
             "updated": "업데이트됨",
@@ -10370,7 +10408,8 @@
           "4cc7b83ffe": "파일 필터링...",
           "21783df79f": "파일 트리 축소",
           "481e63ca52": "파일",
-          "d5ac717d65": "commit 안 됨"
+          "d5ac717d65": "commit 안 됨",
+          "39b6b9e4e4": "Committed on Branch"
         },
         "CombinedDiffViewer": {
           "35cc27aeb2": "소스 제어에서",
@@ -11023,6 +11062,14 @@
                 "trashWorktree": "워크트리 휴지통으로 이동",
                 "addQuickCommand": "빠른 명령 추가",
                 "newQuickCommand": "새로운 빠른 명령"
+              }
+            }
+          },
+          "palette": {
+            "project": {
+              "results": {
+                "repoGroup": "Repo group",
+                "project": "Project"
               }
             }
           }

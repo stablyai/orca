@@ -35,7 +35,7 @@ describe('getCombinedUncommittedEntries', () => {
     ])
   })
 
-  it('excludes untracked entries when no area filter is set', () => {
+  it('includes every area when no area filter is set', () => {
     const liveEntries: GitStatusEntry[] = [
       { path: 'src/staged.ts', status: 'modified', area: 'staged' },
       { path: 'src/unstaged.ts', status: 'modified', area: 'unstaged' },
@@ -44,7 +44,8 @@ describe('getCombinedUncommittedEntries', () => {
 
     expect(getCombinedUncommittedEntries(liveEntries, undefined)).toEqual([
       { path: 'src/staged.ts', status: 'modified', area: 'staged' },
-      { path: 'src/unstaged.ts', status: 'modified', area: 'unstaged' }
+      { path: 'src/unstaged.ts', status: 'modified', area: 'unstaged' },
+      { path: 'src/untracked.ts', status: 'untracked', area: 'untracked' }
     ])
   })
 })

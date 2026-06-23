@@ -117,6 +117,12 @@ export type PendingSidebarWorktreeReveal = {
   beginRename?: boolean
 }
 
+export type PendingSidebarRowReveal = {
+  rowKey: string
+  behavior: 'auto' | 'smooth'
+  highlight?: boolean
+}
+
 export type AgentSendPopoverTargetMode = {
   id: string
   instanceId: string
@@ -847,6 +853,7 @@ export type UISlice = {
   petSize: number
   setPetSize: (size: number) => void
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
+  pendingRevealSidebarRow: PendingSidebarRowReveal | null
   revealWorktreeInSidebar: (
     worktreeId: string,
     options?: {
@@ -855,7 +862,15 @@ export type UISlice = {
       beginRename?: boolean
     }
   ) => void
+  revealSidebarRow: (
+    rowKey: string,
+    options?: {
+      behavior?: PendingSidebarRowReveal['behavior']
+      highlight?: boolean
+    }
+  ) => void
   clearPendingRevealWorktreeId: () => void
+  clearPendingRevealSidebarRow: () => void
   // Why: lets the SourceControl sidebar request that the diff editor scroll
   // to a specific note. Cleared by the diff decorator after it reveals the
   // line, so the same id can be requested again later without the surface
@@ -2145,6 +2160,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     }),
 
   pendingRevealWorktree: null,
+  pendingRevealSidebarRow: null,
   revealWorktreeInSidebar: (worktreeId, options) =>
     set({
       pendingRevealWorktree: {
@@ -2154,7 +2170,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         ...(options?.beginRename ? { beginRename: true } : {})
       }
     }),
+  revealSidebarRow: (rowKey, options) =>
+    set({
+      pendingRevealSidebarRow: {
+        rowKey,
+        behavior: options?.behavior ?? 'smooth',
+        ...(options?.highlight === false ? {} : { highlight: true })
+      }
+    }),
   clearPendingRevealWorktreeId: () => set({ pendingRevealWorktree: null }),
+  clearPendingRevealSidebarRow: () => set({ pendingRevealSidebarRow: null }),
   scrollToDiffCommentId: null,
   setScrollToDiffCommentId: (id) => set({ scrollToDiffCommentId: id }),
   persistedUIReady: false,

@@ -40,6 +40,7 @@ import { toast } from 'sonner'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { branchName } from '@/lib/git-utils'
 import { markInputQuietSchedulerInput, scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
+import { clearSessionCommitDraftForWorktree } from '@/lib/source-control-commit-draft-session'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
 import { showPreservedBranchToast } from '@/components/sidebar/preserved-branch-toast'
 import { translate } from '@/i18n/i18n'
@@ -2686,6 +2687,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // assemblies (some unit tests) omit the generation slices.
       get().prunePullRequestGenerationRecords?.(liveWorktreeKeys)
       get().pruneCommitMessageGenerationRecords?.(liveWorktreeKeys)
+      // Why: Source Control may be unmounted during deletion, so its local
+      // prune effect cannot be the only stale-draft cleanup path.
+      clearSessionCommitDraftForWorktree(worktreeId)
       const preservedBranch = removalResult?.preservedBranch
       if (preservedBranch) {
         showPreservedBranchToast(removalResult, worktreeBeforeRemoval, (branch, expectedHead) => {

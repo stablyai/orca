@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  FLUSH_CARD_CONTENT_PULLBACK,
   FLUSH_CARD_MIN_CONTENT_INSET,
+  NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK,
   LINEAGE_CHILDREN_INLINE_OFFSET,
   LINEAGE_IMMEDIATE_PARENT_STEP,
   LINEAGE_NESTED_ROW_SURFACE_INSET,
@@ -97,8 +99,15 @@ describe('worktree list indentation', () => {
     expect(getFlushWorktreeCardPaddingLeft(20)).toBe('max(2px, calc(20px - 4px))')
   })
 
+  it('pulls experimental flush cards back further for the fixed status lane', () => {
+    expect(getFlushWorktreeCardPaddingLeft(20, true)).toBe(
+      `max(2px, calc(20px - ${FLUSH_CARD_CONTENT_PULLBACK + NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK}px))`
+    )
+  })
+
   it('keeps flush card content off the sidebar edge without indentation', () => {
     expect(getFlushWorktreeCardPaddingLeft(0)).toBe('2px')
+    expect(getFlushWorktreeCardPaddingLeft(0, true)).toBe('2px')
   })
 
   it('derives the lineage parent-child step from the pre-refactor grouped-card anchor', () => {

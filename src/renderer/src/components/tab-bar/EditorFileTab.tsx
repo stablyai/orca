@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { X, GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks } from 'lucide-react'
+import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { basename, normalizeRelativePath } from '@/lib/path'
@@ -30,6 +30,7 @@ import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
 import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
+import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
 
 export default function EditorFileTab({
   file,
@@ -341,28 +342,14 @@ export default function EditorFileTab({
          When clean: close button is shown normally (visible on active tab, on hover for others). */}
       <div className="relative flex items-center justify-center w-4 h-4 shrink-0">
         {file.isDirty && (
-          <span className="absolute size-1.5 rounded-full bg-foreground/60 group-hover:hidden" />
+          <span className="absolute size-1.5 rounded-full bg-foreground/60 group-hover:hidden group-focus-within:hidden" />
         )}
         {!isPinned && (
-          <button
-            className={`flex items-center justify-center w-4 h-4 rounded-sm ${
-              file.isDirty
-                ? 'hidden group-hover:flex text-muted-foreground hover:text-foreground hover:bg-muted'
-                : showsSelectionChrome
-                  ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
-            }`}
-            // Why: simulator unified tabs reuse this tab chrome, so E2E needs
-            // the same stable close affordance on the real button users click.
-            data-tab-close-button="true"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation()
-              onClose()
-            }}
-          >
-            <X className="w-3 h-3" />
-          </button>
+          <EditorFileTabCloseButton
+            fileIsDirty={file.isDirty}
+            showsSelectionChrome={showsSelectionChrome}
+            onClose={onClose}
+          />
         )}
       </div>
     </div>

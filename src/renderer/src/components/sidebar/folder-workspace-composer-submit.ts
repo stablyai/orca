@@ -5,6 +5,7 @@ import {
 } from '@/lib/new-workspace'
 import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
 import { isOrcaCliAvailableForLaunch } from '@/lib/orca-cli-launch-availability'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
@@ -223,6 +224,11 @@ export async function submitFolderWorkspaceCreate({
     workspacePath: workspace.folderPath,
     connectionId: workspace.connectionId ?? projectGroup.connectionId
   })
+  if (startupPlan && !startupPlan.launchToken) {
+    // Why: delayed delivery must target the exact pane spawned from this queued
+    // startup, so both halves share one renderer-session token.
+    startupPlan.launchToken = createBrowserUuid()
+  }
 
   const startup =
     quickAgent && startupPlan
@@ -230,6 +236,7 @@ export async function submitFolderWorkspaceCreate({
           command: startupPlan.launchCommand,
           ...(startupPlan.env ? { env: startupPlan.env } : {}),
           launchConfig: startupPlan.launchConfig,
+          ...(startupPlan.launchToken ? { launchToken: startupPlan.launchToken } : {}),
           launchAgent: quickAgent,
           ...(startupPlan.startupCommandDelivery
             ? { startupCommandDelivery: startupPlan.startupCommandDelivery }

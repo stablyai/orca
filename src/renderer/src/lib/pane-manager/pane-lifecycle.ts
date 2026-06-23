@@ -286,6 +286,9 @@ export function attachLigatures(pane: ManagedPaneInternal): void {
     const ligaturesAddon = new LigaturesAddon()
     pane.terminal.loadAddon(ligaturesAddon)
     pane.ligaturesAddon = ligaturesAddon
+    // Why: ligatures can be enabled after rows already rendered, especially
+    // from Settings. Force existing glyph runs to be recomputed immediately.
+    pane.terminal.refresh(0, pane.terminal.rows - 1)
     // Why: the WebGL renderer builds its glyph texture atlas at activation
     // time, so `font-feature-settings` applied after WebGL loaded won't
     // reach the GPU-rendered cells until the atlas is rebuilt. The upstream

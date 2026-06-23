@@ -5,19 +5,19 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import { PREFLIGHT_METHODS } from './preflight'
 
 const {
-  detectInstalledAgentsMock,
+  detectInstalledAgentsWithShellPathHydrationMock,
   detectRemoteAgentsMock,
   refreshShellPathAndDetectAgentsMock,
   runPreflightCheckMock
 } = vi.hoisted(() => ({
-  detectInstalledAgentsMock: vi.fn(),
+  detectInstalledAgentsWithShellPathHydrationMock: vi.fn(),
   detectRemoteAgentsMock: vi.fn(),
   refreshShellPathAndDetectAgentsMock: vi.fn(),
   runPreflightCheckMock: vi.fn()
 }))
 
 vi.mock('../../../ipc/preflight', () => ({
-  detectInstalledAgents: detectInstalledAgentsMock,
+  detectInstalledAgentsWithShellPathHydration: detectInstalledAgentsWithShellPathHydrationMock,
   detectRemoteAgents: detectRemoteAgentsMock,
   refreshShellPathAndDetectAgents: refreshShellPathAndDetectAgentsMock,
   runPreflightCheck: runPreflightCheckMock
@@ -46,7 +46,7 @@ describe('preflight RPC methods', () => {
   })
 
   it('detects agents and refreshes PATH on the server through runtime RPC', async () => {
-    detectInstalledAgentsMock.mockResolvedValueOnce(['codex'])
+    detectInstalledAgentsWithShellPathHydrationMock.mockResolvedValueOnce(['codex'])
     refreshShellPathAndDetectAgentsMock.mockResolvedValueOnce({
       agents: ['codex', 'claude'],
       addedPathSegments: ['/opt/bin'],
@@ -60,7 +60,7 @@ describe('preflight RPC methods', () => {
     const detected = await dispatcher.dispatch(makeRequest('preflight.detectAgents'))
     const refreshed = await dispatcher.dispatch(makeRequest('preflight.refreshAgents'))
 
-    expect(detectInstalledAgentsMock).toHaveBeenCalled()
+    expect(detectInstalledAgentsWithShellPathHydrationMock).toHaveBeenCalled()
     expect(refreshShellPathAndDetectAgentsMock).toHaveBeenCalled()
     expect(detected).toMatchObject({ ok: true, result: ['codex'] })
     expect(refreshed).toMatchObject({

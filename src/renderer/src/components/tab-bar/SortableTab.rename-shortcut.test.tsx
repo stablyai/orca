@@ -106,7 +106,9 @@ vi.mock('lucide-react', () => ({
 }))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
-  formatShortcutLabel: () => '⌘⇧\\'
+  formatShortcutLabel: () => '⌘⇧\\',
+  useOptionalShortcutLabel: () => '⌘W',
+  useShortcutKeyDetails: () => ({ keys: ['⌘', 'W'], doubleTap: false })
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
@@ -119,11 +121,11 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuItem: function DropdownMenuItem(props: { children?: unknown }) {
     return { type: 'DropdownMenuItem', props }
   },
-  DropdownMenuSeparator: function DropdownMenuSeparator() {
-    return { type: 'DropdownMenuSeparator', props: {} }
-  },
   DropdownMenuShortcut: function DropdownMenuShortcut(props: { children?: unknown }) {
     return { type: 'DropdownMenuShortcut', props }
+  },
+  DropdownMenuSeparator: function DropdownMenuSeparator() {
+    return { type: 'DropdownMenuSeparator', props: {} }
   },
   DropdownMenuLabel: function DropdownMenuLabel(props: { children?: unknown }) {
     return { type: 'DropdownMenuLabel', props }

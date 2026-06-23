@@ -169,7 +169,7 @@ describe('fetchClaudeRateLimits', () => {
     )
   })
 
-  it('uses legacy Keychain credentials for host system default without an explicit config dir', async () => {
+  it('falls back to legacy Keychain credentials for host system default without an explicit config dir', async () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
@@ -178,22 +178,16 @@ describe('fetchClaudeRateLimits', () => {
       stripAuthEnv: false,
       provenance: 'system'
     }
-    vi.mocked(readActiveClaudeKeychainCredentials).mockResolvedValueOnce(
-      JSON.stringify({
-        claudeAiOauth: {
-          accessToken: 'legacy-oauth-token',
-          expiresAt: Date.now() + 60_000
-        }
-      })
-    )
-    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValue(
-      JSON.stringify({
-        claudeAiOauth: {
-          accessToken: 'stale-scoped-oauth-token',
-          expiresAt: Date.now() + 60_000
-        }
-      })
-    )
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          claudeAiOauth: {
+            accessToken: 'legacy-oauth-token',
+            expiresAt: Date.now() + 60_000
+          }
+        })
+      )
 
     await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
       provider: 'claude',
@@ -202,13 +196,54 @@ describe('fetchClaudeRateLimits', () => {
       weekly: { usedPercent: 34 }
     })
 
-    expect(readActiveClaudeKeychainCredentials).toHaveBeenCalledWith(undefined)
-    expect(readActiveClaudeKeychainCredentialsStrict).not.toHaveBeenCalled()
+    expect(readActiveClaudeKeychainCredentialsStrict).toHaveBeenNthCalledWith(1, configDir)
+    expect(readActiveClaudeKeychainCredentialsStrict).toHaveBeenNthCalledWith(2, undefined)
+    expect(readActiveClaudeKeychainCredentials).not.toHaveBeenCalled()
     expect(netFetchMock).toHaveBeenCalledWith(
       'https://api.anthropic.com/api/oauth/usage',
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer legacy-oauth-token'
+        })
+      })
+    )
+  })
+
+  it('reads scoped Keychain credentials for host system default without an explicit config dir', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      runtime: 'host',
+      envPatch: {},
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'scoped-oauth-token',
+          expiresAt: Date.now() + 60_000
+        }
+      })
+    )
+
+    await expect(
+      fetchClaudeRateLimits({ authPreparation, allowPtyFallback: false })
+    ).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: { usedPercent: 12 },
+      weekly: { usedPercent: 34 }
+    })
+
+    expect(readActiveClaudeKeychainCredentialsStrict).toHaveBeenCalledWith(configDir)
+    expect(readActiveClaudeKeychainCredentials).not.toHaveBeenCalled()
+    expect(fetchViaPty).not.toHaveBeenCalled()
+    expect(netFetchMock).toHaveBeenCalledWith(
+      'https://api.anthropic.com/api/oauth/usage',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer scoped-oauth-token'
         })
       })
     )

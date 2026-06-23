@@ -6,7 +6,7 @@ import {
   markComplexScriptOutput,
   resetTerminalWebglSuggestion
 } from './pane-webgl-renderer'
-import { openTerminal } from './pane-lifecycle'
+import { attachLigatures, openTerminal } from './pane-lifecycle'
 import {
   buildDefaultTerminalOptions,
   DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
@@ -345,6 +345,18 @@ describe('attachWebgl', () => {
     attachWebgl(pane)
 
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('attachLigatures', () => {
+  it('refreshes existing rows after loading the ligatures addon', () => {
+    const pane = createPane()
+
+    attachLigatures(pane)
+
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+    expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
+    expect(pane.ligaturesAddon).not.toBeNull()
   })
 })
 

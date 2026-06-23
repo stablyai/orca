@@ -101,6 +101,17 @@ describe('Electron runtime package contract', () => {
     expect(publishLinuxStep.with.command).toBe('${{ matrix.release_command }}')
   })
 
+  it('keeps Linux postinstall repairing Chromium sandbox permissions', () => {
+    const afterInstallScript = readFileSync(
+      join(projectDir, 'resources/linux/packaging/after-install.sh'),
+      'utf8'
+    )
+
+    expect(afterInstallScript).toContain('chrome-sandbox')
+    expect(afterInstallScript).toContain('chmod 4755 "$sandbox"')
+    expect(afterInstallScript).not.toContain('chmod 0755 "$sandbox"')
+  })
+
   it('lets release-cut tag a version that is already present on main', () => {
     const releaseWorkflow = readFileSync(
       join(projectDir, '.github/workflows/release-cut.yml'),

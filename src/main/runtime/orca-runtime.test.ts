@@ -164,7 +164,7 @@ const {
   addGitHubIssueCommentMock,
   listGitHubLabelsMock,
   listGitHubAssignableUsersMock,
-  detectInstalledAgentsMock,
+  detectInstalledAgentsWithShellPathHydrationMock,
   detectRemoteAgentsMock,
   listGitLabMergeRequestsMock,
   listGitLabWorkItemsMock,
@@ -255,7 +255,7 @@ const {
     addGitHubIssueCommentMock: vi.fn(),
     listGitHubLabelsMock: vi.fn(),
     listGitHubAssignableUsersMock: vi.fn(),
-    detectInstalledAgentsMock: vi.fn(),
+    detectInstalledAgentsWithShellPathHydrationMock: vi.fn(),
     detectRemoteAgentsMock: vi.fn(),
     listGitLabMergeRequestsMock: vi.fn(),
     listGitLabWorkItemsMock: vi.fn(),
@@ -319,7 +319,7 @@ vi.mock('../ipc/ssh', () => ({
 }))
 
 vi.mock('../ipc/preflight', () => ({
-  detectInstalledAgents: detectInstalledAgentsMock,
+  detectInstalledAgentsWithShellPathHydration: detectInstalledAgentsWithShellPathHydrationMock,
   detectRemoteAgents: detectRemoteAgentsMock
 }))
 
@@ -620,8 +620,8 @@ function resetRuntimeTestMocks(): void {
   listGitHubLabelsMock.mockResolvedValue([])
   listGitHubAssignableUsersMock.mockReset()
   listGitHubAssignableUsersMock.mockResolvedValue([])
-  detectInstalledAgentsMock.mockReset()
-  detectInstalledAgentsMock.mockResolvedValue([])
+  detectInstalledAgentsWithShellPathHydrationMock.mockReset()
+  detectInstalledAgentsWithShellPathHydrationMock.mockResolvedValue([])
   detectRemoteAgentsMock.mockReset()
   detectRemoteAgentsMock.mockResolvedValue([])
   listGitLabMergeRequestsMock.mockReset()
@@ -17898,7 +17898,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('uses desktop task agent selection and bracketed-pastes startup drafts for local worktrees', async () => {
-    detectInstalledAgentsMock.mockResolvedValue(['claude'])
+    detectInstalledAgentsWithShellPathHydrationMock.mockResolvedValue(['claude'])
     const metaById: Record<string, WorktreeMeta> = {}
     const runtimeStore = {
       ...store,
@@ -17959,7 +17959,7 @@ describe('OrcaRuntimeService', () => {
       activate: true
     })
 
-    expect(detectInstalledAgentsMock).not.toHaveBeenCalled()
+    expect(detectInstalledAgentsWithShellPathHydrationMock).not.toHaveBeenCalled()
     expect(detectRemoteAgentsMock).not.toHaveBeenCalled()
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -18215,7 +18215,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('records the resolved fallback agent when the requested startup draft agent is disabled', async () => {
-    detectInstalledAgentsMock.mockResolvedValue(['claude'])
+    detectInstalledAgentsWithShellPathHydrationMock.mockResolvedValue(['claude'])
     const metaById: Record<string, WorktreeMeta> = {}
     const runtimeStore = {
       ...store,
@@ -18276,7 +18276,7 @@ describe('OrcaRuntimeService', () => {
       activate: true
     })
 
-    expect(detectInstalledAgentsMock).toHaveBeenCalled()
+    expect(detectInstalledAgentsWithShellPathHydrationMock).toHaveBeenCalled()
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-fallback-draft',
@@ -18405,7 +18405,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('lets explicit startup draft agents override the desktop default', async () => {
-    detectInstalledAgentsMock.mockResolvedValue([])
+    detectInstalledAgentsWithShellPathHydrationMock.mockResolvedValue([])
     const metaById: Record<string, WorktreeMeta> = {}
     const runtimeStore = {
       ...store,
@@ -18467,7 +18467,7 @@ describe('OrcaRuntimeService', () => {
       activate: true
     })
 
-    expect(detectInstalledAgentsMock).not.toHaveBeenCalled()
+    expect(detectInstalledAgentsWithShellPathHydrationMock).not.toHaveBeenCalled()
     expect(detectRemoteAgentsMock).not.toHaveBeenCalled()
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -18485,7 +18485,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('does not auto-launch an agent for startup drafts when the default is blank', async () => {
-    detectInstalledAgentsMock.mockResolvedValue(['claude', 'codex'])
+    detectInstalledAgentsWithShellPathHydrationMock.mockResolvedValue(['claude', 'codex'])
     const metaById: Record<string, WorktreeMeta> = {}
     const runtimeStore = {
       ...store,
@@ -18545,7 +18545,7 @@ describe('OrcaRuntimeService', () => {
       activate: true
     })
 
-    expect(detectInstalledAgentsMock).not.toHaveBeenCalled()
+    expect(detectInstalledAgentsWithShellPathHydrationMock).not.toHaveBeenCalled()
     expect(detectRemoteAgentsMock).not.toHaveBeenCalled()
     expect(spawn).not.toHaveBeenCalled()
     expect(metaById[result.worktree.id]?.createdWithAgent).toBeUndefined()
@@ -18638,7 +18638,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     expect(detectRemoteAgentsMock).toHaveBeenCalledWith({ connectionId: 'ssh-1' })
-    expect(detectInstalledAgentsMock).not.toHaveBeenCalled()
+    expect(detectInstalledAgentsWithShellPathHydrationMock).not.toHaveBeenCalled()
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/remote/mobile-startup-draft',

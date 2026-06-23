@@ -80,6 +80,10 @@ import {
 } from './store-test-helpers'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import { buildOrphanTerminalCleanupPatch } from './terminal-orphan-helpers'
+import {
+  loadSessionCommitDrafts,
+  saveSessionCommitDrafts
+} from '@/lib/source-control-commit-draft-session'
 
 // ─── Tests ────────────────────────────────────────────────────────────
 
@@ -87,6 +91,7 @@ describe('removeWorktree cascade', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     clearRuntimeCompatibilityCacheForTests()
+    saveSessionCommitDrafts({})
     mockApi.worktrees.remove.mockResolvedValue(undefined)
     mockApi.worktrees.forceDeletePreservedBranch.mockResolvedValue({ deleted: true })
     mockApi.runtimeEnvironments.call.mockReset()
@@ -149,6 +154,10 @@ describe('removeWorktree cascade', () => {
       activeTabTypeByWorktree: { [worktreeId]: 'editor' },
       rightSidebarExplorerViewByWorktree: { [worktreeId]: 'search' }
     })
+    saveSessionCommitDrafts({
+      [worktreeId]: 'feat: stale draft',
+      'repo1::/path/wt2': 'fix: keep draft'
+    })
 
     const result = await store.getState().removeWorktree(worktreeId)
     const s = store.getState()
@@ -170,6 +179,7 @@ describe('removeWorktree cascade', () => {
     expect(s.activeFileIdByWorktree[worktreeId]).toBeUndefined()
     expect(s.activeTabTypeByWorktree[worktreeId]).toBeUndefined()
     expect(s.rightSidebarExplorerViewByWorktree[worktreeId]).toBeUndefined()
+    expect(loadSessionCommitDrafts()).toEqual({ 'repo1::/path/wt2': 'fix: keep draft' })
   })
 
   it('warns when workspace removal keeps the local branch', async () => {

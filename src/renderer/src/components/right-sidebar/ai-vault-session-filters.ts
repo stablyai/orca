@@ -17,6 +17,7 @@ import { aiVaultAgentLabel } from '../../../../shared/ai-vault-types'
 import type { Worktree } from '../../../../shared/types'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
 import { sessionPreviewSearchText } from './ai-vault-session-display'
+import type { AiVaultSessionProject } from './ai-vault-session-projects'
 
 export type AiVaultSessionFilterState = {
   query: string
@@ -24,6 +25,9 @@ export type AiVaultSessionFilterState = {
   scope: AiVaultScope
   sort: AiVaultSort
   activeWorktreePaths: readonly string[]
+  activeProjectKey?: string | null
+  sessionProjectById?: ReadonlyMap<string, AiVaultSessionProject>
+  projectLabelByKey?: ReadonlyMap<string, string>
   hideEmptySessions: boolean
 }
 
@@ -78,7 +82,15 @@ export function filterAiVaultSessions(
           return false
         }
       }
-      return matchesQuery(session, parsedQuery)
+      if (filters.scope === 'project') {
+        if (!filters.activeProjectKey) {
+          return false
+        }
+        if (filters.sessionProjectById?.get(session.id)?.key !== filters.activeProjectKey) {
+          return false
+        }
+      }
+      return matchesQuery(session, parsedQuery, filters)
     })
     .sort((left, right) => compareSessions(left, right, filters.sort))
 }
@@ -110,13 +122,16 @@ export function deriveAiVaultWorkspaceScopePaths(
 
 export function groupAiVaultSessions(
   sessions: readonly AiVaultSession[],
-  group: AiVaultGroup
+  group: AiVaultGroup,
+  options: {
+    sessionProjectById?: ReadonlyMap<string, AiVaultSessionProject>
+    projectLabelByKey?: ReadonlyMap<string, string>
+  } = {}
 ): AiVaultSessionGroup[] {
   const groups = new Map<string, AiVaultSessionGroup>()
 
   for (const session of sessions) {
-    const key = group === 'agent' ? session.agent : getFolderGroupKey(session.cwd)
-    const label = group === 'agent' ? agentLabel(session.agent) : folderLabel(session.cwd)
+    const { key, label } = getGroupIdentity(session, group, options)
     const existing = groups.get(key)
     if (existing) {
       existing.sessions.push(session)
@@ -170,7 +185,11 @@ export function parseVaultQuery(query: string): ParsedQuery {
   return { terms, repoTerms, pathTerms }
 }
 
-function matchesQuery(session: AiVaultSession, parsed: ParsedQuery): boolean {
+function matchesQuery(
+  session: AiVaultSession,
+  parsed: ParsedQuery,
+  filters: Pick<AiVaultSessionFilterState, 'sessionProjectById' | 'projectLabelByKey'>
+): boolean {
   const searchable = [
     session.title,
     session.sessionId,
@@ -189,7 +208,12 @@ function matchesQuery(session: AiVaultSession, parsed: ParsedQuery): boolean {
     return false
   }
 
-  const repoLabel = folderLabel(session.cwd).toLowerCase()
+  const sessionProject = filters.sessionProjectById?.get(session.id)
+  const repoLabel = (
+    sessionProject?.kind === 'repo'
+      ? (filters.projectLabelByKey?.get(sessionProject.key) ?? sessionProject.label)
+      : folderLabel(session.cwd)
+  ).toLowerCase()
   if (parsed.repoTerms.some((term) => !repoLabel.includes(term))) {
     return false
   }
@@ -208,6 +232,32 @@ function compareSessions(left: AiVaultSession, right: AiVaultSession, sort: AiVa
   const leftTime = Date.parse(leftValue ?? left.modifiedAt)
   const rightTime = Date.parse(rightValue ?? right.modifiedAt)
   return rightTime - leftTime
+}
+
+function getGroupIdentity(
+  session: AiVaultSession,
+  group: AiVaultGroup,
+  options: {
+    sessionProjectById?: ReadonlyMap<string, AiVaultSessionProject>
+    projectLabelByKey?: ReadonlyMap<string, string>
+  }
+): Pick<AiVaultSessionGroup, 'key' | 'label'> {
+  if (group === 'agent') {
+    return { key: session.agent, label: agentLabel(session.agent) }
+  }
+  if (group === 'project') {
+    const sessionProject = options.sessionProjectById?.get(session.id)
+    if (sessionProject) {
+      return {
+        key: sessionProject.key,
+        label:
+          options.projectLabelByKey?.get(sessionProject.key) ||
+          sessionProject.label ||
+          folderLabel(session.cwd)
+      }
+    }
+  }
+  return { key: getFolderGroupKey(session.cwd), label: folderLabel(session.cwd) }
 }
 
 function getFolderGroupKey(pathValue: string | null): string {

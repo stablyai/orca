@@ -3,6 +3,7 @@ import {
   getExplicitRuntimeEnvironmentIdForWorktree,
   getExecutionHostIdForWorktree,
   getRuntimeEnvironmentIdForWorktree,
+  getRuntimeSessionMirrorEnvironmentIds,
   getSettingsForWorktreeRuntimeOwner,
   type WorktreeRuntimeOwnerState
 } from './worktree-runtime-owner'
@@ -116,5 +117,47 @@ describe('getExplicitRuntimeEnvironmentIdForWorktree', () => {
     expect(
       getExecutionHostIdForWorktree(hostOverrideState, 'runtime-repo::wt-runtime-override')
     ).toBe('runtime:worktree-env')
+  })
+})
+
+describe('getRuntimeSessionMirrorEnvironmentIds', () => {
+  it('includes focused runtime plus explicit repo, worktree, and folder owners', () => {
+    const multiRuntimeState: WorktreeRuntimeOwnerState = {
+      ...state,
+      worktreesByRepo: {
+        ...state.worktreesByRepo,
+        'runtime-repo': [
+          ...(state.worktreesByRepo?.['runtime-repo'] ?? []),
+          {
+            id: 'runtime-repo::wt-runtime-override',
+            repoId: 'runtime-repo',
+            hostId: 'runtime:worktree-env'
+          }
+        ]
+      }
+    }
+
+    expect(getRuntimeSessionMirrorEnvironmentIds(multiRuntimeState)).toEqual([
+      'focused-env',
+      'folder-env',
+      'owner-env',
+      'worktree-env'
+    ])
+  })
+
+  it('does not include local or SSH owners', () => {
+    const localOnlyState: WorktreeRuntimeOwnerState = {
+      settings: { activeRuntimeEnvironmentId: null },
+      repos: [
+        { id: 'local-repo', connectionId: null, executionHostId: 'local' },
+        { id: 'ssh-repo', connectionId: 'remote', executionHostId: 'ssh:remote' }
+      ],
+      worktreesByRepo: {
+        'local-repo': [{ id: 'local-repo::wt-local', repoId: 'local-repo', hostId: 'local' }],
+        'ssh-repo': [{ id: 'ssh-repo::wt-ssh', repoId: 'ssh-repo', hostId: 'ssh:remote' }]
+      }
+    }
+
+    expect(getRuntimeSessionMirrorEnvironmentIds(localOnlyState)).toEqual([])
   })
 })

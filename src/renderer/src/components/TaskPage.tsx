@@ -22,6 +22,7 @@ import {
   Files,
   GitMerge,
   GitPullRequest,
+  GitPullRequestDraft,
   List,
   LoaderCircle,
   Lock,
@@ -210,6 +211,11 @@ import {
   resolveTaskPageGitHubStatusStateDraft,
   updateTaskPageGitHubStatusLocalState
 } from '@/components/task-page-github-status-state'
+import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page-github-work-item-status-badge'
+import {
+  getTaskPageGitHubPRIconTone,
+  isTaskPageGitHubDraftPR
+} from '@/components/task-page-github-work-item-status'
 import {
   createTaskPageJiraLoadFailureState,
   type TaskPageJiraLoadError
@@ -1119,11 +1125,7 @@ function GHStatusCell({
   )
 
   if (item.type !== 'issue' || !repo) {
-    return (
-      <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 opacity-70 dark:text-emerald-200">
-        {translate('auto.components.TaskPage.606a85c774', 'Open')}
-      </span>
-    )
+    return <TaskPageGitHubWorkItemStateBadge item={item} />
   }
 
   return (
@@ -7760,91 +7762,84 @@ export default function TaskPage(): React.JSX.Element {
                         })}
                       </div>
                     ) : null}
-                    {/* Why: the repo combobox filters Items mode by repo. In
-                        Project mode the row set comes from the project's
-                        view filter (server-side), so this control would be
-                        inert — hide it to avoid suggesting it does
-                        something. */}
-                    {githubMode !== 'project' && (
-                      <>
-                        <div className="min-w-0 max-w-[220px] shrink-0">
-                          <TaskProjectSourceCombobox
-                            groups={taskPickerGroups}
-                            selected={repoSelection}
-                            getRepoHostLabel={getTaskPickerRepoHostLabel}
-                            onChange={(next) => {
-                              const normalized = normalizeTaskRepoSelection(eligibleRepos, next)
-                              setRepoSelection(normalized)
-                              void updateSettings({ defaultRepoSelection: [...normalized] }).catch(
-                                () => {
-                                  toast.error(
-                                    translate(
-                                      'auto.components.TaskPage.dfd72673e7',
-                                      'Failed to save project selection.'
-                                    )
-                                  )
-                                }
-                              )
-                            }}
-                            onSelectAll={() => {
-                              const allIds = new Set(taskPickerRepos.map((r) => r.id))
-                              setRepoSelection(allIds)
-                              void updateSettings({ defaultRepoSelection: null }).catch(() => {
-                                toast.error(
-                                  translate(
-                                    'auto.components.TaskPage.dfd72673e7',
-                                    'Failed to save project selection.'
-                                  )
+                    {/* Why: Project rows are now repo-scoped too, so the
+                        selection must stay visible in both GitHub modes. */}
+                    <div className="min-w-0 max-w-[220px] shrink-0">
+                      <TaskProjectSourceCombobox
+                        groups={taskPickerGroups}
+                        selected={repoSelection}
+                        getRepoHostLabel={getTaskPickerRepoHostLabel}
+                        onChange={(next) => {
+                          const normalized = normalizeTaskRepoSelection(eligibleRepos, next)
+                          setRepoSelection(normalized)
+                          void updateSettings({ defaultRepoSelection: [...normalized] }).catch(
+                            () => {
+                              toast.error(
+                                translate(
+                                  'auto.components.TaskPage.dfd72673e7',
+                                  'Failed to save project selection.'
                                 )
-                              })
-                            }}
-                            triggerClassName="h-8 w-auto max-w-[220px] rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
-                          />
-                        </div>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon-sm"
-                              onClick={() => {
-                                if (!selectedGitHubRepoExternalLink?.url) {
-                                  return
-                                }
-                                void window.api.shell.openUrl(selectedGitHubRepoExternalLink.url)
-                              }}
-                              aria-label={
-                                selectedGitHubRepoExternalLink
-                                  ? translate(
-                                      'auto.components.TaskPage.8d1e17a3ef',
-                                      'Open {{value0}} in GitHub',
-                                      { value0: selectedGitHubRepoExternalLink.label }
-                                    )
-                                  : translate(
-                                      'auto.components.TaskPage.d1132848f8',
-                                      'Select one GitHub project to open in GitHub'
-                                    )
-                              }
-                              className="h-8 w-8 rounded-md border-border/50 bg-muted/50 text-foreground shadow-sm transition hover:bg-muted/50"
-                            >
-                              <ExternalLink className="size-3.5" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" sideOffset={6}>
-                            {selectedGitHubRepoExternalLink
+                              )
+                            }
+                          )
+                        }}
+                        onSelectAll={() => {
+                          const allIds = new Set(taskPickerRepos.map((r) => r.id))
+                          setRepoSelection(allIds)
+                          void updateSettings({ defaultRepoSelection: null }).catch(() => {
+                            toast.error(
+                              translate(
+                                'auto.components.TaskPage.dfd72673e7',
+                                'Failed to save project selection.'
+                              )
+                            )
+                          })
+                        }}
+                        triggerClassName="h-8 w-auto max-w-[220px] rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
+                      />
+                    </div>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon-sm"
+                          onClick={() => {
+                            if (!selectedGitHubRepoExternalLink?.url) {
+                              return
+                            }
+                            void window.api.shell.openUrl(selectedGitHubRepoExternalLink.url)
+                          }}
+                          aria-label={
+                            selectedGitHubRepoExternalLink
                               ? translate(
                                   'auto.components.TaskPage.8d1e17a3ef',
                                   'Open {{value0}} in GitHub',
                                   { value0: selectedGitHubRepoExternalLink.label }
                                 )
                               : translate(
-                                  'auto.components.TaskPage.bc46d8204e',
-                                  'Select one project to open in GitHub'
-                                )}
-                          </TooltipContent>
-                        </Tooltip>
-                      </>
-                    )}
+                                  'auto.components.TaskPage.d1132848f8',
+                                  'Select one GitHub project to open in GitHub'
+                                )
+                          }
+                          className="h-8 w-8 rounded-md border-border/50 bg-muted/50 text-foreground shadow-sm transition hover:bg-muted/50"
+                        >
+                          <ExternalLink className="size-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        {selectedGitHubRepoExternalLink
+                          ? translate(
+                              'auto.components.TaskPage.8d1e17a3ef',
+                              'Open {{value0}} in GitHub',
+                              { value0: selectedGitHubRepoExternalLink.label }
+                            )
+                          : translate(
+                              'auto.components.TaskPage.bc46d8204e',
+                              'Select one project to open in GitHub'
+                            )}
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 ) : null}
 
@@ -8633,7 +8628,7 @@ export default function TaskPage(): React.JSX.Element {
             )
           ) : taskSource === 'github' && githubMode === 'project' ? (
             <div className="mt-3 flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-md border border-border/50 bg-muted/50 shadow-sm">
-              <ProjectViewWrapper />
+              <ProjectViewWrapper selectedRepoIds={repoSelection} />
             </div>
           ) : taskSource === 'github' ? (
             <div className="flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-muted/50 shadow-sm">
@@ -8817,6 +8812,29 @@ export default function TaskPage(): React.JSX.Element {
                       const attachedWorkspaceLabel = attachedWorkspace
                         ? getGithubWorkItemWorkspaceAttachmentLabel(attachedWorkspace)
                         : null
+                      const githubTaskIdPill = (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 text-muted-foreground"
+                          aria-label={`${item.type === 'pr' ? (isTaskPageGitHubDraftPR(item) ? 'Draft pull request' : 'Pull request') : 'Issue'} #${item.number}`}
+                        >
+                          {item.type === 'pr' ? (
+                            isTaskPageGitHubDraftPR(item) ? (
+                              <GitPullRequestDraft
+                                className={cn('size-3', getTaskPageGitHubPRIconTone(item))}
+                                aria-hidden="true"
+                              />
+                            ) : (
+                              <GitPullRequest
+                                className={cn('size-3', getTaskPageGitHubPRIconTone(item))}
+                                aria-hidden="true"
+                              />
+                            )
+                          ) : (
+                            <CircleDot className="size-3" aria-hidden="true" />
+                          )}
+                          <span className="font-mono text-[11px] font-normal">#{item.number}</span>
+                        </span>
+                      )
                       return (
                         // Why: the row is a clickable container rather than a
                         // <button> because it holds nested interactive elements
@@ -8846,36 +8864,30 @@ export default function TaskPage(): React.JSX.Element {
                           )}
                         >
                           <div className={GITHUB_TASK_STICKY_ID_CELL_CLASS}>
-                            <span
-                              className={cn(
-                                'inline-flex items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5',
-                                item.state === 'merged'
-                                  ? 'text-purple-600 dark:text-purple-300'
-                                  : item.state === 'closed'
-                                    ? 'text-rose-600 dark:text-rose-300'
-                                    : 'text-muted-foreground'
-                              )}
-                            >
-                              {item.type === 'pr' ? (
-                                <GitPullRequest className="size-3" />
-                              ) : (
-                                <CircleDot className="size-3" />
-                              )}
-                              <span className="font-mono text-[11px] font-normal">
-                                #{item.number}
-                              </span>
-                            </span>
+                            {isTaskPageGitHubDraftPR(item) ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>{githubTaskIdPill}</TooltipTrigger>
+                                <TooltipContent side="bottom" sideOffset={6}>
+                                  {translate('auto.components.TaskPage.054bf695cc', 'Draft')}
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : (
+                              githubTaskIdPill
+                            )}
                           </div>
 
                           <div className={GITHUB_TASK_STICKY_TITLE_CELL_CLASS}>
-                            <div className="flex items-center gap-2">
+                            <div className="flex min-w-0 items-center gap-2">
                               <h3 className="truncate text-sm font-semibold text-foreground">
                                 {item.title}
                               </h3>
-                              {item.type === 'pr' && item.state === 'draft' ? (
-                                <span className="shrink-0 rounded-full border border-slate-500/30 bg-slate-500/10 px-1.5 py-0 text-[10px] font-medium text-slate-600 dark:text-slate-300">
-                                  {translate('auto.components.TaskPage.054bf695cc', 'Draft')}
-                                </span>
+                              {item.type === 'pr' &&
+                              item.state !== 'open' &&
+                              item.state !== 'draft' ? (
+                                <TaskPageGitHubWorkItemStateBadge
+                                  item={item}
+                                  className="shrink-0 px-1.5 py-0"
+                                />
                               ) : null}
                               {selectedRepos.length > 1 && itemRepo ? (
                                 // Why: disambiguate rows when multiple repos are in
@@ -8898,6 +8910,14 @@ export default function TaskPage(): React.JSX.Element {
                               </span>
                               {selectedRepos.length === 1 && itemRepo ? (
                                 <span>{itemRepo.displayName}</span>
+                              ) : null}
+                              {item.type === 'pr' && item.state === 'draft' ? (
+                                <>
+                                  <span aria-hidden="true">·</span>
+                                  <span>
+                                    {translate('auto.components.TaskPage.054bf695cc', 'Draft')}
+                                  </span>
+                                </>
                               ) : null}
                               {item.type === 'pr' && formatPRDelta(item) ? (
                                 <span className="inline-flex items-center gap-1">

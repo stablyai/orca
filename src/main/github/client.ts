@@ -2273,6 +2273,20 @@ type TrackedUpstreamBranch = {
   branchName: string
 }
 
+const TRACKED_UPSTREAM_NULL_CACHE_TTL_MS = 30_000
+
+type TrackedUpstreamNullCacheEntry = {
+  expiresAt: number
+}
+
+const trackedUpstreamNullCache = new Map<string, TrackedUpstreamNullCacheEntry>()
+const trackedUpstreamInFlight = new Map<string, Promise<TrackedUpstreamBranch | null>>()
+
+export function __resetTrackedUpstreamBranchCacheForTests(): void {
+  trackedUpstreamNullCache.clear()
+  trackedUpstreamInFlight.clear()
+}
+
 function parseTrackedUpstreamBranch(
   upstreamRef: string,
   branchName: string
@@ -2285,6 +2299,65 @@ function parseTrackedUpstreamBranch(
 }
 
 async function getTrackedUpstreamBranch(
+  repoPath: string,
+  branchName: string,
+  connectionId?: string | null,
+  localGitOptions: { wslDistro?: string } = {}
+): Promise<TrackedUpstreamBranch | null> {
+  // Why: branches without configured upstreams are stable misses during PR
+  // polling; cache only nulls so positive PR discovery stays fresh.
+  const cacheKey = getTrackedUpstreamBranchCacheKey(
+    repoPath,
+    branchName,
+    connectionId,
+    localGitOptions
+  )
+  const now = Date.now()
+  const cachedNull = trackedUpstreamNullCache.get(cacheKey)
+  if (cachedNull && cachedNull.expiresAt > now) {
+    return null
+  }
+  if (cachedNull) {
+    trackedUpstreamNullCache.delete(cacheKey)
+  }
+
+  const inFlight = trackedUpstreamInFlight.get(cacheKey)
+  if (inFlight) {
+    return inFlight
+  }
+
+  const probe = probeTrackedUpstreamBranch(repoPath, branchName, connectionId, localGitOptions)
+  trackedUpstreamInFlight.set(cacheKey, probe)
+  try {
+    const result = await probe
+    if (result) {
+      trackedUpstreamNullCache.delete(cacheKey)
+    } else {
+      trackedUpstreamNullCache.set(cacheKey, {
+        expiresAt: now + TRACKED_UPSTREAM_NULL_CACHE_TTL_MS
+      })
+    }
+    return result
+  } finally {
+    if (trackedUpstreamInFlight.get(cacheKey) === probe) {
+      trackedUpstreamInFlight.delete(cacheKey)
+    }
+  }
+}
+
+function getTrackedUpstreamBranchCacheKey(
+  repoPath: string,
+  branchName: string,
+  connectionId?: string | null,
+  localGitOptions: { wslDistro?: string } = {}
+): string {
+  const runtimeKey = connectionId
+    ? `ssh:${connectionId}`
+    : `local:${localGitOptions.wslDistro ?? 'host'}`
+  return [runtimeKey, repoPath, branchName].join('\0')
+}
+
+async function probeTrackedUpstreamBranch(
   repoPath: string,
   branchName: string,
   connectionId?: string | null,

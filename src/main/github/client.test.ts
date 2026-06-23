@@ -110,7 +110,8 @@ import {
   updatePRTitle,
   _getMergeQueueCacheSizeForTests,
   _resetOwnerRepoCache,
-  _resetMergeQueueCacheForTests
+  _resetMergeQueueCacheForTests,
+  __resetTrackedUpstreamBranchCacheForTests
 } from './client'
 
 describe('checkOrcaStarred', () => {
@@ -179,6 +180,7 @@ describe('getPRForBranch', () => {
     acquireMock.mockResolvedValue(undefined)
     _resetOwnerRepoCache()
     _resetMergeQueueCacheForTests()
+    __resetTrackedUpstreamBranchCacheForTests()
   })
 
   it('queries GitHub by head branch when the remote is on github.com', async () => {
@@ -1158,6 +1160,104 @@ describe('getPRForBranch', () => {
       title: 'Hydrated upstream branch PR',
       headSha: 'upstream-head-oid'
     })
+  })
+
+  it('does not repeat missing tracked-upstream probes during PR refresh polling', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValue({
+      candidates: [{ owner: 'acme', repo: 'widgets' }],
+      headRepo: { owner: 'acme', repo: 'widgets' }
+    })
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: JSON.stringify([]) })
+    gitExecFileAsyncMock.mockRejectedValue(
+      new Error("fatal: no upstream configured for branch 'no-pr-branch'")
+    )
+
+    await getPRForBranch('/repo-root', 'no-pr-branch')
+    await getPRForBranch('/repo-root', 'no-pr-branch')
+    await getPRForBranch('/repo-root', 'no-pr-branch')
+
+    const trackedUpstreamCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) =>
+      (args as string[]).includes('no-pr-branch@{upstream}')
+    )
+    expect(trackedUpstreamCalls).toHaveLength(1)
+  })
+
+  it('coalesces concurrent missing tracked-upstream probes', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValue({
+      candidates: [{ owner: 'acme', repo: 'widgets' }],
+      headRepo: { owner: 'acme', repo: 'widgets' }
+    })
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: JSON.stringify([]) })
+    gitExecFileAsyncMock.mockImplementation(async () => {
+      await Promise.resolve()
+      throw new Error("fatal: no upstream configured for branch 'no-pr-branch'")
+    })
+
+    await Promise.all([
+      getPRForBranch('/repo-root', 'no-pr-branch'),
+      getPRForBranch('/repo-root', 'no-pr-branch'),
+      getPRForBranch('/repo-root', 'no-pr-branch')
+    ])
+
+    const trackedUpstreamCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) =>
+      (args as string[]).includes('no-pr-branch@{upstream}')
+    )
+    expect(trackedUpstreamCalls).toHaveLength(1)
+  })
+
+  it('keeps missing tracked-upstream probes separate for host and WSL runtimes', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValue({
+      candidates: [{ owner: 'acme', repo: 'widgets' }],
+      headRepo: { owner: 'acme', repo: 'widgets' }
+    })
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: JSON.stringify([]) })
+    gitExecFileAsyncMock.mockRejectedValue(
+      new Error("fatal: no upstream configured for branch 'no-pr-branch'")
+    )
+
+    await getPRForBranch('/repo-root', 'no-pr-branch')
+    await getPRForBranch('/repo-root', 'no-pr-branch', null, null, null, {
+      localGitExecOptions: { wslDistro: 'Ubuntu' }
+    })
+    await getPRForBranch('/repo-root', 'no-pr-branch')
+    await getPRForBranch('/repo-root', 'no-pr-branch', null, null, null, {
+      localGitExecOptions: { wslDistro: 'Ubuntu' }
+    })
+
+    const trackedUpstreamCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) =>
+      (args as string[]).includes('no-pr-branch@{upstream}')
+    )
+    expect(trackedUpstreamCalls).toHaveLength(2)
+    expect(trackedUpstreamCalls[0][1]).toEqual({ cwd: '/repo-root' })
+    expect(trackedUpstreamCalls[1][1]).toEqual({
+      cwd: '/repo-root',
+      wslDistro: 'Ubuntu'
+    })
+  })
+
+  it('rechecks missing tracked-upstream probes after the null-cache TTL expires', async () => {
+    vi.useFakeTimers()
+    try {
+      resolvePRRepositoryCandidatesMock.mockResolvedValue({
+        candidates: [{ owner: 'acme', repo: 'widgets' }],
+        headRepo: { owner: 'acme', repo: 'widgets' }
+      })
+      ghExecFileAsyncMock.mockResolvedValue({ stdout: JSON.stringify([]) })
+      gitExecFileAsyncMock
+        .mockRejectedValueOnce(new Error("fatal: no upstream configured for branch 'feature'"))
+        .mockResolvedValueOnce({ stdout: 'origin/contributor/original\n', stderr: '' })
+
+      await getPRForBranch('/repo-root', 'feature')
+      await vi.advanceTimersByTimeAsync(30_001)
+      await getPRForBranch('/repo-root', 'feature')
+
+      const trackedUpstreamCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) =>
+        (args as string[]).includes('feature@{upstream}')
+      )
+      expect(trackedUpstreamCalls).toHaveLength(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('uses the tracked upstream remote owner for fork branch lookup', async () => {

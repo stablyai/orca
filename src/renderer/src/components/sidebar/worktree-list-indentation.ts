@@ -6,6 +6,9 @@ const PROJECT_WORKTREE_CARD_EXTRA_INDENT = 2
 // raw tree indent to sit under the group header. A smaller pullback nudges
 // content rightward for clearer nesting; this is the knob to tune that gap.
 export const FLUSH_CARD_CONTENT_PULLBACK = 4
+// Why: experimental cards reserve a fixed status lane inside the padded
+// content box; pull the box back so title/meta text stay on the tree step.
+export const NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK = 6
 // Why: even at zero indent a flush card keeps this minimal left inset so its
 // surface never sits hard against the sidebar edge.
 export const FLUSH_CARD_MIN_CONTENT_INSET = 2
@@ -106,10 +109,41 @@ export function getWorktreeCardSurfaceInset(args: {
   return args.isGrouped ? clampDepth(args.groupDepth) * GROUPED_WORKTREE_CARD_SURFACE_INDENT : 0
 }
 
-export function getFlushWorktreeCardPaddingLeft(contentIndent: number): string {
+export function getFlushWorktreeCardPaddingLeft(
+  contentIndent: number,
+  applyNewCardStyleStatusLaneOffset = false
+): string {
+  const pullback =
+    FLUSH_CARD_CONTENT_PULLBACK +
+    (applyNewCardStyleStatusLaneOffset ? NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK : 0)
   return contentIndent > 0
-    ? `max(${FLUSH_CARD_MIN_CONTENT_INSET}px, calc(${contentIndent}px - ${FLUSH_CARD_CONTENT_PULLBACK}px))`
+    ? `max(${FLUSH_CARD_MIN_CONTENT_INSET}px, calc(${contentIndent}px - ${pullback}px))`
     : `${FLUSH_CARD_MIN_CONTENT_INSET}px`
+}
+
+export function getNewCardStyleParentContentMarginLeft(contentIndent: number): number {
+  if (contentIndent <= 0) {
+    return 0
+  }
+
+  const legacyInnerPadding = Math.max(
+    FLUSH_CARD_MIN_CONTENT_INSET,
+    contentIndent - FLUSH_CARD_CONTENT_PULLBACK
+  )
+  const newInnerPadding = Math.max(
+    FLUSH_CARD_MIN_CONTENT_INSET,
+    contentIndent - FLUSH_CARD_CONTENT_PULLBACK - NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK
+  )
+  const paddingShift = legacyInnerPadding - newInnerPadding
+  const remainingShift = NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK - paddingShift
+  if (remainingShift <= 0) {
+    return 0
+  }
+
+  // Why: shallow rows hit the flush-card padding floor; finish the status-lane
+  // offset with margin, but never pull content past the card's inner edge.
+  const rawMargin = -remainingShift
+  return Math.max(-newInnerPadding, rawMargin)
 }
 
 export function getLineageNestedRowGeometry(args: {
