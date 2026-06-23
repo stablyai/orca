@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 import type {
@@ -191,6 +192,7 @@ beforeEach(() => {
 function configureSharedProjectCompatibilityMocks(
   options: {
     localRepoHasProviderIdentity?: boolean
+    localProjectRuntimePreference?: Project['localWindowsRuntimePreference'] | null
     remoteProjectRuntimePreference?: Project['localWindowsRuntimePreference']
   } = {}
 ): {
@@ -214,7 +216,13 @@ function configureSharedProjectCompatibilityMocks(
     displayName: 'Orca',
     badgeColor: '#000',
     sourceRepoIds: ['local-repo'],
-    localWindowsRuntimePreference: { kind: 'windows-host' },
+    ...(options.localProjectRuntimePreference === null
+      ? {}
+      : {
+          localWindowsRuntimePreference: options.localProjectRuntimePreference ?? {
+            kind: 'windows-host'
+          }
+        }),
     createdAt: 1,
     updatedAt: 1
   }
@@ -238,7 +246,7 @@ function configureSharedProjectCompatibilityMocks(
     id: 'remote-setup',
     projectId: sharedProjectId,
     repoId: 'remote-repo',
-    path: '/srv/repo',
+    path: path.join('/', 'srv', 'repo'),
     displayName: 'Remote setup'
   }
   reposList.mockResolvedValue([localRepoForSharedProject])
@@ -427,6 +435,22 @@ describe('fetchReposForAllHosts', () => {
       store.getState().projects.find((project) => project.id === sharedProjectId)
         ?.localWindowsRuntimePreference
     ).toEqual({ kind: 'windows-host' })
+  })
+
+  it('does not adopt a remote runtime preference when the local shared project inherits the default', async () => {
+    const { sharedProjectId } = configureSharedProjectCompatibilityMocks({
+      localProjectRuntimePreference: null,
+      remoteProjectRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+    })
+    const store = createTestStore()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
+
+    await store.getState().fetchReposForAllHosts()
+
+    expect(
+      store.getState().projects.find((project) => project.id === sharedProjectId)
+        ?.localWindowsRuntimePreference
+    ).toBeUndefined()
   })
 
   it('preserves shared project metadata after a runtime-only repo refresh', async () => {

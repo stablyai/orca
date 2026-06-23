@@ -499,7 +499,8 @@ function mergePreviousProjectMetadata(
   previous: Project,
   current: Project,
   reposById: ReadonlyMap<string, Repo>,
-  hostId: string
+  hostId: string,
+  preserveLocalWindowsRuntimePreference: boolean
 ): Project {
   const project = mergeProjectCompatibilityProject(previous, current)
   if (hostId === LOCAL_EXECUTION_HOST_ID) {
@@ -514,10 +515,14 @@ function mergePreviousProjectMetadata(
     } else {
       delete project.localWindowsRuntimePreference
     }
-  } else if (previous.localWindowsRuntimePreference !== undefined) {
+  } else if (preserveLocalWindowsRuntimePreference) {
     // Why: remote runtimes can have their own local Windows preference; they must
-    // not overwrite the client-local project runtime setting.
-    project.localWindowsRuntimePreference = previous.localWindowsRuntimePreference
+    // not overwrite the client-local project runtime setting, even when unset.
+    if (previous.localWindowsRuntimePreference === undefined) {
+      delete project.localWindowsRuntimePreference
+    } else {
+      project.localWindowsRuntimePreference = previous.localWindowsRuntimePreference
+    }
   }
   return {
     ...project,
@@ -606,6 +611,8 @@ function mergeFetchedProjectCompatibilityForHost({
     [...getExplicitProjectHostIds(project, projectHostSetups, repos)].some(
       (ownerHostId) => ownerHostId !== hostId
     )
+  const projectHasLocalOwner = (project: Project): boolean =>
+    getExplicitProjectHostIds(project, projectHostSetups, repos).has(LOCAL_EXECUTION_HOST_ID)
   const fetchedProjects = fetched.projects
     .filter((project) => {
       const previousProject = previousProjectById.get(project.id)
@@ -619,7 +626,13 @@ function mergeFetchedProjectCompatibilityForHost({
     .map((project) => {
       const previousProject = previousProjectById.get(project.id)
       return previousProject
-        ? mergePreviousProjectMetadata(previousProject, project, reposById, hostId)
+        ? mergePreviousProjectMetadata(
+            previousProject,
+            project,
+            reposById,
+            hostId,
+            hostId !== LOCAL_EXECUTION_HOST_ID && projectHasLocalOwner(previousProject)
+          )
         : projectWithCurrentSourceRepoIds(project, currentRepoIds)
     })
   const fetchedProjectIds = new Set(fetchedProjects.map((project) => project.id))
