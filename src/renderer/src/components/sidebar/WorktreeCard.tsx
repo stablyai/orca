@@ -45,7 +45,10 @@ import {
 import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCardPorts'
 import { writeWorkspaceDragData } from './workspace-status'
 import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
-import { getWorktreeCardTitleDisplay } from './worktree-card-title-display'
+import {
+  coerceWorktreeCardVisibleTitle,
+  getWorktreeCardTitleDisplay
+} from './worktree-card-title-display'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
@@ -502,7 +505,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
     issueTitle: issueDisplay?.title,
     reviewTitle: prDisplay?.title
   })
-  const visibleCardTitle = newCardStyle ? cardTitleDisplay : worktree.displayName
+  const legacyCardTitleDisplay = coerceWorktreeCardVisibleTitle(worktree.displayName)
+  const visibleCardTitle = newCardStyle ? cardTitleDisplay : legacyCardTitleDisplay
   const isDeleting = deleteState?.isDeleting ?? false
   const deleteModifierPressed = useWorkspaceDeleteModifierPressed()
 
