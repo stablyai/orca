@@ -151,14 +151,13 @@ type RegisteredRepoValidationResult =
 
 function validateRegisteredRepo(
   args: string | RepoScopedArgs,
-  store: Store
+  store: Store,
+  repos = store.getRepos()
 ): RegisteredRepoValidationResult {
   const repoPath = typeof args === 'string' ? args : args.repoPath
   const repoId = typeof args === 'string' ? undefined : args.repoId
   const resolvedRepoPath = resolve(repoPath)
-  const repo = store
-    .getRepos()
-    .find((r) => (repoId ? r.id === repoId : resolve(r.path) === resolvedRepoPath))
+  const repo = repos.find((r) => (repoId ? r.id === repoId : resolve(r.path) === resolvedRepoPath))
   if (!repo) {
     return {
       kind: 'denied',
@@ -228,14 +227,15 @@ function applyRepoToPRRefreshCandidate(
 
 function validateAutomaticPRRefreshCandidate(
   candidate: GitHubPRRefreshCandidate,
-  store: Store
+  store: Store,
+  repos = store.getRepos()
 ):
   | { kind: 'ok'; candidate: GitHubPRRefreshCandidate }
   | {
       kind: 'skipped'
       result: Extract<GitHubPRRefreshEnqueueResult, { kind: 'skipped' }>
     } {
-  const result = validateRegisteredRepo(candidate, store)
+  const result = validateRegisteredRepo(candidate, store, repos)
   if (result.kind === 'denied') {
     const skippedReason = notePRRefreshValidationDenial({
       repoId: candidate.repoId,
@@ -359,8 +359,9 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         })
       }
       const candidates: GitHubPRRefreshCandidate[] = []
+      const repos = store.getRepos()
       for (const candidate of args.candidates) {
-        const validation = validateAutomaticPRRefreshCandidate(candidate, store)
+        const validation = validateAutomaticPRRefreshCandidate(candidate, store, repos)
         if (validation.kind === 'ok') {
           candidates.push(validation.candidate)
         }
