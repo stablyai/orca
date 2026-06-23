@@ -3441,7 +3441,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (enqueue) {
       void enqueue({ candidate, reason, priority })
         .then((queued) => {
-          if (queued === false) {
+          if (queued === false || queued.kind === 'fallback') {
             return get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
               force: bypassesGitHubPRRefreshFreshness(reason),
               repoId: candidate.repoId,

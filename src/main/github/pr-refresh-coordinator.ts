@@ -12,6 +12,7 @@ import type {
 } from '../../shared/types'
 import { getPRForBranchOutcome, type GitHubPRBranchLookupOptions } from './client'
 import { getRateLimit, noteRateLimitSpend, rateLimitGuard } from './rate-limit'
+import { recordCoalescedCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 
 type QueueEntry = {
   key: string
@@ -64,6 +65,7 @@ const BACKGROUND_BUDGET_MAX = 20
 const POST_PUSH_DELAY_MS = 2_500
 const BACKOFF_BASE_MS = 60_000
 const BACKOFF_MAX_MS = 15 * 60_000
+const DIAGNOSTIC_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 
 let sequence = 0
 let draining = false
@@ -74,6 +76,12 @@ const errorBackoff = new Map<string, { failures: number; retryAt: number }>()
 let lastBackgroundStartAt = 0
 const visibleByWindow = new Map<number, { generation: number; keys: Set<string> }>()
 let outcomeObserver: PRRefreshOutcomeObserver | null = null
+const diagnosticsCounters = {
+  enqueued: 0,
+  coalesced: 0,
+  skipped: 0,
+  backgroundPauses: 0
+}
 
 export function setPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver | null): void {
   outcomeObserver = observer
@@ -92,6 +100,27 @@ function removeInvisibleVisibleRefreshes(): void {
       })
     }
   }
+}
+
+function recordPRRefreshQueueDiagnostic(
+  event: 'enqueued' | 'coalesced' | 'skipped' | 'background-pause',
+  reason: GitHubPRRefreshReason,
+  skippedReason?: GitHubPRRefreshSkippedReason
+): void {
+  recordCoalescedCrashBreadcrumb({
+    name: 'pr_refresh_queue',
+    coalesceKey: `pr-refresh-queue:${event}:${reason}:${skippedReason ?? ''}`,
+    minIntervalMs: DIAGNOSTIC_BREADCRUMB_MIN_INTERVAL_MS,
+    data: {
+      event,
+      reason,
+      ...(skippedReason ? { skippedReason } : {}),
+      enqueued: diagnosticsCounters.enqueued,
+      coalesced: diagnosticsCounters.coalesced,
+      skipped: diagnosticsCounters.skipped,
+      backgroundPauses: diagnosticsCounters.backgroundPauses
+    }
+  })
 }
 
 export function clearVisiblePRRefreshWindow(windowId: number): void {
@@ -480,6 +509,8 @@ async function drainQueue(): Promise<void> {
 
       const budgetDelay = isBudgetedQueueEntry(next) ? nextBudgetDelay() : 0
       if (budgetDelay > 0) {
+        diagnosticsCounters.backgroundPauses += 1
+        recordPRRefreshQueueDiagnostic('background-pause', next.reason)
         scheduleDrain(budgetDelay)
         return
       }
@@ -488,6 +519,8 @@ async function drainQueue(): Promise<void> {
       const aliases = Array.from(next.aliases.values())
       const skippedReason = validateCandidate(next.candidate)
       if (skippedReason) {
+        diagnosticsCounters.skipped += 1
+        recordPRRefreshQueueDiagnostic('skipped', next.reason, skippedReason)
         broadcast({ aliases, reason: next.reason, status: 'skipped', skippedReason })
         continue
       }
@@ -578,6 +611,8 @@ export function enqueuePRRefresh(
   const skippedReason = validateCandidate(candidate)
   if (skippedReason) {
     removeQueuedAliasForInvalidCandidate(key, alias)
+    diagnosticsCounters.skipped += 1
+    recordPRRefreshQueueDiagnostic('skipped', reason, skippedReason)
     broadcast({
       aliases: [alias],
       reason,
@@ -592,6 +627,8 @@ export function enqueuePRRefresh(
   const dueAt = freshDueAt ?? Date.now() + (reason === 'post-push' ? POST_PUSH_DELAY_MS : 0)
   if (existing) {
     existing.aliases.set(alias.cacheKey, alias)
+    diagnosticsCounters.coalesced += 1
+    recordPRRefreshQueueDiagnostic('coalesced', reason)
     const shouldPromoteExisting =
       priority > existing.priority ||
       isManual(reason) ||
@@ -604,6 +641,8 @@ export function enqueuePRRefresh(
       existing.windowId = windowId ?? existing.windowId
     }
   } else {
+    diagnosticsCounters.enqueued += 1
+    recordPRRefreshQueueDiagnostic('enqueued', reason)
     queue.set(key, {
       key,
       candidate,

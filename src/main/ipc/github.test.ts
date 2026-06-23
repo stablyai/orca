@@ -158,6 +158,7 @@ vi.mock('../telemetry/cohort-classifier', () => ({
 }))
 
 import { registerGitHubHandlers } from './github'
+import { clearPRRefreshValidationBackoffForTests } from '../github/pr-refresh-validation-backoff'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
@@ -237,6 +238,7 @@ describe('registerGitHubHandlers', () => {
     refreshPRNowMock.mockReset()
     reportVisiblePRRefreshCandidatesMock.mockReset()
     setPRRefreshOutcomeObserverMock.mockReset()
+    clearPRRefreshValidationBackoffForTests()
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
@@ -291,6 +293,113 @@ describe('registerGitHubHandlers', () => {
     ).toThrow('Access denied: unknown repository path')
 
     expect(getIssueMock).not.toHaveBeenCalled()
+  })
+
+  it('returns typed automatic PR refresh validation skips without enqueueing', async () => {
+    registerGitHubHandlers(store as never, stats as never)
+    const candidate = {
+      cacheKey: 'missing::feature/test',
+      repoPath: '/workspace/missing',
+      repoId: 'missing-repo',
+      branch: 'feature/test',
+      repoKind: 'git' as const
+    }
+
+    const first = await handlers['gh:enqueuePRRefresh'](null, {
+      candidate,
+      reason: 'active',
+      priority: 80
+    })
+    const second = await handlers['gh:enqueuePRRefresh'](null, {
+      candidate,
+      reason: 'active',
+      priority: 80
+    })
+
+    expect(first).toEqual({ kind: 'skipped', skippedReason: 'validation-denied' })
+    expect(second).toEqual({ kind: 'skipped', skippedReason: 'validation-backoff' })
+    expect(first).not.toBe(false)
+    expect(second).not.toBe(false)
+    expect(enqueuePRRefreshMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps manual PR refresh validation strict', async () => {
+    registerGitHubHandlers(store as never, stats as never)
+
+    await expect(
+      handlers['gh:refreshPRNow'](null, {
+        candidate: {
+          cacheKey: 'missing::feature/test',
+          repoPath: '/workspace/missing',
+          repoId: 'missing-repo',
+          branch: 'feature/test',
+          repoKind: 'git'
+        }
+      })
+    ).rejects.toThrow('Access denied: unknown repository path')
+
+    expect(refreshPRNowMock).not.toHaveBeenCalled()
+  })
+
+  it('filters invalid visible PR refresh candidates while keeping valid candidates', async () => {
+    registerGitHubHandlers(store as never, stats as never)
+
+    await handlers['gh:reportVisiblePRRefreshCandidates'](
+      { sender: { id: 7, once: vi.fn() } },
+      {
+        generation: 1,
+        candidates: [
+          {
+            cacheKey: 'valid::feature/test',
+            repoPath: '/workspace/repo',
+            repoId: 'repo-1',
+            branch: 'feature/test',
+            repoKind: 'git'
+          },
+          {
+            cacheKey: 'missing::feature/old',
+            repoPath: '/workspace/missing',
+            repoId: 'missing-repo',
+            branch: 'feature/old',
+            repoKind: 'git'
+          }
+        ]
+      }
+    )
+
+    expect(reportVisiblePRRefreshCandidatesMock).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          cacheKey: 'valid::feature/test',
+          repoPath: '/workspace/repo',
+          repoId: 'repo-1'
+        })
+      ],
+      1,
+      7
+    )
+  })
+
+  it('clears a sender visible PR refresh set when all current candidates are invalid', async () => {
+    registerGitHubHandlers(store as never, stats as never)
+
+    await handlers['gh:reportVisiblePRRefreshCandidates'](
+      { sender: { id: 8, once: vi.fn() } },
+      {
+        generation: 2,
+        candidates: [
+          {
+            cacheKey: 'missing::feature/old',
+            repoPath: '/workspace/missing',
+            repoId: 'missing-repo',
+            branch: 'feature/old',
+            repoKind: 'git'
+          }
+        ]
+      }
+    )
+
+    expect(reportVisiblePRRefreshCandidatesMock).toHaveBeenCalledWith([], 2, 8)
   })
 
   it('rejects GitHub source context from a different host', async () => {

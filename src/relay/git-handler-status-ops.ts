@@ -136,7 +136,10 @@ export async function getStatusOp(
           try {
             upstreamStatus = await readOrProbeNoEffectiveUpstreamStatus(
               { worktreePath, branchName, upstreamName: upstreamStatus?.upstreamName },
-              (args) => git(args, worktreePath)
+              (args) => git(args, worktreePath),
+              {
+                bypassCache: params.bypassEffectiveUpstreamNegativeCache === true
+              }
             )
           } catch {
             // Why: status polling should keep returning working-tree entries even

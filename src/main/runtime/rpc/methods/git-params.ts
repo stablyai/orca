@@ -8,7 +8,8 @@ export const WorktreeSelector = z.object({
 })
 
 export const GitStatusParams = WorktreeSelector.extend({
-  includeIgnored: z.boolean().optional()
+  includeIgnored: z.boolean().optional(),
+  bypassEffectiveUpstreamNegativeCache: z.boolean().optional()
 })
 
 export const GitCheckIgnored = WorktreeSelector.extend({

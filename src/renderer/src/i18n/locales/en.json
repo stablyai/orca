@@ -10399,7 +10399,8 @@
           "4cc7b83ffe": "Filter files...",
           "21783df79f": "Collapse file tree",
           "481e63ca52": "Files",
-          "d5ac717d65": "uncommitted"
+          "d5ac717d65": "uncommitted",
+          "39b6b9e4e4": "Committed on Branch"
         },
         "CombinedDiffViewer": {
           "35cc27aeb2": "in Source Control",

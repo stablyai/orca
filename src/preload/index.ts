@@ -2536,6 +2536,7 @@ const api = {
       worktreePath: string
       connectionId?: string
       includeIgnored?: boolean
+      bypassEffectiveUpstreamNegativeCache?: boolean
     }): Promise<unknown> => ipcRenderer.invoke('git:status', args),
     checkIgnored: (args: {
       worktreePath: string

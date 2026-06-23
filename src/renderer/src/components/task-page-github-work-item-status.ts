@@ -55,7 +55,6 @@ export function getTaskPageGitHubPRIconTone(item: GitHubWorkItemStatusItem): str
     return 'text-muted-foreground'
   }
 
-  // Exhaustive switch ensures TypeScript will error if new states are added
   switch (item.state) {
     case 'draft':
       return 'text-muted-foreground'
@@ -65,8 +64,5 @@ export function getTaskPageGitHubPRIconTone(item: GitHubWorkItemStatusItem): str
       return 'text-purple-600 dark:text-purple-300'
     case 'closed':
       return 'text-rose-600 dark:text-rose-300'
-    default:
-      // Fallback for any unexpected state
-      return 'text-muted-foreground'
   }
 }

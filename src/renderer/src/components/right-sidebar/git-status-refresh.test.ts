@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { refreshGitStatusForWorktree, type GitStatusRefreshDeps } from './git-status-refresh'
+import {
+  clearGitStatusRefreshOrderingForTests,
+  refreshGitStatusForWorktree,
+  refreshGitStatusForWorktreeStrict,
+  type GitStatusRefreshDeps
+} from './git-status-refresh'
 import type { GitStatusResult } from '../../../../shared/types'
 
 function makeDeps(): GitStatusRefreshDeps {
@@ -11,9 +16,24 @@ function makeDeps(): GitStatusRefreshDeps {
   }
 }
 
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (error: unknown) => void
+} {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve
+    reject = promiseReject
+  })
+  return { promise, resolve, reject }
+}
+
 describe('refreshGitStatusForWorktree', () => {
   beforeEach(() => {
     vi.unstubAllGlobals()
+    clearGitStatusRefreshOrderingForTests()
   })
 
   it('stores status, branch identity, and upstream data from git status', async () => {
@@ -131,6 +151,81 @@ describe('refreshGitStatusForWorktree', () => {
       connectionId: undefined
     })
     expect(deps.setGitStatus).toHaveBeenCalledWith('wt-3', status)
+  })
+
+  it('bypasses automatic no-upstream backoff only for strict refreshes', async () => {
+    const status: GitStatusResult = {
+      entries: [],
+      conflictOperation: 'unknown',
+      upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
+    }
+    const gitStatus = vi.fn().mockResolvedValue(status)
+    vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
+    const deps = makeDeps()
+
+    await refreshGitStatusForWorktree({
+      worktreeId: 'wt-normal',
+      worktreePath: '/repo',
+      deps
+    })
+    await refreshGitStatusForWorktreeStrict({
+      worktreeId: 'wt-strict',
+      worktreePath: '/repo',
+      deps
+    })
+
+    expect(gitStatus).toHaveBeenNthCalledWith(1, {
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitStatus).toHaveBeenNthCalledWith(2, {
+      worktreePath: '/repo',
+      connectionId: undefined,
+      bypassEffectiveUpstreamNegativeCache: true
+    })
+  })
+
+  it('does not let an older automatic upstream result overwrite a strict result', async () => {
+    const automaticStatus = deferred<GitStatusResult>()
+    const strictStatus: GitStatusResult = {
+      entries: [],
+      conflictOperation: 'unknown',
+      upstreamStatus: {
+        hasUpstream: true,
+        upstreamName: 'origin/feature',
+        ahead: 0,
+        behind: 1
+      }
+    }
+    const staleAutomaticStatus: GitStatusResult = {
+      entries: [],
+      conflictOperation: 'unknown',
+      upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
+    }
+    const gitStatus = vi
+      .fn()
+      .mockReturnValueOnce(automaticStatus.promise)
+      .mockResolvedValueOnce(strictStatus)
+    vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
+    const deps = makeDeps()
+
+    const automatic = refreshGitStatusForWorktree({
+      worktreeId: 'wt-race',
+      worktreePath: '/repo',
+      deps
+    })
+    await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(1))
+
+    await refreshGitStatusForWorktreeStrict({
+      worktreeId: 'wt-race',
+      worktreePath: '/repo',
+      deps
+    })
+    automaticStatus.resolve(staleAutomaticStatus)
+    await automatic
+
+    expect(deps.setUpstreamStatus).toHaveBeenCalledTimes(1)
+    expect(deps.setUpstreamStatus).toHaveBeenCalledWith('wt-race', strictStatus.upstreamStatus)
   })
 
   it('clears stale branch identity when git status reports detached HEAD', async () => {
