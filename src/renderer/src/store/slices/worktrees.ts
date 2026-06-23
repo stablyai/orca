@@ -349,20 +349,80 @@ function getHydratedSessionWorktreeIdsForRepo(state: AppState, repoId: string): 
   return Object.keys(state.tabsByWorktree).filter((id) => getRepoIdFromWorktreeId(id) === repoId)
 }
 
-function worktreeMatchesHost(
-  worktree: { hostId?: ExecutionHostId },
+type WorktreeHostMatchOptions = {
+  unhostedWorktreesMatchHost?: boolean
+}
+
+type RepoHostSummary = {
+  count: number
+  onlyHostId?: ExecutionHostId
+}
+
+const repoHostSummariesByRepos = new WeakMap<AppState['repos'], Map<string, RepoHostSummary>>()
+
+function getRepoHostSummaries(repos: AppState['repos']): Map<string, RepoHostSummary> {
+  const cached = repoHostSummariesByRepos.get(repos)
+  if (cached) {
+    return cached
+  }
+
+  const summaries = new Map<string, RepoHostSummary>()
+  for (const repo of repos) {
+    const current = summaries.get(repo.id)
+    if (current) {
+      summaries.set(repo.id, { count: current.count + 1 })
+    } else {
+      summaries.set(repo.id, { count: 1, onlyHostId: getRepoExecutionHostId(repo) })
+    }
+  }
+  repoHostSummariesByRepos.set(repos, summaries)
+  return summaries
+}
+
+function unhostedWorktreesMatchRefreshHost(
+  state: Pick<AppState, 'repos'>,
+  repoId: string,
   hostId: ExecutionHostId
 ): boolean {
-  return (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID) === hostId
+  if (hostId === LOCAL_EXECUTION_HOST_ID) {
+    return true
+  }
+
+  const summary = getRepoHostSummaries(state.repos).get(repoId)
+  return summary?.count === 1 && summary.onlyHostId === hostId
+}
+
+function worktreeHostMatchOptions(
+  state: Pick<AppState, 'repos'>,
+  repoId: string,
+  hostId: ExecutionHostId
+): WorktreeHostMatchOptions {
+  return {
+    // Why: pre-host persisted runtime/SSH worktrees were stored without hostId.
+    // Treat them as the sole repo owner's rows, but keep ambiguous duplicates local.
+    unhostedWorktreesMatchHost: unhostedWorktreesMatchRefreshHost(state, repoId, hostId)
+  }
+}
+
+function worktreeMatchesHost(
+  worktree: { hostId?: ExecutionHostId },
+  hostId: ExecutionHostId,
+  options: WorktreeHostMatchOptions = {}
+): boolean {
+  if (worktree.hostId) {
+    return worktree.hostId === hostId
+  }
+  return options.unhostedWorktreesMatchHost ?? hostId === LOCAL_EXECUTION_HOST_ID
 }
 
 function mergeWorktreesForHost<T extends { hostId?: ExecutionHostId }>(
   current: readonly T[] | undefined,
   refreshed: readonly T[],
-  hostId: ExecutionHostId
+  hostId: ExecutionHostId,
+  options?: WorktreeHostMatchOptions
 ): T[] {
   return [
-    ...(current ?? []).filter((worktree) => !worktreeMatchesHost(worktree, hostId)),
+    ...(current ?? []).filter((worktree) => !worktreeMatchesHost(worktree, hostId, options)),
     ...refreshed
   ]
 }
@@ -370,12 +430,13 @@ function mergeWorktreesForHost<T extends { hostId?: ExecutionHostId }>(
 function mergeDetectedWorktreesForHost(
   current: DetectedWorktreeListResult | undefined,
   refreshed: DetectedWorktreeListResult,
-  hostId: ExecutionHostId
+  hostId: ExecutionHostId,
+  options?: WorktreeHostMatchOptions
 ): DetectedWorktreeListResult {
   const refreshedForHost = refreshed.worktrees.map((worktree) => withRepoHostId(worktree, hostId))
   return {
     ...refreshed,
-    worktrees: mergeWorktreesForHost(current?.worktrees, refreshedForHost, hostId)
+    worktrees: mergeWorktreesForHost(current?.worktrees, refreshedForHost, hostId, options)
   }
 }
 
@@ -386,15 +447,16 @@ function getKnownWorktreeIdsForPurge(
 ): string[] {
   const detected = state.detectedWorktreesByRepo[repoId]
   const knownIds = new Set<string>()
+  const matchOptions = worktreeHostMatchOptions(state, repoId, hostId)
   if (detected?.authoritative === true) {
     for (const worktree of detected.worktrees) {
-      if (worktreeMatchesHost(worktree, hostId)) {
+      if (worktreeMatchesHost(worktree, hostId, matchOptions)) {
         knownIds.add(worktree.id)
       }
     }
   } else {
     for (const worktree of state.worktreesByRepo[repoId] ?? []) {
-      if (worktreeMatchesHost(worktree, hostId)) {
+      if (worktreeMatchesHost(worktree, hostId, matchOptions)) {
         knownIds.add(worktree.id)
       }
     }
@@ -1630,11 +1692,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       }
       const worktrees = toVisibleWorktrees(detected, hostId)
       const current = get().worktreesByRepo[repoId]
+      const currentMatchOptions = worktreeHostMatchOptions(get(), repoId, hostId)
       const currentForHost = (current ?? []).filter((worktree) =>
-        worktreeMatchesHost(worktree, hostId)
+        worktreeMatchesHost(worktree, hostId, currentMatchOptions)
       )
       if (areWorktreesEqual(currentForHost, worktrees)) {
         set((s) => {
+          const matchOptions = worktreeHostMatchOptions(s, repoId, hostId)
           const removedIds = getRemovedWorktreeIdsAfterAuthoritativeScan(
             s,
             repoId,
@@ -1644,12 +1708,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           const mergedDetected = mergeDetectedWorktreesForHost(
             s.detectedWorktreesByRepo[repoId],
             detected,
-            hostId
+            hostId,
+            matchOptions
           )
           const mergedWorktrees = mergeWorktreesForHost(
             s.worktreesByRepo[repoId],
             worktrees,
-            hostId
+            hostId,
+            matchOptions
           )
           const worktreesChanged = !areWorktreesEqual(s.worktreesByRepo[repoId], mergedWorktrees)
           if (
@@ -1690,7 +1756,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             [repoId]: mergeDetectedWorktreesForHost(
               s.detectedWorktreesByRepo[repoId],
               detected,
-              hostId
+              hostId,
+              worktreeHostMatchOptions(s, repoId, hostId)
             )
           }
         }))
@@ -1701,12 +1768,19 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         // Why: hidden worktrees are not in worktreesByRepo. Purge decisions
         // must diff against the previous authoritative detected list so hiding
         // does not delete state, and deleting a hidden worktree still does.
+        const matchOptions = worktreeHostMatchOptions(s, repoId, hostId)
         const removedIds = getRemovedWorktreeIdsAfterAuthoritativeScan(s, repoId, detected, hostId)
-        const mergedWorktrees = mergeWorktreesForHost(s.worktreesByRepo[repoId], worktrees, hostId)
+        const mergedWorktrees = mergeWorktreesForHost(
+          s.worktreesByRepo[repoId],
+          worktrees,
+          hostId,
+          matchOptions
+        )
         const mergedDetected = mergeDetectedWorktreesForHost(
           s.detectedWorktreesByRepo[repoId],
           detected,
-          hostId
+          hostId,
+          matchOptions
         )
 
         return {
@@ -1740,12 +1814,19 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         const detected = await listDetectedWorktreesForRepo(settings, r.id)
         const worktrees = toVisibleWorktrees(detected, hostId)
         set((s) => {
+          const matchOptions = worktreeHostMatchOptions(s, r.id, hostId)
           const removedIds = getRemovedWorktreeIdsAfterAuthoritativeScan(s, r.id, detected, hostId)
-          const mergedWorktrees = mergeWorktreesForHost(s.worktreesByRepo[r.id], worktrees, hostId)
+          const mergedWorktrees = mergeWorktreesForHost(
+            s.worktreesByRepo[r.id],
+            worktrees,
+            hostId,
+            matchOptions
+          )
           const mergedDetected = mergeDetectedWorktreesForHost(
             s.detectedWorktreesByRepo[r.id],
             detected,
-            hostId
+            hostId,
+            matchOptions
           )
           if (
             areWorktreesEqual(s.worktreesByRepo[r.id], mergedWorktrees) &&
@@ -1792,28 +1873,33 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           )
           const list = toVisibleWorktrees(detected, hostId)
           const current = get().worktreesByRepo[r.id]
+          const currentMatchOptions = worktreeHostMatchOptions(get(), r.id, hostId)
           const currentForHost = (current ?? []).filter((worktree) =>
-            worktreeMatchesHost(worktree, hostId)
+            worktreeMatchesHost(worktree, hostId, currentMatchOptions)
           )
           if (
             !areWorktreesEqual(currentForHost, list) &&
             !(list.length === 0 && currentForHost.length > 0 && !detected.authoritative)
           ) {
-            set((s) => ({
-              worktreesByRepo: {
-                ...s.worktreesByRepo,
-                [r.id]: mergeWorktreesForHost(s.worktreesByRepo[r.id], list, hostId)
-              },
-              detectedWorktreesByRepo: {
-                ...s.detectedWorktreesByRepo,
-                [r.id]: mergeDetectedWorktreesForHost(
-                  s.detectedWorktreesByRepo[r.id],
-                  detected,
-                  hostId
-                )
-              },
-              sortEpoch: s.sortEpoch + 1
-            }))
+            set((s) => {
+              const matchOptions = worktreeHostMatchOptions(s, r.id, hostId)
+              return {
+                worktreesByRepo: {
+                  ...s.worktreesByRepo,
+                  [r.id]: mergeWorktreesForHost(s.worktreesByRepo[r.id], list, hostId, matchOptions)
+                },
+                detectedWorktreesByRepo: {
+                  ...s.detectedWorktreesByRepo,
+                  [r.id]: mergeDetectedWorktreesForHost(
+                    s.detectedWorktreesByRepo[r.id],
+                    detected,
+                    hostId,
+                    matchOptions
+                  )
+                },
+                sortEpoch: s.sortEpoch + 1
+              }
+            })
           } else {
             set((s) => ({
               detectedWorktreesByRepo: {
@@ -1821,7 +1907,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                 [r.id]: mergeDetectedWorktreesForHost(
                   s.detectedWorktreesByRepo[r.id],
                   detected,
-                  hostId
+                  hostId,
+                  worktreeHostMatchOptions(s, r.id, hostId)
                 )
               }
             }))
