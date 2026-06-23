@@ -184,6 +184,41 @@ describe('pr-refresh-coordinator', () => {
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
   })
 
+  it('paces a burst of distinct active refreshes', async () => {
+    const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockResolvedValue({
+      kind: 'upstream-error',
+      errorType: 'unknown',
+      message: 'missing upstream',
+      fetchedAt: Date.now()
+    })
+
+    for (let index = 0; index < 10; index += 1) {
+      enqueuePRRefresh(
+        makeCandidate({
+          cacheKey: `/repo::feature/${index}`,
+          branch: `feature/${index}`,
+          worktreeId: `wt-${index}`
+        }),
+        'active',
+        80,
+        1
+      )
+    }
+
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(3)
+
+    await vi.advanceTimersByTimeAsync(29_999)
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(3)
+
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(6)
+  })
+
   it('preserves an active refresh queued while a visible refresh is in flight', async () => {
     const { enqueuePRRefresh, reportVisiblePRRefreshCandidates } =
       await import('./pr-refresh-coordinator')
