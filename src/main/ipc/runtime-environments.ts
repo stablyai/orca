@@ -126,14 +126,21 @@ export function registerRuntimeEnvironmentHandlers(): void {
     'runtimeEnvironments:call',
     async (
       _event,
-      args: { selector: string; method: string; params?: unknown; timeoutMs?: number }
+      args: {
+        selector: string
+        method: string
+        params?: unknown
+        timeoutMs?: number
+        background?: boolean
+      }
     ): Promise<RuntimeRpcResponse<unknown>> => {
       return callRuntimeEnvironment(
         getUserDataPath(),
         args.selector,
         args.method,
         args.params,
-        args.timeoutMs
+        args.timeoutMs,
+        args.background
       )
     }
   )

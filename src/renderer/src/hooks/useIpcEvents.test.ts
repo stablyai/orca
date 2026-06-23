@@ -3816,8 +3816,616 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     await new Promise((resolve) => setTimeout(resolve, 0))
 
+    // Why: worktreesChanged is the same server-pushed client-event stream as
+    // reposChanged, so its refresh rides the background lane too — symmetric
+    // treatment keeps a multi-server worktree storm off the foreground lane.
+    expect(fetchWorktrees).toHaveBeenCalledWith('repo-1', { background: true })
+    expect(fetchWorktreeLineage).toHaveBeenCalledWith({ background: true })
+  })
+
+  it('routes the event-driven project refresh onto the background lane', async () => {
+    const fetchRuntimeEnvironmentRepos = vi.fn().mockResolvedValue([{ id: 'repo-1' }])
+    const fetchWorktrees = vi.fn().mockResolvedValue(true)
+    const fetchWorktreeLineage = vi.fn()
+    let runtimeOnResponse: ((response: unknown) => void) | undefined
+    const runtimeSubscribe = vi.fn(async (_args, callbacks) => {
+      runtimeOnResponse = (callbacks as { onResponse: (response: unknown) => void }).onResponse
+      return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+    })
+
+    vi.doMock('react', async () => {
+      const actual = await vi.importActual<typeof ReactModule>('react')
+      return {
+        ...actual,
+        useEffect: (effect: () => void | (() => void)) => {
+          effect()
+        }
+      }
+    })
+
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => ({
+          fetchRepos: vi.fn(),
+          fetchRuntimeEnvironmentRepos,
+          fetchProjectGroups: vi.fn(),
+          fetchWorktrees,
+          fetchWorktreeLineage,
+          repos: [{ id: 'repo-1' }],
+          detectedWorktreesByRepo: {},
+          worktreesByRepo: {},
+          purgeWorktreeTerminalState: vi.fn(),
+          removeWorkspaceSpaceWorktrees: vi.fn(),
+          setUpdateStatus: vi.fn(),
+          activeModal: null,
+          closeModal: vi.fn(),
+          openModal: vi.fn(),
+          getKnownWorktreeById: vi.fn(),
+          activeWorktreeId: null,
+          activeView: 'terminal',
+          setActiveView: vi.fn(),
+          setActiveRepo: vi.fn(),
+          setActiveWorktree: vi.fn(),
+          revealWorktreeInSidebar: vi.fn(),
+          setIsFullScreen: vi.fn(),
+          updateBrowserPageState: vi.fn(),
+          activeTabType: 'terminal',
+          editorFontZoomLevel: 0,
+          setEditorFontZoomLevel: vi.fn(),
+          setRateLimitsFromPush: vi.fn(),
+          setSshConnectionState: vi.fn(),
+          setSshTargetLabels: vi.fn(),
+          setPortForwards: vi.fn(),
+          clearPortForwards: vi.fn(),
+          setDetectedPorts: vi.fn(),
+          enqueueSshCredentialRequest: vi.fn(),
+          removeSshCredentialRequest: vi.fn(),
+          clearTabPtyId: vi.fn(),
+          settings: { activeRuntimeEnvironmentId: 'env-1', terminalFontSize: 13 }
+        })
+      }
+    }))
+
+    vi.doMock('@/lib/ui-zoom', () => ({ applyUIZoom: vi.fn() }))
+    vi.doMock('@/lib/worktree-activation', () => ({
+      activateAndRevealWorktree: vi.fn(),
+      ensureWorktreeHasInitialTerminal: vi.fn()
+    }))
+    vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+      getVisibleWorktreeIds: () => []
+    }))
+    vi.doMock('@/lib/editor-font-zoom', () => ({
+      nextEditorFontZoomLevel: vi.fn(() => 0),
+      computeEditorFontSize: vi.fn(() => 13)
+    }))
+    vi.doMock('@/components/settings/SettingsConstants', () => ({
+      zoomLevelToPercent: vi.fn(() => 100),
+      ZOOM_MIN: -3,
+      ZOOM_MAX: 3
+    }))
+    vi.doMock('@/lib/zoom-events', () => ({ dispatchZoomLevelChanged: vi.fn() }))
+
+    vi.stubGlobal('window', {
+      api: {
+        repos: { onChanged: () => () => {} },
+        worktrees: {
+          onChanged: () => () => {},
+          onBaseStatus: () => () => {},
+          onRemoteBranchConflict: () => () => {}
+        },
+        runtimeEnvironments: { subscribe: runtimeSubscribe },
+        ui: {
+          onStateChanged: () => () => {},
+          onOpenSettings: () => () => {},
+          onOpenFeatureTour: () => () => {},
+          onToggleLeftSidebar: () => () => {},
+          onToggleRightSidebar: () => () => {},
+          onToggleWorktreePalette: () => () => {},
+          onToggleFloatingTerminal: () => () => {},
+          onOpenQuickOpen: () => () => {},
+          onOpenNewWorkspace: () => () => {},
+          onOpenTasks: () => () => {},
+          onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
+          onWorktreeHistoryNavigate: () => () => {},
+          onActivateWorktree: () => () => {},
+          onCreateTerminal: () => () => {},
+          onRequestTerminalCreate: () => () => {},
+          replyTerminalCreate: () => {},
+          onSplitTerminal: () => () => {},
+          onRenameTerminal: () => () => {},
+          onFocusTerminal: () => () => {},
+          onFocusEditorTab: () => () => {},
+          onCloseSessionTab: () => () => {},
+          onMoveSessionTab: () => () => {},
+          onOpenFileFromMobile: () => () => {},
+          onOpenDiffFromMobile: () => () => {},
+          onCloseTerminal: () => () => {},
+          onSleepWorktree: () => () => {},
+          onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
+          onRequestTabCreate: () => () => {},
+          replyTabCreate: () => {},
+          onRequestTabClose: () => () => {},
+          replyTabClose: () => {},
+          onRequestTabSetProfile: () => () => {},
+          replyTabSetProfile: () => {},
+          onNewTerminalTab: () => () => {},
+          onCloseActiveTab: () => () => {},
+          onSwitchTab: () => () => {},
+          onSwitchTabAcrossAllTypes: () => () => {},
+          onSwitchRecentTab: () => () => {},
+          onSwitchTerminalTab: () => () => {},
+          onToggleStatusBar: () => () => {},
+          onFullscreenChanged: () => () => {},
+          onTerminalZoom: () => () => {},
+          getZoomLevel: () => 0,
+          set: vi.fn()
+        },
+        settings: { onChanged: () => () => {} },
+        updater: {
+          getStatus: () => Promise.resolve({ state: 'idle' }),
+          onStatus: () => () => {},
+          onClearDismissal: () => () => {}
+        },
+        browser: {
+          onGuestLoadFailed: () => () => {},
+          onOpenLinkInOrcaTab: () => () => {},
+          onNavigationUpdate: () => () => {},
+          onActivateView: () => () => {},
+          onPaneFocus: () => () => {}
+        },
+        rateLimits: {
+          get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),
+          onUpdate: () => () => {}
+        },
+        ssh: {
+          listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
+          getState: () => Promise.resolve(null),
+          onStateChanged: () => () => {},
+          onCredentialRequest: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {},
+          onCredentialResolved: () => () => {}
+        },
+        runtime: {
+          getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
+          getBrowserDrivers: () => Promise.resolve([]),
+          onTerminalFitOverrideChanged: () => () => {},
+          onTerminalDriverChanged: () => () => {},
+          onBrowserDriverChanged: () => () => {}
+        },
+        agentStatus: { onSet: () => () => {} }
+      }
+    })
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (!runtimeOnResponse) {
+      throw new Error('Expected runtime client event callbacks')
+    }
+    runtimeOnResponse({ ok: true, result: { type: 'reposChanged' } })
+    // Wait past the scheduler's 250ms debounce, then drain microtasks.
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    // The whole event-driven project refresh (repos + worktrees + lineage) must
+    // ride the background lane so a per-server refresh storm yields transport
+    // capacity to user-initiated runtime calls.
+    expect(fetchRuntimeEnvironmentRepos).toHaveBeenCalledWith('env-1', { background: true })
+    expect(fetchWorktrees).toHaveBeenCalledWith('repo-1', { background: true })
+    expect(fetchWorktreeLineage).toHaveBeenCalledWith({ background: true })
+  })
+
+  it('routes worktreesChanged repo discovery onto the background lane', async () => {
+    const fetchRuntimeEnvironmentRepos = vi.fn().mockResolvedValue([{ id: 'repo-1' }])
+    const fetchWorktrees = vi.fn().mockResolvedValue(true)
+    const fetchWorktreeLineage = vi.fn()
+    let runtimeOnResponse: ((response: unknown) => void) | undefined
+    const runtimeSubscribe = vi.fn(async (_args, callbacks) => {
+      runtimeOnResponse = (callbacks as { onResponse: (response: unknown) => void }).onResponse
+      return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+    })
+
+    vi.doMock('react', async () => {
+      const actual = await vi.importActual<typeof ReactModule>('react')
+      return {
+        ...actual,
+        useEffect: (effect: () => void | (() => void)) => {
+          effect()
+        }
+      }
+    })
+
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => ({
+          fetchRepos: vi.fn(),
+          fetchRuntimeEnvironmentRepos,
+          fetchProjectGroups: vi.fn(),
+          fetchWorktrees,
+          fetchWorktreeLineage,
+          // Repo is NOT yet known to the renderer, so ensureRuntimeEventRepoKnown
+          // must discover it via fetchRuntimeEnvironmentRepos before refreshing.
+          repos: [],
+          detectedWorktreesByRepo: {},
+          worktreesByRepo: {},
+          purgeWorktreeTerminalState: vi.fn(),
+          removeWorkspaceSpaceWorktrees: vi.fn(),
+          setUpdateStatus: vi.fn(),
+          activeModal: null,
+          closeModal: vi.fn(),
+          openModal: vi.fn(),
+          getKnownWorktreeById: vi.fn(),
+          activeWorktreeId: null,
+          activeView: 'terminal',
+          setActiveView: vi.fn(),
+          setActiveRepo: vi.fn(),
+          setActiveWorktree: vi.fn(),
+          revealWorktreeInSidebar: vi.fn(),
+          setIsFullScreen: vi.fn(),
+          updateBrowserPageState: vi.fn(),
+          activeTabType: 'terminal',
+          editorFontZoomLevel: 0,
+          setEditorFontZoomLevel: vi.fn(),
+          setRateLimitsFromPush: vi.fn(),
+          setSshConnectionState: vi.fn(),
+          setSshTargetLabels: vi.fn(),
+          setPortForwards: vi.fn(),
+          clearPortForwards: vi.fn(),
+          setDetectedPorts: vi.fn(),
+          enqueueSshCredentialRequest: vi.fn(),
+          removeSshCredentialRequest: vi.fn(),
+          clearTabPtyId: vi.fn(),
+          settings: { activeRuntimeEnvironmentId: 'env-1', terminalFontSize: 13 }
+        })
+      }
+    }))
+
+    vi.doMock('@/lib/ui-zoom', () => ({ applyUIZoom: vi.fn() }))
+    vi.doMock('@/lib/worktree-activation', () => ({
+      activateAndRevealWorktree: vi.fn(),
+      ensureWorktreeHasInitialTerminal: vi.fn()
+    }))
+    vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+      getVisibleWorktreeIds: () => []
+    }))
+    vi.doMock('@/lib/editor-font-zoom', () => ({
+      nextEditorFontZoomLevel: vi.fn(() => 0),
+      computeEditorFontSize: vi.fn(() => 13)
+    }))
+    vi.doMock('@/components/settings/SettingsConstants', () => ({
+      zoomLevelToPercent: vi.fn(() => 100),
+      ZOOM_MIN: -3,
+      ZOOM_MAX: 3
+    }))
+    vi.doMock('@/lib/zoom-events', () => ({ dispatchZoomLevelChanged: vi.fn() }))
+
+    vi.stubGlobal('window', {
+      api: {
+        repos: { onChanged: () => () => {} },
+        worktrees: {
+          onChanged: () => () => {},
+          onBaseStatus: () => () => {},
+          onRemoteBranchConflict: () => () => {}
+        },
+        runtimeEnvironments: { subscribe: runtimeSubscribe },
+        ui: {
+          onStateChanged: () => () => {},
+          onOpenSettings: () => () => {},
+          onOpenFeatureTour: () => () => {},
+          onToggleLeftSidebar: () => () => {},
+          onToggleRightSidebar: () => () => {},
+          onToggleWorktreePalette: () => () => {},
+          onToggleFloatingTerminal: () => () => {},
+          onOpenQuickOpen: () => () => {},
+          onOpenNewWorkspace: () => () => {},
+          onOpenTasks: () => () => {},
+          onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
+          onWorktreeHistoryNavigate: () => () => {},
+          onActivateWorktree: () => () => {},
+          onCreateTerminal: () => () => {},
+          onRequestTerminalCreate: () => () => {},
+          replyTerminalCreate: () => {},
+          onSplitTerminal: () => () => {},
+          onRenameTerminal: () => () => {},
+          onFocusTerminal: () => () => {},
+          onFocusEditorTab: () => () => {},
+          onCloseSessionTab: () => () => {},
+          onMoveSessionTab: () => () => {},
+          onOpenFileFromMobile: () => () => {},
+          onOpenDiffFromMobile: () => () => {},
+          onCloseTerminal: () => () => {},
+          onSleepWorktree: () => () => {},
+          onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
+          onRequestTabCreate: () => () => {},
+          replyTabCreate: () => {},
+          onRequestTabClose: () => () => {},
+          replyTabClose: () => {},
+          onRequestTabSetProfile: () => () => {},
+          replyTabSetProfile: () => {},
+          onNewTerminalTab: () => () => {},
+          onCloseActiveTab: () => () => {},
+          onSwitchTab: () => () => {},
+          onSwitchTabAcrossAllTypes: () => () => {},
+          onSwitchRecentTab: () => () => {},
+          onSwitchTerminalTab: () => () => {},
+          onToggleStatusBar: () => () => {},
+          onFullscreenChanged: () => () => {},
+          onTerminalZoom: () => () => {},
+          getZoomLevel: () => 0,
+          set: vi.fn()
+        },
+        settings: { onChanged: () => () => {} },
+        updater: {
+          getStatus: () => Promise.resolve({ state: 'idle' }),
+          onStatus: () => () => {},
+          onClearDismissal: () => () => {}
+        },
+        browser: {
+          onGuestLoadFailed: () => () => {},
+          onOpenLinkInOrcaTab: () => () => {},
+          onNavigationUpdate: () => () => {},
+          onActivateView: () => () => {},
+          onPaneFocus: () => () => {}
+        },
+        rateLimits: {
+          get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),
+          onUpdate: () => () => {}
+        },
+        ssh: {
+          listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
+          getState: () => Promise.resolve(null),
+          onStateChanged: () => () => {},
+          onCredentialRequest: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {},
+          onCredentialResolved: () => () => {}
+        },
+        runtime: {
+          getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
+          getBrowserDrivers: () => Promise.resolve([]),
+          onTerminalFitOverrideChanged: () => () => {},
+          onTerminalDriverChanged: () => () => {},
+          onBrowserDriverChanged: () => () => {}
+        },
+        agentStatus: { onSet: () => () => {} }
+      }
+    })
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (!runtimeOnResponse) {
+      throw new Error('Expected runtime client event callbacks')
+    }
+    runtimeOnResponse({ ok: true, result: { type: 'worktreesChanged', repoId: 'repo-1' } })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    // ensureRuntimeEventRepoKnown's discovery fetch is part of the same
+    // worktreesChanged refresh, so it must ride the background lane too.
+    expect(fetchRuntimeEnvironmentRepos).toHaveBeenCalledWith('env-1', { background: true })
+    expect(fetchWorktrees).toHaveBeenCalledWith('repo-1', { background: true })
+  })
+
+  it('keeps runtime activateWorktree on the foreground lane', async () => {
+    const fetchRuntimeEnvironmentRepos = vi.fn().mockResolvedValue([{ id: 'repo-1' }])
+    const fetchWorktrees = vi.fn().mockResolvedValue(true)
+    const fetchWorktreeLineage = vi.fn()
+    let runtimeOnResponse: ((response: unknown) => void) | undefined
+    const runtimeSubscribe = vi.fn(async (_args, callbacks) => {
+      runtimeOnResponse = (callbacks as { onResponse: (response: unknown) => void }).onResponse
+      return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+    })
+
+    vi.doMock('react', async () => {
+      const actual = await vi.importActual<typeof ReactModule>('react')
+      return {
+        ...actual,
+        useEffect: (effect: () => void | (() => void)) => {
+          effect()
+        }
+      }
+    })
+
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => ({
+          fetchRepos: vi.fn(),
+          fetchRuntimeEnvironmentRepos,
+          fetchProjectGroups: vi.fn(),
+          fetchWorktrees,
+          fetchWorktreeLineage,
+          repos: [],
+          detectedWorktreesByRepo: {},
+          worktreesByRepo: {},
+          purgeWorktreeTerminalState: vi.fn(),
+          removeWorkspaceSpaceWorktrees: vi.fn(),
+          setUpdateStatus: vi.fn(),
+          activeModal: null,
+          closeModal: vi.fn(),
+          openModal: vi.fn(),
+          getKnownWorktreeById: vi.fn(),
+          activeWorktreeId: null,
+          activeView: 'terminal',
+          setActiveView: vi.fn(),
+          setActiveRepo: vi.fn(),
+          setActiveWorktree: vi.fn(),
+          revealWorktreeInSidebar: vi.fn(),
+          setIsFullScreen: vi.fn(),
+          updateBrowserPageState: vi.fn(),
+          activeTabType: 'terminal',
+          editorFontZoomLevel: 0,
+          setEditorFontZoomLevel: vi.fn(),
+          setRateLimitsFromPush: vi.fn(),
+          setSshConnectionState: vi.fn(),
+          setSshTargetLabels: vi.fn(),
+          setPortForwards: vi.fn(),
+          clearPortForwards: vi.fn(),
+          setDetectedPorts: vi.fn(),
+          enqueueSshCredentialRequest: vi.fn(),
+          removeSshCredentialRequest: vi.fn(),
+          clearTabPtyId: vi.fn(),
+          settings: { activeRuntimeEnvironmentId: 'env-1', terminalFontSize: 13 }
+        })
+      }
+    }))
+
+    vi.doMock('@/lib/ui-zoom', () => ({ applyUIZoom: vi.fn() }))
+    vi.doMock('@/lib/worktree-activation', () => ({
+      activateAndRevealWorktree: vi.fn(),
+      ensureWorktreeHasInitialTerminal: vi.fn()
+    }))
+    vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+      getVisibleWorktreeIds: () => []
+    }))
+    vi.doMock('@/lib/editor-font-zoom', () => ({
+      nextEditorFontZoomLevel: vi.fn(() => 0),
+      computeEditorFontSize: vi.fn(() => 13)
+    }))
+    vi.doMock('@/components/settings/SettingsConstants', () => ({
+      zoomLevelToPercent: vi.fn(() => 100),
+      ZOOM_MIN: -3,
+      ZOOM_MAX: 3
+    }))
+    vi.doMock('@/lib/zoom-events', () => ({ dispatchZoomLevelChanged: vi.fn() }))
+
+    vi.stubGlobal('window', {
+      api: {
+        repos: { onChanged: () => () => {} },
+        worktrees: {
+          onChanged: () => () => {},
+          onBaseStatus: () => () => {},
+          onRemoteBranchConflict: () => () => {}
+        },
+        runtimeEnvironments: { subscribe: runtimeSubscribe },
+        ui: {
+          onStateChanged: () => () => {},
+          onOpenSettings: () => () => {},
+          onOpenFeatureTour: () => () => {},
+          onToggleLeftSidebar: () => () => {},
+          onToggleRightSidebar: () => () => {},
+          onToggleWorktreePalette: () => () => {},
+          onToggleFloatingTerminal: () => () => {},
+          onOpenQuickOpen: () => () => {},
+          onOpenNewWorkspace: () => () => {},
+          onOpenTasks: () => () => {},
+          onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
+          onWorktreeHistoryNavigate: () => () => {},
+          onActivateWorktree: () => () => {},
+          onCreateTerminal: () => () => {},
+          onRequestTerminalCreate: () => () => {},
+          replyTerminalCreate: () => {},
+          onSplitTerminal: () => () => {},
+          onRenameTerminal: () => () => {},
+          onFocusTerminal: () => () => {},
+          onFocusEditorTab: () => () => {},
+          onCloseSessionTab: () => () => {},
+          onMoveSessionTab: () => () => {},
+          onOpenFileFromMobile: () => () => {},
+          onOpenDiffFromMobile: () => () => {},
+          onCloseTerminal: () => () => {},
+          onSleepWorktree: () => () => {},
+          onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
+          onRequestTabCreate: () => () => {},
+          replyTabCreate: () => {},
+          onRequestTabClose: () => () => {},
+          replyTabClose: () => {},
+          onRequestTabSetProfile: () => () => {},
+          replyTabSetProfile: () => {},
+          onNewTerminalTab: () => () => {},
+          onCloseActiveTab: () => () => {},
+          onSwitchTab: () => () => {},
+          onSwitchTabAcrossAllTypes: () => () => {},
+          onSwitchRecentTab: () => () => {},
+          onSwitchTerminalTab: () => () => {},
+          onToggleStatusBar: () => () => {},
+          onFullscreenChanged: () => () => {},
+          onTerminalZoom: () => () => {},
+          getZoomLevel: () => 0,
+          set: vi.fn()
+        },
+        settings: { onChanged: () => () => {} },
+        updater: {
+          getStatus: () => Promise.resolve({ state: 'idle' }),
+          onStatus: () => () => {},
+          onClearDismissal: () => () => {}
+        },
+        browser: {
+          onGuestLoadFailed: () => () => {},
+          onOpenLinkInOrcaTab: () => () => {},
+          onNavigationUpdate: () => () => {},
+          onActivateView: () => () => {},
+          onPaneFocus: () => () => {}
+        },
+        rateLimits: {
+          get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),
+          onUpdate: () => () => {}
+        },
+        ssh: {
+          listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
+          getState: () => Promise.resolve(null),
+          onStateChanged: () => () => {},
+          onCredentialRequest: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {},
+          onCredentialResolved: () => () => {}
+        },
+        runtime: {
+          getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
+          getBrowserDrivers: () => Promise.resolve([]),
+          onTerminalFitOverrideChanged: () => () => {},
+          onTerminalDriverChanged: () => () => {},
+          onBrowserDriverChanged: () => () => {}
+        },
+        agentStatus: { onSet: () => () => {} }
+      }
+    })
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (!runtimeOnResponse) {
+      throw new Error('Expected runtime client event callbacks')
+    }
+    runtimeOnResponse({
+      ok: true,
+      result: { type: 'activateWorktree', repoId: 'repo-1', worktreeId: 'wt-1' }
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    // activateWorktree carries user-facing intent (a CLI-created worktree the
+    // user wants revealed immediately), so its fetches must stay on the
+    // foreground lane — never silently demoted to background by the shared
+    // ensureRuntimeEventRepoKnown helper.
+    // No options object (undefined) means the call defaults to the foreground
+    // lane — the opposite of the worktreesChanged path's { background: true }.
+    expect(fetchRuntimeEnvironmentRepos).toHaveBeenCalledWith('env-1', undefined)
+    expect(fetchRuntimeEnvironmentRepos).not.toHaveBeenCalledWith('env-1', { background: true })
     expect(fetchWorktrees).toHaveBeenCalledWith('repo-1')
-    expect(fetchWorktreeLineage).toHaveBeenCalledTimes(1)
+    expect(fetchWorktrees).not.toHaveBeenCalledWith('repo-1', { background: true })
   })
 })
 

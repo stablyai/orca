@@ -2878,3 +2878,66 @@ describe('web GitLab preload API', () => {
     ])
   })
 })
+
+describe('web runtimeEnvironments background lane parity', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.doUnmock('./web-runtime-client')
+    vi.restoreAllMocks()
+  })
+
+  it('demotes an explicit-background runtimeEnvironments.call behind a foreground call', async () => {
+    const started: string[] = []
+    const pending: ((value: RuntimeRpcResponse<unknown>) => void)[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        async call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          started.push(method)
+          if (method === 'repo.list') {
+            return await new Promise((resolve) => pending.push(resolve))
+          }
+          return {
+            id: `call-${started.length}`,
+            ok: true,
+            result: {},
+            _meta: { runtimeId: 'runtime-1' }
+          }
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const selector = 'web-env-1' // id written by writeStoredRuntimeEnvironment
+    const demoted = globals.window.api.runtimeEnvironments.call({
+      selector,
+      method: 'repo.list',
+      background: true
+    })
+    await vi.waitFor(() => expect(started).toEqual(['repo.list']))
+
+    // A foreground call must overtake the in-flight-capped background repo.list.
+    const foreground = await globals.window.api.runtimeEnvironments.call({
+      selector,
+      method: 'terminal.send'
+    })
+    expect(foreground).toMatchObject({ ok: true })
+    expect(started).toEqual(['repo.list', 'terminal.send'])
+
+    pending.shift()?.({
+      id: 'repo-list',
+      ok: true,
+      result: {},
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    await expect(demoted).resolves.toMatchObject({ ok: true })
+  })
+})

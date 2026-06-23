@@ -40,11 +40,19 @@ export class RuntimeRpcCallQueuePool {
     private readonly backgroundConcurrency = DEFAULT_REMOTE_RUNTIME_BACKGROUND_CALL_CONCURRENCY
   ) {}
 
-  enqueue<T>(selector: string, method: string, run: () => Promise<T>): Promise<T> {
+  enqueue<T>(
+    selector: string,
+    method: string,
+    run: () => Promise<T>,
+    options?: { background?: boolean }
+  ): Promise<T> {
     const queue = this.getQueue(selector)
     return new Promise<T>((resolve, reject) => {
       const call: QueuedRuntimeCall<T> = {
-        background: isBackgroundRuntimeMethod(method),
+        // Why: per-call-site demotion wins so the event-driven refresh storm yields
+        // the foreground lane, while same-method user actions stay foreground; absent
+        // the flag we keep the existing method-name classification.
+        background: options?.background ?? isBackgroundRuntimeMethod(method),
         run,
         resolve,
         reject

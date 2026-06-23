@@ -725,6 +725,35 @@ describe('fetchWorktrees', () => {
     expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
   })
 
+  it('forwards the background flag to both the detected-list and best-effort lineage calls', async () => {
+    const store = createTestStore()
+    const remote = makeWorktree({
+      id: 'repo1::/remote/wt1',
+      repoId: 'repo1',
+      path: '/remote/wt1',
+      branch: 'refs/heads/remote'
+    })
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: makeDetectedResult('repo1', [remote]),
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+
+    await store.getState().fetchWorktrees('repo1', { background: true })
+
+    // Both the worktree scan and the best-effort lineage follow-up must ride the
+    // background lane; the lineage call is the one that previously leaked onto
+    // the foreground lane.
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'worktree.detectedList', background: true })
+    )
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'worktree.lineageList', background: true })
+    )
+  })
+
   it('fetches SSH repo worktrees through local IPC even when a runtime is focused', async () => {
     const store = createTestStore()
     const sshWorktree = makeWorktree({
@@ -1165,6 +1194,31 @@ describe('worktree lineage state', () => {
     })
     expect(mockApi.worktrees.listLineage).not.toHaveBeenCalled()
     expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
+  })
+
+  it('forwards the background flag to the remote lineage call', async () => {
+    const store = createTestStore()
+    const lineage = makeLineage()
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-lineage-list',
+      ok: true,
+      result: { lineage: { [lineage.worktreeId]: lineage } },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: {}
+    } as Partial<AppState>)
+
+    await store.getState().fetchWorktreeLineage({ background: true })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'worktree.lineageList',
+        background: true
+      })
+    )
   })
 
   it('updates lineage through the active remote runtime environment', async () => {

@@ -765,7 +765,10 @@ export function getRuntimeProjectRefreshEnvironmentIds(args: {
   ]
 }
 
-async function refreshRuntimeProjectWorktrees(repos: readonly { id: string }[]): Promise<void> {
+async function refreshRuntimeProjectWorktrees(
+  repos: readonly { id: string }[],
+  options?: { background?: boolean }
+): Promise<void> {
   let nextIndex = 0
   const failures: { repoId: string; error: unknown }[] = []
   const workerCount = Math.min(RUNTIME_PROJECT_REFRESH_CONCURRENCY, repos.length)
@@ -779,7 +782,7 @@ async function refreshRuntimeProjectWorktrees(repos: readonly { id: string }[]):
         nextIndex += 1
         const repoId = repos[index].id
         try {
-          await useAppStore.getState().fetchWorktrees(repoId)
+          await useAppStore.getState().fetchWorktrees(repoId, options)
         } catch (error) {
           failures.push({ repoId, error })
         }
@@ -841,8 +844,11 @@ export function useIpcEvents(): void {
       const before =
         getAuthoritativeDetectedWorktreeIds(state, repoId) ??
         getVisibleWorktreeIdsForRepo(state, repoId)
-      await state.fetchWorktrees(repoId)
-      await useAppStore.getState().fetchWorktreeLineage()
+      // Why: worktreesChanged is server-pushed (not user-initiated), same as
+      // reposChanged — ride the background lane so a multi-server worktree
+      // storm yields transport capacity to the foreground.
+      await state.fetchWorktrees(repoId, { background: true })
+      await useAppStore.getState().fetchWorktreeLineage({ background: true })
       // Why: changing the worktree's id unmounts the active pane without
       // re-rendering it under the new id. Now that the list has refreshed,
       // re-activate the renamed worktree so its tab model reconciles and the
@@ -926,19 +932,25 @@ export function useIpcEvents(): void {
 
     const ensureRuntimeEventRepoKnown = async (
       environmentId: string,
-      repoId: string
+      repoId: string,
+      options?: { background?: boolean }
     ): Promise<void> => {
       if ((useAppStore.getState().repos ?? []).some((repo) => repo.id === repoId)) {
         return
       }
-      await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
+      await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId, options)
     }
 
     const runtimeProjectRefreshScheduler = createRuntimeProjectRefreshScheduler({
       refresh: async (environmentId) => {
-        const repos = await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
-        await refreshRuntimeProjectWorktrees(repos)
-        await useAppStore.getState().fetchWorktreeLineage()
+        // Why: this event-driven project refresh rides the background lane so a
+        // per-server refresh storm yields transport capacity to user-initiated
+        // runtime calls instead of competing on the foreground lane.
+        const repos = await useAppStore
+          .getState()
+          .fetchRuntimeEnvironmentRepos(environmentId, { background: true })
+        await refreshRuntimeProjectWorktrees(repos, { background: true })
+        await useAppStore.getState().fetchWorktreeLineage({ background: true })
       },
       onError: (error) => {
         console.error('Failed to refresh runtime projects:', error)
@@ -951,9 +963,12 @@ export function useIpcEvents(): void {
         return
       }
       if (event.type === 'worktreesChanged') {
-        void ensureRuntimeEventRepoKnown(environmentId, event.repoId).then(() =>
-          worktreeChangeRefreshQueue.enqueue({ repoId: event.repoId })
-        )
+        // Why: repo discovery here is part of the background worktree refresh,
+        // so it rides the background lane too. The activateWorktree path below
+        // keeps the default foreground lane for its user-facing reveal.
+        void ensureRuntimeEventRepoKnown(environmentId, event.repoId, {
+          background: true
+        }).then(() => worktreeChangeRefreshQueue.enqueue({ repoId: event.repoId }))
         return
       }
       if (event.type === 'linearLinkedIssueUpdated') {

@@ -328,7 +328,8 @@ function setupWithFetchedOwner(
 
 async function fetchProjectHostSetupCompatibility(
   target: ReturnType<typeof getActiveRuntimeTarget>,
-  repos: readonly Repo[]
+  repos: readonly Repo[],
+  options?: { background?: boolean }
 ): Promise<ProjectHostSetupProjection> {
   try {
     if (target.kind === 'local') {
@@ -351,10 +352,12 @@ async function fetchProjectHostSetupCompatibility(
     await assertProjectHostSetupRuntimeCapability(target)
     const [projectResponse, setupResponse] = await Promise.all([
       callRuntimeRpc<{ projects: Project[] }>(target, 'project.list', undefined, {
-        timeoutMs: 15_000
+        timeoutMs: 15_000,
+        background: options?.background
       }),
       callRuntimeRpc<{ setups: ProjectHostSetup[] }>(target, 'projectHostSetup.list', undefined, {
-        timeoutMs: 15_000
+        timeoutMs: 15_000,
+        background: options?.background
       })
     ])
     return {
@@ -789,7 +792,8 @@ function mergeFetchedFolderWorkspacesForHost({
 
 async function fetchReposForTarget(
   target: ReturnType<typeof getActiveRuntimeTarget>,
-  currentRepos: readonly Repo[]
+  currentRepos: readonly Repo[],
+  options?: { background?: boolean }
 ): Promise<{
   repos: Repo[]
   projectCompatibility: Pick<RepoSlice, 'projects' | 'projectHostSetups'>
@@ -800,12 +804,17 @@ async function fetchReposForTarget(
       ? await window.api.repos.list()
       : (
           await callRuntimeRpc<{ repos: Repo[] }>(target, 'repo.list', undefined, {
-            timeoutMs: 15_000
+            timeoutMs: 15_000,
+            background: options?.background
           })
         ).repos
   const hostId = getRuntimeTargetHostId(target)
   const repos = fetchedRepos.map((repo) => repoWithFetchedOwner(repo, target))
-  const fetchedProjectCompatibility = await fetchProjectHostSetupCompatibility(target, repos)
+  const fetchedProjectCompatibility = await fetchProjectHostSetupCompatibility(
+    target,
+    repos,
+    options
+  )
   const reconciledRepos = mergeFetchedReposForHost(currentRepos, repos, hostId)
   const projectCompatibility =
     target.kind === 'local'
@@ -1034,7 +1043,10 @@ export type RepoSlice = {
   activeRepoId: string | null
   fetchRepos: () => Promise<void>
   fetchReposForAllHosts: () => Promise<void>
-  fetchRuntimeEnvironmentRepos: (environmentId: string) => Promise<Repo[]>
+  fetchRuntimeEnvironmentRepos: (
+    environmentId: string,
+    options?: { background?: boolean }
+  ) => Promise<Repo[]>
   fetchProjectGroups: () => Promise<void>
   fetchProjectGroupsForAllHosts: () => Promise<void>
   fetchFolderWorkspaces: () => Promise<void>
@@ -1187,14 +1199,14 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  fetchRuntimeEnvironmentRepos: async (environmentId) => {
+  fetchRuntimeEnvironmentRepos: async (environmentId, options) => {
     try {
       const target = { kind: 'environment' as const, environmentId }
       const {
         repos: reconciledRepos,
         projectCompatibility,
         hostId
-      } = await fetchReposForTarget(target, get().repos)
+      } = await fetchReposForTarget(target, get().repos, options)
       const validRepoIds = new Set(reconciledRepos.map((repo) => repo.id))
       set((s) => {
         const mergedProjectCompatibility = mergeFetchedProjectCompatibilityForHost({

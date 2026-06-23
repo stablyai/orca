@@ -71,44 +71,50 @@ export async function callRuntimeEnvironment(
   selector: string,
   method: string,
   params: unknown,
-  timeoutMs?: number
+  timeoutMs?: number,
+  background?: boolean
 ): Promise<RuntimeRpcResponse<unknown>> {
   const environment = resolveEnvironment(userDataPath, selector)
-  return enqueueRuntimeCall(environment.id, method, async () => {
-    const currentEnvironment = resolveEnvironment(userDataPath, environment.id)
-    const pairing = getPreferredPairingOffer(currentEnvironment)
-    const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
-    if (shouldUseCachedRequestConnection(method)) {
-      const response = await sendRemoteRuntimeConnectionRequest(
-        currentEnvironment.id,
-        pairing,
-        method,
-        params,
-        effectiveTimeoutMs
-      )
+  return enqueueRuntimeCall(
+    environment.id,
+    method,
+    async () => {
+      const currentEnvironment = resolveEnvironment(userDataPath, environment.id)
+      const pairing = getPreferredPairingOffer(currentEnvironment)
+      const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
+      if (shouldUseCachedRequestConnection(method)) {
+        const response = await sendRemoteRuntimeConnectionRequest(
+          currentEnvironment.id,
+          pairing,
+          method,
+          params,
+          effectiveTimeoutMs
+        )
+        markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
+        return response
+      }
+      if (
+        method !== 'status.get' &&
+        (await supportsSharedControl(userDataPath, currentEnvironment, pairing, effectiveTimeoutMs))
+      ) {
+        const response = await sendRemoteRuntimeSharedControlRequest(
+          currentEnvironment.id,
+          pairing,
+          method,
+          params,
+          effectiveTimeoutMs
+        )
+        markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
+        return response
+      }
+      // Why: startup/control-plane RPCs use the proven one-shot path so repo
+      // hydration cannot be coupled to a stale terminal-control connection.
+      const response = await sendRemoteRuntimeRequest(pairing, method, params, effectiveTimeoutMs)
       markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
       return response
-    }
-    if (
-      method !== 'status.get' &&
-      (await supportsSharedControl(userDataPath, currentEnvironment, pairing, effectiveTimeoutMs))
-    ) {
-      const response = await sendRemoteRuntimeSharedControlRequest(
-        currentEnvironment.id,
-        pairing,
-        method,
-        params,
-        effectiveTimeoutMs
-      )
-      markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
-      return response
-    }
-    // Why: startup/control-plane RPCs use the proven one-shot path so repo
-    // hydration cannot be coupled to a stale terminal-control connection.
-    const response = await sendRemoteRuntimeRequest(pairing, method, params, effectiveTimeoutMs)
-    markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
-    return response
-  })
+    },
+    { background }
+  )
 }
 
 export async function subscribeRuntimeEnvironment(

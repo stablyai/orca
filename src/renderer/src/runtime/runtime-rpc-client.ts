@@ -47,7 +47,11 @@ export async function callRuntimeRpc<TResult>(
   target: RuntimeClientTarget,
   method: string,
   params?: unknown,
-  options: { timeoutMs?: number; suppressFeatureInteraction?: boolean } = {}
+  options: {
+    timeoutMs?: number
+    suppressFeatureInteraction?: boolean
+    background?: boolean
+  } = {}
 ): Promise<TResult> {
   if (target.kind === 'environment' && method !== 'status.get') {
     await ensureRuntimeEnvironmentCompatible(target.environmentId, options.timeoutMs)
@@ -60,7 +64,10 @@ export async function callRuntimeRpc<TResult>(
           selector: target.environmentId,
           method,
           params: nextParams,
-          timeoutMs: options.timeoutMs
+          timeoutMs: options.timeoutMs,
+          // Why: only the event-driven refresh storm opts in; user-initiated calls
+          // to the same method leave background undefined and stay foreground.
+          background: options.background
         })
   return unwrapRuntimeRpcResult<TResult>(response as RuntimeRpcResponse<TResult>)
 }

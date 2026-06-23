@@ -1188,6 +1188,105 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     await expect(bg3).resolves.toMatchObject({ ok: true })
   })
 
+  it('honors an explicit background flag for a normally-foreground refresh method', async () => {
+    registerRuntimeEnvironmentHandlers()
+    const pendingBackground: ((value: unknown) => void)[] = []
+    sendRemoteRuntimeRequestMock.mockImplementation(async (_pairing, method) => {
+      if (method === 'status.get') {
+        return {
+          id: 'status',
+          ok: true,
+          result: { runtimeId: 'runtime-remote', capabilities: [] },
+          _meta: { runtimeId: 'runtime-remote' }
+        }
+      }
+      return await new Promise((resolve) => pendingBackground.push(resolve))
+    })
+    sendRemoteRuntimeConnectionRequestMock.mockResolvedValue({
+      id: 'terminal-send',
+      ok: true,
+      result: { send: { accepted: true } },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const call = handler<
+      {
+        selector: string
+        method: string
+        params?: unknown
+        timeoutMs?: number
+        background?: boolean
+      },
+      { ok: true; result: unknown }
+    >('runtimeEnvironments:call')
+
+    // repo.list/project.list are NOT background methods, but background:true demotes them to the
+    // background lane. Two saturate the background concurrency (default 2); a third must queue.
+    const demotedRepoList = call(null, { selector: 'desk', method: 'repo.list', background: true })
+    const demotedProjectList = call(null, {
+      selector: 'desk',
+      method: 'project.list',
+      background: true
+    })
+    const demotedHostSetup = call(null, {
+      selector: 'desk',
+      method: 'projectHostSetup.list',
+      background: true
+    })
+    await vi.waitFor(() =>
+      expect(sendRemoteRuntimeRequestMock.mock.calls.map((c) => c[1])).toEqual([
+        'status.get',
+        'repo.list',
+        'project.list'
+      ])
+    )
+
+    // A foreground terminal.send must overtake the background lane capped at 2 in-flight.
+    const foreground = call(null, {
+      selector: 'desk',
+      method: 'terminal.send',
+      params: { terminal: 'term-1', text: 'a' }
+    })
+    await expect(foreground).resolves.toMatchObject({
+      ok: true,
+      result: { send: { accepted: true } }
+    })
+    // projectHostSetup.list is still queued (background lane saturated) — proves demotion.
+    expect(pendingBackground).toHaveLength(2)
+    expect(sendRemoteRuntimeRequestMock.mock.calls.map((c) => c[1])).not.toContain(
+      'projectHostSetup.list'
+    )
+
+    // Once the foreground call drains, the demoted background calls resolve.
+    pendingBackground.shift()?.({
+      id: 'repo-list',
+      ok: true,
+      result: { repos: [] },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    pendingBackground.shift()?.({
+      id: 'project-list',
+      ok: true,
+      result: { projects: [] },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    await expect(demotedRepoList).resolves.toMatchObject({ ok: true })
+    await expect(demotedProjectList).resolves.toMatchObject({ ok: true })
+    pendingBackground.shift()?.({
+      id: 'project-host-setup-list',
+      ok: true,
+      result: {},
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    await expect(demotedHostSetup).resolves.toMatchObject({ ok: true })
+  })
+
   it('starts and stops streaming subscriptions for a saved remote runtime', async () => {
     registerRuntimeEnvironmentHandlers()
     const close = vi.fn()
