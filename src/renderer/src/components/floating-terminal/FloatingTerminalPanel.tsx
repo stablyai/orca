@@ -391,9 +391,12 @@ export function FloatingTerminalPanel({
         if (tab.contentType === 'browser') {
           return browserItems.some((item) => item.tabId === tab.id)
         }
+        if (tab.contentType === 'simulator') {
+          return simulatorItems.some((item) => item.id === tab.id)
+        }
         return editorItems.some((item) => item.tabId === tab.id)
       }),
-    [browserItems, editorItems, groupTabs, tabBarOrder, terminalItems]
+    [browserItems, editorItems, groupTabs, simulatorItems, tabBarOrder, terminalItems]
   )
   const activeBrowserTab = activeBrowserId
     ? (browserTabs.find((tab) => tab.id === activeBrowserId) ?? null)

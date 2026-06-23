@@ -592,8 +592,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       darwin: ['Mod+R'],
       linux: [],
       win32: []
-    },
-    allowInTerminal: true
+    }
   },
   {
     id: 'tab.reopenClosed',

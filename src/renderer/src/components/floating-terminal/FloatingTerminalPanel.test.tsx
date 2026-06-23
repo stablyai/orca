@@ -1545,6 +1545,101 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-3')
   })
 
+  it('routes focused floating tab index shortcuts across mixed visible tab types', async () => {
+    const state = storeBox.state as FloatingPanelStoreState
+    const groupId = 'floating-group'
+    const terminalTab = makeTab({ id: 'terminal-tab' })
+    const simulatorTab: Tab = {
+      id: 'simulator-tab',
+      entityId: 'simulator-tab',
+      groupId,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      contentType: 'simulator',
+      label: 'Mobile Emulator',
+      customLabel: null,
+      color: null,
+      sortOrder: 1,
+      createdAt: 1
+    }
+    const browserTab: BrowserTab = {
+      id: 'browser-tab',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      url: '',
+      title: 'Browser',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: 2
+    }
+    const browserUnifiedTab: Tab = {
+      id: 'browser-unified-tab',
+      entityId: browserTab.id,
+      groupId,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      contentType: 'browser',
+      label: 'Browser',
+      customLabel: null,
+      color: null,
+      sortOrder: 2,
+      createdAt: 2
+    }
+    const terminalUnifiedTab: Tab = {
+      id: terminalTab.id,
+      entityId: terminalTab.id,
+      groupId,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      contentType: 'terminal',
+      label: terminalTab.title,
+      customLabel: terminalTab.customTitle,
+      color: terminalTab.color,
+      sortOrder: 0,
+      createdAt: terminalTab.createdAt
+    }
+    state.tabsByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: [terminalTab] }
+    state.browserTabsByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: [browserTab] }
+    state.unifiedTabsByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [terminalUnifiedTab, simulatorTab, browserUnifiedTab]
+    }
+    state.groupsByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [
+        {
+          id: groupId,
+          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+          activeTabId: terminalUnifiedTab.id,
+          tabOrder: [terminalUnifiedTab.id, simulatorTab.id, browserUnifiedTab.id],
+          recentTabIds: [terminalUnifiedTab.id, simulatorTab.id, browserUnifiedTab.id]
+        }
+      ]
+    }
+    state.activeGroupIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
+    state.activeTabIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: terminalTab.id }
+    state.tabBarOrderByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [
+        terminalUnifiedTab.id,
+        simulatorTab.id,
+        browserUnifiedTab.id
+      ]
+    }
+    const element = await renderPanel(true)
+    const { keydownListener, panelElement } = bindFocusedFloatingPanelKeydown(element)
+    const preventDefault = vi.fn()
+
+    keydownListener(
+      makeFocusedPanelKeyEvent({
+        code: 'Digit2',
+        ctrlKey: true,
+        key: '2',
+        preventDefault,
+        target: panelElement
+      })
+    )
+
+    expect(preventDefault).toHaveBeenCalledWith()
+    expect(mocks.activateTab).toHaveBeenCalledWith('simulator-tab')
+  })
+
   it('ignores focused floating tab index shortcuts past the visible tab count', async () => {
     setFloatingTabs([makeTab({ id: 'tab-1' }), makeTab({ id: 'tab-2' })])
     const element = await renderPanel(true)
