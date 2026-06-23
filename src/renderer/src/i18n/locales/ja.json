@@ -2313,7 +2313,7 @@
           "TerminalContextMenu": {
             "b4cdd9314e": "クリアスクリーン",
             "8c17d6786d": "ペインを閉じる",
-            "copyTerminalId": "Copy Terminal ID",
+            "copyTerminalId": "ターミナル ID をコピー",
             "2cf85a6a55": "ペインIDのコピー",
             "39809d152f": "タイトルを設定…",
             "06c2b0f043": "ペインのサイズを均等化する",
@@ -2328,8 +2328,7 @@
             "f3eeb1de13": "コピー",
             "c2f0b72b8d": "入れる",
             "925f49f210": "ペインを展開する",
-            "df766809e0": "ペインを折りたたむ",
-            "copyTerminalId": "ターミナル ID をコピー"
+            "df766809e0": "ペインを折りたたむ"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "デーモンを再起動します",
@@ -6242,7 +6241,19 @@
           "ab20575a8a": "オフ",
           "ab3a1f9068": "wsl.exe",
           "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
-          "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent."
+          "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent.",
+          "scrollSpeed": {
+            "title": "スクロール速度",
+            "description": "通常のターミナルスクロールバック、修飾キーでの高速スクロール、全画面 TUI のホイール速度を調整します。",
+            "helper": "ホイール入力の感触をスクロールバックとマウス対応のターミナルアプリで調整します。",
+            "reset": "リセット",
+            "normal": "通常",
+            "normalDescription": "スクロールバックのホイール倍率。",
+            "fast": "高速",
+            "fastDescription": "修飾キーを押しながらスクロールするときの追加倍率。",
+            "tui": "TUI",
+            "tuiDescription": "全画面ターミナルアプリ向けの離散的なホイール通知。"
+          }
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "{{value0}} テーマのプレビュー",
@@ -7878,7 +7889,11 @@
             "0fe0073f0c": "新規ペインとライブ アップデートのデフォルトの terminal フォント サイズ。",
             "5930244899": "フォントサイズ",
             "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
-            "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent."
+            "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent.",
+            "scrollSpeed": {
+              "title": "スクロール速度",
+              "description": "通常のターミナルスクロールバック、修飾キーでの高速スクロール、全画面 TUI のホイール速度を調整します。"
+            }
           },
           "windows": {
             "search": {
@@ -9234,9 +9249,6 @@
                 "copyCommand": "Copy command"
               }
             }
-          },
-          "SourceControlEntryContextMenu": {
-            "a1f2c8d901": "表示"
           }
         }
       },

@@ -2313,7 +2313,7 @@
           "TerminalContextMenu": {
             "b4cdd9314e": "清晰的屏幕",
             "8c17d6786d": "关闭窗格",
-            "copyTerminalId": "复制 Terminal ID",
+            "copyTerminalId": "复制终端 ID",
             "2cf85a6a55": "复制窗格 ID",
             "39809d152f": "设置标题...",
             "06c2b0f043": "均衡窗格大小",
@@ -2328,8 +2328,7 @@
             "f3eeb1de13": "复制",
             "c2f0b72b8d": "插入",
             "925f49f210": "展开窗格",
-            "df766809e0": "折叠窗格",
-            "copyTerminalId": "复制终端 ID"
+            "df766809e0": "折叠窗格"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "重新启动守护进程",
@@ -6205,7 +6204,19 @@
           "ab20575a8a": "关",
           "ab3a1f9068": "执行程序",
           "ask_before_closing_running_terminals_title": "关闭运行中的 Terminal 前询问",
-          "ask_before_closing_running_terminals_description": "在关闭有运行中命令或 agent 的 terminal 前显示确认。"
+          "ask_before_closing_running_terminals_description": "在关闭有运行中命令或 agent 的 terminal 前显示确认。",
+          "scrollSpeed": {
+            "title": "滚动速度",
+            "description": "调整普通终端回滚、修饰键快速滚动以及全屏 TUI 滚轮速度。",
+            "helper": "调整滚轮输入在回滚和支持鼠标的终端应用中的手感。",
+            "reset": "重置",
+            "normal": "普通",
+            "normalDescription": "回滚滚轮倍数。",
+            "fast": "快速",
+            "fastDescription": "按住修饰键滚动时的额外倍数。",
+            "tui": "TUI",
+            "tuiDescription": "面向全屏终端应用的离散滚轮报告。"
+          }
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "预览 {{value0}} 主题",
@@ -7841,7 +7852,11 @@
               "keyword_custom": "自定义"
             },
             "ask_before_closing_running_terminals_title": "关闭运行中的 Terminal 前询问",
-            "ask_before_closing_running_terminals_description": "在关闭有运行中命令或 agent 的 terminal 前显示确认。"
+            "ask_before_closing_running_terminals_description": "在关闭有运行中命令或 agent 的 terminal 前显示确认。",
+            "scrollSpeed": {
+              "title": "滚动速度",
+              "description": "调整普通终端回滚、修饰键快速滚动以及全屏 TUI 滚轮速度。"
+            }
           },
           "windows": {
             "search": {
@@ -9234,9 +9249,6 @@
                 "copyCommand": "Copy command"
               }
             }
-          },
-          "SourceControlEntryContextMenu": {
-            "a1f2c8d901": "查看"
           }
         }
       },
