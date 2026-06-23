@@ -30,6 +30,18 @@ Orca targets macOS, Linux, and Windows. Keep all platform-dependent behavior beh
 - **Shortcut labels in UI**: Display `⌘` / `⇧` on Mac and `Ctrl+` / `Shift+` on other platforms.
 - **File paths**: Use `path.join` or Electron/Node path utilities — never assume `/` or `\`.
 
+## Localization (i18n)
+
+All user-facing copy is localized. `src/renderer/src/i18n/locales/en.json` is the source of truth; the `zh`, `ja`, `ko`, and `es` catalogs mirror its keys. Strings reach the UI through `translate('auto.<key>', 'English fallback')` (also `t` / `translateMain`) — never hardcode display text.
+
+When you touch user-facing copy, keep all five catalogs in sync:
+
+- **New strings** — wrap them in `translate(...)` with an English fallback, run `pnpm sync:localization-catalog` to register the keys in `en.json` and add placeholders to every other locale, then `pnpm bootstrap:<locale>-catalog` (e.g. `bootstrap:ja-catalog`) to translate the placeholders.
+- **Reworded strings** — changing the value of an existing key updates only `en.json`. The other locales keep the key with its old translation, and **the lint checks will not catch this**: `verify:localization-catalog` enforces key _parity_, not translation _freshness_. Update the same key in `zh/ja/ko/es` by hand, or re-translate it via `bootstrap:<locale>-catalog`.
+- **Removed strings** — delete the key from _every_ locale; the parity check rejects a key that exists in one catalog but not another.
+
+Before pushing copy changes, run `pnpm verify:localization-catalog` and `pnpm verify:localization-coverage` (both also run in `pnpm lint`).
+
 ## SSH Use Case
 
 All changes must consider the SSH use case. Don't assume local-only execution.
