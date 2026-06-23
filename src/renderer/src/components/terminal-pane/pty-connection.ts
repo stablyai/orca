@@ -84,7 +84,7 @@ import {
 import { executeTerminalStartupCommandPaste } from './terminal-startup-command-paste'
 import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
-import { isCodexTerminalStartupCommand } from './terminal-startup-command-classifier'
+import { isKnownTuiAgentTerminalStartupCommand } from './terminal-startup-command-classifier'
 import { createCommandCodeOutputStatusDetector } from './command-code-output-status'
 import type { PtyDataMeta } from './pty-dispatcher'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
@@ -313,8 +313,8 @@ function shouldKeepHiddenStartupRendererQueriesLive(
   startup: PtyConnectionDeps['startup']
 ): boolean {
   return (
-    startup?.telemetry?.agent_kind === 'codex' ||
-    isCodexTerminalStartupCommand(startup?.command ?? '')
+    Boolean(startup?.telemetry?.agent_kind && startup.telemetry.agent_kind !== 'other') ||
+    isKnownTuiAgentTerminalStartupCommand(startup?.command ?? '')
   )
 }
 

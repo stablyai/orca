@@ -4732,6 +4732,48 @@ describe('connectPanePty', () => {
     binding.dispose()
   })
 
+  it('keeps hidden Grok telemetry startup output parsing briefly', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const binding = connectPanePty(
+      pane as never,
+      manager as never,
+      createDeps({
+        isVisibleRef: { current: false },
+        startup: {
+          command: 'wrapped-agent',
+          telemetry: {
+            agent_kind: 'grok',
+            launch_source: 'tab_bar_quick_launch',
+            request_kind: 'new'
+          }
+        }
+      }) as never
+    )
+    await flushAsyncTicks(6)
+
+    expect(capturedDataCallback.current).not.toBeNull()
+
+    capturedDataCallback.current?.('\x1b]11;?\x1b\\startup frame\r\n')
+
+    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b]11;?\x1b\\', expect.any(Function))
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      '\x1b]11;?\x1b\\startup frame\r\n',
+      expect.any(Function)
+    )
+
+    binding.dispose()
+  })
+
   it('keeps hidden bare Codex startup commands parsing briefly', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
@@ -4750,6 +4792,41 @@ describe('connectPanePty', () => {
       createDeps({
         isVisibleRef: { current: false },
         startup: { command: 'codex' }
+      }) as never
+    )
+    await flushAsyncTicks(6)
+
+    expect(capturedDataCallback.current).not.toBeNull()
+
+    capturedDataCallback.current?.('\x1b]11;?\x1b\\startup frame\r\n')
+
+    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b]11;?\x1b\\', expect.any(Function))
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      '\x1b]11;?\x1b\\startup frame\r\n',
+      expect.any(Function)
+    )
+
+    binding.dispose()
+  })
+
+  it('keeps hidden bare Grok startup commands parsing briefly', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const binding = connectPanePty(
+      pane as never,
+      manager as never,
+      createDeps({
+        isVisibleRef: { current: false },
+        startup: { command: '/Users/me/.grok/bin/grok --permission-mode bypassPermissions' }
       }) as never
     )
     await flushAsyncTicks(6)
