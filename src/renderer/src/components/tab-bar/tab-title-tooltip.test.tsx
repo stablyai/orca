@@ -62,6 +62,10 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuItem: ({ children }: { children?: ReactNode }) => <>{children}</>,
   DropdownMenuSeparator: () => null,
   DropdownMenuShortcut: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  DropdownMenuLabel: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  DropdownMenuSub: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  DropdownMenuSubContent: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  DropdownMenuSubTrigger: ({ children }: { children?: ReactNode }) => <>{children}</>,
   DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
 
@@ -241,6 +245,8 @@ describe('tab title tooltips', () => {
     const markup = renderToStaticMarkup(
       <SortableTab
         tab={makeTerminalTab({ customTitle: 'Custom terminal title' })}
+        unifiedTabId="terminal-1"
+        groupId="group-1"
         tabCount={1}
         hasTabsToRight={false}
         isActive={true}
@@ -254,7 +260,6 @@ describe('tab title tooltips', () => {
         onSetTabColor={vi.fn()}
         onTogglePin={vi.fn()}
         onToggleExpand={vi.fn()}
-        onSplitGroup={vi.fn()}
         dragData={makeDragData('terminal', 'terminal-1')}
       />
     )
@@ -273,6 +278,8 @@ describe('tab title tooltips', () => {
     const markup = renderToStaticMarkup(
       <SortableTab
         tab={makeTerminalTab({ title: '✳ Claude Code' })}
+        unifiedTabId="terminal-1"
+        groupId="group-1"
         tabCount={1}
         hasTabsToRight={false}
         isActive={true}
@@ -286,7 +293,6 @@ describe('tab title tooltips', () => {
         onSetTabColor={vi.fn()}
         onTogglePin={vi.fn()}
         onToggleExpand={vi.fn()}
-        onSplitGroup={vi.fn()}
         dragData={makeDragData('terminal', 'terminal-1')}
       />
     )
@@ -309,7 +315,6 @@ describe('tab title tooltips', () => {
         onActivate={vi.fn()}
         onClose={vi.fn()}
         onCloseToRight={vi.fn()}
-        onSplitGroup={vi.fn()}
         onDuplicate={vi.fn()}
         onTogglePin={vi.fn()}
         dragData={makeDragData('browser', 'browser-1')}
@@ -340,7 +345,6 @@ describe('tab title tooltips', () => {
         onCloseAll={vi.fn()}
         onMakePermanent={vi.fn()}
         onTogglePin={vi.fn()}
-        onSplitGroup={vi.fn()}
         dragData={makeDragData('editor', 'editor-tab-1')}
       />
     )

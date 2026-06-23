@@ -28,6 +28,35 @@ describe('resolveExternalEditorLaunchSpec', () => {
     })
   })
 
+  it('treats an existing POSIX executable path with spaces as an executable launcher', () => {
+    const ideaPath = '/Users/me/Library/Application Support/JetBrains/Toolbox/scripts/idea'
+    expect(
+      resolveExternalEditorLaunchSpec(ideaPath, '/tmp/workspace', {
+        platform: 'darwin',
+        fileExists: (candidate) => candidate === ideaPath
+      })
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      spawnCmd: ideaPath,
+      spawnArgs: ['/tmp/workspace']
+    })
+  })
+
+  it('keeps absolute POSIX commands with arguments on the shell launch path', () => {
+    expect(
+      resolveExternalEditorLaunchSpec('/usr/local/bin/code --reuse-window', '/tmp/workspace', {
+        platform: 'darwin',
+        fileExists: () => false
+      })
+    ).toEqual({
+      kind: 'shell',
+      hideWindowsConsole: true,
+      spawnCmd: '/bin/sh',
+      spawnArgs: ['-c', '/usr/local/bin/code --reuse-window /tmp/workspace']
+    })
+  })
+
   it('runs compound Windows commands through cmd.exe', () => {
     expect(
       resolveExternalEditorLaunchSpec('start "" notepad', 'C:\\note.md', { platform: 'win32' })

@@ -6383,6 +6383,54 @@ describe('connectPanePty', () => {
     disposable.dispose()
   })
 
+  it('coalesces remote replay payloads that overlap before parsing starts', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    enableActiveRuntimeEnvironment()
+    const transport = createMockTransport('remote:env-1@@terminal-1')
+    const capturedReplayCallback: {
+      current: ((data: string) => void) | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedReplayCallback.current = callbacks.onReplayData ?? null
+      return { id: 'remote:env-1@@terminal-1', replay: '' }
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const pendingParses: (() => void)[] = []
+    pane.terminal.write = vi.fn((_data: string, callback?: () => void) => {
+      if (callback) {
+        pendingParses.push(callback)
+      }
+    })
+    const manager = createManager(1)
+    const deps = createDeps()
+    const disposable = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    capturedReplayCallback.current?.('first replay')
+    capturedReplayCallback.current?.('second replay')
+    await flushAsyncTicks(2)
+
+    expect(pane.terminal.write).toHaveBeenCalledTimes(1)
+    expect(pane.terminal.write).toHaveBeenNthCalledWith(
+      1,
+      '\x1b[2J\x1b[3J\x1b[H',
+      expect.any(Function)
+    )
+
+    for (let index = 0; index < 8; index += 1) {
+      await flushAsyncTicks(2)
+      pendingParses.shift()?.()
+    }
+    await flushAsyncTicks(4)
+
+    expect(pane.terminal.write).not.toHaveBeenCalledWith('first replay', expect.any(Function))
+    expect(pane.terminal.write).toHaveBeenCalledWith('second replay', expect.any(Function))
+    expect(manager.rebuildPaneWebgl).toHaveBeenCalledTimes(1)
+    disposable.dispose()
+  })
+
   it('does not switch renderers for Arabic output', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()

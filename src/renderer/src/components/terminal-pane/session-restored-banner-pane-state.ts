@@ -88,10 +88,12 @@ export function syncSessionRestoredBannerTitleSpace(args: {
   paneTitles: Readonly<Record<number, string>>
   renamingPaneId: number | null
   sessionRestoredBannerPaneIds: ReadonlySet<number>
+  reservePaneHeaderSpace?: boolean
 }): boolean {
   let needsFit = false
   for (const pane of args.panes) {
     const shouldShow =
+      args.reservePaneHeaderSpace === true ||
       !!args.paneTitles[pane.id] ||
       args.renamingPaneId === pane.id ||
       args.sessionRestoredBannerPaneIds.has(pane.id)

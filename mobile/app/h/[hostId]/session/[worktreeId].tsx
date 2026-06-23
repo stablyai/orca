@@ -164,6 +164,11 @@ import { useMobileImageAttachment } from '../../../../src/session/use-mobile-ima
 import { classifyMobileArtifact } from '../../../../src/session/mobile-artifact-kind'
 import { useLiveWorktreeName } from '../../../../src/session/use-live-worktree-name'
 import {
+  acceptSessionSnapshot,
+  applyClosedTabTombstones,
+  type AppliedSnapshotMarker
+} from '../../../../src/session/session-tab-snapshot-gate'
+import {
   buildMarkdownDiskFallbackDoc,
   shouldReadMarkdownFromDiskAfterReadTabFailure
 } from '../../../../src/session/mobile-markdown-disk-fallback'
@@ -908,6 +913,16 @@ export default function SessionScreen() {
   const terminalsRef = useRef<Terminal[]>([])
   const [sessionTabs, setSessionTabs] = useState<MobileSessionTab[]>([])
   const sessionTabsRef = useRef<MobileSessionTab[]>([])
+  // Why: subscription, 2s polling, and post-mutation refetch race to apply tab
+  // snapshots. Track the last applied (publicationEpoch, snapshotVersion) so a
+  // late-arriving older snapshot from the same publisher can't overwrite (and
+  // resurrect closed tabs in) a newer one. See session-tab-snapshot-gate.
+  const appliedSnapshotMarkerRef = useRef<AppliedSnapshotMarker>({ epoch: null, version: -1 })
+  // Why: after an optimistic local close, suppress the tab until the publisher
+  // confirms its absence, so an in-flight snapshot generated before the close
+  // propagated (and thus newer by version) can't flash the tab back. Maps tab id
+  // to an expiry timestamp so a failed host-side close can't hide a tab forever.
+  const closedTabTombstonesRef = useRef<Map<string, number>>(new Map())
   const [terminalsLoaded, setTerminalsLoaded] = useState(false)
   const [input, setInput] = useState('')
   // Why: baseline terminal zoom, reloaded on focus so a Settings → Terminal change
@@ -941,6 +956,10 @@ export default function SessionScreen() {
   const [pendingDiffNotesDelivery, setPendingDiffNotesDelivery] =
     useState<DiffNotesDelivery | null>(null)
   const [creating, setCreating] = useState(false)
+  // Why: React state isn't a synchronous lock — a fast double-tap can fire two
+  // creates before `creating` re-renders. This ref blocks the second one in the
+  // same tick (server idempotency only dedupes identical clientMutationIds).
+  const creatingTerminalRef = useRef(false)
   const [creatingBrowser, setCreatingBrowser] = useState(false)
   const [creatingMarkdown, setCreatingMarkdown] = useState(false)
   const [createError, setCreateError] = useState('')
@@ -1648,7 +1667,16 @@ export default function SessionScreen() {
 
   const applySessionTabs = useCallback(
     (result: SessionTabsResult) => {
-      let nextTabs = result.tabs
+      // Reject out-of-order snapshots, then suppress just-closed tabs until the
+      // publisher confirms their absence. See session-tab-snapshot-gate.
+      if (!acceptSessionSnapshot(result, appliedSnapshotMarkerRef.current)) {
+        return
+      }
+      let nextTabs = applyClosedTabTombstones(
+        result.tabs,
+        closedTabTombstonesRef.current,
+        Date.now()
+      )
       const presentTabIds = new Set(nextTabs.map((tab) => tab.id))
       const orphanedDraftTabs: MobileSessionTab[] = []
       const currentMarkdownDocs = markdownDocsRef.current
@@ -2541,6 +2569,12 @@ export default function SessionScreen() {
     pendingBrowserFocusPageIdRef.current = null
     pendingTerminalActivationAttemptRef.current = null
     initialEmptySessionAutoCreateRef.current = null
+    // Why: snapshot version floor and close tombstones are per-worktree. This
+    // screen can be reused across worktrees, so a prior worktree's high version
+    // would reject the next one's first snapshot (same renderer epoch) and stale
+    // tombstones could suppress same-id tabs.
+    appliedSnapshotMarkerRef.current = { epoch: null, version: -1 }
+    closedTabTombstonesRef.current.clear()
     for (const queued of terminalGestureInputQueuesRef.current.values()) {
       if (queued.timer) {
         clearTimeout(queued.timer)
@@ -3730,17 +3764,27 @@ export default function SessionScreen() {
     agent?: MobileNewTabAgentOption['agent'],
     options?: { initialPrompt?: string; onPromptSent?: () => void }
   ) {
-    if (!client || creating) {
+    if (!client || creatingTerminalRef.current) {
       return
     }
+    creatingTerminalRef.current = true
 
     setCreating(true)
     setCreateError('')
+
+    // Why: idempotency key so a transport-level retry (reconnect replay) of this
+    // create resolves to the same terminal instead of spawning a duplicate. Kept
+    // compact (no worktree id) to stay under the schema's length cap; the ref
+    // guard above blocks concurrent taps synchronously.
+    const clientMutationId = `mobile-create:${Date.now().toString(36)}-${Math.random()
+      .toString(36)
+      .slice(2, 10)}`
 
     try {
       const response = await client.sendRequest('session.tabs.createTerminal', {
         worktree: `id:${worktreeId}`,
         afterTabId: activeSessionTabId ?? undefined,
+        clientMutationId,
         ...(agent ? { agent } : {})
       })
       if (response.ok) {
@@ -3829,6 +3873,7 @@ export default function SessionScreen() {
     } catch {
       setCreateError('Failed to create terminal')
     } finally {
+      creatingTerminalRef.current = false
       setCreating(false)
     }
   }
@@ -4019,7 +4064,6 @@ export default function SessionScreen() {
             subscribeToTerminal(replacement.handle)
           }
         }
-        scheduleDelayedAction(() => void fetchTerminals(), 300)
       }
     } catch {
       // Close failed — keep the local tab list unchanged.
@@ -4042,13 +4086,16 @@ export default function SessionScreen() {
           initializedHandlesRef.current.delete(tab.terminal)
         }
         setSessionTabs((prev) => prev.filter((candidate) => candidate.id !== tab.id))
+        // Why: tombstone the closed tab and rely on the subscription/poll
+        // snapshot (gated by snapshotVersion) instead of a blind 300ms refetch
+        // that re-applied whatever the host had — often the not-yet-closed list.
+        closedTabTombstonesRef.current.set(tab.id, Date.now() + 10_000)
         if (activeSessionTabId === tab.id) {
           activeSessionTabTypeRef.current = null
           setActiveSessionTabId(null)
           activeHandleRef.current = null
           setActiveHandle(null)
         }
-        scheduleDelayedAction(() => void fetchSessionTabs(), 300)
       }
     } catch {
       // Close failed — keep the authoritative session snapshot visible.
@@ -4899,8 +4946,6 @@ export default function SessionScreen() {
                       autoCorrect={autocompleteEnabled}
                       spellCheck={autocompleteEnabled}
                       smartInsertDelete={false}
-                      // Why: Android's default keyboard is required for CJK IME
-                      // composition; iOS can still use ASCII when autocomplete is off.
                       keyboardType={getTerminalCommandKeyboardType(
                         Platform.OS,
                         autocompleteEnabled

@@ -634,6 +634,34 @@ describe('fetchClaudeRateLimits', () => {
     expect(fetchViaPty).toHaveBeenCalledWith({ authPreparation })
   })
 
+  it('marks CLI plan usage shell results as usage unavailable', async () => {
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir: '/Users/test/.claude',
+      envPatch: {},
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(fetchViaPty).mockResolvedValueOnce({
+      provider: 'claude',
+      session: null,
+      weekly: null,
+      updatedAt: 1,
+      error: 'Claude plan usage is unavailable for this Claude CLI session.',
+      status: 'error'
+    })
+
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'error',
+      error: 'Claude plan usage is unavailable for this Claude CLI session.',
+      usageMetadata: {
+        source: 'cli',
+        attemptedSources: ['cli'],
+        failureKind: 'usage-unavailable'
+      }
+    })
+  })
+
   it('surfaces Keychain read failures as structured usage metadata when CLI fallback is disabled', async () => {
     vi.mocked(readActiveClaudeKeychainCredentials).mockRejectedValueOnce(
       new Error('security timed out after 3000ms')

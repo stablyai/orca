@@ -7,12 +7,12 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { useAppStore } from '@/store'
 import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
+import { useIntegrationSubordinateRowClass } from './integration-card-presentation'
 import { getProviderAccountScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'
 
 type VerificationResult = { state: 'ok' | 'error'; error?: string }
-const INTEGRATION_SUBORDINATE_ROW_CLASS = 'rounded-md border border-border/50 bg-muted/50 px-3 py-2'
 
 export function LinearIntegrationCard(): React.JSX.Element {
   const linearStatus = useAppStore((s) => s.linearStatus)
@@ -36,6 +36,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
   const connected = contextMatches && linearStatus.connected
   const workspaces = linearStatus.workspaces ?? []
   const accountScope = getProviderAccountScope(settings)
+  const subordinateRowClass = useIntegrationSubordinateRowClass('flex items-center gap-3')
 
   const handleDisconnect = async (workspaceId?: string): Promise<void> => {
     await (workspaceId ? disconnectLinearWorkspace(workspaceId) : disconnectLinear())
@@ -116,10 +117,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
               const testResult = testResultByWorkspace[workspace.id]
               const testing = testingWorkspaceId === workspace.id
               return (
-                <div
-                  key={workspace.id}
-                  className={`flex items-center gap-3 ${INTEGRATION_SUBORDINATE_ROW_CLASS}`}
-                >
+                <div key={workspace.id} className={subordinateRowClass}>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">
                       {workspace.organizationName}
@@ -217,6 +215,8 @@ export function LinearIntegrationCard(): React.JSX.Element {
 }
 
 function ProviderAccountScopeRow({ scope }: { scope: ReturnType<typeof getProviderAccountScope> }) {
+  const subordinateRowClass = useIntegrationSubordinateRowClass('text-xs')
+
   return (
     <ProviderHostScopeControl
       labelPrefix={translate(
@@ -224,7 +224,7 @@ function ProviderAccountScopeRow({ scope }: { scope: ReturnType<typeof getProvid
         'Account scope'
       )}
       scope={scope}
-      className={`text-xs ${INTEGRATION_SUBORDINATE_ROW_CLASS}`}
+      className={subordinateRowClass}
     />
   )
 }

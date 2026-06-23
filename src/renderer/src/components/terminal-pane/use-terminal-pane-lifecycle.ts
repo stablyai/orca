@@ -68,6 +68,7 @@ import { connectPanePty } from './pty-connection'
 import type { PtyTransport } from './pty-transport'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { getConnectionId } from '@/lib/connection-context'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { isPaneReplaying, type ReplayingPanesRef } from './replay-guard'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import { registerRuntimeTerminalTab, scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
@@ -1054,7 +1055,8 @@ export function useTerminalPaneLifecycle({
           osRelease: platformInfo?.osRelease,
           connectionId: getConnectionId(worktreeId),
           cwd: startupCwd,
-          shellOverride: currentTab?.shellOverride
+          shellOverride: currentTab?.shellOverride,
+          executionHostId: getExecutionHostIdForWorktree(storeState, worktreeId)
         })
         return {
           ...windowsPtyCompatibilityOptions,

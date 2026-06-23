@@ -1,4 +1,5 @@
-import { subscribeToPtyData, subscribeToPtyExit } from '@/components/terminal-pane/pty-dispatcher'
+import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
+import { subscribeToPtyExit } from '@/components/terminal-pane/pty-dispatcher'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getRemoteRuntimeTerminalMultiplexer } from '@/runtime/remote-runtime-terminal-multiplexer'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'

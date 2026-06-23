@@ -5,6 +5,10 @@ import {
   type IpcMainInvokeEvent,
   type WebContents
 } from 'electron'
+import { spawn } from 'node:child_process'
+import { stat } from 'node:fs/promises'
+import type { Store } from '../persistence'
+import { isENOENT, PATH_ACCESS_DENIED_MESSAGE, resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import {
   assertClipboardTextWriteWithinLimitWithYield,
   assertClipboardTextWithinLimitWithYield,
@@ -19,6 +23,7 @@ import {
   assertClipboardImageByteLengthWithinLimit,
   assertClipboardImageDimensionsWithinLimit
 } from '../../shared/clipboard-image'
+import { writeFileToClipboard } from './clipboard-file-copy'
 
 let trustedClipboardRendererWebContentsId: number | null = null
 
@@ -26,12 +31,26 @@ export function setTrustedClipboardRendererWebContentsId(webContentsId: number |
   trustedClipboardRendererWebContentsId = webContentsId
 }
 
-export function registerClipboardHandlers(): void {
+// Run a short-lived OS clipboard helper (PowerShell / wl-copy / xclip), feeding
+// it stdin when provided; resolves only on a clean exit.
+function runCommand(command: string, args: string[], stdin?: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ['pipe', 'ignore', 'ignore'] })
+    child.on('error', reject)
+    child.on('exit', (code) =>
+      code === 0 ? resolve() : reject(new Error(`${command} exited with ${code}`))
+    )
+    child.stdin?.end(stdin ?? '')
+  })
+}
+
+export function registerClipboardHandlers(store: Store): void {
   ipcMain.removeHandler('clipboard:readText')
   ipcMain.removeHandler('clipboard:readSelectionText')
   ipcMain.removeHandler('clipboard:writeText')
   ipcMain.removeHandler('clipboard:writeSelectionText')
   ipcMain.removeHandler('clipboard:writeImage')
+  ipcMain.removeHandler('clipboard:writeFile')
   ipcMain.removeHandler('clipboard:saveImageAsTempFile')
 
   ipcMain.handle('clipboard:readText', async (event, options?: ReadClipboardTextOptions) => {
@@ -60,6 +79,29 @@ export function registerClipboardHandlers(): void {
       return saveClipboardImageBufferAsTempFile(image.toPNG(), args)
     }
   )
+  // Why: copy the actual file to the OS clipboard so pasting in Finder/Explorer
+  // drops the file itself, not its path as text. Local files only.
+  ipcMain.handle('clipboard:writeFile', (event, filePath: string) => {
+    assertTrustedClipboardSender(event)
+    return writeFileToClipboard(filePath, {
+      platform: process.platform,
+      desktop: process.env.XDG_CURRENT_DESKTOP,
+      resolveFilePath: async (path) => {
+        try {
+          const authorizedPath = await resolveAuthorizedPath(path, store)
+          await stat(authorizedPath)
+          return { ok: true, path: authorizedPath }
+        } catch (error) {
+          if (error instanceof Error && error.message === PATH_ACCESS_DENIED_MESSAGE) {
+            return { ok: false, reason: 'access-denied' }
+          }
+          return { ok: false, reason: isENOENT(error) ? 'not-found' : 'invalid-path' }
+        }
+      },
+      writeBuffer: (format, buffer) => clipboard.writeBuffer(format, buffer),
+      runCommand
+    })
+  })
   ipcMain.handle('clipboard:writeText', async (event, text: string) => {
     assertTrustedClipboardSender(event)
     return clipboard.writeText(await assertClipboardTextWriteWithinLimitWithYield(text))

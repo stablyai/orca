@@ -89,8 +89,11 @@ vi.mock('@/lib/agent-paste-draft', () => ({
 
 vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   registerEagerPtyBuffer: mockRegisterEagerPtyBuffer,
-  subscribeToPtyData: mockSubscribeToPtyData,
   subscribeToPtyExit: mockSubscribeToPtyExit
+}))
+
+vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
+  subscribeToPtyData: mockSubscribeToPtyData
 }))
 
 describe('launchAgentBackgroundSession', () => {

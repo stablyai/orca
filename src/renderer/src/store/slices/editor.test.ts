@@ -11,7 +11,7 @@ import {
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { GitStatusEntry } from '../../../../shared/types'
+import type { GitStatusEntry, Tab } from '../../../../shared/types'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -24,6 +24,14 @@ vi.mock('sonner', () => ({
 const { openHttpLinkMock } = vi.hoisted(() => ({ openHttpLinkMock: vi.fn() }))
 vi.mock('@/lib/http-link-routing', () => ({
   openHttpLink: openHttpLinkMock
+}))
+
+const { notifyHostOfMirroredEditorCloseMock } = vi.hoisted(() => ({
+  notifyHostOfMirroredEditorCloseMock: vi.fn()
+}))
+vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
+  notifyHostOfMirroredEditorClose: (...args: unknown[]) =>
+    notifyHostOfMirroredEditorCloseMock(...args)
 }))
 
 function createEditorStore(): StoreApi<AppState> {
@@ -66,6 +74,21 @@ function ownedEditorFileId(
 ): string {
   const runtimeKey = runtimeEnvironmentId?.trim() || 'local'
   return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
+}
+
+function mirroredEditorUnifiedTab(id: string, entityId: string, worktreeId: string): Tab {
+  return {
+    id,
+    entityId,
+    worktreeId,
+    groupId: `${worktreeId}:group`,
+    contentType: 'editor',
+    label: entityId,
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  }
 }
 
 describe('createEditorSlice right sidebar state', () => {
@@ -4018,5 +4041,126 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(store.getState().openFiles).toHaveLength(openCountBefore)
     expect(store.getState().markdownViewMode['/repo/docs/note.md']).toBe('source')
     expect(store.getState().pendingEditorReveal?.line).toBe(3)
+  })
+})
+
+describe('closeFile host mirroring', () => {
+  beforeEach(() => {
+    notifyHostOfMirroredEditorCloseMock.mockReset()
+  })
+
+  it('routes every close through the host-mirror notifier and still removes the file locally', () => {
+    const store = createEditorTabsStore()
+    store.getState().openFile({
+      filePath: '/repo/a.ts',
+      relativePath: 'a.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    const fileId = store.getState().openFiles[0]!.id
+
+    store.getState().closeFile(fileId)
+
+    // Why: closeFile is the single chokepoint, so a mirrored tab closed via any
+    // surface (tab strip, bulk close, save/discard) reaches the host. The notifier
+    // itself no-ops for non-mirrored files; here we assert the wiring + local close.
+    expect(notifyHostOfMirroredEditorCloseMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'wt-1',
+      fileId
+    )
+    expect(store.getState().openFiles).toHaveLength(0)
+  })
+
+  it('notifies the host for mirrored editors removed by close all in the active worktree', () => {
+    const store = createEditorTabsStore()
+    store.getState().openFile({
+      filePath: '/repo/a.ts',
+      relativePath: 'a.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit',
+      mirroredFromRuntimeSession: true
+    })
+    store.getState().openFile({
+      filePath: '/other/b.ts',
+      relativePath: 'b.ts',
+      worktreeId: 'wt-2',
+      language: 'typescript',
+      mode: 'edit',
+      mirroredFromRuntimeSession: true
+    })
+    store.setState({
+      unifiedTabsByWorktree: {
+        'wt-1': [mirroredEditorUnifiedTab('host-tab-a', '/repo/a.ts', 'wt-1')],
+        'wt-2': [mirroredEditorUnifiedTab('host-tab-b', '/other/b.ts', 'wt-2')]
+      },
+      tabBarOrderByWorktree: {
+        'wt-1': ['host-tab-a'],
+        'wt-2': ['host-tab-b']
+      }
+    } as Partial<AppState>)
+
+    store.getState().closeAllFiles()
+
+    // Why: closeAllFiles mutates openFiles directly instead of calling closeFile,
+    // so it must still run the host close hook for every removed mirrored editor.
+    expect(notifyHostOfMirroredEditorCloseMock).toHaveBeenCalledTimes(1)
+    expect(notifyHostOfMirroredEditorCloseMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'wt-1',
+      '/repo/a.ts'
+    )
+    expect(store.getState().openFiles).toHaveLength(1)
+    expect(store.getState().openFiles[0]?.id).toBe('/other/b.ts')
+    expect(store.getState().tabBarOrderByWorktree['wt-1']).toEqual([])
+    expect(store.getState().tabBarOrderByWorktree['wt-2']).toEqual(['host-tab-b'])
+  })
+
+  it('notifies the host for every mirrored editor when close all has no active worktree', () => {
+    const store = createEditorTabsStore()
+    store.setState({ activeWorktreeId: null })
+    store.getState().openFile({
+      filePath: '/repo/a.ts',
+      relativePath: 'a.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit',
+      mirroredFromRuntimeSession: true
+    })
+    store.getState().openFile({
+      filePath: '/other/b.ts',
+      relativePath: 'b.ts',
+      worktreeId: 'wt-2',
+      language: 'typescript',
+      mode: 'edit',
+      mirroredFromRuntimeSession: true
+    })
+    store.setState({
+      unifiedTabsByWorktree: {
+        'wt-1': [mirroredEditorUnifiedTab('host-tab-a', '/repo/a.ts', 'wt-1')],
+        'wt-2': [mirroredEditorUnifiedTab('host-tab-b', '/other/b.ts', 'wt-2')]
+      },
+      tabBarOrderByWorktree: {
+        'wt-1': ['host-tab-a'],
+        'wt-2': ['host-tab-b']
+      }
+    } as Partial<AppState>)
+
+    store.getState().closeAllFiles()
+
+    expect(notifyHostOfMirroredEditorCloseMock).toHaveBeenCalledTimes(2)
+    expect(notifyHostOfMirroredEditorCloseMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'wt-1',
+      '/repo/a.ts'
+    )
+    expect(notifyHostOfMirroredEditorCloseMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'wt-2',
+      '/other/b.ts'
+    )
+    expect(store.getState().openFiles).toHaveLength(0)
   })
 })

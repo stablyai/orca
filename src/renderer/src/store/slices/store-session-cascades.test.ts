@@ -1507,6 +1507,10 @@ describe('reconnectPersistedTerminals', () => {
     // can pass them as sessionId to the daemon's createOrAttach.
     expect(s.tabsByWorktree[wt1][0].ptyId).toBe('old-pty-1')
     expect(s.tabsByWorktree[wt2][0].ptyId).toBe('old-pty-2')
+    expect(s.ptyIdsByTabId.tab1).toEqual(['old-pty-1'])
+    // Why: inactive worktrees keep a wake hint but must not advertise live PTYs
+    // until the user opens them and connectPanePty performs the actual reattach.
+    expect(s.ptyIdsByTabId.tab2).toEqual([])
     expect(s.pendingReconnectWorktreeIds).toEqual([])
     // No eager spawn — PTY creation deferred to pane mount
     expect((mockApi.pty as Record<string, unknown>).spawn).not.toHaveBeenCalled()

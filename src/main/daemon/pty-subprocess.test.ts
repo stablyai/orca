@@ -756,6 +756,18 @@ describe('createPtySubprocess', () => {
     expect(data).toEqual(['hello'])
   })
 
+  it('replays data emitted before the Session registers onData', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+
+    const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    proc._simulateData('early setup output\r\n')
+    const data: string[] = []
+    handle.onData((d) => data.push(d))
+
+    expect(data).toEqual(['early setup output\r\n'])
+  })
+
   it('routes onExit events', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
@@ -766,6 +778,36 @@ describe('createPtySubprocess', () => {
 
     proc._simulateExit(42)
     expect(codes).toEqual([42])
+  })
+
+  it('replays pre-listener data before a pre-listener exit', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+
+    const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    proc._simulateData('last output\r\n')
+    proc._simulateExit(7)
+    const data: string[] = []
+    const codes: number[] = []
+    handle.onData((d) => data.push(d))
+    handle.onExit((code) => codes.push(code))
+
+    expect(data).toEqual(['last output\r\n'])
+    expect(codes).toEqual([7])
+  })
+
+  it('preserves pre-listener data when onExit is registered before onData', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+
+    const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    proc._simulateData('last output\r\n')
+    proc._simulateExit(7)
+    const events: string[] = []
+    handle.onExit((code) => events.push(`exit:${code}`))
+    handle.onData((data) => events.push(`data:${data}`))
+
+    expect(events).toEqual(['exit:7', 'data:last output\r\n'])
   })
 
   it('sends signal via process.kill', () => {

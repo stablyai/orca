@@ -716,8 +716,14 @@ jobs:
               ~\AppData\Local\electron\Cache
               ~\AppData\Local\electron-builder\Cache
           - os: ubuntu-latest
-            platform: linux
-            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && pnpm exec electron-builder --config config/electron-builder.config.cjs --linux --publish always
+            platform: linux-x64
+            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --x64 --publish always
+            eb_cache_path: |
+              ~/.cache/electron
+              ~/.cache/electron-builder
+          - os: ubuntu-24.04-arm
+            platform: linux-arm64
+            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_LINUX_ARM64_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --arm64 --publish always
             eb_cache_path: |
               ~/.cache/electron
               ~/.cache/electron-builder

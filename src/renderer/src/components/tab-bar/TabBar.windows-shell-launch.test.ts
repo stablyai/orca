@@ -140,6 +140,15 @@ vi.mock('@dnd-kit/sortable', () => ({
   }
 }))
 
+vi.mock('./tab-strip-drag-scroll', () => ({
+  useTabStripDragScrollHandlers: () => ({
+    isTabDragActive: false,
+    onDragScrollStartEnter: vi.fn(),
+    onDragScrollEndEnter: vi.fn(),
+    onDragScrollLeave: vi.fn()
+  })
+}))
+
 const useAppStoreExport = (selector: Parameters<typeof useAppStoreMock>[0]): unknown =>
   useAppStoreMock(selector)
 useAppStoreExport.getState = vi.fn(() => ({
@@ -236,6 +245,18 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   },
   DropdownMenuShortcut: function DropdownMenuShortcut(props: { children?: unknown }) {
     return { type: 'DropdownMenuShortcut', props }
+  },
+  DropdownMenuLabel: function DropdownMenuLabel(props: { children?: unknown }) {
+    return { type: 'DropdownMenuLabel', props }
+  },
+  DropdownMenuSub: function DropdownMenuSub(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSub', props }
+  },
+  DropdownMenuSubContent: function DropdownMenuSubContent(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubContent', props }
+  },
+  DropdownMenuSubTrigger: function DropdownMenuSubTrigger(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubTrigger', props }
   },
   DropdownMenuTrigger: function DropdownMenuTrigger(props: { children?: unknown }) {
     return { type: 'DropdownMenuTrigger', props }
@@ -728,6 +749,66 @@ describe('TabBar PowerShell launch wiring', () => {
 
     expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal: Git Bash')).toBeNull()
     expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal: PowerShell')).toBeNull()
+    expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal')).not.toBeNull()
+  })
+
+  it('hides local Windows shell rows for a non-Windows serve runtime', async () => {
+    // Why: a Windows desktop client paired to a Linux `orca serve` runs its PTY on
+    // the serve host. The local Windows shell choices (PowerShell/CMD/WSL) are
+    // meaningless there; the plain "New Terminal" already opens the serve's default
+    // shell. Sibling tests above assert that a win32 remote host still shows the
+    // rows, so the LOCAL Windows-WSL project-runtime menu (hostPlatform 'win32')
+    // is unaffected by this suppression.
+    vi.stubGlobal('navigator', { userAgent: 'Windows' })
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
+    vi.stubGlobal('window', {
+      api: {
+        wsl: {
+          isAvailable: vi.fn().mockResolvedValue(false),
+          listDistros: vi.fn().mockResolvedValue([])
+        },
+        pwsh: { isAvailable: vi.fn().mockResolvedValue(false) },
+        gitBash: { isAvailable: vi.fn().mockResolvedValue(false) },
+        runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'linux' }) }
+      }
+    })
+    appStoreSnapshot.activeRuntimeEnvironmentId = 'serve-env-1'
+    const capabilities = await import('@/lib/windows-terminal-capabilities')
+    await capabilities.loadWindowsTerminalCapabilities({
+      force: true,
+      ownerKey: 'runtime:serve-env-1'
+    })
+
+    const tabBarModule = await import('./TabBar')
+    const candidate = tabBarModule.default ?? tabBarModule
+    const TabBar =
+      typeof candidate === 'function'
+        ? candidate
+        : typeof (candidate as { type?: unknown }).type === 'function'
+          ? (candidate as { type: (props: Record<string, unknown>) => unknown }).type
+          : null
+    expect(TabBar).not.toBeNull()
+
+    const element = TabBar!({
+      tabs: [],
+      activeTabId: null,
+      worktreeId: 'wt-1',
+      expandedPaneByTabId: {},
+      onActivate: () => {},
+      onClose: () => {},
+      onCloseOthers: () => {},
+      onCloseToRight: () => {},
+      onNewTerminalTab: () => {},
+      onNewTerminalWithShell: vi.fn(),
+      onNewBrowserTab: () => {},
+      onSetCustomTitle: () => {},
+      onSetTabColor: () => {},
+      onTogglePaneExpand: () => {}
+    })
+
+    expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal: PowerShell')).toBeNull()
+    expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal: CMD Prompt')).toBeNull()
+    expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal: WSL')).toBeNull()
     expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal')).not.toBeNull()
   })
 })

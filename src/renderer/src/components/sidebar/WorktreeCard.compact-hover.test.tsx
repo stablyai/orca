@@ -372,6 +372,30 @@ describe('WorktreeCard compact hover details', () => {
     expect(markup).toContain('Reviewer handoff note')
   })
 
+  it('keeps long workspace and branch identity in whole-card hover details when the branch row is hidden', async () => {
+    settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }
+    worktreeCardProperties = ['status', 'comment']
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          branch: 'bug-hold-to-talk-speech-to-text-option-no-longer-works',
+          displayName: '[Bug]: Hold-to-talk speech-to-text option no longer works',
+          comment: 'Reviewer handoff note'
+        })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).not.toContain('data-worktree-card-meta-row=""')
+    expectParentBodyIsHoverTrigger(markup)
+    expect(markup).toContain('[Bug]: Hold-to-talk speech-to-text option no longer works')
+    expect(markup).toContain('bug-hold-to-talk-speech-to-text-option-no-longer-works')
+    expect(markup).toContain('Reviewer handoff note')
+  })
+
   it('repeats a long workspace title inside the whole-card hover when branch is already visible', async () => {
     settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }
     worktreeCardProperties = ['status', 'branch', 'comment']

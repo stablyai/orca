@@ -8,10 +8,15 @@ import { FileExplorerToolbar } from './FileExplorerToolbar'
 import { FileExplorerNameFilter } from './FileExplorerNameFilter'
 import { FileExplorerViewSwitch } from './FileExplorerViewSwitch'
 import {
+  getNameFilterCollapsedPathsAfterExpand,
+  getNextNameFilterCollapsedPaths
+} from './file-explorer-name-filter-projection'
+import {
   downloadRemoteFile,
   FileExplorerRow,
   shouldShowCollapseFolderAction,
   shouldShowFindInFolderAction,
+  shouldShowCopyFileAction,
   shouldShowRemoteDownloadAction
 } from './FileExplorerRow'
 import { FileExplorerVirtualRows } from './FileExplorerVirtualRows'
@@ -279,6 +284,25 @@ beforeEach(() => {
   toastErrorMock.mockReset()
   toastSuccessMock.mockReset()
   delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
+})
+
+describe('getNextNameFilterCollapsedPaths', () => {
+  it('collapses expanded filtered folders and expands collapsed filtered folders', () => {
+    const collapsed = getNextNameFilterCollapsedPaths(new Set(), '/repo/src', true)
+    expect([...collapsed]).toEqual(['/repo/src'])
+
+    const expanded = getNextNameFilterCollapsedPaths(collapsed, '/repo/src', false)
+    expect([...expanded]).toEqual([])
+  })
+
+  it('expands filtered folders without toggling unrelated collapsed paths', () => {
+    const expanded = getNameFilterCollapsedPathsAfterExpand(
+      new Set(['/repo/docs', '/repo/src']),
+      '/repo/src'
+    )
+
+    expect([...expanded]).toEqual(['/repo/docs'])
+  })
 })
 
 describe('FileExplorerToolbar', () => {
@@ -549,6 +573,16 @@ describe('FileExplorerRow collapse folder action', () => {
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
 
     expect(shouldShowRemoteDownloadAction(fileNode, 'ssh-1')).toBe(false)
+  })
+
+  it('shows OS file copy only for single local desktop selections', () => {
+    expect(shouldShowCopyFileAction(null, 1)).toBe(true)
+    expect(shouldShowCopyFileAction(undefined, 2)).toBe(false)
+    expect(shouldShowCopyFileAction('ssh-1', 1)).toBe(false)
+
+    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+
+    expect(shouldShowCopyFileAction(null, 1)).toBe(false)
   })
 
   it('calls the preload download API and shows success only when not canceled', async () => {

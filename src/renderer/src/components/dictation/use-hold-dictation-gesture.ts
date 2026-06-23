@@ -1,18 +1,9 @@
-import { useEffect, type MutableRefObject } from 'react'
+import { useEffect, useRef, type MutableRefObject } from 'react'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../shared/keybindings'
 import type { DictationState } from '../../../../shared/speech-types'
 import type { GlobalSettings } from '../../../../shared/types'
 import type { DictationInsertionTarget } from './dictation-insertion-target'
-
-type HoldReleaseGesture = {
-  key: string
-  code: string
-  metaKey: boolean
-  ctrlKey: boolean
-  altKey: boolean
-  shiftKey: boolean
-}
 
 type HoldDictationGestureOptions = {
   dictationStateRef: MutableRefObject<DictationState>
@@ -25,37 +16,89 @@ type HoldDictationGestureOptions = {
   stopDictation: () => Promise<void> | void
 }
 
-function normalizeEventKey(key: string): string {
+type HoldDictationReleaseMatcher = (event: KeyboardEvent) => boolean
+
+type HeldModifiers = {
+  alt: boolean
+  control: boolean
+  meta: boolean
+  shift: boolean
+}
+
+const MODIFIER_KEYS_BY_NAME: Partial<Record<string, keyof HeldModifiers>> = {
+  Alt: 'alt',
+  AltGraph: 'alt',
+  Control: 'control',
+  Ctrl: 'control',
+  Meta: 'meta',
+  OS: 'meta',
+  Shift: 'shift'
+}
+
+const UNRELIABLE_KEY_VALUES = new Set(['', 'Dead', 'Unidentified'])
+const UNRELIABLE_CODE_VALUES = new Set(['', 'Unidentified'])
+
+function normalizeReleasedKey(key: string): string {
   return key.length === 1 ? key.toLowerCase() : key
 }
 
-function captureReleaseGesture(e: KeyboardEvent): HoldReleaseGesture {
-  return {
-    key: normalizeEventKey(e.key),
-    code: e.code,
-    metaKey: e.metaKey,
-    ctrlKey: e.ctrlKey,
-    altKey: e.altKey,
-    shiftKey: e.shiftKey
+function getReleasedModifier(event: KeyboardEvent): keyof HeldModifiers | null {
+  const byKey = MODIFIER_KEYS_BY_NAME[event.key]
+  if (byKey) {
+    return byKey
   }
+  if (event.code.startsWith('Alt')) {
+    return 'alt'
+  }
+  if (event.code.startsWith('Control')) {
+    return 'control'
+  }
+  if (event.code.startsWith('Meta')) {
+    return 'meta'
+  }
+  if (event.code.startsWith('Shift')) {
+    return 'shift'
+  }
+  return null
 }
 
-function keyReleased(e: KeyboardEvent, gesture: HoldReleaseGesture): boolean {
-  return normalizeEventKey(e.key) === gesture.key || (e.code !== '' && e.code === gesture.code)
+function getReleasedPrimaryKey(event: KeyboardEvent): string | null {
+  if (getReleasedModifier(event)) {
+    return null
+  }
+  const key = normalizeReleasedKey(event.key)
+  return UNRELIABLE_KEY_VALUES.has(key) ? null : key
 }
 
-function requiredModifierReleased(e: KeyboardEvent, gesture: HoldReleaseGesture): boolean {
-  switch (e.key) {
-    case 'Meta':
-      return gesture.metaKey
-    case 'Control':
-      return gesture.ctrlKey
-    case 'Alt':
-      return gesture.altKey
-    case 'Shift':
-      return gesture.shiftKey
-    default:
-      return false
+function getReleasedPrimaryCode(event: KeyboardEvent): string | null {
+  if (getReleasedModifier(event) || UNRELIABLE_CODE_VALUES.has(event.code)) {
+    return null
+  }
+  return event.code
+}
+
+function createHoldDictationReleaseMatcher(event: KeyboardEvent): HoldDictationReleaseMatcher {
+  const primaryKey = getReleasedPrimaryKey(event)
+  const primaryCode = getReleasedPrimaryCode(event)
+  const heldModifiers: HeldModifiers = {
+    alt: event.altKey,
+    control: event.ctrlKey,
+    meta: event.metaKey,
+    shift: event.shiftKey
+  }
+
+  return (releaseEvent) => {
+    const releasedModifier = getReleasedModifier(releaseEvent)
+    if (releasedModifier) {
+      return heldModifiers[releasedModifier]
+    }
+    // Why: modifier state can already be false on the keyup that ends a chord,
+    // so release matching tracks the accepted keydown's key identity instead.
+    const releasePrimaryCode = getReleasedPrimaryCode(releaseEvent)
+    if (primaryCode !== null && releasePrimaryCode !== null) {
+      return releasePrimaryCode === primaryCode
+    }
+    return primaryKey !== null && getReleasedPrimaryKey(releaseEvent) === primaryKey
   }
 }
 
@@ -69,6 +112,8 @@ export function useHoldDictationGesture({
   startDictation,
   stopDictation
 }: HoldDictationGestureOptions): void {
+  const releaseMatcherRef = useRef<HoldDictationReleaseMatcher | null>(null)
+
   // Why: hold mode uses renderer-side DOM events instead of the IPC path
   // (before-input-event). Electron suppresses keyUp after preventDefault()
   // there, so the renderer owns both press and release.
@@ -77,9 +122,6 @@ export function useHoldDictationGesture({
     if (mode !== 'hold') {
       return
     }
-    // Why: keyUp can arrive after the modifier is already released, so the
-    // original shortcut no longer matches even though the held chord ended.
-    let activeReleaseGesture: HoldReleaseGesture | null = null
 
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (keybindingMatchesAction('voice.dictation', e, getShortcutPlatform(), keybindings)) {
@@ -89,7 +131,7 @@ export function useHoldDictationGesture({
         e.preventDefault()
         e.stopPropagation()
         holdGestureActiveRef.current = true
-        activeReleaseGesture = captureReleaseGesture(e)
+        releaseMatcherRef.current = createHoldDictationReleaseMatcher(e)
         if (dictationStateRef.current === 'idle') {
           void startDictation()
         }
@@ -101,19 +143,17 @@ export function useHoldDictationGesture({
         return
       }
       if (
-        !activeReleaseGesture ||
-        (!keyReleased(e, activeReleaseGesture) &&
-          !requiredModifierReleased(e, activeReleaseGesture))
+        !keybindingMatchesAction('voice.dictation', e, getShortcutPlatform(), keybindings) &&
+        releaseMatcherRef.current?.(e) !== true
       ) {
         return
       }
+      releaseMatcherRef.current = null
       if (dictationStateRef.current === 'idle' || dictationStateRef.current === 'stopping') {
         holdGestureActiveRef.current = false
-        activeReleaseGesture = null
         return
       }
       holdGestureActiveRef.current = false
-      activeReleaseGesture = null
       void stopDictation()
     }
 
@@ -122,7 +162,7 @@ export function useHoldDictationGesture({
         return
       }
       holdGestureActiveRef.current = false
-      activeReleaseGesture = null
+      releaseMatcherRef.current = null
       if (dictationStateRef.current !== 'idle' && dictationStateRef.current !== 'stopping') {
         insertionTargetRef.current = null
         intentionalTargetCancellationRef.current = true

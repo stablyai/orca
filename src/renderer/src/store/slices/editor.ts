@@ -58,6 +58,7 @@ import {
   statRuntimePath
 } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
@@ -1912,6 +1913,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     const hasDraft = !!get().editorDrafts[fileId]
     const shouldDeleteFromDisk = shouldDeleteUntouchedUntitledFile(preClose, hasDraft)
 
+    // Why: closeFile is the single chokepoint every editor close funnels through
+    // (tab strips, bulk close, save/discard, floating panel). Mirrored tabs are
+    // host-owned, so the host must close its copy too or its next snapshot
+    // re-mirrors the file and the tab reopens. No-op for the host's own files.
+    notifyHostOfMirroredEditorClose(get(), preClose?.worktreeId, fileId)
+
     set((s) => {
       const closedFile = s.openFiles.find((f) => f.id === fileId)
       const idx = s.openFiles.findIndex((f) => f.id === fileId)
@@ -2136,6 +2143,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         shouldDeleteUntouchedUntitledFile(f, !!state.editorDrafts[f.id]) &&
         (!activeWorktreeId || f.worktreeId === activeWorktreeId)
     )
+    const closingFiles = state.openFiles.filter(
+      (file) => !activeWorktreeId || file.worktreeId === activeWorktreeId
+    )
+    // Why: close-all bypasses closeFile's per-tab path, so mirrored host-owned
+    // editors must be notified here or the next host snapshot reopens them.
+    for (const file of closingFiles) {
+      notifyHostOfMirroredEditorClose(state, file.worktreeId, file.id)
+    }
 
     const closingItemIds = Object.values(state.unifiedTabsByWorktree ?? {})
       .flat()
@@ -2193,16 +2208,17 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const shouldDeactivateWorktree =
         browserTabsForWorktree.length === 0 && terminalTabsForWorktree.length === 0
 
-      // Why: remove all closed editor file IDs from tab bar order so stale
-      // entries don't cause position shifts on subsequent tab operations.
+      // Why: mirrored editor tabs use host tab ids in tab order, while local
+      // editor entries may still use file ids. Remove both close-all shapes.
       const closedFileIds = new Set(
         s.openFiles.filter((f) => f.worktreeId === activeWorktreeId).map((f) => f.id)
       )
+      const closedTabOrderIds = new Set([...closedFileIds, ...closingItemIds])
       const nextTabBarOrderByWorktree = s.tabBarOrderByWorktree
         ? {
             ...s.tabBarOrderByWorktree,
             [activeWorktreeId]: (s.tabBarOrderByWorktree[activeWorktreeId] ?? []).filter(
-              (entryId) => !closedFileIds.has(entryId)
+              (entryId) => !closedTabOrderIds.has(entryId)
             )
           }
         : s.tabBarOrderByWorktree

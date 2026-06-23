@@ -844,16 +844,12 @@ test.describe('Terminal Panes', () => {
     await expect(orcaPage.locator('.pane-title-text', { hasText: title })).toHaveCount(1)
   })
 
-  test('Set Title remove button hover stays transparent', async ({ orcaPage }) => {
-    const title = `Remove hover title ${Date.now()}`
+  test('Always-on pane header split button hover stays transparent', async ({ orcaPage }) => {
+    const splitButton = orcaPage.getByRole('button', { name: 'Split Terminal Right' })
+    await expect(splitButton).toBeVisible()
+    await splitButton.hover()
 
-    await setPaneTitleFromTerminalMenu(orcaPage, title)
-    const removeButton = orcaPage.getByRole('button', { name: `Remove pane title: ${title}` })
-    await orcaPage.locator('.pane-title-bar', { hasText: title }).hover()
-    await removeButton.hover()
-    await expect(orcaPage.getByText('Remove title', { exact: true })).toBeVisible()
-
-    const hoverStyle = await removeButton.evaluate((element) => {
+    const hoverStyle = await splitButton.evaluate((element) => {
       const style = getComputedStyle(element)
       return {
         backgroundColor: style.backgroundColor,
@@ -907,8 +903,7 @@ test.describe('Terminal Panes', () => {
     await expectSavedLayoutNotToContainTitle(orcaPage, tabId, paneTitle)
 
     await setPaneTitleFromTerminalMenu(orcaPage, removeButtonTitle)
-    await orcaPage.locator('.pane-title-bar', { hasText: removeButtonTitle }).hover()
-    await orcaPage.getByRole('button', { name: `Remove pane title: ${removeButtonTitle}` }).click()
+    await setPaneTitleFromTerminalMenu(orcaPage, '')
     await expect(orcaPage.locator('.pane-title-text', { hasText: removeButtonTitle })).toBeHidden()
     await expectSavedLayoutNotToContainTitle(orcaPage, tabId, removeButtonTitle)
 

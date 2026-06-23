@@ -52,6 +52,7 @@ type FloatingPanelStoreState = {
   closeTab: (tabId: string) => void
   closeBrowserTab: (tabId: string) => void
   closeFile: (fileId: string) => void
+  closeUnifiedTab: (tabId: string) => Tab | null
   markFileDirty: (fileId: string, dirty: boolean) => void
   activateTab: (tabId: string) => void
   setActiveTab: (tabId: string) => void
@@ -85,6 +86,7 @@ const mocks = vi.hoisted(() => ({
   closeWebRuntimeSessionTab: vi.fn(),
   closeFile: vi.fn(),
   closeTab: vi.fn(),
+  closeUnifiedTab: vi.fn(),
   createBrowserTab: vi.fn(),
   createTab: vi.fn(),
   createWebRuntimeSessionBrowserTab: vi.fn(),
@@ -173,6 +175,12 @@ vi.mock('@/components/terminal-pane/TerminalPane', () => ({
 
 vi.mock('@/components/browser-pane/BrowserPane', () => ({
   default: function BrowserPane() {
+    return null
+  }
+}))
+
+vi.mock('@/components/emulator-pane/EmulatorPane', () => ({
+  default: function EmulatorPane() {
     return null
   }
 }))
@@ -406,6 +414,38 @@ function setFloatingEditorTabs(files: OpenFile[]): void {
   state.activeGroupIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
 }
 
+function setFloatingSimulatorTab(): Tab {
+  const state = storeBox.state as FloatingPanelStoreState
+  const groupId = 'floating-group'
+  const tab: Tab = {
+    id: 'simulator-tab',
+    entityId: 'simulator-tab',
+    groupId,
+    worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+    contentType: 'simulator',
+    label: 'Mobile Emulator',
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  }
+  state.unifiedTabsByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: [tab] }
+  state.groupsByWorktree = {
+    [FLOATING_TERMINAL_WORKTREE_ID]: [
+      {
+        id: groupId,
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        activeTabId: tab.id,
+        tabOrder: [tab.id],
+        recentTabIds: [tab.id]
+      }
+    ]
+  }
+  state.activeGroupIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
+  state.tabBarOrderByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: [tab.id] }
+  return tab
+}
+
 function resetStore(tabs: TerminalTab[] = []): void {
   storeBox.state = {
     tabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: tabs },
@@ -420,6 +460,7 @@ function resetStore(tabs: TerminalTab[] = []): void {
     activateTab: mocks.activateTab,
     closeBrowserTab: mocks.closeBrowserTab,
     closeFile: mocks.closeFile,
+    closeUnifiedTab: mocks.closeUnifiedTab,
     createTab: mocks.createTab,
     createBrowserTab: mocks.createBrowserTab,
     closeTab: mocks.closeTab,
@@ -1676,6 +1717,77 @@ describe('FloatingTerminalPanel close behavior', () => {
     ;(terminalPane.props.onCloseTab as () => void)()
     expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
     expect(onOpenChange).not.toHaveBeenCalled()
+  })
+
+  it('renders and closes simulator tabs in the floating workspace', async () => {
+    const tab = setFloatingSimulatorTab()
+
+    const element = await renderPanel(true)
+    const tabBar = findByTypeName(element, 'TabBar')
+    const emulatorPane = findByTypeName(element, 'EmulatorPane')
+    ;(tabBar.props.onCloseFile as (tabId: string) => void)(tab.id)
+
+    expect(tabBar.props.activeTabType).toBe('simulator')
+    expect(tabBar.props.activeSimulatorTabId).toBe(tab.id)
+    expect(emulatorPane.props.tab).toBe(tab)
+    expect(mocks.closeUnifiedTab).toHaveBeenCalledWith(tab.id)
+    expect(mocks.closeFile).not.toHaveBeenCalledWith(tab.id)
+  })
+
+  it('keeps simulator tabs open when closing all files', async () => {
+    const state = storeBox.state as FloatingPanelStoreState
+    const groupId = 'floating-group'
+    const file = makeFile({ id: 'file-a' })
+    const editorTab: Tab = {
+      id: 'tab-file-a',
+      entityId: file.id,
+      groupId,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      contentType: 'editor',
+      label: file.relativePath,
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    }
+    const simulatorTab: Tab = {
+      id: 'simulator-tab',
+      entityId: 'simulator-tab',
+      groupId,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      contentType: 'simulator',
+      label: 'Mobile Emulator',
+      customLabel: null,
+      color: null,
+      sortOrder: 1,
+      createdAt: 1
+    }
+    state.openFiles = [file]
+    state.unifiedTabsByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [editorTab, simulatorTab]
+    }
+    state.groupsByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [
+        {
+          id: groupId,
+          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+          activeTabId: editorTab.id,
+          tabOrder: [editorTab.id, simulatorTab.id],
+          recentTabIds: [editorTab.id, simulatorTab.id]
+        }
+      ]
+    }
+    state.activeGroupIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
+    state.tabBarOrderByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [editorTab.id, simulatorTab.id]
+    }
+
+    const element = await renderPanel(true)
+    const tabBar = findByTypeName(element, 'TabBar')
+    ;(tabBar.props.onCloseAllFiles as () => void)()
+
+    expect(mocks.closeFile).toHaveBeenCalledWith(file.id)
+    expect(mocks.closeUnifiedTab).not.toHaveBeenCalledWith(simulatorTab.id)
   })
 
   it('routes floating terminal create and close through active web runtime sessions', async () => {

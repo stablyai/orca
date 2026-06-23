@@ -314,6 +314,16 @@ export function shouldShowRemoteDownloadAction(
   )
 }
 
+export function shouldShowCopyFileAction(connectionId?: string | null, selectionSize = 1): boolean {
+  // Why: the OS file clipboard only holds local files — remote (SSH) files
+  // don't exist on this machine, and the web client has no native clipboard.
+  return (
+    !connectionId &&
+    selectionSize === 1 &&
+    (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
+  )
+}
+
 export async function downloadRemoteFile(node: TreeNode, connectionId: string): Promise<void> {
   try {
     const result = await window.api.fs.downloadFile({ filePath: node.path, connectionId })
@@ -393,6 +403,7 @@ export function FileExplorerRow({
   const FileIcon = getFileTypeIcon(node.relativePath || node.name)
   const rowDropDir = node.isDirectory ? node.path : targetDir
   const showRemoteDownloadAction = shouldShowRemoteDownloadAction(node, connectionId)
+  const showCopyFileAction = shouldShowCopyFileAction(connectionId, selectionSize)
   const { setRowDragNode, handleDragOver, handleDragEnter, handleDragLeave, handleDrop } =
     useFileExplorerRowDrag({
       rowDropDir,
@@ -420,6 +431,24 @@ export function FileExplorerRow({
     }
     void downloadRemoteFile(node, connectionId)
   }, [connectionId, node])
+  const handleCopyFile = useCallback(() => {
+    const failureMessage = translate(
+      'auto.components.right.sidebar.FileExplorerRow.b234ab25b4',
+      'Could not copy the file to the clipboard'
+    )
+    void window.api.ui
+      .writeClipboardFile(node.path)
+      .then((result) => {
+        if (!result.ok) {
+          toast.error(failureMessage)
+        }
+      })
+      // A failure in the main process rejects the IPC promise; surface the same
+      // toast instead of leaving an unhandled rejection with no feedback.
+      .catch(() => {
+        toast.error(failureMessage)
+      })
+  }, [node.path])
 
   return (
     <ContextMenu
@@ -592,6 +621,12 @@ export function FileExplorerRow({
           {translate('auto.components.right.sidebar.FileExplorerRow.f61af83316', 'New Folder')}
         </ContextMenuItem>
         <ContextMenuSeparator />
+        {showCopyFileAction && (
+          <ContextMenuItem onSelect={handleCopyFile}>
+            <Copy />
+            {translate('auto.components.right.sidebar.FileExplorerRow.98a79948b3', 'Copy')}
+          </ContextMenuItem>
+        )}
         <ContextMenuItem onSelect={() => onCopyPaths('absolute')}>
           <Copy />
           {selectionSize > 1

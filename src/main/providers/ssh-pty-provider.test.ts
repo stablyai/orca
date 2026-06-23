@@ -227,6 +227,18 @@ describe('SshPtyProvider', () => {
     expect(mux.request).toHaveBeenCalledWith('pty.attach', { id: 'pty-1' })
   })
 
+  it('attachForReconnect returns replay without relay notification', async () => {
+    mux.request.mockResolvedValue({ replay: 'restored output' })
+
+    const result = await provider.attachForReconnect(scopedPty1)
+
+    expect(result).toEqual({ replay: 'restored output' })
+    expect(mux.request).toHaveBeenCalledWith('pty.attach', {
+      id: 'pty-1',
+      suppressReplayNotification: true
+    })
+  })
+
   it('write sends pty.data notification', () => {
     provider.write(scopedPty1, 'hello')
     expect(mux.notify).toHaveBeenCalledWith('pty.data', { id: 'pty-1', data: 'hello' })

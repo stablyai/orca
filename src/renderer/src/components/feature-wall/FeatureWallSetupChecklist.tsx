@@ -279,19 +279,21 @@ export function FeatureWallSetupChecklist(
       ? 'gap-8 xl:grid-cols-[minmax(0,1fr)_auto] xl:gap-12'
       : 'gap-8 sm:grid-cols-[minmax(0,48ch)_auto] sm:gap-10'
 
+  // Why: in the modal, a stacked checklist can leave medium-width windows with
+  // only a tiny action pane; switch to the rail/content layout sooner.
   return (
     <div
       className={cn(
         'grid h-full min-h-0',
         isEmbedded
           ? 'grid-rows-[auto_minmax(0,1fr)] gap-10 lg:grid-cols-[minmax(15rem,17rem)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:gap-16'
-          : 'grid-rows-[auto_minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(200px,300px)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]'
+          : 'grid-rows-[auto_minmax(0,1fr)] gap-5 md:grid-cols-[minmax(190px,260px)_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)]'
       )}
     >
       <div
         className={cn(
           'scrollbar-sleek min-h-0 space-y-5 overflow-y-auto',
-          isEmbedded ? 'pr-4' : 'pr-1'
+          isEmbedded ? 'pr-4' : 'max-h-[min(18rem,40vh)] pr-1 md:max-h-none'
         )}
       >
         <SetupSection
@@ -325,7 +327,7 @@ export function FeatureWallSetupChecklist(
           'scrollbar-sleek min-h-0 overflow-y-auto',
           isEmbedded
             ? 'pt-10 lg:border-l lg:border-border/50 lg:pl-14 lg:pt-0'
-            : 'border-t border-border pt-5 lg:border-l lg:border-t-0 lg:pl-7 lg:pt-0'
+            : 'border-t border-border pt-5 md:border-l md:border-t-0 md:pl-7 md:pt-0'
         )}
       >
         {activeStep ? (
