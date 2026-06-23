@@ -8,7 +8,12 @@ type UseEditorPanelFileLoadRetryParams = {
   activeFile: OpenFile | null
   fileContents: Record<string, FileContent>
   fileLoadRetryAttemptsRef: MutableRefObject<Record<string, number>>
-  loadFileContent: (filePath: string, id: string, worktreeId?: string) => Promise<void>
+  loadFileContent: (
+    filePath: string,
+    id: string,
+    worktreeId?: string,
+    relativePath?: string
+  ) => Promise<void>
   openFilesRef: MutableRefObject<OpenFile[]>
   setFileContents: Dispatch<SetStateAction<Record<string, FileContent>>>
 }
@@ -66,7 +71,12 @@ export function useEditorPanelFileLoadRetry({
         delete next[currentFile.id]
         return next
       })
-      void loadFileContent(currentFile.filePath, currentFile.id, currentFile.worktreeId)
+      void loadFileContent(
+        currentFile.filePath,
+        currentFile.id,
+        currentFile.worktreeId,
+        currentFile.relativePath
+      )
     }, delayMs)
     return () => window.clearTimeout(timeoutId)
   }, [

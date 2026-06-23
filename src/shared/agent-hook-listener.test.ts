@@ -335,6 +335,70 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
+  it('reads newline-heavy Command Code transcripts without line-array splitting', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-large-transcript-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    try {
+      const filler = Array.from({ length: 6_000 }, (_value, index) =>
+        JSON.stringify({
+          role: index % 2 === 0 ? 'assistant' : 'user',
+          content: [{ type: 'text', text: `filler ${index}` }]
+        })
+      )
+      writeFileSync(
+        transcriptPath,
+        `${[
+          ...filler,
+          JSON.stringify({
+            role: 'user',
+            content: [{ type: 'text', text: 'large transcript prompt' }]
+          }),
+          JSON.stringify({
+            role: 'assistant',
+            content: [{ type: 'text', text: 'large transcript answer' }]
+          })
+        ].join('\n')}\n`
+      )
+      const splitSpy = vi.spyOn(String.prototype, 'split')
+
+      const tool = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'PreToolUse',
+            transcript_path: transcriptPath,
+            tool_name: 'shell_command',
+            tool_input: { command: 'pwd' }
+          }
+        },
+        'production'
+      )
+      const done = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'Stop',
+            transcript_path: transcriptPath
+          }
+        },
+        'production'
+      )
+
+      expect(tool?.payload.prompt).toBe('large transcript prompt')
+      expect(done?.payload.lastAssistantMessage).toBe('large transcript answer')
+      const usedLineArraySplit = splitSpy.mock.calls.some(
+        ([separator]) => typeof separator === 'string' && separator === '\n'
+      )
+      expect(usedLineArraySplit).toBe(false)
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
   it('trims surrounding whitespace from extracted prompt text', () => {
     const event = normalizeHookPayload(
       state,
@@ -381,6 +445,152 @@ describe('shared agent-hook-listener', () => {
       agentType: 'claude'
     })
     expect(event?.payload.lastAssistantMessage).toBeUndefined()
+  })
+
+  it('normalizes Devin documented lifecycle events', () => {
+    const started = normalizeHookPayload(
+      state,
+      'devin',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionStart', source: 'resume' }
+      },
+      'production'
+    )
+    const compacted = normalizeHookPayload(
+      state,
+      'devin',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'PostCompaction', summary: 'trimmed' }
+      },
+      'production'
+    )
+    const ended = normalizeHookPayload(
+      state,
+      'devin',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionEnd', reason: 'complete' }
+      },
+      'production'
+    )
+
+    // Why: SessionStart fires when the TUI opens/resumes while still idle.
+    // It must not create a visible "working" row before the user submits a prompt.
+    expect(started).toBeNull()
+    expect(compacted?.payload).toMatchObject({ agentType: 'devin', state: 'working' })
+    expect(ended?.payload).toMatchObject({ agentType: 'devin', state: 'done' })
+  })
+
+  it('normalizes Kimi Code Claude-compatible lifecycle events as kimi status', () => {
+    const submitted = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          session_id: 'session_abc',
+          cwd: '/repo',
+          // Kimi sends the prompt as a content-block array, not a bare string.
+          prompt: [{ type: 'text', text: 'list the files here' }]
+        }
+      },
+      'production'
+    )
+    const tool = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          session_id: 'session_abc',
+          tool_name: 'Bash',
+          tool_input: { command: 'ls' }
+        }
+      },
+      'production'
+    )
+    const waiting = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'PermissionRequest', session_id: 'session_abc' }
+      },
+      'production'
+    )
+    const stopped = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'Stop', session_id: 'session_abc' }
+      },
+      'production'
+    )
+
+    expect(submitted?.payload).toMatchObject({
+      agentType: 'kimi',
+      state: 'working',
+      prompt: 'list the files here'
+    })
+    expect(tool?.payload).toMatchObject({ agentType: 'kimi', state: 'working', toolName: 'Bash' })
+    expect(waiting?.payload).toMatchObject({ agentType: 'kimi', state: 'waiting' })
+    expect(stopped?.payload).toMatchObject({ agentType: 'kimi', state: 'done' })
+    // The Claude-shaped session_id is captured for provider-session resume.
+    expect(stopped?.providerSession).toMatchObject({ key: 'session_id', id: 'session_abc' })
+  })
+
+  it('maps Kimi AskUserQuestion PreToolUse to waiting, then back to working on answer', () => {
+    const question = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          session_id: 'session_abc',
+          tool_name: 'AskUserQuestion',
+          tool_input: {
+            questions: [
+              {
+                question: 'Which region should I deploy to?',
+                options: [{ label: 'us-east', description: 'US East' }]
+              }
+            ]
+          }
+        }
+      },
+      'production'
+    )
+    const answered = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          session_id: 'session_abc',
+          tool_name: 'AskUserQuestion',
+          tool_response: { selected: ['us-east'] }
+        }
+      },
+      'production'
+    )
+
+    expect(question?.payload).toMatchObject({
+      agentType: 'kimi',
+      state: 'waiting',
+      toolName: 'AskUserQuestion'
+    })
+    expect(answered?.payload).toMatchObject({
+      agentType: 'kimi',
+      state: 'working',
+      toolName: 'AskUserQuestion'
+    })
   })
 
   it('rejects oversized paneKey', () => {
@@ -577,6 +787,47 @@ describe('shared agent-hook-listener', () => {
         agentType: 'antigravity'
       })
       expect(started?.hasExplicitPrompt).toBe(true)
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('reads newline-heavy Antigravity user requests without wrapper regex matching', () => {
+    const matchSpy = vi.spyOn(String.prototype, 'match')
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-large-prompt-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    const requestText = 'Fix the failing test\n'.repeat(300)
+    try {
+      writeFileSync(
+        transcriptPath,
+        `${JSON.stringify({
+          source: 'USER_EXPLICIT',
+          type: 'USER_INPUT',
+          content: `<USER_REQUEST>\n${requestText}</USER_REQUEST>`
+        })}\n`
+      )
+
+      const started = normalizeHookPayload(
+        state,
+        'antigravity',
+        {
+          paneKey: PANE_KEY,
+          hook_event_name: 'PreInvocation',
+          payload: { transcriptPath }
+        },
+        'production'
+      )
+
+      expect(started?.payload.prompt).toContain('Fix the failing test')
+      expect(started?.payload.prompt).not.toContain('<USER_REQUEST>')
+      expect(started?.payload.prompt).not.toContain('</USER_REQUEST>')
+      const usedRequestWrapperMatch = matchSpy.mock.calls.some(
+        ([pattern]) =>
+          pattern instanceof RegExp &&
+          pattern.source.includes('<USER_REQUEST>') &&
+          pattern.source.includes('[\\s\\S]')
+      )
+      expect(usedRequestWrapperMatch).toBe(false)
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
     }
@@ -946,6 +1197,34 @@ describe('shared agent-hook-listener', () => {
       'production'
     )
     expect(event?.payload.prompt).toBe('Find recent PR')
+  })
+
+  it('strips newline-heavy Grok user_query wrappers without regex matching', () => {
+    const matchSpy = vi.spyOn(String.prototype, 'match')
+    const promptText = 'Find recent PR\n'.repeat(300)
+    const event = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'user_prompt_submit',
+          prompt: `<user_query>\n${promptText}</user_query>`
+        }
+      },
+      'production'
+    )
+
+    expect(event?.payload.prompt).toContain('Find recent PR')
+    expect(event?.payload.prompt).not.toContain('<user_query>')
+    expect(event?.payload.prompt).not.toContain('</user_query>')
+    const usedGrokWrapperMatch = matchSpy.mock.calls.some(
+      ([pattern]) =>
+        pattern instanceof RegExp &&
+        pattern.source.startsWith('^<user_query>') &&
+        pattern.source.includes('[\\s\\S]')
+    )
+    expect(usedGrokWrapperMatch).toBe(false)
   })
 
   it('maps Grok feedback notifications to waiting without overwriting the prompt', () => {

@@ -35,6 +35,8 @@ function renderHeader(onClose: () => void): React.ReactElement {
   return WorkspaceKanbanDrawerHeader({
     selectedCount: 0,
     workspaceStatuses: statuses,
+    syncTaskStatusFromWorkspaceBoard: false,
+    onSyncTaskStatusFromWorkspaceBoardChange: vi.fn(),
     onRenameStatus: vi.fn(),
     onChangeStatusColor: vi.fn(),
     onChangeStatusIcon: vi.fn(),

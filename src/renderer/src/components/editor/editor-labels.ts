@@ -29,6 +29,10 @@ export function getEditorDisplayLabel(
     return 'Conflict Review'
   }
 
+  if (file.mode === 'check-details') {
+    return file.checkRunDetails?.check.name ?? getBaseLabel(file, variant)
+  }
+
   if (file.mode === 'markdown-preview') {
     return `${getBaseLabel(file, variant)} (preview)`
   }
@@ -38,8 +42,11 @@ export function getEditorDisplayLabel(
   }
 
   const source = file.diffSource
-  if (source === 'combined-uncommitted') {
+  if (source === 'combined-all') {
     return 'All Changes'
+  }
+  if (source === 'combined-uncommitted') {
+    return file.combinedAreaFilter ? getBaseLabel(file, variant) : 'Uncommitted Changes'
   }
   if (source === 'combined-branch') {
     return `Branch Changes (${file.branchCompare?.baseRef ?? 'base'})`

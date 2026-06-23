@@ -21,7 +21,6 @@ on:
       - 'src/main/runtime/rpc/errors.ts'
       - 'src/main/runtime/rpc/methods/computer*.ts'
       - 'src/shared/computer-use-*.ts'
-      - 'src/shared/runtime-types.ts'
       - 'tests/e2e/computer-linux.e2e.ts'
       - 'tests/e2e/computer-mac.e2e.ts'
       - 'tests/e2e/computer-mac-safari.e2e.ts'
@@ -113,7 +112,7 @@ jobs:
     # macOS Accessibility and Screen Recording require user-granted TCC entries.
     # Keep this on manual/scheduled permission-bearing runners instead of PR CI.
     if: github.event_name != 'pull_request'
-    runs-on: macos-14
+    runs-on: macos-15
     env:
       ORCA_COMPUTER_E2E: '1'
     steps:

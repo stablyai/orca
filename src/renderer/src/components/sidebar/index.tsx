@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
@@ -13,15 +13,14 @@ import { cn } from '@/lib/utils'
 import { FolderPlus, Loader2 } from 'lucide-react'
 import { useSidebarProjectDrop } from './useSidebarProjectDrop'
 import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
+import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
+import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
 
-const WorktreeMetaDialog = React.lazy(() => import('./WorktreeMetaDialog'))
-const NonGitFolderDialog = React.lazy(() => import('./NonGitFolderDialog'))
-const RemoveFolderDialog = React.lazy(() => import('./RemoveFolderDialog'))
-const AddRepoDialog = React.lazy(() => import('./AddRepoDialog'))
-const AddProjectFromFolderDialog = React.lazy(() => import('./AddProjectFromFolderDialog'))
-const ProjectAddedDialog = React.lazy(() => import('./ProjectAddedDialog'))
-const WorktreeVisibilityDialog = React.lazy(() => import('./WorktreeVisibilityDialog'))
-const OrcaYamlTrustDialog = React.lazy(() => import('./OrcaYamlTrustDialog'))
+const WorktreeMetaDialog = lazyWithRetry(() => import('./WorktreeMetaDialog'))
+const RemoveFolderDialog = lazyWithRetry(() => import('./RemoveFolderDialog'))
+const WorktreeVisibilityDialog = lazyWithRetry(() => import('./WorktreeVisibilityDialog'))
+const OrcaYamlTrustDialog = lazyWithRetry(() => import('./OrcaYamlTrustDialog'))
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
@@ -42,18 +41,28 @@ function Sidebar({
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth)
   const repos = useAppStore((s) => s.repos)
+  const settings = useAppStore((s) => s.settings)
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
   const activeModal = useAppStore((s) => s.activeModal)
+  const statusBarVisible = useAppStore((s) => s.statusBarVisible)
+  const systemPrefersDark = useSystemPrefersDark()
+  const leftSidebarStyle = useMemo(
+    () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
+    [settings, systemPrefersDark]
+  ) as React.CSSProperties | undefined
   const { nativeDropTarget, dropHandlers, affordance } = useSidebarProjectDrop()
-  const [shouldMountAddRepoDialog, setShouldMountAddRepoDialog] = React.useState(false)
-  const unmountAddRepoDialogTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const {
     workspaceBoardOpen,
+    workspaceBoardRenderedOpen,
+    workspaceBoardDragPreviewOpen,
     workspaceBoardMenuOpen,
     toggleWorkspaceBoard,
     handleWorkspaceBoardOpenChange,
     setWorkspaceBoardMenuOpen,
-    closeWorkspaceBoard
+    closeWorkspaceBoard,
+    previewWorkspaceBoardFromDrag,
+    solidifyWorkspaceBoardFromDrag,
+    cancelWorkspaceBoardDragPreview
   } = useWorkspaceBoardPanel()
 
   const setLiveSidebarWidth = React.useCallback((width: number) => {
@@ -68,36 +77,44 @@ function Sidebar({
     }
   }, [repoCount, fetchAllWorktrees])
 
+  // Why: a runtime host coming online/offline must refresh the sidebar so its
+  // worktrees appear/drop, the same way SSH state changes already refetch. Only
+  // the manual connect button refetched before, so the list went stale until the
+  // user forced a refetch (e.g. via Add Project). React to the set of online
+  // runtime envs (a host has a status entry once it is connected).
+  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const fetchWorktreeLineage = useAppStore((s) => s.fetchWorktreeLineage)
+  const onlineRuntimeEnvKey = React.useMemo(
+    () =>
+      // Why: tolerate an absent map — a partial/hydrating store can leave this
+      // undefined, and a thrown selector would crash the whole sidebar render.
+      [...(runtimeStatusByEnvironmentId?.entries() ?? [])]
+        .filter(([, entry]) => Boolean(entry?.status))
+        .map(([id]) => id)
+        .sort()
+        .join(','),
+    [runtimeStatusByEnvironmentId]
+  )
+  const previousOnlineRuntimeEnvKeyRef = React.useRef<string | null>(null)
   useEffect(() => {
-    if (activeModal === 'add-repo') {
-      if (unmountAddRepoDialogTimerRef.current) {
-        clearTimeout(unmountAddRepoDialogTimerRef.current)
-        unmountAddRepoDialogTimerRef.current = null
-      }
-      setShouldMountAddRepoDialog(true)
+    // Skip the initial value — startup/repoCount effects already fetch. Only
+    // refetch when the online-host set actually changes.
+    if (previousOnlineRuntimeEnvKeyRef.current === null) {
+      previousOnlineRuntimeEnvKeyRef.current = onlineRuntimeEnvKey
       return
     }
-    if (shouldMountAddRepoDialog && !unmountAddRepoDialogTimerRef.current) {
-      // Why: AddRepoDialog's close effect aborts in-flight clone/nested work.
-      // Keep one closed render, then remove hidden SSH/remote subscriptions.
-      unmountAddRepoDialogTimerRef.current = setTimeout(() => {
-        setShouldMountAddRepoDialog(false)
-        unmountAddRepoDialogTimerRef.current = null
-      }, 0)
+    if (previousOnlineRuntimeEnvKeyRef.current === onlineRuntimeEnvKey) {
+      return
     }
-    return () => {
-      if (unmountAddRepoDialogTimerRef.current) {
-        clearTimeout(unmountAddRepoDialogTimerRef.current)
-        unmountAddRepoDialogTimerRef.current = null
-      }
-    }
-  }, [activeModal, shouldMountAddRepoDialog])
+    previousOnlineRuntimeEnvKeyRef.current = onlineRuntimeEnvKey
+    void fetchAllWorktrees().then(() => fetchWorktreeLineage())
+  }, [onlineRuntimeEnvKey, fetchAllWorktrees, fetchWorktreeLineage])
 
   useEffect(() => {
-    if (!sidebarOpen && workspaceBoardOpen) {
+    if (!sidebarOpen && workspaceBoardRenderedOpen) {
       closeWorkspaceBoard()
     }
-  }, [closeWorkspaceBoard, sidebarOpen, workspaceBoardOpen])
+  }, [closeWorkspaceBoard, sidebarOpen, workspaceBoardRenderedOpen])
 
   const { containerRef, onResizeStart } = useSidebarResize<HTMLDivElement>({
     isOpen: sidebarOpen,
@@ -115,6 +132,7 @@ function Sidebar({
         ref={containerRef}
         data-native-file-drop-target={sidebarOpen ? nativeDropTarget : undefined}
         className="relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
+        style={leftSidebarStyle}
         {...dropHandlers}
       >
         {sidebarOpen && (
@@ -126,6 +144,10 @@ function Sidebar({
             <WorktreeList
               scrollOffsetRef={worktreeScrollOffsetRef}
               scrollAnchorRef={worktreeScrollAnchorRef}
+              workspaceBoardOpen={workspaceBoardOpen}
+              onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
+              onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
+              onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
             />
 
             <SetupScriptPromptCard />
@@ -133,6 +155,7 @@ function Sidebar({
             {/* Fixed bottom toolbar */}
             <SidebarToolbar
               workspaceBoardOpen={workspaceBoardOpen}
+              workspaceBoardDragPreviewOpen={workspaceBoardDragPreviewOpen}
               onWorkspaceBoardToggle={toggleWorkspaceBoard}
             />
           </>
@@ -171,17 +194,16 @@ function Sidebar({
       for the modal that needs their flow-specific hooks and UI. */}
       <React.Suspense fallback={null}>
         {activeModal === 'edit-meta' ? <WorktreeMetaDialog /> : null}
-        {activeModal === 'confirm-non-git-folder' ? <NonGitFolderDialog /> : null}
         {activeModal === 'confirm-remove-folder' ? <RemoveFolderDialog /> : null}
-        {shouldMountAddRepoDialog ? <AddRepoDialog /> : null}
-        {activeModal === 'confirm-add-project-from-folder' ? <AddProjectFromFolderDialog /> : null}
-        {activeModal === 'project-added' ? <ProjectAddedDialog /> : null}
         {activeModal === 'worktree-visibility' ? <WorktreeVisibilityDialog /> : null}
         {activeModal === 'confirm-orca-yaml-hooks' ? <OrcaYamlTrustDialog /> : null}
       </React.Suspense>
       {sidebarOpen ? (
         <WorkspaceKanbanDrawer
-          open={workspaceBoardOpen}
+          leftSidebarStyle={leftSidebarStyle}
+          open={workspaceBoardRenderedOpen}
+          statusBarVisible={statusBarVisible}
+          dragPreview={workspaceBoardDragPreviewOpen}
           preserveOpenForMenu={workspaceBoardMenuOpen}
           onOpenChange={handleWorkspaceBoardOpenChange}
           onMenuOpenChange={setWorkspaceBoardMenuOpen}

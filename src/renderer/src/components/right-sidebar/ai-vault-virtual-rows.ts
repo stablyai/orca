@@ -6,7 +6,7 @@ import {
 } from '../sidebar/worktree-list-virtual-rows'
 
 export const VAULT_GROUP_HEADER_ROW_HEIGHT = 32
-export const VAULT_SESSION_ROW_HEIGHT = 64
+export const VAULT_SESSION_ROW_HEIGHT = 82
 
 export type VaultVirtualRow = { type: 'group' | 'session' }
 

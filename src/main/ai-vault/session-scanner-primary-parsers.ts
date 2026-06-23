@@ -126,6 +126,11 @@ export async function parseCodexSessionFile(
 
     const payload = asRecord(record.payload)
     if (record.type === 'session_meta' && payload) {
+      if (isCodexWorkerSession(payload)) {
+        // Why: Codex writes internal worker/sub-agent transcripts into the same
+        // history tree; AI Vault should show user-started sessions only.
+        return null
+      }
       const sessionId = extractString(payload.id)
       if (sessionId) {
         accumulator.sessionId = sessionId
@@ -211,6 +216,20 @@ export async function parseCodexSessionFile(
   }
 
   return finalizeSession(accumulator, platform, { codexHome })
+}
+
+function extractCodexThreadSource(payload: Record<string, unknown>): string | null {
+  return extractString(payload.thread_source) ?? extractString(payload.threadSource)
+}
+
+function isCodexWorkerSession(payload: Record<string, unknown>): boolean {
+  const threadSource = extractCodexThreadSource(payload)
+  if (threadSource) {
+    return threadSource.toLowerCase() !== 'user'
+  }
+
+  const source = asRecord(payload.source)
+  return Boolean(asRecord(source?.subagent))
 }
 
 export async function parseGeminiSessionFile(

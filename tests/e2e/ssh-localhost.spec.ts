@@ -307,11 +307,11 @@ test.describe('Localhost SSH', () => {
       ptyId,
       [
         'opencode_status_file="$OPENCODE_CONFIG_DIR/plugins/orca-opencode-status.js"',
-        'pi_status_file="$PI_CODING_AGENT_DIR/extensions/orca-agent-status.ts"',
-        'if [ -n "$OPENCODE_CONFIG_DIR" ] && [ -f "$opencode_status_file" ] && [ -n "$PI_CODING_AGENT_DIR" ] && [ -f "$pi_status_file" ]; then',
+        'pi_status_file="$HOME/.pi/agent/extensions/orca-agent-status.ts"',
+        'if [ -n "$OPENCODE_CONFIG_DIR" ] && [ -f "$opencode_status_file" ] && [ -f "$pi_status_file" ]; then',
         `  ${emitMarkerCommand(pluginOverlayMarker)}`,
         'else',
-        `  printf '%s opencode=%s opencode_file=%s pi=%s pi_file=%s\\n' ${shellQuote(pluginOverlayFailedMarker)} "$OPENCODE_CONFIG_DIR" "$opencode_status_file" "$PI_CODING_AGENT_DIR" "$pi_status_file"`,
+        `  printf '%s opencode=%s opencode_file=%s pi_file=%s\\n' ${shellQuote(pluginOverlayFailedMarker)} "$OPENCODE_CONFIG_DIR" "$opencode_status_file" "$pi_status_file"`,
         'fi'
       ].join('\n')
     )

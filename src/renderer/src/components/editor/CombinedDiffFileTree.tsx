@@ -61,14 +61,14 @@ function buildUncommittedRows(
 }
 
 function buildBranchRows(
-  mode: Extract<CombinedDiffFileTreeMode, 'branch' | 'commit'>,
+  mode: Extract<CombinedDiffFileTreeMode, 'all' | 'branch' | 'commit'>,
   entries: readonly CombinedDiffFileTreeEntry[],
   collapsedDirectoryKeys: ReadonlySet<string>
 ): CombinedDiffTreeNode[] {
   const branchEntries = entries.filter(
     (entry): entry is GitBranchChangeEntry => !isGitStatusEntry(entry)
   )
-  const area: CombinedDiffBranchTreeArea = mode === 'branch' ? 'combined-branch' : 'combined-commit'
+  const area: CombinedDiffBranchTreeArea = mode === 'commit' ? 'combined-commit' : 'combined-branch'
   const roots = compactSourceControlTree(buildSourceControlTree(area, branchEntries))
   return flattenSourceControlTree(roots, collapsedDirectoryKeys) as CombinedDiffTreeNode[]
 }
@@ -149,12 +149,14 @@ export function CombinedDiffFileTree({
 
   const uncommittedGroups = React.useMemo(
     () =>
-      mode === 'uncommitted' ? buildUncommittedRows(filteredEntries, collapsedDirectoryKeys) : [],
+      mode === 'all' || mode === 'uncommitted'
+        ? buildUncommittedRows(filteredEntries, collapsedDirectoryKeys)
+        : [],
     [collapsedDirectoryKeys, filteredEntries, mode]
   )
   const branchRows = React.useMemo(
     () =>
-      mode === 'branch' || mode === 'commit'
+      mode === 'all' || mode === 'branch' || mode === 'commit'
         ? buildBranchRows(mode, filteredEntries, collapsedDirectoryKeys)
         : [],
     [collapsedDirectoryKeys, filteredEntries, mode]
@@ -280,27 +282,52 @@ export function CombinedDiffFileTree({
               'No files match the current filters.'
             )}
           </div>
-        ) : mode === 'uncommitted' ? (
-          uncommittedGroups.map((group) => (
-            <div key={group.area} className="py-1">
-              <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-                {group.label}
+        ) : mode === 'all' || mode === 'uncommitted' ? (
+          <>
+            {uncommittedGroups.map((group) => (
+              <div key={group.area} className="py-1">
+                <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                  {group.label}
+                </div>
+                {group.rows.map((node) => (
+                  <CombinedDiffFileTreeRow
+                    key={node.key}
+                    node={node}
+                    mode={mode}
+                    worktreePath={worktreePath}
+                    activeSectionKey={activeSectionKey}
+                    sectionIndexByKey={sectionIndexByKey}
+                    isCollapsed={collapsedDirectoryKeys.has(node.key)}
+                    onToggleDirectory={toggleDirectory}
+                    onNavigate={onNavigate}
+                  />
+                ))}
               </div>
-              {group.rows.map((node) => (
-                <CombinedDiffFileTreeRow
-                  key={node.key}
-                  node={node}
-                  mode={mode}
-                  worktreePath={worktreePath}
-                  activeSectionKey={activeSectionKey}
-                  sectionIndexByKey={sectionIndexByKey}
-                  isCollapsed={collapsedDirectoryKeys.has(node.key)}
-                  onToggleDirectory={toggleDirectory}
-                  onNavigate={onNavigate}
-                />
-              ))}
-            </div>
-          ))
+            ))}
+            {mode === 'all' && branchRows.length > 0 ? (
+              <div className="py-1">
+                <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                  {translate(
+                    'auto.components.editor.CombinedDiffFileTree.39b6b9e4e4',
+                    'Committed on Branch'
+                  )}
+                </div>
+                {branchRows.map((node) => (
+                  <CombinedDiffFileTreeRow
+                    key={node.key}
+                    node={node}
+                    mode={mode}
+                    worktreePath={worktreePath}
+                    activeSectionKey={activeSectionKey}
+                    sectionIndexByKey={sectionIndexByKey}
+                    isCollapsed={collapsedDirectoryKeys.has(node.key)}
+                    onToggleDirectory={toggleDirectory}
+                    onNavigate={onNavigate}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </>
         ) : (
           branchRows.map((node) => (
             <CombinedDiffFileTreeRow

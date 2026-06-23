@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: this prototype keeps the real-data adapter
 and current visual skeleton together until the next refinement pass decides
 which pieces become production modules. */
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
   Bell,
@@ -64,8 +64,10 @@ import {
   type MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { translate } from '@/i18n/i18n'
+import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 
 type ThreadReadFilter = 'all' | 'unread'
 type ActivityGroupBy = 'status' | 'project' | 'worktree' | 'agent'
@@ -420,7 +422,7 @@ function agentTitle(event: ActivityEvent): string {
 }
 
 function agentSummary(event: ActivityEvent): string {
-  const prompt = event.entry.prompt.trim()
+  const prompt = getAgentRowPrimaryText(event.entry)
   if (event.state === 'done') {
     const message = event.entry.lastAssistantMessage?.trim()
     return message || prompt || 'Completed the current turn.'
@@ -448,7 +450,7 @@ function paneTitleForEntry(entry: AgentStatusEntry, tab: TerminalTab): string {
   if (customTitle) {
     return customTitle
   }
-  const prompt = entry.prompt.trim()
+  const prompt = getAgentRowPrimaryText(entry)
   if (prompt) {
     return prompt
   }
@@ -989,12 +991,24 @@ export function groupActivityThreadsByStatus(threads: AgentPaneThread[]): Activi
 function threadSearchText(thread: AgentPaneThread): string {
   const latest = thread.latestEvent
   const stateLabel = threadAgentStateLabel(thread)
-  const currentPrompt = thread.currentAgentEntry?.prompt.trim() ?? ''
+  const currentPrompt = thread.currentAgentEntry
+    ? getAgentRowPrimaryText(thread.currentAgentEntry)
+    : ''
+  const rawCurrentPrompt = thread.currentAgentEntry?.prompt.trim() ?? ''
   const currentSummary = thread.currentAgentEntry?.lastAssistantMessage?.trim() ?? ''
   const latestEventText = latest
     ? `${agentTitle(latest)} ${agentSummary(latest)} ${agentMeta(latest)}`
     : ''
-  return `${thread.paneTitle} ${thread.worktree.displayName} ${thread.repo?.displayName ?? ''} ${formatAgentTypeLabel(thread.agentType)} ${stateLabel} ${currentPrompt} ${currentSummary} ${thread.responsePreview} ${latestEventText}`.toLowerCase()
+  return `${thread.paneTitle} ${thread.worktree.displayName} ${thread.repo?.displayName ?? ''} ${formatAgentTypeLabel(thread.agentType)} ${stateLabel} ${currentPrompt} ${rawCurrentPrompt} ${currentSummary} ${thread.responsePreview} ${latestEventText}`.toLowerCase()
+}
+
+export const ACTIVITY_SEARCH_QUERY_MAX_BYTES = 2 * 1024
+
+export function isActivitySearchQueryTooLarge(
+  query: string,
+  maxBytes = ACTIVITY_SEARCH_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
 export function activityThreadMatchesSearchQuery({
@@ -1004,8 +1018,78 @@ export function activityThreadMatchesSearchQuery({
   thread: AgentPaneThread
   searchQuery: string
 }): boolean {
-  const trimmedQuery = searchQuery.trim().toLowerCase()
-  return !trimmedQuery || threadSearchText(thread).includes(trimmedQuery)
+  if (isActivitySearchQueryTooLarge(searchQuery)) {
+    return false
+  }
+  const trimmedQuery = searchQuery.trim()
+  if (!trimmedQuery) {
+    return true
+  }
+  return threadSearchText(thread).includes(trimmedQuery.toLowerCase())
+}
+
+export function isActivityFilterFocusShortcut(
+  event: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey'>,
+  isMac = navigator.userAgent.includes('Mac')
+): boolean {
+  if (event.key.toLowerCase() !== 'f' || event.shiftKey || event.altKey) {
+    return false
+  }
+  return isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
+}
+
+export function shouldIgnoreActivityFilterFocusShortcutTarget(
+  target: Element | null,
+  terminalPortalTargets: (HTMLElement | null)[]
+): boolean {
+  if (!target) {
+    return false
+  }
+  // Why: the workspace terminal stays mounted while Activity is open; only the
+  // Activity-portaled terminal should keep Cmd/Ctrl+F for terminal search.
+  return terminalPortalTargets.some((portalTarget) => portalTarget?.contains(target) ?? false)
+}
+
+export function handleActivityFilterFocusShortcut({
+  activeElement,
+  event,
+  input,
+  isMac,
+  terminalPortalTargets
+}: {
+  activeElement: Element | null
+  event: Pick<
+    KeyboardEvent,
+    | 'altKey'
+    | 'ctrlKey'
+    | 'key'
+    | 'metaKey'
+    | 'preventDefault'
+    | 'shiftKey'
+    | 'stopImmediatePropagation'
+    | 'stopPropagation'
+  >
+  input: Pick<HTMLInputElement, 'focus' | 'select'> | null
+  isMac?: boolean
+  terminalPortalTargets: (HTMLElement | null)[]
+}): boolean {
+  if (shouldIgnoreActivityFilterFocusShortcutTarget(activeElement, terminalPortalTargets)) {
+    return false
+  }
+  if (!isActivityFilterFocusShortcut(event, isMac)) {
+    return false
+  }
+  if (!input) {
+    return false
+  }
+  event.preventDefault()
+  // Why: hidden workspace xterms can retain focus behind Activity; capture-phase
+  // handling must stop the chord before xterm forwards it to a local/SSH PTY.
+  event.stopPropagation()
+  event.stopImmediatePropagation()
+  input.focus()
+  input.select()
+  return true
 }
 
 function ThreadAgentStateIndicator({ thread }: { thread: AgentPaneThread }): React.JSX.Element {
@@ -1193,7 +1277,7 @@ function ThreadRow({
                       'Mark thread unread'
                     )}
                   >
-                    <Bell className="size-3 text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100 group-hover/unread:opacity-100" />
+                    <Bell className="size-3 text-muted-foreground/40 can-hover:opacity-0 transition-opacity group-hover:opacity-100 group-hover/unread:opacity-100" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="left">
@@ -1216,14 +1300,13 @@ function ThreadRow({
         {/* Why (Jump-to-workspace lives on the secondary row): the bell slot
             on the title row already holds the unread/Mark-unread state, so
             the navigation action gets its own slot down here aligned with
-            the worktree name. Reserved layout via `invisible` +
-            `pointer-events-none` keeps the worktree-name's flex-1 width
-            stable across hover. */}
+            the worktree name. On hover-capable pointers, the hidden state
+            keeps the worktree-name's flex-1 width stable across hover. */}
         {canJump ? (
           <span
             className={cn(
               'ml-auto inline-flex shrink-0 items-center transition-opacity',
-              'pointer-events-none invisible opacity-0',
+              'can-hover:pointer-events-none can-hover:invisible can-hover:opacity-0',
               'group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100'
             )}
           >
@@ -1264,6 +1347,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   const [readFilter, setReadFilter] = useState<ThreadReadFilter>('all')
   const [groupBy, setGroupBy] = useState<ActivityGroupBy>('status')
   const [query, setQuery] = useState('')
+  const activityFilterInputRef = useRef<HTMLInputElement | null>(null)
   const [compactMode, setCompactMode] = useState(false)
   const [selectedPaneKey, setSelectedPaneKey] = useState<string | null>(null)
   const [displayedPaneKey, setDisplayedPaneKey] = useState<string | null>(null)
@@ -1342,7 +1426,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   }
 
   const visibleThreads = useMemo(() => {
-    const trimmedQuery = query.trim().toLowerCase()
+    const normalizedQuery = isActivitySearchQueryTooLarge(query) ? null : query.trim().toLowerCase()
     return allThreads.filter((thread) => {
       // Why: keep the just-selected thread visible even after auto-mark-read
       // flips it to read, otherwise clicking a row in unread-only mode makes it
@@ -1354,7 +1438,10 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       ) {
         return false
       }
-      return activityThreadMatchesSearchQuery({ thread, searchQuery: trimmedQuery })
+      if (normalizedQuery === null) {
+        return false
+      }
+      return activityThreadMatchesSearchQuery({ thread, searchQuery: normalizedQuery })
     })
   }, [allThreads, readFilter, query, effectiveSelectedPaneKey])
   const visibleThreadGroups = useMemo(
@@ -1533,6 +1620,20 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     }
   }, [])
 
+  useEffect(() => {
+    const focusActivityFilter = (event: KeyboardEvent): void => {
+      handleActivityFilterFocusShortcut({
+        activeElement: document.activeElement,
+        event,
+        input: activityFilterInputRef.current,
+        terminalPortalTargets: [activePortalTargetEl, inactivePortalTargetEl]
+      })
+    }
+
+    window.addEventListener('keydown', focusActivityFilter, { capture: true })
+    return () => window.removeEventListener('keydown', focusActivityFilter, { capture: true })
+  }, [activePortalTargetEl, inactivePortalTargetEl])
+
   const markThreadRead = (thread: AgentPaneThread): void => {
     storeData.acknowledgeAgents([thread.paneKey])
   }
@@ -1638,6 +1739,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
               <div className="relative min-w-0 flex-1">
                 <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
+                  ref={activityFilterInputRef}
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder={translate(

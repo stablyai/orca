@@ -11,7 +11,7 @@ function createSettings(
       enabled: true,
       agentTaskComplete: true,
       terminalBell: true,
-      suppressWhenFocused: false,
+      suppressWhenFocused: true,
       customSoundId: 'system',
       customSoundPath: null,
       customSoundVolume: 80,

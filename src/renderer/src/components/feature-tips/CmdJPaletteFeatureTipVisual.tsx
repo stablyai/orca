@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState, type JSX } from 'react'
 import { Plus, Search } from 'lucide-react'
 import { usePrefersReducedMotion } from '@/components/feature-wall/feature-wall-modal-helpers'
-import { formatShortcutKeys, useShortcutKeys } from '@/hooks/useShortcutLabel'
+import { formatShortcutKeyComboDetails, useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 
 const TYPED_QUERY = 'auth'
@@ -49,11 +49,13 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
   const reducedMotion = usePrefersReducedMotion()
   // Why: render the live binding so the cue stays correct after a rebind and on
   // platforms where Cmd+J is not the default (Linux/Windows use Ctrl+Shift+J).
-  const shortcutKeys = useShortcutKeys('worktree.palette')
+  const shortcut = useShortcutKeyDetails('worktree.palette')
   // Why: the press animation staggers per-key chips (⌘ then J); fall back to the
   // platform default when the user disables the binding.
-  const displayShortcutKeys =
-    shortcutKeys.length > 0 ? shortcutKeys : formatShortcutKeys('worktree.palette')
+  const displayShortcut =
+    shortcut.keys.length > 0 ? shortcut : formatShortcutKeyComboDetails('worktree.palette')[0]
+  const displayShortcutKeys = displayShortcut?.keys ?? []
+  const displayShortcutDoubleTap = displayShortcut?.doubleTap === true
 
   const [phase, setPhase] = useState<CyclePhase>('idle')
   const [typedLength, setTypedLength] = useState(0)
@@ -135,7 +137,7 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
         <div className="inline-flex items-center gap-1.5">
           {displayShortcutKeys.map((key, index) => (
             <Fragment key={`${key}-${index}`}>
-              {index > 0 ? (
+              {index > 0 && !displayShortcutDoubleTap ? (
                 <span className="text-xs text-muted-foreground" aria-hidden="true">
                   +
                 </span>

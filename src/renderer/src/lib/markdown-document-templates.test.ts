@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DirEntry } from '../../../shared/types'
 import {
   applyMarkdownTemplatePlaceholders,
+  getMarkdownTemplateTitleForFileName,
   listMarkdownDocumentTemplates
 } from './markdown-document-templates'
 
@@ -61,6 +62,19 @@ describe('markdown document templates', () => {
         'Unknown: {{owner}}'
       ].join('\n')
     )
+  })
+
+  it('folds whitespace-heavy pasted filenames without whitespace regex replacement', () => {
+    const replace = vi.spyOn(String.prototype, 'replace')
+    const nonBreakingSpace = String.fromCharCode(160)
+    const fileName = `  launch___plan\t${nonBreakingSpace}${' pasted '.repeat(300)}.md`
+
+    expect(getMarkdownTemplateTitleForFileName(fileName)).toContain('Launch plan pasted pasted')
+    expect(
+      replace.mock.calls.filter(
+        ([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+'
+      )
+    ).toHaveLength(0)
   })
 
   it('discovers markdown files under .orca/templates and skips unsafe entries', async () => {

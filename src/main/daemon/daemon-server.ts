@@ -274,10 +274,14 @@ export class DaemonServer {
           env: p.env,
           envToDelete: p.envToDelete,
           command: p.command,
+          startupCommandDelivery: p.startupCommandDelivery,
           shellOverride: p.shellOverride,
           terminalWindowsWslDistro: p.terminalWindowsWslDistro,
           terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
           shellReadySupported: p.shellReadySupported,
+          ...(p.shellReadyTimeoutMs !== undefined
+            ? { shellReadyTimeoutMs: p.shellReadyTimeoutMs }
+            : {}),
           streamClient: {
             onData: (data) => {
               const lastInputAt = this.lastInputAtBySessionId.get(p.sessionId)
@@ -345,7 +349,7 @@ export class DaemonServer {
 
       case 'kill':
         this.lastInputAtBySessionId.delete(request.payload.sessionId)
-        this.host.kill(request.payload.sessionId)
+        this.host.kill(request.payload.sessionId, { immediate: request.payload.immediate })
         return {}
 
       case 'signal':
@@ -380,7 +384,8 @@ export class DaemonServer {
         // those bytes on top of a snapshot that already contains them.
         return this.host.takePendingOutput(
           request.payload.sessionId,
-          request.payload.includeSnapshot === true
+          request.payload.includeSnapshot === true,
+          { teardownSnapshot: request.payload.teardownSnapshot === true }
         )
 
       case 'ping':

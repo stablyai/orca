@@ -7,6 +7,7 @@ function pr(overrides: Partial<GitHubPRMergeStateInput> = {}): GitHubPRMergeStat
     mergeable: 'MERGEABLE',
     mergeStateStatus: 'CLEAN',
     checksSummary: { state: 'success', total: 1, passed: 1, failed: 0, pending: 0 },
+    autoMergeAllowed: true,
     ...overrides
   }
 }
@@ -59,6 +60,13 @@ describe('presentGitHubPRMergeState', () => {
       presentGitHubPRMergeState(pr({ mergeable: 'UNKNOWN', mergeStateStatus: 'DIRTY' }))
         .autoMergeAction
     ).toBeNull()
+  })
+
+  it('does not offer enable auto-merge when GitHub reports the repository disallows it', () => {
+    expect(presentGitHubPRMergeState(pr({ autoMergeAllowed: false })).autoMergeAction).toBeNull()
+    expect(
+      presentGitHubPRMergeState(pr({ autoMergeAllowed: undefined })).autoMergeAction
+    ).toMatchObject({ kind: 'enable', label: 'Enable auto-merge' })
   })
 
   it('offers disable auto-merge when GitHub reports auto-merge is already enabled', () => {

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildRegistry } from '../core'
+import { CLIPBOARD_TEXT_WRITE_MAX_BYTES } from '../../../../shared/clipboard-text'
 
 const computerMocks = vi.hoisted(() => ({
   callComputerSidecarAction: vi.fn(),
@@ -236,6 +237,14 @@ describe('computer RPC methods', () => {
     expect(() =>
       findMethod('computer.hotkey').params!.parse({ app: 'Finder', key: 'Ctrl+A+B' })
     ).toThrow(/Hotkey requires a modifier and one key/)
+  })
+
+  it('leaves pasteText byte limits to async sidecar validation', () => {
+    const text = 'x'.repeat(CLIPBOARD_TEXT_WRITE_MAX_BYTES + 1)
+
+    expect(
+      findMethod('computer.pasteText').params!.safeParse({ app: 'Finder', text }).success
+    ).toBe(true)
   })
 })
 

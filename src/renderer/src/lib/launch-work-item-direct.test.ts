@@ -139,6 +139,7 @@ describe('launchWorkItemDirect', () => {
     })
     mocks.resolvePrBase.mockResolvedValue({
       baseBranch: 'abc123',
+      compareBaseRef: 'refs/remotes/origin/main',
       headSha: 'abc123',
       branchNameOverride: 'feature/fix',
       pushTarget: { remoteName: 'origin', branchName: 'feature/fix' }
@@ -162,6 +163,19 @@ describe('launchWorkItemDirect', () => {
           addedAt: 1
         }
       ],
+      activeRepoId: 'repo-1',
+      activeWorktreeId: null,
+      projects: [
+        {
+          id: 'repo-1',
+          displayName: 'Repo',
+          badgeColor: '#000000',
+          sourceRepoIds: ['repo-1'],
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      worktreesByRepo: {},
       settings: {
         defaultTuiAgent: 'codex',
         disabledTuiAgents: [],
@@ -217,10 +231,20 @@ describe('launchWorkItemDirect', () => {
         type: 'pr',
         number: 42,
         title: 'Fix the bug',
-        url: 'https://github.com/acme/repo/pull/42'
+        url: 'https://github.com/acme/repo/pull/42',
+        branchName: 'feature/fix',
+        baseRefName: 'main',
+        isCrossRepository: true
       }
     })
 
+    expect(mocks.resolvePrBase).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      prNumber: 42,
+      headRefName: 'feature/fix',
+      baseRefName: 'main',
+      isCrossRepository: true
+    })
     expect(mocks.createWorktree).toHaveBeenCalledWith(
       'repo-1',
       'review-pr-42',
@@ -242,7 +266,11 @@ describe('launchWorkItemDirect', () => {
       undefined,
       undefined,
       undefined,
-      undefined
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'refs/remotes/origin/main'
     )
   })
 
@@ -284,6 +312,10 @@ describe('launchWorkItemDirect', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
       undefined
     )
   })
@@ -307,7 +339,8 @@ describe('launchWorkItemDirect', () => {
       agent: 'cursor',
       launchCommand: 'cursor-agent',
       expectedProcess: 'cursor-agent',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: { agentArgs: '', agentEnv: {} }
     })
     mocks.store.createWorktree.mockResolvedValue({
       worktree: { id: 'wt-ssh', path: '/home/orca/repo-worktrees/issue-77' }
@@ -468,5 +501,58 @@ describe('launchWorkItemDirect', () => {
     expect(mocks.ensureDetectedAgents).not.toHaveBeenCalled()
     const activationOptions = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]
     expect(activationOptions.startup.command).toContain('unset ORCA_PI_PREFILL')
+  })
+
+  it('plans direct local Windows-path launches with POSIX startup for WSL project runtime', async () => {
+    mocks.store.repos = [
+      {
+        id: 'repo-1',
+        path: 'C:\\Users\\alice\\repo',
+        displayName: 'Repo',
+        addedAt: 1
+      }
+    ]
+    mocks.store.projects = [
+      {
+        id: 'repo-1',
+        displayName: 'Repo',
+        badgeColor: '#000000',
+        sourceRepoIds: ['repo-1'],
+        createdAt: 1,
+        updatedAt: 1,
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+      }
+    ]
+    mocks.store.createWorktree.mockResolvedValue({
+      worktree: {
+        id: 'repo-1::C:\\Users\\alice\\repo-worktree',
+        path: 'C:\\Users\\alice\\repo-worktree'
+      }
+    })
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+
+    await expect(
+      launchWorkItemDirect({
+        item: {
+          title: 'Fix failing checks',
+          url: 'https://github.com/acme/repo/pull/1',
+          type: 'issue',
+          number: 1,
+          pasteContent: 'Fix the failing checks.'
+        },
+        repoId: 'repo-1',
+        openModalFallback: mocks.openModalFallback,
+        launchSource: 'task_page',
+        agentOverride: 'codex',
+        promptDelivery: 'submit-after-ready'
+      })
+    ).resolves.toBe(true)
+
+    expect(buildAgentStartupPlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'codex',
+        platform: 'linux'
+      })
+    )
   })
 })

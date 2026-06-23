@@ -11,7 +11,9 @@
     "lint": "oxlint",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
-    "mock-server": "npx tsx scripts/mock-server.ts"
+    "mock-server": "npx tsx scripts/mock-server.ts",
+    "repro:workspace-picker-lag": "npx tsx scripts/repro-workspace-picker-lag.ts",
+    "start:emulator": "node scripts/start-emulator.mjs"
   },
   "dependencies": {
     "@orca/expo-two-way-audio": "file:./packages/expo-two-way-audio",
@@ -24,7 +26,11 @@
     "expo-constants": "^55.0.16",
     "expo-crypto": "^55.0.14",
     "expo-dev-client": "~55.0.35",
+    "expo-document-picker": "^55.0.13",
+    "expo-file-system": "55.0.19",
     "expo-haptics": "^55.0.14",
+    "expo-image-manipulator": "^55.0.17",
+    "expo-image-picker": "^55.0.20",
     "expo-linking": "^55.0.15",
     "expo-modules-core": "~55.0.25",
     "expo-network": "~55.0.14",
@@ -47,7 +53,7 @@
     "react-native-webview": "^13.16.1",
     "react-native-worklets": "^0.8.3",
     "tweetnacl": "^1.0.3",
-    "ws": "^8.20.1",
+    "ws": "^8.21.0",
     "zod": "~4.4.3",
     "zustand": "^5.0.13"
   },

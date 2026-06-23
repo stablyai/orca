@@ -2,6 +2,7 @@ import type { SettingsSearchEntry } from './settings-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
+import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
@@ -146,12 +147,49 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
     },
     {
       title: translate(
+        'auto.components.settings.experimental.search.agentHibernation.title',
+        'Agent sleep'
+      ),
+      description: translate(
+        'auto.components.settings.experimental.search.agentHibernation.description',
+        'Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again. Agent sleep preserves launch options for agents started by Orca; manually started agents may resume with current Orca defaults.'
+      ),
+      keywords: [
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.0d24759f14',
+          'experimental'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.agentHibernation.agent',
+          'agent'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.agentHibernation.agents',
+          'agents'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.agentHibernation.sleep',
+          'sleep'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.agentHibernation.minutes',
+          'minutes'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.agentHibernation.terminal',
+          'terminal'
+        )
+      ]
+    },
+    getNewWorktreeCardStyleSearchEntry(),
+    {
+      title: translate(
         'auto.components.settings.experimental.search.78c2a8dc74',
-        'Symlinks on worktrees'
+        'Shared paths on worktrees'
       ),
       description: translate(
         'auto.components.settings.experimental.search.603d29ed74',
-        'Automatically symlink configured files or folders into newly created worktrees so shared state (envs, caches, installs) stays connected.'
+        'Automatically materialize configured files or folders into newly created worktrees using APFS clone-copy on macOS when possible, otherwise symlinks.'
       ),
       keywords: [
         ...translateSearchKeyword(
@@ -216,8 +254,23 @@ export function getExperimentalSearchEntry() {
     terminalAttention: findEntry(
       translate('auto.components.settings.experimental.search.9e4ddf776d', 'Terminal attention')
     ),
+    agentHibernation: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.agentHibernation.title',
+        'Agent sleep'
+      )
+    ),
+    newWorktreeCardStyle: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.newWorktreeCardStyle.title',
+        'New card style'
+      )
+    ),
     symlinksOnWorktrees: findEntry(
-      translate('auto.components.settings.experimental.search.78c2a8dc74', 'Symlinks on worktrees')
+      translate(
+        'auto.components.settings.experimental.search.78c2a8dc74',
+        'Shared paths on worktrees'
+      )
     )
   } as const
 }

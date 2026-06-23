@@ -5,12 +5,14 @@ import { createHash } from 'crypto'
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
-import { safeStorage } from 'electron'
+import { net, safeStorage, session } from 'electron'
 import {
   CredentialDecryptionError,
   credentialFileHasContent,
   readStoredCredentialToken
 } from '../integration-credential-file'
+import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
+import { withSpan } from '../observability/tracer'
 import type {
   JiraConnectArgs,
   JiraConnectionStatus,
@@ -18,6 +20,13 @@ import type {
   JiraSiteSelection,
   JiraViewer
 } from '../../shared/types'
+
+// Why: Atlassian's XSRF filter rejects POST/PUT REST calls that carry a browser
+// User-Agent, failing them with "XSRF check failed" even under API-token auth.
+// Electron's net.fetch sends a Chrome UA, so issue search/create/update/comment
+// all 403'd while GET calls (connect, /myself) passed. A non-browser UA is the
+// reliable fix; X-Atlassian-Token: no-check is not honored for this case.
+const JIRA_API_USER_AGENT = 'Orca'
 
 const MAX_CONCURRENT = 4
 let running = 0
@@ -303,6 +312,55 @@ function authHeader(email: string, apiToken: string): string {
   return `Basic ${Buffer.from(`${email}:${apiToken}`).toString('base64')}`
 }
 
+function describeErrorCause(error: unknown): string | undefined {
+  if (!error || typeof error !== 'object' || !('cause' in error)) {
+    return undefined
+  }
+  const cause = (error as { cause?: unknown }).cause
+  if (cause instanceof Error) {
+    return `${cause.name}: ${cause.message}`
+  }
+  return cause === undefined ? undefined : String(cause)
+}
+
+async function jiraFetch(url: string, init: RequestInit): Promise<Response> {
+  return withSpan(
+    'jira.request',
+    async (span) => {
+      span.setAttribute('jira.siteUrl', new URL(url).origin)
+      await ensureElectronProxyFromEnvironment({
+        proxySession: session.defaultSession,
+        probeUrl: url
+      }).catch((error) => {
+        span.addEvent('jira.proxySetupFailed', {
+          errorName: error instanceof Error ? error.name : typeof error,
+          errorMessage: error instanceof Error ? error.message : String(error)
+        })
+      })
+      try {
+        // Why: Electron's network stack follows Chromium proxy/session state,
+        // avoiding undici's stale keep-alive sockets after VPN path changes.
+        return await net.fetch(url, init)
+      } catch (error) {
+        span.setAttribute(
+          'jira.transportErrorName',
+          error instanceof Error ? error.name : typeof error
+        )
+        span.setAttribute(
+          'jira.transportErrorMessage',
+          error instanceof Error ? error.message : String(error)
+        )
+        const cause = describeErrorCause(error)
+        if (cause) {
+          span.setAttribute('jira.transportErrorCause', cause)
+        }
+        throw error
+      }
+    },
+    { kind: 'client' }
+  )
+}
+
 async function requestWithCredentials(
   siteUrl: string,
   email: string,
@@ -313,8 +371,9 @@ async function requestWithCredentials(
   const headers = new Headers(init?.headers)
   headers.set('Accept', 'application/json')
   headers.set('Content-Type', 'application/json')
+  headers.set('User-Agent', JIRA_API_USER_AGENT)
   headers.set('Authorization', authHeader(email, apiToken))
-  const response = await fetch(`${siteUrl}${path}`, {
+  const response = await jiraFetch(`${siteUrl}${path}`, {
     ...init,
     headers
   })
@@ -356,8 +415,9 @@ export async function jiraRequest<T>(
   const headers = new Headers(init?.headers)
   headers.set('Accept', 'application/json')
   headers.set('Content-Type', 'application/json')
+  headers.set('User-Agent', JIRA_API_USER_AGENT)
   headers.set('Authorization', client.authorization)
-  const response = await fetch(`${client.site.siteUrl}${path}`, {
+  const response = await jiraFetch(`${client.site.siteUrl}${path}`, {
     ...init,
     headers
   })
@@ -523,5 +583,7 @@ export function clearToken(siteId: string): void {
 }
 
 export function isAuthError(error: unknown): boolean {
-  return error instanceof JiraApiError && (error.status === 401 || error.status === 403)
+  // Why: Jira returns 403 for project/API permission gaps even when /myself
+  // succeeds, so only 401 means the saved credential itself is invalid.
+  return error instanceof JiraApiError && error.status === 401
 }

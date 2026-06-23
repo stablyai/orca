@@ -192,9 +192,8 @@ export function getActiveServerModeDescription(allowLocalRuntime: boolean): stri
 
 type RuntimeServerConnectionState = 'connected' | 'checking' | 'disconnected'
 
-function getRuntimeServerConnectionState(
-  details: RuntimeHostDetails | undefined,
-  _active: boolean
+export function getRuntimeServerConnectionState(
+  details: RuntimeHostDetails | undefined
 ): RuntimeServerConnectionState {
   if (!details || details.status === 'loading') {
     return 'checking'
@@ -202,6 +201,10 @@ function getRuntimeServerConnectionState(
   if (details.status !== 'ready' || details.compatibility?.kind === 'blocked') {
     return 'disconnected'
   }
+  // Why: an attached, reachable, compatible host is "Connected" (and exposes
+  // Disconnect). Whether it is the default *active* server is a separate concept,
+  // surfaced by the Advanced > Active Server selector and the row's help text —
+  // it must not change this connection label, or the dot/label/button disagree.
   return 'connected'
 }
 
@@ -864,7 +867,8 @@ export function RuntimeEnvironmentsPane({
                     const details = detailsByEnvironmentId[environment.id]
                     const detailsDescription = getHostDetailsDescription(details)
                     const isActive = settings.activeRuntimeEnvironmentId === environment.id
-                    const connectionState = getRuntimeServerConnectionState(details, isActive)
+                    const connectionState = getRuntimeServerConnectionState(details)
+                    // A connected host exposes Disconnect; otherwise Connect.
                     const isReachable = connectionState === 'connected'
                     const actionBusy =
                       connectingId === environment.id ||

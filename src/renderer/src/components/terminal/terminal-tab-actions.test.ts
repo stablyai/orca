@@ -267,6 +267,119 @@ describe('closeTerminalTab', () => {
     expect(closeWebRuntimeSessionTabMock).not.toHaveBeenCalled()
     expect(closeTab).toHaveBeenCalledWith('local-agent-tab')
   })
+
+  function makePinnedTabState(
+    overrides: { confirmClosePinnedTab: boolean } & Record<string, unknown>
+  ): Record<string, unknown> {
+    const { confirmClosePinnedTab, ...rest } = overrides
+    return {
+      settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab },
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'unified-pinned-1',
+            entityId: 'pinned-entity-1',
+            contentType: 'terminal',
+            groupId: 'group-1',
+            worktreeId: 'wt-1',
+            label: 'Server',
+            generatedLabel: null,
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0,
+            isPreview: false,
+            isPinned: true
+          }
+        ]
+      },
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'pinned-entity-1',
+      openFiles: [],
+      browserTabsByWorktree: {},
+      closeTab: vi.fn(),
+      closeUnifiedTab: vi.fn(),
+      setActiveTab: vi.fn(),
+      setActiveWorktree: vi.fn(),
+      requestPinnedTabCloseConfirm: vi.fn(),
+      ...rest
+    }
+  }
+
+  it('routes a pinned tab through the confirmation guard instead of closing it', () => {
+    const requestPinnedTabCloseConfirm = vi.fn()
+    const closeUnifiedTab = vi.fn()
+    getStateMock.mockReturnValue(
+      makePinnedTabState({
+        confirmClosePinnedTab: true,
+        requestPinnedTabCloseConfirm,
+        closeUnifiedTab
+      })
+    )
+
+    closeTerminalTab('pinned-entity-1')
+
+    expect(closeUnifiedTab).not.toHaveBeenCalled()
+    expect(requestPinnedTabCloseConfirm).toHaveBeenCalledTimes(1)
+    expect(requestPinnedTabCloseConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({ tabLabel: 'Server', onConfirm: expect.any(Function) })
+    )
+  })
+
+  it('closes the pinned tab when the confirmation callback runs', () => {
+    const requestPinnedTabCloseConfirm = vi.fn()
+    const closeUnifiedTab = vi.fn()
+    getStateMock.mockReturnValue(
+      makePinnedTabState({
+        confirmClosePinnedTab: true,
+        requestPinnedTabCloseConfirm,
+        closeUnifiedTab
+      })
+    )
+
+    closeTerminalTab('pinned-entity-1')
+    const { onConfirm } = requestPinnedTabCloseConfirm.mock.calls[0][0] as { onConfirm: () => void }
+    onConfirm()
+
+    expect(closeUnifiedTab).toHaveBeenCalledWith('unified-pinned-1')
+  })
+
+  it('guards a pinned tab closed by its unified id (workspace overlay path)', () => {
+    const requestPinnedTabCloseConfirm = vi.fn()
+    const closeUnifiedTab = vi.fn()
+    getStateMock.mockReturnValue(
+      makePinnedTabState({
+        confirmClosePinnedTab: true,
+        requestPinnedTabCloseConfirm,
+        closeUnifiedTab
+      })
+    )
+
+    // Why: TerminalPaneOverlayLayer closes by terminalTab.id (the unified id),
+    // not the entityId. The guard must still recognize it as pinned.
+    closeTerminalTab('unified-pinned-1')
+
+    expect(closeUnifiedTab).not.toHaveBeenCalled()
+    expect(requestPinnedTabCloseConfirm).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes a pinned tab immediately when the confirmation setting is off', () => {
+    const requestPinnedTabCloseConfirm = vi.fn()
+    const closeUnifiedTab = vi.fn()
+    getStateMock.mockReturnValue(
+      makePinnedTabState({
+        confirmClosePinnedTab: false,
+        requestPinnedTabCloseConfirm,
+        closeUnifiedTab
+      })
+    )
+
+    closeTerminalTab('pinned-entity-1')
+
+    expect(requestPinnedTabCloseConfirm).not.toHaveBeenCalled()
+    expect(closeUnifiedTab).toHaveBeenCalledWith('unified-pinned-1')
+  })
 })
 
 describe('closeOtherTerminalTabs', () => {

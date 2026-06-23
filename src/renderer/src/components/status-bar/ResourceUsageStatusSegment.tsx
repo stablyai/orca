@@ -40,15 +40,14 @@ import type { AppMemory, UsageValues, Worktree } from '../../../../shared/types'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { isWorkspaceOldForCleanup } from '../../../../shared/workspace-cleanup'
-import {
-  mergeSnapshotAndSessions,
-  UNATTRIBUTED_REPO_ID,
-  type DaemonSession,
-  type Metric,
-  type UnifiedProjectGroup,
-  type UnifiedSessionRow,
-  type UnifiedWorktreeRow
-} from './mergeSnapshotAndSessions'
+import { mergeSnapshotAndSessions, UNATTRIBUTED_REPO_ID } from './mergeSnapshotAndSessions'
+import type {
+  DaemonSession,
+  Metric,
+  UnifiedProjectGroup,
+  UnifiedSessionRow,
+  UnifiedWorktreeRow
+} from './resource-usage-merge-types'
 import { WorkspaceSpaceCompactPanel } from './WorkspaceSpaceCompactPanel'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
 import {
@@ -69,6 +68,11 @@ import {
   getResourceManagerAriaLabel,
   getResourceManagerTooltipLines
 } from './resource-manager-terminal-copy'
+import {
+  buildResourceSessionBindingIndex,
+  countUnboundDaemonSessions,
+  type ResourceSessionBindingInputs
+} from './resource-session-bindings'
 import { translate } from '@/i18n/i18n'
 
 const POLL_MS = 2_000
@@ -414,7 +418,7 @@ function SessionRow({
           className={cn(
             'rounded p-0.5 text-muted-foreground transition-opacity hover:bg-destructive/10 hover:text-destructive',
             session.bound &&
-              'opacity-0 group-hover/sessrow:opacity-100 group-focus-within/sessrow:opacity-100 focus-visible:opacity-100'
+              'can-hover:opacity-0 group-hover/sessrow:opacity-100 group-focus-within/sessrow:opacity-100 focus-visible:opacity-100'
           )}
           aria-label={translate(
             'auto.components.status.bar.ResourceUsageStatusSegment.fa6d36758d',
@@ -528,18 +532,20 @@ function WorktreeRow({
         </button>
         <div className="flex items-center gap-2 shrink-0 pr-3">
           <div className="relative">
+            {/* Why: no-hover devices show the action overlay by default, so
+                the sparkline yields there just like it does during hover. */}
             <span
               className={cn(
                 'block transition-opacity',
                 showWorktreeActions &&
-                  'group-hover/wtrow:opacity-0 group-hover/wtrow:pointer-events-none group-focus-within/wtrow:opacity-0 group-focus-within/wtrow:pointer-events-none'
+                  'group-hover/wtrow:opacity-0 group-hover/wtrow:pointer-events-none group-focus-within/wtrow:opacity-0 group-focus-within/wtrow:pointer-events-none [@media(hover:none)]:opacity-0 [@media(hover:none)]:pointer-events-none'
               )}
               aria-hidden={showWorktreeActions ? undefined : true}
             >
               <Sparkline samples={worktree.history} />
             </span>
             {showWorktreeActions && (
-              <div className="absolute inset-0 flex items-center justify-end gap-0.5 opacity-0 pointer-events-none transition-opacity group-hover/wtrow:opacity-100 group-hover/wtrow:pointer-events-auto group-focus-within/wtrow:opacity-100 group-focus-within/wtrow:pointer-events-auto">
+              <div className="absolute inset-0 flex items-center justify-end gap-0.5 can-hover:opacity-0 can-hover:pointer-events-none transition-opacity group-hover/wtrow:opacity-100 group-hover/wtrow:pointer-events-auto group-focus-within/wtrow:opacity-100 group-focus-within/wtrow:pointer-events-auto">
                 <Tooltip delayDuration={300}>
                   <TooltipTrigger asChild>
                     <button
@@ -731,6 +737,8 @@ export function ResourceUsageStatusSegment({
   const fetchSnapshot = useAppStore((s) => s.fetchMemorySnapshot)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
+  const tabsByWorktreeForPtyBindings = useAppStore((s) => s.tabsByWorktree)
+  const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
   const setActiveView = useAppStore((s) => s.setActiveView)
   const openModal = useAppStore((s) => s.openModal)
   const openSpacePage = useAppStore((s) => s.openSpacePage)
@@ -777,6 +785,17 @@ export function ResourceUsageStatusSegment({
   // While a runtime server is active, hiding local samples avoids showing or
   // killing sessions from the wrong machine.
   const resourceSnapshot = runtimeEnvironmentActive ? null : snapshot
+  // Why: ptyIdsByTabId intentionally tracks mounted/live panes only. Resource
+  // Manager also reads restored wake hints, but only for classification.
+  const resourceSessionBindings = useMemo<ResourceSessionBindingInputs>(
+    () => ({
+      ptyIdsByTabId,
+      tabsByWorktree: tabsByWorktreeForPtyBindings,
+      terminalLayoutsByTabId,
+      workspaceSessionReady
+    }),
+    [ptyIdsByTabId, tabsByWorktreeForPtyBindings, terminalLayoutsByTabId, workspaceSessionReady]
+  )
 
   // Why: after a kill confirms and the session unmounts, focus would otherwise
   // fall to <body>. We park a ref on the popover body so we can restore focus
@@ -946,6 +965,7 @@ export function ResourceUsageStatusSegment({
         ? mergeSnapshotAndSessions(resourceSnapshot, sessions, {
             tabsByWorktree,
             ptyIdsByTabId,
+            terminalLayoutsByTabId,
             runtimePaneTitlesByTabId,
             workspaceSessionReady,
             repoDisplayNameById,
@@ -959,6 +979,7 @@ export function ResourceUsageStatusSegment({
       sessions,
       tabsByWorktree,
       ptyIdsByTabId,
+      terminalLayoutsByTabId,
       runtimePaneTitlesByTabId,
       workspaceSessionReady,
       repoDisplayNameById,
@@ -968,28 +989,12 @@ export function ResourceUsageStatusSegment({
 
   // Why: orphanCount drives the trigger badge (always visible in the status
   // bar, popover open or not) so it must compute outside the open-gate.
-  // Build the bound set with a single flat walk instead of nested Object
-  // iterations to keep this light on every store update.
   const orphanCount = useMemo(() => {
     if (!workspaceSessionReady || runtimeEnvironmentActive) {
       return 0
     }
-    const bound = new Set<string>()
-    for (const ids of Object.values(ptyIdsByTabId)) {
-      for (const id of ids) {
-        if (id) {
-          bound.add(id)
-        }
-      }
-    }
-    let n = 0
-    for (const s of sessions) {
-      if (!bound.has(s.id)) {
-        n++
-      }
-    }
-    return n
-  }, [sessions, ptyIdsByTabId, workspaceSessionReady, runtimeEnvironmentActive])
+    return countUnboundDaemonSessions(sessions, resourceSessionBindings)
+  }, [sessions, resourceSessionBindings, workspaceSessionReady, runtimeEnvironmentActive])
 
   const { totalMemory, totalCpu, hostShare, memBadgeLabel } = useMemo(() => {
     const memory = resourceSnapshot?.totalMemory ?? 0
@@ -1122,14 +1127,7 @@ export function ResourceUsageStatusSegment({
     if (!workspaceSessionReady) {
       return
     }
-    const bound = new Set<string>()
-    for (const ids of Object.values(ptyIdsByTabId)) {
-      for (const id of ids) {
-        if (id) {
-          bound.add(id)
-        }
-      }
-    }
+    const bound = buildResourceSessionBindingIndex(resourceSessionBindings).boundPtyIds
     const orphans = sessions.filter((s) => !bound.has(s.id))
     if (orphans.length === 0) {
       return
@@ -1140,7 +1138,7 @@ export function ResourceUsageStatusSegment({
     setSessions((prev) => prev.filter((s) => !orphanIds.has(s.id)))
     await Promise.allSettled(orphans.map((s) => window.api.pty.kill(s.id)))
     void refreshSessions()
-  }, [sessions, ptyIdsByTabId, workspaceSessionReady, refreshSessions])
+  }, [sessions, resourceSessionBindings, workspaceSessionReady, refreshSessions])
 
   const runKillConfirmed = useCallback(async () => {
     if (!killConfirm) {

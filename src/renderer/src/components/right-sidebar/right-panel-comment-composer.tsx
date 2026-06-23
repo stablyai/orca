@@ -5,6 +5,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { cn } from '@/lib/utils'
 import {
+  getCommentBodySubmitState,
+  hasBoundedCommentBodyText
+} from '@/lib/comment-body-submit-state'
+import {
   clearRightPanelCommentFocusTimer,
   scheduleRightPanelCommentFocusTimer
 } from './right-panel-comment-focus-timers'
@@ -134,14 +138,23 @@ export function RightPanelCommentComposer({
   )
 
   const submit = useCallback(async () => {
-    const trimmed = body.trim()
-    if (!trimmed || submitting || disabled) {
+    const bodyState = getCommentBodySubmitState(body)
+    if (bodyState.status === 'empty' || submitting || disabled) {
+      return
+    }
+    if (bodyState.status === 'too-large-leading-whitespace') {
+      setError(
+        translate(
+          'auto.components.right.sidebar.right.panel.comment.composer.commentTooLarge',
+          'Comment is too large to submit safely.'
+        )
+      )
       return
     }
     setSubmitting(true)
     setError(null)
     try {
-      const result = await onSubmit(trimmed)
+      const result = await onSubmit(bodyState.body)
       if (result.ok) {
         setBody('')
         onCancel?.()
@@ -154,6 +167,7 @@ export function RightPanelCommentComposer({
       setSubmitting(false)
     }
   }, [body, disabled, onCancel, onSubmit, submitting])
+  const canSubmitComment = hasBoundedCommentBodyText(body)
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -272,7 +286,7 @@ export function RightPanelCommentComposer({
               type="button"
               size="xs"
               aria-label={submitLabel}
-              disabled={disabled || submitting || body.trim().length === 0}
+              disabled={disabled || submitting || !canSubmitComment}
               onClick={() => void submit()}
             >
               {submitting

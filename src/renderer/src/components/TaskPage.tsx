@@ -22,6 +22,7 @@ import {
   Files,
   GitMerge,
   GitPullRequest,
+  GitPullRequestDraft,
   List,
   LoaderCircle,
   Lock,
@@ -85,6 +86,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import TaskProjectSourceCombobox from '@/components/task-project-source-combobox'
 import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
 import { LinearScopeSelector } from '@/components/linear-scope-selector'
@@ -106,8 +108,17 @@ import {
   getGitHubPRPrimaryReviewer,
   getGitHubPRReviewLabel,
   normalizeGitHubReviewerLogins,
+  parseGitHubReviewerInputLogins,
   type GitHubPRPrimaryReviewer
 } from '@/components/github-pr-reviewer-display'
+import {
+  filterGitHubPRReviewerCandidates,
+  getGitHubPRReviewerQueryState
+} from '@/components/github/github-pr-reviewer-candidate-filter'
+import {
+  filterJiraProjectPickerProjects,
+  getJiraProjectPickerDisplayLabel as getJiraProjectDisplayLabel
+} from '@/components/jira-project-picker-filter'
 import {
   getLinearStateMarkerStyle,
   getLinearStatePillStyle
@@ -155,6 +166,10 @@ import {
 } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
+import {
+  readLinearBoardIssueDragData,
+  writeLinearBoardIssueDragData
+} from '@/lib/linear-board-drag-payload'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
@@ -196,8 +211,18 @@ import {
   resolveTaskPageGitHubStatusStateDraft,
   updateTaskPageGitHubStatusLocalState
 } from '@/components/task-page-github-status-state'
+import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page-github-work-item-status-badge'
+import {
+  getTaskPageGitHubPRIconTone,
+  isTaskPageGitHubDraftPR
+} from '@/components/task-page-github-work-item-status'
+import {
+  createTaskPageJiraLoadFailureState,
+  type TaskPageJiraLoadError
+} from '@/components/task-page-jira-load-state'
 import { deriveTaskPagePRCheckSummary } from '@/components/task-page-pr-check-summary'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
+import { buildJiraCreateTextAdf } from '@/components/jira-create-adf'
 import {
   GITHUB_PR_MERGE_METHOD_LABELS,
   resolveGitHubPRMergeMethods
@@ -531,8 +556,6 @@ type LinearIssueListRow =
   | { type: 'section'; key: string; label: string; count: number }
   | { type: 'issue'; issue: LinearIssue }
 
-const LINEAR_BOARD_DRAG_ISSUE_MIME = 'application/x-orca-linear-issue-id'
-
 const LINEAR_CUSTOM_VIEW_MODELS = ['issue', 'project'] satisfies readonly LinearCustomViewModel[]
 
 function mergeLinearCollectionResults<T>(
@@ -803,6 +826,51 @@ function groupLinearIssues(
   return [...sections.values()]
 }
 
+function TaskPageJiraErrorBanner({
+  error,
+  open,
+  onOpenChange
+}: {
+  error: TaskPageJiraLoadError
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}): React.JSX.Element {
+  return (
+    <Collapsible
+      open={open}
+      onOpenChange={onOpenChange}
+      className="border-b border-border bg-destructive/10 px-4 py-3 text-sm text-destructive"
+    >
+      <div className="flex items-start gap-2">
+        <AlertCircle className="mt-0.5 size-4 flex-none" />
+        <div className="min-w-0 flex-1">
+          <div className="font-medium leading-5">{error.title}</div>
+          {error.details ? (
+            <>
+              <CollapsibleTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="-ml-1 mt-1 h-6 px-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  {open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+                  {translate('auto.components.TaskPage.40eaf2c27c', 'Details')}
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="mt-1 rounded-md border border-destructive/20 bg-background/80 px-2 py-1.5 font-mono text-xs text-foreground">
+                  {error.details}
+                </div>
+              </CollapsibleContent>
+            </>
+          ) : null}
+        </div>
+      </div>
+    </Collapsible>
+  )
+}
+
 function getLinearIssueGridTemplate(visibleProperties: ReadonlySet<LinearDisplayProperty>): string {
   const columns = ['96px', 'minmax(240px,1.55fr)']
   if (visibleProperties.has('labels')) {
@@ -847,14 +915,6 @@ const jiraProjectLabelCollator = new Intl.Collator(undefined, {
   sensitivity: 'base'
 })
 
-function getJiraProjectDisplayLabel(project: JiraProject, includeSiteName: boolean): string {
-  const projectLabel = `${project.name} (${project.key})`
-  if (includeSiteName && project.siteName) {
-    return `${project.siteName} · ${projectLabel}`
-  }
-  return projectLabel
-}
-
 function compareJiraProjectsByDisplayLabel(
   a: JiraProject,
   b: JiraProject,
@@ -873,17 +933,6 @@ function compareJiraProjectsByDisplayLabel(
   return jiraProjectLabelCollator.compare(a.key, b.key)
 }
 
-function getJiraProjectSearchText(project: JiraProject, includeSiteName: boolean): string {
-  return [
-    getJiraProjectDisplayLabel(project, includeSiteName),
-    project.key,
-    project.name,
-    project.siteName ?? ''
-  ]
-    .join(' ')
-    .toLocaleLowerCase()
-}
-
 const JIRA_CREATE_SYSTEM_FIELD_KEYS = new Set(['project', 'issuetype', 'summary', 'description'])
 
 function isVisibleJiraCreateField(field: JiraCreateField): boolean {
@@ -900,17 +949,6 @@ function findJiraCreateAllowedValue(field: JiraCreateField, draftValue: string) 
   return field.allowedValues?.find((value) => {
     return value.id === draftValue || value.value === draftValue || value.name === draftValue
   })
-}
-
-function jiraCreateTextToAdf(text: string): Record<string, unknown> {
-  return {
-    type: 'doc',
-    version: 1,
-    content: text.split(/\r?\n/).map((line) => ({
-      type: 'paragraph',
-      content: line ? [{ type: 'text', text: line }] : []
-    }))
-  }
 }
 
 function getJiraCreateOptionPayload(
@@ -954,7 +992,7 @@ function buildJiraCreateFieldValue(field: JiraCreateField, draftValue: string): 
     return Number.isFinite(numberValue) ? numberValue : trimmed
   }
   if (field.schema?.custom?.includes(':textarea') || field.schema?.type === 'textarea') {
-    return jiraCreateTextToAdf(trimmed)
+    return buildJiraCreateTextAdf(trimmed)
   }
   return trimmed
 }
@@ -1087,11 +1125,7 @@ function GHStatusCell({
   )
 
   if (item.type !== 'issue' || !repo) {
-    return (
-      <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 opacity-70 dark:text-emerald-200">
-        {translate('auto.components.TaskPage.606a85c774', 'Open')}
-      </span>
-    )
+    return <TaskPageGitHubWorkItemStateBadge item={item} />
   }
 
   return (
@@ -1884,32 +1918,22 @@ function PRReviewCell({
       ),
     [localReviewRequests]
   )
-  const reviewerQuery = reviewerInput.trim().replace(/^@/, '').toLowerCase()
-  const filteredReviewerCandidates = useMemo(() => {
-    const query = reviewerQuery
-    return reviewerCandidates
-      .filter((user) => {
-        const login = user.login.toLowerCase()
-        return (
-          query.length === 0 ||
-          login.includes(query) ||
-          (user.name ?? '').toLowerCase().includes(query)
-        )
-      })
-      .sort((a, b) => {
-        const aLogin = a.login.toLowerCase()
-        const bLogin = b.login.toLowerCase()
-        const aStarts = aLogin.startsWith(query)
-        const bStarts = bLogin.startsWith(query)
-        if (aStarts !== bStarts) {
-          return aStarts ? -1 : 1
-        }
-        return a.login.localeCompare(b.login)
-      })
-  }, [reviewerCandidates, reviewerQuery])
+  const reviewerQueryState = useMemo(
+    () => getGitHubPRReviewerQueryState(reviewerInput),
+    [reviewerInput]
+  )
+  const reviewerQuery = reviewerQueryState.query
+  const filteredReviewerCandidates = useMemo(
+    () =>
+      filterGitHubPRReviewerCandidates({
+        candidates: reviewerCandidates,
+        queryState: reviewerQueryState
+      }),
+    [reviewerCandidates, reviewerQueryState]
+  )
   const suggestedReviewerRows = useMemo(
     () =>
-      reviewerQuery.length === 0
+      reviewerQuery.length === 0 && !reviewerQueryState.isTooLarge
         ? reviewerSeedUsers
             .filter((user) => !selectedReviewerLogins.has(user.login.toLowerCase()))
             .filter((user) => user.login.toLowerCase() !== authorLogin)
@@ -1920,6 +1944,7 @@ function PRReviewCell({
       authorLogin,
       reviewerCandidatesByLogin,
       reviewerQuery.length,
+      reviewerQueryState.isTooLarge,
       reviewerSeedUsers,
       selectedReviewerLogins
     ]
@@ -1975,7 +2000,7 @@ function PRReviewCell({
       return
     }
     const logins = normalizeGitHubReviewerLogins(
-      requestedLogins ?? reviewerInput.split(/[\s,]+/),
+      requestedLogins ?? parseGitHubReviewerInputLogins(reviewerInput),
       selectedReviewerLogins
     )
     if (logins.length === 0) {
@@ -2476,6 +2501,7 @@ function PRMergeCell({
                 repo: runtimeRepoId,
                 prNumber: item.number,
                 enabled,
+                method: enabled ? mergeMethods.defaultMethod : undefined,
                 prRepo: item.prRepo ?? null
               },
               { timeoutMs: 30_000 }
@@ -2486,6 +2512,7 @@ function PRMergeCell({
               sourceContext,
               prNumber: item.number,
               enabled,
+              method: enabled ? mergeMethods.defaultMethod : undefined,
               prRepo: item.prRepo ?? null
             })
       if (result.ok) {
@@ -4146,7 +4173,8 @@ export default function TaskPage(): React.JSX.Element {
   // Jira tab state
   const [jiraIssues, setJiraIssues] = useState<JiraIssue[]>([])
   const [jiraLoading, setJiraLoading] = useState(false)
-  const [jiraError, setJiraError] = useState<string | null>(null)
+  const [jiraError, setJiraError] = useState<TaskPageJiraLoadError | null>(null)
+  const [jiraErrorDetailsOpen, setJiraErrorDetailsOpen] = useState(false)
   const [jiraSearchInput, setJiraSearchInput] = useState('')
   const [appliedJiraSearch, setAppliedJiraSearch] = useState('')
   const [activeJiraPreset, setActiveJiraPreset] = useState<JiraPresetId>('assigned')
@@ -4946,9 +4974,10 @@ export default function TaskPage(): React.JSX.Element {
         event.preventDefault()
         return
       }
-      event.dataTransfer.effectAllowed = 'move'
-      event.dataTransfer.setData(LINEAR_BOARD_DRAG_ISSUE_MIME, issue.id)
-      event.dataTransfer.setData('text/plain', issue.id)
+      if (!writeLinearBoardIssueDragData(event.dataTransfer, issue.id)) {
+        event.preventDefault()
+        return
+      }
       setLinearBoardDraggingIssueId(issue.id)
     },
     [linearBoardUpdatingIssueIds, linearStatusBoardEnabled]
@@ -4977,8 +5006,13 @@ export default function TaskPage(): React.JSX.Element {
         return
       }
 
+      const draggedIssue = readLinearBoardIssueDragData(event.dataTransfer)
       const issueId =
-        event.dataTransfer.getData(LINEAR_BOARD_DRAG_ISSUE_MIME) || linearBoardDraggingIssueId
+        draggedIssue.status === 'issue'
+          ? draggedIssue.issueId
+          : draggedIssue.status === 'hidden'
+            ? linearBoardDraggingIssueId
+            : null
       const issue = filteredLinearIssues.find((item) => item.id === issueId)
       if (
         !issue ||
@@ -5345,13 +5379,11 @@ export default function TaskPage(): React.JSX.Element {
   )
 
   const filteredNewJiraIssueProjects = useMemo(() => {
-    const query = newJiraIssueProjectQuery.trim().toLocaleLowerCase()
-    if (!query) {
-      return sortedAvailableJiraProjects
-    }
-    return sortedAvailableJiraProjects.filter((project) =>
-      getJiraProjectSearchText(project, includeJiraSiteNameInProjectLabel).includes(query)
-    )
+    return filterJiraProjectPickerProjects({
+      projects: sortedAvailableJiraProjects,
+      query: newJiraIssueProjectQuery,
+      includeSiteName: includeJiraSiteNameInProjectLabel
+    })
   }, [includeJiraSiteNameInProjectLabel, newJiraIssueProjectQuery, sortedAvailableJiraProjects])
 
   const newJiraIssueTargetProject = useMemo(
@@ -7252,6 +7284,7 @@ export default function TaskPage(): React.JSX.Element {
     let cancelled = false
     setJiraLoading(true)
     setJiraError(null)
+    setJiraErrorDetailsOpen(false)
 
     const trimmed = appliedJiraSearch.trim()
     const request =
@@ -7273,7 +7306,9 @@ export default function TaskPage(): React.JSX.Element {
         if (cancelled) {
           return
         }
-        setJiraError(err instanceof Error ? err.message : 'Failed to load Jira issues.')
+        const failureState = createTaskPageJiraLoadFailureState(err)
+        setJiraIssues(failureState.issues)
+        setJiraError(failureState.error)
         setJiraLoading(false)
       })
 
@@ -7555,7 +7590,9 @@ export default function TaskPage(): React.JSX.Element {
                                   )
                                 })
                               }}
+                              data-task-source={source.id}
                               aria-label={sourceAvailabilityNotice?.label ?? source.label}
+                              aria-pressed={active}
                               className={cn(
                                 'group flex h-8 w-8 items-center justify-center rounded-md border transition',
                                 active
@@ -7725,91 +7762,84 @@ export default function TaskPage(): React.JSX.Element {
                         })}
                       </div>
                     ) : null}
-                    {/* Why: the repo combobox filters Items mode by repo. In
-                        Project mode the row set comes from the project's
-                        view filter (server-side), so this control would be
-                        inert — hide it to avoid suggesting it does
-                        something. */}
-                    {githubMode !== 'project' && (
-                      <>
-                        <div className="min-w-0 max-w-[220px] shrink-0">
-                          <TaskProjectSourceCombobox
-                            groups={taskPickerGroups}
-                            selected={repoSelection}
-                            getRepoHostLabel={getTaskPickerRepoHostLabel}
-                            onChange={(next) => {
-                              const normalized = normalizeTaskRepoSelection(eligibleRepos, next)
-                              setRepoSelection(normalized)
-                              void updateSettings({ defaultRepoSelection: [...normalized] }).catch(
-                                () => {
-                                  toast.error(
-                                    translate(
-                                      'auto.components.TaskPage.dfd72673e7',
-                                      'Failed to save project selection.'
-                                    )
-                                  )
-                                }
-                              )
-                            }}
-                            onSelectAll={() => {
-                              const allIds = new Set(taskPickerRepos.map((r) => r.id))
-                              setRepoSelection(allIds)
-                              void updateSettings({ defaultRepoSelection: null }).catch(() => {
-                                toast.error(
-                                  translate(
-                                    'auto.components.TaskPage.dfd72673e7',
-                                    'Failed to save project selection.'
-                                  )
+                    {/* Why: Project rows are now repo-scoped too, so the
+                        selection must stay visible in both GitHub modes. */}
+                    <div className="min-w-0 max-w-[220px] shrink-0">
+                      <TaskProjectSourceCombobox
+                        groups={taskPickerGroups}
+                        selected={repoSelection}
+                        getRepoHostLabel={getTaskPickerRepoHostLabel}
+                        onChange={(next) => {
+                          const normalized = normalizeTaskRepoSelection(eligibleRepos, next)
+                          setRepoSelection(normalized)
+                          void updateSettings({ defaultRepoSelection: [...normalized] }).catch(
+                            () => {
+                              toast.error(
+                                translate(
+                                  'auto.components.TaskPage.dfd72673e7',
+                                  'Failed to save project selection.'
                                 )
-                              })
-                            }}
-                            triggerClassName="h-8 w-auto max-w-[220px] rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
-                          />
-                        </div>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon-sm"
-                              onClick={() => {
-                                if (!selectedGitHubRepoExternalLink?.url) {
-                                  return
-                                }
-                                void window.api.shell.openUrl(selectedGitHubRepoExternalLink.url)
-                              }}
-                              aria-label={
-                                selectedGitHubRepoExternalLink
-                                  ? translate(
-                                      'auto.components.TaskPage.8d1e17a3ef',
-                                      'Open {{value0}} in GitHub',
-                                      { value0: selectedGitHubRepoExternalLink.label }
-                                    )
-                                  : translate(
-                                      'auto.components.TaskPage.d1132848f8',
-                                      'Select one GitHub project to open in GitHub'
-                                    )
-                              }
-                              className="h-8 w-8 rounded-md border-border/50 bg-muted/50 text-foreground shadow-sm transition hover:bg-muted/50"
-                            >
-                              <ExternalLink className="size-3.5" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" sideOffset={6}>
-                            {selectedGitHubRepoExternalLink
+                              )
+                            }
+                          )
+                        }}
+                        onSelectAll={() => {
+                          const allIds = new Set(taskPickerRepos.map((r) => r.id))
+                          setRepoSelection(allIds)
+                          void updateSettings({ defaultRepoSelection: null }).catch(() => {
+                            toast.error(
+                              translate(
+                                'auto.components.TaskPage.dfd72673e7',
+                                'Failed to save project selection.'
+                              )
+                            )
+                          })
+                        }}
+                        triggerClassName="h-8 w-auto max-w-[220px] rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
+                      />
+                    </div>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon-sm"
+                          onClick={() => {
+                            if (!selectedGitHubRepoExternalLink?.url) {
+                              return
+                            }
+                            void window.api.shell.openUrl(selectedGitHubRepoExternalLink.url)
+                          }}
+                          aria-label={
+                            selectedGitHubRepoExternalLink
                               ? translate(
                                   'auto.components.TaskPage.8d1e17a3ef',
                                   'Open {{value0}} in GitHub',
                                   { value0: selectedGitHubRepoExternalLink.label }
                                 )
                               : translate(
-                                  'auto.components.TaskPage.bc46d8204e',
-                                  'Select one project to open in GitHub'
-                                )}
-                          </TooltipContent>
-                        </Tooltip>
-                      </>
-                    )}
+                                  'auto.components.TaskPage.d1132848f8',
+                                  'Select one GitHub project to open in GitHub'
+                                )
+                          }
+                          className="h-8 w-8 rounded-md border-border/50 bg-muted/50 text-foreground shadow-sm transition hover:bg-muted/50"
+                        >
+                          <ExternalLink className="size-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        {selectedGitHubRepoExternalLink
+                          ? translate(
+                              'auto.components.TaskPage.8d1e17a3ef',
+                              'Open {{value0}} in GitHub',
+                              { value0: selectedGitHubRepoExternalLink.label }
+                            )
+                          : translate(
+                              'auto.components.TaskPage.bc46d8204e',
+                              'Select one project to open in GitHub'
+                            )}
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 ) : null}
 
@@ -8586,7 +8616,7 @@ export default function TaskPage(): React.JSX.Element {
                 initialTab={dialogInitialTab}
                 repoPath={dialogRepoPath}
                 repoId={dialogWorkItem.repoId}
-                variant="page"
+                sourceContext={dialogSourceContext}
                 backLabel="GitHub list"
                 onUse={(item) => {
                   setDialogWorkItem(null)
@@ -8598,7 +8628,7 @@ export default function TaskPage(): React.JSX.Element {
             )
           ) : taskSource === 'github' && githubMode === 'project' ? (
             <div className="mt-3 flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-md border border-border/50 bg-muted/50 shadow-sm">
-              <ProjectViewWrapper />
+              <ProjectViewWrapper selectedRepoIds={repoSelection} />
             </div>
           ) : taskSource === 'github' ? (
             <div className="flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-muted/50 shadow-sm">
@@ -8782,6 +8812,29 @@ export default function TaskPage(): React.JSX.Element {
                       const attachedWorkspaceLabel = attachedWorkspace
                         ? getGithubWorkItemWorkspaceAttachmentLabel(attachedWorkspace)
                         : null
+                      const githubTaskIdPill = (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 text-muted-foreground"
+                          aria-label={`${item.type === 'pr' ? (isTaskPageGitHubDraftPR(item) ? 'Draft pull request' : 'Pull request') : 'Issue'} #${item.number}`}
+                        >
+                          {item.type === 'pr' ? (
+                            isTaskPageGitHubDraftPR(item) ? (
+                              <GitPullRequestDraft
+                                className={cn('size-3', getTaskPageGitHubPRIconTone(item))}
+                                aria-hidden="true"
+                              />
+                            ) : (
+                              <GitPullRequest
+                                className={cn('size-3', getTaskPageGitHubPRIconTone(item))}
+                                aria-hidden="true"
+                              />
+                            )
+                          ) : (
+                            <CircleDot className="size-3" aria-hidden="true" />
+                          )}
+                          <span className="font-mono text-[11px] font-normal">#{item.number}</span>
+                        </span>
+                      )
                       return (
                         // Why: the row is a clickable container rather than a
                         // <button> because it holds nested interactive elements
@@ -8811,36 +8864,30 @@ export default function TaskPage(): React.JSX.Element {
                           )}
                         >
                           <div className={GITHUB_TASK_STICKY_ID_CELL_CLASS}>
-                            <span
-                              className={cn(
-                                'inline-flex items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5',
-                                item.state === 'merged'
-                                  ? 'text-purple-600 dark:text-purple-300'
-                                  : item.state === 'closed'
-                                    ? 'text-rose-600 dark:text-rose-300'
-                                    : 'text-muted-foreground'
-                              )}
-                            >
-                              {item.type === 'pr' ? (
-                                <GitPullRequest className="size-3" />
-                              ) : (
-                                <CircleDot className="size-3" />
-                              )}
-                              <span className="font-mono text-[11px] font-normal">
-                                #{item.number}
-                              </span>
-                            </span>
+                            {isTaskPageGitHubDraftPR(item) ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>{githubTaskIdPill}</TooltipTrigger>
+                                <TooltipContent side="bottom" sideOffset={6}>
+                                  {translate('auto.components.TaskPage.054bf695cc', 'Draft')}
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : (
+                              githubTaskIdPill
+                            )}
                           </div>
 
                           <div className={GITHUB_TASK_STICKY_TITLE_CELL_CLASS}>
-                            <div className="flex items-center gap-2">
+                            <div className="flex min-w-0 items-center gap-2">
                               <h3 className="truncate text-sm font-semibold text-foreground">
                                 {item.title}
                               </h3>
-                              {item.type === 'pr' && item.state === 'draft' ? (
-                                <span className="shrink-0 rounded-full border border-slate-500/30 bg-slate-500/10 px-1.5 py-0 text-[10px] font-medium text-slate-600 dark:text-slate-300">
-                                  {translate('auto.components.TaskPage.054bf695cc', 'Draft')}
-                                </span>
+                              {item.type === 'pr' &&
+                              item.state !== 'open' &&
+                              item.state !== 'draft' ? (
+                                <TaskPageGitHubWorkItemStateBadge
+                                  item={item}
+                                  className="shrink-0 px-1.5 py-0"
+                                />
                               ) : null}
                               {selectedRepos.length > 1 && itemRepo ? (
                                 // Why: disambiguate rows when multiple repos are in
@@ -8863,6 +8910,14 @@ export default function TaskPage(): React.JSX.Element {
                               </span>
                               {selectedRepos.length === 1 && itemRepo ? (
                                 <span>{itemRepo.displayName}</span>
+                              ) : null}
+                              {item.type === 'pr' && item.state === 'draft' ? (
+                                <>
+                                  <span aria-hidden="true">·</span>
+                                  <span>
+                                    {translate('auto.components.TaskPage.054bf695cc', 'Draft')}
+                                  </span>
+                                </>
                               ) : null}
                               {item.type === 'pr' && formatPRDelta(item) ? (
                                 <span className="inline-flex items-center gap-1">
@@ -9406,10 +9461,17 @@ export default function TaskPage(): React.JSX.Element {
                   className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
                   style={{ scrollbarGutter: 'stable' }}
                 >
-                  {(jiraStatus.credentialError ?? jiraError) ? (
+                  {jiraStatus.credentialError ? (
                     <div className="border-b border-border px-4 py-4 text-sm text-destructive">
-                      {jiraStatus.credentialError ?? jiraError}
+                      {jiraStatus.credentialError}
                     </div>
+                  ) : null}
+                  {!jiraStatus.credentialError && jiraError ? (
+                    <TaskPageJiraErrorBanner
+                      error={jiraError}
+                      open={jiraErrorDetailsOpen}
+                      onOpenChange={setJiraErrorDetailsOpen}
+                    />
                   ) : null}
 
                   {jiraLoading && jiraIssues.length === 0 ? (
@@ -12073,24 +12135,6 @@ export default function TaskPage(): React.JSX.Element {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <GitHubItemDialog
-        workItem={dialogWorkItem}
-        repoPath={
-          // Why: the dialog is for a single item — resolve its repoPath from the
-          // item's own repoId (set when fan-out merged the list) so it works in
-          // cross-repo mode too. Reusing the memoized repo map avoids an O(n)
-          // scan on every render while the dialog is open.
-          dialogWorkItem ? (repoMap.get(dialogWorkItem.repoId)?.path ?? null) : null
-        }
-        repoId={dialogWorkItem?.repoId ?? null}
-        sourceContext={dialogSourceContext}
-        onUse={(item) => {
-          setDialogWorkItem(null)
-          handleUseWorkItem(item)
-        }}
-        onClose={() => setDialogWorkItem(null)}
-      />
 
       <GitLabItemDialog
         item={gitlabDialogItem}

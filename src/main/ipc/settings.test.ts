@@ -7,6 +7,7 @@ const {
   handleMock,
   previewGhosttyImportMock,
   previewWarpThemeImportMock,
+  prepareLocalWorktreeRootsForReposMock,
   rebuildAppMenuMock
 } = vi.hoisted(() => ({
   applyAppIconMock: vi.fn(),
@@ -15,6 +16,7 @@ const {
   handleMock: vi.fn(),
   previewGhosttyImportMock: vi.fn(),
   previewWarpThemeImportMock: vi.fn(),
+  prepareLocalWorktreeRootsForReposMock: vi.fn(),
   rebuildAppMenuMock: vi.fn()
 }))
 
@@ -38,6 +40,10 @@ vi.mock('../network/proxy-settings', () => ({
 
 vi.mock('../app-icon', () => ({
   applyAppIcon: applyAppIconMock
+}))
+
+vi.mock('../worktree-root-preparation', () => ({
+  prepareLocalWorktreeRootsForRepos: prepareLocalWorktreeRootsForReposMock
 }))
 
 vi.mock('../menu/register-app-menu', () => ({
@@ -69,6 +75,7 @@ describe('registerSettingsHandlers', () => {
     applyElectronProxySettingsMock.mockResolvedValue({ source: 'settings' })
     previewGhosttyImportMock.mockClear()
     previewWarpThemeImportMock.mockClear()
+    prepareLocalWorktreeRootsForReposMock.mockReset().mockResolvedValue(undefined)
     rebuildAppMenuMock.mockClear()
     browserWindowGetAllWindowsMock.mockReset()
     store.getSettings.mockReset()
@@ -213,6 +220,51 @@ describe('registerSettingsHandlers', () => {
     handler(settingsInvokeEvent, { defaultTuiAgent: 'codex' })
 
     expect(agentAwakeService.setEnabled).not.toHaveBeenCalled()
+  })
+
+  it('prepares local worktree roots when workspace directory changes', async () => {
+    store.getSettings.mockReturnValue({ workspaceDir: '/old/workspaces', nestWorkspaces: false })
+    store.updateSettings.mockReturnValue({ workspaceDir: '/new/workspaces', nestWorkspaces: false })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { workspaceDir: '/new/workspaces' })
+
+    expect(prepareLocalWorktreeRootsForReposMock).toHaveBeenCalledWith(store)
+  })
+
+  it('prepares local worktree roots when workspace nesting changes', async () => {
+    store.getSettings.mockReturnValue({ workspaceDir: '/workspaces', nestWorkspaces: false })
+    store.updateSettings.mockReturnValue({ workspaceDir: '/workspaces', nestWorkspaces: true })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { nestWorkspaces: true })
+
+    expect(prepareLocalWorktreeRootsForReposMock).toHaveBeenCalledWith(store)
+  })
+
+  it('does not prepare local worktree roots when workspace layout values do not change', async () => {
+    store.getSettings.mockReturnValue({ workspaceDir: '/workspaces', nestWorkspaces: false })
+    store.updateSettings.mockReturnValue({ workspaceDir: '/workspaces', nestWorkspaces: false })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { workspaceDir: '/workspaces', nestWorkspaces: false })
+
+    expect(prepareLocalWorktreeRootsForReposMock).not.toHaveBeenCalled()
   })
 
   it('does not accept floating workspace trust grants from renderer settings IPC', async () => {

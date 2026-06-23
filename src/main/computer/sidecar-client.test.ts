@@ -1,6 +1,11 @@
 import { EventEmitter } from 'events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS,
+  CLIPBOARD_TEXT_WRITE_MAX_BYTES,
+  CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR
+} from '../../shared/clipboard-text'
+import {
   callComputerSidecarAction,
   callComputerSidecarCapabilities,
   resetComputerSidecarForTest
@@ -232,6 +237,45 @@ describe('computer sidecar client', () => {
         path: 'clipboard',
         verification: { state: 'unverified', reason: 'clipboard_paste' }
       }
+    })
+  })
+
+  it('rejects oversized pasteText payloads before forking the sidecar', async () => {
+    const secret = 'sidecar-secret-token'
+
+    await expect(
+      callComputerSidecarAction('pasteText', {
+        app: 'Finder',
+        text: secret + 'x'.repeat(CLIPBOARD_TEXT_WRITE_MAX_BYTES + 1)
+      })
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR
+    })
+
+    expect(children).toHaveLength(0)
+  })
+
+  it('yields while validating large accepted pasteText payloads before forking', async () => {
+    const text = 'é'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+
+    const call = callComputerSidecarAction('pasteText', { app: 'Finder', text })
+    await Promise.resolve()
+
+    expect(children).toHaveLength(0)
+
+    await vi.advanceTimersByTimeAsync(0)
+    expect(children).toHaveLength(1)
+    const child = children[0]!
+    const request = child.sent[0]!
+    child.emit('message', {
+      id: request.id,
+      ok: true,
+      result: { action: { path: 'clipboard', actionName: 'paste' } }
+    })
+
+    await expect(call).resolves.toMatchObject({
+      action: { path: 'clipboard' }
     })
   })
 

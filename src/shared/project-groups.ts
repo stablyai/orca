@@ -135,6 +135,31 @@ export function getProjectGroupSubtreeIds(
   return subtreeIds
 }
 
+/** Manual rank for a project inside a group bucket. Explicit
+ *  `projectGroupOrder` wins; otherwise fall back to global repo order so drag
+ *  midpoint math and sidebar sorting stay aligned. */
+export function getEffectiveProjectGroupManualRank(
+  repo: Pick<Repo, 'id' | 'projectGroupOrder'> | undefined,
+  repoOrderRankById?: ReadonlyMap<string, number>,
+  siblingFallbackIndex?: number
+): number {
+  if (!repo) {
+    return Number.POSITIVE_INFINITY
+  }
+  const order = repo.projectGroupOrder
+  if (typeof order === 'number' && Number.isFinite(order)) {
+    return order
+  }
+  const repoRank = repoOrderRankById?.get(repo.id)
+  if (repoRank !== undefined) {
+    return repoRank * 1000
+  }
+  if (siblingFallbackIndex !== undefined) {
+    return siblingFallbackIndex * 1000
+  }
+  return Number.POSITIVE_INFINITY
+}
+
 export function getNextProjectGroupOrder(repos: readonly Repo[], groupId: string | null): number {
   let max = -1
   for (const repo of repos) {

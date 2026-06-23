@@ -108,7 +108,7 @@ describe('mapRuntimeError', () => {
     const response = mapRuntimeError(
       'req_1',
       { runtimeId: 'runtime-1' },
-      new LineageError('Parent workspace was not found.')
+      new LineageError('Parent selector was not found.')
     )
 
     expect(response).toEqual({
@@ -116,7 +116,7 @@ describe('mapRuntimeError', () => {
       ok: false,
       error: {
         code: 'LINEAGE_PARENT_NOT_FOUND',
-        message: 'Parent workspace was not found.',
+        message: 'Parent selector was not found.',
         data: {
           nextSteps: ['Run `orca worktree list`.', 'Retry with --no-parent.']
         }

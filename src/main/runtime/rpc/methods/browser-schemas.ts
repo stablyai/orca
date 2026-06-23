@@ -9,6 +9,7 @@ import {
   OptionalFiniteNumber,
   OptionalPlainString,
   OptionalString,
+  requiredStringAllowingEmpty,
   requiredString
 } from '../schemas'
 
@@ -22,9 +23,7 @@ export const Goto = BrowserTarget.extend({
 
 export const Fill = BrowserTarget.extend({
   element: requiredString('Missing required --element'),
-  value: z.custom<string>((v) => typeof v === 'string', {
-    message: 'Missing required --value'
-  })
+  value: requiredStringAllowingEmpty('Missing required --value')
 })
 
 export const Type = BrowserTarget.extend({
@@ -118,7 +117,12 @@ export const TabCreate = z.object({
   url: OptionalString,
   worktree: OptionalString,
   profileId: OptionalString,
-  waitForRegistration: z.boolean().optional()
+  waitForRegistration: z.boolean().optional(),
+  // User-initiated opens focus the tab; agent/automation opens stay background.
+  activate: z.boolean().optional(),
+  // Why: the split group whose "+" was clicked, so a headless host places the
+  // new browser tab there instead of coalescing into the first/active group.
+  targetGroupId: OptionalString
 })
 
 export const TabShow = z.object({
@@ -153,9 +157,7 @@ export const ProfileCreate = z.object({
   scope: z.enum(['isolated', 'imported'])
 })
 
-export const ProfileDelete = z.object({
-  profileId: requiredString('Missing required --profile')
-})
+export const ProfileDelete = z.object({ profileId: requiredString('Missing required --profile') })
 
 export const ProfileImportFromBrowser = z.object({
   profileId: requiredString('Missing required --profile'),

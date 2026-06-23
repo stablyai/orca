@@ -5,8 +5,11 @@ import type {
   LinearCollectionResult,
   LinearIssue
 } from '../../../../shared/types'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 
 export type SmartNameMode = 'smart' | 'github' | 'gitlab' | 'branches' | 'linear' | 'text'
+
+export const SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES = 2048
 
 export type SmartWorkspaceSourceRow =
   | { kind: 'use-name'; value: string; name: string }
@@ -31,6 +34,13 @@ export function getSmartWorkspaceEmptyHint(mode: SmartNameMode): string {
   return EMPTY_HINT_BY_MODE[mode]
 }
 
+export function isSmartWorkspaceSourceQueryWithinLimit(
+  query: string,
+  maxBytes = SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES
+): boolean {
+  return !isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
+
 export function getBranchSearchRequest({
   branchesEnabled,
   disabled,
@@ -48,15 +58,18 @@ export function getBranchSearchRequest({
   query: string
   limit: number
 }): { repoId: string; query: string; limit: number } | null {
-  const trimmedQuery = query.trim()
-  const shouldSearchBranches = mode === 'branches' || (mode === 'smart' && trimmedQuery.length > 0)
   if (
     branchesEnabled === false ||
     disabled ||
     textOnly ||
-    !selectedRepoId ||
-    !shouldSearchBranches
+    !isSmartWorkspaceSourceQueryWithinLimit(query) ||
+    !selectedRepoId
   ) {
+    return null
+  }
+  const trimmedQuery = query.trim()
+  const shouldSearchBranches = mode === 'branches' || (mode === 'smart' && trimmedQuery.length > 0)
+  if (!shouldSearchBranches) {
     return null
   }
   return { repoId: selectedRepoId, query: trimmedQuery, limit }
@@ -77,6 +90,9 @@ export function getVisibleBranchResults({
   selectedRepoId: string | null
   value: string
 }): BaseRefSearchResult[] {
+  if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
+    return []
+  }
   const currentQuery = value.trim()
   if (mode !== 'branches' && mode !== 'smart') {
     return []
@@ -108,6 +124,9 @@ export function buildSmartWorkspaceSourceRows({
   resultLimit: number
   value: string
 }): SmartWorkspaceSourceRow[] {
+  if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
+    return []
+  }
   const trimmed = value.trim()
   const nextRows: SmartWorkspaceSourceRow[] = []
   if (trimmed && mode === 'smart') {
@@ -120,7 +139,7 @@ export function buildSmartWorkspaceSourceRows({
     nextRows.push(
       ...githubItems.map((item) => ({
         kind: 'github' as const,
-        value: `github-${item.type}-${item.number}`,
+        value: `github-${item.repoId}-${item.type}-${item.number}`,
         item
       }))
     )
@@ -129,7 +148,7 @@ export function buildSmartWorkspaceSourceRows({
     nextRows.push(
       ...gitlabItems.map((item) => ({
         kind: 'gitlab' as const,
-        value: `gitlab-${item.type}-${item.number}`,
+        value: `gitlab-${item.repoId}-${item.type}-${item.number}`,
         item
       }))
     )

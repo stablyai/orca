@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { HeadlessEmulator } from './headless-emulator'
 
+function expectedNativePath(posixPath: string): string {
+  return posixPath
+}
+
 describe('HeadlessEmulator', () => {
   let emulator: HeadlessEmulator
 
@@ -48,6 +52,52 @@ describe('HeadlessEmulator', () => {
       const snapshot = emulator.getSnapshot()
       expect(snapshot.snapshotAnsi).toContain('red text')
     })
+
+    it('captures OSC 8 link ranges in snapshot metadata', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+      await emulator.write('\x1b]8;;https://news.ycombinator.com\x07Hacker News\x1b]8;;\x07')
+
+      expect(emulator.getSnapshot().oscLinks).toEqual([
+        {
+          row: 0,
+          startCol: 0,
+          endCol: 11,
+          uri: 'https://news.ycombinator.com'
+        }
+      ])
+    })
+
+    it('captures scrollback OSC 8 ranges in unrestricted snapshots', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 2, scrollback: 10 })
+      await emulator.write('\x1b]8;;https://example.com/old\x07old\x1b]8;;\x07\r\nplain\r\nvisible')
+
+      expect(emulator.getSnapshot().oscLinks).toContainEqual({
+        row: 0,
+        startCol: 0,
+        endCol: 3,
+        uri: 'https://example.com/old'
+      })
+      expect(
+        emulator
+          .getSnapshot({ scrollbackRows: 0 })
+          .oscLinks?.some((link) => link.uri === 'https://example.com/old')
+      ).toBe(false)
+    })
+
+    it('projects restored OSC 8 ranges into serialized snapshot windows', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+      await emulator.write('issue #1234 done')
+      emulator.setRestoredOscLinks([
+        { row: 0, startCol: 6, endCol: 11, uri: 'https://example.com/issue/1234' }
+      ])
+
+      expect(emulator.getSnapshot().oscLinks).toContainEqual({
+        row: 0,
+        startCol: 6,
+        endCol: 11,
+        uri: 'https://example.com/issue/1234'
+      })
+    })
   })
 
   describe('OSC-7 CWD tracking', () => {
@@ -55,30 +105,38 @@ describe('HeadlessEmulator', () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
       await emulator.write('\x1b]7;file://localhost/Users/test/project\x07')
 
-      expect(emulator.getSnapshot().cwd).toBe('/Users/test/project')
+      expect(emulator.getSnapshot().cwd).toBe(expectedNativePath('/Users/test/project'))
     })
 
     it('handles OSC-7 with empty host', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
       await emulator.write('\x1b]7;file:///home/user/work\x07')
 
-      expect(emulator.getSnapshot().cwd).toBe('/home/user/work')
+      expect(emulator.getSnapshot().cwd).toBe(expectedNativePath('/home/user/work'))
     })
 
     it('updates CWD when new OSC-7 arrives', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
       await emulator.write('\x1b]7;file:///first\x07')
-      expect(emulator.getSnapshot().cwd).toBe('/first')
+      expect(emulator.getSnapshot().cwd).toBe(expectedNativePath('/first'))
 
       await emulator.write('\x1b]7;file:///second\x07')
-      expect(emulator.getSnapshot().cwd).toBe('/second')
+      expect(emulator.getSnapshot().cwd).toBe(expectedNativePath('/second'))
+    })
+
+    it('keeps earlier file CWD when a later OSC-7 URI is unsupported', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+
+      await emulator.write('\x1b]7;file:///kept\x07\x1b]7;http://example.invalid/rejected\x07')
+
+      expect(emulator.getSnapshot().cwd).toBe(expectedNativePath('/kept'))
     })
 
     it('decodes percent-encoded paths', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
       await emulator.write('\x1b]7;file:///Users/test/my%20project\x07')
 
-      expect(emulator.getSnapshot().cwd).toBe('/Users/test/my project')
+      expect(emulator.getSnapshot().cwd).toBe(expectedNativePath('/Users/test/my project'))
     })
 
     it('normalizes Windows drive-letter OSC-7 paths', async () => {
@@ -117,7 +175,7 @@ describe('HeadlessEmulator', () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
       await emulator.write('\x1b]7;file:///path/here\x1b\\')
 
-      expect(emulator.getSnapshot().cwd).toBe('/path/here')
+      expect(emulator.getSnapshot().cwd).toBe(expectedNativePath('/path/here'))
     })
 
     it('tracks OSC-7 CWD across split PTY chunks', async () => {
@@ -126,7 +184,7 @@ describe('HeadlessEmulator', () => {
       await emulator.write('\x1b]7;file:///split')
       await emulator.write('/project\x07')
 
-      expect(emulator.getSnapshot().cwd).toBe('/split/project')
+      expect(emulator.getSnapshot().cwd).toBe(expectedNativePath('/split/project'))
     })
 
     it('tracks OSC-7 CWD when ESC and OSC marker arrive in separate chunks', async () => {
@@ -135,7 +193,7 @@ describe('HeadlessEmulator', () => {
       await emulator.write('\x1b')
       await emulator.write(']7;file:///split-escape\x07')
 
-      expect(emulator.getSnapshot().cwd).toBe('/split-escape')
+      expect(emulator.getSnapshot().cwd).toBe(expectedNativePath('/split-escape'))
     })
   })
 

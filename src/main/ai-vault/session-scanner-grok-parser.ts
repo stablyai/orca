@@ -13,11 +13,15 @@ import {
 } from './session-scanner-accumulator'
 import {
   asRecord,
+  extractPreviewContentText,
   extractString,
+  normalizePreviewText,
   normalizeTitleText,
   numberValue,
   parseJsonObject
 } from './session-scanner-values'
+
+const GROK_USER_QUERY_PREVIEW_SCAN_LIMIT = 4096
 
 export async function parseGrokSessionFile(
   file: FileWithMtime,
@@ -79,32 +83,52 @@ async function consumeGrokChatHistory(
   }
 }
 
-function extractGrokContentText(value: unknown): string | null {
-  const text = extractGrokRawContentText(value)
-  if (!text) {
-    return null
+export function extractGrokContentText(value: unknown): string | null {
+  if (typeof value === 'string') {
+    return extractGrokStringContentText(value)
   }
-  return text.match(/<user_query>\s*([\s\S]*?)\s*<\/user_query>/i)?.[1]?.trim() || text
+  return extractPreviewContentText(value)
 }
 
-function extractGrokRawContentText(value: unknown): string | null {
-  if (typeof value === 'string') {
-    return extractString(value)
+function extractGrokStringContentText(text: string): string | null {
+  const bounds = grokUserQueryEnvelopeBounds(text)
+  if (!bounds) {
+    return normalizePreviewText(text)
   }
-  if (!Array.isArray(value)) {
+
+  const boundedEnd = Math.min(bounds.end, bounds.start + GROK_USER_QUERY_PREVIEW_SCAN_LIMIT)
+  return normalizePreviewText(text.slice(bounds.start, boundedEnd)) ?? normalizePreviewText(text)
+}
+
+function grokUserQueryEnvelopeBounds(text: string): { start: number; end: number } | null {
+  const opener = '<user_query>'
+  const startIndex = indexOfAsciiIgnoreCase(text, opener, 0)
+  if (startIndex === -1) {
     return null
   }
-  const parts: string[] = []
-  for (const item of value) {
-    if (typeof item === 'string') {
-      parts.push(item)
-      continue
+  const bodyStartIndex = startIndex + opener.length
+  const endIndex = indexOfAsciiIgnoreCase(text, '</user_query>', bodyStartIndex)
+  if (endIndex === -1) {
+    return null
+  }
+  return { start: bodyStartIndex, end: endIndex }
+}
+
+function indexOfAsciiIgnoreCase(value: string, search: string, fromIndex: number): number {
+  const lastStart = value.length - search.length
+  for (let index = Math.max(0, fromIndex); index <= lastStart; index++) {
+    let matches = true
+    for (let offset = 0; offset < search.length; offset++) {
+      const code = value.charCodeAt(index + offset)
+      const normalizedCode = code >= 65 && code <= 90 ? code + 32 : code
+      if (normalizedCode !== search.charCodeAt(offset)) {
+        matches = false
+        break
+      }
     }
-    const record = asRecord(item)
-    const text = extractString(record?.text) || extractString(record?.content)
-    if (text) {
-      parts.push(text)
+    if (matches) {
+      return index
     }
   }
-  return extractString(parts.join(' '))
+  return -1
 }

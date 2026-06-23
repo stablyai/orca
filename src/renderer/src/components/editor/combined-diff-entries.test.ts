@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { getCombinedBranchEntries, getCombinedUncommittedEntries } from './combined-diff-entries'
+import {
+  getCombinedBranchEntries,
+  getCombinedUncommittedEntries,
+  shouldAutoReloadCombinedDiffFromGitStatus
+} from './combined-diff-entries'
 import type { GitBranchChangeEntry, GitStatusEntry } from '../../../../shared/types'
 
 describe('getCombinedUncommittedEntries', () => {
@@ -31,7 +35,7 @@ describe('getCombinedUncommittedEntries', () => {
     ])
   })
 
-  it('excludes untracked entries when no area filter is set', () => {
+  it('includes every area when no area filter is set', () => {
     const liveEntries: GitStatusEntry[] = [
       { path: 'src/staged.ts', status: 'modified', area: 'staged' },
       { path: 'src/unstaged.ts', status: 'modified', area: 'unstaged' },
@@ -40,7 +44,8 @@ describe('getCombinedUncommittedEntries', () => {
 
     expect(getCombinedUncommittedEntries(liveEntries, undefined)).toEqual([
       { path: 'src/staged.ts', status: 'modified', area: 'staged' },
-      { path: 'src/unstaged.ts', status: 'modified', area: 'unstaged' }
+      { path: 'src/unstaged.ts', status: 'modified', area: 'unstaged' },
+      { path: 'src/untracked.ts', status: 'untracked', area: 'untracked' }
     ])
   })
 })
@@ -56,5 +61,40 @@ describe('getCombinedBranchEntries', () => {
     const liveEntries: GitBranchChangeEntry[] = [{ path: 'src/live.ts', status: 'modified' }]
 
     expect(getCombinedBranchEntries(undefined, liveEntries)).toEqual(liveEntries)
+  })
+})
+
+describe('shouldAutoReloadCombinedDiffFromGitStatus', () => {
+  it('does not auto-reload snapshot-backed uncommitted diffs', () => {
+    expect(
+      shouldAutoReloadCombinedDiffFromGitStatus({
+        mode: 'uncommitted',
+        hasUncommittedEntriesSnapshot: true
+      })
+    ).toBe(false)
+  })
+
+  it('keeps the legacy live-entry uncommitted path reloadable', () => {
+    expect(
+      shouldAutoReloadCombinedDiffFromGitStatus({
+        mode: 'uncommitted',
+        hasUncommittedEntriesSnapshot: false
+      })
+    ).toBe(true)
+  })
+
+  it('does not use git status to reload branch or commit combined diffs', () => {
+    expect(
+      shouldAutoReloadCombinedDiffFromGitStatus({
+        mode: 'branch',
+        hasUncommittedEntriesSnapshot: false
+      })
+    ).toBe(false)
+    expect(
+      shouldAutoReloadCombinedDiffFromGitStatus({
+        mode: 'commit',
+        hasUncommittedEntriesSnapshot: false
+      })
+    ).toBe(false)
   })
 })

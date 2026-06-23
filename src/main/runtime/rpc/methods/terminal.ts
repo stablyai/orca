@@ -1,6 +1,11 @@
 /* oxlint-disable max-lines -- Why: terminal RPC methods are co-located for discoverability; splitting would scatter related handlers across files. */
 import { z } from 'zod'
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
+import {
+  InvalidArgumentError,
+  defineMethod,
+  defineStreamingMethod,
+  type RpcAnyMethod
+} from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 import type { DriverState, OrcaRuntimeService } from '../../orca-runtime'
 import {
@@ -13,6 +18,14 @@ import {
   type TerminalStreamFrame
 } from '../../../../shared/terminal-stream-protocol'
 import { TERMINAL_PANE_SPLIT_SOURCES } from '../../../../shared/feature-education-telemetry'
+import type { TerminalOscLinkRange } from '../../../../shared/terminal-osc-link-ranges'
+import {
+  TERMINAL_INPUT_MAX_BYTES,
+  TERMINAL_INPUT_TOO_LARGE_ERROR,
+  isTerminalInputTooLargeWithYield
+} from '../../../../shared/terminal-input'
+import { measureClipboardTextByteLength } from '../../../../shared/clipboard-text'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 
 // Why: when a mobile client subscribes the server resizes the PTY to phone
 // dims and serializes the buffer. Sending only the visible screen meant
@@ -30,7 +43,6 @@ const TERMINAL_OUTPUT_BATCH_MAX_BYTES = 64 * 1024
 // Why: pending output is held for later binary frames, so cap the encoded
 // payload bytes rather than UTF-16 code units.
 const TERMINAL_MULTIPLEX_PENDING_MAX_BYTES = 256 * 1024
-const terminalStreamTextEncoder = new TextEncoder()
 let nextTerminalStreamId = 1
 
 type SnapshotFrameOptions = {
@@ -45,6 +57,7 @@ type SnapshotFrameOptions = {
   truncated?: boolean
   truncatedByByteBudget?: boolean
   source?: 'headless' | 'renderer'
+  oscLinks?: TerminalOscLinkRange[]
 }
 
 type SerializedSnapshot = {
@@ -53,6 +66,7 @@ type SerializedSnapshot = {
   rows: number
   seq?: number
   source?: 'headless' | 'renderer'
+  oscLinks?: TerminalOscLinkRange[]
   scrollbackRows: number
   truncatedByByteBudget: boolean
 } | null
@@ -72,6 +86,10 @@ type TerminalMultiplexStream = {
   pendingOutput: TerminalOutputChunk[]
   pendingOutputBytes: number
   pendingOutputOverflowed: boolean
+  // Why: the cols the mobile client last rewrapped to. Re-stream the full
+  // scrollback only when a reflow actually changes the width.
+  lastResizeCols: number | undefined
+  resizeGeneration: number
   outputBatcher: ReturnType<typeof createTerminalOutputBatcher>
   unsubscribeData: () => void
   unsubscribeResize: () => void
@@ -82,6 +100,7 @@ type TerminalMultiplexStream = {
 
 type TerminalOutputChunk = {
   data: string
+  bytes: number
   meta?: { seq?: number; rawLength?: number }
 }
 
@@ -129,11 +148,15 @@ function createTerminalOutputBatcher(
         return
       }
       chunks.push(data)
-      bytes += terminalStreamByteLength(data)
+      const remainingBudget = Math.max(1, TERMINAL_OUTPUT_BATCH_MAX_BYTES - bytes)
+      const measurement = measureTerminalStreamByteLength(data, {
+        stopAfterBytes: remainingBudget
+      })
+      bytes += measurement.byteLength
       if (typeof meta?.seq === 'number') {
         lastSeq = meta.seq
       }
-      if (bytes >= TERMINAL_OUTPUT_BATCH_MAX_BYTES) {
+      if (measurement.exceededLimit || bytes >= TERMINAL_OUTPUT_BATCH_MAX_BYTES) {
         flush()
         return
       }
@@ -155,50 +178,73 @@ function createTerminalOutputBatcher(
   }
 }
 
-function splitTerminalOutputFrameChunks(
+function* iterateTerminalOutputFrameChunks(
   data: string,
   meta?: { seq?: number; rawLength?: number }
-): TerminalOutputFrameChunk[] {
-  const bytes = encodeTerminalStreamText(data)
-  if (bytes.byteLength <= TERMINAL_STREAM_CHUNK_BYTES) {
-    return [{ bytes, seq: meta?.seq }]
+): Generator<TerminalOutputFrameChunk> {
+  if (!terminalStreamByteLengthExceeds(data, TERMINAL_STREAM_CHUNK_BYTES)) {
+    yield { bytes: encodeTerminalStreamText(data), seq: meta?.seq }
+    return
   }
-  const chunks: TerminalOutputFrameChunk[] = []
   const rawLength = meta?.rawLength ?? data.length
   const canPreserveChunkSeq = typeof meta?.seq === 'number' && rawLength === data.length
+  const shouldDelayFinalSeq = !canPreserveChunkSeq && typeof meta?.seq === 'number'
   const startSeq = canPreserveChunkSeq ? meta.seq! - rawLength : undefined
   let chunk = ''
   let chunkBytes = 0
   let chunkStartOffset = 0
   let offset = 0
+  let delayedChunk: { text: string; seq?: number } | null = null
 
-  const flushChunk = (): void => {
+  const takeChunk = (): { text: string; seq?: number } | null => {
     if (!chunk) {
-      return
+      return null
     }
     const chunkSeq = canPreserveChunkSeq ? startSeq! + chunkStartOffset + chunk.length : undefined
-    chunks.push({ bytes: encodeTerminalStreamText(chunk), seq: chunkSeq })
+    const current = { text: chunk, seq: chunkSeq }
     chunk = ''
     chunkBytes = 0
     chunkStartOffset = offset
+    return current
   }
 
   for (const part of data) {
     const partBytes = terminalStreamByteLength(part)
     if (chunkBytes > 0 && chunkBytes + partBytes > TERMINAL_STREAM_CHUNK_BYTES) {
-      flushChunk()
+      const nextChunk = takeChunk()
+      if (nextChunk) {
+        if (shouldDelayFinalSeq) {
+          if (delayedChunk) {
+            yield { bytes: encodeTerminalStreamText(delayedChunk.text) }
+          }
+          delayedChunk = nextChunk
+        } else {
+          yield { bytes: encodeTerminalStreamText(nextChunk.text), seq: nextChunk.seq }
+        }
+      }
     }
     chunk += part
     chunkBytes += partBytes
     offset += part.length
   }
-  flushChunk()
-  if (!canPreserveChunkSeq && typeof meta?.seq === 'number' && chunks.length > 0) {
+  const finalChunk = takeChunk()
+  if (shouldDelayFinalSeq) {
     // Why: if a future caller reports rawLength that cannot be mapped back to
     // UTF-16 offsets, only the final frame can safely carry the high-water mark.
-    chunks.at(-1)!.seq = meta.seq
+    if (finalChunk) {
+      if (delayedChunk) {
+        yield { bytes: encodeTerminalStreamText(delayedChunk.text) }
+      }
+      delayedChunk = finalChunk
+    }
+    if (delayedChunk) {
+      yield { bytes: encodeTerminalStreamText(delayedChunk.text), seq: meta.seq }
+    }
+    return
   }
-  return chunks
+  if (finalChunk) {
+    yield { bytes: encodeTerminalStreamText(finalChunk.text), seq: finalChunk.seq }
+  }
 }
 
 function isTerminalInputLockedForClient(
@@ -218,6 +264,17 @@ function isTerminalInputLockedForClient(
   return runtime.getDriver(ptyId).kind === 'mobile'
 }
 
+async function assertTerminalSendTextWithinLimit(text: string | undefined): Promise<void> {
+  if (!text) {
+    return
+  }
+  // Why: runtime/mobile sends can be paste-sized; validate outside Zod so
+  // accepted large input yields before terminal runtime dispatch.
+  if (await isTerminalInputTooLargeWithYield(text, TERMINAL_INPUT_MAX_BYTES)) {
+    throw new InvalidArgumentError(TERMINAL_INPUT_TOO_LARGE_ERROR)
+  }
+}
+
 function resolveMobileFloorClientId(
   driver: DriverState | null,
   client: TerminalViewportClient | undefined
@@ -231,20 +288,43 @@ function resolveMobileFloorClientId(
   return null
 }
 
+function getTerminalSendGuardRefusedReason(error: unknown): 'no-agent' | 'permission' | undefined {
+  const message = error instanceof Error ? error.message : String(error)
+  if (message.includes('terminal_guard_permission')) {
+    return 'permission'
+  }
+  if (message.includes('terminal_guard_no_agent')) {
+    return 'no-agent'
+  }
+  return undefined
+}
+
+function isTerminalSendGuardNotWritable(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.includes('terminal_guard_not_writable')
+}
+
 function appendPendingMultiplexOutput(
   stream: TerminalMultiplexStream,
   data: string,
   meta?: { seq?: number; rawLength?: number }
 ): void {
-  stream.pendingOutput.push({ data, meta })
-  stream.pendingOutputBytes += terminalStreamByteLength(data)
+  const remainingBudget = Math.max(
+    1,
+    TERMINAL_MULTIPLEX_PENDING_MAX_BYTES - stream.pendingOutputBytes
+  )
+  const measurement = measureTerminalStreamByteLength(data, {
+    stopAfterBytes: remainingBudget
+  })
+  stream.pendingOutput.push({ data, bytes: measurement.byteLength, meta })
+  stream.pendingOutputBytes += measurement.byteLength
   const trimmed = trimPendingOutputToBudget(stream.pendingOutput, stream.pendingOutputBytes)
   stream.pendingOutputBytes = trimmed.bytes
   stream.pendingOutputOverflowed ||= trimmed.overflowed
 }
 
 function trimPendingOutputToBudget(
-  pendingOutput: (string | TerminalOutputChunk)[],
+  pendingOutput: TerminalOutputChunk[],
   pendingOutputBytes: number
 ): { bytes: number; overflowed: boolean } {
   let omittedChunkCount = 0
@@ -253,7 +333,7 @@ function trimPendingOutputToBudget(
     omittedChunkCount < pendingOutput.length
   ) {
     const chunk = pendingOutput[omittedChunkCount]
-    pendingOutputBytes -= terminalStreamByteLength(typeof chunk === 'string' ? chunk : chunk.data)
+    pendingOutputBytes -= chunk.bytes
     omittedChunkCount += 1
   }
   if (omittedChunkCount > 0) {
@@ -262,8 +342,28 @@ function trimPendingOutputToBudget(
   return { bytes: pendingOutputBytes, overflowed: omittedChunkCount > 0 }
 }
 
+function measureTerminalStreamByteLength(
+  data: string,
+  options: { stopAfterBytes?: number } = {}
+): { byteLength: number; exceededLimit: boolean } {
+  return measureClipboardTextByteLength(data, options)
+}
+
 function terminalStreamByteLength(data: string): number {
-  return terminalStreamTextEncoder.encode(data).byteLength
+  return measureTerminalStreamByteLength(data).byteLength
+}
+
+function terminalStreamByteLengthExceeds(data: string, maxBytes: number): boolean {
+  return measureTerminalStreamByteLength(data, { stopAfterBytes: maxBytes }).exceededLimit
+}
+
+function* iterateTerminalStreamTextPayloads(data: string): Generator<Uint8Array<ArrayBufferLike>> {
+  if (!data) {
+    return
+  }
+  for (const chunk of iterateTerminalOutputFrameChunks(data)) {
+    yield chunk.bytes
+  }
 }
 
 function isTerminalReadPayloadIncomplete(read: { truncated: boolean; limited?: boolean }): boolean {
@@ -297,12 +397,15 @@ async function serializeBudgetedRequestedSnapshot(
     if (!serialized) {
       return null
     }
-    const bytes = terminalStreamByteLength(serialized.data)
-    if (bytes <= REQUESTED_SNAPSHOT_BYTE_BUDGET || rows === 0) {
+    const overByteBudget = terminalStreamByteLengthExceeds(
+      serialized.data,
+      REQUESTED_SNAPSHOT_BYTE_BUDGET
+    )
+    if (!overByteBudget || rows === 0) {
       return {
         ...serialized,
         scrollbackRows: rows,
-        truncatedByByteBudget: rows < requestedRows || bytes > REQUESTED_SNAPSHOT_BYTE_BUDGET
+        truncatedByByteBudget: rows < requestedRows || overByteBudget
       }
     }
   }
@@ -324,21 +427,20 @@ function sendSnapshotFrames(
       reason: options.reason,
       seq: options.seq,
       source: options.source,
+      oscLinks: options.oscLinks,
       truncated: options.truncated === true,
       truncatedByByteBudget: options.truncatedByByteBudget === true
     })
   )
-  const bytes = encodeTerminalStreamText(options.data)
   let chunks = 0
-  for (let offset = 0; offset < bytes.length; offset += TERMINAL_STREAM_CHUNK_BYTES) {
+  let bytes = 0
+  for (const chunk of iterateTerminalStreamTextPayloads(options.data)) {
     chunks++
-    sendFrame(
-      TerminalStreamOpcode.SnapshotChunk,
-      bytes.slice(offset, offset + TERMINAL_STREAM_CHUNK_BYTES)
-    )
+    bytes += chunk.byteLength
+    sendFrame(TerminalStreamOpcode.SnapshotChunk, chunk)
   }
   sendFrame(TerminalStreamOpcode.SnapshotEnd)
-  return { bytes: bytes.byteLength, chunks }
+  return { bytes, chunks }
 }
 
 async function serializeBudgetedMobileSnapshot(
@@ -356,17 +458,60 @@ async function serializeBudgetedMobileSnapshot(
     if (!serialized) {
       return null
     }
-    const bytes = terminalStreamByteLength(serialized.data)
-    if (bytes <= MOBILE_SNAPSHOT_BYTE_BUDGET || rows === 0) {
+    const overByteBudget = terminalStreamByteLengthExceeds(
+      serialized.data,
+      MOBILE_SNAPSHOT_BYTE_BUDGET
+    )
+    if (!overByteBudget || rows === 0) {
       return {
         ...serialized,
         scrollbackRows: rows,
-        truncatedByByteBudget:
-          rows < MOBILE_SUBSCRIBE_SCROLLBACK_ROWS || bytes > MOBILE_SNAPSHOT_BYTE_BUDGET
+        truncatedByByteBudget: rows < MOBILE_SUBSCRIBE_SCROLLBACK_ROWS || overByteBudget
       }
     }
   }
   return null
+}
+
+// Why: mobile xterm can only re-wrap SOFT-wrapped lines on a client-side
+// term.resize(); the restored scrollback snapshot contains HARD newlines from
+// the host serialization, so a width change leaves prior output wrapped at the
+// old column count. On a real reflow we re-serialize the FULL buffer at the new
+// cols and replay it, so scrollback rewraps. Alt-screen TUIs are PTY-repainted
+// and have no scrollback, so they keep the geometry-only Resized frame.
+async function sendMobileResizeRestream(
+  runtime: OrcaRuntimeService,
+  ptyId: string,
+  sendFrame: (opcode: TerminalStreamOpcode, payload?: Uint8Array<ArrayBufferLike>) => void,
+  event: { cols: number; rows: number; displayMode: string; reason: string; seq?: number },
+  shouldSend?: () => boolean
+): Promise<boolean> {
+  // Why: only a true PTY geometry reflow rewraps scrollback; mode-change ticks
+  // that did not change dims would re-send the whole buffer for nothing.
+  if (event.reason !== 'apply-layout' || runtime.isTerminalAlternateScreen(ptyId)) {
+    return false
+  }
+  const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, true)
+  if (!serialized) {
+    return false
+  }
+  if (shouldSend && !shouldSend()) {
+    return true
+  }
+  sendSnapshotFrames(sendFrame, {
+    kind: 'resized',
+    cols: serialized.cols,
+    rows: serialized.rows,
+    displayMode: event.displayMode,
+    reason: event.reason,
+    seq: event.seq ?? serialized.seq,
+    source: serialized.source,
+    oscLinks: serialized.oscLinks,
+    truncated: false,
+    truncatedByByteBudget: serialized.truncatedByByteBudget,
+    data: serialized.data
+  })
+  return true
 }
 
 async function updateViewportForClient(
@@ -375,12 +520,13 @@ async function updateViewportForClient(
   client: TerminalViewportClient,
   viewport: { cols: number; rows: number },
   defaultType: 'mobile' | 'desktop'
-): Promise<boolean> {
+): Promise<{ updated: boolean; applied: boolean }> {
   const type = client.type ?? defaultType
   if (type === 'mobile') {
     return runtime.updateMobileViewport(ptyId, client.id, viewport)
   }
-  return runtime.updateDesktopViewport(ptyId, viewport)
+  const updated = await runtime.updateDesktopViewport(ptyId, viewport)
+  return { updated, applied: updated }
 }
 
 const TerminalHandle = z.object({
@@ -389,11 +535,16 @@ const TerminalHandle = z.object({
 
 const TerminalListParams = z.object({
   worktree: OptionalString,
-  limit: OptionalFiniteNumber
+  limit: OptionalFiniteNumber,
+  requireFreshPtyLiveness: z.boolean().optional()
 })
 
 const TerminalResolveActive = z.object({
   worktree: OptionalString
+})
+
+const TerminalResolvePane = z.object({
+  paneKey: requiredString('Missing pane key')
 })
 
 const TerminalRead = TerminalHandle.extend({
@@ -433,6 +584,7 @@ const TerminalSend = TerminalHandle.extend({
   text: OptionalString,
   enter: z.unknown().optional(),
   interrupt: z.unknown().optional(),
+  requireAgentStatus: z.enum(['sendable']).optional(),
   // Why: identifies the caller for the driver state machine. Optional for
   // backward compatibility with older mobile clients (server falls back to
   // the most recent mobile actor when absent). New mobile builds populate
@@ -461,7 +613,17 @@ const TerminalWait = TerminalHandle.extend({
 const TerminalCreateParams = z.object({
   worktree: OptionalString,
   command: OptionalString,
+  startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
   env: z.record(z.string(), z.string()).optional(),
+  launchConfig: z
+    .object({
+      agentCommand: z.string().optional(),
+      agentArgs: z.string(),
+      agentEnv: z.record(z.string(), z.string())
+    })
+    .optional(),
+  launchToken: OptionalString,
+  launchAgent: z.string().refine(isTuiAgent).optional(),
   title: OptionalString,
   focus: z.unknown().optional(),
   rendererBacked: z.unknown().optional(),
@@ -483,6 +645,12 @@ const TerminalSplit = TerminalHandle.extend({
 
 const TerminalStop = z.object({
   worktree: requiredString('Missing worktree selector')
+})
+
+const TerminalStopExact = TerminalStop.extend({
+  expectedPtyIds: z.array(requiredString('Missing PTY ID')).min(1),
+  keepHistory: z.boolean().optional(),
+  targetOnly: z.boolean().optional()
 })
 
 const AgentTeamsTmuxCompat = z.object({
@@ -617,13 +785,23 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.list',
     params: TerminalListParams,
-    handler: async (params, { runtime }) => runtime.listTerminals(params.worktree, params.limit)
+    handler: async (params, { runtime }) =>
+      runtime.listTerminals(params.worktree, params.limit, {
+        requireFreshPtyLiveness: params.requireFreshPtyLiveness
+      })
   }),
   defineMethod({
     name: 'terminal.resolveActive',
     params: TerminalResolveActive,
     handler: async (params, { runtime }) => ({
       handle: await runtime.resolveActiveTerminal(params.worktree)
+    })
+  }),
+  defineMethod({
+    name: 'terminal.resolvePane',
+    params: TerminalResolvePane,
+    handler: async (params, { runtime }) => ({
+      terminal: runtime.resolveTerminalPane(params.paneKey)
     })
   }),
   defineMethod({
@@ -658,6 +836,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     })
   }),
   defineMethod({
+    name: 'terminal.agentStatus',
+    params: TerminalHandle,
+    handler: async (params, { runtime }) => ({
+      agentStatus: await runtime.getTerminalAgentStatus(params.terminal)
+    })
+  }),
+  defineMethod({
     name: 'terminal.rename',
     params: TerminalRename,
     handler: async (params, { runtime }) => ({
@@ -675,6 +860,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     name: 'terminal.send',
     params: TerminalSend,
     handler: async (params, { runtime }) => {
+      await assertTerminalSendTextWithinLimit(params.text)
       const leaf = runtime.resolveLeafForHandle(params.terminal)
       const driver = leaf?.ptyId ? runtime.getDriver(leaf.ptyId) : null
       if (leaf?.ptyId && isTerminalInputLockedForClient(runtime, leaf.ptyId, params.client)) {
@@ -686,11 +872,97 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           }
         }
       }
-      const result = await runtime.sendTerminal(params.terminal, {
-        text: params.text,
-        enter: params.enter === true,
-        interrupt: params.interrupt === true
-      })
+      const hasText = typeof params.text === 'string' && params.text.length > 0
+      const hasSuffix = params.enter === true || params.interrupt === true
+      if (params.requireAgentStatus === 'sendable' && hasText && hasSuffix) {
+        // Why: guarded sends are two-phase writes. Reject combined payload +
+        // submit so guard flips cannot create ambiguous partial delivery.
+        return {
+          send: {
+            handle: params.terminal,
+            accepted: false,
+            bytesWritten: 0
+          }
+        }
+      }
+      // Why: selected note sends submit with Enter. The runtime must recheck
+      // permission/no-agent state immediately before accepting the PTY write.
+      const assertSendPreconditions =
+        params.requireAgentStatus === 'sendable'
+          ? async (ptyId?: string): Promise<void> => {
+              if (ptyId && isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
+                throw new Error('terminal_guard_not_writable')
+              }
+              const agentStatus = await runtime.getTerminalAgentStatus(params.terminal)
+              if (!agentStatus.isRunningAgent) {
+                throw new Error('terminal_guard_no_agent')
+              }
+              if (agentStatus.status === 'permission') {
+                throw new Error('terminal_guard_permission')
+              }
+            }
+          : undefined
+      if (params.requireAgentStatus === 'sendable') {
+        try {
+          await assertSendPreconditions?.(leaf?.ptyId ?? undefined)
+        } catch (error) {
+          if (isTerminalSendGuardNotWritable(error)) {
+            return {
+              send: {
+                handle: params.terminal,
+                accepted: false,
+                bytesWritten: 0
+              }
+            }
+          }
+          const refusedReason = getTerminalSendGuardRefusedReason(error)
+          if (!refusedReason) {
+            throw error
+          }
+          return {
+            send: {
+              handle: params.terminal,
+              accepted: false,
+              bytesWritten: 0,
+              refusedReason
+            }
+          }
+        }
+      }
+      let result
+      try {
+        result = await runtime.sendTerminal(
+          params.terminal,
+          {
+            text: params.text,
+            enter: params.enter === true,
+            interrupt: params.interrupt === true
+          },
+          { beforeWrite: assertSendPreconditions }
+        )
+      } catch (error) {
+        const refusedReason = getTerminalSendGuardRefusedReason(error)
+        if (refusedReason) {
+          return {
+            send: {
+              handle: params.terminal,
+              accepted: false,
+              bytesWritten: 0,
+              refusedReason
+            }
+          }
+        }
+        if (isTerminalSendGuardNotWritable(error)) {
+          return {
+            send: {
+              handle: params.terminal,
+              accepted: false,
+              bytesWritten: 0
+            }
+          }
+        }
+        throw error
+      }
       // Why: deliberate mobile input is a take-floor action. Drives the
       // `* → mobile{clientId}` driver transition so the desktop banner
       // remounts (if previously reclaimed) and active phone-fit dims follow
@@ -720,7 +992,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     handler: async (params, { runtime }) => ({
       terminal: await runtime.createTerminal(params.worktree, {
         command: params.command,
+        startupCommandDelivery: params.startupCommandDelivery,
         env: params.env,
+        ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
+        ...(params.launchToken ? { launchToken: params.launchToken } : {}),
+        ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
         title: params.title,
         focus: params.focus === true,
         rendererBacked: params.rendererBacked === true,
@@ -746,6 +1022,15 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     name: 'terminal.stop',
     params: TerminalStop,
     handler: async (params, { runtime }) => runtime.stopTerminalsForWorktree(params.worktree)
+  }),
+  defineMethod({
+    name: 'terminal.stopExact',
+    params: TerminalStopExact,
+    handler: async (params, { runtime }) =>
+      runtime.stopExactTerminalsForWorktree(params.worktree, params.expectedPtyIds, {
+        keepHistory: params.keepHistory,
+        targetOnly: params.targetOnly
+      })
   }),
   defineMethod({
     name: 'terminal.resizeForClient',
@@ -852,14 +1137,14 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
       }
-      const updated = await updateViewportForClient(
+      const viewportUpdate = await updateViewportForClient(
         runtime,
         leaf.ptyId,
         params.client,
         params.viewport,
         'mobile'
       )
-      return { updated, seq: runtime.getLayout(leaf.ptyId)?.seq }
+      return { ...viewportUpdate, seq: runtime.getLayout(leaf.ptyId)?.seq }
     }
   }),
   // Why: desktop remote sessions can have dozens of panes. One streaming RPC
@@ -905,6 +1190,23 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       const sendStreamError = (streamId: number, message: string): void => {
         sendFrame(streamId, TerminalStreamOpcode.Error, encodeTerminalStreamText(message))
         emit({ type: 'error', streamId, message })
+      }
+      const sendResizedFrame = (
+        stream: TerminalMultiplexStream,
+        event: { cols: number; rows: number; displayMode: string; reason: string; seq?: number }
+      ): void => {
+        stream.lastResizeCols = event.cols
+        sendFrame(
+          stream.streamId,
+          TerminalStreamOpcode.Resized,
+          encodeTerminalStreamJson({
+            cols: event.cols,
+            rows: event.rows,
+            displayMode: event.displayMode,
+            reason: event.reason,
+            seq: event.seq
+          })
+        )
       }
       const detachStream = (streamId: number, emitEnd: boolean): void => {
         const stream = streams.get(streamId)
@@ -1050,6 +1352,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             displayMode,
             seq: serialized?.seq,
             source: serialized?.source,
+            oscLinks: serialized?.oscLinks,
             truncated: false,
             truncatedByByteBudget: serialized?.truncatedByByteBudget,
             data: serialized?.data ?? ''
@@ -1114,8 +1417,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           pendingOutput: [],
           pendingOutputBytes: 0,
           pendingOutputOverflowed: false,
+          lastResizeCols: undefined,
+          resizeGeneration: 0,
           outputBatcher: createTerminalOutputBatcher((data, meta) => {
-            for (const chunk of splitTerminalOutputFrameChunks(data, meta)) {
+            for (const chunk of iterateTerminalOutputFrameChunks(data, meta)) {
               sendFrame(request.streamId, TerminalStreamOpcode.Output, chunk.bytes, chunk.seq)
             }
           }),
@@ -1219,8 +1524,12 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             truncated: serialized ? read.truncated : isTerminalReadPayloadIncomplete(read),
             truncatedByByteBudget: serialized?.truncatedByByteBudget,
             source: serialized?.source,
+            oscLinks: serialized?.oscLinks,
             data: serialized?.data ?? (read.tail.length > 0 ? `${read.tail.join('\r\n')}\r\n` : '')
           })
+          // Why: baseline for resize re-stream gating; the client already
+          // rewrapped to these cols via the initial snapshot replay.
+          stream.lastResizeCols = serialized?.cols ?? size?.cols
           stream.buffering = false
           for (const chunk of stream.pendingOutput.splice(0)) {
             stream.outputBatcher.push(chunk.data, chunk.meta)
@@ -1231,17 +1540,51 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
 
           stream.unsubscribeResize = runtime.subscribeToTerminalResize(ptyId, (event) => {
             stream.outputBatcher.flush()
-            sendFrame(
-              request.streamId,
-              TerminalStreamOpcode.Resized,
-              encodeTerminalStreamJson({
-                cols: event.cols,
-                rows: event.rows,
-                displayMode: event.displayMode,
-                reason: event.reason,
-                seq: event.seq
-              })
-            )
+            const resizeGeneration = stream.resizeGeneration + 1
+            stream.resizeGeneration = resizeGeneration
+            const widthChanged = stream.isMobile && event.cols !== stream.lastResizeCols
+            if (widthChanged) {
+              stream.lastResizeCols = event.cols
+              // Why: re-serialize+replay the full scrollback at the new cols so
+              // restored hard-wrapped lines rewrap; the await means later live
+              // output still flows on this stream after the snapshot lands.
+              void sendMobileResizeRestream(
+                runtime,
+                ptyId,
+                (opcode, payload) => sendFrame(request.streamId, opcode, payload),
+                event,
+                () =>
+                  !closed &&
+                  streams.get(request.streamId) === stream &&
+                  stream.resizeGeneration === resizeGeneration
+              )
+                .then((restreamed) => {
+                  if (
+                    closed ||
+                    streams.get(request.streamId) !== stream ||
+                    stream.resizeGeneration !== resizeGeneration
+                  ) {
+                    return
+                  }
+                  if (!restreamed) {
+                    sendResizedFrame(stream, event)
+                  }
+                })
+                // Why: if re-stream serialization/runtime throws, still emit the
+                // geometry-only Resized frame so the client never misses the resize.
+                .catch(() => {
+                  if (
+                    closed ||
+                    streams.get(request.streamId) !== stream ||
+                    stream.resizeGeneration !== resizeGeneration
+                  ) {
+                    return
+                  }
+                  sendResizedFrame(stream, event)
+                })
+              return
+            }
+            sendResizedFrame(stream, event)
           })
           void runtime
             .waitForTerminal(request.terminal, { condition: 'exit' })
@@ -1341,6 +1684,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           lines: read.tail,
           truncated: isTerminalReadPayloadIncomplete(read),
           serialized: serialized?.data,
+          oscLinks: serialized?.oscLinks,
           cols: serialized?.cols ?? size?.cols,
           rows: serialized?.rows ?? size?.rows,
           displayMode,
@@ -1391,7 +1735,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       let cursor = 0
       let closed = false
       let buffering = true
-      const pendingOutput: string[] = []
+      // Why: the cols the mobile client last rewrapped to; gate the
+      // resize re-stream so it only fires on an actual width change.
+      let lastResizeCols: number | undefined
+      let resizeGeneration = 0
+      const pendingOutput: TerminalOutputChunk[] = []
       let pendingOutputBytes = 0
       let unsubscribeData = (): void => {}
       let unsubscribeResize = (): void => {}
@@ -1438,7 +1786,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq: cursor++, payload }))
       }
       outputBatcher = createTerminalOutputBatcher((data) => {
-        for (const chunk of splitTerminalOutputFrameChunks(data)) {
+        for (const chunk of iterateTerminalOutputFrameChunks(data)) {
           sendFrame(TerminalStreamOpcode.Output, chunk.bytes)
         }
       })
@@ -1499,9 +1847,17 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             return
           }
           if (buffering) {
-            pendingOutput.push(data)
-            pendingOutputBytes += terminalStreamByteLength(data)
-            pendingOutputBytes = trimPendingOutputToBudget(pendingOutput, pendingOutputBytes).bytes
+            const remainingBudget = Math.max(
+              1,
+              TERMINAL_MULTIPLEX_PENDING_MAX_BYTES - pendingOutputBytes
+            )
+            const measurement = measureTerminalStreamByteLength(data, {
+              stopAfterBytes: remainingBudget
+            })
+            pendingOutput.push({ data, bytes: measurement.byteLength })
+            pendingOutputBytes += measurement.byteLength
+            const trimmed = trimPendingOutputToBudget(pendingOutput, pendingOutputBytes)
+            pendingOutputBytes = trimmed.bytes
             return
           }
           outputBatcher?.push(data)
@@ -1537,6 +1893,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           seq,
           truncated: serialized ? read.truncated : isTerminalReadPayloadIncomplete(read),
           truncatedByByteBudget: serialized?.truncatedByByteBudget,
+          oscLinks: serialized?.oscLinks,
           data: serialized?.data ?? ''
         })
         console.log('[mobile-terminal-stream] snapshot', {
@@ -1548,18 +1905,24 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           scrollbackRows: serialized?.scrollbackRows,
           truncatedByByteBudget: serialized?.truncatedByByteBudget === true
         })
+        // Why: baseline for resize re-stream gating; the client already
+        // rewrapped to these cols via the initial snapshot replay.
+        lastResizeCols = serialized?.cols ?? size?.cols
         buffering = false
         for (const item of pendingOutput.splice(0)) {
-          outputBatcher.push(item)
+          outputBatcher.push(item.data, item.meta)
         }
         pendingOutputBytes = 0
         outputBatcher.flush()
 
-        unsubscribeResize = runtime.subscribeToTerminalResize(ptyId, (event) => {
-          // Why: true PTY geometry changes should be followed by the TUI's
-          // redraw output, not a full scrollback replay. The client resizes
-          // xterm geometry and consumes subsequent live output on this stream.
-          outputBatcher?.flush()
+        const sendResizedFrame = (event: {
+          cols: number
+          rows: number
+          displayMode: string
+          reason: string
+          seq?: number
+        }): void => {
+          lastResizeCols = event.cols
           sendFrame(
             TerminalStreamOpcode.Resized,
             encodeTerminalStreamJson({
@@ -1570,6 +1933,45 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               seq: event.seq
             })
           )
+        }
+        unsubscribeResize = runtime.subscribeToTerminalResize(ptyId, (event) => {
+          outputBatcher?.flush()
+          const eventGeneration = resizeGeneration + 1
+          resizeGeneration = eventGeneration
+          // Why: a width reflow rewraps scrollback. xterm can only re-wrap
+          // soft-wrapped lines, so a geometry-only Resized frame leaves the
+          // hard-wrapped restored snapshot at the old cols. Re-serialize and
+          // replay the full buffer at the new width instead. Non-mobile and
+          // alt-screen TUIs keep the geometry-only frame + TUI redraw.
+          const widthChanged = isMobile && event.cols !== lastResizeCols
+          if (widthChanged) {
+            lastResizeCols = event.cols
+            void sendMobileResizeRestream(
+              runtime,
+              ptyId,
+              sendFrame,
+              event,
+              () => !closed && resizeGeneration === eventGeneration
+            )
+              .then((restreamed) => {
+                if (closed || resizeGeneration !== eventGeneration) {
+                  return
+                }
+                if (!restreamed) {
+                  sendResizedFrame(event)
+                }
+              })
+              // Why: if re-stream serialization/runtime throws, still emit the
+              // geometry-only Resized frame so the client never misses the resize.
+              .catch(() => {
+                if (closed || resizeGeneration !== eventGeneration) {
+                  return
+                }
+                sendResizedFrame(event)
+              })
+            return
+          }
+          sendResizedFrame(event)
         })
 
         // Legacy fit-override-changed for non-mobile (desktop) subscribers

@@ -10,6 +10,16 @@ export const mobileSessionFrameStyles = StyleSheet.create({
   kavInner: {
     flex: 1
   },
+  // Master-detail content row below the header chrome (KTD2): the existing content is
+  // the flex-1 left child; the dock column (when present on wide) is the right child.
+  sessionContentRow: {
+    flex: 1,
+    flexDirection: 'row'
+  },
+  sessionContentMain: {
+    flex: 1,
+    minWidth: 0
+  },
   sessionChrome: {
     backgroundColor: colors.bgPanel,
     borderBottomWidth: 1,
@@ -42,6 +52,10 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     marginLeft: spacing.xs
   },
   filesButtonPressed: {
+    backgroundColor: colors.bgRaised
+  },
+  // Selected state for the active docked-panel icon on wide layouts (R2).
+  filesButtonActive: {
     backgroundColor: colors.bgRaised
   },
   sessionTitleBlock: {
@@ -89,7 +103,9 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     borderBottomColor: 'transparent'
   },
   tabActive: {
-    borderBottomColor: colors.accentBlue
+    // Neutral grey underline, matching the desktop terminal tab's active
+    // indicator (a muted foreground/card mix), not a blue accent.
+    borderBottomColor: colors.textSecondary
   },
   tabLabelRow: {
     maxWidth: '100%',

@@ -15,6 +15,7 @@ import {
   getAgentResumeArgv,
   isResumableTuiAgent,
   type AgentProviderSessionMetadata,
+  type SleepingAgentLaunchConfig,
   type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
 import {
@@ -41,6 +42,36 @@ export type RetainedAgentEntry = {
   startedAt: number
 }
 
+export type AgentStatusWorktreeShutdownReason =
+  | 'manual-sleep'
+  | 'remove-worktree'
+  | 'auto-hibernate-completed-agent'
+
+type DropAgentStatusByWorktreeOptions = {
+  shutdownReason?: AgentStatusWorktreeShutdownReason
+  sleepingPaneKeys?: readonly string[] | ReadonlySet<string>
+  retainedCompletionEvidence?: readonly RetainedAgentEntry[]
+}
+
+type DropHibernatedAgentPaneOptions = {
+  retainedCompletionEvidence?: readonly RetainedAgentEntry[]
+}
+
+type AgentLaunchConfigRegistrationMetadata = {
+  agentType?: AgentType
+  launchToken?: string
+  tabId?: string
+  leafId?: string
+  terminalHandle?: string
+  providerSession?: AgentProviderSessionMetadata
+}
+
+type AgentLaunchConfigRegistryEntry = {
+  launchConfig: SleepingAgentLaunchConfig
+  registeredAt: number
+  identity: AgentLaunchConfigRegistrationMetadata
+}
+
 export type AgentStatusSlice = {
   /** Explicit agent status entries keyed by `${tabId}:${leafId}` composite.
    *  Real-time only — lives in renderer memory, not persisted to disk. */
@@ -64,10 +95,18 @@ export type AgentStatusSlice = {
    *  live status rows; they power the one-click CLI resume action on wake. */
   sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord>
 
+  /** Ephemeral launch snapshots keyed by concrete pane. Hook payloads do not
+   *  carry Orca launch settings, so the renderer supplies them from startup. */
+  agentLaunchConfigByPaneKey: Record<string, AgentLaunchConfigRegistryEntry>
+
   /** Pane keys explicitly torn down (pane close, tab close, PTY exit, manual
    *  dismissal) and therefore forbidden from being re-retained on their next
    *  disappearance. Consumed by the retention sync as a one-shot suppressor. */
   retentionSuppressedPaneKeys: Record<string, true>
+
+  /** Terminal tabs explicitly closed in this renderer session. Used only to
+   *  drop late in-flight IPC statuses and stale main-cache replays. */
+  recentlyClosedAgentStatusTabIds: Record<string, true>
 
   /** Update or insert an agent status entry from a status payload. */
   setAgentStatus: (
@@ -76,8 +115,22 @@ export type AgentStatusSlice = {
     terminalTitle?: string,
     timing?: { updatedAt?: number; stateStartedAt?: number },
     routing?: { tabId?: string; worktreeId?: string; terminalHandle?: string },
-    metadata?: { providerSession?: AgentProviderSessionMetadata }
+    metadata?: {
+      providerSession?: AgentProviderSessionMetadata
+      launchConfig?: SleepingAgentLaunchConfig
+      launchToken?: string
+    }
   ) => void
+
+  registerAgentLaunchConfig: (
+    paneKey: string,
+    launchConfig: SleepingAgentLaunchConfig,
+    metadata?: AgentLaunchConfigRegistrationMetadata
+  ) => void
+  getAgentLaunchConfigForStatusEntry: (
+    entry: AgentStatusEntry
+  ) => SleepingAgentLaunchConfig | undefined
+  clearAgentLaunchConfig: (paneKey: string) => void
 
   setRuntimeAgentOrchestrationByPaneKey: (
     entries: Record<string, AgentStatusOrchestrationContext>
@@ -103,6 +156,14 @@ export type AgentStatusSlice = {
    *  remaining agent rows (live or retained) must not reappear. */
   dropAgentStatusByTabPrefix: (tabIdPrefix: string) => void
 
+  /** Remove one automatically hibernated completed-agent pane while preserving
+   *  sibling live/retained rows in the same worktree. */
+  dropHibernatedAgentStatusPane: (
+    worktreeId: string,
+    paneKey: string,
+    opts?: DropHibernatedAgentPaneOptions
+  ) => void
+
   /** Remove all entries for a worktree AND suppress re-retention for live rows.
    *  Used on worktree sleep/remove — the whole worktree surface is folding, so
    *  retained rows must drop even if their original tab is no longer present.
@@ -110,9 +171,9 @@ export type AgentStatusSlice = {
    *  Live entries are swept by tab prefix and by main-stamped worktree
    *  attribution so worker rows that arrive before their tab exists do not
    *  survive sleep/remove. */
-  dropAgentStatusByWorktree: (worktreeId: string) => void
+  dropAgentStatusByWorktree: (worktreeId: string, opts?: DropAgentStatusByWorktreeOptions) => void
 
-  captureSleepingAgentSessionsByWorktree: (worktreeId: string) => void
+  captureSleepingAgentSessionsByWorktree: (worktreeId: string, paneKeys?: string[]) => void
   /** Capture resumable agent sessions across every worktree. Called from the
    *  quit flush so provider session ids survive an app restart. */
   captureAllSleepingAgentSessions: () => void
@@ -161,6 +222,25 @@ function getTabIdFromPaneKey(paneKey: string): string | null {
   return paneKey.slice(0, separator)
 }
 
+function getLeafIdFromPaneKey(paneKey: string): string | null {
+  const separator = paneKey.indexOf(':')
+  if (separator <= 0 || separator !== paneKey.lastIndexOf(':')) {
+    return null
+  }
+  const leafId = paneKey.slice(separator + 1)
+  return leafId.length > 0 ? leafId : null
+}
+
+function isRecentlyClosedAgentStatusTab(
+  closedTabs: Record<string, true>,
+  tabId: string | null
+): boolean {
+  if (!tabId) {
+    return false
+  }
+  return closedTabs[tabId] === true
+}
+
 function findAgentPaneWorktreeId(state: AppState, paneKey: string): string | null {
   const tabId = getTabIdFromPaneKey(paneKey)
   if (!tabId) {
@@ -186,12 +266,71 @@ function findTabForAgentEntry(
   return (state.tabsByWorktree[worktreeId] ?? []).find((tab) => tab.id === tabId)
 }
 
+function getRetainedFallbackTab(entry: AgentStatusEntry, worktreeId: string): TerminalTab {
+  const tabId = entry.tabId ?? getTabIdFromPaneKey(entry.paneKey) ?? entry.paneKey
+  return {
+    id: tabId,
+    ptyId: null,
+    worktreeId,
+    title: entry.terminalTitle ?? 'Agent',
+    customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: entry.stateStartedAt
+  }
+}
+
+function retainedAgentEntryFromLive(
+  state: AppState,
+  worktreeId: string,
+  entry: AgentStatusEntry,
+  agentType: AgentType
+): RetainedAgentEntry {
+  const tab =
+    findTabForAgentEntry(state, worktreeId, entry) ?? getRetainedFallbackTab(entry, worktreeId)
+  return {
+    entry,
+    worktreeId,
+    tab,
+    agentType,
+    startedAt: entry.stateHistory[0]?.startedAt ?? entry.stateStartedAt
+  }
+}
+
+function shouldReplaceRetainedWithLive(
+  retained: RetainedAgentEntry | undefined,
+  live: RetainedAgentEntry
+): boolean {
+  if (!retained) {
+    return true
+  }
+  if (live.startedAt !== retained.startedAt) {
+    return live.startedAt > retained.startedAt
+  }
+  const retainedSessionId = retained.entry.providerSession?.id
+  const liveSessionId = live.entry.providerSession?.id
+  if (retainedSessionId && liveSessionId && retainedSessionId !== liveSessionId) {
+    return live.entry.updatedAt >= retained.entry.updatedAt
+  }
+  return live.entry.updatedAt > retained.entry.updatedAt
+}
+
+function normalizePaneKeySet(
+  paneKeys: DropAgentStatusByWorktreeOptions['sleepingPaneKeys']
+): ReadonlySet<string> | null {
+  if (!paneKeys) {
+    return null
+  }
+  return paneKeys instanceof Set ? paneKeys : new Set(paneKeys)
+}
+
 function sleepingRecordFromEntry(args: {
   state: AppState
   entry: AgentStatusEntry
   worktreeId: string
   tab?: TerminalTab
   capturedAt: number
+  launchConfig?: SleepingAgentLaunchConfig
   origin?: SleepingAgentSessionRecord['origin']
 }): SleepingAgentSessionRecord | null {
   const agent = args.entry.agentType
@@ -218,8 +357,338 @@ function sleepingRecordFromEntry(args: {
     ...(args.entry.lastAssistantMessage
       ? { lastAssistantMessage: args.entry.lastAssistantMessage }
       : {}),
+    ...(args.launchConfig ? { launchConfig: copyLaunchConfig(args.launchConfig) } : {}),
+    ...(args.entry.interrupted ? { interrupted: true } : {}),
     ...(args.origin ? { origin: args.origin } : {})
   }
+}
+
+type CollectSleepingAgentSessionRecordsOptions = {
+  paneKeys?: readonly string[]
+  captureMode?: 'manual-worktree-sleep' | 'completed-agent-hibernation'
+}
+
+function normalizeSleepingAgentSessionCollectOptions(
+  options: readonly string[] | CollectSleepingAgentSessionRecordsOptions | undefined
+): CollectSleepingAgentSessionRecordsOptions {
+  if (!options) {
+    return {}
+  }
+  return Array.isArray(options)
+    ? { paneKeys: options }
+    : (options as CollectSleepingAgentSessionRecordsOptions)
+}
+
+function isValidManualSleepLiveAgentEntry(
+  state: AppState,
+  entry: AgentStatusEntry,
+  capturedAt: number
+): boolean {
+  if (entry.interrupted === true || entry.state === 'done') {
+    return false
+  }
+  const lastInputAt = state.lastTerminalInputAtByPaneKey[entry.paneKey]
+  if (
+    typeof lastInputAt === 'number' &&
+    Number.isFinite(lastInputAt) &&
+    lastInputAt > entry.updatedAt
+  ) {
+    return false
+  }
+  return isExplicitAgentStatusFresh(entry, capturedAt, AGENT_STATUS_STALE_AFTER_MS)
+}
+
+function isValidCompletedAgentHibernationEntry(entry: AgentStatusEntry): boolean {
+  return entry.state === 'done' && entry.interrupted !== true
+}
+
+export function removeSleepingRecordsReplacedByManualWorktreeSleep(
+  records: Record<string, SleepingAgentSessionRecord>,
+  worktreeId: string,
+  paneKeys?: readonly string[]
+): { records: Record<string, SleepingAgentSessionRecord>; changed: boolean } {
+  const allowedPaneKeys = paneKeys ? new Set(paneKeys) : null
+  let next = records
+  let changed = false
+  for (const [paneKey, record] of Object.entries(records)) {
+    if (record.worktreeId !== worktreeId || (allowedPaneKeys && !allowedPaneKeys.has(paneKey))) {
+      continue
+    }
+    if (next === records) {
+      next = { ...records }
+    }
+    delete next[paneKey]
+    changed = true
+  }
+  return { records: next, changed }
+}
+
+export function collectSleepingAgentSessionRecordsForWorktree(
+  state: AppState,
+  worktreeId: string,
+  options?: readonly string[] | CollectSleepingAgentSessionRecordsOptions
+): Record<string, SleepingAgentSessionRecord> {
+  const capturedAt = Date.now()
+  const collectOptions = normalizeSleepingAgentSessionCollectOptions(options)
+  const allowedPaneKeys = collectOptions.paneKeys ? new Set(collectOptions.paneKeys) : null
+  const isManualWorktreeSleep = collectOptions.captureMode === 'manual-worktree-sleep'
+  const isCompletedAgentHibernation = collectOptions.captureMode === 'completed-agent-hibernation'
+  const isWorktreeOwnedCapture = isManualWorktreeSleep || isCompletedAgentHibernation
+  // Why: hibernated completions are intentional worktree-owned records; wake
+  // treats originless completed records as ambiguous legacy captures.
+  const origin: SleepingAgentSessionRecord['origin'] | undefined = isWorktreeOwnedCapture
+    ? 'worktree-sleep'
+    : undefined
+  const tabPrefixes = (state.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
+  const records: Record<string, SleepingAgentSessionRecord> = {}
+
+  for (const retained of Object.values(state.retainedAgentsByPaneKey)) {
+    if (isCompletedAgentHibernation) {
+      continue
+    }
+    if (allowedPaneKeys && !allowedPaneKeys.has(retained.entry.paneKey)) {
+      continue
+    }
+    if (retained.worktreeId !== worktreeId) {
+      continue
+    }
+    const record = sleepingRecordFromEntry({
+      state,
+      entry: retained.entry,
+      worktreeId,
+      tab: retained.tab,
+      capturedAt,
+      launchConfig: getLaunchConfigForEntry(state, retained.entry),
+      origin
+    })
+    if (record) {
+      records[record.paneKey] = record
+    }
+  }
+
+  for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
+    if (allowedPaneKeys && !allowedPaneKeys.has(paneKey)) {
+      continue
+    }
+    const belongsToWorktree =
+      entry.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
+    if (!belongsToWorktree) {
+      continue
+    }
+    if (isManualWorktreeSleep && !isValidManualSleepLiveAgentEntry(state, entry, capturedAt)) {
+      continue
+    }
+    if (isCompletedAgentHibernation && !isValidCompletedAgentHibernationEntry(entry)) {
+      continue
+    }
+    const record = sleepingRecordFromEntry({
+      state,
+      entry,
+      worktreeId,
+      capturedAt,
+      launchConfig: getLaunchConfigForEntry(state, entry),
+      origin
+    })
+    if (record) {
+      records[record.paneKey] = record
+    }
+  }
+
+  return records
+}
+
+export function collectHibernatedCompletionEvidenceForWorktree(
+  state: AppState,
+  worktreeId: string,
+  paneKeys?: readonly string[]
+): RetainedAgentEntry[] {
+  const allowedPaneKeys = normalizePaneKeySet(paneKeys)
+  if (!allowedPaneKeys || allowedPaneKeys.size === 0) {
+    return []
+  }
+  const tabPrefixes = (state.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
+  const retained: RetainedAgentEntry[] = []
+  for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
+    const agentType = entry.agentType
+    if (
+      !allowedPaneKeys.has(paneKey) ||
+      entry.state !== 'done' ||
+      agentType === undefined ||
+      entry.interrupted === true
+    ) {
+      continue
+    }
+    const belongsToWorktree =
+      entry.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
+    if (!belongsToWorktree) {
+      continue
+    }
+    retained.push(retainedAgentEntryFromLive(state, worktreeId, entry, agentType))
+  }
+  return retained
+}
+
+function recoveryRecordMatches(
+  existing: SleepingAgentSessionRecord | undefined,
+  next: SleepingAgentSessionRecord
+): boolean {
+  if (!existing) {
+    return false
+  }
+  return (
+    existing.origin === next.origin &&
+    existing.agent === next.agent &&
+    existing.worktreeId === next.worktreeId &&
+    existing.tabId === next.tabId &&
+    existing.providerSession.key === next.providerSession.key &&
+    existing.providerSession.id === next.providerSession.id &&
+    launchConfigsEqual(existing.launchConfig, next.launchConfig)
+  )
+}
+
+function copyLaunchConfig(config: SleepingAgentLaunchConfig): SleepingAgentLaunchConfig {
+  return {
+    ...(config.agentCommand ? { agentCommand: config.agentCommand } : {}),
+    agentArgs: config.agentArgs,
+    agentEnv: { ...config.agentEnv }
+  }
+}
+
+function launchConfigsEqual(
+  a: SleepingAgentLaunchConfig | undefined,
+  b: SleepingAgentLaunchConfig | undefined
+): boolean {
+  if (a === undefined || b === undefined) {
+    return a === b
+  }
+  if (a.agentCommand !== b.agentCommand || a.agentArgs !== b.agentArgs) {
+    return false
+  }
+  const aKeys = Object.keys(a.agentEnv)
+  const bKeys = Object.keys(b.agentEnv)
+  return aKeys.length === bKeys.length && aKeys.every((key) => a.agentEnv[key] === b.agentEnv[key])
+}
+
+function providerSessionsEqual(
+  a: AgentProviderSessionMetadata | undefined,
+  b: AgentProviderSessionMetadata | undefined
+): boolean {
+  if (a === undefined || b === undefined) {
+    return a === b
+  }
+  return a.key === b.key && a.id === b.id
+}
+
+function normalizeLaunchConfigRegistrationMetadata(
+  paneKey: string,
+  metadata: AgentLaunchConfigRegistrationMetadata | undefined
+): AgentLaunchConfigRegistrationMetadata {
+  return {
+    ...(metadata?.agentType ? { agentType: metadata.agentType } : {}),
+    ...(metadata?.launchToken ? { launchToken: metadata.launchToken } : {}),
+    tabId: metadata?.tabId ?? getTabIdFromPaneKey(paneKey) ?? undefined,
+    leafId: metadata?.leafId ?? getLeafIdFromPaneKey(paneKey) ?? undefined,
+    ...(metadata?.terminalHandle ? { terminalHandle: metadata.terminalHandle } : {}),
+    ...(metadata?.providerSession ? { providerSession: metadata.providerSession } : {})
+  }
+}
+
+function launchConfigRegistryEntriesEqual(
+  a: AgentLaunchConfigRegistryEntry | undefined,
+  b: AgentLaunchConfigRegistryEntry
+): boolean {
+  return (
+    a !== undefined &&
+    launchConfigsEqual(a.launchConfig, b.launchConfig) &&
+    a.identity.agentType === b.identity.agentType &&
+    a.identity.launchToken === b.identity.launchToken &&
+    a.identity.tabId === b.identity.tabId &&
+    a.identity.leafId === b.identity.leafId &&
+    a.identity.terminalHandle === b.identity.terminalHandle &&
+    providerSessionsEqual(a.identity.providerSession, b.identity.providerSession)
+  )
+}
+
+function registryEntryMatchesStatus(args: {
+  entry: AgentLaunchConfigRegistryEntry | undefined
+  paneKey: string
+  agentType: AgentType | undefined
+  tabId: string | undefined
+  terminalHandle: string | undefined
+  launchToken: string | undefined
+  providerSession: AgentProviderSessionMetadata | undefined
+  existingProviderSession: AgentProviderSessionMetadata | undefined
+  providerSessionChanged: boolean
+}): boolean {
+  const entry = args.entry
+  if (!entry || args.providerSessionChanged) {
+    return false
+  }
+  const identity = entry.identity
+  if (identity.agentType !== undefined && identity.agentType !== args.agentType) {
+    return false
+  }
+  if (identity.tabId !== undefined && identity.tabId !== args.tabId) {
+    return false
+  }
+  if (identity.leafId !== undefined && identity.leafId !== getLeafIdFromPaneKey(args.paneKey)) {
+    return false
+  }
+  if (
+    identity.terminalHandle !== undefined &&
+    (args.terminalHandle === undefined || identity.terminalHandle !== args.terminalHandle)
+  ) {
+    return false
+  }
+  if (identity.providerSession !== undefined) {
+    return providerSessionsEqual(identity.providerSession, args.providerSession)
+  }
+  if (
+    identity.launchToken !== undefined &&
+    (args.launchToken === undefined || identity.launchToken !== args.launchToken)
+  ) {
+    return false
+  }
+  if (identity.launchToken !== undefined) {
+    return true
+  }
+  if (identity.terminalHandle !== undefined) {
+    return true
+  }
+  if (args.existingProviderSession && args.providerSession) {
+    return providerSessionsEqual(args.existingProviderSession, args.providerSession)
+  }
+  return false
+}
+
+function getLaunchConfigForEntry(
+  state: AppState,
+  entry: AgentStatusEntry
+): SleepingAgentLaunchConfig | undefined {
+  const registryEntry = state.agentLaunchConfigByPaneKey[entry.paneKey]
+  const registryLaunchConfig = registryEntryMatchesStatus({
+    entry: registryEntry,
+    paneKey: entry.paneKey,
+    agentType: entry.agentType,
+    tabId: entry.tabId ?? getTabIdFromPaneKey(entry.paneKey) ?? undefined,
+    terminalHandle: entry.terminalHandle,
+    launchToken: undefined,
+    providerSession: entry.providerSession,
+    existingProviderSession: entry.providerSession,
+    providerSessionChanged: false
+  })
+    ? registryEntry?.launchConfig
+    : undefined
+  if (registryLaunchConfig) {
+    return registryLaunchConfig
+  }
+  const sleepingRecord = state.sleepingAgentSessionsByPaneKey[entry.paneKey]
+  return sleepingRecord?.launchConfig &&
+    sleepingRecord.agent === entry.agentType &&
+    entry.providerSession &&
+    providerSessionsEqual(sleepingRecord.providerSession, entry.providerSession)
+    ? sleepingRecord.launchConfig
+    : undefined
 }
 
 function pruneMigrationUnsupportedEntries(
@@ -245,6 +714,8 @@ function orchestrationContextsEqual(
   return (
     a.taskId === b.taskId &&
     a.dispatchId === b.dispatchId &&
+    a.taskTitle === b.taskTitle &&
+    a.displayName === b.displayName &&
     a.parentTerminalHandle === b.parentTerminalHandle &&
     a.parentPaneKey === b.parentPaneKey &&
     a.coordinatorHandle === b.coordinatorHandle &&
@@ -311,7 +782,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     agentStatusEpoch: 0,
     retainedAgentsByPaneKey: {},
     sleepingAgentSessionsByPaneKey: {},
+    agentLaunchConfigByPaneKey: {},
     retentionSuppressedPaneKeys: {},
+    recentlyClosedAgentStatusTabIds: {},
 
     setRuntimeAgentOrchestrationByPaneKey: (entries) => {
       set((s) => {
@@ -372,8 +845,101 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       })
     },
 
+    registerAgentLaunchConfig: (paneKey, launchConfig, metadata) => {
+      set((s) => {
+        const copiedLaunchConfig = copyLaunchConfig(launchConfig)
+        const nextRegistryEntry: AgentLaunchConfigRegistryEntry = {
+          launchConfig: copiedLaunchConfig,
+          registeredAt: Date.now(),
+          identity: normalizeLaunchConfigRegistrationMetadata(paneKey, metadata)
+        }
+        const existingRegistryEntry = s.agentLaunchConfigByPaneKey[paneKey]
+        const registryChanged = !launchConfigRegistryEntriesEqual(
+          existingRegistryEntry,
+          nextRegistryEntry
+        )
+        const existingEntry = s.agentStatusByPaneKey[paneKey]
+        const entryMatchesRegistry = registryEntryMatchesStatus({
+          entry: nextRegistryEntry,
+          paneKey,
+          agentType: existingEntry?.agentType,
+          tabId: existingEntry?.tabId ?? getTabIdFromPaneKey(paneKey) ?? undefined,
+          terminalHandle: existingEntry?.terminalHandle,
+          launchToken: metadata?.launchToken,
+          providerSession: existingEntry?.providerSession,
+          existingProviderSession: existingEntry?.providerSession,
+          providerSessionChanged: false
+        })
+        const existingSleepingRecord = s.sleepingAgentSessionsByPaneKey[paneKey]
+        let nextSleepingAgentSessions = s.sleepingAgentSessionsByPaneKey
+        if (existingSleepingRecord && entryMatchesRegistry && existingEntry) {
+          const worktreeId =
+            existingEntry.worktreeId ??
+            existingSleepingRecord.worktreeId ??
+            findAgentPaneWorktreeId(s, paneKey)
+          const refreshedRecord = worktreeId
+            ? sleepingRecordFromEntry({
+                state: s,
+                entry: existingEntry,
+                worktreeId,
+                capturedAt: existingSleepingRecord.capturedAt,
+                launchConfig: copiedLaunchConfig,
+                origin: existingSleepingRecord.origin
+              })
+            : null
+          if (refreshedRecord) {
+            nextSleepingAgentSessions = {
+              ...s.sleepingAgentSessionsByPaneKey,
+              [paneKey]: {
+                ...refreshedRecord,
+                capturedAt: existingSleepingRecord.capturedAt
+              }
+            }
+          }
+        }
+        if (!registryChanged && nextSleepingAgentSessions === s.sleepingAgentSessionsByPaneKey) {
+          return s
+        }
+        return {
+          ...(registryChanged
+            ? {
+                agentLaunchConfigByPaneKey: {
+                  ...s.agentLaunchConfigByPaneKey,
+                  [paneKey]: nextRegistryEntry
+                }
+              }
+            : {}),
+          ...(nextSleepingAgentSessions !== s.sleepingAgentSessionsByPaneKey
+            ? { sleepingAgentSessionsByPaneKey: nextSleepingAgentSessions }
+            : {})
+        }
+      })
+    },
+    getAgentLaunchConfigForStatusEntry: (entry) => getLaunchConfigForEntry(get(), entry),
+
+    clearAgentLaunchConfig: (paneKey) => {
+      set((s) => {
+        if (!(paneKey in s.agentLaunchConfigByPaneKey)) {
+          return s
+        }
+        const nextLaunchConfigs = { ...s.agentLaunchConfigByPaneKey }
+        delete nextLaunchConfigs[paneKey]
+        return { agentLaunchConfigByPaneKey: nextLaunchConfigs }
+      })
+    },
+
     setAgentStatus: (paneKey, payload, terminalTitle, timing, routing, metadata) => {
       const updatedAt = timing?.updatedAt ?? Date.now()
+      if (
+        // Why: a closed terminal tab is no longer a valid destination for hook
+        // replays or late status events, even if main still receives them.
+        isRecentlyClosedAgentStatusTab(
+          get().recentlyClosedAgentStatusTabIds,
+          getTabIdFromPaneKey(paneKey)
+        )
+      ) {
+        return
+      }
       let completionRefreshWorktreeId: string | null = null
       let suppressedInheritedTerminalStatus = false
       set((s) => {
@@ -467,9 +1033,55 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           payload.state === 'done' ? existing?.orchestration : undefined
         const orchestration =
           payloadMergedOrchestration ?? runtimeMergedOrchestration ?? completedFallbackOrchestration
+        const canReuseExistingIdentity =
+          existing?.agentType === identity.agentType &&
+          !isAgentCompletionState(existing.state) &&
+          !isAgentCompletionState(payload.state)
         const providerSession =
           metadata?.providerSession ??
-          (existing?.agentType === identity.agentType ? existing.providerSession : undefined)
+          (canReuseExistingIdentity ? existing.providerSession : undefined)
+        const existingProviderSession = canReuseExistingIdentity
+          ? existing.providerSession
+          : undefined
+        const providerSessionChanged =
+          Boolean(metadata?.providerSession && existingProviderSession) &&
+          (metadata?.providerSession?.key !== existingProviderSession?.key ||
+            metadata?.providerSession?.id !== existingProviderSession?.id)
+        const statusTabId =
+          routing?.tabId ?? existing?.tabId ?? getTabIdFromPaneKey(paneKey) ?? undefined
+        const statusTerminalHandle = routing?.terminalHandle ?? existing?.terminalHandle
+        const registryEntry = s.agentLaunchConfigByPaneKey[paneKey]
+        const matchedRegistryLaunchConfig = registryEntryMatchesStatus({
+          entry: registryEntry,
+          paneKey,
+          agentType: identity.agentType,
+          tabId: statusTabId,
+          terminalHandle: statusTerminalHandle,
+          launchToken: metadata?.launchToken,
+          providerSession,
+          existingProviderSession,
+          providerSessionChanged
+        })
+          ? registryEntry?.launchConfig
+          : undefined
+        const existingSleepingRecord = s.sleepingAgentSessionsByPaneKey[paneKey]
+        const matchedSleepingLaunchConfig =
+          payload.state !== 'done' &&
+          existingSleepingRecord?.launchConfig &&
+          existingSleepingRecord.agent === identity.agentType &&
+          providerSession &&
+          providerSessionsEqual(existingSleepingRecord.providerSession, providerSession)
+            ? existingSleepingRecord.launchConfig
+            : undefined
+        // Why: pane keys can be reused after a manually-started agent replaces
+        // an Orca-launched one. Once the provider session changes, the old
+        // pane-key launch registry must not bleed options into the new session.
+        const launchConfigSource =
+          (payload.state !== 'done' && !providerSessionChanged && metadata?.launchToken
+            ? metadata?.launchConfig
+            : undefined) ??
+          matchedRegistryLaunchConfig ??
+          matchedSleepingLaunchConfig
         const entry: AgentStatusEntry = {
           state: payload.state,
           prompt: payload.prompt,
@@ -477,13 +1089,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           stateStartedAt,
           agentType: identity.agentType,
           paneKey,
-          terminalHandle: routing?.terminalHandle ?? existing?.terminalHandle,
+          terminalHandle: statusTerminalHandle,
           worktreeId:
             routing?.worktreeId ??
             existing?.worktreeId ??
             findAgentPaneWorktreeId(s, paneKey) ??
             undefined,
-          tabId: routing?.tabId ?? existing?.tabId ?? getTabIdFromPaneKey(paneKey) ?? undefined,
+          tabId: statusTabId,
           terminalTitle: effectiveTitle,
           stateHistory: history,
           toolName: payload.toolName,
@@ -559,16 +1171,63 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           s.migrationUnsupportedByPtyId,
           (entry) => entry.paneKey === paneKey
         )
-        const hasSleepingRecord = paneKey in s.sleepingAgentSessionsByPaneKey
-        const nextSleepingAgentSessions = hasSleepingRecord
-          ? { ...s.sleepingAgentSessionsByPaneKey }
-          : s.sleepingAgentSessionsByPaneKey
-        if (hasSleepingRecord) {
+        const liveRecoveryWorktreeId =
+          entry.state === 'done'
+            ? null
+            : (entry.worktreeId ?? findAgentPaneWorktreeId(s, entry.paneKey))
+        const liveRecoveryRecord = liveRecoveryWorktreeId
+          ? sleepingRecordFromEntry({
+              state: s,
+              entry,
+              worktreeId: liveRecoveryWorktreeId,
+              capturedAt: updatedAt,
+              launchConfig: launchConfigSource,
+              origin: 'live'
+            })
+          : null
+        let nextSleepingAgentSessions = s.sleepingAgentSessionsByPaneKey
+        let nextLaunchConfigs = s.agentLaunchConfigByPaneKey
+        if (
+          matchedRegistryLaunchConfig &&
+          registryEntry &&
+          providerSession &&
+          !providerSessionsEqual(registryEntry.identity.providerSession, providerSession)
+        ) {
+          nextLaunchConfigs = {
+            ...nextLaunchConfigs,
+            [paneKey]: {
+              ...registryEntry,
+              identity: {
+                ...registryEntry.identity,
+                providerSession
+              }
+            }
+          }
+        }
+        // Why: launch tokens can remain in a shell after an Orca-started TUI exits;
+        // once the original session is done they must no longer authorize config reuse.
+        if (
+          (providerSessionChanged || entry.state === 'done') &&
+          paneKey in s.agentLaunchConfigByPaneKey
+        ) {
+          nextLaunchConfigs = { ...s.agentLaunchConfigByPaneKey }
+          delete nextLaunchConfigs[paneKey]
+        }
+        if (liveRecoveryRecord) {
+          if (!recoveryRecordMatches(existingSleepingRecord, liveRecoveryRecord)) {
+            nextSleepingAgentSessions = {
+              ...s.sleepingAgentSessionsByPaneKey,
+              [paneKey]: liveRecoveryRecord
+            }
+          }
+        } else if (existingSleepingRecord) {
+          nextSleepingAgentSessions = { ...s.sleepingAgentSessionsByPaneKey }
           delete nextSleepingAgentSessions[paneKey]
         }
         return {
           agentStatusByPaneKey: { ...s.agentStatusByPaneKey, [paneKey]: entry },
           sleepingAgentSessionsByPaneKey: nextSleepingAgentSessions,
+          agentLaunchConfigByPaneKey: nextLaunchConfigs,
           migrationUnsupportedByPtyId: migrationUnsupported.next,
           retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
           agentStatusEpoch:
@@ -629,6 +1288,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     removeAgentStatus: (paneKey) => {
       if (
         !(paneKey in get().agentStatusByPaneKey) &&
+        !(paneKey in get().agentLaunchConfigByPaneKey) &&
         !Object.values(get().migrationUnsupportedByPtyId).some((entry) => entry.paneKey === paneKey)
       ) {
         return
@@ -638,6 +1298,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const next = hasLive ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
         if (hasLive) {
           delete next[paneKey]
+        }
+        const hasLaunchConfig = paneKey in s.agentLaunchConfigByPaneKey
+        const nextLaunchConfigs = hasLaunchConfig
+          ? { ...s.agentLaunchConfigByPaneKey }
+          : s.agentLaunchConfigByPaneKey
+        if (hasLaunchConfig) {
+          delete nextLaunchConfigs[paneKey]
         }
         const migrationUnsupported = pruneMigrationUnsupportedEntries(
           s.migrationUnsupportedByPtyId,
@@ -658,6 +1325,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         // as setAgentStatus.
         return {
           agentStatusByPaneKey: next,
+          agentLaunchConfigByPaneKey: nextLaunchConfigs,
           migrationUnsupportedByPtyId: migrationUnsupported.next,
           ...(nextAck !== s.acknowledgedAgentsByPaneKey
             ? { acknowledgedAgentsByPaneKey: nextAck }
@@ -673,16 +1341,23 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       const prefix = `${tabIdPrefix}:`
       const currentKeys = Object.keys(get().agentStatusByPaneKey)
       const toRemove = currentKeys.filter((k) => k.startsWith(prefix))
+      const launchConfigKeys = Object.keys(get().agentLaunchConfigByPaneKey).filter((k) =>
+        k.startsWith(prefix)
+      )
       const hasMigrationUnsupported = Object.values(get().migrationUnsupportedByPtyId).some(
         (entry) => entry.paneKey?.startsWith(prefix)
       )
-      if (toRemove.length === 0 && !hasMigrationUnsupported) {
+      if (toRemove.length === 0 && launchConfigKeys.length === 0 && !hasMigrationUnsupported) {
         return
       }
       set((s) => {
         const next = { ...s.agentStatusByPaneKey }
         for (const key of toRemove) {
           delete next[key]
+        }
+        const nextLaunchConfigs = { ...s.agentLaunchConfigByPaneKey }
+        for (const key of launchConfigKeys) {
+          delete nextLaunchConfigs[key]
         }
         const migrationUnsupported = pruneMigrationUnsupportedEntries(
           s.migrationUnsupportedByPtyId,
@@ -703,6 +1378,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         // no keys matched the prefix.
         return {
           agentStatusByPaneKey: next,
+          agentLaunchConfigByPaneKey: nextLaunchConfigs,
           migrationUnsupportedByPtyId: migrationUnsupported.next,
           ...(nextAck !== s.acknowledgedAgentsByPaneKey
             ? { acknowledgedAgentsByPaneKey: nextAck }
@@ -736,14 +1412,29 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           nextAck = { ...nextAck }
           delete nextAck[paneKey]
         }
+        const hasLaunchConfig = paneKey in s.agentLaunchConfigByPaneKey
+        const nextLaunchConfigs = hasLaunchConfig
+          ? { ...s.agentLaunchConfigByPaneKey }
+          : s.agentLaunchConfigByPaneKey
+        if (hasLaunchConfig) {
+          delete nextLaunchConfigs[paneKey]
+        }
         // Why: bail when there is genuinely nothing to do. The old guard
         // `!hasLive && !hasRetained && alreadySuppressed` leaked a phantom
         // suppressor write in the `!hasLive && !hasRetained && !alreadySuppressed`
         // case. With the hasLive-gated suppressor below, a no-op drop on a
         // paneKey with no live and no retained entry truly has nothing to
         // change, so short-circuit here — but still flush a pending ack
-        // cleanup if one is present.
+        // cleanup or launch-config cleanup if one is present.
         if (!hasLive && !hasRetained && !migrationUnsupported.changed) {
+          if (hasLaunchConfig) {
+            return {
+              agentLaunchConfigByPaneKey: nextLaunchConfigs,
+              ...(nextAck !== s.acknowledgedAgentsByPaneKey
+                ? { acknowledgedAgentsByPaneKey: nextAck }
+                : {})
+            }
+          }
           if (nextAck !== s.acknowledgedAgentsByPaneKey) {
             return { acknowledgedAgentsByPaneKey: nextAck }
           }
@@ -754,7 +1445,6 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         if (hasLive) {
           delete nextLive[paneKey]
         }
-
         const nextRetained = hasRetained
           ? { ...s.retainedAgentsByPaneKey }
           : s.retainedAgentsByPaneKey
@@ -794,6 +1484,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
 
         return {
           agentStatusByPaneKey: nextLive,
+          agentLaunchConfigByPaneKey: nextLaunchConfigs,
           retainedAgentsByPaneKey: nextRetained,
           migrationUnsupportedByPtyId: migrationUnsupported.next,
           ...(nextAck !== s.acknowledgedAgentsByPaneKey
@@ -841,6 +1532,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       let hadLive = false
       set((s) => {
         const liveKeys = Object.keys(s.agentStatusByPaneKey).filter((k) => k.startsWith(prefix))
+        const launchConfigKeys = Object.keys(s.agentLaunchConfigByPaneKey).filter((k) =>
+          k.startsWith(prefix)
+        )
         const retainedKeys = Object.keys(s.retainedAgentsByPaneKey).filter((k) =>
           k.startsWith(prefix)
         )
@@ -859,11 +1553,24 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             delete nextAck[k]
           }
         }
-        if (liveKeys.length === 0 && retainedKeys.length === 0 && !migrationUnsupported.changed) {
+        const nextClosedTabs: Record<string, true> = {
+          ...s.recentlyClosedAgentStatusTabIds,
+          [tabIdPrefix]: true
+        }
+
+        if (
+          liveKeys.length === 0 &&
+          launchConfigKeys.length === 0 &&
+          retainedKeys.length === 0 &&
+          !migrationUnsupported.changed
+        ) {
           if (nextAck !== s.acknowledgedAgentsByPaneKey) {
-            return { acknowledgedAgentsByPaneKey: nextAck }
+            return {
+              acknowledgedAgentsByPaneKey: nextAck,
+              recentlyClosedAgentStatusTabIds: nextClosedTabs
+            }
           }
-          return s
+          return { recentlyClosedAgentStatusTabIds: nextClosedTabs }
         }
         hadLive = liveKeys.length > 0
 
@@ -871,6 +1578,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           liveKeys.length > 0 ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
         for (const key of liveKeys) {
           delete nextLive[key]
+        }
+        const nextLaunchConfigs =
+          launchConfigKeys.length > 0
+            ? { ...s.agentLaunchConfigByPaneKey }
+            : s.agentLaunchConfigByPaneKey
+        for (const key of launchConfigKeys) {
+          delete nextLaunchConfigs[key]
         }
 
         const nextRetained =
@@ -904,9 +1618,11 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
 
         return {
           agentStatusByPaneKey: nextLive,
+          agentLaunchConfigByPaneKey: nextLaunchConfigs,
           retainedAgentsByPaneKey: nextRetained,
           migrationUnsupportedByPtyId: migrationUnsupported.next,
           retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
+          recentlyClosedAgentStatusTabIds: nextClosedTabs,
           ...(nextAck !== s.acknowledgedAgentsByPaneKey
             ? { acknowledgedAgentsByPaneKey: nextAck }
             : {}),
@@ -921,19 +1637,128 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       if (hadLive) {
         queueMicrotask(() => freshness.schedule())
       }
+      if (typeof window !== 'undefined') {
+        window.api?.agentStatus?.dropByTabPrefix?.(tabIdPrefix)
+      }
     },
 
-    dropAgentStatusByWorktree: (worktreeId) => {
+    dropHibernatedAgentStatusPane: (worktreeId, paneKey, opts) => {
+      let hadLive = false
+      set((s) => {
+        const liveEntry = s.agentStatusByPaneKey[paneKey]
+        const hasLive = liveEntry !== undefined
+        const hasRetained = paneKey in s.retainedAgentsByPaneKey
+        const hasLaunchConfig = paneKey in s.agentLaunchConfigByPaneKey
+        const migrationUnsupported = pruneMigrationUnsupportedEntries(
+          s.migrationUnsupportedByPtyId,
+          (entry) => entry.paneKey === paneKey
+        )
+        const retainedEvidence = new Map<string, RetainedAgentEntry>()
+        for (const retained of opts?.retainedCompletionEvidence ?? []) {
+          if (
+            retained.entry.paneKey === paneKey &&
+            !liveEntry &&
+            shouldReplaceRetainedWithLive(retainedEvidence.get(paneKey), retained)
+          ) {
+            retainedEvidence.set(paneKey, retained)
+          }
+        }
+        if (
+          liveEntry?.state === 'done' &&
+          liveEntry.agentType !== undefined &&
+          liveEntry.interrupted !== true
+        ) {
+          retainedEvidence.set(
+            paneKey,
+            retainedAgentEntryFromLive(s, worktreeId, liveEntry, liveEntry.agentType)
+          )
+        }
+        const keepsCompletionEvidence = retainedEvidence.has(paneKey)
+        let nextAck = s.acknowledgedAgentsByPaneKey
+        if (!keepsCompletionEvidence && paneKey in nextAck) {
+          nextAck = { ...nextAck }
+          delete nextAck[paneKey]
+        }
+        if (
+          !hasLive &&
+          !hasRetained &&
+          !hasLaunchConfig &&
+          !migrationUnsupported.changed &&
+          !keepsCompletionEvidence
+        ) {
+          if (nextAck !== s.acknowledgedAgentsByPaneKey) {
+            return { acknowledgedAgentsByPaneKey: nextAck }
+          }
+          return s
+        }
+        hadLive = hasLive
+
+        const nextLive = hasLive ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
+        if (hasLive) {
+          delete nextLive[paneKey]
+        }
+        const nextLaunchConfigs = hasLaunchConfig
+          ? { ...s.agentLaunchConfigByPaneKey }
+          : s.agentLaunchConfigByPaneKey
+        if (hasLaunchConfig) {
+          delete nextLaunchConfigs[paneKey]
+        }
+
+        const nextRetained =
+          hasRetained || keepsCompletionEvidence
+            ? { ...s.retainedAgentsByPaneKey }
+            : s.retainedAgentsByPaneKey
+        if (hasRetained && !keepsCompletionEvidence) {
+          delete nextRetained[paneKey]
+        }
+        for (const [key, retained] of retainedEvidence) {
+          if (shouldReplaceRetainedWithLive(nextRetained[key], retained)) {
+            nextRetained[key] = retained
+          }
+        }
+
+        const needsSuppressor =
+          hasLive && !keepsCompletionEvidence && !(paneKey in s.retentionSuppressedPaneKeys)
+
+        return {
+          agentStatusByPaneKey: nextLive,
+          agentLaunchConfigByPaneKey: nextLaunchConfigs,
+          retainedAgentsByPaneKey: nextRetained,
+          migrationUnsupportedByPtyId: migrationUnsupported.next,
+          ...(nextAck !== s.acknowledgedAgentsByPaneKey
+            ? { acknowledgedAgentsByPaneKey: nextAck }
+            : {}),
+          ...(needsSuppressor
+            ? {
+                retentionSuppressedPaneKeys: {
+                  ...s.retentionSuppressedPaneKeys,
+                  [paneKey]: true
+                }
+              }
+            : {}),
+          agentStatusEpoch:
+            hasLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
+          sortEpoch: hasLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
+        }
+      })
+      if (hadLive) {
+        queueMicrotask(() => freshness.schedule())
+      }
+    },
+
+    dropAgentStatusByWorktree: (worktreeId, opts) => {
       let hadLive = false
       set((s) => {
         const tabPrefixes = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
-        const liveKeys = Object.entries(s.agentStatusByPaneKey)
-          .filter(
-            ([paneKey, entry]) =>
-              entry.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
-          )
-          .map(([paneKey]) => paneKey)
+        const liveEntries = Object.entries(s.agentStatusByPaneKey).filter(
+          ([paneKey, entry]) =>
+            entry.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
+        )
+        const liveKeys = liveEntries.map(([paneKey]) => paneKey)
         const liveKeySet = new Set(liveKeys)
+        const launchConfigKeys = Object.keys(s.agentLaunchConfigByPaneKey).filter(
+          (paneKey) => paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes) || liveKeySet.has(paneKey)
+        )
         const retainedKeys = Object.entries(s.retainedAgentsByPaneKey)
           .filter(
             ([paneKey, retained]) =>
@@ -947,13 +1772,50 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             entry.worktreeId === worktreeId ||
             (entry.paneKey ? paneKeyMatchesAnyTabPrefix(entry.paneKey, tabPrefixes) : false)
         )
+        const allowedPaneKeys = normalizePaneKeySet(opts?.sleepingPaneKeys)
+        const preserveHibernatedEvidence =
+          opts?.shutdownReason === 'auto-hibernate-completed-agent' &&
+          allowedPaneKeys !== null &&
+          allowedPaneKeys.size > 0
+        const liveEntryByPaneKey = new Map(liveEntries)
+        const retainedEvidence = new Map<string, RetainedAgentEntry>()
+        if (preserveHibernatedEvidence) {
+          for (const retained of opts?.retainedCompletionEvidence ?? []) {
+            if (
+              allowedPaneKeys.has(retained.entry.paneKey) &&
+              !liveEntryByPaneKey.has(retained.entry.paneKey) &&
+              shouldReplaceRetainedWithLive(retainedEvidence.get(retained.entry.paneKey), retained)
+            ) {
+              retainedEvidence.set(retained.entry.paneKey, retained)
+            }
+          }
+          for (const [paneKey, entry] of liveEntries) {
+            const agentType = entry.agentType
+            if (
+              allowedPaneKeys.has(paneKey) &&
+              entry.state === 'done' &&
+              agentType !== undefined &&
+              entry.interrupted !== true
+            ) {
+              retainedEvidence.set(
+                paneKey,
+                retainedAgentEntryFromLive(s, worktreeId, entry, agentType)
+              )
+            }
+          }
+        }
+        const retainedEvidenceKeys = new Set(retainedEvidence.keys())
         // See removeAgentStatus for rationale on ack cleanup. Current tabs are
         // swept by prefix; attributed live rows and orphan retained rows are
-        // swept by their retained/lifecycle key.
+        // swept by their retained/lifecycle key. Auto-hibernated completion
+        // evidence keeps its read state so a slept card does not turn bold again.
         let nextAck = s.acknowledgedAgentsByPaneKey
         const ackKeys = Object.keys(nextAck).filter(
           (k) =>
-            paneKeyMatchesAnyTabPrefix(k, tabPrefixes) || liveKeySet.has(k) || retainedKeySet.has(k)
+            !retainedEvidenceKeys.has(k) &&
+            (paneKeyMatchesAnyTabPrefix(k, tabPrefixes) ||
+              liveKeySet.has(k) ||
+              retainedKeySet.has(k))
         )
         if (ackKeys.length > 0) {
           nextAck = { ...nextAck }
@@ -965,7 +1827,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         // changed, narrow the return to just the ack delta (or s) so we don't
         // emit a new top-level state object that re-renders full-state
         // subscribers for nothing.
-        if (liveKeys.length === 0 && retainedKeys.length === 0 && !migrationUnsupported.changed) {
+        if (
+          liveKeys.length === 0 &&
+          launchConfigKeys.length === 0 &&
+          retainedKeys.length === 0 &&
+          retainedEvidence.size === 0 &&
+          !migrationUnsupported.changed
+        ) {
           if (nextAck !== s.acknowledgedAgentsByPaneKey) {
             return { acknowledgedAgentsByPaneKey: nextAck }
           }
@@ -978,17 +1846,36 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         for (const key of liveKeys) {
           delete nextLive[key]
         }
-
-        const nextRetained =
-          retainedKeys.length > 0 ? { ...s.retainedAgentsByPaneKey } : s.retainedAgentsByPaneKey
-        for (const key of retainedKeys) {
-          delete nextRetained[key]
+        const nextLaunchConfigs =
+          launchConfigKeys.length > 0
+            ? { ...s.agentLaunchConfigByPaneKey }
+            : s.agentLaunchConfigByPaneKey
+        for (const key of launchConfigKeys) {
+          delete nextLaunchConfigs[key]
         }
 
-        // Why: a worktree-level teardown folds the whole surface. Current live
-        // rows need one-shot suppressors so the retention sync cannot recreate a
-        // done row from the previous render after sleep/remove has hidden it.
-        const suppressorAdds = liveKeys.filter((k) => !(k in s.retentionSuppressedPaneKeys))
+        const nextRetained =
+          retainedKeys.length > 0 || retainedEvidence.size > 0
+            ? { ...s.retainedAgentsByPaneKey }
+            : s.retainedAgentsByPaneKey
+        for (const key of retainedKeys) {
+          if (!retainedEvidenceKeys.has(key)) {
+            delete nextRetained[key]
+          }
+        }
+        for (const [paneKey, retained] of retainedEvidence) {
+          if (shouldReplaceRetainedWithLive(nextRetained[paneKey], retained)) {
+            nextRetained[paneKey] = retained
+          }
+        }
+
+        // Why: normal worktree teardown folds the surface, so live rows need
+        // suppressors. Auto-hibernated `done` rows become retained evidence
+        // immediately, so suppressing those same pane keys would erase them on
+        // the next retention sync.
+        const suppressorAdds = liveKeys.filter(
+          (k) => !retainedEvidenceKeys.has(k) && !(k in s.retentionSuppressedPaneKeys)
+        )
         let nextRetentionSuppressedPaneKeys = s.retentionSuppressedPaneKeys
         if (suppressorAdds.length > 0) {
           nextRetentionSuppressedPaneKeys = { ...s.retentionSuppressedPaneKeys }
@@ -999,6 +1886,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
 
         return {
           agentStatusByPaneKey: nextLive,
+          agentLaunchConfigByPaneKey: nextLaunchConfigs,
           retainedAgentsByPaneKey: nextRetained,
           migrationUnsupportedByPtyId: migrationUnsupported.next,
           retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
@@ -1015,45 +1903,22 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       }
     },
 
-    captureSleepingAgentSessionsByWorktree: (worktreeId) => {
+    captureSleepingAgentSessionsByWorktree: (worktreeId, paneKeys) => {
       set((s) => {
-        const capturedAt = Date.now()
-        const tabPrefixes = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
-        const next: Record<string, SleepingAgentSessionRecord> = {
-          ...s.sleepingAgentSessionsByPaneKey
-        }
-        let changed = false
+        const records = collectSleepingAgentSessionRecordsForWorktree(s, worktreeId, {
+          paneKeys,
+          captureMode: 'manual-worktree-sleep'
+        })
+        const replaced = removeSleepingRecordsReplacedByManualWorktreeSleep(
+          s.sleepingAgentSessionsByPaneKey,
+          worktreeId,
+          paneKeys
+        )
+        const next: Record<string, SleepingAgentSessionRecord> = { ...replaced.records }
+        let changed = replaced.changed
 
-        for (const retained of Object.values(s.retainedAgentsByPaneKey)) {
-          if (retained.worktreeId !== worktreeId) {
-            continue
-          }
-          const record = sleepingRecordFromEntry({
-            state: s,
-            entry: retained.entry,
-            worktreeId,
-            tab: retained.tab,
-            capturedAt
-          })
-          if (record && next[record.paneKey] !== record) {
-            next[record.paneKey] = record
-            changed = true
-          }
-        }
-
-        for (const [paneKey, entry] of Object.entries(s.agentStatusByPaneKey)) {
-          const belongsToWorktree =
-            entry.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
-          if (!belongsToWorktree) {
-            continue
-          }
-          const record = sleepingRecordFromEntry({
-            state: s,
-            entry,
-            worktreeId,
-            capturedAt
-          })
-          if (record && next[record.paneKey] !== record) {
+        for (const record of Object.values(records)) {
+          if (next[record.paneKey] !== record) {
             next[record.paneKey] = record
             changed = true
           }
@@ -1088,6 +1953,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             entry,
             worktreeId,
             capturedAt,
+            launchConfig: getLaunchConfigForEntry(s, entry),
             origin: 'quit'
           })
           if (record && next[record.paneKey] !== record) {
@@ -1101,12 +1967,27 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
 
     clearSleepingAgentSession: (paneKey) => {
       set((s) => {
-        if (!(paneKey in s.sleepingAgentSessionsByPaneKey)) {
+        const hasSleepingRecord = paneKey in s.sleepingAgentSessionsByPaneKey
+        const hasLaunchConfig = paneKey in s.agentLaunchConfigByPaneKey
+        if (!hasSleepingRecord && !hasLaunchConfig) {
           return s
         }
-        const next = { ...s.sleepingAgentSessionsByPaneKey }
-        delete next[paneKey]
-        return { sleepingAgentSessionsByPaneKey: next }
+        const nextSleeping = hasSleepingRecord
+          ? { ...s.sleepingAgentSessionsByPaneKey }
+          : s.sleepingAgentSessionsByPaneKey
+        if (hasSleepingRecord) {
+          delete nextSleeping[paneKey]
+        }
+        const nextLaunchConfigs = hasLaunchConfig
+          ? { ...s.agentLaunchConfigByPaneKey }
+          : s.agentLaunchConfigByPaneKey
+        if (hasLaunchConfig) {
+          delete nextLaunchConfigs[paneKey]
+        }
+        return {
+          sleepingAgentSessionsByPaneKey: nextSleeping,
+          agentLaunchConfigByPaneKey: nextLaunchConfigs
+        }
       })
     },
 
@@ -1114,14 +1995,28 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       set((s) => {
         let changed = false
         const next: Record<string, SleepingAgentSessionRecord> = {}
+        const launchConfigKeysToRemove: string[] = []
         for (const [paneKey, record] of Object.entries(s.sleepingAgentSessionsByPaneKey)) {
           if (record.worktreeId === worktreeId) {
             changed = true
+            launchConfigKeysToRemove.push(paneKey)
             continue
           }
           next[paneKey] = record
         }
-        return changed ? { sleepingAgentSessionsByPaneKey: next } : s
+        const nextLaunchConfigs =
+          launchConfigKeysToRemove.length > 0 ? { ...s.agentLaunchConfigByPaneKey } : null
+        if (nextLaunchConfigs) {
+          for (const paneKey of launchConfigKeysToRemove) {
+            delete nextLaunchConfigs[paneKey]
+          }
+        }
+        return changed
+          ? {
+              sleepingAgentSessionsByPaneKey: next,
+              ...(nextLaunchConfigs ? { agentLaunchConfigByPaneKey: nextLaunchConfigs } : {})
+            }
+          : s
       })
     },
 
@@ -1129,14 +2024,28 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       set((s) => {
         let changed = false
         const next: Record<string, SleepingAgentSessionRecord> = {}
+        const launchConfigKeysToRemove: string[] = []
         for (const [paneKey, record] of Object.entries(s.sleepingAgentSessionsByPaneKey)) {
           if (!validWorktreeIds.has(record.worktreeId)) {
             changed = true
+            launchConfigKeysToRemove.push(paneKey)
             continue
           }
           next[paneKey] = record
         }
-        return changed ? { sleepingAgentSessionsByPaneKey: next } : s
+        const nextLaunchConfigs =
+          launchConfigKeysToRemove.length > 0 ? { ...s.agentLaunchConfigByPaneKey } : null
+        if (nextLaunchConfigs) {
+          for (const paneKey of launchConfigKeysToRemove) {
+            delete nextLaunchConfigs[paneKey]
+          }
+        }
+        return changed
+          ? {
+              sleepingAgentSessionsByPaneKey: next,
+              ...(nextLaunchConfigs ? { agentLaunchConfigByPaneKey: nextLaunchConfigs } : {})
+            }
+          : s
       })
     },
 

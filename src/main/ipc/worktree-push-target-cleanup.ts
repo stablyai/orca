@@ -7,6 +7,7 @@ import type { Store } from '../persistence'
 import type { GitPushTarget } from '../../shared/types'
 import { parseGitHubOwnerRepo } from '../github/gh-utils'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
+import { iterateProcessOutputLines } from '../../shared/process-output-field-scanner'
 
 export type GitRemoteExec = (
   args: string[],
@@ -62,17 +63,44 @@ async function hasBranchConfigUsingRemote(
       ['config', '--get-regexp', '^branch\\..*\\.(remote|pushRemote)$'],
       repoPath
     )
-    return stdout
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .some((line) => {
-        const value = line.split(/\s+/).slice(1).join(' ')
-        return value === target.remoteName || value === target.remoteUrl
-      })
+    // Why: git config output can be large; avoid materializing line/split arrays here.
+    for (const line of iterateProcessOutputLines(stdout)) {
+      const value = readBranchRemoteConfigValue(line)
+      if (value === target.remoteName || value === target.remoteUrl) {
+        return true
+      }
+    }
+    return false
   } catch {
     return false
   }
+}
+
+function readBranchRemoteConfigValue(line: string): string | null {
+  let index = 0
+  while (index < line.length && isBranchConfigSeparator(line.charCodeAt(index))) {
+    index += 1
+  }
+  while (index < line.length && !isBranchConfigSeparator(line.charCodeAt(index))) {
+    index += 1
+  }
+  while (index < line.length && isBranchConfigSeparator(line.charCodeAt(index))) {
+    index += 1
+  }
+  if (index >= line.length) {
+    return null
+  }
+
+  const valueStart = index
+  let valueEnd = line.length
+  while (valueEnd > valueStart && isBranchConfigSeparator(line.charCodeAt(valueEnd - 1))) {
+    valueEnd -= 1
+  }
+  return valueStart < valueEnd ? line.slice(valueStart, valueEnd) : null
+}
+
+function isBranchConfigSeparator(code: number): boolean {
+  return code === 32 || (code >= 9 && code <= 13)
 }
 
 // Exported for unit tests: the `execGit` seam lets tests drive the multi-fork

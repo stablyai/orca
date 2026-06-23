@@ -1,14 +1,21 @@
 // @vitest-environment happy-dom
 
-import { act, type MouseEvent, type ReactNode } from 'react'
+import { act, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo, Worktree, WorktreeLineage, WorkspaceLineage } from '../../../../shared/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import {
+  LINEAGE_CHILDREN_INLINE_OFFSET,
+  getLineageChildrenInlineStyle
+} from '@/components/sidebar/worktree-list-indentation'
 
 type MockStoreState = {
   activeWorktreeId: string | null
   activeWorkspaceKey: string | null
+  settings?: {
+    experimentalNewWorktreeCardStyle?: boolean
+  }
   folderWorkspaces: {
     id: string
     name: string
@@ -24,6 +31,9 @@ const testState = vi.hoisted(() => ({
   store: {
     activeWorktreeId: null,
     activeWorkspaceKey: null,
+    settings: {
+      experimentalNewWorktreeCardStyle: true
+    },
     folderWorkspaces: [],
     workspaceLineageByChildKey: {},
     worktreeLineageById: {},
@@ -36,9 +46,11 @@ const testState = vi.hoisted(() => ({
     nativeDragEnabled?: boolean
     isActive?: boolean
     flushSurface?: boolean
+    contentIndent?: number
     lineageChildCount?: number
     lineageCollapsed?: boolean
     lineageChildren?: ReactNode
+    lineageChildrenStyle?: CSSProperties
     onLineageToggle?: (event: MouseEvent<HTMLButtonElement>) => void
   }[],
   cardClicks: [] as string[]
@@ -60,9 +72,11 @@ vi.mock('@/components/sidebar/WorktreeCard', () => ({
     nativeDragEnabled?: boolean
     isActive?: boolean
     flushSurface?: boolean
+    contentIndent?: number
     lineageChildCount?: number
     lineageCollapsed?: boolean
     lineageChildren?: ReactNode
+    lineageChildrenStyle?: CSSProperties
     onLineageToggle?: (event: MouseEvent<HTMLButtonElement>) => void
   }) => {
     testState.cardProps.push(props)
@@ -74,8 +88,10 @@ vi.mock('@/components/sidebar/WorktreeCard', () => ({
         data-native-drag-enabled={props.nativeDragEnabled ? 'true' : 'false'}
         data-active={props.isActive ? 'true' : 'false'}
         data-flush-surface={props.flushSurface ? 'true' : 'false'}
+        data-content-indent={props.contentIndent ?? 0}
         data-lineage-child-count={props.lineageChildCount ?? 0}
         data-lineage-collapsed={props.lineageCollapsed ? 'true' : 'false'}
+        style={props.lineageChildrenStyle}
         onClick={() => testState.cardClicks.push(props.worktree.id)}
       >
         {props.worktree.displayName}
@@ -313,6 +329,10 @@ describe('FolderWorkspaceWorktreesPanel', () => {
     ])
     expect(testState.cardProps[0]?.lineageChildCount).toBe(1)
     expect(testState.cardProps[0]?.lineageCollapsed).toBe(false)
+    expect(testState.cardProps[0]?.lineageChildrenStyle).toEqual(
+      getLineageChildrenInlineStyle(LINEAGE_CHILDREN_INLINE_OFFSET)
+    )
+    expect(testState.cardProps[0]?.contentIndent).toBe(0)
 
     act(() => {
       container

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { X, GitCompareArrows, Eye, ShieldAlert, Pin } from 'lucide-react'
+import { X, GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { basename, normalizeRelativePath } from '@/lib/path'
@@ -22,11 +22,14 @@ import {
   getDropIndicatorClasses,
   getTabRootStateClasses,
   getTabStripBorderClasses,
+  showsTabSelectionChrome,
   type DropIndicator
 } from './drop-indicator'
 import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
 import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
 import { translate } from '@/i18n/i18n'
+import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
+import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 
 export default function EditorFileTab({
   file,
@@ -40,7 +43,6 @@ export default function EditorFileTab({
   onCloseAll,
   onMakePermanent,
   onTogglePin,
-  onSplitGroup,
   dragData,
   dropIndicator,
   includeTopTabBorder = true
@@ -56,7 +58,6 @@ export default function EditorFileTab({
   onCloseAll: () => void
   onMakePermanent?: () => void
   onTogglePin: () => void
-  onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
   includeTopTabBorder?: boolean
@@ -76,6 +77,7 @@ export default function EditorFileTab({
 
   const isDiff = file.mode === 'diff'
   const isConflictReview = file.mode === 'conflict-review'
+  const isCheckDetails = file.mode === 'check-details'
   const isMarkdownPreviewTab = file.mode === 'markdown-preview'
   const resolvedLanguage =
     file.mode === 'diff'
@@ -198,19 +200,26 @@ export default function EditorFileTab({
     return () => window.removeEventListener('blur', dismiss)
   }, [menuOpen])
 
+  const { isPressed, onPointerDown: onTabPointerDown } = useTabStripPointerActivation({
+    onActivate,
+    disabled: isRenaming
+  })
+  const showsSelectionChrome = showsTabSelectionChrome(isActive, isPressed)
+  const dragListeners = isRenaming ? undefined : listeners
+
   const tabRoot = (
     <div
       ref={setNodeRef}
+      data-tab-id={file.tabId ?? file.id}
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
-      {...listeners}
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      {...dragListeners}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive, isPressed)}`}
       onPointerDown={(e) => {
-        if (e.button !== 0) {
-          return
-        }
-        onActivate()
-        listeners?.onPointerDown?.(e)
+        onTabPointerDown(
+          e,
+          dragListeners?.onPointerDown as ((event: React.PointerEvent<Element>) => void) | undefined
+        )
       }}
       onDoubleClick={() => {
         if (file.isPreview && onMakePermanent) {
@@ -234,26 +243,30 @@ export default function EditorFileTab({
         }
       }}
     >
-      {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
+      {showsSelectionChrome && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
       {isConflictReview ? (
         <ShieldAlert
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-orange-400' : 'text-orange-400/70'}`}
+          className={`w-3 h-3 mr-1 shrink-0 ${showsSelectionChrome ? 'text-orange-400' : 'text-orange-400/70'}`}
+        />
+      ) : isCheckDetails ? (
+        <ListChecks
+          className={`w-3 h-3 mr-1 shrink-0 ${showsSelectionChrome ? 'text-foreground' : 'text-muted-foreground'}`}
         />
       ) : isDiff ? (
         <GitCompareArrows
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
+          className={`w-3 h-3 mr-1 shrink-0 ${showsSelectionChrome ? 'text-foreground' : 'text-muted-foreground'}`}
         />
       ) : isMarkdownPreviewTab ? (
         <Eye
-          className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
+          className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${showsSelectionChrome ? 'text-foreground' : 'text-muted-foreground'}`}
         />
       ) : (
         <FileIcon
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
+          className={`w-3 h-3 mr-1 shrink-0 ${showsSelectionChrome ? 'text-foreground' : 'text-muted-foreground'}`}
         />
       )}
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
-      <span className="mr-1 flex min-w-0 items-baseline gap-1">
+      <span className="mr-1 flex min-w-0 flex-1 items-baseline gap-1">
         {isRenaming ? (
           <Input
             ref={setRenameInputElement}
@@ -288,7 +301,7 @@ export default function EditorFileTab({
           />
         ) : (
           <span
-            className={`truncate max-w-[80px]${file.isPreview ? ' italic' : ''}${file.externalMutation ? ' line-through' : ''}`}
+            className={`${TAB_LABEL_WIDTH_CLASSES}${file.isPreview ? ' italic' : ''}${file.externalMutation ? ' line-through' : ''}`}
             style={tabStatusColor ? { color: tabStatusColor } : undefined}
             onDoubleClick={(e) => {
               if (file.isPreview && onMakePermanent) {
@@ -335,10 +348,13 @@ export default function EditorFileTab({
             className={`flex items-center justify-center w-4 h-4 rounded-sm ${
               file.isDirty
                 ? 'hidden group-hover:flex text-muted-foreground hover:text-foreground hover:bg-muted'
-                : isActive
+                : showsSelectionChrome
                   ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
                   : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
             }`}
+            // Why: simulator unified tabs reuse this tab chrome, so E2E needs
+            // the same stable close affordance on the real button users click.
+            data-tab-close-button="true"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation()
@@ -355,6 +371,7 @@ export default function EditorFileTab({
   return (
     <>
       <div
+        className={TAB_CONTAINER_WIDTH_CLASSES}
         onContextMenuCapture={(event) => {
           event.preventDefault()
           window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
@@ -382,6 +399,8 @@ export default function EditorFileTab({
         open={menuOpen}
         menuPoint={menuPoint}
         file={file}
+        unifiedTabId={dragData.unifiedTabId}
+        groupId={dragData.groupId}
         isPinned={isPinned}
         isRenaming={isRenaming}
         hasTabsToRight={hasTabsToRight}
@@ -397,7 +416,6 @@ export default function EditorFileTab({
         onClose={onClose}
         onCloseAll={onCloseAll}
         onCloseToRight={onCloseToRight}
-        onSplitGroup={onSplitGroup}
         onOpenMarkdownPreview={openMarkdownPreview}
       />
     </>

@@ -12,6 +12,7 @@ const RECONNECT_DELAY_MS = 750
 const KEYBOARD_FRAME_DELAY_MS = 4
 
 export type EmulatorControlStream = {
+  cancelKeyboardFrames: () => void
   connected: boolean
   sendKeyboardFrames: (frames: ServeSimKeyboardFrame[]) => boolean
   sendTouch: (touch: ServeSimTouchFrame) => boolean
@@ -72,6 +73,11 @@ export function useEmulatorControlStream(
     [sendKeyboardFrameNow]
   )
 
+  const cancelKeyboardFrames = useCallback((): void => {
+    clearKeyboardTimers()
+    releasePressedKeyboardUsages(true)
+  }, [clearKeyboardTimers, releasePressedKeyboardUsages])
+
   useEffect(() => {
     if (!enabled || !wsUrl) {
       setConnected(false)
@@ -126,8 +132,7 @@ export function useEmulatorControlStream(
       // Why: delayed HID frames may leave a modifier/key down if the tab closes
       // before the matching up frame runs. Release held usages while the socket
       // is still open, then cancel the remaining delayed queue.
-      releasePressedKeyboardUsages(true)
-      clearKeyboardTimers()
+      cancelKeyboardFrames()
       const ws = wsRef.current
       if (ws) {
         wsRef.current = null
@@ -135,7 +140,7 @@ export function useEmulatorControlStream(
       }
       setConnected(false)
     }
-  }, [clearKeyboardTimers, enabled, releasePressedKeyboardUsages, wsUrl])
+  }, [cancelKeyboardFrames, clearKeyboardTimers, enabled, releasePressedKeyboardUsages, wsUrl])
 
   const sendTouch = useCallback(
     (touch: ServeSimTouchFrame): boolean => {
@@ -179,5 +184,5 @@ export function useEmulatorControlStream(
     [getOpenSocket, sendKeyboardFrameNow]
   )
 
-  return { connected, sendKeyboardFrames, sendTouch }
+  return { cancelKeyboardFrames, connected, sendKeyboardFrames, sendTouch }
 }

@@ -4,6 +4,7 @@ states stay consistent across Claude and Codex. */
 import {
   AlertTriangle,
   Activity,
+  RotateCcw,
   Plug,
   ChevronDown,
   ChevronRight,
@@ -13,7 +14,17 @@ import {
   Server
 } from 'lucide-react'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
@@ -35,14 +46,20 @@ import type {
   RateLimitRuntimeTarget,
   RateLimitWindow
 } from '../../../../shared/rate-limit-types'
-import { ProviderIcon, ProviderPanel, barColor, getProviderUsageStatusLabel } from './tooltip'
+import {
+  ProviderIcon,
+  ProviderPanel,
+  barColor,
+  formatResetCreditExpiry,
+  getProviderUsageStatusLabel
+} from './tooltip'
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { formatWindowLabel } from '@/lib/window-label-formatter'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
-import { isProviderConfigured } from './status-bar-provider-visibility'
+import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
 import { StatusBarUsageEmptyCta } from './StatusBarUsageEmptyCta'
 import { shouldOpenStatusBarContextMenu } from './status-bar-context-menu-policy'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
@@ -60,18 +77,18 @@ type StatusBarProps = {
   floatingTerminalOpen: boolean
 }
 
-const PetStatusSegment = React.lazy(() =>
+const PetStatusSegment = lazyWithRetry(() =>
   import('./PetStatusSegment').then((module) => ({ default: module.PetStatusSegment }))
 )
-const ResourceUsageStatusSegment = React.lazy(() =>
+const ResourceUsageStatusSegment = lazyWithRetry(() =>
   import('./ResourceUsageStatusSegment').then((module) => ({
     default: module.ResourceUsageStatusSegment
   }))
 )
-const PortsStatusSegment = React.lazy(() =>
+const PortsStatusSegment = lazyWithRetry(() =>
   import('./PortsStatusSegment').then((module) => ({ default: module.PortsStatusSegment }))
 )
-const SshStatusSegment = React.lazy(() =>
+const SshStatusSegment = lazyWithRetry(() =>
   import('./SshStatusSegment').then((module) => ({ default: module.SshStatusSegment }))
 )
 
@@ -159,12 +176,11 @@ function toCodexStatusRuntimeTarget(
   return { runtime: 'host', wslDistro: null }
 }
 
-function getStatusBarPreferredWslDistro(
+export function getStatusBarPreferredWslDistro(
   settings: GlobalSettings | null | undefined,
   wslDistros: string[]
 ): string | null {
-  const configuredDistro =
-    settings?.localAccountWslDistro?.trim() || settings?.terminalWindowsWslDistro?.trim() || null
+  const configuredDistro = settings?.localAccountWslDistro?.trim() || null
   if (configuredDistro) {
     return configuredDistro
   }
@@ -1118,11 +1134,14 @@ function CodexSwitcherMenu({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [accountsExpanded, setAccountsExpanded] = useState(false)
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false)
+  const [skipFutureResetConfirm, setSkipFutureResetConfirm] = useState(false)
   const [accounts, setAccounts] = useState<CodexRateLimitAccountsState>({
     accounts: [],
     activeAccountId: null
   })
   const [isSwitching, setIsSwitching] = useState(false)
+  const [isRedeemingReset, setIsRedeemingReset] = useState(false)
   const [reauthenticatingAccountId, setReauthenticatingAccountId] = useState<string | null>(null)
   const mountedRef = useRef(true)
   const accountsExpandedRef = useRef(accountsExpanded)
@@ -1138,8 +1157,10 @@ function CodexSwitcherMenu({
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
+  const updateSettings = useAppStore((s) => s.updateSettings)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const refreshCodexRateLimitsForTarget = useAppStore((s) => s.refreshCodexRateLimitsForTarget)
+  const consumeCodexRateLimitResetCredit = useAppStore((s) => s.consumeCodexRateLimitResetCredit)
   const fetchInactiveCodexAccountUsage = useAppStore((s) => s.fetchInactiveCodexAccountUsage)
   const inactiveCodexAccounts = useAppStore((s) => s.rateLimits.inactiveCodexAccounts)
   const codexTarget = useAppStore((s) => s.rateLimits.codexTarget)
@@ -1271,6 +1292,49 @@ function CodexSwitcherMenu({
     }
   }
 
+  const handleRedeemReset = async (): Promise<void> => {
+    if (isRedeemingReset) {
+      return
+    }
+    setIsRedeemingReset(true)
+    try {
+      await consumeCodexRateLimitResetCredit()
+    } catch (error) {
+      console.error('Failed to redeem Codex rate-limit reset from status bar:', error)
+    } finally {
+      if (mountedRef.current) {
+        setIsRedeemingReset(false)
+      }
+    }
+  }
+
+  const handleResetMenuSelect = (): void => {
+    if (settings?.skipCodexRateLimitResetConfirm) {
+      void handleRedeemReset()
+      return
+    }
+    setSkipFutureResetConfirm(false)
+    setResetConfirmOpen(true)
+  }
+
+  const handleConfirmReset = async (): Promise<void> => {
+    if (isRedeemingReset) {
+      return
+    }
+    if (skipFutureResetConfirm) {
+      try {
+        await updateSettings({ skipCodexRateLimitResetConfirm: true })
+      } catch (error) {
+        console.error('Failed to save Codex reset confirmation preference:', error)
+      }
+    }
+    await handleRedeemReset()
+    if (mountedRef.current) {
+      setResetConfirmOpen(false)
+      setSkipFutureResetConfirm(false)
+    }
+  }
+
   const handleOpenChange = useCallback((nextOpen: boolean): void => {
     setOpen(nextOpen)
     if (!nextOpen) {
@@ -1306,12 +1370,21 @@ function CodexSwitcherMenu({
   const selectedGroup =
     switchGroups.find((group) => group.key === selectedRuntimeKey) ?? switchGroups[0]
   const activeTarget = selectedGroup?.targets.find((target) => target.active)
+  const resetCreditCount = codex.rateLimitResetCredits?.availableCount ?? null
+  const resetCreditExpiry =
+    resetCreditCount !== null
+      ? formatResetCreditExpiry(codex.rateLimitResetCredits?.nextExpiresAt, resetCreditCount)
+      : null
+  const canRedeemReset = resetCreditCount !== null && resetCreditCount > 0
 
   return (
     <ProviderDetailsMenu
       provider={codex}
       compact={compact}
       iconOnly={iconOnly}
+      // Why: Codex reset credits render beside the reset action below; showing
+      // them in the generic provider summary duplicates the same metadata.
+      hidePanelResetCredits
       ariaLabel={translate(
         'auto.components.status.bar.StatusBar.ba55303942',
         'Open Codex details and account switcher'
@@ -1330,6 +1403,85 @@ function CodexSwitcherMenu({
       open={open}
       onOpenChange={handleOpenChange}
     >
+      <Dialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>
+              {translate('auto.components.status.bar.StatusBar.972a1ff497', 'Reset Codex limits?')}
+            </DialogTitle>
+            <DialogDescription>
+              {translate(
+                'auto.components.status.bar.StatusBar.6d1042aa6f',
+                'This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.'
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <label className="flex cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-xs text-foreground/80 transition-colors hover:text-foreground">
+            <Checkbox
+              checked={skipFutureResetConfirm}
+              onCheckedChange={(checked) => setSkipFutureResetConfirm(checked === true)}
+            />
+            <span>
+              {translate('auto.components.status.bar.StatusBar.f077f586db', "Don't ask again")}
+            </span>
+          </label>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResetConfirmOpen(false)}>
+              {translate('auto.components.status.bar.StatusBar.c0e972d726', 'Cancel')}
+            </Button>
+            <Button onClick={() => void handleConfirmReset()} disabled={isRedeemingReset}>
+              {isRedeemingReset ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RotateCcw className="size-4" />
+              )}
+              {isRedeemingReset
+                ? translate('auto.components.status.bar.StatusBar.25d8bbde69', 'Using reset…')
+                : translate('auto.components.status.bar.StatusBar.e159fc1fd7', 'Reset now')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {resetCreditCount !== null ? (
+        <>
+          <DropdownMenuLabel className="space-y-0.5">
+            <div>
+              {resetCreditCount === 1
+                ? translate(
+                    'auto.components.status.bar.StatusBar.5e5f9f5160',
+                    '1 rate-limit reset available'
+                  )
+                : translate(
+                    'auto.components.status.bar.StatusBar.5ecae9197c',
+                    '{{value0}} rate-limit resets available',
+                    { value0: resetCreditCount }
+                  )}
+            </div>
+            {resetCreditExpiry ? (
+              <div className="text-[11px] font-normal text-muted-foreground">
+                {resetCreditExpiry}
+              </div>
+            ) : null}
+          </DropdownMenuLabel>
+          {canRedeemReset ? (
+            <DropdownMenuItem
+              disabled={isRedeemingReset}
+              onSelect={(event) => {
+                event.preventDefault()
+                handleResetMenuSelect()
+              }}
+            >
+              {isRedeemingReset ? (
+                <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+              ) : null}
+              {isRedeemingReset
+                ? translate('auto.components.status.bar.StatusBar.25d8bbde69', 'Using reset…')
+                : translate('auto.components.status.bar.StatusBar.e159fc1fd7', 'Reset now')}
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuSeparator />
+        </>
+      ) : null}
       <DropdownMenuLabel>
         {translate('auto.components.status.bar.StatusBar.7657e3db9c', 'Codex Account')}
       </DropdownMenuLabel>
@@ -1454,6 +1606,7 @@ export function ProviderDetailsMenu({
   iconOnly,
   ariaLabel,
   topContent,
+  hidePanelResetCredits = false,
   open,
   onOpenChange,
   children
@@ -1463,6 +1616,7 @@ export function ProviderDetailsMenu({
   iconOnly: boolean
   ariaLabel: string
   topContent?: React.ReactNode
+  hidePanelResetCredits?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
   children?: React.ReactNode
@@ -1528,7 +1682,8 @@ export function ProviderDetailsMenu({
       >
         {topContent}
         <div className="p-2">
-          <ProviderPanel p={provider} />
+          {/* Why: provider-specific action sections may render richer reset-credit UI. */}
+          <ProviderPanel p={provider} showResetCredits={!hidePanelResetCredits} />
         </div>
         {children ? (
           <>
@@ -1550,14 +1705,14 @@ const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Element | null {
   const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
   const rateLimits = useAppStore((s) => s.rateLimits)
+  const settings = useAppStore((s) => s.settings)
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const statusBarItems = useAppStore((s) => s.statusBarItems)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  const floatingTerminalEnabled = useAppStore((s) => s.settings?.floatingTerminalEnabled === true)
-  const floatingTerminalTriggerLocation = useAppStore(
-    (s) => s.settings?.floatingTerminalTriggerLocation ?? 'floating-button'
-  )
+  const floatingTerminalEnabled = settings?.floatingTerminalEnabled === true
+  const floatingTerminalTriggerLocation =
+    settings?.floatingTerminalTriggerLocation ?? 'floating-button'
   // Why: usage bars exist to surface CLI rate limits — showing one for an
   // agent that isn't on the user's PATH is just noise (e.g. a fresh Ubuntu
   // install showing "Gemini Usage" with no Gemini CLI installed). We gate
@@ -1643,31 +1798,35 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
 
   const { claude, codex, gemini, opencodeGo, kimi } = rateLimits
 
-  // Why: a provider only earns a bar once it's configured (isProviderConfigured
-  // drops the `unavailable` state — Gemini OAuth off, OpenCode Go cookie unset,
-  // Claude on API-key billing). A configured provider that fails transiently
-  // (`error`) keeps its slot so the bar doesn't flap on refresh hiccups.
+  // Why: a provider earns a bar from either a usable live snapshot or durable
+  // setup in Settings. The durable path keeps account switchers visible while
+  // usage snapshots hydrate, fail, or temporarily report unavailable.
   // Detection-gating (see status-bar-agent-gating) additionally hides per-CLI
   // bars when the agent isn't installed on PATH.
+  const visibleClaude = getVisibleUsageProvider('claude', claude, settings)
+  const visibleCodex = getVisibleUsageProvider('codex', codex, settings)
+  const visibleGemini = getVisibleUsageProvider('gemini', gemini, settings)
+  const visibleKimi = getVisibleUsageProvider('kimi', kimi, settings)
   const showClaude =
-    isProviderConfigured(claude) &&
+    visibleClaude !== null &&
     statusBarItems.includes('claude') &&
     isStatusBarItemAvailable('claude', detectedAgentIds)
   const showCodex =
-    isProviderConfigured(codex) &&
+    visibleCodex !== null &&
     statusBarItems.includes('codex') &&
     isStatusBarItemAvailable('codex', detectedAgentIds)
   const showGemini =
-    isProviderConfigured(gemini) &&
+    visibleGemini !== null &&
     statusBarItems.includes('gemini') &&
     isStatusBarItemAvailable('gemini', detectedAgentIds)
   const showKimi =
-    isProviderConfigured(kimi) &&
+    visibleKimi !== null &&
     statusBarItems.includes('kimi') &&
     isStatusBarItemAvailable('kimi', detectedAgentIds)
   // Why: OpenCode Go is a web/cookie-auth provider, not a CLI on PATH, so
   // detection-gating doesn't apply.
-  const showOpencodeGo = isProviderConfigured(opencodeGo) && statusBarItems.includes('opencode-go')
+  const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, settings)
+  const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')
   const showSsh = statusBarItems.includes('ssh')
   const showResourceUsage = statusBarItems.includes('resource-usage')
   const showPorts = statusBarItems.includes('ports')
@@ -1676,16 +1835,10 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const anyVisible =
     showClaude || showCodex || showGemini || showOpencodeGo || showKimi || showResourceUsage
   // Why: a brand-new user with no provider configured would otherwise see an
-  // empty left side of the status bar and wonder what's missing. The CTA
-  // names the surface and points to the setup path. Detection is on
-  // configuration (not user toggles) so users who intentionally hid a
-  // provider's bar don't get the teaching prompt back.
-  const isEmptyUsageState =
-    !isProviderConfigured(claude) &&
-    !isProviderConfigured(codex) &&
-    !isProviderConfigured(gemini) &&
-    !isProviderConfigured(opencodeGo) &&
-    !isProviderConfigured(kimi)
+  // empty left side of the status bar and wonder what's missing. Settings are
+  // included because managed accounts are durable even when live usage
+  // snapshots are still hydrating or unavailable after an update.
+  const isEmptyUsageState = isUsageEmptyState({ claude, codex, gemini, opencodeGo, kimi }, settings)
   // Why: the teaching CTA is a one-time nudge — once the user hides it, keep it
   // hidden even after providers are disconnected again.
   const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
@@ -1731,12 +1884,14 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
         ) : (
           <>
             {showClaude && (
-              <ClaudeSwitcherMenu claude={claude} compact={compact} iconOnly={iconOnly} />
+              <ClaudeSwitcherMenu claude={visibleClaude} compact={compact} iconOnly={iconOnly} />
             )}
-            {showCodex && <CodexSwitcherMenu codex={codex} compact={compact} iconOnly={iconOnly} />}
+            {showCodex && (
+              <CodexSwitcherMenu codex={visibleCodex} compact={compact} iconOnly={iconOnly} />
+            )}
             {showGemini && (
               <ProviderDetailsMenu
-                provider={gemini}
+                provider={visibleGemini}
                 compact={compact}
                 iconOnly={iconOnly}
                 ariaLabel={translate(
@@ -1747,7 +1902,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             )}
             {showOpencodeGo && (
               <ProviderDetailsMenu
-                provider={opencodeGo}
+                provider={visibleOpencodeGo}
                 compact={compact}
                 iconOnly={iconOnly}
                 ariaLabel={translate(
@@ -1758,7 +1913,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             )}
             {showKimi && (
               <ProviderDetailsMenu
-                provider={kimi}
+                provider={visibleKimi}
                 compact={compact}
                 iconOnly={iconOnly}
                 ariaLabel={translate(

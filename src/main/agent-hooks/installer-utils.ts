@@ -63,12 +63,34 @@ export function readHooksJson(configPath: string): HooksConfig | null {
 export function createManagedCommandMatcher(
   scriptFileName: string
 ): (command: string | undefined) => boolean {
-  const needle = `agent-hooks/${scriptFileName}`
+  const scriptStem = scriptFileName.replace(/\.(?:cmd|sh)$/, '')
+  // Why: local Windows installs use .cmd, while SSH/POSIX installs and older
+  // entries use .sh. A platform switch should still sweep stale Orca hooks.
+  const needles = [
+    `agent-hooks/${scriptFileName}`,
+    `agent-hooks/${scriptStem}.cmd`,
+    `agent-hooks/${scriptStem}.sh`
+  ]
   return (command) => {
     if (!command) {
       return false
     }
-    return command.replaceAll('\\', '/').includes(needle)
+    const decodedCommand = decodePowerShellEncodedCommand(command)
+    const searchText = decodedCommand ? `${command}\n${decodedCommand}` : command
+    const normalizedCommand = searchText.replaceAll('\\', '/')
+    return needles.some((needle) => normalizedCommand.includes(needle))
+  }
+}
+
+function decodePowerShellEncodedCommand(command: string): string | null {
+  const match = command.match(/\s-EncodedCommand\s+(\S+)/i)
+  if (!match) {
+    return null
+  }
+  try {
+    return Buffer.from(match[1], 'base64').toString('utf16le')
+  } catch {
+    return null
   }
 }
 
@@ -98,12 +120,27 @@ export function wrapPosixHookCommand(scriptPath: string, env: Record<string, str
   return `if [ -x ${quoted} ]; then ${invocation}; fi`
 }
 
+function quotePowerShellString(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`
+}
+
+// Why: Windows splits a raw hook command on whitespace, so a user profile path
+// like `C:\Users\Jane Doe` makes the agent try to execute `C:\Users\Jane` and
+// fail with exit code 1. Keep the script path inside an encoded PowerShell
+// command so cmd.exe never gets a chance to expand legal path characters like
+// `%` or `^` before the .cmd is invoked. #6078.
+export function wrapWindowsHookCommand(scriptPath: string): string {
+  const command = `& ${quotePowerShellString(scriptPath)}; exit $LASTEXITCODE`
+  const encodedCommand = Buffer.from(command, 'utf16le').toString('base64')
+  return `powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodedCommand}`
+}
+
 export function buildWindowsAgentHookPostCommand(source: AgentHookSource): string {
   // Why: Windows PowerShell 5.1 defaults redirected stdin/request bodies to the
   // active code page. Hook payloads are UTF-8 JSON, so force UTF-8 on both read
   // and POST or CJK prompts arrive in Orca as literal question marks. Timeout
   // caps best-effort hook posts if the local listener stalls.
-  return `powershell -NoProfile -ExecutionPolicy Bypass -Command "$utf8=[System.Text.UTF8Encoding]::new($false); [Console]::InputEncoding=$utf8; [Console]::OutputEncoding=$utf8; $inputData=[Console]::In.ReadToEnd(); if ([string]::IsNullOrWhiteSpace($inputData)) { exit 0 }; try { $body=@{ paneKey=$env:ORCA_PANE_KEY; tabId=$env:ORCA_TAB_ID; worktreeId=$env:ORCA_WORKTREE_ID; env=$env:ORCA_AGENT_HOOK_ENV; version=$env:ORCA_AGENT_HOOK_VERSION; payload=($inputData | ConvertFrom-Json) } | ConvertTo-Json -Depth 100 -Compress; $bodyBytes=$utf8.GetBytes($body); Invoke-WebRequest -UseBasicParsing -Method Post -Uri ('http://127.0.0.1:' + $env:ORCA_AGENT_HOOK_PORT + '/hook/${source}') -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Orca-Agent-Hook-Token'=$env:ORCA_AGENT_HOOK_TOKEN } -Body $bodyBytes -TimeoutSec 2 | Out-Null } catch {}"`
+  return `powershell -NoProfile -ExecutionPolicy Bypass -Command "$utf8=[System.Text.UTF8Encoding]::new($false); [Console]::InputEncoding=$utf8; [Console]::OutputEncoding=$utf8; $inputData=[Console]::In.ReadToEnd(); if ([string]::IsNullOrWhiteSpace($inputData)) { exit 0 }; try { $body=@{ paneKey=$env:ORCA_PANE_KEY; launchToken=$env:ORCA_AGENT_LAUNCH_TOKEN; tabId=$env:ORCA_TAB_ID; worktreeId=$env:ORCA_WORKTREE_ID; env=$env:ORCA_AGENT_HOOK_ENV; version=$env:ORCA_AGENT_HOOK_VERSION; payload=($inputData | ConvertFrom-Json) } | ConvertTo-Json -Depth 100 -Compress; $bodyBytes=$utf8.GetBytes($body); Invoke-WebRequest -UseBasicParsing -Method Post -Uri ('http://127.0.0.1:' + $env:ORCA_AGENT_HOOK_PORT + '/hook/${source}') -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Orca-Agent-Hook-Token'=$env:ORCA_AGENT_HOOK_TOKEN } -Body $bodyBytes -TimeoutSec 2 | Out-Null } catch {}"`
 }
 
 export function removeManagedCommands(

@@ -191,6 +191,31 @@ describe('github owner/repo resolution', () => {
     await expect(getOwnerRepo('/repo', 'ssh-1')).resolves.toEqual({ owner: 'remote', repo: 'orca' })
   })
 
+  it('keeps local host and local WSL owner/repo cache entries separate for the same path', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'git@github.com:host/orca.git\n' })
+      .mockResolvedValueOnce({ stdout: 'git@github.com:wsl/orca.git\n' })
+
+    await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'host', repo: 'orca' })
+    await expect(getOwnerRepo('/repo', null, { wslDistro: 'Ubuntu' })).resolves.toEqual({
+      owner: 'wsl',
+      repo: 'orca'
+    })
+    await expect(getOwnerRepo('/repo', null, { wslDistro: 'Ubuntu' })).resolves.toEqual({
+      owner: 'wsl',
+      repo: 'orca'
+    })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['remote', 'get-url', 'origin'], {
+      cwd: '/repo'
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['remote', 'get-url', 'origin'], {
+      cwd: '/repo',
+      wslDistro: 'Ubuntu'
+    })
+  })
+
   it('prunes expired distinct owner/repo cache entries on later lookups', async () => {
     const nowSpy = vi.spyOn(Date, 'now')
     try {

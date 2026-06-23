@@ -10,6 +10,7 @@ import {
   type ActivityTerminalPortalTarget
 } from '../activity/activity-terminal-portal'
 import TerminalPane from './TerminalPane'
+import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 
 type TerminalOverlayAssignment = {
   groupId: string
@@ -25,6 +26,8 @@ const HAS_CSS_ANCHOR_POSITIONING =
   CSS.supports('position-anchor', '--orca-terminal-overlay-probe') &&
   CSS.supports('top', 'anchor(--orca-terminal-overlay-probe top)') &&
   CSS.supports('width', 'anchor-size(--orca-terminal-overlay-probe width)')
+const MIN_OVERLAY_FIT_WIDTH_PX = 48
+const MIN_OVERLAY_FIT_HEIGHT_PX = 24
 
 function shouldUseCssAnchorPositioning(): boolean {
   return (
@@ -46,6 +49,7 @@ type TerminalOverlaySlotProps = {
   worktreeId: string
   worktreePath: string
   groupId: string | undefined
+  isWorktreeActive: boolean
   isVisible: boolean
   isActive: boolean
   activityTerminalPortal: ActivityTerminalPortalTarget | null
@@ -61,6 +65,7 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   worktreeId,
   worktreePath,
   groupId,
+  isWorktreeActive,
   isVisible,
   isActive,
   activityTerminalPortal,
@@ -74,9 +79,14 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   const [measuredFallbackRect, setMeasuredFallbackRect] = useState<MeasuredFallbackRect | null>(
     null
   )
-  const [shouldMeasureHiddenStartup] = useState(
+  const [shouldMeasureHiddenStartup, setShouldMeasureHiddenStartup] = useState(
     () => useAppStore.getState().pendingStartupByTabId[terminalTabId] !== undefined
   )
+  useLayoutEffect(() => {
+    if (isVisible && shouldMeasureHiddenStartup) {
+      setShouldMeasureHiddenStartup(false)
+    }
+  }, [isVisible, shouldMeasureHiddenStartup])
   useLayoutEffect(() => {
     if (!anchorName || shouldUseCssAnchorPositioning() || !groupId) {
       return
@@ -127,21 +137,37 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   }, [anchorName, groupId, isVisible])
 
   useLayoutEffect(() => {
-    if (!isVisible || !anchorName || shouldUseCssAnchorPositioning()) {
+    if (!isVisible || !anchorName) {
       return
     }
-    // Why: worktree switches resume visibility before fallback positioning
-    // settles. Re-fit on show and again after the measured rect lands so the
-    // PTY never stays pinned at a stale ~2-col width.
-    const frameId = requestAnimationFrame(() => {
+    const dispatchFitIfMeasurable = (): void => {
+      const rect = overlayRef.current?.getBoundingClientRect()
+      if (
+        !rect ||
+        rect.width < MIN_OVERLAY_FIT_WIDTH_PX ||
+        rect.height < MIN_OVERLAY_FIT_HEIGHT_PX
+      ) {
+        return
+      }
       window.dispatchEvent(new Event(SYNC_FIT_PANES_EVENT))
+    }
+
+    // Why: tab switches can resume visibility before anchor/fallback geometry
+    // settles. Re-fit only after the overlay has real dimensions so the PTY
+    // never stays pinned at a stale ~2-col width.
+    const frameId = requestAnimationFrame(() => {
+      dispatchFitIfMeasurable()
     })
     const retryId = window.setTimeout(() => {
-      window.dispatchEvent(new Event(SYNC_FIT_PANES_EVENT))
+      dispatchFitIfMeasurable()
     }, 50)
+    const settledRetryId = window.setTimeout(() => {
+      dispatchFitIfMeasurable()
+    }, 150)
     return () => {
       cancelAnimationFrame(frameId)
       window.clearTimeout(retryId)
+      window.clearTimeout(settledRetryId)
     }
   }, [anchorName, isVisible, measuredFallbackRect])
 
@@ -201,6 +227,7 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       // TerminalPane mounted here preserves alt-screen TUI state while this
       // flag still lets hidden tabs throttle rendering.
       isVisible={isVisible || activityTerminalPortal !== null}
+      isWorktreeActive={isWorktreeActive || activityTerminalPortal !== null}
       isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
       onPtyExit={(ptyId) => {
         if (consumeSuppressedPtyExit(ptyId)) {
@@ -210,7 +237,10 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
         leaveWorktreeIfEmpty()
       }}
       onCloseTab={() => {
-        closeTab(terminalTabId)
+        // Why: route through closeTerminalTab (not the raw store closeTab) so a
+        // pinned tab hits the confirmation guard. The overlay's direct
+        // store.closeTab was the path that closed pinned terminals silently.
+        closeTerminalTab(terminalTabId)
         leaveWorktreeIfEmpty()
       }}
     />
@@ -328,6 +358,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
             worktreeId={worktreeId}
             worktreePath={worktreePath}
             groupId={assignment?.groupId}
+            isWorktreeActive={isWorktreeActive}
             isVisible={isVisible}
             isActive={isActive}
             activityTerminalPortal={activityTerminalPortal}

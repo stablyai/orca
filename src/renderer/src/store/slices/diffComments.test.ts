@@ -139,6 +139,7 @@ import { createWorkspaceCleanupSlice } from './workspace-cleanup'
 import { createRuntimeStatusSlice } from './runtime-status'
 import { createPullRequestGenerationSlice } from './pull-request-generation'
 import { createCommitMessageGenerationSlice } from './commit-message-generation'
+import { createPinnedTabCloseConfirmSlice } from './pinned-tab-close-confirm'
 
 function createTestStore() {
   return create<AppState>()((...a) => ({
@@ -173,7 +174,8 @@ function createTestStore() {
     ...createWorkspaceCleanupSlice(...a),
     ...createRuntimeStatusSlice(...a),
     ...createPullRequestGenerationSlice(...a),
-    ...createCommitMessageGenerationSlice(...a)
+    ...createCommitMessageGenerationSlice(...a),
+    ...createPinnedTabCloseConfirmSlice(...a)
   }))
 }
 

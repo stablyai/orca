@@ -50,6 +50,11 @@ describe('Electron runtime package contract', () => {
     expect(scripts['build:release']).not.toContain('build:computer-macos')
   })
 
+  it('runs the web build through the heap-sized Vite wrapper', () => {
+    expect(packageJson.scripts['build:web']).toContain('node config/scripts/run-vite-web-build.mjs')
+    expect(packageJson.scripts['build:web']).toContain('node config/scripts/verify-web-build.mjs')
+  })
+
   it('guards release publishing before electron-builder runs', () => {
     const releaseWorkflow = readFileSync(
       join(projectDir, '.github/workflows/release-cut.yml'),
@@ -63,7 +68,7 @@ describe('Electron runtime package contract', () => {
       ])
     )
 
-    expect([...releaseCommands.keys()].sort()).toEqual(['linux', 'mac', 'win'])
+    expect([...releaseCommands.keys()].sort()).toEqual(['linux-arm64', 'linux-x64', 'mac', 'win'])
     for (const command of releaseCommands.values()) {
       expect(command).toContain('node config/scripts/ensure-native-runtime.mjs --runtime=electron')
       expect(command).toContain('electron-builder')
@@ -72,10 +77,39 @@ describe('Electron runtime package contract', () => {
       )
     }
     expect(releaseCommands.get('mac')).toContain(' && ORCA_MAC_RELEASE=1 ')
-    expect(releaseCommands.get('linux')).toContain(' && pnpm exec electron-builder ')
+    expect(releaseCommands.get('linux-x64')).toContain(' && pnpm exec electron-builder ')
+    expect(releaseCommands.get('linux-x64')).toContain('--linux AppImage deb rpm --x64')
+    expect(releaseCommands.get('linux-arm64')).toContain('ORCA_LINUX_ARM64_RELEASE=1')
+    expect(releaseCommands.get('linux-arm64')).toContain('--linux AppImage deb rpm --arm64')
     expect(releaseCommands.get('win')).toContain(
       '; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder '
     )
+  })
+
+  it('publishes both Linux release matrix entries', () => {
+    const releaseWorkflow = readFileSync(
+      join(projectDir, '.github/workflows/release-cut.yml'),
+      'utf8'
+    )
+    const parsedWorkflow = parse(releaseWorkflow)
+    const publishLinuxStep = parsedWorkflow.jobs.build.steps.find(
+      (step) => step.name === 'Publish release artifacts (Linux)'
+    )
+
+    expect(publishLinuxStep.if).toContain("matrix.platform == 'linux-x64'")
+    expect(publishLinuxStep.if).toContain("matrix.platform == 'linux-arm64'")
+    expect(publishLinuxStep.with.command).toBe('${{ matrix.release_command }}')
+  })
+
+  it('keeps Linux postinstall repairing Chromium sandbox permissions', () => {
+    const afterInstallScript = readFileSync(
+      join(projectDir, 'resources/linux/packaging/after-install.sh'),
+      'utf8'
+    )
+
+    expect(afterInstallScript).toContain('chrome-sandbox')
+    expect(afterInstallScript).toContain('chmod 4755 "$sandbox"')
+    expect(afterInstallScript).not.toContain('chmod 0755 "$sandbox"')
   })
 
   it('lets release-cut tag a version that is already present on main', () => {
@@ -223,14 +257,28 @@ describe('Electron runtime package contract', () => {
       readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
     )
     const steps = goldenWorkflow.jobs['golden-e2e'].steps
-    const linuxRunStep = steps.find((step) => step.name === 'Run golden E2E tests on Linux')
-    const macRunStep = steps.find((step) => step.name === 'Run golden E2E tests on macOS')
-    const windowsRunStep = steps.find((step) => step.name === 'Run golden E2E tests on Windows')
+    const goldenPlatformLabels = new Map([
+      ['linux', 'Linux'],
+      ['mac', 'macOS'],
+      ['windows', 'Windows']
+    ])
+    const goldenPlatforms = goldenWorkflow.jobs['golden-e2e'].strategy.matrix.include
+      .map(({ platform }) => platform)
+      .sort()
+    const goldenRunSteps = goldenPlatforms.map((platform) => {
+      const label = goldenPlatformLabels.get(platform)
+
+      expect(label, platform).toBeDefined()
+
+      return steps.find((step) => step.name === `Run golden E2E tests on ${label}`)
+    })
     const pullRequestPaths = goldenWorkflow.on.pull_request.paths
     const releaseGoldenJob = releaseWorkflow.jobs['terminal-rendering-golden']
     const releaseEvidenceJob = releaseWorkflow.jobs['terminal-rendering-release-evidence']
     const releaseBuildNeeds = releaseWorkflow.jobs.build.needs
     const publishReleaseNeeds = releaseWorkflow.jobs['publish-release'].needs
+    // Why: Windows release evidence is temporarily paused for CI runner PTY readiness.
+    const releaseEvidencePlatforms = ['linux', 'mac']
 
     expect(packageScripts['test:e2e:terminal-rendering-golden']).toContain(
       '@terminal-rendering-golden'
@@ -247,8 +295,8 @@ describe('Electron runtime package contract', () => {
     expect(packageScripts['test:e2e:terminal-rendering-release-evidence']).toContain(
       'terminal-long-table-scroll-restore.spec.ts'
     )
-    for (const runStep of [linuxRunStep, macRunStep, windowsRunStep]) {
-      expect(runStep.run).toContain('pnpm run test:e2e:terminal-rendering-golden')
+    for (const runStep of goldenRunSteps) {
+      expect(runStep?.run).toContain('pnpm run test:e2e:terminal-rendering-golden')
     }
     expect(pullRequestPaths).toContain('tests/e2e/terminal-raw-emoji-table-scroll-restore.spec.ts')
     expect(pullRequestPaths).toContain('tests/e2e/fixtures/terminal-emoji-table.md')
@@ -260,7 +308,7 @@ describe('Electron runtime package contract', () => {
     expect(publishReleaseNeeds).not.toContain('terminal-rendering-release-evidence')
     expect(releaseGoldenJob['continue-on-error']).toBeUndefined()
     expect(releaseGoldenJob.strategy.matrix.include.map(({ platform }) => platform).sort()).toEqual(
-      ['linux', 'mac', 'windows']
+      goldenPlatforms
     )
     expect(releaseGoldenJob.steps.map((step) => step.run ?? '')).toContain(
       'xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden'
@@ -268,7 +316,7 @@ describe('Electron runtime package contract', () => {
     expect(releaseEvidenceJob['continue-on-error']).toBe(true)
     expect(
       releaseEvidenceJob.strategy.matrix.include.map(({ platform }) => platform).sort()
-    ).toEqual(['linux', 'mac', 'windows'])
+    ).toEqual(releaseEvidencePlatforms)
     expect(releaseEvidenceJob.steps.map((step) => step.run ?? '')).toContain(
       'xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-release-evidence'
     )

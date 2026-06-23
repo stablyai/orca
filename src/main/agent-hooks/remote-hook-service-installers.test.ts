@@ -18,6 +18,8 @@ import { ClaudeHookService } from '../claude/hook-service'
 import { GrokHookService } from '../grok/hook-service'
 import { CopilotHookService } from '../copilot/hook-service'
 import { HermesHookService } from '../hermes/hook-service'
+import { DevinHookService } from '../devin/hook-service'
+import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 
 type FakeFs = {
@@ -161,6 +163,10 @@ describe('remote hook service installers', () => {
         {
           path: '/home/dev/.orca/agent-hooks/copilot-hook.sh',
           install: (sftp: SFTPWrapper) => new CopilotHookService().installRemote(sftp, '/home/dev')
+        },
+        {
+          path: '/home/dev/.orca/agent-hooks/devin-hook.sh',
+          install: (sftp: SFTPWrapper) => new DevinHookService().installRemote(sftp, '/home/dev')
         }
       ]
 
@@ -227,13 +233,21 @@ describe('remote hook service installers', () => {
     expect(fs.files.get('/home/dev/.orca/agent-hooks/codex-hook.sh')).toContain('#!/bin/sh')
   })
 
-  it('installs remote Gemini, Antigravity, Cursor, Command Code, and Grok configs using their CLI-specific schemas', async () => {
+  it('installs remote Gemini, Antigravity, Cursor, Command Code, Grok, and Devin configs using their CLI-specific schemas', async () => {
     const gemini = createFakeSftp()
     const antigravity = createFakeSftp()
     const amp = createFakeSftp()
     const cursor = createFakeSftp()
     const commandCode = createFakeSftp()
     const grok = createFakeSftp()
+    const devin = createFakeSftp({
+      '/home/dev/.config/devin/config.json': `{
+  // Existing Devin config comment
+  "hooks": {},
+  "permissions": { "mode": "normal" }
+}
+`
+    })
 
     await new GeminiHookService().installRemote(gemini.sftp, '/home/dev')
     await new AntigravityHookService().installRemote(antigravity.sftp, '/home/dev')
@@ -241,6 +255,7 @@ describe('remote hook service installers', () => {
     await new CursorHookService().installRemote(cursor.sftp, '/home/dev')
     await new CommandCodeHookService().installRemote(commandCode.sftp, '/home/dev')
     await new GrokHookService().installRemote(grok.sftp, '/home/dev')
+    await new DevinHookService().installRemote(devin.sftp, '/home/dev')
 
     const geminiConfig = JSON.parse(gemini.fs.files.get('/home/dev/.gemini/settings.json')!) as {
       hooks: Record<string, { hooks: { command: string }[] }[]>
@@ -333,6 +348,83 @@ describe('remote hook service installers', () => {
       expect(command).toMatch(/^if \[ -x /)
     }
     expect(grokConfig.hooks.PreToolUse?.[0]?.matcher).toBe('*')
+
+    const devinConfig = JSON.parse(devin.fs.files.get('/home/dev/.config/devin/config.json')!) as {
+      permissions: { mode: string }
+      hooks: Record<string, { matcher?: string; hooks?: { command: string }[] }[]>
+    }
+    expect(devinConfig.permissions.mode).toBe('normal')
+    for (const eventName of [
+      'SessionStart',
+      'UserPromptSubmit',
+      'Stop',
+      'PostCompaction',
+      'SessionEnd'
+    ]) {
+      const definition = devinConfig.hooks[eventName]?.[0]
+      const command = definition?.hooks?.[0]?.command
+      expect(command).toContain('/home/dev/.orca/agent-hooks/devin-hook.sh')
+      expect(command).toMatch(/^if \[ -x /)
+    }
+    for (const eventName of ['PreToolUse', 'PostToolUse', 'PermissionRequest']) {
+      const definition = devinConfig.hooks[eventName]?.[0]
+      const command = definition?.hooks?.[0]?.command
+      expect(definition?.matcher).toBeUndefined()
+      expect(command).toContain('/home/dev/.orca/agent-hooks/devin-hook.sh')
+      expect(command).toMatch(/^if \[ -x /)
+    }
+    expect(devin.fs.files.get('/home/dev/.orca/agent-hooks/devin-hook.sh')).toContain('/hook/devin')
+  })
+
+  it('installs remote Kimi hooks as a managed config.toml block preserving user config', async () => {
+    const userConfig = 'default_model = "kimi-k2.6"\n\n[providers."mine"]\napi_key = "sk-secret"\n'
+    const { sftp, fs } = createFakeSftp({ '/home/dev/.kimi-code/config.toml': userConfig })
+
+    const status = await new KimiHookService().installRemote(sftp, '/home/dev')
+    expect(status.state).toBe('installed')
+
+    const config = fs.files.get('/home/dev/.kimi-code/config.toml')!
+    // User config above the managed block is preserved.
+    expect(config).toContain('default_model = "kimi-k2.6"')
+    expect(config).toContain('api_key = "sk-secret"')
+    for (const eventName of [
+      'UserPromptSubmit',
+      'PreToolUse',
+      'PostToolUse',
+      'PostToolUseFailure',
+      'PermissionRequest',
+      'Stop',
+      'StopFailure'
+    ]) {
+      expect(config).toContain(`event = "${eventName}"`)
+    }
+    // The command points at the POSIX managed script via the `[ -x ]` guard.
+    expect(config).toContain('/home/dev/.orca/agent-hooks/kimi-hook.sh')
+    expect(config).toMatch(/command = "if \[ -x /)
+    expect(fs.files.get('/home/dev/.orca/agent-hooks/kimi-hook.sh')).toContain('/hook/kimi')
+  })
+
+  it('does not overwrite malformed remote Devin JSONC', async () => {
+    const original = '{"hooks": }'
+    const { sftp, fs } = createFakeSftp({
+      '/home/dev/.config/devin/config.json': original
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const status = await new DevinHookService().installRemote(sftp, '/home/dev')
+
+      expect(status).toMatchObject({
+        agent: 'devin',
+        state: 'error',
+        configPath: '/home/dev/.config/devin/config.json',
+        managedHooksPresent: false,
+        detail: 'Could not parse remote Devin config.json'
+      })
+      expect(fs.files.get('/home/dev/.config/devin/config.json')).toBe(original)
+      expect(fs.files.get('/home/dev/.orca/agent-hooks/devin-hook.sh')).toBeUndefined()
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('removes stale remote Antigravity PreToolUse hooks while installing SSH hooks', async () => {

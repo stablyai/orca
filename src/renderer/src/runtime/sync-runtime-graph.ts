@@ -26,10 +26,10 @@ import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { isClaudeManagementTitle } from '../../../shared/agent-detection'
 import type {
+  Tab,
   TabGroup,
   TabGroupLayoutNode,
   TerminalLayoutSnapshot,
-  TerminalPaneLayoutNode,
   TerminalTab
 } from '../../../shared/types'
 import { resolveTerminalTabTitle } from '../../../shared/tab-title-resolution'
@@ -38,6 +38,7 @@ import {
   getGroupVisibleTabOrder,
   type VisibleTabRef
 } from '../components/tab-bar/group-tab-order'
+import { resolveTerminalLayoutRoot } from './remote-terminal-layout-resolution'
 import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
 
 type RegisteredTerminalTab = {
@@ -52,6 +53,10 @@ type OpenFileByWorktreeAndId = Map<string, Map<string, AppState['openFiles'][num
 type OpenFileIndexes = {
   byWorktreeAndId: OpenFileByWorktreeAndId
   idsByWorktree: Map<string, string[]>
+}
+type FallbackEditorTabTarget = {
+  tabId: string
+  groupId: string | null
 }
 type TabsProjectionCacheEntry = {
   tabs: NonNullable<AppState['tabsByWorktree'][string]>
@@ -78,10 +83,12 @@ const EMPTY_BROWSER_PAGES_BY_WORKSPACE: AppState['browserPagesByWorkspace'] = {}
 const EMPTY_LAYOUT_BY_WORKTREE: AppState['layoutByWorktree'] = {}
 const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = {}
 const AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS = 30_000
+const RUNTIME_GRAPH_SYNC_COALESCE_MS = 16
 let syncScheduled = false
 let syncInFlight = false
 let syncPendingAfterFlight = false
 let syncEnabled = false
+let syncTimer: ReturnType<typeof setTimeout> | null = null
 let getStoreState: (() => AppState) | null = null
 let mobileSessionSnapshotVersion = 0
 let cachedTabsProjection: TabsProjectionCache | null = null
@@ -127,9 +134,20 @@ export function focusRuntimeTerminalSurface(tabId: string, leafId?: string | nul
 
 export function setRuntimeGraphSyncEnabled(enabled: boolean): void {
   syncEnabled = enabled
-  if (enabled) {
-    scheduleRuntimeGraphSync()
+  if (!enabled) {
+    syncPendingAfterFlight = false
+    clearScheduledRuntimeGraphSync()
+    return
   }
+  scheduleRuntimeGraphSync()
+}
+
+function clearScheduledRuntimeGraphSync(): void {
+  if (syncTimer !== null) {
+    clearTimeout(syncTimer)
+    syncTimer = null
+  }
+  syncScheduled = false
 }
 
 export function scheduleRuntimeGraphSync(): void {
@@ -141,10 +159,14 @@ export function scheduleRuntimeGraphSync(): void {
     return
   }
   syncScheduled = true
-  queueMicrotask(() => {
+  // Why: terminal title/status updates often arrive as separate IPC tasks.
+  // A frame-sized timer collapses that churn into one graph publish without
+  // tying runtime state publication to paint frames or visible-window status.
+  syncTimer = setTimeout(() => {
+    syncTimer = null
     syncScheduled = false
     void runRuntimeGraphSync()
-  })
+  }, RUNTIME_GRAPH_SYNC_COALESCE_MS)
 }
 
 async function runRuntimeGraphSync(): Promise<void> {
@@ -184,6 +206,8 @@ export type RuntimeMobileSessionSyncKey = {
   tabBarOrderByWorktree: AppState['tabBarOrderByWorktree']
   activeFileId: AppState['activeFileId']
   activeFileIdByWorktree: AppState['activeFileIdByWorktree']
+  activeTabType: AppState['activeTabType']
+  activeTabTypeByWorktree: AppState['activeTabTypeByWorktree']
   activeTabId: AppState['activeTabId']
   activeBrowserTabIdByWorktree: AppState['activeBrowserTabIdByWorktree']
   agentStatusEpoch: number
@@ -222,6 +246,8 @@ export function canSkipRuntimeMobileSessionSyncKeyBuild(
     state.tabBarOrderByWorktree === previousState.tabBarOrderByWorktree &&
     state.activeFileId === previousState.activeFileId &&
     state.activeFileIdByWorktree === previousState.activeFileIdByWorktree &&
+    state.activeTabType === previousState.activeTabType &&
+    state.activeTabTypeByWorktree === previousState.activeTabTypeByWorktree &&
     state.browserTabsByWorktree === previousState.browserTabsByWorktree &&
     state.browserPagesByWorkspace === previousState.browserPagesByWorkspace &&
     state.activeBrowserTabIdByWorktree === previousState.activeBrowserTabIdByWorktree &&
@@ -274,6 +300,8 @@ export function getRuntimeMobileSessionSyncKey(
     tabBarOrderByWorktree: state.tabBarOrderByWorktree,
     activeFileId: state.activeFileId,
     activeFileIdByWorktree: state.activeFileIdByWorktree,
+    activeTabType: state.activeTabType,
+    activeTabTypeByWorktree: state.activeTabTypeByWorktree,
     activeTabId: state.activeTabId,
     activeBrowserTabIdByWorktree:
       state.activeBrowserTabIdByWorktree ?? EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE,
@@ -478,6 +506,8 @@ export function runtimeMobileSessionSyncKeysEqual(
     a.tabBarOrderByWorktree === b.tabBarOrderByWorktree &&
     a.activeFileId === b.activeFileId &&
     a.activeFileIdByWorktree === b.activeFileIdByWorktree &&
+    a.activeTabType === b.activeTabType &&
+    a.activeTabTypeByWorktree === b.activeTabTypeByWorktree &&
     a.activeTabId === b.activeTabId &&
     a.activeBrowserTabIdByWorktree === b.activeBrowserTabIdByWorktree &&
     a.agentStatusEpoch === b.agentStatusEpoch &&
@@ -605,7 +635,14 @@ async function syncRuntimeGraph(): Promise<void> {
         worktreeId,
         title,
         activeLeafId: layout?.activeLeafId ?? liveLeaves[0][0],
-        layout: layout?.root ?? fallbackLayoutForLeafIds(liveLeaves.map(([leafId]) => leafId))
+        layout: resolveTerminalLayoutRoot({
+          authoritativeRoot: layout?.root,
+          leafIds: liveLeaves.map(([leafId]) => leafId),
+          onSynthesize: (leafCount) =>
+            console.warn(
+              `[sync-runtime-graph] synthesized layout for ${leafCount} unmounted leaves with no saved tree`
+            )
+        })
       })
       liveLeaves.forEach(([leafId, ptyId], index) => {
         graph.leaves.push({
@@ -660,6 +697,9 @@ export function buildMobileSessionTabSnapshots(
         workspace
       ])
     )
+    const unifiedTabByIdForWorktree = new Map(
+      (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
+    )
     const editorIds = openFileIndexes.idsByWorktree.get(worktreeId) ?? []
     const publishableTerminalIds = [...terminalTabByIdForWorktree.values()]
       .filter((terminal) => !isWebOnlyMirroredTerminalTab(state, terminal))
@@ -670,6 +710,8 @@ export function buildMobileSessionTabSnapshots(
       browserIds: [...browserWorkspaceByIdForWorktree.keys()]
     })
     const tabs: RuntimeMobileSessionSnapshotTab[] = []
+    const emittedEditorFileIds = new Set<string>()
+    const emittedEditorTabIds = new Set<string>()
 
     for (const item of groupProjection.order) {
       if (item.type === 'terminal') {
@@ -699,23 +741,105 @@ export function buildMobileSessionTabSnapshots(
           openFileIndexes.byWorktreeAndId,
           editorDraftVersionByFileId,
           file,
-          item.tabId
+          item.tabId ? unifiedTabByIdForWorktree.get(item.tabId) : undefined
         )
         if (markdown) {
           tabs.push(markdown)
         } else {
-          tabs.push(buildMobileFileTab(state, file, item.tabId))
+          tabs.push(
+            buildMobileFileTab(
+              state,
+              file,
+              item.tabId ? unifiedTabByIdForWorktree.get(item.tabId) : undefined
+            )
+          )
         }
+        emittedEditorFileIds.add(file.id)
+        emittedEditorTabIds.add(item.tabId ?? item.id)
       } else if (item.type === 'browser') {
         const workspace = browserWorkspaceByIdForWorktree.get(item.id)
         if (!workspace) {
           continue
         }
-        tabs.push(buildMobileBrowserTab(state, workspace, item.tabId))
+        tabs.push(
+          buildMobileBrowserTab(
+            state,
+            workspace,
+            item.tabId ? unifiedTabByIdForWorktree.get(item.tabId) : undefined
+          )
+        )
+      }
+    }
+
+    // Why: split-group projection can miss plain editor files during hydration.
+    // Publish the missing file so paired mobile/web clients still mirror it.
+    const fallbackEditorTabs: FallbackEditorTabTarget[] = []
+    const openFilesForWorktree = openFileIndexes.byWorktreeAndId.get(worktreeId)
+    if (openFilesForWorktree) {
+      const unifiedEditorTabs = getEditorUnifiedTabsForWorktree(state, worktreeId)
+      const unifiedEditorFileIds = new Set(unifiedEditorTabs.map((tab) => tab.entityId))
+      for (const unifiedTab of unifiedEditorTabs) {
+        if (emittedEditorTabIds.has(unifiedTab.id)) {
+          continue
+        }
+        const file = openFilesForWorktree.get(unifiedTab.entityId)
+        if (!file) {
+          continue
+        }
+        const markdown = buildMobileMarkdownTab(
+          state,
+          openFileIndexes.byWorktreeAndId,
+          editorDraftVersionByFileId,
+          file,
+          unifiedTab
+        )
+        const fallbackTab = markdown ?? buildMobileFileTab(state, file, unifiedTab)
+        tabs.push(fallbackTab)
+        fallbackEditorTabs.push({
+          tabId: fallbackTab.id,
+          groupId: unifiedTab.groupId
+        })
+        emittedEditorTabIds.add(unifiedTab.id)
+      }
+      for (const file of openFilesForWorktree.values()) {
+        if (emittedEditorFileIds.has(file.id)) {
+          continue
+        }
+        if (unifiedEditorFileIds.has(file.id)) {
+          emittedEditorFileIds.add(file.id)
+          continue
+        }
+        const markdown = buildMobileMarkdownTab(
+          state,
+          openFileIndexes.byWorktreeAndId,
+          editorDraftVersionByFileId,
+          file
+        )
+        const fallbackTab = markdown ?? buildMobileFileTab(state, file)
+        tabs.push(fallbackTab)
+        fallbackEditorTabs.push({
+          tabId: fallbackTab.id,
+          groupId: null
+        })
+        emittedEditorFileIds.add(file.id)
       }
     }
 
     const active = tabs.find((tab) => tab.isActive) ?? null
+    const tabGroups = appendFallbackEditorTabsToGroups(
+      groupProjection.tabGroups,
+      state.groupsByWorktree[worktreeId] ?? [],
+      activeGroupId,
+      fallbackEditorTabs,
+      active?.id ?? null
+    )
+    const tabGroupLayout =
+      tabGroups && tabGroups.length > 0
+        ? pruneTabGroupLayout(
+            (state.layoutByWorktree ?? EMPTY_LAYOUT_BY_WORKTREE)[worktreeId],
+            new Set(tabGroups.map((group) => group.id))
+          )
+        : groupProjection.tabGroupLayout
     snapshots.push({
       worktree: worktreeId,
       publicationEpoch: mobileSessionPublicationEpoch,
@@ -723,15 +847,132 @@ export function buildMobileSessionTabSnapshots(
       activeGroupId,
       activeTabId: active?.id ?? null,
       activeTabType: active?.type ?? null,
-      ...(groupProjection.tabGroups && groupProjection.tabGroups.length > 0
-        ? { tabGroups: groupProjection.tabGroups }
-        : {}),
-      ...(groupProjection.tabGroupLayout ? { tabGroupLayout: groupProjection.tabGroupLayout } : {}),
+      ...(tabGroups && tabGroups.length > 0 ? { tabGroups } : {}),
+      ...(tabGroupLayout ? { tabGroupLayout } : {}),
       tabs
     })
   }
 
   return snapshots
+}
+
+function isEditorSurfaceTab(tab: Pick<Tab, 'contentType'>): boolean {
+  // Why: mobile file snapshots can faithfully mirror ordinary edit/diff files;
+  // conflict review and check-details tabs require metadata this contract lacks.
+  return tab.contentType === 'editor' || tab.contentType === 'diff'
+}
+
+function getEditorUnifiedTabsForWorktree(
+  state: Pick<AppState, 'unifiedTabsByWorktree'>,
+  worktreeId: string
+): Tab[] {
+  return (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(isEditorSurfaceTab)
+}
+
+function applyUnifiedEditorTabIdsToLegacyOrder(
+  order: readonly VisibleTabRef[],
+  state: Pick<AppState, 'unifiedTabsByWorktree'>,
+  worktreeId: string
+): VisibleTabRef[] {
+  const unifiedEditorTabs = getEditorUnifiedTabsForWorktree(state, worktreeId)
+  if (unifiedEditorTabs.length === 0) {
+    return [...order]
+  }
+  const firstUnifiedTabByFileId = new Map<string, string>()
+  for (const tab of unifiedEditorTabs) {
+    if (!firstUnifiedTabByFileId.has(tab.entityId)) {
+      firstUnifiedTabByFileId.set(tab.entityId, tab.id)
+    }
+  }
+  return order.map((item) => {
+    if (item.type !== 'editor' || item.tabId) {
+      return item
+    }
+    const tabId = firstUnifiedTabByFileId.get(item.id)
+    return tabId ? { ...item, tabId } : item
+  })
+}
+
+function appendFallbackEditorTabsToGroups(
+  tabGroups: RuntimeMobileSessionTabGroup[] | undefined,
+  sourceGroups: readonly TabGroup[],
+  activeGroupId: string | null,
+  fallbackTabs: readonly FallbackEditorTabTarget[],
+  activeTabId: string | null
+): RuntimeMobileSessionTabGroup[] | undefined {
+  if (fallbackTabs.length === 0) {
+    return tabGroups
+  }
+  const result = [...(tabGroups ?? [])]
+  const sourceGroupsById = new Map(sourceGroups.map((group) => [group.id, group]))
+  const groupIndexById = new Map(result.map((group, index) => [group.id, index]))
+  const firstTargetGroupId =
+    result[0]?.id ??
+    (activeGroupId && sourceGroupsById.has(activeGroupId) ? activeGroupId : null) ??
+    sourceGroups[0]?.id ??
+    null
+  const fallbackTabIdSet = new Set(fallbackTabs.map((tab) => tab.tabId))
+
+  for (const fallback of fallbackTabs) {
+    const targetGroupId =
+      fallback.groupId ??
+      (activeGroupId && (groupIndexById.has(activeGroupId) || sourceGroupsById.has(activeGroupId))
+        ? activeGroupId
+        : firstTargetGroupId)
+    if (!targetGroupId) {
+      continue
+    }
+    let targetIndex = groupIndexById.get(targetGroupId)
+    if (targetIndex === undefined) {
+      const sourceGroup = sourceGroupsById.get(targetGroupId)
+      const group: RuntimeMobileSessionTabGroup = {
+        id: targetGroupId,
+        activeTabId: sourceGroup?.activeTabId ?? null,
+        tabOrder: [],
+        recentTabIds: sourceGroup?.recentTabIds ?? []
+      }
+      targetIndex = result.length
+      groupIndexById.set(targetGroupId, targetIndex)
+      result.push(group)
+    }
+    const group = result[targetIndex]!
+    if (!group.tabOrder.includes(fallback.tabId)) {
+      result[targetIndex] = {
+        ...group,
+        tabOrder: [...group.tabOrder, fallback.tabId]
+      }
+    }
+  }
+
+  if (result.length === 0) {
+    return tabGroups
+  }
+
+  const activeFallbackTabId = activeTabId && fallbackTabIdSet.has(activeTabId) ? activeTabId : null
+
+  return result.map((group) => {
+    const tabOrder = [...group.tabOrder]
+    const tabOrderSet = new Set(tabOrder)
+    const activeFallbackTabIdForGroup =
+      activeFallbackTabId && tabOrderSet.has(activeFallbackTabId) ? activeFallbackTabId : null
+    const activeTabIdForGroup =
+      activeFallbackTabIdForGroup ??
+      (group.activeTabId && tabOrderSet.has(group.activeTabId) ? group.activeTabId : null)
+    const recentTabIds = (group.recentTabIds ?? []).filter((tabId) => tabOrderSet.has(tabId))
+    if (
+      activeFallbackTabId &&
+      tabOrderSet.has(activeFallbackTabId) &&
+      !recentTabIds.includes(activeFallbackTabId)
+    ) {
+      recentTabIds.push(activeFallbackTabId)
+    }
+    return {
+      ...group,
+      activeTabId: activeTabIdForGroup,
+      tabOrder,
+      recentTabIds
+    }
+  })
 }
 
 function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean {
@@ -859,9 +1100,13 @@ function buildMobileSessionGroupProjection(
   const groups = state.groupsByWorktree[worktreeId] ?? []
   if (groups.length === 0) {
     return {
-      order: getActiveTabNavOrder(state, worktreeId, {
-        editorIds: ids.editorIds
-      })
+      order: applyUnifiedEditorTabIdsToLegacyOrder(
+        getActiveTabNavOrder(state, worktreeId, {
+          editorIds: ids.editorIds
+        }),
+        state,
+        worktreeId
+      )
     }
   }
 
@@ -981,22 +1226,6 @@ function resolveMobileTerminalTheme(
   return { mode: appearance.mode, theme: theme as RuntimeMobileTerminalTheme['theme'] }
 }
 
-function fallbackLayoutForLeafIds(leafIds: readonly string[]): TerminalPaneLayoutNode | null {
-  const leaves = leafIds.filter(isTerminalLeafId)
-  if (leaves.length === 0) {
-    return null
-  }
-  return leaves.slice(1).reduce<TerminalPaneLayoutNode>(
-    (root, leafId) => ({
-      type: 'split',
-      direction: 'horizontal',
-      first: root,
-      second: { type: 'leaf', leafId }
-    }),
-    { type: 'leaf', leafId: leaves[0]! }
-  )
-}
-
 function getRuntimeLeafIdsForTerminal(tabId: string, state: AppState): string[] {
   const registered = registeredTabs.get(tabId)
   const manager = registered?.getManager()
@@ -1053,7 +1282,18 @@ function buildMobileTerminalSurfaceTabs(
     typeof HTMLElement !== 'undefined' && firstChild instanceof HTMLElement ? firstChild : null
   )
   const parentLayout = normalizeTerminalLayoutSnapshot({
-    root: liveLayoutRoot ?? sanitizedSavedLayout?.root ?? fallbackLayoutForLeafIds(leafIds),
+    // Why: the live DOM tree (when mounted) is authoritative; otherwise the
+    // saved tree. Both carry the real direction — only synthesize as a last
+    // resort, never re-guess. Shared with the client-ingest path.
+    root: resolveTerminalLayoutRoot({
+      authoritativeRoot: liveLayoutRoot,
+      existingRoot: sanitizedSavedLayout?.root,
+      leafIds,
+      onSynthesize: (leafCount) =>
+        console.warn(
+          `[sync-runtime-graph] synthesized parentLayout for ${leafCount} leaves with no live or saved tree`
+        )
+    }),
     activeLeafId,
     expandedLeafId: sanitizedSavedLayout?.expandedLeafId ?? null,
     ...(Object.keys(savedPtyIdsByLeafId).length > 0 ? { ptyIdsByLeafId: savedPtyIdsByLeafId } : {}),
@@ -1109,7 +1349,7 @@ function buildMobileMarkdownTab(
   openFileByWorktreeAndId: OpenFileByWorktreeAndId,
   editorDraftVersionByFileId: ReadonlyMap<string, string>,
   file: AppState['openFiles'][number],
-  unifiedTabId?: string
+  unifiedTab?: Tab
 ): RuntimeMobileSessionMarkdownTab | null {
   if (file.mode !== 'edit' && file.mode !== 'markdown-preview') {
     return null
@@ -1125,6 +1365,7 @@ function buildMobileMarkdownTab(
       : file
   const draftVersion = editorDraftVersionByFileId.get(sourceFile.id)
   const title = file.relativePath.split(/[\\/]/).pop() || file.relativePath || 'Markdown'
+  const unifiedTabId = unifiedTab?.id
 
   return {
     type: 'markdown',
@@ -1137,21 +1378,24 @@ function buildMobileMarkdownTab(
     isDirty: file.isDirty || sourceFile.isDirty,
     isActive: unifiedTabId
       ? isUnifiedTabActiveInActiveGroup(state, file.worktreeId, unifiedTabId)
-      : state.activeFileId === file.id,
+      : isFileActiveEditorSurface(state, file),
     sourceFileId: sourceFile.id,
     sourceFilePath: sourceFile.filePath,
     sourceRelativePath: sourceFile.relativePath,
-    documentVersion: draftVersion ?? `file:${sourceFile.id}`
+    documentVersion: draftVersion ?? `file:${sourceFile.id}`,
+    color: unifiedTab?.color ?? null,
+    isPinned: unifiedTab?.isPinned === true
   }
 }
 
 function buildMobileFileTab(
   state: AppState,
   file: AppState['openFiles'][number],
-  unifiedTabId?: string
+  unifiedTab?: Tab
 ): RuntimeMobileSessionFileTab {
   const title = file.relativePath.split(/[\\/]/).pop() || file.relativePath || 'File'
   const diffSource = isMobileFileDiffSource(file.diffSource) ? file.diffSource : undefined
+  const unifiedTabId = unifiedTab?.id
 
   return {
     type: 'file',
@@ -1163,10 +1407,26 @@ function buildMobileFileTab(
     mode: file.mode === 'diff' ? 'diff' : 'edit',
     ...(diffSource ? { diffSource } : {}),
     isDirty: file.isDirty,
+    color: unifiedTab?.color ?? null,
+    isPinned: unifiedTab?.isPinned === true,
     isActive: unifiedTabId
       ? isUnifiedTabActiveInActiveGroup(state, file.worktreeId, unifiedTabId)
-      : state.activeFileId === file.id
+      : isFileActiveEditorSurface(state, file)
   }
+}
+
+function isFileActiveEditorSurface(
+  state: Pick<
+    AppState,
+    'activeFileId' | 'activeFileIdByWorktree' | 'activeTabType' | 'activeTabTypeByWorktree'
+  >,
+  file: Pick<AppState['openFiles'][number], 'id' | 'worktreeId'>
+): boolean {
+  const activeType = state.activeTabTypeByWorktree?.[file.worktreeId] ?? state.activeTabType
+  return (
+    activeType === 'editor' &&
+    (state.activeFileIdByWorktree?.[file.worktreeId] ?? state.activeFileId) === file.id
+  )
 }
 
 function isMobileFileDiffSource(
@@ -1178,12 +1438,13 @@ function isMobileFileDiffSource(
 function buildMobileBrowserTab(
   state: AppState,
   workspace: NonNullable<AppState['browserTabsByWorktree'][string]>[number],
-  unifiedTabId?: string
+  unifiedTab?: Tab
 ): RuntimeMobileSessionBrowserTab {
   const pages = state.browserPagesByWorkspace[workspace.id] ?? []
   const activePage = pages.find((page) => page.id === workspace.activePageId) ?? pages[0] ?? null
   const title =
     activePage?.title || workspace.title || activePage?.url || workspace.url || 'Browser'
+  const unifiedTabId = unifiedTab?.id
 
   return {
     type: 'browser',
@@ -1195,6 +1456,8 @@ function buildMobileBrowserTab(
     loading: activePage?.loading ?? workspace.loading,
     canGoBack: activePage?.canGoBack ?? workspace.canGoBack,
     canGoForward: activePage?.canGoForward ?? workspace.canGoForward,
+    color: unifiedTab?.color ?? null,
+    isPinned: unifiedTab?.isPinned === true,
     isActive: unifiedTabId
       ? isUnifiedTabActiveInActiveGroup(state, workspace.worktreeId, unifiedTabId)
       : state.activeBrowserTabIdByWorktree[workspace.worktreeId] === workspace.id

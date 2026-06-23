@@ -5,6 +5,7 @@ import {
   parseGitHubIssueOrPRLink,
   parseGitHubIssueOrPRNumber
 } from './github-links'
+import { WORK_ITEM_LINK_QUERY_MAX_BYTES } from './work-item-link-query-bounds'
 
 describe('buildGitHubRepoUrl', () => {
   it('builds a GitHub repository URL from an owner/repo slug', () => {
@@ -50,6 +51,9 @@ describe('parseGitHubIssueOrPRNumber', () => {
   })
 
   it('rejects invalid GitHub item URLs', () => {
+    expect(parseGitHubIssueOrPRNumber('0')).toBeNull()
+    expect(parseGitHubIssueOrPRNumber('#0')).toBeNull()
+    expect(parseGitHubIssueOrPRNumber('https://github.com/o/r/pull/0')).toBeNull()
     expect(
       parseGitHubIssueOrPRNumber('https://github.com/o/r/pull/not-a-number/changes')
     ).toBeNull()
@@ -116,6 +120,8 @@ describe('parseGitHubIssueOrPRLink', () => {
   })
 
   it('rejects non-GitHub and malformed item URLs', () => {
+    expect(parseGitHubIssueOrPRLink('https://github.com/o/r/pull/0')).toBeNull()
+    expect(parseGitHubIssueOrPRLink('https://github.com/o/r/issues/0')).toBeNull()
     expect(parseGitHubIssueOrPRLink('https://github.com/o/r/pull/not-a-number/changes')).toBeNull()
     expect(parseGitHubIssueOrPRLink('https://github.com/o/r/pull/')).toBeNull()
     expect(parseGitHubIssueOrPRLink('https://github.com/o/r/issues/123abc')).toBeNull()
@@ -128,6 +134,21 @@ describe('normalizeGitHubLinkQuery', () => {
     expect(normalizeGitHubLinkQuery('https://github.com/stablyai/orca/issues/923')).toEqual({
       query: 'https://github.com/stablyai/orca/issues/923',
       directNumber: 923
+    })
+  })
+
+  it('rejects oversized pasted link queries without echoing their content', () => {
+    const secret = 'github-link-secret'
+    const result = normalizeGitHubLinkQuery(secret + 'x'.repeat(WORK_ITEM_LINK_QUERY_MAX_BYTES))
+
+    expect(result).toEqual({ query: '', directNumber: null, tooLarge: true })
+  })
+
+  it('rejects oversized whitespace before trimming link queries', () => {
+    expect(normalizeGitHubLinkQuery(' '.repeat(WORK_ITEM_LINK_QUERY_MAX_BYTES + 1))).toEqual({
+      query: '',
+      directNumber: null,
+      tooLarge: true
     })
   })
 })

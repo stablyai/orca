@@ -1,16 +1,19 @@
-import { Copy, ExternalLink, Columns2, Rows2, Pencil, Pin, PinOff } from 'lucide-react'
+import { Copy, ExternalLink, Pencil, Pin, PinOff } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
 import { showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { OpenFile } from '../../store/slices/editor'
 import { shouldBlockEditorTabLocalOpen } from './editor-tab-local-open-guard'
 import { translate } from '@/i18n/i18n'
+import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -26,6 +29,8 @@ type EditorFileTabContextMenuProps = {
   open: boolean
   menuPoint: { x: number; y: number }
   file: OpenFile & { tabId?: string }
+  unifiedTabId: string
+  groupId: string
   isPinned: boolean
   isRenaming: boolean
   hasTabsToRight: boolean
@@ -41,7 +46,6 @@ type EditorFileTabContextMenuProps = {
   onClose: () => void
   onCloseAll: () => void
   onCloseToRight: () => void
-  onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   onOpenMarkdownPreview: (
     file: {
       filePath: string
@@ -58,6 +62,8 @@ export function EditorFileTabContextMenu({
   open,
   menuPoint,
   file,
+  unifiedTabId,
+  groupId,
   isPinned,
   isRenaming,
   hasTabsToRight,
@@ -73,10 +79,10 @@ export function EditorFileTabContextMenu({
   onClose,
   onCloseAll,
   onCloseToRight,
-  onSplitGroup,
   onOpenMarkdownPreview
 }: EditorFileTabContextMenuProps): React.JSX.Element {
-  const sourceVisibleTabId = file.tabId ?? file.id
+  const closeAllShortcut = useShortcutLabel('tab.closeAll')
+  const showCloseAllShortcut = closeAllShortcut !== 'Unassigned'
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
@@ -100,23 +106,6 @@ export function EditorFileTabContextMenu({
           event.preventDefault()
         }}
       >
-        <DropdownMenuItem onSelect={() => onSplitGroup('up', sourceVisibleTabId)}>
-          <Rows2 className="mr-1.5 size-3.5" />
-          {translate('auto.components.tab.bar.EditorFileTabContextMenu.6b3efb106e', 'Split Up')}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onSplitGroup('down', sourceVisibleTabId)}>
-          <Rows2 className="mr-1.5 size-3.5" />
-          {translate('auto.components.tab.bar.EditorFileTabContextMenu.1d04b1630b', 'Split Down')}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onSplitGroup('left', sourceVisibleTabId)}>
-          <Columns2 className="mr-1.5 size-3.5" />
-          {translate('auto.components.tab.bar.EditorFileTabContextMenu.e3ff145b98', 'Split Left')}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onSplitGroup('right', sourceVisibleTabId)}>
-          <Columns2 className="mr-1.5 size-3.5" />
-          {translate('auto.components.tab.bar.EditorFileTabContextMenu.f7c3d7d5af', 'Split Right')}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
         <DropdownMenuItem
           disabled={!canRename || isRenaming}
           onSelect={() => {
@@ -135,6 +124,7 @@ export function EditorFileTabContextMenu({
             ? translate('auto.components.tab.bar.EditorFileTabContextMenu.8e9d603a09', 'Unpin Tab')
             : translate('auto.components.tab.bar.EditorFileTabContextMenu.fdd29eb669', 'Pin Tab')}
         </DropdownMenuItem>
+        <TabWorkspaceLayoutMenuSection unifiedTabId={unifiedTabId} groupId={groupId} />
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
           {translate('auto.components.tab.bar.EditorFileTabContextMenu.1ba8492c5b', 'Close')}
@@ -144,6 +134,9 @@ export function EditorFileTabContextMenu({
             'auto.components.tab.bar.EditorFileTabContextMenu.ba1369dd24',
             'Close All Editor Tabs'
           )}
+          {showCloseAllShortcut ? (
+            <DropdownMenuShortcut>{closeAllShortcut}</DropdownMenuShortcut>
+          ) : null}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onCloseToRight} disabled={!hasTabsToRight}>
           {translate(

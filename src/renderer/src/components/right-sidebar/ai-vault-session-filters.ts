@@ -1,7 +1,11 @@
 import {
   isPathInsideOrEqual,
+  isRuntimePathAbsolute,
+  normalizeRuntimePathForComparison,
   normalizeRuntimePathSeparators
 } from '../../../../shared/cross-platform-path'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import type {
   AiVaultAgent,
   AiVaultGroup,
@@ -10,13 +14,20 @@ import type {
   AiVaultSort
 } from '../../../../shared/ai-vault-types'
 import { aiVaultAgentLabel } from '../../../../shared/ai-vault-types'
+import type { Worktree } from '../../../../shared/types'
+import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
+import { sessionPreviewSearchText } from './ai-vault-session-display'
+import type { AiVaultSessionProject } from './ai-vault-session-projects'
 
 export type AiVaultSessionFilterState = {
   query: string
   agents: readonly AiVaultAgent[]
   scope: AiVaultScope
   sort: AiVaultSort
-  activeWorktreePath: string | null
+  activeWorktreePaths: readonly string[]
+  activeProjectKey?: string | null
+  sessionProjectById?: ReadonlyMap<string, AiVaultSessionProject>
+  projectLabelByKey?: ReadonlyMap<string, string>
   hideEmptySessions: boolean
 }
 
@@ -32,10 +43,23 @@ type ParsedQuery = {
   pathTerms: string[]
 }
 
+export const AI_VAULT_SESSION_FILTER_QUERY_MAX_BYTES = 2 * 1024
+
+export function isAiVaultSessionFilterQueryTooLarge(
+  query: string,
+  maxBytes = AI_VAULT_SESSION_FILTER_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
+
 export function filterAiVaultSessions(
   sessions: readonly AiVaultSession[],
   filters: AiVaultSessionFilterState
 ): AiVaultSession[] {
+  if (isAiVaultSessionFilterQueryTooLarge(filters.query)) {
+    return []
+  }
+
   const agentSet = new Set(filters.agents)
   const parsedQuery = parseVaultQuery(filters.query)
 
@@ -47,27 +71,67 @@ export function filterAiVaultSessions(
       if (filters.hideEmptySessions && session.messageCount === 0) {
         return false
       }
-      if (
-        filters.scope === 'workspace' &&
-        filters.activeWorktreePath &&
-        (!session.cwd || !isPathInsideOrEqual(filters.activeWorktreePath, session.cwd))
-      ) {
-        return false
+      if (filters.scope === 'workspace') {
+        const cwd = session.cwd
+        if (
+          !cwd ||
+          !filters.activeWorktreePaths.some((pathValue) =>
+            isAiVaultSessionInWorkspacePath(pathValue, cwd)
+          )
+        ) {
+          return false
+        }
       }
-      return matchesQuery(session, parsedQuery)
+      if (filters.scope === 'project') {
+        if (!filters.activeProjectKey) {
+          return false
+        }
+        if (filters.sessionProjectById?.get(session.id)?.key !== filters.activeProjectKey) {
+          return false
+        }
+      }
+      return matchesQuery(session, parsedQuery, filters)
     })
     .sort((left, right) => compareSessions(left, right, filters.sort))
 }
 
+export function deriveAiVaultWorkspaceScopePaths(
+  activeWorktree: Pick<Worktree, 'id' | 'path' | 'priorWorktreeIds' | 'repoId'> | null,
+  liveWorktrees: readonly Pick<Worktree, 'id' | 'path' | 'repoId'>[] = []
+): string[] {
+  if (!activeWorktree) {
+    return []
+  }
+
+  const paths: string[] = []
+  addAiVaultWorkspaceScopePath(paths, activeWorktree.path)
+
+  for (const priorWorktreeId of activeWorktree.priorWorktreeIds ?? []) {
+    const parsed = splitWorktreeIdForFilesystem(priorWorktreeId)
+    if (!parsed || parsed.repoId !== activeWorktree.repoId) {
+      continue
+    }
+    if (isAiVaultWorkspaceScopePathClaimed(parsed.worktreePath, activeWorktree, liveWorktrees)) {
+      continue
+    }
+    addAiVaultWorkspaceScopePath(paths, parsed.worktreePath)
+  }
+
+  return paths
+}
+
 export function groupAiVaultSessions(
   sessions: readonly AiVaultSession[],
-  group: AiVaultGroup
+  group: AiVaultGroup,
+  options: {
+    sessionProjectById?: ReadonlyMap<string, AiVaultSessionProject>
+    projectLabelByKey?: ReadonlyMap<string, string>
+  } = {}
 ): AiVaultSessionGroup[] {
   const groups = new Map<string, AiVaultSessionGroup>()
 
   for (const session of sessions) {
-    const key = group === 'agent' ? session.agent : getFolderGroupKey(session.cwd)
-    const label = group === 'agent' ? agentLabel(session.agent) : folderLabel(session.cwd)
+    const { key, label } = getGroupIdentity(session, group, options)
     const existing = groups.get(key)
     if (existing) {
       existing.sessions.push(session)
@@ -121,7 +185,11 @@ export function parseVaultQuery(query: string): ParsedQuery {
   return { terms, repoTerms, pathTerms }
 }
 
-function matchesQuery(session: AiVaultSession, parsed: ParsedQuery): boolean {
+function matchesQuery(
+  session: AiVaultSession,
+  parsed: ParsedQuery,
+  filters: Pick<AiVaultSessionFilterState, 'sessionProjectById' | 'projectLabelByKey'>
+): boolean {
   const searchable = [
     session.title,
     session.sessionId,
@@ -129,7 +197,8 @@ function matchesQuery(session: AiVaultSession, parsed: ParsedQuery): boolean {
     session.branch,
     session.model,
     session.cwd,
-    session.filePath
+    session.filePath,
+    sessionPreviewSearchText(session)
   ]
     .filter(Boolean)
     .join(' ')
@@ -139,7 +208,12 @@ function matchesQuery(session: AiVaultSession, parsed: ParsedQuery): boolean {
     return false
   }
 
-  const repoLabel = folderLabel(session.cwd).toLowerCase()
+  const sessionProject = filters.sessionProjectById?.get(session.id)
+  const repoLabel = (
+    sessionProject?.kind === 'repo'
+      ? (filters.projectLabelByKey?.get(sessionProject.key) ?? sessionProject.label)
+      : folderLabel(session.cwd)
+  ).toLowerCase()
   if (parsed.repoTerms.some((term) => !repoLabel.includes(term))) {
     return false
   }
@@ -160,8 +234,81 @@ function compareSessions(left: AiVaultSession, right: AiVaultSession, sort: AiVa
   return rightTime - leftTime
 }
 
+function getGroupIdentity(
+  session: AiVaultSession,
+  group: AiVaultGroup,
+  options: {
+    sessionProjectById?: ReadonlyMap<string, AiVaultSessionProject>
+    projectLabelByKey?: ReadonlyMap<string, string>
+  }
+): Pick<AiVaultSessionGroup, 'key' | 'label'> {
+  if (group === 'agent') {
+    return { key: session.agent, label: agentLabel(session.agent) }
+  }
+  if (group === 'project') {
+    const sessionProject = options.sessionProjectById?.get(session.id)
+    if (sessionProject) {
+      return {
+        key: sessionProject.key,
+        label:
+          options.projectLabelByKey?.get(sessionProject.key) ||
+          sessionProject.label ||
+          folderLabel(session.cwd)
+      }
+    }
+  }
+  return { key: getFolderGroupKey(session.cwd), label: folderLabel(session.cwd) }
+}
+
 function getFolderGroupKey(pathValue: string | null): string {
   return pathValue ? normalizeRuntimePathSeparators(pathValue).toLowerCase() : 'unknown'
+}
+
+function addAiVaultWorkspaceScopePath(paths: string[], pathValue: string): void {
+  const trimmedPath = pathValue.trim()
+  if (!trimmedPath || !isRuntimePathAbsolute(trimmedPath)) {
+    return
+  }
+  const comparisonPath = normalizeRuntimePathForComparison(trimmedPath)
+  if (
+    paths.some((existingPath) => normalizeRuntimePathForComparison(existingPath) === comparisonPath)
+  ) {
+    return
+  }
+  paths.push(trimmedPath)
+}
+
+function isAiVaultSessionInWorkspacePath(workspacePath: string, sessionCwd: string): boolean {
+  if (isPathInsideOrEqual(workspacePath, sessionCwd)) {
+    return true
+  }
+
+  const workspaceWslPath = parseWslUncPath(workspacePath)
+  if (!workspaceWslPath) {
+    return false
+  }
+
+  // WSL agent transcripts record Linux cwd values even when Orca stores the
+  // active worktree as a Windows UNC path.
+  return isPathInsideOrEqual(workspaceWslPath.linuxPath, sessionCwd)
+}
+
+function isAiVaultWorkspaceScopePathClaimed(
+  pathValue: string,
+  activeWorktree: Pick<Worktree, 'id'>,
+  liveWorktrees: readonly Pick<Worktree, 'id' | 'path'>[]
+): boolean {
+  const trimmedPath = pathValue.trim()
+  if (!trimmedPath || !isRuntimePathAbsolute(trimmedPath)) {
+    return false
+  }
+  const comparisonPath = normalizeRuntimePathForComparison(trimmedPath)
+  // AI Vault sessions are keyed by cwd only, so any live worktree now owning this path wins.
+  return liveWorktrees.some(
+    (worktree) =>
+      worktree.id !== activeWorktree.id &&
+      normalizeRuntimePathForComparison(worktree.path) === comparisonPath
+  )
 }
 
 function tokenizeQuery(query: string): string[] {

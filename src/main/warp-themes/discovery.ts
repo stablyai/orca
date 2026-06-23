@@ -29,9 +29,10 @@ function readDirectoryEntries(directoryPath: string): Dirent[] {
 function addDedupeDirectory(
   directories: string[],
   seenDirectories: Set<string>,
-  directoryPath: string
+  directoryPath: string,
+  pathImpl: typeof path.posix
 ): void {
-  const normalizedPath = path.normalize(path.resolve(directoryPath))
+  const normalizedPath = pathImpl.normalize(pathImpl.resolve(directoryPath))
   if (seenDirectories.has(normalizedPath)) {
     return
   }
@@ -39,39 +40,53 @@ function addDedupeDirectory(
   directories.push(directoryPath)
 }
 
-function warpThemeDirectoriesFromDataHomes(dataHomes: string[]): string[] {
+function warpThemeDirectoriesFromDataHomes(
+  dataHomes: string[],
+  pathImpl: typeof path.posix
+): string[] {
   const directories: string[] = []
   const seenDirectories = new Set<string>()
   for (const dataHome of dataHomes) {
-    addDedupeDirectory(directories, seenDirectories, path.join(dataHome, 'themes'))
+    addDedupeDirectory(directories, seenDirectories, pathImpl.join(dataHome, 'themes'), pathImpl)
   }
   return directories
 }
 
 function getMacWarpThemeDirectories(home: string): string[] {
-  return warpThemeDirectoriesFromDataHomes([
-    ...WARP_CHANNELS.map((channel) => path.join(home, channel.macName)),
-    ...readDirectoryEntries(home)
-      .filter((entry) => entry.isDirectory() && entry.name.startsWith('.warp'))
-      .map((entry) => path.join(home, entry.name))
-  ])
+  const pathImpl = path.posix
+  return warpThemeDirectoriesFromDataHomes(
+    [
+      ...WARP_CHANNELS.map((channel) => pathImpl.join(home, channel.macName)),
+      ...readDirectoryEntries(home)
+        .filter((entry) => entry.isDirectory() && entry.name.startsWith('.warp'))
+        .map((entry) => pathImpl.join(home, entry.name))
+    ],
+    pathImpl
+  )
 }
 
 function getLinuxWarpThemeDirectories(home: string): string[] {
+  const pathImpl = path.posix
   const xdgDataHome = process.env.XDG_DATA_HOME
   // Why: XDG_DATA_HOME is only valid as an absolute path; relative values would
   // make discovery depend on Orca's launch directory.
   const dataHome =
-    xdgDataHome && path.isAbsolute(xdgDataHome) ? xdgDataHome : path.join(home, '.local', 'share')
-  return warpThemeDirectoriesFromDataHomes([
-    ...WARP_CHANNELS.map((channel) => path.join(dataHome, channel.linuxName)),
-    ...readDirectoryEntries(dataHome)
-      .filter(
-        (entry) =>
-          entry.isDirectory() && (entry.name === 'warp-terminal' || entry.name.startsWith('warp-'))
-      )
-      .map((entry) => path.join(dataHome, entry.name))
-  ])
+    xdgDataHome && pathImpl.isAbsolute(xdgDataHome)
+      ? xdgDataHome
+      : pathImpl.join(home, '.local', 'share')
+  return warpThemeDirectoriesFromDataHomes(
+    [
+      ...WARP_CHANNELS.map((channel) => pathImpl.join(dataHome, channel.linuxName)),
+      ...readDirectoryEntries(dataHome)
+        .filter(
+          (entry) =>
+            entry.isDirectory() &&
+            (entry.name === 'warp-terminal' || entry.name.startsWith('warp-'))
+        )
+        .map((entry) => pathImpl.join(dataHome, entry.name))
+    ],
+    pathImpl
+  )
 }
 
 function getWindowsWarpThemeDirectories(home: string): string[] {
@@ -83,7 +98,8 @@ function getWindowsWarpThemeDirectories(home: string): string[] {
     addDedupeDirectory(
       directories,
       seenDirectories,
-      path.win32.join(warpAppData, channel.windowsName, 'data', 'themes')
+      path.win32.join(warpAppData, channel.windowsName, 'data', 'themes'),
+      path.win32
     )
   }
   for (const entry of readDirectoryEntries(warpAppData)) {
@@ -93,7 +109,8 @@ function getWindowsWarpThemeDirectories(home: string): string[] {
     addDedupeDirectory(
       directories,
       seenDirectories,
-      path.win32.join(warpAppData, entry.name, 'data', 'themes')
+      path.win32.join(warpAppData, entry.name, 'data', 'themes'),
+      path.win32
     )
   }
   return directories

@@ -22,7 +22,8 @@ describe('AgentStateDot', () => {
 
     expect(markup).toContain('border-yellow-500')
     expect(markup).toContain('border-t-transparent')
-    expect(markup).toContain('animate-spin')
+    expect(markup).toContain('[animation:spin_1s_steps(12,end)_infinite]')
+    expect(markup).not.toContain('animate-spin')
   })
 
   it('renders done as an emerald check icon', () => {

@@ -236,4 +236,122 @@ describe('locale-translation-policy zh round 5', () => {
       })
     ).toBe('本地项目、Git repo 或包含多个 repos 的文件夹')
   })
+
+  it('keeps product, provider, code, and shell tokens untranslated', () => {
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.IntegrationsPane.8489c0aa49',
+        enValue: 'Bitbucket',
+        localeValue: '位桶',
+        locale: 'zh'
+      })
+    ).toBe('Bitbucket')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.integrations.search.50d20817f7',
+        enValue: 'bitbucket',
+        localeValue: '位桶',
+        locale: 'zh'
+      })
+    ).toBe('Bitbucket')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.MobileNetworkInterfaceSection.1dc87a7fbc',
+        enValue: 'Tailscale',
+        localeValue: '尾鳞',
+        locale: 'zh'
+      })
+    ).toBe('Tailscale')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.tab.bar.TabBar.efb33546ff',
+        enValue: 'Git Bash',
+        localeValue: 'git 重击',
+        locale: 'zh'
+      })
+    ).toBe('git bash')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.tab.bar.TabBar.2148f65e04',
+        enValue: 'PowerShell',
+        localeValue: '电源外壳',
+        locale: 'zh'
+      })
+    ).toBe('PowerShell')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.github.github.rate.limit.display.bb227706a6',
+        enValue: 'REST',
+        localeValue: '休息',
+        locale: 'zh'
+      })
+    ).toBe('REST')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.right.sidebar.GitHistoryGraphSvg.47eff48230',
+        enValue: 'HEAD',
+        localeValue: '头',
+        locale: 'zh'
+      })
+    ).toBe('HEAD')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.editor.RichMarkdownCodeBlock.9e384d48dc',
+        enValue: 'Swift',
+        localeValue: '迅速',
+        locale: 'zh'
+      })
+    ).toBe('Swift')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.editor.RichMarkdownCodeBlock.e72e6b03f4',
+        enValue: 'Rust',
+        localeValue: '锈',
+        locale: 'zh'
+      })
+    ).toBe('Rust')
+  })
+
+  it('normalizes zh product spacing and contextual review abbreviations', () => {
+    expect(
+      repairTranslatedValue({
+        key: 'settings.appearance.statusBar.claudeToggleDescription',
+        enValue: 'Show Claude token and cost usage for the active workspace.',
+        localeValue: '显示Claude Token 和成本使用情况。',
+        locale: 'zh'
+      })
+    ).toBe('显示 Claude Token 和成本使用情况。')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.feature.wall.ComputerUseAnimatedVisual.94787f01f8',
+        enValue: 'Claude Code session started',
+        localeValue: 'Claude·科德 会话已开始',
+        locale: 'zh'
+      })
+    ).toBe('Claude Code 会话已开始')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.GitHubItemDialog.dbe5e2448e',
+        enValue: 'Pull request merged',
+        localeValue: 'PR已合并',
+        locale: 'zh'
+      })
+    ).toBe('拉取请求已合并')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.GitLabItemDialog.9b11cd233f',
+        enValue: 'Closed MR !{{value0}}',
+        localeValue: '已关闭先生！{{value0}}',
+        locale: 'zh'
+      })
+    ).toBe('已关闭 MR !{{value0}}')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.tab.bar.tab.create.menu.options.1baeb07c17',
+        enValue: 'ios simulator',
+        localeValue: 'ios simulator',
+        locale: 'zh'
+      })
+    ).toBe('iOS 模拟器')
+  })
 })

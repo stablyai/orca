@@ -8,6 +8,8 @@ import type {
   LinearIssueListRequest,
   LinearIssueListResult,
   LinearIssueContextResult,
+  LinearProjectListRequest,
+  LinearProjectListResult,
   LinearIssueTaskUpdateRequest,
   LinearIssueTaskUpdateResult,
   LinearSearchResult,
@@ -49,6 +51,7 @@ import {
   formatLinearCreate,
   formatLinearIssue,
   formatLinearIssueList,
+  formatLinearProjectList,
   formatLinearTaskUpdate,
   formatLinearSearch,
   formatLinearStatusSet,
@@ -58,6 +61,7 @@ import {
   formatLinearTeamStates,
   printLinearIssueWarnings,
   printLinearListWarnings,
+  printLinearProjectListWarnings,
   printLinearSearchWarnings
 } from '../linear-format'
 
@@ -116,6 +120,19 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
       workspaceId: getOptionalStringFlag(flags, 'workspace')
     })
     printResult(response, json, formatLinearTeamLabels)
+  },
+  'linear project list': async ({ flags, client, json }) => {
+    const limit = clampLinearSearchLimit(getOptionalPositiveIntegerFlag(flags, 'limit'))
+    const request: LinearProjectListRequest = {
+      query: getOptionalStringFlag(flags, 'query'),
+      limit,
+      workspaceId: getOptionalStringFlag(flags, 'workspace')
+    }
+    const response = await client.call<LinearProjectListResult>('linear.agentProjectList', request)
+    if (!json) {
+      printLinearProjectListWarnings(response.result)
+    }
+    printResult(response, json, formatLinearProjectList)
   },
   'linear list': async ({ flags, client, json }) => {
     const limit = getOptionalPositiveIntegerFlag(flags, 'limit')
@@ -229,6 +246,7 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
       title: getRequiredStringFlag(flags, 'title'),
       ...(body !== undefined ? { body } : {}),
       teamInput: getOptionalStringFlag(flags, 'team'),
+      projectInput: getOptionalStringFlag(flags, 'project'),
       state: getOptionalStringFlag(flags, 'state'),
       assignee: getOptionalStringFlag(flags, 'assignee'),
       priority: flags.has('priority') ? getPriorityFlag(flags, 'priority') : undefined,

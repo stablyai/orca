@@ -176,6 +176,7 @@ describe('orchestration RPC methods', () => {
     ): RuntimeTerminalSummary {
       return {
         handle,
+        ptyId: opts.ptyId ?? handle,
         worktreeId: opts.worktreeId ?? 'wt_default',
         worktreePath: opts.worktreePath ?? '/tmp/wt',
         branch: opts.branch ?? 'main',
@@ -659,11 +660,15 @@ describe('orchestration RPC methods', () => {
     it('creates a task', async () => {
       setup()
       const result = (await call('orchestration.taskCreate', {
-        spec: 'implement feature X'
+        spec: 'implement feature X',
+        taskTitle: 'Feature X',
+        displayName: 'Implement feature X'
       })) as { task: { id: string; status: string } }
 
       expect(result.task.id).toMatch(/^task_/)
       expect(result.task.status).toBe('ready')
+      expect(db.getTask(result.task.id)?.task_title).toBe('Feature X')
+      expect(db.getTask(result.task.id)?.display_name).toBe('Implement feature X')
     })
 
     it('creates a task with deps', async () => {

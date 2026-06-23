@@ -1,12 +1,30 @@
-export type GitBranchCleanupExec = (argv: string[]) => Promise<{ stdout: string }>
+export type GitBranchCleanupExec = (
+  argv: string[],
+  options?: { stdin?: string }
+) => Promise<{ stdout: string }>
+
+const SQUASH_PATCH_SCAN_LIMIT = 200
 
 async function readOptionalGitStdout(
+  runGit: GitBranchCleanupExec,
+  argv: string[],
+  options?: { stdin?: string }
+): Promise<string | null> {
+  try {
+    const { stdout } = await runGit(argv, options)
+    return stdout.trim() || null
+  } catch {
+    return null
+  }
+}
+
+async function readOptionalGitRawStdout(
   runGit: GitBranchCleanupExec,
   argv: string[]
 ): Promise<string | null> {
   try {
     const { stdout } = await runGit(argv)
-    return stdout.trim() || null
+    return stdout || null
   } catch {
     return null
   }
@@ -117,6 +135,77 @@ async function branchOnlyCommitsArePatchEquivalent(
   return lines.every((line) => line.startsWith('-'))
 }
 
+function parsePatchId(stdout: string | null): string | null {
+  const line = stdout
+    ?.split(/\r?\n/)
+    .map((candidate) => candidate.trim())
+    .find(Boolean)
+  const patchId = line?.split(/\s+/)[0]
+  return patchId || null
+}
+
+async function computeStablePatchId(
+  runGit: GitBranchCleanupExec,
+  patchText: string | null
+): Promise<string | null> {
+  if (!patchText) {
+    return null
+  }
+  return parsePatchId(
+    await readOptionalGitStdout(runGit, ['patch-id', '--stable'], { stdin: patchText })
+  )
+}
+
+async function branchNetPatchMatchesTargetSquashCommit(
+  runGit: GitBranchCleanupExec,
+  targetOid: string,
+  branchRef: string
+): Promise<boolean> {
+  const mergeBase = await readOptionalGitStdout(runGit, ['merge-base', targetOid, branchRef])
+  if (!mergeBase) {
+    return false
+  }
+
+  const branchPatchId = await computeStablePatchId(
+    runGit,
+    await readOptionalGitRawStdout(runGit, ['diff', mergeBase, branchRef])
+  )
+  if (!branchPatchId) {
+    return false
+  }
+
+  const commits = (
+    await readOptionalGitStdout(runGit, [
+      'rev-list',
+      '--ancestry-path',
+      `--max-count=${SQUASH_PATCH_SCAN_LIMIT + 1}`,
+      `${mergeBase}..${targetOid}`
+    ])
+  )
+    ?.split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+  if (!commits?.length || commits.length > SQUASH_PATCH_SCAN_LIMIT) {
+    return false
+  }
+
+  for (const commitOid of commits) {
+    const commitPatchId = await computeStablePatchId(
+      runGit,
+      await readOptionalGitRawStdout(runGit, ['show', '--format=', commitOid])
+    )
+    // Why: a matching patch-id identifies a possible squash commit, but the
+    // tree merge proves the branch contributes no additional changes there.
+    if (
+      commitPatchId === branchPatchId &&
+      (await branchMergesWithoutTreeChanges(runGit, commitOid, branchRef))
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
 export async function branchHasNoUnmergedChangesOnAnyTarget(
   runGit: GitBranchCleanupExec,
   branchName: string,
@@ -133,6 +222,9 @@ export async function branchHasNoUnmergedChangesOnAnyTarget(
       return true
     }
     if (await hasBranchOnlyMergeCommits(runGit, targetOid, branchRef)) {
+      if (await branchNetPatchMatchesTargetSquashCommit(runGit, targetOid, branchRef)) {
+        return true
+      }
       continue
     }
     if (await branchOnlyCommitsArePatchEquivalent(runGit, targetOid, branchRef)) {

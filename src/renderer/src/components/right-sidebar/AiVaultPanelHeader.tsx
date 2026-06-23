@@ -16,6 +16,7 @@ type AiVaultPanelHeaderProps = {
   sessionCount: number
   hasScanResult: boolean
   activeWorktreePath: string | null
+  activeProjectKey: string | null
   scope: AiVaultScope
   agents: readonly AiVaultAgent[]
   sort: AiVaultSort
@@ -39,6 +40,7 @@ export function AiVaultPanelHeader({
   sessionCount,
   hasScanResult,
   activeWorktreePath,
+  activeProjectKey,
   scope,
   agents,
   sort,
@@ -59,30 +61,44 @@ export function AiVaultPanelHeader({
       <div className="flex items-center gap-1.5">
         <div className="min-w-0 flex-1">
           <div className="truncate text-xs font-semibold text-foreground">
-            {translate(
-              'auto.components.right.sidebar.AiVaultPanel.sessionHistory',
-              'Agent Session History'
-            )}
+            {/* Why: below 300px the header competes with fixed controls, so compact copy prevents overlap. */}
+            <span className="@max-[300px]/ai-vault:hidden">
+              {translate(
+                'auto.components.right.sidebar.AiVaultPanel.sessionHistory',
+                'Agent Session History'
+              )}
+            </span>
+            <span className="hidden @max-[300px]/ai-vault:inline">
+              {translate('auto.components.right.sidebar.AiVaultPanel.agents', 'Agents')}
+            </span>
           </div>
           <div className="truncate text-[11px] text-muted-foreground">
-            {hasScanResult
-              ? translate(
-                  'auto.components.right.sidebar.AiVaultPanel.shownRecent',
-                  '{{value0}} shown · {{value1}} recent',
-                  { value0: shownCount, value1: sessionCount }
-                )
-              : translate(
-                  'auto.components.right.sidebar.AiVaultPanel.resumePastSessions',
-                  'Resume past sessions'
-                )}
+            {hasScanResult ? (
+              <>
+                <span className="@max-[300px]/ai-vault:hidden">
+                  {translate(
+                    'auto.components.right.sidebar.AiVaultPanel.shownRecent',
+                    '{{value0}} shown · {{value1}} recent',
+                    { value0: shownCount, value1: sessionCount }
+                  )}
+                </span>
+                <span className="hidden @max-[300px]/ai-vault:inline">
+                  {translate(
+                    'auto.components.right.sidebar.AiVaultPanel.sessionsShownCompact',
+                    '{{value0}} shown',
+                    { value0: shownCount }
+                  )}
+                </span>
+              </>
+            ) : (
+              translate(
+                'auto.components.right.sidebar.AiVaultPanel.resumePastSessions',
+                'Resume past sessions'
+              )
+            )}
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <VaultScopeSwitch
-            scope={scope}
-            workspaceAvailable={Boolean(activeWorktreePath)}
-            onScopeChange={onScopeChange}
-          />
+        <div className="flex shrink-0 items-center gap-1 @max-[300px]/ai-vault:gap-0.5">
           <VaultViewMenu
             agents={agents}
             sort={sort}
@@ -115,6 +131,15 @@ export function AiVaultPanelHeader({
             )}
           </Button>
         </div>
+      </div>
+
+      <div className="mt-2">
+        <VaultScopeSwitch
+          scope={scope}
+          workspaceAvailable={Boolean(activeWorktreePath)}
+          projectAvailable={Boolean(activeProjectKey)}
+          onScopeChange={onScopeChange}
+        />
       </div>
 
       <div className="mt-2 flex h-8 items-center gap-1.5 rounded-md border border-sidebar-border bg-input/50 px-2 focus-within:border-sidebar-ring focus-within:ring-[2px] focus-within:ring-sidebar-ring/30">

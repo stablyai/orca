@@ -390,7 +390,7 @@ describe('locale-translation-policy', () => {
         localeValue: 'Jira の問題',
         locale: 'ja'
       })
-    ).toBe('Jira イシュー')
+    ).toBe('Jira Issue')
     expect(
       repairTranslatedValue({
         key: 'auto.components.mobile.MobileHero.668016be7a',
@@ -406,7 +406,7 @@ describe('locale-translation-policy', () => {
         localeValue: '選択した GitHub の課題またはプル リクエストをプレビューおよび編集します。',
         locale: 'ja'
       })
-    ).toBe('選択した GitHub イシューまたは PR をプレビュー・編集します。')
+    ).toBe('選択した GitHub Issue または PR をプレビュー・編集します。')
     expect(
       repairTranslatedValue({
         key: 'auto.components.GitHubItemDialog.a2495e4784',
@@ -422,7 +422,7 @@ describe('locale-translation-policy', () => {
         localeValue: '問題を表示する',
         locale: 'ja'
       })
-    ).toBe('イシューを表示')
+    ).toBe('Issue を表示')
     expect(
       repairTranslatedValue({
         key: 'auto.components.editor.EditorContent.e4b074749d',
@@ -439,7 +439,7 @@ describe('locale-translation-policy', () => {
           'GitHub CLI をインストールして、プル リクエスト、発行、チェックを有効にします。',
         locale: 'ja'
       })
-    ).toBe('GitHub CLI をインストールして PR、イシュー、チェックを有効にします。')
+    ).toBe('GitHub CLI をインストールして PR、Issue、チェックを有効にします。')
     expect(
       repairTranslatedValue({
         key: 'auto.components.mobile.MobilePage.e17393c6a3',
@@ -582,5 +582,24 @@ describe('locale-translation-policy', () => {
         locale: 'ko'
       })
     ).toBe('폰트')
+  })
+
+  it('merges split Korean key overrides without dropping other locale repairs', () => {
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.GitHubItemDialog.8c45901789',
+        enValue: 'Request reviewer {{value0}}',
+        localeValue: '请求审阅者 {{value0}}',
+        locale: 'zh'
+      })
+    ).toBe('请求评审人 {{value0}}')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.right.sidebar.PortsPanel.c9d106547a',
+        enValue: 'Forward',
+        localeValue: '進む',
+        locale: 'ja'
+      })
+    ).toBe('転送')
   })
 })

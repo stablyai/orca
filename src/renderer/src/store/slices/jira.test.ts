@@ -390,4 +390,32 @@ describe('createJiraSlice credential errors', () => {
       expect(store.getState().jiraStatus.credentialError).toBeUndefined()
     })
   })
+
+  it('surfaces endpoint-level forbidden errors without disconnecting Jira', async () => {
+    const store = createTestStore()
+    store.setState({
+      jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' }
+    })
+    jiraListIssues.mockRejectedValueOnce(new Error('Forbidden'))
+
+    // A non-auth failure must reject so the Tasks panel can show a real error
+    // instead of a misleading empty list, while keeping the session connected.
+    await expect(store.getState().listJiraIssues('assigned', 30)).rejects.toThrow('Forbidden')
+
+    expect(store.getState().jiraStatus.connected).toBe(true)
+  })
+
+  it('surfaces endpoint-level search errors without disconnecting Jira', async () => {
+    const store = createTestStore()
+    store.setState({
+      jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' }
+    })
+    jiraSearchIssues.mockRejectedValueOnce(new Error('Malformed JQL'))
+
+    await expect(store.getState().searchJiraIssues('project =', 30)).rejects.toThrow(
+      'Malformed JQL'
+    )
+
+    expect(store.getState().jiraStatus.connected).toBe(true)
+  })
 })

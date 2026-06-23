@@ -137,7 +137,10 @@ export class SshPtyProvider implements IPtyProvider {
       // relay does not execute `command` itself — the user types it into
       // the shell — but receiving it as a hint lets overlay resolution be
       // per-launch instead of always-Pi.
-      ...(opts.command ? { command: opts.command } : {})
+      ...(opts.command ? { command: opts.command } : {}),
+      ...(opts.startupCommandDelivery
+        ? { startupCommandDelivery: opts.startupCommandDelivery }
+        : {})
     })
     return {
       ...(result as PtySpawnResult),
@@ -172,6 +175,16 @@ export class SshPtyProvider implements IPtyProvider {
 
   async attach(id: string): Promise<void> {
     await this.mux.request('pty.attach', { id: this.toRelayPtyId(id) })
+  }
+
+  async attachForReconnect(id: string): Promise<{ replay?: string }> {
+    // Why: reconnect owns replay delivery so stale/duplicate attach results can
+    // be filtered before they reach the renderer.
+    const result = (await this.mux.request('pty.attach', {
+      id: this.toRelayPtyId(id),
+      suppressReplayNotification: true
+    })) as { replay?: string } | undefined
+    return result ?? {}
   }
 
   write(id: string, data: string): void {

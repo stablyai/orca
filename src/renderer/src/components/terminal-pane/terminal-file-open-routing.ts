@@ -170,14 +170,17 @@ export function openDetectedFilePath(
       activateAndRevealWorktree(worktreeId)
     }
 
-    store.openFile({
-      filePath,
-      relativePath,
-      worktreeId: worktreeId || '',
-      language: detectLanguage(filePath),
-      mode: 'edit',
-      runtimeEnvironmentId
-    })
+    store.openFile(
+      {
+        filePath,
+        relativePath,
+        worktreeId: worktreeId || '',
+        language: detectLanguage(filePath),
+        mode: 'edit',
+        runtimeEnvironmentId
+      },
+      { forceContentReload: true }
+    )
 
     if (line !== null) {
       const targetColumn = column ?? 1

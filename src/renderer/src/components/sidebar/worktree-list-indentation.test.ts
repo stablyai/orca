@@ -1,7 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import {
+  FLUSH_CARD_CONTENT_PULLBACK,
+  FLUSH_CARD_MIN_CONTENT_INSET,
+  NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK,
+  LINEAGE_CHILDREN_INLINE_OFFSET,
+  LINEAGE_IMMEDIATE_PARENT_STEP,
+  LINEAGE_NESTED_ROW_SURFACE_INSET,
+  WORKTREE_CARD_SURFACE_MARGIN,
   WORKTREE_SECTION_HEADER_PADDING_LEFT,
+  getFolderBackedRepoWorktreeCardContentIndent,
+  getFolderBackedRepoWorktreeCardSurfaceInset,
+  getFolderWorkspaceCardContentIndent,
+  getFolderWorkspaceCardSurfaceInset,
   getFlushWorktreeCardPaddingLeft,
+  getLineageChildrenInlineStyle,
+  getLineageEffectiveChildStart,
+  getLineageNestedRowGeometry,
   getProjectGroupHeaderPaddingLeft,
   getWorktreeCardContentIndent,
   getWorktreeCardSurfaceInset
@@ -35,6 +49,35 @@ describe('worktree list indentation', () => {
     )
   })
 
+  it('uses compact header rhythm for folder-scanned repo worktree content', () => {
+    expect(getFolderBackedRepoWorktreeCardContentIndent({ groupDepth: 1, lineageDepth: 0 })).toBe(
+      30
+    )
+    expect(getFolderBackedRepoWorktreeCardContentIndent({ groupDepth: 2, lineageDepth: 0 })).toBe(
+      40
+    )
+    expect(getFolderBackedRepoWorktreeCardContentIndent({ groupDepth: 1, lineageDepth: 1 })).toBe(
+      48
+    )
+  })
+
+  it('caps folder-scanned repo worktree surfaces before they overshoot the compact anchor', () => {
+    expect(getFolderBackedRepoWorktreeCardSurfaceInset({ groupDepth: 1, lineageDepth: 0 })).toBe(14)
+    expect(getFolderBackedRepoWorktreeCardSurfaceInset({ groupDepth: 4, lineageDepth: 0 })).toBe(54)
+    expect(getFolderBackedRepoWorktreeCardSurfaceInset({ groupDepth: 4, lineageDepth: 1 })).toBe(56)
+  })
+
+  it('keeps folder workspace content one step under its owning group', () => {
+    expect(getFolderWorkspaceCardContentIndent({ groupDepth: 1 })).toBe(20)
+    expect(getFolderWorkspaceCardContentIndent({ groupDepth: 2 })).toBe(30)
+  })
+
+  it('caps folder workspace surfaces before they overshoot the compact content anchor', () => {
+    expect(getFolderWorkspaceCardSurfaceInset({ isGrouped: true, groupDepth: 1 })).toBe(14)
+    expect(getFolderWorkspaceCardSurfaceInset({ isGrouped: true, groupDepth: 2 })).toBe(24)
+    expect(getFolderWorkspaceCardSurfaceInset({ isGrouped: false, groupDepth: 2 })).toBe(0)
+  })
+
   it('caps header indentation separately from workspace content indentation', () => {
     expect(getProjectGroupHeaderPaddingLeft(100)).toBe(70)
   })
@@ -56,7 +99,77 @@ describe('worktree list indentation', () => {
     expect(getFlushWorktreeCardPaddingLeft(20)).toBe('max(2px, calc(20px - 4px))')
   })
 
+  it('pulls experimental flush cards back further for the fixed status lane', () => {
+    expect(getFlushWorktreeCardPaddingLeft(20, true)).toBe(
+      `max(2px, calc(20px - ${FLUSH_CARD_CONTENT_PULLBACK + NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK}px))`
+    )
+  })
+
   it('keeps flush card content off the sidebar edge without indentation', () => {
     expect(getFlushWorktreeCardPaddingLeft(0)).toBe('2px')
+    expect(getFlushWorktreeCardPaddingLeft(0, true)).toBe('2px')
+  })
+
+  it('derives the lineage parent-child step from the pre-refactor grouped-card anchor', () => {
+    expect(LINEAGE_IMMEDIATE_PARENT_STEP).toBe(20)
+    expect(LINEAGE_CHILDREN_INLINE_OFFSET).toBe(
+      LINEAGE_IMMEDIATE_PARENT_STEP - WORKTREE_CARD_SURFACE_MARGIN - FLUSH_CARD_MIN_CONTENT_INSET
+    )
+  })
+
+  it('keeps experimental lineage nested rows from accumulating global depth', () => {
+    const child = getLineageNestedRowGeometry({
+      experimentalNewWorktreeCardStyle: true,
+      inheritedCardContentIndent: 20,
+      lineageDepth: 1
+    })
+    const grandchild = getLineageNestedRowGeometry({
+      experimentalNewWorktreeCardStyle: true,
+      inheritedCardContentIndent: 20,
+      lineageDepth: 2
+    })
+
+    expect(child.surfaceInset).toBe(LINEAGE_NESTED_ROW_SURFACE_INSET)
+    expect(grandchild.surfaceInset).toBe(LINEAGE_NESTED_ROW_SURFACE_INSET)
+    expect(child.cardContentIndent).toBe(0)
+    expect(grandchild.cardContentIndent).toBe(0)
+  })
+
+  it('preserves legacy nested row geometry for non-experimental cards', () => {
+    expect(
+      getLineageNestedRowGeometry({
+        experimentalNewWorktreeCardStyle: false,
+        inheritedCardContentIndent: 0,
+        lineageDepth: 1
+      }).surfaceInset
+    ).toBe(14)
+    expect(
+      getLineageNestedRowGeometry({
+        experimentalNewWorktreeCardStyle: false,
+        inheritedCardContentIndent: 0,
+        lineageDepth: 2
+      }).surfaceInset
+    ).toBe(28)
+  })
+
+  it('keeps each experimental lineage boundary at one immediate-parent step', () => {
+    for (const parentContentStart of [FLUSH_CARD_MIN_CONTENT_INSET, 16, 34]) {
+      const childStart = getLineageEffectiveChildStart({
+        parentContentStart,
+        lineageChildrenWrapperOffset: LINEAGE_CHILDREN_INLINE_OFFSET,
+        nestedRowSurfaceInset: LINEAGE_NESTED_ROW_SURFACE_INSET,
+        cardSurfaceMargin: WORKTREE_CARD_SURFACE_MARGIN,
+        flushCardContentInset: FLUSH_CARD_MIN_CONTENT_INSET
+      })
+
+      expect(childStart - parentContentStart).toBe(LINEAGE_IMMEDIATE_PARENT_STEP)
+    }
+  })
+
+  it('expresses lineage child wrapper width from the resolved inline offset', () => {
+    expect(getLineageChildrenInlineStyle(LINEAGE_CHILDREN_INLINE_OFFSET)).toEqual({
+      marginLeft: '14px',
+      width: 'calc(100% - 14px)'
+    })
   })
 })

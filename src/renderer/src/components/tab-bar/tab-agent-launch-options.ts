@@ -1,4 +1,5 @@
 import { getAgentCatalog } from '@/lib/agent-catalog'
+import { normalizeMatchQuery, tokenizeMatchValue } from './query-token-match'
 import type { TuiAgent } from '../../../../shared/types'
 
 export type TabAgentLaunchOption = {
@@ -58,16 +59,62 @@ export function buildTabAgentLaunchOptions(
   })
 }
 
+// Scores how well a query matches an agent. Exact alias equality is the
+// strongest signal; otherwise every query token must prefix some alias token.
+// Why prefix-only (not substring): agent rows rank above file matches, so a
+// mid-string match like "ode" → "opencode" would noisily hijack the list.
+function scoreAgentLaunchOption(
+  normalizedQuery: string,
+  compactQuery: string,
+  option: TabAgentLaunchOption
+): number {
+  if (option.aliases.includes(normalizedQuery) || option.aliases.includes(compactQuery)) {
+    return 1000
+  }
+  const candidateTokens = option.aliases.flatMap(tokenizeMatchValue)
+  const queryTokens = tokenizeMatchValue(normalizedQuery)
+  if (queryTokens.length === 0 || candidateTokens.length === 0) {
+    return 0
+  }
+  let score = 0
+  for (const queryToken of queryTokens) {
+    let best = 0
+    for (const candidateToken of candidateTokens) {
+      if (candidateToken === queryToken) {
+        best = Math.max(best, 3)
+      } else if (queryToken.length >= 2 && candidateToken.startsWith(queryToken)) {
+        // Why: a single-character prefix matches almost every agent, flooding the
+        // list and letting one keystroke auto-launch the wrong agent; require an
+        // exact token match below 2 chars.
+        best = Math.max(best, 2)
+      }
+    }
+    if (best === 0) {
+      return 0
+    }
+    score += best
+  }
+  return score
+}
+
 export function findMatchingTabAgentLaunchOptions(
   query: string,
   agents: readonly TabAgentLaunchOption[]
 ): TabAgentLaunchOption[] {
-  const normalizedQuery = normalizeAgentAlias(query)
+  const normalizedQuery = normalizeMatchQuery(query)
   if (!normalizedQuery) {
     return []
   }
   const compactQuery = compactAgentAlias(query)
-  return agents.filter(
-    (option) => option.aliases.includes(normalizedQuery) || option.aliases.includes(compactQuery)
-  )
+  return agents
+    .map((option, index) => ({
+      index,
+      option,
+      score: scoreAgentLaunchOption(normalizedQuery, compactQuery, option)
+    }))
+    .filter((entry) => entry.score > 0)
+    .sort((left, right) =>
+      left.score !== right.score ? right.score - left.score : left.index - right.index
+    )
+    .map((entry) => entry.option)
 }

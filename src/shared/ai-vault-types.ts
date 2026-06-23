@@ -13,13 +13,15 @@ export const AI_VAULT_AGENTS = [
   'opencode',
   'grok',
   'openclaw',
-  'droid'
+  'devin',
+  'droid',
+  'kimi'
 ] as const satisfies readonly TuiAgent[]
 
 export type AiVaultAgent = (typeof AI_VAULT_AGENTS)[number]
-export type AiVaultScope = 'workspace' | 'all'
+export type AiVaultScope = 'workspace' | 'project' | 'all'
 export type AiVaultSort = 'updated' | 'created'
-export type AiVaultGroup = 'folder' | 'agent'
+export type AiVaultGroup = 'project' | 'folder' | 'agent'
 
 export const AI_VAULT_AGENT_LABELS = {
   claude: 'Claude',
@@ -33,7 +35,9 @@ export const AI_VAULT_AGENT_LABELS = {
   opencode: 'OpenCode',
   grok: 'Grok',
   openclaw: 'OpenClaw',
-  droid: 'Droid'
+  devin: 'Devin',
+  droid: 'Droid',
+  kimi: 'Kimi'
 } as const satisfies Record<AiVaultAgent, string>
 
 export type AiVaultSessionPreviewMessage = {
@@ -136,6 +140,10 @@ function buildAgentResumeInvocation(
       return `${baseCommand} rovodev run --restore ${sessionArg}`
     case 'opencode':
     case 'pi':
+    // Why: Kimi Code resumes with `kimi --session <id>` (alias `-S`). Sessions
+    // are work-dir-scoped, so the cwd prefix from buildAiVaultResumeCommand is
+    // required — resuming from another directory is rejected by the CLI.
+    case 'kimi':
       return `${baseCommand} --session ${sessionArg}`
     case 'copilot':
       return `${baseCommand} --resume=${sessionArg}`
@@ -144,6 +152,7 @@ function buildAgentResumeInvocation(
     case 'gemini':
     case 'grok':
     case 'hermes':
+    case 'devin':
     case 'openclaw':
     case 'droid':
       return `${baseCommand} --resume ${sessionArg}`

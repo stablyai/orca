@@ -3,6 +3,7 @@ import { isMacOs } from './emulator-pane-types'
 import { EmulatorUnavailablePane } from './emulator-unavailable-pane'
 import { EmulatorPaneToolbar } from './emulator-pane-toolbar'
 import { EmulatorDeviceFrame } from './emulator-device-frame'
+import { MobileEmulatorAgentSetupGuideLayer } from './MobileEmulatorAgentSetupGuideLayer'
 import { useEmulatorPaneSession } from './use-emulator-pane-session'
 import { translate } from '@/i18n/i18n'
 
@@ -46,7 +47,10 @@ function EmulatorPaneContent({ tab, worktreeId, isActive = true }: EmulatorPaneP
   })
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background text-sm text-foreground">
+    <div
+      data-emulator-pane
+      className="flex h-full min-h-0 flex-col bg-background text-sm text-foreground"
+    >
       <EmulatorPaneToolbar
         displayName={displayName}
         isLive={isLive}
@@ -69,25 +73,27 @@ function EmulatorPaneContent({ tab, worktreeId, isActive = true }: EmulatorPaneP
         </div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-muted px-3 py-6">
-        {!isLive && !loading ? (
-          <p className="mb-4 text-center text-xs text-muted-foreground">
-            {translate(
-              'auto.components.emulator.pane.EmulatorPane.59b08fa031',
-              'No emulator connected'
-            )}
-          </p>
-        ) : null}
-        <EmulatorDeviceFrame
-          previewUrl={previewUrl}
-          wsUrl={wsUrl}
-          streamKey={streamKey}
-          deviceName={displayName}
-          loading={loading}
-          isLive={isLive}
-          onTap={(x, y) => void sendTap(x, y)}
-          onGesture={(points) => void sendGesture(points)}
-        />
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-muted px-3 py-6">
+        <MobileEmulatorAgentSetupGuideLayer isActive={isActive} worktreeId={worktreeId}>
+          {!isLive && !loading ? (
+            <p className="mb-4 text-center text-xs text-muted-foreground">
+              {translate(
+                'auto.components.emulator.pane.EmulatorPane.59b08fa031',
+                'No emulator connected'
+              )}
+            </p>
+          ) : null}
+          <EmulatorDeviceFrame
+            previewUrl={previewUrl}
+            wsUrl={wsUrl}
+            streamKey={streamKey}
+            deviceName={displayName}
+            loading={loading}
+            isLive={isLive}
+            onTap={(x, y) => void sendTap(x, y)}
+            onGesture={(points) => void sendGesture(points)}
+          />
+        </MobileEmulatorAgentSetupGuideLayer>
       </div>
     </div>
   )

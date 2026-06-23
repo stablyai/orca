@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { getExecutionHostLabel } from './execution-host'
 import { MIN_COMPATIBLE_RUNTIME_SERVER_VERSION, RUNTIME_PROTOCOL_VERSION } from './protocol-version'
 import { buildExecutionHostRegistry } from './execution-host-registry'
+
+const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
 
 describe('execution host registry', () => {
   it('returns only the local host for local-only state', () => {
@@ -13,7 +16,7 @@ describe('execution host registry', () => {
       {
         id: 'local',
         kind: 'local',
-        label: 'Local Mac',
+        label: LOCAL_HOST_LABEL,
         detail: 'This computer',
         health: 'local'
       }
@@ -188,7 +191,7 @@ describe('execution host registry', () => {
     })
 
     expect(hosts).toMatchObject([
-      { id: 'local', label: 'Local Mac' },
+      { id: 'local', label: LOCAL_HOST_LABEL },
       { id: 'ssh:repo-ssh', label: 'Derived SSH' }
     ])
   })

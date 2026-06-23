@@ -152,6 +152,12 @@ describe('rich markdown round trip', () => {
     expect(roundTripMarkdown('| a | b |\n| - | - |\n| 1 | 2 |\n')).toContain('| a')
   })
 
+  it('preserves encoded local image paths with screenshot filenames', () => {
+    expect(roundTripMarkdown('![](Screenshot%202026-06-22%20at%203.37.19%20PM%20copy.png)\n')).toBe(
+      '![](Screenshot%202026-06-22%20at%203.37.19%20PM%20copy.png)'
+    )
+  })
+
   it('does not surface Linear issue reference definitions as description text', () => {
     const input = [
       '- [x] [H-279]',

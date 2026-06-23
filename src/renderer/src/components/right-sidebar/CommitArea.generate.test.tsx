@@ -37,11 +37,13 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     isCommitting: inputs.isCommitting,
     isFixingCommitFailureWithAI: false,
     showComposer: true,
+    sourceControlAiActionsVisible: true,
     aiEnabled: false,
     aiAgentConfigured: false,
     isGenerating: false,
     generateError: null as string | null,
     stagedCount: inputs.stagedCount,
+    hasPartiallyStagedChanges: inputs.hasPartiallyStagedChanges,
     hasUnresolvedConflicts: inputs.hasUnresolvedConflicts,
     isRemoteOperationActive: inputs.isRemoteOperationActive,
     inFlightRemoteOpKind: inputs.inFlightRemoteOpKind ?? null,
@@ -75,7 +77,7 @@ function buttonByLabel(markup: string, label: string): string {
 }
 
 function hasDisabledAttribute(markup: string): boolean {
-  return markup.includes(' disabled=""')
+  return markup.includes(' disabled=""') || markup.includes('aria-disabled="true"')
 }
 
 describe('CommitArea AI generation', () => {
@@ -94,9 +96,9 @@ describe('CommitArea AI generation', () => {
       aiAgentConfigured: true
     })
 
-    expect(hasDisabledAttribute(buttonByLabel(markup, 'Generate commit message with AI'))).toBe(
-      false
-    )
+    const button = buttonByLabel(markup, 'Generate commit message with AI')
+    expect(hasDisabledAttribute(button)).toBe(false)
+    expect(button).toContain('title="ai commit msg"')
   })
 
   it('disables AI generation when the textarea already has user text', () => {
@@ -107,7 +109,7 @@ describe('CommitArea AI generation', () => {
     })
 
     const button = buttonByLabel(markup, 'Generate commit message with AI')
-    expect(hasDisabledAttribute(button)).toBe(true)
+    expect(button).toContain('aria-disabled="true"')
     expect(button).toContain('title="Clear the message to regenerate."')
   })
 

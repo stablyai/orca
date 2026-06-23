@@ -17,6 +17,11 @@ import {
 
 // Re-export so existing `agent-detection` importers keep working.
 export { AGENT_NAMES, titleHasAgentName } from './agent-name-token-match'
+export {
+  extractAllOscTitles,
+  extractLastOscTitle,
+  MAX_OSC_TITLE_CHARS
+} from './osc-title-extraction'
 export { isShellProcess } from './shell-process-detection'
 
 export type AgentStatus = 'working' | 'permission' | 'idle'
@@ -89,47 +94,6 @@ export const STRONG_WORKING_KEYWORDS_RE = new RegExp(
 const STRONG_WORKING_KEYWORDS_RE_GLOBAL = new RegExp(STRONG_WORKING_KEYWORDS_RE.source, 'gi')
 const PI_IDLE_PREFIX = '\u03c0 - ' // π - (Pi titlebar extension idle format)
 
-// eslint-disable-next-line no-control-regex -- intentional terminal escape sequence matching
-const OSC_TITLE_RE = /\x1b\]([012]);([^\x07\x1b]*?)(?:\x07|\x1b\\)/g
-
-/**
- * Extract the last OSC title-set sequence from raw PTY data.
- * Agent CLIs (Claude Code, Gemini, etc.) set OSC titles to announce their
- * identity and status. This is a single regex scan — comparable cost to one
- * normalizeTerminalChunk pass.
- */
-export function extractLastOscTitle(data: string): string | null {
-  if (!data.includes('\x1b]')) {
-    return null
-  }
-  let last: string | null = null
-  for (const m of data.matchAll(OSC_TITLE_RE)) {
-    last = m[2]
-  }
-  return last
-}
-
-/**
- * Extract ALL OSC title-set sequences from raw PTY data, in order of appearance.
- * Why separate from extractLastOscTitle: node-pty and the main-process batch
- * window (PTY_BATCH_INTERVAL_MS) often coalesce multiple title changes into
- * one IPC payload. For fast agents (Pi's 80ms spinner + agent_end idle in the
- * same batch), returning only the last title silently drops the working
- * transition. Callers that care about driving UI state transitions
- * (working/idle spinner) need every title in the chunk. See issue #1083's
- * spinner-miss follow-up.
- */
-export function extractAllOscTitles(data: string): string[] {
-  if (!data.includes('\x1b]')) {
-    return []
-  }
-  const titles: string[] = []
-  for (const m of data.matchAll(OSC_TITLE_RE)) {
-    titles.push(m[2])
-  }
-  return titles
-}
-
 export function isGeminiTerminalTitle(title: string): boolean {
   return (
     title.includes(GEMINI_PERMISSION) ||
@@ -160,13 +124,9 @@ function containsBrailleSpinner(title: string): boolean {
   return false
 }
 
-function containsLegacyAgentName(title: string): boolean {
-  return titleHasAnyLegacyAgentName(title)
-}
-
 function containsAgentName(title: string): boolean {
   return (
-    containsLegacyAgentName(title) ||
+    titleHasAnyLegacyAgentName(title) ||
     AGY_AGENT_NAME_RE.test(title) ||
     DROID_AGENT_NAME_RE.test(title) ||
     HERMES_AGENT_NAME_RE.test(title)
@@ -381,6 +341,9 @@ export function getAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'grok')) {
     return 'Grok'
   }
+  if (titleHasAgentName(title, 'devin')) {
+    return 'Devin'
+  }
   if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {
     return 'Antigravity'
   }
@@ -468,7 +431,7 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   const hasDroidAgentName = DROID_AGENT_NAME_RE.test(title)
   const hasHermesAgentName = HERMES_AGENT_NAME_RE.test(title)
   const hasAgyAgentName = AGY_AGENT_NAME_RE.test(title)
-  const hasLegacyAgentName = containsLegacyAgentName(title)
+  const hasLegacyAgentName = titleHasAnyLegacyAgentName(title)
   if (hasLegacyAgentName || hasDroidAgentName || hasHermesAgentName || hasAgyAgentName) {
     if (containsAny(title, ['action required', 'permission', 'waiting'])) {
       return 'permission'

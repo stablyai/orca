@@ -51,7 +51,7 @@ import { registerBrowserHandlers } from './browser'
 import { registerBrowserCredentialHandlers } from './browser-credentials'
 import { registerShellHandlers } from './shell'
 import { registerPetHandlers } from './pet'
-import { registerUIHandlers } from './ui'
+import { registerUIHandlers, setTrustedUIRendererWebContentsId } from './ui'
 import { registerEmulatorFrameStreamHandlers } from './emulator-frame-stream'
 import { registerSpeechHandlers } from './speech'
 import { registerCodexAccountHandlers } from './codex-accounts'
@@ -59,7 +59,10 @@ import { registerAgentHookHandlers } from './agent-hooks'
 import { registerAgentTrustHandlers } from './agent-trust'
 import { registerClaudeAccountHandlers } from './claude-accounts'
 import { registerUpdaterHandlers } from '../window/attach-main-window-services'
-import { registerClipboardHandlers } from '../window/clipboard-ipc-handlers'
+import {
+  registerClipboardHandlers,
+  setTrustedClipboardRendererWebContentsId
+} from '../window/clipboard-ipc-handlers'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { OpenCodeUsageStore } from '../opencode-usage/store'
@@ -74,7 +77,7 @@ import type { KeybindingService } from '../keybindings/keybinding-service'
 let registered = false
 
 type CoreHandlerLifecycleOptions = {
-  onBeforeRelaunch?: () => void
+  onBeforeRelaunch?: () => void | Promise<void>
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
 }
 
@@ -101,6 +104,8 @@ export function registerCoreHandlers(
   // if a channel is registered twice, so we guard to register only once and
   // just update the per-window web-contents ID on subsequent calls.
   setTrustedBrowserRendererWebContentsId(mainWindowWebContentsId)
+  setTrustedClipboardRendererWebContentsId(mainWindowWebContentsId)
+  setTrustedUIRendererWebContentsId(mainWindowWebContentsId)
   setAgentBrowserBridgeRef(runtime.getAgentBrowserBridge())
   if (registered) {
     return
@@ -181,7 +186,7 @@ export function registerCoreHandlers(
   registerAiVaultHandlers({
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths
   })
-  registerClipboardHandlers()
+  registerClipboardHandlers(store)
   registerUpdaterHandlers(store)
   registerSpeechHandlers(store)
 }

@@ -132,7 +132,8 @@ export function injectHistoryEnv(
   spawnEnv: Record<string, string>,
   worktreeId: string,
   shellPath: string,
-  cwd: string
+  cwd: string,
+  options: { wslDistro?: string | null } = {}
 ): HistoryInjectionResult {
   const shell = resolveShellKind(shellPath)
   const result: HistoryInjectionResult = { shell, histFile: null }
@@ -154,7 +155,8 @@ export function injectHistoryEnv(
   // WSL: store under a separate root keyed by distro, and convert the
   // HISTFILE path to a Linux-visible /mnt/... path for the inner shell.
   const wslInfo = process.platform === 'win32' ? parseWslPath(cwd) : null
-  const histDir = ensureHistoryDir(worktreeHash, wslInfo?.distro)
+  const wslDistro = wslInfo?.distro ?? options.wslDistro?.trim()
+  const histDir = ensureHistoryDir(worktreeHash, wslDistro)
   if (!histDir) {
     // Directory creation failed — degrade gracefully to shared history.
     return result
@@ -165,7 +167,7 @@ export function injectHistoryEnv(
   const histFilePath = join(histDir, filename)
 
   // For WSL, convert the Windows path to a Linux-visible path.
-  spawnEnv.HISTFILE = wslInfo ? toLinuxPath(histFilePath) : histFilePath
+  spawnEnv.HISTFILE = wslDistro ? toLinuxPath(histFilePath) : histFilePath
 
   result.histFile = spawnEnv.HISTFILE
   return result

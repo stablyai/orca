@@ -3,14 +3,15 @@ import { useAppStore } from '@/store'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
-  type AgentDraftLaunchPlan,
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive,
@@ -25,8 +26,6 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
-
-const WIN32_INLINE_DRAFT_LIMIT_CHARS = 24_000
 
 export type LaunchAgentInNewTabArgs = {
   agent: TuiAgent
@@ -86,23 +85,6 @@ function seedCommandCodeSubmittedPromptStatus(tabId: string, prompt: string): vo
   }
 }
 
-function canUseInlineDraftLaunchPlan(
-  plan: AgentDraftLaunchPlan,
-  platform: NodeJS.Platform
-): boolean {
-  if (platform !== 'win32') {
-    return true
-  }
-  const envChars = Object.entries(plan.env ?? {}).reduce(
-    (total, [key, value]) => total + key.length + value.length,
-    0
-  )
-  // Why: Windows CreateProcess/env blocks have tight length ceilings. Large
-  // generated drafts should use the existing post-ready paste path instead of
-  // failing the PTY spawn before the agent starts.
-  return plan.launchCommand.length + envChars <= WIN32_INLINE_DRAFT_LIMIT_CHARS
-}
-
 /**
  * Create a new terminal tab and queue the agent's launch command, optionally
  * with an initial prompt.
@@ -135,10 +117,20 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     promptDelivery = 'auto-submit',
     launchSource,
     quickCommandLabel,
-    launchPlatform = CLIENT_PLATFORM,
+    launchPlatform,
     onPromptDelivered
   } = args
   const store = useAppStore.getState()
+  const worktree = store.allWorktrees?.().find((entry: { id: string }) => entry.id === worktreeId)
+  const repo = worktree ? store.repos?.find((entry) => entry.id === worktree.repoId) : null
+  const resolvedLaunchPlatform =
+    launchPlatform ??
+    (repo
+      ? getAgentLaunchPlatformForRepo(
+          repo,
+          repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(store, worktreeId)
+        )
+      : CLIENT_PLATFORM)
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
   const effectiveAgentArgs =
     agentArgs !== undefined
@@ -166,7 +158,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       prompt: '',
       cmdOverrides,
-      platform: launchPlatform,
+      platform: resolvedLaunchPlatform,
       agentArgs: effectiveAgentArgs,
       agentEnv,
       allowEmptyPromptLaunch: true
@@ -179,16 +171,20 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       draft: trimmedPrompt,
       cmdOverrides,
-      platform: launchPlatform,
+      platform: resolvedLaunchPlatform,
       agentArgs: effectiveAgentArgs,
       agentEnv
     })
-    if (draftLaunchPlan && canUseInlineDraftLaunchPlan(draftLaunchPlan, launchPlatform)) {
+    if (draftLaunchPlan) {
       startupPlan = {
         agent: draftLaunchPlan.agent,
         launchCommand: draftLaunchPlan.launchCommand,
         expectedProcess: draftLaunchPlan.expectedProcess,
         followupPrompt: null,
+        launchConfig: draftLaunchPlan.launchConfig,
+        ...(draftLaunchPlan.startupCommandDelivery
+          ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
+          : {}),
         ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
       }
     } else {
@@ -196,7 +192,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         agent,
         prompt: '',
         cmdOverrides,
-        platform: launchPlatform,
+        platform: resolvedLaunchPlatform,
         agentArgs: effectiveAgentArgs,
         agentEnv,
         allowEmptyPromptLaunch: true
@@ -208,7 +204,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       prompt: '',
       cmdOverrides,
-      platform: launchPlatform,
+      platform: resolvedLaunchPlatform,
       agentArgs: effectiveAgentArgs,
       agentEnv,
       allowEmptyPromptLaunch: true
@@ -219,7 +215,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       prompt: hasPrompt ? trimmedPrompt : '',
       cmdOverrides,
-      platform: launchPlatform,
+      platform: resolvedLaunchPlatform,
       agentArgs: effectiveAgentArgs,
       agentEnv,
       allowEmptyPromptLaunch: !hasPrompt
@@ -241,7 +237,17 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       environmentId: runtimeEnvironmentId,
       targetGroupId: groupId,
       activate: true,
-      ...(hasPrompt ? { command: startupPlan.launchCommand } : { agent })
+      ...(hasPrompt
+        ? {
+            command: startupPlan.launchCommand,
+            ...(startupPlan.env ? { env: startupPlan.env } : {}),
+            launchConfig: startupPlan.launchConfig,
+            launchAgent: agent,
+            ...(startupPlan.startupCommandDelivery
+              ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+              : {})
+          }
+        : { agent })
     }).then((created) => {
       // Why: created means the host accepted the launch, not that a local tab
       // exists; keep pruning stale local rows until the snapshot mirrors.
@@ -284,6 +290,11 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
+    launchConfig: startupPlan.launchConfig,
+    launchAgent: agent,
+    ...(startupPlan.startupCommandDelivery
+      ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+      : {}),
     ...(agent === 'command-code' && hasPrompt && promptDelivery === 'auto-submit'
       ? { initialAgentStatus: { agent, prompt: trimmedPrompt } }
       : {}),

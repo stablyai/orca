@@ -3,9 +3,18 @@
  * to a file that was already ~398 code lines on main. The per-type render
  * branches share little beyond drag data, so consolidating them would cost
  * more clarity than the ~5 lines of bloat is worth. */
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { SortableContext } from '@dnd-kit/sortable'
-import { FilePlus, FileText, Globe, Plus, Smartphone, TerminalSquare } from 'lucide-react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  FilePlus,
+  FileText,
+  Globe,
+  Plus,
+  Smartphone,
+  TerminalSquare
+} from 'lucide-react'
 import { toast } from 'sonner'
 import type {
   BrowserTab as BrowserTabState,
@@ -14,6 +23,7 @@ import type {
   TuiAgent,
   WorkspaceVisibleTabType
 } from '../../../../shared/types'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import { useAppStore } from '../../store'
 import { buildStatusMap } from '../right-sidebar/status-display'
@@ -33,12 +43,14 @@ import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { type AgentDetectionTarget, useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { normalizeRelativePath } from '@/lib/path'
 import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   type BuiltInWindowsTerminalShell,
@@ -53,10 +65,18 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Button } from '@/components/ui/button'
 import type { TabCreateEntryArgs } from './tab-create-entry-action'
 import { buildTabAgentLaunchOptions, orderTabLaunchAgents } from './tab-agent-launch-options'
 import { buildTabCreateMenuOptions, type TabCreateMenuOption } from './tab-create-menu-options'
+import { MobileEmulatorTabIntroCallout } from '../emulator-pane/MobileEmulatorTabIntroCallout'
+import { shouldShowMobileEmulatorTabIntro } from '../emulator-pane/mobile-emulator-tab-intro-visibility'
 import { translate } from '@/i18n/i18n'
+import { TabStripScrollIndicator } from './TabStripScrollIndicator'
+import { getTabStripScrollMaskClassName } from './tab-strip-scroll-metrics'
+import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
+import { useTabStripDragScrollHandlers } from './tab-strip-drag-scroll'
+import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'
 
 const isWindows = navigator.userAgent.includes('Windows')
 const isMacOs = navigator.userAgent.includes('Mac')
@@ -67,6 +87,18 @@ const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntries = []
 const EMPTY_AGENT_CMD_OVERRIDES: Partial<Record<TuiAgent, string>> = {}
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
 const AGENT_DETECTION_LOCAL_TARGET_KEY = 'local'
+
+function getProjectRuntimeShellMenuMode(
+  projectRuntime: ProjectExecutionRuntimeResolution | undefined
+): 'host' | 'wsl' | null {
+  if (!projectRuntime) {
+    return null
+  }
+  if (projectRuntime.status === 'repair-required') {
+    return 'wsl'
+  }
+  return projectRuntime.runtime.kind === 'wsl' ? 'wsl' : 'host'
+}
 
 type TabBarProps = {
   tabs: (TerminalTab & { unifiedTabId?: string })[]
@@ -107,10 +139,6 @@ type TabBarProps = {
   onMakePreviewFilePermanent?: (fileId: string, tabId?: string) => void
   onPinFile?: (fileId: string, tabId?: string) => void
   tabBarOrder?: string[]
-  onCreateSplitGroup?: (
-    direction: 'left' | 'right' | 'up' | 'down',
-    sourceVisibleTabId?: string
-  ) => void
   hoveredTabInsertion?: HoveredTabInsertion | null
   /** Floating workspace panels are rounded; skip tab top borders that clash with the curve. */
   tabStripChrome?: 'default' | 'floating-panel'
@@ -157,6 +185,31 @@ function getTabDragLabel(item: TabItem, generatedTitlesEnabled: boolean): string
     return item.data.label || 'Mobile Emulator'
   }
   return getEditorDisplayLabel(item.data)
+}
+
+function getTabLayoutSignature(
+  item: TabItem,
+  {
+    generatedTitlesEnabled,
+    isExpanded,
+    status
+  }: {
+    generatedTitlesEnabled: boolean
+    isExpanded: boolean
+    status?: string | null
+  }
+): string {
+  const label = getTabDragLabel(item, generatedTitlesEnabled)
+  if (item.type === 'terminal') {
+    return `${item.type}:${item.id}:${item.isPinned}:${isExpanded}:${Boolean(item.data.color)}:${label}`
+  }
+  if (item.type === 'browser') {
+    return `${item.type}:${item.id}:${item.isPinned}:${item.data.loading}:${item.data.loadError}:${label}`
+  }
+  if (item.type === 'editor') {
+    return `${item.type}:${item.id}:${item.isPinned}:${item.data.isDirty}:${item.data.isPreview}:${item.data.externalMutation ?? ''}:${status ?? ''}:${label}`
+  }
+  return `${item.type}:${item.id}:${item.isPinned}:${label}`
 }
 
 function createUnifiedTabLookup(tabs: readonly Tab[], groupId: string): Map<string, Tab> {
@@ -211,7 +264,6 @@ function TabBarInner({
   onMakePreviewFilePermanent,
   onPinFile,
   tabBarOrder,
-  onCreateSplitGroup,
   hoveredTabInsertion,
   tabStripChrome = 'default'
 }: TabBarProps): React.JSX.Element {
@@ -222,6 +274,14 @@ function TabBarInner({
   const newFileShortcut = useShortcutLabel('tab.newMarkdown')
   const generatedTabTitlesEnabled = useAppStore((s) => s.settings?.tabAutoGenerateTitle === true)
   const mobileEmulatorEnabled = useAppStore((s) => s.settings?.mobileEmulatorEnabled !== false)
+  const persistedUIReady = useAppStore((s) => s.persistedUIReady)
+  const mobileEmulatorTabIntroDismissed = useAppStore((s) => s.mobileEmulatorTabIntroDismissed)
+  const showMobileEmulatorIntroCallout = shouldShowMobileEmulatorTabIntro({
+    persistedUIReady,
+    mobileEmulatorTabIntroDismissed,
+    mobileEmulatorEnabled,
+    isMacOs
+  })
   const gitStatusEntries = useAppStore(
     (s) => s.gitStatusByWorktree[worktreeId] ?? EMPTY_GIT_STATUS_ENTRIES
   )
@@ -235,6 +295,12 @@ function TabBarInner({
   const defaultWindowsPowerShellImplementation = useAppStore(
     (s) => s.settings?.terminalWindowsPowerShellImplementation ?? 'auto'
   )
+  const activeRepoId = useAppStore((s) => s.activeRepoId)
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const projects = useAppStore((s) => s.projects)
+  const repos = useAppStore((s) => s.repos)
+  const settings = useAppStore((s) => s.settings)
+  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   // Why: probe Windows shell capabilities on the host that owns this worktree, so
   // the offered shells match the host that actually runs the terminal.
   const activeRuntimeEnvironmentId = useAppStore(
@@ -309,11 +375,51 @@ function TabBarInner({
     windowsTerminalCapabilityOwnerKey,
     runtimeTarget
   )
-  // Why: SSH-backed PTYs ignore local Windows shell overrides; showing these
-  // entries there promises PowerShell/CMD/Git Bash but opens the remote shell.
-  const shouldShowWindowsShellMenu =
-    (isWindows || windowsTerminalCapabilities.hostPlatform === 'win32') &&
-    !worktreeHasRemoteConnection
+  const showWindowsShellMenu = shouldShowWindowsShellMenu({
+    activeRuntimeEnvironmentId,
+    hostPlatform: windowsTerminalCapabilities.hostPlatform,
+    isWindowsClient: isWindows,
+    worktreeHasRemoteConnection
+  })
+  const localProjectRuntime = useMemo(() => {
+    if (!showWindowsShellMenu || activeRuntimeEnvironmentId?.trim()) {
+      return undefined
+    }
+    return getLocalProjectExecutionRuntimeContext(
+      {
+        activeRepoId,
+        activeWorktreeId,
+        projects,
+        repos,
+        settings,
+        worktreesByRepo
+      },
+      worktreeId,
+      'win32',
+      {
+        wslAvailable: windowsTerminalCapabilities.isLoading
+          ? undefined
+          : windowsTerminalCapabilities.wslAvailable,
+        availableWslDistros: windowsTerminalCapabilities.isLoading
+          ? null
+          : windowsTerminalCapabilities.wslDistros
+      }
+    )
+  }, [
+    activeRepoId,
+    activeRuntimeEnvironmentId,
+    activeWorktreeId,
+    projects,
+    repos,
+    settings,
+    showWindowsShellMenu,
+    windowsTerminalCapabilities.isLoading,
+    windowsTerminalCapabilities.wslAvailable,
+    windowsTerminalCapabilities.wslDistros,
+    worktreeId,
+    worktreesByRepo
+  ])
+  const projectRuntimeShellMenuMode = getProjectRuntimeShellMenuMode(localProjectRuntime)
   const resolvedGroupId = groupId ?? activeGroupIdForWorktree ?? worktreeId
 
   const statusByRelativePath = useMemo(() => buildStatusMap(gitStatusEntries), [gitStatusEntries])
@@ -387,38 +493,42 @@ function TabBarInner({
     pendingNewTabMenuFocusRef.current = () => focusTerminalTabSurface(tabId)
   }
   const windowsShellEntries = useMemo(() => {
-    if (!shouldShowWindowsShellMenu || !onNewTerminalWithShell) {
+    if (!showWindowsShellMenu || !onNewTerminalWithShell) {
       return undefined
     }
+    const includeHostShells = projectRuntimeShellMenuMode !== 'wsl'
+    const includeWslShell = projectRuntimeShellMenuMode !== 'host'
     const allShells: {
       label: string
       shell: BuiltInWindowsTerminalShell
-    }[] = [
-      {
-        label: translate('auto.components.tab.bar.TabBar.2148f65e04', 'PowerShell'),
-        shell: 'powershell.exe'
-      },
-      {
-        label: translate('auto.components.tab.bar.TabBar.1a8af49530', 'CMD Prompt'),
-        shell: 'cmd.exe'
-      },
-      ...(windowsTerminalCapabilities.gitBashAvailable
-        ? ([
-            {
-              label: translate('auto.components.tab.bar.TabBar.efb33546ff', 'Git Bash'),
-              shell: WINDOWS_GIT_BASH_SHELL
-            }
-          ] as const)
-        : []),
-      ...(windowsTerminalCapabilities.wslAvailable
-        ? ([
-            {
-              label: translate('auto.components.tab.bar.TabBar.d1afac112b', 'WSL'),
-              shell: 'wsl.exe'
-            }
-          ] as const)
-        : [])
-    ]
+    }[] = []
+    if (includeHostShells) {
+      allShells.push(
+        {
+          label: translate('auto.components.tab.bar.TabBar.2148f65e04', 'PowerShell'),
+          shell: 'powershell.exe'
+        },
+        {
+          label: translate('auto.components.tab.bar.TabBar.1a8af49530', 'CMD Prompt'),
+          shell: 'cmd.exe'
+        }
+      )
+      if (windowsTerminalCapabilities.gitBashAvailable) {
+        allShells.push({
+          label: translate('auto.components.tab.bar.TabBar.efb33546ff', 'Git Bash'),
+          shell: WINDOWS_GIT_BASH_SHELL
+        })
+      }
+    }
+    if (includeWslShell && windowsTerminalCapabilities.wslAvailable) {
+      allShells.push({
+        label: translate('auto.components.tab.bar.TabBar.d1afac112b', 'WSL'),
+        shell: 'wsl.exe'
+      })
+    }
+    if (allShells.length === 0) {
+      return undefined
+    }
     const defaultEntry =
       allShells.find((shell) => shell.shell === defaultWindowsShell) ?? allShells[0]
     const orderedShells = [
@@ -429,7 +539,8 @@ function TabBarInner({
   }, [
     defaultWindowsShell,
     onNewTerminalWithShell,
-    shouldShowWindowsShellMenu,
+    projectRuntimeShellMenuMode,
+    showWindowsShellMenu,
     windowsTerminalCapabilities.gitBashAvailable,
     windowsTerminalCapabilities.wslAvailable
   ])
@@ -652,6 +763,14 @@ function TabBarInner({
         {translate('auto.components.tab.bar.TabBar.4f327c8b3d', 'Open Markdown...')}
       </DropdownMenuItem>
     ) : null
+  const mobileEmulatorIntroMenuBlock =
+    showMobileEmulatorIntroCallout &&
+    !terminalOnly &&
+    isMacOs &&
+    mobileEmulatorEnabled &&
+    onNewSimulatorTab ? (
+      <MobileEmulatorTabIntroCallout />
+    ) : null
   const standardCreateMenuItems =
     newTabMenuOrder === 'markdown-first' ? (
       <>
@@ -660,6 +779,7 @@ function TabBarInner({
         {defaultTerminalMenuItems}
         {newBrowserMenuItem}
         {newSimulatorMenuItem}
+        {mobileEmulatorIntroMenuBlock}
       </>
     ) : (
       <>
@@ -668,6 +788,7 @@ function TabBarInner({
         {newMarkdownMenuItem}
         {openMarkdownMenuItem}
         {newSimulatorMenuItem}
+        {mobileEmulatorIntroMenuBlock}
       </>
     )
 
@@ -796,7 +917,51 @@ function TabBarInner({
     return indicators
   }, [activeIndicator, orderedItems])
 
+  const activeVisibleTabId = useMemo(() => {
+    const activeItem = orderedItems.find((item) => {
+      if (item.type === 'terminal') {
+        return (
+          (activeTabType === 'terminal' || activeTabType === 'simulator') && item.id === activeTabId
+        )
+      }
+      if (item.type === 'browser') {
+        return activeTabType === 'browser' && item.id === activeBrowserTabId
+      }
+      if (item.type === 'simulator') {
+        return activeTabType === 'simulator' && item.id === activeSimulatorTabId
+      }
+      return (
+        (activeTabType === 'editor' || activeTabType === 'simulator') && activeFileId === item.id
+      )
+    })
+    return activeItem?.id ?? null
+  }, [
+    activeBrowserTabId,
+    activeFileId,
+    activeSimulatorTabId,
+    activeTabId,
+    activeTabType,
+    orderedItems
+  ])
+  const tabStripLayoutKey = useMemo(
+    () =>
+      orderedItems
+        .map((item) =>
+          getTabLayoutSignature(item, {
+            generatedTitlesEnabled: generatedTabTitlesEnabled,
+            isExpanded: expandedPaneByTabId[item.id] === true,
+            status:
+              item.type === 'editor'
+                ? (statusByRelativePath.get(normalizeRelativePath(item.data.relativePath)) ?? null)
+                : null
+          })
+        )
+        .join('\u001f'),
+    [expandedPaneByTabId, generatedTabTitlesEnabled, orderedItems, statusByRelativePath]
+  )
+
   const togglePinned = (item: TabItem): void => {
+    // pinTab/unpinTab mirror the change to the host for remote-server tabs.
     if (item.isPinned) {
       unpinTab(item.unifiedTabId)
       return
@@ -808,103 +973,16 @@ function TabBarInner({
     pinTab(item.unifiedTabId)
   }
 
-  // Horizontal wheel scrolling for the tab strip
-  const tabStripRef = useRef<HTMLDivElement>(null)
-  const prevStripLenRef = useRef<{ worktreeId: string; len: number } | null>(null)
-  const stickToEndRef = useRef(false)
-
-  useEffect(() => {
-    const el = tabStripRef.current
-    if (!el) {
-      return
-    }
-    const onWheel = (e: WheelEvent): void => {
-      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-        e.preventDefault()
-        el.scrollLeft += e.deltaY
-      }
-    }
-    el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
-  }, [])
-
-  useEffect(() => {
-    const el = tabStripRef.current
-    if (!el) {
-      return
-    }
-    const isAtEnd = (): boolean => {
-      const max = Math.max(0, el.scrollWidth - el.clientWidth)
-      return el.scrollLeft >= max - 2
-    }
-    const onScroll = (): void => {
-      // Only keep sticking while the user hasn't intentionally scrolled away.
-      stickToEndRef.current = isAtEnd()
-    }
-    el.addEventListener('scroll', onScroll, { passive: true })
-    // Seed based on initial position.
-    onScroll()
-
-    const ro = new ResizeObserver(() => {
-      // If the user is pinned to the right edge, keep it pinned even as tab
-      // labels (e.g. \"Terminal 5\" → branch name) expand and change scrollWidth.
-      if (!stickToEndRef.current) {
-        return
-      }
-      el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
-    })
-    ro.observe(el)
-
-    return () => {
-      el.removeEventListener('scroll', onScroll)
-      ro.disconnect()
-    }
-  }, [])
-
-  // Why: new and reopened tabs are appended to the right; without this the strip
-  // keeps its scroll offset and the active tab can sit off-screen until the user
-  // drags the tab bar horizontally.
-  useLayoutEffect(() => {
-    const strip = tabStripRef.current
-    const len = orderedItems.length
-    const prev = prevStripLenRef.current
-    if (!strip) {
-      prevStripLenRef.current = { worktreeId, len }
-      return
-    }
-    if (!prev || prev.worktreeId !== worktreeId) {
-      prevStripLenRef.current = { worktreeId, len }
-      return
-    }
-    // If the user is pinned to the right edge, keep the close button visible
-    // even when tab labels change length (e.g. "Terminal 5" → branch name).
-    // Why: label changes don't necessarily change the strip element's own size,
-    // so ResizeObserver won't fire; this effect runs on rerenders instead.
-    if (stickToEndRef.current) {
-      const scrollToEnd = (): void => {
-        const el = tabStripRef.current
-        if (!el) {
-          return
-        }
-        el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
-      }
-      scrollToEnd()
-      requestAnimationFrame(scrollToEnd)
-    }
-    if (len > prev.len) {
-      const scrollToEnd = (): void => {
-        const el = tabStripRef.current
-        if (!el) {
-          return
-        }
-        el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
-        stickToEndRef.current = true
-      }
-      scrollToEnd()
-      requestAnimationFrame(scrollToEnd)
-    }
-    prevStripLenRef.current = { worktreeId, len }
-  }, [orderedItems, worktreeId])
+  const { tabStripRef, tabStripOverflowState, scrollTabStrip } = useTabStripOverflowNavigation({
+    activeVisibleTabId,
+    layoutKey: tabStripLayoutKey,
+    tabCount: orderedItems.length,
+    worktreeId
+  })
+  const tabStripDragScroll = useTabStripDragScrollHandlers(scrollTabStrip, {
+    start: tabStripOverflowState.canScrollStart,
+    end: tabStripOverflowState.canScrollEnd
+  })
 
   return (
     <div
@@ -917,6 +995,34 @@ function TabBarInner({
       // editor drop zone.
       data-native-file-drop-target="editor"
     >
+      {tabStripOverflowState.hasOverflow ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="mx-0.5 my-auto h-6 w-5 text-muted-foreground hover:bg-accent/50 hover:text-foreground disabled:opacity-35"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              aria-label={translate(
+                'auto.components.tab.bar.TabBar.7a9b4af2af',
+                'Scroll tabs left'
+              )}
+              aria-disabled={!tabStripOverflowState.canScrollStart}
+              disabled={
+                !tabStripDragScroll.isTabDragActive && !tabStripOverflowState.canScrollStart
+              }
+              onClick={() => scrollTabStrip('start')}
+              onPointerEnter={tabStripDragScroll.onDragScrollStartEnter}
+              onPointerLeave={tabStripDragScroll.onDragScrollLeave}
+            >
+              <ChevronLeft className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            {translate('auto.components.tab.bar.TabBar.7a9b4af2af', 'Scroll tabs left')}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
       {/* Why: no strategy means dnd-kit does not animate siblings aside for
           the active tab. Combined with dropping transform/transition on the
           dragged tab (see SortableTab etc.), this keeps every tab visually
@@ -926,107 +1032,134 @@ function TabBarInner({
             region. The outer container inherits drag so empty space after the
             "+" button remains window-draggable. */}
         <div
-          ref={tabStripRef}
-          // Why: only `border-r` on the strip — the trailing edge must stay
-          // visible even when tabs overflow-scroll past the last tab. The
-          // left edge is instead painted by the FIRST tab's own `border-l`
-          // (see per-tab components) so its rendering is identical to every
-          // between-tab separator. A strip-level `border-l` would render at
-          // a different box than the tab's own `border-t`, producing a
-          // heavier-looking L-corner at the leftmost tab when inactive.
-          className="terminal-tab-strip flex items-stretch overflow-x-auto overflow-y-hidden border-r border-border"
+          className="relative flex min-h-0 min-w-0 max-w-full flex-[0_1_auto]"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
-          {orderedItems.map((item, index) => {
-            const dragData: TabDragItemData = {
-              kind: 'tab',
-              worktreeId,
-              groupId: resolvedGroupId,
-              unifiedTabId: item.unifiedTabId,
-              visibleTabId: item.id,
-              tabType: item.type,
-              label: getTabDragLabel(item, generatedTabTitlesEnabled),
-              iconPath: item.type === 'editor' ? item.data.filePath : undefined,
-              color: item.type === 'terminal' ? (item.data.color ?? null) : null
-            }
-            if (item.type === 'terminal') {
-              const terminalTab = {
-                ...item.data,
-                title: resolveTerminalTabTitle(
-                  item.data,
-                  generatedTabTitlesEnabled,
-                  item.data.title
+          <div
+            ref={tabStripRef}
+            // Why: only `border-r` on the strip — the trailing edge must stay
+            // visible even when tabs overflow-scroll past the last tab. The
+            // left edge is instead painted by the FIRST tab's own `border-l`
+            // (see per-tab components) so its rendering is identical to every
+            // between-tab separator. A strip-level `border-l` would render at
+            // a different box than the tab's own `border-t`, producing a
+            // heavier-looking L-corner at the leftmost tab when inactive.
+            className={[
+              'terminal-tab-strip flex h-full min-w-0 max-w-full flex-1 items-stretch overflow-x-auto overflow-y-hidden border-r border-border/70',
+              getTabStripScrollMaskClassName(tabStripOverflowState)
+            ]
+              .filter(Boolean)
+              .join(' ')}
+          >
+            {orderedItems.map((item, index) => {
+              const dragData: TabDragItemData = {
+                kind: 'tab',
+                worktreeId,
+                groupId: resolvedGroupId,
+                unifiedTabId: item.unifiedTabId,
+                visibleTabId: item.id,
+                tabType: item.type,
+                label: getTabDragLabel(item, generatedTabTitlesEnabled),
+                iconPath: item.type === 'editor' ? item.data.filePath : undefined,
+                color: item.type === 'terminal' ? (item.data.color ?? null) : null
+              }
+              if (item.type === 'terminal') {
+                const terminalTab = {
+                  ...item.data,
+                  title: resolveTerminalTabTitle(
+                    item.data,
+                    generatedTabTitlesEnabled,
+                    item.data.title
+                  )
+                }
+                return (
+                  <SortableTab
+                    key={item.id}
+                    tab={terminalTab}
+                    unifiedTabId={item.unifiedTabId}
+                    groupId={resolvedGroupId}
+                    tabCount={orderedItems.length}
+                    hasTabsToRight={index < orderedItems.length - 1}
+                    isActive={
+                      (activeTabType === 'terminal' || activeTabType === 'simulator') &&
+                      item.id === activeTabId
+                    }
+                    isPinned={item.isPinned}
+                    isExpanded={expandedPaneByTabId[item.id] === true}
+                    onActivate={onActivate}
+                    onClose={onClose}
+                    onCloseOthers={onCloseOthers}
+                    onCloseToRight={onCloseToRight}
+                    onSetCustomTitle={onSetCustomTitle}
+                    onSetTabColor={onSetTabColor}
+                    onTogglePin={() => togglePinned(item)}
+                    onToggleExpand={onTogglePaneExpand}
+                    dragData={dragData}
+                    dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+                    includeTopTabBorder={includeTopTabBorder}
+                  />
                 )
               }
-              return (
-                <SortableTab
-                  key={item.id}
-                  tab={terminalTab}
-                  tabCount={orderedItems.length}
-                  hasTabsToRight={index < orderedItems.length - 1}
-                  isActive={
-                    (activeTabType === 'terminal' || activeTabType === 'simulator') &&
-                    item.id === activeTabId
-                  }
-                  isPinned={item.isPinned}
-                  isExpanded={expandedPaneByTabId[item.id] === true}
-                  onActivate={onActivate}
-                  onClose={onClose}
-                  onCloseOthers={onCloseOthers}
-                  onCloseToRight={onCloseToRight}
-                  onSetCustomTitle={onSetCustomTitle}
-                  onSetTabColor={onSetTabColor}
-                  onTogglePin={() => togglePinned(item)}
-                  onToggleExpand={onTogglePaneExpand}
-                  onSplitGroup={(direction, sourceVisibleTabId) =>
-                    onCreateSplitGroup?.(direction, sourceVisibleTabId)
-                  }
-                  dragData={dragData}
-                  dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
-                  includeTopTabBorder={includeTopTabBorder}
-                />
-              )
-            }
-            if (item.type === 'browser') {
-              return (
-                <BrowserTab
-                  key={item.id}
-                  tab={item.data}
-                  isActive={activeTabType === 'browser' && activeBrowserTabId === item.id}
-                  isPinned={item.isPinned}
-                  hasTabsToRight={index < orderedItems.length - 1}
-                  onActivate={() => onActivateBrowserTab?.(item.id)}
-                  onClose={() => onCloseBrowserTab?.(item.id)}
-                  onCloseToRight={() => onCloseToRight(item.id)}
-                  onSplitGroup={(direction, sourceVisibleTabId) =>
-                    onCreateSplitGroup?.(direction, sourceVisibleTabId)
-                  }
-                  onDuplicate={() => onDuplicateBrowserTab?.(item.id)}
-                  onTogglePin={() => togglePinned(item)}
-                  dragData={dragData}
-                  dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
-                  includeTopTabBorder={includeTopTabBorder}
-                />
-              )
-            }
-            if (item.type === 'simulator') {
-              const simLabel = item.data.label || 'Mobile Emulator'
-              const simFile: OpenFile & { tabId: string } = {
-                id: item.id,
-                tabId: item.id,
-                filePath: simLabel,
-                relativePath: simLabel,
-                worktreeId,
-                language: 'simulator',
-                isPreview: false,
-                isDirty: false,
-                mode: 'edit'
+              if (item.type === 'browser') {
+                return (
+                  <BrowserTab
+                    key={item.id}
+                    tab={item.data}
+                    isActive={activeTabType === 'browser' && activeBrowserTabId === item.id}
+                    isPinned={item.isPinned}
+                    hasTabsToRight={index < orderedItems.length - 1}
+                    onActivate={() => onActivateBrowserTab?.(item.id)}
+                    onClose={() => onCloseBrowserTab?.(item.id)}
+                    onCloseToRight={() => onCloseToRight(item.id)}
+                    onDuplicate={() => onDuplicateBrowserTab?.(item.id)}
+                    onTogglePin={() => togglePinned(item)}
+                    dragData={dragData}
+                    dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+                    includeTopTabBorder={includeTopTabBorder}
+                  />
+                )
+              }
+              if (item.type === 'simulator') {
+                const simLabel = item.data.label || 'Mobile Emulator'
+                const simFile: OpenFile & { tabId: string } = {
+                  id: item.id,
+                  tabId: item.id,
+                  filePath: simLabel,
+                  relativePath: simLabel,
+                  worktreeId,
+                  language: 'simulator',
+                  isPreview: false,
+                  isDirty: false,
+                  mode: 'edit'
+                }
+                return (
+                  <EditorFileTab
+                    key={item.id}
+                    file={simFile}
+                    isActive={activeTabType === 'simulator' && item.id === activeSimulatorTabId}
+                    isPinned={item.isPinned}
+                    hasTabsToRight={index < orderedItems.length - 1}
+                    statusByRelativePath={statusByRelativePath}
+                    onActivate={() => onActivateFile?.(item.id)}
+                    onClose={() => onCloseFile?.(item.id)}
+                    onCloseToRight={() => onCloseToRight(item.id)}
+                    onCloseAll={() => onCloseAllFiles?.()}
+                    onMakePermanent={() => {}}
+                    onTogglePin={() => togglePinned(item)}
+                    dragData={dragData}
+                    dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+                    includeTopTabBorder={includeTopTabBorder}
+                  />
+                )
               }
               return (
                 <EditorFileTab
                   key={item.id}
-                  file={simFile}
-                  isActive={activeTabType === 'simulator' && item.id === activeSimulatorTabId}
+                  file={item.data}
+                  isActive={
+                    (activeTabType === 'editor' || activeTabType === 'simulator') &&
+                    activeFileId === item.id
+                  }
                   isPinned={item.isPinned}
                   hasTabsToRight={index < orderedItems.length - 1}
                   statusByRelativePath={statusByRelativePath}
@@ -1034,46 +1167,54 @@ function TabBarInner({
                   onClose={() => onCloseFile?.(item.id)}
                   onCloseToRight={() => onCloseToRight(item.id)}
                   onCloseAll={() => onCloseAllFiles?.()}
-                  onMakePermanent={() => {}}
-                  onTogglePin={() => togglePinned(item)}
-                  onSplitGroup={(direction, sourceVisibleTabId) =>
-                    onCreateSplitGroup?.(direction, sourceVisibleTabId)
+                  onMakePermanent={() =>
+                    onMakePreviewFilePermanent?.(item.data.id, item.data.tabId)
                   }
+                  onTogglePin={() => togglePinned(item)}
                   dragData={dragData}
                   dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
                   includeTopTabBorder={includeTopTabBorder}
                 />
               )
-            }
-            return (
-              <EditorFileTab
-                key={item.id}
-                file={item.data}
-                isActive={
-                  (activeTabType === 'editor' || activeTabType === 'simulator') &&
-                  activeFileId === item.id
-                }
-                isPinned={item.isPinned}
-                hasTabsToRight={index < orderedItems.length - 1}
-                statusByRelativePath={statusByRelativePath}
-                onActivate={() => onActivateFile?.(item.id)}
-                onClose={() => onCloseFile?.(item.id)}
-                onCloseToRight={() => onCloseToRight(item.id)}
-                onCloseAll={() => onCloseAllFiles?.()}
-                onMakePermanent={() => onMakePreviewFilePermanent?.(item.data.id, item.data.tabId)}
-                onTogglePin={() => togglePinned(item)}
-                onSplitGroup={(direction, sourceVisibleTabId) =>
-                  onCreateSplitGroup?.(direction, sourceVisibleTabId)
-                }
-                dragData={dragData}
-                dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
-                includeTopTabBorder={includeTopTabBorder}
-              />
-            )
-          })}
+            })}
+          </div>
+          <TabStripScrollIndicator metrics={tabStripOverflowState} />
         </div>
       </SortableContext>
-      <DropdownMenu open={newTabMenuOpen} onOpenChange={setNewTabMenuOpen}>
+      {tabStripOverflowState.hasOverflow ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="mx-0.5 my-auto h-6 w-5 text-muted-foreground hover:bg-accent/50 hover:text-foreground disabled:opacity-35"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              aria-label={translate(
+                'auto.components.tab.bar.TabBar.232e075b07',
+                'Scroll tabs right'
+              )}
+              aria-disabled={!tabStripOverflowState.canScrollEnd}
+              disabled={!tabStripDragScroll.isTabDragActive && !tabStripOverflowState.canScrollEnd}
+              onClick={() => scrollTabStrip('end')}
+              onPointerEnter={tabStripDragScroll.onDragScrollEndEnter}
+              onPointerLeave={tabStripDragScroll.onDragScrollLeave}
+            >
+              <ChevronRight className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            {translate('auto.components.tab.bar.TabBar.232e075b07', 'Scroll tabs right')}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
+      <DropdownMenu
+        open={newTabMenuOpen}
+        onOpenChange={setNewTabMenuOpen}
+        // Why: this menu can stay open after the Mobile Emulator "Hide" action,
+        // which shows a toast with a re-enable link; modal would disable body
+        // pointer events and make that toast (and other outside UI) unclickable.
+        modal={false}
+      >
         <DropdownMenuTrigger asChild>
           <button
             className="ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"

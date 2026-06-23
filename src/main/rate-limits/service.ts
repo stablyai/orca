@@ -2,14 +2,16 @@
 handling, account-switch fetch semantics, and renderer push coordination so the
 fetch ordering rules stay in one place. */
 import type { BrowserWindow } from 'electron'
+import { randomUUID } from 'node:crypto'
 import type {
+  CodexRateLimitResetResult,
   RateLimitState,
   ProviderRateLimits,
   InactiveAccountUsage
 } from '../../shared/rate-limit-types'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
 import type { InactiveClaudeAccountInfo } from './claude-fetcher'
-import { fetchCodexRateLimits } from './codex-fetcher'
+import { consumeCodexRateLimitResetCredit, fetchCodexRateLimits } from './codex-fetcher'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import {
   normalizeClaudeAccountSelectionTarget,
@@ -35,6 +37,13 @@ type ClaudeAuthPreparationResolver = (
   target?: ClaudeAccountSelectionTarget
 ) => Promise<ClaudeRuntimeAuthPreparation>
 
+type OpenCodeGoRateLimitConfig = {
+  sessionCookie: string
+  workspaceIdOverride: string
+}
+
+type GeminiCliOAuthEnabledResolver = () => boolean
+
 // Why: Claude's subscription usage endpoint has a tight request budget. Quota
 // state is informational, so prefer keeping a recent snapshot over polling it
 // into 429s during long focused Orca sessions.
@@ -44,6 +53,7 @@ const MAX_POLL_MS = 2_147_483_647 // Max safe setInterval delay before Node clam
 const MIN_REFETCH_MS = 5 * 60 * 1000 // 5 minutes — debounce resume/manual refresh bursts
 const STALE_THRESHOLD_MS = 30 * 60 * 1000 // 30 minutes — after this, stale data is dropped
 const INACTIVE_FETCH_DEBOUNCE_MS = 60 * 1000 // 60 seconds — debounce fetch-on-open
+const DEFERRED_STARTUP_ACTIVE_REFRESH_MS = 1000
 
 // Why: inactive account arrays are derived from provider-specific caches on
 // demand in getState() and pushToRenderer().
@@ -62,6 +72,18 @@ function normalizePollingInterval(ms: number): number {
   return Math.min(MAX_POLL_MS, Math.max(MIN_POLL_MS, ms))
 }
 
+function isSystemDefaultClaudeAuth(
+  authPreparation: ClaudeRuntimeAuthPreparation | undefined
+): boolean {
+  // Why: fetch cycles classify missing Claude auth as system-default; keep the
+  // PTY fallback gate aligned so background refresh cannot trigger auth flows.
+  if (!authPreparation) {
+    return true
+  }
+  const provenance = authPreparation?.provenance
+  return provenance === 'system' || Boolean(provenance?.endsWith(':system'))
+}
+
 export class RateLimitService {
   private state: InternalRateLimitState = {
     claude: null,
@@ -72,6 +94,7 @@ export class RateLimitService {
   }
   private pollInterval: number = DEFAULT_POLL_MS
   private timer: ReturnType<typeof setInterval> | null = null
+  private deferredStartupRefreshTimer: ReturnType<typeof setTimeout> | null = null
   private lastFetchAt = 0
   private mainWindow: BrowserWindow | null = null
   private detachWindowListeners: (() => void) | null = null
@@ -80,7 +103,6 @@ export class RateLimitService {
   private codexOnlyFetchQueued = false
   private claudeOnlyFetchQueued = false
   private fetchIdleResolvers: (() => void)[] = []
-  private hasCompletedFetch = false
   private codexFetchGeneration = 0
   private claudeFetchGeneration = 0
   private opencodeFetchGeneration = 0
@@ -95,13 +117,8 @@ export class RateLimitService {
     runtime: 'host',
     wslDistro: null
   }
-  private settingsResolver:
-    | (() => {
-        opencodeSessionCookie: string
-        opencodeWorkspaceId: string
-        geminiCliOAuthEnabled?: boolean
-      })
-    | null = null
+  private openCodeGoConfigResolver: (() => OpenCodeGoRateLimitConfig) | null = null
+  private geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
   private inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
   private inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
   private inactiveClaudeCache = new Map<string, ProviderRateLimits>()
@@ -139,14 +156,12 @@ export class RateLimitService {
     this.claudeFetchTarget = normalizeClaudeAccountSelectionTarget(target)
   }
 
-  setSettingsResolver(
-    resolver: () => {
-      opencodeSessionCookie: string
-      opencodeWorkspaceId: string
-      geminiCliOAuthEnabled?: boolean
-    }
-  ): void {
-    this.settingsResolver = resolver
+  setOpenCodeGoConfigResolver(resolver: () => OpenCodeGoRateLimitConfig): void {
+    this.openCodeGoConfigResolver = resolver
+  }
+
+  setGeminiCliOAuthEnabledResolver(resolver: GeminiCliOAuthEnabledResolver): void {
+    this.geminiCliOAuthEnabledResolver = resolver
   }
 
   setInactiveClaudeAccountsResolver(resolver: () => InactiveClaudeAccountInfo[]): void {
@@ -193,12 +208,15 @@ export class RateLimitService {
   start(options: { fetchImmediately?: boolean } = {}): void {
     if (options.fetchImmediately !== false) {
       void this.fetchAll()
+    } else {
+      this.scheduleDeferredStartupRefresh()
     }
     this.startTimer()
   }
 
   stop(): void {
     this.stopTimer()
+    this.clearDeferredStartupRefresh()
     this.detachWindowListeners?.()
     this.detachWindowListeners = null
     this.mainWindow = null
@@ -270,6 +288,29 @@ export class RateLimitService {
     })
     await this.fetchCodexOnly({ force: true })
     return this.getState()
+  }
+
+  async consumeCodexRateLimitResetCredit(): Promise<CodexRateLimitResetResult> {
+    const codexTarget = this.codexFetchTarget
+    const codexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
+    const missingWslCodexHome = codexHomePath
+      ? null
+      : this.getMissingWslCodexHomeResult(codexTarget)
+    if (missingWslCodexHome) {
+      await this.fetchCodexOnly({ force: true })
+      throw new Error(missingWslCodexHome.error ?? 'Codex home unavailable')
+    }
+    try {
+      const outcome = await consumeCodexRateLimitResetCredit({
+        codexHomePath,
+        idempotencyKey: randomUUID()
+      })
+      await this.fetchCodexOnly({ force: true })
+      return { outcome, state: this.getState() }
+    } catch (error) {
+      await this.fetchCodexOnly({ force: true })
+      throw error
+    }
   }
 
   async refreshForClaudeAccountChange(
@@ -540,6 +581,21 @@ export class RateLimitService {
     }
   }
 
+  private scheduleDeferredStartupRefresh(): void {
+    this.clearDeferredStartupRefresh()
+    this.deferredStartupRefreshTimer = setTimeout(() => {
+      this.deferredStartupRefreshTimer = null
+      void this.refreshIfWindowActive()
+    }, DEFERRED_STARTUP_ACTIVE_REFRESH_MS)
+  }
+
+  private clearDeferredStartupRefresh(): void {
+    if (this.deferredStartupRefreshTimer) {
+      clearTimeout(this.deferredStartupRefreshTimer)
+      this.deferredStartupRefreshTimer = null
+    }
+  }
+
   private shouldBackgroundPoll(): boolean {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       return false
@@ -557,9 +613,9 @@ export class RateLimitService {
     if (!this.shouldBackgroundPoll()) {
       return
     }
-    if (!this.hasCompletedFetch) {
-      return
-    }
+    // Why: startup intentionally skips the pre-paint fetch. The first visible
+    // activation must still populate usage after update relaunches where the
+    // timer can be focus-gated for a long time.
     if (Date.now() - this.lastFetchAt < MIN_REFETCH_MS) {
       return
     }
@@ -596,7 +652,6 @@ export class RateLimitService {
         }
       }
     } finally {
-      this.hasCompletedFetch = true
       this.isFetching = false
       this.resolveFetchIdleWaiters()
     }
@@ -632,7 +687,6 @@ export class RateLimitService {
         }
       }
     } finally {
-      this.hasCompletedFetch = true
       this.isFetching = false
       this.resolveFetchIdleWaiters()
     }
@@ -668,7 +722,6 @@ export class RateLimitService {
         }
       }
     } finally {
-      this.hasCompletedFetch = true
       this.isFetching = false
       this.resolveFetchIdleWaiters()
     }
@@ -751,6 +804,20 @@ export class RateLimitService {
     return process.platform !== 'win32'
   }
 
+  private shouldAllowClaudePtyFallback(
+    authPreparation: ClaudeRuntimeAuthPreparation | undefined
+  ): boolean {
+    // Why: automatic recovery uses Claude CLI as the next source, but Windows
+    // hidden PTY support remains less reliable than host/WSL shells.
+    if (process.platform === 'win32') {
+      return false
+    }
+    // Why: system-default Claude is not an Orca-managed account. Background
+    // quota refresh may read existing OAuth, but must not launch Claude and
+    // trigger auth/browser flows for users who never configured Claude in Orca.
+    return !isSystemDefaultClaudeAuth(authPreparation)
+  }
+
   private withFetchingStatus(
     current: ProviderRateLimits | null,
     provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi'
@@ -778,10 +845,10 @@ export class RateLimitService {
     const codexProvenance = this.getCodexProvenance(codexTarget, codexHomePath)
     const codexGeneration = this.codexFetchGeneration
     const previousState = this.state
-    const settings = this.settingsResolver?.()
-    const cookie = settings?.opencodeSessionCookie ?? ''
-    const workspaceIdOverride = settings?.opencodeWorkspaceId ?? ''
-    const geminiCliOAuthEnabled = settings?.geminiCliOAuthEnabled ?? false
+    const openCodeGoConfig = this.openCodeGoConfigResolver?.()
+    const cookie = openCodeGoConfig?.sessionCookie ?? ''
+    const workspaceIdOverride = openCodeGoConfig?.workspaceIdOverride ?? ''
+    const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
 
     // Detect if configuration changed — if it did, we must discard any stale
     // data because it belongs to a different session/workspace.
@@ -814,9 +881,7 @@ export class RateLimitService {
       await Promise.allSettled([
         fetchClaudeRateLimits({
           authPreparation: claudeAuthPreparation,
-          // Why: active quota refreshes run on startup/focus/timers. They must
-          // never spawn hidden Claude Code, which can trigger macOS App Data TCC.
-          allowPtyFallback: false
+          allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation)
         }),
         missingWslCodexHome ??
           fetchCodexRateLimits({
@@ -991,9 +1056,7 @@ export class RateLimitService {
 
     const claude = await fetchClaudeRateLimits({
       authPreparation: claudeAuthPreparation,
-      // Why: account-change refreshes share the same automatic active quota
-      // surface as startup/timer refreshes, so keep them API-only as well.
-      allowPtyFallback: false
+      allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation)
     }).catch(
       (err): ProviderRateLimits => ({
         provider: 'claude',
@@ -1028,7 +1091,14 @@ export class RateLimitService {
   ): ProviderRateLimits {
     // Fresh data is fine — use it
     if (fresh.status === 'ok') {
-      return fresh
+      return {
+        ...fresh,
+        usageMetadata: {
+          ...fresh.usageMetadata,
+          lastSuccessfulSource:
+            fresh.usageMetadata?.source ?? fresh.usageMetadata?.lastSuccessfulSource
+        }
+      }
     }
 
     // Explicitly unavailable — user likely cleared a setting. Discard any stale
@@ -1062,7 +1132,13 @@ export class RateLimitService {
     return {
       ...previous,
       error: fresh.error,
-      status: 'error'
+      status: 'error',
+      usageMetadata: {
+        ...previous.usageMetadata,
+        ...fresh.usageMetadata,
+        lastSuccessfulSource:
+          previous.usageMetadata?.lastSuccessfulSource ?? previous.usageMetadata?.source
+      }
     }
   }
 

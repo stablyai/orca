@@ -11,7 +11,7 @@ import { useAppStore } from '@/store'
 import { joinPath } from '@/lib/path'
 import { detectLanguage } from '@/lib/language-detect'
 import { setWithLRU } from '@/lib/scroll-cache'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId, getConnectionIdForFile } from '@/lib/connection-context'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { writeRuntimeFile } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
@@ -55,10 +55,18 @@ import {
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
   type EditorPathMutationTarget
 } from './editor-autosave'
-import { getCombinedBranchEntries, getCombinedUncommittedEntries } from './combined-diff-entries'
+import {
+  getCombinedBranchEntries,
+  getCombinedUncommittedEntries,
+  shouldAutoReloadCombinedDiffFromGitStatus
+} from './combined-diff-entries'
+import { getCombinedDiffCommitMessageBody } from './combined-diff-commit-message'
 import { getDiffSectionEstimatedHeight, isIntrinsicHeightImageDiff } from './diff-section-layout'
+import { getLargeDiffRenderLimit } from './large-diff-render-limit'
+import { getStoredTextDiffContent, getStoredTextDiffResult } from './large-diff-section-content'
 import type { DiffSection } from './diff-section-types'
 import { getInitialCombinedDiffSectionLoadIndices } from './combined-diff-initial-section-load'
+import { removeDiffSectionMeasuredHeight } from './diff-section-height-cache'
 import { createCombinedDiffLoadScheduler } from './combined-diff-load-scheduler'
 import {
   beginCombinedDiffScrollbarDrag,
@@ -175,18 +183,6 @@ function getInitialCombinedDiffFileTreeCollapsed(
   return combinedDiffFileTreeCollapsedPreference ?? combinedDiffFileTreeVisibleByDefault !== true
 }
 
-function commitMessageBody(message: string | undefined, subject: string | undefined): string {
-  const normalized = (message ?? '').replace(/\r\n/g, '\n').trim()
-  if (!normalized) {
-    return ''
-  }
-  const [firstLine = '', ...bodyLines] = normalized.split('\n')
-  if (subject && firstLine.trim() === subject.trim()) {
-    return bodyLines.join('\n').trim()
-  }
-  return normalized
-}
-
 export default function CombinedDiffViewer({
   file,
   viewStateKey
@@ -276,7 +272,11 @@ export default function CombinedDiffViewer({
     if (!container || container.scrollHeight <= container.clientHeight + 1) {
       setScrollThumb((prev) =>
         prev.visible
-          ? { visible: false, top: 0, height: COMBINED_DIFF_SCROLLBAR_THUMB_MIN_HEIGHT }
+          ? {
+              visible: false,
+              top: 0,
+              height: COMBINED_DIFF_SCROLLBAR_THUMB_MIN_HEIGHT
+            }
           : prev
       )
       return
@@ -361,6 +361,7 @@ export default function CombinedDiffViewer({
 
   const isBranchMode = file.diffSource === 'combined-branch'
   const isCommitMode = file.diffSource === 'combined-commit'
+  const isAllMode = file.diffSource === 'combined-all'
   const branchCompare =
     file.branchCompare?.baseOid && file.branchCompare.headOid && file.branchCompare.mergeBase
       ? file.branchCompare
@@ -385,12 +386,37 @@ export default function CombinedDiffViewer({
   const branchEntries = React.useMemo<GitBranchChangeEntry[]>(() => {
     return getCombinedBranchEntries(file.branchEntriesSnapshot, liveBranchEntries)
   }, [file.branchEntriesSnapshot, liveBranchEntries])
+  const renderableBranchEntries = React.useMemo(
+    () => (branchCompare ? branchEntries : []),
+    [branchCompare, branchEntries]
+  )
   const commitEntries = React.useMemo<GitBranchChangeEntry[]>(
     () => file.commitEntriesSnapshot ?? [],
     [file.commitEntriesSnapshot]
   )
-  const entries = isBranchMode ? branchEntries : isCommitMode ? commitEntries : uncommittedEntries
-  const treeMode = isBranchMode ? 'branch' : isCommitMode ? 'commit' : 'uncommitted'
+  const allEntries = React.useMemo(
+    () => [...uncommittedEntries, ...renderableBranchEntries],
+    [renderableBranchEntries, uncommittedEntries]
+  )
+  const entries = isAllMode
+    ? allEntries
+    : isBranchMode
+      ? renderableBranchEntries
+      : isCommitMode
+        ? commitEntries
+        : uncommittedEntries
+  const treeMode = isAllMode
+    ? 'all'
+    : isBranchMode
+      ? 'branch'
+      : isCommitMode
+        ? 'commit'
+        : 'uncommitted'
+  const hasUncommittedEntriesSnapshot = file.uncommittedEntriesSnapshot !== undefined
+  const shouldAutoReloadFromGitStatus = shouldAutoReloadCombinedDiffFromGitStatus({
+    mode: treeMode,
+    hasUncommittedEntriesSnapshot
+  })
   const entrySignature = React.useMemo(
     () =>
       JSON.stringify({
@@ -472,7 +498,7 @@ export default function CombinedDiffViewer({
     pendingRestoreScrollTopRef.current = combinedDiffScrollTopCache.get(viewStateKey) ?? null
     setSections(
       entries.map((entry) => ({
-        key: `${'area' in entry ? entry.area : (file.diffSource ?? 'compare')}:${entry.path}`,
+        key: getCombinedDiffFileTreeSectionKey(treeMode, entry),
         path: entry.path,
         status: entry.status,
         area: 'area' in entry ? entry.area : undefined,
@@ -485,7 +511,8 @@ export default function CombinedDiffViewer({
         loading: true,
         error: undefined,
         dirty: false,
-        diffResult: null
+        diffResult: null,
+        largeDiffRenderLimit: null
       }))
     )
     setSectionHeights({})
@@ -494,7 +521,7 @@ export default function CombinedDiffViewer({
     loadSchedulerRef.current.reset()
     generationRef.current += 1
     setGeneration((prev) => prev + 1)
-  }, [entries, entrySignature, file.diffSource, gitStatusEntries, viewStateKey])
+  }, [entries, entrySignature, file.diffSource, gitStatusEntries, treeMode, viewStateKey])
 
   const loadSectionNow = useCallback(
     async (index: number) => {
@@ -504,11 +531,13 @@ export default function CombinedDiffViewer({
       loadingIndicesRef.current.add(index)
 
       const gen = generationRef.current
-      const entries = isBranchMode
-        ? branchEntries
-        : isCommitMode
-          ? commitEntries
-          : uncommittedEntries
+      const entries = isAllMode
+        ? allEntries
+        : isBranchMode
+          ? renderableBranchEntries
+          : isCommitMode
+            ? commitEntries
+            : uncommittedEntries
       const entry = entries[index]
       if (!entry) {
         loadingIndicesRef.current.delete(index)
@@ -521,7 +550,7 @@ export default function CombinedDiffViewer({
         const connectionId = getConnectionId(file.worktreeId) ?? undefined
         const state = useAppStore.getState()
         const fileSettings = settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId)
-        if (isBranchMode && branchCompare) {
+        if ((isBranchMode || (isAllMode && !('area' in entry))) && branchCompare) {
           result = await withDiffSectionLoadTimeout(
             getRuntimeGitBranchDiff(
               {
@@ -586,21 +615,33 @@ export default function CombinedDiffViewer({
         } as GitDiffResult
       }
 
+      const largeDiffRenderLimit =
+        !error && result.kind === 'text'
+          ? (result.largeDiffRenderLimit ??
+            getLargeDiffRenderLimit({
+              originalContent: result.originalContent,
+              modifiedContent: result.modifiedContent
+            }))
+          : null
+
       loadingIndicesRef.current.delete(index)
       if (generationRef.current !== gen) {
         return
       }
+      const storedContent = getStoredTextDiffContent(result, largeDiffRenderLimit)
+      const storedResult = getStoredTextDiffResult(result, largeDiffRenderLimit)
       loadedIndicesRef.current.add(index)
       setSections((prev) => {
         return prev.map((s, i) =>
           i === index
             ? {
                 ...s,
-                diffResult: result,
-                originalContent: result.kind === 'text' ? result.originalContent : '',
-                modifiedContent: result.kind === 'text' ? result.modifiedContent : '',
+                diffResult: storedResult,
+                originalContent: storedContent.originalContent,
+                modifiedContent: storedContent.modifiedContent,
                 loading: false,
-                error
+                error,
+                largeDiffRenderLimit
               }
             : s
         )
@@ -611,14 +652,16 @@ export default function CombinedDiffViewer({
       branchCompare?.baseOid,
       branchCompare?.headOid,
       branchCompare?.mergeBase,
-      branchEntries,
+      allEntries,
       commitCompare?.commitOid,
       commitCompare?.parentOid,
       commitEntries,
       file.filePath,
       file.runtimeEnvironmentId,
+      isAllMode,
       isBranchMode,
       isCommitMode,
+      renderableBranchEntries,
       uncommittedEntries
     ]
   )
@@ -676,6 +719,7 @@ export default function CombinedDiffViewer({
       invalidateCombinedDiffViewStateCache()
       generationRef.current += 1
       setGeneration((prev) => prev + 1)
+      setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
       setSections((prev) =>
         prev.map((section, sectionIndex) =>
           sectionIndex === index
@@ -686,6 +730,7 @@ export default function CombinedDiffViewer({
                 diffResult: null,
                 originalContent: '',
                 modifiedContent: '',
+                largeDiffRenderLimit: null,
                 contentGeneration: (section.contentGeneration ?? 0) + 1
               }
             : section
@@ -720,7 +765,9 @@ export default function CombinedDiffViewer({
           section.added === undefined && section.removed === undefined
             ? undefined
             : (section.added ?? 0) + (section.removed ?? 0),
-        useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult)
+        useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult),
+        isLargeDiffLimited: section.largeDiffRenderLimit?.limited === true,
+        lineCounts: section.largeDiffRenderLimit?.lineCounts ?? undefined
       })
     },
     overscan: COMBINED_DIFF_OVERSCAN,
@@ -807,15 +854,15 @@ export default function CombinedDiffViewer({
   )
 
   const combinedGitStatusSignature = React.useMemo(() => {
-    if (treeMode !== 'uncommitted') {
+    if (!shouldAutoReloadFromGitStatus) {
       return ''
     }
     return buildCombinedGitStatusSignature(sections, gitStatusEntries)
-  }, [gitStatusEntries, sections, treeMode])
+  }, [gitStatusEntries, sections, shouldAutoReloadFromGitStatus])
   const prevCombinedGitStatusSignatureRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (treeMode !== 'uncommitted') {
+    if (!shouldAutoReloadFromGitStatus) {
       prevCombinedGitStatusSignatureRef.current = null
       return
     }
@@ -830,10 +877,10 @@ export default function CombinedDiffViewer({
     for (const index of loadedIndicesRef.current) {
       requestCombinedDiffSectionReload(index)
     }
-  }, [combinedGitStatusSignature, requestCombinedDiffSectionReload, treeMode])
+  }, [combinedGitStatusSignature, requestCombinedDiffSectionReload, shouldAutoReloadFromGitStatus])
 
   useEffect(() => {
-    if (treeMode !== 'uncommitted') {
+    if (treeMode !== 'all' && treeMode !== 'uncommitted') {
       return
     }
     const handler = (event: Event): void => {
@@ -905,7 +952,9 @@ export default function CombinedDiffViewer({
         removed: section.removed
       }
 
-      if (isBranchMode && branchCompare) {
+      const isBranchEntry = section.area === undefined
+
+      if ((isBranchMode || (isAllMode && isBranchEntry)) && branchCompare) {
         openBranchDiff(file.worktreeId, file.filePath, entry, branchCompare, language)
         return
       }
@@ -930,6 +979,7 @@ export default function CombinedDiffViewer({
       file.filePath,
       file.runtimeEnvironmentId,
       file.worktreeId,
+      isAllMode,
       isBranchMode,
       isCommitMode,
       openBranchDiff,
@@ -945,14 +995,14 @@ export default function CombinedDiffViewer({
         return
       }
       const modifiedEditor = modifiedEditorsRef.current.get(index)
-      if (!modifiedEditor) {
+      if (!modifiedEditor && !section.dirty) {
         return
       }
 
-      const content = modifiedEditor.getValue()
+      const content = modifiedEditor?.getValue() ?? section.modifiedContent
       const absolutePath = joinPath(file.filePath, section.path)
       try {
-        const connectionId = getConnectionId(file.worktreeId) ?? undefined
+        const connectionId = getConnectionIdForFile(file.worktreeId, absolutePath) ?? undefined
         const state = useAppStore.getState()
         const worktree = file.worktreeId
           ? findWorktreeById(state.worktreesByRepo, file.worktreeId)
@@ -967,20 +1017,36 @@ export default function CombinedDiffViewer({
           absolutePath,
           content
         )
+        setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
         setSections((prev) =>
           prev.map((s, i) => {
             if (i !== index) {
               return s
             }
 
+            if (s.diffResult?.kind !== 'text') {
+              return {
+                ...s,
+                modifiedContent: content,
+                dirty: false,
+                largeDiffRenderLimit: s.largeDiffRenderLimit
+              }
+            }
+
+            const nextDiffResult = { ...s.diffResult, modifiedContent: content }
+            const nextLargeDiffRenderLimit = getLargeDiffRenderLimit({
+              originalContent: s.originalContent,
+              modifiedContent: content
+            })
+            const storedContent = getStoredTextDiffContent(nextDiffResult, nextLargeDiffRenderLimit)
+
             return {
               ...s,
-              modifiedContent: content,
+              modifiedContent: storedContent.modifiedContent,
+              originalContent: storedContent.originalContent,
               dirty: false,
-              diffResult:
-                s.diffResult?.kind === 'text'
-                  ? { ...s.diffResult, modifiedContent: content }
-                  : s.diffResult
+              diffResult: getStoredTextDiffResult(nextDiffResult, nextLargeDiffRenderLimit),
+              largeDiffRenderLimit: nextLargeDiffRenderLimit
             }
           })
         )
@@ -1107,14 +1173,14 @@ export default function CombinedDiffViewer({
       return
     }
 
-    if (file.combinedAlternate.source === 'combined-uncommitted') {
+    if (file.combinedAlternate.source === 'combined-all') {
       openAllDiffs(file.worktreeId, file.filePath)
       return
     }
 
     if (branchSummary && branchSummary.status === 'ready') {
       openBranchAllDiffs(file.worktreeId, file.filePath, branchSummary, {
-        source: 'combined-uncommitted'
+        source: 'combined-all'
       })
     }
   }, [branchSummary, file, openAllDiffs, openBranchAllDiffs])
@@ -1233,7 +1299,10 @@ export default function CombinedDiffViewer({
     }
   }, [clearDiffComments, diffCommentCount, file.worktreeId, isClearingNotes])
 
-  const commitBody = commitMessageBody(commitCompare?.message, commitCompare?.subject)
+  const commitBody = getCombinedDiffCommitMessageBody(
+    commitCompare?.message,
+    commitCompare?.subject
+  )
   const commitHeader =
     isCommitMode && commitCompare ? (
       <div className="border-b border-border bg-background px-4 py-3">
@@ -1406,7 +1475,7 @@ export default function CombinedDiffViewer({
             <span className="truncate text-xs text-muted-foreground">
               {sections.length}{' '}
               {translate('auto.components.editor.CombinedDiffViewer.7e7ca60816', 'changed files')}
-              {isBranchMode && branchCompare
+              {(isAllMode || isBranchMode) && branchCompare
                 ? translate(
                     'auto.components.editor.CombinedDiffViewer.6094135eec',
                     ' vs {{value0}}',
@@ -1483,7 +1552,7 @@ export default function CombinedDiffViewer({
                     )
                   : translate(
                       'auto.components.editor.CombinedDiffViewer.982d14bfa5',
-                      'Open Uncommitted Diff'
+                      'Open All Changes'
                     )}
               </button>
             )}
@@ -1560,7 +1629,7 @@ export default function CombinedDiffViewer({
                         toggleSection={toggleSection}
                         openSection={openSection}
                         openSectionTitle={
-                          isBranchMode || isCommitMode ? 'Open diff' : 'Open in editor'
+                          isAllMode || isBranchMode || isCommitMode ? 'Open diff' : 'Open in editor'
                         }
                         setSectionHeights={setSectionHeights}
                         setSections={setSections}
@@ -1577,7 +1646,7 @@ export default function CombinedDiffViewer({
                               comments={diffCommentsForWorktree}
                               filePath={section.path}
                               showFileScope
-                              triggerClassName="p-0.5 opacity-0 group-hover:opacity-100"
+                              triggerClassName="p-0.5 can-hover:opacity-0 group-hover:opacity-100"
                             />
                           ) : null
                         }}

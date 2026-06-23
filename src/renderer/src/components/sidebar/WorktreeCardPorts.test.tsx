@@ -47,6 +47,7 @@ describe('WorktreeCardPortsDetails', () => {
 
     expect(markup).toContain('dev.preview.localhost:58941')
     expect(markup).toContain('aria-label="Copy dev.preview.localhost:58941"')
+    expect(markup).toContain('Open in Browser. Shift+Ctrl+click for system browser')
     expect(markup).toContain(
       '<section class="space-y-1.5"><div class="flex items-center gap-1.5 px-1'
     )

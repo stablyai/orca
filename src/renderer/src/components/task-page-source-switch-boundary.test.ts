@@ -13,6 +13,25 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
 }
 
 describe('TaskPage source switching host boundary', () => {
+  it('renders GitHub item details from the task-detail page owner only', () => {
+    const detailSection = sourceBetween(
+      TASK_PAGE_SOURCE,
+      '<PullRequestPage',
+      ") : taskSource === 'github' && githubMode === 'project' ?"
+    )
+    const modalSection = sourceBetween(
+      TASK_PAGE_SOURCE,
+      '<ProjectViewWrapper selectedRepoIds={repoSelection} />',
+      '<GitLabItemDialog'
+    )
+
+    expect(modalSection).toContain('selectedRepoIds={repoSelection}')
+    expect(detailSection).toContain('workItem={dialogWorkItem}')
+    expect(detailSection).toContain('<GitHubItemDialog')
+    expect(detailSection).toContain('sourceContext={dialogSourceContext}')
+    expect(modalSection).not.toContain('<GitHubItemDialog')
+  })
+
   it('switches task source without mutating the focused run host', () => {
     const section = sourceBetween(
       TASK_PAGE_SOURCE,

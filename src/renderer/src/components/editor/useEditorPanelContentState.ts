@@ -3,7 +3,7 @@
    make the hook coordination harder to audit. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId, getConnectionIdForFile } from '@/lib/connection-context'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import { getRuntimeFileReadScope, readRuntimeFileContent } from '@/runtime/runtime-file-client'
@@ -95,7 +95,7 @@ export function useEditorPanelContentState({
       relativePath?: string
     ): Promise<void> => {
       try {
-        const connectionId = getConnectionId(worktreeId ?? null) ?? undefined
+        const connectionId = getConnectionIdForFile(worktreeId ?? null, filePath) ?? undefined
         const restoredOpenFile = openFilesRef.current.find((file) => file.id === id)
         const activeSettings = useAppStore.getState().settings
         const readSettings = settingsForRuntimeOwner(
@@ -305,7 +305,12 @@ export function useEditorPanelContentState({
         return
       }
       if (!fileContents[fileToLoad.id]) {
-        void loadFileContent(fileToLoad.filePath, fileToLoad.id, fileToLoad.worktreeId)
+        void loadFileContent(
+          fileToLoad.filePath,
+          fileToLoad.id,
+          fileToLoad.worktreeId,
+          fileToLoad.relativePath
+        )
       }
       if (isChangesMode && !diffContents[fileToLoad.id]) {
         void loadDiffContent(fileToLoad)
@@ -336,19 +341,31 @@ export function useEditorPanelContentState({
   const changesStatusEntries = activeFile?.worktreeId
     ? gitStatusByWorktree[activeFile.worktreeId]
     : undefined
-  const activeFileGitStatusSignature = useMemo(() => {
+  const activeFileGitStatusEntries = useMemo(() => {
     if (!activeFile?.relativePath || !changesStatusEntries) {
+      return undefined
+    }
+    return changesStatusEntries.filter((entry) => entry.path === activeFile.relativePath)
+  }, [activeFile?.relativePath, changesStatusEntries])
+  const activeFileGitStatusSignature = useMemo(() => {
+    if (!activeFileGitStatusEntries) {
       return ''
     }
-    const matching = changesStatusEntries.filter((entry) => entry.path === activeFile.relativePath)
     return JSON.stringify(
-      matching.map((entry) => ({
+      activeFileGitStatusEntries.map((entry) => ({
         area: entry.area,
         status: entry.status,
         conflictStatus: entry.conflictStatus
       }))
     )
-  }, [activeFile?.relativePath, changesStatusEntries])
+  }, [activeFileGitStatusEntries])
+  const activeFileShouldReloadOnGitStatusChange = useMemo(
+    () =>
+      activeFile
+        ? shouldReloadDiffOnGitStatusChange(activeFile, activeFileGitStatusEntries)
+        : false,
+    [activeFile, activeFileGitStatusEntries]
+  )
   useEffect(() => {
     if (!activeFile?.id) {
       return
@@ -357,7 +374,7 @@ export function useEditorPanelContentState({
     if (!current) {
       return
     }
-    if (!(isChangesMode || shouldReloadDiffOnGitStatusChange(current))) {
+    if (!(isChangesMode || activeFileShouldReloadOnGitStatusChange)) {
       return
     }
     // Why: the lazy-load effect already fetches on first open; forcing here
@@ -366,7 +383,13 @@ export function useEditorPanelContentState({
       return
     }
     void loadDiffContent(current, { force: true })
-  }, [activeFileGitStatusSignature, isChangesMode, activeFile?.id, loadDiffContent])
+  }, [
+    activeFileShouldReloadOnGitStatusChange,
+    activeFileGitStatusSignature,
+    isChangesMode,
+    activeFile?.id,
+    loadDiffContent
+  ])
 
   useEffect(() => {
     const nonce = activeFile?.diffContentReloadNonce
@@ -387,6 +410,30 @@ export function useEditorPanelContentState({
     })
     void loadDiffContent(current, { force: true })
   }, [activeFile?.diffContentReloadNonce, activeFile?.id, loadDiffContent])
+
+  useEffect(() => {
+    const nonce = activeFile?.fileContentReloadNonce
+    if (!activeFile?.id || nonce === undefined || nonce === 0) {
+      return
+    }
+    const current = openFilesRef.current.find((f) => f.id === activeFile.id)
+    if (
+      !current ||
+      current.isDirty ||
+      (current.mode !== 'edit' && current.mode !== 'markdown-preview')
+    ) {
+      return
+    }
+    setFileContents((prev) => {
+      if (!prev[current.id]) {
+        return prev
+      }
+      const next = { ...prev }
+      delete next[current.id]
+      return next
+    })
+    void loadFileContent(current.filePath, current.id, current.worktreeId, current.relativePath)
+  }, [activeFile?.fileContentReloadNonce, activeFile?.filePath, activeFile?.id, loadFileContent])
 
   useEditorPanelExternalContentEvents({
     loadDiffContent,

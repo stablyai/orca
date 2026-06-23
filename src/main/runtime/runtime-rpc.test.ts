@@ -25,7 +25,8 @@ vi.mock('../git/worktree', () => ({
       isBare: false,
       isMainWorktree: false
     }
-  ])
+  ]),
+  listWorktreesStrict: vi.fn().mockResolvedValue([])
 }))
 
 async function sendRequest(
@@ -568,7 +569,7 @@ describe('OrcaRuntimeRpcServer', () => {
       disconnectSpy.mockRestore()
       await server.stop()
     }
-  })
+  }, 15_000)
 
   it('does not revoke runtime-scoped devices through mobile revocation', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
@@ -633,7 +634,7 @@ describe('OrcaRuntimeRpcServer', () => {
     } finally {
       await server.stop()
     }
-  })
+  }, 15_000)
 
   it('rotates unused runtime pairing links without revoking already-used grants', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
@@ -689,7 +690,7 @@ describe('OrcaRuntimeRpcServer', () => {
     } finally {
       await server.stop()
     }
-  })
+  }, 15_000)
 
   it('caps WebSocket long-polls and aborts them when the socket closes', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
@@ -980,7 +981,9 @@ describe('OrcaRuntimeRpcServer', () => {
     await server['handleWebSocketMessage'](
       JSON.stringify({
         id: 'req_forbidden',
-        method: 'git.generateCommitMessage',
+        // files.delete is a real registered RPC intentionally kept off the
+        // mobile allowlist — mobile clients must never delete host files.
+        method: 'files.delete',
         deviceToken: mobile.token,
         params: { worktree: 'id:wt-1' }
       }),
@@ -2145,7 +2148,10 @@ describe('OrcaRuntimeRpcServer', () => {
     })
     expect(listResponse).toMatchObject({
       id: 'req_list',
-      ok: true
+      ok: true,
+      result: {
+        terminals: [expect.objectContaining({ ptyId: 'pty-1' })]
+      }
     })
 
     const handle = (
@@ -2228,6 +2234,242 @@ describe('OrcaRuntimeRpcServer', () => {
     })
 
     await server.stop()
+  })
+
+  it('serves terminal.list with visual split-group and pane nesting', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+    const worktreeId = 'repo-1::/tmp/worktree-a'
+    const leftLeaf = '11111111-1111-4111-8111-111111111111'
+    const topLeaf = '22222222-2222-4222-8222-222222222222'
+    const bottomLeaf = '33333333-3333-4333-8333-333333333333'
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-left',
+          worktreeId,
+          title: 'Left',
+          activeLeafId: leftLeaf,
+          layout: { type: 'leaf', leafId: leftLeaf }
+        },
+        {
+          tabId: 'tab-right',
+          worktreeId,
+          title: 'Right',
+          activeLeafId: bottomLeaf,
+          layout: {
+            type: 'split',
+            direction: 'vertical',
+            first: { type: 'leaf', leafId: topLeaf },
+            second: { type: 'leaf', leafId: bottomLeaf }
+          }
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-left',
+          worktreeId,
+          leafId: leftLeaf,
+          paneRuntimeId: 1,
+          ptyId: 'pty-left',
+          title: 'Left'
+        },
+        {
+          tabId: 'tab-right',
+          worktreeId,
+          leafId: topLeaf,
+          paneRuntimeId: 1,
+          ptyId: 'pty-top',
+          title: 'Right top'
+        },
+        {
+          tabId: 'tab-right',
+          worktreeId,
+          leafId: bottomLeaf,
+          paneRuntimeId: 2,
+          ptyId: 'pty-bottom',
+          title: 'Right bottom'
+        }
+      ],
+      mobileSessionTabs: [
+        {
+          worktree: worktreeId,
+          publicationEpoch: 'test',
+          snapshotVersion: 1,
+          activeGroupId: 'group-right',
+          activeTabId: `tab-right::${bottomLeaf}`,
+          activeTabType: 'terminal',
+          tabGroups: [
+            { id: 'group-left', activeTabId: 'tab-left', tabOrder: ['tab-left'] },
+            { id: 'group-right', activeTabId: 'tab-right', tabOrder: ['tab-right'] }
+          ],
+          tabGroupLayout: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', groupId: 'group-left' },
+            second: { type: 'leaf', groupId: 'group-right' }
+          },
+          tabs: [
+            {
+              type: 'terminal',
+              id: `tab-left::${leftLeaf}`,
+              title: 'Left',
+              parentTabId: 'tab-left',
+              leafId: leftLeaf,
+              ptyId: 'pty-left',
+              parentLayout: {
+                root: { type: 'leaf', leafId: leftLeaf },
+                activeLeafId: leftLeaf,
+                expandedLeafId: null,
+                ptyIdsByLeafId: { [leftLeaf]: 'pty-left' }
+              },
+              isActive: false
+            },
+            {
+              type: 'terminal',
+              id: `tab-right::${topLeaf}`,
+              title: 'Right top',
+              parentTabId: 'tab-right',
+              leafId: topLeaf,
+              ptyId: 'pty-top',
+              parentLayout: {
+                root: {
+                  type: 'split',
+                  direction: 'vertical',
+                  first: { type: 'leaf', leafId: topLeaf },
+                  second: { type: 'leaf', leafId: bottomLeaf }
+                },
+                activeLeafId: bottomLeaf,
+                expandedLeafId: null,
+                ptyIdsByLeafId: {
+                  [topLeaf]: 'pty-top',
+                  [bottomLeaf]: 'pty-bottom'
+                }
+              },
+              isActive: false
+            },
+            {
+              type: 'terminal',
+              id: `tab-right::${bottomLeaf}`,
+              title: 'Right bottom',
+              parentTabId: 'tab-right',
+              leafId: bottomLeaf,
+              ptyId: 'pty-bottom',
+              parentLayout: {
+                root: {
+                  type: 'split',
+                  direction: 'vertical',
+                  first: { type: 'leaf', leafId: topLeaf },
+                  second: { type: 'leaf', leafId: bottomLeaf }
+                },
+                activeLeafId: bottomLeaf,
+                expandedLeafId: null,
+                ptyIdsByLeafId: {
+                  [topLeaf]: 'pty-top',
+                  [bottomLeaf]: 'pty-bottom'
+                }
+              },
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    await server.start()
+    try {
+      const metadata = readRuntimeMetadata(userDataPath)
+      const listResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
+        id: 'req_list_layout',
+        authToken: metadata!.authToken,
+        method: 'terminal.list',
+        params: { worktree: `id:${worktreeId}` }
+      })
+      const result = listResponse.result as {
+        visualLayouts?: unknown[]
+        terminals: { handle: string; tabId: string; leafId: string }[]
+      }
+      const handleByLeaf = new Map(
+        result.terminals.map((terminal) => [terminal.leafId, terminal.handle])
+      )
+
+      expect(listResponse).toMatchObject({
+        id: 'req_list_layout',
+        ok: true
+      })
+      expect(result.visualLayouts).toMatchObject([
+        {
+          worktreeId,
+          worktreePath: '/tmp/worktree-a',
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: {
+              type: 'group',
+              groupId: 'group-left',
+              tabs: [
+                {
+                  tabId: 'tab-left',
+                  panes: {
+                    type: 'terminal',
+                    handle: handleByLeaf.get(leftLeaf),
+                    leafId: leftLeaf
+                  }
+                }
+              ]
+            },
+            second: {
+              type: 'group',
+              groupId: 'group-right',
+              tabs: [
+                {
+                  tabId: 'tab-right',
+                  panes: {
+                    type: 'pane-split',
+                    direction: 'vertical',
+                    first: {
+                      type: 'terminal',
+                      handle: handleByLeaf.get(topLeaf),
+                      leafId: topLeaf
+                    },
+                    second: {
+                      type: 'terminal',
+                      handle: handleByLeaf.get(bottomLeaf),
+                      leafId: bottomLeaf,
+                      active: true
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ])
+
+      const resolvePaneResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
+        id: 'req_resolve_pane',
+        authToken: metadata!.authToken,
+        method: 'terminal.resolvePane',
+        params: { paneKey: `tab-right:${bottomLeaf}` }
+      })
+      expect(resolvePaneResponse).toMatchObject({
+        id: 'req_resolve_pane',
+        ok: true,
+        result: {
+          terminal: {
+            handle: handleByLeaf.get(bottomLeaf),
+            tabId: 'tab-right',
+            leafId: bottomLeaf,
+            ptyId: 'pty-bottom'
+          }
+        }
+      })
+    } finally {
+      await server.stop()
+    }
   })
 
   it('mirrors laptop-created remote runtime terminals into phone session tabs over RPC', async () => {

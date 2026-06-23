@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
 import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
+import { assertClipboardImageByteLengthWithinLimit } from '../../shared/clipboard-image'
 
 export type SaveClipboardImageAsTempFileArgs = {
   connectionId?: string | null
@@ -23,6 +24,8 @@ export async function saveClipboardImageBufferAsTempFile(
   buffer: Buffer,
   args?: SaveClipboardImageAsTempFileArgs
 ): Promise<string> {
+  assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
+
   const fileName = `orca-paste-${Date.now()}-${randomUUID()}.png`
 
   if (args?.connectionId) {

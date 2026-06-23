@@ -120,6 +120,7 @@ export type NavigationContext = {
   activeWorktreeId: string | null
   selectedNode: TreeNode | null
   isExpanded: (path: string) => boolean
+  canToggleDirectories?: boolean
   findFocusedIndex: () => number | null
   handlers: NavigationHandlers
 }
@@ -157,7 +158,9 @@ export function applyFileExplorerNavigation(ctx: NavigationContext, e: KeyboardE
   if (resolved.type === 'toggle-expand' || resolved.type === 'toggle-collapse') {
     e.preventDefault()
     e.stopPropagation()
-    if (ctx.activeWorktreeId) {
+    // Why: callers can disable directory toggles for projected or transient trees
+    // where mutating persisted expansion state would be misleading.
+    if (ctx.activeWorktreeId && ctx.canToggleDirectories !== false) {
       ctx.handlers.toggleDir(ctx.activeWorktreeId, resolved.dirPath)
     }
     return true

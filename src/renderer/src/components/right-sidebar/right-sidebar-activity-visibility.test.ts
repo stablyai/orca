@@ -5,8 +5,27 @@ import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-vi
 
 const items: ActivityBarItem[] = [
   { id: 'explorer', icon: Files, title: 'Explorer', shortcut: '' },
-  { id: 'workspaces', icon: Files, title: 'Workspaces', shortcut: '', folderOnly: true },
-  { id: 'source-control', icon: Files, title: 'Source Control', shortcut: '', gitOnly: true },
+  {
+    id: 'workspaces',
+    icon: Files,
+    title: 'Workspaces',
+    shortcut: '',
+    folderOnly: true
+  },
+  {
+    id: 'pr-checks',
+    icon: Files,
+    title: 'PR Checks',
+    shortcut: '',
+    folderOnly: true
+  },
+  {
+    id: 'source-control',
+    icon: Files,
+    title: 'Source Control',
+    shortcut: '',
+    gitOnly: true
+  },
   { id: 'ports', icon: Files, title: 'Ports', shortcut: '', sshOnly: true }
 ]
 
@@ -36,7 +55,7 @@ describe('getVisibleRightSidebarActivityItems', () => {
         isFolderWorkspace: true,
         isSshRepo: true
       }).map((item) => item.id)
-    ).toEqual(['explorer', 'workspaces', 'ports'])
+    ).toEqual(['explorer', 'workspaces', 'pr-checks', 'ports'])
 
     expect(
       getVisibleRightSidebarActivityItems(items, {

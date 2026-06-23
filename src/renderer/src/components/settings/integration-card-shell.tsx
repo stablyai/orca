@@ -1,5 +1,6 @@
 import { LoaderCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useIntegrationCardShellClass } from './integration-card-presentation'
 
 export type IntegrationCardStatusTone = 'connected' | 'attention' | 'neutral'
 
@@ -20,31 +21,34 @@ export function IntegrationCardShell(props: {
   actions?: React.ReactNode
   children?: React.ReactNode
 }): React.JSX.Element {
-  return (
-    <div
-      className={cn('rounded-md border border-border/50 bg-muted/30 px-4 py-3', props.className)}
+  const shellClass = useIntegrationCardShellClass(props.className)
+  const status = props.checking ? (
+    <LoaderCircle className="size-4 shrink-0 animate-spin text-muted-foreground" />
+  ) : (
+    <span
+      className={cn(
+        'shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium',
+        STATUS_TONE_CLASSES[props.statusTone]
+      )}
     >
-      <div className="flex items-center gap-3">
+      {props.statusLabel}
+    </span>
+  )
+
+  return (
+    <div className={shellClass}>
+      <div className="flex flex-wrap items-start gap-3">
         <span className="shrink-0 text-muted-foreground">{props.icon}</span>
-        <div className="min-w-0 flex-1 space-y-0.5">
+        <div className="min-w-0 flex-1 basis-[16rem] space-y-0.5">
           <p className="text-sm font-medium">{props.name}</p>
           <p className="text-xs text-muted-foreground">{props.description}</p>
         </div>
-        {props.actions ? (
-          <div className="flex shrink-0 items-center gap-1.5">{props.actions}</div>
-        ) : null}
-        {props.checking ? (
-          <LoaderCircle className="size-4 shrink-0 animate-spin text-muted-foreground" />
-        ) : (
-          <span
-            className={cn(
-              'shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium',
-              STATUS_TONE_CLASSES[props.statusTone]
-            )}
-          >
-            {props.statusLabel}
-          </span>
-        )}
+        {/* Why: settings can be narrow with the sidebar open; controls need their
+        own row before they squeeze provider copy into unreadable columns. */}
+        <div className="flex basis-full shrink-0 flex-wrap items-center justify-start gap-1.5 min-[1100px]:ml-auto min-[1100px]:basis-auto min-[1100px]:justify-end">
+          {props.actions}
+          {status}
+        </div>
       </div>
       {props.children}
     </div>
@@ -56,12 +60,7 @@ export function IntegrationCardDetails(props: {
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <div
-      className={cn(
-        'mt-3 space-y-2 rounded-md border border-border/30 bg-background/50 px-3 py-2.5',
-        props.className
-      )}
-    >
+    <div className={cn('mt-4 space-y-2 border-t border-border/60 pt-4', props.className)}>
       {props.children}
     </div>
   )

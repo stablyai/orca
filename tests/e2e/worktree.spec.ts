@@ -65,10 +65,10 @@ test.describe('Create Workspace', () => {
       await expect(dialog).toBeVisible()
 
       // Wait for the composer to settle. The card fires several async effects
-      // on mount (detected-agent probe, repo combobox autofocus + hydration,
+      // on mount (detected-agent probe, name-field autofocus + hydration,
       // setup-hooks fetch). Clicking before those settle can race Radix's
       // FocusScope reparenting.
-      await expect(dialog.getByRole('combobox').first()).toBeVisible()
+      await expect(dialog.locator('[data-workspace-name-input="true"]')).toBeVisible()
 
       // Force the `getBaseRefDefault` IPC to round-trip so any consumer that
       // renders the envelope (e.g. SourceControl) has a chance to crash
@@ -180,7 +180,7 @@ test.describe('Create Workspace', () => {
 
       const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
       await expect(dialog).toBeVisible()
-      await expect(dialog.getByRole('combobox').first()).toBeVisible()
+      await expect(dialog.locator('[data-workspace-name-input="true"]')).toBeVisible()
 
       const nameInput = dialog.getByPlaceholder(/Type a name/i)
       await expect(nameInput).toBeVisible()
@@ -227,7 +227,7 @@ test.describe('Create Workspace', () => {
 
       const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
       await expect(dialog).toBeVisible()
-      await expect(dialog.getByRole('combobox').first()).toBeVisible()
+      await expect(dialog.locator('[data-workspace-name-input="true"]')).toBeVisible()
 
       await electronApp.evaluate(
         ({ ipcMain }, { title, url }) => {
@@ -337,7 +337,7 @@ test.describe('Create Workspace', () => {
 
       const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
       await expect(dialog).toBeVisible()
-      await expect(dialog.getByRole('combobox').first()).toBeVisible()
+      await expect(dialog.locator('[data-workspace-name-input="true"]')).toBeVisible()
 
       await electronApp.evaluate(
         ({ ipcMain }, { title, url }) => {

@@ -84,4 +84,11 @@ describe('getTabRootStateClasses', () => {
     expect(classes).toContain('text-muted-foreground')
     expect(classes).toContain('hover:text-foreground')
   })
+
+  it('returns the selected-tab surface treatment while pressed before activation', () => {
+    const classes = getTabRootStateClasses(false, true)
+    expect(classes).toContain('bg-[color-mix(in_srgb,var(--foreground)_6%,var(--card))]')
+    expect(classes).toContain('text-foreground')
+    expect(classes).not.toContain('hover:text-foreground')
+  })
 })

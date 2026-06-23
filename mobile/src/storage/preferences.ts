@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
 const PINS_PREFIX = 'orca:pins:'
-const PREFS_PREFIX = 'orca:prefs:'
 const NOTIF_KEY = 'orca:pushNotificationsEnabled'
 
 // Why: default-off so the iOS notification permission prompt never
@@ -74,33 +73,94 @@ export async function saveTerminalAutocompleteEnabled(enabled: boolean): Promise
   await AsyncStorage.setItem(AUTOCOMPLETE_KEY, String(enabled))
 }
 
-export type HostPreferences = {
-  sortMode: string
-  filterMode: string
-  groupMode: string
-  collapsedGroups: string[]
-  selectedRepos: string[]
+const SIDEBAR_WIDTH_KEY = 'orca:hostSidebarWidth'
+
+// Bounds for the draggable host worktree-list sidebar on tablet/foldable
+// layouts (mirrors the desktop's resizable sidebar). The caller additionally
+// caps the max against the window so the detail pane keeps usable space.
+export const HOST_SIDEBAR_MIN_WIDTH = 280
+export const HOST_SIDEBAR_MAX_WIDTH = 560
+export const HOST_SIDEBAR_DEFAULT_WIDTH = 340
+
+export function clampHostSidebarWidth(width: number): number {
+  if (!Number.isFinite(width)) {
+    return HOST_SIDEBAR_DEFAULT_WIDTH
+  }
+  return Math.min(HOST_SIDEBAR_MAX_WIDTH, Math.max(HOST_SIDEBAR_MIN_WIDTH, Math.round(width)))
 }
 
-const DEFAULT_PREFS: HostPreferences = {
-  sortMode: 'recent',
-  filterMode: 'all',
-  groupMode: 'repo',
-  collapsedGroups: [],
-  selectedRepos: []
+export async function loadHostSidebarWidth(): Promise<number> {
+  try {
+    const raw = await AsyncStorage.getItem(SIDEBAR_WIDTH_KEY)
+    if (raw === null) {
+      return HOST_SIDEBAR_DEFAULT_WIDTH
+    }
+    return clampHostSidebarWidth(Number(raw))
+  } catch {
+    return HOST_SIDEBAR_DEFAULT_WIDTH
+  }
 }
-const SORT_MODES = new Set(['smart', 'recent', 'name', 'repo'])
-const FILTER_MODES = new Set(['all', 'active'])
-const GROUP_MODES = new Set(['none', 'workspaceStatus', 'repo', 'prStatus'])
+
+export async function saveHostSidebarWidth(width: number): Promise<void> {
+  await AsyncStorage.setItem(SIDEBAR_WIDTH_KEY, String(clampHostSidebarWidth(width)))
+}
+
+const DOCK_WIDTH_KEY = 'orca:hostDockWidth'
+
+// Bounds for the draggable right-hand session dock (Source Control / Files / PR)
+// on wide layouts. Mirrors the left worktree-list sidebar's bounds so the two
+// resizable columns read as a matched pair; the default matches the left default.
+// The caller additionally caps the max against the window so the terminal keeps
+// usable space.
+export const HOST_DOCK_MIN_WIDTH = 280
+export const HOST_DOCK_MAX_WIDTH = 560
+export const HOST_DOCK_DEFAULT_WIDTH = 340
+
+export function clampHostDockWidth(width: number): number {
+  if (!Number.isFinite(width)) {
+    return HOST_DOCK_DEFAULT_WIDTH
+  }
+  return Math.min(HOST_DOCK_MAX_WIDTH, Math.max(HOST_DOCK_MIN_WIDTH, Math.round(width)))
+}
+
+export async function loadHostDockWidth(): Promise<number> {
+  try {
+    const raw = await AsyncStorage.getItem(DOCK_WIDTH_KEY)
+    if (raw === null) {
+      return HOST_DOCK_DEFAULT_WIDTH
+    }
+    return clampHostDockWidth(Number(raw))
+  } catch {
+    return HOST_DOCK_DEFAULT_WIDTH
+  }
+}
+
+export async function saveHostDockWidth(width: number): Promise<void> {
+  await AsyncStorage.setItem(DOCK_WIDTH_KEY, String(clampHostDockWidth(width)))
+}
+
+export type MobileTerminalLinkOpenMode = 'orca-browser' | 'phone-browser'
+
+const TERMINAL_LINK_OPEN_MODE_KEY = 'orca:terminalLinkOpenMode'
+export const DEFAULT_TERMINAL_LINK_OPEN_MODE: MobileTerminalLinkOpenMode = 'orca-browser'
+
+export async function loadTerminalLinkOpenMode(): Promise<MobileTerminalLinkOpenMode> {
+  try {
+    const raw = await AsyncStorage.getItem(TERMINAL_LINK_OPEN_MODE_KEY)
+    return raw === 'phone-browser' || raw === 'orca-browser' ? raw : DEFAULT_TERMINAL_LINK_OPEN_MODE
+  } catch {
+    return DEFAULT_TERMINAL_LINK_OPEN_MODE
+  }
+}
+
+export async function saveTerminalLinkOpenMode(mode: MobileTerminalLinkOpenMode): Promise<void> {
+  await AsyncStorage.setItem(TERMINAL_LINK_OPEN_MODE_KEY, mode)
+}
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')
     : []
-}
-
-function allowedString(value: unknown, allowed: Set<string>, fallback: string): string {
-  return typeof value === 'string' && allowed.has(value) ? value : fallback
 }
 
 export async function loadPinnedIds(hostId: string): Promise<Set<string>> {
@@ -117,32 +177,4 @@ export async function loadPinnedIds(hostId: string): Promise<Set<string>> {
 
 export async function savePinnedIds(hostId: string, ids: Set<string>): Promise<void> {
   await AsyncStorage.setItem(PINS_PREFIX + hostId, JSON.stringify([...ids]))
-}
-
-export async function loadPreferences(hostId: string): Promise<HostPreferences> {
-  try {
-    const raw = await AsyncStorage.getItem(PREFS_PREFIX + hostId)
-    if (!raw) {
-      return DEFAULT_PREFS
-    }
-    const parsed = JSON.parse(raw) as Partial<HostPreferences>
-    return {
-      sortMode: allowedString(parsed.sortMode, SORT_MODES, DEFAULT_PREFS.sortMode),
-      filterMode: allowedString(parsed.filterMode, FILTER_MODES, DEFAULT_PREFS.filterMode),
-      groupMode: allowedString(parsed.groupMode, GROUP_MODES, DEFAULT_PREFS.groupMode),
-      collapsedGroups: stringArray(parsed.collapsedGroups),
-      selectedRepos: stringArray(parsed.selectedRepos)
-    }
-  } catch {
-    return DEFAULT_PREFS
-  }
-}
-
-export async function savePreferences(
-  hostId: string,
-  prefs: Partial<HostPreferences>
-): Promise<void> {
-  const current = await loadPreferences(hostId)
-  const merged = { ...current, ...prefs }
-  await AsyncStorage.setItem(PREFS_PREFIX + hostId, JSON.stringify(merged))
 }

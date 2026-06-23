@@ -93,6 +93,38 @@ describe('gitlab project ref resolution', () => {
     })
   })
 
+  it('keeps local host and local WSL project-ref cache entries separate for the same path', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:host/orca.git\n' })
+      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:wsl/orca.git\n' })
+
+    await expect(getProjectRef('/repo')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'host/orca'
+    })
+    await expect(getProjectRef('/repo', undefined, null, { wslDistro: 'Ubuntu' })).resolves.toEqual(
+      {
+        host: 'gitlab.com',
+        path: 'wsl/orca'
+      }
+    )
+    await expect(getProjectRef('/repo', undefined, null, { wslDistro: 'Ubuntu' })).resolves.toEqual(
+      {
+        host: 'gitlab.com',
+        path: 'wsl/orca'
+      }
+    )
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['remote', 'get-url', 'origin'], {
+      cwd: '/repo'
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['remote', 'get-url', 'origin'], {
+      cwd: '/repo',
+      wslDistro: 'Ubuntu'
+    })
+  })
+
   it('coalesces concurrent missing remote probes for the same repo and remote', async () => {
     gitExecFileAsyncMock.mockImplementation(async () => {
       await Promise.resolve()
@@ -327,6 +359,19 @@ describe('parseGlabApiResponse', () => {
     const parsed = parseGlabApiResponse(stdout)
     expect(parsed.headers['x-total']).toBe('7')
     expect(parsed.body).toBe('[]')
+  })
+
+  it('splits large bodies without full-output separator matching', () => {
+    const matchSpy = vi.spyOn(String.prototype, 'match')
+    const body = '[{"iid":1}]'.repeat(10_000)
+    const parsed = parseGlabApiResponse(`HTTP/2.0 200 OK\r\nX-Total: 7\r\n\r\n${body}`)
+
+    expect(parsed.headers['x-total']).toBe('7')
+    expect(parsed.body).toBe(body)
+    const usedSeparatorMatch = matchSpy.mock.calls.some(
+      ([pattern]) => pattern instanceof RegExp && pattern.source === '\\r?\\n\\r?\\n'
+    )
+    expect(usedSeparatorMatch).toBe(false)
   })
 
   it('lowercases header names for stable lookup', () => {

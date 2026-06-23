@@ -125,23 +125,36 @@ describe('HistoryManager', () => {
       expect(data.rehydrateSequences).toBe('\x1b[?2004h\x1b[?1h')
     })
 
+    it('preserves OSC link ranges in checkpoint', async () => {
+      await mgr.openSession('sess-1', { cwd: '/tmp', cols: 80, rows: 24 })
+      const oscLinks = [{ row: 0, startCol: 6, endCol: 11, uri: 'https://example.com/issue/1234' }]
+
+      await mgr.checkpoint('sess-1', makeSnapshot({ oscLinks }))
+
+      const data = JSON.parse(readFileSync(sessionPath(dir, 'sess-1', 'checkpoint.json'), 'utf-8'))
+      expect(data.oscLinks).toEqual(oscLinks)
+    })
+
     it('ignores checkpoint for unknown sessions', async () => {
       await mgr.checkpoint('nonexistent', makeSnapshot())
     })
 
-    it('ignores checkpoint for disabled sessions', async () => {
-      await mgr.openSession('sess-1', { cwd: '/tmp', cols: 80, rows: 24 })
+    it.skipIf(process.platform === 'win32')(
+      'ignores checkpoint for disabled sessions',
+      async () => {
+        await mgr.openSession('sess-1', { cwd: '/tmp', cols: 80, rows: 24 })
 
-      const cpPath = sessionPath(dir, 'sess-1', 'checkpoint.json')
-      chmodSync(join(dir, getHistorySessionDirName('sess-1')), 0o555)
+        const cpPath = sessionPath(dir, 'sess-1', 'checkpoint.json')
+        chmodSync(join(dir, getHistorySessionDirName('sess-1')), 0o555)
 
-      await mgr.checkpoint('sess-1', makeSnapshot())
+        await mgr.checkpoint('sess-1', makeSnapshot())
 
-      chmodSync(join(dir, getHistorySessionDirName('sess-1')), 0o755)
+        chmodSync(join(dir, getHistorySessionDirName('sess-1')), 0o755)
 
-      await mgr.checkpoint('sess-1', makeSnapshot({ snapshotAnsi: 'after-error' }))
-      expect(existsSync(cpPath)).toBe(false)
-    })
+        await mgr.checkpoint('sess-1', makeSnapshot({ snapshotAnsi: 'after-error' }))
+        expect(existsSync(cpPath)).toBe(false)
+      }
+    )
 
     it('does not write scrollback.bin', async () => {
       await mgr.openSession('sess-1', { cwd: '/tmp', cols: 80, rows: 24 })
@@ -235,58 +248,70 @@ describe('HistoryManager', () => {
   })
 
   describe('error handling', () => {
-    it('disables writes after fs error and does not throw', async () => {
-      await mgr.openSession('disk-full', { cwd: '/tmp', cols: 80, rows: 24 })
+    it.skipIf(process.platform === 'win32')(
+      'disables writes after fs error and does not throw',
+      async () => {
+        await mgr.openSession('disk-full', { cwd: '/tmp', cols: 80, rows: 24 })
 
-      const sessionDir = join(dir, getHistorySessionDirName('disk-full'))
-      chmodSync(sessionDir, 0o555)
+        const sessionDir = join(dir, getHistorySessionDirName('disk-full'))
+        chmodSync(sessionDir, 0o555)
 
-      await mgr.checkpoint('disk-full', makeSnapshot())
+        await mgr.checkpoint('disk-full', makeSnapshot())
 
-      chmodSync(sessionDir, 0o755)
+        chmodSync(sessionDir, 0o755)
 
-      await mgr.checkpoint('disk-full', makeSnapshot({ snapshotAnsi: 'after-error' }))
-      expect(existsSync(sessionPath(dir, 'disk-full', 'checkpoint.json'))).toBe(false)
-    })
+        await mgr.checkpoint('disk-full', makeSnapshot({ snapshotAnsi: 'after-error' }))
+        expect(existsSync(sessionPath(dir, 'disk-full', 'checkpoint.json'))).toBe(false)
+      }
+    )
 
-    it('disables writes after fs error on openSession', async () => {
-      chmodSync(dir, 0o555)
+    it.skipIf(process.platform === 'win32')(
+      'disables writes after fs error on openSession',
+      async () => {
+        chmodSync(dir, 0o555)
 
-      await mgr.openSession('disk-full-open', { cwd: '/tmp', cols: 80, rows: 24 })
+        await mgr.openSession('disk-full-open', { cwd: '/tmp', cols: 80, rows: 24 })
 
-      chmodSync(dir, 0o755)
+        chmodSync(dir, 0o755)
 
-      await mgr.checkpoint('disk-full-open', makeSnapshot())
-    })
+        await mgr.checkpoint('disk-full-open', makeSnapshot())
+      }
+    )
 
-    it('does not throw on closeSession disk error', async () => {
-      await mgr.openSession('close-err', { cwd: '/tmp', cols: 80, rows: 24 })
+    it.skipIf(process.platform === 'win32')(
+      'does not throw on closeSession disk error',
+      async () => {
+        await mgr.openSession('close-err', { cwd: '/tmp', cols: 80, rows: 24 })
 
-      const metaPath = sessionPath(dir, 'close-err', 'meta.json')
-      chmodSync(metaPath, 0o444)
+        const metaPath = sessionPath(dir, 'close-err', 'meta.json')
+        chmodSync(metaPath, 0o444)
 
-      await mgr.closeSession('close-err', 0)
+        await mgr.closeSession('close-err', 0)
 
-      chmodSync(metaPath, 0o644)
-    })
+        chmodSync(metaPath, 0o644)
+      }
+    )
 
-    it('reports write errors via onWriteError callback', async () => {
-      const errors: { sessionId: string; error: Error }[] = []
-      mgr = new HistoryManager(dir, {
-        onWriteError: (sessionId, error) => errors.push({ sessionId, error })
-      })
+    it.skipIf(process.platform === 'win32')(
+      'reports write errors via onWriteError callback',
+      async () => {
+        const errors: { sessionId: string; error: Error }[] = []
+        mgr = new HistoryManager(dir, {
+          onWriteError: (sessionId, error) => errors.push({ sessionId, error })
+        })
 
-      await mgr.openSession('err-cb', { cwd: '/tmp', cols: 80, rows: 24 })
+        await mgr.openSession('err-cb', { cwd: '/tmp', cols: 80, rows: 24 })
 
-      const sessionDir = join(dir, getHistorySessionDirName('err-cb'))
-      chmodSync(sessionDir, 0o555)
+        const sessionDir = join(dir, getHistorySessionDirName('err-cb'))
+        chmodSync(sessionDir, 0o555)
 
-      await mgr.checkpoint('err-cb', makeSnapshot())
+        await mgr.checkpoint('err-cb', makeSnapshot())
 
-      chmodSync(sessionDir, 0o755)
+        chmodSync(sessionDir, 0o755)
 
-      expect(errors).toHaveLength(1)
-      expect(errors[0].sessionId).toBe('err-cb')
-    })
+        expect(errors).toHaveLength(1)
+        expect(errors[0].sessionId).toBe('err-cb')
+      }
+    )
   })
 })

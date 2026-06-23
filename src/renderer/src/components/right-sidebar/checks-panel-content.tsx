@@ -15,12 +15,14 @@ import {
   Plus,
   ChevronDown,
   ChevronRight,
+  PanelRight,
   SendHorizontal,
   Sparkles,
   RefreshCw,
   AlertTriangle,
   MoreHorizontal,
   Pencil,
+  SlidersHorizontal,
   Trash,
   X
 } from 'lucide-react'
@@ -35,20 +37,21 @@ import {
   AccordionTrigger
 } from '@/components/ui/accordion'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger
-} from '@/components/ui/dialog'
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger
+} from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import {
@@ -60,16 +63,24 @@ import {
   type PRCommentAudienceFilter
 } from '@/lib/pr-comment-audience'
 import {
-  getPRCommentGroupCount,
   getPRCommentGroupId,
   getPRCommentGroupRoot,
   groupPRComments,
-  isResolvedPRCommentGroup,
-  PR_COMMENT_OPEN_AUTHOR_CLASS,
-  PR_COMMENT_RESOLVED_AUTHOR_CLASS,
-  PR_COMMENT_RESOLVED_CONTAINER_CLASS,
   type PRCommentGroup
 } from '@/lib/pr-comment-groups'
+import {
+  getPRCommentGroupActionState,
+  isPRCommentGroupQueueableForAI,
+  partitionPRCommentGroupsForTriage,
+  sortPRCommentGroupsForTimeline,
+  type PRCommentGroupActionState
+} from '@/lib/pr-comment-action-state'
+import { formatPrCommentRelativeTime } from '@/lib/pr-comment-time'
+import {
+  getPRCommentPresentationClasses,
+  getPRCommentGroupSurfaceClasses,
+  type PRCommentPresentationClasses
+} from './pr-comment-presentation'
 import type {
   PRInfo,
   PRCheckDetail,
@@ -85,8 +96,20 @@ import {
 } from './right-panel-comment-composer'
 import { usePRCommentsListSelection } from './pr-comments-list-selection'
 import { translate } from '@/i18n/i18n'
+import { useActiveWorktree } from '@/store/selectors'
+import { useAppStore } from '@/store'
 
 export const PullRequestIcon = GitPullRequest
+
+type PRCommentsListDisplayMode = 'triage' | 'timeline'
+
+const PR_COMMENT_LIST_DISPLAY_MODES: PRCommentsListDisplayMode[] = ['triage', 'timeline']
+
+function getPRCommentsListDisplayModeLabel(mode: PRCommentsListDisplayMode): string {
+  return mode === 'triage'
+    ? translate('auto.components.right.sidebar.checks.panel.content.8a621a2c4f', 'Grouped')
+    : translate('auto.components.right.sidebar.checks.panel.content.b13f85d75c', 'Timeline')
+}
 
 export const CHECK_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   success: CircleCheck,
@@ -111,6 +134,14 @@ export const CHECK_COLOR: Record<string, string> = {
 type ConflictReview = {
   mergeable: PRMergeableState
   conflictSummary?: PRConflictSummary
+}
+
+export function buildMergeabilityRecalculationCommands(): string {
+  return [
+    'git fetch origin',
+    'git commit --allow-empty --only -m "chore: refresh PR mergeability"',
+    'git push'
+  ].join('\n')
 }
 
 export function ConflictingFilesSection({ pr }: { pr: ConflictReview }): React.JSX.Element | null {
@@ -169,6 +200,23 @@ export function MergeConflictNotice({
   if (pr.mergeable !== 'CONFLICTING' || (pr.conflictSummary?.files.length ?? 0) > 0) {
     return null
   }
+  const locallyClean = pr.conflictSummary?.localMergeState === 'clean'
+  let noticeBody = translate(
+    'auto.components.right.sidebar.checks.panel.content.ae8a04ef17',
+    'Conflict file details are unavailable'
+  )
+  if (isRefreshingConflictDetails) {
+    noticeBody = translate(
+      'auto.components.right.sidebar.checks.panel.content.73d0675356',
+      'Refreshing conflict details…'
+    )
+  } else if (locallyClean) {
+    noticeBody = translate(
+      'auto.components.right.sidebar.checks.panel.content.f5bc5c4cf1',
+      'The hosting provider reports conflicts, but local Git did not reproduce them. Refresh the review or push the branch to recalculate mergeability.'
+    )
+  }
+  const refreshCommands = locallyClean ? buildMergeabilityRecalculationCommands() : null
 
   return (
     <div className="border-t border-border px-3 py-3">
@@ -178,17 +226,89 @@ export function MergeConflictNotice({
           'This branch has conflicts that must be resolved'
         )}
       </div>
-      <div className="mt-1 text-[11px] text-muted-foreground">
-        {isRefreshingConflictDetails
-          ? translate(
-              'auto.components.right.sidebar.checks.panel.content.73d0675356',
-              'Refreshing conflict details…'
-            )
-          : translate(
-              'auto.components.right.sidebar.checks.panel.content.ae8a04ef17',
-              'Conflict file details are unavailable'
-            )}
+      <div className="mt-1 text-[11px] text-muted-foreground">{noticeBody}</div>
+      {refreshCommands ? <MergeabilityRecalculationCommandBox commands={refreshCommands} /> : null}
+    </div>
+  )
+}
+
+function MergeabilityRecalculationCommandBox({
+  commands
+}: {
+  commands: string
+}): React.JSX.Element {
+  const [copied, setCopied] = useState(false)
+  const copiedResetTimerRef = useRef<number | null>(null)
+  const isMountedRef = useRef(false)
+
+  const clearCopiedResetTimer = useCallback((): void => {
+    if (copiedResetTimerRef.current !== null) {
+      window.clearTimeout(copiedResetTimerRef.current)
+      copiedResetTimerRef.current = null
+    }
+  }, [])
+
+  const setCopyButtonRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      isMountedRef.current = node !== null
+      if (node === null) {
+        clearCopiedResetTimer()
+      }
+    },
+    [clearCopiedResetTimer]
+  )
+
+  const copyCommands = useCallback((): void => {
+    void window.api.ui
+      .writeClipboardText(commands)
+      .then(() => {
+        if (!isMountedRef.current) {
+          return
+        }
+        clearCopiedResetTimer()
+        setCopied(true)
+        copiedResetTimerRef.current = window.setTimeout(() => {
+          copiedResetTimerRef.current = null
+          setCopied(false)
+        }, 1500)
+      })
+      .catch(() => {
+        /* best-effort */
+      })
+  }, [clearCopiedResetTimer, commands])
+
+  return (
+    <div className="mt-3 rounded-md border border-border bg-accent/20 p-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[10px] font-medium text-muted-foreground">
+          {translate(
+            'auto.components.right.sidebar.checks.panel.content.5bc9bda2af',
+            'Run from this worktree'
+          )}
+        </div>
+        <Button
+          ref={setCopyButtonRef}
+          type="button"
+          variant="outline"
+          size="xs"
+          onClick={copyCommands}
+          aria-label={translate(
+            'auto.components.right.sidebar.checks.panel.content.e87fb3d929',
+            'Copy mergeability refresh commands'
+          )}
+        >
+          {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+          {copied
+            ? translate('auto.components.right.sidebar.checks.panel.content.1e53e45072', 'Copied')
+            : translate(
+                'auto.components.right.sidebar.checks.panel.content.084c516efb',
+                'Copy commands'
+              )}
+        </Button>
       </div>
+      <pre className="scrollbar-sleek mt-2 max-h-28 overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-background px-2 py-1.5 font-mono text-[10px] leading-4 text-foreground">
+        {commands}
+      </pre>
     </div>
   )
 }
@@ -475,15 +595,48 @@ export function getFailedChecksForDetails(checks: PRCheckDetail[]): PRCheckDetai
   return checks.filter(isFailedCheck)
 }
 
+type CheckDetailsStickySurface = 'sidebar' | 'card'
+
+function getCheckDetailsStickySurfaceClass(surface: CheckDetailsStickySurface): string {
+  return surface === 'card' ? 'bg-card/95' : 'bg-sidebar/95'
+}
+
+function ViewFullCheckDetailsButton({
+  onClick,
+  label
+}: {
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
+  label: string
+}): React.JSX.Element {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="xs"
+      className="h-6 min-w-[7.25rem] shrink-0 gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+      onClick={onClick}
+    >
+      <PanelRight className="size-3" />
+      {label}
+    </Button>
+  )
+}
+
 function CheckRunDetails({
   check,
-  state
+  state,
+  checkDetailsContextKey,
+  worktreeId,
+  detailsStickySurface = 'sidebar'
 }: {
   check: PRCheckDetail
   state: CheckDetailsLoadState | undefined
+  checkDetailsContextKey: string
+  worktreeId: string | null
+  detailsStickySurface?: CheckDetailsStickySurface
 }): React.JSX.Element {
+  const openCheckRunDetails = useAppStore((s) => s.openCheckRunDetails)
   const details = state?.details
-  const openUrl = details?.detailsUrl ?? details?.url ?? check.url
   const startedAt = formatCheckTimestamp(details?.startedAt)
   const completedAt = formatCheckTimestamp(details?.completedAt)
   const detailsStatusCheck: PRCheckDetail = {
@@ -502,15 +655,58 @@ function CheckRunDetails({
   const hasJobs = jobs.length > 0
   const hasLogTail = jobs.some((job) => Boolean(job.logTail))
 
+  // Why: wait until inline details finish loading before switching to the logs label
+  // so the sticky button does not resize mid-fetch.
+  const fullDetailsLabel =
+    !state?.loading && hasLogTail
+      ? translate('auto.components.right.sidebar.checks.panel.content.b8c4e2a1f7', 'View full logs')
+      : translate(
+          'auto.components.right.sidebar.checks.panel.content.e4e3af15ee',
+          'View full details'
+        )
+
+  const openFullDetailsTab = (): void => {
+    if (!worktreeId) {
+      return
+    }
+    openCheckRunDetails(worktreeId, checkDetailsContextKey, check, {
+      details: state?.details ?? null,
+      loading: state?.loading ?? false,
+      error: state?.error ?? null
+    })
+  }
+
+  const handleOpenFullDetails = (event: React.MouseEvent<HTMLButtonElement>): void => {
+    event.stopPropagation()
+    openFullDetailsTab()
+  }
+
   return (
     <div className="mb-1 ml-[26px] mr-3 min-w-0 border-l border-border pl-3">
-      {state?.loading ? (
-        <div className="flex items-center gap-2 py-1.5 text-[12px] text-muted-foreground">
-          <LoaderCircle className="size-3.5 animate-spin" />
-          {translate(
-            'auto.components.right.sidebar.checks.panel.content.1f2b980522',
-            'Loading check details…'
+      {worktreeId && (
+        // Why: inline check details can be long; pinning the affordance keeps it
+        // visible while scrolling through annotations and job output.
+        <div
+          className={cn(
+            'sticky top-0 z-10 -ml-3 flex min-w-0 items-center gap-2 border-b border-border/60 py-1 pl-3 backdrop-blur-sm',
+            getCheckDetailsStickySurfaceClass(detailsStickySurface)
           )}
+        >
+          <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-foreground">
+            {check.name}
+          </span>
+          <ViewFullCheckDetailsButton label={fullDetailsLabel} onClick={handleOpenFullDetails} />
+        </div>
+      )}
+      {state?.loading ? (
+        <div className="flex min-w-0 flex-col gap-2 py-1.5">
+          <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+            <LoaderCircle className="size-3.5 animate-spin" />
+            {translate(
+              'auto.components.right.sidebar.checks.panel.content.1f2b980522',
+              'Loading check details…'
+            )}
+          </div>
         </div>
       ) : (
         <div className="flex min-w-0 flex-col gap-2.5 py-1.5">
@@ -715,300 +911,34 @@ function CheckRunDetails({
               )}
             </div>
           )}
-
-          <div className="flex justify-end pt-1">
-            {!state?.loading && (
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="xs"
-                    className="h-7 gap-1 px-2 text-[11px]"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    {translate(
-                      'auto.components.right.sidebar.checks.panel.content.e4e3af15ee',
-                      'View full details'
-                    )}
-                  </Button>
-                </DialogTrigger>
-                <CheckRunDetailsDialog
-                  check={check}
-                  state={state}
-                  detailsStatusCheck={detailsStatusCheck}
-                  jobs={jobs}
-                  openUrl={openUrl}
-                />
-              </Dialog>
-            )}
-          </div>
         </div>
       )}
     </div>
   )
 }
 
-export function CheckRunDetailsDialog({
-  check,
-  state,
-  detailsStatusCheck,
-  jobs,
-  openUrl
-}: {
-  check: PRCheckDetail
-  state: CheckDetailsLoadState | undefined
-  detailsStatusCheck: PRCheckDetail
-  jobs: NonNullable<PRCheckRunDetails['jobs']>
-  openUrl: string | null | undefined
-}): React.JSX.Element {
-  const details = state?.details
-  const startedAt = formatCheckTimestamp(details?.startedAt)
-  const completedAt = formatCheckTimestamp(details?.completedAt)
-  const hasOutput = Boolean(details?.title || details?.summary || details?.text)
-  const hasAnnotations = (details?.annotations.length ?? 0) > 0
-  const hasJobs = jobs.length > 0
-
-  return (
-    <DialogContent
-      className="flex max-h-[85vh] w-[min(760px,calc(100vw-2rem))] max-w-none flex-col gap-0 overflow-hidden p-0"
-      onClick={(event) => event.stopPropagation()}
-    >
-      <DialogHeader className="border-b border-border px-5 py-4 pr-12">
-        <DialogTitle className="truncate text-base">{check.name}</DialogTitle>
-        <DialogDescription className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-          <span>
-            {translate('auto.components.right.sidebar.checks.panel.content.a54ae21c6f', 'Status:')}
-            {details ? getCheckStatusLabel(detailsStatusCheck) : getCheckStatusLabel(check)}
-          </span>
-          {startedAt && (
-            <span>
-              {translate(
-                'auto.components.right.sidebar.checks.panel.content.fd46a70f1a',
-                'Started'
-              )}
-              {startedAt}
-            </span>
-          )}
-          {completedAt && (
-            <span>
-              {translate(
-                'auto.components.right.sidebar.checks.panel.content.00e1c1658a',
-                'Completed'
-              )}
-              {completedAt}
-            </span>
-          )}
-          {check.checkRunId && (
-            <span className="font-mono">
-              {translate(
-                'auto.components.right.sidebar.checks.panel.content.aa8494ae3c',
-                'check #'
-              )}
-              {check.checkRunId}
-            </span>
-          )}
-          {check.workflowRunId && (
-            <span className="font-mono">
-              {translate(
-                'auto.components.right.sidebar.checks.panel.content.2dd5ddabc4',
-                'workflow #'
-              )}
-              {check.workflowRunId}
-            </span>
-          )}
-        </DialogDescription>
-      </DialogHeader>
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 scrollbar-sleek">
-        <div className="grid gap-4">
-          {state?.error && <div className="text-sm text-muted-foreground">{state.error}</div>}
-
-          {hasOutput && (
-            <section className="rounded-md border border-border bg-background">
-              <div className="border-b border-border px-3 py-2 text-sm font-medium">
-                {translate(
-                  'auto.components.right.sidebar.checks.panel.content.d098e5529a',
-                  'Output'
-                )}
-              </div>
-              <div className="px-3 py-3">
-                {details?.title && (
-                  <div className="mb-2 text-sm font-medium text-foreground">{details.title}</div>
-                )}
-                {details?.summary && (
-                  <CommentMarkdown
-                    content={details.summary}
-                    variant="document"
-                    className="min-w-0 max-w-full overflow-hidden break-words text-sm leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
-                  />
-                )}
-                {details?.text && (
-                  <CommentMarkdown
-                    content={details.text}
-                    variant="document"
-                    className="mt-3 min-w-0 max-w-full overflow-hidden break-words text-sm leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
-                  />
-                )}
-              </div>
-            </section>
-          )}
-
-          {hasAnnotations && (
-            <section className="rounded-md border border-border bg-background">
-              <div className="border-b border-border px-3 py-2 text-sm font-medium">
-                {translate(
-                  'auto.components.right.sidebar.checks.panel.content.f2fe8a4e8f',
-                  'Annotations'
-                )}
-              </div>
-              <div className="divide-y divide-border/50">
-                {details!.annotations.map((annotation, index) => (
-                  <div key={`${annotation.path ?? 'annotation'}-${index}`} className="px-3 py-3">
-                    <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <span className="min-w-0 break-all font-mono text-xs text-muted-foreground">
-                        {annotation.path ??
-                          translate(
-                            'auto.components.right.sidebar.checks.panel.content.cdbfda4dec',
-                            'Annotation'
-                          )}
-                        {annotation.startLine ? `:${annotation.startLine}` : ''}
-                      </span>
-                      {annotation.annotationLevel && (
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          {annotation.annotationLevel}
-                        </span>
-                      )}
-                    </div>
-                    {annotation.title && (
-                      <div className="mt-2 text-sm font-medium text-foreground">
-                        {annotation.title}
-                      </div>
-                    )}
-                    <div className="mt-2 break-words text-sm text-foreground">
-                      {annotation.message}
-                    </div>
-                    {annotation.rawDetails && (
-                      <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-3 font-mono text-xs text-muted-foreground scrollbar-sleek">
-                        {annotation.rawDetails}
-                      </pre>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {hasJobs && (
-            <section className="rounded-md border border-border bg-background">
-              <div className="border-b border-border px-3 py-2 text-sm font-medium">
-                {translate('auto.components.right.sidebar.checks.panel.content.49731703ea', 'Jobs')}
-              </div>
-              <div className="divide-y divide-border/50">
-                {jobs.map((job, index) => (
-                  <div key={`${job.name}-${index}`} className="px-3 py-3">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                        {job.name}
-                      </span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {job.conclusion ??
-                          job.status ??
-                          translate(
-                            'auto.components.right.sidebar.checks.panel.content.ee07b33924',
-                            'unknown'
-                          )}
-                      </span>
-                    </div>
-                    {job.steps.length > 0 && (
-                      <div className="mt-2 grid gap-1">
-                        {job.steps.map((step) => (
-                          <div
-                            key={step.name}
-                            className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground"
-                          >
-                            <span className="min-w-0 flex-1 truncate">{step.name}</span>
-                            <span className="shrink-0">{step.conclusion ?? step.status}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {job.logTail && <CheckJobLogTail logTail={job.logTail} />}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {!state?.error && !hasOutput && !hasAnnotations && !hasJobs && (
-            <div className="text-sm text-muted-foreground">
-              {translate(
-                'auto.components.right.sidebar.checks.panel.content.07eccfa397',
-                'No details are available for this check.'
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-      {openUrl && (
-        <div className="flex justify-end border-t border-border px-5 py-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={(event) => {
-              event.stopPropagation()
-              window.api.shell.openUrl(openUrl)
-            }}
-          >
-            {translate(
-              'auto.components.right.sidebar.checks.panel.content.a916648574',
-              'Open details'
-            )}
-            <ExternalLink className="size-3.5" />
-          </Button>
-        </div>
-      )}
-    </DialogContent>
-  )
-}
-
-export function CheckJobLogTail({ logTail }: { logTail: string }): React.JSX.Element {
-  return (
-    <div className="mt-3 min-w-0">
-      <div className="mb-1.5 flex min-w-0 items-center gap-2">
-        <div className="min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-          {translate(
-            'auto.components.right.sidebar.checks.panel.content.d713f500b2',
-            'Log tail (last 200 lines)'
-          )}
-        </div>
-        <CopyButton
-          text={logTail}
-          title={translate(
-            'auto.components.right.sidebar.checks.panel.content.679bf2093c',
-            'Copy log tail'
-          )}
-        />
-      </div>
-      <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-3 font-mono text-xs text-muted-foreground scrollbar-sleek">
-        {logTail}
-      </pre>
-    </div>
-  )
-}
+export { CheckJobLogTail } from './check-job-log-tail'
 
 /** Renders the checks summary bar + scrollable check list. */
 export function ChecksList({
   checks,
   checksLoading,
   checkDetailsContextKey,
-  onLoadCheckDetails
+  onLoadCheckDetails,
+  worktreeId: worktreeIdOverride,
+  detailsStickySurface = 'sidebar'
 }: {
   checks: PRCheckDetail[]
   checksLoading: boolean
   checkDetailsContextKey: string
   onLoadCheckDetails?: (check: PRCheckDetail) => Promise<PRCheckRunDetails | null>
+  /** Why: folder-workspace PR checks render rows for attached worktrees, not the active one. */
+  worktreeId?: string
+  detailsStickySurface?: CheckDetailsStickySurface
 }): React.JSX.Element {
+  const activeWorktree = useActiveWorktree()
+  const resolvedWorktreeId = worktreeIdOverride ?? activeWorktree?.id ?? null
+  const patchOpenCheckRunDetails = useAppStore((s) => s.patchOpenCheckRunDetails)
   const [checksExpanded, setChecksExpanded] = useState(true)
   const [expandedCheckKeys, setExpandedCheckKeys] = useState<Set<string>>(new Set())
   const [detailsByCheckKey, setDetailsByCheckKey] = useState<Record<string, CheckDetailsLoadState>>(
@@ -1072,6 +1002,27 @@ export function ChecksList({
       return next
     })
   }, [checkDetailsContextKey, rows])
+
+  useEffect(() => {
+    setDetailsByCheckKey((current) => {
+      let changed = false
+      const next: Record<string, CheckDetailsLoadState> = { ...current }
+      for (const row of rows) {
+        const cached = next[row.key]
+        if (!cached?.details) {
+          continue
+        }
+        if (
+          cached.details.status !== row.check.status ||
+          cached.details.conclusion !== row.check.conclusion
+        ) {
+          delete next[row.key]
+          changed = true
+        }
+      }
+      return changed ? next : current
+    })
+  }, [rows])
 
   const requestCheckDetails = useCallback(
     (row: { check: PRCheckDetail; key: string }) => {
@@ -1153,6 +1104,29 @@ export function ChecksList({
     }
   }, [checksExpanded, detailsByCheckKey, expandedCheckKeys, requestCheckDetails, rows])
 
+  useEffect(() => {
+    if (!resolvedWorktreeId) {
+      return
+    }
+    for (const row of rows) {
+      const detailsState = detailsByCheckKey[row.key]
+      if (!detailsState) {
+        continue
+      }
+      patchOpenCheckRunDetails(resolvedWorktreeId, checkDetailsContextKey, row.check, {
+        details: detailsState.details ?? null,
+        loading: detailsState.loading ?? false,
+        error: detailsState.error ?? null
+      })
+    }
+  }, [
+    checkDetailsContextKey,
+    detailsByCheckKey,
+    patchOpenCheckRunDetails,
+    resolvedWorktreeId,
+    rows
+  ])
+
   const toggleCheckExpanded = useCallback(
     (row: { check: PRCheckDetail; key: string }) => {
       const willExpand = !expandedCheckKeys.has(row.key)
@@ -1226,7 +1200,7 @@ export function ChecksList({
           <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
         </div>
       ) : checks.length === 0 ? (
-        <div className="flex items-center justify-center py-8 text-[11px] text-muted-foreground">
+        <div className="px-4 py-8 text-[11px] text-muted-foreground">
           {translate(
             'auto.components.right.sidebar.checks.panel.content.991f50c7e4',
             'No checks configured'
@@ -1304,7 +1278,15 @@ export function ChecksList({
                       )}
                     </span>
                   </div>
-                  {expanded && <CheckRunDetails check={check} state={detailsByCheckKey[row.key]} />}
+                  {expanded && (
+                    <CheckRunDetails
+                      check={check}
+                      state={detailsByCheckKey[row.key]}
+                      checkDetailsContextKey={checkDetailsContextKey}
+                      worktreeId={resolvedWorktreeId}
+                      detailsStickySurface={detailsStickySurface}
+                    />
+                  )}
                 </div>
               )
             })}
@@ -1481,16 +1463,19 @@ export function isMutablePRConversationComment(comment: PRComment): boolean {
 function CommentMoreMenu({
   comment,
   onStartEdit,
-  onDelete
+  onDelete,
+  onQueueForAgent
 }: {
   comment: PRComment
   onStartEdit?: () => void
   onDelete?: () => void | Promise<void>
+  onQueueForAgent?: () => void
 }): React.JSX.Element | null {
   const hasGoToComment = Boolean(comment.url)
   const hasEdit = Boolean(onStartEdit)
   const hasDelete = Boolean(onDelete)
-  if (!hasGoToComment && !hasEdit && !hasDelete) {
+  const hasQueue = Boolean(onQueueForAgent)
+  if (!hasGoToComment && !hasEdit && !hasDelete && !hasQueue) {
     return null
   }
 
@@ -1511,6 +1496,16 @@ function CommentMoreMenu({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={4}>
+        {hasQueue ? (
+          <DropdownMenuItem onSelect={() => onQueueForAgent?.()}>
+            <Sparkles />
+            {translate(
+              'auto.components.right.sidebar.checks.panel.content.f8a2c91d04',
+              'Queue for agent'
+            )}
+          </DropdownMenuItem>
+        ) : null}
+        {hasQueue && (hasGoToComment || hasEdit || hasDelete) ? <DropdownMenuSeparator /> : null}
         {hasGoToComment && (
           <DropdownMenuItem onSelect={() => window.api.shell.openUrl(comment.url)}>
             <ExternalLink />
@@ -1553,6 +1548,71 @@ function buildCopyText(comment: PRComment): string {
   return `File: ${location}\n\n${comment.body}`
 }
 
+function QueueForAgentButton({
+  className,
+  onQueueForAgent
+}: {
+  className?: string
+  onQueueForAgent: () => void
+}): React.JSX.Element {
+  const label = translate(
+    'auto.components.right.sidebar.checks.panel.content.f8a2c91d04',
+    'Queue for agent'
+  )
+  // Why: always-visible row action, but ghost styling keeps it from reading as a card-level CTA.
+  return (
+    <button
+      type="button"
+      className={cn(
+        'inline-flex shrink-0 items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground transition-[background-color,color,opacity] hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+        className
+      )}
+      aria-label={label}
+      title={label}
+      onClick={(event) => {
+        event.stopPropagation()
+        onQueueForAgent()
+      }}
+    >
+      <Sparkles className="size-3 shrink-0" />
+      {translate('auto.components.right.sidebar.checks.panel.content.a7f0c7e8d1', 'Queue')}
+    </button>
+  )
+}
+
+function PRCommentActionBadge({
+  actionState,
+  isQueued,
+  presentation
+}: {
+  actionState: PRCommentGroupActionState
+  isQueued: boolean
+  presentation: PRCommentPresentationClasses
+}): React.JSX.Element | null {
+  if (isQueued) {
+    return (
+      <span className={presentation.statusBadgeQueued}>
+        {translate('auto.components.right.sidebar.checks.panel.content.b4e8a1c902', 'Queued')}
+      </span>
+    )
+  }
+  if (actionState === 'open') {
+    return (
+      <span className={presentation.statusBadgeOpen}>
+        {translate('auto.components.right.sidebar.checks.panel.content.7c1f0a2b11', 'Open')}
+      </span>
+    )
+  }
+  if (actionState === 'resolved') {
+    return (
+      <span className={presentation.statusBadgeResolved}>
+        {translate('auto.components.right.sidebar.checks.panel.content.8987d5a3dd', 'Resolved')}
+      </span>
+    )
+  }
+  return null
+}
+
 /** A single comment row — used for both root and reply comments. */
 function CommentRow({
   comment,
@@ -1560,26 +1620,32 @@ function CommentRow({
   showResolve,
   showReply,
   selectionControl,
-  resolveSelectionAction,
+  actionState,
+  isQueued,
   replyDisabled,
   replyDisabledReason,
+  presentation,
   onResolve,
   onReply,
   onEditComment,
-  onDeleteComment
+  onDeleteComment,
+  onQueueForAgent
 }: {
   comment: PRComment
   isReply: boolean
   showResolve: boolean
   showReply?: boolean
   selectionControl?: React.ReactNode
-  resolveSelectionAction?: React.ReactNode
+  actionState: PRCommentGroupActionState
+  isQueued: boolean
   replyDisabled?: boolean
   replyDisabledReason?: string
+  presentation: PRCommentPresentationClasses
   onResolve?: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
   onReply?: (comment: PRComment) => void
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
+  onQueueForAgent?: () => void
 }): React.JSX.Element {
   const automated = isBotPRComment(comment)
   const canMutateComment = isMutablePRConversationComment(comment)
@@ -1634,94 +1700,177 @@ function CommentRow({
 
   const trimmedDraft = draft.trim()
   const canSaveEdit = !submittingEdit && trimmedDraft.length > 0 && trimmedDraft !== comment.body
+  const relativeTime = formatPrCommentRelativeTime(comment.createdAt, Date.now())
+
+  const authorAvatar = comment.authorAvatarUrl ? (
+    <img
+      src={comment.authorAvatarUrl}
+      alt={comment.author}
+      className={cn(isReply ? presentation.avatarReply : presentation.avatar)}
+    />
+  ) : (
+    <div className={cn(isReply ? presentation.avatarReply : presentation.avatar)} aria-hidden />
+  )
+
+  const authorName = (
+    <span className={cn(presentation.author, comment.isResolved && presentation.authorResolved)}>
+      {comment.author}
+    </span>
+  )
+  const queueButton =
+    !isReply && onQueueForAgent ? <QueueForAgentButton onQueueForAgent={onQueueForAgent} /> : null
+
+  const hoverActions = !editing ? (
+    <div className="flex items-center gap-0.5 can-hover:opacity-0 group-hover/comment:opacity-100 transition-opacity">
+      {showResolve &&
+        comment.threadId != null &&
+        onResolve &&
+        (actionState === 'open' || actionState === 'resolved') && (
+          <ResolveButton
+            threadId={comment.threadId}
+            isResolved={comment.isResolved ?? false}
+            onResolve={onResolve}
+          />
+        )}
+      {showReply && onReply && (
+        <button
+          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          title={
+            replyDisabled
+              ? replyDisabledReason
+              : translate('auto.components.right.sidebar.checks.panel.content.c1f6fc006a', 'Reply')
+          }
+          disabled={replyDisabled}
+          onClick={(event) => {
+            event.stopPropagation()
+            onReply(comment)
+          }}
+        >
+          {translate('auto.components.right.sidebar.checks.panel.content.c1f6fc006a', 'Reply')}
+        </button>
+      )}
+      <CopyButton text={buildCopyText(comment)} />
+      <CommentMoreMenu
+        comment={comment}
+        onStartEdit={canMutateComment && onEditComment ? handleStartEdit : undefined}
+        onDelete={canMutateComment && onDeleteComment ? handleDelete : undefined}
+        onQueueForAgent={!isReply ? onQueueForAgent : undefined}
+      />
+    </div>
+  ) : null
+
+  const commentActions = !editing ? (
+    <div className="flex shrink-0 items-center gap-0.5">
+      {presentation.useCardLayout ? null : queueButton}
+      {hoverActions}
+    </div>
+  ) : null
+
+  const cardMetaRow =
+    presentation.useCardLayout && !isReply ? (
+      <div
+        className={
+          selectionControl
+            ? presentation.commentHeaderMetaWithSelection
+            : presentation.commentHeaderMeta
+        }
+      >
+        {relativeTime ? <span>{relativeTime}</span> : null}
+        {automated ? (
+          <span className={presentation.botBadge}>
+            {translate('auto.components.right.sidebar.checks.panel.content.2ba0a32bdd', 'bot')}
+          </span>
+        ) : null}
+        {comment.path ? (
+          <span className={presentation.pathBadge} title={comment.path}>
+            {comment.path.split('/').pop()}
+            {formatLineRange(comment) && `:${formatLineRange(comment)}`}
+          </span>
+        ) : null}
+        <PRCommentActionBadge
+          actionState={actionState}
+          isQueued={isQueued}
+          presentation={presentation}
+        />
+        {onQueueForAgent ? (
+          <QueueForAgentButton
+            className="ml-auto can-hover:opacity-0 group-hover/comment:opacity-100 group-focus-within/comment:opacity-100"
+            onQueueForAgent={onQueueForAgent}
+          />
+        ) : null}
+      </div>
+    ) : null
+
+  const authorLine =
+    presentation.useCardLayout && !isReply ? (
+      <>
+        <div className={presentation.commentHeaderPrimary}>
+          {selectionControl}
+          {authorAvatar}
+          {authorName}
+          {commentActions}
+        </div>
+        {cardMetaRow}
+      </>
+    ) : (
+      <>
+        {selectionControl}
+        {authorAvatar}
+        {authorName}
+        {relativeTime ? (
+          <span className={presentation.time} aria-hidden={presentation.time === 'hidden'}>
+            {presentation.useCardLayout ? `· ${relativeTime}` : relativeTime}
+          </span>
+        ) : null}
+        {automated && (
+          <span className={presentation.botBadge}>
+            {translate('auto.components.right.sidebar.checks.panel.content.2ba0a32bdd', 'bot')}
+          </span>
+        )}
+        {!isReply && comment.path && (
+          <span className={presentation.pathBadge}>
+            {comment.path.split('/').pop()}
+            {formatLineRange(comment) && `:${formatLineRange(comment)}`}
+          </span>
+        )}
+        {!isReply ? (
+          <PRCommentActionBadge
+            actionState={actionState}
+            isQueued={isQueued}
+            presentation={presentation}
+          />
+        ) : null}
+        <div className="flex-1" />
+        {commentActions}
+      </>
+    )
 
   return (
     <div
       className={cn(
-        'flex items-start gap-2 py-1.5 hover:bg-accent/40 transition-colors group/comment',
-        isReply ? 'pl-7 pr-3' : 'px-3',
-        comment.isResolved && PR_COMMENT_RESOLVED_CONTAINER_CLASS
+        'group/comment min-w-0',
+        presentation.commentRow,
+        isReply && presentation.commentRowReply,
+        comment.isResolved && presentation.resolvedContainer
       )}
     >
-      {selectionControl}
-      <div className="flex-1 min-w-0">
-        {/* Author line: avatar + name + file badge aligned on center */}
-        <div className="flex items-center gap-1.5 min-w-0">
-          {comment.authorAvatarUrl ? (
-            <img
-              src={comment.authorAvatarUrl}
-              alt={comment.author}
-              className={cn('rounded-full shrink-0', isReply ? 'size-3.5' : 'size-4')}
-            />
-          ) : (
-            <div
-              className={cn('rounded-full bg-muted shrink-0', isReply ? 'size-3.5' : 'size-4')}
-            />
+      <div className="min-w-0">
+        <div
+          className={cn(
+            isReply && presentation.useCardLayout
+              ? presentation.commentHeaderReply
+              : presentation.commentHeader
           )}
-          <span
-            className={cn(
-              'text-[11px] font-semibold shrink-0',
-              comment.isResolved ? PR_COMMENT_RESOLVED_AUTHOR_CLASS : PR_COMMENT_OPEN_AUTHOR_CLASS
-            )}
-          >
-            {comment.author}
-          </span>
-          {automated && (
-            <span className="shrink-0 rounded border border-border bg-accent/40 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-              {translate('auto.components.right.sidebar.checks.panel.content.2ba0a32bdd', 'bot')}
-            </span>
-          )}
-          {!isReply && comment.path && (
-            <span className="text-[10px] font-mono text-muted-foreground/60 truncate min-w-0">
-              {comment.path.split('/').pop()}
-              {formatLineRange(comment) && `:${formatLineRange(comment)}`}
-            </span>
-          )}
-          <div className="flex-1" />
-          {!editing && resolveSelectionAction}
-          {!editing && (
-            <div className="flex items-center gap-0.5 opacity-0 group-hover/comment:opacity-100 transition-opacity">
-              {showResolve && comment.threadId != null && onResolve && (
-                <ResolveButton
-                  threadId={comment.threadId}
-                  isResolved={comment.isResolved ?? false}
-                  onResolve={onResolve}
-                />
-              )}
-              {showReply && onReply && (
-                <button
-                  className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                  title={
-                    replyDisabled
-                      ? replyDisabledReason
-                      : translate(
-                          'auto.components.right.sidebar.checks.panel.content.c1f6fc006a',
-                          'Reply'
-                        )
-                  }
-                  disabled={replyDisabled}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onReply(comment)
-                  }}
-                >
-                  {translate(
-                    'auto.components.right.sidebar.checks.panel.content.c1f6fc006a',
-                    'Reply'
-                  )}
-                </button>
-              )}
-              <CopyButton text={buildCopyText(comment)} />
-              <CommentMoreMenu
-                comment={comment}
-                onStartEdit={canMutateComment && onEditComment ? handleStartEdit : undefined}
-                onDelete={canMutateComment && onDeleteComment ? handleDelete : undefined}
-              />
-            </div>
-          )}
+        >
+          {authorLine}
         </div>
         {editing ? (
-          <div className={cn('mt-1 flex flex-col gap-1.5', isReply ? 'pl-5' : 'pl-[22px]')}>
+          <div
+            className={cn(
+              'mt-1 flex flex-col gap-1.5',
+              presentation.useCardLayout ? 'px-3 pb-3' : isReply ? 'pl-5' : 'pl-[22px]'
+            )}
+          >
             <textarea
               autoFocus
               value={draft}
@@ -1756,9 +1905,8 @@ function CommentRow({
           <CommentMarkdown
             content={comment.body}
             className={cn(
-              'mt-1 text-[11px] leading-snug text-muted-foreground',
-              'break-words [&_p]:my-1 [&_pre]:max-h-none [&_pre]:max-w-full [&_pre]:whitespace-pre-wrap [&_table]:w-full [&_table]:max-w-full',
-              isReply ? 'pl-5' : 'pl-[22px]'
+              isReply ? presentation.commentBodyReply : presentation.commentBody,
+              presentation.commentBodyMarkdown
             )}
           />
         )}
@@ -1771,28 +1919,34 @@ function PRCommentGroupView({
   group,
   replyingGroupId,
   selectionControl,
-  resolveSelectionAction,
+  actionState,
+  isQueued,
   replyDisabled,
   replyDisabledReason,
+  presentation,
   onResolve,
   onStartReply,
   onCancelReply,
   onReply,
   onEditComment,
-  onDeleteComment
+  onDeleteComment,
+  onQueueForAgent
 }: {
   group: PRCommentGroup
   replyingGroupId: string | null
   selectionControl?: React.ReactNode
-  resolveSelectionAction?: React.ReactNode
+  actionState: PRCommentGroupActionState
+  isQueued: boolean
   replyDisabled?: boolean
   replyDisabledReason?: string
+  presentation: PRCommentPresentationClasses
   onResolve?: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
   onStartReply?: (groupId: string) => void
   onCancelReply?: () => void
   onReply?: (comment: PRComment, body: string) => Promise<RightPanelCommentSubmitResult>
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
+  onQueueForAgent?: () => void
 }): React.JSX.Element {
   const groupId = getPRCommentGroupId(group)
   const root = getPRCommentGroupRoot(group)
@@ -1815,70 +1969,92 @@ function PRCommentGroupView({
       </div>
     ) : null
   const startReply = onStartReply ? () => onStartReply(groupId) : undefined
+  const surfaceClassName = cn(
+    getPRCommentGroupSurfaceClasses(presentation, actionState, { queued: isQueued }),
+    group.kind === 'standalone' ? presentation.groupStandalone : presentation.groupThread
+  )
+  const sharedRowProps = {
+    actionState,
+    isQueued,
+    replyDisabled,
+    replyDisabledReason,
+    presentation,
+    onResolve,
+    onEditComment,
+    onDeleteComment,
+    onQueueForAgent
+  }
 
-  if (group.kind === 'standalone') {
-    return (
-      <div key={group.comment.id}>
+  const content =
+    group.kind === 'standalone' ? (
+      <div className={surfaceClassName} data-testid="pr-comment-group">
         <CommentRow
           comment={group.comment}
           isReply={false}
           showResolve={false}
           showReply={Boolean(onReply)}
           selectionControl={selectionControl}
-          resolveSelectionAction={resolveSelectionAction}
-          replyDisabled={replyDisabled}
-          replyDisabledReason={replyDisabledReason}
-          onResolve={onResolve}
           onReply={startReply ? () => startReply() : undefined}
-          onEditComment={onEditComment}
-          onDeleteComment={onDeleteComment}
+          {...sharedRowProps}
         />
         {replyComposer}
       </div>
+    ) : (
+      <div className={surfaceClassName} data-testid="pr-comment-group">
+        <CommentRow
+          comment={group.root}
+          isReply={false}
+          showResolve={true}
+          showReply={Boolean(onReply)}
+          selectionControl={selectionControl}
+          onReply={startReply ? () => startReply() : undefined}
+          {...sharedRowProps}
+        />
+        {group.replies.length > 0 && (
+          <div className={presentation.repliesContainer}>
+            {group.replies.map((reply) => (
+              <CommentRow
+                key={reply.id}
+                {...sharedRowProps}
+                comment={reply}
+                isReply={true}
+                showResolve={false}
+                showReply={false}
+                isQueued={false}
+              />
+            ))}
+          </div>
+        )}
+        {replyComposer}
+      </div>
     )
+
+  if (!onQueueForAgent) {
+    return content
   }
+
   return (
-    <div key={group.threadId} className="py-0.5">
-      <CommentRow
-        comment={group.root}
-        isReply={false}
-        showResolve={true}
-        showReply={Boolean(onReply)}
-        selectionControl={selectionControl}
-        resolveSelectionAction={resolveSelectionAction}
-        replyDisabled={replyDisabled}
-        replyDisabledReason={replyDisabledReason}
-        onResolve={onResolve}
-        onReply={startReply ? () => startReply() : undefined}
-        onEditComment={onEditComment}
-        onDeleteComment={onDeleteComment}
-      />
-      {group.replies.length > 0 && (
-        <div className="ml-3 border-l-2 border-border/50">
-          {group.replies.map((reply) => (
-            <CommentRow
-              key={reply.id}
-              comment={reply}
-              isReply={true}
-              showResolve={false}
-              showReply={false}
-              onResolve={onResolve}
-              onEditComment={onEditComment}
-              onDeleteComment={onDeleteComment}
-            />
-          ))}
-        </div>
-      )}
-      {replyComposer}
-    </div>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{content}</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={() => onQueueForAgent()}>
+          <Sparkles />
+          {translate(
+            'auto.components.right.sidebar.checks.panel.content.f8a2c91d04',
+            'Queue for agent'
+          )}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }
 
-function ResolvedCommentGroupAccordion({
-  group,
+function ResolvedCommentGroupsSection({
+  groups,
   replyingGroupId,
   replyDisabled,
   replyDisabledReason,
+  presentation,
   onResolve,
   onStartReply,
   onCancelReply,
@@ -1886,52 +2062,57 @@ function ResolvedCommentGroupAccordion({
   onEditComment,
   onDeleteComment
 }: {
-  group: PRCommentGroup
+  groups: PRCommentGroup[]
   replyingGroupId: string | null
   replyDisabled?: boolean
   replyDisabledReason?: string
+  presentation: PRCommentPresentationClasses
   onResolve?: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
   onStartReply?: (groupId: string) => void
   onCancelReply?: () => void
   onReply?: (comment: PRComment, body: string) => Promise<RightPanelCommentSubmitResult>
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
-}): React.JSX.Element {
-  const root = getPRCommentGroupRoot(group)
-  const count = getPRCommentGroupCount(group)
+}): React.JSX.Element | null {
+  if (groups.length === 0) {
+    return null
+  }
   return (
-    <Accordion type="single" collapsible>
-      <AccordionItem value={getPRCommentGroupId(group)} className="border-b-0">
-        <AccordionTrigger className="px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-accent/35">
-          <span className="min-w-0 truncate">
-            {translate('auto.components.right.sidebar.checks.panel.content.8987d5a3dd', 'Resolved')}{' '}
-            {group.kind === 'thread'
-              ? translate('auto.components.right.sidebar.checks.panel.content.95ad090b01', 'thread')
-              : translate(
-                  'auto.components.right.sidebar.checks.panel.content.90206b6353',
-                  'comment'
-                )}{' '}
-            {translate('auto.components.right.sidebar.checks.panel.content.0fc6f743b3', 'by')}{' '}
-            {root.author}
-            {count > 1 ? ` (${count})` : ''}
-          </span>
-        </AccordionTrigger>
-        <AccordionContent className="pb-1 pt-0">
-          <PRCommentGroupView
-            group={group}
-            replyingGroupId={replyingGroupId}
-            replyDisabled={replyDisabled}
-            replyDisabledReason={replyDisabledReason}
-            onResolve={onResolve}
-            onStartReply={onStartReply}
-            onCancelReply={onCancelReply}
-            onReply={onReply}
-            onEditComment={onEditComment}
-            onDeleteComment={onDeleteComment}
-          />
-        </AccordionContent>
-      </AccordionItem>
-    </Accordion>
+    <div className={presentation.resolvedSection}>
+      <Accordion type="single" collapsible>
+        <AccordionItem value="resolved-all" className="border-b-0">
+          <AccordionTrigger className={presentation.resolvedSectionTrigger}>
+            <span className="min-w-0 truncate">
+              {translate(
+                'auto.components.right.sidebar.checks.panel.content.e8b4c1a903',
+                'Resolved · {{value0}}',
+                { value0: groups.length }
+              )}
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className={presentation.resolvedSectionContent}>
+            {groups.map((group) => (
+              <PRCommentGroupView
+                key={getPRCommentGroupId(group)}
+                group={group}
+                replyingGroupId={replyingGroupId}
+                actionState="resolved"
+                isQueued={false}
+                replyDisabled={replyDisabled}
+                replyDisabledReason={replyDisabledReason}
+                presentation={presentation}
+                onResolve={onResolve}
+                onStartReply={onStartReply}
+                onCancelReply={onCancelReply}
+                onReply={onReply}
+                onEditComment={onEditComment}
+                onDeleteComment={onDeleteComment}
+              />
+            ))}
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+    </div>
   )
 }
 
@@ -2008,7 +2189,9 @@ export function PRCommentsList({
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
 }): React.JSX.Element {
+  const presentation = React.useMemo(() => getPRCommentPresentationClasses(), [])
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
+  const [displayMode, setDisplayMode] = useState<PRCommentsListDisplayMode>('triage')
   const [replyingGroupId, setReplyingGroupId] = useState<string | null>(null)
   const [isAddingComment, setIsAddingComment] = useState(false)
   const addCommentSurfaceRef = useRef<HTMLDivElement>(null)
@@ -2029,6 +2212,9 @@ export function PRCommentsList({
     [commentFilter, comments]
   )
   const groups = React.useMemo(() => groupPRComments(visibleComments), [visibleComments])
+  const triageGroups = React.useMemo(() => partitionPRCommentGroupsForTriage(groups), [groups])
+  // Why: triage mode prioritizes actionability; timeline restores the host discussion history.
+  const timelineGroups = React.useMemo(() => sortPRCommentGroupsForTimeline(groups), [groups])
   const canShowResolveWithAI = Boolean(
     onResolveSelectedCommentsWithAI && selectableGroups.length > 0
   )
@@ -2085,44 +2271,40 @@ export function PRCommentsList({
         )}
         checked={checked}
         onCheckedChange={(value) => toggleGroupSelection(groupId, value === true)}
-        className="mt-0.5"
+        className="shrink-0"
       />
     )
   }
 
-  const renderResolveSelectionAction = (group: PRCommentGroup): React.ReactNode => {
-    if (isSelectingForAI || !selectableGroupsById.has(getPRCommentGroupId(group))) {
-      return null
-    }
+  const renderCommentGroup = (group: PRCommentGroup): React.JSX.Element => {
     const groupId = getPRCommentGroupId(group)
+    const actionState = getPRCommentGroupActionState(group)
+    const isQueued = selectedGroupIds.has(groupId)
+    const canQueue =
+      canShowResolveWithAI &&
+      !isQueued &&
+      isPRCommentGroupQueueableForAI(group) &&
+      selectableGroupsById.has(groupId) &&
+      !isSelectingForAI
     return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            className="shrink-0 text-muted-foreground hover:text-foreground"
-            aria-label={translate(
-              'auto.components.right.sidebar.checks.panel.content.49ea0937e4',
-              'Add comment to resolve list'
-            )}
-            onClick={(event) => {
-              event.stopPropagation()
-              addGroupToSelection(groupId)
-            }}
-          >
-            <Sparkles className="size-3" />
-            {translate('auto.components.right.sidebar.checks.panel.content.9fecebb29d', 'Add')}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4}>
-          {translate(
-            'auto.components.right.sidebar.checks.panel.content.49ea0937e4',
-            'Add comment to resolve list'
-          )}
-        </TooltipContent>
-      </Tooltip>
+      <PRCommentGroupView
+        key={groupId}
+        group={group}
+        replyingGroupId={replyingGroupId}
+        selectionControl={renderSelectionControl(group)}
+        actionState={actionState}
+        isQueued={isQueued}
+        replyDisabled={commentsDisabled}
+        replyDisabledReason={commentsDisabledReason}
+        presentation={presentation}
+        onResolve={onResolve}
+        onStartReply={setReplyingGroupId}
+        onCancelReply={() => setReplyingGroupId(null)}
+        onReply={onReply}
+        onEditComment={onEditComment}
+        onDeleteComment={onDeleteComment}
+        onQueueForAgent={canQueue ? () => addGroupToSelection(groupId) : undefined}
+      />
     )
   }
 
@@ -2165,14 +2347,14 @@ export function PRCommentsList({
   return (
     <div className="border-t border-border">
       {/* Header */}
-      <div className="flex flex-col gap-2.5 border-b border-border px-3 py-2.5">
+      <div className={presentation.sectionHeader}>
         <div className="flex min-w-0 items-center gap-2">
           <MessageSquare className="size-3.5 text-muted-foreground" />
-          <span className="text-[11px] font-medium text-foreground">
+          <span className={presentation.sectionHeaderLabel}>
             {translate('auto.components.right.sidebar.checks.panel.content.94557d68e2', 'Comments')}
           </span>
           {comments.length > 0 && (
-            <span className="text-[10px] text-muted-foreground">{comments.length}</span>
+            <span className={presentation.sectionCount}>{comments.length}</span>
           )}
           <div className="-mr-1 ml-auto flex items-center gap-0.5">
             {canShowResolveWithAI && (
@@ -2221,7 +2403,7 @@ export function PRCommentsList({
                           className="relative"
                           aria-label={translate(
                             'auto.components.right.sidebar.checks.panel.content.d91f2a6c39',
-                            'Send {{value0}} queued comments',
+                            'Send {{value0}} queued comments to AI',
                             { value0: selectedCommentQueueCount }
                           )}
                           disabled={
@@ -2247,7 +2429,7 @@ export function PRCommentsList({
                           ? resolveCommentsWithAIDisabledReason
                           : translate(
                               'auto.components.right.sidebar.checks.panel.content.d91f2a6c39',
-                              'Send {{value0}} queued comments',
+                              'Send {{value0}} queued comments to AI',
                               { value0: selectedCommentQueueCount }
                             )}
                       </TooltipContent>
@@ -2320,10 +2502,46 @@ export function PRCommentsList({
                 </TooltipContent>
               </Tooltip>
             )}
+            {comments.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label={translate(
+                      'auto.components.right.sidebar.checks.panel.content.f5cf324efa',
+                      'Comment display options'
+                    )}
+                  >
+                    <SlidersHorizontal className="size-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" side="bottom" sideOffset={6}>
+                  <DropdownMenuLabel>
+                    {translate(
+                      'auto.components.right.sidebar.checks.panel.content.5e6e5a13fa',
+                      'View'
+                    )}
+                  </DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={displayMode}
+                    onValueChange={(value) => setDisplayMode(value as PRCommentsListDisplayMode)}
+                  >
+                    {PR_COMMENT_LIST_DISPLAY_MODES.map((mode) => (
+                      <DropdownMenuRadioItem key={mode} value={mode}>
+                        {getPRCommentsListDisplayModeLabel(mode)}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
         {comments.length > 0 && (
-          <div className="grid grid-cols-3 rounded-md border border-border bg-background p-0.5">
+          <div className={presentation.audienceTabs}>
             {getPrCommentAudienceFilters().map((filter) => {
               const isActive = commentFilter === filter.value
               return (
@@ -2331,8 +2549,8 @@ export function PRCommentsList({
                   key={filter.value}
                   type="button"
                   className={cn(
-                    'flex h-7 items-center justify-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-muted-foreground transition-colors',
-                    isActive && 'bg-muted text-foreground'
+                    presentation.audienceTab,
+                    isActive && presentation.audienceTabActive
                   )}
                   aria-pressed={isActive}
                   onClick={() => setCommentFilter(filter.value)}
@@ -2375,34 +2593,30 @@ export function PRCommentsList({
           {getPRCommentAudienceEmptyLabel(commentFilter)}
         </div>
       ) : (
-        <div className="py-1">
-          {groups.map((group) => {
-            if (isResolvedPRCommentGroup(group)) {
-              return (
-                <ResolvedCommentGroupAccordion
-                  key={getPRCommentGroupId(group)}
-                  group={group}
-                  replyingGroupId={replyingGroupId}
-                  replyDisabled={commentsDisabled}
-                  replyDisabledReason={commentsDisabledReason}
-                  onResolve={onResolve}
-                  onStartReply={setReplyingGroupId}
-                  onCancelReply={() => setReplyingGroupId(null)}
-                  onReply={onReply}
-                  onEditComment={onEditComment}
-                  onDeleteComment={onDeleteComment}
-                />
-              )
-            }
-            return (
-              <PRCommentGroupView
-                key={getPRCommentGroupId(group)}
-                group={group}
+        <div className={presentation.list}>
+          {displayMode === 'timeline' ? (
+            timelineGroups.map(renderCommentGroup)
+          ) : (
+            <>
+              {triageGroups.open.length > 0 ? (
+                <>
+                  <div className={presentation.sectionTriageLabel}>
+                    {translate(
+                      'auto.components.right.sidebar.checks.panel.content.c3a8e5d710',
+                      'Needs review · {{value0}}',
+                      { value0: triageGroups.open.length }
+                    )}
+                  </div>
+                  {triageGroups.open.map(renderCommentGroup)}
+                </>
+              ) : null}
+              {triageGroups.conversation.map(renderCommentGroup)}
+              <ResolvedCommentGroupsSection
+                groups={triageGroups.resolved}
                 replyingGroupId={replyingGroupId}
-                selectionControl={renderSelectionControl(group)}
-                resolveSelectionAction={renderResolveSelectionAction(group)}
                 replyDisabled={commentsDisabled}
                 replyDisabledReason={commentsDisabledReason}
+                presentation={presentation}
                 onResolve={onResolve}
                 onStartReply={setReplyingGroupId}
                 onCancelReply={() => setReplyingGroupId(null)}
@@ -2410,8 +2624,8 @@ export function PRCommentsList({
                 onEditComment={onEditComment}
                 onDeleteComment={onDeleteComment}
               />
-            )
-          })}
+            </>
+          )}
         </div>
       )}
       {onAddComment && comments.length > 0 && isAddingComment && renderAddCommentComposer(false)}

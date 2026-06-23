@@ -76,6 +76,31 @@ export function getVirtualRowTransform(start: number): string {
   return `translateY(${start}px)`
 }
 
+type VirtualRowElementCache<TElement extends Element> = {
+  elementsCache: Map<unknown, TElement>
+  measureElement: (node: TElement | null) => void
+}
+
+export function pruneStaleVirtualRowElementCache<TElement extends Element>({
+  activeRowKeys,
+  virtualizer
+}: {
+  activeRowKeys: ReadonlySet<string>
+  virtualizer: VirtualRowElementCache<TElement>
+}): void {
+  virtualizer.measureElement(null)
+  for (const [key, element] of virtualizer.elementsCache) {
+    const rowKey = String(key)
+    if (activeRowKeys.has(rowKey) || element.isConnected) {
+      continue
+    }
+    // Why: measured row nodes retain their React fiber tree. Once TanStack's
+    // public null-measure cleanup has run, drop any disconnected stale key left
+    // behind so old WorktreeCard scopes do not survive runtime-host row churn.
+    virtualizer.elementsCache.delete(key)
+  }
+}
+
 export function getStickyHeaderIndexes(rows: readonly RenderRow[]): number[] {
   const indexes: number[] = []
   rows.forEach((row, index) => {

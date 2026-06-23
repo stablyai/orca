@@ -112,7 +112,7 @@ export function __resetPersistedWindowsPathCacheForTests(): void {
 }
 
 export function mergePersistedWindowsPath(
-  env: Record<string, string>,
+  env: NodeJS.ProcessEnv,
   options: ReadWindowsPathOptions = {}
 ): void {
   const platform = options.platform ?? process.platform
