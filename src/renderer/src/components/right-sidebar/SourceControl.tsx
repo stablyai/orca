@@ -334,6 +334,15 @@ function requestSourceControlEditorRevealFrame(
 // (tests and other components) instead of going through this module.
 
 type CommitDraftsByWorktree = Record<string, string>
+let sessionCommitDraftsByWorktree: CommitDraftsByWorktree = {}
+
+export function loadSessionCommitDrafts(): CommitDraftsByWorktree {
+  return sessionCommitDraftsByWorktree
+}
+
+export function saveSessionCommitDrafts(nextDrafts: CommitDraftsByWorktree): void {
+  sessionCommitDraftsByWorktree = nextDrafts
+}
 
 export type PullRequestGenerationFields = {
   base: string
@@ -1278,9 +1287,11 @@ function SourceControlInner(): React.JSX.Element {
   // falsy until we have a real answer from the main process.
   const [defaultBaseRef, setDefaultBaseRef] = useState<string | null>(null)
   const [filterQuery, setFilterQuery] = useState('')
-  // Why: commit drafts/errors are worktree-scoped during the mounted session,
-  // so switching worktrees restores each draft instead of wiping it.
-  const [commitDrafts, setCommitDrafts] = useState<CommitDraftsByWorktree>({})
+  // Why: Source Control unmounts when the user switches tabs, so keep commit
+  // drafts in a module-scoped session cache and restore them on remount.
+  const [commitDrafts, setCommitDrafts] = useState<CommitDraftsByWorktree>(() =>
+    loadSessionCommitDrafts()
+  )
   const [commitErrors, setCommitErrors] = useState<Record<string, string | null>>({})
   const [remoteActionErrors, setRemoteActionErrors] = useState<
     Record<string, SourceControlActionError | null>
@@ -1945,6 +1956,10 @@ function SourceControlInner(): React.JSX.Element {
       }
     }
   }, [worktreeMap])
+
+  useEffect(() => {
+    saveSessionCommitDrafts(commitDrafts)
+  }, [commitDrafts])
 
   useEffect(() => {
     // Why: users often finish merge/rebase conflicts in a terminal. Once git
