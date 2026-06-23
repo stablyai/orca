@@ -98,7 +98,7 @@ describe('getEditorHeaderCopyState', () => {
           filePath: '/repo/worktree',
           relativePath: 'All Changes',
           mode: 'diff',
-          diffSource: 'combined-uncommitted'
+          diffSource: 'combined-all'
         })
       )
     ).toEqual({

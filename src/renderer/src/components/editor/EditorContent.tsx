@@ -199,7 +199,8 @@ export function EditorContent({
 
   const isCombinedDiff =
     activeFile.mode === 'diff' &&
-    (activeFile.diffSource === 'combined-uncommitted' ||
+    (activeFile.diffSource === 'combined-all' ||
+      activeFile.diffSource === 'combined-uncommitted' ||
       activeFile.diffSource === 'combined-branch' ||
       activeFile.diffSource === 'combined-commit')
 

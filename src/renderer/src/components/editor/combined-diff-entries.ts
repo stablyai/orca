@@ -15,10 +15,7 @@ export function getCombinedUncommittedEntries(
     if (entry.conflictStatus === 'unresolved') {
       return false
     }
-    if (areaFilter) {
-      return entry.area === areaFilter
-    }
-    return entry.area !== 'untracked'
+    return areaFilter === undefined || entry.area === areaFilter
   })
 }
 
