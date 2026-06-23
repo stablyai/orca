@@ -98,6 +98,37 @@ describe('terminal perf report annotations', () => {
     ])
   })
 
+  it('keeps trusted source and scenario fields when descriptions contain matching keys', () => {
+    const report = {
+      suites: [
+        {
+          specs: [
+            {
+              tests: [
+                {
+                  annotations: [
+                    {
+                      type: 'opencode-scale',
+                      description: 'source=spoofed.json scenario=spoofed median=12.3ms'
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+
+    expect(collectTerminalPerfRows(report, 'report.json')).toEqual([
+      {
+        median: '12.3ms',
+        scenario: 'opencode-scale',
+        source: 'report.json'
+      }
+    ])
+  })
+
   it('supports a custom annotation type prefix', () => {
     expect(
       collectTerminalPerfRows(makeNestedReport(), 'report.json', { typePrefix: 'terminal-' })

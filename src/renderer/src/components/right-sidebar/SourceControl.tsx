@@ -737,6 +737,9 @@ function SourceControlInner(): React.JSX.Element {
       ? (s.gitStatusByWorktree[activeWorktreeId] ?? EMPTY_GIT_STATUS_ENTRIES)
       : EMPTY_GIT_STATUS_ENTRIES
   )
+  const activeGitStatusHead = useAppStore((s) =>
+    activeWorktreeId ? (s.gitStatusHeadByWorktree[activeWorktreeId] ?? null) : null
+  )
   const repositoryHuge = useAppStore((s) =>
     activeWorktreeId ? s.gitStatusHugeByWorktree?.[activeWorktreeId] : undefined
   )
@@ -4371,6 +4374,7 @@ function SourceControlInner(): React.JSX.Element {
   const branchCompareRerunRef = useRef(false)
   const branchCompareRunPromiseRef = useRef<Promise<void> | null>(null)
   const refreshBranchCompareRef = useRef<() => Promise<void>>(async () => {})
+  const branchCompareStatusHeadRef = useRef<BranchCompareStatusHeadSnapshot | null>(null)
 
   const runBranchCompare = useCallback(async () => {
     if (!activeWorktreeId || !worktreePath || !effectiveBaseRef || isFolder) {
@@ -4445,8 +4449,8 @@ function SourceControlInner(): React.JSX.Element {
 
     branchCompareInFlightRef.current = true
     const runPromise = (async (): Promise<void> => {
-      // Why: branch compare shells out to git on a timer and can exceed the
-      // 30s poll interval on large repos. Keep one compare chain in flight and
+      // Why: branch compare shells out to git from both event-driven refreshes
+      // and the fallback timer. Keep one compare chain in flight and
       // collapse skipped ticks into one trailing refresh instead of stacking
       // subprocesses while preserving the await contract for direct callers.
       try {
@@ -4542,42 +4546,43 @@ function SourceControlInner(): React.JSX.Element {
   const refreshGitHistoryRef = useRef(refreshGitHistory)
   refreshGitHistoryRef.current = refreshGitHistory
 
-  const shouldPollCurrentBranchCompare = useMemo(
-    () =>
-      shouldPollBranchCompare({
-        summary: branchSummary ?? null,
-        currentBaseRef: effectiveBaseRef
-      }),
-    [branchSummary, effectiveBaseRef]
-  )
-
   useEffect(() => {
-    if (
-      !activeWorktreeId ||
-      !worktreePath ||
-      !isBranchVisible ||
-      !effectiveBaseRef ||
-      isFolder ||
-      !shouldPollCurrentBranchCompare
-    ) {
+    if (!activeWorktreeId || !worktreePath || !isBranchVisible || !effectiveBaseRef || isFolder) {
+      branchCompareStatusHeadRef.current = null
       return
     }
 
-    // Why: branch compare shells out to git every tick. The panel only needs
-    // background freshness while Orca is visible and there is branch UI worth
-    // refreshing; hidden-window time should not burn subprocess work or timer wakeups.
-    return installWindowVisibilityInterval({
-      run: () => void refreshBranchCompareRef.current(),
-      intervalMs: BRANCH_REFRESH_INTERVAL_MS
-    })
+    const current = {
+      baseRef: effectiveBaseRef,
+      statusHead: activeGitStatusHead,
+      worktreeId: activeWorktreeId
+    }
+    const previous = branchCompareStatusHeadRef.current
+    branchCompareStatusHeadRef.current = current
+    if (shouldRefreshBranchCompareForStatusHead(previous, current)) {
+      void refreshBranchCompareRef.current()
+    }
   }, [
+    activeGitStatusHead,
     activeWorktreeId,
     effectiveBaseRef,
     isBranchVisible,
     isFolder,
-    shouldPollCurrentBranchCompare,
     worktreePath
   ])
+
+  useEffect(() => {
+    if (!activeWorktreeId || !worktreePath || !isBranchVisible || !effectiveBaseRef || isFolder) {
+      return
+    }
+
+    // Why: git-status HEAD changes refresh branch compare immediately. Keep a
+    // visible-window fallback for base refs or remote updates that do not move HEAD.
+    return installWindowVisibilityInterval({
+      run: () => void refreshBranchCompareRef.current(),
+      intervalMs: BRANCH_REFRESH_INTERVAL_MS
+    })
+  }, [activeWorktreeId, effectiveBaseRef, isBranchVisible, isFolder, worktreePath])
 
   useEffect(() => {
     // Why: history shells out to git. Defer the first load until the user
@@ -6770,21 +6775,23 @@ export function CommitArea({
   )
 }
 
-export function shouldPollBranchCompare(input: {
-  summary: GitBranchCompareSummary | null
-  currentBaseRef?: string | null
-}): boolean {
-  const { summary, currentBaseRef } = input
-  if (!summary || summary.status === 'loading') {
-    return true
-  }
-  if (currentBaseRef && summary.baseRef !== currentBaseRef) {
-    return true
-  }
-  if (summary.status === 'ready') {
-    return true
-  }
-  return true
+type BranchCompareStatusHeadSnapshot = {
+  baseRef: string
+  statusHead: string | null
+  worktreeId: string
+}
+
+export function shouldRefreshBranchCompareForStatusHead(
+  previous: BranchCompareStatusHeadSnapshot | null,
+  current: BranchCompareStatusHeadSnapshot
+): boolean {
+  return (
+    current.statusHead !== null &&
+    previous !== null &&
+    previous.worktreeId === current.worktreeId &&
+    previous.baseRef === current.baseRef &&
+    previous.statusHead !== current.statusHead
+  )
 }
 
 export function shouldShowCompareSummary(summary: GitBranchCompareSummary | null): boolean {

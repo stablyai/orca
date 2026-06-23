@@ -6,7 +6,7 @@ import {
   refreshSourceControlAfterRemoteAction,
   resolveSourceControlBaseRef,
   resolveSourceControlPickerBaseRef,
-  shouldPollBranchCompare,
+  shouldRefreshBranchCompareForStatusHead,
   shouldShowCompareSummary
 } from './SourceControl'
 import type { GitBranchCompareSummary } from '../../../../shared/types'
@@ -276,58 +276,45 @@ describe('SourceControl compare summary', () => {
     expect(collectCompareSummaryToolbarLabels(node)).toEqual(['Change base ref', 'Retry'])
   })
 
-  it('polls branch compare every 30 seconds', () => {
+  it('keeps a 30 second branch compare fallback refresh', () => {
     expect(BRANCH_REFRESH_INTERVAL_MS).toBe(30_000)
   })
 
-  it('polls ready branch compare at the reduced interval so external changes refresh', () => {
+  it('refreshes branch compare when git status observes a new head for the same base', () => {
     expect(
-      shouldPollBranchCompare({
-        summary: null
-      })
-    ).toBe(true)
-    expect(
-      shouldPollBranchCompare({
-        summary: { ...readySummary, commitsAhead: 0 }
-      })
-    ).toBe(true)
-    expect(
-      shouldPollBranchCompare({
-        summary: { ...readySummary, commitsAhead: 1 }
-      })
+      shouldRefreshBranchCompareForStatusHead(
+        { baseRef: 'origin/main', statusHead: 'old-head', worktreeId: 'wt-1' },
+        { baseRef: 'origin/main', statusHead: 'new-head', worktreeId: 'wt-1' }
+      )
     ).toBe(true)
   })
 
-  it('polls stale branch compare base refs so repaired bases refresh', () => {
+  it('does not refresh branch compare for initial, unknown, or unrelated status heads', () => {
     expect(
-      shouldPollBranchCompare({
-        summary: { ...readySummary, baseRef: 'origin/old', commitsAhead: 0 },
-        currentBaseRef: 'origin/main'
+      shouldRefreshBranchCompareForStatusHead(null, {
+        baseRef: 'origin/main',
+        statusHead: 'head',
+        worktreeId: 'wt-1'
       })
-    ).toBe(true)
-  })
-
-  it('keeps branch compare errors retryable so external git repairs refresh', () => {
+    ).toBe(false)
     expect(
-      shouldPollBranchCompare({
-        summary: { ...readySummary, status: 'error', errorMessage: 'Unable to compare' }
-      })
-    ).toBe(true)
+      shouldRefreshBranchCompareForStatusHead(
+        { baseRef: 'origin/main', statusHead: 'old-head', worktreeId: 'wt-1' },
+        { baseRef: 'origin/main', statusHead: null, worktreeId: 'wt-1' }
+      )
+    ).toBe(false)
     expect(
-      shouldPollBranchCompare({
-        summary: { ...readySummary, status: 'invalid-base' }
-      })
-    ).toBe(true)
+      shouldRefreshBranchCompareForStatusHead(
+        { baseRef: 'origin/main', statusHead: 'old-head', worktreeId: 'wt-1' },
+        { baseRef: 'origin/main', statusHead: 'new-head', worktreeId: 'wt-2' }
+      )
+    ).toBe(false)
     expect(
-      shouldPollBranchCompare({
-        summary: { ...readySummary, status: 'no-merge-base' }
-      })
-    ).toBe(true)
-    expect(
-      shouldPollBranchCompare({
-        summary: { ...readySummary, status: 'unborn-head' }
-      })
-    ).toBe(true)
+      shouldRefreshBranchCompareForStatusHead(
+        { baseRef: 'origin/main', statusHead: 'old-head', worktreeId: 'wt-1' },
+        { baseRef: 'origin/release', statusHead: 'new-head', worktreeId: 'wt-1' }
+      )
+    ).toBe(false)
   })
 
   it('keeps immediate refresh paths for remote actions', () => {
