@@ -36,7 +36,7 @@ fallback for older OpenCode installs.
 
 ## Architecture
 
-```
+```text
 scanAiVaultSessions()
   ├── discoverFiles(... per-agent file scanners ...)   ← unchanged
   │     └── opencode: discoverFiles(storage/session)    ← kept as fallback
