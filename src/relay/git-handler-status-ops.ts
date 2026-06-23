@@ -11,14 +11,8 @@ import { parseUnmergedEntry } from './git-handler-utils'
 import { parseStatusOutput } from './git-status-output-parser'
 import type { GitExec } from './git-handler-ops'
 import type { GitUpstreamStatus } from '../shared/types'
-import {
-  getEffectiveGitUpstreamStatus,
-  splitRemoteBranchName
-} from '../shared/git-effective-upstream'
-import {
-  cacheNoEffectiveUpstreamStatus,
-  readCachedNoEffectiveUpstreamStatus
-} from './git-status-upstream-negative-cache'
+import { splitRemoteBranchName } from '../shared/git-effective-upstream'
+import { readOrProbeNoEffectiveUpstreamStatus } from './git-status-upstream-negative-cache'
 import {
   applyLineStats,
   collectUntrackedAdditions,
@@ -137,13 +131,13 @@ export async function getStatusOp(
 
     if (!didHitLimit) {
       if (shouldProbeEffectiveUpstreamStatus(branch, upstreamStatus?.upstreamName)) {
-        const cachedStatus = readCachedNoEffectiveUpstreamStatus({ worktreePath, branch, head })
-        if (cachedStatus) {
-          upstreamStatus = cachedStatus
-        } else {
+        const branchName = getShortBranchName(branch)
+        if (branchName) {
           try {
-            upstreamStatus = await getEffectiveGitUpstreamStatus((args) => git(args, worktreePath))
-            cacheNoEffectiveUpstreamStatus({ worktreePath, branch, head }, upstreamStatus)
+            upstreamStatus = await readOrProbeNoEffectiveUpstreamStatus(
+              { worktreePath, branchName, upstreamName: upstreamStatus?.upstreamName },
+              (args) => git(args, worktreePath)
+            )
           } catch {
             // Why: status polling should keep returning working-tree entries even
             // if the richer upstream probe hits a transient SSH/git ref error.

@@ -1,11 +1,13 @@
+import { getEffectiveGitUpstreamStatus } from '../shared/git-effective-upstream'
+import type { GitCommandRunner } from '../shared/git-effective-upstream'
 import type { GitUpstreamStatus } from '../shared/types'
 
-const NO_EFFECTIVE_UPSTREAM_CACHE_TTL_MS = 5 * 60_000
+const NO_EFFECTIVE_UPSTREAM_CACHE_TTL_MS = 30_000
 
 type NoEffectiveUpstreamCacheIdentity = {
   worktreePath: string
-  branch?: string
-  head?: string
+  branchName: string
+  upstreamName?: string
 }
 
 type NoEffectiveUpstreamCacheEntry = {
@@ -14,41 +16,84 @@ type NoEffectiveUpstreamCacheEntry = {
 }
 
 const noEffectiveUpstreamByIdentity = new Map<string, NoEffectiveUpstreamCacheEntry>()
+const noEffectiveUpstreamInFlight = new Map<string, Promise<GitUpstreamStatus>>()
 
 function noEffectiveUpstreamCacheKey(identity: NoEffectiveUpstreamCacheIdentity): string {
-  return [identity.worktreePath, identity.branch ?? '', identity.head ?? ''].join('\0')
+  return [identity.worktreePath, identity.branchName, identity.upstreamName ?? ''].join('\0')
 }
 
-export function readCachedNoEffectiveUpstreamStatus(
-  identity: NoEffectiveUpstreamCacheIdentity,
+function readCachedNoEffectiveUpstreamStatus(
+  cacheKey: string,
   nowMs = Date.now()
 ): GitUpstreamStatus | null {
-  const key = noEffectiveUpstreamCacheKey(identity)
-  const entry = noEffectiveUpstreamByIdentity.get(key)
+  const entry = noEffectiveUpstreamByIdentity.get(cacheKey)
   if (!entry) {
     return null
   }
   if (entry.expiresAt <= nowMs) {
-    noEffectiveUpstreamByIdentity.delete(key)
+    noEffectiveUpstreamByIdentity.delete(cacheKey)
     return null
   }
   return entry.status
 }
 
-export function cacheNoEffectiveUpstreamStatus(
-  identity: NoEffectiveUpstreamCacheIdentity,
+function cacheNoEffectiveUpstreamStatus(
+  cacheKey: string,
   status: GitUpstreamStatus,
+  probedSameNameOriginRef: boolean,
   nowMs = Date.now()
 ): void {
-  if (status.hasUpstream) {
+  // Why: hasConfiguredPushTarget controls publish behavior; keep that signal
+  // fresh rather than serving a stale positive from status polling.
+  if (status.hasUpstream || status.hasConfiguredPushTarget) {
+    noEffectiveUpstreamByIdentity.delete(cacheKey)
     return
   }
-  noEffectiveUpstreamByIdentity.set(noEffectiveUpstreamCacheKey(identity), {
+  if (!probedSameNameOriginRef) {
+    return
+  }
+  noEffectiveUpstreamByIdentity.set(cacheKey, {
     status,
     expiresAt: nowMs + NO_EFFECTIVE_UPSTREAM_CACHE_TTL_MS
   })
 }
 
+export async function readOrProbeNoEffectiveUpstreamStatus(
+  identity: NoEffectiveUpstreamCacheIdentity,
+  runGit: GitCommandRunner
+): Promise<GitUpstreamStatus> {
+  const cacheKey = noEffectiveUpstreamCacheKey(identity)
+  const cachedStatus = readCachedNoEffectiveUpstreamStatus(cacheKey)
+  if (cachedStatus) {
+    return cachedStatus
+  }
+
+  const inFlight = noEffectiveUpstreamInFlight.get(cacheKey)
+  if (inFlight) {
+    return inFlight
+  }
+
+  let probedSameNameOriginRef = false
+  const probe = getEffectiveGitUpstreamStatus((args) => {
+    if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${identity.branchName}`)) {
+      probedSameNameOriginRef = true
+    }
+    return runGit(args)
+  }).then((status) => {
+    cacheNoEffectiveUpstreamStatus(cacheKey, status, probedSameNameOriginRef)
+    return status
+  })
+  noEffectiveUpstreamInFlight.set(cacheKey, probe)
+  try {
+    return await probe
+  } finally {
+    if (noEffectiveUpstreamInFlight.get(cacheKey) === probe) {
+      noEffectiveUpstreamInFlight.delete(cacheKey)
+    }
+  }
+}
+
 export function clearNoEffectiveUpstreamStatusCache(): void {
   noEffectiveUpstreamByIdentity.clear()
+  noEffectiveUpstreamInFlight.clear()
 }

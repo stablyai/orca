@@ -99,28 +99,120 @@ describe('getStatusOp', () => {
     expect(first.upstreamStatus).toEqual({ hasUpstream: false, ahead: 0, behind: 0 })
     expect(second.upstreamStatus).toEqual(first.upstreamStatus)
     expect(git.mock.calls).toHaveLength(firstCallCount + 1)
+    expect(
+      git.mock.calls.filter(([args]) => args[0] === 'rev-parse' && args.includes('HEAD@{u}'))
+    ).toHaveLength(1)
+    expect(
+      git.mock.calls.filter(
+        ([args]) => args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')
+      )
+    ).toHaveLength(1)
   })
 
-  it('invalidates cached no-effective-upstream probes when HEAD changes', async () => {
-    let head = 'abc123'
+  it('coalesces concurrent no-effective-upstream probes', async () => {
     const git = vi.fn<GitExec>(async (args) => {
       if (args.includes('status')) {
-        return { stdout: buildBranchStatusOutput(head, 'feature'), stderr: '' }
+        return { stdout: buildBranchStatusOutput('abc123', 'feature'), stderr: '' }
       }
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'feature\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
+        await Promise.resolve()
         throw new Error('fatal: no upstream configured for branch feature')
+      }
+      if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')) {
+        await Promise.resolve()
+        throw new Error('missing remote branch')
+      }
+      throw new Error(`No upstream fixture for git ${args.join(' ')}`)
+    })
+
+    await Promise.all([
+      getStatusOp(git, { worktreePath: tmpDir }),
+      getStatusOp(git, { worktreePath: tmpDir }),
+      getStatusOp(git, { worktreePath: tmpDir })
+    ])
+
+    expect(
+      git.mock.calls.filter(([args]) => args[0] === 'rev-parse' && args.includes('HEAD@{u}'))
+    ).toHaveLength(1)
+    expect(
+      git.mock.calls.filter(
+        ([args]) => args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')
+      )
+    ).toHaveLength(1)
+  })
+
+  it('invalidates cached no-effective-upstream probes when the branch changes', async () => {
+    let branch = 'feature'
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args.includes('status')) {
+        return { stdout: buildBranchStatusOutput('abc123', branch), stderr: '' }
+      }
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: `${branch}\n`, stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
+        throw new Error(`fatal: no upstream configured for branch ${branch}`)
+      }
+      if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))) {
+        throw new Error('missing remote branch')
       }
       throw new Error(`No upstream fixture for git ${args.join(' ')}`)
     })
 
     await getStatusOp(git, { worktreePath: tmpDir })
-    const firstCallCount = git.mock.calls.length
-    head = 'def456'
+    branch = 'other-feature'
     await getStatusOp(git, { worktreePath: tmpDir })
 
-    expect(git.mock.calls.length).toBeGreaterThan(firstCallCount + 1)
+    expect(
+      git.mock.calls
+        .filter(
+          ([args]) =>
+            args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))
+        )
+        .map(([args]) => args.at(-1))
+    ).toEqual(['refs/remotes/origin/feature', 'refs/remotes/origin/other-feature'])
+  })
+
+  it('does not cache a configured push target signal', async () => {
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args.includes('status')) {
+        return { stdout: buildBranchStatusOutput('abc123', 'feature/fix'), stderr: '' }
+      }
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'feature/fix\n', stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
+        throw new Error('fatal: no upstream configured for branch feature/fix')
+      }
+      if (args[0] === 'config' && args.includes('branch.feature/fix.pushRemote')) {
+        return { stdout: 'fork\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('remote.pushDefault')) {
+        throw new Error('missing push default')
+      }
+      if (args[0] === 'config' && args.includes('branch.feature/fix.remote')) {
+        return { stdout: 'fork\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.feature/fix.merge')) {
+        return { stdout: 'refs/heads/feature/fix\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.feature/fix.base')) {
+        throw new Error('missing branch base')
+      }
+      if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/'))) {
+        throw new Error('missing remote branch')
+      }
+      throw new Error(`No upstream fixture for git ${args.join(' ')}`)
+    })
+
+    await getStatusOp(git, { worktreePath: tmpDir })
+    await getStatusOp(git, { worktreePath: tmpDir })
+
+    expect(
+      git.mock.calls.filter(([args]) => args[0] === 'rev-parse' && args.includes('HEAD@{u}'))
+    ).toHaveLength(2)
   })
 })
