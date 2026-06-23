@@ -39,6 +39,8 @@ export function splitRepoReorderByHost(
   const groups = new Map<string, string[]>()
   for (const id of orderedIds) {
     const remainingHosts = remainingHostsByRepoId.get(id)
+    // Why: a bare repo id can appear once per host in the combined order. Shift
+    // consumes each occurrence against the corresponding owner host exactly once.
     const hostId = remainingHosts?.shift()
     if (!hostId) {
       continue

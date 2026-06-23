@@ -25,6 +25,8 @@ function findRepoOwner(
   const focusedMatches = matchingRepos.filter(
     (entry) => getRepoExecutionHostId(entry) === focusedHostId
   )
+  // Why: duplicate bare repo ids are only safe to route when focus selects one
+  // owner unambiguously; otherwise callers must avoid guessing a host.
   return focusedMatches.length === 1 ? focusedMatches[0] : null
 }
 

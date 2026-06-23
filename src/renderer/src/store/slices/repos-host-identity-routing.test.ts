@@ -32,6 +32,16 @@ const ptyKill = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 function projectHostSetup(overrides: Pick<ProjectHostSetup, 'id' | 'hostId'>): ProjectHostSetup {
   return {
     projectId: 'repo:same-repo',
@@ -99,6 +109,79 @@ describe('repo slice host identity routing', () => {
     })
   })
 
+  it('keeps queued focused-host repo updates pinned when focus changes', async () => {
+    const firstUpdate = deferred<{
+      id: string
+      ok: true
+      result: { repo: Repo }
+      _meta: { runtimeId: string }
+    }>()
+    runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      if (args.method === 'repo.update') {
+        const { updates } = (args as unknown as { params: { updates: { displayName: string } } })
+          .params
+        const displayName = updates.displayName
+        if (displayName === 'Remote slow') {
+          return firstUpdate.promise
+        }
+        return Promise.resolve({
+          id: 'rpc-queued-update',
+          ok: true,
+          result: { repo: { ...remoteDuplicate, displayName } },
+          _meta: { runtimeId: 'runtime-remote' }
+        })
+      }
+      return Promise.resolve({
+        id: 'rpc-other',
+        ok: true,
+        result: {},
+        _meta: { runtimeId: 'runtime-remote' }
+      })
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [localDuplicate, remoteDuplicate]
+    })
+
+    const first = store.getState().updateRepo('same-repo', { displayName: 'Remote slow' })
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selector: 'env-1',
+          method: 'repo.update',
+          params: { repo: 'same-repo', updates: { displayName: 'Remote slow' } }
+        })
+      )
+    })
+
+    const second = store.getState().updateRepo('same-repo', { displayName: 'Remote queued' })
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-2' } as never })
+    firstUpdate.resolve({
+      id: 'rpc-first-update',
+      ok: true,
+      result: { repo: { ...remoteDuplicate, displayName: 'Remote slow' } },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+
+    await expect(first).resolves.toBe(true)
+    await expect(second).resolves.toBe(true)
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'repo.update',
+        params: { repo: 'same-repo', updates: { displayName: 'Remote queued' } }
+      })
+    )
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ selector: 'env-2', method: 'repo.update' })
+    )
+    expect(store.getState().repos).toEqual([
+      localDuplicate,
+      { ...remoteDuplicate, displayName: 'Remote queued' }
+    ])
+  })
+
   it('removes only the focused host row and worktrees for duplicate repo ids', async () => {
     const localWorktree = makeWorktree({
       id: 'same-repo::/local/wt',
@@ -134,6 +217,10 @@ describe('repo slice host identity routing', () => {
       ptyIdsByTabId: {
         'local-tab': ['local-pty'],
         'remote-tab': ['remote-pty']
+      },
+      lastVisitedAtByWorktreeId: {
+        [localWorktree.id]: 10,
+        [remoteWorktree.id]: 20
       }
     })
 
@@ -148,6 +235,7 @@ describe('repo slice host identity routing', () => {
     expect(store.getState().projectHostSetups).toEqual([
       expect.objectContaining({ hostId: 'runtime:env-1', repoId: 'same-repo' })
     ])
+    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ [remoteWorktree.id]: 20 })
     expect(store.getState().projects).toEqual([
       expect.objectContaining({ id: 'repo:same-repo', sourceRepoIds: ['same-repo'] })
     ])
@@ -184,6 +272,10 @@ describe('repo slice host identity routing', () => {
       ptyIdsByTabId: {
         'local-tab': ['local-pty'],
         'remote-tab': ['remote-pty']
+      },
+      lastVisitedAtByWorktreeId: {
+        [localWorktree.id]: 10,
+        [remoteWorktree.id]: 20
       }
     })
 
@@ -195,6 +287,7 @@ describe('repo slice host identity routing', () => {
       { id: 'local-tab', worktreeId: localWorktree.id }
     ])
     expect(store.getState().tabsByWorktree[remoteWorktree.id]).toBeUndefined()
+    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ [localWorktree.id]: 10 })
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'repo.rm',

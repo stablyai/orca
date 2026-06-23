@@ -461,7 +461,7 @@ function getKnownWorktreeIdsForPurge(
       }
     }
   }
-  if (!state.hasHydratedWorktreePurge) {
+  if (!state.hasHydratedWorktreePurge && hostId === LOCAL_EXECUTION_HOST_ID) {
     // Why (#1158): hydration can preserve tab keys before worktree metadata exists;
     // the first authoritative scan still needs to reap deleted session-only keys.
     for (const id of getHydratedSessionWorktreeIdsForRepo(state, repoId)) {
@@ -1684,9 +1684,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
   fetchWorktrees: async (repoId, options) => {
     try {
-      const settings = settingsForRepoOwner(get(), repoId)
+      const ownerState = get()
+      const hostId = repoHostId(ownerState, repoId)
+      const settings = settingsForRepoOwner(ownerState, repoId, hostId)
       const detected = await listDetectedWorktreesForRepo(settings, repoId)
-      const hostId = repoHostId(get(), repoId)
       if (options?.requireAuthoritative && !detected.authoritative) {
         return false
       }
