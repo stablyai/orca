@@ -282,9 +282,10 @@ describe('managed agent hook timeouts', () => {
       const { sftp, fs } = createFakeSftp()
       await install(sftp)
       for (const [path, content] of fs.files) {
-        if (!path.endsWith('.sh') || !content.includes('curl')) {
+        if (!path.endsWith('.sh')) {
           continue
         }
+        expect(content, `${agent} wrapper missing curl transport`).toContain('curl')
         expect(content, `${agent} wrapper missing --connect-timeout`).toContain('--connect-timeout')
         expect(content, `${agent} wrapper missing --max-time`).toContain('--max-time')
         curlWrappersChecked += 1
