@@ -6,6 +6,8 @@
 // untouched. Appending table headers is always valid TOML, so the block can live
 // at the end of any existing file.
 
+import { MANAGED_HOOK_TIMEOUT_SECONDS } from '../agent-hooks/installer-utils'
+
 // Why: mirror the Claude-compatible events Orca normalizes for status. Kimi uses
 // these exact event names (see normalizeKimiEvent), so each maps to a
 // working/waiting/done transition.
@@ -55,8 +57,15 @@ export function buildManagedKimiHooksBlock(command: string): string {
   const commandLiteral = tomlBasicString(command)
   // Omit `matcher`: Kimi treats it as a regex (so Claude's literal "*" is
   // invalid) and an absent matcher already matches every tool.
+  // `timeout` is the host-level backstop; the shell wrapper's curl budget is
+  // the normal dead-endpoint bound.
   const entries = KIMI_HOOK_EVENTS.map((event) =>
-    [`[[hooks]]`, `event = "${event}"`, `command = ${commandLiteral}`].join('\n')
+    [
+      `[[hooks]]`,
+      `event = "${event}"`,
+      `command = ${commandLiteral}`,
+      `timeout = ${MANAGED_HOOK_TIMEOUT_SECONDS}`
+    ].join('\n')
   )
   return [BLOCK_START, ...entries, BLOCK_END].join('\n')
 }

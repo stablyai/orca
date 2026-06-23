@@ -1,6 +1,7 @@
 import { homedir } from 'os'
 import { join } from 'path'
 import {
+  buildManagedCommandHook,
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
   removeManagedCommands,
@@ -74,7 +75,7 @@ export function applyDevinManagedHooks(
     const cleaned = removeManagedCommands(current, isManagedCommand)
     const definition: HookDefinition = {
       ...event.definition,
-      hooks: [{ type: 'command', command }]
+      hooks: [buildManagedCommandHook(command)]
     }
     nextHooks[event.eventName] = [...cleaned, definition]
   }
