@@ -38,6 +38,11 @@ import {
   resolveAgentPermissionModeSummary,
   type AgentPermissionMode
 } from '../../../../shared/tui-agent-permissions'
+import {
+  AI_VAULT_AGENTS,
+  defaultAiVaultResumeArgsTemplate,
+  type AiVaultAgent
+} from '../../../../shared/ai-vault-types'
 import { getSettingOwnershipSummary } from './setting-ownership'
 import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
@@ -81,6 +86,10 @@ type AgentRowProps = {
   onSaveOverride: (value: string) => void
   onSaveArgs: (value: string) => void
   onSaveEnv: (value: Record<string, string>) => void
+  /** Resume-flag override props are only supplied for agents with vault sessions. */
+  resumeArgsOverride?: string
+  defaultResumeArgs?: string
+  onSaveResumeArgs?: (value: string) => void
 }
 
 type AgentCommandOverrideInputProps = {
@@ -93,6 +102,12 @@ type AgentDefaultArgsInputProps = {
   defaultArgs: string
   argsOverride: string
   onSaveArgs: (value: string) => void
+}
+
+type AgentResumeArgsInputProps = {
+  defaultResumeArgs: string
+  resumeArgsOverride: string | undefined
+  onSaveResumeArgs: (value: string) => void
 }
 
 type AgentDefaultEnvInputProps = {
@@ -373,6 +388,58 @@ function AgentDefaultArgsInput({
   )
 }
 
+function AgentResumeArgsInput({
+  defaultResumeArgs,
+  resumeArgsOverride,
+  onSaveResumeArgs
+}: AgentResumeArgsInputProps): React.JSX.Element {
+  const [draft, setDraft] = useState(resumeArgsOverride ?? '')
+
+  const commit = (): void => {
+    onSaveResumeArgs(draft.trim())
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="shrink-0 text-xs text-muted-foreground">
+        {translate('auto.components.settings.AgentsPane.resumeArgsLabel', 'Resume')}
+      </span>
+      <Input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            commit()
+            e.currentTarget.blur()
+          }
+          if (e.key === 'Escape') {
+            setDraft(resumeArgsOverride ?? '')
+            e.currentTarget.blur()
+          }
+        }}
+        placeholder={defaultResumeArgs}
+        spellCheck={false}
+        className="h-7 flex-1 font-mono text-xs"
+      />
+      {resumeArgsOverride && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          onClick={() => {
+            onSaveResumeArgs('')
+            setDraft('')
+          }}
+          className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
+        >
+          {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
+        </Button>
+      )}
+    </div>
+  )
+}
+
 function AgentDefaultEnvInput({
   defaultEnv,
   envOverride,
@@ -476,12 +543,18 @@ function AgentRow({
   onSetEnabled,
   onSaveOverride,
   onSaveArgs,
-  onSaveEnv
+  onSaveEnv,
+  resumeArgsOverride,
+  defaultResumeArgs,
+  onSaveResumeArgs
 }: AgentRowProps): React.JSX.Element {
   const envSummary = stringifyAgentDefaultEnvDraft(envOverride)
   const defaultEnvSummary = stringifyAgentDefaultEnvDraft(defaultEnv)
   const [cmdOpen, setCmdOpen] = useState(
-    Boolean(cmdOverride) || argsOverride !== defaultArgs || envSummary !== defaultEnvSummary
+    Boolean(cmdOverride) ||
+      Boolean(resumeArgsOverride) ||
+      argsOverride !== defaultArgs ||
+      envSummary !== defaultEnvSummary
   )
 
   return (
@@ -634,6 +707,16 @@ function AgentRow({
               onSaveArgs={onSaveArgs}
             />
           </div>
+          {defaultResumeArgs !== undefined && onSaveResumeArgs && (
+            <div className="mt-2">
+              <AgentResumeArgsInput
+                key={`${agentId}:resume:${resumeArgsOverride ?? ''}`}
+                defaultResumeArgs={defaultResumeArgs}
+                resumeArgsOverride={resumeArgsOverride}
+                onSaveResumeArgs={onSaveResumeArgs}
+              />
+            </div>
+          )}
           {(defaultEnvSummary || envSummary) && (
             <div className="mt-2">
               <AgentDefaultEnvInput
@@ -647,7 +730,7 @@ function AgentRow({
           <p className="mt-1.5 text-[11px] text-muted-foreground">
             {translate(
               'auto.components.settings.AgentsPane.f9f127d664',
-              'Override the binary path or name, and edit the default launch arguments or environment for this agent.'
+              'Override the binary path or name, edit the default launch arguments or environment, and customize the resume command ({{id}} = session id) for this agent.'
             )}
           </p>
         </div>
@@ -696,6 +779,7 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
   const defaultAgent = settings.defaultTuiAgent
   const agentOwnership = getSettingOwnershipSummary('agentLaunchDefaults')
   const cmdOverrides = settings.agentCmdOverrides ?? {}
+  const resumeArgsOverrides = settings.agentResumeArgsOverrides ?? {}
   const agentDefaultArgs = settings.agentDefaultArgs ?? {}
   const agentDefaultEnv = settings.agentDefaultEnv ?? {}
   const agentPermissionMode = resolveAgentPermissionModeSummary({
@@ -726,6 +810,21 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
       delete next[id]
     }
     updateSettings({ agentCmdOverrides: next })
+  }
+
+  // Why: empty value clears the per-agent key so the built-in resume flags
+  // (from buildAiVaultResumeCommand) take over again.
+  const isAiVaultAgent = (id: TuiAgent): id is AiVaultAgent =>
+    (AI_VAULT_AGENTS as readonly TuiAgent[]).includes(id)
+
+  const saveResumeArgs = (id: TuiAgent, value: string): void => {
+    const next = { ...resumeArgsOverrides }
+    if (value) {
+      next[id] = value
+    } else {
+      delete next[id]
+    }
+    updateSettings({ agentResumeArgsOverrides: next })
   }
 
   const saveAgentArgs = (id: TuiAgent, value: string): void => {
@@ -880,6 +979,15 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
                 cmdOverride={cmdOverrides[agent.id]}
                 argsOverride={resolveTuiAgentLaunchArgs(agent.id, agentDefaultArgs)}
                 envOverride={resolveTuiAgentLaunchEnv(agent.id, agentDefaultEnv)}
+                resumeArgsOverride={
+                  isAiVaultAgent(agent.id) ? resumeArgsOverrides[agent.id] : undefined
+                }
+                defaultResumeArgs={
+                  isAiVaultAgent(agent.id) ? defaultAiVaultResumeArgsTemplate(agent.id) : undefined
+                }
+                onSaveResumeArgs={
+                  isAiVaultAgent(agent.id) ? (v) => saveResumeArgs(agent.id, v) : undefined
+                }
                 onSetDefault={() => setDefault(agent.id)}
                 onSetEnabled={(enabled) => setAgentEnabled(agent.id, enabled)}
                 onSaveOverride={(v) => saveOverride(agent.id, v)}
@@ -924,6 +1032,15 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
                 cmdOverride={undefined}
                 argsOverride={resolveTuiAgentLaunchArgs(agent.id, agentDefaultArgs)}
                 envOverride={resolveTuiAgentLaunchEnv(agent.id, agentDefaultEnv)}
+                resumeArgsOverride={
+                  isAiVaultAgent(agent.id) ? resumeArgsOverrides[agent.id] : undefined
+                }
+                defaultResumeArgs={
+                  isAiVaultAgent(agent.id) ? defaultAiVaultResumeArgsTemplate(agent.id) : undefined
+                }
+                onSaveResumeArgs={
+                  isAiVaultAgent(agent.id) ? (v) => saveResumeArgs(agent.id, v) : undefined
+                }
                 onSetDefault={() => {}}
                 onSetEnabled={(enabled) => setAgentEnabled(agent.id, enabled)}
                 onSaveOverride={() => {}}

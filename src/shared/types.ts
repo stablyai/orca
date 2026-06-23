@@ -2639,6 +2639,9 @@ export type GlobalSettings = {
   geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
+  /** Per-agent resume flag overrides for the Agent Session History resume button.
+   *  Use {{id}} for the session id (omit it to append). Missing key = built-in flags. */
+  agentResumeArgsOverrides?: Partial<Record<TuiAgent, string>>
   /** Per-agent default CLI arguments appended after the binary/path and before prompts. */
   agentDefaultArgs?: Partial<Record<TuiAgent, string>>
   /** Per-agent launch environment defaults used when yolo mode is exposed as env. */

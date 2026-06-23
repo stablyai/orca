@@ -88,14 +88,16 @@ export function buildAiVaultResumeCommand(args: {
   cwd: string | null
   platform: NodeJS.Platform
   commandOverride?: string | null
+  resumeArgsOverride?: string | null
   codexHome?: string | null
 }): string {
-  const { agent, sessionId, cwd, platform, commandOverride, codexHome } = args
+  const { agent, sessionId, cwd, platform, commandOverride, resumeArgsOverride, codexHome } = args
   const baseCommand = commandOverride?.trim() || defaultAiVaultResumeCommandBase(agent)
   const sessionArg = quoteShellArg(sessionId, platform)
   const resumeCommand = buildAgentResumeInvocation(agent, baseCommand, sessionArg, {
     codexHome: codexHome?.trim() || null,
-    platform
+    platform,
+    resumeArgsOverride: resumeArgsOverride?.trim() || null
   })
 
   if (!cwd) {
@@ -131,22 +133,42 @@ function buildAgentResumeInvocation(
   agent: AiVaultAgent,
   baseCommand: string,
   sessionArg: string,
-  options: { codexHome: string | null; platform: NodeJS.Platform }
+  options: { codexHome: string | null; platform: NodeJS.Platform; resumeArgsOverride: string | null }
 ): string {
+  // Why: codex needs CODEX_HOME exported before the binary; keep that prefix
+  // even when the user overrides the resume flags.
+  const envPrefix = agent === 'codex' ? codexHomeEnvPrefix(options.codexHome, options.platform) : ''
+  const flags = options.resumeArgsOverride
+    ? expandResumeArgsOverride(options.resumeArgsOverride, sessionArg)
+    : defaultAgentResumeFlags(agent, sessionArg)
+  return `${envPrefix}${baseCommand} ${flags}`
+}
+
+// Why: {{id}} marks where the shell-quoted session id goes; if the override
+// omits it, append the id so a flags-only value still resumes the session.
+// The replacement uses a function so a session id with `$` is treated literally.
+function expandResumeArgsOverride(override: string, sessionArg: string): string {
+  if (override.includes('{{id}}')) {
+    return override.replace(/\{\{id\}\}/g, () => sessionArg)
+  }
+  return `${override} ${sessionArg}`
+}
+
+function defaultAgentResumeFlags(agent: AiVaultAgent, sessionArg: string): string {
   switch (agent) {
     case 'codex':
-      return `${codexHomeEnvPrefix(options.codexHome, options.platform)}${baseCommand} resume ${sessionArg}`
+      return `resume ${sessionArg}`
     case 'rovo':
-      return `${baseCommand} rovodev run --restore ${sessionArg}`
+      return `rovodev run --restore ${sessionArg}`
     case 'opencode':
     case 'pi':
     // Why: Kimi Code resumes with `kimi --session <id>` (alias `-S`). Sessions
     // are work-dir-scoped, so the cwd prefix from buildAiVaultResumeCommand is
     // required — resuming from another directory is rejected by the CLI.
     case 'kimi':
-      return `${baseCommand} --session ${sessionArg}`
+      return `--session ${sessionArg}`
     case 'copilot':
-      return `${baseCommand} --resume=${sessionArg}`
+      return `--resume=${sessionArg}`
     case 'claude':
     case 'cursor':
     case 'gemini':
@@ -155,8 +177,13 @@ function buildAgentResumeInvocation(
     case 'devin':
     case 'openclaw':
     case 'droid':
-      return `${baseCommand} --resume ${sessionArg}`
+      return `--resume ${sessionArg}`
   }
+}
+
+/** Default resume flags for an agent as an editable template ({{id}} = session id). */
+export function defaultAiVaultResumeArgsTemplate(agent: AiVaultAgent): string {
+  return defaultAgentResumeFlags(agent, '{{id}}')
 }
 
 function codexHomeEnvPrefix(codexHome: string | null, platform: NodeJS.Platform): string {

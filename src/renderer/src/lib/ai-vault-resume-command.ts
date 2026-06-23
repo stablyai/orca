@@ -14,6 +14,7 @@ export function buildAiVaultResumeCommandForWorktree(args: {
   worktreeId?: string | null
   session: AiVaultResumeCommandSession
   commandOverride?: string | null
+  resumeArgsOverride?: string | null
 }): string {
   const platform = getAiVaultResumePlatform(args.state, args.worktreeId)
   const codexHome = getAiVaultResumeCodexHome(args.session.codexHome, platform)
@@ -23,6 +24,7 @@ export function buildAiVaultResumeCommandForWorktree(args: {
     cwd: args.session.cwd,
     platform,
     commandOverride: args.commandOverride,
+    resumeArgsOverride: args.resumeArgsOverride,
     codexHome
   })
 }
