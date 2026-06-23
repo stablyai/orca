@@ -205,7 +205,9 @@ export function registerShellHandlers(): void {
     async (_event, args: { defaultPath?: string }): Promise<string | null> => {
       const result = await dialog.showOpenDialog({
         defaultPath: args.defaultPath,
-        properties: ['openDirectory', 'createDirectory']
+        // Why: callers only need an existing folder grant; enabling native
+        // creation can leave typed prefix directories behind on macOS.
+        properties: ['openDirectory']
       })
       if (result.canceled || result.filePaths.length === 0) {
         return null

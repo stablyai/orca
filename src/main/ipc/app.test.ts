@@ -1,14 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handlers, appExitMock, appQuitMock, appRelaunchMock, execFileMock, destroySystemTrayMock } =
-  vi.hoisted(() => ({
-    handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
-    appExitMock: vi.fn(),
-    appQuitMock: vi.fn(),
-    appRelaunchMock: vi.fn(),
-    execFileMock: vi.fn(),
-    destroySystemTrayMock: vi.fn()
-  }))
+const {
+  handlers,
+  appExitMock,
+  appQuitMock,
+  appRelaunchMock,
+  execFileMock,
+  destroySystemTrayMock,
+  showOpenDialogMock,
+  grantFloatingWorkspaceDirectoryMock
+} = vi.hoisted(() => ({
+  handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
+  appExitMock: vi.fn(),
+  appQuitMock: vi.fn(),
+  appRelaunchMock: vi.fn(),
+  execFileMock: vi.fn(),
+  destroySystemTrayMock: vi.fn(),
+  showOpenDialogMock: vi.fn(),
+  grantFloatingWorkspaceDirectoryMock: vi.fn()
+}))
 
 vi.mock('node:child_process', () => ({
   execFile: execFileMock
@@ -26,7 +36,7 @@ vi.mock('electron', () => ({
     fromWebContents: vi.fn(() => null)
   },
   dialog: {
-    showOpenDialog: vi.fn()
+    showOpenDialog: showOpenDialogMock
   },
   ipcMain: {
     handle: vi.fn((channel: string, handler: (_event: unknown, args?: unknown) => unknown) => {
@@ -43,6 +53,12 @@ vi.mock('../tray/system-tray', () => ({
   destroySystemTray: destroySystemTrayMock
 }))
 
+vi.mock('./floating-workspace-directory', () => ({
+  ensureDefaultFloatingWorkspacePath: vi.fn(),
+  grantFloatingWorkspaceDirectory: grantFloatingWorkspaceDirectoryMock,
+  resolveFloatingTerminalCwd: vi.fn()
+}))
+
 import { registerAppHandlers } from './app'
 
 describe('registerAppHandlers', () => {
@@ -56,6 +72,8 @@ describe('registerAppHandlers', () => {
     appRelaunchMock.mockReset()
     execFileMock.mockReset()
     destroySystemTrayMock.mockReset()
+    showOpenDialogMock.mockReset()
+    grantFloatingWorkspaceDirectoryMock.mockReset()
     Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
   })
 
@@ -176,5 +194,22 @@ describe('registerAppHandlers', () => {
     expect(settled).toBe(true)
     await expect(resultPromise).resolves.toBeNull()
     expect(killMock).toHaveBeenCalled()
+  })
+
+  it('picks an existing floating workspace directory without enabling native directory creation', async () => {
+    const store = {}
+    showOpenDialogMock.mockResolvedValue({
+      canceled: false,
+      filePaths: ['/Users/kaylee/notes']
+    })
+    registerAppHandlers(store as never)
+
+    await expect(
+      handlers.get('app:pickFloatingWorkspaceDirectory')?.({ sender: {} })
+    ).resolves.toBe('/Users/kaylee/notes')
+    expect(showOpenDialogMock).toHaveBeenCalledWith({
+      properties: ['openDirectory']
+    })
+    expect(grantFloatingWorkspaceDirectoryMock).toHaveBeenCalledWith(store, '/Users/kaylee/notes')
   })
 })
