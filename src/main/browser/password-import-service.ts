@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { accessSync, constants, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   type DetectedImportBrowser,
@@ -34,9 +34,18 @@ export function detectPasswordImportBrowsers(): DetectedImportBrowser[] {
   const detected = detectChromiumBrowsers((root, profileDir) => {
     const candidate = join(root, profileDir, 'Login Data')
     // Why: only consider a browser "importable" if the Login Data file physically
-    // exists — avoids returning browsers that are installed but have never been
-    // used (and therefore have no stored passwords).
-    return existsSync(candidate) ? candidate : null
+    // exists AND is readable — avoids returning browsers that are installed but
+    // have never been used, and prevents listing files that would fail at import
+    // due to permission errors (e.g. locked by the OS or owned by another user).
+    if (!existsSync(candidate)) {
+      return null
+    }
+    try {
+      accessSync(candidate, constants.R_OK)
+      return candidate
+    } catch {
+      return null
+    }
   })
 
   return detected.map((b) => ({

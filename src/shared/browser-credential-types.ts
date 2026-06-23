@@ -90,7 +90,17 @@ export function isBrowserPasswordBridgeEvent(value: unknown): value is BrowserPa
   }
   const v = value as Record<string, unknown>
   if (v.type === 'detect') {
-    return typeof v.origin === 'string' && Array.isArray(v.fields)
+    return (
+      typeof v.origin === 'string' &&
+      Array.isArray(v.fields) &&
+      v.fields.every(
+        (f) =>
+          !!f &&
+          typeof f === 'object' &&
+          typeof (f as Record<string, unknown>).fieldId === 'string' &&
+          typeof (f as Record<string, unknown>).rect === 'object'
+      )
+    )
   }
   if (v.type === 'capture') {
     return (

@@ -21,6 +21,10 @@ export function buildBrowserPasswordBridgeScript({
 
   const teardown = (state) => {
     if (!state) return;
+    // Why: cancel in-flight RAF and debounced detect so stale events cannot
+    // fire after disable/reinject (fix for pending-work leak on teardown).
+    if (state.raf) cancelAnimationFrame(state.raf);
+    if (state.debounce) clearTimeout(state.debounce);
     if (state.observer) state.observer.disconnect();
     if (state.onScroll) {
       window.removeEventListener('scroll', state.onScroll, true);
@@ -75,7 +79,7 @@ export function buildBrowserPasswordBridgeScript({
     emit({ type: 'detect', origin, fields });
   };
 
-  const state = { observer: null, onScroll: null, onSubmit: null, raf: 0 };
+  const state = { observer: null, onScroll: null, onSubmit: null, raf: 0, debounce: 0 };
 
   state.onScroll = () => {
     if (state.raf) return;
@@ -89,17 +93,19 @@ export function buildBrowserPasswordBridgeScript({
     });
   };
 
-  let debounce = 0;
   state.observer = new MutationObserver(() => {
-    clearTimeout(debounce);
-    debounce = setTimeout(detect, 300);
+    clearTimeout(state.debounce);
+    state.debounce = setTimeout(detect, 300);
   });
 
   globalThis.__orcaPasswordBridge = {
     fill: (fieldId, username, password) => {
       // Why: fieldId comes from an external caller; escape it so special CSS
-      // characters cannot break the attribute selector.
-      const esc = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(fieldId) : fieldId;
+      // characters cannot break the double-quoted attribute selector. The
+      // fallback mirrors escapeCssAttrValue in tab-group-panel-split-target.ts.
+      const esc = (typeof CSS !== 'undefined' && CSS.escape)
+        ? CSS.escape(fieldId)
+        : fieldId.split('\\\\').join('\\\\\\\\').split('"').join('\\\\\\"');
       const userEl = document.querySelector('[' + attrUser + '="' + esc + '"]');
       const passEl = document.querySelector('[' + attrPass + '="' + esc + '"]');
       const set = (el, value) => {

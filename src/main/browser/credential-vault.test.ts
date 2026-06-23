@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'fs'
+import { mkdtempSync, readFileSync, rmSync, statSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -72,6 +72,11 @@ describe('BrowserCredentialVault', () => {
     vault.save({ origin: 'https://github.com', username: 'me', password: 'secret' })
     const raw = readFileSync(join(dir, 'creds.json'), 'utf-8')
     expect(raw).not.toContain('secret')
+    // Why: POSIX mode bits don't exist on Windows; guard so the assertion only
+    // runs on platforms where the 0600 restriction is meaningful.
+    if (process.platform !== 'win32') {
+      expect(statSync(join(dir, 'creds.json')).mode & 0o777).toBe(0o600)
+    }
     const reopened = makeVault()
     expect(reopened.matchesForOrigin('https://github.com').length).toBe(1)
   })
