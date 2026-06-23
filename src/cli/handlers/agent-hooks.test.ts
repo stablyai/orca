@@ -14,7 +14,18 @@ const {
 } = vi.hoisted(() => ({
   applyAgentStatusHooksEnabledMock: vi.fn(),
   callMock: vi.fn(),
-  getCliStatusMock: vi.fn(() => Promise.resolve({ result: { runtime: { reachable: false } } })),
+  getCliStatusMock: vi.fn(() =>
+    Promise.resolve({
+      id: 'test-status',
+      ok: true,
+      result: {
+        app: { running: false, pid: null },
+        runtime: { state: 'not_running', reachable: false, runtimeId: null },
+        graph: { state: 'not_running' }
+      },
+      _meta: { runtimeId: 'test' }
+    })
+  ),
   getDefaultUserDataPathMock: vi.fn(),
   getManagedAgentHookStatusesMock: vi.fn()
 }))

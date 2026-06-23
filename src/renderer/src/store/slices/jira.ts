@@ -496,7 +496,14 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
         ) {
           set({ jiraStatus: { connected: false, viewer: null } })
         }
-        return []
+        // Credential/auth failures are surfaced through connection state, so they
+        // keep the empty-list contract. Other failures (forbidden, bad JQL,
+        // network, 5xx) reject so the Tasks panel can show a real error instead
+        // of a misleading "No issues found".
+        if (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) {
+          return []
+        }
+        throw error
       })
       .finally(() => {
         if (inflightSearchRequests.get(cacheKey) === entry) {
@@ -583,7 +590,14 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
         ) {
           set({ jiraStatus: { connected: false, viewer: null } })
         }
-        return []
+        // Credential/auth failures are surfaced through connection state, so they
+        // keep the empty-list contract. Other failures (forbidden, bad JQL,
+        // network, 5xx) reject so the Tasks panel can show a real error instead
+        // of a misleading "No issues found".
+        if (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) {
+          return []
+        }
+        throw error
       })
       .finally(() => {
         if (inflightListRequests.get(cacheKey) === entry) {

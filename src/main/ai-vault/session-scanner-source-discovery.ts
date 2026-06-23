@@ -52,7 +52,11 @@ export async function discoverAiVaultSessionSources(args: {
     ...(options.additionalCodexSessionsDirs ?? [])
   ])
 
-  return Promise.all<SessionFileDiscovery>([
+  return Promise.all([
+    // Why: OpenCode 1.17.x migrated sessions from per-session JSON files to a
+    // SQLite DB. discoverOpenCodeSessions runs both the file scanner (legacy)
+    // and the SQLite scanner (1.17.x); dedup by sessionId happens inside.
+    ...opencodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...claudeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...codexDiscoveries(codexSessionsDirs, limitPerAgent, issues),
     ...standardDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
@@ -106,7 +110,6 @@ function standardDiscoveries(
       discoverFiles({ rootDir, limit, agent: 'copilot', issues, extensions: ['.jsonl'] })
     ),
     ...cursorDiscoveries(options, wslHomeDirs, limit, issues),
-    ...opencodeDiscoveries(options, wslHomeDirs, limit, issues),
     ...grokDiscoveries(options, wslHomeDirs, limit, issues),
     ...devinDiscoveries(options, wslHomeDirs, limit, issues),
     ...hermesDiscoveries(options, wslHomeDirs, limit, issues),

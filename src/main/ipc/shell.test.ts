@@ -132,6 +132,22 @@ describe('registerShellHandlers', () => {
     await expect(handler({})).resolves.toBeNull()
   })
 
+  it('picks an existing directory without enabling native directory creation', async () => {
+    showOpenDialogMock.mockResolvedValue({
+      canceled: false,
+      filePaths: ['/Users/kaylee/projects']
+    })
+
+    const handler = getHandler('shell:pickDirectory')
+    await expect(handler({}, { defaultPath: '/Users/kaylee' })).resolves.toBe(
+      '/Users/kaylee/projects'
+    )
+    expect(showOpenDialogMock).toHaveBeenCalledWith({
+      defaultPath: '/Users/kaylee',
+      properties: ['openDirectory']
+    })
+  })
+
   describe('shell:openPath', () => {
     it('ignores relative paths', async () => {
       const handler = getHandler('shell:openPath')

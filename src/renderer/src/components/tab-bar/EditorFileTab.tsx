@@ -352,6 +352,9 @@ export default function EditorFileTab({
                   ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
                   : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
             }`}
+            // Why: simulator unified tabs reuse this tab chrome, so E2E needs
+            // the same stable close affordance on the real button users click.
+            data-tab-close-button="true"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation()

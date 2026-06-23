@@ -1601,7 +1601,8 @@
         "ff90d0abc7": "Start workspace from {{value0}}",
         "fe28c9821f": "view",
         "8d1e17a3ef": "Open {{value0}} in GitHub",
-        "4ac8ff2275": "Open {{value0}} in Jira"
+        "4ac8ff2275": "Open {{value0}} in Jira",
+        "40eaf2c27c": "Details"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -8349,6 +8350,8 @@
             "66a29dde82": "Copy Relative Path",
             "42e10cbf57": "Copy Relative Paths",
             "b5d436aa30": "Copy Path",
+            "98a79948b3": "Copy",
+            "b234ab25b4": "Could not copy the file to the clipboard",
             "f9d7ca753d": "Copy Paths",
             "3161c4e425": "folder"
           },
@@ -10144,7 +10147,6 @@
             "3dddb2d565": "connected for tasks",
             "33b650af52": "Connect where your team tracks work. Orca starts workspaces with the issue title, link, and context already attached.",
             "5b3577a492": "connected for review status",
-            "3a1fcdddad": "Two quick steps: connect where your code is reviewed, then where your team plans work.",
             "list_end": ", and ",
             "list_pair": " and ",
             "list_mid": ", ",

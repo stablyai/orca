@@ -3,7 +3,10 @@ import { translate } from '@/i18n/i18n'
 
 export function EmulatorUnavailablePane() {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 bg-background px-6 text-center text-sm text-muted-foreground">
+    <div
+      data-emulator-pane
+      className="flex h-full flex-col items-center justify-center gap-3 bg-background px-6 text-center text-sm text-muted-foreground"
+    >
       <Smartphone className="size-8 text-muted-foreground" />
       <p className="max-w-md font-medium text-foreground">
         {translate(

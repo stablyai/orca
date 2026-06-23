@@ -1601,7 +1601,8 @@
         "ff90d0abc7": "从 {{value0}} 开始工作区",
         "fe28c9821f": "视图",
         "8d1e17a3ef": "在 GitHub 中打开 {{value0}}",
-        "4ac8ff2275": "在 Jira 中打开 {{value0}}"
+        "4ac8ff2275": "在 Jira 中打开 {{value0}}",
+        "40eaf2c27c": "Details"
       },
       "Terminal": {
         "73768427cf": "关闭",
@@ -8349,6 +8350,8 @@
             "66a29dde82": "复制相对路径",
             "42e10cbf57": "复制相对路径",
             "b5d436aa30": "复制路径",
+            "98a79948b3": "复制",
+            "b234ab25b4": "无法将文件复制到剪贴板",
             "f9d7ca753d": "复制路径",
             "3161c4e425": "文件夹"
           },
@@ -10144,7 +10147,6 @@
             "3dddb2d565": "connected for tasks",
             "33b650af52": "Connect where your team tracks work. Orca starts workspaces with the issue title, link, and context already attached.",
             "5b3577a492": "connected for review status",
-            "3a1fcdddad": "Two quick steps: connect where your code is reviewed, then where your team plans work.",
             "list_end": ", and ",
             "list_pair": " and ",
             "list_mid": ", ",

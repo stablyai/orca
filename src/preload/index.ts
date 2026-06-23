@@ -3270,6 +3270,14 @@ const api = {
         mode: options?.mode === 'paste-and-match-style' ? 'paste-and-match-style' : 'paste'
       })
     },
+    writeClipboardFile: (
+      args:
+        | {
+            filePath: string
+            connectionId?: string | null
+          }
+        | string
+    ): Promise<{ ok: boolean; reason?: string }> => ipcRenderer.invoke('clipboard:writeFile', args),
     onFileDrop: (callback: (data: NativeFileDropPayload) => void): (() => void) =>
       subscribeNativeFileDrop(callback),
     getZoomLevel: (): number => webFrame.getZoomLevel(),
@@ -3838,6 +3846,11 @@ const api = {
      *  cannot resurrect it. Fire-and-forget; no response. */
     drop: (paneKey: string): void => {
       ipcRenderer.send('agentStatus:drop', paneKey)
+    },
+    /** Drop all cached hook statuses under one terminal tab prefix. Fired on
+     *  explicit tab close even when the renderer has no matching local row. */
+    dropByTabPrefix: (tabId: string): void => {
+      ipcRenderer.send('agentStatus:dropByTabPrefix', tabId)
     }
   },
 

@@ -57,7 +57,9 @@ async function pickFloatingWorkspaceDirectory(
 ): Promise<string | null> {
   const parentWindow = BrowserWindow.fromWebContents(event.sender)
   const options = {
-    properties: ['openDirectory', 'createDirectory']
+    // Why: this picker grants access to an existing workspace directory.
+    // Creation belongs to explicit file/write actions, not typeahead input.
+    properties: ['openDirectory']
   } satisfies Electron.OpenDialogOptions
   const result = parentWindow
     ? await dialog.showOpenDialog(parentWindow, options)

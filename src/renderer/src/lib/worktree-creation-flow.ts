@@ -32,6 +32,7 @@ function buildStartupOpt(
     command: plan.launchCommand,
     ...(plan.env ? { env: plan.env } : {}),
     launchConfig: plan.launchConfig,
+    ...(plan.launchToken ? { launchToken: plan.launchToken } : {}),
     ...(request.agent ? { launchAgent: request.agent } : {}),
     ...(plan.startupCommandDelivery ? { startupCommandDelivery: plan.startupCommandDelivery } : {}),
     // Why: command-code shows its prompt in the tab status before the first
@@ -144,6 +145,11 @@ async function executeWorktreeCreation(
   }
 
   const backendSpawned = result.startupTerminal?.spawned === true
+  if (request.startupPlan && !backendSpawned && !request.startupPlan.launchToken) {
+    // Why: delayed delivery must target the exact pane spawned from this queued
+    // startup, so both halves of the handoff share one renderer-session token.
+    request.startupPlan.launchToken = createBrowserUuid()
+  }
   const startupOpt = buildStartupOpt(request, backendSpawned)
 
   if (worktree.path) {

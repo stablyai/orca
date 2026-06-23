@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'events'
 import { randomUUID } from 'crypto'
 import { lstat, mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
+import { homedir, tmpdir } from 'os'
 import { join } from 'path'
 import { ipcMain } from 'electron'
 import type {
@@ -58,7 +58,11 @@ import {
   unregisterSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
-import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceSession } from '../../shared/constants'
+import {
+  DEFAULT_REPO_BADGE_COLOR,
+  FLOATING_TERMINAL_WORKTREE_ID,
+  getDefaultWorkspaceSession
+} from '../../shared/constants'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree-id'
@@ -1828,6 +1832,25 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
 
     await expect(runtime.showManagedWorktree('active')).rejects.toThrow('selector_not_found')
+  })
+
+  it('does not resolve the floating-terminal sentinel as a managed worktree', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    await expect(runtime.showManagedWorktree(FLOATING_TERMINAL_WORKTREE_ID)).rejects.toThrow(
+      'selector_not_found'
+    )
+    await expect(
+      runtime.showManagedWorktree(`id:${FLOATING_TERMINAL_WORKTREE_ID}`)
+    ).rejects.toThrow('selector_not_found')
+  })
+
+  it('still throws selector_not_found for an unknown id selector', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    await expect(runtime.showManagedWorktree('id:does-not-exist')).rejects.toThrow(
+      'selector_not_found'
+    )
   })
 
   it('does not reuse stale in-flight worktree scans after creating a worktree', async () => {
@@ -6293,6 +6316,52 @@ describe('OrcaRuntimeService', () => {
     expect(spawnedEnv.ORCA_PROJECT_GROUP_ID).toBe(TEST_FOLDER_PROJECT_GROUP_ID)
     expect(spawnedEnv.ORCA_WORKSPACE_ROOT).toBe(folderPath)
     expect(spawnedEnv.ORCA_WORKTREE_ID).toBe(TEST_FOLDER_WORKSPACE_KEY)
+  })
+
+  it.each([
+    { label: 'bare floating terminal sentinel', selector: FLOATING_TERMINAL_WORKTREE_ID },
+    {
+      label: 'id-prefixed floating terminal sentinel',
+      selector: `id:${FLOATING_TERMINAL_WORKTREE_ID}`
+    }
+  ])('creates background terminal sessions for a $label', async ({ selector }) => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-floating' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await expect(
+      runtime.createTerminal(selector, {
+        command: 'codex',
+        title: 'floating worker'
+      })
+    ).resolves.toMatchObject({
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      title: 'floating worker',
+      surface: 'background'
+    })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as
+      | {
+          cwd?: string
+          connectionId?: string | null
+          env?: Record<string, string>
+          worktreeId?: string
+        }
+      | undefined
+    expect(spawnCall).toMatchObject({
+      cwd: homedir(),
+      connectionId: null,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+    })
+    expect(spawnCall?.env?.ORCA_WORKTREE_ID).toBe(FLOATING_TERMINAL_WORKTREE_ID)
+    expect(spawnCall?.env?.ORCA_WORKSPACE_ID).toBeUndefined()
+    expect(spawnCall?.env?.ORCA_PROJECT_GROUP_ID).toBeUndefined()
+    expect(spawnCall?.env?.ORCA_WORKSPACE_ROOT).toBeUndefined()
   })
 
   it('rejects folder workspace terminal creation when the backing path is missing', async () => {
@@ -13885,6 +13954,250 @@ describe('OrcaRuntimeService', () => {
     )
     expect(focusTerminal).not.toHaveBeenCalled()
     expect(result.tab).toMatchObject({ parentTabId: 'tab-renderer', isActive: false })
+  })
+
+  it('dedupes concurrent mobile terminal creates that share a clientMutationId', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setNotifier({
+      focusTerminal: vi.fn(),
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      closeSessionTab: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    const send = vi.fn((_channel: string, payload: { requestId: string }) => {
+      runtime.syncWindowGraph(1, {
+        tabs: [],
+        leaves: [],
+        mobileSessionTabs: [
+          {
+            worktree: TEST_WORKTREE_ID,
+            publicationEpoch: 'epoch-1',
+            snapshotVersion: 1,
+            activeGroupId: 'group-1',
+            activeTabId: null,
+            activeTabType: null,
+            tabs: [
+              {
+                type: 'terminal',
+                id: 'tab-renderer::pane:1',
+                parentTabId: 'tab-renderer',
+                leafId: 'pane:1',
+                title: 'Terminal',
+                isActive: false
+              }
+            ]
+          }
+        ]
+      })
+      ipcMain.emit(
+        'terminal:tabCreateReply',
+        {},
+        { requestId: payload.requestId, tabId: 'tab-renderer', title: 'Terminal' }
+      )
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents: { send }
+    })
+
+    const [first, second] = await Promise.all([
+      runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        activate: false,
+        clientMutationId: 'mutation-1'
+      }),
+      runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        activate: false,
+        clientMutationId: 'mutation-1'
+      })
+    ])
+
+    const createRequests = send.mock.calls.filter(
+      ([channel]) => channel === 'terminal:requestTabCreate'
+    )
+    expect(createRequests).toHaveLength(1)
+    expect(second).toBe(first)
+    expect(first.tab).toMatchObject({ parentTabId: 'tab-renderer' })
+  })
+
+  it('does not dedupe mobile terminal creates across worktrees with the same clientMutationId', async () => {
+    const otherWorktreeId = `${TEST_REPO_ID}::/tmp/worktree-b`
+    vi.mocked(listWorktrees).mockResolvedValue([
+      ...MOCK_GIT_WORKTREES,
+      {
+        path: '/tmp/worktree-b',
+        head: 'def',
+        branch: 'feature/bar',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => ({
+        [TEST_WORKTREE_ID]: store.getAllWorktreeMeta()[TEST_WORKTREE_ID],
+        [otherWorktreeId]: makeWorktreeMeta({ displayName: 'other' })
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setNotifier({
+      focusTerminal: vi.fn(),
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      closeSessionTab: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    const send = vi.fn((_channel: string, payload: { requestId: string; worktreeId: string }) => {
+      const parentTabId =
+        payload.worktreeId === TEST_WORKTREE_ID ? 'tab-renderer-a' : 'tab-renderer-b'
+      ipcMain.emit(
+        'terminal:tabCreateReply',
+        {},
+        { requestId: payload.requestId, tabId: parentTabId, title: 'Terminal' }
+      )
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents: { send }
+    })
+
+    const firstCreate = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      activate: false,
+      clientMutationId: 'mutation-1'
+    })
+    const secondCreate = runtime.createMobileSessionTerminal(`id:${otherWorktreeId}`, {
+      activate: false,
+      clientMutationId: 'mutation-1'
+    })
+    await vi.waitFor(() => {
+      const createRequests = send.mock.calls.filter(
+        ([channel]) => channel === 'terminal:requestTabCreate'
+      )
+      expect(createRequests).toHaveLength(2)
+    })
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-a',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: null,
+          activeTabType: null,
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-renderer-a::pane:1',
+              parentTabId: 'tab-renderer-a',
+              leafId: 'pane:1',
+              title: 'Terminal',
+              isActive: false
+            }
+          ]
+        },
+        {
+          worktree: otherWorktreeId,
+          publicationEpoch: 'epoch-b',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: null,
+          activeTabType: null,
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-renderer-b::pane:1',
+              parentTabId: 'tab-renderer-b',
+              leafId: 'pane:1',
+              title: 'Terminal',
+              isActive: false
+            }
+          ]
+        }
+      ]
+    })
+    const [first, second] = await Promise.all([firstCreate, secondCreate])
+
+    const createRequests = send.mock.calls.filter(
+      ([channel]) => channel === 'terminal:requestTabCreate'
+    )
+    expect(createRequests).toHaveLength(2)
+    expect(first.tab).toMatchObject({ parentTabId: 'tab-renderer-a' })
+    expect(second.tab).toMatchObject({ parentTabId: 'tab-renderer-b' })
+  })
+
+  it('rolls back a half-created terminal whose surface never publishes', async () => {
+    vi.useFakeTimers()
+    try {
+      const closeTerminal = vi.fn()
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setNotifier({
+        focusTerminal: vi.fn(),
+        worktreesChanged: vi.fn(),
+        reposChanged: vi.fn(),
+        activateWorktree: vi.fn(),
+        createTerminal: vi.fn(),
+        revealTerminalSession: vi.fn(),
+        splitTerminal: vi.fn(),
+        renameTerminal: vi.fn(),
+        closeTerminal,
+        closeSessionTab: vi.fn(),
+        sleepWorktree: vi.fn(),
+        terminalFitOverrideChanged: vi.fn(),
+        terminalDriverChanged: vi.fn()
+      })
+      // Why: reply with a tabId but never sync a matching surface graph, so
+      // waitForMobileTerminalSurface times out and the rollback path runs.
+      const send = vi.fn((_channel: string, payload: { requestId: string }) => {
+        ipcMain.emit(
+          'terminal:tabCreateReply',
+          {},
+          { requestId: payload.requestId, tabId: 'tab-ghost', title: 'Terminal' }
+        )
+      })
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      electronMocks.BrowserWindow.fromId.mockReturnValue({
+        isDestroyed: () => false,
+        webContents: { send }
+      })
+
+      const pending = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        activate: false
+      })
+      const settled = pending.then(
+        () => ({ ok: true as const }),
+        (error: Error) => ({ ok: false as const, error })
+      )
+      await vi.advanceTimersByTimeAsync(11_000)
+      const outcome = await settled
+
+      expect(outcome.ok).toBe(false)
+      expect(closeTerminal).toHaveBeenCalledWith('tab-ghost')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('reports browser tab creation as unsupported for a windowless host with no offscreen backend', async () => {

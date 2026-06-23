@@ -138,8 +138,9 @@ function canStopParsingSessions(
   }
   const visibleCutoff = sessions
     .map(sessionSortTime)
-    .sort((l, r) => r - l)
+    .sort((left, right) => right - left)
     .at(limit - 1)
+
   // Transcript mtime is already our discovery bound and fallback sort key; older
   // files cannot displace the current visible set once the cutoff is newer.
   return typeof visibleCutoff === 'number' && nextCandidateMtimeMs < visibleCutoff

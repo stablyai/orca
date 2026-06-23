@@ -177,6 +177,16 @@ export class SshPtyProvider implements IPtyProvider {
     await this.mux.request('pty.attach', { id: this.toRelayPtyId(id) })
   }
 
+  async attachForReconnect(id: string): Promise<{ replay?: string }> {
+    // Why: reconnect owns replay delivery so stale/duplicate attach results can
+    // be filtered before they reach the renderer.
+    const result = (await this.mux.request('pty.attach', {
+      id: this.toRelayPtyId(id),
+      suppressReplayNotification: true
+    })) as { replay?: string } | undefined
+    return result ?? {}
+  }
+
   write(id: string, data: string): void {
     this.mux.notify('pty.data', { id: this.toRelayPtyId(id), data })
   }

@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.91-rc.0",
+  "version": "1.4.92-rc.1",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -70,6 +70,7 @@
     "build:mac:release": "node config/scripts/verify-macos-release-env.mjs && ORCA_MAC_RELEASE=1 pnpm run build:desktop && ORCA_MAC_RELEASE=1 pnpm run build:computer-macos && pnpm run ensure:electron-runtime && ORCA_MAC_RELEASE=1 electron-builder --config config/electron-builder.config.cjs --mac",
     "build:linux": "pnpm run build:desktop && pnpm run ensure:electron-runtime && electron-builder --config config/electron-builder.config.cjs --linux AppImage deb",
     "test:e2e": "pnpm run ensure:electron-runtime && npx playwright test --config tests/playwright.config.ts --project electron-headless",
+    "test:e2e:floating-mobile-emulator": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/floating-mobile-emulator-tab.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
     "test:e2e:terminal-rendering-golden": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/terminal-raw-emoji-table-scroll-restore.spec.ts --grep @terminal-rendering-golden --config tests/playwright.config.ts --project electron-headless --workers=1",
     "test:e2e:terminal-rendering-release-evidence": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/terminal-opencode-emoji-table-rendering.spec.ts tests/e2e/terminal-long-table-scroll-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=2",
     "test:e2e:terminal-perf": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/terminal-typing-latency.spec.ts tests/e2e/terminal-foreground-redraw-freeze.spec.ts tests/e2e/terminal-output-scheduler.spec.ts tests/e2e/terminal-hidden-tui-visual-restore.spec.ts tests/e2e/artificial-opencode-terminal-load.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=2",
@@ -78,9 +79,13 @@
     "test:e2e:terminal-perf:check-report": "node config/scripts/check-terminal-perf-report-budgets.mjs",
     "test:e2e:terminal-perf:summarize": "node config/scripts/summarize-terminal-perf-report.mjs",
     "test:e2e:ssh-docker-perf": "node config/scripts/run-ssh-docker-perf-e2e.mjs",
+    "test:e2e:ssh-codex-artifacts-repro": "node config/scripts/run-ssh-codex-artifacts-repro-e2e.mjs",
     "test:e2e:headful": "pnpm run ensure:electron-runtime && npx playwright test --config tests/playwright.config.ts --project electron-headful",
     "test:e2e:computer": "vitest run --config tests/e2e/vitest.config.ts",
-    "bench:idle-cpu": "pnpm run ensure:electron-runtime && node config/scripts/run-idle-cpu-benchmark.mjs"
+    "bench:idle-cpu": "pnpm run ensure:electron-runtime && node config/scripts/run-idle-cpu-benchmark.mjs",
+    "bench:startup": "pnpm run ensure:electron-runtime && node tools/benchmarks/startup-time-bench.mjs",
+    "bench:daemon-coldstart": "pnpm run ensure:electron-runtime && node tools/benchmarks/daemon-coldstart-bench.mjs",
+    "bench:compare": "node config/scripts/compare-benchmark-artifacts.mjs"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",

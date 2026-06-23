@@ -23,6 +23,7 @@ import {
   clearWebSessionTabsTrackingForEnvironment,
   resolveHostSessionTabIdForWebSessionTab,
   resetWebSessionTabsSnapshotFreshnessForTests,
+  shouldSyncAllRuntimeSessionTabs,
   shouldApplyWebSessionTabsSnapshot,
   shouldBootstrapInitialWebRuntimeTerminal,
   shouldRespawnWebRuntimeTerminalAfterWake,
@@ -268,27 +269,56 @@ describe('applyWebSessionTabsSnapshot', () => {
     ).toBe(true)
   })
 
-  it('syncs session tabs for desktop remote runtime clients, not only web clients', () => {
-    vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
-
+  it('syncs active session tabs for desktop remote runtime clients using the worktree owner', () => {
     expect(
       shouldSyncRuntimeSessionTabs({
-        activeRuntimeEnvironmentId: ENV,
-        workspaceSessionReady: true
-      })
-    ).toBe(true)
-    expect(
-      shouldSyncRuntimeSessionTabs({
-        activeRuntimeEnvironmentId: ENV,
         activeWorktreeId: WT,
-        workspaceSessionReady: true,
-        requireActiveWorktree: true
+        activeWorktreeRuntimeEnvironmentId: ENV,
+        workspaceSessionReady: true
       })
     ).toBe(true)
     expect(
       shouldSyncRuntimeSessionTabs({
-        activeRuntimeEnvironmentId: null,
+        activeWorktreeId: WT,
+        activeWorktreeRuntimeEnvironmentId: null,
         workspaceSessionReady: true
+      })
+    ).toBe(false)
+    expect(
+      shouldSyncRuntimeSessionTabs({
+        activeWorktreeId: WT,
+        activeWorktreeRuntimeEnvironmentId: 'other-env',
+        workspaceSessionReady: true
+      })
+    ).toBe(true)
+    expect(
+      shouldSyncRuntimeSessionTabs({
+        activeWorktreeRuntimeEnvironmentId: ENV,
+        workspaceSessionReady: true
+      })
+    ).toBe(false)
+    expect(
+      shouldSyncRuntimeSessionTabs({
+        activeWorktreeId: WT,
+        activeWorktreeRuntimeEnvironmentId: ENV,
+        workspaceSessionReady: false
+      })
+    ).toBe(false)
+  })
+
+  it('only starts the all-session mirror for paired web clients', () => {
+    expect(
+      shouldSyncAllRuntimeSessionTabs({
+        activeRuntimeEnvironmentId: ENV,
+        workspaceSessionReady: true,
+        isWebClient: true
+      })
+    ).toBe(true)
+    expect(
+      shouldSyncAllRuntimeSessionTabs({
+        activeRuntimeEnvironmentId: ENV,
+        workspaceSessionReady: true,
+        isWebClient: false
       })
     ).toBe(false)
   })

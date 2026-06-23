@@ -16,6 +16,32 @@ export type FileExplorerNameFilterProjectionSource = {
 
 export const FILE_EXPLORER_NAME_FILTER_QUERY_MAX_BYTES = 2 * 1024
 
+export function getNextNameFilterCollapsedPaths(
+  collapsedPaths: ReadonlySet<string>,
+  dirPath: string,
+  isExpanded: boolean
+): Set<string> {
+  const next = new Set(collapsedPaths)
+  if (isExpanded) {
+    next.add(dirPath)
+  } else {
+    next.delete(dirPath)
+  }
+  return next
+}
+
+export function getNameFilterCollapsedPathsAfterExpand(
+  collapsedPaths: ReadonlySet<string>,
+  dirPath: string
+): Set<string> {
+  if (!collapsedPaths.has(dirPath)) {
+    return new Set(collapsedPaths)
+  }
+  const next = new Set(collapsedPaths)
+  next.delete(dirPath)
+  return next
+}
+
 export function isFileExplorerNameFilterQueryTooLarge(
   query: string | undefined,
   maxBytes = FILE_EXPLORER_NAME_FILTER_QUERY_MAX_BYTES
@@ -119,12 +145,14 @@ function createSyntheticNode(
 }
 
 export function createNameFilteredFileExplorerProjection({
+  collapsedPaths,
   ignoredSet,
   nameFilter,
   showDotfiles,
   showGitIgnoredFiles,
   worktreePath
 }: {
+  collapsedPaths?: ReadonlySet<string>
   ignoredSet: Set<string>
   nameFilter: FileExplorerNameFilterProjectionSource
   showDotfiles: boolean
@@ -180,14 +208,15 @@ export function createNameFilteredFileExplorerProjection({
     }
   }
 
-  appendNameFilteredEntries(rootChildren.values(), visibleFlatRows, rowsByPath)
+  appendNameFilteredEntries(rootChildren.values(), visibleFlatRows, rowsByPath, collapsedPaths)
   return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
 }
 
 function appendNameFilteredEntries(
   entries: Iterable<SyntheticTreeEntry>,
   visibleFlatRows: TreeNode[],
-  rowsByPath: Map<string, TreeNode>
+  rowsByPath: Map<string, TreeNode>,
+  collapsedPaths?: ReadonlySet<string>
 ): void {
   const sortedEntries = Array.from(entries).sort((a, b) => {
     if (a.node.isDirectory !== b.node.isDirectory) {
@@ -198,8 +227,13 @@ function appendNameFilteredEntries(
   for (const entry of sortedEntries) {
     visibleFlatRows.push(entry.node)
     rowsByPath.set(entry.node.path, entry.node)
-    if (entry.children.size > 0) {
-      appendNameFilteredEntries(entry.children.values(), visibleFlatRows, rowsByPath)
+    if (entry.children.size > 0 && !collapsedPaths?.has(entry.node.path)) {
+      appendNameFilteredEntries(
+        entry.children.values(),
+        visibleFlatRows,
+        rowsByPath,
+        collapsedPaths
+      )
     }
   }
 }

@@ -168,6 +168,31 @@ describe('file explorer visible row projection', () => {
     ])
   })
 
+  it('hides descendants under collapsed folders while a file-name filter is active', () => {
+    const projection = createVisibleFileExplorerRowProjection(
+      input({
+        '/repo': [row('docs', true, 0), row('src', true, 0)]
+      }),
+      {
+        ignoredSet: new Set(),
+        nameFilter: {
+          query: 'ts',
+          relativePaths: ['docs/guide.ts', 'src/components/FileExplorer.tsx', 'src/index.ts']
+        },
+        nameFilterCollapsedPaths: new Set(['/repo/src']),
+        showDotfiles: true,
+        showGitIgnoredFiles: true
+      }
+    )
+
+    expect(projection.getVisibleSlice(0, 10).map((entry) => entry.relativePath)).toEqual([
+      'docs',
+      'docs/guide.ts',
+      'src'
+    ])
+    expect([...getFileExplorerNameFilterExpandedPaths(projection, 'ts')]).toEqual(['/repo/docs'])
+  })
+
   it('does not fall back to the partial cached tree while recursive file filtering is loading', () => {
     const projection = createVisibleFileExplorerRowProjection(
       input(

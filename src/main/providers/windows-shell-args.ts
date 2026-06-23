@@ -105,6 +105,19 @@ function buildWslShellArgs(linuxCwd: string, distro?: string): string[] {
   return distro ? ['-d', distro, ...shellArgs] : shellArgs
 }
 
+function normalizeMsysDrivePath(cwd: string): string {
+  const match = cwd.match(/^\/([A-Za-z])(?:\/(.*))?$/)
+  if (!match) {
+    return cwd
+  }
+
+  // Why: Git Bash/MSYS launch contexts can hand Windows terminals `/d/repo`;
+  // ConPTY requires the equivalent native drive path as its cwd.
+  const driveLetter = match[1].toUpperCase()
+  const rest = match[2]?.replace(/\//g, '\\') ?? ''
+  return rest ? `${driveLetter}:\\${rest}` : `${driveLetter}:\\`
+}
+
 /** Build the argv + effective cwd for a Windows shell launch.
  *
  *  - cmd.exe: `/K chcp 65001 > nul` so multi-byte CJK output renders correctly.
@@ -122,6 +135,7 @@ export function resolveWindowsShellLaunchArgs(
   startupCommand?: string
 ): WindowsShellLaunchArgs {
   const shellBasename = pathWin32.basename(shellPath).toLowerCase()
+  const nativeCwd = normalizeMsysDrivePath(cwd)
 
   if (shellBasename === 'cmd.exe') {
     const shellArgStartupCommand = getCmdShellArgStartupCommand(startupCommand)
@@ -133,8 +147,8 @@ export function resolveWindowsShellLaunchArgs(
           : CMD_UTF8_SETUP_COMMAND
       ],
       ...(shellArgStartupCommand ? { startupCommandDeliveredInShellArgs: true } : {}),
-      effectiveCwd: cwd,
-      validationCwd: cwd
+      effectiveCwd: nativeCwd,
+      validationCwd: nativeCwd
     }
   }
 
@@ -147,16 +161,16 @@ export function resolveWindowsShellLaunchArgs(
       ...(powerShellCommand.startupCommandDeliveredInShellArgs
         ? { startupCommandDeliveredInShellArgs: true }
         : {}),
-      effectiveCwd: cwd,
-      validationCwd: cwd
+      effectiveCwd: nativeCwd,
+      validationCwd: nativeCwd
     }
   }
 
   if (isWindowsGitBashShellPath(shellPath)) {
     return {
       shellArgs: ['--login', '-i'],
-      effectiveCwd: cwd,
-      validationCwd: cwd
+      effectiveCwd: nativeCwd,
+      validationCwd: nativeCwd
     }
   }
 
@@ -176,18 +190,18 @@ export function resolveWindowsShellLaunchArgs(
         validationCwd: toWindowsWslPath(cwd, wslContext.distro)
       }
     }
-    const driveMatch = cwd.replace(/\\/g, '/').match(/^([A-Za-z]):\/?(.*)$/)
-    const linuxCwd = driveMatch ? toLinuxPath(cwd) : '/mnt/c'
+    const driveMatch = nativeCwd.replace(/\\/g, '/').match(/^([A-Za-z]):\/?(.*)$/)
+    const linuxCwd = driveMatch ? toLinuxPath(nativeCwd) : '/mnt/c'
     return {
       shellArgs: buildWslShellArgs(linuxCwd, wslContext?.distro),
       effectiveCwd: defaultCwd,
-      validationCwd: cwd
+      validationCwd: nativeCwd
     }
   }
 
   return {
     shellArgs: [],
-    effectiveCwd: cwd,
-    validationCwd: cwd
+    effectiveCwd: nativeCwd,
+    validationCwd: nativeCwd
   }
 }

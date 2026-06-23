@@ -940,6 +940,9 @@ export function connectPanePty(
       leafId: pane.leafId
     })
   }
+  const clearRegisteredStartupLaunchConfig = (): void => {
+    useAppStore.getState().clearAgentLaunchConfig(cacheKey)
+  }
   const pendingSpawnKey = cacheKey
   const neutralTerminalTitle = (): string => {
     const state = useAppStore.getState()
@@ -2411,6 +2414,14 @@ export function connectPanePty(
           }
           if (resolvedPtyId) {
             clearSleepingRecordAfterColdRestoreSpawn(coldRestoreOverride)
+          } else if (
+            paneStartup?.launchConfig ||
+            (startupOverride && 'launchConfig' in startupOverride)
+          ) {
+            // Why: delayed draft/follow-up delivery keys off this launch
+            // registry. If spawn produced no PTY, the launch is no longer a
+            // viable delivery target and must not wait for a future pane.
+            clearRegisteredStartupLaunchConfig()
           }
           const gen = await preSignalPromise
           if (typeof gen === 'number' && resolvedPtyId) {
@@ -2427,6 +2438,9 @@ export function connectPanePty(
           return resolvedPtyId
         })
         .catch(async () => {
+          if (paneStartup?.launchConfig || (startupOverride && 'launchConfig' in startupOverride)) {
+            clearRegisteredStartupLaunchConfig()
+          }
           const gen = await preSignalPromise
           if (typeof gen === 'number') {
             void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
@@ -2491,8 +2505,13 @@ export function connectPanePty(
       return replayIntoTerminalAsync(pane, deps.replayingPanesRef, data)
     }
 
-    const replayDataCallback = (data: string): void => {
-      void (async () => {
+    let replayWriteQueue = Promise.resolve()
+    let pendingReplayData: string | null = null
+    let replayDrainQueued = false
+    const drainReplayDataQueue = async (): Promise<void> => {
+      while (pendingReplayData !== null) {
+        const data = pendingReplayData
+        pendingReplayData = null
         // Relay replay buffer holds the last 100 KB of output, which may
         // overlap with content already rendered in xterm before the
         // disconnect. Clear first to prevent duplication on SSH reconnect.
@@ -2500,13 +2519,30 @@ export function connectPanePty(
         await writeReplayDataAsync(data)
         await writeReplayDataAsync(POST_REPLAY_REATTACH_RESET)
         if (disposed) {
+          pendingReplayData = null
           return
         }
         // Why: remote-runtime snapshots can arrive after WebGL attached to an
         // empty buffer; rebuilding after replay parses seeds the glyph atlas
         // from the now-populated xterm state.
         manager.rebuildPaneWebgl(pane.id)
-      })()
+      }
+    }
+    const replayDataCallback = (data: string): void => {
+      pendingReplayData = data
+      if (replayDrainQueued) {
+        return
+      }
+      replayDrainQueued = true
+      replayWriteQueue = replayWriteQueue
+        .catch(() => undefined)
+        .then(drainReplayDataQueue)
+        .finally(() => {
+          replayDrainQueued = false
+          if (pendingReplayData !== null) {
+            replayDataCallback(pendingReplayData)
+          }
+        })
     }
 
     type PendingHiddenOutputRestoreChunk = {

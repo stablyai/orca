@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useId, useRef, useState } from 'react'
 import { FolderOpen, RotateCcw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/types'
 import {
@@ -33,6 +33,7 @@ export function WorkspaceDirectorySetting({
 }: WorkspaceDirectorySettingProps): React.JSX.Element {
   const { hostOptions } = useSidebarHostScopeOptions()
   const [scope, setScope] = useState<HostSettingScope>(CLIENT_DEFAULT_SCOPE)
+  const inputId = useId()
 
   const clientDefaultLabel = translate(
     'auto.components.settings.WorkspaceDirectorySetting.1a2b3c4d5e',
@@ -59,6 +60,21 @@ export function WorkspaceDirectorySetting({
         settings.workspaceDir
       )
     : settings.workspaceDir
+  // Why: settings:set prepares the workspace root with mkdir; committing each
+  // keystroke would create every typed path prefix as a real directory.
+  const [draftValue, setDraftValue] = useState(value)
+  const draftValueRef = useRef(value)
+  const skipNextBlurCommitRef = useRef(false)
+
+  useEffect(() => {
+    setDraftValue(value)
+    draftValueRef.current = value
+  }, [value])
+
+  const setDraft = (next: string): void => {
+    draftValueRef.current = next
+    setDraftValue(next)
+  }
 
   const writeValue = (next: string): void => {
     if (!editingHost) {
@@ -75,6 +91,26 @@ export function WorkspaceDirectorySetting({
     })
   }
 
+  const commitDraftValue = (): void => {
+    const next = draftValueRef.current
+    if (next === value) {
+      return
+    }
+    writeValue(next)
+  }
+
+  const handleBlur = (): void => {
+    if (skipNextBlurCommitRef.current) {
+      skipNextBlurCommitRef.current = false
+      return
+    }
+    commitDraftValue()
+  }
+
+  const resetDraftValue = (): void => {
+    setDraft(value)
+  }
+
   const resetOverride = (): void => {
     if (!editingHost) {
       return
@@ -89,9 +125,16 @@ export function WorkspaceDirectorySetting({
   }
 
   const handleBrowse = async (): Promise<void> => {
-    const path = await window.api.repos.pickFolder()
-    if (path) {
-      writeValue(path)
+    try {
+      const path = await window.api.repos.pickFolder()
+      if (path) {
+        setDraft(path)
+        writeValue(path)
+        return
+      }
+      resetDraftValue()
+    } finally {
+      skipNextBlurCommitRef.current = false
     }
   }
 
@@ -113,7 +156,7 @@ export function WorkspaceDirectorySetting({
       className="space-y-2"
     >
       <div className="flex items-center justify-between gap-2">
-        <Label>
+        <Label htmlFor={inputId}>
           {translate(
             'auto.components.settings.GeneralWorkspaceSettingsSection.0e9fc0eadc',
             'Workspace Directory'
@@ -147,13 +190,36 @@ export function WorkspaceDirectorySetting({
       </div>
       <div className="flex gap-2">
         <Input
-          value={value}
-          onChange={(e) => writeValue(e.target.value)}
+          id={inputId}
+          value={draftValue}
+          onChange={(e) => {
+            setDraft(e.target.value)
+          }}
+          onBlur={handleBlur}
+          onKeyDown={(e) => {
+            if (isComposingKeyboardEvent(e)) {
+              return
+            }
+            if (e.key === 'Enter') {
+              skipNextBlurCommitRef.current = true
+              commitDraftValue()
+              e.currentTarget.blur()
+              return
+            }
+            if (e.key === 'Escape') {
+              skipNextBlurCommitRef.current = true
+              resetDraftValue()
+              e.currentTarget.blur()
+            }
+          }}
           className="flex-1 text-xs"
         />
         <Button
           variant="outline"
           size="sm"
+          onPointerDown={() => {
+            skipNextBlurCommitRef.current = true
+          }}
           onClick={() => void handleBrowse()}
           className="shrink-0 gap-1.5"
         >
@@ -203,4 +269,9 @@ export function WorkspaceDirectorySetting({
       )}
     </SearchableSetting>
   )
+}
+
+function isComposingKeyboardEvent(event: React.KeyboardEvent<HTMLInputElement>): boolean {
+  const nativeEvent = event.nativeEvent
+  return nativeEvent.isComposing || nativeEvent.keyCode === 229
 }

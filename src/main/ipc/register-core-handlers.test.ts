@@ -420,7 +420,7 @@ describe('registerCoreHandlers', () => {
     expect(registerCliHandlersMock).toHaveBeenCalled()
     expect(registerPreflightHandlersMock).toHaveBeenCalled()
     expect(registerShellHandlersMock).toHaveBeenCalled()
-    expect(registerClipboardHandlersMock).toHaveBeenCalled()
+    expect(registerClipboardHandlersMock).toHaveBeenCalledWith(store)
     expect(registerUpdaterHandlersMock).toHaveBeenCalled()
     expect(setTrustedBrowserRendererWebContentsIdMock).toHaveBeenCalledWith(null)
     expect(setTrustedClipboardRendererWebContentsIdMock).toHaveBeenCalledWith(null)

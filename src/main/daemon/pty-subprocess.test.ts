@@ -1424,6 +1424,38 @@ describe('createPtySubprocess', () => {
     expect(spawnMock).not.toHaveBeenCalled()
   })
 
+  it('normalizes MSYS drive cwd before spawning daemon PowerShell on Windows', () => {
+    const proc = mockPtyProcess()
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    spawnMock.mockImplementation((_shell, _args, options) => {
+      if (options.cwd === '/c/Users/alice/project') {
+        throw new Error('Cannot create process, error code: 267')
+      }
+      return proc
+    })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: '/c/Users/alice/project',
+        shellOverride: 'powershell.exe'
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'powershell.exe',
+      POWERSHELL_OSC133_COMMAND_ARGS,
+      expect.objectContaining({ cwd: 'C:\\Users\\alice\\project' })
+    )
+  })
+
   it('validates the requested Windows cwd before launching WSL on Windows', () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'win32' })

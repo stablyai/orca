@@ -12,6 +12,13 @@ set -e
 link="/usr/bin/orca-ide"
 
 for dir in /opt/Orca /opt/orca-ide /opt/orca; do
+  sandbox="$dir/chrome-sandbox"
+  if [ -f "$sandbox" ]; then
+    # Why: packaged Linux installs must leave Chromium's sandbox helper usable
+    # on hosts where unprivileged user namespaces are unavailable.
+    chmod 4755 "$sandbox" || true
+  fi
+
   shim="$dir/resources/bin/orca-ide"
   if [ -x "$shim" ]; then
     # Only manage our own symlink; never clobber an unrelated /usr/bin/orca-ide.

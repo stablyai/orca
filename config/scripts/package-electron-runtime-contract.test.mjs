@@ -86,6 +86,32 @@ describe('Electron runtime package contract', () => {
     )
   })
 
+  it('publishes both Linux release matrix entries', () => {
+    const releaseWorkflow = readFileSync(
+      join(projectDir, '.github/workflows/release-cut.yml'),
+      'utf8'
+    )
+    const parsedWorkflow = parse(releaseWorkflow)
+    const publishLinuxStep = parsedWorkflow.jobs.build.steps.find(
+      (step) => step.name === 'Publish release artifacts (Linux)'
+    )
+
+    expect(publishLinuxStep.if).toContain("matrix.platform == 'linux-x64'")
+    expect(publishLinuxStep.if).toContain("matrix.platform == 'linux-arm64'")
+    expect(publishLinuxStep.with.command).toBe('${{ matrix.release_command }}')
+  })
+
+  it('keeps Linux postinstall repairing Chromium sandbox permissions', () => {
+    const afterInstallScript = readFileSync(
+      join(projectDir, 'resources/linux/packaging/after-install.sh'),
+      'utf8'
+    )
+
+    expect(afterInstallScript).toContain('chrome-sandbox')
+    expect(afterInstallScript).toContain('chmod 4755 "$sandbox"')
+    expect(afterInstallScript).not.toContain('chmod 0755 "$sandbox"')
+  })
+
   it('lets release-cut tag a version that is already present on main', () => {
     const releaseWorkflow = readFileSync(
       join(projectDir, '.github/workflows/release-cut.yml'),

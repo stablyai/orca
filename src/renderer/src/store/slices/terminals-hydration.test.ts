@@ -255,6 +255,35 @@ describe('hydrateWorkspaceSession', () => {
     expect(store.getState().worktreeNavHistoryIndex).toBe(0)
   })
 
+  it('restores the active repo main worktree when the session has no active terminal tabs', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/wt-main'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo1',
+            path: '/wt-main',
+            isMainWorktree: true
+          })
+        ]
+      }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    expect(store.getState().activeWorktreeId).toBe(worktreeId)
+    expect(store.getState().activeWorkspaceKey).toBe(`worktree:${worktreeId}`)
+    expect(store.getState().worktreeNavHistory).toEqual([worktreeId])
+  })
+
   it('leaves nav history empty when no active worktree is restored', () => {
     const store = createTestStore()
     seedStore(store, { worktreesByRepo: {} })

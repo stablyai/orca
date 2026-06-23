@@ -75,8 +75,22 @@ export function createManagedCommandMatcher(
     if (!command) {
       return false
     }
-    const normalizedCommand = command.replaceAll('\\', '/')
+    const decodedCommand = decodePowerShellEncodedCommand(command)
+    const searchText = decodedCommand ? `${command}\n${decodedCommand}` : command
+    const normalizedCommand = searchText.replaceAll('\\', '/')
     return needles.some((needle) => normalizedCommand.includes(needle))
+  }
+}
+
+function decodePowerShellEncodedCommand(command: string): string | null {
+  const match = command.match(/\s-EncodedCommand\s+(\S+)/i)
+  if (!match) {
+    return null
+  }
+  try {
+    return Buffer.from(match[1], 'base64').toString('utf16le')
+  } catch {
+    return null
   }
 }
 
@@ -104,6 +118,21 @@ export function wrapPosixHookCommand(scriptPath: string, env: Record<string, str
     .join(' ')
   const invocation = envPrefix ? `${envPrefix} /bin/sh ${quoted}` : `/bin/sh ${quoted}`
   return `if [ -x ${quoted} ]; then ${invocation}; fi`
+}
+
+function quotePowerShellString(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`
+}
+
+// Why: Windows splits a raw hook command on whitespace, so a user profile path
+// like `C:\Users\Jane Doe` makes the agent try to execute `C:\Users\Jane` and
+// fail with exit code 1. Keep the script path inside an encoded PowerShell
+// command so cmd.exe never gets a chance to expand legal path characters like
+// `%` or `^` before the .cmd is invoked. #6078.
+export function wrapWindowsHookCommand(scriptPath: string): string {
+  const command = `& ${quotePowerShellString(scriptPath)}; exit $LASTEXITCODE`
+  const encodedCommand = Buffer.from(command, 'utf16le').toString('base64')
+  return `powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodedCommand}`
 }
 
 export function buildWindowsAgentHookPostCommand(source: AgentHookSource): string {

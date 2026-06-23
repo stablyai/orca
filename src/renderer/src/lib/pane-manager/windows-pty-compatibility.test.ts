@@ -13,7 +13,8 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
         osRelease: '10.0.26100',
         connectionId: null,
         cwd: 'C:\\repo',
-        shellOverride: null
+        shellOverride: null,
+        executionHostId: 'local'
       })
     ).toEqual({
       windowsPty: { backend: 'conpty', buildNumber: 26100 }
@@ -27,7 +28,8 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
         osRelease: 'bad-release',
         connectionId: null,
         cwd: 'C:\\repo',
-        shellOverride: null
+        shellOverride: null,
+        executionHostId: 'local'
       })
     ).toEqual({
       windowsPty: { backend: 'conpty' }
@@ -41,7 +43,8 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
         osRelease: '10.0.26100',
         connectionId: 'ssh-1',
         cwd: 'C:\\repo',
-        shellOverride: null
+        shellOverride: null,
+        executionHostId: 'local'
       })
     ).toEqual({})
   })
@@ -59,7 +62,8 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
           osRelease: '10.0.26100',
           connectionId: null,
           cwd,
-          shellOverride: null
+          shellOverride: null,
+          executionHostId: 'local'
         })
       ).toEqual({})
     }
@@ -72,7 +76,8 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
         osRelease: '10.0.26100',
         connectionId: null,
         cwd: 'C:\\repo',
-        shellOverride: 'C:\\Windows\\System32\\wsl.exe'
+        shellOverride: 'C:\\Windows\\System32\\wsl.exe',
+        executionHostId: 'local'
       })
     ).toEqual({})
   })
@@ -84,7 +89,38 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
         osRelease: '23.0.0',
         connectionId: null,
         cwd: '/repo',
-        shellOverride: null
+        shellOverride: null,
+        executionHostId: 'local'
+      })
+    ).toEqual({})
+  })
+
+  it('does NOT return ConPTY options for a serve/remote-runtime pane even when the raw Windows heuristic matches', () => {
+    // Regression: a serve pane on a Windows client has no SSH connectionId and a
+    // Linux cwd, so the raw heuristic matches; the execution-host gate must still
+    // exclude it so a remote Linux PTY is not given the native-Windows ConPTY backend.
+    const serveContext = {
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      osRelease: '10.0.26100',
+      connectionId: null,
+      cwd: '/home/me/workspaces/repo',
+      shellOverride: null
+    } as const
+    expect(isLocalNativeWindowsPty(serveContext)).toBe(true)
+    expect(
+      buildWindowsPtyCompatibilityOptions({ ...serveContext, executionHostId: 'runtime:my-serve' })
+    ).toEqual({})
+  })
+
+  it('does NOT return ConPTY options for an SSH-runtime pane', () => {
+    expect(
+      buildWindowsPtyCompatibilityOptions({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        osRelease: '10.0.26100',
+        connectionId: null,
+        cwd: 'C:\\repo',
+        shellOverride: null,
+        executionHostId: 'ssh:my-host'
       })
     ).toEqual({})
   })

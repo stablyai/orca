@@ -87,6 +87,7 @@ import {
   getActiveStickyIndexesForScroll,
   getStickyHeaderIndexes,
   getVirtualRowTransform,
+  pruneStaleVirtualRowElementCache,
   shouldUseHeaderTopSpacing,
   type RenderRow
 } from './worktree-list-virtual-rows'
@@ -1941,6 +1942,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     () => renderRows.map(getRenderRowKey).join('\n'),
     [renderRows]
   )
+  const activeRenderRowKeys = useMemo(() => new Set(renderRows.map(getRenderRowKey)), [renderRows])
   const totalSize = virtualizer.getTotalSize()
   const virtualItems = virtualizer.getVirtualItems()
   const activeStickyIndexes = getActiveStickyIndexesForScroll({
@@ -1976,6 +1978,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   )
 
   useLayoutEffect(() => {
+    pruneStaleVirtualRowElementCache({
+      activeRowKeys: activeRenderRowKeys,
+      virtualizer
+    })
     // Why: after delete/collapse, TanStack may briefly retain the removed row's
     // cached element. Measuring that disconnected node reports 0px and corrupts
     // the next row's slot, so measure only elements whose DOM key still matches
@@ -1983,7 +1989,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     measureMountedRows()
     const frameId = window.requestAnimationFrame(measureMountedRows)
     return () => window.cancelAnimationFrame(frameId)
-  }, [prCacheLen, issueCacheLen, measureMountedRows, renderRowKeySignature])
+  }, [
+    activeRenderRowKeys,
+    prCacheLen,
+    issueCacheLen,
+    measureMountedRows,
+    renderRowKeySignature,
+    virtualizer
+  ])
 
   useVirtualizedScrollAnchor({
     anchorRef: scrollAnchorRef,

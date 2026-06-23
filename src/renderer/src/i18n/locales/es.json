@@ -1601,7 +1601,8 @@
         "ff90d0abc7": "Iniciar espacio de trabajo desde {{value0}}",
         "fe28c9821f": "vista",
         "8d1e17a3ef": "Abra {{value0}} en GitHub",
-        "4ac8ff2275": "Abrir {{value0}} en Jira"
+        "4ac8ff2275": "Abrir {{value0}} en Jira",
+        "40eaf2c27c": "Details"
       },
       "Terminal": {
         "73768427cf": "Cerca",
@@ -2312,7 +2313,7 @@
           "TerminalContextMenu": {
             "b4cdd9314e": "Borrar pantalla",
             "8c17d6786d": "Cerrar panel",
-            "copyTerminalId": "Copy Terminal ID",
+            "copyTerminalId": "Copiar ID de terminal",
             "2cf85a6a55": "Copiar ID del panel",
             "39809d152f": "Establecer título…",
             "06c2b0f043": "Igualar tamaños de paneles",
@@ -8349,6 +8350,8 @@
             "66a29dde82": "Copiar ruta relativa",
             "42e10cbf57": "Copiar rutas relativas",
             "b5d436aa30": "Copiar ruta",
+            "98a79948b3": "Copiar",
+            "b234ab25b4": "No se pudo copiar el archivo al portapapeles",
             "f9d7ca753d": "Copiar rutas",
             "3161c4e425": "carpeta"
           },
@@ -10144,7 +10147,6 @@
             "3dddb2d565": "connected for tasks",
             "33b650af52": "Connect where your team tracks work. Orca starts workspaces with the issue title, link, and context already attached.",
             "5b3577a492": "connected for review status",
-            "3a1fcdddad": "Two quick steps: connect where your code is reviewed, then where your team plans work.",
             "list_end": ", and ",
             "list_pair": " and ",
             "list_mid": ", ",

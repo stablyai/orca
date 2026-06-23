@@ -894,7 +894,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Publish release artifacts (Linux)
-        if: matrix.platform == 'linux'
+        if: matrix.platform == 'linux-x64' || matrix.platform == 'linux-arm64'
         uses: nick-fields/retry@v4
         with:
           timeout_minutes: 30
