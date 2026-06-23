@@ -9,8 +9,10 @@ type MockTerminalInstance = {
   open: Mock
   write: Mock
   reset: Mock
+  refresh: Mock
   dispose: Mock
   loadAddon: Mock
+  rows: number
 }
 
 type MockLigaturesAddonInstance = {
@@ -78,7 +80,9 @@ vi.mock('@xterm/xterm', () => ({
       })
       this.write = vi.fn()
       this.reset = vi.fn()
+      this.refresh = vi.fn()
       this.dispose = vi.fn()
+      this.rows = Number(options.rows)
       this.loadAddon = vi.fn(() => {
         if (mockXterm.nextLoadAddonError) {
           throw mockXterm.nextLoadAddonError
@@ -228,6 +232,7 @@ describe('TerminalSettingsPreview terminal lifecycle', () => {
     const addon = mockLigaturesAddon.instances[0]
     expect(terminal.loadAddon).toHaveBeenCalledOnce()
     expect(terminal.loadAddon).toHaveBeenCalledWith(addon)
+    expect(terminal.refresh).toHaveBeenCalledWith(0, 14)
 
     runCleanups()
     expect(addon.dispose).toHaveBeenCalledOnce()
