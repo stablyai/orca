@@ -20,6 +20,11 @@ type ViewportAnchor = {
   clientHeight: number
 }
 
+type ScrollProbeSample = {
+  scrollHeight: number
+  scrollTop: number
+}
+
 const FILE_COUNT = 18
 const ADDED_LINES_PER_FILE = 180
 
@@ -236,6 +241,117 @@ async function waitForStableViewportAnchor(page: Page): Promise<ViewportAnchor> 
   throw new Error(`combined diff viewport anchor did not settle: ${JSON.stringify(lastAnchor)}`)
 }
 
+async function startCombinedDiffScrollProbe(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    type CombinedDiffScrollProbe = {
+      samples: ScrollProbeSample[]
+      stop: () => void
+    }
+    const targetWindow = window as typeof window & {
+      __combinedDiffScrollProbe?: CombinedDiffScrollProbe
+    }
+    targetWindow.__combinedDiffScrollProbe?.stop()
+
+    const container = document.querySelector<HTMLElement>('.combined-diff-scroll-container')
+    if (!container) {
+      throw new Error('combined diff scroll container not found')
+    }
+
+    const samples: ScrollProbeSample[] = []
+    const record = (): void => {
+      samples.push({
+        scrollHeight: container.scrollHeight,
+        scrollTop: container.scrollTop
+      })
+    }
+    container.addEventListener('scroll', record, { passive: true })
+    record()
+    targetWindow.__combinedDiffScrollProbe = {
+      samples,
+      stop: () => container.removeEventListener('scroll', record)
+    }
+  })
+}
+
+async function stopCombinedDiffScrollProbe(page: Page): Promise<ScrollProbeSample[]> {
+  return page.evaluate(() => {
+    type CombinedDiffScrollProbe = {
+      samples: ScrollProbeSample[]
+      stop: () => void
+    }
+    const targetWindow = window as typeof window & {
+      __combinedDiffScrollProbe?: CombinedDiffScrollProbe
+    }
+    const probe = targetWindow.__combinedDiffScrollProbe
+    if (!probe) {
+      return []
+    }
+    probe.stop()
+    delete targetWindow.__combinedDiffScrollProbe
+    return probe.samples
+  })
+}
+
+async function wheelCombinedDiffDown(page: Page): Promise<ScrollProbeSample[]> {
+  const container = page.locator('.combined-diff-scroll-container')
+  const box = await container.boundingBox()
+  if (!box) {
+    throw new Error('combined diff scroll container bounds not found')
+  }
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await startCombinedDiffScrollProbe(page)
+  for (let index = 0; index < 12; index += 1) {
+    await page.mouse.wheel(0, 520)
+    await page.waitForTimeout(35)
+  }
+  await page.waitForTimeout(400)
+  return stopCombinedDiffScrollProbe(page)
+}
+
+function getLargestBackwardScrollJump(samples: readonly ScrollProbeSample[]): number {
+  let largestBackwardJump = 0
+  for (let index = 1; index < samples.length; index += 1) {
+    largestBackwardJump = Math.max(
+      largestBackwardJump,
+      samples[index - 1].scrollTop - samples[index].scrollTop
+    )
+  }
+  return largestBackwardJump
+}
+
+async function clickVisibleDiffLine(page: Page): Promise<void> {
+  const linePoint = await page.evaluate(() => {
+    const container = document.querySelector<HTMLElement>('.combined-diff-scroll-container')
+    if (!container) {
+      throw new Error('combined diff scroll container not found')
+    }
+    const containerRect = container.getBoundingClientRect()
+    const visibleLine = Array.from(
+      container.querySelectorAll<HTMLElement>('.monaco-diff-editor .view-line')
+    ).find((line) => {
+      const rect = line.getBoundingClientRect()
+      return (
+        rect.height > 0 &&
+        rect.bottom > containerRect.top &&
+        rect.top < containerRect.bottom &&
+        rect.right > containerRect.left &&
+        rect.left < containerRect.right
+      )
+    })
+    if (!visibleLine) {
+      throw new Error('visible combined diff line not found')
+    }
+    const rect = visibleLine.getBoundingClientRect()
+    return {
+      x: rect.left + Math.min(12, Math.max(1, rect.width / 2)),
+      y: rect.top + rect.height / 2
+    }
+  })
+
+  await page.mouse.click(linePoint.x, linePoint.y)
+}
+
 test.describe('Combined diff scroll restore', () => {
   test.describe.configure({ mode: 'serial' })
   test.use({ seedTestRepo: false })
@@ -251,6 +367,11 @@ test.describe('Combined diff scroll restore', () => {
       await expect(orcaPage.getByText(`${FILE_COUNT} changed files`)).toBeVisible()
 
       await scrollCombinedDiffDeep(orcaPage)
+      await waitForStableViewportAnchor(orcaPage)
+      const activeScrollSamples = await wheelCombinedDiffDown(orcaPage)
+      expect(activeScrollSamples.length).toBeGreaterThan(2)
+      expect(getLargestBackwardScrollJump(activeScrollSamples)).toBeLessThan(120)
+
       const beforeSwitch = await waitForStableViewportAnchor(orcaPage)
       expect(beforeSwitch.index).toBeGreaterThan(0)
 
@@ -270,11 +391,7 @@ test.describe('Combined diff scroll restore', () => {
       expect(afterSwitch.key).toBe(beforeSwitch.key)
       expect(Math.abs(afterSwitch.top - beforeSwitch.top)).toBeLessThan(80)
 
-      const visibleLine = orcaPage
-        .locator('.combined-diff-scroll-container .monaco-diff-editor .view-line')
-        .first()
-      await expect(visibleLine).toBeVisible()
-      await visibleLine.click({ force: true })
+      await clickVisibleDiffLine(orcaPage)
       const afterLineClick = await waitForStableViewportAnchor(orcaPage)
 
       expect(afterLineClick.key).toBe(afterSwitch.key)

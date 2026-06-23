@@ -12,6 +12,7 @@ import {
   useVirtualizedScrollAnchor,
   type VirtualizedScrollAnchor
 } from '@/hooks/useVirtualizedScrollAnchor'
+import { getVirtualizedScrollAnchorForOffset } from '@/hooks/virtualized-scroll-anchor-recording'
 import { joinPath } from '@/lib/path'
 import { detectLanguage } from '@/lib/language-detect'
 import { setWithLRU } from '@/lib/scroll-cache'
@@ -54,7 +55,10 @@ import {
   createCombinedDiffSectionIndexMap,
   handleCombinedDiffFileTreeNavigation
 } from './CombinedDiffFileTree'
-import { getCombinedDiffFileTreeSectionKey } from './combined-diff-file-tree-model'
+import {
+  getCombinedDiffFileTreeSectionKey,
+  type CombinedDiffFileTreeMode
+} from './combined-diff-file-tree-model'
 import {
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
   type EditorPathMutationTarget
@@ -186,6 +190,26 @@ function getInitialCombinedDiffFileTreeCollapsed(
   // Why: the tree is opt-in for new sessions; only an explicit saved setting
   // should make it the opening surface while settings are still loading.
   return combinedDiffFileTreeCollapsedPreference ?? combinedDiffFileTreeVisibleByDefault !== true
+}
+
+function cachedCombinedDiffSectionsMatchEntries({
+  entries,
+  sections,
+  treeMode
+}: {
+  entries: readonly (GitStatusEntry | GitBranchChangeEntry)[]
+  sections: readonly DiffSection[]
+  treeMode: CombinedDiffFileTreeMode
+}): boolean {
+  return (
+    sections.length === entries.length &&
+    sections.every((section, index) => {
+      const entry = entries[index]
+      return (
+        entry !== undefined && section.key === getCombinedDiffFileTreeSectionKey(treeMode, entry)
+      )
+    })
+  )
 }
 
 export default function CombinedDiffViewer({
@@ -485,15 +509,23 @@ export default function CombinedDiffViewer({
   // Why: switching tabs or worktrees unmounts this viewer through the shared
   // editor surface above it. Cache the rendered combined-diff state by the
   // visible pane key so remounting can restore loaded sections and scroll
-  // position instead of flashing back to "Loading..." and forcing the user to
-  // find their place again.
-  useEffect(() => {
+  // position before the remounted surface paints at the top.
+  useLayoutEffect(() => {
     const cached = combinedDiffViewStateCache.get(viewStateKey)
+    const canRestoreSnapshotSectionsByKey =
+      hasUncommittedEntriesSnapshot &&
+      cached !== undefined &&
+      cachedCombinedDiffSectionsMatchEntries({
+        entries,
+        sections: cached.sections,
+        treeMode
+      })
     const canRestoreCachedSections =
       cached &&
-      cached.entrySignature === entrySignature &&
-      (cached.gitStatusSignature ?? '') ===
-        buildCombinedGitStatusSignature(cached.sections, gitStatusEntries) &&
+      (cached.entrySignature === entrySignature || canRestoreSnapshotSectionsByKey) &&
+      (!shouldAutoReloadFromGitStatus ||
+        (cached.gitStatusSignature ?? '') ===
+          buildCombinedGitStatusSignature(cached.sections, gitStatusEntries)) &&
       (cached.sections.length > 0 || entries.length === 0)
     if (canRestoreCachedSections && cached) {
       const collapsedPreference = combinedDiffCollapsedPreference
@@ -545,7 +577,15 @@ export default function CombinedDiffViewer({
     loadSchedulerRef.current.reset()
     generationRef.current += 1
     setGeneration((prev) => prev + 1)
-  }, [entries, entrySignature, file.diffSource, gitStatusEntries, treeMode, viewStateKey])
+  }, [
+    entries,
+    entrySignature,
+    gitStatusEntries,
+    hasUncommittedEntriesSnapshot,
+    shouldAutoReloadFromGitStatus,
+    treeMode,
+    viewStateKey
+  ])
 
   const loadSectionNow = useCallback(
     async (index: number) => {
@@ -811,6 +851,18 @@ export default function CombinedDiffViewer({
       element instanceof HTMLElement ? (element.dataset.combinedDiffSectionKey ?? null) : null,
     []
   )
+  const recordCombinedDiffVirtualScrollAnchor = useCallback(
+    (scrollTop: number): void => {
+      scrollAnchorRef.current = getVirtualizedScrollAnchorForOffset({
+        getRowKey: getCombinedDiffSectionKey,
+        rows: sectionsRef.current,
+        scrollTop,
+        virtualItems: virtualizer.getVirtualItems()
+      })
+      latestDomScrollAnchorRef.current = null
+    },
+    [getCombinedDiffSectionKey, virtualizer]
+  )
   const recordCombinedDiffDomScrollAnchor = useCallback((): boolean => {
     const container = scrollContainerRef.current
     if (!container) {
@@ -884,6 +936,7 @@ export default function CombinedDiffViewer({
     recordAnchorOnScroll: false,
     rows: sections,
     scrollElementRef: scrollContainerRef,
+    shouldSkipRestore: hasDirectScrollInput,
     scrollOffsetRef,
     totalSize: combinedDiffTotalSize,
     virtualizer
@@ -1229,6 +1282,12 @@ export default function CombinedDiffViewer({
       cancelScheduledAnchorPersist()
       anchorIdleTimerId = window.setTimeout(() => {
         anchorIdleTimerId = null
+        if (hasDirectScrollInput()) {
+          // Why: the first idle timer can fire while wheel input is still
+          // active and TanStack may be showing a transitional virtual window.
+          scheduleSettledAnchorPersist()
+          return
+        }
         anchorFrameId = window.requestAnimationFrame(() => {
           anchorFrameId = null
           persistCombinedDiffScrollAnchor()
@@ -1239,19 +1298,23 @@ export default function CombinedDiffViewer({
     const updateCachedScrollPosition = ({
       recordDomAnchor,
       scheduleSettled,
-      scrollTop
+      scrollTop,
+      writeAnchor
     }: {
       recordDomAnchor: boolean
       scheduleSettled: boolean
       scrollTop: number
+      writeAnchor: boolean
     }): void => {
       const existing = combinedDiffViewStateCache.get(viewStateKey)
       scrollOffsetRef.current = scrollTop
       setWithLRU(combinedDiffScrollTopCache, viewStateKey, scrollTop)
-      if (recordDomAnchor) {
-        persistCombinedDiffScrollAnchor()
-      } else {
-        writeCombinedDiffScrollAnchor()
+      if (writeAnchor) {
+        if (recordDomAnchor) {
+          persistCombinedDiffScrollAnchor()
+        } else {
+          writeCombinedDiffScrollAnchor()
+        }
       }
       if (scheduleSettled) {
         scheduleSettledAnchorPersist()
@@ -1270,10 +1333,12 @@ export default function CombinedDiffViewer({
         updateCombinedDiffScrollbar()
         return
       }
+      recordCombinedDiffVirtualScrollAnchor(container.scrollTop)
       updateCachedScrollPosition({
         recordDomAnchor: false,
         scheduleSettled: true,
-        scrollTop: container.scrollTop
+        scrollTop: container.scrollTop,
+        writeAnchor: true
       })
     }
 
@@ -1293,7 +1358,8 @@ export default function CombinedDiffViewer({
       updateCachedScrollPosition({
         recordDomAnchor: false,
         scheduleSettled: false,
-        scrollTop: scrollOffsetRef.current
+        scrollTop: scrollOffsetRef.current,
+        writeAnchor: true
       })
       resizeObserver.disconnect()
       container.removeEventListener('scroll', handleScroll)
@@ -1302,6 +1368,7 @@ export default function CombinedDiffViewer({
     entrySignature,
     hasDirectScrollInput,
     persistCombinedDiffScrollAnchor,
+    recordCombinedDiffVirtualScrollAnchor,
     sections.length,
     updateCombinedDiffScrollbar,
     writeCombinedDiffScrollAnchor,
@@ -1310,7 +1377,35 @@ export default function CombinedDiffViewer({
 
   useLayoutEffect(() => {
     updateCombinedDiffScrollbar()
-  }, [sectionHeights, sections, updateCombinedDiffScrollbar])
+    const container = scrollContainerRef.current
+    if (!container || container.scrollTop <= 0) {
+      return
+    }
+
+    let frameId: number | null = null
+    const timerId = window.setTimeout(() => {
+      if (!container.isConnected || hasDirectScrollInput()) {
+        return
+      }
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null
+        persistCombinedDiffScrollAnchor()
+      })
+    }, 300)
+
+    return () => {
+      window.clearTimeout(timerId)
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId)
+      }
+    }
+  }, [
+    hasDirectScrollInput,
+    persistCombinedDiffScrollAnchor,
+    sectionHeights,
+    sections,
+    updateCombinedDiffScrollbar
+  ])
 
   const openAlternateDiff = useCallback(() => {
     if (!file.combinedAlternate) {
