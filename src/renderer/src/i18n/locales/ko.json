@@ -6204,7 +6204,19 @@
           "ab20575a8a": "끄기",
           "ab3a1f9068": "wsl.exe",
           "ask_before_closing_running_terminals_title": "실행 중인 Terminals을 닫기 전에 확인",
-          "ask_before_closing_running_terminals_description": "실행 중인 명령이나 agent가 있는 terminal을 닫기 전에 확인 창을 표시합니다."
+          "ask_before_closing_running_terminals_description": "실행 중인 명령이나 agent가 있는 terminal을 닫기 전에 확인 창을 표시합니다.",
+          "scrollSpeed": {
+            "title": "Scroll Speed",
+            "description": "Tune normal terminal scrollback, fast modifier scrolling, and full-screen TUI wheel speed.",
+            "helper": "Adjust how wheel input feels in scrollback and in mouse-aware terminal apps.",
+            "reset": "Reset",
+            "normal": "Normal",
+            "normalDescription": "Scrollback wheel multiplier.",
+            "fast": "Fast",
+            "fastDescription": "Extra multiplier while scrolling with a modifier key.",
+            "tui": "TUI",
+            "tuiDescription": "Discrete wheel reports for full-screen terminal apps."
+          }
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "{{value0}} 테마 미리보기",
@@ -7840,7 +7852,11 @@
               "keyword_custom": "custom"
             },
             "ask_before_closing_running_terminals_title": "실행 중인 Terminals을 닫기 전에 확인",
-            "ask_before_closing_running_terminals_description": "실행 중인 명령이나 agent가 있는 terminal을 닫기 전에 확인을 표시합니다."
+            "ask_before_closing_running_terminals_description": "실행 중인 명령이나 agent가 있는 terminal을 닫기 전에 확인을 표시합니다.",
+            "scrollSpeed": {
+              "title": "Scroll Speed",
+              "description": "Tune normal terminal scrollback, fast modifier scrolling, and full-screen TUI wheel speed."
+            }
           },
           "windows": {
             "search": {
