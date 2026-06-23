@@ -33,7 +33,12 @@ export function AddPasswordForm({
     }
     setSaving(true)
     try {
-      await onAdd(trimmedOrigin, trimmedUsername, password)
+      const result = await onAdd(trimmedOrigin, trimmedUsername, password)
+      // Why: only clear the form and notify parent on success — null means the
+      // vault rejected the entry (e.g. invalid origin); preserve the user's input.
+      if (!result) {
+        return
+      }
       setOrigin('')
       setUsername('')
       setPassword('')

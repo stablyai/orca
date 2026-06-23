@@ -32,13 +32,21 @@ export function PasswordsPane({ settings, updateSettings }: PasswordsPaneProps):
 
   // Why: check vault availability on mount so add/save controls are disabled when
   // safeStorage is unavailable — never persist plaintext without OS keychain backing.
+  // Fail closed: treat an IPC rejection as unavailable so controls are disabled.
   useEffect(() => {
     let stale = false
-    void window.api.browser.credentials.status().then((status) => {
-      if (!stale && mountedRef.current) {
-        setVaultStatus(status)
-      }
-    })
+    void window.api.browser.credentials
+      .status()
+      .then((status) => {
+        if (!stale && mountedRef.current) {
+          setVaultStatus(status)
+        }
+      })
+      .catch(() => {
+        if (!stale && mountedRef.current) {
+          setVaultStatus({ available: false })
+        }
+      })
     return () => {
       stale = true
     }
@@ -46,14 +54,25 @@ export function PasswordsPane({ settings, updateSettings }: PasswordsPaneProps):
 
   // Why: stable reference via useCallback so the mount effect can declare loadEntries
   // as a dependency without triggering a re-run on every render.
+  // loadingEntries is reset in a finally-equivalent path so the pane never gets
+  // stuck in the loading state when the IPC call rejects.
   const loadEntries = useCallback((): void => {
     setLoadingEntries(true)
-    void window.api.browser.credentials.list().then((list) => {
-      if (mountedRef.current) {
-        setEntries(list)
-        setLoadingEntries(false)
-      }
-    })
+    void window.api.browser.credentials
+      .list()
+      .then((list) => {
+        if (mountedRef.current) {
+          setEntries(list)
+        }
+      })
+      .catch(() => {
+        // IPC rejected — leave the entries list empty but clear the loading flag.
+      })
+      .finally(() => {
+        if (mountedRef.current) {
+          setLoadingEntries(false)
+        }
+      })
   }, [mountedRef])
 
   // Why: run once on mount; mutations call loadEntries() manually after completing.

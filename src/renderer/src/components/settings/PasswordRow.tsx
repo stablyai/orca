@@ -45,8 +45,12 @@ export function PasswordRow({
     setRevealing(true)
     try {
       const pwd = await onReveal(entry.id)
-      setPlaintext(pwd)
-      setRevealed(true)
+      // Why: only mark as revealed when decryption succeeded — null means
+      // safeStorage was unavailable or decryption failed; keep the row masked.
+      if (pwd !== null) {
+        setPlaintext(pwd)
+        setRevealed(true)
+      }
     } finally {
       setRevealing(false)
     }
@@ -63,8 +67,12 @@ export function PasswordRow({
   const handleSave = async (): Promise<void> => {
     setSaving(true)
     try {
-      await onUpdate(entry.id, editUsername, editPassword)
-      setEditing(false)
+      const result = await onUpdate(entry.id, editUsername, editPassword)
+      // Why: only exit edit mode on success — null means the vault update failed,
+      // so leave the form open so the user doesn't lose their edits.
+      if (result) {
+        setEditing(false)
+      }
     } finally {
       setSaving(false)
     }
