@@ -1492,7 +1492,7 @@ describe('reconnectPersistedTerminals', () => {
         [wt2]: [makeTab({ id: 'tab2', worktreeId: wt2, ptyId: 'old-pty-2' })]
       },
       terminalLayoutsByTabId: { tab1: makeLayout(), tab2: makeLayout() },
-      activeWorktreeIdsOnShutdown: [wt1, wt2]
+      activeWorktreeIdsOnShutdown: [wt1]
     })
 
     expect(store.getState().workspaceSessionReady).toBe(false)
