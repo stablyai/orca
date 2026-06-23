@@ -36,6 +36,7 @@ import {
   isFloatingWorkspaceTerminalInputTarget,
   switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
+import { markActiveTerminalUnread } from '@/lib/terminal-unread-marking'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import {
@@ -1133,6 +1134,12 @@ export function FloatingTerminalPanel({
       }
 
       if (handleFloatingPanelShortcutAction(event, consume)) {
+        return
+      }
+
+      if (context === 'terminal' && matches('terminal.markUnread')) {
+        consume()
+        markActiveTerminalUnread(FLOATING_TERMINAL_WORKTREE_ID)
         return
       }
 

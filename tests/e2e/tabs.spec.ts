@@ -161,12 +161,12 @@ test.describe('Tabs', () => {
    * - New tab works
    *
    * Why: we still use the store's `setActiveTab` for the switch itself (the
-   * hotkey path that used to be here turned out to target bracket-chord next/
+   * hotkey path that used to be here turned out to target shifted-arrow next/
    * prev tab cycling, not arbitrary tab selection), but the final assertion
    * checks DOM `data-active` to prove the selection actually paints onto the
    * right tab element.
    */
-  test('Cmd/Ctrl+Shift+] and Cmd/Ctrl+Shift+[ switch between tabs', async ({ orcaPage }) => {
+  test('Cmd/Ctrl+Shift+Right and Cmd/Ctrl+Shift+Left switch between tabs', async ({ orcaPage }) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
 
     // Ensure we have at least 2 tabs — use the real "+" flow so a render
@@ -280,7 +280,7 @@ test.describe('Tabs', () => {
   })
 
   /**
-   * Regression: after a drag-reorder, Cmd/Ctrl+Shift+[ must walk tabs in
+   * Regression: after a drag-reorder, Cmd/Ctrl+Shift+Left must walk tabs in
    * the new visible order. The pre-fix bug read a stale legacy order
    * (`tabBarOrderByWorktree`), so pressing "left" three times cycled
    * 3 → 1 → 2 instead of 3 → 2 → 1 once tabs had been rearranged.
@@ -289,7 +289,7 @@ test.describe('Tabs', () => {
    * the load-bearing check — it fails if the shortcut walks the right store
    * id but the tab bar stops painting the active indicator on that tab.
    */
-  test('Cmd/Ctrl+Shift+[ walks tabs in drag-reordered order', async ({ orcaPage }) => {
+  test('Cmd/Ctrl+Shift+Left walks tabs in drag-reordered order', async ({ orcaPage }) => {
     const isMac = process.platform === 'darwin'
     const mod = isMac ? 'Meta' : 'Control'
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
@@ -346,11 +346,11 @@ test.describe('Tabs', () => {
     }, a)
     await expect.poll(() => getDomActiveTabId(orcaPage), { timeout: 3_000 }).toBe(a)
 
-    await orcaPage.keyboard.press(`${mod}+Shift+BracketLeft`)
+    await orcaPage.keyboard.press(`${mod}+Shift+ArrowLeft`)
     await expect.poll(() => getDomActiveTabId(orcaPage), { timeout: 3_000 }).toBe(c)
     await expect(tabLocator(orcaPage, c)).toHaveAttribute('data-active', 'true')
 
-    await orcaPage.keyboard.press(`${mod}+Shift+BracketLeft`)
+    await orcaPage.keyboard.press(`${mod}+Shift+ArrowLeft`)
     await expect.poll(() => getDomActiveTabId(orcaPage), { timeout: 3_000 }).toBe(b)
     await expect(tabLocator(orcaPage, b)).toHaveAttribute('data-active', 'true')
   })

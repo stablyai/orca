@@ -4088,6 +4088,25 @@ describe('worktree unread (show-until-interact)', () => {
       })
     )
   })
+
+  it('preserves unread state when activation is used only for keyboard cycling', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      isUnread: true
+    })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] }
+    } as Partial<AppState>)
+
+    store.getState().setActiveWorktree(wt.id, { preserveUnread: true })
+
+    expect(store.getState().activeWorktreeId).toBe(wt.id)
+    expect(store.getState().worktreesByRepo.repo1[0].isUnread).toBe(true)
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+  })
 })
 
 // Why: design §4.4 — the hydration-time purge must be gated behind a

@@ -643,7 +643,7 @@ test.describe('Terminal Shortcuts', () => {
     ).toBeVisible()
     await focusFloatingTerminal(orcaPage)
 
-    await orcaPage.keyboard.press(`${mod}+Shift+BracketRight`)
+    await orcaPage.keyboard.press(`${mod}+Shift+ArrowRight`)
     await expect
       .poll(() => getActiveFloatingTerminalTabId(orcaPage), {
         timeout: 5_000,
@@ -658,7 +658,7 @@ test.describe('Terminal Shortcuts', () => {
       .toBe(scenario.backgroundFirstTabId)
 
     await focusFloatingTerminal(orcaPage)
-    await orcaPage.keyboard.press(`${mod}+Shift+BracketLeft`)
+    await orcaPage.keyboard.press(`${mod}+Shift+ArrowLeft`)
     await expect
       .poll(() => getActiveFloatingTerminalTabId(orcaPage), {
         timeout: 5_000,

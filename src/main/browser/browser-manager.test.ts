@@ -1566,8 +1566,8 @@ describe('browserManager', () => {
       },
       {
         type: 'keyDown',
-        code: 'BracketRight',
-        key: '}',
+        code: 'ArrowRight',
+        key: 'ArrowRight',
         meta: isDarwin,
         control: !isDarwin,
         alt: false,
@@ -1629,7 +1629,7 @@ describe('browserManager', () => {
     expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:newBrowserTab')
     expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:newTerminalTab')
     expect(rendererSendMock).toHaveBeenNthCalledWith(3, 'ui:closeActiveTab')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(4, 'ui:switchTab', 1)
+    expect(rendererSendMock).toHaveBeenNthCalledWith(4, 'ui:switchTabAcrossAllTypes', 1)
     expect(rendererSendMock).toHaveBeenNthCalledWith(5, 'ui:switchTerminalTab', 1)
     expect(rendererSendMock).toHaveBeenNthCalledWith(6, 'ui:openQuickOpen')
     expect(rendererSendMock).toHaveBeenNthCalledWith(7, 'ui:focusBrowserAddressBar')

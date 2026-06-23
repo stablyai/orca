@@ -95,6 +95,7 @@ export type KeybindingActionId =
   | 'terminal.paste'
   | 'terminal.search'
   | 'terminal.clear'
+  | 'terminal.markUnread'
   | 'terminal.focusNextPane'
   | 'terminal.focusPreviousPane'
   | 'terminal.equalizePaneSizes'
@@ -555,7 +556,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     group: 'Tab Navigation',
     scope: 'tabs',
     searchKeywords: ['shortcut', 'tab', 'next', 'switch', 'cycle'],
-    defaultBindings: platformBindings(['Mod+Shift+BracketRight'])
+    defaultBindings: platformBindings([])
   },
   {
     id: 'tab.previousSameType',
@@ -563,23 +564,23 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     group: 'Tab Navigation',
     scope: 'tabs',
     searchKeywords: ['shortcut', 'tab', 'previous', 'switch', 'cycle'],
-    defaultBindings: platformBindings(['Mod+Shift+BracketLeft'])
+    defaultBindings: platformBindings([])
   },
   {
     id: 'tab.nextAllTypes',
-    title: 'Next tab (all types)',
+    title: 'Next tab',
     group: 'Tab Navigation',
     scope: 'tabs',
     searchKeywords: ['shortcut', 'tab', 'next', 'switch', 'cycle', 'all', 'any'],
-    defaultBindings: platformBindings(['Mod+Alt+BracketRight'])
+    defaultBindings: platformBindings(['Mod+Shift+ArrowRight'])
   },
   {
     id: 'tab.previousAllTypes',
-    title: 'Previous tab (all types)',
+    title: 'Previous tab',
     group: 'Tab Navigation',
     scope: 'tabs',
     searchKeywords: ['shortcut', 'tab', 'previous', 'switch', 'cycle', 'all', 'any'],
-    defaultBindings: platformBindings(['Mod+Alt+BracketLeft'])
+    defaultBindings: platformBindings(['Mod+Shift+ArrowLeft'])
   },
   {
     id: 'tab.previousRecent',
@@ -819,6 +820,20 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'terminal',
     searchKeywords: ['shortcut', 'pane', 'clear'],
     defaultBindings: platformBindings(['Mod+K'])
+  },
+  {
+    id: 'terminal.markUnread',
+    title: 'Mark active terminal unread',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'unread', 'attention', 'bell'],
+    // Why: Ctrl+Shift+U is terminal/Unicode input on Linux, so only macOS gets
+    // a default. Users can still bind the action explicitly on other platforms.
+    defaultBindings: {
+      darwin: ['Mod+Shift+U'],
+      linux: [],
+      win32: []
+    }
   },
   {
     id: 'terminal.focusNextPane',

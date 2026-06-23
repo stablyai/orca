@@ -18,9 +18,8 @@ type CycleContext = {
 }
 
 /**
- * Shared setup for the Cmd/Ctrl+Shift+[ / ] chords (both the type-scoped and
- * across-all-types variants). Returns null when there is no active worktree
- * or the visible nav has at most one tab (nothing to cycle).
+ * Shared setup for workspace tab cycling chords. Returns null when there is no
+ * active worktree or the visible nav has at most one tab (nothing to cycle).
  */
 function resolveCycleContext(): CycleContext | null {
   const store = useAppStore.getState()
@@ -87,7 +86,7 @@ export function activateCyclableTab(store: AppStoreState, next: TypeCyclableTab)
 }
 
 /**
- * Handle Cmd/Ctrl+Shift+[ / ] direction switching within the active tab type.
+ * Handle user-bound same-type tab switching.
  * Extracted from useIpcEvents to keep file size under the max-lines lint threshold.
  * Returns true if a tab switch occurred, false otherwise.
  */
@@ -114,14 +113,8 @@ export function handleSwitchTab(direction: number): boolean {
 }
 
 /**
- * Handle Cmd/Ctrl+Alt+Shift+[ / ] cycling across every visible tab,
+ * Handle Cmd/Ctrl+Shift+Left/Right cycling across every visible tab,
  * regardless of tab type.
- *
- * Why: companion chord to the type-scoped Cmd/Ctrl+Shift+[ / ] that ships as
- * the default. The type-scoped chord is the VS Code-style per-pane cycle;
- * this one gives users an escape hatch back to the pre-scope "cycle through
- * everything" behavior without needing a settings toggle (see PR #1281
- * discussion). Returns true if a tab switch occurred, false otherwise.
  */
 export function handleSwitchTabAcrossAllTypes(direction: number): boolean {
   const ctx = resolveCycleContext()

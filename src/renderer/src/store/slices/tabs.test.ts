@@ -104,7 +104,14 @@ const mockApi = {
 // @ts-expect-error -- mock
 globalThis.window = { api: mockApi }
 
-import { createTestStore, makeOpenFile, makeTabGroup, makeUnifiedTab } from './store-test-helpers'
+import {
+  createTestStore,
+  makeOpenFile,
+  makeTab,
+  makeTabGroup,
+  makeUnifiedTab,
+  makeWorktree
+} from './store-test-helpers'
 
 const WT = 'repo1::/tmp/feature'
 
@@ -616,6 +623,83 @@ describe('TabsSlice', () => {
       store.getState().activateTab(t2.id)
 
       expect(store.getState().unreadTerminalTabs[t2TerminalId]).toBeUndefined()
+    })
+
+    it('clears workspace unread when activating the last unread terminal tab', () => {
+      mockApi.worktrees.updateMeta.mockClear()
+      const t1 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t2 = store.getState().createUnifiedTab(WT, 'terminal')
+      store.getState().activateTab(t1.id)
+      store.setState({
+        activeWorktreeId: WT,
+        worktreesByRepo: {
+          repo1: [makeWorktree({ id: WT, repoId: 'repo1', isUnread: true })]
+        },
+        unreadTerminalTabs: { [t2.entityId]: true as const }
+      })
+
+      store.getState().activateTab(t2.id)
+
+      expect(store.getState().unreadTerminalTabs[t2.entityId]).toBeUndefined()
+      expect(store.getState().worktreesByRepo.repo1[0].isUnread).toBe(false)
+      expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
+        worktreeId: WT,
+        updates: { isUnread: false }
+      })
+    })
+
+    it('keeps workspace unread while sibling terminal tabs are still unread', () => {
+      mockApi.worktrees.updateMeta.mockClear()
+      const t1 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t2 = store.getState().createUnifiedTab(WT, 'terminal')
+      store.getState().activateTab(t1.id)
+      store.setState({
+        activeWorktreeId: WT,
+        worktreesByRepo: {
+          repo1: [makeWorktree({ id: WT, repoId: 'repo1', isUnread: true })]
+        },
+        unreadTerminalTabs: {
+          [t1.entityId]: true as const,
+          [t2.entityId]: true as const
+        }
+      })
+
+      store.getState().activateTab(t2.id)
+
+      expect(store.getState().unreadTerminalTabs[t2.entityId]).toBeUndefined()
+      expect(store.getState().unreadTerminalTabs[t1.entityId]).toBe(true)
+      expect(store.getState().worktreesByRepo.repo1[0].isUnread).toBe(true)
+      expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('setActiveTab', () => {
+    it('clears workspace unread when activating the last unread terminal tab', () => {
+      mockApi.worktrees.updateMeta.mockClear()
+      const t1 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t2 = store.getState().createUnifiedTab(WT, 'terminal')
+      store.setState({
+        activeWorktreeId: WT,
+        worktreesByRepo: {
+          repo1: [makeWorktree({ id: WT, repoId: 'repo1', isUnread: true })]
+        },
+        tabsByWorktree: {
+          [WT]: [
+            makeTab({ id: t1.entityId, worktreeId: WT }),
+            makeTab({ id: t2.entityId, worktreeId: WT })
+          ]
+        },
+        unreadTerminalTabs: { [t2.entityId]: true as const }
+      })
+
+      store.getState().setActiveTab(t2.entityId)
+
+      expect(store.getState().unreadTerminalTabs[t2.entityId]).toBeUndefined()
+      expect(store.getState().worktreesByRepo.repo1[0].isUnread).toBe(false)
+      expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
+        worktreeId: WT,
+        updates: { isUnread: false }
+      })
     })
   })
 

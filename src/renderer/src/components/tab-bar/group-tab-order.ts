@@ -18,7 +18,7 @@ export type ActiveTabNavOrderIds = {
 /**
  * Compute the visible tab-strip order for a single group.
  *
- * Why: keyboard navigation (Cmd/Ctrl+Shift+[ / ]) and the IPC switch-tab
+ * Why: keyboard navigation (Cmd/Ctrl+Shift+Left/Right) and the IPC switch-tab
  * shortcut must walk tabs in the same order the TabBar renders them. The
  * TabBar derives its order from `group.tabOrder` (the canonical split-group
  * state, updated by drag/drop via `reorderUnifiedTabs`). Reading from the

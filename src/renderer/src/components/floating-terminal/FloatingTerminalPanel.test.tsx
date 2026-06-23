@@ -1378,10 +1378,10 @@ describe('FloatingTerminalPanel close behavior', () => {
 
     keydownListener({
       altKey: false,
-      code: 'BracketRight',
+      code: 'ArrowRight',
       ctrlKey: false,
       defaultPrevented: false,
-      key: ']',
+      key: 'ArrowRight',
       metaKey: true,
       preventDefault,
       repeat: false,

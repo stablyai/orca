@@ -1050,8 +1050,8 @@ test.describe('Terminal Panes', () => {
     const activeType = await getActiveTabType(orcaPage)
     expect(activeType).toBe('terminal')
 
-    // Switch back to the previous tab with Cmd/Ctrl+Shift+[
-    await pressShortcut(orcaPage, 'BracketLeft', { shift: true })
+    // Switch back to the previous tab with Cmd/Ctrl+Shift+Left
+    await pressShortcut(orcaPage, 'ArrowLeft', { shift: true })
 
     // Verify the marker is still present
     await expect
@@ -1059,7 +1059,7 @@ test.describe('Terminal Panes', () => {
       .toBe(true)
 
     // Clean up the extra tab
-    await pressShortcut(orcaPage, 'BracketRight', { shift: true })
+    await pressShortcut(orcaPage, 'ArrowRight', { shift: true })
     await pressShortcut(orcaPage, 'w')
   })
 

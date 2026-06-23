@@ -2081,7 +2081,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       const nextWorktreeId = worktreeRows[nextIndex].worktree.id
       // Why: keyboard cycling between worktrees is still real navigation, so
       // it must flow through the same activation helper that records history.
-      activateAndRevealWorktree(nextWorktreeId)
+      // Preserve unread because cycling is scanning, not content interaction.
+      activateAndRevealWorktree(nextWorktreeId, { preserveUnread: true })
 
       const rowIndex = renderRows.findIndex((row) => renderRowContainsWorktree(row, nextWorktreeId))
       if (rowIndex !== -1) {
@@ -2129,6 +2130,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         markDirectScrollInput()
         navigateWorktree(direction)
         e.preventDefault()
+        // Why: workspace cycling is an app shortcut. If it reaches xterm's
+        // keydown listener, the old terminal pane treats it as interaction and
+        // clears unread before the workspace switch completes.
+        e.stopPropagation()
+        e.stopImmediatePropagation()
       }
     }
 
