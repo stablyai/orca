@@ -3,6 +3,7 @@ import {
   Clipboard,
   Copy,
   Eraser,
+  ExternalLink,
   GitFork,
   Maximize2,
   Minimize2,
@@ -42,6 +43,8 @@ type TerminalContextMenuProps = {
   canClosePane: boolean
   canExpandPane: boolean
   menuPaneIsExpanded: boolean
+  linkUrl: string | null
+  onOpenLinkInDefaultBrowser: () => void
   onCopy: () => void
   onPaste: () => void
   onSplitRight: () => void
@@ -71,6 +74,8 @@ export default function TerminalContextMenu({
   canClosePane,
   canExpandPane,
   menuPaneIsExpanded,
+  linkUrl,
+  onOpenLinkInDefaultBrowser,
   onCopy,
   onPaste,
   onSplitRight,
@@ -171,6 +176,18 @@ export default function TerminalContextMenu({
           }
         }}
       >
+        {linkUrl ? (
+          <>
+            <DropdownMenuItem onSelect={onOpenLinkInDefaultBrowser}>
+              <ExternalLink />
+              {translate(
+                'auto.components.terminal.pane.TerminalContextMenu.openLinkDefaultBrowser',
+                'Open in Default Browser'
+              )}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
         <DropdownMenuItem onSelect={onCopy}>
           <Copy />
           {translate('auto.components.terminal.pane.TerminalContextMenu.f3eeb1de13', 'Copy')}

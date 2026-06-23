@@ -39,6 +39,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { copyTerminalHandleForPane } from './terminal-handle-copy'
+import { getTerminalHttpLinkForMouseEvent } from './terminal-url-link-hit-testing'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -78,6 +79,8 @@ type TerminalMenuState = {
   menuOpenedAtRef: React.RefObject<number>
   paneCount: number
   menuPaneId: number | null
+  menuLinkUrl: string | null
+  onOpenLinkInDefaultBrowser: () => void
   onContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onPaneTitleContextMenu: (event: React.MouseEvent<HTMLElement>, paneId: number) => void
   onCopy: () => Promise<void>
@@ -117,6 +120,7 @@ export function useTerminalPaneContextMenu({
   const menuOpenedAtRef = useRef(0)
   const [open, setOpen] = useState(false)
   const [point, setPoint] = useState({ x: 0, y: 0 })
+  const [menuLinkUrl, setMenuLinkUrl] = useState<string | null>(null)
 
   useEffect(() => {
     const closeMenu = (): void => {
@@ -173,6 +177,14 @@ export function useTerminalPaneContextMenu({
       )
     )
     pane.terminal.focus()
+  }
+
+  const onOpenLinkInDefaultBrowser = (): void => {
+    if (!menuLinkUrl) {
+      return
+    }
+    void window.api.shell.openUrl(menuLinkUrl)
+    resolveMenuPane()?.terminal.focus()
   }
 
   const getShortcutPlatform = (): NodeJS.Platform => {
@@ -430,6 +442,7 @@ export function useTerminalPaneContextMenu({
     const manager = managerRef.current
     if (!manager) {
       contextPaneIdRef.current = null
+      setMenuLinkUrl(null)
       return
     }
     const clickedPane =
@@ -437,6 +450,9 @@ export function useTerminalPaneContextMenu({
         ? (manager.getPanes().find((pane) => pane.id === clickedPaneId) ?? null)
         : null
     contextPaneIdRef.current = clickedPane?.id ?? null
+    setMenuLinkUrl(
+      clickedPane ? getTerminalHttpLinkForMouseEvent(clickedPane.terminal, event.nativeEvent) : null
+    )
 
     // Why: Windows terminals treat right-click as copy-or-paste depending on
     // whether text is selected. With a selection, right-click copies it and
@@ -468,12 +484,14 @@ export function useTerminalPaneContextMenu({
     if (!manager) {
       event.preventDefault()
       contextPaneIdRef.current = null
+      setMenuLinkUrl(null)
       return
     }
     const target = event.target
     if (!(target instanceof Node)) {
       event.preventDefault()
       contextPaneIdRef.current = null
+      setMenuLinkUrl(null)
       return
     }
     const clickedPane = manager.getPanes().find((pane) => pane.container.contains(target)) ?? null
@@ -502,6 +520,8 @@ export function useTerminalPaneContextMenu({
     menuOpenedAtRef,
     paneCount,
     menuPaneId,
+    menuLinkUrl,
+    onOpenLinkInDefaultBrowser,
     onContextMenuCapture,
     onPaneTitleContextMenu,
     onCopy,
