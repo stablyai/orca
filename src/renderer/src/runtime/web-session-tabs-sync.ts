@@ -255,10 +255,9 @@ export function shouldSyncRuntimeSessionTabs(args: {
 export function shouldSyncAllRuntimeSessionTabs(args: {
   activeRuntimeEnvironmentId: string | null | undefined
   workspaceSessionReady: boolean
-  isWebClient: boolean
 }): boolean {
   const environmentId = args.activeRuntimeEnvironmentId?.trim()
-  return Boolean(environmentId && args.workspaceSessionReady && args.isWebClient)
+  return Boolean(environmentId && args.workspaceSessionReady)
 }
 
 export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
@@ -2335,19 +2334,17 @@ export function useWebSessionTabsSync(): void {
     getExplicitRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId)
   )
   const workspaceSessionReady = useAppStore((state) => state.workspaceSessionReady)
-  const isWebClient = (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true
 
   useEffect(() => {
     const environmentId = activeRuntimeEnvironmentId?.trim()
     // Why: startup hydration writes browser-local session state; applying the
     // host snapshot before that point gets clobbered and leaves the sidebar stale.
-    // Desktop clients should not mirror every remote session just because a
-    // remote is connected; project discovery runs through separate repo APIs.
+    // Selectedness is not liveness: desktop and web clients both mirror the
+    // runtime's session bindings so background worktrees do not look asleep.
     if (
       !shouldSyncAllRuntimeSessionTabs({
         activeRuntimeEnvironmentId,
-        workspaceSessionReady,
-        isWebClient
+        workspaceSessionReady
       }) ||
       !environmentId
     ) {
@@ -2455,7 +2452,7 @@ export function useWebSessionTabsSync(): void {
       // stale freshness/mapping entries should not live for the renderer lifetime.
       clearWebSessionTabsTrackingForEnvironment(environmentId)
     }
-  }, [activeRuntimeEnvironmentId, isWebClient, workspaceSessionReady])
+  }, [activeRuntimeEnvironmentId, workspaceSessionReady])
 
   useEffect(() => {
     const environmentId = activeWorktreeRuntimeEnvironmentId?.trim()
