@@ -268,12 +268,14 @@ describe('keybindings', () => {
     ).toBe(false)
   })
 
-  it('defaults mark active terminal unread to macOS only', () => {
+  it('defaults mark active terminal unread to macOS and Windows only', () => {
     expect(getEffectiveKeybindingsForAction('terminal.markUnread', 'darwin')).toEqual([
       'Mod+Shift+U'
     ])
     expect(getEffectiveKeybindingsForAction('terminal.markUnread', 'linux')).toEqual([])
-    expect(getEffectiveKeybindingsForAction('terminal.markUnread', 'win32')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('terminal.markUnread', 'win32')).toEqual([
+      'Mod+Shift+U'
+    ])
     expect(
       keybindingMatchesAction(
         'terminal.markUnread',
@@ -286,6 +288,22 @@ describe('keybindings', () => {
           shift: true
         },
         'darwin',
+        undefined,
+        { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'terminal.markUnread',
+        {
+          key: 'u',
+          code: 'KeyU',
+          control: true,
+          meta: false,
+          alt: false,
+          shift: true
+        },
+        'win32',
         undefined,
         { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
       )

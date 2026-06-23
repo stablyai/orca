@@ -827,12 +827,12 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     group: 'Terminal Panes',
     scope: 'terminal',
     searchKeywords: ['shortcut', 'terminal', 'unread', 'attention', 'bell'],
-    // Why: Ctrl+Shift+U is terminal/Unicode input on Linux, so only macOS gets
-    // a default. Users can still bind the action explicitly on other platforms.
+    // Why: Ctrl+Shift+U is terminal/Unicode input on Linux, so keep that
+    // platform unbound while defaulting the shortcut on macOS and Windows.
     defaultBindings: {
       darwin: ['Mod+Shift+U'],
       linux: [],
-      win32: []
+      win32: ['Mod+Shift+U']
     }
   },
   {
