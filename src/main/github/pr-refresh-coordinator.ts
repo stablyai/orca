@@ -21,7 +21,9 @@ type QueueEntry = {
   reason: GitHubPRRefreshReason
   priority: number
   dueAt: number
+  queuedAt: number
   bypassBackgroundBudget?: boolean
+  activeDelayNotified?: boolean
   windowId?: number
 }
 
@@ -70,11 +72,12 @@ const ACTIVE_BURST_WINDOW_MS = 30_000
 const ACTIVE_BURST_MAX = 3
 
 let sequence = 0
+let queueOrder = 0
 let draining = false
 let drainTimer: ReturnType<typeof setTimeout> | null = null
 const queue = new Map<string, QueueEntry>()
 const backgroundStarts: number[] = []
-const activeStarts: number[] = []
+const activeStartsByScope = new Map<string, number[]>()
 const errorBackoff = new Map<string, { failures: number; retryAt: number }>()
 let lastBackgroundStartAt = 0
 const visibleByWindow = new Map<number, { generation: number; keys: Set<string> }>()
@@ -138,6 +141,11 @@ export function clearVisiblePRRefreshWindow(windowId: number): void {
 function nextSequence(): number {
   sequence += 1
   return sequence
+}
+
+function nextQueueOrder(): number {
+  queueOrder += 1
+  return queueOrder
 }
 
 function broadcast(event: Omit<GitHubPRRefreshEvent, 'sequence'>, sequenceOverride?: number): void {
@@ -361,6 +369,7 @@ function scheduleVisibleFollowUp(
       reason: 'visible',
       priority,
       dueAt: retryAt,
+      queuedAt: nextQueueOrder(),
       windowId
     })
     // Why: this is a delayed retry, not active work; showing it as a spinner
@@ -389,6 +398,7 @@ function scheduleVisibleFollowUp(
     reason: 'visible',
     priority,
     dueAt,
+    queuedAt: nextQueueOrder(),
     // Why: this manual one-shot fixes GitHub's transient UNKNOWN state; visible
     // spacing would otherwise delay it past the intended prompt retry window.
     bypassBackgroundBudget: pendingMergeabilityDueAt !== null,
@@ -471,25 +481,65 @@ function nextBudgetDelay(): number {
   return Math.max(spacingDelay, windowDelay)
 }
 
-function pruneActiveStarts(now: number): void {
+function activeBurstScope(entry: QueueEntry): string {
+  const runtimeScope = entry.candidate.connectionId
+    ? `ssh:${entry.candidate.connectionId}`
+    : `local:${entry.candidate.localGitOptions?.wslDistro ?? 'host'}`
+  return `${entry.windowId ?? 'global'}::${runtimeScope}`
+}
+
+function pruneActiveStarts(scope: string, now: number): number[] {
+  const activeStarts = activeStartsByScope.get(scope) ?? []
   while (activeStarts.length > 0 && now - activeStarts[0] >= ACTIVE_BURST_WINDOW_MS) {
     activeStarts.shift()
   }
+  if (activeStarts.length === 0) {
+    activeStartsByScope.delete(scope)
+  } else {
+    activeStartsByScope.set(scope, activeStarts)
+  }
+  return activeStarts
 }
 
-function nextActiveBurstDelay(): number {
+function nextActiveBurstDelay(entry: QueueEntry): number {
   const now = Date.now()
-  pruneActiveStarts(now)
+  const activeStarts = pruneActiveStarts(activeBurstScope(entry), now)
   if (activeStarts.length < ACTIVE_BURST_MAX) {
     return 0
   }
   return Math.max(1, ACTIVE_BURST_WINDOW_MS - (now - activeStarts[0]))
 }
 
-function noteActiveStart(): void {
+function noteActiveStart(entry: QueueEntry): void {
   const now = Date.now()
-  pruneActiveStarts(now)
+  const scope = activeBurstScope(entry)
+  const activeStarts = pruneActiveStarts(scope, now)
   activeStarts.push(now)
+  activeStartsByScope.set(scope, activeStarts)
+}
+
+function activeOrder(a: QueueEntry, b: QueueEntry): number {
+  if (a.reason !== 'active' || b.reason !== 'active') {
+    return 0
+  }
+  if (activeBurstScope(a) !== activeBurstScope(b)) {
+    return 0
+  }
+  // Why: activation churn should refresh the worktree the user lands on before
+  // stale transient selections from the same window/runtime scope.
+  return b.queuedAt - a.queuedAt
+}
+
+function entryDelay(entry: QueueEntry): number {
+  const activeBurstDelay = entry.reason === 'active' ? nextActiveBurstDelay(entry) : 0
+  if (activeBurstDelay > 0) {
+    return activeBurstDelay
+  }
+  return isBudgetedQueueEntry(entry) ? nextBudgetDelay() : 0
+}
+
+function isActiveBurstDelayed(entry: QueueEntry): boolean {
+  return entry.reason === 'active' && nextActiveBurstDelay(entry) > 0
 }
 
 function scheduleDrain(delay = 0): void {
@@ -508,7 +558,7 @@ function queuedEntriesByPriority(): QueueEntry[] {
     const aReady = a.dueAt <= now
     const bReady = b.dueAt <= now
     if (aReady && bReady) {
-      return b.priority - a.priority || a.dueAt - b.dueAt
+      return b.priority - a.priority || activeOrder(a, b) || a.dueAt - b.dueAt
     }
     if (aReady !== bReady) {
       return aReady ? -1 : 1
@@ -524,25 +574,37 @@ async function drainQueue(): Promise<void> {
   draining = true
   try {
     while (queue.size > 0) {
-      const next = queuedEntriesByPriority()[0]
+      let next = queuedEntriesByPriority()[0]
       const waitMs = next.dueAt - Date.now()
       if (waitMs > 0) {
         scheduleDrain(waitMs)
         return
       }
 
-      const activeBurstDelay = next.reason === 'active' ? nextActiveBurstDelay() : 0
-      if (activeBurstDelay > 0) {
-        scheduleDrain(activeBurstDelay)
-        return
-      }
-
-      const budgetDelay = isBudgetedQueueEntry(next) ? nextBudgetDelay() : 0
-      if (budgetDelay > 0) {
-        diagnosticsCounters.backgroundPauses += 1
-        recordPRRefreshQueueDiagnostic('background-pause', next.reason)
-        scheduleDrain(budgetDelay)
-        return
+      let delay = entryDelay(next)
+      if (delay > 0) {
+        const runnable = queuedEntriesByPriority().find(
+          (entry) => entry.dueAt <= Date.now() && entryDelay(entry) === 0
+        )
+        if (runnable && runnable.key !== next.key) {
+          next = runnable
+          delay = 0
+        } else {
+          if (isActiveBurstDelayed(next) && !next.activeDelayNotified) {
+            next.activeDelayNotified = true
+            broadcast({
+              aliases: Array.from(next.aliases.values()),
+              reason: next.reason,
+              status: 'queued'
+            })
+          }
+          if (isBudgetedQueueEntry(next) && nextBudgetDelay() > 0) {
+            diagnosticsCounters.backgroundPauses += 1
+            recordPRRefreshQueueDiagnostic('background-pause', next.reason)
+          }
+          scheduleDrain(delay)
+          return
+        }
       }
 
       queue.delete(next.key)
@@ -604,7 +666,7 @@ async function drainQueue(): Promise<void> {
         if (next.reason === 'active') {
           // Why: activation is high priority, but tab/worktree churn can enqueue
           // many distinct active refreshes that each probe local Git.
-          noteActiveStart()
+          noteActiveStart(next)
         }
         for (const bucket of buckets) {
           noteRateLimitSpend(bucket)
@@ -667,11 +729,14 @@ export function enqueuePRRefresh(
     const shouldPromoteExisting =
       priority > existing.priority ||
       isManual(reason) ||
+      (reason === 'active' && existing.reason === 'active') ||
       (priority >= existing.priority && dueAt < existing.dueAt && bypassesFreshnessDelay(reason))
     if (shouldPromoteExisting) {
       existing.priority = priority
       existing.reason = reason
       existing.dueAt = Math.min(existing.dueAt, dueAt)
+      existing.queuedAt = nextQueueOrder()
+      existing.activeDelayNotified = false
       existing.candidate = candidate
       existing.windowId = windowId ?? existing.windowId
     }
@@ -685,6 +750,7 @@ export function enqueuePRRefresh(
       reason,
       priority,
       dueAt,
+      queuedAt: nextQueueOrder(),
       windowId
     })
   }
