@@ -338,6 +338,7 @@ import type {
   PortForwardEntry,
   EnrichedDetectedPort
 } from '../shared/ssh-types'
+import type { TailscaleStatusResult } from '../shared/tailscale-status'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
@@ -2590,6 +2591,10 @@ export type PreloadApi = {
     fetchInactiveClaudeAccounts: () => Promise<void>
     fetchInactiveCodexAccounts: () => Promise<void>
     onUpdate: (callback: (state: RateLimitState) => void) => () => void
+  }
+  tailscale: {
+    status: () => Promise<TailscaleStatusResult>
+    login: () => Promise<TailscaleStatusResult>
   }
   ssh: {
     listTargets: () => Promise<SshTarget[]>

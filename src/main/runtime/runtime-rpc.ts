@@ -26,7 +26,7 @@ import {
   type TerminalStreamFrame
 } from '../../shared/terminal-stream-protocol'
 
-const DEFAULT_WS_PORT = 6768
+export const DEFAULT_WS_PORT = 6768
 
 type OrcaRuntimeRpcServerOptions = {
   runtime: OrcaRuntimeService

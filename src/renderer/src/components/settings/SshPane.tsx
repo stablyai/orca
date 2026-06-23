@@ -12,6 +12,7 @@ import { SshTargetDestructiveActions } from './SshTargetDestructiveActions'
 import { SshTargetForm, EMPTY_FORM, type EditingTarget } from './SshTargetForm'
 import {
   getEditingTargetForSshTarget,
+  buildSshTargetPayload,
   getSshTargetDraftConnectionFields,
   isRelayGracePeriodValid,
   parseRelayGracePeriodSeconds
@@ -107,21 +108,13 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       return
     }
 
-    const identityFile = form.identityFile.trim() || undefined
-    const proxyCommand = form.proxyCommand.trim() || undefined
-    const jumpHost = form.jumpHost.trim() || undefined
-
-    const target = {
-      label: form.label.trim() || (username ? `${username}@${host}` : configHost),
-      configHost,
+    const { target, identityFile, proxyCommand, jumpHost } = buildSshTargetPayload(form, {
       host,
-      port,
+      configHost,
       username,
-      relayGracePeriodSeconds: graceSeconds,
-      ...(identityFile ? { identityFile } : {}),
-      ...(proxyCommand ? { proxyCommand } : {}),
-      ...(jumpHost ? { jumpHost } : {})
-    }
+      port,
+      graceSeconds
+    })
 
     try {
       await (editingId

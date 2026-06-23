@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   EMPTY_FORM,
   applyParsedSshHostInput,
+  buildSshTargetPayload,
   getEditingTargetForSshTarget,
   getSshTargetDraftConnectionFields,
   parseSshHostInput
@@ -194,5 +195,55 @@ describe('getEditingTargetForSshTarget', () => {
       username: 'deploy',
       port: 22
     })
+  })
+
+  it('round-trips through buildSshTargetPayload', () => {
+    const draft = getEditingTargetForSshTarget({
+      id: 'ssh-1',
+      label: 'Tailnet box',
+      configHost: '',
+      host: 'box.tail-scale.ts.net',
+      port: 22,
+      username: 'deploy',
+      transport: 'tailscale'
+    })
+    const conn = {
+      host: 'box.tail-scale.ts.net',
+      configHost: '',
+      username: 'deploy',
+      port: 22,
+      graceSeconds: 100
+    }
+    const { target } = buildSshTargetPayload(draft, conn)
+    expect(target.transport).toBe('tailscale')
+    // An explicit label is preserved verbatim.
+    expect(target.label).toBe('Tailnet box')
+
+    // With no label, it falls back to user@host.
+    const { target: unlabeled } = buildSshTargetPayload({ ...draft, label: '' }, conn)
+    expect(unlabeled.label).toBe('deploy@box.tail-scale.ts.net')
+  })
+
+  it('maps the tailscale transport onto the useTailscale toggle', () => {
+    const tailnet = getEditingTargetForSshTarget({
+      id: 'ssh-1',
+      label: 'Tailnet box',
+      configHost: '',
+      host: 'box.tail-scale.ts.net',
+      port: 22,
+      username: 'deploy',
+      transport: 'tailscale'
+    })
+    expect(tailnet.useTailscale).toBe(true)
+
+    const direct = getEditingTargetForSshTarget({
+      id: 'ssh-2',
+      label: 'Direct box',
+      configHost: '',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    })
+    expect(direct.useTailscale).toBe(false)
   })
 })

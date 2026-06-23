@@ -40,6 +40,21 @@ const winSpeechNativeResource = {
   from: 'node_modules/sherpa-onnx-win-x64',
   to: 'node_modules/sherpa-onnx-win-x64'
 }
+// Why: the userspace tailnet sidecar is a per-platform/arch Go binary built by
+// build:ts-sidecar. It resolves from process.resourcesPath/ts-sidecar at runtime,
+// so it ships as extraResources rather than inside app.asar.
+const macTsSidecarResource = {
+  from: 'native/ts-sidecar/ts-sidecar-darwin-${arch}',
+  to: 'ts-sidecar/ts-sidecar-darwin-${arch}'
+}
+const linuxTsSidecarResource = {
+  from: 'native/ts-sidecar/ts-sidecar-linux-${arch}',
+  to: 'ts-sidecar/ts-sidecar-linux-${arch}'
+}
+const winTsSidecarResource = {
+  from: 'native/ts-sidecar/ts-sidecar-win32-x64.exe',
+  to: 'ts-sidecar/ts-sidecar-win32-x64.exe'
+}
 
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
@@ -137,6 +152,13 @@ module.exports = {
       // the copied binary to be executable in packaged apps.
       chmodSync(join(resourcesDir, filename), 0o755)
     }
+    // Why: the spawned tailnet sidecar binary must be executable in packaged apps.
+    const sidecarDir = join(resourcesDir, 'ts-sidecar')
+    if (context.electronPlatformName !== 'win32' && existsSync(sidecarDir)) {
+      for (const filename of readdirSync(sidecarDir)) {
+        chmodSync(join(sidecarDir, filename), 0o755)
+      }
+    }
     if (context.electronPlatformName === 'darwin') {
       await signMacComputerUseHelper(join(resourcesDir, 'Orca Computer Use.app'), context.packager)
     }
@@ -151,6 +173,7 @@ module.exports = {
     extraResources: [
       ...commonExtraResources,
       winSpeechNativeResource,
+      winTsSidecarResource,
       {
         from: 'resources/win32/bin/orca.cmd',
         to: 'bin/orca.cmd'
@@ -206,6 +229,7 @@ module.exports = {
     extraResources: [
       ...commonExtraResources,
       macSpeechNativeResource,
+      macTsSidecarResource,
       {
         from: 'resources/darwin/bin/orca',
         to: 'bin/orca'
@@ -260,6 +284,7 @@ module.exports = {
     extraResources: [
       ...commonExtraResources,
       linuxSpeechNativeResource,
+      linuxTsSidecarResource,
       {
         from: 'resources/linux/bin/orca-ide',
         to: 'bin/orca-ide'

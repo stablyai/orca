@@ -119,6 +119,7 @@ import type {
   PortForwardEntry,
   EnrichedDetectedPort
 } from '../shared/ssh-types'
+import type { TailscaleStatusResult } from '../shared/tailscale-status'
 import type {
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
@@ -3571,6 +3572,11 @@ const api = {
       ipcRenderer.on('rateLimits:update', listener)
       return () => ipcRenderer.removeListener('rateLimits:update', listener)
     }
+  },
+
+  tailscale: {
+    status: (): Promise<TailscaleStatusResult> => ipcRenderer.invoke('tailscale:status'),
+    login: (): Promise<TailscaleStatusResult> => ipcRenderer.invoke('tailscale:login')
   },
 
   ssh: {

@@ -16,11 +16,14 @@ import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
 import { OpenCodeUsageStore, initOpenCodeUsagePath } from './opencode-usage/store'
 import { killAllPty } from './ipc/pty'
 import { initDaemonPtyProvider, disconnectDaemon, shutdownDaemon } from './daemon/daemon-init'
+import { disposeTailscaleTransport } from './tailscale/ts-sidecar-manager'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
 import { initObservability, shutdownObservability } from './observability'
 import { startSpan } from './observability/tracer'
 import { registerMobileHandlers } from './ipc/mobile'
+import { registerTailscaleHandlers } from './ipc/tailscale'
+import { getTailnetPairingAddress } from './tailscale/ts-sidecar-manager'
 import { initTelemetry, shutdownTelemetry, trackAppOpenedOnce } from './telemetry/client'
 import { runManagedHookInstallers } from './agent-hooks/install-telemetry'
 import {
@@ -1633,7 +1636,8 @@ app.whenReady().then(async () => {
     ...(serveOptions?.wsPort !== undefined ? { wsPort: serveOptions.wsPort } : {}),
     webClientRoot: getBundledWebClientRoot()
   })
-  registerMobileHandlers(runtimeRpc)
+  registerMobileHandlers(runtimeRpc, getTailnetPairingAddress)
+  registerTailscaleHandlers()
 
   if (!isServeMode) {
     startDesktopFirstWindowStartupServices()
@@ -1709,6 +1713,9 @@ app.on('before-quit', () => {
   unsubscribeAgentAwakeStatusChanges = null
   agentAwakeService?.dispose()
   agentAwakeService = null
+  // Why: kill the tailnet sidecar so a userspace tailnet node is not orphaned
+  // after the app exits.
+  disposeTailscaleTransport()
   // Why: PTY cleanup is deferred to will-quit so the renderer has a chance to
   // capture terminal scrollback buffers before PTY exit events race in and
   // unmount TerminalPane components (removing their capture callbacks).

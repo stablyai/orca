@@ -6,6 +6,10 @@ import { isTailnetIPv4Address } from '../../shared/tailnet-address'
 import type { DeviceEntry } from '../runtime/device-registry'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 
+// Why: injected so mobile.ts stays free of the electron-coupled sidecar manager.
+// Returns the userspace tailnet pairing address (MagicDNS name) when available.
+export type TailnetPairingAddressProvider = () => NetworkInterface | null
+
 export type NetworkInterface = {
   name: string
   address: string
@@ -15,7 +19,7 @@ export type NetworkInterface = {
 // connectable from a mobile device. We enumerate all non-internal IPv4
 // addresses so the user can choose which one to advertise in the QR code
 // (e.g. LAN vs Tailscale).
-function getNetworkInterfaces(): NetworkInterface[] {
+function getNetworkInterfaces(tailnetProvider?: TailnetPairingAddressProvider): NetworkInterface[] {
   const result: NetworkInterface[] = []
   const interfaces = networkInterfaces()
   for (const [name, addrs] of Object.entries(interfaces)) {
@@ -28,9 +32,15 @@ function getNetworkInterfaces(): NetworkInterface[] {
       }
     }
   }
-  return result.sort(
+  const sorted = result.sort(
     (a, b) => Number(isTailnetIPv4Address(b.address)) - Number(isTailnetIPv4Address(a.address))
   )
+  // Why: with the userspace sidecar there is no OS interface carrying the tailnet
+  // IP, so surface it (when running) as a selectable pairing address. A phone on
+  // the same tailnet reaches the desktop via this MagicDNS name; the sidecar's
+  // inbound listener forwards it to the WS server.
+  const tailnet = tailnetProvider?.() ?? null
+  return tailnet ? [...sorted, tailnet] : sorted
 }
 
 function getDefaultPairingAddress(): string | null {
@@ -51,9 +61,12 @@ function toRuntimeAccessGrant(device: DeviceEntry): RuntimeAccessGrant {
 // device management, and WebSocket readiness status. They depend on the
 // OrcaRuntimeRpcServer because it owns the device registry and TLS state.
 
-export function registerMobileHandlers(rpcServer: OrcaRuntimeRpcServer): void {
+export function registerMobileHandlers(
+  rpcServer: OrcaRuntimeRpcServer,
+  tailnetProvider?: TailnetPairingAddressProvider
+): void {
   ipcMain.handle('mobile:listNetworkInterfaces', (): { interfaces: NetworkInterface[] } => ({
-    interfaces: getNetworkInterfaces()
+    interfaces: getNetworkInterfaces(tailnetProvider)
   }))
 
   ipcMain.handle(

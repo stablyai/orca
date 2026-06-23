@@ -7,6 +7,7 @@ import {
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
+import { TailscaleLoginStatus } from './TailscaleLoginStatus'
 import { applyParsedSshHostInput, type EditingTarget } from './ssh-target-draft'
 import { translate } from '@/i18n/i18n'
 export { EMPTY_FORM, type EditingTarget } from './ssh-target-draft'
@@ -144,6 +145,34 @@ export function SshTargetForm({
               'Optional. Equivalent to ProxyJump / ssh -J.'
             )}
           </p>
+        </div>
+        <div className="col-span-2 space-y-1.5">
+          <Label>
+            {translate('auto.components.settings.SshTargetForm.tailscaleLabel', 'Network')}
+          </Label>
+          <label className="flex cursor-pointer items-start gap-2.5 py-1 text-xs">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-3.5 shrink-0 accent-foreground"
+              checked={form.useTailscale}
+              onChange={(e) => onFormChange((f) => ({ ...f, useTailscale: e.target.checked }))}
+            />
+            <span className="space-y-0.5">
+              <span className="block font-medium text-foreground">
+                {translate(
+                  'auto.components.settings.SshTargetForm.tailscaleToggle',
+                  'Connect over Tailscale'
+                )}
+              </span>
+              <span className="block text-muted-foreground">
+                {translate(
+                  'auto.components.settings.SshTargetForm.tailscaleHint',
+                  'Reach this host over your tailnet without installing Tailscale at the OS level. Works alongside other VPNs.'
+                )}
+              </span>
+            </span>
+          </label>
+          {form.useTailscale && <TailscaleLoginStatus />}
         </div>
         <div className="col-span-2 space-y-1.5">
           <Label>

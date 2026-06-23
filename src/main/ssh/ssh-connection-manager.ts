@@ -1,5 +1,6 @@
 import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
 import { SshConnection, type SshConnectionCallbacks } from './ssh-connection'
+import type { TailscaleTransportResolver } from './ssh-tailscale-transport'
 
 // ── Connection Manager ──────────────────────────────────────────────
 // Why: extracted from ssh-connection.ts to keep each file under the
@@ -13,9 +14,11 @@ export class SshConnectionManager {
   // the "existing" check, create two SshConnections, and orphan the first.
   // This set prevents a second call from racing with an in-progress one.
   private connectingTargets = new Set<string>()
+  private tailscaleTransport?: TailscaleTransportResolver
 
-  constructor(callbacks: SshConnectionCallbacks) {
+  constructor(callbacks: SshConnectionCallbacks, tailscaleTransport?: TailscaleTransportResolver) {
     this.callbacks = callbacks
+    this.tailscaleTransport = tailscaleTransport
   }
 
   setCallbacks(callbacks: SshConnectionCallbacks): void {
@@ -42,7 +45,7 @@ export class SshConnectionManager {
         await existing.disconnect()
       }
 
-      const conn = new SshConnection(target, this.callbacks)
+      const conn = new SshConnection(target, this.callbacks, this.tailscaleTransport)
       this.connections.set(target.id, conn)
 
       try {

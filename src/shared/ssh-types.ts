@@ -23,6 +23,11 @@ export type SshTarget = {
   proxyCommand?: string
   /** Jump host (ProxyJump), if any. */
   jumpHost?: string
+  /** Transport used to reach the host. `direct` (default) dials TCP via ssh2 or
+   *  the system OpenSSH fallback. `tailscale` routes the connection through the
+   *  userspace tailnet sidecar's loopback SOCKS5 proxy, so the host is reached
+   *  over the tailnet without an OS/kernel Tailscale install. */
+  transport?: 'direct' | 'tailscale'
   /** Where this target came from. `ssh-config` targets are kept in sync with
    *  `~/.ssh/config` on import — their config-derived fields (host, port,
    *  username, jump host, identity, proxy) are refreshed on each import.

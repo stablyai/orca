@@ -1,0 +1,3 @@
+# Built sidecar binaries (per platform/arch); produced by the build script.
+ts-sidecar-*-*
+!*.go

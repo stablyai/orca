@@ -4,6 +4,7 @@ import { ipcMain, powerMonitor, type BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import { SshConnectionStore } from '../ssh/ssh-connection-store'
 import { SshConnectionManager, type SshConnectionCallbacks } from '../ssh/ssh-connection'
+import { getTailscaleTransport } from '../tailscale/ts-sidecar-manager'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { SshRelaySession } from '../ssh/ssh-relay-session'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
@@ -583,7 +584,7 @@ export function registerSshHandlers(
   if (connectionManager) {
     connectionManager.setCallbacks(callbacks)
   } else {
-    connectionManager = new SshConnectionManager(callbacks)
+    connectionManager = new SshConnectionManager(callbacks, getTailscaleTransport())
   }
   portForwardManager ??= new SshPortForwardManager()
   refreshActiveRelaySessions()

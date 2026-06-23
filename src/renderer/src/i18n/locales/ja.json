@@ -6094,7 +6094,10 @@
           "9518545cb6": "ターゲットの追加",
           "a62b4cb39a": "変更を保存",
           "29af933cd5": "新規 SSH ターゲット",
-          "f2331ce599": "SSH ターゲットの編集"
+          "f2331ce599": "SSH ターゲットの編集",
+          "tailscaleLabel": "Network",
+          "tailscaleToggle": "Connect over Tailscale",
+          "tailscaleHint": "Reach this host over your tailnet without installing Tailscale at the OS level. Works alongside other VPNs."
         },
         "TasksPane": {
           "3a72b9745e": "[タスク] ページとサイドバーのショートカットに表示するタスク プロバイダーを選択します。",
@@ -6241,7 +6244,19 @@
           "ab20575a8a": "オフ",
           "ab3a1f9068": "wsl.exe",
           "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
-          "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent."
+          "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent.",
+          "scrollSpeed": {
+            "title": "Scroll Speed",
+            "description": "Tune normal terminal scrollback, fast modifier scrolling, and full-screen TUI wheel speed.",
+            "helper": "Adjust how wheel input feels in scrollback and in mouse-aware terminal apps.",
+            "reset": "Reset",
+            "normal": "Normal",
+            "normalDescription": "Scrollback wheel multiplier.",
+            "fast": "Fast",
+            "fastDescription": "Extra multiplier while scrolling with a modifier key.",
+            "tui": "TUI",
+            "tuiDescription": "Discrete wheel reports for full-screen terminal apps."
+          }
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "{{value0}} テーマのプレビュー",
@@ -7877,7 +7892,11 @@
             "0fe0073f0c": "新規ペインとライブ アップデートのデフォルトの terminal フォント サイズ。",
             "5930244899": "フォントサイズ",
             "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
-            "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent."
+            "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent.",
+            "scrollSpeed": {
+              "title": "Scroll Speed",
+              "description": "Tune normal terminal scrollback, fast modifier scrolling, and full-screen TUI wheel speed."
+            }
           },
           "windows": {
             "search": {
@@ -8235,6 +8254,13 @@
         "ShortcutRemoveButton": {
           "9e29aff18b": "Remove {{value0}} shortcut {{value1}}",
           "2a9588b1c2": "Remove this binding"
+        },
+        "TailscaleLoginStatus": {
+          "unavailable": "Tailscale is not available in this build.",
+          "connected": "Tailnet connected",
+          "disconnected": "Tailnet not connected",
+          "opening": "Opening login…",
+          "login": "Log in to Tailscale"
         }
       },
       "right": {

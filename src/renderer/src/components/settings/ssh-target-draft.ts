@@ -16,6 +16,9 @@ export type EditingTarget = {
   jumpHost: string
   relayGracePeriodSeconds: string
   relayKeepAliveUntilReset: boolean
+  /** Route this target through the userspace tailnet sidecar (SOCKS5) instead of
+   *  a direct/system SSH dial. Maps to SshTarget.transport. */
+  useTailscale: boolean
 }
 
 export const EMPTY_FORM: EditingTarget = {
@@ -28,7 +31,8 @@ export const EMPTY_FORM: EditingTarget = {
   proxyCommand: '',
   jumpHost: '',
   relayGracePeriodSeconds: String(DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS),
-  relayKeepAliveUntilReset: false
+  relayKeepAliveUntilReset: false,
+  useTailscale: false
 }
 
 export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
@@ -49,7 +53,8 @@ export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
         ? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
         : (target.relayGracePeriodSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS)
     ),
-    relayKeepAliveUntilReset: target.relayGracePeriodSeconds === 0
+    relayKeepAliveUntilReset: target.relayGracePeriodSeconds === 0,
+    useTailscale: target.transport === 'tailscale'
   }
 }
 
@@ -130,6 +135,48 @@ export function getSshTargetDraftConnectionFields(draft: EditingTarget): {
     username,
     port
   }
+}
+
+export type SshTargetConnectionInput = {
+  host: string
+  configHost: string
+  username: string
+  port: number
+  graceSeconds: number
+}
+
+export type SshTargetPayload = {
+  target: Omit<SshTarget, 'id'>
+  identityFile: string | undefined
+  proxyCommand: string | undefined
+  jumpHost: string | undefined
+}
+
+// Why: builds the persisted target from the form draft. The optional fields are
+// returned alongside the target so the add path can omit empties (cleaner
+// records) while the update path passes them explicitly to clear stale values.
+export function buildSshTargetPayload(
+  draft: EditingTarget,
+  conn: SshTargetConnectionInput
+): SshTargetPayload {
+  const identityFile = draft.identityFile.trim() || undefined
+  const proxyCommand = draft.proxyCommand.trim() || undefined
+  const jumpHost = draft.jumpHost.trim() || undefined
+  const label =
+    draft.label.trim() || (conn.username ? `${conn.username}@${conn.host}` : conn.configHost)
+  const target: Omit<SshTarget, 'id'> = {
+    label,
+    configHost: conn.configHost,
+    host: conn.host,
+    port: conn.port,
+    username: conn.username,
+    transport: draft.useTailscale ? 'tailscale' : 'direct',
+    relayGracePeriodSeconds: conn.graceSeconds,
+    ...(identityFile ? { identityFile } : {}),
+    ...(proxyCommand ? { proxyCommand } : {}),
+    ...(jumpHost ? { jumpHost } : {})
+  }
+  return { target, identityFile, proxyCommand, jumpHost }
 }
 
 export function parseRelayGracePeriodSeconds(draft: EditingTarget): number {

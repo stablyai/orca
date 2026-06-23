@@ -31,6 +31,7 @@ import {
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
+import { resolveTailscaleSock, type TailscaleTransportResolver } from './ssh-tailscale-transport'
 export type { SshConnectionCallbacks } from './ssh-connection-utils'
 
 type SshRemoteFileOptions = {
@@ -52,10 +53,16 @@ export class SshConnection {
   private cachedPassphrase: string | null = null
   private cachedPassword: string | null = null
   private connectGeneration = 0
+  private tailscaleTransport?: TailscaleTransportResolver
 
-  constructor(target: SshTarget, callbacks: SshConnectionCallbacks) {
+  constructor(
+    target: SshTarget,
+    callbacks: SshConnectionCallbacks,
+    tailscaleTransport?: TailscaleTransportResolver
+  ) {
     this.target = target
     this.callbacks = callbacks
+    this.tailscaleTransport = tailscaleTransport
     this.state = {
       targetId: target.id,
       status: 'disconnected',
@@ -280,28 +287,43 @@ export class SshConnection {
 
   private async attemptConnect(): Promise<void> {
     this.setState('connecting')
-    this.proxyProcess?.kill()
-    this.proxyProcess = null
+    this.killProxyProcess()
     const connectGeneration = ++this.connectGeneration
 
     const resolved = await resolveWithSshG(this.target.configHost || this.target.label).catch(
       () => null
     )
-    if (shouldUseSystemSshTransport(this.target, resolved)) {
+    // Why: tailnet targets are reached over the userspace sidecar's SOCKS5
+    // proxy, never the system OpenSSH binary (which would need OS-level routing
+    // that the sidecar deliberately avoids).
+    const isTailscale = this.target.transport === 'tailscale'
+
+    if (!isTailscale && shouldUseSystemSshTransport(this.target, resolved)) {
       await this.doSystemSshProbe(connectGeneration)
       return
     }
 
     const config = buildConnectConfig(this.target, resolved)
 
-    // Why: ssh2 doesn't support ProxyCommand/ProxyJump natively. Spawn the
-    // resolved proxy and pipe its stdin/stdout as config.sock.
-    const effectiveProxy = resolveEffectiveProxy(this.target, resolved)
-    if (effectiveProxy) {
-      const proxy = spawnProxyCommand(effectiveProxy, config.host!, config.port!, config.username!)
-      this.proxyProcess = proxy.process
-      config.sock = proxy.sock
+    // Why: ssh2 destroys config.sock on auth failure, so credential retries must
+    // rebuild it. This closure owns transport-socket setup for both the initial
+    // attempt and every retry: a fresh SOCKS5 dial for tailnet targets, or a
+    // respawned ProxyCommand/ProxyJump process for direct targets. ssh2 supports
+    // neither proxy form natively, hence config.sock.
+    const effectiveProxy = isTailscale ? null : resolveEffectiveProxy(this.target, resolved)
+    const refreshTransportSock = async (cfg: ConnectConfig): Promise<void> => {
+      if (isTailscale) {
+        cfg.sock = await resolveTailscaleSock(
+          this.tailscaleTransport,
+          cfg.host!,
+          cfg.port!,
+          CONNECT_TIMEOUT_MS
+        )
+      } else if (effectiveProxy) {
+        this.respawnProxy(cfg, effectiveProxy)
+      }
     }
+    await refreshTransportSock(config)
 
     if (this.cachedPassphrase) {
       config.passphrase = this.cachedPassphrase
@@ -314,14 +336,12 @@ export class SshConnection {
       await this.doSsh2Connect(config, connectGeneration)
     } catch (err) {
       if (!(err instanceof Error)) {
-        this.proxyProcess?.kill()
-        this.proxyProcess = null
+        this.killProxyProcess()
         throw err
       }
 
-      if (isSystemSshFallbackError(err)) {
-        this.proxyProcess?.kill()
-        this.proxyProcess = null
+      if (!isTailscale && isSystemSshFallbackError(err)) {
+        this.killProxyProcess()
         try {
           // Why: on macOS, per-app network policy can block Orca's direct
           // TCP socket while the system OpenSSH binary is still allowed.
@@ -355,14 +375,13 @@ export class SshConnection {
           keyConfig.password = this.cachedPassword
         }
         if (keyConfig.privateKey || keyConfig.password) {
-          this.respawnProxy(keyConfig, effectiveProxy)
+          await refreshTransportSock(keyConfig)
           try {
             await this.doSsh2Connect(keyConfig, connectGeneration)
             return
           } catch (keyErr) {
             if (!(keyErr instanceof Error)) {
-              this.proxyProcess?.kill()
-              this.proxyProcess = null
+              this.killProxyProcess()
               throw keyErr
             }
             authError = keyErr
@@ -377,7 +396,7 @@ export class SshConnection {
               if (val) {
                 this.cachedPassphrase = val
                 keyConfig.passphrase = val
-                this.respawnProxy(keyConfig, effectiveProxy)
+                await refreshTransportSock(keyConfig)
                 await this.doSsh2Connect(keyConfig, connectGeneration)
                 return
               }
@@ -387,8 +406,7 @@ export class SshConnection {
       }
 
       if (!this.callbacks.onCredentialRequest) {
-        this.proxyProcess?.kill()
-        this.proxyProcess = null
+        this.killProxyProcess()
         throw authError
       }
 
@@ -400,7 +418,7 @@ export class SshConnection {
         if (val) {
           this.cachedPassphrase = val
           credentialRetryConfig.passphrase = val
-          this.respawnProxy(credentialRetryConfig, effectiveProxy)
+          await refreshTransportSock(credentialRetryConfig)
           await this.doSsh2Connect(credentialRetryConfig, connectGeneration)
           return
         }
@@ -416,13 +434,12 @@ export class SshConnection {
         if (val) {
           this.cachedPassword = val
           credentialRetryConfig.password = val
-          this.respawnProxy(credentialRetryConfig, effectiveProxy)
+          await refreshTransportSock(credentialRetryConfig)
           await this.doSsh2Connect(credentialRetryConfig, connectGeneration)
           return
         }
       }
-      this.proxyProcess?.kill()
-      this.proxyProcess = null
+      this.killProxyProcess()
       throw authError
     }
   }
@@ -447,8 +464,7 @@ export class SshConnection {
   private async doSystemSshProbe(connectGeneration: number): Promise<void> {
     this.useSystemSshTransport = true
     this.client = null
-    this.proxyProcess?.kill()
-    this.proxyProcess = null
+    this.killProxyProcess()
 
     // Why: this probe runs before remote platform detection. A raw echo works
     // under POSIX shells, cmd.exe, and PowerShell; `/bin/sh` wrapping does not.
@@ -533,6 +549,11 @@ export class SshConnection {
     channel.once('close', cleanup)
     channel.once('error', cleanup)
     return channel
+  }
+
+  private killProxyProcess(): void {
+    this.proxyProcess?.kill()
+    this.proxyProcess = null
   }
 
   // Why: ssh2 may destroy the proxy socket on auth failure, so credential
@@ -700,8 +721,7 @@ export class SshConnection {
     } catch {
       /* best-effort transport teardown */
     }
-    this.proxyProcess?.kill()
-    this.proxyProcess = null
+    this.killProxyProcess()
     this.systemOperationAbortController.abort()
     this.systemOperationAbortController = new AbortController()
     for (const channel of this.systemCommandChannels) {
@@ -778,8 +798,7 @@ export class SshConnection {
     this.cachedPassword = null
     this.client?.end()
     this.client = null
-    this.proxyProcess?.kill()
-    this.proxyProcess = null
+    this.killProxyProcess()
     this.systemOperationAbortController.abort()
     this.systemOperationAbortController = new AbortController()
     for (const channel of this.systemCommandChannels) {
