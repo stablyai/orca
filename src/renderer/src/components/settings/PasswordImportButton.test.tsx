@@ -460,4 +460,51 @@ describe('PasswordImportButton', () => {
       expect(onImported).not.toHaveBeenCalled()
     })
   })
+
+  // -------------------------------------------------------------------------
+  // 9. (Fix 5) detectImportBrowsers rejects → empty list + error toast
+  // -------------------------------------------------------------------------
+  describe('when detectImportBrowsers rejects', () => {
+    it('shows the "No supported browsers found" item and fires toast.error', async () => {
+      apiMocks.detectImportBrowsers.mockRejectedValue(new Error('IPC failure'))
+      const container = await renderButton()
+      await openDropdown()
+
+      // After rejection the list should be empty, showing the disabled placeholder.
+      const items = container.querySelectorAll<HTMLButtonElement>('[data-testid="menu-item"]')
+      expect(items).toHaveLength(1)
+      expect(items[0].disabled).toBe(true)
+      expect(items[0].textContent).toContain('No supported browsers found')
+
+      expect(toastMocks.error).toHaveBeenCalledWith('Could not detect supported browsers')
+      expect(toastMocks.success).not.toHaveBeenCalled()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // 10. (Fix 6) importFromBrowser throws → error toast + importing cleared
+  // -------------------------------------------------------------------------
+  describe('when importFromBrowser throws', () => {
+    it('fires toast.error with the generic message and re-enables the trigger', async () => {
+      const onImported = vi.fn()
+      apiMocks.detectImportBrowsers.mockResolvedValue([singleProfileBrowser()])
+      apiMocks.importFromBrowser.mockRejectedValue(new Error('Unexpected crash'))
+
+      const container = await renderButton({ disabled: false, onImported })
+      await openDropdown()
+
+      const item = container.querySelector<HTMLButtonElement>('[data-testid="menu-item"]')!
+      await act(async () => {
+        item.click()
+      })
+
+      expect(toastMocks.error).toHaveBeenCalledWith('Import failed. Please try again.')
+      expect(toastMocks.success).not.toHaveBeenCalled()
+      expect(onImported).not.toHaveBeenCalled()
+
+      // The trigger should be re-enabled (importing reset to false in finally).
+      const trigger = container.querySelector<HTMLButtonElement>('[data-testid="import-trigger"]')
+      expect(trigger?.disabled).toBe(false)
+    })
+  })
 })

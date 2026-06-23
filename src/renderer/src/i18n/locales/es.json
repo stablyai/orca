@@ -8302,7 +8302,9 @@
           "success_toast": "Imported {{value0}} logins from {{value1}}{{value2}}. {{value3}} skipped, {{value4}} invalid.",
           "trigger_label": "Import from browser…",
           "from_browser": "From {{value0}}",
-          "no_browsers_found": "No supported browsers found"
+          "no_browsers_found": "No supported browsers found",
+          "detect_failed": "Could not detect supported browsers",
+          "import_failed": "Import failed. Please try again."
         },
         "passwords": {
           "search": {

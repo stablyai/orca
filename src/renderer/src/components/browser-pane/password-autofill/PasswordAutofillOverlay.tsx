@@ -120,7 +120,9 @@ export function PasswordAutofillOverlay({
   }
 
   return (
-    <div className="pointer-events-none absolute inset-0">
+    // Why: z-20 places key buttons above the Electron webview (z-10 failure/blank
+    // overlays sit below) and below z-30 zoom/annotation overlays that float on top.
+    <div className="pointer-events-none absolute inset-0 z-20">
       {fieldsWithMatches.map((field) => (
         <FieldKeyButton
           key={field.fieldId}

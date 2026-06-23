@@ -3954,6 +3954,22 @@ function BrowserPagePane({
     syncBrowserAnnotationViewportBridge
   ])
 
+  // Why: the webview lifecycle effect reads passwordAutofillEnabled via a ref
+  // (so it doesn't re-run on toggle), meaning the bridge stays in its old state
+  // until the next navigation. This effect syncs the bridge immediately when the
+  // setting changes on the current page without waiting for a navigation event.
+  useEffect(() => {
+    const webview = webviewState
+    if (!webview) {
+      return
+    }
+    void window.api.browser.credentials.injectBridge({
+      browserTabId: browserTab.id,
+      token: passwordBridgeTokenRef.current,
+      enabled: passwordAutofillEnabled
+    })
+  }, [browserTab.id, passwordAutofillEnabled, webviewState])
+
   useEffect(() => {
     const webview = webviewRef.current
     if (!webview) {

@@ -31,7 +31,18 @@ export function PasswordImportButton({
     if (open) {
       // Refresh the browser list each time the dropdown opens so newly
       // installed browsers appear without requiring a restart.
-      void window.api.browser.credentials.detectImportBrowsers().then(setDetectedBrowsers)
+      void window.api.browser.credentials
+        .detectImportBrowsers()
+        .then(setDetectedBrowsers)
+        .catch(() => {
+          setDetectedBrowsers([])
+          toast.error(
+            translate(
+              'auto.components.settings.passwordImport.detect_failed',
+              'Could not detect supported browsers'
+            )
+          )
+        })
     }
   }
 
@@ -60,6 +71,13 @@ export function PasswordImportButton({
       } else {
         toast.error(result.reason)
       }
+    } catch {
+      toast.error(
+        translate(
+          'auto.components.settings.passwordImport.import_failed',
+          'Import failed. Please try again.'
+        )
+      )
     } finally {
       setImporting(false)
     }

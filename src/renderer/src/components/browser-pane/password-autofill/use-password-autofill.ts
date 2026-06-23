@@ -48,8 +48,14 @@ export function usePasswordAutofill(opts: {
   // Transient secret — the captured password lives ONLY here, never in React state, never returned.
   const captureSecretRef = useRef<BrowserPasswordCaptureEvent | null>(null)
 
+  // Sequence counters guard against out-of-order async results for each event type.
+  const detectSeqRef = useRef(0)
+  const captureSeqRef = useRef(0)
+
   useEffect(() => {
     if (!webview || !enabled) {
+      // Drop any transient captured secret when autofill is off (defense in depth).
+      captureSecretRef.current = null
       return undefined
     }
     const handler = (e: Electron.ConsoleMessageEvent): void => {
@@ -59,7 +65,12 @@ export function usePasswordAutofill(opts: {
       }
       if (event.type === 'detect') {
         setDetect(event)
+        const seq = ++detectSeqRef.current
         void window.api.browser.credentials.matchesForOrigin(event.origin).then((matches) => {
+          // Discard if a newer detect event has already started.
+          if (seq !== detectSeqRef.current) {
+            return
+          }
           const byField: Record<string, BrowserCredentialEntry[]> = {}
           event.fields.forEach((f: BrowserPasswordBridgeField) => {
             byField[f.fieldId] = matches
@@ -69,7 +80,12 @@ export function usePasswordAutofill(opts: {
       } else {
         // Hold the secret only in a ref; classify against the vault, never store the password in state.
         captureSecretRef.current = event
+        const seq = ++captureSeqRef.current
         void window.api.browser.credentials.matchesForOrigin(event.origin).then((matches) => {
+          // Discard if a newer capture event has already started.
+          if (seq !== captureSeqRef.current) {
+            return
+          }
           const isUpdate = matches.some((m) => m.username === event.username)
           setPendingCapture({ origin: event.origin, username: event.username, isUpdate })
         })
@@ -110,5 +126,16 @@ export function usePasswordAutofill(opts: {
     setPendingCapture(null)
   }, [])
 
-  return { detect, matchesByFieldId, pendingCapture, fillField, confirmSave, dismissCapture }
+  // Why: gate the exposed state on enabled/webview during render rather than
+  // clearing it from an effect (avoids the adjust-state-on-prop-change pattern);
+  // the overlay/banner disappear immediately when autofill is turned off.
+  const active = enabled && webview !== null
+  return {
+    detect: active ? detect : null,
+    matchesByFieldId: active ? matchesByFieldId : {},
+    pendingCapture: active ? pendingCapture : null,
+    fillField,
+    confirmSave,
+    dismissCapture
+  }
 }
