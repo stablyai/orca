@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
@@ -16,17 +17,20 @@ import {
  * cannot be found (e.g., store not yet hydrated).
  */
 export function getConnectionId(worktreeId: string | null): string | null | undefined {
+  return getConnectionIdFromState(useAppStore.getState(), worktreeId)
+}
+
+export function getConnectionIdFromState(
+  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'>,
+  worktreeId: string | null
+): string | null | undefined {
   if (!worktreeId) {
     return null
   }
   const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
   if (parsedWorkspaceKey?.type === 'folder') {
-    return getFolderWorkspaceConnectionId(
-      useAppStore.getState(),
-      parsedWorkspaceKey.folderWorkspaceId
-    )
+    return getFolderWorkspaceConnectionId(state, parsedWorkspaceKey.folderWorkspaceId)
   }
-  const state = useAppStore.getState()
   const allWorktrees = Object.values(state.worktreesByRepo ?? {}).flat()
   const worktree = allWorktrees.find((w) => w.id === worktreeId)
   // Why: SSH worktrees can be restored from session IDs before relay discovery
