@@ -25,14 +25,21 @@ export function splitRepoReorderByHost(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 ): RepoReorderHostGroup[] {
   const focusedHostId = getSettingsFocusedExecutionHostId(settings)
-  const hostByRepoId = new Map<string, string>()
+  const remainingHostsByRepoId = new Map<string, string[]>()
   for (const repo of repos) {
     const hasExplicitOwner = Boolean(repo.executionHostId?.trim() || repo.connectionId?.trim())
-    hostByRepoId.set(repo.id, hasExplicitOwner ? getRepoExecutionHostId(repo) : focusedHostId)
+    const hostId = hasExplicitOwner ? getRepoExecutionHostId(repo) : focusedHostId
+    const existing = remainingHostsByRepoId.get(repo.id)
+    if (existing) {
+      existing.push(hostId)
+    } else {
+      remainingHostsByRepoId.set(repo.id, [hostId])
+    }
   }
   const groups = new Map<string, string[]>()
   for (const id of orderedIds) {
-    const hostId = hostByRepoId.get(id)
+    const remainingHosts = remainingHostsByRepoId.get(id)
+    const hostId = remainingHosts?.shift()
     if (!hostId) {
       continue
     }
