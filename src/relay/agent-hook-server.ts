@@ -305,6 +305,7 @@ export class RelayAgentHookServer {
     const envelope: AgentHookRelayEnvelope = {
       source,
       paneKey: event.paneKey,
+      ...(event.launchToken ? { launchToken: event.launchToken } : {}),
       tabId: event.tabId,
       worktreeId: event.worktreeId,
       connectionId: null,

@@ -25,6 +25,7 @@ import {
 import { clearPendingSplitScrollRestore } from './pane-split-scroll'
 import { buildDefaultTerminalOptions } from './pane-terminal-options'
 import { activateOrcaTerminalUnicodeProvider } from './pane-terminal-unicode-provider'
+import { attachTerminalMouseWheelMultiplier } from './pane-terminal-mouse-wheel'
 import { attachDomRendererFocusClassSync } from './pane-dom-focus-class-sync'
 import {
   ENABLE_WEBGL_RENDERER,
@@ -130,6 +131,7 @@ export function createPaneDOM(
     container,
     xtermContainer,
     linkTooltip,
+    terminalTuiScrollSensitivity: options.terminalTuiScrollSensitivity,
     terminalGpuAcceleration: options.terminalGpuAcceleration ?? 'auto',
     gpuRenderingEnabled: ENABLE_WEBGL_RENDERER,
     webglAttachmentDeferred: false,
@@ -179,6 +181,7 @@ export function openTerminal(pane: ManagedPaneInternal): void {
     terminal,
     xtermContainer,
     linkTooltip,
+    terminalTuiScrollSensitivity,
     fitAddon,
     searchAddon,
     serializeAddon,
@@ -197,6 +200,9 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   terminal.loadAddon(serializeAddon)
   terminal.loadAddon(unicode11Addon)
   terminal.loadAddon(webLinksAddon)
+  attachTerminalMouseWheelMultiplier(terminal, {
+    getTuiMouseWheelMultiplier: terminalTuiScrollSensitivity
+  })
 
   // Activate Orca's Unicode 11 width shim *before* any caller-driven write. CJK / emoji /
   // ZWJ codepoints get baked into the buffer at the active unicode version on
@@ -280,6 +286,9 @@ export function attachLigatures(pane: ManagedPaneInternal): void {
     const ligaturesAddon = new LigaturesAddon()
     pane.terminal.loadAddon(ligaturesAddon)
     pane.ligaturesAddon = ligaturesAddon
+    // Why: ligatures can be enabled after rows already rendered, especially
+    // from Settings. Force existing glyph runs to be recomputed immediately.
+    pane.terminal.refresh(0, pane.terminal.rows - 1)
     // Why: the WebGL renderer builds its glyph texture atlas at activation
     // time, so `font-feature-settings` applied after WebGL loaded won't
     // reach the GPU-rendered cells until the atlas is rebuilt. The upstream

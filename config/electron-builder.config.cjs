@@ -9,6 +9,7 @@ const {
 } = require('./packaged-runtime-node-modules.cjs')
 
 const isMacRelease = process.env.ORCA_MAC_RELEASE === '1'
+const isLinuxArm64Release = process.env.ORCA_LINUX_ARM64_RELEASE === '1'
 const featureWallResources = {
   from: 'resources/onboarding/feature-wall',
   to: 'onboarding/feature-wall'
@@ -273,12 +274,12 @@ module.exports = {
       },
       featureWallResources
     ],
-    target: ['AppImage', 'deb', 'rpm'],
+    target: ['AppImage', 'deb'],
     maintainer: 'stablyai',
     category: 'Utility'
   },
   appImage: {
-    artifactName: 'orca-linux.${ext}'
+    artifactName: isLinuxArm64Release ? 'orca-linux-arm64.${ext}' : 'orca-linux.${ext}'
   },
   deb: {
     packageName: 'orca-ide',

@@ -189,6 +189,7 @@ export type WorktreeSlice = {
     updates: Partial<WorktreeMeta>,
     options?: WorktreeMetaUpdateOptions
   ) => Promise<void>
+  ensureHostedReviewPushTarget: (worktreeId: string) => Promise<void>
   updateWorktreesMeta: (
     updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>
   ) => Promise<void>

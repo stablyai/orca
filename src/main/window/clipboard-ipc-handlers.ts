@@ -5,6 +5,10 @@ import {
   type IpcMainInvokeEvent,
   type WebContents
 } from 'electron'
+import { spawn } from 'node:child_process'
+import { stat } from 'node:fs/promises'
+import type { Store } from '../persistence'
+import { isENOENT, PATH_ACCESS_DENIED_MESSAGE, resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import {
   assertClipboardTextWriteWithinLimitWithYield,
   assertClipboardTextWithinLimitWithYield,
@@ -19,20 +23,50 @@ import {
   assertClipboardImageByteLengthWithinLimit,
   assertClipboardImageDimensionsWithinLimit
 } from '../../shared/clipboard-image'
+import {
+  writeFileToClipboard,
+  type ClipboardFileDeps,
+  type ClipboardFileResult
+} from './clipboard-file-copy'
+import {
+  cleanupExpiredRemoteClipboardFiles,
+  writeRemoteFileToClipboard
+} from './clipboard-remote-file-copy'
 
 let trustedClipboardRendererWebContentsId: number | null = null
+
+type ClipboardWriteFileRequest = {
+  filePath: string
+  connectionId?: string
+}
 
 export function setTrustedClipboardRendererWebContentsId(webContentsId: number | null): void {
   trustedClipboardRendererWebContentsId = webContentsId
 }
 
-export function registerClipboardHandlers(): void {
+// Run a short-lived OS clipboard helper (PowerShell / wl-copy / xclip), feeding
+// it stdin when provided; resolves only on a clean exit.
+function runCommand(command: string, args: string[], stdin?: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ['pipe', 'ignore', 'ignore'] })
+    child.on('error', reject)
+    child.on('exit', (code) =>
+      code === 0 ? resolve() : reject(new Error(`${command} exited with ${code}`))
+    )
+    child.stdin?.end(stdin ?? '')
+  })
+}
+
+export function registerClipboardHandlers(store: Store): void {
   ipcMain.removeHandler('clipboard:readText')
   ipcMain.removeHandler('clipboard:readSelectionText')
   ipcMain.removeHandler('clipboard:writeText')
   ipcMain.removeHandler('clipboard:writeSelectionText')
   ipcMain.removeHandler('clipboard:writeImage')
+  ipcMain.removeHandler('clipboard:writeFile')
   ipcMain.removeHandler('clipboard:saveImageAsTempFile')
+
+  void cleanupExpiredRemoteClipboardFiles()
 
   ipcMain.handle('clipboard:readText', async (event, options?: ReadClipboardTextOptions) => {
     assertTrustedClipboardSender(event)
@@ -58,6 +92,38 @@ export function registerClipboardHandlers(): void {
       }
       assertClipboardImageDimensionsWithinLimit(image.getSize())
       return saveClipboardImageBufferAsTempFile(image.toPNG(), args)
+    }
+  )
+  // Why: copy the actual file to the OS clipboard so pasting in Finder/Explorer
+  // drops the file itself, not its path as text.
+  ipcMain.handle(
+    'clipboard:writeFile',
+    (event, args: unknown): ClipboardFileResult | Promise<ClipboardFileResult> => {
+      assertTrustedClipboardSender(event)
+      const request = normalizeClipboardWriteFileRequest(args)
+      if (!request) {
+        return { ok: false, reason: 'invalid-path' }
+      }
+      const deps = makeClipboardFileDeps(async (path) => {
+        try {
+          const authorizedPath = await resolveAuthorizedPath(path, store)
+          await stat(authorizedPath)
+          return { ok: true, path: authorizedPath }
+        } catch (error) {
+          if (error instanceof Error && error.message === PATH_ACCESS_DENIED_MESSAGE) {
+            return { ok: false, reason: 'access-denied' }
+          }
+          return { ok: false, reason: isENOENT(error) ? 'not-found' : 'invalid-path' }
+        }
+      })
+      if (request.connectionId) {
+        return writeRemoteFileToClipboard({
+          remotePath: request.filePath,
+          connectionId: request.connectionId,
+          deps
+        })
+      }
+      return writeFileToClipboard(request.filePath, deps)
     }
   )
   ipcMain.handle('clipboard:writeText', async (event, text: string) => {
@@ -107,6 +173,36 @@ export function registerClipboardHandlers(): void {
     }
     clipboard.writeImage(image)
   })
+}
+
+function normalizeClipboardWriteFileRequest(args: unknown): ClipboardWriteFileRequest | null {
+  if (typeof args === 'string') {
+    return { filePath: args }
+  }
+  if (!args || typeof args !== 'object' || Array.isArray(args)) {
+    return null
+  }
+  const filePath = (args as { filePath?: unknown }).filePath
+  if (typeof filePath !== 'string') {
+    return null
+  }
+  const connectionId = (args as { connectionId?: unknown }).connectionId
+  if (typeof connectionId === 'string' && connectionId.trim() !== '') {
+    return { filePath, connectionId }
+  }
+  return { filePath }
+}
+
+function makeClipboardFileDeps(
+  resolveFilePath: ClipboardFileDeps['resolveFilePath']
+): ClipboardFileDeps {
+  return {
+    platform: process.platform,
+    desktop: process.env.XDG_CURRENT_DESKTOP,
+    resolveFilePath,
+    writeBuffer: (format, buffer) => clipboard.writeBuffer(format, buffer),
+    runCommand
+  }
 }
 
 function assertTrustedClipboardSender(event: IpcMainInvokeEvent): void {

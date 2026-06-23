@@ -1606,7 +1606,18 @@ describe('web worktree preload API', () => {
       name: 'review-pr-42',
       baseBranch: TEST_COMMIT_OID,
       compareBaseRef: 'refs/remotes/origin/main',
-      setupDecision: 'inherit'
+      setupDecision: 'inherit',
+      createdWithAgent: 'codex',
+      startup: {
+        command: "codex 'summarize repo'",
+        env: { ORCA_AGENT_MODE: 'direct' },
+        launchConfig: {
+          agentCommand: 'codex',
+          agentArgs: '--model gpt-5',
+          agentEnv: { ORCA_AGENT_MODE: 'direct' }
+        },
+        startupCommandDelivery: 'shell-ready'
+      }
     })
     await globals.window.api.worktrees.resolvePrBase({
       repoId: 'repo-1',
@@ -1629,7 +1640,17 @@ describe('web worktree preload API', () => {
         params: expect.objectContaining({
           repo: 'repo-1',
           baseBranch: TEST_COMMIT_OID,
-          compareBaseRef: 'refs/remotes/origin/main'
+          compareBaseRef: 'refs/remotes/origin/main',
+          createdWithAgent: 'codex',
+          startupCommand: "codex 'summarize repo'",
+          startupEnv: { ORCA_AGENT_MODE: 'direct' },
+          startupLaunchConfig: {
+            agentCommand: 'codex',
+            agentArgs: '--model gpt-5',
+            agentEnv: { ORCA_AGENT_MODE: 'direct' }
+          },
+          startupCommandDelivery: 'shell-ready',
+          activate: true
         })
       },
       {
@@ -1650,6 +1671,48 @@ describe('web worktree preload API', () => {
           sourceBranch: 'feature/mr',
           targetBranch: 'release',
           isCrossRepository: false
+        }
+      }
+    ])
+  })
+
+  it('encodes explicit push target clears for runtime worktree updates', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: {
+              worktree: { id: 'repo-1::/workspace/review', path: '/workspace/review' }
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.worktrees.updateMeta({
+      worktreeId: 'repo-1::/workspace/review',
+      updates: { linkedPR: null, pushTarget: undefined }
+    })
+
+    expect(runtimeCalls).toEqual([
+      {
+        method: 'worktree.set',
+        params: {
+          worktree: 'id:repo-1::/workspace/review',
+          linkedPR: null,
+          pushTarget: null
         }
       }
     ])

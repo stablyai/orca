@@ -417,6 +417,56 @@ function getProjectHostSetupOwnerKey(setup: ProjectHostSetup): string {
   return `${setup.hostId}:${setup.repoId ?? setup.id}`
 }
 
+function getProjectHostIds(
+  project: Project,
+  setups: readonly ProjectHostSetup[],
+  repos: readonly Repo[]
+): Set<string> {
+  const hostIds = new Set<string>()
+  const repoById = new Map(repos.map((repo) => [repo.id, repo]))
+  for (const setup of setups) {
+    if (setup.projectId === project.id) {
+      hostIds.add(setup.hostId)
+    }
+  }
+  for (const repoId of project.sourceRepoIds) {
+    const repo = repoById.get(repoId)
+    if (repo) {
+      hostIds.add(getRepoExecutionHostId(repo))
+    }
+  }
+  if (hostIds.size === 0) {
+    hostIds.add(LOCAL_EXECUTION_HOST_ID)
+  }
+  return hostIds
+}
+
+function mergeFetchedProjectCompatibilityForHost({
+  previous,
+  fetched,
+  repos,
+  hostId
+}: {
+  previous: Pick<RepoSlice, 'projects' | 'projectHostSetups'>
+  fetched: Pick<RepoSlice, 'projects' | 'projectHostSetups'>
+  repos: readonly Repo[]
+  hostId: string
+}): Pick<RepoSlice, 'projects' | 'projectHostSetups'> {
+  const fetchedSetupsForHost = fetched.projectHostSetups.filter((setup) => setup.hostId === hostId)
+  const preservedSetups = previous.projectHostSetups.filter((setup) => setup.hostId !== hostId)
+  const projectHostSetups = mergeById(preservedSetups, fetchedSetupsForHost)
+  const fetchedProjectsForHost = fetched.projects.filter((project) =>
+    getProjectHostIds(project, fetched.projectHostSetups, repos).has(hostId)
+  )
+  const preservedProjects = previous.projects.filter(
+    (project) => !getProjectHostIds(project, previous.projectHostSetups, repos).has(hostId)
+  )
+  return {
+    projects: mergeById(preservedProjects, fetchedProjectsForHost),
+    projectHostSetups
+  }
+}
+
 function mergeById<T extends { id: string }>(base: readonly T[], overlay: readonly T[]): T[] {
   const merged = [...base]
   const indexById = new Map(merged.map((entry, index) => [entry.id, index]))
@@ -458,6 +508,48 @@ function mergeFetchedReposForHost(
   )
 }
 
+function getProjectGroupHostId(group: Pick<ProjectGroup, 'connectionId' | 'executionHostId'>) {
+  if (group.executionHostId) {
+    return group.executionHostId
+  }
+  return group.connectionId ? toSshExecutionHostId(group.connectionId) : LOCAL_EXECUTION_HOST_ID
+}
+
+function mergeFetchedProjectGroupsForHost(
+  previous: readonly ProjectGroup[],
+  fetched: ProjectGroup[],
+  hostId: string
+): ProjectGroup[] {
+  const fetchedIds = new Set(fetched.map((group) => group.id))
+  const preserved = previous.filter((group) => {
+    const existingHostId = getProjectGroupHostId(group)
+    return existingHostId !== hostId || fetchedIds.has(group.id)
+  })
+  return mergeById(preserved, fetched)
+}
+
+function mergeFetchedFolderWorkspacesForHost({
+  previous,
+  fetched,
+  projectGroups,
+  hostId
+}: {
+  previous: readonly FolderWorkspace[]
+  fetched: FolderWorkspace[]
+  projectGroups: readonly ProjectGroup[]
+  hostId: string
+}): FolderWorkspace[] {
+  const fetchedIds = new Set(fetched.map((workspace) => workspace.id))
+  const projectGroupHostIds = new Map(
+    projectGroups.map((group) => [group.id, getProjectGroupHostId(group)])
+  )
+  const preserved = previous.filter((workspace) => {
+    const existingHostId = projectGroupHostIds.get(workspace.projectGroupId)
+    return existingHostId === undefined || existingHostId !== hostId || fetchedIds.has(workspace.id)
+  })
+  return mergeById(preserved, fetched)
+}
+
 async function fetchReposForTarget(
   target: ReturnType<typeof getActiveRuntimeTarget>,
   currentRepos: readonly Repo[]
@@ -490,6 +582,66 @@ async function fetchReposForTarget(
         )
 
   return { repos: reconciledRepos, projectCompatibility, hostId }
+}
+
+async function fetchProjectGroupsForTarget(
+  target: ReturnType<typeof getActiveRuntimeTarget>,
+  currentProjectGroups: readonly ProjectGroup[]
+): Promise<{ projectGroups: ProjectGroup[]; hostId: ReturnType<typeof getRuntimeTargetHostId> }> {
+  const fetchedGroups =
+    target.kind === 'local'
+      ? await window.api.projectGroups.list()
+      : (
+          await callRuntimeRpc<{ groups: ProjectGroup[] }>(target, 'projectGroup.list', undefined, {
+            timeoutMs: 15_000
+          })
+        ).groups
+  const hostId = getRuntimeTargetHostId(target)
+  const ownedGroups = fetchedGroups.map((group) => projectGroupWithFetchedOwner(group, target))
+  return {
+    projectGroups: mergeFetchedProjectGroupsForHost(currentProjectGroups, ownedGroups, hostId),
+    hostId
+  }
+}
+
+async function fetchFolderWorkspacesForTarget(
+  target: ReturnType<typeof getActiveRuntimeTarget>,
+  currentFolderWorkspaces: readonly FolderWorkspace[],
+  projectGroups: readonly ProjectGroup[]
+): Promise<{
+  folderWorkspaces: FolderWorkspace[]
+  hostId: ReturnType<typeof getRuntimeTargetHostId>
+}> {
+  const fetchedFolderWorkspaces =
+    target.kind === 'local'
+      ? await window.api.folderWorkspaces.list()
+      : (
+          await callRuntimeRpc<{ folderWorkspaces: FolderWorkspace[] }>(
+            target,
+            'folderWorkspace.list',
+            undefined,
+            { timeoutMs: 15_000 }
+          )
+        ).folderWorkspaces
+  const hostId = getRuntimeTargetHostId(target)
+  return {
+    folderWorkspaces: mergeFetchedFolderWorkspacesForHost({
+      previous: currentFolderWorkspaces,
+      fetched: fetchedFolderWorkspaces,
+      projectGroups,
+      hostId
+    }),
+    hostId
+  }
+}
+
+async function listRuntimeEnvironmentsForAllHostLoad(): Promise<{ id: string }[]> {
+  try {
+    return (await window.api.runtimeEnvironments.list()) ?? []
+  } catch (err) {
+    console.warn('Failed to list runtime environments for all-host load:', err)
+    return []
+  }
 }
 
 function settingsForRepoOwner(state: Pick<AppState, 'repos' | 'settings'>, repoId: string) {
@@ -625,9 +777,12 @@ export type RepoSlice = {
   folderWorkspacePathStatuses: Record<string, FolderWorkspacePathStatusCacheEntry>
   activeRepoId: string | null
   fetchRepos: () => Promise<void>
+  fetchReposForAllHosts: () => Promise<void>
   fetchRuntimeEnvironmentRepos: (environmentId: string) => Promise<Repo[]>
   fetchProjectGroups: () => Promise<void>
+  fetchProjectGroupsForAllHosts: () => Promise<void>
   fetchFolderWorkspaces: () => Promise<void>
+  fetchFolderWorkspacesForAllHosts: () => Promise<void>
   addRepo: () => Promise<Repo | null>
   addRepoPath: (path: string, kind?: 'git' | 'folder') => Promise<Repo | null>
   setupProjectExistingFolder: (
@@ -746,9 +901,18 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       } = await fetchReposForTarget(target, get().repos)
       set((s) => {
         const validRepoIds = new Set(reconciledRepos.map((repo) => repo.id))
+        const mergedProjectCompatibility = mergeFetchedProjectCompatibilityForHost({
+          previous: {
+            projects: s.projects,
+            projectHostSetups: s.projectHostSetups
+          },
+          fetched: projectCompatibility,
+          repos: reconciledRepos,
+          hostId
+        })
         return {
           repos: reconciledRepos,
-          ...projectCompatibility,
+          ...mergedProjectCompatibility,
           folderWorkspacePathStatuses: {},
           activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
           filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
@@ -776,16 +940,27 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         hostId
       } = await fetchReposForTarget(target, get().repos)
       const validRepoIds = new Set(reconciledRepos.map((repo) => repo.id))
-      set((s) => ({
-        repos: reconciledRepos,
-        ...projectCompatibility,
-        activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
-        filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
-        setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
-          s.setupScriptPromptDismissedRepoIds,
-          validRepoIds
-        )
-      }))
+      set((s) => {
+        const mergedProjectCompatibility = mergeFetchedProjectCompatibilityForHost({
+          previous: {
+            projects: s.projects,
+            projectHostSetups: s.projectHostSetups
+          },
+          fetched: projectCompatibility,
+          repos: reconciledRepos,
+          hostId
+        })
+        return {
+          repos: reconciledRepos,
+          ...mergedProjectCompatibility,
+          activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
+          filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
+          setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
+            s.setupScriptPromptDismissedRepoIds,
+            validRepoIds
+          )
+        }
+      })
       const fetchedHostRepos = reconciledRepos.filter(
         (repo) => getRepoExecutionHostId(repo) === hostId
       )
@@ -797,24 +972,77 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
+  fetchReposForAllHosts: async () => {
+    // Why: a cold start that restores a remote workspace re-activates that
+    // remote runtime environment, and fetching only the active host hides every
+    // other host's repos (notably all local repos), which reads as "my projects
+    // vanished". Load local + every configured runtime environment so the
+    // sidebar "All hosts" scope shows them together regardless of which
+    // environment is active. Each host fails soft: an unreachable/disconnected
+    // host is skipped without blocking the others.
+    const applyResult = (result: Awaited<ReturnType<typeof fetchReposForTarget>>): void => {
+      const validRepoIds = new Set(result.repos.map((repo) => repo.id))
+      set((s) => {
+        const mergedProjectCompatibility = mergeFetchedProjectCompatibilityForHost({
+          previous: {
+            projects: s.projects,
+            projectHostSetups: s.projectHostSetups
+          },
+          fetched: result.projectCompatibility,
+          repos: result.repos,
+          hostId: result.hostId
+        })
+        return {
+          repos: result.repos,
+          ...mergedProjectCompatibility,
+          folderWorkspacePathStatuses: {},
+          activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
+          filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
+          setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
+            s.setupScriptPromptDismissedRepoIds,
+            validRepoIds
+          )
+        }
+      })
+      // Why: preserve the safe-auto fork sync that fetchRepos /
+      // fetchRuntimeEnvironmentRepos schedule after merging each host, so
+      // cold-start (which now routes through here) keeps updating safe-auto forks.
+      scheduleSafeAutoForkSync(
+        get,
+        result.repos.filter((repo) => getRepoExecutionHostId(repo) === result.hostId)
+      )
+    }
+
+    // Local first so local repos are present even if a remote fetch stalls.
+    try {
+      applyResult(await fetchReposForTarget({ kind: 'local' }, get().repos))
+    } catch (err) {
+      console.error('Failed to fetch local repos for all-host load:', err)
+    }
+
+    const environments = await listRuntimeEnvironmentsForAllHostLoad()
+
+    // Sequential to avoid concurrent set() races on the merged repos array.
+    for (const environment of environments) {
+      try {
+        applyResult(
+          await fetchReposForTarget(
+            { kind: 'environment', environmentId: environment.id },
+            get().repos
+          )
+        )
+      } catch (err) {
+        console.warn(`Skipped repos for runtime environment ${environment.id}:`, err)
+      }
+    }
+  },
+
   fetchProjectGroups: async () => {
     try {
       const target = getActiveRuntimeTarget(get().settings)
-      const projectGroups =
-        target.kind === 'local'
-          ? await window.api.projectGroups.list()
-          : (
-              await callRuntimeRpc<{ groups: ProjectGroup[] }>(
-                target,
-                'projectGroup.list',
-                undefined,
-                {
-                  timeoutMs: 15_000
-                }
-              )
-            ).groups
+      const { projectGroups } = await fetchProjectGroupsForTarget(target, [])
       set({
-        projectGroups: projectGroups.map((group) => projectGroupWithFetchedOwner(group, target)),
+        projectGroups,
         folderWorkspacePathStatuses: {}
       })
     } catch (err) {
@@ -822,23 +1050,88 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
+  fetchProjectGroupsForAllHosts: async () => {
+    // Why: startup renders an all-host sidebar; replacing groups with only the
+    // active host would leave repos from other hosts visible but ungrouped.
+    const applyResult = (result: Awaited<ReturnType<typeof fetchProjectGroupsForTarget>>): void => {
+      set({
+        projectGroups: result.projectGroups,
+        folderWorkspacePathStatuses: {}
+      })
+    }
+
+    try {
+      applyResult(await fetchProjectGroupsForTarget({ kind: 'local' }, get().projectGroups))
+    } catch (err) {
+      console.error('Failed to fetch local project groups for all-host load:', err)
+    }
+
+    const environments = await listRuntimeEnvironmentsForAllHostLoad()
+    for (const environment of environments) {
+      try {
+        applyResult(
+          await fetchProjectGroupsForTarget(
+            { kind: 'environment', environmentId: environment.id },
+            get().projectGroups
+          )
+        )
+      } catch (err) {
+        console.warn(`Skipped project groups for runtime environment ${environment.id}:`, err)
+      }
+    }
+  },
+
   fetchFolderWorkspaces: async () => {
     try {
       const target = getActiveRuntimeTarget(get().settings)
-      const folderWorkspaces =
-        target.kind === 'local'
-          ? await window.api.folderWorkspaces.list()
-          : (
-              await callRuntimeRpc<{ folderWorkspaces: FolderWorkspace[] }>(
-                target,
-                'folderWorkspace.list',
-                undefined,
-                { timeoutMs: 15_000 }
-              )
-            ).folderWorkspaces
+      const { folderWorkspaces } = await fetchFolderWorkspacesForTarget(
+        target,
+        [],
+        get().projectGroups
+      )
       set({ folderWorkspaces, folderWorkspacePathStatuses: {} })
     } catch (err) {
       console.error('Failed to fetch folder workspaces:', err)
+    }
+  },
+
+  fetchFolderWorkspacesForAllHosts: async () => {
+    // Why: folder workspaces are owned through their project groups, so startup
+    // must fetch groups first and then merge each host's folder slice.
+    const applyResult = (
+      result: Awaited<ReturnType<typeof fetchFolderWorkspacesForTarget>>
+    ): void => {
+      set({
+        folderWorkspaces: result.folderWorkspaces,
+        folderWorkspacePathStatuses: {}
+      })
+    }
+
+    try {
+      applyResult(
+        await fetchFolderWorkspacesForTarget(
+          { kind: 'local' },
+          get().folderWorkspaces,
+          get().projectGroups
+        )
+      )
+    } catch (err) {
+      console.error('Failed to fetch local folder workspaces for all-host load:', err)
+    }
+
+    const environments = await listRuntimeEnvironmentsForAllHostLoad()
+    for (const environment of environments) {
+      try {
+        applyResult(
+          await fetchFolderWorkspacesForTarget(
+            { kind: 'environment', environmentId: environment.id },
+            get().folderWorkspaces,
+            get().projectGroups
+          )
+        )
+      } catch (err) {
+        console.warn(`Skipped folder workspaces for runtime environment ${environment.id}:`, err)
+      }
     }
   },
 

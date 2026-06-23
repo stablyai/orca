@@ -93,4 +93,23 @@ describe('ai vault resume command runtime', () => {
 
     expect(getAiVaultResumePlatform(state, 'repo-1::worktree-1')).toBe('linux')
   })
+
+  it('converts WSL UNC Codex homes before building Linux resume commands', () => {
+    const state = makeState({
+      worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo'
+    })
+
+    expect(
+      buildAiVaultResumeCommandForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'codex',
+          sessionId: 'session one',
+          cwd: '/home/alice/repo',
+          codexHome: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex'
+        }
+      })
+    ).toBe("cd '/home/alice/repo' && CODEX_HOME='/home/alice/.codex' codex resume 'session one'")
+  })
 })

@@ -6,6 +6,10 @@ import {
   LINEAGE_NESTED_ROW_SURFACE_INSET,
   WORKTREE_CARD_SURFACE_MARGIN,
   WORKTREE_SECTION_HEADER_PADDING_LEFT,
+  getFolderBackedRepoWorktreeCardContentIndent,
+  getFolderBackedRepoWorktreeCardSurfaceInset,
+  getFolderWorkspaceCardContentIndent,
+  getFolderWorkspaceCardSurfaceInset,
   getFlushWorktreeCardPaddingLeft,
   getLineageChildrenInlineStyle,
   getLineageEffectiveChildStart,
@@ -41,6 +45,35 @@ describe('worktree list indentation', () => {
     expect(getWorktreeCardContentIndent({ isGrouped: true, groupDepth: 1, lineageDepth: 2 })).toBe(
       74
     )
+  })
+
+  it('uses compact header rhythm for folder-scanned repo worktree content', () => {
+    expect(getFolderBackedRepoWorktreeCardContentIndent({ groupDepth: 1, lineageDepth: 0 })).toBe(
+      30
+    )
+    expect(getFolderBackedRepoWorktreeCardContentIndent({ groupDepth: 2, lineageDepth: 0 })).toBe(
+      40
+    )
+    expect(getFolderBackedRepoWorktreeCardContentIndent({ groupDepth: 1, lineageDepth: 1 })).toBe(
+      48
+    )
+  })
+
+  it('caps folder-scanned repo worktree surfaces before they overshoot the compact anchor', () => {
+    expect(getFolderBackedRepoWorktreeCardSurfaceInset({ groupDepth: 1, lineageDepth: 0 })).toBe(14)
+    expect(getFolderBackedRepoWorktreeCardSurfaceInset({ groupDepth: 4, lineageDepth: 0 })).toBe(54)
+    expect(getFolderBackedRepoWorktreeCardSurfaceInset({ groupDepth: 4, lineageDepth: 1 })).toBe(56)
+  })
+
+  it('keeps folder workspace content one step under its owning group', () => {
+    expect(getFolderWorkspaceCardContentIndent({ groupDepth: 1 })).toBe(20)
+    expect(getFolderWorkspaceCardContentIndent({ groupDepth: 2 })).toBe(30)
+  })
+
+  it('caps folder workspace surfaces before they overshoot the compact content anchor', () => {
+    expect(getFolderWorkspaceCardSurfaceInset({ isGrouped: true, groupDepth: 1 })).toBe(14)
+    expect(getFolderWorkspaceCardSurfaceInset({ isGrouped: true, groupDepth: 2 })).toBe(24)
+    expect(getFolderWorkspaceCardSurfaceInset({ isGrouped: false, groupDepth: 2 })).toBe(0)
   })
 
   it('caps header indentation separately from workspace content indentation', () => {

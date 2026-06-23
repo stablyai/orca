@@ -30,6 +30,7 @@ export type IgnoredPathResult = {
 type VisibleFileExplorerRowProjectionOptions = {
   ignoredSet: Set<string>
   nameFilter?: FileExplorerNameFilterProjectionSource | null
+  nameFilterCollapsedPaths?: ReadonlySet<string> | null
   showDotfiles: boolean
   showGitIgnoredFiles: boolean
 }
@@ -81,6 +82,7 @@ export function createVisibleFileExplorerRowProjection(
   }
   if (options.nameFilter) {
     return createNameFilteredFileExplorerProjection({
+      collapsedPaths: options.nameFilterCollapsedPaths ?? undefined,
       ignoredSet: options.ignoredSet,
       nameFilter: options.nameFilter,
       showDotfiles: options.showDotfiles,
@@ -149,7 +151,8 @@ export function useFileExplorerVisibleRowProjection(
   expanded: Set<string>,
   activeRepoSupportsGit: boolean,
   showDotfiles: boolean,
-  nameFilter: FileExplorerNameFilterProjectionSource | null
+  nameFilter: FileExplorerNameFilterProjectionSource | null,
+  nameFilterCollapsedPaths: ReadonlySet<string> | null = null
 ): {
   rowProjection: FileExplorerRowProjection
   ignoredByRelativePath: Set<string>
@@ -235,11 +238,21 @@ export function useFileExplorerVisibleRowProjection(
         {
           ignoredSet,
           nameFilter,
+          nameFilterCollapsedPaths,
           showDotfiles,
           showGitIgnoredFiles
         }
       ),
-    [dirCache, expanded, ignoredSet, nameFilter, showDotfiles, showGitIgnoredFiles, worktreePath]
+    [
+      dirCache,
+      expanded,
+      ignoredSet,
+      nameFilter,
+      nameFilterCollapsedPaths,
+      showDotfiles,
+      showGitIgnoredFiles,
+      worktreePath
+    ]
   )
   const nameFilterExpandedPaths = useMemo(
     () => getFileExplorerNameFilterExpandedPaths(rowProjection, nameFilter?.query ?? ''),

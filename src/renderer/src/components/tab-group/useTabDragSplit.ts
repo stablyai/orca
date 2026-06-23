@@ -1,7 +1,7 @@
 /* oxlint-disable max-lines -- Why: the drag-split hook co-locates drop-zone
  * resolution, same-group reordering, and cross-group handoff so state
  * transitions stay readable in one place. */
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useRef, useState, type RefObject } from 'react'
 import {
   closestCenter,
   pointerWithin,
@@ -16,20 +16,30 @@ import {
   useSensors
 } from '@dnd-kit/core'
 import type { TabGroup, TuiAgent } from '../../../../shared/types'
-import type { RuntimeMobileSessionTabMove } from '../../../../shared/runtime-types'
 import { useAppStore } from '../../store'
-import {
-  isWebRuntimeSessionActive,
-  moveWebRuntimeSessionTab
-} from '../../runtime/web-runtime-session'
 import type { TabSplitDirection } from '../../store/slices/tabs'
+import { mirrorWebRuntimeTabMove } from '../tab-bar/web-runtime-tab-move-mirror'
 import {
   resolveTabInsertion,
   useHoveredTabInsertion,
   type HoveredTabInsertion
 } from './tab-insertion'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  applyDragPreviewTab,
+  captureTabDragActivationSnapshot,
+  restoreSourceGroupActiveTabAfterCrossGroupDrop,
+  restoreTabDragActivationSnapshot,
+  type TabDragActivationSnapshot
+} from './tab-drag-preview-activation'
+import { resolveDragPreviewTabId, resolveSourceGroupRestoreOnDrop } from './tab-drag-preview-target'
+import { getDragPointer } from './tab-drag-pointer'
+import {
+  captureTabGroupPanelGeometrySnapshot,
+  resolveActivePaneColumnSplitTarget,
+  type ActivePaneColumnSplitTarget,
+  type TabGroupPanelGeometrySnapshot
+} from './tab-group-panel-split-target'
 
 export type { HoveredTabInsertion }
 
@@ -65,21 +75,7 @@ export type TabPaneDropData = {
 export type HoveredTabDropTarget = {
   groupId: string
   zone: TabDropZone
-}
-
-function mirrorWebRuntimeTabMove(
-  args: RuntimeMobileSessionTabMove & {
-    worktreeId: string
-  }
-): void {
-  const environmentId = getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), args.worktreeId)
-  if (!isWebRuntimeSessionActive(environmentId)) {
-    return
-  }
-  void moveWebRuntimeSessionTab({
-    ...args,
-    environmentId
-  })
+  panelRect?: DOMRect
 }
 
 export function canDropTabIntoPaneBody({
@@ -113,67 +109,31 @@ export function canDropTabIntoPaneBody({
   return true
 }
 
-function isTabDragData(value: unknown): value is TabDragItemData {
+export function canDropTabForPaneColumnSplit(args: {
+  activeDrag: TabDragItemData | null
+  groupsByWorktree: Record<string, TabGroup[]>
+  targetGroupId: string
+  worktreeId: string
+}): boolean {
+  if (!args.activeDrag || args.activeDrag.groupId !== args.targetGroupId) {
+    return false
+  }
+  return canDropTabIntoPaneBody({
+    activeDrag: args.activeDrag,
+    groupsByWorktree: args.groupsByWorktree,
+    overGroupId: args.targetGroupId,
+    worktreeId: args.worktreeId
+  })
+}
+
+export function isTabDragData(value: unknown): value is TabDragItemData {
   return Boolean(value) && typeof value === 'object' && (value as TabDragItemData).kind === 'tab'
 }
 
-function isPaneDropData(value: unknown): value is TabPaneDropData {
+export function isPaneDropData(value: unknown): value is TabPaneDropData {
   return (
     Boolean(value) && typeof value === 'object' && (value as TabPaneDropData).kind === 'pane-body'
   )
-}
-
-function getDragCenter(
-  event: Pick<DragMoveEvent, 'active' | 'delta'>
-): { x: number; y: number } | null {
-  const translated = event.active.rect.current.translated
-  if (translated) {
-    return {
-      x: translated.left + translated.width / 2,
-      y: translated.top + translated.height / 2
-    }
-  }
-
-  const initial = event.active.rect.current.initial
-  if (!initial) {
-    return null
-  }
-
-  return {
-    x: initial.left + initial.width / 2 + event.delta.x,
-    y: initial.top + initial.height / 2 + event.delta.y
-  }
-}
-
-export function resolveDropZone(
-  rect: { left: number; top: number; width: number; height: number },
-  point: { x: number; y: number }
-): TabDropZone {
-  const localX = point.x - rect.left
-  const localY = point.y - rect.top
-  const edgeWidthThreshold = rect.width * 0.1
-  const edgeHeightThreshold = rect.height * 0.1
-  const splitWidthThreshold = rect.width / 3
-
-  // Why: VS Code keeps a center "merge" zone while biasing side-by-side drops
-  // toward left/right, which feels much more stable than a generic nearest-edge
-  // calculation once a workspace has nested splits.
-  if (
-    localX > edgeWidthThreshold &&
-    localX < rect.width - edgeWidthThreshold &&
-    localY > edgeHeightThreshold &&
-    localY < rect.height - edgeHeightThreshold
-  ) {
-    return 'center'
-  }
-
-  if (localX < splitWidthThreshold) {
-    return 'left'
-  }
-  if (localX > splitWidthThreshold * 2) {
-    return 'right'
-  }
-  return localY < rect.height / 2 ? 'up' : 'down'
 }
 
 const collisionDetection: CollisionDetection = (args) => {
@@ -199,6 +159,7 @@ export function useTabDragSplit({
   collisionDetection: CollisionDetection
   hoveredDropTarget: HoveredTabDropTarget | null
   hoveredTabInsertion: HoveredTabInsertion | null
+  isTabDragActiveRef: RefObject<boolean>
   onDragCancel: () => void
   onDragEnd: (event: DragEndEvent) => void
   onDragMove: (event: DragMoveEvent) => void
@@ -212,7 +173,12 @@ export function useTabDragSplit({
   const [activeDrag, setActiveDrag] = useState<TabDragItemData | null>(null)
   const [hoveredDropTarget, setHoveredDropTarget] = useState<HoveredTabDropTarget | null>(null)
   const releaseWebviewDragPassthroughRef = useRef<(() => void) | null>(null)
-  const tabInsertion = useHoveredTabInsertion(isTabDragData, getDragCenter)
+  const preDragActivationSnapshotRef = useRef<TabDragActivationSnapshot | null>(null)
+  const lastPreviewRef = useRef<{ groupId: string; tabId: string | null } | null>(null)
+  const lastHoveredTabPreviewRef = useRef<{ groupId: string; tabId: string } | null>(null)
+  const tabDragActiveRef = useRef(false)
+  const dragGeometryRef = useRef<TabGroupPanelGeometrySnapshot | null>(null)
+  const tabInsertion = useHoveredTabInsertion(isTabDragData, getDragPointer)
 
   // Why: hidden worktrees stay mounted so their PTYs survive worktree
   // switches, but their DndContext should not activate drags. We use an
@@ -250,58 +216,133 @@ export function useTabDragSplit({
   )
 
   const clearDragState = useCallback(() => {
+    tabDragActiveRef.current = false
     releaseWebviewDragPassthrough()
     setActiveDrag(null)
     setHoveredDropTarget(null)
     tabInsertion.clear()
+    preDragActivationSnapshotRef.current = null
+    lastPreviewRef.current = null
+    lastHoveredTabPreviewRef.current = null
+    dragGeometryRef.current = null
   }, [releaseWebviewDragPassthrough, tabInsertion])
 
-  const updateHoveredPane = useCallback(
-    (event: DragMoveEvent | DragOverEvent) => {
-      const overData = event.over?.data.current
-      if (!event.over || !isPaneDropData(overData)) {
-        // Why: using functional updater to avoid a new null reference when
-        // the state is already null — prevents unnecessary re-renders during
-        // high-frequency onDragMove events.
-        setHoveredDropTarget((prev) => (prev === null ? prev : null))
+  const restorePreDragActivation = useCallback(() => {
+    const snapshot = preDragActivationSnapshotRef.current
+    if (!snapshot) {
+      return
+    }
+    restoreTabDragActivationSnapshot(worktreeId, snapshot)
+  }, [worktreeId])
+
+  const restoreSourceGroupAfterCrossGroupDrop = useCallback(
+    (activeData: TabDragItemData) => {
+      const snapshot = preDragActivationSnapshotRef.current
+      if (!snapshot) {
         return
       }
-
-      const activeData = event.active.data.current
-      if (
-        !isTabDragData(activeData) ||
-        !canDropTabIntoPaneBody({
-          activeDrag: activeData,
-          groupsByWorktree: useAppStore.getState().groupsByWorktree,
-          overGroupId: overData.groupId,
-          worktreeId
-        })
-      ) {
-        setHoveredDropTarget((prev) => (prev === null ? prev : null))
-        return
-      }
-
-      const center = getDragCenter(event)
-      if (!center) {
-        setHoveredDropTarget((prev) => (prev === null ? prev : null))
-        return
-      }
-
-      // Why: onDragMove fires at pointer-move frequency (~60 fps). Creating
-      // a new { groupId, zone } object every time would trigger a state
-      // update and full re-render of the SplitNode tree on every frame even
-      // when nothing meaningful changed. The functional updater lets us
-      // compare against the previous value and return the same reference
-      // when groupId and zone are unchanged.
-      setHoveredDropTarget((prev) => {
-        const zone = resolveDropZone(event.over!.rect, center)
-        if (prev?.groupId === overData.groupId && prev?.zone === zone) {
-          return prev
-        }
-        return { groupId: overData.groupId, zone }
+      restoreSourceGroupActiveTabAfterCrossGroupDrop({
+        worktreeId,
+        snapshot,
+        sourceGroupId: activeData.groupId,
+        movedTabId: activeData.unifiedTabId
       })
     },
     [worktreeId]
+  )
+
+  const finishDrag = useCallback(
+    (restoreSnapshot: boolean, activeData?: TabDragItemData) => {
+      if (restoreSnapshot) {
+        restorePreDragActivation()
+      } else if (activeData) {
+        restoreSourceGroupAfterCrossGroupDrop(activeData)
+      }
+      clearDragState()
+    },
+    [clearDragState, restorePreDragActivation, restoreSourceGroupAfterCrossGroupDrop]
+  )
+
+  const updateDragPreviewActivation = useCallback(
+    (event: DragMoveEvent | DragOverEvent, activeData: TabDragItemData) => {
+      const snapshot = preDragActivationSnapshotRef.current
+      if (!snapshot) {
+        return
+      }
+
+      const overData = event.over?.data.current
+      if (isTabDragData(overData) && overData.unifiedTabId !== activeData.unifiedTabId) {
+        lastHoveredTabPreviewRef.current = {
+          groupId: overData.groupId,
+          tabId: overData.unifiedTabId
+        }
+      }
+
+      const preview = resolveDragPreviewTabId({
+        activeDrag: activeData,
+        overData,
+        preDragActiveTabIdByGroup: snapshot.activeTabIdByGroup,
+        lastHoveredTabPreview: lastHoveredTabPreviewRef.current
+      })
+      const lastPreview = lastPreviewRef.current
+      if (lastPreview?.groupId === preview.groupId && lastPreview.tabId === preview.tabId) {
+        return
+      }
+      lastPreviewRef.current = preview
+      applyDragPreviewTab({
+        worktreeId,
+        groupId: preview.groupId,
+        tabId: preview.tabId,
+        activeGroupId: preview.groupId
+      })
+    },
+    [worktreeId]
+  )
+
+  const updateHoveredDropTargetFromSplit = useCallback(
+    (splitTarget: ActivePaneColumnSplitTarget | null) => {
+      if (!splitTarget) {
+        setHoveredDropTarget((prev) => (prev === null ? prev : null))
+        return
+      }
+      setHoveredDropTarget((prev) => {
+        if (prev?.groupId === splitTarget.groupId && prev?.zone === splitTarget.zone) {
+          return prev
+        }
+        return {
+          groupId: splitTarget.groupId,
+          zone: splitTarget.zone,
+          panelRect: splitTarget.panelRect
+        }
+      })
+    },
+    []
+  )
+
+  const handleDragUpdate = useCallback(
+    (event: DragMoveEvent | DragOverEvent) => {
+      const activeData = event.active.data.current
+      if (isTabDragData(activeData) && activeData.worktreeId === worktreeId) {
+        updateDragPreviewActivation(event, activeData)
+      }
+
+      const state = useAppStore.getState()
+      const splitTarget = resolveActivePaneColumnSplitTarget({
+        event,
+        groupsByWorktree: state.groupsByWorktree,
+        layoutByWorktree: state.layoutByWorktree,
+        worktreeId,
+        getDragPointer,
+        geometry: dragGeometryRef.current
+      })
+      updateHoveredDropTargetFromSplit(splitTarget)
+      if (splitTarget) {
+        tabInsertion.clear()
+      } else {
+        tabInsertion.update(event)
+      }
+    },
+    [tabInsertion, updateDragPreviewActivation, updateHoveredDropTargetFromSplit, worktreeId]
   )
 
   const onDragStart = useCallback(
@@ -313,6 +354,9 @@ export function useTabDragSplit({
       }
 
       setActiveDrag(dragData)
+      tabDragActiveRef.current = true
+      dragGeometryRef.current = captureTabGroupPanelGeometrySnapshot(worktreeId)
+      preDragActivationSnapshotRef.current = captureTabDragActivationSnapshot(worktreeId)
       acquireWebviewDragPassthrough()
     },
     [acquireWebviewDragPassthrough, clearDragState, worktreeId]
@@ -320,41 +364,77 @@ export function useTabDragSplit({
 
   const onDragMove = useCallback(
     (event: DragMoveEvent) => {
-      updateHoveredPane(event)
-      tabInsertion.update(event)
+      handleDragUpdate(event)
     },
-    [updateHoveredPane, tabInsertion]
+    [handleDragUpdate]
   )
 
-  const onDragOver = useCallback(
-    (event: DragOverEvent) => {
-      updateHoveredPane(event)
-      tabInsertion.update(event)
-    },
-    [updateHoveredPane, tabInsertion]
-  )
+  const onDragOver = useCallback((_event: DragOverEvent) => {
+    // Why: onDragMove already carries over + delta; skipping duplicate work here
+    // avoids running split/insertion resolution twice in the same frame.
+  }, [])
 
   const onDragEnd = useCallback(
     (event: DragEndEvent) => {
       const activeData = event.active.data.current
       const overData = event.over?.data.current
+      let shouldRestorePreDragActivation = true
 
-      if (!event.over || !isTabDragData(activeData) || activeData.worktreeId !== worktreeId) {
-        clearDragState()
+      if (!isTabDragData(activeData) || activeData.worktreeId !== worktreeId) {
+        finishDrag(true)
+        return
+      }
+
+      const state = useAppStore.getState()
+      const paneColumnSplit = resolveActivePaneColumnSplitTarget({
+        event,
+        groupsByWorktree: state.groupsByWorktree,
+        layoutByWorktree: state.layoutByWorktree,
+        worktreeId,
+        getDragPointer,
+        geometry: dragGeometryRef.current
+      })
+      if (paneColumnSplit) {
+        const moved = dropUnifiedTab(activeData.unifiedTabId, {
+          groupId: paneColumnSplit.groupId,
+          splitDirection: paneColumnSplit.zone
+        })
+        if (moved) {
+          shouldRestorePreDragActivation = false
+          mirrorWebRuntimeTabMove({
+            kind: 'split',
+            worktreeId,
+            tabId: activeData.unifiedTabId,
+            targetGroupId: paneColumnSplit.groupId,
+            splitDirection: paneColumnSplit.zone
+          })
+        }
+        finishDrag(
+          shouldRestorePreDragActivation,
+          resolveSourceGroupRestoreOnDrop(
+            activeData,
+            paneColumnSplit.groupId,
+            shouldRestorePreDragActivation
+          )
+        )
+        return
+      }
+
+      if (!event.over) {
+        finishDrag(true)
         return
       }
 
       if (isTabDragData(overData)) {
         if (activeData.unifiedTabId === overData.unifiedTabId) {
-          clearDragState()
+          finishDrag(true)
           return
         }
 
-        const state = useAppStore.getState()
         const groups = state.groupsByWorktree[worktreeId] ?? []
         const targetGroup = groups.find((group) => group.id === overData.groupId)
         if (!targetGroup) {
-          clearDragState()
+          finishDrag(true)
           return
         }
 
@@ -362,9 +442,14 @@ export function useTabDragSplit({
         // insertion point depends on which side of that tab the cursor sits.
         // Using the bar's computed side (re-derived here to avoid stale
         // closures) means the drop always lands where the blue bar was drawn.
-        const insertion = resolveTabInsertion(event, isTabDragData, getDragCenter)
+        const insertion = resolveTabInsertion(event, isTabDragData, getDragPointer)
+        if (!insertion) {
+          finishDrag(true)
+          return
+        }
+
         const overIndex = targetGroup.tabOrder.indexOf(overData.unifiedTabId)
-        const rawInsertIndex = overIndex + (insertion?.side === 'right' ? 1 : 0)
+        const rawInsertIndex = overIndex + (insertion.side === 'right' ? 1 : 0)
 
         if (activeData.groupId === overData.groupId) {
           const oldIndex = targetGroup.tabOrder.indexOf(activeData.unifiedTabId)
@@ -391,6 +476,7 @@ export function useTabDragSplit({
             index
           })
           if (moved) {
+            shouldRestorePreDragActivation = false
             mirrorWebRuntimeTabMove({
               kind: 'move-to-group',
               worktreeId,
@@ -401,62 +487,46 @@ export function useTabDragSplit({
           }
         }
 
-        clearDragState()
+        finishDrag(
+          shouldRestorePreDragActivation,
+          resolveSourceGroupRestoreOnDrop(
+            activeData,
+            overData.groupId,
+            shouldRestorePreDragActivation
+          )
+        )
         return
       }
 
       if (isPaneDropData(overData)) {
-        if (
-          !canDropTabIntoPaneBody({
-            activeDrag: activeData,
-            groupsByWorktree: useAppStore.getState().groupsByWorktree,
-            overGroupId: overData.groupId,
-            worktreeId
+        if (activeData.groupId !== overData.groupId) {
+          const moved = dropUnifiedTab(activeData.unifiedTabId, {
+            groupId: overData.groupId
           })
-        ) {
-          clearDragState()
-          return
-        }
-
-        const center = getDragCenter(event)
-        if (center) {
-          const zone = resolveDropZone(event.over.rect, center)
-          // Why: a center drop onto the tab's own pane body is a no-op in the
-          // store (non-split same-group drops are ignored), but
-          // canDropTabIntoPaneBody still allows it when the source group has
-          // >1 tab — so the overlay advertises "center" as a valid target.
-          // Skip the call in that case to avoid misleading the user via a
-          // drop that silently does nothing.
-          if (zone !== 'center' || activeData.groupId !== overData.groupId) {
-            const moved = dropUnifiedTab(activeData.unifiedTabId, {
-              groupId: overData.groupId,
-              splitDirection: zone === 'center' ? undefined : zone
+          if (moved) {
+            shouldRestorePreDragActivation = false
+            mirrorWebRuntimeTabMove({
+              kind: 'move-to-group',
+              worktreeId,
+              tabId: activeData.unifiedTabId,
+              targetGroupId: overData.groupId
             })
-            if (moved) {
-              if (zone === 'center') {
-                mirrorWebRuntimeTabMove({
-                  kind: 'move-to-group',
-                  worktreeId,
-                  tabId: activeData.unifiedTabId,
-                  targetGroupId: overData.groupId
-                })
-              } else {
-                mirrorWebRuntimeTabMove({
-                  kind: 'split',
-                  worktreeId,
-                  tabId: activeData.unifiedTabId,
-                  targetGroupId: overData.groupId,
-                  splitDirection: zone
-                })
-              }
-            }
           }
         }
       }
 
-      clearDragState()
+      finishDrag(
+        shouldRestorePreDragActivation,
+        isPaneDropData(overData)
+          ? resolveSourceGroupRestoreOnDrop(
+              activeData,
+              overData.groupId,
+              shouldRestorePreDragActivation
+            )
+          : undefined
+      )
     },
-    [clearDragState, dropUnifiedTab, reorderUnifiedTabs, worktreeId]
+    [dropUnifiedTab, finishDrag, reorderUnifiedTabs, worktreeId]
   )
 
   // Why: dnd-kit fires onDragCancel (not onDragEnd) when the user presses
@@ -464,14 +534,15 @@ export function useTabDragSplit({
   // activeDrag and hoveredDropTarget state would remain stale, leaving the
   // drop overlay visible indefinitely.
   const onDragCancel = useCallback(() => {
-    clearDragState()
-  }, [clearDragState])
+    finishDrag(true)
+  }, [finishDrag])
 
   return {
     activeDrag,
     collisionDetection,
     hoveredDropTarget,
     hoveredTabInsertion: tabInsertion.hoveredTabInsertion,
+    isTabDragActiveRef: tabDragActiveRef,
     onDragCancel,
     onDragEnd,
     onDragMove,

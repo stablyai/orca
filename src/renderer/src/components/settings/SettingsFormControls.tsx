@@ -630,12 +630,10 @@ export function FontAutocomplete({
     () => filterFontSuggestions(suggestions, query),
     [suggestions, query]
   )
-  // Why: a committed font fills the input, but typed searches can also mirror
-  // into `value`; only expand exact matches outside an active search session.
+  // Why: the committed font fills the input, but opening the chooser should
+  // still reveal every installed font instead of only fonts sharing that name.
   const visibleSuggestions =
-    !isFilteringQuery && normalizedQuery === normalizedValue && filteredSuggestions.length <= 1
-      ? suggestions
-      : filteredSuggestions
+    !isFilteringQuery && normalizedQuery === normalizedValue ? suggestions : filteredSuggestions
 
   // Why: sync the highlighted index during render rather than via useEffect so
   // the correct item is highlighted on the very first paint after open/filter

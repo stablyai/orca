@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import {
+  refitAndRefreshAllTerminalPanes,
   registerLivePaneManager,
   resetAllTerminalWebglAtlases,
   unregisterLivePaneManager
@@ -56,5 +57,55 @@ describe('pane manager registry', () => {
 
     expect(broken.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
     expect(healthy.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+  })
+
+  it('fits and refreshes every registered manager', () => {
+    const first = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      fitAllPanes: vi.fn<() => void>(),
+      refreshAllPanes: vi.fn<() => void>()
+    }
+    const second = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      fitAllPanes: vi.fn<() => void>(),
+      refreshAllPanes: vi.fn<() => void>()
+    }
+    registerLivePaneManager(first)
+    registeredManagers.push(first)
+    registerLivePaneManager(second)
+    registeredManagers.push(second)
+
+    refitAndRefreshAllTerminalPanes()
+
+    expect(first.fitAllPanes).toHaveBeenCalledTimes(1)
+    expect(first.refreshAllPanes).toHaveBeenCalledTimes(1)
+    expect(second.fitAllPanes).toHaveBeenCalledTimes(1)
+    expect(second.refreshAllPanes).toHaveBeenCalledTimes(1)
+  })
+
+  it('continues refitting later managers when one manager throws', () => {
+    const broken = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      fitAllPanes: vi.fn<() => void>(() => {
+        throw new Error('pane disposed')
+      }),
+      refreshAllPanes: vi.fn<() => void>()
+    }
+    registerLivePaneManager(broken)
+    registeredManagers.push(broken)
+    const healthy = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      fitAllPanes: vi.fn<() => void>(),
+      refreshAllPanes: vi.fn<() => void>()
+    }
+    registerLivePaneManager(healthy)
+    registeredManagers.push(healthy)
+
+    expect(() => refitAndRefreshAllTerminalPanes()).not.toThrow()
+
+    expect(broken.fitAllPanes).toHaveBeenCalledTimes(1)
+    expect(broken.refreshAllPanes).not.toHaveBeenCalled()
+    expect(healthy.fitAllPanes).toHaveBeenCalledTimes(1)
+    expect(healthy.refreshAllPanes).toHaveBeenCalledTimes(1)
   })
 })

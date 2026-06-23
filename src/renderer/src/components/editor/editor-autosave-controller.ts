@@ -4,7 +4,7 @@ avoids split-brain saves across visible and hidden editors. */
 import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionIdForFile } from '@/lib/connection-context'
 import {
   buildWorkspaceSessionPayload,
   shouldPersistWorkspaceSession
@@ -81,7 +81,8 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         }
 
         const contentToSave = state.editorDrafts[file.id] ?? fallbackContent
-        const connectionId = getConnectionId(liveFile.worktreeId) ?? undefined
+        const connectionId =
+          getConnectionIdForFile(liveFile.worktreeId, liveFile.filePath) ?? undefined
         const worktree = liveFile.worktreeId
           ? findWorktreeById(state.worktreesByRepo ?? {}, liveFile.worktreeId)
           : null

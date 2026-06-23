@@ -109,6 +109,10 @@ describe('agent sleep planner', () => {
       const e = entry({ state })
       expect(plannedWorktrees(snapshot({ agentStatusByPaneKey: { [e.paneKey]: e } }))).toEqual([])
     }
+    const interrupted = entry({ interrupted: true })
+    expect(
+      plannedWorktrees(snapshot({ agentStatusByPaneKey: { [interrupted.paneKey]: interrupted } }))
+    ).toEqual([])
     const noSession = entry({ providerSession: undefined })
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [noSession.paneKey]: noSession } }))

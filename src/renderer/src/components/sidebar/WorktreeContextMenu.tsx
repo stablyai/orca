@@ -4,6 +4,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
@@ -653,6 +654,47 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
           onClickCapture={suppressOpeningPointerEvent}
           onCloseAutoFocus={handleCloseAutoFocus}
         >
+          <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
+            {translate('auto.components.sidebar.WorktreeContextMenu.workspaceSection', 'Workspace')}
+          </DropdownMenuLabel>
+          {!isMultiContext && (
+            <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>
+              <Pencil className="size-3.5" />
+              {translate('auto.components.sidebar.WorktreeContextMenu.439fa94d53', 'Update')}
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger disabled={deletingContext}>
+              <Kanban className="size-3.5" />
+              {isMultiContext
+                ? translate(
+                    'auto.components.sidebar.WorktreeContextMenu.56cde9e8e6',
+                    'Move Statuses To'
+                  )
+                : translate(
+                    'auto.components.sidebar.WorktreeContextMenu.84cdbb7e30',
+                    'Move to Status'
+                  )}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-44">
+              <DropdownMenuRadioGroup value={contextWorkspaceStatus}>
+                {workspaceStatuses.map((status) => {
+                  const meta = getWorkspaceStatusVisualMeta(status)
+                  return (
+                    <DropdownMenuRadioItem
+                      key={status.id}
+                      value={status.id}
+                      onSelect={() => handleAssignWorkspaceStatus(status.id)}
+                    >
+                      <meta.icon className={cn('size-3.5', meta.tone)} />
+                      {status.label}
+                    </DropdownMenuRadioItem>
+                  )
+                })}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuSeparator />
           {!isMultiContext && (
             <>
               <WorktreeOpenInSubMenu
@@ -765,58 +807,19 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
               )}
             </>
           )}
-          {isMultiContext && (
+          {isMultiContext && hasAnyContextLineage ? (
             <>
-              {hasAnyContextLineage && (
-                <DropdownMenuItem onSelect={handleRemoveParentLink} disabled={deletingContext}>
-                  <Unlink className="size-3.5" />
-                  {translate(
-                    'auto.components.sidebar.WorktreeContextMenu.579b1a8e61',
-                    'Remove from Parent'
-                  )}
-                </DropdownMenuItem>
-              )}
+              <DropdownMenuItem onSelect={handleRemoveParentLink} disabled={deletingContext}>
+                <Unlink className="size-3.5" />
+                {translate(
+                  'auto.components.sidebar.WorktreeContextMenu.579b1a8e61',
+                  'Remove from Parent'
+                )}
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
             </>
-          )}
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger disabled={deletingContext}>
-              <Kanban className="size-3.5" />
-              {isMultiContext
-                ? translate(
-                    'auto.components.sidebar.WorktreeContextMenu.56cde9e8e6',
-                    'Move Statuses To'
-                  )
-                : translate(
-                    'auto.components.sidebar.WorktreeContextMenu.84cdbb7e30',
-                    'Move to Status'
-                  )}
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="w-44">
-              <DropdownMenuRadioGroup value={contextWorkspaceStatus}>
-                {workspaceStatuses.map((status) => {
-                  const meta = getWorkspaceStatusVisualMeta(status)
-                  return (
-                    <DropdownMenuRadioItem
-                      key={status.id}
-                      value={status.id}
-                      onSelect={() => handleAssignWorkspaceStatus(status.id)}
-                    >
-                      <meta.icon className={cn('size-3.5', meta.tone)} />
-                      {status.label}
-                    </DropdownMenuRadioItem>
-                  )
-                })}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          {!isMultiContext && (
-            <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>
-              <Pencil className="size-3.5" />
-              {translate('auto.components.sidebar.WorktreeContextMenu.439fa94d53', 'Update')}
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuSeparator />
+          ) : null}
+
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuItem

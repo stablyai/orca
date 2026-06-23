@@ -65,7 +65,9 @@ async function launchExternalEditor(pathValue: string, command?: string): Promis
     const child = spawn(spawnCmd, spawnArgs, {
       detached: true,
       stdio: 'ignore',
-      windowsHide: true
+      // Why: terminal editors such as nvim need a visible console on Windows;
+      // GUI editor launches stay hidden to avoid command-shim flashes.
+      windowsHide: launchSpec.hideWindowsConsole
     })
     let settled = false
 
@@ -203,7 +205,9 @@ export function registerShellHandlers(): void {
     async (_event, args: { defaultPath?: string }): Promise<string | null> => {
       const result = await dialog.showOpenDialog({
         defaultPath: args.defaultPath,
-        properties: ['openDirectory', 'createDirectory']
+        // Why: callers only need an existing folder grant; enabling native
+        // creation can leave typed prefix directories behind on macOS.
+        properties: ['openDirectory']
       })
       if (result.canceled || result.filePaths.length === 0) {
         return null

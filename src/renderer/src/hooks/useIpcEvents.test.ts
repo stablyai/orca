@@ -4,10 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildRuntimeClientEventEnvironmentKey,
   buildNewWorkspaceShortcutModalData,
+  getNewlyConnectedRuntimeEnvironmentIds,
+  getRuntimeProjectRefreshEnvironmentIds,
   openNewWorkspaceFromShortcut,
   resolveBrowserSessionTabTarget,
   resolveZoomTarget
 } from './useIpcEvents'
+import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
+import type { TuiAgent } from '../../../shared/types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 
 const { closeTerminalTabMock } = vi.hoisted(() => ({
@@ -32,6 +36,47 @@ describe('buildRuntimeClientEventEnvironmentKey', () => {
     expect(buildRuntimeClientEventEnvironmentKey(['env-b', 'env-a', 'env-b'])).toBe(
       buildRuntimeClientEventEnvironmentKey(['env-a', 'env-b'])
     )
+  })
+})
+
+describe('getNewlyConnectedRuntimeEnvironmentIds', () => {
+  it('returns only environments that became connected', () => {
+    expect(getNewlyConnectedRuntimeEnvironmentIds(['env-a'], ['env-a', 'env-b'])).toEqual(['env-b'])
+  })
+
+  it('ignores environments that disconnected or stayed connected', () => {
+    expect(getNewlyConnectedRuntimeEnvironmentIds(['env-a', 'env-b'], ['env-a'])).toEqual([])
+  })
+
+  it('treats every environment as new when none were connected before', () => {
+    expect(getNewlyConnectedRuntimeEnvironmentIds([], ['env-a', 'env-a', 'env-b'])).toEqual([
+      'env-a',
+      'env-b'
+    ])
+  })
+})
+
+describe('getRuntimeProjectRefreshEnvironmentIds', () => {
+  it('refreshes when an already-desired runtime becomes reachable', () => {
+    expect(
+      getRuntimeProjectRefreshEnvironmentIds({
+        previousDesired: ['env-a'],
+        nextDesired: ['env-a'],
+        previousReachable: [],
+        nextReachable: ['env-a']
+      })
+    ).toEqual(['env-a'])
+  })
+
+  it('deduplicates runtimes that are both newly desired and newly reachable', () => {
+    expect(
+      getRuntimeProjectRefreshEnvironmentIds({
+        previousDesired: [],
+        nextDesired: ['env-a'],
+        previousReachable: [],
+        nextReachable: ['env-a']
+      })
+    ).toEqual(['env-a'])
   })
 })
 
@@ -1246,6 +1291,8 @@ describe('useIpcEvents updater integration', () => {
     const revealWorktreeInSidebar = vi.fn()
     const setTabCustomTitle = vi.fn()
     const queueTabStartupCommand = vi.fn()
+    const registerAgentLaunchConfig = vi.fn()
+    const clearAgentLaunchConfig = vi.fn()
     const updateTabPtyId = vi.fn()
     const setTabLayout = vi.fn()
     const setTabBarOrder = vi.fn()
@@ -1265,6 +1312,8 @@ describe('useIpcEvents updater integration', () => {
       revealWorktreeInSidebar,
       setTabCustomTitle,
       queueTabStartupCommand,
+      registerAgentLaunchConfig,
+      clearAgentLaunchConfig,
       updateTabPtyId,
       setTabLayout,
       tabsByWorktree: {} as Record<string, { id: string; ptyId?: string | null; title?: string }[]>,
@@ -1304,6 +1353,8 @@ describe('useIpcEvents updater integration', () => {
             requestId?: string
             worktreeId: string
             command?: string
+            launchConfig?: SleepingAgentLaunchConfig
+            launchAgent?: TuiAgent
             title?: string
             ptyId?: string
             activate?: boolean
@@ -1328,6 +1379,8 @@ describe('useIpcEvents updater integration', () => {
             afterTabId?: string
             targetGroupId?: string
             command?: string
+            launchConfig?: SleepingAgentLaunchConfig
+            launchAgent?: TuiAgent
             title?: string
             activate?: boolean
           }) => void)
@@ -1422,6 +1475,8 @@ describe('useIpcEvents updater integration', () => {
               requestId?: string
               worktreeId: string
               command?: string
+              launchConfig?: SleepingAgentLaunchConfig
+              launchAgent?: TuiAgent
               title?: string
               ptyId?: string
               activate?: boolean
@@ -1447,6 +1502,8 @@ describe('useIpcEvents updater integration', () => {
               afterTabId?: string
               targetGroupId?: string
               command?: string
+              launchConfig?: SleepingAgentLaunchConfig
+              launchAgent?: TuiAgent
               title?: string
               activate?: boolean
             }) => void
@@ -1602,6 +1659,11 @@ describe('useIpcEvents updater integration', () => {
       targetGroupId: 'group-left',
       title: 'Codex',
       command: 'codex',
+      launchConfig: {
+        agentArgs: '--model gpt-5',
+        agentEnv: { CODEX_PROFILE: 'request' }
+      },
+      launchAgent: 'codex',
       activate: false
     })
 
@@ -1623,7 +1685,14 @@ describe('useIpcEvents updater integration', () => {
     expect(setTabCustomTitle).toHaveBeenCalledWith('tab-new', 'Codex', {
       recordInteraction: false
     })
-    expect(queueTabStartupCommand).toHaveBeenCalledWith('tab-new', { command: 'codex' })
+    expect(queueTabStartupCommand).toHaveBeenCalledWith('tab-new', {
+      command: 'codex',
+      launchConfig: {
+        agentArgs: '--model gpt-5',
+        agentEnv: { CODEX_PROFILE: 'request' }
+      },
+      launchAgent: 'codex'
+    })
     expect(replyTerminalCreate).toHaveBeenCalledWith({
       requestId: 'req-renderer-backed',
       tabId: 'tab-new',
@@ -1631,15 +1700,34 @@ describe('useIpcEvents updater integration', () => {
     })
 
     createTab.mockClear()
+    registerAgentLaunchConfig.mockClear()
     createTerminalListenerRef.current({
       worktreeId: 'wt-2',
-      ptyId: 'pty-bg'
+      ptyId: 'pty-bg',
+      leafId: '55555555-5555-4555-8555-555555555555',
+      launchConfig: {
+        agentArgs: '--model gpt-5',
+        agentEnv: { CODEX_PROFILE: 'adopted' }
+      },
+      launchAgent: 'codex'
     })
 
     expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
       initialPtyId: 'pty-bg',
       activate: true
     })
+    expect(registerAgentLaunchConfig).toHaveBeenCalledWith(
+      makePaneKey('tab-new', '55555555-5555-4555-8555-555555555555'),
+      {
+        agentArgs: '--model gpt-5',
+        agentEnv: { CODEX_PROFILE: 'adopted' }
+      },
+      {
+        agentType: 'codex',
+        tabId: 'tab-new',
+        leafId: '55555555-5555-4555-8555-555555555555'
+      }
+    )
 
     createTab.mockClear()
     setActiveView.mockClear()
@@ -1841,15 +1929,18 @@ describe('useIpcEvents browser tab close routing', () => {
   }) => void
   type CloseActiveTabListener = () => void
   type CloseTerminalListener = (data: { tabId: string; paneRuntimeId?: number | null }) => void
+  type CloseSessionTabListener = (data: { tabId: string; worktreeId: string }) => void
 
   async function useIpcEventsForCloseRouting({
     closeActiveTabListenerRef,
+    closeSessionTabListenerRef,
     closeTerminalListenerRef,
     getState,
     requestTabCloseListenerRef,
     replyTabClose = vi.fn()
   }: {
     closeActiveTabListenerRef?: { current: CloseActiveTabListener | null }
+    closeSessionTabListenerRef?: { current: CloseSessionTabListener | null }
     closeTerminalListenerRef?: { current: CloseTerminalListener | null }
     getState: () => Record<string, unknown>
     requestTabCloseListenerRef?: { current: RequestTabCloseListener | null }
@@ -1899,6 +1990,7 @@ describe('useIpcEvents browser tab close routing', () => {
           activeBrowserTabIdByWorktree: { 'wt-1': 'workspace-1' },
           browserTabsByWorktree: { 'wt-1': [{ id: 'workspace-1' }] },
           browserPagesByWorkspace: {},
+          openFiles: [],
           unifiedTabsByWorktree: {},
           closeBrowserTab: vi.fn(),
           closeBrowserPage: vi.fn(),
@@ -1965,7 +2057,12 @@ describe('useIpcEvents browser tab close routing', () => {
           onRenameTerminal: () => () => {},
           onFocusTerminal: () => () => {},
           onFocusEditorTab: () => () => {},
-          onCloseSessionTab: () => () => {},
+          onCloseSessionTab: (listener: CloseSessionTabListener) => {
+            if (closeSessionTabListenerRef) {
+              closeSessionTabListenerRef.current = listener
+            }
+            return () => {}
+          },
           onMoveSessionTab: () => () => {},
           onOpenFileFromMobile: () => () => {},
           onOpenDiffFromMobile: () => () => {},
@@ -2051,6 +2148,62 @@ describe('useIpcEvents browser tab close routing', () => {
     const { useIpcEvents: registerIpcEvents } = await import('./useIpcEvents')
     registerIpcEvents()
   }
+
+  it('removes the file from openFiles when a companion closes an editor session tab', async () => {
+    const closeSessionTabListenerRef: { current: CloseSessionTabListener | null } = {
+      current: null
+    }
+    const closeFile = vi.fn()
+    const closeUnifiedTab = vi.fn()
+
+    await useIpcEventsForCloseRouting({
+      closeSessionTabListenerRef,
+      getState: () => ({
+        closeFile,
+        closeUnifiedTab,
+        browserTabsByWorktree: {},
+        unifiedTabsByWorktree: {
+          'wt-1': [{ id: 'host-tab-1', entityId: 'file-1', contentType: 'editor', isPinned: false }]
+        }
+      })
+    })
+
+    closeSessionTabListenerRef.current?.({ tabId: 'host-tab-1', worktreeId: 'wt-1' })
+
+    // Why: closeUnifiedTab alone would leave the file in openFiles, which the host
+    // republishes — so the editor close must go through closeFile.
+    expect(closeFile).toHaveBeenCalledWith('file-1')
+    expect(closeUnifiedTab).not.toHaveBeenCalled()
+  })
+
+  it('keeps closeUnifiedTab for a non-editor session tab closed by a companion', async () => {
+    const closeSessionTabListenerRef: { current: CloseSessionTabListener | null } = {
+      current: null
+    }
+    const closeFile = vi.fn()
+    const closeUnifiedTab = vi.fn()
+
+    await useIpcEventsForCloseRouting({
+      closeSessionTabListenerRef,
+      getState: () => ({
+        closeFile,
+        closeUnifiedTab,
+        browserTabsByWorktree: {},
+        unifiedTabsByWorktree: {
+          'wt-1': [
+            { id: 'sim-tab-1', entityId: 'sim-1', contentType: 'simulator', isPinned: false }
+          ]
+        }
+      })
+    })
+
+    closeSessionTabListenerRef.current?.({ tabId: 'sim-tab-1', worktreeId: 'wt-1' })
+
+    // Why: only editor tabs need the closeFile (openFiles) path; other content types
+    // must keep closeUnifiedTab so the editor-only routing stays scoped.
+    expect(closeUnifiedTab).toHaveBeenCalledWith('sim-tab-1')
+    expect(closeFile).not.toHaveBeenCalled()
+  })
 
   it('delegates terminal close IPC without a pane id to the shared terminal close flow', async () => {
     const closeTerminalListenerRef: { current: CloseTerminalListener | null } = { current: null }
@@ -3477,6 +3630,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       runtimePaneTitlesByTabId: {},
       terminalLayoutsByTabId: {},
       agentStatusByPaneKey: {},
+      recentlyClosedAgentStatusTabIds: {},
       repos: [],
       worktreesByRepo: {},
       tabsByWorktree: {},
@@ -4011,6 +4165,128 @@ describe('useIpcEvents agent status snapshot integration', () => {
       }),
       'Inactive Tab',
       { updatedAt: 1_700_000_000_200, stateStartedAt: 1_699_999_999_100 },
+      expectWorktreeRouting('wt-1'),
+      undefined
+    )
+  })
+
+  it('drops late push events for a recently closed terminal tab', async () => {
+    const setAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      recentlyClosedAgentStatusTabIds: { 'tab-future': true },
+      settings: { terminalFontSize: 13, notifications: { enabled: false } },
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
+
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      state: 'done',
+      prompt: 'late completion',
+      agentType: 'codex',
+      receivedAt: 1_700_000_000_200,
+      stateStartedAt: 1_699_999_999_100
+    })
+
+    expect(setAgentStatus).not.toHaveBeenCalled()
+  })
+
+  it('keeps missing-tab runtime attribution for tabs that were never explicitly closed', async () => {
+    const setAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      recentlyClosedAgentStatusTabIds: {},
+      settings: { terminalFontSize: 13, notifications: { enabled: false } },
+      repos: [{ id: 'repo-1', connectionId: null }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] },
+      tabsByWorktree: { 'wt-1': [] },
+      terminalLayoutsByTabId: {}
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
+
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      state: 'working',
+      prompt: 'runtime child',
+      agentType: 'codex',
+      worktreeId: 'wt-1',
+      receivedAt: 1_700_000_000_200,
+      stateStartedAt: 1_700_000_000_000,
+      orchestration: {
+        parentPaneKey: 'parent-tab:11111111-1111-4111-8111-111111111111'
+      }
+    })
+
+    expect(setAgentStatus).toHaveBeenCalledTimes(1)
+    expect(setAgentStatus).toHaveBeenCalledWith(
+      FUTURE_PANE_KEY,
+      expect.objectContaining({ state: 'working', prompt: 'runtime child', agentType: 'codex' }),
+      undefined,
+      { updatedAt: 1_700_000_000_200, stateStartedAt: 1_700_000_000_000 },
       expectWorktreeRouting('wt-1'),
       undefined
     )

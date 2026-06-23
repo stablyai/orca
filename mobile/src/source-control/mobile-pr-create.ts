@@ -5,6 +5,7 @@ import type {
 } from '../../../src/shared/hosted-review'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
+import { linkMobileHostedReview } from './mobile-pr-link'
 
 // The mobile worktree id is `${repoId}::${path}`; the repo selector the host
 // hosted-review RPCs expect is `id:${repoId}`.
@@ -130,7 +131,7 @@ export function buildMobilePrCreateParams(
 }
 
 export type MobilePrCreateOutcome =
-  | { ok: true; url: string; number: number }
+  | { ok: true; url: string; number: number; linkError?: string }
   | { ok: false; error: string }
 
 export async function createMobilePr(
@@ -148,7 +149,23 @@ export async function createMobilePr(
     }
     const result = (response as RpcSuccess).result as CreateHostedReviewResult
     if (result.ok) {
-      return { ok: true, url: result.url, number: result.number }
+      const linked = await linkMobileHostedReview(
+        client,
+        worktreeId,
+        input.provider,
+        result.number,
+        {
+          // Why: mobile branch compare cannot infer the new hosted review's target
+          // base from renderer cache; persist the submitted base for the refresh.
+          baseRef: input.base
+        }
+      )
+      return {
+        ok: true,
+        url: result.url,
+        number: result.number,
+        ...(linked.ok ? {} : { linkError: linked.error })
+      }
     }
     return { ok: false, error: result.error || 'Failed to create pull request' }
   } catch (err) {

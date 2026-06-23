@@ -417,6 +417,11 @@ describe('worktree RPC methods', () => {
         startupCommand: "codex 'summarize repo'",
         startupCommandDelivery: 'shell-ready',
         startupEnv: { ORCA_AGENT_MODE: 'direct' },
+        startupLaunchConfig: {
+          agentCommand: 'codex',
+          agentArgs: '--model gpt-5',
+          agentEnv: { ORCA_AGENT_MODE: 'direct' }
+        },
         activate: true
       })
     )
@@ -429,9 +434,48 @@ describe('worktree RPC methods', () => {
         startup: {
           command: "codex 'summarize repo'",
           startupCommandDelivery: 'shell-ready',
-          env: { ORCA_AGENT_MODE: 'direct' }
+          env: { ORCA_AGENT_MODE: 'direct' },
+          launchConfig: {
+            agentCommand: 'codex',
+            agentArgs: '--model gpt-5',
+            agentEnv: { ORCA_AGENT_MODE: 'direct' }
+          }
         }
       })
+    )
+  })
+
+  it('drops invalid startup launch config env at the runtime RPC boundary', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      showRepo: vi.fn().mockResolvedValue(repo),
+      createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('worktree.create', {
+        repo: 'repo-1',
+        name: 'agent-startup',
+        startupCommand: "codex 'summarize repo'",
+        startupLaunchConfig: {
+          agentCommand: 'codex',
+          agentArgs: '--model gpt-5',
+          agentEnv: { ['__proto__']: 'polluted' }
+        }
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startup: expect.objectContaining({
+          command: "codex 'summarize repo'"
+        })
+      })
+    )
+    expect(vi.mocked(runtime.createManagedWorktree).mock.calls[0]?.[0].startup).not.toHaveProperty(
+      'launchConfig'
     )
   })
 
@@ -619,6 +663,31 @@ describe('worktree RPC methods', () => {
         linkedLinearIssue: 'STA-335',
         linkedLinearIssueWorkspaceId: null,
         linkedLinearIssueOrganizationUrlKey: 'stably'
+      })
+    )
+  })
+
+  it('forwards push target clears through worktree.set', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateManagedWorktreeMeta: vi.fn().mockResolvedValue({ id: 'wt-1' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('worktree.set', {
+        worktree: 'id:wt-1',
+        linkedPR: null,
+        pushTarget: null
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.updateManagedWorktreeMeta).toHaveBeenCalledWith(
+      'id:wt-1',
+      expect.objectContaining({
+        linkedPR: null,
+        pushTarget: null
       })
     )
   })

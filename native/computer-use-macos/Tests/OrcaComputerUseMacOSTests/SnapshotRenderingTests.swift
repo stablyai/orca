@@ -2,6 +2,24 @@ import XCTest
 @testable import OrcaComputerUseMacOSCore
 
 final class SnapshotRenderingTests: XCTestCase {
+    func testSkipsUnsupportedAdvertisedAttributes() {
+        let advertised: Set<String> = ["AXRole", "AXChildren"]
+
+        XCTAssertTrue(SnapshotRenderHeuristics.supportsAttribute("AXRole", advertisedAttributes: advertised))
+        XCTAssertFalse(SnapshotRenderHeuristics.supportsAttribute("AXTitle", advertisedAttributes: advertised))
+    }
+
+    func testUnknownAttributeAdvertisementsStayPermissive() {
+        XCTAssertTrue(SnapshotRenderHeuristics.supportsAttribute("AXTitle", advertisedAttributes: nil))
+    }
+
+    func testSecureTextMetadataOnlyProbesTextLikeRoles() {
+        XCTAssertTrue(SnapshotRenderHeuristics.shouldProbeSecureTextMetadata(role: "AXTextField"))
+        XCTAssertTrue(SnapshotRenderHeuristics.shouldProbeSecureTextMetadata(role: "AXSearchField"))
+        XCTAssertFalse(SnapshotRenderHeuristics.shouldProbeSecureTextMetadata(role: "AXGroup"))
+        XCTAssertFalse(SnapshotRenderHeuristics.shouldProbeSecureTextMetadata(role: "AXButton"))
+    }
+
     func testElidesAnonymousWrappers() {
         let node = SnapshotRenderNode(role: "AXGroup", childCount: 1)
 

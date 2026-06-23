@@ -3,7 +3,7 @@
 import React from 'react'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
 import {
   normalizeCreateReviewBaseSearchResults,
@@ -59,10 +59,16 @@ function createEligibility(
 }
 
 type DialogFields = ReturnType<typeof useCreatePullRequestDialogFields>
+type DialogGeneration = NonNullable<
+  Parameters<typeof useCreatePullRequestDialogFields>[0]['generation']
+>
 
 type DialogFieldsRenderInput = {
   eligibility: HostedReviewCreationEligibility
   currentBaseRef?: string | null
+  generation?: DialogGeneration
+  worktreeId?: string | null
+  branch?: string
 }
 
 function renderDialogFields(input: DialogFieldsRenderInput): {
@@ -81,13 +87,14 @@ function renderDialogFields(input: DialogFieldsRenderInput): {
     latest = useCreatePullRequestDialogFields({
       open: true,
       repoId: 'repo-1',
-      worktreeId: 'wt-1',
+      worktreeId: currentInput.worktreeId ?? 'wt-1',
       worktreePath: '/repo/wt',
-      branch: 'feature/base-change',
+      branch: currentInput.branch ?? 'feature/base-change',
       eligibility: currentInput.eligibility,
       currentBaseRef: currentInput.currentBaseRef,
       settings: null,
-      submitting: false
+      submitting: false,
+      generation: currentInput.generation
     })
     return null
   }
@@ -226,6 +233,74 @@ describe('useCreatePullRequestDialogFields', () => {
       expect(harness.current().title).toBe('Generated title')
       expect(harness.current().body).toBe('Generated body')
       expect(harness.current().draft).toBe(true)
+    } finally {
+      harness.unmount()
+    }
+  })
+
+  it('restores an external generation seed once after remount', async () => {
+    const seedFieldRevisions = {
+      base: 0,
+      title: 1,
+      body: 1,
+      draft: 0
+    }
+    const generation: DialogGeneration = {
+      generating: true,
+      generateError: null,
+      seedRestoreKey: 'repo-1:wt-1:feature:1',
+      seed: {
+        base: 'release',
+        title: 'Seed title edited before generation',
+        body: 'Seed body edited before generation',
+        draft: true
+      },
+      seedFieldRevisions,
+      onSeedRestored: vi.fn(),
+      onGenerate: () => undefined,
+      onCancelGenerate: () => undefined
+    }
+    const harness = renderDialogFields({
+      eligibility: createEligibility(),
+      generation
+    })
+    try {
+      await harness.rerender({
+        eligibility: createEligibility(),
+        generation
+      })
+
+      expect(harness.current().base).toBe('release')
+      expect(harness.current().title).toBe('Seed title edited before generation')
+      expect(harness.current().body).toBe('Seed body edited before generation')
+      expect(harness.current().draft).toBe(true)
+      expect(harness.current().fieldRevisions).toEqual(seedFieldRevisions)
+      expect(generation.onSeedRestored).toHaveBeenCalledTimes(1)
+
+      act(() => {
+        harness.current().setTitle('User edit after remount')
+      })
+      await harness.rerender({
+        eligibility: createEligibility(),
+        generation
+      })
+
+      expect(harness.current().title).toBe('User edit after remount')
+      expect(harness.current().fieldRevisions.title).toBe(2)
+      expect(generation.onSeedRestored).toHaveBeenCalledTimes(1)
+
+      await harness.rerender({
+        eligibility: createEligibility({ title: 'Other branch title' }),
+        branch: 'feature/other'
+      })
+      expect(harness.current().title).toBe('Other branch title')
+
+      await harness.rerender({
+        eligibility: createEligibility(),
+        generation
+      })
+      expect(harness.current().title).toBe('Seed title edited before generation')
+      expect(generation.onSeedRestored).toHaveBeenCalledTimes(2)
     } finally {
       harness.unmount()
     }

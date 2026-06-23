@@ -6,7 +6,7 @@ import {
   type EditorFileSavedDetail
 } from '@/components/editor/editor-autosave'
 import { flushPendingEditorChange } from '@/components/editor/editor-pending-flush'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionIdForFile } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { readRuntimeFileContent } from './runtime-file-client'
@@ -239,7 +239,7 @@ async function readCurrentContent(
 }
 
 async function readFileContent(file: OpenFile): Promise<string> {
-  const connectionId = getConnectionId(file.worktreeId) ?? undefined
+  const connectionId = getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined
   const state = useAppStore.getState()
   const result = (await readRuntimeFileContent({
     settings: settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId),

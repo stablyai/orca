@@ -9,6 +9,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import { getAgentCatalog } from '@/lib/agent-catalog'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   parseGitHubIssueOrPRNumber,
   parseGitHubIssueOrPRLink,
@@ -3062,6 +3063,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           ? {
               command: startupPlan.launchCommand,
               ...(startupPlan.env ? { env: startupPlan.env } : {}),
+              launchConfig: startupPlan.launchConfig,
+              launchAgent: tuiAgent,
               ...(startupPlan.startupCommandDelivery
                 ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
                 : {}),
@@ -3117,6 +3120,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             }
           : undefined
       const backendSpawnedStartup = result.startupTerminal?.spawned === true
+      if (startupPlan && !backendSpawnedStartup && !startupPlan.launchToken) {
+        // Why: delayed delivery must target the exact pane spawned from this
+        // queued startup, so both halves share one renderer-session token.
+        startupPlan.launchToken = createBrowserUuid()
+      }
       const activation = activateAndRevealWorktree(worktree.id, {
         sidebarRevealBehavior: 'auto',
         setup: result.setup,
@@ -3127,6 +3135,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               startup: {
                 command: startupPlan.launchCommand,
                 ...(startupPlan.env ? { env: startupPlan.env } : {}),
+                launchConfig: startupPlan.launchConfig,
+                ...(startupPlan.launchToken ? { launchToken: startupPlan.launchToken } : {}),
+                launchAgent: tuiAgent,
                 ...(startupPlan.startupCommandDelivery
                   ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
                   : {}),
@@ -3410,6 +3421,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             launchCommand: draftLaunchPlan.launchCommand,
             expectedProcess: draftLaunchPlan.expectedProcess,
             followupPrompt: null,
+            launchConfig: draftLaunchPlan.launchConfig,
             ...(draftLaunchPlan.startupCommandDelivery
               ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
               : {}),
@@ -3444,6 +3456,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             ? {
                 command: startupPlan.launchCommand,
                 ...(startupPlan.env ? { env: startupPlan.env } : {}),
+                launchConfig: startupPlan.launchConfig,
+                ...(agent ? { launchAgent: agent } : {}),
                 ...(startupPlan.startupCommandDelivery
                   ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
                   : {}),

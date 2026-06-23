@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: this relay handler centralizes the git RPC
 protocol surface so local and SSH git behavior stay in one dispatch table. */
-import { execFile, spawn } from 'child_process'
+import { execFile, spawn, type ExecFileOptions } from 'child_process'
 import { promisify } from 'util'
 import * as path from 'path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
@@ -50,6 +50,41 @@ import { syncForkDefaultBranch, validateGitForkSyncExpectedUpstream } from '../s
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
 const BULK_CHUNK_SIZE = 100
+
+function execFileWithStdin(
+  command: string,
+  args: string[],
+  options: ExecFileOptions,
+  stdin: string
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const finish = (
+      error: Error | null,
+      stdout: string | Buffer = '',
+      stderr: string | Buffer = ''
+    ): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      if (error) {
+        reject(Object.assign(error, { stdout, stderr }))
+        return
+      }
+      resolve({ stdout: String(stdout), stderr: String(stderr) })
+    }
+    const child = execFile(command, args, options, (error, stdout, stderr) => {
+      if (error) {
+        finish(error, stdout, stderr)
+        return
+      }
+      finish(null, stdout, stderr)
+    })
+    child.once('error', (error) => finish(error))
+    child.stdin?.end(stdin)
+  })
+}
 
 export class GitHandler {
   private dispatcher: RelayDispatcher
@@ -114,6 +149,7 @@ export class GitHandler {
       disableOptionalLocks?: boolean
       signal?: AbortSignal
       nonInteractive?: boolean
+      stdin?: string
     }
   ): Promise<{ stdout: string; stderr: string }> {
     const env = buildRelayCommandEnv()
@@ -126,13 +162,18 @@ export class GitHandler {
       env.SSH_ASKPASS = ''
       env.GIT_SSH_COMMAND ??= 'ssh -o BatchMode=yes'
     }
-    return execFileAsync('git', args, {
+    const execOptions = {
       cwd: expandTilde(cwd),
       env,
       encoding: 'utf-8',
       maxBuffer: opts?.maxBuffer ?? MAX_GIT_BUFFER,
       signal: opts?.signal
-    })
+    } satisfies ExecFileOptions
+    if (opts?.stdin !== undefined) {
+      return execFileWithStdin('git', args, execOptions, opts.stdin)
+    }
+    const { stdout, stderr } = await execFileAsync('git', args, execOptions)
+    return { stdout: String(stdout), stderr: String(stderr) }
   }
 
   private async gitBuffer(args: string[], cwd: string): Promise<Buffer> {

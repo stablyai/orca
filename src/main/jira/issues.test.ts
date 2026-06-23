@@ -18,10 +18,10 @@ vi.mock('./client', () => ({
   jiraRequest: (...args: unknown[]) => jiraRequestMock(...args)
 }))
 
-function makeEntry(): JiraClientForSite {
+function makeEntry(id = 'site-1'): JiraClientForSite {
   return {
     site: {
-      id: 'site-1',
+      id,
       siteUrl: 'https://example.atlassian.net',
       email: 'ada@example.com',
       displayName: 'Example Jira',
@@ -58,6 +58,71 @@ describe('Jira issue operations', () => {
         title: 'Fix auth'
       })
     ).rejects.toThrow(error.message)
+  })
+
+  it('rejects single-site search failures so the UI can surface them', async () => {
+    getClientsMock.mockReturnValue([makeEntry('site-1')])
+    jiraRequestMock.mockRejectedValueOnce(new Error('Forbidden'))
+    const { searchIssues } = await import('./issues')
+
+    await expect(searchIssues('project = ALP', 20, 'site-1')).rejects.toThrow('Forbidden')
+  })
+
+  it('includes Jira status codes in surfaced single-site search failures', async () => {
+    const error = Object.assign(new Error('Forbidden'), { status: 403 })
+    getClientsMock.mockReturnValue([makeEntry('site-1')])
+    jiraRequestMock.mockRejectedValueOnce(error)
+    const { searchIssues } = await import('./issues')
+
+    await expect(searchIssues('project = ALP', 20, 'site-1')).rejects.toThrow(
+      'Error 403: Forbidden'
+    )
+  })
+
+  it('keeps healthy sites when one site fails under an "all" search', async () => {
+    getClientsMock.mockReturnValue([makeEntry('site-1'), makeEntry('site-2')])
+    jiraRequestMock.mockRejectedValueOnce(new Error('Forbidden')).mockResolvedValueOnce({
+      issues: [{ id: '1', key: 'BRV-1', fields: { summary: 'Healthy' } }]
+    })
+    const { searchIssues } = await import('./issues')
+
+    await expect(searchIssues('project = ALP', 20, 'all')).resolves.toMatchObject([
+      { key: 'BRV-1', title: 'Healthy' }
+    ])
+  })
+
+  it('keeps healthy sites when the saved selection fans out without an explicit site', async () => {
+    getClientsMock.mockReturnValue([makeEntry('site-1'), makeEntry('site-2')])
+    jiraRequestMock.mockRejectedValueOnce(new Error('Forbidden')).mockResolvedValueOnce({
+      issues: [{ id: '1', key: 'BRV-1', fields: { summary: 'Healthy' } }]
+    })
+    const { searchIssues } = await import('./issues')
+
+    await expect(searchIssues('project = ALP', 20)).resolves.toMatchObject([
+      { key: 'BRV-1', title: 'Healthy' }
+    ])
+  })
+
+  it('surfaces an error when every site fails under an "all" search', async () => {
+    getClientsMock.mockReturnValue([makeEntry('site-1'), makeEntry('site-2')])
+    jiraRequestMock
+      .mockRejectedValueOnce(new Error('Forbidden'))
+      .mockRejectedValueOnce(new Error('Service Unavailable'))
+    const { searchIssues } = await import('./issues')
+
+    await expect(searchIssues('project = ALP', 20, 'all')).rejects.toThrow('Forbidden')
+  })
+
+  it('prefers operational failures when every "all" search site fails', async () => {
+    const authError = new Error('Unauthorized')
+    const operationalError = new Error('Service Unavailable')
+    getClientsMock.mockReturnValue([makeEntry('site-1'), makeEntry('site-2')])
+    isAuthErrorMock.mockImplementation((error) => error === authError)
+    jiraRequestMock.mockRejectedValueOnce(authError).mockRejectedValueOnce(operationalError)
+    const { searchIssues } = await import('./issues')
+
+    await expect(searchIssues('project = ALP', 20, 'all')).rejects.toThrow('Service Unavailable')
+    expect(clearTokenMock).toHaveBeenCalledWith('site-1')
   })
 
   it('paginates Jira project search results before sorting them', async () => {

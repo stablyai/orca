@@ -83,10 +83,12 @@ const EMPTY_BROWSER_PAGES_BY_WORKSPACE: AppState['browserPagesByWorkspace'] = {}
 const EMPTY_LAYOUT_BY_WORKTREE: AppState['layoutByWorktree'] = {}
 const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = {}
 const AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS = 30_000
+const RUNTIME_GRAPH_SYNC_COALESCE_MS = 16
 let syncScheduled = false
 let syncInFlight = false
 let syncPendingAfterFlight = false
 let syncEnabled = false
+let syncTimer: ReturnType<typeof setTimeout> | null = null
 let getStoreState: (() => AppState) | null = null
 let mobileSessionSnapshotVersion = 0
 let cachedTabsProjection: TabsProjectionCache | null = null
@@ -132,9 +134,20 @@ export function focusRuntimeTerminalSurface(tabId: string, leafId?: string | nul
 
 export function setRuntimeGraphSyncEnabled(enabled: boolean): void {
   syncEnabled = enabled
-  if (enabled) {
-    scheduleRuntimeGraphSync()
+  if (!enabled) {
+    syncPendingAfterFlight = false
+    clearScheduledRuntimeGraphSync()
+    return
   }
+  scheduleRuntimeGraphSync()
+}
+
+function clearScheduledRuntimeGraphSync(): void {
+  if (syncTimer !== null) {
+    clearTimeout(syncTimer)
+    syncTimer = null
+  }
+  syncScheduled = false
 }
 
 export function scheduleRuntimeGraphSync(): void {
@@ -146,10 +159,14 @@ export function scheduleRuntimeGraphSync(): void {
     return
   }
   syncScheduled = true
-  queueMicrotask(() => {
+  // Why: terminal title/status updates often arrive as separate IPC tasks.
+  // A frame-sized timer collapses that churn into one graph publish without
+  // tying runtime state publication to paint frames or visible-window status.
+  syncTimer = setTimeout(() => {
+    syncTimer = null
     syncScheduled = false
     void runRuntimeGraphSync()
-  })
+  }, RUNTIME_GRAPH_SYNC_COALESCE_MS)
 }
 
 async function runRuntimeGraphSync(): Promise<void> {

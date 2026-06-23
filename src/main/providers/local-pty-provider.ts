@@ -26,10 +26,12 @@ import {
   getAttributionShellLaunchConfig,
   getShellReadyLaunchConfig,
   createShellReadyScanState,
+  drainShellReadyHeldBytes,
   scanForShellReady,
   writeStartupCommandWhenShellReady,
   STARTUP_COMMAND_READY_MAX_WAIT_MS
 } from './local-pty-shell-ready'
+import type { ShellReadySignal } from './local-pty-shell-ready'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { addWslEnvKeys } from '../wsl-env'
@@ -44,7 +46,12 @@ import { getAgentForegroundContextPaths } from './agent-foreground-context-paths
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 
-const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
+const PANE_IDENTITY_ENV_KEYS = [
+  'ORCA_PANE_KEY',
+  'ORCA_TAB_ID',
+  'ORCA_WORKTREE_ID',
+  'ORCA_AGENT_LAUNCH_TOKEN'
+] as const
 
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
@@ -55,6 +62,7 @@ const ptyAgentForegroundContextPaths = new Map<string, string[]>()
 // stale callbacks survive into node::FreeEnvironment() where NAPI attempts
 // to invoke/clean them up on a destroyed environment, triggering a SIGABRT.
 const ptyDisposables = new Map<string, { dispose: () => void }[]>()
+const ptyCleanupCallbacks = new Map<string, () => void>()
 
 let loadGeneration = 0
 const ptyLoadGeneration = new Map<string, number>()
@@ -130,6 +138,15 @@ function disposePtyListeners(id: string): void {
   }
 }
 
+function runPtyCleanup(id: string): void {
+  const cleanup = ptyCleanupCallbacks.get(id)
+  if (!cleanup) {
+    return
+  }
+  ptyCleanupCallbacks.delete(id)
+  cleanup()
+}
+
 /**
  * Resolves a WSL context from a worktree id whose path is already a WSL path.
  */
@@ -155,6 +172,7 @@ function getWslContextFromPreferredDistro(
  * Removes all local tracking state for a PTY id after teardown.
  */
 function clearPtyState(id: string): void {
+  runPtyCleanup(id)
   disposePtyListeners(id)
   ptyProcesses.delete(id)
   ptyShellName.delete(id)
@@ -244,6 +262,7 @@ function destroyPtyProcess(proc: pty.IPty, options: { alreadyKilled?: boolean } 
  * Kills a local PTY and clears all associated local provider state.
  */
 function safeKillAndClean(id: string, proc: pty.IPty): void {
+  runPtyCleanup(id)
   disposePtyListeners(id)
   try {
     proc.kill()
@@ -613,17 +632,17 @@ export class LocalPtyProvider implements IPtyProvider {
     this.opts.onSpawned?.(id)
 
     // Shell-ready startup command support
-    let resolveShellReady: (() => void) | null = null
+    let resolveShellReady: ((signal: ShellReadySignal) => void) | null = null
     let shellReadyTimeout: ReturnType<typeof setTimeout> | null = null
     const shellReadyScanState = shellReadyLaunch?.supportsReadyMarker
       ? createShellReadyScanState()
       : null
     const shellReadyPromise = args.command
-      ? new Promise<void>((resolve) => {
+      ? new Promise<ShellReadySignal>((resolve) => {
           resolveShellReady = resolve
         })
-      : Promise.resolve()
-    const finishShellReady = (): void => {
+      : Promise.resolve({ postMarkerBytesObserved: false })
+    const finishShellReady = (signal: ShellReadySignal): void => {
       if (!resolveShellReady) {
         return
       }
@@ -633,18 +652,44 @@ export class LocalPtyProvider implements IPtyProvider {
       }
       const resolve = resolveShellReady
       resolveShellReady = null
-      resolve()
+      resolve(signal)
+    }
+    const releaseHeldShellReadyBytes = (): void => {
+      if (!shellReadyScanState) {
+        return
+      }
+      const heldBytes = drainShellReadyHeldBytes(shellReadyScanState)
+      if (heldBytes.length === 0) {
+        return
+      }
+      this.opts.onData?.(id, heldBytes, Date.now())
+      for (const cb of dataListeners) {
+        cb({ id, data: heldBytes })
+      }
     }
     if (args.command) {
       if (shellReadyLaunch?.supportsReadyMarker) {
         shellReadyTimeout = setTimeout(() => {
-          finishShellReady()
+          releaseHeldShellReadyBytes()
+          finishShellReady({ postMarkerBytesObserved: false })
         }, STARTUP_COMMAND_READY_MAX_WAIT_MS)
       } else {
-        finishShellReady()
+        finishShellReady({ postMarkerBytesObserved: false })
       }
     }
     let startupCommandCleanup: (() => void) | null = null
+    if (args.command) {
+      ptyCleanupCallbacks.set(id, () => {
+        if (shellReadyTimeout) {
+          clearTimeout(shellReadyTimeout)
+          shellReadyTimeout = null
+        }
+        releaseHeldShellReadyBytes()
+        startupCommandCleanup?.()
+        startupCommandCleanup = null
+        resolveShellReady = null
+      })
+    }
 
     const disposables: { dispose: () => void }[] = []
     const onDataDisposable = proc.onData((rawData) => {
@@ -653,7 +698,7 @@ export class LocalPtyProvider implements IPtyProvider {
         const scanned = scanForShellReady(shellReadyScanState, rawData)
         data = scanned.output
         if (scanned.matched) {
-          finishShellReady()
+          finishShellReady({ postMarkerBytesObserved: scanned.postMarkerBytesObserved })
         }
       }
       if (data.length === 0) {
@@ -735,8 +780,9 @@ export class LocalPtyProvider implements IPtyProvider {
     // Why: disposePtyListeners removes the onExit callback, so the natural
     // exit cleanup path from node-pty won't fire. Cleanup and notification
     // must happen unconditionally after the try/catch.
-    // Note: clearPtyState calls disposePtyListeners internally, so we only
-    // need to call it once via clearPtyState after killing the process.
+    // Timer/writer cleanup must happen here too: disposing listeners prevents
+    // the natural onExit callback from running the usual clearPtyState path.
+    runPtyCleanup(id)
     disposePtyListeners(id)
     try {
       proc.kill()
@@ -744,10 +790,7 @@ export class LocalPtyProvider implements IPtyProvider {
       /* Process may already be dead */
     }
     destroyPtyProcess(proc, { alreadyKilled: true })
-    ptyProcesses.delete(id)
-    ptyShellName.delete(id)
-    ptyAgentForegroundContextPaths.delete(id)
-    ptyLoadGeneration.delete(id)
+    clearPtyState(id)
     this.opts.onExit?.(id, -1)
     for (const cb of exitListeners) {
       cb({ id, code: -1 })

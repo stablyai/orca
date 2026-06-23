@@ -232,6 +232,7 @@ function getAmpPluginSource(): string {
     '      },',
     '      body: JSON.stringify({',
     '        paneKey,',
+    '        launchToken: process.env.ORCA_AGENT_LAUNCH_TOKEN || "",',
     '        tabId: process.env.ORCA_TAB_ID || "",',
     '        worktreeId: process.env.ORCA_WORKTREE_ID || "",',
     '        env: coords.env,',

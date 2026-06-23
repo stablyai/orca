@@ -16,15 +16,19 @@ import {
   getDropIndicatorClasses,
   getTabRootStateClasses,
   getTabStripBorderClasses,
+  showsTabSelectionChrome,
   type DropIndicator
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { SortableTabContextMenu } from './SortableTabContextMenu'
 import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
+import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 
 type SortableTabProps = {
   tab: TerminalTab
+  unifiedTabId: string
+  groupId: string
   tabCount: number
   hasTabsToRight: boolean
   isActive: boolean
@@ -38,7 +42,6 @@ type SortableTabProps = {
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePin: () => void
   onToggleExpand: (tabId: string) => void
-  onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
   includeTopTabBorder?: boolean
@@ -48,6 +51,8 @@ export const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
 export default function SortableTab({
   tab,
+  unifiedTabId,
+  groupId,
   tabCount,
   hasTabsToRight,
   isActive,
@@ -61,7 +66,6 @@ export default function SortableTab({
   onSetTabColor,
   onTogglePin,
   onToggleExpand,
-  onSplitGroup,
   dragData,
   dropIndicator,
   includeTopTabBorder = true
@@ -195,6 +199,14 @@ export default function SortableTab({
   // so dnd-kit's a11y attributes (aria-roledescription, etc.) remain on the element — only
   // the pointer listeners are gated so a drag can't start while typing.
   const dragListeners = isEditing ? undefined : listeners
+  const handleActivate = useCallback(() => {
+    onActivate(tab.id)
+  }, [onActivate, tab.id])
+  const { isPressed, onPointerDown: onTabPointerDown } = useTabStripPointerActivation({
+    onActivate: handleActivate,
+    disabled: isEditing
+  })
+  const showsSelectionChrome = showsTabSelectionChrome(isActive, isPressed)
   const tabTitle = tab.customTitle ?? tab.title
   const tabRoot = (
     <div
@@ -209,6 +221,7 @@ export default function SortableTab({
       // pass even if the tab-bar render path had silently broken (the same
       // tautology that let PR #1186's render crash ship past E2E in #1193).
       data-active={isActive ? 'true' : 'false'}
+      data-pressed={isPressed ? 'true' : 'false'}
       {...attributes}
       {...dragListeners}
       // Why: on unread activity, tint the whole tab with a subtle amber
@@ -218,7 +231,7 @@ export default function SortableTab({
       // tab still reads as "selected + has activity". The wash is
       // rendered as an absolutely-positioned child below so the ::after
       // pseudo-element stays free for the drop indicator.
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive, isPressed)}`}
       onDoubleClick={(e) => {
         if (isEditing) {
           return
@@ -227,11 +240,10 @@ export default function SortableTab({
         handleRenameOpen()
       }}
       onPointerDown={(e) => {
-        if (isEditing || e.button !== 0) {
-          return
-        }
-        onActivate(tab.id)
-        dragListeners?.onPointerDown?.(e)
+        onTabPointerDown(
+          e,
+          dragListeners?.onPointerDown as ((event: React.PointerEvent<Element>) => void) | undefined
+        )
       }}
       onMouseDown={(e) => {
         // Why: prevent default browser middle-click behavior (auto-scroll)
@@ -257,7 +269,7 @@ export default function SortableTab({
         }
       }}
     >
-      {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
+      {showsSelectionChrome && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
       {showActivityAffordance && (
         // Why: amber wash for unread tabs. Rendered as a real DOM child so
         // both drop indicators (::before left / ::after right in
@@ -279,7 +291,7 @@ export default function SortableTab({
         // Why: coding-agent tabs should read as Claude/Codex/etc. while the
         // harness is running; plain shells keep the generic terminal tile.
         <span
-          className={`mr-1 inline-flex shrink-0 ${isActive ? '' : 'opacity-70'}`}
+          className={`mr-1 inline-flex shrink-0 ${showsSelectionChrome ? '' : 'opacity-70'}`}
           data-agent-icon={tabAgent}
           aria-hidden
         >
@@ -295,7 +307,7 @@ export default function SortableTab({
         // on inactive tabs to match the existing text treatment without
         // desaturating the brand colors beyond recognition.
         <span
-          className={`mr-1 inline-flex shrink-0 ${isActive ? '' : 'opacity-70'}`}
+          className={`mr-1 inline-flex shrink-0 ${showsSelectionChrome ? '' : 'opacity-70'}`}
           data-shell-icon={shellForIcon ?? 'generic'}
           aria-hidden
         >
@@ -375,7 +387,7 @@ export default function SortableTab({
       {isExpanded && !isEditing && (
         <button
           className={`mr-1 flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
-            isActive
+            showsSelectionChrome
               ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
               : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
           }`}
@@ -393,7 +405,7 @@ export default function SortableTab({
       {!isEditing && !isPinned && (
         <button
           className={`relative z-10 flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
-            isActive
+            showsSelectionChrome
               ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
               : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
           }`}
@@ -447,19 +459,22 @@ export default function SortableTab({
 
       <SortableTabContextMenu
         tab={tab}
+        unifiedTabId={unifiedTabId}
+        groupId={groupId}
+        isActive={isActive}
         open={menuOpen}
         point={menuPoint}
         tabCount={tabCount}
         hasTabsToRight={hasTabsToRight}
         isPinned={isPinned}
         onOpenChange={setMenuOpen}
+        onActivate={onActivate}
         onClose={onClose}
         onCloseOthers={onCloseOthers}
         onCloseToRight={onCloseToRight}
         onRenameOpen={handleRenameOpen}
         onSetTabColor={onSetTabColor}
         onTogglePin={onTogglePin}
-        onSplitGroup={onSplitGroup}
       />
     </>
   )

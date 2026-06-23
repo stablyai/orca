@@ -182,7 +182,9 @@ export function WorktreeCardDetailsHover({
   const branchIdentity = branchName ? (
     <div
       className={cn(
-        'truncate font-mono text-[11px] leading-none text-muted-foreground',
+        // Why: the hover panel is where users read full git identity; wrap instead
+        // of truncating so long branch names stay readable like issue titles below.
+        'break-words font-mono text-[11px] leading-snug text-muted-foreground',
         identityOrder === 'workspace-first' && 'mt-1'
       )}
     >
@@ -193,7 +195,7 @@ export function WorktreeCardDetailsHover({
     workspaceTitle && workspaceTitle !== branchName ? (
       <div
         className={cn(
-          'truncate text-[13px] font-semibold leading-snug text-foreground',
+          'break-words text-[13px] font-semibold leading-snug text-foreground',
           identityOrder === 'branch-first' && 'mt-1'
         )}
       >

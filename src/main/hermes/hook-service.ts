@@ -379,6 +379,7 @@ def _post_to_orca(payload: dict[str, Any]) -> None:
         return
     body = {
         "paneKey": pane_key,
+        "launchToken": env.get("ORCA_AGENT_LAUNCH_TOKEN", ""),
         "tabId": env.get("ORCA_TAB_ID", ""),
         "worktreeId": env.get("ORCA_WORKTREE_ID", ""),
         "env": env.get("ORCA_AGENT_HOOK_ENV", ""),

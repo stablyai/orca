@@ -635,7 +635,7 @@ describe('getPRForBranch', () => {
     })
   })
 
-  it('ignores merged PRs discovered only by branch lookup', async () => {
+  it('ignores merged PRs discovered only by branch lookup when the branch moved on', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
       .mockResolvedValueOnce({
@@ -670,10 +670,67 @@ describe('getPRForBranch', () => {
           headRefOid: 'head-oid'
         })
       })
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: 'new-local-head-oid\n',
+      stderr: ''
+    })
 
     const pr = await getPRForBranch('/repo-root', 'add-guide-for-mobile-emulator-use')
 
     expect(pr).toBeNull()
+  })
+
+  it('shows a merged branch PR when it still matches the current HEAD', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 5875,
+            title: 'Merged current branch PR',
+            state: 'closed',
+            merged_at: '2026-06-20T04:53:05Z',
+            html_url: 'https://github.com/acme/widgets/pull/5875',
+            updated_at: '2026-06-20T04:53:05Z',
+            draft: false,
+            mergeable_state: 'clean',
+            head: { ref: 'fix-tab-strip-layout-test', sha: 'current-head-oid' },
+            base: { ref: 'main', sha: 'base-oid' }
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 5875,
+          title: 'Merged current branch PR',
+          state: 'MERGED',
+          url: 'https://github.com/acme/widgets/pull/5875',
+          statusCheckRollup: [],
+          updatedAt: '2026-06-20T04:53:05Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'fix-tab-strip-layout-test',
+          baseRefOid: 'base-oid',
+          headRefOid: 'current-head-oid'
+        })
+      })
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: 'current-head-oid\n',
+      stderr: ''
+    })
+
+    const pr = await getPRForBranch('/repo-root', 'fix-tab-strip-layout-test')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['rev-parse', 'HEAD'], {
+      cwd: '/repo-root'
+    })
+    expect(pr).toMatchObject({
+      number: 5875,
+      title: 'Merged current branch PR',
+      state: 'merged',
+      headSha: 'current-head-oid'
+    })
   })
 
   it('prefers branch lookup over a fallback PR number', async () => {
@@ -1630,6 +1687,42 @@ describe('getPRForBranch', () => {
     )
     expect(pr?.mergeable).toBe('CONFLICTING')
     expect(pr?.conflictSummary).toBeUndefined()
+  })
+
+  it('marks the conflict summary as locally clean when GitHub reports dirty but merge-tree has no conflicted files', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([
+        {
+          number: 42,
+          title: 'Fix PR discovery',
+          state: 'open',
+          html_url: 'https://github.com/acme/widgets/pull/42',
+          updated_at: '2026-06-20T22:16:43Z',
+          draft: false,
+          mergeable_state: 'dirty',
+          base: { ref: 'main', sha: 'base-oid' },
+          head: { ref: 'feature/test', sha: 'head-oid' }
+        }
+      ])
+    })
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '' })
+      .mockResolvedValueOnce({ stdout: 'latest-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: 'merge-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: '1\n' })
+      .mockResolvedValueOnce({ stdout: 'result-tree-oid\u0000' })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test')
+
+    expect(pr?.mergeable).toBe('CONFLICTING')
+    expect(pr?.conflictSummary).toEqual({
+      baseRef: 'main',
+      baseCommit: 'latest-',
+      commitsBehind: 1,
+      files: [],
+      localMergeState: 'clean'
+    })
   })
 
   it('falls back to GitHub baseRefOid when fetching or resolving the base ref fails', async () => {

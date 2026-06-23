@@ -371,6 +371,49 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
   })
 
+  it('prefers connect-time launch metadata when creating the remote runtime terminal', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      command: "codex 'old'",
+      launchConfig: { agentArgs: '--old', agentEnv: {} },
+      launchToken: 'old-token',
+      launchAgent: 'codex'
+    })
+
+    await transport.connect({
+      url: '',
+      command: "codex '--model' 'gpt-5' 'resume' 'session-1'",
+      env: { CODEX_PROFILE: 'captured', ORCA_AGENT_LAUNCH_TOKEN: 'fresh-token' },
+      launchConfig: {
+        agentArgs: '--model gpt-5',
+        agentEnv: { CODEX_PROFILE: 'captured' }
+      },
+      launchToken: 'fresh-token',
+      launchAgent: 'codex',
+      callbacks: {}
+    })
+
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'terminal.create',
+        params: expect.objectContaining({
+          command: "codex '--model' 'gpt-5' 'resume' 'session-1'",
+          env: { CODEX_PROFILE: 'captured', ORCA_AGENT_LAUNCH_TOKEN: 'fresh-token' },
+          launchConfig: {
+            agentArgs: '--model gpt-5',
+            agentEnv: { CODEX_PROFILE: 'captured' }
+          },
+          launchToken: 'fresh-token',
+          launchAgent: 'codex'
+        })
+      })
+    )
+  })
+
   it('activates pending host session mirrors instead of creating duplicate terminals', async () => {
     runtimeCall.mockImplementation((args) => {
       if (args.method === 'session.tabs.activate') {
