@@ -49,6 +49,8 @@ function cacheNoEffectiveUpstreamStatus(
     noEffectiveUpstreamByIdentity.delete(cacheKey)
     return
   }
+  // Why: only cache negatives after probing origin/<branch>; other resolution
+  // paths can fail without proving the same-name publish branch is absent.
   if (!probedSameNameOriginRef) {
     return
   }
