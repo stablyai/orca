@@ -132,6 +132,10 @@ export async function refreshGitStatusForWorktree({
       connectionId
     })) as GitStatusResult
 
+    if (!shouldApplyAutomaticUpstreamRefresh(worktreeId, upstreamStartGeneration)) {
+      return
+    }
+
     deps.setGitStatus(worktreeId, status)
     // Why: branch switches can happen inside a terminal. `git status --branch`
     // gives us the new identity without a separate worktree-list poll.
@@ -141,9 +145,6 @@ export async function refreshGitStatusForWorktree({
       // explicit clear signal so stale branch names don't linger in the UI.
       branch: status.branch ?? (status.head ? null : undefined)
     })
-    if (!shouldApplyAutomaticUpstreamRefresh(worktreeId, upstreamStartGeneration)) {
-      return
-    }
     if (pushTarget) {
       // Why: porcelain status reports Git's configured upstream. Source Control
       // actions for PR-created worktrees must instead reconcile with Orca's

@@ -226,6 +226,9 @@ describe('refreshGitStatusForWorktree', () => {
     automaticStatus.resolve(staleAutomaticStatus)
     await automatic
 
+    expect(deps.setGitStatus).toHaveBeenCalledTimes(1)
+    expect(deps.setGitStatus).toHaveBeenCalledWith('wt-race', strictStatus)
+    expect(deps.updateWorktreeGitIdentity).toHaveBeenCalledTimes(1)
     expect(deps.setUpstreamStatus).toHaveBeenCalledTimes(1)
     expect(deps.setUpstreamStatus).toHaveBeenCalledWith('wt-race', strictStatus.upstreamStatus)
   })
