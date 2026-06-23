@@ -101,6 +101,8 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import { createTestStore, makeWorktree, makeTab, makeLayout } from './store-test-helpers'
+import { computeVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
@@ -1508,9 +1510,22 @@ describe('reconnectPersistedTerminals', () => {
     expect(s.tabsByWorktree[wt1][0].ptyId).toBe('old-pty-1')
     expect(s.tabsByWorktree[wt2][0].ptyId).toBe('old-pty-2')
     expect(s.ptyIdsByTabId.tab1).toEqual(['old-pty-1'])
-    // Why: inactive worktrees keep a wake hint but must not advertise live PTYs
-    // until the user opens them and connectPanePty performs the actual reattach.
-    expect(s.ptyIdsByTabId.tab2).toEqual([])
+    expect(s.ptyIdsByTabId.tab2).toEqual(['old-pty-2'])
+    expect(
+      computeVisibleWorktreeIds(s.worktreesByRepo, [wt1, wt2], {
+        filterRepoIds: [],
+        showSleepingWorkspaces: false,
+        tabsByWorktree: s.tabsByWorktree,
+        ptyIdsByTabId: s.ptyIdsByTabId,
+        browserTabsByWorktree: s.browserTabsByWorktree,
+        hideDefaultBranchWorkspace: false,
+        hideAutomationGeneratedWorkspaces: false,
+        repoMap: new Map(s.repos.map((repo) => [repo.id, repo])),
+        workspaceHostScope: 'all',
+        defaultHostId: LOCAL_EXECUTION_HOST_ID,
+        worktreeLineageById: {}
+      })
+    ).toEqual([wt1, wt2])
     expect(s.pendingReconnectWorktreeIds).toEqual([])
     // No eager spawn — PTY creation deferred to pane mount
     expect((mockApi.pty as Record<string, unknown>).spawn).not.toHaveBeenCalled()
