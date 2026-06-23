@@ -1,10 +1,3 @@
-/**
- * Repro for intra-worktree terminal tab switches leaving xterm at stale geometry
- * or garbled WebGL output after visibility resume.
- *
- * Mirrors the user report: switching away from a Grok terminal tab and back can
- * paint only half the pane (or garbled glyphs) until a later switch refits.
- */
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import {
@@ -19,6 +12,8 @@ import {
   sendToTerminal,
   waitForActiveTerminalManager
 } from './helpers/terminal'
+import { compareTerminalScreenshots } from './terminal-screenshot-diff'
+import { captureStableTabScreenshot } from './terminal-tab-screenshot'
 
 const SILENT_FOREGROUND_COMMAND = 'node -e "setInterval(() => {}, 1000)"\r'
 const TAB_A_GLYPH_ROW = 'abcdefghijklmnopqrstuvwxyz 0123456789 []{}<>/\\#@%&*+=~'
@@ -403,25 +398,6 @@ async function resetAtlasOnTab(page: Page, tabId: string): Promise<void> {
   }, tabId)
 }
 
-function tabScreenLocator(page: Page, tabId: string): ReturnType<Page['locator']> {
-  return page.locator(`[data-terminal-tab-id="${tabId}"] .xterm-screen`).first()
-}
-
-async function captureStableTabScreenshot(page: Page, tabId: string): Promise<Buffer> {
-  const screen = tabScreenLocator(page, tabId)
-  await expect(screen).toBeVisible()
-  let previous = await screen.screenshot({ animations: 'disabled' })
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    await page.waitForTimeout(250)
-    const next = await screen.screenshot({ animations: 'disabled' })
-    if (next.equals(previous)) {
-      return next
-    }
-    previous = next
-  }
-  throw new Error(`Terminal surface for tab ${tabId} did not stabilize for screenshot`)
-}
-
 async function injectHiddenStreamingBurst(page: Page, tabId: string, runId: string): Promise<void> {
   const marker = `${TAB_SWITCH_MARKER_PREFIX}_${runId}`
   await page.evaluate(
@@ -473,8 +449,9 @@ async function readTabTerminalGeometry(
       }
       const screenRect = screen.getBoundingClientRect()
       const cellWidth = pane.terminal._core?._renderService?.dimensions?.css?.cell?.width ?? 0
-      const rowRight = screenRect.left + pane.terminal.cols * cellWidth
-      const contentWidthRatio = screenRect.width > 0 ? rowRight / screenRect.width : 0
+      const renderedContentWidth = pane.terminal.cols * cellWidth
+      const rowRight = screenRect.left + renderedContentWidth
+      const contentWidthRatio = screenRect.width > 0 ? renderedContentWidth / screenRect.width : 0
       const buffer = pane.terminal.buffer.active
       let markerPresent = false
       for (let row = 0; row < pane.terminal.rows; row += 1) {
@@ -510,11 +487,11 @@ function geometryLooksCorrupted(geometry: TabTerminalGeometry): string | null {
   if (geometry.overlayDisplay === 'none') {
     return 'overlay still display:none after activation'
   }
-  if (geometry.overlayWidth < 200) {
-    return `overlay width too narrow (${geometry.overlayWidth}px)`
+  if (geometry.overlayWidth < 200 || geometry.overlayHeight <= 0) {
+    return `overlay dimensions invalid (${geometry.overlayWidth}x${geometry.overlayHeight}px)`
   }
-  if (geometry.cols < 40) {
-    return `terminal cols suspiciously low (${geometry.cols})`
+  if (geometry.cols < 40 || geometry.rows <= 0) {
+    return `terminal grid invalid (${geometry.cols}x${geometry.rows})`
   }
   // Why: half-width bug paints content in only ~50% of the screen; rowRight
   // lags far behind screenRight when cols are stale.
@@ -543,6 +520,8 @@ async function captureTabScreenshot(
 }
 
 test.describe('Terminal tab switch visual restore', () => {
+  test.describe.configure({ mode: 'serial' })
+
   test('keeps full-width geometry after switching away and back', async ({
     orcaPage
   }, testInfo) => {
@@ -779,6 +758,8 @@ test.describe('Terminal tab switch visual restore', () => {
     await activateTerminalTab(orcaPage, shellTabId)
     const runId = `${Date.now()}`
     const marker = `${TAB_SWITCH_MARKER_PREFIX}_SKIPPED_GROK_${runId}`
+    // Why: synchronized-output mode exercises the hidden renderer skip path
+    // used by agent TUIs before light tab resume requests recovery.
     const hiddenFrame = [
       '\x1b[?2026h',
       `${marker} hidden renderer frame`,
@@ -863,8 +844,11 @@ test.describe('Terminal tab switch visual restore', () => {
       await activateTerminalTab(orcaPage, firstTabId)
       await orcaPage.waitForTimeout(100)
       const afterReturn = await captureStableTabScreenshot(orcaPage, firstTabId)
-      if (!afterReturn.equals(baseline)) {
-        screenshotMismatches.push(`cycle ${cycle}`)
+      const diff = compareTerminalScreenshots(baseline, afterReturn)
+      if (!diff.matches) {
+        screenshotMismatches.push(
+          `cycle ${cycle}: ${diff.diffPixels} px (${(diff.diffRatio * 100).toFixed(2)}%)`
+        )
         await testInfo.attach(`after-return-cycle-${cycle}`, {
           body: afterReturn,
           contentType: 'image/png'

@@ -93,10 +93,9 @@ export function useTerminalPaneGlobalEffects({
     if (isVisible) {
       const shouldUseLightTabResume =
         isWorktreeActive &&
-        !wasVisible &&
-        hiddenReasonRef.current === 'tab' &&
         hasCompletedVisibleResumeRef.current &&
-        !renderingSuspendedByVisibilityRef.current
+        !renderingSuspendedByVisibilityRef.current &&
+        (wasVisible || hiddenReasonRef.current === 'tab')
       resumeTerminalVisibility({
         manager,
         isActive,
@@ -118,6 +117,7 @@ export function useTerminalPaneGlobalEffects({
         wasVisible,
         wasWorktreeActive,
         isWorktreeActive,
+        hasCompletedVisibleResume: hasCompletedVisibleResumeRef.current,
         captureViewportPositions
       })
       renderingSuspendedByVisibilityRef.current = hiddenState.renderingSuspended

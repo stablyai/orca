@@ -26,6 +26,7 @@ type HideTerminalVisibilityArgs = {
   wasVisible: boolean
   wasWorktreeActive: boolean
   isWorktreeActive: boolean
+  hasCompletedVisibleResume: boolean
   captureViewportPositions: (useRememberedSnapshots: boolean) => Map<number, ScrollState>
 }
 
@@ -74,6 +75,7 @@ export function hideTerminalVisibility({
   wasVisible,
   wasWorktreeActive,
   isWorktreeActive,
+  hasCompletedVisibleResume,
   captureViewportPositions
 }: HideTerminalVisibilityArgs): HideTerminalVisibilityResult {
   const surfaceBecameHidden = wasWorktreeActive && !isWorktreeActive
@@ -88,6 +90,13 @@ export function hideTerminalVisibility({
     // suspend is purely a GPU resource decision.
     manager.suspendRendering()
     return { hiddenReason: 'surface', renderingSuspended: true }
+  }
+  if (!hasCompletedVisibleResume && wasVisible && wasWorktreeActive && isWorktreeActive) {
+    // Why: the visibility hook starts wasVisible=true so terminal tabs that
+    // first mount hidden still release WebGL contexts instead of exhausting
+    // Chromium's small context budget.
+    manager.suspendRendering()
+    return { hiddenReason: 'tab', renderingSuspended: true }
   }
   if (wasVisible && isWorktreeActive) {
     return { hiddenReason: 'tab', renderingSuspended: false }
