@@ -109,6 +109,27 @@ describe('repo slice host identity routing', () => {
     })
   })
 
+  it('updates a legacy local duplicate without overwriting an explicit remote sibling', async () => {
+    const { executionHostId: _executionHostId, ...legacyLocalDuplicate } = localDuplicate
+    reposUpdate.mockResolvedValue(undefined)
+    const store = createTestStore()
+    store.setState({ repos: [legacyLocalDuplicate as Repo, remoteDuplicate] })
+
+    await store.getState().updateRepo('same-repo', { displayName: 'Local Renamed' })
+
+    expect(store.getState().repos).toEqual([
+      { ...legacyLocalDuplicate, displayName: 'Local Renamed' },
+      remoteDuplicate
+    ])
+    expect(reposUpdate).toHaveBeenCalledWith({
+      repoId: 'same-repo',
+      updates: { displayName: 'Local Renamed' }
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'repo.update' })
+    )
+  })
+
   it('keeps queued focused-host repo updates pinned when focus changes', async () => {
     const firstUpdate = deferred<{
       id: string

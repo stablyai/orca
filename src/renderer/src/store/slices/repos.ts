@@ -2265,7 +2265,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           const nextRepos = s.repos.map((r) => {
             const matchesOwner = ownerHasExplicitHost
               ? repoMatchesHostIdentity(r, projectId, ownerHostId)
-              : r.id === projectId
+              : repoMatchesHostIdentity(r, projectId, ownerHostId) || r === ownerRepo
             if (!matchesOwner) {
               return r
             }
