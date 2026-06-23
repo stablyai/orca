@@ -169,7 +169,8 @@ describe('useGitStatusPolling', () => {
       undefined,
       undefined,
       {
-        runtimeTargetSettings: { activeRuntimeEnvironmentId: null }
+        runtimeTargetSettings: { activeRuntimeEnvironmentId: null },
+        applyUpstreamStatus: false
       }
     )
   })
@@ -192,7 +193,8 @@ describe('useGitStatusPolling', () => {
       undefined,
       pushTarget,
       {
-        runtimeTargetSettings: { activeRuntimeEnvironmentId: null }
+        runtimeTargetSettings: { activeRuntimeEnvironmentId: null },
+        applyUpstreamStatus: false
       }
     )
   })
