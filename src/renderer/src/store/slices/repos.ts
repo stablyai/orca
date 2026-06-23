@@ -2513,18 +2513,22 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     // Optimistically apply the new order so the sidebar updates instantly;
     // resync only if main rejects (stale permutation due to a racing add/remove).
     const previous = get().repos
-    const remainingById = new Map<string, Repo[]>()
+    const remainingById = new Map<string, { repos: Repo[]; nextIndex: number }>()
     for (const repo of previous) {
       const existing = remainingById.get(repo.id)
       if (existing) {
-        existing.push(repo)
+        existing.repos.push(repo)
       } else {
-        remainingById.set(repo.id, [repo])
+        remainingById.set(repo.id, { repos: [repo], nextIndex: 0 })
       }
     }
     const next: Repo[] = []
     for (const id of orderedIds) {
-      const repo = remainingById.get(id)?.shift()
+      const remaining = remainingById.get(id)
+      const repo = remaining?.repos[remaining.nextIndex]
+      if (remaining) {
+        remaining.nextIndex += 1
+      }
       if (repo) {
         next.push(repo)
       }

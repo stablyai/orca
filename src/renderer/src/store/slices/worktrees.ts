@@ -724,25 +724,32 @@ function settingsForRepoOwner(
   if (!repo) {
     return state.settings
   }
+  return settingsForKnownRepoOwner(state.settings, repo)
+}
+
+function settingsForKnownRepoOwner(
+  settings: AppState['settings'],
+  repo: { connectionId?: string | null; executionHostId?: ExecutionHostId | null }
+) {
   if (!repo.executionHostId && !repo.connectionId) {
-    return state.settings
+    return settings
   }
   const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
   if (parsed?.kind === 'runtime') {
-    return state.settings
-      ? { ...state.settings, activeRuntimeEnvironmentId: parsed.environmentId }
+    return settings
+      ? { ...settings, activeRuntimeEnvironmentId: parsed.environmentId }
       : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
   }
-  if (parsed?.kind === 'local' && state.settings?.activeRuntimeEnvironmentId) {
-    return { ...state.settings, activeRuntimeEnvironmentId: null }
+  if (parsed?.kind === 'local' && settings?.activeRuntimeEnvironmentId) {
+    return { ...settings, activeRuntimeEnvironmentId: null }
   }
   if (parsed?.kind !== 'ssh') {
-    return state.settings
+    return settings
   }
   // Why: SSH repos are owned by the desktop client/SSH provider, not the
   // currently focused runtime server.
-  return state.settings
-    ? { ...state.settings, activeRuntimeEnvironmentId: null }
+  return settings
+    ? { ...settings, activeRuntimeEnvironmentId: null }
     : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
 }
 
@@ -1826,7 +1833,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     if (get().hasHydratedWorktreePurge) {
       await mapReposForWorktreeRefresh(repos, async (r) => {
         const hostId = getRepoExecutionHostId(r)
-        const settings = settingsForRepoOwner(get(), r.id, hostId)
+        const settings = settingsForKnownRepoOwner(get().settings, r)
         const detected = await listDetectedWorktreesForRepo(settings, r.id)
         const worktrees = toVisibleWorktrees(detected, hostId)
         set((s) => {
@@ -1884,7 +1891,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         try {
           const hostId = getRepoExecutionHostId(r)
           const detected = await listDetectedWorktreesForRepo(
-            settingsForRepoOwner(get(), r.id, hostId),
+            settingsForKnownRepoOwner(get().settings, r),
             r.id
           )
           const list = toVisibleWorktrees(detected, hostId)
