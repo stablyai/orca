@@ -229,6 +229,14 @@ export function activateAndRevealFolderWorkspace(
   return { primaryTabId }
 }
 
+/**
+ * Build a startup payload that reopens the agent a worktree was originally
+ * created with (`createdWithAgent`). Returns `undefined` when the worktree
+ * has no creation agent, so the caller can fall through to the default-agent
+ * or plain-terminal path.
+ * @param worktree - The worktree being activated.
+ * @returns A startup payload to resume the creation agent, or `undefined`.
+ */
 function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayload | undefined {
   const agent = worktree.createdWithAgent
   if (!isTuiAgent(agent)) {
@@ -274,6 +282,18 @@ function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayl
   }
 }
 
+/**
+ * Build a startup payload that launches the user's global `defaultTuiAgent`
+ * when activating a worktree with no existing tabs. Only fires when the
+ * `openWorktreeWithAgent` setting is enabled and the default agent is a
+ * valid, enabled TUI agent (not 'blank' or null). Lower priority than
+ * `buildCreatedAgentReopenStartup` so worktrees created with a specific
+ * agent always reopen that agent.
+ * @param state - Current app store state (for settings + repo lookup).
+ * @param worktree - The worktree being activated.
+ * @returns A startup payload to launch the default agent, or `undefined` to
+ *   fall through to a plain terminal.
+ */
 function buildDefaultAgentReopenStartup(
   state: ReturnType<typeof useAppStore.getState>,
   worktree: Worktree
