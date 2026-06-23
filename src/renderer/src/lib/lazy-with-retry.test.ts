@@ -2,11 +2,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ComponentType } from 'react'
 
-import { loadLazyWithRetry } from './lazy-with-retry'
+import { isLazyChunkLoadError, loadLazyWithRetry } from './lazy-with-retry'
 
 const RELOAD_GUARD_KEY = 'orca:lazy-chunk-reload-attempted'
 const Comp: ComponentType = () => null
 const chunkParseError = (): SyntaxError => new SyntaxError("Unexpected token ']'")
+const chunkFetchError = (): TypeError =>
+  new TypeError('Failed to fetch dynamically imported module: file://redacted/chunk.js')
 
 function spyOnReload(): ReturnType<typeof vi.fn> {
   const reload = vi.fn()
@@ -107,21 +109,58 @@ describe('loadLazyWithRetry', () => {
     expect(settled).toBe(false)
   })
 
-  it('does NOT reload twice — re-throws once the guard is already set', async () => {
+  it('does NOT reload twice — wraps known chunk failures once the guard is already set', async () => {
     const reload = spyOnReload()
     window.sessionStorage.setItem(RELOAD_GUARD_KEY, '1')
-    const error = chunkParseError()
+    const error = chunkFetchError()
     const factory = vi.fn(() => Promise.reject(error))
 
     const loaded = loadLazyWithRetry(factory, { retries: 2, baseDelayMs: 250 })
+    const assertion = expect(loaded).rejects.toMatchObject({
+      name: 'LazyChunkLoadError',
+      cause: error
+    })
+    await vi.advanceTimersByTimeAsync(5000)
+    await assertion
+
+    expect(reload).not.toHaveBeenCalled()
+    const caught = await loaded.catch((rejection) => rejection)
+    expect(isLazyChunkLoadError(caught)).toBe(true)
+  })
+
+  it('preserves the original error when the guarded failure is not a dynamic import failure', async () => {
+    const reload = spyOnReload()
+    window.sessionStorage.setItem(RELOAD_GUARD_KEY, '1')
+    const error = new Error('render bug from lazy module evaluation')
+    const factory = vi.fn(() => Promise.reject(error))
+
+    const loaded = loadLazyWithRetry(factory, { retries: 1, baseDelayMs: 100 })
     const assertion = expect(loaded).rejects.toBe(error)
     await vi.advanceTimersByTimeAsync(5000)
     await assertion
 
     expect(reload).not.toHaveBeenCalled()
+    const caught = await loaded.catch((rejection) => rejection)
+    expect(isLazyChunkLoadError(caught)).toBe(false)
   })
 
-  it('fails closed (re-throws, never reloads) when sessionStorage reads throw', async () => {
+  it('preserves bare parse errors so lazy module evaluation bugs still report', async () => {
+    const reload = spyOnReload()
+    window.sessionStorage.setItem(RELOAD_GUARD_KEY, '1')
+    const error = chunkParseError()
+    const factory = vi.fn(() => Promise.reject(error))
+
+    const loaded = loadLazyWithRetry(factory, { retries: 1, baseDelayMs: 100 })
+    const assertion = expect(loaded).rejects.toBe(error)
+    await vi.advanceTimersByTimeAsync(5000)
+    await assertion
+
+    expect(reload).not.toHaveBeenCalled()
+    const caught = await loaded.catch((rejection) => rejection)
+    expect(isLazyChunkLoadError(caught)).toBe(false)
+  })
+
+  it('fails closed with the original error when sessionStorage reads throw', async () => {
     const reload = spyOnReload()
     // Private-mode / sandboxed storage makes reads throw. The guard must treat
     // this as "already reloaded" so a broken chunk can NEVER cause a reload loop.
@@ -135,6 +174,8 @@ describe('loadLazyWithRetry', () => {
     await assertion
 
     expect(reload).not.toHaveBeenCalled()
+    const caught = await loaded.catch((rejection) => rejection)
+    expect(isLazyChunkLoadError(caught)).toBe(false)
   })
 
   it('records a lazy_chunk_reload breadcrumb (with reloadKey) before reloading', async () => {
@@ -166,7 +207,7 @@ describe('loadLazyWithRetry', () => {
     expect(settled).toBe(false)
   })
 
-  it('re-throws without reloading when there is no window (SSR / node)', async () => {
+  it('re-throws the original error without reloading when there is no window (SSR / node)', async () => {
     vi.stubGlobal('window', undefined)
     const error = chunkParseError()
     const factory = vi.fn(() => Promise.reject(error))
@@ -177,6 +218,8 @@ describe('loadLazyWithRetry', () => {
     await assertion
 
     expect(factory).toHaveBeenCalledTimes(2)
+    const caught = await loaded.catch((rejection) => rejection)
+    expect(isLazyChunkLoadError(caught)).toBe(false)
   })
 
   it('keeps the reload guard set across a successful load (no second reload in one session)', async () => {
