@@ -2599,8 +2599,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // Why: activeWorktreeIdsOnShutdown is only the eager-remount hint. Any
       // tab with a persisted PTY or relay session can still reattach when
       // opened, so it must also advertise liveness to Hide sleeping.
+      const tabHasRestorableSession = (tab: TerminalTab): boolean => {
+        const leafPtyIds = Object.values(
+          session.terminalLayoutsByTabId?.[tab.id]?.ptyIdsByLeafId ?? {}
+        ).filter(Boolean)
+        return Boolean(tab.ptyId || remoteSessionIds[tab.id] || leafPtyIds.length > 0)
+      }
       const sessionBackedWorktreeIds = Object.entries(session.tabsByWorktree)
-        .filter(([, tabs]) => tabs.some((t) => t.ptyId || remoteSessionIds[t.id]))
+        .filter(([, tabs]) => tabs.some(tabHasRestorableSession))
         .map(([wId]) => wId)
       const shutdownIds = Array.from(
         new Set([...(session.activeWorktreeIdsOnShutdown ?? []), ...sessionBackedWorktreeIds])
@@ -2618,7 +2624,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       for (const worktreeId of pendingReconnectWorktreeIds) {
         const rawTabs = session.tabsByWorktree[worktreeId] ?? []
         const liveTabIds = rawTabs
-          .filter((t) => (t.ptyId || remoteSessionIds[t.id]) && validTabIds.has(t.id))
+          .filter((t) => tabHasRestorableSession(t) && validTabIds.has(t.id))
           .map((t) => t.id)
         if (liveTabIds.length > 0) {
           pendingReconnectTabByWorktree[worktreeId] = liveTabIds
@@ -2867,15 +2873,17 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         console.debug(
           `[reconnect-terminals] tab=${tabId} tabLevelPtyId=${tabLevelPtyId} supportsDeferredReattach=${supportsDeferredReattach} hasLeafMappings=${hasLeafMappings}`
         )
-        if (tabLevelPtyId) {
+        if (tabLevelPtyId || hasLeafMappings) {
           set((s) => {
             const next = { ...s.tabsByWorktree }
             if (!next[worktreeId]) {
               return {}
             }
-            next[worktreeId] = next[worktreeId].map((t) =>
-              t.id === tabId ? { ...t, ptyId: tabLevelPtyId } : t
-            )
+            if (tabLevelPtyId) {
+              next[worktreeId] = next[worktreeId].map((t) =>
+                t.id === tabId ? { ...t, ptyId: tabLevelPtyId } : t
+              )
+            }
 
             // Why: populate ptyIdsByTabId so the sessions status segment
             // can map daemon session IDs back to tabs (for bound/orphan
@@ -2883,7 +2891,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
             // appear as orphans until the terminal pane mounts.
             const allPtyIds = hasLeafMappings
               ? (Object.values(leafPtyMap).filter(Boolean) as string[])
-              : [tabLevelPtyId]
+              : [tabLevelPtyId!]
             return {
               tabsByWorktree: next,
               // Why: hide-sleeping uses ptyIdsByTabId as the liveness source.
