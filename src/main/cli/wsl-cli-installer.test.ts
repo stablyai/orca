@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- WSL CLI tests cover one installer state machine with shared
+   runner fixtures; splitting would duplicate the fake WSL filesystem setup. */
 import type { CliInstallStatus } from '../../shared/cli-install-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -9,7 +11,9 @@ vi.mock('node:child_process', () => ({
 
 import { WslCliInstaller, _internals } from './wsl-cli-installer'
 
-function makeHostStatus(launcherPath = 'C:\\Users\\me\\AppData\\Local\\Orca\\bin\\orca.cmd') {
+function makeHostStatus(
+  launcherPath = 'C:\\Users\\me\\AppData\\Local\\Programs\\Orca\\resources\\bin\\orca.cmd'
+) {
   return {
     platform: 'win32',
     commandName: 'orca',
@@ -40,9 +44,6 @@ function createWslRunner(initialFile: string | null = null, pathIncludesLocalBin
     if (command.includes('printf %s "$HOME"')) {
       return '/home/alice'
     }
-    if (command.includes('command -v powershell.exe')) {
-      return 'yes'
-    }
     if (command.includes('case ":$PATH:"')) {
       return pathIncludesLocalBin ? 'yes' : 'no'
     }
@@ -56,6 +57,9 @@ function createWslRunner(initialFile: string | null = null, pathIncludesLocalBin
       files.set(commandPath, launcher)
       files.set(bridgePath, bridge)
       return ''
+    }
+    if (command.includes('command -v powershell.exe')) {
+      return 'yes'
     }
     if (command.includes('rm -f')) {
       if (
@@ -114,11 +118,11 @@ describe('WslCliInstaller', () => {
     expect(installed).toMatchObject({
       state: 'installed',
       pathConfigured: true,
-      launcherPath: 'C:\\Users\\me\\AppData\\Local\\Orca\\bin\\orca.cmd'
+      launcherPath: 'C:\\Users\\me\\AppData\\Local\\Programs\\Orca\\resources\\bin\\orca.cmd'
     })
     expect(wsl.getFile()).toBe(
       _internals.buildWslLauncher(
-        'C:\\Users\\me\\AppData\\Local\\Orca\\bin\\orca.cmd',
+        'C:\\Users\\me\\AppData\\Local\\Programs\\Orca\\resources\\bin\\orca.cmd',
         '/home/alice/.local/share/orca/orca-wsl-bridge.ps1'
       )
     )
@@ -154,6 +158,30 @@ describe('WslCliInstaller', () => {
       state: 'installed',
       pathConfigured: false,
       detail: expect.stringContaining('not on PATH')
+    })
+  })
+
+  it('accepts current managed WSL scripts with an extra heredoc trailing newline', async () => {
+    const launcher = `${_internals.buildWslLauncher(
+      'C:\\Orca\\orca.cmd',
+      '/home/alice/.local/share/orca/orca-wsl-bridge.ps1'
+    )}\n`
+    const wsl = createWslRunner(launcher)
+    const installer = new WslCliInstaller({
+      platform: 'win32',
+      distro: 'Ubuntu',
+      hostInstaller: { getStatus: async () => makeHostStatus('C:\\Orca\\orca.cmd') },
+      wslRunner: async (distro, command) => {
+        if (command.includes('cat /home/alice/.local/share/orca/orca-wsl-bridge.ps1')) {
+          return `${_internals.buildWslBridgeScript()}\n`
+        }
+        return wsl.runner(distro, command)
+      }
+    })
+
+    await expect(installer.getStatus()).resolves.toMatchObject({
+      state: 'installed',
+      currentTarget: 'C:\\Orca\\orca.cmd'
     })
   })
 
@@ -195,7 +223,12 @@ describe('WslCliInstaller', () => {
     )
     const bridge = _internals.buildWslBridgeScript()
 
-    expect(launcher).toContain('powershell.exe -NoProfile -ExecutionPolicy Bypass -File')
+    expect(launcher).toContain('command -v powershell.exe')
+    expect(launcher).toContain('/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe')
+    expect(launcher).toContain(
+      'Orca WSL CLI requires Windows interop and could not find powershell.exe.'
+    )
+    expect(launcher).toContain('"$ORCA_POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File')
     expect(launcher).toContain('"$ORCA_WIN_LAUNCHER" "$@"')
     expect(launcher).not.toContain('-Command')
     expect(bridge).toContain('[Parameter(ValueFromRemainingArguments=$true)]')
@@ -221,6 +254,52 @@ describe('WslCliInstaller', () => {
     expect(wrapped).toContain('set -o pipefail;')
     expect(encoded).toBeTruthy()
     expect(Buffer.from(encoded as string, 'base64').toString('utf8')).toBe(command)
+  })
+
+  it('treats absolute Windows PowerShell as interop-ready when powershell.exe is missing from PATH', async () => {
+    const wsl = createWslRunner()
+    const installer = new WslCliInstaller({
+      platform: 'win32',
+      distro: 'Ubuntu',
+      hostInstaller: { getStatus: async () => makeHostStatus() },
+      wslRunner: async (distro, command) => {
+        if (command.includes('command -v powershell.exe') && !command.includes('cat >')) {
+          expect(command).toContain('/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe')
+          return 'yes'
+        }
+        return wsl.runner(distro, command)
+      }
+    })
+
+    await expect(installer.getStatus()).resolves.toMatchObject({
+      state: 'not_installed',
+      commandPath: '/home/alice/.local/bin/orca-ide'
+    })
+  })
+
+  it('marks stale managed launchers that point at the old app bin instead of packaged resources', async () => {
+    const oldLauncher = _internals.buildWslLauncher(
+      'C:\\Users\\me\\AppData\\Local\\Programs\\Orca\\bin\\orca.cmd',
+      '/home/alice/.local/share/orca/orca-wsl-bridge.ps1'
+    )
+    const wsl = createWslRunner(oldLauncher)
+    const installer = new WslCliInstaller({
+      platform: 'win32',
+      distro: 'Ubuntu',
+      hostInstaller: { getStatus: async () => makeHostStatus() },
+      wslRunner: wsl.runner
+    })
+
+    await expect(installer.getStatus()).resolves.toMatchObject({
+      state: 'stale',
+      currentTarget: 'C:\\Users\\me\\AppData\\Local\\Programs\\Orca\\bin\\orca.cmd',
+      launcherPath: 'C:\\Users\\me\\AppData\\Local\\Programs\\Orca\\resources\\bin\\orca.cmd'
+    })
+
+    await expect(installer.install()).resolves.toMatchObject({
+      state: 'installed',
+      currentTarget: 'C:\\Users\\me\\AppData\\Local\\Programs\\Orca\\resources\\bin\\orca.cmd'
+    })
   })
 
   it('settles when wsl.exe never reports completion', async () => {

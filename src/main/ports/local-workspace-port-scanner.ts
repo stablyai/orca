@@ -9,12 +9,16 @@ import type {
   WorkspacePortProbe,
   WorkspacePortScanResult
 } from '../../shared/workspace-ports'
+import { getProcessOutputFields } from '../../shared/process-output-field-scanner'
 import { advertisedUrlWatcher, type AdvertisedUrlWatcher } from './advertised-url-watcher'
+import { WorkspacePortScanTimeoutBackoff } from './workspace-port-scan-timeout-backoff'
 
 const COMMAND_TIMEOUT_MS = 4_000
 const MAX_PORTS = 200
 const HTTP_PORTS = new Set([80, 3000, 3001, 4200, 5000, 5173, 5174, 8000, 8080, 8888])
 const HTTPS_PORTS = new Set([443, 8443])
+
+const commandTimeoutBackoff = new WorkspacePortScanTimeoutBackoff()
 
 type RawListeningPort = {
   host: string
@@ -31,26 +35,53 @@ type ProcessMetadata = {
   cwd?: string
 }
 
+type NormalizedWorkspacePortProbe = {
+  worktree: WorkspacePortProbe
+  normalizedPath: string
+}
+
 export async function scanWorkspacePorts(
   worktrees: WorkspacePortProbe[],
   urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup' | 'reconcileScan'> = advertisedUrlWatcher
 ): Promise<WorkspacePortScanResult> {
+  const cooldown = commandTimeoutBackoff.snapshot()
+  if (cooldown.isCoolingDown) {
+    return makeUnavailableScan(
+      `Port scanning is temporarily paused after a command timeout. Retrying in ${Math.ceil(
+        cooldown.remainingMs / 1000
+      )}s.`
+    )
+  }
+
   try {
     const rawPorts = await scanPlatformListeningPorts()
-    reconcileAdvertisedUrls(rawPorts, worktrees, urlWatcher)
+    commandTimeoutBackoff.recordSuccess()
+    const normalizedWorktrees = normalizeWorkspacePortProbes(worktrees)
+    reconcileAdvertisedUrls(rawPorts, normalizedWorktrees, urlWatcher)
     const ports = rawPorts
-      .map((port) => enrichPort(port, worktrees, urlWatcher))
+      .map((port) => enrichPort(port, normalizedWorktrees, urlWatcher))
       .sort(compareWorkspacePorts)
       .slice(0, MAX_PORTS)
     return { platform: process.platform, scannedAt: Date.now(), ports }
   } catch (error) {
-    console.warn('[workspace-ports] scan failed', error)
-    return {
-      platform: process.platform,
-      scannedAt: Date.now(),
-      ports: [],
-      unavailableReason: `Port scanning is unavailable on ${process.platform}.`
+    if (isCommandTimeoutError(error)) {
+      commandTimeoutBackoff.recordTimeout()
     }
+    console.warn('[workspace-ports] scan failed', error)
+    return makeUnavailableScan(`Port scanning is unavailable on ${process.platform}.`)
+  }
+}
+
+export function resetWorkspacePortScanTimeoutBackoffForTests(): void {
+  commandTimeoutBackoff.reset()
+}
+
+function makeUnavailableScan(reason: string): WorkspacePortScanResult {
+  return {
+    platform: process.platform,
+    scannedAt: Date.now(),
+    ports: [],
+    unavailableReason: reason
   }
 }
 
@@ -58,16 +89,30 @@ export function attributePortToWorkspace(
   port: Pick<RawListeningPort, 'cwd' | 'commandLine'>,
   worktrees: WorkspacePortProbe[]
 ): WorkspacePortOwner | undefined {
+  return attributePortToNormalizedWorkspaces(port, normalizeWorkspacePortProbes(worktrees))
+}
+
+function normalizeWorkspacePortProbes(
+  worktrees: readonly WorkspacePortProbe[]
+): NormalizedWorkspacePortProbe[] {
+  return worktrees.map((worktree) => ({
+    worktree,
+    normalizedPath: normalizeComparablePath(worktree.path)
+  }))
+}
+
+function attributePortToNormalizedWorkspaces(
+  port: Pick<RawListeningPort, 'cwd' | 'commandLine'>,
+  worktrees: readonly NormalizedWorkspacePortProbe[]
+): WorkspacePortOwner | undefined {
   const cwd = port.cwd ? normalizeComparablePath(port.cwd) : null
   const commandLine = port.commandLine ? normalizeComparableText(port.commandLine) : null
 
-  const cwdMatches = cwd
-    ? worktrees
-        .map((worktree) => ({ worktree, normalizedPath: normalizeComparablePath(worktree.path) }))
-        .filter(({ normalizedPath }) => isSameOrDescendant(cwd, normalizedPath))
-    : []
-
-  const cwdMatch = pickDeepestMatch(cwdMatches)
+  const cwdMatch = cwd
+    ? pickDeepestMatching(worktrees, ({ normalizedPath }) =>
+        isSameOrDescendant(cwd, normalizedPath)
+      )
+    : undefined
   if (cwdMatch) {
     return toOwner(cwdMatch.worktree, 'cwd')
   }
@@ -76,10 +121,9 @@ export function attributePortToWorkspace(
     return undefined
   }
 
-  const commandMatches = worktrees
-    .map((worktree) => ({ worktree, normalizedPath: normalizeComparablePath(worktree.path) }))
-    .filter(({ normalizedPath }) => includesPathBoundary(commandLine, normalizedPath))
-  const commandMatch = pickDeepestMatch(commandMatches)
+  const commandMatch = pickDeepestMatching(worktrees, ({ normalizedPath }) =>
+    includesPathBoundary(commandLine, normalizedPath)
+  )
   return commandMatch ? toOwner(commandMatch.worktree, 'command') : undefined
 }
 
@@ -114,11 +158,10 @@ export function parseLsofListeningOutput(output: string): RawListeningPort[] {
 export function parseNetstatListeningOutput(output: string): RawListeningPort[] {
   const ports: RawListeningPort[] = []
   for (const line of output.split('\n')) {
-    const trimmed = line.trim()
-    if (!trimmed.toUpperCase().startsWith('TCP')) {
+    const fields = getProcessOutputFields(line, 6)
+    if (fields[0]?.toUpperCase() !== 'TCP') {
       continue
     }
-    const fields = trimmed.split(/\s+/)
     const stateIndex = fields.findIndex((field) => field.toUpperCase() === 'LISTENING')
     if (stateIndex < 2) {
       continue
@@ -137,7 +180,7 @@ export function parseProcNetTcp(content: string): { host: string; port: number; 
   const results: { host: string; port: number; inode: number }[] = []
   const lines = content.split('\n')
   for (let i = 1; i < lines.length; i++) {
-    const fields = lines[i].trim().split(/\s+/)
+    const fields = getProcessOutputFields(lines[i], 10)
     if (fields.length < 10 || fields[3] !== '0A') {
       continue
     }
@@ -220,6 +263,9 @@ async function readProcNet(
 
 async function mapLinuxInodesToPids(inodes: Set<number>): Promise<Map<number, number>> {
   const result = new Map<number, number>()
+  if (inodes.size === 0) {
+    return result
+  }
   let pids: string[]
   try {
     pids = (await readdir('/proc')).filter((entry) => /^\d+$/.test(entry))
@@ -346,7 +392,7 @@ async function runCommand(command: string, args: string[]): Promise<{ stdout: st
       }
       settled = true
       child?.kill()
-      reject(new Error(`${command} timed out after ${COMMAND_TIMEOUT_MS}ms`))
+      reject(new CommandTimeoutError(command, COMMAND_TIMEOUT_MS))
     }, COMMAND_TIMEOUT_MS)
 
     const settle = (callback: () => void): void => {
@@ -383,6 +429,17 @@ async function runCommand(command: string, args: string[]): Promise<{ stdout: st
   })
 }
 
+class CommandTimeoutError extends Error {
+  constructor(command: string, timeoutMs: number) {
+    super(`${command} timed out after ${timeoutMs}ms`)
+    this.name = 'CommandTimeoutError'
+  }
+}
+
+function isCommandTimeoutError(error: unknown): boolean {
+  return error instanceof CommandTimeoutError
+}
+
 async function readTextIfAvailable(filePath: string): Promise<string | undefined> {
   try {
     return await readFile(filePath, 'utf-8')
@@ -393,10 +450,10 @@ async function readTextIfAvailable(filePath: string): Promise<string | undefined
 
 function enrichPort(
   port: RawListeningPort,
-  worktrees: WorkspacePortProbe[],
+  worktrees: readonly NormalizedWorkspacePortProbe[],
   urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup'>
 ): WorkspacePort {
-  const owner = attributePortToWorkspace(port, worktrees)
+  const owner = attributePortToNormalizedWorkspaces(port, worktrees)
   const base = {
     id: `${port.host}:${port.port}:${port.pid ?? 'unknown'}`,
     bindHost: port.host,
@@ -428,15 +485,15 @@ function enrichPort(
 
 function reconcileAdvertisedUrls(
   ports: RawListeningPort[],
-  worktrees: WorkspacePortProbe[],
+  worktrees: readonly NormalizedWorkspacePortProbe[],
   urlWatcher: Pick<AdvertisedUrlWatcher, 'reconcileScan'>
 ): void {
   const observationsByWorktree = new Map<string, { port: number; pid?: number }[]>()
   for (const worktree of worktrees) {
-    observationsByWorktree.set(worktree.id, [])
+    observationsByWorktree.set(worktree.worktree.id, [])
   }
   for (const port of ports) {
-    const owner = attributePortToWorkspace(port, worktrees)
+    const owner = attributePortToNormalizedWorkspaces(port, worktrees)
     if (!owner) {
       continue
     }
@@ -485,8 +542,20 @@ function toOwner(
   }
 }
 
-function pickDeepestMatch<T extends { normalizedPath: string }>(matches: T[]): T | undefined {
-  return matches.sort((a, b) => b.normalizedPath.length - a.normalizedPath.length)[0]
+function pickDeepestMatching<T extends { normalizedPath: string }>(
+  candidates: readonly T[],
+  predicate: (candidate: T) => boolean
+): T | undefined {
+  let best: T | undefined
+  for (const candidate of candidates) {
+    if (!predicate(candidate)) {
+      continue
+    }
+    if (!best || candidate.normalizedPath.length > best.normalizedPath.length) {
+      best = candidate
+    }
+  }
+  return best
 }
 
 function isSameOrDescendant(candidate: string, parent: string): boolean {
@@ -509,6 +578,11 @@ function includesPathBoundary(commandLine: string, normalizedPath: string): bool
 }
 
 function normalizeComparablePath(input: string): string {
+  if (input.startsWith('/')) {
+    // Why: command-line evidence for SSH/WSL/POSIX workspaces can be evaluated
+    // on a Windows host; path.resolve would reinterpret "/repo" as "G:/repo".
+    return normalizeComparableText(path.posix.resolve(input))
+  }
   return normalizeComparableText(path.resolve(input))
 }
 

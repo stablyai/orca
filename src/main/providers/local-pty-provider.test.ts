@@ -7,14 +7,16 @@ const {
   accessSyncMock,
   mkdirSyncMock,
   writeFileSyncMock,
-  spawnMock
+  spawnMock,
+  resolveAgentForegroundProcessMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
   accessSyncMock: vi.fn(),
   mkdirSyncMock: vi.fn(),
   writeFileSyncMock: vi.fn(),
-  spawnMock: vi.fn()
+  spawnMock: vi.fn(),
+  resolveAgentForegroundProcessMock: vi.fn()
 }))
 
 vi.mock('fs', () => ({
@@ -35,6 +37,10 @@ vi.mock('electron', () => ({
 
 vi.mock('node-pty', () => ({
   spawn: spawnMock
+}))
+
+vi.mock('./agent-foreground-process', () => ({
+  resolveAgentForegroundProcess: resolveAgentForegroundProcessMock
 }))
 
 vi.mock('../wsl', () => ({
@@ -82,12 +88,23 @@ describe('LocalPtyProvider', () => {
     accessSyncMock.mockReturnValue(undefined)
     mkdirSyncMock.mockReset()
     writeFileSyncMock.mockReset()
+    resolveAgentForegroundProcessMock.mockReset()
+    resolveAgentForegroundProcessMock.mockImplementation(
+      async (_pid: number, fallbackProcess: string | null) => fallbackProcess
+    )
 
     exitCb = undefined
     mockProc = {
-      onData: vi.fn(),
+      onData: vi.fn(() => ({ dispose: vi.fn() })),
       onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
         exitCb = cb
+        return {
+          dispose: () => {
+            if (exitCb === cb) {
+              exitCb = undefined
+            }
+          }
+        }
       }),
       write: vi.fn(),
       resize: vi.fn(),
@@ -118,6 +135,28 @@ describe('LocalPtyProvider', () => {
       const result = await provider.spawn({ cols: 80, rows: 24 })
       expect(result.id).toBeTruthy()
       expect(typeof result.id).toBe('string')
+    })
+
+    it('reattaches to an existing caller-supplied session id without spawning', async () => {
+      const first = await provider.spawn({ cols: 80, rows: 24, sessionId: 'serve-session-1' })
+      spawnMock.mockClear()
+
+      const second = await provider.spawn({ cols: 120, rows: 40, sessionId: first.id })
+
+      expect(second).toEqual({ id: 'serve-session-1', pid: 12345, isReattach: true })
+      expect(mockProc.resize).toHaveBeenCalledWith(120, 40)
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
+    it('does not reattach numeric caller session ids that can collide after restart', async () => {
+      const first = await provider.spawn({ cols: 80, rows: 24 })
+      spawnMock.mockClear()
+
+      const second = await provider.spawn({ cols: 120, rows: 40, sessionId: first.id })
+
+      expect(second.id).not.toBe(first.id)
+      expect(second.isReattach).toBeUndefined()
+      expect(spawnMock).toHaveBeenCalledOnce()
     })
 
     it('calls node-pty spawn with correct args', async () => {
@@ -157,6 +196,115 @@ describe('LocalPtyProvider', () => {
 
       const spawnCall = spawnMock.mock.calls.at(-1)!
       expect(spawnCall[2].env.CUSTOM_VAR).toBe('custom-value')
+    })
+
+    it('uses fallback shell readiness when startup-command shell spawn falls back', async () => {
+      vi.useFakeTimers()
+      try {
+        process.env.SHELL = '/usr/bin/fish'
+        spawnMock.mockImplementationOnce(() => {
+          throw new Error('fish failed')
+        })
+        spawnMock.mockReturnValue(mockProc)
+
+        await provider.spawn({ cols: 80, rows: 24, command: "printf 'linked issue context'" })
+
+        expect(spawnMock.mock.calls[0]?.[0]).toBe('/bin/zsh')
+        await Promise.resolve()
+        vi.advanceTimersByTime(50)
+        await Promise.resolve()
+        expect(mockProc.write).not.toHaveBeenCalled()
+
+        const dataCallback = mockProc.onData.mock.calls[0]?.[0] as (data: string) => void
+        dataCallback('\x1b]777;orca-shell-ready\x07user@host % ')
+        await Promise.resolve()
+        vi.advanceTimersByTime(29)
+        await Promise.resolve()
+        expect(mockProc.write).not.toHaveBeenCalled()
+
+        vi.advanceTimersByTime(1)
+        await Promise.resolve()
+        expect(mockProc.write).toHaveBeenCalledWith("printf 'linked issue context'\n")
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('releases held marker-prefix bytes when local shell readiness times out', async () => {
+      vi.useFakeTimers()
+      const onData = vi.fn()
+      provider.configure({ onData })
+      try {
+        await provider.spawn({ cols: 80, rows: 24, command: 'printf ready' })
+        const dataCallback = mockProc.onData.mock.calls[0]?.[0] as (data: string) => void
+
+        dataCallback('\x1b]777;orca-shell-ready')
+        expect(onData).not.toHaveBeenCalled()
+
+        vi.advanceTimersByTime(1500)
+        await Promise.resolve()
+
+        expect(onData).toHaveBeenCalledWith(
+          expect.any(String),
+          '\x1b]777;orca-shell-ready',
+          expect.any(Number)
+        )
+        expect(mockProc.write).not.toHaveBeenCalled()
+
+        vi.advanceTimersByTime(200)
+        await Promise.resolve()
+        expect(mockProc.write).toHaveBeenCalledWith('printf ready\n')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('releases held marker-prefix bytes when local shell exits before readiness', async () => {
+      const onData = vi.fn()
+      provider.configure({ onData })
+
+      await provider.spawn({ cols: 80, rows: 24, command: 'printf ready' })
+      const dataCallback = mockProc.onData.mock.calls[0]?.[0] as (data: string) => void
+
+      dataCallback('\x1b]777;orca-shell-ready')
+      expect(onData).not.toHaveBeenCalled()
+
+      exitCb?.({ exitCode: 0 })
+
+      expect(onData).toHaveBeenCalledWith(
+        expect.any(String),
+        '\x1b]777;orca-shell-ready',
+        expect.any(Number)
+      )
+    })
+
+    it('honors explicit terminal env overrides after deleting requested defaults', async () => {
+      provider.configure({
+        buildSpawnEnv: (_id, env) => {
+          env.TERM_PROGRAM = 'Orca'
+          env.ORCA_ATTRIBUTION_SHIM_DIR = '/tmp/orca-attribution'
+          env.PATH = `/tmp/orca-attribution:${env.PATH ?? ''}`
+          return env
+        }
+      })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        env: {
+          TERM: 'screen-256color',
+          PATH: '/tmp/orca-agent-teams-bin:/usr/bin',
+          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test'
+        },
+        envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].name).toBe('screen-256color')
+      expect(spawnCall[2].env.TERM).toBe('screen-256color')
+      expect(spawnCall[2].env.PATH.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
+      expect(spawnCall[2].env.TERM_PROGRAM).toBeUndefined()
+      expect(spawnCall[2].env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
     })
 
     it('does not pass a Windows Codex home into WSL terminals', async () => {
@@ -283,6 +431,7 @@ describe('LocalPtyProvider', () => {
       await provider.spawn({
         cols: 80,
         rows: 24,
+        worktreeId: 'repo-1::C:\\Users\\jin\\repo',
         cwd: 'C:\\Users\\jin\\repo',
         shellOverride: 'wsl.exe',
         terminalWindowsWslDistro: 'Debian'
@@ -294,10 +443,53 @@ describe('LocalPtyProvider', () => {
         '-d',
         'Debian',
         '--',
-        'bash',
+        'sh',
         '-c',
-        "cd '/mnt/c/Users/jin/repo' && exec bash -l"
+        expect.stringContaining("cd '/mnt/c/Users/jin/repo'")
       ])
+      expect(spawnCall[1][5]).toContain('exec "\\$_orca_wsl_shell" -l')
+      expect(spawnCall[2].env.HISTFILE).toContain('terminal-history-wsl/Debian')
+    })
+
+    it('marks Orca terminal handle for WSL import when buildSpawnEnv opts in', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const savedCodexHome = process.env.CODEX_HOME
+      const savedOrcaCodexHome = process.env.ORCA_CODEX_HOME
+      delete process.env.CODEX_HOME
+      delete process.env.ORCA_CODEX_HOME
+      provider.configure({
+        buildSpawnEnv: (_id, env, ctx) => {
+          env.ORCA_TERMINAL_HANDLE = 'term_wsl'
+          if (ctx?.isWsl) {
+            env.WSLENV = 'ORCA_TERMINAL_HANDLE/u'
+          }
+          return env
+        }
+      })
+
+      try {
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+        })
+      } finally {
+        if (savedCodexHome === undefined) {
+          delete process.env.CODEX_HOME
+        } else {
+          process.env.CODEX_HOME = savedCodexHome
+        }
+        if (savedOrcaCodexHome === undefined) {
+          delete process.env.ORCA_CODEX_HOME
+        } else {
+          process.env.ORCA_CODEX_HOME = savedOrcaCodexHome
+        }
+      }
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[0]).toBe('wsl.exe')
+      expect(spawnCall[2].env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
+      expect(spawnCall[2].env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u')
     })
 
     it('does not inherit parent Orca pane identity when caller omits pane env', async () => {
@@ -425,7 +617,7 @@ describe('LocalPtyProvider', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'wsl.exe',
-        ['-d', 'Ubuntu', '--', 'bash', '-c', "cd '/home/jin/repo/subdir' && exec bash -l"],
+        ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining("cd '/home/jin/repo/subdir'")],
         expect.objectContaining({ cwd: expect.any(String) })
       )
     })
@@ -528,6 +720,21 @@ describe('LocalPtyProvider', () => {
       expect(destroySpy).not.toHaveBeenCalled()
     })
 
+    it('cancels pending shell-ready startup delivery on forced shutdown', async () => {
+      vi.useFakeTimers()
+      try {
+        const { id } = await provider.spawn({ cols: 80, rows: 24, command: 'printf ready' })
+
+        await provider.shutdown(id, { immediate: true })
+        vi.advanceTimersByTime(2000)
+        await Promise.resolve()
+
+        expect(mockProc.write).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it('is a no-op for unknown PTY ids', async () => {
       await provider.shutdown('nonexistent', { immediate: true })
       expect(mockProc.kill).not.toHaveBeenCalled()
@@ -555,6 +762,24 @@ describe('LocalPtyProvider', () => {
     it('returns the process name', async () => {
       const { id } = await provider.spawn({ cols: 80, rows: 24 })
       expect(await provider.getForegroundProcess(id)).toBe('zsh')
+    })
+
+    it('uses the spawned Windows shell when node-pty reports only the terminal name', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      mockProc.process = 'xterm-256color'
+
+      const { id } = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe'
+      })
+
+      expect(await provider.getForegroundProcess(id)).toBe('powershell.exe')
+      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledWith(
+        mockProc.pid,
+        'powershell.exe',
+        expect.any(Object)
+      )
     })
 
     it('returns null for unknown PTY ids', async () => {

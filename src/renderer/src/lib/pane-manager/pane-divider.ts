@@ -1,4 +1,5 @@
 import type { PaneStyleOptions, ManagedPaneInternal } from './pane-manager-types'
+import { holdPtyResizesForPaneSubtrees } from './pane-pty-resize-hold'
 
 // ---------------------------------------------------------------------------
 // Divider creation & drag-to-resize
@@ -129,6 +130,7 @@ function attachDividerDrag(
   let prevEl: HTMLElement | null = null
   let nextEl: HTMLElement | null = null
   let activePointerId: number | null = null
+  let releasePtyResizeHold: { flush: () => void; cancel: () => void } | null = null
   const flexScheduler = createDividerFlexFrameScheduler({
     apply: (newPrev, newNext) => {
       if (!prevEl || !nextEl) {
@@ -157,6 +159,9 @@ function attachDividerDrag(
     if (!prevEl || !nextEl) {
       return
     }
+    // Why: shells redraw prompts on every PTY SIGWINCH. During a divider drag
+    // we still fit xterm locally, but forward only the final PTY size on drop.
+    releasePtyResizeHold = holdPtyResizesForPaneSubtrees([prevEl, nextEl])
 
     const prevRect = prevEl.getBoundingClientRect()
     const nextRect = nextEl.getBoundingClientRect()
@@ -214,6 +219,8 @@ function attachDividerDrag(
     if (nextEl) {
       callbacks.refitPanesUnder(nextEl)
     }
+    releasePtyResizeHold?.flush()
+    releasePtyResizeHold = null
     prevEl = null
     nextEl = null
 
@@ -239,12 +246,38 @@ function attachDividerDrag(
     callbacks.onLayoutChanged?.()
   }
 
+  const cancelActiveDrag = (): void => {
+    dragging = false
+    flexScheduler.cancel()
+    releasePtyResizeHold?.cancel()
+    releasePtyResizeHold = null
+    activePointerId = null
+    prevEl = null
+    nextEl = null
+    divider.classList.remove('is-dragging')
+  }
+
+  const onPointerCancel = (): void => {
+    cancelActiveDrag()
+  }
+
+  const onLostPointerCapture = (): void => {
+    if (!dragging) {
+      return
+    }
+    cancelActiveDrag()
+  }
+
   divider.addEventListener('pointerdown', onPointerDown)
   divider.addEventListener('pointermove', onPointerMove)
   divider.addEventListener('pointerup', onPointerUp)
+  divider.addEventListener('pointercancel', onPointerCancel)
+  divider.addEventListener('lostpointercapture', onLostPointerCapture)
   divider.addEventListener('dblclick', onDoubleClick)
   dividerDragCleanups.set(divider, () => {
     flexScheduler.cancel()
+    releasePtyResizeHold?.cancel()
+    releasePtyResizeHold = null
     if (activePointerId !== null) {
       try {
         if (divider.hasPointerCapture(activePointerId)) {
@@ -262,6 +295,8 @@ function attachDividerDrag(
     divider.removeEventListener('pointerdown', onPointerDown)
     divider.removeEventListener('pointermove', onPointerMove)
     divider.removeEventListener('pointerup', onPointerUp)
+    divider.removeEventListener('pointercancel', onPointerCancel)
+    divider.removeEventListener('lostpointercapture', onLostPointerCapture)
     divider.removeEventListener('dblclick', onDoubleClick)
   })
 }

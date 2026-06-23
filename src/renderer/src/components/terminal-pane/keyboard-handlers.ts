@@ -2,7 +2,7 @@
  * precedence in one ordered handler so shell input, pane commands, search, and
  * split actions do not race across separate window listeners. */
 import { useEffect } from 'react'
-import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
@@ -12,11 +12,25 @@ import {
   type KeybindingPlatform,
   type TerminalShortcutPolicy
 } from '../../../../shared/keybindings'
-import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
+import { type PaneCwdMap } from './resolve-split-cwd'
 import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
 import { normalizeSelectedTextForFileSearch } from '@/lib/file-search-selection'
-import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-session'
+import { isFindQueryTooLarge } from '@/lib/find-query-bounds'
 import { handleEmptyFloatingWorkspacePanelCloseShortcut } from '@/lib/floating-workspace-terminal-actions'
+import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
+import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
+import { useAppStore } from '@/store'
+import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+
+export function recordKeyboardCreatedTerminalPaneSplit(
+  createdPane: unknown,
+  args: {
+    source: 'contextual_tour' | 'keyboard'
+    direction: 'vertical' | 'horizontal'
+  }
+): boolean {
+  return recordCreatedTerminalPaneSplit(createdPane, args)
+}
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -73,6 +87,9 @@ export function matchSearchNavigate(
   if (!searchState.query) {
     return null
   }
+  if (isFindQueryTooLarge(searchState.query)) {
+    return null
+  }
   return e.shiftKey ? 'previous' : 'next'
 }
 
@@ -92,6 +109,7 @@ export function matchFileSearchShortcut(
 }
 
 type KeyboardHandlersDeps = {
+  tabId: string
   isActive: boolean
   keyboardScopeRef: React.RefObject<HTMLElement | null>
   managerRef: React.RefObject<PaneManager | null>
@@ -108,6 +126,7 @@ type KeyboardHandlersDeps = {
   setSearchOpen: React.Dispatch<React.SetStateAction<boolean>>
   onSearchSelectedText: (text: string) => void
   onRequestClosePane: (paneId: number) => void
+  onClearPaneScrollback: (pane: ManagedPane) => void
   searchOpenRef: React.RefObject<boolean>
   searchStateRef: React.RefObject<SearchState>
   macOptionAsAltRef: React.RefObject<MacOptionAsAlt>
@@ -116,6 +135,7 @@ type KeyboardHandlersDeps = {
 }
 
 export function useTerminalKeyboardShortcuts({
+  tabId,
   isActive,
   keyboardScopeRef,
   managerRef,
@@ -131,6 +151,7 @@ export function useTerminalKeyboardShortcuts({
   setSearchOpen,
   onSearchSelectedText,
   onRequestClosePane,
+  onClearPaneScrollback,
   searchOpenRef,
   searchStateRef,
   macOptionAsAltRef,
@@ -235,7 +256,10 @@ export function useTerminalKeyboardShortcuts({
         if (!pane) {
           return
         }
-        paneTransportsRef.current.get(pane.id)?.sendInput(action.data)
+        const sent = paneTransportsRef.current.get(pane.id)?.sendInput(action.data) === true
+        if (sent) {
+          recordTerminalUserInputForLeaf(tabId, pane.leafId)
+        }
         return
       }
 
@@ -277,7 +301,22 @@ export function useTerminalKeyboardShortcuts({
         e.stopImmediatePropagation()
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
         if (pane) {
-          pane.terminal.clear()
+          onClearPaneScrollback(pane)
+        }
+        return
+      }
+
+      if (action.type === 'scrollViewport') {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        const pane = manager.getActivePane() ?? manager.getPanes()[0]
+        if (!pane) {
+          return
+        }
+        if (action.position === 'top') {
+          pane.terminal.scrollToLine(0)
+        } else {
+          pane.terminal.scrollToBottom()
         }
         return
       }
@@ -372,30 +411,16 @@ export function useTerminalKeyboardShortcuts({
         if (!pane) {
           return
         }
-        const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
-        if (splitWebRuntimeTerminal(ptyId, action.direction)) {
-          return
-        }
-        // Split-pane CWD inheritance (docs/ssh-split-pane-inherit-cwd.md):
-        // if we have a confirmed live OSC 7 for the source pane, split
-        // synchronously to preserve chaining on rapid Cmd+D. Otherwise fall
-        // back to an async resolve that queries pty.getCwd.
-        const cached = paneCwdRef.current.get(pane.id)
-        if (cached?.confirmed && cached.cwd) {
-          manager.splitPane(pane.id, action.direction, { cwd: cached.cwd })
-          return
-        }
-        const paneIdAtDispatch = pane.id
-        const directionAtDispatch = action.direction
-        void (async () => {
-          const cwd = await resolveSplitCwd({
-            paneCwdMap: paneCwdRef.current,
-            sourcePaneId: paneIdAtDispatch,
-            sourcePtyId: ptyId,
-            fallbackCwd
-          })
-          managerRef.current?.splitPane(paneIdAtDispatch, directionAtDispatch, { cwd })
-        })()
+        splitTerminalPaneWithInheritedCwd({
+          manager,
+          getManager: () => managerRef.current,
+          paneTransports: paneTransportsRef.current,
+          paneCwdMap: paneCwdRef.current,
+          fallbackCwd,
+          pane,
+          direction: action.direction,
+          source: getKeyboardSplitTelemetrySource()
+        })
       }
     }
 
@@ -423,10 +448,18 @@ export function useTerminalKeyboardShortcuts({
     setSearchOpen,
     onSearchSelectedText,
     onRequestClosePane,
+    onClearPaneScrollback,
     searchOpenRef,
     searchStateRef,
     macOptionAsAltRef,
     keybindings,
-    terminalShortcutPolicy
+    terminalShortcutPolicy,
+    tabId
   ])
+}
+
+function getKeyboardSplitTelemetrySource(): 'contextual_tour' | 'keyboard' {
+  return useAppStore.getState().activeContextualTourId === 'workspace-agent-sessions'
+    ? 'contextual_tour'
+    : 'keyboard'
 }

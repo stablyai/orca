@@ -85,11 +85,7 @@ function isRunnableCommand(platform: NodeJS.Platform, candidate: string): boolea
   }
 }
 
-function getVersionManagerDirectories(
-  platform: NodeJS.Platform,
-  homePath: string,
-  executableNames: string[]
-): string[] {
+function getBaseVersionManagerDirectories(platform: NodeJS.Platform, homePath: string): string[] {
   const directories = [
     join(homePath, '.volta', 'bin'),
     join(homePath, '.asdf', 'shims'),
@@ -99,25 +95,6 @@ function getVersionManagerDirectories(
     // or CLI tools through mise can't be found by the fallback probe.
     join(homePath, '.local', 'share', 'mise', 'shims')
   ]
-
-  // Why: GUI-launched Electron apps do not inherit shell init from version
-  // managers like nvm, so `spawn('codex')` can fail for users who installed
-  // Codex under a Node-managed bin directory even though Terminal can run it.
-  // Probe the newest installed nvm version explicitly so rate-limit tracking
-  // and account login use the same binary the shell would expose.
-  const nvmVersionsDir = join(homePath, '.nvm', 'versions', 'node')
-  if (existsSync(nvmVersionsDir)) {
-    const nvmVersionDirectories = readdirSync(nvmVersionsDir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
-      .sort(compareVersionDesc)
-      .map((entry) => join(nvmVersionsDir, entry, 'bin'))
-
-    const firstNvmMatch = findFirstExecutable(platform, nvmVersionDirectories, executableNames)
-    if (firstNvmMatch) {
-      directories.unshift(dirname(firstNvmMatch))
-    }
-  }
 
   if (platform === 'win32') {
     // Why: Anthropic's native Windows installer places claude.exe here, and
@@ -146,6 +123,40 @@ function getVersionManagerDirectories(
   return directories
 }
 
+function getNvmVersionDirectories(homePath: string): string[] {
+  const nvmVersionsDir = join(homePath, '.nvm', 'versions', 'node')
+  if (!existsSync(nvmVersionsDir)) {
+    return []
+  }
+
+  return readdirSync(nvmVersionsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort(compareVersionDesc)
+    .map((entry) => join(nvmVersionsDir, entry, 'bin'))
+}
+
+function getVersionManagerDirectories(
+  platform: NodeJS.Platform,
+  homePath: string,
+  executableNames: string[]
+): string[] {
+  const directories = getBaseVersionManagerDirectories(platform, homePath)
+
+  // Why: GUI-launched Electron apps do not inherit shell init from nvm, so
+  // command resolution probes the newest installed Node versions explicitly.
+  const firstNvmMatch = findFirstExecutable(
+    platform,
+    getNvmVersionDirectories(homePath),
+    executableNames
+  )
+  if (firstNvmMatch) {
+    directories.unshift(dirname(firstNvmMatch))
+  }
+
+  return directories
+}
+
 export function resolveCliCommand(
   commandName: string,
   options: ResolveCommandOptions = {}
@@ -165,6 +176,33 @@ export function resolveCliCommand(
     executableNames
   )
   return versionManagerCandidate ?? commandName
+}
+
+export function resolveCliCommands(
+  commandNames: readonly string[],
+  options: ResolveCommandOptions = {}
+): Map<string, string> {
+  const platform = options.platform ?? process.platform
+  const pathEnv = options.pathEnv ?? process.env.PATH ?? process.env.Path ?? null
+  const pathDirectories = splitPath(pathEnv)
+  const homePath = options.homePath ?? homedir()
+  // Why: agent detection probes many CLIs at once; compute expensive install
+  // directories, especially nvm versions, once per detection pass.
+  const installDirectories = [
+    ...getNvmVersionDirectories(homePath),
+    ...getBaseVersionManagerDirectories(platform, homePath)
+  ]
+  const resolved = new Map<string, string>()
+
+  for (const commandName of new Set(commandNames)) {
+    const executableNames = getExecutableNames(platform, commandName)
+    const pathCandidate = findFirstExecutable(platform, pathDirectories, executableNames)
+    const installCandidate =
+      pathCandidate ?? findFirstExecutable(platform, installDirectories, executableNames)
+    resolved.set(commandName, installCandidate ?? commandName)
+  }
+
+  return resolved
 }
 
 export function resolveCodexCommand(options: ResolveCommandOptions = {}): string {

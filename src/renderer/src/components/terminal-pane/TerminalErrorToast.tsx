@@ -1,7 +1,12 @@
+import { translate } from '@/i18n/i18n'
 const SSH_PREFIX = 'SSH connection is not active'
 const STALE_NODE_PTY_DAEMON_MARKERS = [
   "Daemon's node-pty install is gone",
   'node-pty: posix_spawn failed: ENOENT'
+]
+const STALE_DAEMON_CWD_MARKERS = [
+  "Daemon's working directory is gone",
+  'node-pty: daemon_cwd failed: ENOENT'
 ]
 
 function isSshError(error: string): boolean {
@@ -9,7 +14,9 @@ function isSshError(error: string): boolean {
 }
 
 export function shouldOfferDaemonRestart(error: string): boolean {
-  return STALE_NODE_PTY_DAEMON_MARKERS.every((marker) => error.includes(marker))
+  return [STALE_NODE_PTY_DAEMON_MARKERS, STALE_DAEMON_CWD_MARKERS].some((markers) =>
+    markers.every((marker) => error.includes(marker))
+  )
 }
 
 export function TerminalErrorToast({
@@ -49,17 +56,26 @@ export function TerminalErrorToast({
           {showDaemonRestart ? (
             <>
               {'\n'}
-              Restart the terminal daemon from here to clear stale daemon state.
+              {translate(
+                'auto.components.terminal.pane.TerminalErrorToast.cc6d997c65',
+                'Restart the terminal daemon from here to clear stale daemon state.'
+              )}
             </>
           ) : !ssh ? (
             <>
               {'\n'}
-              If this persists, please{' '}
+              {translate(
+                'auto.components.terminal.pane.TerminalErrorToast.5c8ce20be6',
+                'If this persists, please'
+              )}{' '}
               <a
                 href="https://github.com/stablyai/orca/issues"
                 style={{ color: '#fca5a5', textDecoration: 'underline' }}
               >
-                file an issue
+                {translate(
+                  'auto.components.terminal.pane.TerminalErrorToast.a7e2fd2699',
+                  'file an issue'
+                )}
               </a>
               .
             </>
@@ -81,7 +97,10 @@ export function TerminalErrorToast({
               flexShrink: 0
             }}
           >
-            Restart daemon
+            {translate(
+              'auto.components.terminal.pane.TerminalErrorToast.e4aa243f8c',
+              'Restart daemon'
+            )}
           </button>
         ) : null}
         <button

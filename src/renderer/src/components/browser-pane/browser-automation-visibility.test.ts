@@ -34,7 +34,7 @@ describe('browser automation visibility leases', () => {
     expect(isBrowserAutomationVisible('page-1')).toBe(false)
   })
 
-  it('installs a main-process bridge that waits for paint before returning a token', async () => {
+  it('installs a main-process bridge that keeps the page visible while waiting for paint', async () => {
     const animationFrameCallbacks: FrameRequestCallback[] = []
     vi.stubGlobal('window', {
       requestAnimationFrame: (callback: FrameRequestCallback) => {
@@ -50,13 +50,13 @@ describe('browser automation visibility leases', () => {
     const acquirePromise = bridge?.acquire('page-2')
     await Promise.resolve()
 
-    expect(isBrowserAutomationVisible('page-2')).toBe(false)
+    expect(isBrowserAutomationVisible('page-2')).toBe(true)
     expect(animationFrameCallbacks).toHaveLength(1)
 
     animationFrameCallbacks.shift()?.(0)
     await Promise.resolve()
 
-    expect(isBrowserAutomationVisible('page-2')).toBe(false)
+    expect(isBrowserAutomationVisible('page-2')).toBe(true)
     expect(animationFrameCallbacks).toHaveLength(1)
 
     animationFrameCallbacks.shift()?.(16)
@@ -68,18 +68,28 @@ describe('browser automation visibility leases', () => {
     expect(isBrowserAutomationVisible('page-2')).toBe(false)
   })
 
-  it('does not allocate a main-process bridge lease when the paint wait hangs', async () => {
+  it('releases the main-process bridge lease when the paint wait hangs', async () => {
+    vi.useFakeTimers()
     vi.stubGlobal('window', {
       requestAnimationFrame: () => 1
     })
-    const { isBrowserAutomationVisible } = await import('./browser-automation-visibility')
+    try {
+      const { isBrowserAutomationVisible } = await import('./browser-automation-visibility')
 
-    const bridge = window.__orcaBrowserAutomationVisibility
-    expect(bridge).toBeTruthy()
+      const bridge = window.__orcaBrowserAutomationVisibility
+      expect(bridge).toBeTruthy()
 
-    void bridge?.acquire('page-hung-paint')
-    await Promise.resolve()
+      const acquirePromise = bridge?.acquire('page-hung-paint')
+      await Promise.resolve()
 
-    expect(isBrowserAutomationVisible('page-hung-paint')).toBe(false)
+      expect(isBrowserAutomationVisible('page-hung-paint')).toBe(true)
+
+      await vi.advanceTimersByTimeAsync(2_000)
+      await expect(acquirePromise).resolves.toBeNull()
+
+      expect(isBrowserAutomationVisible('page-hung-paint')).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

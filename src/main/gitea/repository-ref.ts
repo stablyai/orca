@@ -9,6 +9,10 @@ export type GiteaRepoRef = {
   webBaseUrl: string
 }
 
+type LocalGitExecOptions = {
+  wslDistro?: string
+}
+
 const KNOWN_NON_GITEA_HOSTS = new Set([
   'github.com',
   'gitlab.com',
@@ -16,11 +20,28 @@ const KNOWN_NON_GITEA_HOSTS = new Set([
   'dev.azure.com',
   'ssh.dev.azure.com'
 ])
+const REPO_REF_CACHE_MAX_ENTRIES = 512
 const repoRefCache = new Map<string, GiteaRepoRef | null>()
 
 /** @internal - exposed for tests only */
 export function _resetGiteaRepoRefCache(): void {
   repoRefCache.clear()
+}
+
+/** @internal - exposed for tests only */
+export function _getGiteaRepoRefCacheSize(): number {
+  return repoRefCache.size
+}
+
+function rememberRepoRefCacheEntry(cacheKey: string, value: GiteaRepoRef | null): void {
+  repoRefCache.set(cacheKey, value)
+  while (repoRefCache.size > REPO_REF_CACHE_MAX_ENTRIES) {
+    const oldestKey = repoRefCache.keys().next().value
+    if (oldestKey === undefined) {
+      return
+    }
+    repoRefCache.delete(oldestKey)
+  }
 }
 
 function decodeSegment(value: string): string {
@@ -32,7 +53,7 @@ function decodeSegment(value: string): string {
 }
 
 function parsePath(pathname: string): { owner: string; repo: string; basePath: string } | null {
-  const withoutSuffix = pathname.replace(/\.git$/i, '')
+  const withoutSuffix = pathname.replace(/\/+$/, '').replace(/\.git$/i, '')
   const parts = withoutSuffix
     .split('/')
     .map((part) => part.trim())
@@ -123,9 +144,11 @@ export function parseGiteaRepoRef(remoteUrl: string): GiteaRepoRef | null {
 export async function getGiteaRepoRefForRemote(
   repoPath: string,
   remoteName: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GiteaRepoRef | null> {
-  const cacheKey = `${connectionId ?? 'local'}\0${repoPath}\0${remoteName}`
+  const runtimeKey = connectionId ?? `local:${localGitOptions.wslDistro ?? 'host'}`
+  const cacheKey = `${runtimeKey}\0${repoPath}\0${remoteName}`
   if (repoRefCache.has(cacheKey)) {
     return repoRefCache.get(cacheKey)!
   }
@@ -137,10 +160,11 @@ export async function getGiteaRepoRefForRemote(
     const { stdout } = sshGitProvider
       ? await sshGitProvider.exec(['remote', 'get-url', remoteName], repoPath)
       : await gitExecFileAsync(['remote', 'get-url', remoteName], {
-          cwd: repoPath
+          cwd: repoPath,
+          ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
         })
     const result = parseGiteaRepoRef(stdout)
-    repoRefCache.set(cacheKey, result)
+    rememberRepoRefCacheEntry(cacheKey, result)
     return result
   } catch {
     if (connectionId) {
@@ -148,14 +172,15 @@ export async function getGiteaRepoRefForRemote(
       // caching them as "not Gitea" would poison the repo for the session.
       return null
     }
-    repoRefCache.set(cacheKey, null)
+    rememberRepoRefCacheEntry(cacheKey, null)
     return null
   }
 }
 
 export async function getGiteaRepoRef(
   repoPath: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GiteaRepoRef | null> {
-  return getGiteaRepoRefForRemote(repoPath, 'origin', connectionId)
+  return getGiteaRepoRefForRemote(repoPath, 'origin', connectionId, localGitOptions)
 }

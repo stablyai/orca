@@ -35,6 +35,11 @@ describe('shouldIncludeQuickOpenPath', () => {
   it('hides GNOME virtual FS runtime mount from Quick Open', () => {
     expect(shouldIncludeQuickOpenPath('.gvfs/mount/file')).toBe(false)
   })
+  it('hides local share runtime state without hiding all .local files', () => {
+    expect(shouldIncludeQuickOpenPath('.local/share/app/state.db')).toBe(false)
+    expect(shouldIncludeQuickOpenPath('nested/.local/share/app/state.db')).toBe(false)
+    expect(shouldIncludeQuickOpenPath('.local/bin/tool')).toBe(true)
+  })
 
   it('does NOT blocklist user-authored dirs like .config, .ssh, .github', () => {
     expect(HIDDEN_DIR_BLOCKLIST.has('.config')).toBe(false)
@@ -111,6 +116,7 @@ describe('buildHiddenDirExcludeGlobs', () => {
     expect(globs).toContain('!**/node_modules')
     expect(globs).toContain('!**/.git')
     expect(globs).toContain('!**/.cache')
+    expect(globs).toContain('!**/.local/share')
     // Directory-match form (not contents form) — contents form lets rg still
     // descend into the directory.
     expect(globs).not.toContain('!**/node_modules/**')
@@ -233,12 +239,12 @@ describe('normalizeQuickOpenRgLine', () => {
 describe('buildGitLsFilesArgsForQuickOpen', () => {
   it('primary pass is --cached --others --exclude-standard', () => {
     const { primary } = buildGitLsFilesArgsForQuickOpen()
-    expect(primary).toEqual(['--cached', '--others', '--exclude-standard'])
+    expect(primary).toEqual(['-z', '--cached', '--others', '--exclude-standard'])
   })
 
   it('ignored pass surfaces ignored files without .env* pathspec whitelist', () => {
     const { ignoredPass } = buildGitLsFilesArgsForQuickOpen()
-    expect(ignoredPass).toEqual(['--others', '--ignored', '--exclude-standard'])
+    expect(ignoredPass).toEqual(['-z', '--others', '--ignored', '--exclude-standard'])
     expect(ignoredPass).not.toContain('.env*')
     expect(ignoredPass).not.toContain(':(glob)**/.env*')
   })

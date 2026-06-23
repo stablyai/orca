@@ -43,7 +43,9 @@ export function classifyConnection(args: {
   }
 
   // Connected / connecting / handshaking are normal.
-  if (state === 'connected') return { kind: 'normal', label: 'Connected' }
+  if (state === 'connected') {
+    return { kind: 'normal', label: 'Connected' }
+  }
   if (state === 'connecting' || state === 'handshaking') {
     return { kind: 'normal', label: 'Connecting…' }
   }

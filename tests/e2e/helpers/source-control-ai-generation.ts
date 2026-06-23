@@ -25,6 +25,30 @@ export async function openSourceControl(page: Page, worktreeId: string): Promise
     )
     .toBe(true)
 }
+
+export async function openChecks(page: Page, worktreeId: string): Promise<void> {
+  await page.evaluate((targetWorktreeId) => {
+    const state = window.__store?.getState()
+    state?.setActiveWorktree(targetWorktreeId)
+    state?.setRightSidebarOpen(true)
+    state?.setRightSidebarTab('checks')
+  }, worktreeId)
+  await expect
+    .poll(
+      () =>
+        page.evaluate((targetWorktreeId) => {
+          const state = window.__store?.getState()
+          return (
+            state?.activeWorktreeId === targetWorktreeId &&
+            state.rightSidebarOpen &&
+            state.rightSidebarTab === 'checks'
+          )
+        }, worktreeId),
+      { timeout: 5_000 }
+    )
+    .toBe(true)
+}
+
 export async function seedCreatePrComposer(page: Page): Promise<{
   primaryWorktreeId: string
   prWorktreeId: string
@@ -40,12 +64,17 @@ export async function seedCreatePrComposer(page: Page): Promise<{
 
     const state = store.getState()
     const worktrees = Object.values(state.worktreesByRepo).flat()
-    const primaryWorktree = worktrees.find((entry) =>
-      entry.branch.replace(/^refs\/heads\//, '').match(/^(main|master)$/)
-    )
     const prWorktree = worktrees.find(
       (entry) => entry.branch.replace(/^refs\/heads\//, '') === 'e2e-secondary'
     )
+    const primaryWorktree = prWorktree
+      ? worktrees.find(
+          (entry) =>
+            entry.repoId === prWorktree.repoId &&
+            entry.id !== prWorktree.id &&
+            !entry.branch.replace(/^refs\/heads\//, '').startsWith('e2e-')
+        )
+      : undefined
     if (!primaryWorktree || !prWorktree) {
       throw new Error('E2E fixture did not expose the expected main + secondary worktrees')
     }
@@ -116,12 +145,17 @@ export async function seedCommitMessageComposer(page: Page): Promise<{
 
     const state = store.getState()
     const worktrees = Object.values(state.worktreesByRepo).flat()
-    const primaryWorktree = worktrees.find((entry) =>
-      entry.branch.replace(/^refs\/heads\//, '').match(/^(main|master)$/)
-    )
     const commitWorktree = worktrees.find(
       (entry) => entry.branch.replace(/^refs\/heads\//, '') === 'e2e-secondary'
     )
+    const primaryWorktree = commitWorktree
+      ? worktrees.find(
+          (entry) =>
+            entry.repoId === commitWorktree.repoId &&
+            entry.id !== commitWorktree.id &&
+            !entry.branch.replace(/^refs\/heads\//, '').startsWith('e2e-')
+        )
+      : undefined
     if (!primaryWorktree || !commitWorktree) {
       throw new Error('E2E fixture did not expose the expected main + secondary worktrees')
     }
@@ -192,13 +226,19 @@ export async function seedCleanBranchEmptyState(
       })()
 
     const state = store.getState()
-    const primaryWorktree = Object.values(state.worktreesByRepo)
-      .flat()
-      .find((entry) =>
-        targetWorktreeId
-          ? entry.id === targetWorktreeId
+    const worktrees = Object.values(state.worktreesByRepo).flat()
+    const secondaryWorktree = worktrees.find(
+      (entry) => entry.branch.replace(/^refs\/heads\//, '') === 'e2e-secondary'
+    )
+    const primaryWorktree = worktrees.find((entry) =>
+      targetWorktreeId
+        ? entry.id === targetWorktreeId
+        : secondaryWorktree
+          ? entry.repoId === secondaryWorktree.repoId &&
+            entry.id !== secondaryWorktree.id &&
+            !entry.branch.replace(/^refs\/heads\//, '').startsWith('e2e-')
           : entry.branch.replace(/^refs\/heads\//, '').match(/^(main|master)$/)
-      )
+    )
     if (!primaryWorktree) {
       throw new Error('Primary worktree not found')
     }

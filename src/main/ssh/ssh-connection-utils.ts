@@ -74,6 +74,16 @@ export function isTransientError(err: Error): boolean {
   return false
 }
 
+const SYSTEM_SSH_FALLBACK_ERROR_CODES = new Set(['EHOSTUNREACH', 'ENETUNREACH'])
+
+export function isSystemSshFallbackError(err: Error): boolean {
+  const code = (err as NodeJS.ErrnoException).code
+  if (code && SYSTEM_SSH_FALLBACK_ERROR_CODES.has(code)) {
+    return true
+  }
+  return err.message.includes('EHOSTUNREACH') || err.message.includes('ENETUNREACH')
+}
+
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -86,6 +96,10 @@ export function wrapRemoteCommandForPosixShell(command: string): string {
   // Why: sshd asks the user's login shell to parse exec commands. Orca emits
   // POSIX sh snippets; `exec` avoids leaving that shell around for relay bridges.
   return `exec /bin/sh -c ${shellEscape(command)}`
+}
+
+export type SshExecOptions = {
+  wrapCommand?: boolean
 }
 
 function cmdEscape(s: string): string {

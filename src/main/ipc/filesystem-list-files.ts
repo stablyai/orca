@@ -5,11 +5,13 @@ import { resolveAuthorizedPath } from './filesystem-auth'
 import { checkRgAvailable } from './rg-availability'
 import { gitSpawn, wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
+import { getLocalGitOptionsForRegisteredWorktree } from './local-worktree-runtime-options'
 import {
   buildExcludePathPrefixes,
   buildGitLsFilesArgsForQuickOpen,
   buildRgArgsForQuickOpen,
   normalizeQuickOpenRgLine,
+  type RgOutputMode,
   shouldExcludeQuickOpenRelPath,
   shouldIncludeQuickOpenPath
 } from '../../shared/quick-open-filter'
@@ -20,6 +22,11 @@ export async function listQuickOpenFiles(
   excludePaths?: string[]
 ): Promise<string[]> {
   const authorizedRootPath = await resolveAuthorizedPath(rootPath, store)
+  const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
+    store,
+    rootPath,
+    authorizedRootPath
+  )
 
   // Why: when the main worktree sits at the repo root, linked worktrees are
   // nested subdirectories. Without excluding them, rg/git lists files from
@@ -31,17 +38,16 @@ export async function listQuickOpenFiles(
   // spawn('rg') emits 'close' before 'error' on some platforms, causing
   // the handler to resolve with empty results before the git fallback
   // can run.
-  const rgAvailable = await checkRgAvailable(authorizedRootPath)
+  const rgAvailable = await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro)
   if (!rgAvailable) {
-    return listFilesWithGit(authorizedRootPath, excludePathPrefixes)
+    return listFilesWithGit(authorizedRootPath, excludePathPrefixes, localGitOptions)
   }
 
   const files = new Set<string>()
   const children: ChildProcess[] = []
-  // Why: when rg runs inside WSL, output paths are Linux-native
-  // (e.g. /home/user/repo/src/file.ts). Translate them back to Windows
-  // UNC paths up-front before the shared line normalizer runs.
-  const wslInfo = parseWslPath(authorizedRootPath)
+  // Why: WSL-routed rg can emit Linux-native absolute paths. UNC repos carry
+  // their distro in the path; Windows-path repos carry it in project runtime.
+  const wslDistroForOutput = parseWslPath(authorizedRootPath)?.distro ?? localGitOptions.wslDistro
 
   const { primary, ignoredPass } = buildRgArgsForQuickOpen({
     // Why: rg evaluates root-relative exclude globs against cwd only when the
@@ -62,8 +68,13 @@ export async function listQuickOpenFiles(
 
       const processLine = (rawLine: string): void => {
         const translated =
-          wslInfo && rawLine.startsWith('/') ? toWindowsWslPath(rawLine, wslInfo.distro) : rawLine
-        const relPath = normalizeQuickOpenRgLine(translated, { kind: 'cwd-relative' })
+          wslDistroForOutput && rawLine.startsWith('/')
+            ? toWindowsWslPath(rawLine, wslDistroForOutput)
+            : rawLine
+        const relPath = normalizeQuickOpenRgLine(
+          translated,
+          getQuickOpenRgOutputMode(rawLine, translated, authorizedRootPath)
+        )
         if (relPath === null) {
           return
         }
@@ -79,6 +90,7 @@ export async function listQuickOpenFiles(
 
       const child = wslAwareSpawn('rg', args, {
         cwd: authorizedRootPath,
+        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
         stdio: ['ignore', 'pipe', 'pipe']
       })
       children.push(child)
@@ -179,6 +191,22 @@ export async function listQuickOpenFiles(
   return Array.from(files)
 }
 
+function getQuickOpenRgOutputMode(
+  rawLine: string,
+  translatedLine: string,
+  rootPath: string
+): RgOutputMode {
+  if (
+    translatedLine !== rawLine ||
+    rawLine.startsWith('/') ||
+    /^[A-Za-z]:[\\/]/.test(rawLine) ||
+    rawLine.startsWith('\\\\')
+  ) {
+    return { kind: 'absolute', rootPath }
+  }
+  return { kind: 'cwd-relative' }
+}
+
 /**
  * Fallback file lister using git ls-files. Used when rg is not available.
  *
@@ -188,7 +216,8 @@ export async function listQuickOpenFiles(
  */
 function listFilesWithGit(
   rootPath: string,
-  excludePathPrefixes: readonly string[]
+  excludePathPrefixes: readonly string[],
+  localGitOptions: { wslDistro?: string }
 ): Promise<string[]> {
   const files = new Set<string>()
   const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen(excludePathPrefixes)
@@ -198,21 +227,18 @@ function listFilesWithGit(
       let buf = ''
       let done = false
 
-      const processLine = (line: string): void => {
-        if (line.charCodeAt(line.length - 1) === 13 /* \r */) {
-          line = line.substring(0, line.length - 1)
-        }
-        if (!line) {
+      const processPath = (path: string): void => {
+        if (!path) {
           return
         }
         // Why: git exclude pathspecs prune most hits, but post-filter is
         // still required because pathspec semantics differ subtly from the
         // rg globs and exist as a correctness backstop.
-        if (shouldExcludeQuickOpenRelPath(line, excludePathPrefixes)) {
+        if (shouldExcludeQuickOpenRelPath(path, excludePathPrefixes)) {
           return
         }
-        if (shouldIncludeQuickOpenPath(line)) {
-          files.add(line)
+        if (shouldIncludeQuickOpenPath(path)) {
+          files.add(path)
         }
       }
 
@@ -220,17 +246,18 @@ function listFilesWithGit(
       // rootPath and use the output directly — no prefix stripping needed.
       const child = gitSpawn(['ls-files', ...args], {
         cwd: rootPath,
+        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
         stdio: ['ignore', 'pipe', 'pipe']
       })
       let timer: ReturnType<typeof setTimeout>
       const handleStdoutData = (chunk: string): void => {
         buf += chunk
         let start = 0
-        let newlineIdx = buf.indexOf('\n', start)
-        while (newlineIdx !== -1) {
-          processLine(buf.substring(start, newlineIdx))
-          start = newlineIdx + 1
-          newlineIdx = buf.indexOf('\n', start)
+        let nulIdx = buf.indexOf('\0', start)
+        while (nulIdx !== -1) {
+          processPath(buf.substring(start, nulIdx))
+          start = nulIdx + 1
+          nulIdx = buf.indexOf('\0', start)
         }
         buf = start < buf.length ? buf.substring(start) : ''
       }
@@ -243,7 +270,7 @@ function listFilesWithGit(
       }
       const handleClose = (): void => {
         if (buf) {
-          processLine(buf)
+          processPath(buf)
         }
         finish()
       }

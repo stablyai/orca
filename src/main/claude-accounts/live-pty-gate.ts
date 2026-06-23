@@ -17,9 +17,6 @@ export function beginClaudeAuthSwitch(): void {
   if (switchInProgress) {
     throw new Error('A Claude account switch is already in progress.')
   }
-  if (liveClaudePtyIds.size > 0) {
-    throw new Error('Close or restart live Claude terminals before switching Claude accounts.')
-  }
   switchInProgress = true
 }
 

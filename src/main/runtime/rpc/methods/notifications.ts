@@ -24,7 +24,7 @@ export const NOTIFICATION_METHODS: readonly RpcAnyMethod[] = [
     handler: async (_params, { runtime, connectionId }, emit) => {
       await new Promise<void>((resolve) => {
         const unsubscribe = runtime.onNotificationDispatched((event) => {
-          emit({ type: 'notification', ...event })
+          emit(event)
         })
 
         // Why: scope by per-ws connectionId + per-process counter so

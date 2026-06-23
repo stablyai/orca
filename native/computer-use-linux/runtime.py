@@ -23,14 +23,20 @@ import gi
 gi.require_version("Atspi", "2.0")
 try:
     gi.require_version("Gdk", "3.0")
-    from gi.repository import Gdk
+    gi.require_version("GdkPixbuf", "2.0")
+    from gi.repository import Gdk, GdkPixbuf
 except (ImportError, ValueError):
     Gdk = None
+    GdkPixbuf = None
 from gi.repository import Atspi
 
 MAX_NODES = 1200
 MAX_DEPTH = 64
 TEXT_LIMIT = 500
+MAX_SCREENSHOT_PNG_BYTES = 900_000
+MAX_SCREENSHOT_EDGE = 1280
+MIN_SCREENSHOT_SCALE = 0.25
+SCREENSHOT_SCALE_STEP = 0.85
 BLOCKED_APP_FRAGMENTS = (
     "1password",
     "bitwarden",
@@ -39,6 +45,9 @@ BLOCKED_APP_FRAGMENTS = (
     "nordpass",
     "proton pass",
 )
+CLIPBOARD_COMMAND_TIMEOUT_SECONDS = 2
+CLIPBOARD_OWNER_SETTLE_SECONDS = 0.05
+CLIPBOARD_PASTE_SETTLE_SECONDS = 0.15
 
 
 @dataclass
@@ -136,12 +145,13 @@ def choose_window(app, window_id=None, window_index=None):
     windows = windows_for(app)
     if not windows:
         raise RuntimeError("No top-level AT-SPI window is available for " + name_of(app))
-    target = window_id if window_id is not None else window_index
-    if target is not None:
+    if window_id is not None:
+        raise RuntimeError("windowId is not supported by the Linux AT-SPI provider; use windowIndex")
+    if window_index is not None:
         for item in windows:
-            if item[0] == int(target):
+            if item[0] == int(window_index):
                 return item
-        raise RuntimeError(f'windowNotFound("{target}")')
+        raise RuntimeError(f'windowNotFound("{window_index}")')
     for item in windows:
         if has_state(item[1], Atspi.StateType.ACTIVE):
             return item
@@ -151,7 +161,11 @@ def choose_window(app, window_id=None, window_index=None):
     return windows[0]
 
 
-def restore_window(app):
+def restore_window(app, window=None):
+    target = window if window is not None else app
+    component = attempt(target.get_component_iface)
+    if component is not None and attempt(lambda: Atspi.Component.grab_focus(component), False):
+        return
     pid = pid_of(app)
     if not pid or not shutil.which("xdotool"):
         return
@@ -164,8 +178,17 @@ def restore_window(app):
 
 
 def require_keyboard_focus(window, operation):
-    if operation.get("restoreWindow") or has_state(window, Atspi.StateType.ACTIVE):
+    if has_state(window, Atspi.StateType.ACTIVE):
         return
+    if operation.get("restoreWindow"):
+        deadline = time.monotonic() + 0.5
+        while time.monotonic() < deadline:
+            if has_state(window, Atspi.StateType.ACTIVE):
+                return
+            time.sleep(0.05)
+        if has_state(window, Atspi.StateType.ACTIVE):
+            return
+        raise RuntimeError("window_not_focused: keyboard input requires the target window to be focused; restoreWindow was requested but the target window is still not focused; bring it forward manually or check desktop permissions")
     raise RuntimeError("window_not_focused: keyboard input requires the target window to be focused; retry with --restore-window")
 
 
@@ -174,11 +197,16 @@ def app_matches(app, query):
     if not needle:
         return False
     if needle.startswith("pid:"):
-        return str(pid_of(app)) == needle[4:]
-    if needle.isdigit() and pid_of(app) == int(needle):
+        requested_pid = parse_positive_pid(needle[4:])
+        return requested_pid is not None and pid_of(app) == requested_pid
+    if needle.isdigit() and int(needle) > 0 and pid_of(app) == int(needle):
         return True
     haystacks = [name_of(app).lower()] + [name_of(window).lower() for _, window in windows_for(app)]
     return any(value == needle or needle in value for value in haystacks)
+
+
+def parse_positive_pid(value):
+    return int(value) if value.isdigit() and int(value) > 0 else None
 
 
 def find_app(query):
@@ -256,11 +284,20 @@ def suppress_children(role_key, title, value, summary):
     }
 
 
+def text_iface(node):
+    return attempt(lambda: node.get_text_iface())
+
+
+def is_text_node(node):
+    result = attempt(lambda: node.is_text())
+    return bool(result) if result is not None else text_iface(node) is not None
+
+
 def string_value(node):
     if is_secure_node(node):
         return "[redacted]"
-    if bool(attempt(node.is_text, False)):
-        iface = attempt(node.get_text_iface)
+    if is_text_node(node):
+        iface = text_iface(node)
         count = int(attempt(lambda: Atspi.Text.get_character_count(iface), 0) or 0)
         if iface is not None and count > 0:
             value = str(attempt(lambda: Atspi.Text.get_text(iface, 0, min(count, TEXT_LIMIT)), "") or "")
@@ -276,7 +313,8 @@ def string_value(node):
 def is_secure_node(node):
     role = role_of(node).lower()
     label = " ".join([role, name_of(node).lower(), accessible_id(node).lower()])
-    if any(term in label for term in ("password", "passcode", "pin", "secret", "one-time code")):
+    sensitive_terms = ("password", "passcode", "secret", "one-time code", "verification code")
+    if any(term in label for term in sensitive_terms) or re.search(r"(^|[^a-z0-9])pin([^a-z0-9]|$)", label):
         return True
     state_set = attempt(node.get_state_set)
     protected_state = getattr(Atspi.StateType, "PROTECTED", None)
@@ -301,13 +339,14 @@ def record(node, index, path, window_rect):
         "localizedControlType": role,
         "className": str(attempt(node.get_toolkit_name, "") or ""),
         "value": string_value(node),
+        "isSelected": has_state(node, Atspi.StateType.SELECTED),
         "nativeWindowHandle": 0,
         "frame": rect.to_json() if rect else None,
         "actions": action_labels(node),
     }
 
 
-def render_accessibility_tree(root, window_rect, root_path):
+def render_accessibility_tree(root, window_rect, root_path, compact_browser_tabs=False):
     records = []
     lines = []
     truncation = {"truncated": False, "maxNodes": MAX_NODES, "maxDepth": MAX_DEPTH, "maxDepthReached": False}
@@ -392,15 +431,97 @@ def render_accessibility_tree(root, window_rect, root_path):
         lines.append(("\t" * depth) + line)
         if generic_summary or suppress_children(role_key, title, item["value"], generic_summary):
             return
+        child_line_start = len(lines)
         for child_index, child in child_items:
             walk(child, depth + 1, path + [child_index])
+        if compact_browser_tabs:
+            compact_rendered_browser_tabs(records, lines, child_line_start, depth + 1)
 
     walk(root, 0, root_path)
     return records, lines, truncation
 
 
+def compact_rendered_browser_tabs(records, lines, start_line, depth):
+    tab_line_indexes = [
+        line_index
+        for line_index in range(start_line, len(lines))
+        if is_direct_rendered_browser_tab_line(lines[line_index], depth)
+    ]
+    if len(tab_line_indexes) < 10:
+        return
+    records_by_index = {int(item["index"]): item for item in records}
+    active_line_indexes = {
+        line_index
+        for line_index in tab_line_indexes
+        if is_active_rendered_browser_tab_line(lines[line_index], depth, records_by_index)
+    }
+    if not active_line_indexes:
+        return
+
+    omitted_record_indexes = set()
+    omitted_count = 0
+    insertion_index = tab_line_indexes[0]
+    for line_index in reversed(tab_line_indexes):
+        if line_index in active_line_indexes:
+            continue
+        record_index = rendered_element_index(lines[line_index], depth)
+        if record_index is not None:
+            omitted_record_indexes.add(record_index)
+        del lines[line_index]
+        omitted_count += 1
+    if omitted_count <= 0:
+        return
+    records[:] = [item for item in records if int(item["index"]) not in omitted_record_indexes]
+    lines.insert(insertion_index, ("\t" * depth) + f"... {omitted_count} inactive browser tabs omitted")
+
+
+def is_direct_rendered_browser_tab_line(line, depth):
+    indent = "\t" * depth
+    if not line.startswith(indent):
+        return False
+    text = line[len(indent):]
+    if text.startswith("\t"):
+        return False
+    return re.match(r"^\d+ (page tab|tab item|tab)($|[ (,])", text, re.IGNORECASE) is not None
+
+
+def is_active_rendered_browser_tab_line(line, depth, records_by_index):
+    if "(selected" in line:
+        return True
+    record_index = rendered_element_index(line, depth)
+    record = records_by_index.get(record_index)
+    if not record:
+        return False
+    return bool(record.get("isSelected")) or sanitize_text(record.get("value")) == "1"
+
+
+def is_browser_app(query, app):
+    text = f"{query} {name_of(app)}".lower()
+    tokens = set(re.split(r"[^a-z0-9]+", text))
+    browser_tokens = {
+        "arc",
+        "brave",
+        "chrome",
+        "chromium",
+        "edge",
+        "msedge",
+        "firefox",
+        "librewolf",
+        "opera",
+        "vivaldi",
+        "zen",
+    }
+    return not tokens.isdisjoint(browser_tokens)
+
+
+def rendered_element_index(line, depth):
+    text = line[len("\t" * depth):]
+    match = re.match(r"^(\d+)", text)
+    return int(match.group(1)) if match else None
+
+
 def capture_png(rect):
-    if Gdk is None or rect is None or os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland":
+    if Gdk is None or GdkPixbuf is None or rect is None or os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland":
         return None
     screen = Gdk.Screen.get_default()
     root = screen.get_root_window() if screen else None
@@ -409,17 +530,79 @@ def capture_png(rect):
     pixbuf = Gdk.pixbuf_get_from_window(root, round(rect.x), round(rect.y), max(1, round(rect.width)), max(1, round(rect.height)))
     if pixbuf is None:
         return None
+    return bounded_png_payload(pixbuf)
+
+
+def png_bytes(pixbuf):
     ok, data = pixbuf.save_to_bufferv("png", [], [])
-    return base64.b64encode(bytes(data)).decode("ascii") if ok else None
+    return bytes(data) if ok else None
 
 
-def first_descendant(root, predicate):
-    if predicate(root):
-        return root
-    for _, child in children(root):
-        found = first_descendant(child, predicate)
-        if found is not None:
-            return found
+def screenshot_payload(data, width, height, original_width):
+    return {
+        "base64": base64.b64encode(data).decode("ascii"),
+        "width": width,
+        "height": height,
+        "scale": width / max(1, original_width),
+    }
+
+
+def bounded_png_payload(pixbuf):
+    original_width = max(1, pixbuf.get_width())
+    original_height = max(1, pixbuf.get_height())
+    data = png_bytes(pixbuf)
+    if data is None:
+        return None
+    if len(data) <= MAX_SCREENSHOT_PNG_BYTES:
+        return screenshot_payload(data, original_width, original_height, original_width)
+
+    # Why: screenshots are sent through JSON/stdout; matching macOS bounds keeps
+    # large or high-DPI windows from multiplying native, base64, and Node memory.
+    scale = min(1.0, MAX_SCREENSHOT_EDGE / max(original_width, original_height))
+    while scale >= MIN_SCREENSHOT_SCALE:
+        width = max(1, round(original_width * scale))
+        height = max(1, round(original_height * scale))
+        if width == original_width and height == original_height:
+            scale *= SCREENSHOT_SCALE_STEP
+            continue
+        scaled = pixbuf.scale_simple(width, height, GdkPixbuf.InterpType.BILINEAR)
+        if scaled is None:
+            scale *= SCREENSHOT_SCALE_STEP
+            continue
+        candidate = png_bytes(scaled)
+        if candidate is not None:
+            if len(candidate) <= MAX_SCREENSHOT_PNG_BYTES:
+                return screenshot_payload(candidate, width, height, original_width)
+        scale *= SCREENSHOT_SCALE_STEP
+
+    return {
+        "error": {
+            "code": "screenshot_failed",
+            "message": "screenshot exceeded the computer-use payload cap after downscaling; retry with --no-screenshot or target a smaller window",
+        }
+    }
+
+
+def first_descendant(root, predicate, max_nodes=MAX_NODES, max_depth=MAX_DEPTH):
+    visited_count = 0
+    stack = [(root, 0)]
+    seen = set()
+    while stack and visited_count < max_nodes:
+        node, depth = stack.pop()
+        identity = id(node)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        visited_count += 1
+        if predicate(node):
+            return node
+        if depth >= max_depth:
+            continue
+        # Why: focused/selection summaries run after the rendered tree is capped;
+        # keep them from walking a larger or cyclic AT-SPI tree and timing out.
+        child_items = list(children(node))
+        for _, child in reversed(child_items):
+            stack.append((child, depth + 1))
     return None
 
 
@@ -431,8 +614,8 @@ def focused_summary(window):
 
 
 def selected_text(window):
-    node = first_descendant(window, lambda candidate: has_state(candidate, Atspi.StateType.FOCUSED) and bool(attempt(candidate.is_text, False)))
-    iface = attempt(node.get_text_iface) if node is not None else None
+    node = first_descendant(window, lambda candidate: has_state(candidate, Atspi.StateType.FOCUSED) and is_text_node(candidate))
+    iface = text_iface(node) if node is not None else None
     selections = attempt(lambda: Atspi.Text.get_text_selections(iface), [])
     if not selections:
         return None
@@ -450,7 +633,7 @@ def window_json(app, index, window):
     return {
         "index": index,
         "app": app_json(app),
-        "id": index,
+        "id": None,
         "title": name_of(window),
         "x": round(bounds.x) if bounds else None,
         "y": round(bounds.y) if bounds else None,
@@ -465,18 +648,30 @@ def window_json(app, index, window):
 
 def make_snapshot(query, include_screenshot, window_id=None, window_index=None, restore=False):
     app = find_app(query)
-    if restore:
-        restore_window(app)
     window_index, window = choose_window(app, window_id, window_index)
+    if restore:
+        restore_window(app, window)
+        window_index, window = choose_window(app, window_id, window_index)
     bounds = screen_rect(window)
-    records, lines, truncation = render_accessibility_tree(window, bounds, [window_index])
+    records, lines, truncation = render_accessibility_tree(
+        window,
+        bounds,
+        [window_index],
+        compact_browser_tabs=is_browser_app(query, app),
+    )
+    screenshot = capture_png(bounds) if include_screenshot else None
     return {
         "snapshotId": str(uuid.uuid4()),
         "app": app_json(app),
         "windowTitle": name_of(window),
-        "windowId": window_index,
+        "windowId": None,
+        "windowIndex": window_index,
         "windowBounds": bounds.to_json() if bounds else None,
-        "screenshotPngBase64": capture_png(bounds) if include_screenshot else None,
+        "screenshotPngBase64": screenshot.get("base64") if screenshot else None,
+        "screenshotWidth": screenshot.get("width") if screenshot else None,
+        "screenshotHeight": screenshot.get("height") if screenshot else None,
+        "screenshotScale": screenshot.get("scale") if screenshot else None,
+        "screenshotError": screenshot.get("error") if screenshot else None,
         "coordinateSpace": "window",
         "truncation": truncation,
         "treeLines": lines,
@@ -503,7 +698,7 @@ def handshake_response():
     is_wayland = os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland"
     has_hotkey = shutil.which("xdotool") is not None and not is_wayland
     has_clipboard = any(shutil.which(command) for command in ("wl-copy", "xclip", "xsel"))
-    has_screenshot = Gdk is not None and not is_wayland
+    has_screenshot = Gdk is not None and GdkPixbuf is not None and not is_wayland
     return {
         "platform": "linux",
         "provider": "orca-computer-use-linux",
@@ -511,7 +706,7 @@ def handshake_response():
         "protocolVersion": 1,
         "supports": {
             "apps": {"list": True, "bundleIds": False, "pids": True},
-            "windows": {"list": True, "targetById": True, "targetByIndex": True, "focus": False, "moveResize": False},
+            "windows": {"list": True, "targetById": False, "targetByIndex": True, "focus": False, "moveResize": False},
             "observation": {"screenshot": has_screenshot, "annotatedScreenshot": False, "elementFrames": True, "ocr": False},
             "actions": {
                 "click": True,
@@ -601,10 +796,39 @@ def screen_point(window_rect, saved_element=None, x=None, y=None, node=None):
     return window_rect.x + float(x), window_rect.y + float(y)
 
 
+def require_positive_integer(value, name):
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        raise RuntimeError(f"{name} must be a positive integer")
+    if parsed <= 0:
+        raise RuntimeError(f"{name} must be a positive integer")
+    return parsed
+
+
+def require_positive_number(value, name):
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        raise RuntimeError(f"{name} must be a positive number")
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise RuntimeError(f"{name} must be a positive number")
+    return parsed
+
+
+def require_non_empty_string(value, name):
+    if value is None or str(value) == "":
+        raise RuntimeError(f"{name} is required")
+    return str(value)
+
+
 def click_at(x, y, button, count):
     button = (button or "left").lower()
-    down, up = {"right": ("b3p", "b3r"), "middle": ("b2p", "b2r")}.get(button, ("b1p", "b1r"))
-    for _ in range(max(1, int(count or 1))):
+    buttons = {"left": ("b1p", "b1r"), "right": ("b3p", "b3r"), "middle": ("b2p", "b2r")}
+    if button not in buttons:
+        raise RuntimeError(f"unsupported mouse button: {button}")
+    down, up = buttons[button]
+    for _ in range(require_positive_integer(1 if count is None else count, "click_count")):
         Atspi.generate_mouse_event(round(x), round(y), "abs")
         Atspi.generate_mouse_event(round(x), round(y), down)
         time.sleep(0.03)
@@ -612,13 +836,20 @@ def click_at(x, y, button, count):
 
 
 def scroll_at(x, y, direction, pages):
-    down, up = {
+    if direction is None or str(direction).strip() == "":
+        raise RuntimeError("direction is required")
+    direction = str(direction).lower()
+    wheel_events = {
         "up": ("b4p", "b4r"),
         "down": ("b5p", "b5r"),
         "left": ("b6p", "b6r"),
         "right": ("b7p", "b7r"),
-    }.get(str(direction or "down").lower(), ("b5p", "b5r"))
-    for _ in range(max(1, math.ceil(float(pages or 1)))):
+    }
+    if direction not in wheel_events:
+        raise RuntimeError(f"unsupported scroll direction: {direction}")
+    down, up = wheel_events[direction]
+    page_count = max(1, math.ceil(require_positive_number(1 if pages is None else pages, "pages")))
+    for _ in range(page_count):
         Atspi.generate_mouse_event(round(x), round(y), "abs")
         Atspi.generate_mouse_event(round(x), round(y), down)
         time.sleep(0.03)
@@ -640,7 +871,8 @@ def key_name(raw):
     aliases = {
         "return": "Return", "enter": "Return", "tab": "Tab", "escape": "Escape", "esc": "Escape",
         "backspace": "BackSpace", "delete": "Delete", "space": "space", "left": "Left", "right": "Right",
-        "up": "Up", "down": "Down", "page_up": "Page_Up", "page_down": "Page_Down",
+        "up": "Up", "down": "Down", "home": "Home", "end": "End", "insert": "Insert",
+        "pageup": "Page_Up", "page_up": "Page_Up", "pagedown": "Page_Down", "page_down": "Page_Down",
     }
     return aliases.get(str(raw).lower(), str(raw))
 
@@ -676,25 +908,63 @@ def paste_text(value):
     try:
         write_clipboard(text)
         hotkey("ctrl+v")
+        # Why: X11 paste consumers may read the selection after the key event
+        # returns, so keep the pasted text as the owner briefly before restore.
+        time.sleep(CLIPBOARD_PASTE_SETTLE_SECONDS)
     finally:
         if previous is not None:
             write_clipboard(previous)
+        else:
+            # Why: if the clipboard had no readable prior value, do not leave
+            # the agent-provided paste text in the user's system clipboard.
+            write_clipboard("")
 
 
 def read_clipboard():
     for command in (["wl-paste"], ["xclip", "-selection", "clipboard", "-o"], ["xsel", "--clipboard", "--output"]):
         if shutil.which(command[0]):
-            result = subprocess.run(command, check=False, capture_output=True, text=True)
+            try:
+                result = subprocess.run(
+                    command,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=CLIPBOARD_COMMAND_TIMEOUT_SECONDS,
+                )
+            except subprocess.TimeoutExpired:
+                continue
             if result.returncode == 0:
                 return result.stdout
     return None
 
 
 def write_clipboard(value):
-    for command in (["wl-copy"], ["xclip", "-selection", "clipboard"], ["xsel", "--clipboard", "--input"]):
-        if shutil.which(command[0]):
-            subprocess.run(command, input=value, check=True, text=True)
-            return
+    if shutil.which("wl-copy"):
+        subprocess.run(
+            ["wl-copy"],
+            input=value,
+            check=True,
+            text=True,
+            timeout=CLIPBOARD_COMMAND_TIMEOUT_SECONDS,
+        )
+        return
+    for command in (["xclip", "-selection", "clipboard"], ["xsel", "--clipboard", "--input"]):
+        if not shutil.which(command[0]):
+            continue
+        process = subprocess.Popen(
+            command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        if process.stdin is not None:
+            process.stdin.write(value)
+            process.stdin.close()
+        time.sleep(CLIPBOARD_OWNER_SETTLE_SECONDS)
+        if process.poll() not in (None, 0):
+            raise RuntimeError(f"{command[0]} failed to set clipboard")
+        return
     raise RuntimeError("paste_text requires wl-copy, xclip, or xsel")
 
 
@@ -731,9 +1001,10 @@ def run_operation(operation):
         }
 
     app = find_app(operation.get("app", ""))
-    if operation.get("restoreWindow"):
-        restore_window(app)
     _, window = choose_window(app, operation.get("windowId"), operation.get("windowIndex"))
+    if operation.get("restoreWindow"):
+        restore_window(app, window)
+        _, window = choose_window(app, operation.get("windowId"), operation.get("windowIndex"))
     if tool in {"type_text", "press_key", "hotkey", "paste_text"}:
         require_keyboard_focus(window, operation)
     bounds = screen_rect(window)
@@ -744,11 +1015,22 @@ def run_operation(operation):
     action = None
 
     if tool == "click":
+        # Why: agents expect a click into a target app to make the next
+        # keyboard action safe, even when the click uses an accessibility path.
+        restore_window(app, window)
         preferred = preferred_action(node)
-        click_count = int(operation.get("click_count", 1) or 1)
+        click_count = (
+            require_positive_integer(operation.get("click_count"), "click_count")
+            if operation.get("click_count") is not None
+            else 1
+        )
         handled = operation.get("mouse_button", "left") == "left" and click_count <= 1 and perform_action(node, preferred)
         if not handled:
-            click_at(*screen_point(bounds, saved, operation.get("x"), operation.get("y"), node), operation.get("mouse_button", "left"), operation.get("click_count", 1))
+            click_at(
+                *screen_point(bounds, saved, operation.get("x"), operation.get("y"), node),
+                operation.get("mouse_button", "left"),
+                click_count,
+            )
             action = {"path": "synthetic", "actionName": None, "fallbackReason": "actionUnsupported"}
         else:
             labels = action_labels(node)
@@ -762,25 +1044,31 @@ def run_operation(operation):
         else:
             raise RuntimeError(f'{operation.get("action", "")} is not a valid secondary action')
     elif tool == "scroll":
+        # Why: pointer wheel events should land in the requested app window even
+        # when another desktop window is currently foregrounded.
+        restore_window(app, window)
         scroll_at(*screen_point(bounds, saved, operation.get("x"), operation.get("y"), node), operation.get("direction"), operation.get("pages"))
         action = {"path": "synthetic", "actionName": "scroll", "fallbackReason": None}
     elif tool == "drag":
+        # Why: pointer drags are synthetic global input, so activate the target
+        # window before using cached coordinates from its accessibility tree.
+        restore_window(app, window)
         drag_between(
             screen_point(bounds, operation.get("fromElement"), operation.get("from_x"), operation.get("from_y"), from_node),
             screen_point(bounds, operation.get("toElement"), operation.get("to_x"), operation.get("to_y"), to_node),
         )
         action = {"path": "synthetic", "actionName": "drag", "fallbackReason": None}
     elif tool == "type_text":
-        type_text(operation.get("text", ""))
-        action = {"path": "synthetic", "actionName": "typeText", "fallbackReason": None}
+        type_text(require_non_empty_string(operation.get("text"), "text"))
+        action = {"path": "synthetic", "actionName": "typeText", "fallbackReason": None, "verification": {"state": "unverified", "reason": "synthetic_input"}}
     elif tool == "press_key":
-        press_key(operation.get("key", ""))
-        action = {"path": "synthetic", "actionName": "pressKey", "fallbackReason": None}
+        press_key(require_non_empty_string(operation.get("key"), "key"))
+        action = {"path": "synthetic", "actionName": "pressKey", "fallbackReason": None, "verification": {"state": "unverified", "reason": "synthetic_input"}}
     elif tool == "hotkey":
-        hotkey(operation.get("key", ""))
+        hotkey(require_non_empty_string(operation.get("key"), "key"))
         action = {"path": "synthetic", "actionName": "hotkey", "fallbackReason": None, "verification": {"state": "unverified", "reason": "synthetic_input"}}
     elif tool == "paste_text":
-        paste_text(operation.get("text", ""))
+        paste_text(require_non_empty_string(operation.get("text"), "text"))
         action = {"path": "clipboard", "actionName": "paste", "fallbackReason": None, "verification": {"state": "unverified", "reason": "clipboard_paste"}}
     elif tool == "set_value":
         if not set_value(node, operation.get("value", "")):

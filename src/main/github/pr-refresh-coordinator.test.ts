@@ -309,6 +309,31 @@ describe('pr-refresh-coordinator', () => {
     expect(outcome?.sequence).toBe(inFlight?.sequence)
   })
 
+  it('accepts merged fallback PRs for visible fallback refreshes', async () => {
+    const { refreshPRNow } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockResolvedValueOnce({
+      kind: 'found',
+      pr: makePR({ state: 'merged' }),
+      fetchedAt: Date.now()
+    })
+
+    await refreshPRNow(
+      makeCandidate({
+        fallbackPRNumber: 12,
+        fallbackPRSource: 'pr-cache'
+      })
+    )
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith(
+      '/repo',
+      'feature/test',
+      null,
+      null,
+      12,
+      { acceptMergedFallbackPR: true }
+    )
+  })
+
   it('does not coalesce local and SSH refreshes for the same branch', async () => {
     const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
     getPRForBranchOutcomeMock
@@ -352,6 +377,53 @@ describe('pr-refresh-coordinator', () => {
       null,
       'ssh-1',
       null
+    )
+  })
+
+  it('does not coalesce host and WSL refreshes for the same local branch', async () => {
+    const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock
+      .mockResolvedValueOnce({
+        kind: 'found',
+        pr: makePR({ number: 12 }),
+        fetchedAt: Date.now()
+      })
+      .mockResolvedValueOnce({
+        kind: 'found',
+        pr: makePR({ number: 44 }),
+        fetchedAt: Date.now()
+      })
+
+    enqueuePRRefresh(makeCandidate({ cacheKey: 'host::repo-1::feature/test' }), 'active', 80, 1)
+    enqueuePRRefresh(
+      makeCandidate({
+        cacheKey: 'wsl::repo-1::feature/test',
+        localGitOptions: { wslDistro: 'Ubuntu' }
+      }),
+      'active',
+      80,
+      1
+    )
+    await vi.runOnlyPendingTimersAsync()
+    await vi.runOnlyPendingTimersAsync()
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+    expect(getPRForBranchOutcomeMock).toHaveBeenNthCalledWith(
+      1,
+      '/repo',
+      'feature/test',
+      null,
+      null,
+      null
+    )
+    expect(getPRForBranchOutcomeMock).toHaveBeenNthCalledWith(
+      2,
+      '/repo',
+      'feature/test',
+      null,
+      null,
+      null,
+      { localGitExecOptions: { wslDistro: 'Ubuntu' } }
     )
   })
 
@@ -402,6 +474,61 @@ describe('pr-refresh-coordinator', () => {
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
   })
 
+  it('clears visible follow-ups when the owning window is destroyed', async () => {
+    const {
+      _getVisiblePRRefreshWindowCountForTests,
+      clearVisiblePRRefreshWindow,
+      reportVisiblePRRefreshCandidates
+    } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockResolvedValue({
+      kind: 'found',
+      pr: makePR({ checksStatus: 'pending', mergeable: 'MERGEABLE' }),
+      fetchedAt: Date.now()
+    })
+
+    reportVisiblePRRefreshCandidates([makeCandidate()], 1, 1)
+    await vi.runOnlyPendingTimersAsync()
+
+    expect(_getVisiblePRRefreshWindowCountForTests()).toBe(1)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+
+    clearVisiblePRRefreshWindow(1)
+    await vi.advanceTimersByTimeAsync(90_000)
+
+    expect(_getVisiblePRRefreshWindowCountForTests()).toBe(0)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears visible retry backoff when a non-visible manual refresh steals the retry', async () => {
+    const {
+      _getPRRefreshErrorBackoffCountForTests,
+      refreshPRNow,
+      reportVisiblePRRefreshCandidates
+    } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock
+      .mockResolvedValueOnce({
+        kind: 'upstream-error',
+        errorType: 'network',
+        message: 'network down',
+        fetchedAt: Date.now()
+      })
+      .mockResolvedValueOnce({
+        kind: 'found',
+        pr: makePR({ checksStatus: 'success' }),
+        fetchedAt: Date.now()
+      })
+
+    const candidate = makeCandidate()
+    reportVisiblePRRefreshCandidates([candidate], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(_getPRRefreshErrorBackoffCountForTests()).toBe(1)
+
+    getAllWebContentsMock.mockReturnValue([])
+    await refreshPRNow(candidate)
+
+    expect(_getPRRefreshErrorBackoffCountForTests()).toBe(0)
+  })
+
   it('retries visible PRs with unknown mergeability before the success-check interval', async () => {
     const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
     getPRForBranchOutcomeMock
@@ -425,5 +552,49 @@ describe('pr-refresh-coordinator', () => {
     await vi.advanceTimersByTimeAsync(1)
 
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does a prompt visible follow-up after a manual refresh returns unknown mergeability', async () => {
+    const { refreshPRNow, reportVisiblePRRefreshCandidates } =
+      await import('./pr-refresh-coordinator')
+    const visibleCandidate = makeCandidate()
+    const candidate = makeCandidate({
+      cachedFetchedAt: Date.now(),
+      cachedHasPR: true,
+      cachedPRState: 'open',
+      cachedChecksStatus: 'success',
+      cachedMergeable: 'MERGEABLE',
+      cachedMergeStateStatus: 'CLEAN'
+    })
+    getPRForBranchOutcomeMock
+      .mockResolvedValueOnce({
+        kind: 'found',
+        pr: makePR({ checksStatus: 'success', mergeable: 'MERGEABLE' }),
+        fetchedAt: Date.now()
+      })
+      .mockResolvedValueOnce({
+        kind: 'found',
+        pr: makePR({ checksStatus: 'success', mergeable: 'UNKNOWN' }),
+        fetchedAt: Date.now()
+      })
+      .mockResolvedValueOnce({
+        kind: 'found',
+        pr: makePR({ checksStatus: 'success', mergeable: 'CONFLICTING' }),
+        fetchedAt: Date.now()
+      })
+
+    reportVisiblePRRefreshCandidates([visibleCandidate], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    await refreshPRNow(candidate)
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+
+    await vi.advanceTimersByTimeAsync(2_499)
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(3)
   })
 })

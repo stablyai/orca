@@ -2,6 +2,7 @@ import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import type { AppState } from '@/store/types'
 import type {
   AgentStatusEntry,
+  AgentStatusOrchestrationContext,
   MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
@@ -10,6 +11,7 @@ import type { TerminalLayoutSnapshot } from '../../../../shared/types'
 const EMPTY_LIVE_ENTRIES: AgentStatusEntry[] = []
 const EMPTY_MIGRATION_UNSUPPORTED_ENTRIES: MigrationUnsupportedPtyEntry[] = []
 const EMPTY_RETAINED: RetainedAgentEntry[] = []
+const EMPTY_RUNTIME_AGENT_ORCHESTRATION: Record<string, AgentStatusOrchestrationContext> = {}
 
 type WorktreeAgentRowsState = Pick<
   AppState,
@@ -90,7 +92,7 @@ function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, Ag
     if (!parsed) {
       continue
     }
-    const worktreeId = tabIdToWorktreeId.get(parsed.tabId)
+    const worktreeId = tabIdToWorktreeId.get(parsed.tabId) ?? entry.worktreeId
     if (!worktreeId) {
       continue
     }
@@ -201,6 +203,41 @@ export function selectRetainedAgentEntriesForWorktree(
   worktreeId: string
 ): RetainedAgentEntry[] {
   return getRetainedEntriesByWorktree(state).get(worktreeId) ?? EMPTY_RETAINED
+}
+
+export function selectRuntimeAgentOrchestrationForWorktree(
+  state: Pick<
+    AppState,
+    | 'agentStatusByPaneKey'
+    | 'retainedAgentsByPaneKey'
+    | 'runtimeAgentOrchestrationByPaneKey'
+    | 'tabsByWorktree'
+  >,
+  worktreeId: string
+): Record<string, AgentStatusOrchestrationContext> {
+  const tabs = state.tabsByWorktree[worktreeId] ?? []
+  const tabIds = new Set(tabs.map((tab) => tab.id))
+  const out: Record<string, AgentStatusOrchestrationContext> = {}
+  for (const [paneKey, orchestration] of Object.entries(state.runtimeAgentOrchestrationByPaneKey)) {
+    const parsed = parsePaneKey(paneKey)
+    const parsedParent = orchestration.parentPaneKey
+      ? parsePaneKey(orchestration.parentPaneKey)
+      : null
+    const liveEntry = state.agentStatusByPaneKey[paneKey]
+    const retainedEntry = state.retainedAgentsByPaneKey[paneKey]
+    // Why: child agent terminals can be attributed to a worktree before their
+    // tab reaches this renderer, or after the row has been retained as done.
+    // The parent link must still reach that worktree card.
+    if (
+      (parsed && tabIds.has(parsed.tabId)) ||
+      (parsedParent && tabIds.has(parsedParent.tabId)) ||
+      liveEntry?.worktreeId === worktreeId ||
+      retainedEntry?.worktreeId === worktreeId
+    ) {
+      out[paneKey] = orchestration
+    }
+  }
+  return Object.keys(out).length > 0 ? out : EMPTY_RUNTIME_AGENT_ORCHESTRATION
 }
 
 export function selectTerminalLayoutsForWorktree(

@@ -6,6 +6,7 @@ import type {
   ClaudeUsageScanState,
   ClaudeUsageScope,
   ClaudeUsageSessionRow,
+  ClaudeUsageSnapshot,
   ClaudeUsageSummary
 } from '../../../../shared/claude-usage-types'
 import type { AppState } from '../types'
@@ -103,44 +104,54 @@ export const createClaudeUsageSlice: StateCreator<AppState, [], [], ClaudeUsageS
         return
       }
 
-      const nextScanState = (await window.api.claudeUsage.refresh({
-        force: opts?.forceRefresh ?? false
-      })) as ClaudeUsageScanState
       const { claudeUsageScope, claudeUsageRange } = get()
+      const snapshot = (await window.api.claudeUsage.getSnapshot({
+        scope: claudeUsageScope,
+        range: claudeUsageRange,
+        limit: 10
+      })) as ClaudeUsageSnapshot
+      const hasCachedSnapshot =
+        snapshot.scanState.lastScanCompletedAt !== null || snapshot.scanState.hasAnyClaudeData
 
-      const [summary, daily, modelBreakdown, projectBreakdown, recentSessions] = await Promise.all([
-        window.api.claudeUsage.getSummary({
-          scope: claudeUsageScope,
-          range: claudeUsageRange
-        }) as Promise<ClaudeUsageSummary>,
-        window.api.claudeUsage.getDaily({
-          scope: claudeUsageScope,
-          range: claudeUsageRange
-        }) as Promise<ClaudeUsageDailyPoint[]>,
-        window.api.claudeUsage.getBreakdown({
-          scope: claudeUsageScope,
-          range: claudeUsageRange,
-          kind: 'model'
-        }) as Promise<ClaudeUsageBreakdownRow[]>,
-        window.api.claudeUsage.getBreakdown({
-          scope: claudeUsageScope,
-          range: claudeUsageRange,
-          kind: 'project'
-        }) as Promise<ClaudeUsageBreakdownRow[]>,
-        window.api.claudeUsage.getRecentSessions({
-          scope: claudeUsageScope,
-          range: claudeUsageRange,
-          limit: 10
-        }) as Promise<ClaudeUsageSessionRow[]>
-      ])
+      if (hasCachedSnapshot) {
+        set({
+          claudeUsageScanState:
+            opts?.forceRefresh === true
+              ? { ...snapshot.scanState, isScanning: true }
+              : snapshot.scanState,
+          claudeUsageSummary: snapshot.summary,
+          claudeUsageDaily: snapshot.daily,
+          claudeUsageModelBreakdown: snapshot.modelBreakdown,
+          claudeUsageProjectBreakdown: snapshot.projectBreakdown,
+          claudeUsageRecentSessions: snapshot.recentSessions
+        })
+      } else {
+        set({
+          claudeUsageScanState: {
+            ...scanState,
+            isScanning: true,
+            lastScanError: null
+          }
+        })
+      }
+
+      await window.api.claudeUsage.refresh({
+        force: opts?.forceRefresh ?? false
+      })
+      const { claudeUsageScope: refreshedScope, claudeUsageRange: refreshedRange } = get()
+      const refreshedSnapshot = (await window.api.claudeUsage.getSnapshot({
+        scope: refreshedScope,
+        range: refreshedRange,
+        limit: 10
+      })) as ClaudeUsageSnapshot
 
       set({
-        claudeUsageScanState: nextScanState,
-        claudeUsageSummary: summary,
-        claudeUsageDaily: daily,
-        claudeUsageModelBreakdown: modelBreakdown,
-        claudeUsageProjectBreakdown: projectBreakdown,
-        claudeUsageRecentSessions: recentSessions
+        claudeUsageScanState: refreshedSnapshot.scanState,
+        claudeUsageSummary: refreshedSnapshot.summary,
+        claudeUsageDaily: refreshedSnapshot.daily,
+        claudeUsageModelBreakdown: refreshedSnapshot.modelBreakdown,
+        claudeUsageProjectBreakdown: refreshedSnapshot.projectBreakdown,
+        claudeUsageRecentSessions: refreshedSnapshot.recentSessions
       })
     } catch (error) {
       console.error('Failed to fetch Claude usage:', error)

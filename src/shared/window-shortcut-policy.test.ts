@@ -4,6 +4,7 @@ navigation, new-workspace tab routing). Splitting across files would
 fragment the test of a single pure function. */
 import { describe, expect, it } from 'vitest'
 import {
+  isRecentTabSwitcherCommitRelease,
   isWindowShortcutModifierChord,
   matchesRecentTabSwitcherChord,
   resolveWindowShortcutAction,
@@ -103,6 +104,66 @@ describe('resolveWindowShortcutAction', () => {
     ).toBeNull()
   })
 
+  it('honors remapped tab/workspace number ranges, including swapping the modifiers', () => {
+    // Swap on macOS: tab now uses Cmd+1-9, workspace uses Ctrl+1-9.
+    const swapped: KeybindingOverrides = {
+      'tab.selectByIndex': ['Mod+1'],
+      'workspace.selectByIndex': ['Ctrl+1']
+    }
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit3', key: '3', meta: true, control: false, alt: false, shift: false },
+        'darwin',
+        swapped
+      )
+    ).toEqual({ type: 'jumpToTabIndex', index: 2 })
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit3', key: '3', meta: false, control: true, alt: false, shift: false },
+        'darwin',
+        swapped
+      )
+    ).toEqual({ type: 'jumpToWorktreeIndex', index: 2 })
+
+    // A custom chord with an extra modifier also resolves.
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit2', key: '2', meta: false, control: true, alt: false, shift: true },
+        'linux',
+        { 'tab.selectByIndex': ['Mod+Shift+1'] }
+      )
+    ).toEqual({ type: 'jumpToTabIndex', index: 1 })
+
+    // Disabling the range leaves the chord unclaimed.
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit3', key: '3', meta: false, control: true, alt: false, shift: false },
+        'linux',
+        { 'workspace.selectByIndex': [] }
+      )
+    ).toBeNull()
+
+    // Both ranges disabled: neither the workspace nor the tab digit chord resolves.
+    const bothDisabled: KeybindingOverrides = {
+      'workspace.selectByIndex': [],
+      'tab.selectByIndex': []
+    }
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit3', key: '3', meta: true, control: false, alt: false, shift: false },
+        'darwin',
+        bothDisabled
+      )
+    ).toBeNull()
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit3', key: '3', meta: false, control: true, alt: false, shift: false },
+        'darwin',
+        bothDisabled
+      )
+    ).toBeNull()
+  })
+
   it('keeps Orca-first active in terminal context but lets Terminal-first pass risky app chords', () => {
     const macWorktreePalette = {
       code: 'KeyJ',
@@ -159,13 +220,16 @@ describe('resolveWindowShortcutAction', () => {
     ).toEqual({ type: 'jumpToTabIndex', index: 2 })
   })
 
-  it('routes menu-backed actions through the same window shortcut policy', () => {
+  it('does not resolve the removed PDF export shortcut globally', () => {
     expect(
       resolveWindowShortcutAction(
         { code: 'KeyE', key: 'e', meta: true, control: false, alt: false, shift: true },
         'darwin'
       )
-    ).toEqual({ type: 'exportPdf' })
+    ).toBeNull()
+  })
+
+  it('routes menu-backed actions through the same window shortcut policy', () => {
     expect(
       resolveWindowShortcutAction(
         { code: 'KeyR', key: 'r', meta: false, control: true, alt: false, shift: true },
@@ -235,6 +299,7 @@ describe('resolveWindowShortcutAction', () => {
   it('applies custom keybinding overrides to main-process shortcuts', () => {
     const overrides: KeybindingOverrides = {
       'worktree.quickOpen': ['Mod+Shift+O'],
+      'workspace.openBoard': ['Mod+Alt+B'],
       'view.tasks': ['Mod+Alt+K']
     }
 
@@ -252,6 +317,13 @@ describe('resolveWindowShortcutAction', () => {
         overrides
       )
     ).toEqual({ type: 'openQuickOpen' })
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'KeyB', key: 'b', meta: false, control: true, alt: true, shift: false },
+        'linux',
+        overrides
+      )
+    ).toEqual({ type: 'openWorkspaceBoard' })
     expect(
       resolveWindowShortcutAction(
         { code: 'KeyK', key: 'k', meta: false, control: true, alt: true, shift: false },
@@ -327,6 +399,49 @@ describe('resolveWindowShortcutAction', () => {
     })
 
     expect(matchesRecentTabSwitcherChord(eventInput, 'linux')).toBe(true)
+  })
+
+  it('recognizes Ctrl+Tab commit releases across Electron surfaces', () => {
+    expect(
+      isRecentTabSwitcherCommitRelease({
+        type: 'keyUp',
+        code: 'ControlLeft',
+        key: 'Control',
+        control: false
+      })
+    ).toBe(true)
+    expect(
+      isRecentTabSwitcherCommitRelease({
+        type: 'keyUp',
+        code: 'Control',
+        key: 'Control',
+        control: false
+      })
+    ).toBe(true)
+    expect(
+      isRecentTabSwitcherCommitRelease({
+        type: 'keyUp',
+        code: 'Tab',
+        key: 'Tab',
+        control: false
+      })
+    ).toBe(true)
+    expect(
+      isRecentTabSwitcherCommitRelease({
+        type: 'keyUp',
+        code: 'Tab',
+        key: 'Tab',
+        control: true
+      })
+    ).toBe(false)
+    expect(
+      isRecentTabSwitcherCommitRelease({
+        type: 'keyup',
+        code: 'ControlLeft',
+        key: 'Control',
+        ctrlKey: false
+      })
+    ).toBe(true)
   })
 
   it('accepts all supported zoom key variants', () => {
@@ -707,5 +822,22 @@ describe('resolveWindowShortcutAction', () => {
     expect(isWindowShortcutModifierChord({ meta: false, control: true, alt: true }, 'linux')).toBe(
       false
     )
+  })
+
+  it('resolves an allowlisted action from a synthetic double-tap input', () => {
+    // (a) A synthetic DoubleTap+Shift input resolves the overridden action.
+    const overrides: KeybindingOverrides = { 'worktree.quickOpen': ['DoubleTap+Shift'] }
+    expect(
+      resolveWindowShortcutAction({ doubleTapModifier: 'Shift' }, 'darwin', overrides)
+    ).toEqual({ type: 'openQuickOpen' })
+
+    // (b) A different modifier does not resolve it.
+    expect(
+      resolveWindowShortcutAction({ doubleTapModifier: 'Alt' }, 'darwin', overrides)
+    ).toBeNull()
+
+    // (c) Implicit numeric shortcuts are guarded on input.key, which a double-tap
+    // input never has, so they cannot accidentally match a double-tap event.
+    expect(resolveWindowShortcutAction({ doubleTapModifier: 'Cmd' }, 'darwin')).toBeNull()
   })
 })

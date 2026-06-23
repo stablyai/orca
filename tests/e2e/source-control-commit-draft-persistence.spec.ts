@@ -5,10 +5,12 @@ import path from 'path'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 
-function createWorktreeWithStagedChange(repoPath: string): {
+type E2eWorktree = {
   branchName: string
   worktreePath: string
-} {
+}
+
+function createWorktreeWithStagedChange(repoPath: string): E2eWorktree {
   const branchName = `e2e-commit-draft-${Date.now()}-${Math.random().toString(16).slice(2)}`
   const worktreePath = path.join(os.tmpdir(), branchName)
   execFileSync('git', ['worktree', 'add', worktreePath, '-b', branchName], {
@@ -30,7 +32,12 @@ function cleanupWorktree(repoPath: string, worktreePath: string, branchName: str
       stdio: 'pipe'
     })
   } catch {
-    rmSync(worktreePath, { recursive: true, force: true })
+    try {
+      rmSync(worktreePath, { recursive: true, force: true })
+      execFileSync('git', ['worktree', 'prune'], { cwd: repoPath, stdio: 'pipe' })
+    } catch {
+      // Best effort: the branch delete below is still worth attempting.
+    }
   }
   try {
     execFileSync('git', ['branch', '-D', branchName], { cwd: repoPath, stdio: 'pipe' })
@@ -105,11 +112,14 @@ test.describe('Source Control commit draft persistence', () => {
     orcaPage,
     testRepoPath
   }) => {
-    const { branchName, worktreePath } = createWorktreeWithStagedChange(testRepoPath)
+    let firstWorktree: E2eWorktree | null = null
+    let secondWorktree: E2eWorktree | null = null
 
     try {
+      firstWorktree = createWorktreeWithStagedChange(testRepoPath)
+      secondWorktree = createWorktreeWithStagedChange(testRepoPath)
       await waitForSessionReady(orcaPage)
-      await openSourceControlForWorktree(orcaPage, testRepoPath, worktreePath)
+      await openSourceControlForWorktree(orcaPage, testRepoPath, firstWorktree.worktreePath)
 
       const textarea = orcaPage.getByRole('textbox', { name: 'Commit message' })
       await expect(textarea).toBeVisible({ timeout: 10_000 })
@@ -143,8 +153,20 @@ test.describe('Source Control commit draft persistence', () => {
 
       await expect(textarea).toBeVisible({ timeout: 10_000 })
       await expect(textarea).toHaveValue(draft)
+
+      await openSourceControlForWorktree(orcaPage, testRepoPath, secondWorktree.worktreePath)
+      await expect(textarea).toBeVisible({ timeout: 10_000 })
+      await expect(textarea).toHaveValue('')
+
+      await openSourceControlForWorktree(orcaPage, testRepoPath, firstWorktree.worktreePath)
+      await expect(textarea).toBeVisible({ timeout: 10_000 })
+      await expect(textarea).toHaveValue(draft)
     } finally {
-      cleanupWorktree(testRepoPath, worktreePath, branchName)
+      for (const worktree of [firstWorktree, secondWorktree]) {
+        if (worktree) {
+          cleanupWorktree(testRepoPath, worktree.worktreePath, worktree.branchName)
+        }
+      }
     }
   })
 })

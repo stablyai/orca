@@ -12,10 +12,11 @@ export function resolveZoomTarget(args: {
     | 'space'
     | 'skills'
     | 'mobile'
-  activeTabType: 'terminal' | 'editor' | 'browser'
+  activeTabType: 'terminal' | 'editor' | 'browser' | 'simulator'
+  activeBrowserPageId?: string | null
   activeElement: unknown
-}): 'terminal' | 'editor' | 'ui' {
-  const { activeView, activeTabType, activeElement } = args
+}): 'terminal' | 'editor' | 'browser' | 'simulator' | 'ui' {
+  const { activeView, activeTabType, activeBrowserPageId, activeElement } = args
   const terminalInputFocused =
     typeof activeElement === 'object' &&
     activeElement !== null &&
@@ -42,6 +43,14 @@ export function resolveZoomTarget(args: {
 
   if (activeView !== 'terminal') {
     return 'ui'
+  }
+  // Why: a browser tab owns zoom shortcuts even if DOM focus still points at a
+  // just-deactivated editor or terminal during tab switches.
+  if (activeTabType === 'browser' && activeBrowserPageId) {
+    return 'browser'
+  }
+  if (activeTabType === 'simulator') {
+    return 'simulator'
   }
   if (activeTabType === 'editor' || editorFocused) {
     return 'editor'

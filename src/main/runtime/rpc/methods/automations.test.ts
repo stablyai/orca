@@ -28,7 +28,25 @@ describe('automation RPC methods', () => {
       makeRequest('automation.create', {
         name: 'New review',
         prompt: 'Review changes',
+        precheck: { command: 'test -f ready', timeoutSeconds: 30 },
         agentId: 'codex',
+        runContext: {
+          kind: 'workspace-run',
+          projectId: 'github:stablyai/orca',
+          hostId: 'runtime:gpu',
+          projectHostSetupId: 'setup-gpu',
+          repoId: 'repo-gpu',
+          path: '/srv/orca'
+        },
+        sourceContext: {
+          kind: 'task-source',
+          provider: 'github',
+          projectId: 'github:stablyai/orca',
+          hostId: 'local',
+          projectHostSetupId: 'setup-local',
+          repoId: 'repo-local',
+          providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
+        },
         repo: 'repo-1',
         reuseSession: true,
         rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
@@ -56,7 +74,10 @@ describe('automation RPC methods', () => {
       expect.objectContaining({
         name: 'New review',
         prompt: 'Review changes',
+        precheck: { command: 'test -f ready', timeoutSeconds: 30 },
         agentId: 'codex',
+        runContext: expect.objectContaining({ hostId: 'runtime:gpu' }),
+        sourceContext: expect.objectContaining({ hostId: 'local' }),
         repo: 'repo-1',
         reuseSession: true
       })

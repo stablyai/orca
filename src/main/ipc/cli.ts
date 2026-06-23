@@ -3,6 +3,10 @@ import type { CliInstallStatus } from '../../shared/cli-install-types'
 import { CliInstaller } from '../cli/cli-installer'
 import { WslCliInstaller } from '../cli/wsl-cli-installer'
 
+function normalizeWslCliDistro(args?: { distro?: string | null }): string | undefined {
+  return args?.distro?.trim() || undefined
+}
+
 export function registerCliHandlers(): void {
   ipcMain.handle('cli:getInstallStatus', async (): Promise<CliInstallStatus> => {
     return new CliInstaller().getStatus()
@@ -16,15 +20,24 @@ export function registerCliHandlers(): void {
     return new CliInstaller().remove()
   })
 
-  ipcMain.handle('cli:getWslInstallStatus', async (): Promise<CliInstallStatus> => {
-    return new WslCliInstaller().getStatus()
-  })
+  ipcMain.handle(
+    'cli:getWslInstallStatus',
+    async (_event, args?: { distro?: string | null }): Promise<CliInstallStatus> => {
+      return new WslCliInstaller({ distro: normalizeWslCliDistro(args) }).getStatus()
+    }
+  )
 
-  ipcMain.handle('cli:installWsl', async (): Promise<CliInstallStatus> => {
-    return new WslCliInstaller().install()
-  })
+  ipcMain.handle(
+    'cli:installWsl',
+    async (_event, args?: { distro?: string | null }): Promise<CliInstallStatus> => {
+      return new WslCliInstaller({ distro: normalizeWslCliDistro(args) }).install()
+    }
+  )
 
-  ipcMain.handle('cli:removeWsl', async (): Promise<CliInstallStatus> => {
-    return new WslCliInstaller().remove()
-  })
+  ipcMain.handle(
+    'cli:removeWsl',
+    async (_event, args?: { distro?: string | null }): Promise<CliInstallStatus> => {
+      return new WslCliInstaller({ distro: normalizeWslCliDistro(args) }).remove()
+    }
+  )
 }

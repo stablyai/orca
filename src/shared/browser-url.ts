@@ -1,7 +1,7 @@
 import { ORCA_BROWSER_BLANK_URL } from './constants'
 
 const LOCAL_ADDRESS_PATTERN =
-  /^(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[[0-9a-f:]+\])(?::\d+)?(?:\/.*)?$/i
+  /^(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[[0-9a-f:]+\])(?::\d+)?(?:[/?#].*)?$/i
 
 // Why: bare words like "react hooks" should trigger a search, but inputs that
 // look like domain names ("example.com", "foo.bar/path") should navigate directly.

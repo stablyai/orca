@@ -46,15 +46,15 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
   const activeOpIdRef = useRef<string | null>(null)
   const grabTabIdRef = useRef<string | null>(null)
   const browserTabIdRef = useRef(browserPageId)
+  // Why: toolbar/key handlers from the latest render can fire before passive
+  // effects run after a page switch, so keep the target page current in render.
+  browserTabIdRef.current = browserPageId
   const mountedRef = useMountedRef()
-
-  useEffect(() => {
-    browserTabIdRef.current = browserPageId
-  }, [browserPageId])
 
   // Why: when the browser page changes while grab is active, cancel the
   // current grab operation so stale overlays don't survive tab switches.
   useEffect(() => {
+    browserTabIdRef.current = browserPageId
     return () => {
       const grabTabId = grabTabIdRef.current
       if (grabTabId) {

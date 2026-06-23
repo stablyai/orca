@@ -39,6 +39,7 @@ import { X } from 'lucide-react'
 import { Button } from './ui/button'
 import { acknowledgeBanner, PRIVACY_URL, setOptIn as telemetrySetOptIn } from '../lib/telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { translate } from '@/i18n/i18n'
 
 type FirstLaunchBannerProps = {
   onResolve: () => void
@@ -127,23 +128,29 @@ export function FirstLaunchBanner({
     <div
       className="fixed left-1/2 top-2 z-40 flex w-[min(44.625rem,calc(100vw-2rem))] -translate-x-1/2 items-start gap-4 rounded-lg border border-border bg-card/95 py-3 pl-4 pr-3 shadow-lg backdrop-blur"
       role="region"
-      aria-label="Telemetry notice"
+      aria-label={translate('auto.components.FirstLaunchBanner.fcbee32f08', 'Telemetry notice')}
       aria-live="polite"
     >
       {/* Text column — title + body stack on the left, takes remaining
           width so the action column never pushes copy into a wrap. */}
       <div className="flex-1 space-y-0.5 pr-1 text-sm">
-        <p className="font-medium leading-snug">Help us decide what to build next</p>
+        <p className="font-medium leading-snug">
+          {translate(
+            'auto.components.FirstLaunchBanner.9784b4d7bc',
+            'Help us decide what to build next'
+          )}
+        </p>
         <p className="text-xs leading-snug text-muted-foreground">
-          Anonymous counts of which features you use help us prioritize what to build. No file
-          contents, prompts, terminal output, or anything that identifies you. Change anytime in
-          Settings &rarr; Privacy &amp; Telemetry.{' '}
+          {translate(
+            'auto.components.FirstLaunchBanner.958d2cc31b',
+            'Anonymous counts of which features you use help us prioritize what to build. No file contents, prompts, terminal output, or anything that identifies you. Change anytime in Settings -> Privacy & Telemetry.'
+          )}{' '}
           <button
             type="button"
             className="underline underline-offset-2 hover:text-foreground"
             onClick={() => void window.api.shell.openUrl(PRIVACY_URL)}
           >
-            Privacy policy
+            {translate('auto.components.FirstLaunchBanner.d1deebb050', 'Privacy policy')}
           </button>
           .
         </p>
@@ -162,17 +169,17 @@ export function FirstLaunchBanner({
           disabled={inFlight}
           className="border-border/60 text-muted-foreground"
         >
-          Opt out
+          {translate('auto.components.FirstLaunchBanner.fc5cc29955', 'Opt out')}
         </Button>
         <Button size="sm" onClick={handleAcknowledge} disabled={inFlight}>
-          Got it
+          {translate('auto.components.FirstLaunchBanner.94cc673726', 'Got it')}
         </Button>
       </div>
       {/* aria-label says "Dismiss" — the action persists silent opt-in,
           not just hides the UI. */}
       <button
         type="button"
-        aria-label="Dismiss notice"
+        aria-label={translate('auto.components.FirstLaunchBanner.b9e1b966c7', 'Dismiss notice')}
         onClick={handleAcknowledge}
         disabled={inFlight}
         className="absolute right-1.5 top-1.5 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"

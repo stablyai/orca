@@ -76,8 +76,13 @@ export async function hydrateLocalPtyRegistryAtBoot(store: Pick<Store, 'getRepos
     const repoConnectionIdByWorktreeId = new Map<string, string | null>()
 
     for (const repo of repos) {
-      const worktrees = await listRepoWorktrees(repo)
       const connectionId = repo.connectionId ?? null
+      if (connectionId) {
+        // Why: SSH PTYs are never registered for local process sampling, so
+        // avoid startup SSH/git enumeration for repos we will skip anyway.
+        continue
+      }
+      const worktrees = await listRepoWorktrees(repo)
       for (const wt of worktrees) {
         const worktreeId = `${repo.id}::${wt.path}`
         repoConnectionIdByWorktreeId.set(worktreeId, connectionId)

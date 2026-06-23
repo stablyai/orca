@@ -10,6 +10,7 @@ vi.mock('../git/runner', () => ({
 }))
 
 import {
+  _getGiteaRepoRefCacheSize,
   _resetGiteaRepoRefCache,
   getGiteaRepoRef,
   getGiteaRepoRefForRemote,
@@ -36,6 +37,21 @@ describe('Gitea repository ref parsing', () => {
       repo: 'project',
       apiBaseUrl: 'https://git.example.com/api/v1',
       webBaseUrl: 'https://git.example.com'
+    })
+  })
+
+  it('strips trailing slashes after .git suffixes', () => {
+    expect(parseGiteaRepoRef('https://git.example.com/team/project.git/')).toEqual({
+      host: 'git.example.com',
+      owner: 'team',
+      repo: 'project',
+      apiBaseUrl: 'https://git.example.com/api/v1',
+      webBaseUrl: 'https://git.example.com'
+    })
+    expect(parseGiteaRepoRef('git@gitea.example.test:team/project.git/')).toMatchObject({
+      host: 'gitea.example.test',
+      owner: 'team',
+      repo: 'project'
     })
   })
 
@@ -107,6 +123,53 @@ describe('Gitea repository ref parsing', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
       cwd: '/repo'
     })
+  })
+
+  it('keeps local host and local WSL repository-ref cache entries separate', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: 'https://git.example.com/host/project.git\n',
+        stderr: ''
+      })
+      .mockResolvedValueOnce({
+        stdout: 'https://git.example.com/wsl/project.git\n',
+        stderr: ''
+      })
+
+    await expect(getGiteaRepoRef('/repo')).resolves.toMatchObject({
+      owner: 'host',
+      repo: 'project'
+    })
+    await expect(getGiteaRepoRef('/repo', null, { wslDistro: 'Ubuntu' })).resolves.toMatchObject({
+      owner: 'wsl',
+      repo: 'project'
+    })
+    await expect(getGiteaRepoRef('/repo', null, { wslDistro: 'Ubuntu' })).resolves.toMatchObject({
+      owner: 'wsl',
+      repo: 'project'
+    })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['remote', 'get-url', 'origin'], {
+      cwd: '/repo'
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['remote', 'get-url', 'origin'], {
+      cwd: '/repo',
+      wslDistro: 'Ubuntu'
+    })
+  })
+
+  it('bounds cached repository refs for distinct repo paths', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'https://git.example.com/team/project.git\n',
+      stderr: ''
+    })
+
+    for (let i = 0; i < 513; i += 1) {
+      await getGiteaRepoRef(`/repo-${i}`)
+    }
+
+    expect(_getGiteaRepoRefCacheSize()).toBe(512)
   })
 
   it('resolves repository refs through the SSH git provider for connected repos', async () => {

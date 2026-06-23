@@ -1,14 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildResolveConflictsPrompt,
-  loadSessionCommitDrafts,
+  normalizeSourceControlViewMode,
   pickDefaultSourceControlAgent,
   readCommitDraftForWorktree,
   refreshSourceControlAfterRemoteAction,
-  saveSessionCommitDrafts,
   shouldRenderCommitArea,
   writeCommitDraftForWorktree
 } from './SourceControl'
+import { getNextSourceControlViewMode } from './source-control-header-toolbar'
+import {
+  loadSessionCommitDrafts,
+  saveSessionCommitDrafts
+} from '@/lib/source-control-commit-draft-session'
 
 describe('SourceControl commit drafts by worktree', () => {
   afterEach(() => {
@@ -45,13 +49,11 @@ describe('SourceControl commit drafts by worktree', () => {
 
 describe('SourceControl conflict resolution state', () => {
   it('hides commit controls while unresolved conflicts or git operations are live', () => {
-    expect(shouldRenderCommitArea('all', 1, 'unknown')).toBe(false)
-    expect(shouldRenderCommitArea('uncommitted', 1, 'unknown')).toBe(false)
-    expect(shouldRenderCommitArea('all', 0, 'rebase')).toBe(false)
-    expect(shouldRenderCommitArea('uncommitted', 0, 'merge')).toBe(false)
-    expect(shouldRenderCommitArea('all', 0, 'cherry-pick')).toBe(false)
-    expect(shouldRenderCommitArea('all', 0, 'unknown')).toBe(true)
-    expect(shouldRenderCommitArea('uncommitted', 0, 'unknown')).toBe(true)
+    expect(shouldRenderCommitArea(1, 'unknown')).toBe(false)
+    expect(shouldRenderCommitArea(0, 'rebase')).toBe(false)
+    expect(shouldRenderCommitArea(0, 'merge')).toBe(false)
+    expect(shouldRenderCommitArea(0, 'cherry-pick')).toBe(false)
+    expect(shouldRenderCommitArea(0, 'unknown')).toBe(true)
   })
 
   it('builds an end-to-end AI prompt that resolves or skips before continuing conflicts', () => {
@@ -142,5 +144,23 @@ describe('SourceControl remote action refresh', () => {
     await Promise.resolve()
 
     expect(onError).toHaveBeenCalledWith(error)
+  })
+})
+
+describe('SourceControl view mode preference', () => {
+  it('normalizes missing and unknown persisted values to list', () => {
+    expect(normalizeSourceControlViewMode(undefined)).toBe('list')
+    expect(normalizeSourceControlViewMode(null)).toBe('list')
+    expect(normalizeSourceControlViewMode('grid')).toBe('list')
+  })
+
+  it('preserves valid persisted view modes', () => {
+    expect(normalizeSourceControlViewMode('list')).toBe('list')
+    expect(normalizeSourceControlViewMode('tree')).toBe('tree')
+  })
+
+  it('derives the next persisted view mode from the current mode', () => {
+    expect(getNextSourceControlViewMode('list')).toBe('tree')
+    expect(getNextSourceControlViewMode('tree')).toBe('list')
   })
 })

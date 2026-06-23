@@ -4,7 +4,7 @@ import { join } from 'path'
 import { Writable } from 'stream'
 import { describe, expect, it, vi } from 'vitest'
 import type { SFTPWrapper } from 'ssh2'
-import { uploadBuffer, uploadDirectory, uploadFile } from './sftp-upload'
+import { removeDirectorySftp, uploadBuffer, uploadDirectory, uploadFile } from './sftp-upload'
 
 function createWritable(): Writable {
   return new Writable({
@@ -17,7 +17,12 @@ function createWritable(): Writable {
 function createSftpMock(): SFTPWrapper {
   return {
     mkdir: vi.fn((_path: string, cb: (err?: Error | null) => void) => cb(null)),
-    createWriteStream: vi.fn(() => createWritable())
+    createWriteStream: vi.fn(() => createWritable()),
+    readdir: vi.fn((_path: string, cb: (err?: Error | null, entries?: unknown[]) => void) =>
+      cb(null, [])
+    ),
+    unlink: vi.fn((_path: string, cb: (err?: Error | null) => void) => cb(null)),
+    rmdir: vi.fn((_path: string, cb: (err?: Error | null) => void) => cb(null))
   } as unknown as SFTPWrapper
 }
 
@@ -107,5 +112,37 @@ describe('sftp-upload', () => {
     await expect(uploadFile(sftp, linkPath, '/remote/link.txt')).rejects.toThrow()
 
     expect(sftp.createWriteStream).not.toHaveBeenCalled()
+  })
+
+  it('removes remote directory contents before removing the directory', async () => {
+    const sftp = createSftpMock()
+    vi.mocked(sftp.readdir).mockImplementation((remotePath, cb) => {
+      const pathString = String(remotePath)
+      if (pathString === '/remote/assets') {
+        cb(undefined, [
+          { filename: '.', attrs: { isDirectory: () => true } },
+          { filename: '..', attrs: { isDirectory: () => true } },
+          { filename: 'nested', attrs: { isDirectory: () => true } },
+          { filename: 'logo.png', attrs: { isDirectory: () => false } }
+        ] as never)
+        return
+      }
+      if (pathString === '/remote/assets/nested') {
+        cb(undefined, [{ filename: 'copy.txt', attrs: { isDirectory: () => false } }] as never)
+        return
+      }
+      cb(new Error(`unexpected readdir: ${pathString}`), [] as never)
+    })
+
+    await removeDirectorySftp(sftp, '/remote/assets')
+
+    expect(sftp.unlink).toHaveBeenNthCalledWith(
+      1,
+      '/remote/assets/nested/copy.txt',
+      expect.any(Function)
+    )
+    expect(sftp.rmdir).toHaveBeenNthCalledWith(1, '/remote/assets/nested', expect.any(Function))
+    expect(sftp.unlink).toHaveBeenNthCalledWith(2, '/remote/assets/logo.png', expect.any(Function))
+    expect(sftp.rmdir).toHaveBeenNthCalledWith(2, '/remote/assets', expect.any(Function))
   })
 })

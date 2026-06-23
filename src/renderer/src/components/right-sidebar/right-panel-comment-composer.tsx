@@ -1,9 +1,18 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Bold, Code2, Italic, List, LoaderCircle, Quote, Send } from 'lucide-react'
+import { Bold, Code2, Italic, List, Quote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { cn } from '@/lib/utils'
+import {
+  getCommentBodySubmitState,
+  hasBoundedCommentBodyText
+} from '@/lib/comment-body-submit-state'
+import {
+  clearRightPanelCommentFocusTimer,
+  scheduleRightPanelCommentFocusTimer
+} from './right-panel-comment-focus-timers'
+import { translate } from '@/i18n/i18n'
 
 export type RightPanelCommentSubmitResult = { ok: true } | { ok: false; error: string }
 
@@ -74,8 +83,9 @@ export function RightPanelCommentComposer({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const autoFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const selectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isMac = navigator.userAgent.includes('Mac')
-  const modLabel = isMac ? '⌘' : 'Ctrl'
 
   useEffect(() => {
     const textarea = textareaRef.current
@@ -87,10 +97,22 @@ export function RightPanelCommentComposer({
   }, [body])
 
   useEffect(() => {
-    if (autoFocus) {
-      setTimeout(() => textareaRef.current?.focus(), 0)
+    if (!autoFocus) {
+      clearRightPanelCommentFocusTimer(autoFocusTimerRef)
+      return
     }
+    scheduleRightPanelCommentFocusTimer(autoFocusTimerRef, () => textareaRef.current?.focus())
+    return () => clearRightPanelCommentFocusTimer(autoFocusTimerRef)
   }, [autoFocus])
+
+  const setTextareaRef = useCallback((node: HTMLTextAreaElement | null) => {
+    textareaRef.current = node
+    if (node === null) {
+      // Why: markdown toolbar selection restoration is scoped to this textarea;
+      // clearing here prevents stale focus after the composer unmounts.
+      clearRightPanelCommentFocusTimer(selectionTimerRef)
+    }
+  }, [])
 
   const stopPropagation = useCallback((event: React.SyntheticEvent) => {
     event.stopPropagation()
@@ -104,23 +126,35 @@ export function RightPanelCommentComposer({
       }
       const next = applyMarkdownAction(body, textarea.selectionStart, textarea.selectionEnd, action)
       setBody(next.value)
-      setTimeout(() => {
+      scheduleRightPanelCommentFocusTimer(selectionTimerRef, () => {
+        if (!textarea.isConnected) {
+          return
+        }
         textarea.focus()
         textarea.setSelectionRange(next.selectionStart, next.selectionEnd)
-      }, 0)
+      })
     },
     [body]
   )
 
   const submit = useCallback(async () => {
-    const trimmed = body.trim()
-    if (!trimmed || submitting || disabled) {
+    const bodyState = getCommentBodySubmitState(body)
+    if (bodyState.status === 'empty' || submitting || disabled) {
+      return
+    }
+    if (bodyState.status === 'too-large-leading-whitespace') {
+      setError(
+        translate(
+          'auto.components.right.sidebar.right.panel.comment.composer.commentTooLarge',
+          'Comment is too large to submit safely.'
+        )
+      )
       return
     }
     setSubmitting(true)
     setError(null)
     try {
-      const result = await onSubmit(trimmed)
+      const result = await onSubmit(bodyState.body)
       if (result.ok) {
         setBody('')
         onCancel?.()
@@ -133,6 +167,7 @@ export function RightPanelCommentComposer({
       setSubmitting(false)
     }
   }, [body, disabled, onCancel, onSubmit, submitting])
+  const canSubmitComment = hasBoundedCommentBodyText(body)
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -146,21 +181,59 @@ export function RightPanelCommentComposer({
   )
 
   const toolbar = [
-    { action: 'bold' as const, label: 'Bold', icon: Bold },
-    { action: 'italic' as const, label: 'Italic', icon: Italic },
-    { action: 'code' as const, label: 'Code', icon: Code2 },
-    { action: 'quote' as const, label: 'Quote', icon: Quote },
-    { action: 'list' as const, label: 'List', icon: List }
+    {
+      action: 'bold' as const,
+      label: translate(
+        'auto.components.right.sidebar.right.panel.comment.composer.256300f8ea',
+        'Bold'
+      ),
+      icon: Bold
+    },
+    {
+      action: 'italic' as const,
+      label: translate(
+        'auto.components.right.sidebar.right.panel.comment.composer.542bf6a7e2',
+        'Italic'
+      ),
+      icon: Italic
+    },
+    {
+      action: 'code' as const,
+      label: translate(
+        'auto.components.right.sidebar.right.panel.comment.composer.f49e0a21e0',
+        'Code'
+      ),
+      icon: Code2
+    },
+    {
+      action: 'quote' as const,
+      label: translate(
+        'auto.components.right.sidebar.right.panel.comment.composer.d6d9c3c947',
+        'Quote'
+      ),
+      icon: Quote
+    },
+    {
+      action: 'list' as const,
+      label: translate(
+        'auto.components.right.sidebar.right.panel.comment.composer.cf5a7aba6f',
+        'List'
+      ),
+      icon: List
+    }
   ]
 
   return (
     <div
-      className={cn('min-w-0 rounded-md border border-border bg-background', className)}
+      className={cn(
+        'min-w-0 overflow-hidden rounded-md border border-border bg-background',
+        className
+      )}
       onClick={stopPropagation}
       onMouseDown={stopPropagation}
     >
       <textarea
-        ref={textareaRef}
+        ref={setTextareaRef}
         value={body}
         rows={3}
         className="block max-h-44 min-h-20 w-full min-w-0 resize-none bg-transparent px-2.5 py-2 text-[12px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60"
@@ -198,39 +271,47 @@ export function RightPanelCommentComposer({
           {error}
         </div>
       )}
-      <div className="flex min-w-0 items-center justify-between gap-2 border-t border-border px-2 py-1.5">
-        <ShortcutKeyCombo
-          keys={[modLabel, 'Enter']}
-          className="shrink text-[10px] [&_span]:min-w-0 [&_span]:px-1"
-          separatorClassName="mx-0 text-[10px] text-muted-foreground"
-        />
-        <div className="flex shrink-0 items-center gap-1">
-          {onCancel && (
+      <div className="flex min-w-0 items-center justify-end gap-1 border-t border-border px-2 py-1.5">
+        {onCancel && (
+          <Button type="button" variant="ghost" size="xs" disabled={submitting} onClick={onCancel}>
+            {translate(
+              'auto.components.right.sidebar.right.panel.comment.composer.9bca633dee',
+              'Cancel'
+            )}
+          </Button>
+        )}
+        <Tooltip>
+          <TooltipTrigger asChild>
             <Button
               type="button"
-              variant="ghost"
               size="xs"
-              disabled={submitting}
-              onClick={onCancel}
+              aria-label={submitLabel}
+              disabled={disabled || submitting || !canSubmitComment}
+              onClick={() => void submit()}
             >
-              Cancel
+              {submitting
+                ? translate(
+                    'auto.components.right.sidebar.right.panel.comment.composer.87aff03d63',
+                    'Sending...'
+                  )
+                : submitLabel}
             </Button>
-          )}
-          <Button
-            type="button"
-            size="xs"
-            disabled={disabled || submitting || body.trim().length === 0}
-            title={disabled ? disabledReason : undefined}
-            onClick={() => void submit()}
-          >
-            {submitting ? (
-              <LoaderCircle className="size-3 animate-spin" />
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            {disabled && disabledReason ? (
+              <span>{disabledReason}</span>
             ) : (
-              <Send className="size-3" />
+              <span className="flex items-center gap-2">
+                <span>{submitLabel}</span>
+                <ShortcutKeyCombo
+                  keys={[isMac ? '⌘' : 'Ctrl', 'Enter']}
+                  className="shrink text-[10px] [&_span]:min-w-0 [&_span]:px-1"
+                  separatorClassName="mx-0 text-[10px] text-muted-foreground"
+                />
+              </span>
             )}
-            {submitLabel}
-          </Button>
-        </div>
+          </TooltipContent>
+        </Tooltip>
       </div>
     </div>
   )

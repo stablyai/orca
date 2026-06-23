@@ -1,6 +1,40 @@
+import { spawn } from 'child_process'
 import type { CommandHandler } from '../dispatch'
 import { formatCliStatus, formatStatus, printResult } from '../format'
 import { RuntimeClientError, serveOrcaApp } from '../runtime-client'
+
+function envRecord(): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)
+  )
+}
+
+function withTeammateModeAuto(args: string[]): string[] {
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]
+    if (arg === '--teammate-mode' || arg.startsWith('--teammate-mode=')) {
+      return args
+    }
+  }
+  return ['--teammate-mode', 'auto', ...args]
+}
+
+async function runClaudeAgentTeams(env: Record<string, string>, args: string[]): Promise<number> {
+  return await new Promise((resolve, reject) => {
+    const child = spawn('claude', withTeammateModeAuto(args), {
+      stdio: 'inherit',
+      env
+    })
+    child.once('error', reject)
+    child.once('exit', (code, signal) => {
+      if (typeof code === 'number') {
+        resolve(code)
+        return
+      }
+      resolve(signal ? 1 : 0)
+    })
+  })
+}
 
 function getOptionalServePort(flags: Map<string, string | boolean>): string | null {
   if (!flags.has('port')) {
@@ -18,6 +52,35 @@ function getOptionalServePort(flags: Map<string, string | boolean>): string | nu
 }
 
 export const CORE_HANDLERS: Record<string, CommandHandler> = {
+  'claude-teams': async ({ client, rawArgs }) => {
+    if (process.platform === 'win32') {
+      throw new RuntimeClientError(
+        'unsupported_platform',
+        'Claude Agent Teams native panes are not supported on Windows.'
+      )
+    }
+    const paneKey = process.env.ORCA_PANE_KEY
+    if (!paneKey) {
+      throw new RuntimeClientError(
+        'invalid_environment',
+        'orca claude-teams must be run inside an Orca terminal.'
+      )
+    }
+    const response = await client.call<{ launch: { env: Record<string, string> } }>(
+      'agentTeams.prepareLaunch',
+      {
+        paneKey,
+        env: envRecord()
+      }
+    )
+    process.exitCode = await runClaudeAgentTeams(
+      {
+        ...envRecord(),
+        ...response.result.launch.env
+      },
+      rawArgs ?? []
+    )
+  },
   open: async ({ client, json }) => {
     const result = await client.openOrca()
     printResult(result, json, formatCliStatus)

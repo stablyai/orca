@@ -35,6 +35,7 @@ export class UnixSocketTransport implements RpcTransport {
   private readonly keepaliveIntervalMs: number
   private server: Server | null = null
   private messageHandler: MessageHandler | null = null
+  private readonly activeSockets = new Set<Socket>()
 
   constructor({ endpoint, kind, keepaliveIntervalMs }: UnixSocketTransportOptions) {
     this.endpoint = endpoint
@@ -81,7 +82,7 @@ export class UnixSocketTransport implements RpcTransport {
     if (!server) {
       return
     }
-    await new Promise<void>((resolve, reject) => {
+    const closePromise = new Promise<void>((resolve, reject) => {
       server.close((error) => {
         if (error) {
           reject(error)
@@ -90,12 +91,19 @@ export class UnixSocketTransport implements RpcTransport {
         resolve()
       })
     })
+    // Why: server.close() stops accepting new connections but waits for
+    // existing sockets; long-poll keepalives can otherwise hold shutdown open.
+    for (const socket of Array.from(this.activeSockets)) {
+      socket.destroy()
+    }
+    await closePromise
     if (this.kind === 'unix' && existsSync(this.endpoint)) {
       rmSync(this.endpoint, { force: true })
     }
   }
 
   private handleConnection(socket: Socket): void {
+    this.activeSockets.add(socket)
     let buffer = ''
     let oversized = false
     // Why: each in-flight dispatch registers its own AbortController here so
@@ -114,11 +122,12 @@ export class UnixSocketTransport implements RpcTransport {
     socket.on('error', () => {
       socket.destroy()
     })
-    socket.on('close', () => {
+    socket.once('close', () => {
       for (const cleanup of inflight) {
         cleanup()
       }
       inflight.clear()
+      this.activeSockets.delete(socket)
     })
     socket.on('data', (chunk: string) => {
       if (oversized) {

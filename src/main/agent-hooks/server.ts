@@ -42,6 +42,7 @@ import {
   type AgentStatusIpcPayload,
   type AgentType,
   type AgentStatusState,
+  type ParsedAgentStatusPayload,
   normalizeAgentStatusPayload
 } from '../../shared/agent-status-types'
 import {
@@ -54,6 +55,7 @@ import {
 } from '../../shared/agent-interrupt-intent'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import type { LegacyPaneKeyAliasEntry } from '../../shared/types'
+import { normalizeAgentProviderSession } from '../../shared/agent-session-resume'
 
 export type { AgentHookSource }
 
@@ -77,6 +79,7 @@ export type AgentHookStatusChangeEntry = {
 }
 
 type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => void
+type PaneStatusClearListener = (paneKey: string) => void
 type PaneKeyAliasPersistenceListener = (entries: LegacyPaneKeyAliasEntry[]) => void
 type PaneKeyAliasEntry = {
   stablePaneKey: string
@@ -212,6 +215,7 @@ function sanitizeHydratedEntry(
   }
   return {
     paneKey,
+    launchToken: typeof record.launchToken === 'string' ? record.launchToken : undefined,
     tabId: typeof tabId === 'string' ? tabId : undefined,
     worktreeId: typeof worktreeId === 'string' ? worktreeId : undefined,
     connectionId,
@@ -220,6 +224,7 @@ function sanitizeHydratedEntry(
     toolUseId: typeof record.toolUseId === 'string' ? record.toolUseId : undefined,
     toolAgentId: typeof record.toolAgentId === 'string' ? record.toolAgentId : undefined,
     toolAgentType: typeof record.toolAgentType === 'string' ? record.toolAgentType : undefined,
+    providerSession: normalizeAgentProviderSession(record.providerSession) ?? undefined,
     payload,
     receivedAt,
     stateStartedAt
@@ -229,13 +234,30 @@ function sanitizeHydratedEntry(
 function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentStatusIpcPayload {
   return {
     paneKey: entry.paneKey,
+    ...(entry.launchToken ? { launchToken: entry.launchToken } : {}),
     tabId: entry.tabId,
     worktreeId: entry.worktreeId,
     connectionId: entry.connectionId,
     receivedAt: entry.receivedAt,
     stateStartedAt: entry.stateStartedAt,
+    ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
     ...entry.payload
   }
+}
+
+function equivalentParsedAgentStatusPayload(
+  a: ParsedAgentStatusPayload,
+  b: ParsedAgentStatusPayload
+): boolean {
+  return (
+    a.state === b.state &&
+    a.prompt === b.prompt &&
+    a.agentType === b.agentType &&
+    a.toolName === b.toolName &&
+    a.toolInput === b.toolInput &&
+    a.lastAssistantMessage === b.lastAssistantMessage &&
+    a.interrupted === b.interrupted
+  )
 }
 
 function trackEmptyPaneKeyHook(body: unknown): void {
@@ -247,6 +269,15 @@ function trackEmptyPaneKeyHook(body: unknown): void {
     return
   }
   track('agent_hook_unattributed', { reason: 'empty_pane_key' })
+}
+
+function paneCacheKeyTabId(key: string): string | null {
+  const paneKey = key.split('\0', 1)[0] ?? key
+  return parsePaneKey(paneKey)?.tabId ?? parseLegacyNumericPaneKey(paneKey)?.tabId ?? null
+}
+
+function paneCacheKeyMatchesTab(key: string, tabId: string): boolean {
+  return paneCacheKeyTabId(key) === tabId
 }
 
 function shouldKeepClaudePermissionVisible(
@@ -384,6 +415,7 @@ export class AgentHookServer {
   // caller's knowledge of whether this is a packaged build.
   private env = 'production'
   private onAgentStatus: ((payload: EnrichedAgentHookEventPayload) => void) | null = null
+  private onPaneStatusCleared: PaneStatusClearListener | null = null
   private statusChangeListeners = new Set<StatusChangeListener>()
   // Why: directory that holds the on-disk endpoint file. Set via start()'s
   // `userDataPath` option so the class has no direct Electron dependency
@@ -411,6 +443,7 @@ export class AgentHookServer {
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private promptSentDedupeByPaneKey = new Map<string, AgentPromptSentDedupeEntry>()
   private promptSentHashSalt = randomBytes(16).toString('hex')
+  private closedAgentStatusTabIds = new Set<string>()
   // Why: identity check — skip writes when the JSON-stringified contents
   // exactly match the last successful disk write. Cheap protection against
   // re-firing trailing timers when nothing changed.
@@ -442,6 +475,10 @@ export class AgentHookServer {
     return () => {
       this.statusChangeListeners.delete(listener)
     }
+  }
+
+  setPaneStatusClearListener(listener: PaneStatusClearListener | null): void {
+    this.onPaneStatusCleared = listener
   }
 
   /** Snapshot of the current cached statuses, in the IPC-shaped form the
@@ -503,6 +540,7 @@ export class AgentHookServer {
       tabId: existing.tabId,
       worktreeId: existing.worktreeId,
       connectionId: existing.connectionId,
+      providerSession: existing.providerSession,
       payload: {
         state: 'done',
         prompt: payload.prompt,
@@ -541,6 +579,18 @@ export class AgentHookServer {
         console.error('[agent-hooks] status-change listener threw', err)
       }
     }
+  }
+
+  private markTabClosedForAgentStatus(tabId: string): void {
+    this.closedAgentStatusTabIds.add(tabId)
+  }
+
+  private shouldSuppressClosedTabStatus(paneKey: string): boolean {
+    const tabId = parsePaneKey(paneKey)?.tabId
+    if (!tabId) {
+      return false
+    }
+    return this.closedAgentStatusTabIds.has(tabId)
   }
 
   private attachStatusTiming(
@@ -832,6 +882,7 @@ export class AgentHookServer {
   ): void {
     let aliasChanged = false
     let statusChanged = false
+    const clearedStatusPaneKeys = new Set<string>()
     for (const [legacyPaneKey, entry] of this.legacyPaneKeyAliases) {
       if (entry.ptyId === ptyId) {
         this.legacyPaneKeyAliases.delete(legacyPaneKey)
@@ -841,6 +892,7 @@ export class AgentHookServer {
           options?.shouldClearStablePaneKey?.(entry.stablePaneKey) ?? true
         if (shouldClearStablePaneKey && this.state.lastStatusByPaneKey.has(entry.stablePaneKey)) {
           statusChanged = true
+          clearedStatusPaneKeys.add(entry.stablePaneKey)
         }
         if (shouldClearStablePaneKey) {
           // Why: after hydrate, legacy rows are stored under the stable key. If
@@ -859,6 +911,9 @@ export class AgentHookServer {
     if (statusChanged) {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
+      for (const paneKey of clearedStatusPaneKeys) {
+        this.onPaneStatusCleared?.(paneKey)
+      }
     }
   }
 
@@ -882,6 +937,60 @@ export class AgentHookServer {
     return { ...record, paneKey: stablePaneKey }
   }
 
+  ingestTerminalStatus(event: {
+    paneKey: string
+    tabId?: string
+    worktreeId?: string
+    connectionId?: string | null
+    payload: ParsedAgentStatusPayload
+  }): void {
+    const paneKey = this.resolvePaneKeyAlias(event.paneKey.trim())
+    const parsedPaneKey = parsePaneKey(paneKey)
+    if (paneKey.length === 0) {
+      track('agent_hook_unattributed', { reason: 'empty_pane_key' })
+      return
+    }
+    if (paneKey.length > MAX_PANE_KEY_LEN || !parsedPaneKey) {
+      return
+    }
+    const tabId =
+      event.tabId !== undefined && event.tabId.trim().length > 0 ? event.tabId.trim() : undefined
+    if (tabId !== undefined && tabId !== parsedPaneKey.tabId) {
+      return
+    }
+    if (this.shouldSuppressClosedTabStatus(paneKey)) {
+      return
+    }
+    const worktreeId =
+      event.worktreeId !== undefined && event.worktreeId.trim().length > 0
+        ? event.worktreeId.trim()
+        : undefined
+    const connectionId =
+      typeof event.connectionId === 'string' && event.connectionId.trim().length > 0
+        ? event.connectionId.trim()
+        : null
+    const previous = this.state.lastStatusByPaneKey.get(paneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    if (
+      previous?.connectionId === connectionId &&
+      previous.tabId === tabId &&
+      previous.worktreeId === worktreeId &&
+      equivalentParsedAgentStatusPayload(previous.payload, event.payload)
+    ) {
+      return
+    }
+    // Why: OSC terminal status is a runtime/model observation, not a hook
+    // prompt boundary. Keep prompt-sent telemetry tied to native hooks.
+    this.applyNormalizedStatus({
+      paneKey,
+      tabId,
+      worktreeId,
+      connectionId,
+      payload: event.payload
+    })
+  }
+
   /** Ingest a payload that arrived over the relay JSON-RPC channel rather
    *  than the local HTTP server. `connectionId` is the SshChannelMultiplexer
    *  identity Orca holds (the wire envelope carries connectionId: null and
@@ -898,12 +1007,14 @@ export class AgentHookServer {
       worktreeId?: string
       env?: string
       version?: string
+      launchToken?: string
       hasExplicitPrompt?: boolean
       promptInteractionKey?: string
       hookEventName?: string
       toolUseId?: string
       toolAgentId?: string
       toolAgentType?: string
+      providerSession?: unknown
       isReplay?: boolean
       payload: unknown
     },
@@ -953,6 +1064,9 @@ export class AgentHookServer {
     if (tabId !== undefined && tabId !== parsedPaneKey.tabId) {
       return
     }
+    if (this.shouldSuppressClosedTabStatus(paneKey)) {
+      return
+    }
     const worktreeId =
       envelope.worktreeId !== undefined && envelope.worktreeId.trim().length > 0
         ? envelope.worktreeId.trim()
@@ -978,6 +1092,7 @@ export class AgentHookServer {
       typeof envelope.toolAgentType === 'string' && envelope.toolAgentType.trim().length > 0
         ? envelope.toolAgentType.trim()
         : undefined
+    const providerSession = normalizeAgentProviderSession(envelope.providerSession) ?? undefined
     // Why: the relay is across a trust boundary; re-run the canonical
     // normalizer on the inner payload so prompt/agentType/toolName/toolInput
     // length caps, embedded-newline collapse, and the `interrupted`-only-on-
@@ -998,6 +1113,7 @@ export class AgentHookServer {
     })
     const event: AgentHookEventPayload = {
       paneKey,
+      launchToken: envelope.launchToken,
       tabId,
       worktreeId,
       connectionId: trimmedConnectionId,
@@ -1007,6 +1123,7 @@ export class AgentHookServer {
       toolUseId,
       toolAgentId,
       toolAgentType,
+      providerSession,
       isReplay: envelope.isReplay === true ? true : undefined,
       payload: normalizedPayload
     }
@@ -1078,7 +1195,7 @@ export class AgentHookServer {
         trackEmptyPaneKeyHook(body)
         const aliasedBody = this.normalizeHookBodyPaneKeyAlias(body)
         const normalized = normalizeHookPayload(this.state, source, aliasedBody, this.env)
-        if (normalized) {
+        if (normalized && !this.shouldSuppressClosedTabStatus(normalized.paneKey)) {
           const enriched = this.applyNormalizedStatus(normalized)
           this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
         }
@@ -1131,6 +1248,7 @@ export class AgentHookServer {
     this.token = ''
     this.env = 'production'
     this.onAgentStatus = null
+    this.onPaneStatusCleared = null
     for (const timer of this.assistantMessageRetryTimers.values()) {
       clearTimeout(timer)
     }
@@ -1145,6 +1263,7 @@ export class AgentHookServer {
     this.lastWrittenJson = null
     this.runtimeObservedStatusPaneKeys.clear()
     this.promptSentDedupeByPaneKey.clear()
+    this.closedAgentStatusTabIds.clear()
     this.legacyPaneKeyAliases.clear()
     clearAllListenerCaches(this.state)
     this.notifyStatusChangeListeners()
@@ -1173,6 +1292,77 @@ export class AgentHookServer {
     this.notifyStatusChangeListeners()
   }
 
+  dropStatusEntriesByTabPrefix(tabId: string): void {
+    this.markTabClosedForAgentStatus(tabId)
+    const paneKeysToClear = new Set<string>()
+    for (const key of this.state.lastStatusByPaneKey.keys()) {
+      if (paneCacheKeyMatchesTab(key, tabId)) {
+        paneKeysToClear.add(key)
+      }
+    }
+    for (const key of this.state.lastPromptByPaneKey.keys()) {
+      if (paneCacheKeyMatchesTab(key, tabId)) {
+        paneKeysToClear.add(key.split('\0', 1)[0] ?? key)
+      }
+    }
+    for (const key of this.state.lastToolByPaneKey.keys()) {
+      if (paneCacheKeyMatchesTab(key, tabId)) {
+        paneKeysToClear.add(key.split('\0', 1)[0] ?? key)
+      }
+    }
+    for (const key of this.state.antigravityCompletedTranscriptByPaneKey.keys()) {
+      if (paneCacheKeyMatchesTab(key, tabId)) {
+        paneKeysToClear.add(key.split('\0', 1)[0] ?? key)
+      }
+    }
+    for (const key of this.state.ampCompletedCacheKeys) {
+      if (paneCacheKeyMatchesTab(key, tabId)) {
+        paneKeysToClear.add(key.split('\0', 1)[0] ?? key)
+      }
+    }
+    for (const paneKey of this.runtimeObservedStatusPaneKeys) {
+      if (paneCacheKeyMatchesTab(paneKey, tabId)) {
+        paneKeysToClear.add(paneKey)
+      }
+    }
+    for (const paneKey of this.promptSentDedupeByPaneKey.keys()) {
+      if (paneCacheKeyMatchesTab(paneKey, tabId)) {
+        paneKeysToClear.add(paneKey)
+      }
+    }
+
+    let aliasChanged = false
+    for (const [legacyPaneKey, entry] of this.legacyPaneKeyAliases) {
+      if (
+        paneCacheKeyMatchesTab(legacyPaneKey, tabId) ||
+        paneCacheKeyMatchesTab(entry.stablePaneKey, tabId)
+      ) {
+        this.legacyPaneKeyAliases.delete(legacyPaneKey)
+        paneKeysToClear.add(legacyPaneKey)
+        paneKeysToClear.add(entry.stablePaneKey)
+        aliasChanged = true
+      }
+    }
+
+    let statusChanged = false
+    for (const paneKey of paneKeysToClear) {
+      if (this.state.lastStatusByPaneKey.has(paneKey)) {
+        statusChanged = true
+      }
+      this.clearAssistantMessageRetry(paneKey)
+      clearPaneCacheState(this.state, paneKey)
+      this.runtimeObservedStatusPaneKeys.delete(paneKey)
+      this.promptSentDedupeByPaneKey.delete(paneKey)
+    }
+    if (aliasChanged) {
+      this.notifyPaneKeyAliasPersistenceListener()
+    }
+    if (statusChanged) {
+      this.scheduleStatusPersist()
+      this.notifyStatusChangeListeners()
+    }
+  }
+
   clearPaneState(paneKey: string): void {
     const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
     // Why: only schedule a write when we actually evicted a status entry —
@@ -1199,6 +1389,7 @@ export class AgentHookServer {
       this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
+      this.onPaneStatusCleared?.(resolvedPaneKey)
     }
   }
 

@@ -125,4 +125,104 @@ describe('Azure DevOps hosted review integration', () => {
       })
     }
   })
+
+  it('prefers an active Azure Repos PR over a newer abandoned PR for the same branch', async () => {
+    const seen: SeenRequest[] = []
+    const server = createServer((req: IncomingMessage, res: ServerResponse) => {
+      const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`)
+      seen.push({
+        pathname: url.pathname,
+        search: url.search,
+        authorization: req.headers.authorization
+      })
+
+      if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
+        sendJson(res, {
+          id: 'repo-guid',
+          webUrl: 'https://dev.azure.com/acme/Project/_git/repo'
+        })
+        return
+      }
+
+      if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests') {
+        sendJson(res, {
+          value: [
+            {
+              pullRequestId: 40,
+              title: 'Abandoned branch',
+              status: 'abandoned',
+              creationDate: '2026-05-10T00:00:00Z',
+              closedDate: '2026-05-20T00:00:00Z',
+              mergeStatus: 'conflicts',
+              lastMergeSourceCommit: { commitId: 'old123' }
+            },
+            {
+              pullRequestId: 41,
+              title: 'Active branch',
+              status: 'active',
+              creationDate: '2026-05-01T00:00:00Z',
+              mergeStatus: 'succeeded',
+              lastMergeSourceCommit: { commitId: 'active123' }
+            }
+          ]
+        })
+        return
+      }
+
+      if (
+        url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/40/statuses'
+      ) {
+        sendJson(res, { value: [{ state: 'failed' }] })
+        return
+      }
+
+      if (
+        url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/41/statuses'
+      ) {
+        sendJson(res, { value: [{ state: 'succeeded' }] })
+        return
+      }
+
+      res.writeHead(404, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ message: 'not found' }))
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-azure-review-active-'))
+    try {
+      const address = server.address()
+      if (!address || typeof address === 'string') {
+        throw new Error('expected TCP server address')
+      }
+      process.env.ORCA_AZURE_DEVOPS_API_BASE_URL = `http://127.0.0.1:${address.port}/acme/Project`
+
+      await execFileAsync('git', ['init'], { cwd: repoPath })
+      await execFileAsync(
+        'git',
+        ['remote', 'add', 'origin', 'https://dev.azure.com/acme/Project/_git/repo'],
+        { cwd: repoPath }
+      )
+
+      await expect(
+        getHostedReviewForBranch({ repoPath, branch: 'refs/heads/feature/azure' })
+      ).resolves.toMatchObject({
+        provider: 'azure-devops',
+        number: 41,
+        title: 'Active branch',
+        state: 'open',
+        status: 'success',
+        mergeable: 'MERGEABLE',
+        headSha: 'active123'
+      })
+
+      expect(seen.map((request) => request.pathname)).toContain(
+        '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/41/statuses'
+      )
+    } finally {
+      await rm(repoPath, { recursive: true, force: true })
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()))
+      })
+    }
+  })
 })

@@ -23,6 +23,12 @@ import {
 } from '@/lib/agent-picker-search'
 import { cn } from '@/lib/utils'
 import type { TuiAgent } from '../../../../shared/types'
+import {
+  createAgentComboboxCommandState,
+  resolveAgentComboboxCommandState,
+  updateAgentComboboxCommandValue
+} from './agent-combobox-command-state'
+import { translate } from '@/i18n/i18n'
 
 type DefaultAgentPreference = TuiAgent | 'blank' | null
 
@@ -96,7 +102,9 @@ function renderItem({
       <ContextMenuContent className="z-[70]">
         <ContextMenuItem onSelect={onSetDefault} disabled={isDefault}>
           <Star className="size-3.5" />
-          {isDefault ? 'Current default' : 'Set as default'}
+          {isDefault
+            ? translate('auto.components.agent.AgentCombobox.1b0d6965fa', 'Current default')
+            : translate('auto.components.agent.AgentCombobox.9c6b59fe58', 'Set as default')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
@@ -120,7 +128,7 @@ export default function AgentCombobox({
   // Why: controlled cmdk selection so hovering the footer (which lives outside
   // the cmdk tree) can clear the list's highlighted item — otherwise cmdk keeps
   // the last-hovered agent visually selected while the mouse is on the footer.
-  const [commandValue, setCommandValue] = useState('')
+  const [commandState, setCommandState] = useState(() => createAgentComboboxCommandState(''))
   const triggerRef = React.useRef<HTMLButtonElement | null>(null)
   const inputRef = React.useRef<HTMLInputElement | null>(null)
   const focusFrameRef = React.useRef<number | null>(null)
@@ -138,6 +146,17 @@ export default function AgentCombobox({
     filteredAgents,
     rawQuery: query
   })
+  const resolvedCommandState = resolveAgentComboboxCommandState(
+    commandState,
+    open,
+    activeCommandValue
+  )
+  if (resolvedCommandState !== commandState) {
+    // Why: cmdk highlights should follow query/result changes before paint,
+    // while manual hover selection remains intact until the active candidate changes.
+    setCommandState(resolvedCommandState)
+  }
+  const commandValue = resolvedCommandState.commandValue
 
   const cancelFocusFrame = useCallback((): void => {
     if (focusFrameRef.current !== null) {
@@ -146,14 +165,19 @@ export default function AgentCombobox({
     }
   }, [])
 
-  React.useEffect(() => cancelFocusFrame, [cancelFocusFrame])
+  const setInputNode = useCallback(
+    (node: HTMLInputElement | null): void => {
+      if (node === null) {
+        cancelFocusFrame()
+      }
+      inputRef.current = node
+    },
+    [cancelFocusFrame]
+  )
 
-  React.useEffect(() => {
-    if (!open) {
-      return
-    }
-    setCommandValue(activeCommandValue)
-  }, [activeCommandValue, open])
+  const setCommandValue = useCallback((nextCommandValue: string): void => {
+    setCommandState((current) => updateAgentComboboxCommandValue(current, nextCommandValue))
+  }, [])
 
   const focusSearchInput = useCallback(() => {
     cancelFocusFrame()
@@ -176,7 +200,7 @@ export default function AgentCombobox({
     (nextOpen: boolean) => {
       setOpen(nextOpen)
       if (nextOpen) {
-        setCommandValue(value ?? BLANK_VALUE)
+        setCommandState(createAgentComboboxCommandState(value ?? BLANK_VALUE))
         return
       }
       cancelFocusFrame()
@@ -219,7 +243,7 @@ export default function AgentCombobox({
       }
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
-        setCommandValue(value ?? BLANK_VALUE)
+        setCommandState(createAgentComboboxCommandState(value ?? BLANK_VALUE))
         setOpen(true)
         return
       }
@@ -228,7 +252,7 @@ export default function AgentCombobox({
       }
       if (event.key.length === 1 && /\S/.test(event.key)) {
         event.preventDefault()
-        setCommandValue(value ?? BLANK_VALUE)
+        setCommandState(createAgentComboboxCommandState(value ?? BLANK_VALUE))
         setQuery(event.key)
         setOpen(true)
       }
@@ -264,7 +288,9 @@ export default function AgentCombobox({
             ) : (
               <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
                 <Terminal className="size-3.5" />
-                <span className="truncate">Blank Terminal</span>
+                <span className="truncate">
+                  {translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
+                </span>
               </span>
             )}
             <ChevronsUpDown className="size-3.5 opacity-50" />
@@ -284,13 +310,21 @@ export default function AgentCombobox({
         >
           <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
             <CommandInput
-              ref={inputRef}
-              placeholder="Search agents..."
+              ref={setInputNode}
+              placeholder={translate(
+                'auto.components.agent.AgentCombobox.48c6a5a9b4',
+                'Search agents...'
+              )}
               value={query}
               onValueChange={setQuery}
             />
             <CommandList>
-              <CommandEmpty>No agents match your search.</CommandEmpty>
+              <CommandEmpty>
+                {translate(
+                  'auto.components.agent.AgentCombobox.579c768bde',
+                  'No agents match your search.'
+                )}
+              </CommandEmpty>
               {blankMatchesQuery
                 ? renderItem({
                     key: BLANK_VALUE,
@@ -300,7 +334,10 @@ export default function AgentCombobox({
                     onSelect: () => handleSelect(null),
                     onSetDefault: onSetDefault ? () => onSetDefault('blank') : undefined,
                     icon: <Terminal className="size-3.5" />,
-                    label: 'Blank Terminal'
+                    label: translate(
+                      'auto.components.agent.AgentCombobox.986f946354',
+                      'Blank Terminal'
+                    )
                   })
                 : null}
               {filteredAgents.map((agent) =>
@@ -326,7 +363,7 @@ export default function AgentCombobox({
                   onMouseEnter={() => setCommandValue('')}
                   className="h-9 w-full justify-start rounded-none px-3 text-xs font-normal text-muted-foreground"
                 >
-                  Manage agents
+                  {translate('auto.components.agent.AgentCombobox.19522e25ee', 'Manage agents')}
                   <ArrowRight className="ml-auto size-3" />
                 </Button>
               </div>

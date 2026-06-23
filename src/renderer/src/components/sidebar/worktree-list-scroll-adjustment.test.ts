@@ -1,11 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  canKeepImportedWorktreesHidden,
   countRecordKeysByReference,
-  getRenderRowKey,
   getScrollTopToRevealBounds,
-  getWorktreeDragGroups,
-  renderRowContainsWorktree,
   resolvePendingSidebarReveal,
   WORKTREE_SIDEBAR_REVEAL_TOP_INSET,
   shouldAdjustWorktreeSidebarMeasuredRowScroll
@@ -16,7 +12,7 @@ import {
   GROUP_HEADER_ROW_HEIGHT,
   getActiveStickyHeaderIndexForScroll
 } from './worktree-list-virtual-rows'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/types'
 import type { Row } from './worktree-list-groups'
 
 const repo: Repo = {
@@ -27,44 +23,16 @@ const repo: Repo = {
   addedAt: 1
 }
 
-const makeHeaderRow = (key: string): Extract<Row, { type: 'header' }> => ({
+const makeHeaderRow = (
+  key: string,
+  overrides: Partial<Extract<Row, { type: 'header' }>> = {}
+): Extract<Row, { type: 'header' }> => ({
   type: 'header',
   key,
   label: key,
   count: 0,
-  tone: 'text-foreground'
-})
-
-const makeWorktree = (id: string): Worktree => ({
-  id,
-  repoId: repo.id,
-  path: `/repo/${id}`,
-  head: 'abc123',
-  branch: `refs/heads/${id}`,
-  isBare: false,
-  isMainWorktree: false,
-  displayName: id,
-  comment: '',
-  linkedIssue: null,
-  linkedPR: null,
-  linkedLinearIssue: null,
-  linkedGitLabMR: null,
-  linkedGitLabIssue: null,
-  isArchived: false,
-  isUnread: false,
-  isPinned: false,
-  sortOrder: 0,
-  lastActivityAt: 0
-})
-
-const makeWorktreeRow = (id: string): Extract<Row, { type: 'item' }> => ({
-  type: 'item',
-  worktree: makeWorktree(id),
-  repo,
-  depth: 0,
-  lineageTrail: [],
-  isLastLineageChild: false,
-  lineageChildCount: 0
+  tone: 'text-foreground',
+  ...overrides
 })
 
 const makeImportedCardRow = (): Extract<Row, { type: 'imported-worktrees-card' }> => ({
@@ -280,42 +248,5 @@ describe('estimateRenderRowSize', () => {
         virtualItems: [{ key: 'hdr:second', index: 1, start: 100, end: 136, size: 36, lane: 0 }]
       })
     ).toBe(1)
-  })
-})
-
-describe('imported worktree virtual rows', () => {
-  it('uses stable imported row keys and does not match worktree ids', () => {
-    const card = makeImportedCardRow()
-
-    expect(getRenderRowKey(card)).toBe('imported:imported-worktrees-card:repo-group:repo-1')
-    expect(renderRowContainsWorktree(card, 'wt-1')).toBe(false)
-  })
-
-  it('keeps imported card rows out of worktree drag groups', () => {
-    expect(
-      getWorktreeDragGroups([
-        makeHeaderRow('repo:repo-1'),
-        makeWorktreeRow('main'),
-        makeImportedCardRow(),
-        makeWorktreeRow('feature')
-      ])
-    ).toEqual([{ key: 'repo:repo-1', worktreeIds: ['main', 'feature'] }])
-  })
-
-  it('suppresses keep-hidden actions for force-visible rollback failure cards', () => {
-    expect(canKeepImportedWorktreesHidden(makeImportedCardRow(), undefined)).toBe(true)
-    expect(
-      canKeepImportedWorktreesHidden(makeImportedCardRow(), {
-        pending: false,
-        error: 'Could not show imported worktrees.',
-        forceVisible: true
-      })
-    ).toBe(false)
-    expect(
-      canKeepImportedWorktreesHidden(
-        { ...makeImportedCardRow(), placement: 'pinned-fallback' },
-        undefined
-      )
-    ).toBe(false)
   })
 })

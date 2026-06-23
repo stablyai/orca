@@ -22,9 +22,11 @@
     "react/jsx-filename-extension": ["error", { "extensions": [".tsx", ".jsx"] }],
     "react/jsx-fragments": "error",
     "react/jsx-key": "error",
+    "react/jsx-no-constructed-context-values": "error",
     "react/jsx-no-target-blank": "error",
     "react/jsx-no-useless-fragment": ["error", { "allowExpressions": true }],
     "react/jsx-pascal-case": "error",
+    "react/no-object-type-as-default-prop": "error",
     "react/self-closing-comp": "error",
     "react-hooks/rules-of-hooks": "error",
     "react-hooks/exhaustive-deps": "warn",
@@ -74,12 +76,15 @@
       }
     },
     {
-      "files": [
-        "config/scripts/check-styled-scrollbars.mjs",
-        "config/scripts/styled-scrollbars/*.mjs"
-      ],
+      "files": ["**/*.mjs"],
       "rules": {
-        "max-lines": ["error", { "max": 300, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": ["error", { "max": 600, "skipBlankLines": true, "skipComments": true }]
+      }
+    },
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
+      "rules": {
+        "max-lines": ["error", { "max": 800, "skipBlankLines": true, "skipComments": true }]
       }
     }
   ],

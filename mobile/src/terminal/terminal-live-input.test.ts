@@ -1,11 +1,22 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   TERMINAL_LIVE_INPUT_MAX_BYTES,
+  clearTerminalLiveInputFocusTimer,
   getTerminalLiveSpecialKeyBytes,
-  isTerminalLiveInputWithinByteLimit
+  isTerminalLiveInputWithinByteLimit,
+  scheduleTerminalLiveInputFocus,
+  type TerminalLiveInputFocusTimerRef
 } from './terminal-live-input'
 
+function createTimerRef(): TerminalLiveInputFocusTimerRef {
+  return { current: null }
+}
+
 describe('terminal live input', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('maps phone keyboard special keys to PTY bytes', () => {
     expect(getTerminalLiveSpecialKeyBytes('Backspace')).toBe('\x7f')
     expect(getTerminalLiveSpecialKeyBytes('Enter')).toBeNull()
@@ -21,5 +32,33 @@ describe('terminal live input', () => {
     expect(
       isTerminalLiveInputWithinByteLimit('é'.repeat(TERMINAL_LIVE_INPUT_MAX_BYTES / 2 + 1))
     ).toBe(false)
+  })
+
+  it('replaces pending deferred focus work', () => {
+    vi.useFakeTimers()
+    const timerRef = createTimerRef()
+    const staleFocus = vi.fn()
+    const nextFocus = vi.fn()
+
+    scheduleTerminalLiveInputFocus(timerRef, staleFocus)
+    scheduleTerminalLiveInputFocus(timerRef, nextFocus)
+    vi.runOnlyPendingTimers()
+
+    expect(staleFocus).not.toHaveBeenCalled()
+    expect(nextFocus).toHaveBeenCalledTimes(1)
+    expect(timerRef.current).toBeNull()
+  })
+
+  it('clears pending deferred focus work', () => {
+    vi.useFakeTimers()
+    const timerRef = createTimerRef()
+    const focus = vi.fn()
+
+    scheduleTerminalLiveInputFocus(timerRef, focus)
+    clearTerminalLiveInputFocusTimer(timerRef)
+    vi.runOnlyPendingTimers()
+
+    expect(focus).not.toHaveBeenCalled()
+    expect(timerRef.current).toBeNull()
   })
 })

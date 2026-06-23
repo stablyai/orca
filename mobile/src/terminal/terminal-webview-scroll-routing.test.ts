@@ -1,9 +1,20 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8')
+// The in-WebView JS lives in terminal-webview-html.ts; the RN wrapper in
+// TerminalWebView.tsx. Concatenate both so assertions resolve regardless of file.
+const source =
+  readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8') +
+  readFileSync(new URL('./terminal-webview-pending-messages.ts', import.meta.url), 'utf8') +
+  readFileSync(new URL('./terminal-webview-url-tap.ts', import.meta.url), 'utf8') +
+  readFileSync(new URL('./terminal-webview-tap-dispatch-injected.ts', import.meta.url), 'utf8') +
+  readFileSync(new URL('./terminal-webview-html.ts', import.meta.url), 'utf8')
 const sessionSource = readFileSync(
   new URL('../../app/h/[hostId]/session/[worktreeId].tsx', import.meta.url),
+  'utf8'
+)
+const sessionHelperSource = readFileSync(
+  new URL('../session/mobile-session-route-helpers.ts', import.meta.url),
   'utf8'
 )
 
@@ -16,6 +27,26 @@ function sliceBetween(startPattern: string, endPattern: string): string {
 }
 
 describe('TerminalWebView scroll routing', () => {
+  it('keeps Android touch drags inside the terminal WebView', () => {
+    expect(source).toContain('nestedScrollEnabled')
+  })
+
+  it('maps a downward pull at the bottom to older scrollback rows', () => {
+    expect(source).toContain('var deltaY = ts.lastY - y;')
+    expect(source).toContain('smoothScrollOffsetY -= deltaY;')
+    expect(source).toContain('var lines = Math.trunc(-smoothScrollOffsetY / effectiveCellH);')
+
+    const nextViewportY = simulateNormalBufferPull({
+      baseY: 120,
+      viewportY: 120,
+      startY: 300,
+      endY: 340,
+      cellHeight: 20
+    })
+
+    expect(nextViewportY).toBe(118)
+  })
+
   it('routes alternate-screen and mouse-aware scroll before smooth normal scroll', () => {
     expect(source).toContain(
       'return isWheelMouseTrackingMode(getMouseTrackingMode()) || isAlternateBufferActive();'
@@ -78,6 +109,36 @@ describe('TerminalWebView scroll routing', () => {
     expect(resetBlock).toContain('cancelAnimationFrame(normalScrollFrameId);')
   })
 
+  it('drains terminal writes without shifting the queued array', () => {
+    expect(source).toContain('var writeQueueHead = 0;')
+    expect(source).toContain('function nextQueuedWrite()')
+    expect(source).toContain('writeQueueHead++;')
+    expect(source).toContain('writeQueue = writeQueue.slice(writeQueueHead);')
+    expect(source).not.toContain('writeQueue.shift()')
+  })
+
+  it('bounds native-side pending WebView writes while preserving control messages', () => {
+    expect(source).toContain('const MAX_PENDING_WEB_WRITE_BYTES = 1_000_000')
+    expect(source).toContain('const MAX_PENDING_WEB_WRITE_MESSAGES = 4096')
+    expect(source).toContain('let pendingWriteBytes = 0')
+    expect(source).toContain('let pendingWriteCount = 0')
+    expect(source).toContain('const queue = (msg: TerminalWebViewCommand)')
+    expect(source).toContain('pendingWriteCount > MAX_PENDING_WEB_WRITE_MESSAGES')
+    expect(source).toContain("candidate.type === 'write'")
+    expect(source).toContain('pendingMessages.queue(msg)')
+    expect(source).toContain('pendingMessages.clear()')
+  })
+
+  it('clears WebView await timers when the real response wins', () => {
+    const measureBlock = sliceBetween('measureFitDimensions(', 'resetZoom()')
+    expect(measureBlock).toContain('clearTimeout(timeout)')
+    expect(measureBlock).toContain('measureResolveRef.current === finish')
+
+    const readyBlock = sliceBetween('async awaitReady()', '})')
+    expect(readyBlock).toContain('clearTimeout(timeout)')
+    expect(readyBlock).toContain('void p.finally')
+  })
+
   it('hides xterm scrollbars and drives the mobile scroll indicator from committed rows', () => {
     expect(source).toContain('<div id="scroll-indicator"><div id="scroll-thumb"></div></div>')
     expect(source).toContain('.xterm .xterm-viewport::-webkit-scrollbar')
@@ -123,14 +184,14 @@ describe('TerminalWebView scroll routing', () => {
 
     const dragMoveBlock = sliceBetween(
       'function handleDragMove(handle, clientX, clientY)',
-      '  // ============================================================\n  // LATCHING TOUCH DISPATCHER'
+      '  // Latching document-level touch dispatcher: see'
     )
     expect(dragMoveBlock).toContain('edgeScrollClientX = clientX;')
     expect(dragMoveBlock).toContain('edgeScrollClientY = clientY;')
     expect(dragMoveBlock).toContain('syncSelectionHandleToViewportPoint(handle, clientX, clientY)')
   })
 
-  it('synthesizes bounded mouse clicks from surface taps before focus fallback', () => {
+  it('opens links and paths from surface taps before mouse/focus fallback', () => {
     expect(source).toContain('function buildMouseClickInput(clientX, clientY)')
     expect(source).toContain('function isClickMouseTrackingMode(mode)')
     expect(source).toContain("return mode !== 'none';")
@@ -151,18 +212,31 @@ describe('TerminalWebView scroll routing', () => {
       "document.addEventListener('touchend'",
       '}, { capture: true, passive: true });'
     )
-    expect(touchEndBlock.indexOf('var clickInput = buildMouseClickInput')).toBeLessThan(
-      touchEndBlock.indexOf("notify({ type: 'terminal-tap' });")
+    expect(touchEndBlock).toContain('notifyTerminalSurfaceTap(tapCandidate.x, tapCandidate.y)')
+
+    const tapHandlerBlock = sliceBetween(
+      'function notifyTerminalSurfaceTap(originX, originY)',
+      "document.addEventListener('touchstart'"
     )
-    expect(touchEndBlock).toContain("notify({ type: 'terminal-input', bytes: clickInput });")
-    expect(touchEndBlock).toContain(
-      '} else if (!isClickMouseTrackingMode(getMouseTrackingMode())) {'
+    expect(tapHandlerBlock.indexOf('oscLinkAtViewportPoint')).toBeLessThan(
+      tapHandlerBlock.indexOf('urlAtViewportPoint')
     )
+    expect(tapHandlerBlock.indexOf('urlAtViewportPoint')).toBeLessThan(
+      tapHandlerBlock.indexOf('filePathAtViewportPoint')
+    )
+    expect(tapHandlerBlock.indexOf('filePathAtViewportPoint')).toBeLessThan(
+      tapHandlerBlock.indexOf('var clickInput = buildMouseClickInput')
+    )
+    expect(tapHandlerBlock).toContain("notify({ type: 'open-url', url: tappedUrl });")
+    expect(tapHandlerBlock).toContain("notify({ type: 'terminal-input', bytes: clickInput });")
+    expect(tapHandlerBlock).toContain("notify({ type: 'terminal-tap' });")
   })
 
   it('allows x10 mouse gesture reports through the mobile session gate', () => {
-    expect(sessionSource).toContain('function isGestureMouseTrackingMode')
-    expect(sessionSource).toContain("return mode === 'x10' || isWheelMouseTrackingMode(mode)")
+    expect(sessionHelperSource).toContain('function isGestureMouseTrackingMode')
+    expect(sessionHelperSource).toContain(
+      "return mode === 'x10' || mode === 'vt200' || mode === 'drag' || mode === 'any'"
+    )
 
     const inputBlockStart = sessionSource.indexOf('const handleTerminalInput = useCallback')
     expect(inputBlockStart).toBeGreaterThanOrEqual(0)
@@ -179,3 +253,26 @@ describe('TerminalWebView scroll routing', () => {
     )
   })
 })
+
+function simulateNormalBufferPull({
+  baseY,
+  viewportY,
+  startY,
+  endY,
+  cellHeight
+}: {
+  baseY: number
+  viewportY: number
+  startY: number
+  endY: number
+  cellHeight: number
+}): number {
+  const deltaY = startY - endY
+  if (deltaY > 0 ? viewportY >= baseY : viewportY <= 0) {
+    return viewportY
+  }
+  const smoothScrollOffsetY = -deltaY
+  const lines = Math.trunc(-smoothScrollOffsetY / cellHeight)
+  const applied = Math.max(lines, -viewportY)
+  return viewportY + applied
+}

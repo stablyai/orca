@@ -1,5 +1,8 @@
 import type { GlobalSettings } from '../../../shared/types'
 import type { RuntimeTerminalSend } from '../../../shared/runtime-types'
+import { makePaneKey } from '../../../shared/stable-pane-id'
+import { isTerminalInputTooLargeWithDeferredMeasurement } from '../../../shared/terminal-input'
+import { useAppStore } from '../store'
 import { RuntimeRpcCallError, callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 import {
   getRemoteRuntimePtyEnvironmentId,
@@ -12,6 +15,11 @@ export type RuntimeTerminalProcessInspection = {
 }
 
 const REMOTE_PTY_ID_PREFIX = 'remote:'
+const DESKTOP_RUNTIME_CLIENT = { id: 'orca-desktop', type: 'desktop' } as const
+
+function isRuntimePtyInputTooLarge(data: string): boolean | Promise<boolean> {
+  return isTerminalInputTooLargeWithDeferredMeasurement(data)
+}
 
 export function isRemoteRuntimePtyId(ptyId: string): boolean {
   return ptyId.startsWith(REMOTE_PTY_ID_PREFIX)
@@ -34,6 +42,26 @@ function isTerminalGoneError(error: unknown): boolean {
     message.includes('terminal_gone') ||
     message.includes('no_connected_pty')
   )
+}
+
+export function recordRuntimeTerminalInputForPtyId(ptyId: string, timestamp = Date.now()): void {
+  const state = useAppStore.getState()
+  for (const [tabId, layout] of Object.entries(state.terminalLayoutsByTabId)) {
+    for (const [leafId, leafPtyId] of Object.entries(layout?.ptyIdsByLeafId ?? {})) {
+      if (leafPtyId !== ptyId) {
+        continue
+      }
+      try {
+        // Why: paired/runtime sends can bypass xterm.onData, so hibernation
+        // needs the same user-input marker from the PTY-id route.
+        state.recordTerminalInput(makePaneKey(tabId, leafId), timestamp)
+      } catch {
+        // Ignore malformed legacy layout data; the planner will stay
+        // conservative when a live PTY cannot be matched to an eligible pane.
+      }
+      return
+    }
+  }
 }
 
 export async function inspectRuntimeTerminalProcess(
@@ -74,6 +102,30 @@ export function sendRuntimePtyInput(
   ptyId: string,
   data: string
 ): boolean {
+  const tooLarge = isRuntimePtyInputTooLarge(data)
+  if (tooLarge === true) {
+    return false
+  }
+  if (tooLarge !== false) {
+    // Why: this is a fire-and-forget path, so accepted paste-sized input must
+    // yield before validation and then dispatch without blocking the renderer.
+    void tooLarge
+      .then((resolvedTooLarge) => {
+        if (!resolvedTooLarge) {
+          sendRuntimePtyInputWithinLimit(settings, ptyId, data)
+        }
+      })
+      .catch(() => {})
+    return true
+  }
+  return sendRuntimePtyInputWithinLimit(settings, ptyId, data)
+}
+
+function sendRuntimePtyInputWithinLimit(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  ptyId: string,
+  data: string
+): boolean {
   const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
   const target = ownerEnvironmentId
     ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)
@@ -81,18 +133,25 @@ export function sendRuntimePtyInput(
   const terminal = getRemoteRuntimeTerminalHandle(ptyId)
   if (target.kind !== 'environment' || !terminal) {
     window.api.pty.write(ptyId, data)
+    recordRuntimeTerminalInputForPtyId(ptyId)
     return true
   }
 
-  void callRuntimeRpc(
+  void callRuntimeRpc<{ send: RuntimeTerminalSend }>(
     target,
     'terminal.send',
-    { terminal, text: data },
+    { terminal, text: data, client: DESKTOP_RUNTIME_CLIENT },
     { timeoutMs: 15_000 }
-  ).catch(() => {
-    // Why: web session snapshots can retire a remote handle while xterm still
-    // flushes a final input event. The next host snapshot will reattach.
-  })
+  )
+    .then((result) => {
+      if (result.send.accepted === true) {
+        recordRuntimeTerminalInputForPtyId(ptyId)
+      }
+    })
+    .catch(() => {
+      // Why: web session snapshots can retire a remote handle while xterm still
+      // flushes a final input event. The next host snapshot will reattach.
+    })
   return true
 }
 
@@ -101,6 +160,10 @@ export async function sendRuntimePtyInputVerified(
   ptyId: string,
   data: string
 ): Promise<boolean> {
+  const tooLarge = isRuntimePtyInputTooLarge(data)
+  if (typeof tooLarge === 'boolean' ? tooLarge : await tooLarge) {
+    return false
+  }
   const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
   const target = ownerEnvironmentId
     ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)
@@ -112,8 +175,10 @@ export async function sendRuntimePtyInputVerified(
       window.api.pty.write(ptyId, data)
       // Why: SSH/local fallback writes are fire-and-forget. Callers use this
       // boolean to continue UX flow, while hook telemetry confirms real turns.
+      recordRuntimeTerminalInputForPtyId(ptyId)
       return true
     }
+    recordRuntimeTerminalInputForPtyId(ptyId)
     return accepted
   }
 
@@ -121,10 +186,14 @@ export async function sendRuntimePtyInputVerified(
     const result = await callRuntimeRpc<{ send: RuntimeTerminalSend }>(
       target,
       'terminal.send',
-      { terminal, text: data, client: { id: 'orca-desktop', type: 'desktop' } },
+      { terminal, text: data, client: DESKTOP_RUNTIME_CLIENT },
       { timeoutMs: 15_000 }
     )
-    return result.send.accepted === true
+    if (result.send.accepted === true) {
+      recordRuntimeTerminalInputForPtyId(ptyId)
+      return true
+    }
+    return false
   } catch (error) {
     if (isTerminalGoneError(error)) {
       return false

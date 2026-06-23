@@ -15,6 +15,7 @@ type ConcreteAgentKind = Exclude<AgentKind, 'other'>
 
 const TUI_AGENT_KIND_BY_AGENT = {
   claude: 'claude-code',
+  'claude-agent-teams': 'claude-agent-teams',
   openclaude: 'openclaude',
   codex: 'codex',
   autohand: 'autohand',
@@ -43,7 +44,9 @@ const TUI_AGENT_KIND_BY_AGENT = {
   hermes: 'hermes',
   openclaw: 'openclaw',
   copilot: 'copilot',
-  grok: 'grok'
+  grok: 'grok',
+  devin: 'devin',
+  ante: 'ante'
 } satisfies Record<TuiAgent, ConcreteAgentKind>
 
 // Why: `satisfies Record<TuiAgent, …>` makes the lookup exhaustive at compile

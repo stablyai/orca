@@ -4,10 +4,14 @@ import TerminalPane from '@/components/terminal-pane/TerminalPane'
 import { PASTE_TERMINAL_TEXT_EVENT, type PasteTerminalTextDetail } from '@/constants/terminal'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 
 const ONBOARDING_INLINE_TERMINAL_WORKTREE_ID = 'onboarding-inline-terminal'
 const AUTO_INSERT_DELAY_MS = 250
 const READY_RETRY_MS = 100
+// Why: PTY startup can fail before [data-pty-id] appears; cap polling so the
+// setup panel does not leave a hidden retry timer alive forever.
+export const READY_MAX_ATTEMPTS = 50
 const PTY_TEXT_FALLBACK_MS = 750
 
 type OnboardingInlineCommandTerminalProps = {
@@ -20,8 +24,10 @@ type OnboardingInlineCommandTerminalProps = {
   descriptionPaddingClassName?: string
   autoScrollIntoView?: boolean
   worktreeId?: string
+  shellOverride?: string
   onOpened?: () => void
   onInteracted?: (method: 'keyboard' | 'pointer', event?: KeyboardEvent<HTMLElement>) => void
+  onTerminalExit?: () => void
 }
 
 export function OnboardingInlineCommandTerminal({
@@ -34,8 +40,10 @@ export function OnboardingInlineCommandTerminal({
   descriptionPaddingClassName = 'px-4 py-3',
   autoScrollIntoView = true,
   worktreeId = ONBOARDING_INLINE_TERMINAL_WORKTREE_ID,
+  shellOverride,
   onOpened,
-  onInteracted
+  onInteracted,
+  onTerminalExit
 }: OnboardingInlineCommandTerminalProps): React.JSX.Element {
   const createTab = useAppStore((s) => s.createTab)
   const closeTab = useAppStore((s) => s.closeTab)
@@ -74,7 +82,7 @@ export function OnboardingInlineCommandTerminal({
   }, [])
 
   useEffect(() => {
-    const tab = createTab(worktreeId, undefined, undefined, {
+    const tab = createTab(worktreeId, undefined, shellOverride, {
       activate: false,
       recordInteraction: false
     })
@@ -86,7 +94,15 @@ export function OnboardingInlineCommandTerminal({
       // the backing tab so installer shells do not keep running invisibly.
       closeTab(tab.id, { recordInteraction: false })
     }
-  }, [closeTab, createTab, setActiveTabForWorktree, setTabCustomTitle, title, worktreeId])
+  }, [
+    closeTab,
+    createTab,
+    setActiveTabForWorktree,
+    setTabCustomTitle,
+    shellOverride,
+    title,
+    worktreeId
+  ])
 
   useEffect(() => {
     if (!autoScrollIntoView) {
@@ -190,7 +206,7 @@ export function OnboardingInlineCommandTerminal({
       }, AUTO_INSERT_DELAY_MS)
     }
 
-    const waitForTerminal = (): void => {
+    const waitForTerminal = (attempt: number): void => {
       if (canceled) {
         return
       }
@@ -212,10 +228,13 @@ export function OnboardingInlineCommandTerminal({
       } else {
         ptyFirstSeenAt = null
       }
-      retryTimer = window.setTimeout(waitForTerminal, READY_RETRY_MS)
+      const nextAttempt = getNextTerminalReadyRetryAttempt(attempt)
+      if (nextAttempt !== null) {
+        retryTimer = window.setTimeout(() => waitForTerminal(nextAttempt), READY_RETRY_MS)
+      }
     }
 
-    waitForTerminal()
+    waitForTerminal(0)
     return () => {
       canceled = true
       if (retryTimer !== null) {
@@ -264,13 +283,19 @@ export function OnboardingInlineCommandTerminal({
               cwd={cwd}
               isActive
               isVisible
-              onPtyExit={() => closeTab(tabId, { recordInteraction: false })}
+              onPtyExit={() => {
+                onTerminalExit?.()
+                closeTab(tabId, { recordInteraction: false })
+              }}
               onCloseTab={() => closeTab(tabId, { recordInteraction: false })}
             />
           ) : (
             <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
-              Starting terminal...
+              {translate(
+                'auto.components.onboarding.OnboardingInlineCommandTerminal.4123609efd',
+                'Starting terminal...'
+              )}
             </div>
           )}
         </div>
@@ -286,6 +311,10 @@ function findTerminalTabElement(tabId: string): HTMLElement | null {
     }
   }
   return null
+}
+
+export function getNextTerminalReadyRetryAttempt(attempt: number): number | null {
+  return attempt < READY_MAX_ATTEMPTS ? attempt + 1 : null
 }
 
 function terminalReadyForCommand(element: HTMLElement | null): boolean {

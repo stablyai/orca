@@ -12,6 +12,7 @@ import { buildWorktreeAgentRows } from './worktree-agent-rows'
 import {
   selectLiveAgentStatusEntriesForWorktree,
   selectMigrationUnsupportedEntriesForWorktree,
+  selectRuntimeAgentOrchestrationForWorktree,
   selectRetainedAgentEntriesForWorktree,
   selectTerminalLayoutsForWorktree
 } from './worktree-agent-row-selectors'
@@ -20,6 +21,7 @@ export { buildWorktreeAgentRows } from './worktree-agent-rows'
 export {
   selectLiveAgentStatusEntriesForWorktree,
   selectMigrationUnsupportedEntriesForWorktree,
+  selectRuntimeAgentOrchestrationForWorktree,
   selectRetainedAgentEntriesForWorktree
 } from './worktree-agent-row-selectors'
 
@@ -59,6 +61,9 @@ export function useWorktreeAgentRows(worktreeId: string): DashboardAgentRow[] {
   const terminalLayoutsByTabId = useAppStore(
     useShallow((s) => selectTerminalLayoutsForWorktree(s, worktreeId))
   )
+  const runtimeAgentOrchestrationByPaneKey = useAppStore(
+    useShallow((s) => selectRuntimeAgentOrchestrationForWorktree(s, worktreeId))
+  )
   // Why: agentStatusEpoch is included in the dependency array (but not in the
   // computation itself) so the memo recomputes when freshness boundaries
   // expire, even if no new PTY data arrives — same rationale as
@@ -88,6 +93,7 @@ export function useWorktreeAgentRows(worktreeId: string): DashboardAgentRow[] {
         runtimePaneTitlesByTabId,
         ptyIdsByTabId,
         terminalLayoutsByTabId,
+        runtimeAgentOrchestrationByPaneKey,
         now
       })
     )
@@ -100,6 +106,7 @@ export function useWorktreeAgentRows(worktreeId: string): DashboardAgentRow[] {
     runtimePaneTitlesByTabId,
     ptyIdsByTabId,
     terminalLayoutsByTabId,
+    runtimeAgentOrchestrationByPaneKey,
     agentStatusEpoch
   ])
 }

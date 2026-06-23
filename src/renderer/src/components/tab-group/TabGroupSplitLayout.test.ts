@@ -1,3 +1,4 @@
+import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const setTabGroupSplitRatioMock = vi.fn()
@@ -33,6 +34,8 @@ vi.mock('./useTabDragSplit', () => ({
     activeDrag: null,
     collisionDetection: vi.fn(),
     hoveredDropTarget: null,
+    hoveredTabInsertion: null,
+    isTabDragActiveRef: { current: false },
     onDragCancel: vi.fn(),
     onDragEnd: vi.fn(),
     onDragMove: vi.fn(),
@@ -45,6 +48,22 @@ vi.mock('./useTabDragSplit', () => ({
 
 import TabGroupSplitLayout from './TabGroupSplitLayout'
 
+type ReactElementLike = {
+  type: string | ((props: Record<string, unknown>) => unknown)
+  props: Record<string, unknown>
+}
+
+function asElement(node: unknown): ReactElementLike {
+  return node as ReactElementLike
+}
+
+function invokeComponent(element: ReactElementLike): unknown {
+  if (typeof element.type === 'function') {
+    return element.type(element.props)
+  }
+  return element
+}
+
 describe('TabGroupSplitLayout', () => {
   beforeEach(() => {
     setTabGroupSplitRatioMock.mockClear()
@@ -52,6 +71,22 @@ describe('TabGroupSplitLayout', () => {
     setDragRootNodeMock.mockClear()
     useAppStoreMock.mockClear()
   })
+
+  function getLayoutWrapper(element: ReturnType<typeof TabGroupSplitLayout>) {
+    const dndContext = asElement(element.props.children)
+    return React.Children.toArray(dndContext.props.children as React.ReactNode)[0]
+  }
+
+  function getSplitNodeElement(element: ReturnType<typeof TabGroupSplitLayout>) {
+    const layoutWrapperChildren = React.Children.toArray(
+      asElement(getLayoutWrapper(element)).props.children as React.ReactNode
+    )
+    const splitBody = layoutWrapperChildren[1]
+    const splitNodeElement = React.Children.only(
+      asElement(splitBody).props.children as React.ReactNode
+    )
+    return invokeComponent(asElement(splitNodeElement))
+  }
 
   function getLeafPanelProps(isWorktreeActive: boolean) {
     const element = TabGroupSplitLayout({
@@ -61,13 +96,7 @@ describe('TabGroupSplitLayout', () => {
       isWorktreeActive
     })
 
-    // DndContext has multiple children (layout wrapper + DragOverlay). The
-    // layout wrapper holds [drag-strip, split-body]; the split-body holds the
-    // SplitNode element.
-    const layoutWrapper = element.props.children[0]
-    const splitBody = layoutWrapper.props.children[1]
-    const splitNodeElement = splitBody.props.children
-    const tabGroupPanelElement = splitNodeElement.type(splitNodeElement.props)
+    const tabGroupPanelElement = asElement(getSplitNodeElement(element))
     return tabGroupPanelElement.props as {
       groupId: string
       worktreeId: string
@@ -112,9 +141,7 @@ describe('TabGroupSplitLayout', () => {
       isWorktreeActive: true
     })
 
-    const layoutWrapper = element.props.children[0]
-
-    expect(layoutWrapper.props.ref).toBe(setDragRootNodeMock)
+    expect(asElement(getLayoutWrapper(element)).props.ref).toBe(setDragRootNodeMock)
   })
 
   it('only reserves top-right header space for the floating explorer toggle', () => {
@@ -131,17 +158,15 @@ describe('TabGroupSplitLayout', () => {
       isWorktreeActive: true
     })
 
-    const layoutWrapper = element.props.children[0]
-    const splitBody = layoutWrapper.props.children[1]
-    const splitNodeElement = splitBody.props.children
-    const rootElement = splitNodeElement.type(splitNodeElement.props)
-    const leftChild = rootElement.props.children[0].props.children
-    const rightChild = rootElement.props.children[2].props.children
-    const leftPanelProps = leftChild.type(leftChild.props).props as {
+    const rootElement = asElement(getSplitNodeElement(element))
+    const rootChildren = rootElement.props.children as unknown[]
+    const leftChild = asElement(rootChildren[0]).props.children
+    const rightChild = asElement(rootChildren[2]).props.children
+    const leftPanelProps = asElement(invokeComponent(asElement(leftChild))).props as {
       reserveClosedExplorerToggleSpace: boolean
       reserveCollapsedSidebarHeaderSpace: boolean
     }
-    const rightPanelProps = rightChild.type(rightChild.props).props as {
+    const rightPanelProps = asElement(invokeComponent(asElement(rightChild))).props as {
       reserveClosedExplorerToggleSpace: boolean
       reserveCollapsedSidebarHeaderSpace: boolean
     }
@@ -174,13 +199,10 @@ describe('TabGroupSplitLayout', () => {
       isWorktreeActive: true
     })
 
-    const layoutWrapper = element.props.children[0]
-    const splitBody = layoutWrapper.props.children[1]
-    const splitNodeElement = splitBody.props.children
-    const rootElement = splitNodeElement.type(splitNodeElement.props)
-    const resizeHandle = rootElement.props.children[1]
+    const rootElement = asElement(getSplitNodeElement(element))
+    const resizeHandle = asElement((rootElement.props.children as unknown[])[1])
 
-    resizeHandle.props.onResizeStart()
+    ;(resizeHandle.props.onResizeStart as () => void)()
 
     expect(recordFeatureInteractionMock).toHaveBeenCalledWith('terminal-panes')
   })

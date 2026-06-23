@@ -5,7 +5,7 @@ import { existsSync } from 'fs'
 import { open, readdir, readFile, realpath, stat } from 'fs/promises'
 import { createRequire } from 'module'
 import { homedir } from 'os'
-import { isAbsolute, join, relative, resolve } from 'path'
+import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { promisify } from 'util'
 import type { RelayDispatcher } from './dispatcher'
 
@@ -22,6 +22,7 @@ const HERMES_OUTPUT_FILE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d
 const HERMES_RUN_KEY_PATTERN = /^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})$/
 const MAX_SESSION_OUTPUT_GAP_MS = 24 * 60 * 60 * 1000
 const MAX_REFERENCED_LOG_BYTES = 5 * 1024 * 1024
+const HERMES_RUN_COUNT_CACHE_MAX_ENTRIES = 200
 const FULL_SESSION_LOG_HEADING = '## Full session log'
 const REFERENCED_LOG_HEADING = '## Latest log file'
 const LATEST_LOG_PATH_PATTERN =
@@ -246,7 +247,11 @@ export class ExternalAutomationsHandler {
       const relativeToHermesHome = relative(resolve(homeRealPath), resolve(logRealPath))
       // Why: the output body can contain agent-authored text, so only hydrate
       // referenced files that resolve inside Hermes' own data directory.
-      if (relativeToHermesHome.startsWith('..') || isAbsolute(relativeToHermesHome)) {
+      if (
+        relativeToHermesHome === '..' ||
+        relativeToHermesHome.startsWith(`..${sep}`) ||
+        isAbsolute(relativeToHermesHome)
+      ) {
         return null
       }
       const logStat = await stat(logPath)
@@ -568,6 +573,12 @@ export class ExternalAutomationsHandler {
     if (cached && cached.expiresAt > now) {
       return cached.promise
     }
+    if (cached) {
+      this.hermesRunCountCache.delete(jobId)
+    }
+    // Why: remote Hermes jobs can churn independently of Orca; relay
+    // processes are long-lived, so stale job ids need both TTL and a hard cap.
+    this.pruneHermesRunCountCache(now)
     const entry: HermesRunCountCacheEntry = {
       promise: this.readHermesRunRefs(jobId).then((refs) => refs.length),
       expiresAt: Number.POSITIVE_INFINITY
@@ -582,6 +593,21 @@ export class ExternalAutomationsHandler {
         this.hermesRunCountCache.delete(jobId)
       }
       throw error
+    }
+  }
+
+  private pruneHermesRunCountCache(now: number): void {
+    for (const [jobId, entry] of this.hermesRunCountCache) {
+      if (entry.expiresAt <= now) {
+        this.hermesRunCountCache.delete(jobId)
+      }
+    }
+    while (this.hermesRunCountCache.size >= HERMES_RUN_COUNT_CACHE_MAX_ENTRIES) {
+      const oldestJobId = this.hermesRunCountCache.keys().next().value
+      if (oldestJobId === undefined) {
+        return
+      }
+      this.hermesRunCountCache.delete(oldestJobId)
     }
   }
 

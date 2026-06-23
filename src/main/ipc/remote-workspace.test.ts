@@ -35,6 +35,7 @@ vi.mock('./remote-workspace-events', () => ({
 }))
 
 import {
+  _resetRemoteWorkspaceCachesForTests,
   registerRemoteWorkspaceHandlers,
   remoteWorkspaceSessionMatchesSnapshot
 } from './remote-workspace'
@@ -157,6 +158,7 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
   } as unknown as Store
 
   beforeEach(() => {
+    _resetRemoteWorkspaceCachesForTests()
     handlers.clear()
     requestByTargetId.clear()
     muxByTargetId.clear()

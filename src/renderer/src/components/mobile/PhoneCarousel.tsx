@@ -3,6 +3,7 @@ import { cn } from '../../lib/utils'
 import { HomeSlide } from './slides/HomeSlide'
 import { WorktreeListSlide } from './slides/WorktreeListSlide'
 import { TerminalSlide } from './slides/TerminalSlide'
+import { translate } from '@/i18n/i18n'
 
 const DWELL_MS = 4500
 const TAP_BEFORE_PUSH_MS = 240
@@ -67,6 +68,7 @@ export function PhoneCarousel(): React.JSX.Element {
       }, DWELL_MS)
     }
 
+    // oxlint-disable-next-line react-doctor/no-initialize-state -- Why: the first tap pulse is intentionally delayed until after the initial dwell.
     schedule(0)
 
     return () => {
@@ -112,13 +114,31 @@ export function PhoneCarousel(): React.JSX.Element {
   return (
     <div className="mp-phone-frame">
       <div className="mp-phone-screen" ref={containerRef}>
-        <div className={slideClass(0)} role="img" aria-label="Orca Mobile home screen">
+        <div
+          className={slideClass(0)}
+          role="img"
+          aria-label={translate(
+            'auto.components.mobile.PhoneCarousel.89c7713645',
+            'Orca Mobile home screen'
+          )}
+        >
           <HomeSlide tapping={tappingSlide === 0} />
         </div>
-        <div className={slideClass(1)} role="img" aria-label="Worktree list">
+        <div
+          className={slideClass(1)}
+          role="img"
+          aria-label={translate('auto.components.mobile.PhoneCarousel.93217b41c1', 'Worktree list')}
+        >
           <WorktreeListSlide tapping={tappingSlide === 1} />
         </div>
-        <div className={slideClass(2)} role="img" aria-label="Terminal session">
+        <div
+          className={slideClass(2)}
+          role="img"
+          aria-label={translate(
+            'auto.components.mobile.PhoneCarousel.96d651cb87',
+            'Terminal session'
+          )}
+        >
           <TerminalSlide />
         </div>
       </div>

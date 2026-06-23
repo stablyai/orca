@@ -38,6 +38,9 @@ D1+/D3+/D7+ retention means the user fired `app_opened` at least once after 24/7
 - Current `onboarding_step_skipped` means an optional preference/setup step was skipped toward required project setup. It does not mean the user abandoned repo setup.
 - `source = 'unknown'` is not a real product surface. It means the caller omitted a source or the value failed schema validation.
 - `workspace_created` means create-worktree IPC succeeded. It is not a general "usable workspace exists" or "workspace revealed" marker.
+- `add_repo_setup_step_action` is a historical post-add choice-screen event. Current Add Project flows auto-open the default checkout or reveal the project row, so absence of this event after the default-checkout handoff rollout is expected and should not be read as setup abandonment.
+- `add_repo_existing_workspaces_detected` is a detection signal for migration opportunity, not proof that a user chose an existing workspace. Current Add Project flows may emit it before automatically opening the default checkout.
+- `add_repo_default_checkout_handoff.result = 'revealed_project'` means Orca could not confidently open the default checkout and instead revealed the newly added project row. It is the direct fallback metric for the 2026-06-03 Add Project handoff rollout.
 - `agent_started` means PTY spawn succeeded with agent telemetry attached. It is not first-repo activation and does not prove the user sent a prompt.
 - `agent_prompt_sent` means a live agent hook observed an explicit non-empty user prompt. It excludes hydrated/replayed status, agent auto-start, bare shells, draft prefill, and hookless sessions; missing rows mean no hook-confirmed interaction was observed, not proof the user never typed.
 - Workspace-outcome joins are native Electron coverage unless the query explicitly proves remote/web instrumentation. Remote runtime and web paths can bypass native repo/worktree telemetry, so do not interpret missing workspace outcome rows as product drop-off for SSH, remote, or web users.
@@ -46,7 +49,7 @@ D1+/D3+/D7+ retention means the user fired `app_opened` at least once after 24/7
 
 ### 2026-05-08 - Repo Cohort Property
 
-Scope: `nth_repo_added` on repo/activation/retention events. Current schemas declare it on `app_opened`, `repo_added`, `add_repo_setup_step_action`, `add_repo_existing_workspaces_detected`, `workspace_created`, `workspace_create_failed`, `setup_script_prompt_shown`, `setup_script_prompt_action`, `agent_started`, `agent_prompt_sent`, and `agent_error`. The original rollout covered `app_opened`, `repo_added`, `add_repo_setup_step_action`, `workspace_created`, `workspace_create_failed`, `agent_started`, and `agent_error`; later events have their own first-seen timestamps below.
+Scope: `nth_repo_added` on repo/activation/retention events. Current schemas declare it on `app_opened`, `repo_added`, `add_repo_setup_step_action`, `add_repo_existing_workspaces_detected`, `add_repo_default_checkout_handoff`, `workspace_created`, `workspace_create_failed`, `setup_script_prompt_shown`, `setup_script_prompt_action`, `agent_started`, `agent_prompt_sent`, and `agent_error`. The original rollout covered `app_opened`, `repo_added`, `add_repo_setup_step_action`, `workspace_created`, `workspace_create_failed`, `agent_started`, and `agent_error`; later events have their own first-seen timestamps below.
 
 | Field                        | Value                                                                                                                                                                                    |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -72,6 +75,7 @@ PostHog evidence checked at `2026-05-23T23:34:32Z`:
 | `workspace_create_failed`               | `2026-05-08T23:04:32.315Z`                 |
 | `agent_error`                           | `2026-05-13T14:13:16.096Z`                 |
 | `add_repo_existing_workspaces_detected` | `2026-05-20T05:33:20.160Z`                 |
+| `add_repo_default_checkout_handoff`     | `TBD`                                      |
 | `setup_script_prompt_shown`             | `2026-05-21T04:09:04.231Z`                 |
 | `setup_script_prompt_action`            | `2026-05-21T04:10:31.616Z`                 |
 
@@ -80,10 +84,11 @@ Dashboard caveats:
 - Earlier rows do not have `nth_repo_added`; show them as pre-rollout or exclude them from repo-count cohorts.
 - A dashboard that depends on a specific event must use that event's first-seen timestamp, not the earliest `app_opened` timestamp.
 - `repo_added nth_repo_added = 1` is the first-repo activation marker.
+- `add_repo_setup_step_action` is only representative of the old post-add choice-screen funnel. After the 2026-06-03 default-checkout handoff change below, Add Project no longer shows that choice screen during the normal Git add/clone/create/onboarding paths.
 
 ### 2026-05-09 - Onboarding Cohort Injection
 
-Scope: `cohort` on onboarding events. Current schemas declare it on `onboarding_started`, `onboarding_step_viewed`, `onboarding_step_completed`, `onboarding_step_skipped`, `onboarding_tour_outcome`, `onboarding_step4_path_clicked`, `onboarding_step4_path_failed`, `onboarding_task_sources_snapshot`, `onboarding_completed`, `onboarding_dismissed`, `onboarding_agent_picked`, onboarding import/setup events, `onboarding_feature_setup_toggled`, `onboarding_feature_setup_run`, `onboarding_feature_setup_terminal_opened`, and `onboarding_feature_setup_terminal_interacted`. See `src/shared/telemetry-events.ts` for the exact current roster.
+Scope: `cohort` on onboarding events. Current schemas declare it on `onboarding_started`, `onboarding_step_viewed`, `onboarding_step_completed`, `onboarding_step_skipped`, `onboarding_tour_outcome`, `onboarding_step4_path_clicked`, `onboarding_step4_path_failed`, `onboarding_task_sources_snapshot`, `onboarding_windows_terminal_snapshot`, `onboarding_completed`, `onboarding_dismissed`, `onboarding_agent_picked`, onboarding import/setup events, `onboarding_feature_setup_toggled`, `onboarding_feature_setup_run`, `onboarding_feature_setup_terminal_opened`, and `onboarding_feature_setup_terminal_interacted`. See `src/shared/telemetry-events.ts` for the exact current roster.
 
 The original `#1608` rollout covered `onboarding_started`, `onboarding_step_viewed`, `onboarding_step_completed`, `onboarding_step_skipped`, `onboarding_step4_path_clicked`, `onboarding_step4_path_failed`, `onboarding_completed`, `onboarding_dismissed`, `onboarding_agent_picked`, and onboarding import events. Later onboarding events joined the roster by declaring `cohort` in their schemas.
 
@@ -172,6 +177,8 @@ Dashboard caveats:
 
 Scope: low-cardinality telemetry that makes inline-tour cohort retention dashboards possible.
 
+Current status: the inline first-run onboarding tour was later removed from active onboarding after PR #2734 moved these education/setup moments to contextual feature tours and the Getting started with Orca guide. The historical schemas still accept seven-step `tour`/`agent_setup` onboarding rows for compatibility, but current active onboarding should not emit new `onboarding_step_* { value_kind: 'tour' }` rows.
+
 Added/changed signals:
 
 - `onboarding_tour_outcome` with `outcome`, intro/tour duration fields, optional tour depth fields, `advanced_via`, and injected onboarding `cohort`.
@@ -193,18 +200,18 @@ Added/changed signals:
 
 Required readiness signals:
 
-| Signal                                                                                 | `first_seen_at_utc` |
-| -------------------------------------------------------------------------------------- | ------------------- |
-| `onboarding_tour_outcome` with valid `outcome` and joinable fresh-install start        | `TBD`               |
-| `onboarding_step_viewed { value_kind: 'tour' }`                                        | `TBD`               |
-| `feature_wall_closed` with non-null `source`, `exit_action`, and expected depth fields | `TBD`               |
+| Signal                                                                                 | `first_seen_at_utc`                                                                  |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `onboarding_tour_outcome` with valid `outcome` and joinable fresh-install start        | `TBD`                                                                                |
+| `onboarding_step_viewed { value_kind: 'tour' }`                                        | Historical only; no new active-onboarding rows after the PR #2734 education handoff. |
+| `feature_wall_closed` with non-null `source`, `exit_action`, and expected depth fields | `TBD`                                                                                |
 
 QA/opportunistic signals:
 
-| Signal                                           | `first_seen_at_utc`                                             |
-| ------------------------------------------------ | --------------------------------------------------------------- |
-| `onboarding_step_skipped { value_kind: 'tour' }` | `TBD`; do not gate dashboard readiness on natural skip traffic. |
-| `feature_wall_opened { source: 'onboarding' }`   | `TBD`; surface availability only.                               |
+| Signal                                           | `first_seen_at_utc`                                                       |
+| ------------------------------------------------ | ------------------------------------------------------------------------- |
+| `onboarding_step_skipped { value_kind: 'tour' }` | Historical only; do not gate dashboard readiness on natural skip traffic. |
+| `feature_wall_opened { source: 'onboarding' }`   | `TBD`; surface availability only.                                         |
 
 PostHog evidence checked at `2026-05-23T23:34:32Z`:
 
@@ -228,7 +235,7 @@ Invalid before this rollout's `dashboard_ready_at_utc`:
 
 Primary cohort interpretation:
 
-- Denominator for inline completed/partial/skipped rates: `onboarding_step_viewed { value_kind: 'tour' }` after this rollout's `dashboard_ready_at_utc`.
+- Historical denominator for inline completed/partial/skipped rates: `onboarding_step_viewed { value_kind: 'tour' }` after this rollout's `dashboard_ready_at_utc`. Do not use this as a current active-onboarding readiness signal after the PR #2734 education handoff.
 - `onboarding_tour_outcome.outcome = 'completed_inline'` means the user completed the inline tour during fresh onboarding.
 - `onboarding_tour_outcome.outcome = 'started_partial'` means the user started the inline tour but the fresh onboarding session resolved without inline completion.
 - `onboarding_tour_outcome.outcome = 'skipped_intro'` means the user reached the tour intro and skipped without starting the inline tour.
@@ -248,6 +255,130 @@ Feature-wall close interpretation:
 - `exit_action = 'dismissed'` is the default close/unmount path.
 - Depth fields are per explicit tour session. Persisted completion state can affect UI progress but must not be interpreted as current-session depth.
 - Missing/null `feature_wall_closed.source` or depth fields mean the row predates the expanded schema, came from an older app version, or failed field coverage. Do not bucket null with `source = 'unknown'`; exclude it from source/depth cohort tiles or show it as a telemetry coverage gap.
+
+### 2026-06-02 - Active Onboarding Step Removal
+
+Scope: active first-run onboarding no longer emits the `agent_setup` or `tour` semantic steps. The removed "Set up Orca for agents" and "Explore Orca" education/setup moments are covered by PR #2734 through contextual feature tours and the Getting started with Orca guide.
+
+This is a product-flow and telemetry-interpretation boundary, not a new event rollout. Historical onboarding schemas still accept seven-step `agent_setup` and `tour` rows so old data remains queryable, but dashboard authors should not expect new active-onboarding rows for those semantic steps after this rollout.
+
+| Field                    | Value                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| PR                       | `#4445`                                                                         |
+| Merge commit             | `TBD`                                                                           |
+| `code_merged_at_utc`     | `TBD`                                                                           |
+| First release            | `TBD`                                                                           |
+| First release commit     | `TBD`                                                                           |
+| `first_released_at_utc`  | `TBD`                                                                           |
+| `first_seen_at_utc`      | N/A                                                                             |
+| `dashboard_ready_at_utc` | Event-dependent; use this as a cutoff only after the PR is merged and released. |
+
+Dashboard caveats:
+
+- Treat `onboarding_step_* { value_kind: 'agent_setup' }`, `onboarding_step_* { value_kind: 'tour' }`, and `onboarding_tour_outcome` as historical first-run onboarding signals after this rollout.
+- Do not use absence of new `agent_setup` or `tour` onboarding rows as a drop-off signal; those steps no longer exist in active onboarding.
+- Segment numeric onboarding step analysis across this boundary. The active final step changed from seven-step onboarding to the five-step active flow.
+- Continue using `contextual_tour_shown` and `contextual_tour_outcome` from PR #2734 for current feature-education exposure and outcome analysis.
+
+### 2026-06-03 - Final Code Onboarding Step Removal
+
+Scope: active first-run onboarding no longer emits the final code/project picker step. The notifications step is now the final step, and completing it opens the Add Project modal.
+
+This is a product-flow and telemetry-interpretation boundary, not a new event rollout. Historical onboarding schemas still accept five-step rows so old data remains queryable, but dashboard authors should not expect new active-onboarding rows for the removed final code/project picker step after this rollout.
+
+| Field                    | Value                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| PR                       | `#4524`                                                                         |
+| Merge commit             | `TBD`                                                                           |
+| `code_merged_at_utc`     | `TBD`                                                                           |
+| First release            | `TBD`                                                                           |
+| First release commit     | `TBD`                                                                           |
+| `first_released_at_utc`  | `TBD`                                                                           |
+| `first_seen_at_utc`      | N/A                                                                             |
+| `dashboard_ready_at_utc` | Event-dependent; use this as a cutoff only after the PR is merged and released. |
+
+Dashboard caveats:
+
+- Treat `onboarding_step_*` rows for the removed final code/project picker step as historical first-run onboarding signals after this rollout.
+- Segment numeric onboarding step analysis across this boundary. At this boundary, the active final step changed from the five-step active flow to `ONBOARDING_FINAL_STEP = 4`; later onboarding step rollouts may supersede that final-step value.
+- Do not use absence of new final code/project picker rows as a drop-off signal; that step no longer exists in active onboarding.
+
+### 2026-06-03 - Add Project Default Checkout Handoff
+
+Scope: Add Project handoff telemetry and interpretation change. The Git add/clone/create/onboarding flows no longer show the post-add setup-choice screen; they close the add modal and open the project/default checkout when available. If no default checkout is available, they reveal the project row instead.
+
+`repo_added` remains the add/import marker. `add_repo_existing_workspaces_detected` remains a low-cardinality detection event for pre-existing non-main workspaces on local folder, runtime server path, and SSH server path adds. `add_repo_default_checkout_handoff` is the direct rollout-health event for the automatic handoff decision.
+
+| Field                    | Value                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------- |
+| PR                       | `#4530`                                                                               |
+| Merge commit             | `TBD`                                                                                 |
+| `code_merged_at_utc`     | `TBD`                                                                                 |
+| First release            | `TBD`                                                                                 |
+| First release commit     | `TBD`                                                                                 |
+| `first_released_at_utc`  | `TBD`                                                                                 |
+| `first_seen_at_utc`      | `TBD` on `add_repo_default_checkout_handoff`                                          |
+| `dashboard_ready_at_utc` | Use the first release boundary once known for charts that compare setup-choice usage. |
+
+Dashboard caveats:
+
+- Treat `add_repo_setup_step_action` rows after this rollout as historical compatibility or stale modal cleanup only, not the normal Add Project funnel.
+- Do not build current-flow conversion funnels that require `repo_added -> add_repo_setup_step_action`; the normal next step is an automatic workspace reveal/open, not a tracked user choice.
+- Use `add_repo_existing_workspaces_detected` to estimate how often added projects had non-main existing workspaces, but do not infer the user selected "use existing worktrees" because that choice no longer exists in the normal flow.
+- Use `add_repo_default_checkout_handoff` for the current handoff outcome. `result = 'opened_default_checkout'` is the expected path; `result = 'revealed_project'` is the graceful fallback. Break down fallback rows by `source` and `reason`.
+
+### 2026-06-10 - Repo Added Git-vs-Folder Signal
+
+Scope: `repo_added.is_git_repo` replaces the retired `onboarding_completed.is_git_repo` split for git-vs-folder analysis. Project selection moved out of onboarding in the 1.4.46 flow, so `onboarding_completed` now fires before any repo is chosen. After that boundary, the old `onboarding_completed.is_git_repo` value is not a valid git-vs-folder signal.
+
+`repo_added.is_git_repo` is sourced from git detection at the add point. It is optional so SSH/remote paths that genuinely cannot determine git-ness can omit the property instead of defaulting to `false`.
+
+| Field                    | Value                                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------------- |
+| PR                       | `#5121`                                                                                     |
+| Merge commit             | `TBD`                                                                                       |
+| `code_merged_at_utc`     | `TBD`                                                                                       |
+| First release            | `TBD`                                                                                       |
+| First release commit     | `TBD`                                                                                       |
+| `first_released_at_utc`  | `TBD`                                                                                       |
+| `first_seen_at_utc`      | `TBD` on `repo_added.is_git_repo`                                                           |
+| `dashboard_ready_at_utc` | `TBD`; use only after first-seen rows exist and field coverage has been checked in PostHog. |
+
+PostHog evidence checked at `2026-06-10T19:00:00Z`:
+
+- Dashboard tile "Fresh-install onboarding completion over time" (`JlIt5J1N`, insight id `9076383`, project `406068`) showed the git-repo share collapse to about 4% while plain-folder completions spiked to about 88% on 2026-06-05.
+- Raw `onboarding_completed.is_git_repo` counts by `app_version` showed a version cliff: versions through `1.4.45` were about 80% true, while `1.4.46`, `1.4.47`, and `1.4.48` had zero true rows in the sampled data.
+
+Dashboard caveats:
+
+- Treat `onboarding_completed.is_git_repo` as historical only after app version `1.4.45`.
+- Do not stitch historical `onboarding_completed.is_git_repo` and new `repo_added.is_git_repo` series without an explicit version boundary and label change; they are emitted at different funnel moments.
+- Repoint dashboard tile `JlIt5J1N` to use `repo_added.is_git_repo` once the new field is observed in release telemetry.
+- Omitted `repo_added.is_git_repo` means unknown/degraded detection, not plain folder. Only explicit `false` means plain folder.
+
+### 2026-06-16 - Windows Terminal Preferences Onboarding Step
+
+Scope: Windows first-run onboarding adds a terminal preferences step before notifications. The step lets users choose the default Windows terminal shell and right-click paste/menu behavior before their first project handoff.
+
+`onboarding_step_*` rows can now emit `value_kind = 'windows_terminal'` at step `4`. Notifications move to step `5`, so `ONBOARDING_FINAL_STEP = 5` for current active onboarding. Non-Windows clients skip the Windows terminal step but still persist through the skipped step so resumed onboarding lands on notifications. `onboarding_windows_terminal_snapshot` records the low-cardinality selected shell bucket, right-click behavior, exit action, duration, and advance method when the visible Windows terminal step exits.
+
+| Field                    | Value                                                                                  |
+| ------------------------ | -------------------------------------------------------------------------------------- |
+| PR                       | `#5488`                                                                                |
+| Merge commit             | `68abadba8198c627fb642c41e54937c04ccddfe8`                                             |
+| `code_merged_at_utc`     | `2026-06-16T21:07:26Z`                                                                 |
+| First release            | `TBD`                                                                                  |
+| First release commit     | `TBD`                                                                                  |
+| `first_released_at_utc`  | `TBD`                                                                                  |
+| `first_seen_at_utc`      | `TBD` on `onboarding_step_viewed { value_kind: 'windows_terminal' }` and `onboarding_windows_terminal_snapshot` |
+| `dashboard_ready_at_utc` | `TBD`; use only after first-seen rows exist and Windows/non-Windows split plus snapshot coverage are verified. |
+
+Dashboard caveats:
+
+- Segment numeric onboarding step analysis across this boundary. Step `4` is Windows terminal preferences in the current flow, but was notifications in the previous active flow.
+- Use `value_kind` rather than numeric `step` when comparing notifications or Windows terminal setup across releases.
+- Non-Windows users can have persisted `lastCompletedStep` values that include the skipped Windows step; do not treat that as evidence they viewed the Windows terminal page.
+- `onboarding_windows_terminal_snapshot.default_shell = 'other'` means Orca could not bucket the persisted setting. It is not a raw shell path and should be monitored as telemetry quality, not a product choice.
 
 ## Updating This File
 

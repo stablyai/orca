@@ -38,6 +38,8 @@ export function registerWorkspacePortHandlers(
     broadcastWorkspacePortAdvertisedUrlChanged(getWindows, event)
   })
 
+  ipcMain.removeHandler('workspacePorts:scan')
+  ipcMain.removeHandler('workspacePorts:kill')
   ipcMain.handle(
     'workspacePorts:scan',
     (_event, rawArgs?: unknown): Promise<WorkspacePortScanResult> => {

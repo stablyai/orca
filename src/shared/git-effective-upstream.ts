@@ -1,5 +1,14 @@
 import { isNoUpstreamError } from './git-remote-error'
 import type { GitUpstreamStatus } from './types'
+import {
+  getConfiguredBranchRemoteUpstream,
+  hasConfiguredBranchPushTarget
+} from './git-configured-branch-target'
+import { splitRemoteBranchName } from './git-remote-branch-name'
+import { parseGitRevListAheadBehindCounts } from './git-rev-list-output'
+import { iterateProcessOutputLines } from './process-output-field-scanner'
+
+export { gitRefTargetsBranchName, splitRemoteBranchName } from './git-remote-branch-name'
 
 export type GitCommandRunner = (args: string[]) => Promise<{ stdout: string }>
 
@@ -17,17 +26,37 @@ export type EffectiveGitUpstream =
       isConfiguredUpstream: false
     }
 
-export function splitRemoteBranchName(refName: string): {
-  remoteName: string
-  branchName: string
-} | null {
-  const slashIndex = refName.indexOf('/')
-  if (slashIndex <= 0 || slashIndex === refName.length - 1) {
+function hasMultipleSlashSegments(refName: string): boolean {
+  return refName.includes('/') && refName.indexOf('/') !== refName.lastIndexOf('/')
+}
+
+async function splitRemoteBranchNameByKnownRemote(
+  runGit: GitCommandRunner,
+  refName: string
+): Promise<{ remoteName: string; branchName: string } | null> {
+  try {
+    const { stdout } = await runGit(['remote'])
+    let bestRemoteName: string | null = null
+    for (const rawLine of iterateProcessOutputLines(stdout)) {
+      const remoteName = rawLine.trim()
+      // Why: preserve longest-remote matching for remote names that contain slashes.
+      if (
+        !remoteName ||
+        refName === remoteName ||
+        !refName.startsWith(`${remoteName}/`) ||
+        (bestRemoteName && bestRemoteName.length >= remoteName.length)
+      ) {
+        continue
+      }
+      bestRemoteName = remoteName
+    }
+    if (!bestRemoteName) {
+      return null
+    }
+    const branchName = refName.slice(bestRemoteName.length + 1)
+    return branchName ? { remoteName: bestRemoteName, branchName } : null
+  } catch {
     return null
-  }
-  return {
-    remoteName: refName.slice(0, slashIndex),
-    branchName: refName.slice(slashIndex + 1)
   }
 }
 
@@ -86,13 +115,25 @@ async function remoteTrackingRefExists(
   }
 }
 
-export async function resolveEffectiveGitUpstream(
-  runGit: GitCommandRunner
+async function resolveEffectiveGitUpstreamForBranch(
+  runGit: GitCommandRunner,
+  currentBranchName: string | null
 ): Promise<EffectiveGitUpstream | null> {
-  const currentBranchName = await getCurrentBranchName(runGit)
-  const configured = await getConfiguredUpstream(runGit)
+  let configured = await getConfiguredUpstream(runGit)
 
   if (configured) {
+    if (
+      currentBranchName &&
+      configured.remoteName === 'origin' &&
+      configured.branchName !== currentBranchName &&
+      hasMultipleSlashSegments(configured.upstreamName)
+    ) {
+      const parsed = await splitRemoteBranchNameByKnownRemote(runGit, configured.upstreamName)
+      if (parsed) {
+        configured = { ...configured, ...parsed }
+      }
+    }
+
     if (!currentBranchName || configured.branchName === currentBranchName) {
       return configured
     }
@@ -116,6 +157,19 @@ export async function resolveEffectiveGitUpstream(
     return configured
   }
 
+  if (currentBranchName) {
+    const branchRemoteUpstream = await getConfiguredBranchRemoteUpstream(
+      runGit,
+      currentBranchName,
+      (remoteName, branchName) => remoteTrackingRefExists(runGit, remoteName, branchName)
+    )
+    if (branchRemoteUpstream) {
+      // Why: Git cannot resolve HEAD@{u} when branch.<name>.remote is a URL,
+      // but older fork-review worktrees still carry the usable merge target.
+      return branchRemoteUpstream
+    }
+  }
+
   if (currentBranchName && (await remoteTrackingRefExists(runGit, 'origin', currentBranchName))) {
     return {
       upstreamName: `origin/${currentBranchName}`,
@@ -128,13 +182,28 @@ export async function resolveEffectiveGitUpstream(
   return null
 }
 
+export async function resolveEffectiveGitUpstream(
+  runGit: GitCommandRunner
+): Promise<EffectiveGitUpstream | null> {
+  return resolveEffectiveGitUpstreamForBranch(runGit, await getCurrentBranchName(runGit))
+}
+
 export async function getEffectiveGitUpstreamStatus(
   runGit: GitCommandRunner,
   getBehindCommitsArePatchEquivalent?: (upstreamName: string) => Promise<boolean>
 ): Promise<GitUpstreamStatus> {
-  const upstream = await resolveEffectiveGitUpstream(runGit)
+  const currentBranchName = await getCurrentBranchName(runGit)
+  const upstream = await resolveEffectiveGitUpstreamForBranch(runGit, currentBranchName)
   if (!upstream) {
-    return { hasUpstream: false, ahead: 0, behind: 0 }
+    const hasConfiguredPushTarget = currentBranchName
+      ? await hasConfiguredBranchPushTarget(runGit, currentBranchName)
+      : false
+    return {
+      hasUpstream: false,
+      ahead: 0,
+      behind: 0,
+      ...(hasConfiguredPushTarget ? { hasConfiguredPushTarget: true } : {})
+    }
   }
 
   const { stdout } = await runGit([
@@ -143,27 +212,24 @@ export async function getEffectiveGitUpstreamStatus(
     '--count',
     `HEAD...${upstream.upstreamName}`
   ])
-  const tokens = stdout.trim().split(/\s+/)
-  if (tokens.length !== 2) {
+  const counts = parseGitRevListAheadBehindCounts(stdout)
+  if (counts.status === 'unexpected-field-count') {
     throw new Error(`Unexpected git rev-list output: ${JSON.stringify(stdout)}`)
   }
-
-  const ahead = Number.parseInt(tokens[0]!, 10)
-  const behind = Number.parseInt(tokens[1]!, 10)
-  if (!Number.isFinite(ahead) || !Number.isFinite(behind) || ahead < 0 || behind < 0) {
+  if (counts.status === 'unparseable-counts') {
     throw new Error(`Unparseable git rev-list counts: ${JSON.stringify(stdout)}`)
   }
 
   const behindCommitsArePatchEquivalent =
-    ahead > 0 && behind > 0 && getBehindCommitsArePatchEquivalent
+    counts.ahead > 0 && counts.behind > 0 && getBehindCommitsArePatchEquivalent
       ? await getBehindCommitsArePatchEquivalent(upstream.upstreamName)
       : undefined
 
   return {
     hasUpstream: true,
     upstreamName: upstream.upstreamName,
-    ahead,
-    behind,
+    ahead: counts.ahead,
+    behind: counts.behind,
     ...(behindCommitsArePatchEquivalent !== undefined ? { behindCommitsArePatchEquivalent } : {})
   }
 }

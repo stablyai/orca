@@ -11,7 +11,13 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { listRegisteredPtys } from '../memory/pty-registry'
 import { getSshPtyProvider } from './pty'
 import { isFolderRepo } from '../../shared/repo-kind'
-import type { GitStatusResult, GitWorktreeInfo, Repo, Worktree } from '../../shared/types'
+import type {
+  GitStatusResult,
+  GitWorktreeInfo,
+  Repo,
+  Worktree,
+  WorktreeMeta
+} from '../../shared/types'
 import { mergeWorktree } from './worktree-logic'
 import { splitWorktreeId } from '../../shared/worktree-id'
 import {
@@ -523,56 +529,76 @@ function synthesizeDisconnectedSshCandidates(
   scannedAt: number,
   targetWorktreeId?: string
 ): WorkspaceCleanupCandidate[] {
-  return Object.entries(store.getAllWorktreeMeta())
-    .filter(([worktreeId, meta]) => {
-      if (!worktreeId.startsWith(`${repo.id}::`)) {
-        return false
-      }
-      if (targetWorktreeId) {
-        return targetWorktreeId === worktreeId
-      }
-      return isWorkspaceInactiveForCleanup(meta, scannedAt)
+  const repoWorktreePrefix = `${repo.id}::`
+  if (targetWorktreeId) {
+    if (!targetWorktreeId.startsWith(repoWorktreePrefix)) {
+      return []
+    }
+    // Why: focused delete preflight names one workspace already; walking all
+    // persisted metadata is unnecessary for disconnected SSH repos.
+    const meta = store.getWorktreeMeta(targetWorktreeId)
+    return meta ? [createDisconnectedSshCandidate(repo, scannedAt, targetWorktreeId, meta)] : []
+  }
+
+  const candidates: WorkspaceCleanupCandidate[] = []
+  const allMeta = store.getAllWorktreeMeta()
+  for (const worktreeId in allMeta) {
+    if (!Object.hasOwn(allMeta, worktreeId) || !worktreeId.startsWith(repoWorktreePrefix)) {
+      continue
+    }
+    const meta = allMeta[worktreeId]
+    if (!meta || !isWorkspaceInactiveForCleanup(meta, scannedAt)) {
+      continue
+    }
+    candidates.push(createDisconnectedSshCandidate(repo, scannedAt, worktreeId, meta))
+  }
+  return candidates
+}
+
+function createDisconnectedSshCandidate(
+  repo: Repo,
+  scannedAt: number,
+  worktreeId: string,
+  meta: WorktreeMeta
+): WorkspaceCleanupCandidate {
+  const parsed = splitWorktreeId(worktreeId)
+  const path = parsed?.worktreePath ?? worktreeId
+  const reasons = getInactivityReasons(meta, scannedAt)
+  return applyWorkspaceCleanupPolicy({
+    worktreeId,
+    repoId: repo.id,
+    repoName: repo.displayName,
+    connectionId: repo.connectionId ?? null,
+    displayName: meta.displayName || basename(path),
+    branch: basename(path),
+    path,
+    tier: 'protected',
+    selectedByDefault: false,
+    reasons,
+    blockers: ['ssh-disconnected'],
+    lastActivityAt: meta.lastActivityAt,
+    ...(meta.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
+    localContext: {
+      terminalTabCount: 0,
+      cleanEditorTabCount: 0,
+      browserTabCount: 0,
+      diffCommentCount: meta.diffComments?.length ?? 0,
+      newestDiffCommentAt: getNewestDiffCommentAt(meta.diffComments),
+      retainedDoneAgentCount: 0
+    },
+    git: {
+      clean: null,
+      upstreamAhead: null,
+      upstreamBehind: null,
+      checkedAt: null
+    },
+    fingerprint: createWorkspaceCleanupFingerprint({
+      branch: basename(path),
+      head: '',
+      gitClean: null,
+      lastActivityAt: meta.lastActivityAt
     })
-    .map(([worktreeId, meta]) => {
-      const parsed = splitWorktreeId(worktreeId)
-      const path = parsed?.worktreePath ?? worktreeId
-      const reasons = getInactivityReasons(meta, scannedAt)
-      return applyWorkspaceCleanupPolicy({
-        worktreeId,
-        repoId: repo.id,
-        repoName: repo.displayName,
-        connectionId: repo.connectionId ?? null,
-        displayName: meta.displayName || basename(path),
-        branch: basename(path),
-        path,
-        tier: 'protected',
-        selectedByDefault: false,
-        reasons,
-        blockers: ['ssh-disconnected'],
-        lastActivityAt: meta.lastActivityAt,
-        ...(meta.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
-        localContext: {
-          terminalTabCount: 0,
-          cleanEditorTabCount: 0,
-          browserTabCount: 0,
-          diffCommentCount: meta.diffComments?.length ?? 0,
-          newestDiffCommentAt: getNewestDiffCommentAt(meta.diffComments),
-          retainedDoneAgentCount: 0
-        },
-        git: {
-          clean: null,
-          upstreamAhead: null,
-          upstreamBehind: null,
-          checkedAt: null
-        },
-        fingerprint: createWorkspaceCleanupFingerprint({
-          branch: basename(path),
-          head: '',
-          gitClean: null,
-          lastActivityAt: meta.lastActivityAt
-        })
-      })
-    })
+  })
 }
 
 function buildLocalContext(worktree: Worktree): WorkspaceCleanupCandidate['localContext'] {

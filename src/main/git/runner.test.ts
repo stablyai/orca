@@ -1,8 +1,12 @@
 // Why: covers two recent classifier fixes — Retry-After honoring on 429
 // (transient detection must propagate, not silently retry on 250ms cadence)
 // and stderr extraction from execFile rejections (err.message is unreliable).
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { extractExecError, isTransientGhError, parseRetryAfterMs } from './runner'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('parseRetryAfterMs', () => {
   it('returns null when no Retry-After is present', () => {
@@ -15,6 +19,20 @@ describe('parseRetryAfterMs', () => {
 
   it('handles case-insensitive header name and surrounding whitespace', () => {
     expect(parseRetryAfterMs('  retry-after:   12  \n')).toBe(12_000)
+  })
+
+  it('parses large stderr output without full-string retry-after matching', () => {
+    const matchSpy = vi.spyOn(String.prototype, 'match')
+    const stderr = `${'noise\n'.repeat(10_000)}Retry-After: 12\n`
+
+    expect(parseRetryAfterMs(stderr)).toBe(12_000)
+    const usedRetryAfterMatch = matchSpy.mock.calls.some(
+      ([pattern]) =>
+        pattern instanceof RegExp &&
+        pattern.source.startsWith('retry-after:') &&
+        pattern.source.includes('[^\\r\\n]')
+    )
+    expect(usedRetryAfterMatch).toBe(false)
   })
 
   it('returns null for malformed values', () => {

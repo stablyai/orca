@@ -22,25 +22,25 @@ describe('imported worktrees card actions', () => {
     fetchWorktrees.mockResolvedValue(true)
   })
 
-  it('shows imported worktrees only after visibility update and refresh succeed', async () => {
+  it('shows discovered worktrees after visibility update and refresh succeed', async () => {
     await showImportedWorktreesCard({ projectId, updateRepo, fetchWorktrees, setCardState })
 
     expect(updateRepo).toHaveBeenCalledWith(projectId, { externalWorktreeVisibility: 'show' })
     expect(fetchWorktrees).toHaveBeenCalledWith(projectId, { requireAuthoritative: true })
     expect(setCardState).toHaveBeenNthCalledWith(1, projectId, {
       pending: true,
-      error: null,
-      forceVisible: true
+      error: null
     })
     expect(setCardState).toHaveBeenLastCalledWith(projectId, null)
   })
 
-  it('leaves the card visible when showing fails before refresh', async () => {
-    updateRepo.mockResolvedValueOnce(false)
+  it('rolls visibility back when refresh fails after showing', async () => {
+    fetchWorktrees.mockResolvedValueOnce(false)
 
     await showImportedWorktreesCard({ projectId, updateRepo, fetchWorktrees, setCardState })
 
-    expect(fetchWorktrees).not.toHaveBeenCalled()
+    expect(updateRepo).toHaveBeenNthCalledWith(1, projectId, { externalWorktreeVisibility: 'show' })
+    expect(updateRepo).toHaveBeenNthCalledWith(2, projectId, { externalWorktreeVisibility: 'hide' })
     expect(setCardState).toHaveBeenLastCalledWith(projectId, {
       pending: false,
       error: IMPORTED_WORKTREES_SHOW_ERROR
@@ -68,19 +68,6 @@ describe('imported worktrees card actions', () => {
       pending: false,
       error: IMPORTED_WORKTREES_SHOW_ERROR,
       forceVisible: true
-    })
-  })
-
-  it('rolls visibility back and leaves an error when refresh fails after showing', async () => {
-    fetchWorktrees.mockResolvedValueOnce(false)
-
-    await showImportedWorktreesCard({ projectId, updateRepo, fetchWorktrees, setCardState })
-
-    expect(updateRepo).toHaveBeenNthCalledWith(1, projectId, { externalWorktreeVisibility: 'show' })
-    expect(updateRepo).toHaveBeenNthCalledWith(2, projectId, { externalWorktreeVisibility: 'hide' })
-    expect(setCardState).toHaveBeenLastCalledWith(projectId, {
-      pending: false,
-      error: IMPORTED_WORKTREES_SHOW_ERROR
     })
   })
 

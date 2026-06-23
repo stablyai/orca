@@ -18,6 +18,7 @@ export function normalizeProjectGroupName(name: string, fallback = 'Untitled gro
 export function createProjectGroup(input: {
   name: string
   parentPath?: string | null
+  connectionId?: string | null
   parentGroupId?: string | null
   createdFrom: ProjectGroupCreatedFrom
   tabOrder: number
@@ -28,6 +29,7 @@ export function createProjectGroup(input: {
     id: createProjectGroupId(),
     name: normalizeProjectGroupName(input.name),
     parentPath: input.parentPath ?? null,
+    connectionId: input.connectionId ?? null,
     parentGroupId: input.parentGroupId ?? null,
     createdFrom: input.createdFrom,
     tabOrder: input.tabOrder,
@@ -58,6 +60,12 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
       id: raw.id,
       name: normalizeProjectGroupName(typeof raw.name === 'string' ? raw.name : ''),
       parentPath: typeof raw.parentPath === 'string' ? raw.parentPath : null,
+      connectionId:
+        typeof raw.connectionId === 'string'
+          ? raw.connectionId
+          : raw.connectionId === null
+            ? null
+            : null,
       parentGroupId: typeof raw.parentGroupId === 'string' ? raw.parentGroupId : null,
       createdFrom:
         raw.createdFrom === 'manual' ||
@@ -125,6 +133,31 @@ export function getProjectGroupSubtreeIds(
     }
   }
   return subtreeIds
+}
+
+/** Manual rank for a project inside a group bucket. Explicit
+ *  `projectGroupOrder` wins; otherwise fall back to global repo order so drag
+ *  midpoint math and sidebar sorting stay aligned. */
+export function getEffectiveProjectGroupManualRank(
+  repo: Pick<Repo, 'id' | 'projectGroupOrder'> | undefined,
+  repoOrderRankById?: ReadonlyMap<string, number>,
+  siblingFallbackIndex?: number
+): number {
+  if (!repo) {
+    return Number.POSITIVE_INFINITY
+  }
+  const order = repo.projectGroupOrder
+  if (typeof order === 'number' && Number.isFinite(order)) {
+    return order
+  }
+  const repoRank = repoOrderRankById?.get(repo.id)
+  if (repoRank !== undefined) {
+    return repoRank * 1000
+  }
+  if (siblingFallbackIndex !== undefined) {
+    return siblingFallbackIndex * 1000
+  }
+  return Number.POSITIVE_INFINITY
 }
 
 export function getNextProjectGroupOrder(repos: readonly Repo[], groupId: string | null): number {

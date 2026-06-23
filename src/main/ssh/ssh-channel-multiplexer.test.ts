@@ -1,3 +1,5 @@
+/* oxlint-disable max-lines -- Why: keeps the mux protocol lifecycle harness
+   together across request, notification, keepalive, and disposal cases. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { SshChannelMultiplexer, type MultiplexerTransport } from './ssh-channel-multiplexer'
 import { encodeFrame, MessageType, HEADER_LENGTH, encodeKeepAliveFrame } from './relay-protocol'
@@ -61,6 +63,16 @@ function makeNotificationFrame(
     })
   )
   return encodeFrame(MessageType.Regular, seq, 0, payload)
+}
+
+type MuxInternals = {
+  notificationHandlers: unknown[]
+  methodNotificationHandlers: Map<string, Set<unknown>>
+  disposeHandlers: unknown[]
+}
+
+function getMuxInternals(instance: SshChannelMultiplexer): MuxInternals {
+  return instance as unknown as MuxInternals
 }
 
 describe('SshChannelMultiplexer', () => {
@@ -322,6 +334,43 @@ describe('SshChannelMultiplexer', () => {
       expect(mux.isDisposed()).toBe(false)
       mux.dispose()
       expect(mux.isDisposed()).toBe(true)
+    })
+
+    it('clears registered handlers on dispose', () => {
+      const disposeHandler = vi.fn()
+      mux.onNotification(vi.fn())
+      mux.onNotificationByMethod('fs.streamChunk', vi.fn())
+      mux.onDispose(disposeHandler)
+
+      const internals = getMuxInternals(mux)
+      expect(internals.notificationHandlers).toHaveLength(1)
+      expect(internals.methodNotificationHandlers.size).toBe(1)
+      expect(internals.disposeHandlers).toHaveLength(1)
+
+      mux.dispose()
+
+      expect(disposeHandler).toHaveBeenCalledWith('shutdown')
+      expect(internals.notificationHandlers).toHaveLength(0)
+      expect(internals.methodNotificationHandlers.size).toBe(0)
+      expect(internals.disposeHandlers).toHaveLength(0)
+    })
+
+    it('does not retain handlers registered after dispose', () => {
+      mux.dispose()
+
+      const disposeNotification = mux.onNotification(vi.fn())
+      const disposeMethod = mux.onNotificationByMethod('fs.streamChunk', vi.fn())
+      const disposeLifecycle = mux.onDispose(vi.fn())
+
+      const internals = getMuxInternals(mux)
+      expect(internals.notificationHandlers).toHaveLength(0)
+      expect(internals.methodNotificationHandlers.size).toBe(0)
+      expect(internals.disposeHandlers).toHaveLength(0)
+      expect(() => {
+        disposeNotification()
+        disposeMethod()
+        disposeLifecycle()
+      }).not.toThrow()
     })
   })
 

@@ -3,51 +3,35 @@ import { mkdtemp, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { promisify } from 'util'
+import {
+  ensureOrcaRuntimeLaunched,
+  parseJsonOutput,
+  runOrcaCli,
+  stopOrcaRuntime,
+  type CliResult
+} from './computer-cli-driver'
 
 const execFileAsync = promisify(execFile)
 let textEditTempDir: string | null = null
+let safariDraftTempDir: string | null = null
+let safariDraftTitle: string | null = null
 let linuxTempDir: string | null = null
 let windowsTempDir: string | null = null
 let geditProcess: ChildProcess | null = null
 let notepadProcess: ChildProcess | null = null
 let notepadAppSelector: string | null = null
 
-export type CliResult = {
-  stdout: string
-  stderr: string
-}
-
-export async function runOrcaCli(args: string[]): Promise<CliResult> {
-  const devCli = join(process.cwd(), 'config/scripts/orca-dev')
-  const builtCli = join(process.cwd(), 'out/cli/index.js')
-  const command =
-    process.env.ORCA_COMPUTER_CLI ?? (process.platform === 'win32' ? process.execPath : devCli)
-  const cliArgs = process.env.ORCA_COMPUTER_CLI
-    ? args
-    : process.platform === 'win32'
-      ? [builtCli, ...args]
-      : args
-  try {
-    const result = await execFileAsync(command, cliArgs, {
-      maxBuffer: 20 * 1024 * 1024
-    })
-    return { stdout: result.stdout, stderr: result.stderr }
-  } catch (error) {
-    if (error && typeof error === 'object' && 'stdout' in error && 'stderr' in error) {
-      const output = error as { message: string; stdout: string; stderr: string }
-      throw new Error(`${output.message}\nstdout:\n${output.stdout}\nstderr:\n${output.stderr}`)
-    }
-    throw error
-  }
-}
+export { ensureOrcaRuntimeLaunched, parseJsonOutput, runOrcaCli, stopOrcaRuntime, type CliResult }
 
 export async function ensureTextEditLaunched(): Promise<void> {
   await killTextEdit()
   textEditTempDir = await mkdtemp(join(tmpdir(), 'orca-computer-e2e-'))
   const filePath = join(textEditTempDir, 'textedit-target.txt')
   await writeFile(filePath, 'seed', 'utf8')
-  await execFileAsync('open', ['-a', 'TextEdit', '-n', filePath])
-  await delay(5500)
+  await execFileAsync('open', ['-F', '-a', 'TextEdit', '-n', filePath])
+  // Why: cold CI/user launches can register the process before System Events
+  // exposes its first window; short waits make the live computer-use proof flaky.
+  await waitForMacAppWindow('TextEdit', 15000)
 }
 
 export async function killTextEdit(): Promise<void> {
@@ -62,14 +46,119 @@ export async function killTextEdit(): Promise<void> {
   }
 }
 
+export type SafariDraftFixture = {
+  title: string
+}
+
+export async function ensureSafariDraftFixtureLaunched(): Promise<SafariDraftFixture> {
+  await closeSafariDraftFixture()
+  safariDraftTempDir = await mkdtemp(join(tmpdir(), 'orca-computer-safari-e2e-'))
+  safariDraftTitle = `Orca Computer Use Draft Fixture ${Date.now()}`
+  const filePath = join(safariDraftTempDir, 'index.html')
+  await writeFile(filePath, safariDraftFixtureHtml(safariDraftTitle), 'utf8')
+  await execFileAsync('open', ['-F', '-a', 'Safari', filePath])
+  await waitForMacAppWindow('Safari', 15000)
+  await waitForComputerWindowTitle('com.apple.Safari', safariDraftTitle, 15000)
+  return { title: safariDraftTitle }
+}
+
+export async function closeSafariDraftFixture(): Promise<void> {
+  const title = safariDraftTitle
+  if (title) {
+    try {
+      const envelope = parseJsonOutput<{
+        result: {
+          windows: { id?: number | null; index: number; title: string }[]
+        }
+      }>(
+        (await runOrcaCli(['computer', 'list-windows', '--app', 'com.apple.Safari', '--json']))
+          .stdout
+      )
+      const target = envelope.result.windows.find((window) => window.title.includes(title))
+      if (target) {
+        const targetArgs =
+          target.id !== undefined && target.id !== null
+            ? ['--window-id', String(target.id)]
+            : ['--window-index', String(target.index)]
+        await runOrcaCli([
+          'computer',
+          'hotkey',
+          '--app',
+          'com.apple.Safari',
+          ...targetArgs,
+          '--key',
+          'CmdOrCtrl+W',
+          '--restore-window',
+          '--no-screenshot',
+          '--json'
+        ])
+      }
+    } catch {
+      // The test-owned Safari tab may already be closed or the runtime may be gone.
+    }
+    safariDraftTitle = null
+  }
+  if (safariDraftTempDir) {
+    await rm(safariDraftTempDir, { force: true, recursive: true })
+    safariDraftTempDir = null
+  }
+}
+
+export async function activateFinder(): Promise<void> {
+  await execFileAsync('open', ['-a', 'Finder'])
+  await delay(1000)
+}
+
+async function waitForMacAppWindow(appName: string, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      const result = await execFileAsync('osascript', [
+        '-e',
+        `tell application "System Events" to tell process "${escapeAppleScript(appName)}" to count windows`
+      ])
+      if (Number.parseInt(result.stdout.trim(), 10) > 0) {
+        return
+      }
+    } catch {
+      // The app process may not have registered with System Events yet.
+    }
+    await delay(250)
+  }
+  throw new Error(`${appName} did not expose a visible window within ${timeoutMs}ms`)
+}
+
+async function waitForComputerWindowTitle(
+  app: string,
+  title: string,
+  timeoutMs: number
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      const envelope = parseJsonOutput<{
+        result: { windows: { title: string }[] }
+      }>((await runOrcaCli(['computer', 'list-windows', '--app', app, '--json'])).stdout)
+      if (envelope.result.windows.some((window) => window.title.includes(title))) {
+        return
+      }
+    } catch {
+      // The browser window may not be visible to the provider yet.
+    }
+    await delay(250)
+  }
+  throw new Error(`${app} did not expose a window titled ${title} within ${timeoutMs}ms`)
+}
+
 export async function ensureGeditLaunched(): Promise<void> {
   await killGedit()
   linuxTempDir = await mkdtemp(join(tmpdir(), 'orca-computer-linux-e2e-'))
-  const filePath = join(linuxTempDir, 'gedit-target.txt')
+  const fileName = 'gedit-target.txt'
+  const filePath = join(linuxTempDir, fileName)
   await writeFile(filePath, 'seed', 'utf8')
   geditProcess = spawn('gedit', [filePath], { detached: true, stdio: 'ignore' })
   geditProcess.unref()
-  await delay(3500)
+  await waitForComputerWindowTitle('gedit', fileName, 15000)
 }
 
 export async function killGedit(): Promise<void> {
@@ -136,10 +225,6 @@ export function findRoleIndex(treeText: string, role: string | RegExp): number {
   return match?.[1] ? Number.parseInt(match[1], 10) : -1
 }
 
-export function parseJsonOutput<T>(stdout: string): T {
-  return JSON.parse(stdout) as T
-}
-
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -177,6 +262,39 @@ async function findNotepadWindowPid(filePath: string): Promise<number> {
 
 function powerShellSingleQuoted(value: string): string {
   return `'${value.replaceAll("'", "''")}'`
+}
+
+function escapeAppleScript(value: string): string {
+  return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
+}
+
+function safariDraftFixtureHtml(title: string): string {
+  const escapedTitle = escapeHtml(title)
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head>',
+    `<title>${escapedTitle}</title>`,
+    '</head>',
+    '<body>',
+    '<main>',
+    '<h1>Draft Fixture</h1>',
+    '<label>Recipient <input id="recipient" aria-label="Recipient"></label>',
+    '<label>Body <textarea id="body" aria-label="Body"></textarea></label>',
+    "<button id=\"save\" onclick=\"document.getElementById('status').textContent = 'Draft ready: ' + document.getElementById('recipient').value + ' / ' + document.getElementById('body').value\">Save draft</button>",
+    '<p id="status" role="status">Draft empty</p>',
+    '</main>',
+    '</body>',
+    '</html>'
+  ].join('\n')
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
 }
 
 function escapeRegExp(input: string): string {

@@ -14,6 +14,7 @@ import { registerGitHubHandlers } from './github'
 import { registerGitLabHandlers } from './gitlab'
 import { registerHostedReviewHandlers } from './hosted-review'
 import { registerLinearHandlers } from './linear'
+import { registerJiraHandlers } from './jira'
 import { registerFeedbackHandlers } from './feedback'
 import { registerCrashReportingHandlers } from './crash-reporting'
 import { registerExportHandlers } from './export'
@@ -22,6 +23,7 @@ import { registerMemoryHandlers } from './memory'
 import { registerRateLimitHandlers } from './rate-limits'
 import { registerRuntimeHandlers } from './runtime'
 import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
+import { registerAiVaultHandlers } from './ai-vault'
 import { registerNotificationHandlers } from './notifications'
 import { registerNotebookHandlers } from './notebook'
 import { registerOnboardingHandlers } from './onboarding'
@@ -38,18 +40,20 @@ import { registerAutomationHandlers } from './automations'
 import { registerKeybindingHandlers } from './keybindings'
 import { registerTelemetryHandlers } from './telemetry'
 import { registerBrowserHandlers } from './browser'
-import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { registerShellHandlers } from './shell'
 import { registerPetHandlers } from './pet'
-import { registerUIHandlers } from './ui'
+import { registerUIHandlers, setTrustedUIRendererWebContentsId } from './ui'
+import { registerEmulatorFrameStreamHandlers } from './emulator-frame-stream'
 import { registerSpeechHandlers } from './speech'
 import { registerCodexAccountHandlers } from './codex-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
 import { registerAgentTrustHandlers } from './agent-trust'
 import { registerClaudeAccountHandlers } from './claude-accounts'
-import { warmSystemFontFamilies } from '../system-fonts'
 import { registerUpdaterHandlers } from '../window/attach-main-window-services'
-import { registerClipboardHandlers } from '../window/clipboard-ipc-handlers'
+import {
+  registerClipboardHandlers,
+  setTrustedClipboardRendererWebContentsId
+} from '../window/clipboard-ipc-handlers'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { OpenCodeUsageStore } from '../opencode-usage/store'
@@ -64,7 +68,8 @@ import type { KeybindingService } from '../keybindings/keybinding-service'
 let registered = false
 
 type CoreHandlerLifecycleOptions = {
-  onBeforeRelaunch?: () => void
+  onBeforeRelaunch?: () => void | Promise<void>
+  getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
 }
 
 export function registerCoreHandlers(
@@ -90,6 +95,8 @@ export function registerCoreHandlers(
   // if a channel is registered twice, so we guard to register only once and
   // just update the per-window web-contents ID on subsequent calls.
   setTrustedBrowserRendererWebContentsId(mainWindowWebContentsId)
+  setTrustedClipboardRendererWebContentsId(mainWindowWebContentsId)
+  setTrustedUIRendererWebContentsId(mainWindowWebContentsId)
   setAgentBrowserBridgeRef(runtime.getAgentBrowserBridge())
   if (registered) {
     return
@@ -103,7 +110,7 @@ export function registerCoreHandlers(
   registerCodexUsageHandlers(codexUsage)
   registerOpenCodeUsageHandlers(openCodeUsage)
   registerCodexAccountHandlers(codexAccounts)
-  registerAgentHookHandlers()
+  registerAgentHookHandlers(runtime)
   registerAgentTrustHandlers()
   registerClaudeAccountHandlers(claudeAccounts)
   registerRateLimitHandlers(rateLimits)
@@ -111,6 +118,7 @@ export function registerCoreHandlers(
   registerGitLabHandlers(store)
   registerHostedReviewHandlers(store, stats)
   registerLinearHandlers()
+  registerJiraHandlers()
   registerFeedbackHandlers()
   if (crashReports) {
     registerCrashReportingHandlers(crashReports)
@@ -138,16 +146,11 @@ export function registerCoreHandlers(
   }
   registerTelemetryHandlers(store)
   registerBrowserHandlers()
-  // Why: applyPendingCookieImport MUST run before restorePersistedUserAgent
-  // because the latter calls session.fromPartition() which initializes
-  // CookieMonster. The pending import replaces the live DB file so
-  // CookieMonster reads the imported cookies on first access.
-  browserSessionRegistry.applyPendingCookieImport()
-  browserSessionRegistry.restorePersistedUserAgent()
   registerShellHandlers()
   registerPetHandlers()
   registerSessionHandlers(store)
   registerUIHandlers(store)
+  registerEmulatorFrameStreamHandlers()
   registerWorkspaceSpaceHandlers(store)
   registerWorkspacePortHandlers(store)
   if (commitMessageAgentEnv) {
@@ -158,8 +161,10 @@ export function registerCoreHandlers(
   registerFilesystemWatcherHandlers()
   registerRuntimeHandlers(runtime)
   registerRuntimeEnvironmentHandlers()
-  registerClipboardHandlers()
+  registerAiVaultHandlers({
+    getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths
+  })
+  registerClipboardHandlers(store)
   registerUpdaterHandlers(store)
   registerSpeechHandlers(store)
-  warmSystemFontFamilies()
 }

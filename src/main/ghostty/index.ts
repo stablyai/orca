@@ -2,7 +2,7 @@ import { readFile, stat } from 'fs/promises'
 import { platform } from 'os'
 import type { GlobalSettings, GhosttyImportPreview } from '../../shared/types'
 import type { Store } from '../persistence'
-import { findGhosttyConfigPath } from './discovery'
+import { findGhosttyConfigPaths } from './discovery'
 import { parseGhosttyConfig } from './parser'
 import { mapGhosttyToOrca } from './mapper'
 
@@ -41,35 +41,58 @@ function valuesEqual(a: unknown, b: unknown): boolean {
   return false
 }
 
+function asArray(value: string | string[] | undefined): string[] {
+  if (value === undefined) {
+    return []
+  }
+  return Array.isArray(value) ? value : [value]
+}
+
+function mergeParsedConfig(
+  target: Record<string, string | string[]>,
+  parsed: Record<string, string | string[]>
+): void {
+  for (const [key, value] of Object.entries(parsed)) {
+    if (key === 'palette') {
+      target[key] = [...asArray(target[key]), ...asArray(value)]
+      continue
+    }
+    target[key] = value
+  }
+}
+
 export async function previewGhosttyImport(store: Store): Promise<GhosttyImportPreview> {
-  const configPath = await findGhosttyConfigPath()
-  if (!configPath) {
+  const configPaths = await findGhosttyConfigPaths()
+  if (configPaths.length === 0) {
     return { found: false, diff: {}, unsupportedKeys: [] }
   }
 
-  let content: string
-  try {
-    const info = await stat(configPath)
-    if (info.size > MAX_CONFIG_BYTES) {
+  const parsed: Record<string, string | string[]> = {}
+  for (const configPath of configPaths) {
+    let content: string
+    try {
+      const info = await stat(configPath)
+      if (info.size > MAX_CONFIG_BYTES) {
+        return {
+          found: false,
+          diff: {},
+          unsupportedKeys: [],
+          error: `Config file is too large to import (${info.size} bytes, limit ${MAX_CONFIG_BYTES}).`
+        }
+      }
+      content = await readFile(configPath, 'utf-8')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not read config file'
       return {
         found: false,
         diff: {},
         unsupportedKeys: [],
-        error: `Config file is too large to import (${info.size} bytes, limit ${MAX_CONFIG_BYTES}).`
+        error: `Could not read config: ${message}`
       }
     }
-    content = await readFile(configPath, 'utf-8')
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Could not read config file'
-    return {
-      found: false,
-      diff: {},
-      unsupportedKeys: [],
-      error: `Could not read config: ${message}`
-    }
+    mergeParsedConfig(parsed, parseGhosttyConfig(content))
   }
 
-  const parsed = parseGhosttyConfig(content)
   const { diff: rawDiff, unsupportedKeys } = mapGhosttyToOrca(parsed, platform() === 'darwin')
 
   const currentSettings = store.getSettings()
@@ -85,7 +108,8 @@ export async function previewGhosttyImport(store: Store): Promise<GhosttyImportP
 
   return {
     found: true,
-    configPath,
+    configPath: configPaths[0],
+    configPaths,
     diff: actualDiff,
     unsupportedKeys
   }

@@ -6,6 +6,7 @@ import { buildWorkspaceSessionPayload, type WorkspaceSessionSnapshot } from './w
 function createSnapshot(browserUrlHistory: BrowserHistoryEntry[]): WorkspaceSessionSnapshot {
   return {
     activeRepoId: null,
+    activeWorkspaceKey: null,
     activeWorktreeId: null,
     activeTabId: null,
     tabsByWorktree: {},
@@ -13,6 +14,8 @@ function createSnapshot(browserUrlHistory: BrowserHistoryEntry[]): WorkspaceSess
     terminalLayoutsByTabId: {},
     activeTabIdByWorktree: {},
     openFiles: [],
+    editorDrafts: {},
+    markdownFrontmatterVisible: {},
     activeFileIdByWorktree: {},
     activeTabTypeByWorktree: {},
     browserTabsByWorktree: {},
@@ -27,7 +30,8 @@ function createSnapshot(browserUrlHistory: BrowserHistoryEntry[]): WorkspaceSess
     repos: [],
     worktreesByRepo: {},
     lastKnownRelayPtyIdByTabId: {},
-    lastVisitedAtByWorktreeId: {}
+    lastVisitedAtByWorktreeId: {},
+    defaultTerminalTabsAppliedByWorktreeId: {}
   }
 }
 

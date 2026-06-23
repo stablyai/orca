@@ -8,7 +8,11 @@ import { join, dirname } from 'path'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'fs'
 import type * as pty from 'node-pty'
 import type * as LocalPtyShellReadyModule from './local-pty-shell-ready'
-import { writeStartupCommandWhenShellReady } from './local-pty-shell-ready'
+import {
+  createShellReadyScanState,
+  scanForShellReady,
+  writeStartupCommandWhenShellReady
+} from './local-pty-shell-ready'
 
 const { getUserDataPathMock } = vi.hoisted(() => ({
   getUserDataPathMock: vi.fn<() => string>()
@@ -93,9 +97,8 @@ describe('writeStartupCommandWhenShellReady', () => {
     writeStartupCommandWhenShellReady(ready, proc, 'claude', () => {})
 
     await ready
-    // flush path waits for a post-ready data chunk (prompt draw) then 30ms,
-    // or falls back after 50ms if no data arrives.
-    vi.advanceTimersByTime(50)
+    proc._emitData('\r\nuser@host % ')
+    vi.advanceTimersByTime(30)
     await Promise.resolve()
 
     expect(proc._writes).toEqual(['claude\n'])
@@ -108,7 +111,8 @@ describe('writeStartupCommandWhenShellReady', () => {
     writeStartupCommandWhenShellReady(ready, proc, 'claude', () => {})
 
     await ready
-    vi.advanceTimersByTime(50)
+    proc._emitData('\r\nPS> ')
+    vi.advanceTimersByTime(30)
     await Promise.resolve()
 
     expect(proc._writes).toEqual(['claude\r'])
@@ -121,10 +125,102 @@ describe('writeStartupCommandWhenShellReady', () => {
     writeStartupCommandWhenShellReady(ready, proc, 'claude\n', () => {})
 
     await ready
-    vi.advanceTimersByTime(50)
+    proc._emitData('\r\nPS> ')
+    vi.advanceTimersByTime(30)
     await Promise.resolve()
 
     expect(proc._writes).toEqual(['claude\n'])
+  })
+
+  it('keeps the no-prompt fallback conservative to avoid duplicate shell echo', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    const proc = createMockProc()
+    const ready = Promise.resolve()
+    writeStartupCommandWhenShellReady(ready, proc, 'codex', () => {})
+
+    await ready
+    vi.advanceTimersByTime(50)
+    await Promise.resolve()
+
+    expect(proc._writes).toEqual([])
+
+    vi.advanceTimersByTime(150)
+    await Promise.resolve()
+
+    expect(proc._writes).toEqual(['codex\n'])
+  })
+
+  it('uses the short settle delay when marker scan already observed post-marker bytes', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    const proc = createMockProc()
+    const ready = Promise.resolve({ postMarkerBytesObserved: true })
+    writeStartupCommandWhenShellReady(ready, proc, 'codex', () => {})
+
+    await ready
+    vi.advanceTimersByTime(29)
+    await Promise.resolve()
+    expect(proc._writes).toEqual([])
+
+    vi.advanceTimersByTime(1)
+    await Promise.resolve()
+    expect(proc._writes).toEqual(['codex\n'])
+  })
+})
+
+describe('scanForShellReady', () => {
+  it('flushes marker-like output when the full marker is not BEL-terminated', () => {
+    const state = createShellReadyScanState()
+
+    expect(scanForShellReady(state, 'before \x1b]777;orca-shell-readyx')).toEqual({
+      output: 'before \x1b]777;orca-shell-readyx',
+      matched: false,
+      postMarkerBytesObserved: false
+    })
+    expect(scanForShellReady(state, ' after')).toEqual({
+      output: ' after',
+      matched: false,
+      postMarkerBytesObserved: false
+    })
+  })
+
+  it('reports post-marker bytes only when bytes follow the BEL terminator in the matching call', () => {
+    let state = createShellReadyScanState()
+    expect(scanForShellReady(state, 'before \x1b]777;orca-shell-ready\x07')).toEqual({
+      output: 'before ',
+      matched: true,
+      postMarkerBytesObserved: false
+    })
+
+    state = createShellReadyScanState()
+    expect(scanForShellReady(state, 'before \x1b]777;orca-shell-ready\x07% ')).toEqual({
+      output: 'before % ',
+      matched: true,
+      postMarkerBytesObserved: true
+    })
+
+    state = createShellReadyScanState()
+    expect(scanForShellReady(state, 'before \x1b]777;orca-shell-ready')).toEqual({
+      output: 'before ',
+      matched: false,
+      postMarkerBytesObserved: false
+    })
+    expect(scanForShellReady(state, '\x07')).toEqual({
+      output: '',
+      matched: true,
+      postMarkerBytesObserved: false
+    })
+
+    state = createShellReadyScanState()
+    expect(scanForShellReady(state, '\x1b]777;orca-shell-ready')).toEqual({
+      output: '',
+      matched: false,
+      postMarkerBytesObserved: false
+    })
+    expect(scanForShellReady(state, '\x07% ')).toEqual({
+      output: '% ',
+      matched: true,
+      postMarkerBytesObserved: true
+    })
   })
 })
 
@@ -170,6 +266,17 @@ function expectBashOsc133Lifecycle(output: string): void {
   expect(output).toContain(`${oscD}1\x07${oscA}`)
   expect(output.split(oscC)).toHaveLength(4)
   expect(output.split(oscD)).toHaveLength(3)
+}
+
+function expectZdotdirSourceContext(content: string, fileName: '.zprofile' | '.zshrc' | '.zlogin') {
+  expect(content).toContain('export ZDOTDIR="$_orca_home"')
+  expect(content).toContain(`source "$_orca_home/${fileName}"`)
+  expect(content).toContain('export ZDOTDIR="$_orca_wrapper_zdotdir"')
+}
+
+function expectFinalZdotdirRestoreContext(content: string) {
+  expect(content).toContain("after Orca's last wrapper file has loaded")
+  expect(content).toContain('export ZDOTDIR="$_orca_home"')
 }
 
 describePosix('local PTY shell-ready launch config', () => {
@@ -288,12 +395,38 @@ describePosix('local PTY shell-ready launch config', () => {
     getShellReadyLaunchConfig('/bin/zsh')
 
     const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+    const zprofile = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zprofile'), 'utf8')
+    const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshrc'), 'utf8')
+    const zlogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
     expect(zshenv).toContain('_orca_user_zdotdir="${_orca_spawn_orig_zdotdir:-$HOME}"')
     expect(zshenv).toContain('*/shell-ready/zsh) _orca_user_zdotdir="$HOME" ;;')
     expect(zshenv).toContain('""|*/shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;')
+    expectZdotdirSourceContext(zprofile, '.zprofile')
+    expectZdotdirSourceContext(zshrc, '.zshrc')
+    expectZdotdirSourceContext(zlogin, '.zlogin')
+    expectFinalZdotdirRestoreContext(zshrc)
+    expectFinalZdotdirRestoreContext(zlogin)
   })
 
-  it('writes wrappers that restore agent config homes after user startup files', async () => {
+  it('owns zle-line-init for the shell-ready marker instead of an azhw hook', async () => {
+    const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+
+    getShellReadyLaunchConfig('/bin/zsh')
+
+    const zlogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
+    expect(zlogin).toContain('zle -N zle-line-init __orca_prompt_mark')
+    expect(zlogin).toContain('__orca_prev_line_init_fn="${widgets[zle-line-init]#user:}"')
+    expect(zlogin).toContain('printf "\\033]777;orca-shell-ready\\007"')
+    // Why: add-zle-hook-widget aborts its hook chain when an earlier hook
+    // exits non-zero (e.g. oh-my-zsh vi-mode's raw zle-line-init), so the
+    // marker must not be registered through it.
+    expect(zlogin).not.toContain('add-zle-hook-widget line-init')
+    // Why: re-source guard — skip re-capturing when we are already the bound
+    // widget so the prior widget chain survives a second source.
+    expect(zlogin).toContain('== "user:__orca_prompt_mark"')
+  })
+
+  it('writes wrappers without restoring Pi/OMP homes after user startup files', async () => {
     const { getBashShellReadyRcfileContent, getShellReadyLaunchConfig } =
       await importFreshLocalPtyShellReady()
 
@@ -304,25 +437,25 @@ describePosix('local PTY shell-ready launch config', () => {
     const bashRc = getBashShellReadyRcfileContent()
     const restoreLine =
       '[[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"'
-    const piRestoreLine =
-      '[[ -n "${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="${ORCA_PI_CODING_AGENT_DIR}"'
     const codexRestoreLine =
       '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
-    const ompRestoreLine =
-      'if [[ -z "${ORCA_PI_CODING_AGENT_DIR:-}" && -n "${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then'
+    const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
     const ompWrapperLine = 'command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"'
     expect(zshrc).toContain(restoreLine)
     expect(zlogin).toContain(restoreLine)
     expect(bashRc).toContain(restoreLine)
-    expect(zshrc).toContain(piRestoreLine)
-    expect(zlogin).toContain(piRestoreLine)
-    expect(bashRc).toContain(piRestoreLine)
+    expect(zshrc).not.toContain('ORCA_PI_CODING_AGENT_DIR')
+    expect(zlogin).not.toContain('ORCA_PI_CODING_AGENT_DIR')
+    expect(bashRc).not.toContain('ORCA_PI_CODING_AGENT_DIR')
     expect(zshrc).toContain(codexRestoreLine)
     expect(zlogin).toContain(codexRestoreLine)
+    expect(zshrc).toContain(agentTeamsPathRestoreLine)
+    expect(zlogin).toContain(agentTeamsPathRestoreLine)
+    expect(bashRc).toContain(agentTeamsPathRestoreLine)
     expect(bashRc).toContain(codexRestoreLine)
-    expect(zshrc).toContain(ompRestoreLine)
-    expect(zlogin).toContain(ompRestoreLine)
-    expect(bashRc).toContain(ompRestoreLine)
+    expect(zshrc).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
+    expect(zlogin).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
+    expect(bashRc).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
     expect(zshrc).toContain(ompWrapperLine)
     expect(zlogin).toContain(ompWrapperLine)
     expect(bashRc).toContain(ompWrapperLine)
@@ -574,6 +707,9 @@ path=(/custom/bin $path)
       }
       delete cleanEnv.ZDOTDIR
       delete cleanEnv.ORCA_ORIG_ZDOTDIR
+      // Why: attribution shims are intentionally restored after user rcfiles;
+      // this test isolates zsh top-level path scoping, not attribution ordering.
+      delete cleanEnv.ORCA_ATTRIBUTION_SHIM_DIR
       cleanEnv.ZDOTDIR = config.env.ZDOTDIR // Point to Orca wrapper dir
 
       const result = spawnSync(
@@ -639,6 +775,56 @@ export ZDOTDIR="$HOME/.config/zsh"
       expect(result.stdout).toContain('PATH_HEAD=/env/bin')
       expect(result.stdout).toContain('MY_VAR=from-zshenv')
       expect(result.stdout).toContain('from-zshenv-function')
+    })
+
+    it('sources user startup files with their own ZDOTDIR in scope', async () => {
+      // Why: plugin managers such as Antidote resolve files from $ZDOTDIR
+      // while .zprofile/.zshrc/.zlogin are sourced.
+      const xdgZshDir = join(testHome, '.config', 'zsh')
+      const zdotdirLog = join(testHome, 'zdotdir.log')
+      mkdirSync(xdgZshDir, { recursive: true })
+      writeFileSync(join(testHome, '.zshenv'), 'export ZDOTDIR="$HOME/.config/zsh"\n')
+      writeFileSync(
+        join(xdgZshDir, '.zprofile'),
+        'printf "zprofile=%s\\n" "$ZDOTDIR" >> "$HOME/zdotdir.log"\n'
+      )
+      writeFileSync(
+        join(xdgZshDir, '.zshrc'),
+        'printf "zshrc=%s\\n" "$ZDOTDIR" >> "$HOME/zdotdir.log"\n'
+      )
+      writeFileSync(
+        join(xdgZshDir, '.zlogin'),
+        'printf "zlogin=%s\\n" "$ZDOTDIR" >> "$HOME/zdotdir.log"\n'
+      )
+
+      const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+      const config = getShellReadyLaunchConfig('/bin/zsh')
+
+      const cleanEnv: Record<string, string | undefined> = { ...process.env, HOME: testHome }
+      delete cleanEnv.ZDOTDIR
+      delete cleanEnv.ORCA_ORIG_ZDOTDIR
+      cleanEnv.ZDOTDIR = config.env.ZDOTDIR
+
+      const result = spawnSync(
+        'zsh',
+        ['-l', '-i', '-c', 'printf "command=%s\\n" "$ZDOTDIR" >> "$HOME/zdotdir.log"'],
+        {
+          env: cleanEnv as NodeJS.ProcessEnv,
+          encoding: 'utf8',
+          timeout: 5000
+        }
+      )
+
+      expect(result.status).toBe(0)
+      expect(readFileSync(zdotdirLog, 'utf8')).toBe(
+        [
+          `zprofile=${xdgZshDir}`,
+          `zshrc=${xdgZshDir}`,
+          `zlogin=${xdgZshDir}`,
+          `command=${xdgZshDir}`,
+          ''
+        ].join('\n')
+      )
     })
 
     it('survives early return in user .zshenv without crashing', async () => {

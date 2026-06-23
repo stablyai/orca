@@ -197,6 +197,100 @@ describe('AgentExecHandler', () => {
     })
   })
 
+  it('kills the active command when the request aborts', async () => {
+    const child = createFakeChild()
+    spawnMock.mockReturnValue(child as never)
+    const handlers = createHandlers()
+    const controller = new AbortController()
+
+    const pending = handlers.get('agent.execNonInteractive')!(
+      {
+        binary: 'agent',
+        args: [],
+        cwd: '/repo',
+        stdin: null,
+        timeoutMs: 5_000
+      },
+      { clientId: 1, isStale: () => controller.signal.aborted, signal: controller.signal }
+    )
+
+    controller.abort()
+
+    if (process.platform === 'win32') {
+      expect(execMock).toHaveBeenCalledWith('taskkill /pid 12345 /T /F', expect.any(Function))
+    } else {
+      expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    }
+
+    child.emit('close', null)
+    await expect(pending).resolves.toMatchObject({
+      exitCode: null,
+      timedOut: false,
+      canceled: true
+    })
+    expect(child.stdout.listenerCount('data')).toBe(0)
+    expect(child.stderr.listenerCount('data')).toBe(0)
+    expect(child.listenerCount('error')).toBe(0)
+    expect(child.listenerCount('close')).toBe(0)
+  })
+
+  it('cancels a superseded command in the same operation lane', async () => {
+    const firstChild = createFakeChild()
+    const secondChild = createFakeChild()
+    secondChild.pid = 12346
+    spawnMock.mockReturnValueOnce(firstChild as never).mockReturnValueOnce(secondChild as never)
+    const handlers = createHandlers()
+
+    const first = handlers.get('agent.execNonInteractive')!(
+      {
+        binary: 'agent',
+        args: ['first'],
+        cwd: '/repo',
+        stdin: null,
+        timeoutMs: 5_000,
+        operation: 'commit-message'
+      },
+      requestContext()
+    )
+    const second = handlers.get('agent.execNonInteractive')!(
+      {
+        binary: 'agent',
+        args: ['second'],
+        cwd: '/repo',
+        stdin: null,
+        timeoutMs: 5_000,
+        operation: 'commit-message'
+      },
+      requestContext()
+    )
+
+    if (process.platform === 'win32') {
+      expect(execMock).toHaveBeenCalledWith('taskkill /pid 12345 /T /F', expect.any(Function))
+      expect(execMock).not.toHaveBeenCalledWith('taskkill /pid 12346 /T /F', expect.any(Function))
+    } else {
+      expect(firstChild.kill).toHaveBeenCalledWith('SIGKILL')
+      expect(secondChild.kill).not.toHaveBeenCalled()
+    }
+
+    await expect(
+      handlers.get('agent.cancelExec')!(
+        { cwd: '/repo', operation: 'commit-message' },
+        requestContext()
+      )
+    ).resolves.toEqual({ canceled: true })
+
+    if (process.platform === 'win32') {
+      expect(execMock).toHaveBeenCalledWith('taskkill /pid 12346 /T /F', expect.any(Function))
+    } else {
+      expect(secondChild.kill).toHaveBeenCalledWith('SIGKILL')
+    }
+
+    firstChild.emit('close', null)
+    secondChild.emit('close', null)
+    await expect(first).resolves.toMatchObject({ canceled: true })
+    await expect(second).resolves.toMatchObject({ canceled: true })
+  })
+
   it('reports when cancellation has no matching in-flight command', async () => {
     const handlers = createHandlers()
 

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: browser IPC tests share one mocked trust-boundary handler registry plus registration waiters; splitting would duplicate setup and weaken coverage. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -6,40 +7,38 @@ const {
   registerGuestMock,
   unregisterGuestMock,
   getGuestWebContentsIdMock,
+  getWebContentsIdByTabIdMock,
   getWorktreeIdForTabMock,
   openDevToolsMock,
   setAnnotationViewportBridgeMock,
-  getDownloadPromptMock,
-  acceptDownloadMock,
   cancelDownloadMock,
-  showSaveDialogMock,
-  browserWindowFromWebContentsMock
+  browserWindowFromWebContentsMock,
+  webContentsFromIdMock
 } = vi.hoisted(() => ({
   removeHandlerMock: vi.fn(),
   handleMock: vi.fn(),
   registerGuestMock: vi.fn(),
   unregisterGuestMock: vi.fn(),
   getGuestWebContentsIdMock: vi.fn(),
+  getWebContentsIdByTabIdMock: vi.fn(() => new Map()),
   getWorktreeIdForTabMock: vi.fn(),
   openDevToolsMock: vi.fn().mockResolvedValue(true),
   setAnnotationViewportBridgeMock: vi.fn().mockResolvedValue(true),
-  getDownloadPromptMock: vi.fn(),
-  acceptDownloadMock: vi.fn(),
   cancelDownloadMock: vi.fn(),
-  showSaveDialogMock: vi.fn(),
-  browserWindowFromWebContentsMock: vi.fn()
+  browserWindowFromWebContentsMock: vi.fn(),
+  webContentsFromIdMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   BrowserWindow: {
     fromWebContents: browserWindowFromWebContentsMock
   },
-  dialog: {
-    showSaveDialog: showSaveDialogMock
-  },
   ipcMain: {
     removeHandler: removeHandlerMock,
     handle: handleMock
+  },
+  webContents: {
+    fromId: webContentsFromIdMock
   }
 }))
 
@@ -48,11 +47,10 @@ vi.mock('../browser/browser-manager', () => ({
     registerGuest: registerGuestMock,
     unregisterGuest: unregisterGuestMock,
     getGuestWebContentsId: getGuestWebContentsIdMock,
+    getWebContentsIdByTabId: getWebContentsIdByTabIdMock,
     getWorktreeIdForTab: getWorktreeIdForTabMock,
     openDevTools: openDevToolsMock,
     setAnnotationViewportBridge: setAnnotationViewportBridgeMock,
-    getDownloadPrompt: getDownloadPromptMock,
-    acceptDownload: acceptDownloadMock,
     cancelDownload: cancelDownloadMock
   }
 }))
@@ -60,7 +58,9 @@ vi.mock('../browser/browser-manager', () => ({
 import {
   registerBrowserHandlers,
   setAgentBrowserBridgeRef,
-  waitForTabRegistration
+  waitForAnyTabRegistration,
+  waitForTabRegistration,
+  waitForWorktreeTabRegistration
 } from './browser'
 
 describe('registerBrowserHandlers', () => {
@@ -71,14 +71,15 @@ describe('registerBrowserHandlers', () => {
     registerGuestMock.mockReset()
     unregisterGuestMock.mockReset()
     getGuestWebContentsIdMock.mockReset()
+    getWebContentsIdByTabIdMock.mockReset()
+    getWebContentsIdByTabIdMock.mockReturnValue(new Map())
     getWorktreeIdForTabMock.mockReset()
     openDevToolsMock.mockReset()
     setAnnotationViewportBridgeMock.mockReset()
-    getDownloadPromptMock.mockReset()
-    acceptDownloadMock.mockReset()
     cancelDownloadMock.mockReset()
-    showSaveDialogMock.mockReset()
     browserWindowFromWebContentsMock.mockReset()
+    webContentsFromIdMock.mockReset()
+    webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
     openDevToolsMock.mockResolvedValue(true)
     setAnnotationViewportBridgeMock.mockResolvedValue(true)
     setAgentBrowserBridgeRef(null)
@@ -110,19 +111,13 @@ describe('registerBrowserHandlers', () => {
     expect(registerGuestMock).not.toHaveBeenCalled()
   })
 
-  it('accepts downloads through a main-owned save dialog', async () => {
-    getDownloadPromptMock.mockReturnValue({ filename: 'report.csv' })
-    acceptDownloadMock.mockReturnValue({ ok: true })
-    showSaveDialogMock.mockResolvedValue({ canceled: false, filePath: '/tmp/report.csv' })
-
+  it('authorizes browser download cancellation through the owning renderer', () => {
+    cancelDownloadMock.mockReturnValue(true)
     registerBrowserHandlers()
 
-    const acceptHandler = handleMock.mock.calls.find(
-      ([channel]) => channel === 'browser:acceptDownload'
-    )?.[1] as (
-      event: { sender: Electron.WebContents },
-      args: { downloadId: string }
-    ) => Promise<{ ok: true } | { ok: false; reason: string }>
+    const cancelHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:cancelDownload'
+    )?.[1] as (event: { sender: Electron.WebContents }, args: { downloadId: string }) => boolean
 
     const sender = {
       id: 91,
@@ -131,15 +126,36 @@ describe('registerBrowserHandlers', () => {
       getURL: () => 'file:///renderer/index.html'
     } as Electron.WebContents
 
-    const result = await acceptHandler({ sender }, { downloadId: 'download-1' })
+    const result = cancelHandler({ sender }, { downloadId: 'download-1' })
 
-    expect(showSaveDialogMock).toHaveBeenCalledTimes(1)
-    expect(acceptDownloadMock).toHaveBeenCalledWith({
+    expect(cancelDownloadMock).toHaveBeenCalledWith({
       downloadId: 'download-1',
-      senderWebContentsId: 91,
-      savePath: '/tmp/report.csv'
+      senderWebContentsId: 91
     })
-    expect(result).toEqual({ ok: true })
+    expect(result).toBe(true)
+  })
+
+  it('rejects browser download cancellation from untrusted callers', () => {
+    registerBrowserHandlers()
+
+    const cancelHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:cancelDownload'
+    )?.[1] as (event: { sender: Electron.WebContents }, args: { downloadId: string }) => boolean
+
+    const result = cancelHandler(
+      {
+        sender: {
+          id: 92,
+          isDestroyed: () => false,
+          getType: () => 'webview',
+          getURL: () => 'https://example.com'
+        } as Electron.WebContents
+      },
+      { downloadId: 'download-1' }
+    )
+
+    expect(result).toBe(false)
+    expect(cancelDownloadMock).not.toHaveBeenCalled()
   })
 
   it('updates the bridge active tab for the owning worktree', async () => {
@@ -217,6 +233,119 @@ describe('registerBrowserHandlers', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('resolves worktree and any-tab registration waiters when a guest registers', async () => {
+    vi.useFakeTimers()
+    try {
+      getWebContentsIdByTabIdMock.mockReturnValue(new Map())
+      const worktreeWait = waitForWorktreeTabRegistration('worktree-1', 1000)
+      const anyWait = waitForAnyTabRegistration(1000)
+      const settled = Promise.allSettled([worktreeWait, anyWait])
+
+      registerBrowserHandlers()
+
+      const registerHandler = handleMock.mock.calls.find(
+        ([channel]) => channel === 'browser:registerGuest'
+      )?.[1] as (
+        event: { sender: Electron.WebContents },
+        args: {
+          browserPageId: string
+          workspaceId: string
+          worktreeId: string
+          webContentsId: number
+        }
+      ) => boolean
+
+      const result = registerHandler(
+        {
+          sender: {
+            id: 91,
+            isDestroyed: () => false,
+            getType: () => 'window',
+            getURL: () => 'file:///renderer/index.html'
+          } as Electron.WebContents
+        },
+        {
+          browserPageId: 'page-worktree-1',
+          workspaceId: 'workspace-1',
+          worktreeId: 'worktree-1',
+          webContentsId: 123
+        }
+      )
+
+      expect(result).toBe(true)
+      await vi.advanceTimersByTimeAsync(1001)
+      expect(await settled).toEqual([
+        { status: 'fulfilled', value: undefined },
+        { status: 'fulfilled', value: undefined }
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('resolves worktree registration waits immediately when a tab is already registered', async () => {
+    getWebContentsIdByTabIdMock.mockReturnValue(new Map([['page-1', 123]]))
+    getWorktreeIdForTabMock.mockReturnValue('worktree-1')
+
+    await expect(waitForWorktreeTabRegistration('worktree-1', 1000)).resolves.toBeUndefined()
+
+    expect(getWorktreeIdForTabMock).toHaveBeenCalledWith('page-1')
+  })
+
+  it('resolves any-tab registration waits immediately when a tab is already registered', async () => {
+    getWebContentsIdByTabIdMock.mockReturnValue(new Map([['page-1', 123]]))
+
+    await expect(waitForAnyTabRegistration(1000)).resolves.toBeUndefined()
+  })
+
+  it('does not resolve worktree registration waits from a stale registered guest', async () => {
+    getWebContentsIdByTabIdMock.mockReturnValue(new Map([['page-1', 123]]))
+    getWorktreeIdForTabMock.mockReturnValue('worktree-1')
+    webContentsFromIdMock.mockReturnValue({ isDestroyed: () => true })
+
+    let resolved = false
+    const wait = waitForWorktreeTabRegistration('worktree-1', 1000).then(() => {
+      resolved = true
+    })
+    await Promise.resolve()
+
+    expect(resolved).toBe(false)
+
+    registerBrowserHandlers()
+    const registerHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:registerGuest'
+    )?.[1] as (
+      event: { sender: Electron.WebContents },
+      args: {
+        browserPageId: string
+        workspaceId: string
+        worktreeId: string
+        webContentsId: number
+      }
+    ) => boolean
+
+    const result = registerHandler(
+      {
+        sender: {
+          id: 91,
+          isDestroyed: () => false,
+          getType: () => 'window',
+          getURL: () => 'file:///renderer/index.html'
+        } as Electron.WebContents
+      },
+      {
+        browserPageId: 'page-1',
+        workspaceId: 'workspace-1',
+        worktreeId: 'worktree-1',
+        webContentsId: 456
+      }
+    )
+
+    expect(result).toBe(true)
+    await expect(wait).resolves.toBeUndefined()
+    expect(resolved).toBe(true)
   })
 
   it('validates annotation viewport bridge requests before syncing to the guest', async () => {

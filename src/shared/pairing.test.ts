@@ -32,6 +32,15 @@ describe('pairing offer', () => {
     expect(() => decodePairingOffer('https://example.com#abc')).toThrow('Invalid pairing URL')
   })
 
+  it('rejects orca URLs outside the exact pairing route', () => {
+    const url = encodePairingOffer(offer)
+    const code = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('code')!
+
+    expect(parsePairingCode(`orca://pairing?code=${code}`)).toBeNull()
+    expect(parsePairingCode(`orca://pair-extra?code=${code}`)).toBeNull()
+    expect(() => decodePairingOffer(`orca://pairing?code=${code}`)).toThrow('Invalid pairing URL')
+  })
+
   it('rejects URLs without a pairing code', () => {
     expect(() => decodePairingOffer('orca://pair')).toThrow('Invalid pairing URL')
   })

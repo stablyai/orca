@@ -1,11 +1,13 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   clearCrashBreadcrumbsForTest,
   getCrashBreadcrumbSnapshot,
+  recordCoalescedCrashBreadcrumb,
   recordCrashBreadcrumb
 } from './crash-breadcrumb-store'
 
 afterEach(() => {
+  vi.useRealTimers()
   clearCrashBreadcrumbsForTest()
 })
 
@@ -47,5 +49,38 @@ describe('crash breadcrumb store', () => {
 
     expect(getCrashBreadcrumbSnapshot()).toHaveLength(1)
     expect(getCrashBreadcrumbSnapshot()[0].data).toEqual({ packaged: false })
+  })
+
+  it('coalesces repeated breadcrumbs inside the interval', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-20T12:00:00.000Z'))
+
+    recordCoalescedCrashBreadcrumb({
+      name: 'agent_state_changed',
+      data: { agentType: 'claude', state: 'working' },
+      coalesceKey: 'agent:claude:working',
+      minIntervalMs: 30_000
+    })
+    vi.advanceTimersByTime(1_000)
+    recordCoalescedCrashBreadcrumb({
+      name: 'agent_state_changed',
+      data: { agentType: 'claude', state: 'working' },
+      coalesceKey: 'agent:claude:working',
+      minIntervalMs: 30_000
+    })
+    vi.advanceTimersByTime(30_000)
+    recordCoalescedCrashBreadcrumb({
+      name: 'agent_state_changed',
+      data: { agentType: 'claude', state: 'working' },
+      coalesceKey: 'agent:claude:working',
+      minIntervalMs: 30_000
+    })
+
+    expect(getCrashBreadcrumbSnapshot().map((entry) => entry.data)).toEqual([
+      { agentType: 'claude', state: 'working' },
+      { agentType: 'claude', state: 'working', suppressedSinceLast: 1 }
+    ])
+
+    vi.useRealTimers()
   })
 })

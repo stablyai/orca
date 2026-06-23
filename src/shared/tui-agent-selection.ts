@@ -5,11 +5,13 @@ import { isTuiAgent } from './tui-agent-config'
 // automatic fallback priority when the user has not chosen a default agent.
 export const TUI_AGENT_AUTO_PICK_ORDER = [
   'claude',
+  'claude-agent-teams',
   'openclaude',
   'codex',
   'grok',
   'copilot',
   'opencode',
+  'ante',
   'pi',
   'omp',
   'gemini',
@@ -33,8 +35,13 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'qwen-code',
   'rovo',
   'hermes',
+  'devin',
   'openclaw'
 ] as const satisfies readonly TuiAgent[]
+
+// Why: fresh installs should expose Claude Agent Teams in agent pickers; the
+// persistence migration separately preserves the old hidden default for legacy profiles.
+export const DEFAULT_DISABLED_TUI_AGENTS = [] as const satisfies readonly TuiAgent[]
 
 export function pickTuiAgent(
   preferred: TuiAgent | 'blank' | null | undefined,

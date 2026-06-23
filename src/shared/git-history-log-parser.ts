@@ -1,6 +1,9 @@
 import type { GitHistoryItem, GitHistoryItemRef } from './git-history-types'
 
-export const GIT_HISTORY_COMMIT_FORMAT = '%H%n%aN%n%aE%n%at%n%ct%n%P%n%D%n%B'
+const GIT_HISTORY_DECORATION_SEPARATOR = '\x1f'
+
+export const GIT_HISTORY_COMMIT_FORMAT =
+  '%H%n%aN%n%aE%n%at%n%ct%n%P%n%(decorate:prefix=,suffix=,separator=%x1f)%n%B'
 
 export function shortGitHash(hash: string): string {
   return hash.slice(0, 7)
@@ -17,7 +20,13 @@ function parseGitDecorationRefs(raw: string, revision: string): GitHistoryItemRe
   }
 
   const refs: GitHistoryItemRef[] = []
-  for (const part of raw.split(',')) {
+  // Why: Git permits commas in ref names, so Orca's git log format uses a
+  // control-character separator that Git ref names cannot contain.
+  const parts = raw.includes(GIT_HISTORY_DECORATION_SEPARATOR)
+    ? raw.split(GIT_HISTORY_DECORATION_SEPARATOR)
+    : raw.split(',')
+
+  for (const part of parts) {
     const ref = part.trim()
     if (!ref || ref === 'HEAD' || /^refs\/remotes\/[^/]+\/HEAD(?:\s|$)/.test(ref)) {
       continue

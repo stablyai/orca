@@ -5,6 +5,7 @@ import type {
   Automation,
   AutomationCreateInput,
   AutomationDispatchResult,
+  AutomationPrecheckResult,
   ExternalAutomationCreateInput,
   ExternalAutomationActionInput,
   ExternalAutomationManager,
@@ -65,6 +66,14 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
   ipcMain.handle(
     'automations:runNow',
     (_event, args: { id: string }): Promise<AutomationRun> => service.runNow(args.id)
+  )
+  ipcMain.handle(
+    'automations:runPrecheck',
+    (
+      _event,
+      args: { automationId: string; runId: string }
+    ): Promise<AutomationPrecheckResult | null> =>
+      service.runPrecheck(args.automationId, args.runId)
   )
   ipcMain.handle(
     'automations:markDispatchResult',

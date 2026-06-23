@@ -2,6 +2,7 @@
 import { readFileSync, existsSync, mkdirSync, writeFileSync, chmodSync, rmSync } from 'fs'
 import { dirname, join } from 'path'
 import { exec, execFile } from 'child_process'
+import { parse } from 'yaml'
 import { getDefaultRepoHookSettings } from '../shared/constants'
 import { getRuntimePathBasename } from '../shared/cross-platform-path'
 import { resolveHookCommandSourcePolicy } from '../shared/hook-command-source-policy'
@@ -9,14 +10,21 @@ import { gitExecFileSync } from './git/runner'
 import { isWslPath, parseWslPath, toWindowsWslPath, toLinuxPath } from './wsl'
 import type {
   HookCommandSourcePolicy,
+  OrcaDefaultTabTemplate,
   OrcaHooks,
   Repo,
   SetupDecision,
   SetupRunPolicy,
+  WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
 } from '../shared/types'
+import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 
 const HOOK_TIMEOUT = 120_000 // 2 minutes
+
+export type HookRuntimeTarget = {
+  wslDistro?: string | null
+}
 
 function getHookShell(): string | undefined {
   if (process.platform === 'win32') {
@@ -26,88 +34,79 @@ function getHookShell(): string | undefined {
   return '/bin/bash'
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function asTrimmedString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+const DEFAULT_TAB_COLOR_RE = /^#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?$/
+
+function normalizeDefaultTabs(value: unknown): OrcaDefaultTabTemplate[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .map((entry) => {
+      const record = asRecord(entry)
+      if (!record) {
+        return null
+      }
+      const title = asTrimmedString(record.title)
+      const command = asTrimmedString(record.command)
+      const color = asTrimmedString(record.color)
+      const normalizedColor = color && DEFAULT_TAB_COLOR_RE.test(color) ? color : undefined
+      if (!title && !command && !normalizedColor) {
+        return null
+      }
+      return {
+        ...(title ? { title } : {}),
+        ...(normalizedColor ? { color: normalizedColor } : {}),
+        ...(command ? { command } : {})
+      }
+    })
+    .filter((entry): entry is OrcaDefaultTabTemplate => entry !== null)
+}
+
 /**
- * Parse a simple orca.yaml file. Handles only the supported `scripts:` and
- * `issueCommand:` keys with multiline string values (YAML block scalar `|`).
+ * Parse the supported project defaults from `orca.yaml`.
  */
 export function parseOrcaYaml(content: string): OrcaHooks | null {
-  const hooks: OrcaHooks = { scripts: {} }
-  const lines = content.split(/\r?\n/)
-
-  let currentSection: 'scripts' | 'issueCommand' | null = null
-  let currentKey: 'setup' | 'archive' | null = null
-  let issueCommandValue = ''
-
-  for (const line of lines) {
-    const topLevelKeyMatch = line.match(/^([A-Za-z][A-Za-z0-9_-]*):\s*(\|)?\s*(.*)$/)
-    if (topLevelKeyMatch) {
-      if (currentSection === 'scripts' && currentKey) {
-        hooks.scripts[currentKey] = issueCommandValue.trimEnd()
-      } else if (currentSection === 'issueCommand') {
-        hooks.issueCommand = issueCommandValue.trimEnd() || undefined
-      }
-
-      const [, key, blockScalar, rest] = topLevelKeyMatch
-      currentKey = null
-      issueCommandValue = ''
-
-      if (key === 'scripts') {
-        currentSection = 'scripts'
-        continue
-      }
-
-      if (key === 'issueCommand') {
-        currentSection = 'issueCommand'
-        if (blockScalar) {
-          continue
-        }
-        hooks.issueCommand = rest.trim() || undefined
-        currentSection = null
-        continue
-      }
-
-      currentSection = null
-      continue
-    }
-
-    if (currentSection === 'scripts') {
-      // Indented key like "  setup: |" or "  archive: |" or "  setup: echo hello"
-      const keyMatch = line.match(/^  (setup|archive):\s*(\|)?\s*(.*)$/)
-      if (keyMatch) {
-        // Save previous key
-        if (currentKey) {
-          hooks.scripts[currentKey] = issueCommandValue.trimEnd()
-        }
-        currentKey = keyMatch[1] as 'setup' | 'archive'
-        issueCommandValue = keyMatch[3] ? `${keyMatch[3]}\n` : ''
-        continue
-      }
-
-      // Content line (indented by 4+ spaces under a key)
-      if (currentKey && line.startsWith('    ')) {
-        issueCommandValue += `${line.slice(4)}\n`
-      }
-      continue
-    }
-
-    if (currentSection === 'issueCommand' && line.startsWith('  ')) {
-      // Why: `issueCommand` is a top-level scalar in `orca.yaml`, so its block
-      // content must stay separate from the `scripts:` parser rather than being
-      // shoehorned into that section's indentation rules.
-      issueCommandValue += `${line.slice(2)}\n`
-    }
-  }
-
-  if (currentSection === 'scripts' && currentKey) {
-    hooks.scripts[currentKey] = issueCommandValue.trimEnd()
-  } else if (currentSection === 'issueCommand') {
-    hooks.issueCommand = issueCommandValue.trimEnd() || undefined
-  }
-
-  if (!hooks.scripts.setup && !hooks.scripts.archive && !hooks.issueCommand) {
+  let root: unknown
+  try {
+    root = parse(content)
+  } catch {
     return null
   }
-  return hooks
+
+  const record = asRecord(root)
+  if (!record) {
+    return null
+  }
+
+  const scriptsRecord = asRecord(record.scripts)
+  const setup = scriptsRecord ? asTrimmedString(scriptsRecord.setup) : undefined
+  const archive = scriptsRecord ? asTrimmedString(scriptsRecord.archive) : undefined
+  const issueCommand = asTrimmedString(record.issueCommand)
+  const defaultTabs = normalizeDefaultTabs(record.defaultTabs)
+
+  if (!setup && !archive && !issueCommand && defaultTabs.length === 0) {
+    return null
+  }
+
+  return {
+    scripts: {
+      ...(setup ? { setup } : {}),
+      ...(archive ? { archive } : {})
+    },
+    ...(issueCommand ? { issueCommand } : {}),
+    ...(defaultTabs.length > 0 ? { defaultTabs } : {})
+  }
 }
 
 /**
@@ -139,7 +138,7 @@ export function hasHooksFile(repoPath: string): boolean {
 // return `null` from `parseOrcaYaml` and show a confusing "could not be parsed"
 // error.  Detecting well-formed but unrecognised keys lets the UI suggest an
 // update instead of implying the file is broken.
-const RECOGNIZED_ORCA_YAML_KEYS = new Set(['scripts', 'issueCommand'])
+const RECOGNIZED_ORCA_YAML_KEYS = new Set(['scripts', 'issueCommand', 'defaultTabs'])
 
 /**
  * Return true when `orca.yaml` contains at least one top-level key that this
@@ -148,13 +147,16 @@ const RECOGNIZED_ORCA_YAML_KEYS = new Set(['scripts', 'issueCommand'])
 export function hasUnrecognizedOrcaYamlKeys(repoPath: string): boolean {
   try {
     const content = readFileSync(join(repoPath, 'orca.yaml'), 'utf-8')
-    return content.split(/\r?\n/).some((line) => {
+    for (const line of iterateLfScriptLines(content)) {
       // Why: bare `key:` at end-of-line (no trailing space) is valid YAML for
       // a mapping with a block value on the next line. Match both forms so
       // newer keys like `futureFeature:\n  nested` are still detected.
       const m = line.match(/^([A-Za-z][A-Za-z0-9_-]*):(\s|$)/)
-      return m != null && !RECOGNIZED_ORCA_YAML_KEYS.has(m[1])
-    })
+      if (m != null && !RECOGNIZED_ORCA_YAML_KEYS.has(m[1])) {
+        return true
+      }
+    }
+    return false
   } catch {
     return false
   }
@@ -339,6 +341,44 @@ export function shouldRunSetupForCreate(repo: Repo, decision: SetupDecision = 'i
   return policy === 'run-by-default'
 }
 
+export function getDefaultTabCommandTrustContent(hooks: OrcaHooks | null): string {
+  const commands = (hooks?.defaultTabs ?? [])
+    .map((tab, index) => {
+      const command = tab.command?.trim()
+      if (!command) {
+        return null
+      }
+      const label = tab.title ? ` ${tab.title}` : ''
+      return `# defaultTabs[${index + 1}]${label}\n${command}`
+    })
+    .filter((entry): entry is string => entry !== null)
+  return [hooks?.scripts.setup?.trim(), ...commands].filter(Boolean).join('\n\n')
+}
+
+export function getDefaultTabsLaunch(
+  hooks: OrcaHooks | null,
+  repo: Repo,
+  decision: SetupDecision = 'inherit'
+): WorktreeDefaultTabsLaunch | undefined {
+  const tabs = hooks?.defaultTabs ?? []
+  if (tabs.length === 0) {
+    return undefined
+  }
+  const hasCommands = tabs.some((tab) => Boolean(tab.command?.trim()))
+  const sharedCommandPolicy = resolveHookCommandSourcePolicy(
+    repo.hookSettings?.commandSourcePolicy,
+    {
+      hasLocalScript: Boolean(repo.hookSettings?.scripts.setup?.trim())
+    }
+  )
+  // Why: default tab commands come from committed `orca.yaml`; a repo set to
+  // local-only may still use shared titles/colors, but must not execute them.
+  const canRunSharedCommands = sharedCommandPolicy !== 'local-only'
+  const runCommands =
+    hasCommands && canRunSharedCommands ? shouldRunSetupForCreate(repo, decision) : false
+  return { tabs, runCommands }
+}
+
 export function getSetupCommandSource(
   repo: Repo,
   worktreePath?: string
@@ -378,20 +418,63 @@ function getSetupEnvVars(repo: Repo, worktreePath: string): Record<string, strin
   }
 }
 
-function getGitPath(cwd: string, relativePath: string): string {
+function getGitPath(cwd: string, relativePath: string, runtimeTarget?: HookRuntimeTarget): string {
   return gitExecFileSync(['rev-parse', '--git-path', relativePath], {
-    cwd
+    cwd,
+    ...(runtimeTarget?.wslDistro ? { wslDistro: runtimeTarget.wslDistro } : {})
   }).trim()
 }
 
-export function buildWindowsRunnerScript(script: string): string {
-  const lines = script.replace(/\r?\n/g, '\n').split('\n')
-  const runnerLines = ['@echo off', 'setlocal EnableExtensions']
+function getHookRuntimeTarget(
+  projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget
+): HookRuntimeTarget | undefined {
+  if (!projectRuntime) {
+    return undefined
+  }
 
-  for (const rawLine of lines) {
+  if ('status' in projectRuntime) {
+    if (projectRuntime.status === 'repair-required') {
+      return projectRuntime.repair.preferredRuntime.kind === 'wsl'
+        ? { wslDistro: projectRuntime.repair.preferredRuntime.distro }
+        : undefined
+    }
+    return projectRuntime.runtime.kind === 'wsl'
+      ? { wslDistro: projectRuntime.runtime.distro }
+      : undefined
+  }
+
+  return projectRuntime.wslDistro ? { wslDistro: projectRuntime.wslDistro } : undefined
+}
+
+function getHookWslContext(
+  cwd: string,
+  runtimeTarget?: HookRuntimeTarget
+): { distro: string | null; linuxPath: string } | null {
+  const pathInfo = parseWslPath(cwd)
+  if (pathInfo) {
+    return pathInfo
+  }
+
+  const wslDistro = runtimeTarget?.wslDistro?.trim()
+  if (!wslDistro) {
+    return null
+  }
+
+  // Why: project runtime can route a normal Windows checkout through WSL; hooks
+  // must cd to the Linux view of that path rather than running in cmd.exe.
+  return {
+    distro: wslDistro,
+    linuxPath: toLinuxPath(cwd)
+  }
+}
+
+export function buildWindowsRunnerScript(script: string): string {
+  let runnerScript = '@echo off\r\nsetlocal EnableExtensions\r\n'
+
+  for (const rawLine of iterateLfScriptLines(script)) {
     const command = rawLine.trim()
     if (!command) {
-      runnerLines.push('')
+      runnerScript += '\r\n'
       continue
     }
 
@@ -400,19 +483,42 @@ export function buildWindowsRunnerScript(script: string): string {
     // to later lines, and plain newline-separated commands also keep running
     // after failures. Wrap each line in `call` and bail on non-zero exit codes
     // so the generated runner matches the fail-fast behavior of `set -e`.
-    runnerLines.push(`call ${command}`)
-    runnerLines.push('if errorlevel 1 exit /b %errorlevel%')
+    runnerScript += `call ${command}\r\nif errorlevel 1 exit /b %errorlevel%\r\n`
   }
 
-  return `${runnerLines.join('\r\n')}\r\n`
+  return runnerScript
+}
+
+function* iterateLfScriptLines(script: string): Generator<string> {
+  let lineStart = 0
+
+  for (let index = 0; index < script.length; index++) {
+    if (script.charCodeAt(index) !== 10) {
+      continue
+    }
+    const lineEnd = index > lineStart && script.charCodeAt(index - 1) === 13 ? index - 1 : index
+    yield script.slice(lineStart, lineEnd)
+    lineStart = index + 1
+  }
+
+  if (lineStart <= script.length) {
+    yield script.slice(lineStart)
+  }
 }
 
 export function createSetupRunnerScript(
   repo: Repo,
   worktreePath: string,
-  script: string
+  script: string,
+  projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget
 ): WorktreeSetupLaunch {
-  return createWorktreeRunnerScript(repo, worktreePath, script, 'setup-runner')
+  return createWorktreeRunnerScript(
+    repo,
+    worktreePath,
+    script,
+    'setup-runner',
+    getHookRuntimeTarget(projectRuntime)
+  )
 }
 
 export function getSetupRunnerEnvVars(repo: Repo, worktreePath: string): Record<string, string> {
@@ -420,48 +526,74 @@ export function getSetupRunnerEnvVars(repo: Repo, worktreePath: string): Record<
 }
 
 export function buildPosixRunnerScript(script: string): string {
-  return `#!/usr/bin/env bash\nset -e\n${script.replace(/\r\n/g, '\n')}\n`
+  return `#!/usr/bin/env bash\nset -e\n${normalizeCrlfScriptLineEndings(script)}\n`
+}
+
+function normalizeCrlfScriptLineEndings(script: string): string {
+  let crlfStart = script.indexOf('\r\n')
+  if (crlfStart === -1) {
+    return script
+  }
+
+  let normalized = script.slice(0, crlfStart)
+  let chunkStart = crlfStart + 2
+  normalized += '\n'
+  crlfStart = script.indexOf('\r\n', chunkStart)
+
+  while (crlfStart !== -1) {
+    normalized += script.slice(chunkStart, crlfStart)
+    normalized += '\n'
+    chunkStart = crlfStart + 2
+    crlfStart = script.indexOf('\r\n', chunkStart)
+  }
+
+  return `${normalized}${script.slice(chunkStart)}`
 }
 
 export function createIssueCommandRunnerScript(
   repo: Repo,
   worktreePath: string,
-  command: string
+  command: string,
+  projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget
 ): WorktreeSetupLaunch {
   // Why: long issue-automation commands are user-visible shell input when
   // written directly to the PTY, so terminal line editors can wrap or truncate
   // them before execution. Writing the real command into a runner script keeps
   // the shell startup path short and mirrors the already-stable setup runner
   // flow instead of inventing a second launch mechanism.
-  return createWorktreeRunnerScript(repo, worktreePath, command, 'issue-command-runner')
+  return createWorktreeRunnerScript(
+    repo,
+    worktreePath,
+    command,
+    'issue-command-runner',
+    getHookRuntimeTarget(projectRuntime)
+  )
 }
 
 function createWorktreeRunnerScript(
   repo: Repo,
   worktreePath: string,
   script: string,
-  runnerBaseName: 'setup-runner' | 'issue-command-runner'
+  runnerBaseName: 'setup-runner' | 'issue-command-runner',
+  runtimeTarget?: HookRuntimeTarget
 ): WorktreeSetupLaunch {
   const envVars = getSetupEnvVars(repo, worktreePath)
   // Why: WSL worktrees run on a Linux filesystem even though process.platform
   // is 'win32'. Use bash scripts for WSL, .cmd for native Windows.
-  const wslWorktree = isWslPath(worktreePath)
+  const wslWorktree = isWslPath(worktreePath) || Boolean(runtimeTarget?.wslDistro)
   const useWindowsFormat = process.platform === 'win32' && !wslWorktree
-  const normalizedScript = useWindowsFormat
-    ? script.replace(/\r?\n/g, '\r\n')
-    : script.replace(/\r\n/g, '\n')
   // Why: linked git worktrees use a `.git` file that points at the real gitdir,
   // so writing under `${worktreePath}/.git/...` fails. `git rev-parse --git-path`
   // resolves the actual per-worktree git storage path safely across platforms.
   const gitRelPath = useWindowsFormat ? `orca/${runnerBaseName}.cmd` : `orca/${runnerBaseName}.sh`
-  let runnerScriptPath = getGitPath(worktreePath, gitRelPath)
+  let runnerScriptPath = getGitPath(worktreePath, gitRelPath, runtimeTarget)
 
   // Why: for WSL worktrees, getGitPath returns a Linux path (e.g. /home/user/...)
   // because git runs inside WSL. Convert it to a Windows UNC path so mkdirSync
   // and writeFileSync (which run on Windows) can access it.
   if (wslWorktree) {
-    const wslInfo = parseWslPath(worktreePath)
-    if (wslInfo) {
+    const wslInfo = getHookWslContext(worktreePath, runtimeTarget)
+    if (wslInfo?.distro) {
       runnerScriptPath = toWindowsWslPath(runnerScriptPath.trim(), wslInfo.distro)
     }
   }
@@ -469,9 +601,9 @@ function createWorktreeRunnerScript(
   mkdirSync(dirname(runnerScriptPath), { recursive: true })
 
   if (useWindowsFormat) {
-    writeFileSync(runnerScriptPath, buildWindowsRunnerScript(normalizedScript), 'utf-8')
+    writeFileSync(runnerScriptPath, buildWindowsRunnerScript(script), 'utf-8')
   } else {
-    writeFileSync(runnerScriptPath, `#!/usr/bin/env bash\nset -e\n${normalizedScript}\n`, 'utf-8')
+    writeFileSync(runnerScriptPath, buildPosixRunnerScript(script), 'utf-8')
     // Why: chmod via UNC paths to WSL filesystem is supported by Windows and
     // sets the execute bit correctly inside WSL.
     chmodSync(runnerScriptPath, 0o755)
@@ -496,7 +628,8 @@ export function runHook(
   hookName: 'setup' | 'archive',
   cwd: string,
   repo: Repo,
-  hooksPath?: string
+  hooksPath?: string,
+  projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget
 ): Promise<{ success: boolean; output: string }> {
   const hooks = getEffectiveHooks(repo, hooksPath)
   const script = hooks?.scripts[hookName]
@@ -505,7 +638,8 @@ export function runHook(
     return Promise.resolve({ success: true, output: '' })
   }
 
-  const wslInfo = parseWslPath(cwd)
+  const runtimeTarget = getHookRuntimeTarget(projectRuntime)
+  const wslInfo = getHookWslContext(cwd, runtimeTarget)
 
   if (wslInfo) {
     // Why: use execFile('wsl.exe', [...]) instead of exec() to bypass the
@@ -557,9 +691,10 @@ export function runHook(
       }, HOOK_TIMEOUT)
 
       try {
+        const distroArgs = wslInfo.distro ? ['-d', wslInfo.distro] : []
         child = execFile(
           'wsl.exe',
-          ['-d', wslInfo.distro, '--', 'bash', '-c', bashCmd],
+          [...distroArgs, '--', 'bash', '-c', bashCmd],
           {
             timeout: HOOK_TIMEOUT,
             encoding: 'utf-8',

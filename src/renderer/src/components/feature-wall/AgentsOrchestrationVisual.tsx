@@ -13,6 +13,7 @@ export function AgentsOrchestrationVisual(props: {
   activeStepId: AgentsStepId
   widthPx?: number
   heightPx?: number
+  onCycleComplete?: () => void
   orchestrationCreatedChildCount?: number
   orchestrationLoopMs?: number
   orchestrationShowResponseBeats?: boolean
@@ -22,6 +23,7 @@ export function AgentsOrchestrationVisual(props: {
     activeStepId,
     widthPx,
     heightPx,
+    onCycleComplete,
     orchestrationCreatedChildCount,
     orchestrationLoopMs,
     orchestrationShowResponseBeats
@@ -41,6 +43,7 @@ export function AgentsOrchestrationVisual(props: {
         <OrchestrationPage
           active={activeStepId === 'orchestration'}
           reducedMotion={reducedMotion}
+          onCycleComplete={onCycleComplete}
           controlledCreatedChildCount={orchestrationCreatedChildCount}
           loopMs={orchestrationLoopMs}
           showResponseBeats={orchestrationShowResponseBeats}

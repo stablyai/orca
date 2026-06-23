@@ -49,6 +49,26 @@ describe('extractFrontMatter', () => {
     expect(result!.raw).toBe('---\n\n---\n')
     expect(result!.body).toBe('# Body\n')
   })
+
+  it('handles empty front-matter block without a blank line', () => {
+    const content = '---\n---\n# Body\n'
+    const result = extractFrontMatter(content)
+    expect(result).not.toBeNull()
+    expect(result!.raw).toBe('---\n---\n')
+    expect(result!.body).toBe('# Body\n')
+  })
+
+  it('handles empty TOML front-matter block without a blank line', () => {
+    const content = '+++\n+++\nBody\n'
+    const result = extractFrontMatter(content)
+    expect(result).not.toBeNull()
+    expect(result!.raw).toBe('+++\n+++\n')
+    expect(result!.body).toBe('Body\n')
+  })
+
+  it('does not treat same-line delimiter text as a closing delimiter', () => {
+    expect(extractFrontMatter('---\ntitle: Hello---\n# Body\n')).toBeNull()
+  })
 })
 
 describe('prependFrontMatter', () => {

@@ -338,7 +338,9 @@ ws.on('message', (data) => {
     return
   }
   const plaintext = decrypt(raw)
-  if (!plaintext) return
+  if (!plaintext) {
+    return
+  }
 
   const response = JSON.parse(plaintext) as RpcResponse
   const result = response.result
@@ -349,7 +351,9 @@ ws.on('message', (data) => {
   }
 
   const request = pending.get(response.id)
-  if (!request || request.method === 'terminal.subscribe') return
+  if (!request || request.method === 'terminal.subscribe') {
+    return
+  }
   pending.delete(response.id)
   request.resolve(response)
 })

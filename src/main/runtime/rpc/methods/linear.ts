@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import { LINEAR_PROJECT_CREATE_METHOD } from './linear-project-create'
 
 const VALID_FILTERS = ['assigned', 'created', 'all', 'completed'] as const
 const VALID_CUSTOM_VIEW_MODELS = ['issue', 'project'] as const
@@ -68,37 +69,43 @@ const ListProjects = z
   .object({
     query: OptionalString,
     limit: OptionalFiniteNumber,
-    workspaceId: OptionalString
+    workspaceId: OptionalString,
+    force: z.boolean().optional()
   })
   .optional()
 
 const ProjectId = z.object({
   id: requiredString('Project ID is required'),
-  workspaceId: ConcreteWorkspaceId
+  workspaceId: ConcreteWorkspaceId,
+  force: z.boolean().optional()
 })
 
 const ProjectIssues = z.object({
   projectId: requiredString('Project ID is required'),
   limit: OptionalFiniteNumber,
-  workspaceId: ConcreteWorkspaceId
+  workspaceId: ConcreteWorkspaceId,
+  force: z.boolean().optional()
 })
 
 const ListCustomViews = z.object({
   model: z.enum(VALID_CUSTOM_VIEW_MODELS),
   limit: OptionalFiniteNumber,
-  workspaceId: OptionalString
+  workspaceId: OptionalString,
+  force: z.boolean().optional()
 })
 
 const CustomViewId = z.object({
   viewId: requiredString('Custom view ID is required'),
   model: z.enum(VALID_CUSTOM_VIEW_MODELS),
-  workspaceId: ConcreteWorkspaceId
+  workspaceId: ConcreteWorkspaceId,
+  force: z.boolean().optional()
 })
 
 const CustomViewContents = z.object({
   viewId: requiredString('Custom view ID is required'),
   limit: OptionalFiniteNumber,
-  workspaceId: ConcreteWorkspaceId
+  workspaceId: ConcreteWorkspaceId,
+  force: z.boolean().optional()
 })
 
 const TeamId = z.object({
@@ -214,13 +221,14 @@ export const LINEAR_METHODS: RpcMethod[] = [
     name: 'linear.listProjects',
     params: ListProjects,
     handler: async (params, { runtime }) =>
-      runtime.linearListProjects(params?.query, params?.limit, params?.workspaceId)
+      runtime.linearListProjects(params?.query, params?.limit, params?.workspaceId, params?.force)
   }),
+  LINEAR_PROJECT_CREATE_METHOD,
   defineMethod({
     name: 'linear.getProject',
     params: ProjectId,
     handler: async (params, { runtime }) =>
-      runtime.linearGetProject(params.id.trim(), params.workspaceId.trim())
+      runtime.linearGetProject(params.id.trim(), params.workspaceId.trim(), params.force)
   }),
   defineMethod({
     name: 'linear.listProjectIssues',
@@ -229,20 +237,26 @@ export const LINEAR_METHODS: RpcMethod[] = [
       runtime.linearListProjectIssues(
         params.projectId.trim(),
         params.limit,
-        params.workspaceId.trim()
+        params.workspaceId.trim(),
+        params.force
       )
   }),
   defineMethod({
     name: 'linear.listCustomViews',
     params: ListCustomViews,
     handler: async (params, { runtime }) =>
-      runtime.linearListCustomViews(params.model, params.limit, params.workspaceId)
+      runtime.linearListCustomViews(params.model, params.limit, params.workspaceId, params.force)
   }),
   defineMethod({
     name: 'linear.getCustomView',
     params: CustomViewId,
     handler: async (params, { runtime }) =>
-      runtime.linearGetCustomView(params.viewId.trim(), params.model, params.workspaceId.trim())
+      runtime.linearGetCustomView(
+        params.viewId.trim(),
+        params.model,
+        params.workspaceId.trim(),
+        params.force
+      )
   }),
   defineMethod({
     name: 'linear.listCustomViewIssues',
@@ -251,7 +265,8 @@ export const LINEAR_METHODS: RpcMethod[] = [
       runtime.linearListCustomViewIssues(
         params.viewId.trim(),
         params.limit,
-        params.workspaceId.trim()
+        params.workspaceId.trim(),
+        params.force
       )
   }),
   defineMethod({
@@ -261,7 +276,8 @@ export const LINEAR_METHODS: RpcMethod[] = [
       runtime.linearListCustomViewProjects(
         params.viewId.trim(),
         params.limit,
-        params.workspaceId.trim()
+        params.workspaceId.trim(),
+        params.force
       )
   }),
   defineMethod({

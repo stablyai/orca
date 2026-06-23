@@ -156,24 +156,13 @@ export class ClaudeAccountService {
       }
 
       const selection = normalizeClaudeRuntimeSelection(previousSettings)
-      const targetSelection = getClaudeSelectionTargetForAccount(account)
-      const outgoingAccountId = getSelectedClaudeAccountIdForTarget(
-        previousSettings,
-        targetSelection
-      )
       this.store.updateSettings({
         claudeManagedAccounts: [...previousSettings.claudeManagedAccounts, account],
-        activeClaudeManagedAccountId:
-          targetSelection.runtime === 'host' ? account.id : selection.host,
-        activeClaudeManagedAccountIdsByRuntime: setSelectedClaudeAccountIdForTarget(
-          selection,
-          account.id,
-          targetSelection
-        )
+        activeClaudeManagedAccountId: selection.host,
+        activeClaudeManagedAccountIdsByRuntime: selection
       })
       this.runtimeAuth.clearLastWrittenCredentialsJson(accountId)
-      await this.syncRuntimeAuthWithLivePtyGate(targetSelection)
-      await this.rateLimits.refreshForClaudeAccountChange(outgoingAccountId, targetSelection)
+      this.rateLimits.evictInactiveClaudeCache(accountId)
       return this.getSnapshot()
     } catch (error) {
       this.restoreClaudeSettings(previousSettings)

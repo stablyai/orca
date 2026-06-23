@@ -1,38 +1,44 @@
-import { tmpdir } from 'os'
-import * as path from 'path'
 import { describe, expect, it, vi } from 'vitest'
 import type { FsChangeEvent } from '../../../../shared/types'
 import { createFileWatchEventBatcher } from './file-watch-event-batcher'
 
-const LARGE_EVENT_COUNT = 150_000
-
-function buildFileWatchEvents(count: number): FsChangeEvent[] {
-  const events: FsChangeEvent[] = []
-  const root = path.join(tmpdir(), 'orca-file-watch-batch')
-  for (let index = 0; index < count; index += 1) {
-    events.push({
-      kind: 'update',
-      absolutePath: path.join(root, `file-${index}.txt`)
-    })
-  }
-  return events
-}
-
 describe('createFileWatchEventBatcher', () => {
-  it('accepts large watcher event bursts', () => {
+  it('keeps precise watcher events while the batch is under the overflow limit', () => {
     const emit = vi.fn()
-    const batcher = createFileWatchEventBatcher(path.join(tmpdir(), 'worktree'), emit)
+    const batcher = createFileWatchEventBatcher('worktree-1', emit)
+    const events: FsChangeEvent[] = [
+      { kind: 'update', absolutePath: '/repo/file-a.ts' },
+      { kind: 'delete', absolutePath: '/repo/file-b.ts' }
+    ]
 
-    batcher.push(buildFileWatchEvents(LARGE_EVENT_COUNT))
+    batcher.push(events)
     batcher.flush()
 
-    const payload = emit.mock.calls[0]?.[0] as
-      | { type: string; worktree: string; events: FsChangeEvent[] }
-      | undefined
-    expect(payload?.type).toBe('changed')
-    expect(payload?.events).toHaveLength(LARGE_EVENT_COUNT)
-    expect(payload?.events.at(-1)?.absolutePath).toBe(
-      path.join(tmpdir(), 'orca-file-watch-batch', `file-${LARGE_EVENT_COUNT - 1}.txt`)
-    )
+    expect(emit).toHaveBeenCalledWith({
+      type: 'changed',
+      worktree: 'worktree-1',
+      events
+    })
+  })
+
+  it('collapses very large watcher bursts without spreading them onto the stack', () => {
+    vi.useFakeTimers()
+    try {
+      const emit = vi.fn()
+      const batcher = createFileWatchEventBatcher('worktree-1', emit)
+      const event: FsChangeEvent = { kind: 'update', absolutePath: '/repo/file.ts' }
+      const burst = Array.from({ length: 200_000 }, () => event)
+
+      expect(() => batcher.push(burst)).not.toThrow()
+      batcher.flush()
+
+      expect(emit).toHaveBeenCalledWith({
+        type: 'changed',
+        worktree: 'worktree-1',
+        events: [{ kind: 'overflow', absolutePath: '/repo/file.ts' }]
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

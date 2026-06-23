@@ -39,13 +39,17 @@ export function getSuggestedCreatureName(
   }
   // Lowercased to match branch-name convention (fix/seahorse, not fix/Seahorse).
   const available = MARINE_CREATURES.map(normalize).filter((name) => !used.has(name))
-  if (available.length > 0) return pickRandom(available, random)
+  if (available.length > 0) {
+    return pickRandom(available, random)
+  }
   let suffix = 2
   while (true) {
     const numbered = MARINE_CREATURES.map((name) => `${normalize(name)}-${suffix}`).filter(
       (name) => !used.has(name)
     )
-    if (numbered.length > 0) return pickRandom(numbered, random)
+    if (numbered.length > 0) {
+      return pickRandom(numbered, random)
+    }
     suffix += 1
   }
 }

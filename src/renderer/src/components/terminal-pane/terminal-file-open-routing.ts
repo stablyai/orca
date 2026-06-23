@@ -10,6 +10,7 @@ import {
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
 
 type TerminalFileOpenDeps = {
   worktreeId: string
@@ -98,6 +99,21 @@ export function openDetectedFilePath(
     let statResult
     const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
     const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext, filePath)
+
+    if (!openWithSystemDefault) {
+      const worktreeRootLink = resolveKnownWorktreeRootPathLink(filePath)
+      if (worktreeRootLink) {
+        // Why: root workspace switching must work for SSH/runtime paths without
+        // local auth/stat, while still coalescing provider + fallback clicks.
+        await Promise.resolve()
+        if (requestId !== latestOpenDetectedFilePathRequestId) {
+          return
+        }
+        activateAndRevealWorktree(worktreeRootLink.id)
+        return
+      }
+    }
+
     try {
       // Why: remote paths don't need local auth — the relay/runtime is the security boundary.
       if (canOpenWithSystemDefault) {
@@ -154,14 +170,17 @@ export function openDetectedFilePath(
       activateAndRevealWorktree(worktreeId)
     }
 
-    store.openFile({
-      filePath,
-      relativePath,
-      worktreeId: worktreeId || '',
-      language: detectLanguage(filePath),
-      mode: 'edit',
-      runtimeEnvironmentId
-    })
+    store.openFile(
+      {
+        filePath,
+        relativePath,
+        worktreeId: worktreeId || '',
+        language: detectLanguage(filePath),
+        mode: 'edit',
+        runtimeEnvironmentId
+      },
+      { forceContentReload: true }
+    )
 
     if (line !== null) {
       const targetColumn = column ?? 1

@@ -130,6 +130,26 @@ describe('resolveTerminalShortcutAction', () => {
     ).toBeNull()
   })
 
+  it('maps Cmd+↑/↓ on macOS to terminal scrollback top/bottom navigation', () => {
+    expect(
+      resolveTerminalShortcutAction(event({ key: 'ArrowUp', code: 'ArrowUp', metaKey: true }), true)
+    ).toEqual({ type: 'scrollViewport', position: 'top' })
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowDown', code: 'ArrowDown', metaKey: true }),
+        true
+      )
+    ).toEqual({ type: 'scrollViewport', position: 'bottom' })
+
+    // Cmd+Shift+Arrow is selection territory; leave it to focused apps/shells.
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowUp', code: 'ArrowUp', metaKey: true, shiftKey: true }),
+        true
+      )
+    ).toBeNull()
+  })
+
   it('preserves existing non-Mac terminal pane shortcuts', () => {
     expect(
       resolveTerminalShortcutAction(event({ key: 'f', code: 'KeyF', ctrlKey: true }), false)

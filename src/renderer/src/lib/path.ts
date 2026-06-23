@@ -24,6 +24,9 @@ function stripTrailingAbsoluteSeparators(path: string): string {
   if (path === '/') {
     return path
   }
+  if (/^[A-Za-z]:\/$/.test(path)) {
+    return path
+  }
   return path.replace(/\/+$/, '')
 }
 
@@ -52,12 +55,14 @@ export function getRelativePathInsideRoot(
     return ''
   }
 
-  const rootPrefix = normalizedRoot === '/' ? '/' : `${comparisonRoot}/`
+  // Why: POSIX and Windows drive roots already include their trailing separator.
+  const isRootPath = normalizedRoot === '/' || /^[A-Za-z]:\/$/.test(normalizedRoot)
+  const rootPrefix = isRootPath ? comparisonRoot : `${comparisonRoot}/`
   if (!comparisonFilePath.startsWith(rootPrefix)) {
     return null
   }
 
-  const sliceStart = normalizedRoot === '/' ? 1 : normalizedRoot.length + 1
+  const sliceStart = isRootPath ? normalizedRoot.length : normalizedRoot.length + 1
   return normalizeRelativePath(normalizedFilePath.slice(sliceStart))
 }
 

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { findTextMatchRanges, isMarkdownPreviewFindShortcut } from './markdown-preview-search'
+import {
+  MARKDOWN_PREVIEW_SEARCH_QUERY_MAX_BYTES,
+  findTextMatchRanges,
+  isMarkdownPreviewFindShortcut,
+  isMarkdownPreviewSearchQueryTooLarge
+} from './markdown-preview-search'
 
 describe('isMarkdownPreviewFindShortcut', () => {
   it('uses Cmd on macOS', () => {
@@ -73,7 +78,26 @@ describe('findTextMatchRanges', () => {
     expect(findTextMatchRanges('ababa', 'aba')).toEqual([{ start: 0, end: 3 }])
   })
 
+  it('maps locale-lowercase search matches back to original text offsets', () => {
+    const ranges = findTextMatchRanges('İstanbul', 'stan')
+
+    expect(ranges).toEqual([{ start: 1, end: 5 }])
+    expect(ranges.map((range) => 'İstanbul'.slice(range.start, range.end))).toEqual(['stan'])
+  })
+
   it('returns no matches for an empty query', () => {
     expect(findTextMatchRanges('Alpha beta', '')).toEqual([])
+  })
+
+  it('rejects oversized pasted queries before indexing preview text', () => {
+    const oversizedQuery = 'secret-preview-search'.repeat(MARKDOWN_PREVIEW_SEARCH_QUERY_MAX_BYTES)
+    const throwingText = {
+      [Symbol.iterator](): IterableIterator<string> {
+        throw new Error('oversized markdown preview searches must not scan text')
+      }
+    } as string
+
+    expect(isMarkdownPreviewSearchQueryTooLarge(oversizedQuery)).toBe(true)
+    expect(findTextMatchRanges(throwingText, oversizedQuery)).toEqual([])
   })
 })

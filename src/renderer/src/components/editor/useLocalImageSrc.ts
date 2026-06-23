@@ -31,6 +31,15 @@ export function getLocalImageCacheKey(
 // (Map iteration order is insertion order) and revoke its blob URL so the
 // browser can free the underlying data.
 function cacheBlobUrl(key: string, url: string): void {
+  const previousUrl = blobUrlCache.get(key)
+  if (previousUrl !== undefined) {
+    blobUrlCache.delete(key)
+    if (previousUrl !== url) {
+      // Why: concurrent loads for the same image key can both create blob URLs;
+      // overwriting the cache must release the superseded Blob.
+      URL.revokeObjectURL(previousUrl)
+    }
+  }
   blobUrlCache.set(key, url)
   if (blobUrlCache.size > BLOB_URL_CACHE_MAX_SIZE) {
     const oldest = blobUrlCache.keys().next().value

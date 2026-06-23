@@ -5,14 +5,12 @@ import { useAppStore } from '@/store'
 import { isMarkdownPreviewFindShortcut } from './markdown-preview-search'
 import { editorShortcutMatches } from './editor-shortcuts'
 import { getLinkBubblePosition, type LinkBubbleState } from './RichMarkdownLinkBubble'
+import { commitRow, type DocLinkMenuRow, type DocLinkMenuState } from './rich-markdown-commands'
 import {
-  commitRow,
   runSlashCommand,
-  type DocLinkMenuRow,
-  type DocLinkMenuState,
   type SlashCommand,
   type SlashMenuState
-} from './rich-markdown-commands'
+} from './rich-markdown-slash-commands'
 import {
   collapseEmptyListContinuationParagraph,
   commitEmptyOrderedListMarkerAsText,
@@ -49,6 +47,47 @@ export type KeyHandlerContext = {
 
 function isComposingMarkdownInput(event: KeyboardEvent, editor: Editor | null): boolean {
   return event.isComposing || editor?.view.composing === true
+}
+
+type NativeSelectionSnapshot = {
+  anchorNode: Node | null
+  anchorOffset: number
+  focusNode: Node | null
+  focusOffset: number
+}
+
+type ProseMirrorDomObserver = {
+  currentSelection?: {
+    set?: (selection: NativeSelectionSnapshot) => void
+  }
+  flush?: () => void
+}
+
+type ProseMirrorViewWithDomObserver = Editor['view'] & {
+  domObserver?: ProseMirrorDomObserver
+}
+
+function flushPendingProseMirrorSelection(editor: Editor): void {
+  let observer: ProseMirrorDomObserver | undefined
+  try {
+    observer = (editor.view as ProseMirrorViewWithDomObserver).domObserver
+  } catch {
+    return
+  }
+
+  if (typeof observer?.flush !== 'function') {
+    return
+  }
+
+  // Why: immediate Tab after a mouse click can run before ProseMirror has
+  // copied the native selection into editor state, so list commands hit stale item state.
+  observer.currentSelection?.set?.({
+    anchorNode: null,
+    anchorOffset: 0,
+    focusNode: null,
+    focusOffset: 0
+  })
+  observer.flush()
 }
 
 /**
@@ -158,6 +197,7 @@ export function createRichMarkdownKeyHandler(
       if (!ed) {
         return true
       }
+      flushPendingProseMirrorSelection(ed)
 
       if (event.shiftKey) {
         if (!ed.commands.liftListItem('listItem')) {
@@ -171,7 +211,7 @@ export function createRichMarkdownKeyHandler(
         return true
       }
 
-      // Why: sinkListItem succeeds when cursor is in a non-first list item;
+      // Why: sinkListItem succeeds when the item has a previous sibling;
       // otherwise it no-ops. Either way we consume Tab to prevent focus escape.
       if (!ed.commands.sinkListItem('listItem')) {
         ed.commands.sinkListItem('taskItem')

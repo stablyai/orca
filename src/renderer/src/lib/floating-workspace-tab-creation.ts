@@ -1,6 +1,6 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { BrowserTab, TerminalTab } from '../../../shared/types'
-import { createUntitledMarkdownFile } from './create-untitled-markdown'
+import { createUntitledMarkdownFileWithTemplateSelection } from './create-untitled-markdown'
 import { getConnectionId } from './connection-context'
 import { detectLanguage } from './language-detect'
 import type { AppState } from '@/store/types'
@@ -9,6 +9,7 @@ import {
   createWebRuntimeSessionTerminal
 } from '@/runtime/web-runtime-session'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
+import { translate } from '@/i18n/i18n'
 
 type FloatingWorkspaceTerminalStore = Pick<
   AppState,
@@ -68,7 +69,7 @@ export async function createFloatingWorkspaceBrowserTab(
   }
 
   return store.createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, url, {
-    title: 'New Browser Tab',
+    title: translate('auto.lib.floating.workspace.tab.creation.f3785eddc2', 'New Browser Tab'),
     focusAddressBar: true,
     targetGroupId
   })
@@ -84,12 +85,15 @@ export async function createFloatingWorkspaceMarkdownTab(
   if (!floatingMarkdownDirectory) {
     return
   }
-  const fileInfo = await createUntitledMarkdownFile(
+  const fileInfo = await createUntitledMarkdownFileWithTemplateSelection(
     floatingMarkdownDirectory,
     FLOATING_TERMINAL_WORKTREE_ID,
     getConnectionId(FLOATING_TERMINAL_WORKTREE_ID) ?? undefined,
     { activeRuntimeEnvironmentId: null }
   )
+  if (!fileInfo) {
+    return
+  }
   store.openFile(
     {
       ...fileInfo,

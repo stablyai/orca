@@ -6,6 +6,8 @@ import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
   GitConflictOperation,
+  GitForkSyncExpectedUpstream,
+  GitForkSyncResult,
   GitPushTarget,
   GitUpstreamStatus,
   GitWorktreeInfo,
@@ -16,6 +18,8 @@ import type {
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
+import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 
 // ─── PTY Provider ───────────────────────────────────────────────────
 
@@ -26,6 +30,7 @@ export type PtySpawnOptions = {
   env?: Record<string, string>
   envToDelete?: string[]
   command?: string
+  startupCommandDelivery?: StartupCommandDelivery
   /** Orca worktree identity. When present, the local provider scopes shell
    *  history to this worktree so ArrowUp only surfaces local commands. */
   worktreeId?: string
@@ -88,6 +93,7 @@ export type PtySpawnResult = {
   coldRestore?: {
     scrollback: string
     cwd: string
+    oscLinks?: TerminalOscLinkRange[]
   }
 }
 
@@ -133,6 +139,7 @@ export type FileReadResult = {
 export type IFilesystemProvider = {
   readDir(dirPath: string): Promise<DirEntry[]>
   readFile(filePath: string): Promise<FileReadResult>
+  downloadFile?(sourcePath: string, destinationPath: string): Promise<void>
   getTempDir?(): Promise<string>
   writeFile(filePath: string, content: string): Promise<void>
   writeFileBase64(filePath: string, contentBase64: string): Promise<void>
@@ -179,6 +186,8 @@ export type IGitProvider = {
   detectConflictOperation(worktreePath: string): Promise<GitConflictOperation>
   abortMerge(worktreePath: string): Promise<void>
   abortRebase(worktreePath: string): Promise<void>
+  checkoutBranch(worktreePath: string, branch: string): Promise<void>
+  listLocalBranches(worktreePath: string): Promise<{ current: string | null; branches: string[] }>
   getBranchCompare(worktreePath: string, baseRef: string): Promise<GitBranchCompareResult>
   getCommitCompare(worktreePath: string, commitId: string): Promise<GitCommitCompareResult>
   getUpstreamStatus(worktreePath: string, pushTarget?: GitPushTarget): Promise<GitUpstreamStatus>
@@ -192,6 +201,10 @@ export type IGitProvider = {
   fastForwardBranch(worktreePath: string, pushTarget?: GitPushTarget): Promise<void>
   rebaseFromBase(worktreePath: string, baseRef: string): Promise<void>
   fetchRemote(worktreePath: string, pushTarget?: GitPushTarget): Promise<void>
+  syncForkDefaultBranch(
+    worktreePath: string,
+    expectedUpstream: GitForkSyncExpectedUpstream
+  ): Promise<GitForkSyncResult>
   getBranchDiff(
     worktreePath: string,
     baseRef: string,
@@ -216,9 +229,17 @@ export type IGitProvider = {
   renameCurrentBranch?(worktreePath: string, newBranch: string): Promise<void>
   isGitRepo(path: string): boolean
   isGitRepoAsync(dirPath: string): Promise<{ isRepo: boolean; rootPath: string | null }>
-  exec(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }>
+  exec(
+    args: string[],
+    cwd: string,
+    options?: { signal?: AbortSignal; timeoutMs?: number }
+  ): Promise<{ stdout: string; stderr: string }>
   getRemoteFileUrl(worktreePath: string, relativePath: string, line: number): Promise<string | null>
-  worktreeIsClean(worktreePath: string): Promise<{ clean: boolean; stdout?: string }>
+  getRemoteCommitUrl(worktreePath: string, sha: string): Promise<string | null>
+  worktreeIsClean(
+    worktreePath: string,
+    options?: { includeUntracked?: boolean }
+  ): Promise<{ clean: boolean; stdout?: string }>
 }
 
 // ─── Provider Registry ──────────────────────────────────────────────

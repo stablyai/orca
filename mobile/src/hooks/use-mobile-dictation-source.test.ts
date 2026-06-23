@@ -26,4 +26,26 @@ describe('useMobileDictation source invariants', () => {
     expect(mirrorEffect).toContain('onErrorRef.current = onError')
     expect(mirrorEffect).toContain('}, [client, enabled, onTranscript, onError])')
   })
+
+  it('reserves pending audio bytes before encoding microphone chunks', () => {
+    const microphoneEffect = sliceBetween(
+      "addExpoTwoWayAudioEventListener('onMicrophoneData'",
+      'return () => sub.remove()'
+    )
+
+    const reserveIndex = microphoneEffect.indexOf('tryReserve(byteLength)')
+    const encodeIndex = microphoneEffect.indexOf('bytesToBase64(bytes)')
+    expect(reserveIndex).toBeGreaterThanOrEqual(0)
+    expect(encodeIndex).toBeGreaterThanOrEqual(0)
+    expect(reserveIndex).toBeLessThan(encodeIndex)
+    expect(microphoneEffect).toContain('MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE')
+    expect(microphoneEffect).toContain('pendingAudioBudgetRef.current.release(byteLength)')
+  })
+
+  it('resets pending audio bytes whenever pending chunk tracking is cleared', () => {
+    const pendingChunkClears = source.match(/pendingChunksRef\.current\.clear\(\)/g) ?? []
+    const pendingAudioResets = source.match(/pendingAudioBudgetRef\.current\.reset\(\)/g) ?? []
+
+    expect(pendingAudioResets).toHaveLength(pendingChunkClears.length)
+  })
 })

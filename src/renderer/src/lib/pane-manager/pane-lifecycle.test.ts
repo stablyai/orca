@@ -6,14 +6,19 @@ import {
   markComplexScriptOutput,
   resetTerminalWebglSuggestion
 } from './pane-webgl-renderer'
-import { openTerminal } from './pane-lifecycle'
+import { attachLigatures, openTerminal } from './pane-lifecycle'
 import {
   buildDefaultTerminalOptions,
+  DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
+  DEFAULT_TERMINAL_SCROLL_SENSITIVITY,
+  normalizeTerminalFastScrollSensitivity,
+  normalizeTerminalScrollSensitivity,
   resolveTerminalCursorInactiveStyle
 } from './pane-terminal-options'
 
 const webglMock = vi.hoisted(() => ({
   contextLossHandler: null as (() => void) | null,
+  clearTextureAtlas: vi.fn(),
   dispose: vi.fn()
 }))
 
@@ -23,6 +28,7 @@ vi.mock('@xterm/addon-webgl', () => ({
       onContextLoss: vi.fn((handler: () => void) => {
         webglMock.contextLossHandler = handler
       }),
+      clearTextureAtlas: webglMock.clearTextureAtlas,
       dispose: webglMock.dispose
     }
   })
@@ -36,6 +42,7 @@ function createPane(): ManagedPaneInternal {
     stablePaneId: leafId,
     terminal: {
       loadAddon: vi.fn(),
+      attachCustomWheelEventHandler: vi.fn(),
       refresh: vi.fn(),
       rows: 24
     } as never,
@@ -69,8 +76,38 @@ describe('buildDefaultTerminalOptions', () => {
     expect(buildDefaultTerminalOptions().macOptionIsMeta).toBe(false)
   })
 
-  it('keeps the default inactive cursor as a single bar', () => {
-    expect(buildDefaultTerminalOptions().cursorInactiveStyle).toBe('bar')
+  it('uses the default inactive outline only for the block cursor', () => {
+    expect(buildDefaultTerminalOptions().cursorStyle).toBe('block')
+    expect(buildDefaultTerminalOptions().cursorInactiveStyle).toBe('outline')
+  })
+
+  it('shows the slim xterm scrollbar in its reserved gutter', () => {
+    // Why: 7px gutter is an accepted ~1-column cost (VS Code reserves 14);
+    // the v1.4.51 table corruption that once forced width 0 was the ZWJ
+    // width bug, fixed separately by the Orca unicode provider.
+    expect(buildDefaultTerminalOptions().scrollbar?.width).toBe(7)
+  })
+
+  it('slightly increases default terminal wheel scrolling while preserving fast scroll', () => {
+    const options = buildDefaultTerminalOptions()
+
+    expect(options.scrollSensitivity).toBe(DEFAULT_TERMINAL_SCROLL_SENSITIVITY)
+    expect(options.fastScrollSensitivity).toBe(DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY)
+  })
+
+  it('normalizes configurable terminal scroll sensitivity values', () => {
+    expect(normalizeTerminalScrollSensitivity(undefined)).toBe(DEFAULT_TERMINAL_SCROLL_SENSITIVITY)
+    expect(normalizeTerminalScrollSensitivity(0)).toBe(0.1)
+    expect(normalizeTerminalScrollSensitivity(20)).toBe(10)
+    expect(normalizeTerminalFastScrollSensitivity(undefined)).toBe(
+      DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY
+    )
+    expect(normalizeTerminalFastScrollSensitivity(0)).toBe(1)
+    expect(normalizeTerminalFastScrollSensitivity(25)).toBe(20)
+  })
+
+  it('enables xterm contrast correction for low-contrast CLI colors', () => {
+    expect(buildDefaultTerminalOptions().minimumContrastRatio).toBe(4.5)
   })
 
   it('only uses inactive outline for block cursors', () => {
@@ -92,6 +129,7 @@ describe('buildDefaultTerminalOptions', () => {
 describe('attachWebgl', () => {
   beforeEach(() => {
     webglMock.contextLossHandler = null
+    webglMock.clearTextureAtlas.mockClear()
     webglMock.dispose.mockClear()
     vi.mocked(WebglAddon).mockClear()
     resetTerminalWebglSuggestion()
@@ -111,6 +149,7 @@ describe('attachWebgl', () => {
 
   it('keeps a pane on the DOM renderer after WebGL context loss', () => {
     const pane = createPane()
+    pane.terminalGpuAcceleration = 'on'
 
     attachWebgl(pane)
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
@@ -131,14 +170,44 @@ describe('attachWebgl', () => {
 
   it('repaints the current buffer after WebGL attaches', () => {
     const pane = createPane()
+    pane.terminalGpuAcceleration = 'on'
 
     attachWebgl(pane)
 
     expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
   })
 
+  it('clears the WebGL texture atlas and refreshes the buffer on recovery', async () => {
+    const { resetWebglTextureAtlas } = await import('./pane-webgl-renderer')
+    const pane = createPane()
+    pane.terminalGpuAcceleration = 'on'
+
+    attachWebgl(pane)
+    vi.mocked(pane.terminal.refresh).mockClear()
+    resetWebglTextureAtlas(pane)
+
+    expect(webglMock.clearTextureAtlas).toHaveBeenCalledTimes(1)
+    expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
+  })
+
+  it('does not reset a WebGL atlas after context-loss fallback', async () => {
+    const { resetWebglTextureAtlas } = await import('./pane-webgl-renderer')
+    const pane = createPane()
+    pane.terminalGpuAcceleration = 'on'
+
+    attachWebgl(pane)
+    webglMock.contextLossHandler?.()
+    vi.mocked(pane.terminal.refresh).mockClear()
+    webglMock.clearTextureAtlas.mockClear()
+    resetWebglTextureAtlas(pane)
+
+    expect(webglMock.clearTextureAtlas).not.toHaveBeenCalled()
+    expect(pane.terminal.refresh).not.toHaveBeenCalled()
+  })
+
   it('does not attach WebGL while initial rendering is deferred', () => {
     const pane = createPane()
+    pane.terminalGpuAcceleration = 'on'
     pane.webglAttachmentDeferred = true
 
     attachWebgl(pane)
@@ -157,6 +226,15 @@ describe('attachWebgl', () => {
     expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
   })
 
+  it('uses WebGL rendering for auto GPU acceleration on non-Linux platforms', () => {
+    const pane = createPane()
+
+    attachWebgl(pane)
+
+    expect(pane.webglAddon).not.toBeNull()
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+  })
+
   it('uses DOM rendering for auto GPU acceleration on Linux', () => {
     vi.stubGlobal('navigator', {
       platform: 'Linux x86_64',
@@ -168,6 +246,48 @@ describe('attachWebgl', () => {
 
     expect(pane.webglAddon).toBeNull()
     expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
+  })
+
+  it('uses WebGL rendering for Linux auto GPU acceleration on hardware renderers', () => {
+    const rendererKey = 0x9246
+    const vendorKey = 0x9245
+    vi.stubGlobal('navigator', {
+      platform: 'Linux x86_64',
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64)'
+    })
+    vi.stubGlobal('document', {
+      createElement: vi.fn((tagName: string) => {
+        if (tagName !== 'canvas') {
+          return {}
+        }
+        return {
+          getContext: vi.fn((contextName: string) =>
+            contextName === 'webgl2'
+              ? {
+                  getExtension: vi.fn(() => ({
+                    UNMASKED_RENDERER_WEBGL: rendererKey,
+                    UNMASKED_VENDOR_WEBGL: vendorKey
+                  })),
+                  getParameter: vi.fn((key: number) =>
+                    key === rendererKey
+                      ? 'Mesa Intel(R) UHD Graphics 770'
+                      : key === vendorKey
+                        ? 'Intel'
+                        : null
+                  )
+                }
+              : null
+          )
+        }
+      })
+    })
+    resetTerminalWebglSuggestion()
+    const pane = createPane()
+
+    attachWebgl(pane)
+
+    expect(pane.webglAddon).not.toBeNull()
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
   })
 
   it('still allows forced WebGL on Linux', () => {
@@ -183,61 +303,41 @@ describe('attachWebgl', () => {
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
   })
 
-  it('uses DOM for later auto panes after WebGL attach fails until the suggestion resets', () => {
-    const firstPane = createPane()
-    vi.mocked(WebglAddon).mockImplementationOnce(() => {
-      throw new Error('webgl unavailable')
-    })
-
-    attachWebgl(firstPane)
-
-    expect(firstPane.webglAddon).toBeNull()
-
-    const laterAutoPane = createPane()
-    attachWebgl(laterAutoPane)
-
-    expect(laterAutoPane.terminal.loadAddon).not.toHaveBeenCalled()
-
-    resetTerminalWebglSuggestion()
-    const retriedAutoPane = createPane()
-    attachWebgl(retriedAutoPane)
-
-    expect(retriedAutoPane.terminal.loadAddon).toHaveBeenCalledTimes(1)
-  })
-
-  it('still attempts WebGL in on mode after auto mode suggests DOM', () => {
-    const autoPane = createPane()
-    vi.mocked(WebglAddon).mockImplementationOnce(() => {
-      throw new Error('webgl unavailable')
-    })
-
-    attachWebgl(autoPane)
-
-    const forcedPane = createPane()
-    forcedPane.terminalGpuAcceleration = 'on'
-    attachWebgl(forcedPane)
-
-    expect(forcedPane.terminal.loadAddon).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps auto-mode panes on DOM after complex-script output', () => {
+  it('keeps auto-mode panes on WebGL after complex-script output', () => {
     const pane = createPane()
 
     attachWebgl(pane)
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+    vi.mocked(pane.terminal.loadAddon).mockClear()
 
     markComplexScriptOutput(pane)
 
     expect(pane.hasComplexScriptOutput).toBe(true)
-    expect(pane.webglAddon).toBeNull()
-    expect(webglMock.dispose).toHaveBeenCalledTimes(1)
+    expect(pane.webglAddon).not.toBeNull()
+    expect(webglMock.dispose).not.toHaveBeenCalled()
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
 
     attachWebgl(pane)
 
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
   })
 
-  it('allows explicit on mode to override complex-script DOM fallback', () => {
+  it('keeps later auto panes on DOM after WebGL attach fails', () => {
+    vi.mocked(WebglAddon).mockImplementationOnce(() => {
+      throw new Error('webgl unavailable')
+    })
+    const firstPane = createPane()
+    const secondPane = createPane()
+
+    attachWebgl(firstPane)
+    attachWebgl(secondPane)
+
+    expect(firstPane.webglAddon).toBeNull()
+    expect(secondPane.webglAddon).toBeNull()
+    expect(secondPane.terminal.loadAddon).not.toHaveBeenCalled()
+  })
+
+  it('keeps forced WebGL on after complex-script output', () => {
     const pane = createPane()
 
     markComplexScriptOutput(pane)
@@ -245,6 +345,18 @@ describe('attachWebgl', () => {
     attachWebgl(pane)
 
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('attachLigatures', () => {
+  it('refreshes existing rows after loading the ligatures addon', () => {
+    const pane = createPane()
+
+    attachLigatures(pane)
+
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+    expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
+    expect(pane.ligaturesAddon).not.toBeNull()
   })
 })
 
@@ -309,6 +421,7 @@ describe('openTerminal — Unicode 11 ordering', () => {
           events.push('loadAddon:webLinks')
         }
       }),
+      attachCustomWheelEventHandler: vi.fn(),
       write: vi.fn(() => {
         events.push('write')
       }),

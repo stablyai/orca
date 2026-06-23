@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   View,
   Text,
@@ -14,7 +14,9 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
+import { PickerListDrawer } from './PickerListDrawer'
 import { MobileAgentIcon } from './MobileAgentIcon'
+import { MobileWorkspaceNameInput } from './MobileWorkspaceNameInput'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
 import { deriveWorkspaceSshGate, workspaceSshStatusLabel } from '../tasks/workspace-ssh-gate'
 import { WORKTREE_CREATE_TIMEOUT_MS } from '../tasks/workspace-create-timeout'
@@ -39,6 +41,13 @@ import {
   resolveNewWorktreeAgentSelection,
   type NewWorktreeAgentOption as AgentOption
 } from './new-worktree-agent-selection'
+import { getCachedRepos, setCachedRepos } from '../cache/repo-cache'
+import { useLastVisitedWorktreeRepoId } from '../worktree/use-last-visited-worktree-repo'
+import {
+  getMobileNewWorkspaceDialogEligibleRepos,
+  refreshMobileNewWorkspaceDialogSelectedRepo,
+  resolveMobileNewWorkspaceDialogRepoId
+} from '../worktree/new-workspace-dialog-repo-selection'
 
 type Repo = {
   id: string
@@ -63,6 +72,19 @@ type RepoHooksResponse = {
   setupTrust?: SetupHookTrust
 }
 
+type SetupHookDetails = {
+  repoId: string
+  command: string | null
+  source: string | null
+  trust: SetupHookTrust | null
+  runPolicy: SetupRunPolicy
+}
+
+type DetectedAgentIdsState = {
+  connectionId: string | null
+  ids: Set<string>
+}
+
 type CreateOptions = {
   setupOverride?: Exclude<SetupDecision, 'inherit'>
   approvedSetupContentHash?: string
@@ -79,7 +101,9 @@ type SetupTrustPrompt = {
 function repoColor(name: string): string {
   const palette = ['#f97316', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f59e0b', '#6366f1']
   let hash = 0
-  for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) | 0
+  for (let i = 0; i < name.length; i += 1) {
+    hash = (hash * 31 + name.charCodeAt(i)) | 0
+  }
   return palette[Math.abs(hash) % palette.length]!
 }
 
@@ -87,68 +111,12 @@ function repoBadgeColor(repo: Repo | null): string {
   return repo?.badgeColor || repoColor(repo?.displayName ?? 'repository')
 }
 
-// ── Picker sub-modal ────────────────────────────────────────────────
-// Why: inline dropdowns with position:absolute + ScrollView have persistent
-// touch-conflict issues in React Native. A separate modal for the picker
-// list is the standard mobile pattern — it scrolls reliably and feels native.
-
-function PickerListModal<T extends { id: string; label: string }>({
-  visible,
-  title,
-  items,
-  selectedId,
-  onSelect,
-  onClose,
-  renderIcon
-}: {
-  visible: boolean
-  title: string
-  items: T[]
-  selectedId: string
-  onSelect: (item: T) => void
-  onClose: () => void
-  renderIcon?: (item: T) => React.ReactNode
-}) {
-  return (
-    <BottomDrawer visible={visible} onClose={onClose}>
-      <View style={styles.pickerHeader}>
-        <Text style={styles.pickerTitle}>{title}</Text>
-      </View>
-      <View style={styles.pickerGroup}>
-        {items.map((item, index) => {
-          const selected = item.id === selectedId
-          return (
-            <View key={item.id}>
-              {index > 0 && <View style={styles.pickerSeparator} />}
-              <Pressable
-                style={({ pressed }) => [styles.pickerItem, pressed && styles.pickerItemPressed]}
-                onPress={() => {
-                  onSelect(item)
-                  onClose()
-                }}
-              >
-                {renderIcon?.(item)}
-                <Text
-                  style={[styles.pickerItemText, selected && styles.pickerItemTextSelected]}
-                  numberOfLines={1}
-                >
-                  {item.label}
-                </Text>
-                {selected && <Check size={14} color={colors.textPrimary} />}
-              </Pressable>
-            </View>
-          )
-        })}
-      </View>
-    </BottomDrawer>
-  )
-}
-
 // ── Main modal ──────────────────────────────────────────────────────
 
 type Props = {
   visible: boolean
   client: RpcClient | null
+  hostId?: string
   // Why: existing worktree paths from the host so we can pick a unique
   // marine-creature default when the user leaves the name blank, matching
   // the desktop UI's behavior. The "already exists locally" collision is
@@ -162,29 +130,65 @@ type Props = {
 export function NewWorktreeModal({
   visible,
   client,
+  hostId,
   existingWorktreePaths,
   onCreated,
   onClose
 }: Props) {
-  const [repos, setRepos] = useState<Repo[]>([])
+  const openEpochRef = useRef(0)
+  const wasVisibleRef = useRef(false)
+  const clientEpochRef = useRef({ client, epoch: 0 })
+
+  // Why: each drawer opening is a fresh form session; remounting resets local
+  // form state before paint instead of clearing it in a visible-prop Effect.
+  if (visible && !wasVisibleRef.current) {
+    openEpochRef.current += 1
+  }
+  wasVisibleRef.current = visible
+  if (clientEpochRef.current.client !== client) {
+    clientEpochRef.current = { client, epoch: clientEpochRef.current.epoch + 1 }
+  }
+
+  return (
+    <NewWorktreeModalContent
+      key={`${openEpochRef.current}:${clientEpochRef.current.epoch}`}
+      visible={visible}
+      client={client}
+      hostId={hostId}
+      existingWorktreePaths={existingWorktreePaths}
+      onCreated={onCreated}
+      onClose={onClose}
+    />
+  )
+}
+
+function NewWorktreeModalContent({
+  visible,
+  client,
+  hostId,
+  existingWorktreePaths,
+  onCreated,
+  onClose
+}: Props) {
+  const [initialRepos] = useState(() => (hostId ? (getCachedRepos(hostId) as Repo[] | null) : null))
+  const [repos, setRepos] = useState<Repo[]>(initialRepos ?? [])
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null)
   const [showRepoPicker, setShowRepoPicker] = useState(false)
   const [selectedAgentState, setSelectedAgent] = useState<AgentOption>(AGENT_OPTIONS[0]!)
   const [runtimeSettings, setRuntimeSettings] = useState<RuntimeSettings | null>(null)
-  const [detectedAgentIds, setDetectedAgentIds] = useState<Set<string> | null>(null)
+  const [detectedAgentIdsState, setDetectedAgentIdsState] = useState<DetectedAgentIdsState | null>(
+    null
+  )
   const [agentOverriddenState, setAgentOverridden] = useState(false)
   const [showAgentPicker, setShowAgentPicker] = useState(false)
   const [sshState, setSshState] = useState<SshConnectionState | null>(null)
-  const [sshConnecting, setSshConnecting] = useState(false)
+  const [sshConnectingTargetId, setSshConnectingTargetId] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [note, setNote] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [setupCommand, setSetupCommand] = useState<string | null>(null)
-  const [setupSource, setSetupSource] = useState<string | null>(null)
-  const [setupTrust, setSetupTrust] = useState<SetupHookTrust | null>(null)
+  const [setupHookDetails, setSetupHookDetails] = useState<SetupHookDetails | null>(null)
   const [trustedOrcaHooks, setTrustedOrcaHooks] = useState<PersistedTrustedOrcaHooks>({})
   const [setupTrustPrompt, setSetupTrustPrompt] = useState<SetupTrustPrompt | null>(null)
-  const [setupRunPolicy, setSetupRunPolicy] = useState<SetupRunPolicy>('run-by-default')
   const [setupDecisionChoice, setSetupDecisionChoice] = useState<Exclude<
     SetupDecision,
     'inherit'
@@ -192,7 +196,8 @@ export function NewWorktreeModal({
   const [runSetup, setRunSetup] = useState(true)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(initialRepos == null)
+  const lastVisitedRepo = useLastVisitedWorktreeRepoId(hostId, visible)
 
   // Why: matches the desktop UI — the input shows a generic "Workspace name"
   // placeholder, not the suggested creature. The creature name is only used
@@ -204,8 +209,19 @@ export function NewWorktreeModal({
   const sshGate = deriveWorkspaceSshGate({
     connectionId: selectedRepoConnectionId,
     state: sshState,
-    connecting: sshConnecting
+    connecting: sshConnectingTargetId === selectedRepoConnectionId
   })
+  const detectedAgentIds =
+    detectedAgentIdsState?.connectionId === selectedRepoConnectionId &&
+    (selectedRepoConnectionId === null || sshGate.status === 'connected')
+      ? detectedAgentIdsState.ids
+      : null
+  const activeSetupHookDetails =
+    selectedRepo && setupHookDetails?.repoId === selectedRepo.id ? setupHookDetails : null
+  const setupCommand = activeSetupHookDetails?.command ?? null
+  const setupSource = activeSetupHookDetails?.source ?? null
+  const setupTrust = activeSetupHookDetails?.trust ?? null
+  const setupRunPolicy = activeSetupHookDetails?.runPolicy ?? 'run-by-default'
   const selectedAgentResolution = resolveNewWorktreeAgentSelection({
     visible,
     selectedAgent: selectedAgentState,
@@ -225,44 +241,69 @@ export function NewWorktreeModal({
   const selectedAgent = selectedAgentResolution.selectedAgent
 
   useEffect(() => {
-    if (!visible) {
-      setShowRepoPicker(false)
-      setShowAgentPicker(false)
+    if (!visible || !lastVisitedRepo.loaded || selectedRepo || repos.length === 0) {
       return
     }
-    if (!client) return
+    const eligibleRepos = getMobileNewWorkspaceDialogEligibleRepos(repos)
+    const preferredRepoId = resolveMobileNewWorkspaceDialogRepoId({
+      eligibleRepos,
+      activeRepoId: lastVisitedRepo.repoId
+    })
+    const preferredRepo = repos.find((repo) => repo.id === preferredRepoId) ?? null
+    if (preferredRepo) {
+      setSelectedRepo(preferredRepo)
+    }
+  }, [lastVisitedRepo.loaded, lastVisitedRepo.repoId, repos, selectedRepo, visible])
+
+  useEffect(() => {
+    if (!visible || !client) {
+      return
+    }
     let stale = false
-    setName('')
-    setNote('')
-    setShowAdvanced(false)
-    setSetupCommand(null)
-    setSetupSource(null)
-    setSetupTrust(null)
-    setTrustedOrcaHooks({})
-    setSetupTrustPrompt(null)
-    setSetupRunPolicy('run-by-default')
-    setSetupDecisionChoice(null)
-    setRunSetup(true)
-    setError('')
-    setCreating(false)
-    setShowRepoPicker(false)
-    setShowAgentPicker(false)
-    setRuntimeSettings(null)
-    setDetectedAgentIds(null)
-    setAgentOverridden(false)
-    setSshState(null)
-    setSshConnecting(false)
-    setSelectedAgent(AGENT_OPTIONS[0]!)
-    setLoading(true)
+
+    if (repos.length === 0) {
+      setLoading(true)
+    }
+
+    void client
+      .sendRequest('repo.list')
+      .then((repoResponse) => {
+        if (stale) {
+          return
+        }
+        if (repoResponse.ok) {
+          const result = (repoResponse as RpcSuccess).result as { repos: Repo[] }
+          setRepos(result.repos)
+          if (hostId) {
+            setCachedRepos(hostId, result.repos)
+          }
+          setSelectedRepo((current) => {
+            // Why: the optimistic cache can include repos removed before the
+            // fresh repo.list returns; never create against a stale repo id.
+            return refreshMobileNewWorkspaceDialogSelectedRepo(result.repos, current)
+          })
+        }
+      })
+      .catch(() => {
+        if (!stale) {
+          setRepos([])
+        }
+      })
+      .finally(() => {
+        if (!stale) {
+          setLoading(false)
+        }
+      })
 
     void (async () => {
       try {
-        const [repoResponse, settingsResponse, uiResponse] = await Promise.all([
-          client.sendRequest('repo.list'),
+        const [settingsResponse, uiResponse] = await Promise.all([
           client.sendRequest('settings.get'),
           client.sendRequest('ui.get')
         ])
-        if (stale) return
+        if (stale) {
+          return
+        }
         if (settingsResponse.ok) {
           const result = (settingsResponse as RpcSuccess).result as { settings: RuntimeSettings }
           setRuntimeSettings(result.settings)
@@ -273,37 +314,26 @@ export function NewWorktreeModal({
           }
           setTrustedOrcaHooks(result.ui?.trustedOrcaHooks ?? {})
         }
-        if (repoResponse.ok) {
-          const result = (repoResponse as RpcSuccess).result as { repos: Repo[] }
-          setRepos(result.repos)
-          if (result.repos.length === 1) {
-            setSelectedRepo(result.repos[0]!)
-          } else {
-            setSelectedRepo(null)
-          }
-        }
       } catch {
-        if (!stale) setRepos([])
-      } finally {
-        if (!stale) setLoading(false)
+        // Non-critical; repo.list owns the visible loading state.
       }
     })()
     return () => {
       stale = true
     }
-  }, [visible, client])
+  }, [visible, client, hostId])
 
   useEffect(() => {
     if (!visible || !client || !selectedRepoConnectionId) {
-      setSshState(null)
-      setSshConnecting(false)
       return
     }
     let stale = false
     void client
       .sendRequest('ssh.getState', { targetId: selectedRepoConnectionId })
       .then((response) => {
-        if (stale) return
+        if (stale) {
+          return
+        }
         if (!response.ok) {
           throw new Error(response.error.message)
         }
@@ -333,13 +363,13 @@ export function NewWorktreeModal({
   }, [client, selectedRepoConnectionId, visible])
 
   useEffect(() => {
-    if (!visible || !client) return
+    if (!visible || !client) {
+      return
+    }
     if (selectedRepoConnectionId && sshGate.status !== 'connected') {
-      setDetectedAgentIds(null)
       return
     }
     let stale = false
-    setDetectedAgentIds(null)
     void (async () => {
       try {
         const response = selectedRepoConnectionId
@@ -347,12 +377,17 @@ export function NewWorktreeModal({
               connectionId: selectedRepoConnectionId
             })
           : await client.sendRequest('preflight.detectAgents')
-        if (stale) return
-        setDetectedAgentIds(
-          response.ok ? new Set((response as RpcSuccess).result as string[]) : new Set()
-        )
+        if (stale) {
+          return
+        }
+        setDetectedAgentIdsState({
+          connectionId: selectedRepoConnectionId,
+          ids: response.ok ? new Set((response as RpcSuccess).result as string[]) : new Set()
+        })
       } catch {
-        if (!stale) setDetectedAgentIds(new Set())
+        if (!stale) {
+          setDetectedAgentIdsState({ connectionId: selectedRepoConnectionId, ids: new Set() })
+        }
       }
     })()
     return () => {
@@ -362,9 +397,6 @@ export function NewWorktreeModal({
 
   useEffect(() => {
     if (!client || !selectedRepo) {
-      setSetupCommand(null)
-      setSetupSource(null)
-      setSetupTrust(null)
       return
     }
     let stale = false
@@ -373,15 +405,20 @@ export function NewWorktreeModal({
         const response = await client.sendRequest('repo.hooks', {
           repo: `id:${selectedRepo.id}`
         })
-        if (stale) return
+        if (stale) {
+          return
+        }
         if (response.ok) {
           const result = (response as RpcSuccess).result as RepoHooksResponse
           const cmd = result.hooks?.scripts?.setup?.trim() || null
           const policy = result.setupRunPolicy ?? 'run-by-default'
-          setSetupCommand(cmd)
-          setSetupSource(result.source)
-          setSetupTrust(normalizeSetupHookTrust(result.setupTrust))
-          setSetupRunPolicy(policy)
+          setSetupHookDetails({
+            repoId: selectedRepo.id,
+            command: cmd,
+            source: result.source,
+            trust: normalizeSetupHookTrust(result.setupTrust),
+            runPolicy: policy
+          })
           setSetupDecisionChoice(null)
           setRunSetup(policy !== 'skip-by-default')
           if (cmd && policy === 'ask') {
@@ -390,10 +427,13 @@ export function NewWorktreeModal({
         }
       } catch {
         if (!stale) {
-          setSetupCommand(null)
-          setSetupSource(null)
-          setSetupTrust(null)
-          setSetupRunPolicy('run-by-default')
+          setSetupHookDetails({
+            repoId: selectedRepo.id,
+            command: null,
+            source: null,
+            trust: null,
+            runPolicy: 'run-by-default'
+          })
           setSetupDecisionChoice(null)
         }
       }
@@ -404,8 +444,10 @@ export function NewWorktreeModal({
   }, [client, selectedRepo])
 
   async function connectSelectedSshRepo(): Promise<void> {
-    if (!client || !selectedRepoConnectionId) return
-    setSshConnecting(true)
+    if (!client || !selectedRepoConnectionId) {
+      return
+    }
+    setSshConnectingTargetId(selectedRepoConnectionId)
     setSshState({
       targetId: selectedRepoConnectionId,
       status: 'connecting',
@@ -438,7 +480,7 @@ export function NewWorktreeModal({
         reconnectAttempt: 0
       })
     } finally {
-      setSshConnecting(false)
+      setSshConnectingTargetId((current) => (current === selectedRepoConnectionId ? null : current))
     }
   }
 
@@ -447,7 +489,9 @@ export function NewWorktreeModal({
     contentHash: string,
     alwaysTrust: boolean
   ): Promise<void> {
-    if (!client) return
+    if (!client) {
+      return
+    }
     const next = trustedOrcaHooksWithSetupApproval({
       trust: trustedOrcaHooks,
       repoId,
@@ -462,7 +506,9 @@ export function NewWorktreeModal({
   }
 
   async function handleCreate(options: CreateOptions = {}) {
-    if (!client || !selectedRepo) return
+    if (!client || !selectedRepo) {
+      return
+    }
     setCreating(true)
     setError('')
 
@@ -566,8 +612,12 @@ export function NewWorktreeModal({
           setupDecision,
           name: candidateName
         }
-        if (selectedAgent.id !== '__blank__') params.createdWithAgent = selectedAgent.id
-        if (note.trim()) params.comment = note.trim()
+        if (selectedAgent.id !== '__blank__') {
+          params.createdWithAgent = selectedAgent.id
+        }
+        if (note.trim()) {
+          params.comment = note.trim()
+        }
 
         const response = await client.sendRequest('worktree.create', params, {
           timeoutMs: WORKTREE_CREATE_TIMEOUT_MS
@@ -593,13 +643,10 @@ export function NewWorktreeModal({
   }
 
   const needsSetupChoice = Boolean(setupCommand) && setupRunPolicy === 'ask'
-  const agentDetectionPending =
-    selectedRepo != null && !sshGate.requiresConnection && detectedAgentIds === null
   const canCreate =
     selectedRepo != null &&
     !creating &&
     !sshGate.requiresConnection &&
-    !agentDetectionPending &&
     (!needsSetupChoice || setupDecisionChoice != null)
   const visibleAgentOptions =
     detectedAgentIds === null
@@ -615,6 +662,10 @@ export function NewWorktreeModal({
             isMobileTuiAgentEnabled(agent.id, runtimeSettings?.disabledTuiAgents)
         )
   const pickerAgentOptions = [...visibleAgentOptions, BLANK_TERMINAL]
+  const repoPickerItems = useMemo(
+    () => repos.map((repo) => ({ id: repo.id, label: repo.displayName, repo })),
+    [repos]
+  )
 
   return (
     <>
@@ -701,21 +752,20 @@ export function NewWorktreeModal({
               <Text style={styles.label}>
                 Workspace Name <Text style={styles.labelHint}>[Optional]</Text>
               </Text>
-              <TextInput
+              <MobileWorkspaceNameInput
                 style={styles.input}
                 value={name}
                 onChangeText={(t) => {
                   setName(t)
                   setError('')
                 }}
-                placeholder="Workspace name"
                 placeholderTextColor={colors.textMuted}
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoFocus={repos.length <= 1}
+                shouldAutoFocus={visible && !loading && repos.length > 0}
                 returnKeyType="done"
                 onSubmitEditing={() => {
-                  if (canCreate) void handleCreate()
+                  if (canCreate) {
+                    void handleCreate()
+                  }
                 }}
               />
             </View>
@@ -837,20 +887,19 @@ export function NewWorktreeModal({
 
       {/* Sub-modals for pickers — rendered outside the main modal so they
           layer on top and scroll without touch conflicts. */}
-      <PickerListModal
+      <PickerListDrawer
         visible={visible && showRepoPicker}
         title="Repository"
-        items={repos.map((r) => ({ id: r.id, label: r.displayName, _repo: r }))}
+        items={repoPickerItems}
         selectedId={selectedRepo?.id ?? ''}
-        onSelect={(item) => setSelectedRepo((item as { _repo: Repo })._repo)}
+        onSelect={(item) => setSelectedRepo(item.repo)}
         onClose={() => setShowRepoPicker(false)}
         renderIcon={(item) => {
-          const repo = (item as { _repo: Repo })._repo
-          return <View style={[styles.repoDot, { backgroundColor: repoBadgeColor(repo) }]} />
+          return <View style={[styles.repoDot, { backgroundColor: repoBadgeColor(item.repo) }]} />
         }}
       />
 
-      <PickerListModal
+      <PickerListDrawer
         visible={visible && showAgentPicker}
         title="Agent"
         items={pickerAgentOptions}
@@ -1245,47 +1294,6 @@ const styles = StyleSheet.create({
   createText: {
     color: colors.bgBase,
     fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  // Picker sub-modal styles
-  pickerHeader: {
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.sm
-  },
-  pickerTitle: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textMuted
-  },
-  pickerGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden'
-  },
-  pickerSeparator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  pickerList: {
-    flexGrow: 0
-  },
-  pickerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  pickerItemPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  pickerItemText: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  pickerItemTextSelected: {
     fontWeight: '600'
   }
 })

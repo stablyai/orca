@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { reportReactErrorBoundaryCrash } from '@/lib/react-error-boundary-reporting'
 import type { ReactErrorBoundaryReportArgs } from '../../../../shared/crash-reporting'
+import { translate } from '@/i18n/i18n'
 
 type BoundaryFallbackArgs = {
   error: Error | null
@@ -82,16 +83,26 @@ export class RecoverableRenderErrorBoundary extends React.Component<Props, State
         </div>
         <div className="space-y-1">
           <div className="font-medium text-foreground">
-            {this.props.title ?? 'This part of Orca hit an error.'}
+            {this.props.title ??
+              translate(
+                'auto.components.error.boundaries.RecoverableRenderErrorBoundary.ab855c11f4',
+                'This part of Orca hit an error.'
+              )}
           </div>
           <div className="max-w-md text-xs">
             {this.props.description ??
-              'The rest of the app is still running. Retry this surface or switch away and come back.'}
+              translate(
+                'auto.components.error.boundaries.RecoverableRenderErrorBoundary.34a189ae0f',
+                'The rest of the app is still running. Retry this surface or switch away and come back.'
+              )}
           </div>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={this.handleReset}>
           <RotateCw className="size-3.5" />
-          Retry
+          {translate(
+            'auto.components.error.boundaries.RecoverableRenderErrorBoundary.55001880db',
+            'Retry'
+          )}
         </Button>
       </div>
     )

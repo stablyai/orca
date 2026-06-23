@@ -1,5 +1,9 @@
 import { isAbsolute, relative, resolve as resolvePath } from 'path'
-import type { ComputerAppQuery, RuntimeWorktreeListResult } from '../shared/runtime-types'
+import type {
+  ComputerAppQuery,
+  RuntimeWorktreeListResult,
+  RuntimeWorktreeRecord
+} from '../shared/runtime-types'
 import { isPathInsideOrEqual } from '../shared/cross-platform-path'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime-client'
@@ -13,7 +17,7 @@ export type BrowserCliTarget = {
 export type ComputerCliTarget = {
   session?: string
   worktree?: string
-  app?: ComputerAppQuery
+  app: ComputerAppQuery
 }
 
 export function buildCurrentWorktreeSelector(cwd: string): string {
@@ -35,7 +39,7 @@ function assertLocalCwdWorktreeSelector(selector: string, client: RuntimeClient)
   // server, so cwd-derived worktree selectors are only valid locally.
   throw new RuntimeClientError(
     'invalid_argument',
-    `${selector} is a local cwd shortcut and cannot be resolved against a remote runtime. Pass an explicit server-side worktree selector such as id:<id>, branch:<branch>, issue:<number>, or path:<absolute-server-path>.`
+    `${selector} is a local cwd shortcut and cannot be resolved against a remote runtime. Pass an explicit server-side worktree selector such as id:<id>, name:<displayName>, branch:<branch>, issue:<number>, or path:<absolute-server-path>.`
   )
 }
 
@@ -57,9 +61,16 @@ export async function resolveCurrentWorktreeSelector(
   const worktrees = await client.call<RuntimeWorktreeListResult>('worktree.list', {
     limit: 10_000
   })
-  const enclosingWorktree = worktrees.result.worktrees
-    .filter((worktree) => isWithinPath(resolvePath(worktree.path), currentPath))
-    .sort((left, right) => right.path.length - left.path.length)[0]
+  let enclosingWorktree: RuntimeWorktreeRecord | undefined
+  let enclosingPathLength = -1
+  for (const worktree of worktrees.result.worktrees) {
+    const worktreePath = resolvePath(worktree.path)
+    if (!isWithinPath(worktreePath, currentPath) || worktreePath.length <= enclosingPathLength) {
+      continue
+    }
+    enclosingWorktree = worktree
+    enclosingPathLength = worktreePath.length
+  }
 
   if (!enclosingWorktree) {
     throw new RuntimeClientError(
@@ -187,8 +198,15 @@ export async function getComputerCommandTarget(
   cwd: string,
   client: RuntimeClient
 ): Promise<ComputerCliTarget> {
-  const app = getOptionalStringFlag(flags, 'app')
+  const app = getRequiredStringFlag(flags, 'app')
   const session = getOptionalStringFlag(flags, 'session')
+  const worktree = getOptionalStringFlag(flags, 'worktree')
+  if (session && worktree) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Computer-use targeting accepts either --session or --worktree, not both'
+    )
+  }
   if (session) {
     return { session, app }
   }
@@ -196,4 +214,51 @@ export async function getComputerCommandTarget(
     app,
     worktree: await getBrowserWorktreeSelector(flags, cwd, client)
   }
+}
+
+// Mirror getBrowserCommandTarget / getBrowserWorktreeSelector for emulator (workspace scoped by default + explicit --device/--emulator/--worktree; active from bridge for unqualified).
+export type EmulatorCliTarget = {
+  worktree?: string
+  device?: string
+  emulator?: string // Orca id from list
+}
+
+export async function getEmulatorWorktreeSelector(
+  flags: Map<string, string | boolean>,
+  cwd: string,
+  client: RuntimeClient
+): Promise<string | undefined> {
+  const explicit = getOptionalStringFlag(flags, 'worktree')
+  if (explicit === 'all') {
+    return undefined
+  }
+  if (explicit) {
+    if (explicit === 'active' || explicit === 'current') {
+      assertLocalCwdWorktreeSelector(explicit, client)
+      return resolveCurrentWorktreeSelector(cwd, client)
+    }
+    return explicit
+  }
+  if (client.isRemote) {
+    return undefined
+  }
+  try {
+    return await resolveCurrentWorktreeSelector(cwd, client)
+  } catch {
+    return undefined
+  }
+}
+
+export async function getEmulatorCommandTarget(
+  flags: Map<string, string | boolean>,
+  cwd: string,
+  client: RuntimeClient
+): Promise<EmulatorCliTarget> {
+  const device = getOptionalStringFlag(flags, 'device')
+  const emulator = getOptionalStringFlag(flags, 'emulator')
+  const worktree = await getEmulatorWorktreeSelector(flags, cwd, client)
+  if (device || emulator) {
+    return { device: device || undefined, emulator: emulator || undefined, worktree }
+  }
+  return { worktree }
 }

@@ -9,6 +9,8 @@ import {
   Wrench,
   Shield,
   LifeBuoy,
+  Mic,
+  Globe,
   Terminal as TerminalIcon
 } from 'lucide-react-native'
 import { colors, spacing, typography } from '../src/theme/mobile-theme'
@@ -33,6 +35,24 @@ export default function SettingsScreen() {
         >
           <TerminalIcon size={16} color={colors.textSecondary} />
           <Text style={styles.rowLabel}>Terminal</Text>
+          <ChevronRight size={16} color={colors.textMuted} />
+        </Pressable>
+        <View style={styles.separator} />
+        <Pressable
+          style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+          onPress={() => router.push('/browser-settings')}
+        >
+          <Globe size={16} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Browser</Text>
+          <ChevronRight size={16} color={colors.textMuted} />
+        </Pressable>
+        <View style={styles.separator} />
+        <Pressable
+          style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+          onPress={() => router.push('/voice-settings')}
+        >
+          <Mic size={16} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Voice</Text>
           <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>
         <View style={styles.separator} />

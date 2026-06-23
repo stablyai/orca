@@ -119,6 +119,7 @@ import { createGitHubSlice } from './github'
 import { createHostedReviewSlice } from './hosted-review'
 import { createLinearSlice } from './linear'
 import { createPreflightSlice } from './preflight'
+import { createJiraSlice } from './jira'
 import { createEditorSlice } from './editor'
 import { createStatsSlice } from './stats'
 import { createMemorySlice } from './memory'
@@ -135,6 +136,10 @@ import { createDetectedAgentsSlice } from './detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import { createDictationSlice } from './dictation'
 import { createWorkspaceCleanupSlice } from './workspace-cleanup'
+import { createRuntimeStatusSlice } from './runtime-status'
+import { createPullRequestGenerationSlice } from './pull-request-generation'
+import { createCommitMessageGenerationSlice } from './commit-message-generation'
+import { createPinnedTabCloseConfirmSlice } from './pinned-tab-close-confirm'
 
 function createTestStore() {
   return create<AppState>()((...a) => ({
@@ -150,6 +155,7 @@ function createTestStore() {
     ...createHostedReviewSlice(...a),
     ...createLinearSlice(...a),
     ...createPreflightSlice(...a),
+    ...createJiraSlice(...a),
     ...createEditorSlice(...a),
     ...createStatsSlice(...a),
     ...createMemorySlice(...a),
@@ -165,7 +171,11 @@ function createTestStore() {
     ...createDetectedAgentsSlice(...a),
     ...createWorktreeNavHistorySlice(...a),
     ...createDictationSlice(...a),
-    ...createWorkspaceCleanupSlice(...a)
+    ...createWorkspaceCleanupSlice(...a),
+    ...createRuntimeStatusSlice(...a),
+    ...createPullRequestGenerationSlice(...a),
+    ...createCommitMessageGenerationSlice(...a),
+    ...createPinnedTabCloseConfirmSlice(...a)
   }))
 }
 
@@ -337,11 +347,40 @@ describe('updateDiffComment', () => {
       selector: 'env-1',
       method: 'worktree.set',
       params: {
-        worktree: WT,
+        worktree: `id:${WT}`,
         diffComments: [expect.objectContaining({ id: 'c1', body: 'remote body' })]
       },
       timeoutMs: 15_000
     })
+  })
+
+  it('persists explicit local worktree comments locally while a runtime is focused', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [
+        {
+          id: REPO,
+          path: '/path/repo',
+          displayName: 'Repo',
+          badgeColor: '#000',
+          addedAt: 1,
+          executionHostId: 'local'
+        }
+      ]
+    })
+    seed(store, [makeComment({ id: 'c1', body: 'old body' })])
+
+    const ok = await store.getState().updateDiffComment(WT, 'c1', 'local body')
+
+    expect(ok).toBe(true)
+    expect(updateMeta).toHaveBeenCalledWith({
+      worktreeId: WT,
+      updates: {
+        diffComments: [expect.objectContaining({ id: 'c1', body: 'local body' })]
+      }
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
   it('rejects an empty body without persisting', async () => {
@@ -628,7 +667,7 @@ describe('bulk clear diff comments', () => {
       selector: 'env-1',
       method: 'worktree.set',
       params: {
-        worktree: WT,
+        worktree: `id:${WT}`,
         diffComments: []
       },
       timeoutMs: 15_000

@@ -1,7 +1,35 @@
 import type { GlobalSettings } from '../../../shared/types'
-import { createRuntimePath, runtimePathExists } from '../runtime/runtime-file-client'
+import {
+  createRuntimePath,
+  deleteRuntimePath,
+  runtimePathExists,
+  writeRuntimeFile
+} from '../runtime/runtime-file-client'
 import { detectLanguage } from './language-detect'
+import {
+  applyMarkdownTemplatePlaceholders,
+  getMarkdownTemplateTitleForFileName,
+  listMarkdownDocumentTemplates,
+  readMarkdownDocumentTemplateContent,
+  type MarkdownDocumentTemplate
+} from './markdown-document-templates'
+import { requestMarkdownTemplateSelection } from './markdown-template-picker-request'
 import { joinPath } from './path'
+
+export type UntitledMarkdownFileInfo = {
+  filePath: string
+  relativePath: string
+  worktreeId: string
+  language: string
+  isUntitled: true
+  deleteUntouchedOnClose?: boolean
+  mode: 'edit'
+}
+
+type CreateUntitledMarkdownOptions = {
+  template?: MarkdownDocumentTemplate
+  now?: Date
+}
 
 /**
  * Creates an untitled markdown file on disk and returns the metadata
@@ -14,18 +42,16 @@ export async function createUntitledMarkdownFile(
   worktreePath: string,
   worktreeId: string,
   connectionId?: string,
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
-): Promise<{
-  filePath: string
-  relativePath: string
-  worktreeId: string
-  language: string
-  isUntitled: true
-  mode: 'edit'
-}> {
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
+  options: CreateUntitledMarkdownOptions = {}
+): Promise<UntitledMarkdownFileInfo> {
   const baseName = 'untitled'
   const ext = '.md'
   const MAX_ATTEMPTS = 100
+  const context = { settings, worktreeId, worktreePath, connectionId }
+  const templateContent = options.template
+    ? await readMarkdownDocumentTemplateContent(context, options.template)
+    : null
 
   // Why: createFile uses the 'wx' flag, so pathExists is only a hint. Another
   // create can still win the race after our last probe, especially when the
@@ -38,7 +64,6 @@ export async function createUntitledMarkdownFile(
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     const fileName = attempt === 1 ? `${baseName}${ext}` : `${baseName}-${attempt}${ext}`
     const filePath = joinPath(worktreePath, fileName)
-    const context = { settings, worktreeId, worktreePath, connectionId }
 
     if (await runtimePathExists(context, filePath)) {
       continue
@@ -46,6 +71,22 @@ export async function createUntitledMarkdownFile(
 
     try {
       await createRuntimePath(context, filePath, 'file')
+      if (templateContent !== null) {
+        try {
+          await writeRuntimeFile(
+            context,
+            filePath,
+            applyMarkdownTemplatePlaceholders(templateContent, {
+              title: getMarkdownTemplateTitleForFileName(fileName),
+              filename: fileName,
+              now: options.now
+            })
+          )
+        } catch (error) {
+          await deleteRuntimePath(context, filePath).catch(() => undefined)
+          throw error
+        }
+      }
 
       return {
         filePath,
@@ -53,6 +94,7 @@ export async function createUntitledMarkdownFile(
         worktreeId,
         language: detectLanguage(fileName),
         isUntitled: true,
+        deleteUntouchedOnClose: templateContent === null ? undefined : false,
         mode: 'edit'
       }
     } catch (err) {
@@ -66,4 +108,23 @@ export async function createUntitledMarkdownFile(
   }
 
   throw new Error(`Unable to create untitled markdown file after ${MAX_ATTEMPTS} attempts.`)
+}
+
+export async function createUntitledMarkdownFileWithTemplateSelection(
+  worktreePath: string,
+  worktreeId: string,
+  connectionId?: string,
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+): Promise<UntitledMarkdownFileInfo | null> {
+  const context = { settings, worktreeId, worktreePath, connectionId }
+  const templates = await listMarkdownDocumentTemplates(context, worktreePath)
+  const selection = await requestMarkdownTemplateSelection(templates)
+
+  if (selection.type === 'cancel') {
+    return null
+  }
+
+  return createUntitledMarkdownFile(worktreePath, worktreeId, connectionId, settings, {
+    template: selection.type === 'template' ? selection.template : undefined
+  })
 }

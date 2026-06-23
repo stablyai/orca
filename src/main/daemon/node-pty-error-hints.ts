@@ -17,6 +17,7 @@ const PTY_ALLOCATION_STEPS = new Set([
 ])
 
 const RESOURCE_EXHAUSTION_ERRNOS = new Set([
+  6, // ENXIO on macOS: posix_openpt could not provide a usable pty device
   11, // EAGAIN on Linux
   12, // ENOMEM
   23, // ENFILE on macOS

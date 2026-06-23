@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: hydration regressions share store setup and session invariants that are easier to audit together. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -201,6 +202,31 @@ describe('hydrateWorkspaceSession', () => {
     ])
   })
 
+  it('hydrates the default-tab idempotency marker', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/wt-1'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/wt-1' })]
+      }
+    })
+
+    const session: WorkspaceSessionState = {
+      activeRepoId: 'repo1',
+      activeWorktreeId: worktreeId,
+      activeTabId: null,
+      terminalLayoutsByTabId: {},
+      tabsByWorktree: {},
+      defaultTerminalTabsAppliedByWorktreeId: { [worktreeId]: true }
+    }
+
+    store.getState().hydrateWorkspaceSession(session)
+
+    expect(store.getState().defaultTerminalTabsAppliedByWorktreeId).toEqual({
+      [worktreeId]: true
+    })
+  })
+
   it('seeds worktree nav history with the restored active worktree', () => {
     // Why: without seeding, the first sidebar click after startup becomes the
     // only history entry, so Back stays disabled until the user clicks a
@@ -227,6 +253,35 @@ describe('hydrateWorkspaceSession', () => {
 
     expect(store.getState().worktreeNavHistory).toEqual([worktreeId])
     expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+  })
+
+  it('restores the active repo main worktree when the session has no active terminal tabs', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/wt-main'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo1',
+            path: '/wt-main',
+            isMainWorktree: true
+          })
+        ]
+      }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    expect(store.getState().activeWorktreeId).toBe(worktreeId)
+    expect(store.getState().activeWorkspaceKey).toBe(`worktree:${worktreeId}`)
+    expect(store.getState().worktreeNavHistory).toEqual([worktreeId])
   })
 
   it('leaves nav history empty when no active worktree is restored', () => {

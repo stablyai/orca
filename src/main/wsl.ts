@@ -1,4 +1,4 @@
-import { execFileSync } from 'child_process'
+import { execFile, execFileSync } from 'child_process'
 import { parseWslUncPath } from '../shared/wsl-paths'
 
 export type WslPathInfo = {
@@ -115,6 +115,34 @@ export function listWslDistros(): string[] {
   }
 }
 
+export async function listWslDistrosAsync(): Promise<string[]> {
+  if (wslDistroCache !== null) {
+    return wslDistroCache
+  }
+
+  if (process.platform !== 'win32') {
+    wslDistroCache = []
+    return wslDistroCache
+  }
+
+  try {
+    const output = await execFileUtf8('wsl.exe', ['--list', '--quiet'])
+    wslDistroCache = normalizeWslListOutput(output).filter(isUserWslDistro)
+    return wslDistroCache
+  } catch {
+    wslDistroCache = []
+    return wslDistroCache
+  }
+}
+
+export function hasCachedWslDistros(): boolean {
+  return wslDistroCache !== null
+}
+
+export function getCachedWslDistros(): string[] | null {
+  return wslDistroCache
+}
+
 export function getDefaultWslDistro(): string | null {
   return listWslDistros()[0] ?? null
 }
@@ -138,6 +166,28 @@ export function getWslHome(distro: string): string | null {
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 5000
     }).trim()
+
+    if (!home || !home.startsWith('/')) {
+      return null
+    }
+
+    const uncPath = toWindowsWslPath(home, distro)
+    wslHomeCache.set(distro, uncPath)
+    return uncPath
+  } catch {
+    return null
+  }
+}
+
+export async function getWslHomeAsync(distro: string): Promise<string | null> {
+  if (wslHomeCache.has(distro)) {
+    return wslHomeCache.get(distro)!
+  }
+
+  try {
+    const home = (
+      await execFileUtf8('wsl.exe', ['-d', distro, '--', 'bash', '-c', 'echo $HOME'])
+    ).trim()
 
     if (!home || !home.startsWith('/')) {
       return null
@@ -179,4 +229,38 @@ export function isWslAvailable(): boolean {
   }
 
   return wslAvailableCache
+}
+
+export function hasCachedWslAvailability(): boolean {
+  return wslAvailableCache !== null
+}
+
+export function getCachedWslAvailability(): boolean | null {
+  return wslAvailableCache
+}
+
+export function _resetWslCachesForTests(): void {
+  wslHomeCache.clear()
+  wslDistroCache = null
+  wslAvailableCache = null
+}
+
+export function _setWslCachesForTests(args: {
+  available?: boolean | null
+  distros?: string[] | null
+}): void {
+  wslAvailableCache = args.available ?? null
+  wslDistroCache = args.distros ?? null
+}
+
+function execFileUtf8(command: string, args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, { encoding: 'utf-8', timeout: 5000 }, (error, stdout) => {
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve(stdout)
+    })
+  })
 }

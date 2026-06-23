@@ -143,6 +143,48 @@ Run summary: monitor automation completed successfully.
     )
   })
 
+  it('builds large response previews without broad regex captures', async () => {
+    const home = await createHermesHome()
+    const outputDir = join(home, 'cron', 'output', 'job-1')
+    await mkdir(outputDir, { recursive: true })
+    await writeFile(
+      join(outputDir, '2026-05-15_09-02-00.md'),
+      [
+        '# Cron Job: Monitor automation',
+        '',
+        '## Response',
+        '',
+        '```',
+        'hidden-token\n'.repeat(500),
+        '```',
+        '',
+        'Visible response text '.repeat(500),
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    const { readHermesCronOutputRunsPage } = await loadReader()
+    const execSpy = vi.spyOn(RegExp.prototype, 'exec')
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+    const page = await readHermesCronOutputRunsPage('job-1', { page: 1, pageSize: 25 })
+    const usedBroadCapture = execSpy.mock.contexts.some(
+      (pattern) => pattern instanceof RegExp && pattern.source.includes('[\\s\\S]')
+    )
+    const usedWhitespaceReplace = replaceSpy.mock.calls.some(
+      ([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+'
+    )
+
+    expect(usedBroadCapture).toBe(false)
+    expect(usedWhitespaceReplace).toBe(false)
+    expect((page.runs[0] as { output_preview?: string }).output_preview).toContain(
+      'Visible response text'
+    )
+    expect((page.runs[0] as { output_preview?: string }).output_preview).not.toContain(
+      'hidden-token'
+    )
+  })
+
   it('does not hydrate referenced logs outside Hermes home', async () => {
     const home = await createHermesHome()
     const outputDir = join(home, 'cron', 'output', 'job-1')
@@ -171,6 +213,36 @@ Run summary: monitor automation completed successfully.
     )
     expect((page.runs[0] as { output_content?: string }).output_content).not.toContain(
       'do not expose this'
+    )
+  })
+
+  it('hydrates referenced logs in valid dot-dot-prefixed Hermes subdirectories', async () => {
+    const home = await createHermesHome()
+    const outputDir = join(home, 'cron', 'output', 'job-1')
+    const scriptLogPath = join(home, '..logs', 'x-monitor.log')
+    await mkdir(outputDir, { recursive: true })
+    await mkdir(dirname(scriptLogPath), { recursive: true })
+    await writeFile(scriptLogPath, 'dot-dot-prefixed log line\n', 'utf-8')
+    await writeFile(
+      join(outputDir, '2026-05-15_09-02-00.md'),
+      `# Cron Job: Monitor automation
+
+## Response
+
+Latest log path: ${scriptLogPath}
+Run summary: monitor automation completed successfully.
+`,
+      'utf-8'
+    )
+
+    const { readHermesCronOutputRunsPage } = await loadReader()
+    const page = await readHermesCronOutputRunsPage('job-1', { page: 1, pageSize: 25 })
+
+    expect((page.runs[0] as { output_content?: string }).output_content).toContain(
+      '## Latest log file'
+    )
+    expect((page.runs[0] as { output_content?: string }).output_content).toContain(
+      'dot-dot-prefixed log line'
     )
   })
 
@@ -225,6 +297,29 @@ Run summary: monitor automation completed successfully.
 
     clearHermesCronOutputRunCountCache('job-1')
     await expect(readHermesCronOutputRunsPage('job-1', { page: 1, pageSize: 0 })).resolves.toEqual({
+      total: 2,
+      runs: []
+    })
+  })
+
+  it('evicts oldest count cache entries when many job ids are observed', async () => {
+    const home = await createHermesHome()
+    const outputDir = join(home, 'cron', 'output', 'job-0')
+    await mkdir(outputDir, { recursive: true })
+    await writeFile(join(outputDir, '2026-05-15_09-02-00.md'), 'first run', 'utf-8')
+
+    const { readHermesCronOutputRunsPage } = await loadReader()
+    await expect(readHermesCronOutputRunsPage('job-0', { page: 1, pageSize: 0 })).resolves.toEqual({
+      total: 1,
+      runs: []
+    })
+
+    for (let i = 1; i <= 200; i += 1) {
+      await readHermesCronOutputRunsPage(`job-${i}`, { page: 1, pageSize: 0 })
+    }
+    await writeFile(join(outputDir, '2026-05-15_09-03-00.md'), 'second run', 'utf-8')
+
+    await expect(readHermesCronOutputRunsPage('job-0', { page: 1, pageSize: 0 })).resolves.toEqual({
       total: 2,
       runs: []
     })

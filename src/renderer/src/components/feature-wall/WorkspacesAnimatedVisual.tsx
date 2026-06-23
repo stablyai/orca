@@ -85,7 +85,6 @@ export function WorkspacesAnimatedVisual(props: { reducedMotion: boolean }): JSX
 
   useEffect(() => {
     if (reducedMotion) {
-      setVisualState((current) => ({ ...current, promotedWorkspaceId: null }))
       return
     }
     const id = window.setInterval(() => {
@@ -101,6 +100,9 @@ export function WorkspacesAnimatedVisual(props: { reducedMotion: boolean }): JSX
     }, STEP_MS)
     return () => window.clearInterval(id)
   }, [reducedMotion])
+  // Why: reduced-motion mode should display the static stack without a
+  // post-render repair; only the animated interval needs promoted z-order.
+  const renderedPromotedWorkspaceId = reducedMotion ? null : promotedWorkspaceId
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card p-2.5 text-foreground">
@@ -109,7 +111,7 @@ export function WorkspacesAnimatedVisual(props: { reducedMotion: boolean }): JSX
           const isSelected = ws.id === SELECTED_ID
           const runningAgentIndex = running.get(ws.id) ?? -1
           const slotTop = slotTopById.get(ws.id) ?? 0
-          const isPromoted = ws.id === promotedWorkspaceId
+          const isPromoted = ws.id === renderedPromotedWorkspaceId
           return (
             <div
               key={ws.id}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { buildWorktreeDragPreviewOffsets } from './worktree-drag-preview-offsets'
 import {
   buildManualOrderUpdatesForGroupDrop,
-  buildWorktreeDragPreviewOffsets,
   buildManualOrderUpdatesForVisibleGroups,
   expandDraggedWorktreeIdsForVisibleLineage,
   moveWorktreeIdsWithinGroup,
@@ -117,6 +117,34 @@ describe('buildWorktreeDragPreviewOffsets', () => {
     })
 
     expect(offsets.size).toBe(0)
+  })
+
+  it('uses the dragged unit height when previewing variable-height rows', () => {
+    const offsets = buildWorktreeDragPreviewOffsets({
+      groupIds: ['parent', 'sibling'],
+      draggedIds: ['parent'],
+      dropIndex: 2,
+      rects: [
+        { worktreeId: 'parent', groupIndex: 0, top: 0, bottom: 300 },
+        { worktreeId: 'sibling', groupIndex: 1, top: 308, bottom: 408 }
+      ]
+    })
+
+    expect(Array.from(offsets)).toEqual([['sibling', -308]])
+  })
+
+  it('uses the dragged unit height when previewing a short row above a tall row', () => {
+    const offsets = buildWorktreeDragPreviewOffsets({
+      groupIds: ['parent', 'sibling'],
+      draggedIds: ['sibling'],
+      dropIndex: 0,
+      rects: [
+        { worktreeId: 'parent', groupIndex: 0, top: 0, bottom: 300 },
+        { worktreeId: 'sibling', groupIndex: 1, top: 308, bottom: 408 }
+      ]
+    })
+
+    expect(Array.from(offsets)).toEqual([['parent', 108]])
   })
 })
 

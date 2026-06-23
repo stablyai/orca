@@ -1,11 +1,10 @@
 /* eslint-disable max-lines -- Why: this file is the central main-window IPC wiring point; splitting it during the mobile release compatibility rebase would increase release risk. */
 import { randomUUID } from 'node:crypto'
 
-import { app, ipcMain, session } from 'electron'
-import type { BrowserWindow, Session } from 'electron'
+import { app, ipcMain } from 'electron'
+import type { BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import type { CreateWorktreeResult, WorktreeStartupLaunch } from '../../shared/types'
-import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 import { registerRepoHandlers } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
@@ -33,10 +32,15 @@ import type {
   RuntimeMarkdownSaveTabResult
 } from '../../shared/mobile-markdown-document'
 import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
-import type { NativeFileDropPayload } from '../../shared/native-file-drop'
+import { isNativeFileDropPayload, type NativeFileDropPayload } from '../../shared/native-file-drop'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
+
+let appReloadHandlerTokenCounter = 0
+let activeAppReloadHandlerToken: number | null = null
+let runtimeNotifierTokenCounter = 0
+let activeRuntimeNotifierToken: number | null = null
 
 export function attachMainWindowServices(
   mainWindow: BrowserWindow,
@@ -47,7 +51,9 @@ export function attachMainWindowServices(
     target?: ClaudeAccountSelectionTarget
   ) => Promise<ClaudeRuntimeAuthPreparation>,
   options?: {
+    awaitLocalPtyStartup?: () => Promise<void>
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
+    onBeforeUpdateQuit?: () => void | Promise<void>
   }
 ): void {
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
@@ -60,7 +66,10 @@ export function attachMainWindowServices(
     getSelectedCodexHomePath,
     () => store.getSettings(),
     prepareClaudeAuth,
-    store
+    store,
+    {
+      awaitLocalPtyStartup: options?.awaitLocalPtyStartup
+    }
   )
   // Why: the Manage Sessions settings panel (docs/daemon-staleness-ux.md §Phase 1)
   // uses a narrow `pty:management:*` IPC surface that reads the live
@@ -85,12 +94,29 @@ export function attachMainWindowServices(
   // function re-runs as the main window is recreated — does not redo the
   // git I/O or daemon RPC.
   void hydrateLocalPtyRegistryAtBoot(store)
+  const localPtyStartupReady = options?.awaitLocalPtyStartup?.()
+  if (localPtyStartupReady) {
+    void localPtyStartupReady
+      .then(() => hydrateLocalPtyRegistryAtBoot(store))
+      .catch((error) => {
+        console.warn(
+          '[memory] Deferred pty-registry hydration skipped:',
+          error instanceof Error ? error.message : String(error)
+        )
+      })
+  }
   registerSshHandlers(store, () => mainWindow, runtime)
   registerRemoteWorkspaceHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)
   setupAutoUpdater(mainWindow, {
     getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
-    onBeforeQuit: () => store.flush(),
+    onBeforeQuit: async () => {
+      try {
+        await options?.onBeforeUpdateQuit?.()
+      } finally {
+        store.flush()
+      }
+    },
     setLastUpdateCheckAt: (timestamp) => {
       store.updateUI({ lastUpdateCheckAt: timestamp })
     },
@@ -137,97 +163,12 @@ export function attachMainWindowServices(
     }
   )
 
-  const browserSession = session.fromPartition(ORCA_BROWSER_PARTITION)
-  browserSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
-    // Why: the in-app browser is for dev previews and lightweight browsing, not
-    // trusted desktop-app privileges. Denying by default keeps arbitrary sites
-    // from silently escalating into camera/mic/notification prompts inside Orca.
-    // Why `media` is allowed through: camera/mic are still gated by macOS TCC
-    // at the app-process level, so granting here only *permits* Chromium to
-    // use whatever the OS has already authorized for Orca. Denying at this
-    // layer would make pages inside the in-app browser throw NotAllowedError
-    // even after the user granted Camera/Microphone via Settings → Permissions
-    // or System Settings — the bug #1273 partially addressed.
-    if (permission === 'media') {
-      void requestSystemMediaAccess(
-        details as Electron.MediaAccessPermissionRequest | undefined
-      ).then(
-        (granted) => {
-          if (!granted) {
-            browserManager.notifyPermissionDenied({
-              guestWebContentsId: webContents.id,
-              permission,
-              rawUrl: webContents.getURL()
-            })
-          }
-          callback(granted)
-        },
-        (error: unknown) => {
-          console.error('[permissions] Browser media access failed:', error)
-          browserManager.notifyPermissionDenied({
-            guestWebContentsId: webContents.id,
-            permission,
-            rawUrl: webContents.getURL()
-          })
-          callback(false)
-        }
-      )
-      return
-    }
-    const allowed = permission === 'fullscreen'
-    if (!allowed) {
-      browserManager.notifyPermissionDenied({
-        guestWebContentsId: webContents.id,
-        permission,
-        rawUrl: webContents.getURL()
-      })
-    }
-    callback(allowed)
-  })
-  browserSession.setPermissionCheckHandler((_webContents, permission, _origin, details) => {
-    if (permission === 'fullscreen') {
-      return true
-    }
-    if (permission === 'media') {
-      return hasSystemMediaAccess(details?.mediaType)
-    }
-    return false
-  })
-  browserSession.setDisplayMediaRequestHandler((_request, callback) => {
-    // Why: arbitrary sites inside Orca should never be able to capture the
-    // desktop or application windows until there is explicit product UX for
-    // selecting a source and surfacing that choice to the user.
-    // Why: pass undefined (not null) to satisfy Electron's typed callback
-    // signature while still denying the request.
-    callback({ video: undefined, audio: undefined })
-  })
-  registerBrowserDownloadHandler(browserSession)
-
   mainWindow.on('closed', () => {
-    // Why: parked browser webviews can outlive the visible tab body until the
-    // renderer process exits. Clearing main-owned guest registrations on window
-    // close prevents stale tab→webContents ids from leaking across app relaunch
-    // or hot-reload cycles.
+    // Why: browser webviews are renderer-owned guest surfaces. Clearing
+    // main-owned guest registrations on window close prevents stale
+    // tab→webContents ids from leaking across app relaunch or hot-reload cycles.
     browserManager.unregisterAll()
   })
-}
-
-function handleBrowserWillDownload(
-  _event: Electron.Event,
-  item: Electron.DownloadItem,
-  webContents: Electron.WebContents
-): void {
-  // Why: browser-tab downloads need explicit product UX before arbitrary sites
-  // can write files through Orca. Pause the item and route it through
-  // BrowserManager so the user must explicitly accept the save path first.
-  browserManager.handleGuestWillDownload({ guestWebContentsId: webContents.id, item })
-}
-
-function registerBrowserDownloadHandler(browserSession: Session): void {
-  // Why: browser sessions are process-persistent while main windows can be
-  // recreated; replace the named handler so re-attach does not stack listeners.
-  browserSession.removeListener('will-download', handleBrowserWillDownload)
-  browserSession.on('will-download', handleBrowserWillDownload)
 }
 
 function registerAppReloadHandler(
@@ -236,6 +177,8 @@ function registerAppReloadHandler(
 ): void {
   // Why: the process-global IPC handler can outlive the BrowserWindow, so keep
   // the registered WebContents and guard both lifetimes before using it.
+  const handlerToken = ++appReloadHandlerTokenCounter
+  activeAppReloadHandlerToken = handlerToken
   const mainWebContents = mainWindow.webContents
   ipcMain.removeHandler('app:reload')
   ipcMain.handle('app:reload', (event) => {
@@ -249,12 +192,23 @@ function registerAppReloadHandler(
     onBeforeRendererReload?.({ webContentsId: mainWebContents.id, ignoreCache: false })
     mainWebContents.reload()
   })
+  mainWindow.on('closed', () => {
+    if (activeAppReloadHandlerToken !== handlerToken) {
+      return
+    }
+    // Why: macOS can keep the process alive with no window, and this global
+    // handler otherwise keeps the closed BrowserWindow reachable until reopen.
+    ipcMain.removeHandler('app:reload')
+    activeAppReloadHandlerToken = null
+  })
 }
 
 function registerRuntimeWindowLifecycle(
   mainWindow: BrowserWindow,
   runtime: OrcaRuntimeService
 ): void {
+  const notifierToken = ++runtimeNotifierTokenCounter
+  activeRuntimeNotifierToken = notifierToken
   runtime.attachWindow(mainWindow.id)
   const send = (channel: string, ...args: unknown[]): void => {
     if (!mainWindow.isDestroyed()) {
@@ -262,7 +216,8 @@ function registerRuntimeWindowLifecycle(
     }
   }
   runtime.setNotifier({
-    worktreesChanged: (repoId) => send('worktrees:changed', { repoId }),
+    worktreesChanged: (repoId, renamed) =>
+      send('worktrees:changed', renamed ? { repoId, renamed } : { repoId }),
     worktreeBaseStatus: (event) => send('worktree:baseStatus', event),
     worktreeRemoteBranchConflict: (event) => send('worktree:remoteBranchConflict', event),
     reposChanged: () => send('repos:changed'),
@@ -270,17 +225,24 @@ function registerRuntimeWindowLifecycle(
       repoId,
       worktreeId,
       setup?: CreateWorktreeResult['setup'],
-      startup?: WorktreeStartupLaunch
+      startup?: WorktreeStartupLaunch,
+      defaultTabs?: CreateWorktreeResult['defaultTabs']
     ) => {
       send('ui:activateWorktree', {
         repoId,
         worktreeId,
         ...(setup ? { setup } : {}),
-        ...(startup ? { startup } : {})
+        ...(startup ? { startup } : {}),
+        ...(defaultTabs ? { defaultTabs } : {})
       })
     },
     createTerminal: (worktreeId, opts) =>
-      send('ui:createTerminal', { worktreeId, command: opts.command, title: opts.title }),
+      send('ui:createTerminal', {
+        worktreeId,
+        command: opts.command,
+        ...(opts.env ? { env: opts.env } : {}),
+        title: opts.title
+      }),
     revealTerminalSession: (worktreeId, opts) =>
       new Promise((resolve, reject) => {
         const requestId = randomUUID()
@@ -309,6 +271,9 @@ function registerRuntimeWindowLifecycle(
           worktreeId,
           ptyId: opts.ptyId,
           title: opts.title ?? undefined,
+          ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
+          ...(opts.launchToken ? { launchToken: opts.launchToken } : {}),
+          ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
           activate: opts.activate !== false,
           // Why: pre-minted tabId from main keeps the renderer's tab id aligned
           // with the paneKey baked into the PTY env at spawn time, so hook
@@ -316,7 +281,10 @@ function registerRuntimeWindowLifecycle(
           ...(opts.tabId !== undefined ? { tabId: opts.tabId } : {}),
           ...(opts.leafId !== undefined ? { leafId: opts.leafId } : {}),
           ...(opts.splitFromLeafId !== undefined ? { splitFromLeafId: opts.splitFromLeafId } : {}),
-          ...(opts.splitDirection !== undefined ? { splitDirection: opts.splitDirection } : {})
+          ...(opts.splitDirection !== undefined ? { splitDirection: opts.splitDirection } : {}),
+          ...(opts.splitTelemetrySource !== undefined
+            ? { splitTelemetrySource: opts.splitTelemetrySource }
+            : {})
         })
       }),
     splitTerminal: (tabId, paneRuntimeId, opts) => {
@@ -324,7 +292,8 @@ function registerRuntimeWindowLifecycle(
         tabId,
         paneRuntimeId,
         direction: opts.direction,
-        command: opts.command
+        command: opts.command,
+        telemetrySource: opts.telemetrySource
       })
     },
     renameTerminal: (tabId, title) => send('ui:renameTerminal', { tabId, title }),
@@ -334,10 +303,21 @@ function registerRuntimeWindowLifecycle(
     closeSessionTab: (tabId, worktreeId) => send('ui:closeSessionTab', { tabId, worktreeId }),
     moveSessionTab: (worktreeId: string, move: RuntimeMobileSessionTabMove) =>
       send('ui:moveSessionTab', { worktreeId, ...move }),
-    openFile: (worktreeId, filePath, relativePath) =>
-      send('ui:openFileFromMobile', { worktreeId, filePath, relativePath }),
-    openDiff: (worktreeId, filePath, relativePath, staged) =>
-      send('ui:openDiffFromMobile', { worktreeId, filePath, relativePath, staged }),
+    openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId?) =>
+      send('ui:openFileFromMobile', {
+        worktreeId,
+        filePath,
+        relativePath,
+        runtimeEnvironmentId
+      }),
+    openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId?) =>
+      send('ui:openDiffFromMobile', {
+        worktreeId,
+        filePath,
+        relativePath,
+        staged,
+        runtimeEnvironmentId
+      }),
     readMobileMarkdownTab: (worktreeId, tabId) =>
       requestMobileMarkdownFromRenderer(mainWindow, {
         operation: 'read',
@@ -369,14 +349,29 @@ function registerRuntimeWindowLifecycle(
   })
   mainWindow.on('closed', () => {
     runtime.markGraphUnavailable(mainWindow.id)
+    if (activeRuntimeNotifierToken === notifierToken) {
+      // Why: the notifier closes over the BrowserWindow for mobile/CLI UI
+      // relays; clear it during the no-window gap so the runtime does not
+      // retain destroyed window graphs.
+      runtime.setNotifier(null)
+      activeRuntimeNotifierToken = null
+    }
   })
 }
 
 function registerFileDropRelay(mainWindow: BrowserWindow): void {
   const channel = 'terminal:file-dropped-from-preload'
+  const mainWebContents = mainWindow.webContents
   ipcMain.removeAllListeners(channel)
-  const relayFileDrop = (_event: Electron.IpcMainEvent, args: NativeFileDropPayload): void => {
-    if (mainWindow.isDestroyed()) {
+  const relayFileDrop = (event: Electron.IpcMainEvent, args: NativeFileDropPayload): void => {
+    if (
+      mainWindow.isDestroyed() ||
+      mainWebContents.isDestroyed() ||
+      event.sender !== mainWebContents
+    ) {
+      return
+    }
+    if (!isNativeFileDropPayload(args)) {
       return
     }
 

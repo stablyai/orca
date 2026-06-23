@@ -12,6 +12,12 @@ describe('browser-url helpers', () => {
   it('normalizes manual local-dev inputs to http', () => {
     expect(normalizeBrowserNavigationUrl('localhost:3000')).toBe('http://localhost:3000/')
     expect(normalizeBrowserNavigationUrl('127.0.0.1:5173')).toBe('http://127.0.0.1:5173/')
+    expect(normalizeBrowserNavigationUrl('localhost:3000?debug=1')).toBe(
+      'http://localhost:3000/?debug=1'
+    )
+    expect(normalizeBrowserNavigationUrl('localhost:3000#preview')).toBe(
+      'http://localhost:3000/#preview'
+    )
   })
 
   it('keeps normal web URLs and blank tabs in the allowed set', () => {

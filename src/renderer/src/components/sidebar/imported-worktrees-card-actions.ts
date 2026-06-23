@@ -22,18 +22,19 @@ type ImportedWorktreeCardActionDeps = {
   ) => Promise<boolean>
 }
 
-export const IMPORTED_WORKTREES_SHOW_ERROR = 'Could not show imported worktrees. Try again.'
+export const IMPORTED_WORKTREES_SHOW_ERROR = 'Could not show discovered worktrees. Try again.'
 export const IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR =
-  'Could not keep imported worktrees hidden. Try again.'
+  'Could not keep discovered worktrees hidden. Try again.'
 
 export async function showImportedWorktreesCard(
   args: ImportedWorktreeCardActionDeps
 ): Promise<void> {
   const forceVisible = args.forceVisible === true
+  // Preserve rollback-failure retry state so the visible error/action surface does not disappear.
   args.setCardState(args.projectId, {
     pending: true,
     error: null,
-    forceVisible: true
+    ...(forceVisible ? { forceVisible: true } : {})
   })
   const updated = await args.updateRepo(args.projectId, { externalWorktreeVisibility: 'show' })
   if (!updated) {

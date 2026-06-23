@@ -25,8 +25,10 @@ export type ResolvedTerminalFileLink = Pick<ParsedTerminalFileLink, 'line' | 'co
 
 // Matches a path with at least one `/` separator, optionally followed by
 // `:line` and `:col` suffixes (e.g. `src/foo.ts:12:3`, `./bin`, `/abs/path`).
+// Why: framework route files commonly use punctuation segments like
+// `app/(shop)/products/[id]/page.tsx`; keep those links whole.
 const LOCAL_PATH_REGEX =
-  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[A-Za-z0-9._~\-/%+@\\]*(?::\d+)?(?::\d+)?/g
+  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[A-Za-z0-9._~\-/%+@\\()[\]]*(?::\d+)?(?::\d+)?/g
 
 // Matches separator paths whose file or folder names include spaces. This runs
 // before LOCAL_PATH_REGEX so `/Users/A/Foo Bar/file.ts` is claimed as one link
@@ -89,7 +91,14 @@ function parsePathWithOptionalLineColumn(value: string): {
     return null
   }
   const pathText = match[1]
-  if (!pathText || pathText.endsWith('/')) {
+  const hasLineOrColumn = Boolean(match[2] || match[3])
+  if (!pathText) {
+    return null
+  }
+  if (/^[\\/]\s/.test(pathText)) {
+    return null
+  }
+  if (/[\\/]$/.test(pathText) && (hasLineOrColumn || !canKeepTrailingSeparator(pathText))) {
     return null
   }
 
@@ -100,6 +109,13 @@ function parsePathWithOptionalLineColumn(value: string): {
   }
 
   return { pathText, line, column }
+}
+
+function canKeepTrailingSeparator(pathText: string): boolean {
+  if (/^[\\/]+$/.test(pathText) || /^~[\\/]$/.test(pathText) || /^[A-Za-z]:[\\/]$/.test(pathText)) {
+    return false
+  }
+  return /^(?:~[\\/]|[\\/]|[A-Za-z]:[\\/])/.test(pathText)
 }
 
 // Project files that look like filenames despite having no extension. The
@@ -122,6 +138,11 @@ const EXTENSIONLESS_FILENAMES = new Set([
 
 const BARE_FILENAME_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9._+-]*$/
 const URI_PREFIX_CHAR_PATTERN = /^[A-Za-z0-9+./:-]$/
+const MAX_BARE_FILENAME_TOKEN_LENGTH = 120
+
+function hasPathSeparator(text: string): boolean {
+  return text.includes('/') || text.includes('\\')
+}
 
 // Bare words are validated against the filesystem by the provider, so this
 // filter's job is to reject tokens that are obviously not filenames before
@@ -288,6 +309,10 @@ function detectLocalPathLinks(
   lineText: string,
   includeLineEndingPrefixCandidates = false
 ): ParsedTerminalFileLink[] {
+  if (!hasPathSeparator(lineText)) {
+    return []
+  }
+
   const links: ParsedTerminalFileLink[] = []
   const spacedLinks = detectSpacedLocalPathLinks(lineText, includeLineEndingPrefixCandidates)
   const spacedRanges = mergeRanges(
@@ -355,6 +380,11 @@ function detectBareFilenameLinks(
   const links: ParsedTerminalFileLink[] = []
   for (const range of detectRanges(lineText, WORD_TOKEN_REGEX)) {
     if (rangesOverlap(range, claimedRanges)) {
+      continue
+    }
+    // Why: huge terminal blobs can be one unbroken token; parse only bounded
+    // bare-filename candidates so hover link detection stays interactive.
+    if (range.text.length > MAX_BARE_FILENAME_TOKEN_LENGTH) {
       continue
     }
     const link = toParsedLink(range)

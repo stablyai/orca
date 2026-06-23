@@ -9,15 +9,27 @@ import { HistoryManager } from './history-manager'
 import { HistoryReader } from './history-reader'
 import { mintPtySessionId, parsePtySessionId } from './pty-session-id'
 import { supportsPtyStartupBarrier } from './shell-ready'
+import { CODEX_SHELL_READY_TIMEOUT_MS } from './session'
 import {
   PROTOCOL_VERSION,
   type CreateOrAttachResult,
   type DaemonEvent,
   type GetSnapshotResult,
   type ListSessionsResult,
-  type SessionInfo
+  type SessionInfo,
+  type TakePendingOutputResult
 } from './types'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import { isShellProcess } from '../../shared/agent-detection'
+import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
+import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+
+type ColdRestorePayload = {
+  scrollback: string
+  cwd: string
+  oscLinks?: TerminalOscLinkRange[]
+}
 
 export type DaemonPtyAdapterOptions = {
   socketPath: string
@@ -32,6 +44,7 @@ export type DaemonPtyAdapterOptions = {
 }
 
 const MAX_TOMBSTONES = 1000
+const MAX_CONCURRENT_CHECKPOINTS = 4
 
 export class TerminalKilledError extends Error {
   constructor(sessionId: string) {
@@ -66,14 +79,23 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // Why: React StrictMode double-mounts: mount → cold restore → unmount →
   // mount → ??? The sticky cache returns the same cold restore data on the
   // second mount until the renderer explicitly acknowledges it.
-  private coldRestoreCache = new Map<string, { scrollback: string; cwd: string }>()
+  private coldRestoreCache = new Map<string, ColdRestorePayload>()
   private activeSessionIds = new Set<string>()
   private dirtySessionVersions = new Map<string, number>()
+  // Why: a cold-restored session is a fresh shell whose on-disk checkpoint and
+  // log belong to the pre-crash session. Incremental appends would land on
+  // that stale log (and be rejected by its sequence check on restore), so the
+  // first tick must re-anchor with a full snapshot checkpoint, which resets
+  // the log to a new generation.
+  private sessionsNeedingFullCheckpoint = new Set<string>()
   private checkpointTimer: ReturnType<typeof setTimeout> | null = null
   private checkpointInFlight: Promise<void> | null = null
   // Why: checkpoint-based persistence requires the getSnapshot RPC (v4+).
   // Legacy daemons reject it, causing noisy log spam every 5 seconds.
   private supportsCheckpoints: boolean
+  // Why: incremental checkpoints require the takePendingOutput RPC (v13+).
+  // Against older daemons the tick falls back to full-snapshot checkpoints.
+  private supportsIncrementalCheckpoints: boolean
   private static CHECKPOINT_INTERVAL_MS = 5_000
 
   constructor(opts: DaemonPtyAdapterOptions) {
@@ -89,6 +111,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.historyReader = opts.historyPath ? new HistoryReader(opts.historyPath) : null
     this.respawnFn = opts.respawn ?? null
     this.supportsCheckpoints = this.protocolVersion >= 4
+    this.supportsIncrementalCheckpoints = this.protocolVersion >= 13
   }
 
   getHistoryManager(): HistoryManager | null {
@@ -120,6 +143,20 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
     await this.ensureConnected()
 
+    const shellReadySupported = opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
+    const isCodexStartupCommand =
+      recognizeAgentProcessFromCommandLine(opts.command)?.agent === 'codex'
+    const shouldWaitForShellReady =
+      isCodexStartupCommand &&
+      shouldUseShellReadyStartupDelivery({
+        command: opts.command,
+        startupCommandDelivery: opts.startupCommandDelivery
+      })
+    const shellReadyTimeoutMs =
+      shellReadySupported && isCodexStartupCommand && !shouldWaitForShellReady
+        ? CODEX_SHELL_READY_TIMEOUT_MS
+        : undefined
+
     const result = await this.client.request<CreateOrAttachResult>('createOrAttach', {
       sessionId,
       cols: effectiveCols,
@@ -128,6 +165,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       env: opts.env,
       envToDelete: opts.envToDelete,
       command: opts.command,
+      startupCommandDelivery: opts.startupCommandDelivery,
       // Why: without this, the daemon always spawns cmd.exe (COMSPEC) or
       // PowerShell as a fallback — regardless of which shell the renderer
       // asked for in the "+" menu or persisted as the default. Forwarding
@@ -136,7 +174,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
       shellOverride: opts.shellOverride,
       terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
       terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation,
-      shellReadySupported: opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
+      shellReadySupported,
+      ...(shellReadyTimeoutMs !== undefined ? { shellReadyTimeoutMs } : {})
     })
 
     if (effectiveCwd) {
@@ -186,9 +225,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
       // the next 5s tick, the checkpoint is the only recovery data available.
       if (this.historyManager) {
         this.historyManager.registerWriter(sessionId)
+        this.sessionsNeedingFullCheckpoint.add(sessionId)
       }
       if (scrollback) {
-        const coldRestore = { scrollback, cwd: restoreInfo.cwd }
+        const coldRestore = { scrollback, cwd: restoreInfo.cwd, oscLinks: restoreInfo.oscLinks }
         this.coldRestoreCache.set(sessionId, coldRestore)
         return { id: sessionId, pid, coldRestore }
       }
@@ -254,9 +294,20 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
-    await this.client.request('kill', { sessionId: id })
+    // Why: sleep/exact-stop must preserve restorable terminal history,
+    // so force a final checkpoint before killing the daemon session.
+    if (opts.keepHistory) {
+      await this.checkpointSessions([id], { final: true, teardown: true })
+    }
+    await this.client.request('kill', { sessionId: id, immediate: opts.immediate ?? false })
     this.activeSessionIds.delete(id)
     this.dirtySessionVersions.delete(id)
+    this.coldRestoreCache.delete(id)
+    // Why: the !keepHistory close path doesn't take a final checkpoint, so a
+    // session stranded in sessionsNeedingFullCheckpoint would never be cleared.
+    // (Under keepHistory the final checkpoint above already cleared the flag, so
+    // this is a harmless no-op there — kept unconditional to cover both paths.)
+    this.sessionsNeedingFullCheckpoint.delete(id)
     this.stopCheckpointTimerIfIdle()
     this.initialCwds.delete(id)
     // Why: history removal is for the "user explicitly closed this terminal"
@@ -320,8 +371,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // No flow control for daemon-backed terminals
   }
 
-  async hasChildProcesses(_id: string): Promise<boolean> {
-    return false
+  async hasChildProcesses(id: string): Promise<boolean> {
+    const foregroundProcess = await this.getForegroundProcess(id)
+    // Why: daemon-backed PTYs can host long-lived agents while the renderer is
+    // detached. Cleanup prompts must not treat those sessions like idle shells.
+    return foregroundProcess !== null && !isShellProcess(foregroundProcess)
   }
 
   async getForegroundProcess(id: string): Promise<string | null> {
@@ -349,7 +403,15 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   /** Called on app launch. Lists daemon sessions, kills orphans whose
-   *  workspaceId no longer exists, and caches alive session IDs. */
+   *  workspaceId no longer exists, and caches alive session IDs.
+   *
+   *  IMPORTANT: a session id embeds the worktree id it was minted under, which is
+   *  the worktree's *path* at spawn time. When a worktree folder is renamed, its
+   *  id changes but live sessions keep the old id. Callers MUST therefore seed
+   *  `validWorktreeIds` with each live worktree's `WorktreeMeta.priorWorktreeIds`
+   *  (the pre-rename aliases) or those sessions will be reaped as false orphans.
+   *  This reconcile has no production caller yet; wire the alias in when it gains
+   *  one. */
   async reconcileOnStartup(validWorktreeIds: Set<string>): Promise<{
     alive: string[]
     killed: string[]
@@ -429,6 +491,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.dirtySessionVersions.clear()
     this.stopCheckpointTimer()
     for (const id of ids) {
+      this.coldRestoreCache.delete(id)
       // Why: listener throws are intentionally *not* caught — matches the
       // natural onExit fanout in setupEventRouting, so synthetic exits don't
       // diverge in error semantics from real ones. A throwing listener is a
@@ -485,6 +548,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   dispose(): void {
     this.stopCheckpointTimer()
     this.dirtySessionVersions.clear()
+    this.coldRestoreCache.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
     // Why: final checkpoints are written daemon-side in TerminalHost.dispose()
@@ -519,6 +583,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // and the pending getSnapshot RPCs would be rejected.
     await this.checkpointAllSessions()
     this.dirtySessionVersions.clear()
+    this.coldRestoreCache.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
     this.client.disconnect()
@@ -606,40 +671,130 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   // Why: the adapter runs in the Electron main process and does not have direct
-  // access to daemon Session objects. It calls the getSnapshot RPC over the
-  // daemon socket per session. Returns a promise that resolves when all
-  // checkpoint writes complete (callers that don't need to wait can void it).
+  // access to daemon Session objects. It calls checkpoint RPCs over the daemon
+  // socket per session. Returns a promise that resolves when all checkpoint
+  // writes complete (callers that don't need to wait can void it).
+  // Why final=true here: this runs on clean disconnect, where the full-depth
+  // snapshot (not the increment log) must be the restore source. It is not a
+  // teardown snapshot: the detached daemon and its PTYs keep running for warm
+  // reattach, so shell-ready scanner state must remain intact.
   private async checkpointAllSessions(): Promise<void> {
-    const completed = await this.checkpointSessions(this.activeSessionIds)
+    const completed = await this.checkpointSessions(this.activeSessionIds, { final: true })
     for (const sessionId of completed) {
       this.dirtySessionVersions.delete(sessionId)
     }
   }
 
-  private async checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>> {
+  private async checkpointSessions(
+    sessionIds: Iterable<string>,
+    opts?: { final?: boolean; teardown?: boolean }
+  ): Promise<Set<string>> {
     const completed = new Set<string>()
     if (!this.historyManager) {
       return completed
     }
-    const promises: Promise<void>[] = []
-    for (const sessionId of sessionIds) {
-      promises.push(
-        this.client
-          .request<GetSnapshotResult>('getSnapshot', { sessionId })
-          .then((result) => {
-            if (result.snapshot && this.historyManager) {
-              return this.historyManager.checkpoint(sessionId, result.snapshot).then(() => {
-                completed.add(sessionId)
-              })
-            }
+    const ids = Array.from(sessionIds)
+    let nextIndex = 0
+
+    const checkpointNext = async (): Promise<void> => {
+      for (;;) {
+        const index = nextIndex
+        nextIndex++
+        if (index >= ids.length) {
+          return
+        }
+        const sessionId = ids[index]
+        await this.checkpointSession(sessionId, {
+          final: opts?.final === true,
+          teardown: opts?.teardown === true
+        })
+          .then(() => {
             completed.add(sessionId)
-            return undefined
           })
           .catch((err) => console.warn('[history] checkpoint failed:', sessionId, err))
-      )
+      }
     }
-    await Promise.all(promises)
+    // Why: snapshot serialization and checkpoint writes are CPU/disk heavy.
+    // Dirty-session filtering keeps idle terminals out; this cap prevents one
+    // tick from snapshotting every active dirty terminal at once.
+    const workers = Array.from({ length: Math.min(MAX_CONCURRENT_CHECKPOINTS, ids.length) }, () =>
+      checkpointNext()
+    )
+    await Promise.all(workers)
     return completed
+  }
+
+  private async checkpointSession(
+    sessionId: string,
+    opts: { final: boolean; teardown: boolean }
+  ): Promise<void> {
+    if (!this.supportsIncrementalCheckpoints) {
+      const result = await this.client.request<GetSnapshotResult>('getSnapshot', { sessionId })
+      if (result.snapshot && this.historyManager) {
+        await this.historyManager.checkpoint(sessionId, result.snapshot)
+      }
+      return
+    }
+    if (opts.final || this.sessionsNeedingFullCheckpoint.has(sessionId)) {
+      // Why take-with-snapshot instead of plain getSnapshot: the take clears
+      // the daemon's pending records in the same synchronous turn as the
+      // serialize. A plain snapshot would leave pre-snapshot records pending;
+      // a later warm reattach would append them to the fresh log and cold
+      // restore would replay them on top of a checkpoint that already
+      // contains them.
+      await this.takeSnapshotAndCheckpoint(sessionId, { teardown: opts.teardown })
+      this.sessionsNeedingFullCheckpoint.delete(sessionId)
+      return
+    }
+    const take = await this.client.request<TakePendingOutputResult | null>('takePendingOutput', {
+      sessionId
+    })
+    if (!take) {
+      return
+    }
+    if (take.overflowed) {
+      // Why: overflow dropped records, so the log has a hole — only a full
+      // snapshot (which reflects everything ever written) can re-anchor it.
+      await this.takeSnapshotAndCheckpoint(sessionId, { teardown: false })
+      return
+    }
+    if (take.records.length === 0) {
+      return
+    }
+    if (!this.historyManager) {
+      return
+    }
+    const appendResult = await this.historyManager.appendIncrements(
+      sessionId,
+      take.seq,
+      take.records
+    )
+    if (appendResult === 'needs-checkpoint') {
+      // Why dropping take.records is lossless: they were applied to the live
+      // emulator before the take, so the snapshot below contains them.
+      await this.takeSnapshotAndCheckpoint(sessionId, { teardown: false })
+    }
+  }
+
+  private async takeSnapshotAndCheckpoint(
+    sessionId: string,
+    opts: { teardown: boolean }
+  ): Promise<void> {
+    const take = await this.client.request<TakePendingOutputResult | null>('takePendingOutput', {
+      sessionId,
+      includeSnapshot: true,
+      teardownSnapshot: opts.teardown
+    })
+    if (take?.snapshot && this.historyManager) {
+      await this.historyManager.checkpoint(sessionId, take.snapshot)
+      if (take.records.length > 0) {
+        // Why: take-with-snapshot usually returns no records because the
+        // snapshot subsumes them. Held parser-state bytes, such as an
+        // incomplete shell-ready marker prefix, are not representable in the
+        // snapshot and must remain as a post-checkpoint log tail.
+        await this.historyManager.appendIncrements(sessionId, take.seq, take.records)
+      }
+    }
   }
 
   // Why: when the daemon process dies, operations fail with ENOENT (socket
@@ -741,6 +896,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
       } else if (event.event === 'exit') {
         this.activeSessionIds.delete(event.sessionId)
         this.dirtySessionVersions.delete(event.sessionId)
+        this.coldRestoreCache.delete(event.sessionId)
+        // Why: an exited session can never be checkpointed again, so its pending
+        // full-checkpoint flag is dead state. Without this, a cold-restored
+        // session that exits before its first checkpoint leaks a permanent entry.
+        this.sessionsNeedingFullCheckpoint.delete(event.sessionId)
         this.stopCheckpointTimerIfIdle()
         if (this.historyManager) {
           void this.historyManager

@@ -113,3 +113,22 @@ All stable kinds (`patch`, `minor`, `major`) are computed off the latest _stable
 - **Minor or major bump:** `kind=minor` or `kind=major`.
 
 The scheduled 2x/day RC cron in [`release-rc.yml`](../../actions/workflows/release-rc.yml) is independent and continues to run automatically from `main`.
+
+
+## Release Channels
+
+The public Homebrew cask tracks stable desktop releases:
+
+```bash
+brew install --cask stablyai/orca/orca
+```
+
+Release candidates use a separate cask token:
+
+```bash
+brew install --cask stablyai/orca/orca@rc
+```
+
+The two casks conflict because both install `Orca.app`. Switch channels with a
+normal `brew uninstall --cask` followed by the install for the other channel.
+Do not use `--zap` unless you intentionally want to remove local Orca state.

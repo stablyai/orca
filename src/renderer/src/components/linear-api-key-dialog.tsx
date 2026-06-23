@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { ExternalLink, LoaderCircle, Lock } from 'lucide-react'
 import type { LinearWorkspace } from '../../../shared/types'
 import {
@@ -20,6 +20,11 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import {
+  createLinearApiKeyDialogState,
+  resolveLinearApiKeyDialogState
+} from './linear-api-key-dialog-state'
+import { translate } from '@/i18n/i18n'
 
 type LinearApiKeyDialogProps = {
   open: boolean
@@ -49,23 +54,19 @@ export function LinearApiKeyDialog({
   const mountedRef = useMountedRef()
   const apiKeyInputId = useId()
   const apiKeyErrorId = useId()
-  const [apiKeyDraft, setApiKeyDraft] = useState('')
-  const [connectState, setConnectState] = useState<'idle' | 'connecting' | 'error'>('idle')
-  const [connectError, setConnectError] = useState<string | null>(null)
+  const [dialogState, setDialogState] = useState(createLinearApiKeyDialogState)
 
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
   const personalKeyUrl = buildLinearPersonalApiKeySettingsUrl(workspace?.organizationUrlKey)
   const workspaceApiUrl = buildLinearWorkspaceApiSettingsUrl(workspace?.organizationUrlKey)
   const submitLabel = connectLabel ?? (workspace ? 'Update access' : 'Connect')
-
-  useEffect(() => {
-    if (open) {
-      return
-    }
-    setApiKeyDraft('')
-    setConnectState('idle')
-    setConnectError(null)
-  }, [open])
+  const resolvedDialogState = resolveLinearApiKeyDialogState(dialogState, open)
+  if (resolvedDialogState !== dialogState) {
+    // Why: parent-controlled close can race an in-flight connect request; keep
+    // hidden draft/error state reset before the next open paints.
+    setDialogState(resolvedDialogState)
+  }
+  const { apiKeyDraft, connectState, connectError } = resolvedDialogState
 
   const handleOpenChange = (nextOpen: boolean): void => {
     if (connectState !== 'connecting') {
@@ -78,26 +79,30 @@ export function LinearApiKeyDialog({
     if (!apiKey || connectState === 'connecting') {
       return
     }
-    setConnectState('connecting')
-    setConnectError(null)
+    setDialogState((current) => ({ ...current, connectState: 'connecting', connectError: null }))
     try {
       const result = await connectLinear(apiKey)
       if (!mountedRef.current) {
         return
       }
       if (result.ok) {
-        setApiKeyDraft('')
-        setConnectState('idle')
+        setDialogState(createLinearApiKeyDialogState())
         onOpenChange(false)
         onConnected?.()
         return
       }
-      setConnectState('error')
-      setConnectError(result.error)
+      setDialogState((current) => ({
+        ...current,
+        connectState: 'error',
+        connectError: result.error
+      }))
     } catch (error) {
       if (mountedRef.current) {
-        setConnectState('error')
-        setConnectError(error instanceof Error ? error.message : 'Connection failed')
+        setDialogState((current) => ({
+          ...current,
+          connectState: 'error',
+          connectError: error instanceof Error ? error.message : 'Connection failed'
+        }))
       }
     }
   }
@@ -134,20 +139,24 @@ export function LinearApiKeyDialog({
         <div className="space-y-3">
           <div className="space-y-2">
             <Label htmlFor={apiKeyInputId} className="text-xs">
-              Personal API key
+              {translate('auto.components.linear.api.key.dialog.7d498f653c', 'Personal API key')}
             </Label>
             <Input
               id={apiKeyInputId}
               autoFocus
               type="password"
-              placeholder="lin_api_..."
+              placeholder={translate(
+                'auto.components.linear.api.key.dialog.edec49dfae',
+                'lin_api_...'
+              )}
               value={apiKeyDraft}
               onChange={(event) => {
-                setApiKeyDraft(event.target.value)
-                if (connectState === 'error') {
-                  setConnectState('idle')
-                  setConnectError(null)
-                }
+                const nextDraft = event.target.value
+                setDialogState((current) => ({
+                  apiKeyDraft: nextDraft,
+                  connectState: current.connectState === 'error' ? 'idle' : current.connectState,
+                  connectError: current.connectState === 'error' ? null : current.connectError
+                }))
               }}
               disabled={connectState === 'connecting'}
               aria-invalid={connectState === 'error'}
@@ -161,19 +170,28 @@ export function LinearApiKeyDialog({
           ) : null}
           <div className="space-y-2 text-xs leading-relaxed text-muted-foreground">
             <p>
-              Create a Personal API key from Account &gt; Security &amp; Access.{' '}
+              {translate(
+                'auto.components.linear.api.key.dialog.af52a6227f',
+                'Create a Personal API key from Account > Security & Access.'
+              )}{' '}
               {!workspace
-                ? 'Use Linear to choose the intended workspace before creating the key.'
+                ? translate(
+                    'auto.components.linear.api.key.dialog.c9889a09f8',
+                    'Use Linear to choose the intended workspace before creating the key.'
+                  )
                 : null}
             </p>
             <p>
-              Prefer full access when Orca should show every team the account can access in that
-              workspace. Restricted keys only expose permitted teams, and private teams require the
-              key owner to have access.
+              {translate(
+                'auto.components.linear.api.key.dialog.d56d3629f4',
+                'Prefer full access when Orca should show every team the account can access in that workspace. Restricted keys only expose permitted teams, and private teams require the key owner to have access.'
+              )}
             </p>
             <p>
-              If member API keys are blocked, ask a workspace admin to allow them from workspace API
-              settings.
+              {translate(
+                'auto.components.linear.api.key.dialog.e3100b36b9',
+                'If member API keys are blocked, ask a workspace admin to allow them from workspace API settings.'
+              )}
             </p>
             <div className="flex flex-wrap items-center gap-2 pt-1">
               <button
@@ -182,7 +200,7 @@ export function LinearApiKeyDialog({
                 onClick={() => window.api.shell.openUrl(personalKeyUrl)}
               >
                 <ExternalLink className="size-3" />
-                Personal API keys
+                {translate('auto.components.linear.api.key.dialog.dc7ccb0f7c', 'Personal API keys')}
               </button>
               <span className="text-muted-foreground/60">|</span>
               <button
@@ -191,7 +209,10 @@ export function LinearApiKeyDialog({
                 onClick={() => window.api.shell.openUrl(workspaceApiUrl)}
               >
                 <ExternalLink className="size-3" />
-                Workspace API settings
+                {translate(
+                  'auto.components.linear.api.key.dialog.e603ee9156',
+                  'Workspace API settings'
+                )}
               </button>
             </div>
           </div>
@@ -206,7 +227,7 @@ export function LinearApiKeyDialog({
             onClick={() => onOpenChange(false)}
             disabled={connectState === 'connecting'}
           >
-            Cancel
+            {translate('auto.components.linear.api.key.dialog.f8f704a019', 'Cancel')}
           </Button>
           <Button
             onClick={() => void handleConnect()}
@@ -215,7 +236,7 @@ export function LinearApiKeyDialog({
             {connectState === 'connecting' ? (
               <>
                 <LoaderCircle className="size-4 animate-spin" />
-                Verifying...
+                {translate('auto.components.linear.api.key.dialog.834a52c084', 'Verifying...')}
               </>
             ) : (
               submitLabel

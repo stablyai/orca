@@ -14,19 +14,9 @@ export function parseWebPairingInput(input: string): WebPairingOffer | null {
   }
 
   try {
-    if (trimmed.startsWith('orca://pair')) {
-      const queryIndex = trimmed.indexOf('?')
-      if (queryIndex !== -1) {
-        const query = trimmed.slice(queryIndex + 1).split('#')[0] ?? ''
-        const params = new URLSearchParams(query)
-        const code = params.get('code')
-        return code ? decodePairingPayload(code) : null
-      }
-      const hashIndex = trimmed.indexOf('#')
-      if (hashIndex === -1) {
-        return null
-      }
-      return decodePairingPayload(trimmed.slice(hashIndex + 1))
+    if (trimmed.toLowerCase().startsWith('orca://')) {
+      const code = extractPairingCodeFromUrl(trimmed)
+      return code ? decodePairingPayload(code) : null
     }
     return decodePairingPayload(trimmed)
   } catch {
@@ -90,6 +80,28 @@ function decodePairingPayload(base64url: string): WebPairingOffer | null {
     deviceToken: parsed.deviceToken,
     publicKeyB64: parsed.publicKeyB64
   }
+}
+
+function extractPairingCodeFromUrl(url: string): string | null {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return null
+  }
+  // Why: prefix checks accepted routes like `orca://pairing?...`; only the
+  // pairing deep-link host may carry runtime auth material.
+  if (parsed.protocol !== 'orca:' || parsed.hostname !== 'pair') {
+    return null
+  }
+  if (parsed.pathname !== '' && parsed.pathname !== '/') {
+    return null
+  }
+  const code = parsed.searchParams.get('code')
+  if (code) {
+    return code
+  }
+  return parsed.hash ? parsed.hash.slice(1) || null : null
 }
 
 function base64UrlToBytes(value: string): Uint8Array {

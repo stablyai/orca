@@ -3,6 +3,8 @@ import { resolveWorktreeStatus } from '@/lib/worktree-status'
 import type {
   ProjectGroup,
   Repo,
+  TerminalPaneLayoutNode,
+  TerminalTab,
   Worktree,
   WorkspaceStatusDefinition
 } from '../../../../shared/types'
@@ -16,18 +18,21 @@ import {
   selectRuntimePaneTitlesForWorktree
 } from './worktree-card-status-inputs'
 import { selectWorktreeAgentActivitySummary } from './worktree-agent-activity-summary'
+import type { BrowserActivityTab } from './visible-worktree-activity-inputs'
 
 export type WorktreeSectionActivityState = Pick<
   AppState,
-  | 'tabsByWorktree'
-  | 'browserTabsByWorktree'
   | 'ptyIdsByTabId'
   | 'runtimePaneTitlesByTabId'
   | 'agentStatusEpoch'
   | 'agentStatusByPaneKey'
   | 'migrationUnsupportedByPtyId'
   | 'retainedAgentsByPaneKey'
->
+> & {
+  tabsByWorktree: Record<string, readonly Pick<TerminalTab, 'id' | 'title'>[]>
+  browserTabsByWorktree: Record<string, readonly BrowserActivityTab[]>
+  terminalLayoutRootsByTabId: Record<string, TerminalPaneLayoutNode | null | undefined>
+}
 
 export type WorktreeSectionActivitySummary = {
   runningCount: number
@@ -59,17 +64,18 @@ export function buildWorktreeSectionActivitySummaries({
   const summaries = new Map<string, WorktreeSectionActivitySummary>()
 
   for (const worktree of worktrees) {
-    const groupKeys = worktree.isPinned
-      ? [PINNED_GROUP_KEY]
-      : getGroupKeysForWorktree(
-          groupBy,
-          worktree,
-          repoMap,
-          prCache,
-          workspaceStatuses,
-          settings,
-          projectGroups
-        )
+    const groupKeys = [
+      ...(worktree.isPinned ? [PINNED_GROUP_KEY] : []),
+      ...getGroupKeysForWorktree(
+        groupBy,
+        worktree,
+        repoMap,
+        prCache,
+        workspaceStatuses,
+        settings,
+        projectGroups
+      )
+    ]
     if (groupKeys.length === 0) {
       continue
     }
@@ -100,6 +106,8 @@ function getSectionWorktreeStatus(
     browserTabs: state.browserTabsByWorktree[worktreeId] ?? [],
     ptyIdsByTabId: selectLivePtyIdsForWorktree(state, worktreeId),
     runtimePaneTitlesByTabId: selectRuntimePaneTitlesForWorktree(state, worktreeId),
+    agentStatusPaneIdsByTabId: agentSummary.agentStatusPaneIdsByTabId,
+    terminalLayoutRootsByTabId: state.terminalLayoutRootsByTabId,
     hasPermission: agentSummary.hasPermission,
     hasLiveWorking: agentSummary.hasLiveWorking,
     hasLiveDone: agentSummary.hasLiveDone,

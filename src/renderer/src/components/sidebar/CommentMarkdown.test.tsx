@@ -62,6 +62,24 @@ describe('CommentMarkdown', () => {
     expect(markup).toContain('src="data:image/png;base64,abc123"')
   })
 
+  it('renders bare GitHub user attachment links as document videos', () => {
+    const url = 'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488'
+    const markup = renderToStaticMarkup(<CommentMarkdown variant="document" content={url} />)
+
+    expect(markup).toContain('<video')
+    expect(markup).toContain(`src="${url}"`)
+    expect(markup).toContain('controls=""')
+    expect(markup).not.toContain(`href="${url}" class="break-all`)
+  })
+
+  it('keeps non-attachment document links as links', () => {
+    const url = 'https://github.com/stablyai/orca/pull/5265'
+    const markup = renderToStaticMarkup(<CommentMarkdown variant="document" content={url} />)
+
+    expect(markup).not.toContain('<video')
+    expect(markup).toContain(`href="${url}"`)
+  })
+
   it('autolinks very large generated GitHub reference comments', () => {
     const referenceCount = 130_000
     const tree = {
@@ -87,6 +105,83 @@ describe('CommentMarkdown', () => {
       type: 'link',
       url: 'https://github.com/stablyai/orca/issues/1'
     })
+  })
+
+  it('strips single-line and multi-line HTML comments', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown
+        variant="document"
+        content={'before <!-- secret\nmulti-line\nnote --> after'}
+      />
+    )
+
+    expect(markup).not.toContain('secret')
+    expect(markup).not.toContain('multi-line')
+    expect(markup).toContain('before')
+    expect(markup).toContain('after')
+  })
+
+  it('renders <details>/<summary> as a disclosure section', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown
+        variant="document"
+        content={'<details><summary>Show more</summary>\n\nhidden body\n\n</details>'}
+      />
+    )
+
+    expect(markup).toContain('<details')
+    expect(markup).toContain('<summary>Show more</summary>')
+    expect(markup).toContain('hidden body')
+  })
+
+  it('renders markdown blockquotes', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown variant="document" content="> quoted text" />
+    )
+
+    expect(markup).toContain('<blockquote')
+    expect(markup).toContain('quoted text')
+  })
+
+  it('renders raw HTML blockquotes', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown variant="document" content="<blockquote>html quote</blockquote>" />
+    )
+
+    expect(markup).toContain('<blockquote')
+    expect(markup).toContain('html quote')
+  })
+
+  it('renders GFM tables', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown variant="document" content={'| a | b |\n|---|---|\n| 1 | 2 |'} />
+    )
+
+    expect(markup).toContain('<table')
+    expect(markup).toContain('<th>a</th>')
+    expect(markup).toContain('<td>1</td>')
+  })
+
+  it('renders mermaid code fences as a mermaid container instead of a pre block', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown variant="document" content={'```mermaid\ngraph TD; A-->B;\n```'} />
+    )
+
+    expect(markup).toContain('mermaid-block')
+    expect(markup).toContain('overflow-x-auto')
+    expect(markup).toContain('[&amp;_.mermaid-block_pre]:max-h-80')
+    expect(markup).not.toContain('<pre')
+  })
+
+  it('keeps compact mermaid fences as bounded source blocks', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown content={'```mermaid\ngraph TD; A-->B;\n```'} />
+    )
+
+    expect(markup).toContain('<pre')
+    expect(markup).toContain('max-h-32')
+    expect(markup).toContain('overflow-x-auto')
+    expect(markup).not.toContain('mermaid-block')
   })
 
   it('contains long PR body markdown inside its available width', () => {

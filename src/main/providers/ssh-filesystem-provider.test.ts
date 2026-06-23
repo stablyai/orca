@@ -162,6 +162,45 @@ describe('SshFilesystemProvider', () => {
     })
   })
 
+  describe('downloadFile', () => {
+    it('downloads raw bytes through SFTP and closes the session', async () => {
+      const sftp = {
+        fastGet: vi.fn(
+          (_source: string, _destination: string, callback: (err?: Error | null) => void) =>
+            callback()
+        ),
+        end: vi.fn()
+      }
+      provider = new SshFilesystemProvider('conn-1', mux as never, async () => sftp as never)
+
+      await provider.downloadFile('/home/user/archive.zip', '/tmp/archive.zip')
+
+      expect(sftp.fastGet).toHaveBeenCalledWith(
+        '/home/user/archive.zip',
+        '/tmp/archive.zip',
+        expect.any(Function)
+      )
+      expect(sftp.end).toHaveBeenCalled()
+    })
+
+    it('closes the SFTP session when raw download fails', async () => {
+      const sftp = {
+        fastGet: vi.fn(
+          (_source: string, _destination: string, callback: (err?: Error | null) => void) =>
+            callback(new Error('download failed'))
+        ),
+        end: vi.fn()
+      }
+      provider = new SshFilesystemProvider('conn-1', mux as never, async () => sftp as never)
+
+      await expect(
+        provider.downloadFile('/home/user/archive.zip', '/tmp/archive.zip')
+      ).rejects.toThrow('download failed')
+
+      expect(sftp.end).toHaveBeenCalled()
+    })
+  })
+
   describe('createDirNoClobber', () => {
     it('sends fs.createDirNoClobber request', async () => {
       await provider.createDirNoClobber('/home/user/new-dir')
@@ -469,6 +508,43 @@ describe('SshFilesystemProvider', () => {
       unsub()
 
       expect(mux.notify).toHaveBeenCalledWith('fs.unwatch', { rootPath: '/home/user/project' })
+    })
+
+    it('sends fs.unwatch for active roots when disposed', async () => {
+      const callback = vi.fn()
+      await provider.watch('/home/user/project', callback)
+
+      provider.dispose()
+
+      expect(mux.notify).toHaveBeenCalledWith('fs.unwatch', { rootPath: '/home/user/project' })
+      const notifHandler = mux.onNotification.mock.calls[0][0]
+      notifHandler('fs.changed', {
+        events: [{ kind: 'update', absolutePath: '/home/user/project/file.ts' }]
+      })
+      expect(callback).not.toHaveBeenCalled()
+    })
+
+    it('unwatches when disposed while fs.watch setup is still resolving', async () => {
+      let resolveWatch: () => void = () => {}
+      mux.request.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveWatch = resolve
+          })
+      )
+      const callback = vi.fn()
+      const pendingWatch = provider.watch('/home/user/project', callback)
+
+      provider.dispose()
+      resolveWatch()
+
+      await expect(pendingWatch).rejects.toThrow('SSH filesystem provider disposed')
+      expect(mux.notify).toHaveBeenCalledWith('fs.unwatch', { rootPath: '/home/user/project' })
+      const notifHandler = mux.onNotification.mock.calls[0][0]
+      notifHandler('fs.changed', {
+        events: [{ kind: 'update', absolutePath: '/home/user/project/file.ts' }]
+      })
+      expect(callback).not.toHaveBeenCalled()
     })
 
     it('does not send fs.unwatch while other roots are watched', async () => {

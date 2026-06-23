@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  AUTOMATION_CRON_EXPRESSION_MAX_BYTES,
   buildAutomationCronSchedule,
   buildAutomationRrule,
   classifyAutomationCronSchedule,
   formatAutomationSchedule,
+  getAutomationCronExpressionFields,
   isValidAutomationCronSchedule,
   isValidAutomationSchedule,
   latestAutomationOccurrenceAtOrBefore,
@@ -21,6 +23,10 @@ function formatTimeForTest(hour: number, minute: number): string {
   }).format(date)
 }
 
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
 describe('automation schedules', () => {
   it('uses the latest overdue hourly occurrence for missed-run grace decisions', () => {
     const rrule = buildAutomationRrule({ preset: 'hourly', hour: 9, minute: 0 })
@@ -30,6 +36,16 @@ describe('automation schedules', () => {
       new Date('2026-05-13T14:20:00').getTime()
     )
     expect(latest).toBe(new Date('2026-05-13T14:00:00').getTime())
+  })
+
+  it('does not return a future hourly dtstart that is off the scheduled minute', () => {
+    const rrule = buildAutomationRrule({ preset: 'hourly', hour: 9, minute: 0 })
+    const next = nextAutomationOccurrenceAfter(
+      rrule,
+      new Date('2026-05-13T10:30:00').getTime(),
+      new Date('2026-05-13T09:00:00').getTime()
+    )
+    expect(next).toBe(new Date('2026-05-13T11:00:00').getTime())
   })
 
   it('computes weekday schedules without returning weekend candidates', () => {
@@ -69,6 +85,19 @@ describe('automation schedules', () => {
       'Invalid recurrence day.'
     )
     expect(tryParseAutomationRrule('FREQ=WEEKLY;BYDAY=MO,NO;BYHOUR=10;BYMINUTE=15')).toBeNull()
+  })
+
+  it('rejects weekly RRULE schedules that cannot match any day', () => {
+    const rrule = 'FREQ=WEEKLY;BYHOUR=9;BYMINUTE=0'
+
+    expect(isValidAutomationSchedule(rrule)).toBe(false)
+    expect(() =>
+      nextAutomationOccurrenceAfter(
+        rrule,
+        new Date('2026-05-01T00:00:00').getTime(),
+        new Date('2026-05-02T00:00:00').getTime()
+      )
+    ).toThrow('Invalid recurrence day.')
   })
 
   it('formats invalid schedules with a safe fallback label', () => {
@@ -115,6 +144,28 @@ describe('automation schedules', () => {
       `Weekdays at ${formatTimeForTest(10, 15)}`
     )
     expect(formatAutomationSchedule('30 12 * * 7')).toBe(`Sundays at ${formatTimeForTest(12, 30)}`)
+  })
+
+  it('tokenizes pasted cron whitespace without regex field splitting', () => {
+    const split = vi.spyOn(String.prototype, 'split')
+    const schedule = ['15', String.fromCharCode(160), '10\n*\t*\rMON-FRI'].join('')
+
+    expect(getAutomationCronExpressionFields(schedule)).toEqual(['15', '10', '*', '*', 'MON-FRI'])
+    expect(formatAutomationSchedule(schedule)).toBe(`Weekdays at ${formatTimeForTest(10, 15)}`)
+    expect(
+      split.mock.calls.filter(([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+')
+    ).toHaveLength(0)
+  })
+
+  it('rejects oversized pasted cron expressions before field tokenization', () => {
+    const split = vi.spyOn(String.prototype, 'split')
+    const oversizedSchedule = 'secret-cron-field '.repeat(AUTOMATION_CRON_EXPRESSION_MAX_BYTES)
+
+    expect(getAutomationCronExpressionFields(oversizedSchedule)).toEqual([])
+    expect(isValidAutomationCronSchedule(oversizedSchedule)).toBe(false)
+    expect(
+      split.mock.calls.filter(([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+')
+    ).toHaveLength(0)
   })
 
   it('classifies simple cron schedules for provider edit flows', () => {

@@ -35,11 +35,17 @@ const {
   rateLimitGuardMock: vi.fn<() => RateLimitGuardResult>(() => ({ blocked: false })),
   noteRateLimitSpendMock: vi.fn(),
   ghRepoExecOptionsMock: vi.fn((context) =>
-    context.connectionId ? {} : { cwd: context.repoPath }
+    context.connectionId
+      ? {}
+      : {
+          cwd: context.repoPath,
+          ...(context.wslDistro ? { wslDistro: context.wslDistro } : {})
+        }
   ),
-  githubRepoContextMock: vi.fn((repoPath, connectionId) => ({
+  githubRepoContextMock: vi.fn((repoPath, connectionId, localGitOptions) => ({
     repoPath,
-    connectionId: connectionId ?? null
+    connectionId: connectionId ?? null,
+    ...localGitOptions
   })),
   getSshGitProviderMock: vi.fn(),
   acquireMock: vi.fn(),
@@ -91,8 +97,10 @@ vi.mock('./rate-limit', () => ({
 }))
 
 import {
+  checkOrcaStarred,
   getPRComments,
   getPRForBranch,
+  getRepoUpstream,
   getWorkItem,
   getPullRequestPushTarget,
   mergePR,
@@ -100,9 +108,49 @@ import {
   setPRAutoMerge,
   updatePRState,
   updatePRTitle,
+  _getMergeQueueCacheSizeForTests,
   _resetOwnerRepoCache,
   _resetMergeQueueCacheForTests
 } from './client'
+
+describe('checkOrcaStarred', () => {
+  beforeEach(() => {
+    execFileAsyncMock.mockReset()
+    acquireMock.mockReset()
+    releaseMock.mockReset()
+    acquireMock.mockResolvedValue(undefined)
+  })
+
+  it('returns true only for an included successful GitHub response', async () => {
+    execFileAsyncMock.mockResolvedValueOnce({ stdout: 'HTTP/2.0 204 No Content\r\n', stderr: '' })
+
+    await expect(checkOrcaStarred()).resolves.toBe(true)
+
+    expect(execFileAsyncMock).toHaveBeenCalledWith(
+      'gh',
+      ['api', '--include', 'user/starred/stablyai/orca'],
+      { encoding: 'utf-8' }
+    )
+  })
+
+  it('returns true for an HTTP 200 starred response', async () => {
+    execFileAsyncMock.mockResolvedValueOnce({ stdout: 'HTTP/2.0 200 OK\r\n', stderr: '' })
+
+    await expect(checkOrcaStarred()).resolves.toBe(true)
+  })
+
+  it('returns false for GitHub 404 not starred responses', async () => {
+    execFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 404: Not Found'))
+
+    await expect(checkOrcaStarred()).resolves.toBe(false)
+  })
+
+  it('returns null when gh exits successfully without response headers', async () => {
+    execFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await expect(checkOrcaStarred()).resolves.toBe(null)
+  })
+})
 
 describe('getPRForBranch', () => {
   beforeEach(() => {
@@ -303,6 +351,71 @@ describe('getPRForBranch', () => {
       state: 'open',
       headSha: 'linked-head-oid'
     })
+  })
+
+  it('hydrates repository merge method settings for exact PR lookups', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 99,
+          title: 'Linked PR',
+          state: 'OPEN',
+          url: 'https://github.com/acme/widgets/pull/99',
+          statusCheckRollup: [],
+          updatedAt: '2026-03-28T00:00:00Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          reviewDecision: 'APPROVED',
+          mergeStateStatus: 'CLEAN',
+          autoMergeRequest: null,
+          baseRefName: 'main',
+          headRefName: 'someone/fix',
+          baseRefOid: 'base-oid',
+          headRefOid: 'linked-head-oid'
+        })
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          data: {
+            repository: {
+              viewerDefaultMergeMethod: 'REBASE',
+              mergeCommitAllowed: false,
+              rebaseMergeAllowed: true,
+              squashMergeAllowed: true,
+              autoMergeAllowed: true,
+              mergeQueue: null
+            }
+          }
+        })
+      })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/local-worktree', 99)
+
+    expect(pr?.mergeMethodSettings).toEqual({
+      defaultMethod: 'rebase',
+      allowedMethods: {
+        squash: true,
+        merge: false,
+        rebase: true
+      }
+    })
+    expect(pr?.mergeQueueRequired).toBe(false)
+    expect(pr?.autoMergeAllowed).toBe(true)
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      expect.arrayContaining([
+        'api',
+        'graphql',
+        '-f',
+        'owner=acme',
+        '-f',
+        'repo=widgets',
+        '-f',
+        'branch=main'
+      ]),
+      { cwd: '/repo-root' }
+    )
   })
 
   it('treats linked PR metadata as authoritative even when the branch head differs', async () => {
@@ -522,6 +635,104 @@ describe('getPRForBranch', () => {
     })
   })
 
+  it('ignores merged PRs discovered only by branch lookup when the branch moved on', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 5511,
+            title: 'Merged branch PR',
+            state: 'closed',
+            merged_at: '2026-06-16T17:15:33Z',
+            html_url: 'https://github.com/stablyai/orca/pull/5511',
+            updated_at: '2026-06-16T17:15:33Z',
+            draft: false,
+            mergeable_state: 'clean',
+            head: { ref: 'add-guide-for-mobile-emulator-use', sha: 'head-oid' },
+            base: { ref: 'main', sha: 'base-oid' }
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 5511,
+          title: 'Merged branch PR',
+          state: 'MERGED',
+          url: 'https://github.com/stablyai/orca/pull/5511',
+          statusCheckRollup: [],
+          updatedAt: '2026-06-16T17:15:33Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'add-guide-for-mobile-emulator-use',
+          baseRefOid: 'base-oid',
+          headRefOid: 'head-oid'
+        })
+      })
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: 'new-local-head-oid\n',
+      stderr: ''
+    })
+
+    const pr = await getPRForBranch('/repo-root', 'add-guide-for-mobile-emulator-use')
+
+    expect(pr).toBeNull()
+  })
+
+  it('shows a merged branch PR when it still matches the current HEAD', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 5875,
+            title: 'Merged current branch PR',
+            state: 'closed',
+            merged_at: '2026-06-20T04:53:05Z',
+            html_url: 'https://github.com/acme/widgets/pull/5875',
+            updated_at: '2026-06-20T04:53:05Z',
+            draft: false,
+            mergeable_state: 'clean',
+            head: { ref: 'fix-tab-strip-layout-test', sha: 'current-head-oid' },
+            base: { ref: 'main', sha: 'base-oid' }
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 5875,
+          title: 'Merged current branch PR',
+          state: 'MERGED',
+          url: 'https://github.com/acme/widgets/pull/5875',
+          statusCheckRollup: [],
+          updatedAt: '2026-06-20T04:53:05Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'fix-tab-strip-layout-test',
+          baseRefOid: 'base-oid',
+          headRefOid: 'current-head-oid'
+        })
+      })
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: 'current-head-oid\n',
+      stderr: ''
+    })
+
+    const pr = await getPRForBranch('/repo-root', 'fix-tab-strip-layout-test')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['rev-parse', 'HEAD'], {
+      cwd: '/repo-root'
+    })
+    expect(pr).toMatchObject({
+      number: 5875,
+      title: 'Merged current branch PR',
+      state: 'merged',
+      headSha: 'current-head-oid'
+    })
+  })
+
   it('prefers branch lookup over a fallback PR number', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
@@ -610,6 +821,267 @@ describe('getPRForBranch', () => {
       { cwd: '/repo-root' }
     )
     expect(pr).toMatchObject({ number: 42, title: 'Fallback PR lookup' })
+  })
+
+  it('treats a merged branch lookup as a miss before using a fallback PR number', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 5511,
+            title: 'Merged branch PR',
+            state: 'closed',
+            merged_at: '2026-06-16T17:15:33Z',
+            html_url: 'https://github.com/stablyai/orca/pull/5511',
+            updated_at: '2026-06-16T17:15:33Z',
+            draft: false,
+            mergeable_state: 'clean',
+            head: { ref: 'feature/test', sha: 'merged-head-oid' },
+            base: { ref: 'main', sha: 'base-oid' }
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 5511,
+          title: 'Merged branch PR',
+          state: 'MERGED',
+          url: 'https://github.com/stablyai/orca/pull/5511',
+          statusCheckRollup: [],
+          updatedAt: '2026-06-16T17:15:33Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'feature/test',
+          baseRefOid: 'base-oid',
+          headRefOid: 'merged-head-oid'
+        })
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 42,
+          title: 'Open fallback PR',
+          state: 'OPEN',
+          url: 'https://github.com/acme/widgets/pull/42',
+          statusCheckRollup: [],
+          updatedAt: '2026-06-17T00:00:00Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'contributor/original',
+          baseRefOid: 'base-oid',
+          headRefOid: 'fallback-head-oid'
+        })
+      })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test', null, null, 42)
+
+    expect(pr).toMatchObject({ number: 42, title: 'Open fallback PR' })
+  })
+
+  it('returns a merged PR when branch lookup and fallback point at the same PR', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 5511,
+            title: 'Merged current PR',
+            state: 'closed',
+            merged_at: '2026-06-16T17:15:33Z',
+            html_url: 'https://github.com/acme/widgets/pull/5511',
+            updated_at: '2026-06-16T17:15:33Z',
+            draft: false,
+            mergeable_state: 'clean',
+            head: { ref: 'feature/test', sha: 'merged-head-oid' },
+            base: { ref: 'main', sha: 'base-oid' }
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 5511,
+          title: 'Merged current PR',
+          state: 'MERGED',
+          url: 'https://github.com/acme/widgets/pull/5511',
+          statusCheckRollup: [],
+          updatedAt: '2026-06-16T17:15:33Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'feature/test',
+          baseRefOid: 'base-oid',
+          headRefOid: 'merged-head-oid'
+        })
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 5511,
+          title: 'Merged current PR',
+          state: 'MERGED',
+          url: 'https://github.com/acme/widgets/pull/5511',
+          statusCheckRollup: [],
+          updatedAt: '2026-06-16T17:15:33Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'feature/test',
+          baseRefOid: 'base-oid',
+          headRefOid: 'merged-head-oid'
+        })
+      })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test', null, null, 5511)
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      3,
+      [
+        'pr',
+        'view',
+        '5511',
+        '--repo',
+        'acme/widgets',
+        '--json',
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(pr).toMatchObject({ number: 5511, state: 'merged', title: 'Merged current PR' })
+  })
+
+  it('does not carry a merged upstream branch head repo into a fallback PR number', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
+      candidates: [{ owner: 'stablyai', repo: 'orca' }],
+      headRepo: { owner: 'origin-owner', repo: 'orca' }
+    })
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'fork-owner', repo: 'orca' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: 'fork/contributor/original\n',
+      stderr: ''
+    })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 5511,
+            title: 'Merged upstream branch PR',
+            state: 'closed',
+            merged_at: '2026-06-16T17:15:33Z',
+            html_url: 'https://github.com/stablyai/orca/pull/5511',
+            updated_at: '2026-06-16T17:15:33Z',
+            draft: false,
+            mergeable_state: 'clean',
+            head: { ref: 'contributor/original', sha: 'merged-head-oid' },
+            base: { ref: 'main', sha: 'base-oid' }
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 5511,
+          title: 'Merged upstream branch PR',
+          state: 'MERGED',
+          url: 'https://github.com/stablyai/orca/pull/5511',
+          statusCheckRollup: [],
+          updatedAt: '2026-06-16T17:15:33Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'contributor/original',
+          baseRefOid: 'base-oid',
+          headRefOid: 'merged-head-oid'
+        })
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 42,
+          title: 'Open fallback PR',
+          state: 'OPEN',
+          url: 'https://github.com/stablyai/orca/pull/42',
+          statusCheckRollup: [],
+          updatedAt: '2026-06-17T00:00:00Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'fresh/fallback',
+          baseRefOid: 'base-oid',
+          headRefOid: 'fallback-head-oid'
+        })
+      })
+
+    const pr = await getPRForBranch('/repo-root', 'local-created-from-pr', null, null, 42)
+
+    expect(pr).toMatchObject({
+      number: 42,
+      title: 'Open fallback PR',
+      headRepo: { owner: 'origin-owner', repo: 'orca' }
+    })
+  })
+
+  it('ignores merged PRs discovered only from a fallback PR number', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 5511,
+          title: 'Merged fallback PR',
+          state: 'MERGED',
+          url: 'https://github.com/stablyai/orca/pull/5511',
+          statusCheckRollup: [],
+          updatedAt: '2026-06-16T17:15:33Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'add-guide-for-mobile-emulator-use',
+          baseRefOid: 'base-oid',
+          headRefOid: 'head-oid'
+        })
+      })
+
+    const pr = await getPRForBranch(
+      '/repo-root',
+      'add-guide-for-mobile-emulator-use',
+      null,
+      null,
+      5511
+    )
+
+    expect(pr).toBeNull()
+  })
+
+  it('returns a merged fallback PR when visible fallback lifecycle is accepted', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 5511,
+          title: 'Merged visible fallback PR',
+          state: 'MERGED',
+          url: 'https://github.com/acme/widgets/pull/5511',
+          statusCheckRollup: [],
+          updatedAt: '2026-06-16T17:15:33Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'deleted-head',
+          baseRefOid: 'base-oid',
+          headRefOid: 'head-oid'
+        })
+      })
+
+    const pr = await getPRForBranch('/repo-root', 'deleted-head', null, null, 5511, {
+      acceptMergedFallbackPR: true
+    })
+
+    expect(pr).toMatchObject({
+      number: 5511,
+      state: 'merged',
+      title: 'Merged visible fallback PR'
+    })
   })
 
   it('falls back to the tracked upstream branch when the local branch name differs', async () => {
@@ -951,6 +1423,109 @@ describe('getPRForBranch', () => {
     })
   })
 
+  it('routes local WSL branch status and conflict summary git probes through the selected distro', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([
+        {
+          number: 42,
+          title: 'Fix PR discovery',
+          state: 'open',
+          html_url: 'https://github.com/acme/widgets/pull/42',
+          updated_at: '2026-06-16T00:00:00Z',
+          draft: false,
+          mergeable_state: 'dirty',
+          base: { ref: 'main', sha: 'base-oid' },
+          head: { ref: 'feature/test', sha: 'head-oid' }
+        }
+      ])
+    })
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '' })
+      .mockResolvedValueOnce({ stdout: 'latest-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: 'merge-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: '2\n' })
+      .mockResolvedValueOnce({ stdout: 'result-tree-oid\u0000src/conflict.ts\u0000' })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test', null, null, null, {
+      localGitExecOptions: { wslDistro: 'Ubuntu' }
+    })
+
+    expect(pr?.conflictSummary?.files).toEqual(['src/conflict.ts'])
+    expect(resolvePRRepositoryCandidatesMock).toHaveBeenCalledWith('/repo-root', null, {
+      wslDistro: 'Ubuntu'
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({
+        cwd: '/repo-root',
+        wslDistro: 'Ubuntu'
+      })
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      ['fetch', '--quiet', 'origin', 'main'],
+      {
+        cwd: '/repo-root',
+        timeout: 10_000,
+        wslDistro: 'Ubuntu'
+      }
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
+      [
+        'merge-tree',
+        '--write-tree',
+        '--name-only',
+        '-z',
+        '--no-messages',
+        '--merge-base',
+        'merge-base-oid',
+        'head-oid',
+        'latest-base-oid'
+      ],
+      {
+        cwd: '/repo-root',
+        wslDistro: 'Ubuntu'
+      }
+    )
+  })
+
+  it('treats GitHub DIRTY merge state as conflicting when mergeable is still unknown', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 42,
+          title: 'Fix PR discovery',
+          state: 'OPEN',
+          url: 'https://github.com/acme/widgets/pull/42',
+          statusCheckRollup: [],
+          updatedAt: '2026-03-28T00:00:00Z',
+          isDraft: false,
+          mergeable: 'UNKNOWN',
+          mergeStateStatus: 'DIRTY',
+          baseRefName: 'main',
+          headRefName: 'feature/test',
+          baseRefOid: 'base-oid',
+          headRefOid: 'head-oid'
+        })
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({ data: { repository: { mergeQueue: null } } })
+      })
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '' })
+      .mockResolvedValueOnce({ stdout: 'latest-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: 'merge-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: '1\n' })
+      .mockResolvedValueOnce({ stdout: 'result-tree-oid\u0000src/conflict.ts\u0000' })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test', 42)
+
+    expect(pr?.mergeable).toBe('CONFLICTING')
+    expect(pr?.conflictSummary?.files).toEqual(['src/conflict.ts'])
+  })
+
   it('omits conflict summaries for SSH-backed repos', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock.mockResolvedValueOnce({
@@ -1005,6 +1580,149 @@ describe('getPRForBranch', () => {
     const pr = await getPRForBranch('/repo-root', 'feature/test')
 
     expect(pr?.conflictSummary?.files).toEqual(['src/conflict.ts'])
+  })
+
+  it('falls back to the legacy merge-tree invocation when Git lacks --merge-base', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([
+        {
+          number: 42,
+          title: 'Fix PR discovery',
+          state: 'open',
+          html_url: 'https://github.com/acme/widgets/pull/42',
+          updated_at: '2026-03-28T00:00:00Z',
+          draft: false,
+          mergeable_state: 'dirty',
+          base: { ref: 'main', sha: 'base-oid' },
+          head: { ref: 'feature/test', sha: 'head-oid' }
+        }
+      ])
+    })
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '' })
+      .mockResolvedValueOnce({ stdout: 'latest-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: 'merge-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: '2\n' })
+      .mockRejectedValueOnce({
+        stderr: "error: unknown option `merge-base'"
+      })
+      .mockRejectedValueOnce({
+        stdout: 'result-tree-oid\u0000src/conflict.ts\u0000'
+      })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'merge-tree',
+        '--write-tree',
+        '--name-only',
+        '-z',
+        '--no-messages',
+        '--merge-base',
+        'merge-base-oid',
+        'head-oid',
+        'latest-base-oid'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
+      [
+        'merge-tree',
+        '--write-tree',
+        '--name-only',
+        '-z',
+        '--no-messages',
+        'head-oid',
+        'latest-base-oid'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(pr?.conflictSummary?.files).toEqual(['src/conflict.ts'])
+  })
+
+  it('does not retry legacy merge-tree for older Git failures unrelated to --merge-base', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([
+        {
+          number: 42,
+          title: 'Fix PR discovery',
+          state: 'open',
+          html_url: 'https://github.com/acme/widgets/pull/42',
+          updated_at: '2026-03-28T00:00:00Z',
+          draft: false,
+          mergeable_state: 'dirty',
+          base: { ref: 'main', sha: 'base-oid' },
+          head: { ref: 'feature/test', sha: 'head-oid' }
+        }
+      ])
+    })
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '' })
+      .mockResolvedValueOnce({ stdout: 'latest-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: 'merge-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: '2\n' })
+      .mockRejectedValueOnce({
+        stderr: 'usage: git merge-tree <base-tree> <branch1> <branch2>'
+      })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(5)
+    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
+      [
+        'merge-tree',
+        '--write-tree',
+        '--name-only',
+        '-z',
+        '--no-messages',
+        '--merge-base',
+        'merge-base-oid',
+        'head-oid',
+        'latest-base-oid'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(pr?.mergeable).toBe('CONFLICTING')
+    expect(pr?.conflictSummary).toBeUndefined()
+  })
+
+  it('marks the conflict summary as locally clean when GitHub reports dirty but merge-tree has no conflicted files', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([
+        {
+          number: 42,
+          title: 'Fix PR discovery',
+          state: 'open',
+          html_url: 'https://github.com/acme/widgets/pull/42',
+          updated_at: '2026-06-20T22:16:43Z',
+          draft: false,
+          mergeable_state: 'dirty',
+          base: { ref: 'main', sha: 'base-oid' },
+          head: { ref: 'feature/test', sha: 'head-oid' }
+        }
+      ])
+    })
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '' })
+      .mockResolvedValueOnce({ stdout: 'latest-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: 'merge-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: '1\n' })
+      .mockResolvedValueOnce({ stdout: 'result-tree-oid\u0000' })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test')
+
+    expect(pr?.mergeable).toBe('CONFLICTING')
+    expect(pr?.conflictSummary).toEqual({
+      baseRef: 'main',
+      baseCommit: 'latest-',
+      commitsBehind: 1,
+      files: [],
+      localMergeState: 'clean'
+    })
   })
 
   it('falls back to GitHub baseRefOid when fetching or resolving the base ref fails', async () => {
@@ -1165,10 +1883,7 @@ describe('getPRForBranch', () => {
         }
       })
     })
-    gitExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: 'git@github.com:stablyai/orca.git\n',
-      stderr: ''
-    })
+    getRemoteUrlForRepoMock.mockResolvedValueOnce('git@github.com:stablyai/orca.git')
 
     const target = await getPullRequestPushTarget('/repo-root', 1738)
 
@@ -1176,9 +1891,67 @@ describe('getPRForBranch', () => {
       cwd: '/repo-root'
     })
     expect(target).toEqual({
-      remoteName: 'pr-prateek-orca',
-      branchName: 'prateek/fix-sidebar-agents-toggle',
-      remoteUrl: 'git@github.com:prateek/orca.git'
+      pushTarget: {
+        remoteName: 'pr-prateek-orca',
+        branchName: 'prateek/fix-sidebar-agents-toggle',
+        remoteUrl: 'git@github.com:prateek/orca.git'
+      }
+    })
+  })
+
+  it('surfaces maintainer_can_modify=false alongside a fork PR push target', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        maintainer_can_modify: false,
+        head: {
+          ref: 'prateek/fix-sidebar-agents-toggle',
+          repo: {
+            full_name: 'prateek/orca',
+            name: 'orca',
+            clone_url: 'https://github.com/prateek/orca.git',
+            ssh_url: 'git@github.com:prateek/orca.git',
+            owner: { login: 'prateek' }
+          }
+        }
+      })
+    })
+    getRemoteUrlForRepoMock.mockResolvedValueOnce('git@github.com:stablyai/orca.git')
+
+    await expect(getPullRequestPushTarget('/repo-root', 1738)).resolves.toEqual({
+      pushTarget: {
+        remoteName: 'pr-prateek-orca',
+        branchName: 'prateek/fix-sidebar-agents-toggle',
+        remoteUrl: 'git@github.com:prateek/orca.git'
+      },
+      maintainerCanModify: false
+    })
+  })
+
+  it('omits maintainerCanModify when the API does not report the flag', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        head: {
+          ref: 'fix-sidebar',
+          repo: {
+            full_name: 'stablyai/orca',
+            name: 'orca',
+            clone_url: 'https://github.com/stablyai/orca.git',
+            ssh_url: 'git@github.com:stablyai/orca.git',
+            owner: { login: 'stablyai' }
+          }
+        }
+      })
+    })
+
+    await expect(getPullRequestPushTarget('/repo-root', 1738)).resolves.toEqual({
+      pushTarget: {
+        remoteName: 'origin',
+        branchName: 'fix-sidebar'
+      }
     })
   })
 
@@ -1201,10 +1974,64 @@ describe('getPRForBranch', () => {
     })
 
     await expect(getPullRequestPushTarget('/repo-root', 1738)).resolves.toEqual({
-      remoteName: 'origin',
-      branchName: 'fix-sidebar'
+      pushTarget: {
+        remoteName: 'origin',
+        branchName: 'fix-sidebar'
+      }
     })
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('resolves a distinct upstream remote as the repo upstream', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'tmchow', repo: 'orca' })
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+
+    await expect(getRepoUpstream('/repo-root')).resolves.toEqual({
+      owner: 'stablyai',
+      repo: 'orca'
+    })
+
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('does not treat a same-repository upstream remote as a fork', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'StablyAI', repo: 'Orca' })
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({ isFork: false, parent: null })
+    })
+
+    await expect(getRepoUpstream('/repo-root')).resolves.toBeNull()
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      ['repo', 'view', 'StablyAI/Orca', '--json', 'isFork,parent'],
+      { cwd: '/repo-root', timeout: 10_000 }
+    )
+  })
+
+  it('does not mark an upstream-only GitHub remote as a fork', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce(null)
+
+    await expect(getRepoUpstream('/repo-root')).resolves.toBeNull()
+
+    expect(getOwnerRepoForRemoteMock).not.toHaveBeenCalled()
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the GitHub parent when no upstream remote is configured', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'tmchow', repo: 'orca' })
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce(null)
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        isFork: true,
+        parent: { name: 'orca', owner: { login: 'stablyai' } }
+      })
+    })
+
+    await expect(getRepoUpstream('/repo-root')).resolves.toEqual({
+      owner: 'stablyai',
+      repo: 'orca'
+    })
   })
 
   it('probes additional PR repo candidates when the first lookup is not found', async () => {
@@ -1234,8 +2061,10 @@ describe('getPRForBranch', () => {
       })
 
     await expect(getPullRequestPushTarget('/repo-root', 1849)).resolves.toEqual({
-      remoteName: 'origin',
-      branchName: 'feature/test'
+      pushTarget: {
+        remoteName: 'origin',
+        branchName: 'feature/test'
+      }
     })
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['api', 'repos/fork/orca/pulls/1849'], {
       cwd: '/repo-root'
@@ -1484,13 +2313,13 @@ describe('GitHub GraphQL rate-limit guard', () => {
     ghExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
 
     await expect(
-      setPRAutoMerge('/remote/repo-root', 7, true, 'ssh-1', {
+      setPRAutoMerge('/remote/repo-root', 7, true, 'squash', 'ssh-1', {
         owner: 'stablyai',
         repo: 'orca'
       })
     ).resolves.toEqual({ ok: true })
     await expect(
-      setPRAutoMerge('/remote/repo-root', 7, false, 'ssh-1', {
+      setPRAutoMerge('/remote/repo-root', 7, false, 'squash', 'ssh-1', {
         owner: 'stablyai',
         repo: 'orca'
       })
@@ -1498,7 +2327,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
 
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
-      ['pr', 'merge', '7', '--auto', '--repo', 'stablyai/orca'],
+      ['pr', 'merge', '7', '--auto', '--squash', '--repo', 'stablyai/orca'],
       expect.objectContaining({
         env: expect.objectContaining({ GH_PROMPT_DISABLED: '1' })
       })
@@ -1621,6 +2450,41 @@ describe('GitHub GraphQL rate-limit guard', () => {
     expect(
       ghExecFileAsyncMock.mock.calls.filter((call) => call[0].includes('graphql'))
     ).toHaveLength(1)
+  })
+
+  it('bounds merge metadata cache entries across many base branches', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+    let prViewCount = 0
+    ghExecFileAsyncMock.mockImplementation(async (args) => {
+      if (args.includes('graphql')) {
+        return { stdout: JSON.stringify({ data: { repository: { mergeQueue: null } } }) }
+      }
+      prViewCount += 1
+      return {
+        stdout: JSON.stringify({
+          number: prViewCount,
+          title: 'PR',
+          state: 'OPEN',
+          url: `https://github.com/stablyai/orca/pull/${prViewCount}`,
+          statusCheckRollup: [],
+          updatedAt: '2026-04-01T00:00:00Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          reviewDecision: 'APPROVED',
+          mergeStateStatus: 'CLEAN',
+          autoMergeRequest: null,
+          baseRefName: `base-${prViewCount}`,
+          baseRefOid: 'base-oid',
+          headRefOid: 'head-oid'
+        })
+      }
+    })
+
+    for (let i = 0; i < 260; i++) {
+      await getPRForBranch('/repo-root', `feature/${i}`, i + 1)
+    }
+
+    expect(_getMergeQueueCacheSizeForTests()).toBe(256)
   })
 
   it('returns conflicting file details instead of running gh merge when PR is dirty', async () => {

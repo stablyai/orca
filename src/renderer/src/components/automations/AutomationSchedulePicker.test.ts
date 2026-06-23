@@ -22,6 +22,8 @@ const BASE_DRAFT: AutomationDraft = {
   workspaceId: '',
   baseBranch: '',
   reuseSession: false,
+  precheckCommand: '',
+  precheckTimeoutSeconds: '30',
   preset: 'weekdays',
   time: '09:15',
   dayOfWeek: '1',

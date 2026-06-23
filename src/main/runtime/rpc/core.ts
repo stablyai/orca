@@ -53,6 +53,9 @@ export type RpcContext = {
   // server reap all subscriptions for a closing socket, even when other
   // sockets for the same deviceToken stay alive (multi-screen mobile).
   connectionId?: string
+  // Why: shared-control multiplexes many logical streams over one socket. Some
+  // handlers need the frame id to register cleanup at logical-stream granularity.
+  requestId?: string
   // Why: WebSocket RPCs authenticate by mobile device token. State-owning
   // handlers use this to clean up when that paired device disconnects.
   clientId?: string

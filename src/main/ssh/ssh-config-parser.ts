@@ -34,21 +34,19 @@ export function parseSshConfig(content: string): SshConfigHost[] {
       continue
     }
 
-    const match = line.match(/^(\S+)\s+(.+)$/)
-    if (!match) {
+    const directive = parseConfigDirective(line)
+    if (!directive) {
       continue
     }
 
-    const [, keyword, rawValue] = match
-    const key = keyword.toLowerCase()
-    const value = rawValue.trim()
+    const { key, rawValue } = directive
 
     if (key === 'host') {
       if (current.length > 0) {
         appendHosts(hosts, current)
       }
 
-      const patterns = splitHostPatterns(value)
+      const patterns = splitHostPatterns(rawValue)
       const concretePatterns = patterns.filter(
         (pattern) => !pattern.startsWith('!') && !pattern.includes('*') && !pattern.includes('?')
       )
@@ -72,6 +70,8 @@ export function parseSshConfig(content: string): SshConfigHost[] {
     if (current.length === 0) {
       continue
     }
+
+    const value = parseScalarConfigValue(rawValue)
 
     switch (key) {
       case 'hostname':
@@ -106,7 +106,9 @@ export function parseSshConfig(content: string): SshConfigHost[] {
         break
       case 'proxycommand':
         for (const host of current) {
-          host.proxyCommand = value
+          // Why: OpenSSH treats ProxyCommand as a shell snippet and preserves
+          // the rest of the line, including quotes and `#` characters.
+          host.proxyCommand = rawValue.trim()
         }
         break
       case 'proxyusefdpass':
@@ -136,8 +138,30 @@ function appendHosts(target: SshConfigHost[], entries: SshConfigHost[]): void {
   }
 }
 
+function parseConfigDirective(line: string): { key: string; rawValue: string } | null {
+  const match = line.match(/^([^=\s]+)(?:\s*=\s*|\s+)(.*)$/)
+  if (!match) {
+    return null
+  }
+
+  return {
+    key: match[1].toLowerCase(),
+    rawValue: match[2].trim()
+  }
+}
+
+function parseScalarConfigValue(input: string): string {
+  // Why: scalar OpenSSH directives strip wrapping quotes and inline comments;
+  // keeping them would turn valid config values into bad hostnames/users/paths.
+  return splitOpenSshArguments(input)[0] ?? ''
+}
+
 function splitHostPatterns(input: string): string[] {
-  const patterns: string[] = []
+  return splitOpenSshArguments(input)
+}
+
+function splitOpenSshArguments(input: string): string[] {
+  const args: string[] = []
   let current = ''
   let inQuotes = false
   let escaped = false
@@ -166,7 +190,7 @@ function splitHostPatterns(input: string): string[] {
 
     if (!inQuotes && /\s/.test(char)) {
       if (current) {
-        patterns.push(current)
+        args.push(current)
         current = ''
       }
       continue
@@ -176,10 +200,10 @@ function splitHostPatterns(input: string): string[] {
   }
 
   if (current) {
-    patterns.push(current)
+    args.push(current)
   }
 
-  return patterns
+  return args
 }
 
 /** Read and parse the user's ~/.ssh/config file. Returns empty array if not found. */

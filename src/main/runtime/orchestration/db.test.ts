@@ -8,7 +8,7 @@ import { OrchestrationDb } from './db'
 import type { MessageType } from './db'
 
 describe('OrchestrationDb', () => {
-  let db: OrchestrationDb
+  let db: OrchestrationDb | undefined
 
   afterEach(() => {
     db?.close()
@@ -170,6 +170,21 @@ describe('OrchestrationDb', () => {
       expect(task.id).toMatch(/^task_/)
       expect(task.status).toBe('ready')
       expect(task.deps).toBe('[]')
+      expect(task.task_title).toBe('do something')
+      expect(task.display_name).toBe('do something')
+    })
+
+    it('persists explicit task display metadata', () => {
+      const d = createDb()
+      const task = d.createTask({
+        spec: 'full details',
+        taskTitle: 'Checkout race',
+        displayName: 'Fix checkout race'
+      })
+
+      expect(task.task_title).toBe('Checkout race')
+      expect(task.display_name).toBe('Fix checkout race')
+      expect(d.getTask(task.id)?.display_name).toBe('Fix checkout race')
     })
 
     it('persists the creating terminal handle for task-created worktrees', () => {
@@ -362,6 +377,21 @@ describe('OrchestrationDb', () => {
       const active = d.getActiveDispatchForTerminal('term_a')
       expect(active?.task_id).toBe(task.id)
       expect(d.getActiveDispatchForTerminal('term_b')).toBeUndefined()
+    })
+
+    it('getLatestDispatchForTerminal returns the most recent completed dispatch', () => {
+      const d = createDb()
+      const firstTask = d.createTask({ spec: 'first' })
+      const first = d.createDispatchContext(firstTask.id, 'term_a')
+      d.completeDispatch(first.id)
+      const secondTask = d.createTask({ spec: 'second' })
+      const second = d.createDispatchContext(secondTask.id, 'term_a')
+      d.completeDispatch(second.id)
+
+      const latest = d.getLatestDispatchForTerminal('term_a')
+      expect(latest?.id).toBe(second.id)
+      expect(latest?.status).toBe('completed')
+      expect(d.getActiveDispatchForTerminal('term_a')).toBeUndefined()
     })
 
     it('circuit breaker trips after 3 failures', () => {
@@ -665,6 +695,10 @@ describe('OrchestrationDb', () => {
     let tempDir: string
 
     afterEach(() => {
+      // Why: Windows keeps the SQLite file locked until the DB handle closes,
+      // so migration temp directories must close before recursive cleanup.
+      db?.close()
+      db = undefined
       if (tempDir) {
         rmSync(tempDir, { recursive: true, force: true })
       }
@@ -769,6 +803,8 @@ describe('OrchestrationDb', () => {
       const ctx = d.createDispatchContext(task.id, 'term_a')
       d.recordHeartbeat(ctx.id, '2026-05-04T00:00:00.000Z')
       expect(d.getDispatchContext(task.id)?.last_heartbeat_at).toBe('2026-05-04T00:00:00.000Z')
+      expect(d.getTask(task.id)?.task_title).toBe('work')
+      expect(d.getTask(task.id)?.display_name).toBe('work')
 
       // (c) Indexes still attached to messages post-rebuild.
       const sqlite = (d as unknown as { db: Database.Database }).db

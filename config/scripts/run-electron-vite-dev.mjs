@@ -279,6 +279,7 @@ function prepareDevCliWrapper() {
   const binDir = path.join(repoRoot, 'out', 'bin')
   mkdirSync(binDir, { recursive: true })
   const userDataPath = getDevUserDataPath()
+  const userDataBinDir = path.join(userDataPath, 'cli', 'bin')
   const cliPath = path.join(repoRoot, 'out', 'cli', 'index.js')
   const electronBin = getElectronExecutable()
 
@@ -289,13 +290,20 @@ function prepareDevCliWrapper() {
       'utf8'
     )
   } else {
+    const wrapperContent = `#!/usr/bin/env bash\nexport ORCA_USER_DATA_PATH=${JSON.stringify(userDataPath)}\nexport ORCA_APP_EXECUTABLE=${JSON.stringify(electronBin)}\nexport ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT=1\nexec node ${JSON.stringify(cliPath)} "$@"\n`
     const wrapperPath = path.join(binDir, 'orca-dev')
-    writeFileSync(
-      wrapperPath,
-      `#!/usr/bin/env bash\nexport ORCA_USER_DATA_PATH=${JSON.stringify(userDataPath)}\nexport ORCA_APP_EXECUTABLE=${JSON.stringify(electronBin)}\nexport ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT=1\nexec node ${JSON.stringify(cliPath)} "$@"\n`,
-      'utf8'
-    )
+    writeFileSync(wrapperPath, wrapperContent, 'utf8')
     chmodSync(wrapperPath, 0o755)
+
+    mkdirSync(userDataBinDir, { recursive: true })
+    for (const commandName of ['orca-dev', 'orca']) {
+      const userDataWrapperPath = path.join(userDataBinDir, commandName)
+      // Why: dev Orca terminals prepend this directory to PATH; refreshing the
+      // `orca` alias prevents stale global/userData wrappers from hijacking
+      // Orca-owned commands such as `orca claude-teams`.
+      writeFileSync(userDataWrapperPath, wrapperContent, 'utf8')
+      chmodSync(userDataWrapperPath, 0o755)
+    }
   }
 
   process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH ?? ''}`

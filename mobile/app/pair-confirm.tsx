@@ -4,6 +4,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { resolvePairConfirmRouteState } from '../src/transport/pair-confirm-state'
+import {
+  startPairingConnectionAttempt,
+  type PairingConnectionAttempt
+} from '../src/transport/pairing-connection-attempt'
 import { connect } from '../src/transport/rpc-client'
 import { saveHost, getNextHostName } from '../src/transport/host-store'
 import type { ConnectionLogEntry, RpcResponse } from '../src/transport/types'
@@ -30,6 +34,8 @@ export default function PairConfirmScreen() {
   // over the initial state setter) always sees the freshest list and we
   // batch fewer setState calls when entries arrive in bursts.
   const logsRef = useRef<ConnectionLogEntry[]>([])
+  const mountedRef = useRef(true)
+  const activePairingAttemptRef = useRef<PairingConnectionAttempt | null>(null)
 
   const routeState = resolvePairConfirmRouteState(params.code)
   const offer = routeState.offer
@@ -54,35 +60,66 @@ export default function PairConfirmScreen() {
     }, [cancel])
   )
 
+  const setPairConfirmRootRef = useCallback((node: View | null): void => {
+    if (node !== null) {
+      mountedRef.current = true
+      return
+    }
+    // Why: pairing attempts can outlive the visible route; dispose them when
+    // the confirm screen detaches without a passive cleanup-only Effect.
+    mountedRef.current = false
+    activePairingAttemptRef.current?.dispose()
+    activePairingAttemptRef.current = null
+  }, [])
+
   async function confirm() {
-    if (!offer) return
+    if (!offer) {
+      return
+    }
     setStatus('connecting')
     logsRef.current = []
     setLogs([])
     let client: ReturnType<typeof connect> | null = null
+    activePairingAttemptRef.current?.dispose()
 
     // Why: split the try/catch around the network call vs the local save
     // so a Keychain or AsyncStorage failure doesn't masquerade as a
     // "Cannot connect" error.
     let response: RpcResponse
-    let timedOut = false
-    const overallTimer = setTimeout(() => {
-      timedOut = true
-      client?.close()
-    }, PAIRING_OVERALL_TIMEOUT_MS)
+    const attempt = startPairingConnectionAttempt({
+      timeoutMs: PAIRING_OVERALL_TIMEOUT_MS,
+      closeClient: () => client?.close()
+    })
+    activePairingAttemptRef.current = attempt
     try {
       client = connect(offer.endpoint, offer.deviceToken, offer.publicKeyB64, {
         onLog: (entry) => {
+          if (!mountedRef.current || activePairingAttemptRef.current !== attempt) {
+            return
+          }
           logsRef.current = [...logsRef.current, entry]
           setLogs(logsRef.current)
         }
       })
       response = await client.sendRequest('status.get')
-      clearTimeout(overallTimer)
-      client.close()
-      client = null
+      const attemptIsCurrent = activePairingAttemptRef.current === attempt
+      attempt.dispose()
+      if (activePairingAttemptRef.current === attempt) {
+        activePairingAttemptRef.current = null
+      }
+      if (!mountedRef.current || !attemptIsCurrent) {
+        return
+      }
     } catch (err) {
-      clearTimeout(overallTimer)
+      const timedOut = attempt.timedOut
+      const attemptIsCurrent = activePairingAttemptRef.current === attempt
+      attempt.dispose()
+      if (activePairingAttemptRef.current === attempt) {
+        activePairingAttemptRef.current = null
+      }
+      if (!mountedRef.current || !attemptIsCurrent) {
+        return
+      }
       console.warn('[pair-confirm] connect failed', err)
       setStatus('error')
       setErrorMessage(
@@ -90,11 +127,13 @@ export default function PairConfirmScreen() {
           ? `Couldn't connect within ${PAIRING_OVERALL_TIMEOUT_MS / 1000}s — see log below for where it stalled`
           : 'Cannot connect — check that your computer is on the same network'
       )
-      client?.close()
       return
     }
 
     if (!response.ok) {
+      if (!mountedRef.current) {
+        return
+      }
       setStatus('error')
       setErrorMessage(
         response.error.code === 'unauthorized'
@@ -115,8 +154,14 @@ export default function PairConfirmScreen() {
         publicKeyB64: offer.publicKeyB64,
         lastConnected: Date.now()
       })
+      if (!mountedRef.current) {
+        return
+      }
       router.replace(`/h/${hostId}`)
     } catch (err) {
+      if (!mountedRef.current) {
+        return
+      }
       console.warn('[pair-confirm] save failed', err)
       setStatus('error')
       setErrorMessage(
@@ -128,7 +173,7 @@ export default function PairConfirmScreen() {
   const containerPadding = { paddingTop: insets.top + spacing.sm }
 
   return (
-    <View style={[styles.container, containerPadding]}>
+    <View ref={setPairConfirmRootRef} style={[styles.container, containerPadding]}>
       <Pressable style={styles.backButton} onPress={cancel}>
         <ChevronLeft size={22} color={colors.textSecondary} />
       </Pressable>
@@ -140,12 +185,14 @@ export default function PairConfirmScreen() {
             <Text style={styles.subtitle}>
               You opened a pairing link from your desktop. Confirm to add it to your hosts.
             </Text>
-            <Pressable style={styles.primaryButton} onPress={() => void confirm()}>
-              <Text style={styles.primaryButtonText}>Pair</Text>
-            </Pressable>
-            <Pressable style={styles.secondaryButton} onPress={cancel}>
-              <Text style={styles.secondaryButtonText}>Cancel</Text>
-            </Pressable>
+            <View style={styles.actionStack}>
+              <Pressable style={styles.primaryButton} onPress={() => void confirm()}>
+                <Text style={styles.primaryButtonText}>Pair</Text>
+              </Pressable>
+              <Pressable style={styles.secondaryButton} onPress={cancel}>
+                <Text style={styles.secondaryButtonText}>Cancel</Text>
+              </Pressable>
+            </View>
           </>
         )}
 
@@ -167,9 +214,11 @@ export default function PairConfirmScreen() {
                 <ConnectionLog entries={logs} title="Pairing log" />
               </View>
             )}
-            <Pressable style={styles.primaryButton} onPress={cancel}>
-              <Text style={styles.primaryButtonText}>Back to home</Text>
-            </Pressable>
+            <View style={styles.actionStack}>
+              <Pressable style={styles.primaryButton} onPress={cancel}>
+                <Text style={styles.primaryButtonText}>Back to home</Text>
+              </Pressable>
+            </View>
           </>
         )}
       </View>
@@ -212,9 +261,17 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: 20,
     marginBottom: spacing.xl,
-    textAlign: 'center'
+    textAlign: 'center',
+    maxWidth: 520,
+    alignSelf: 'center'
+  },
+  actionStack: {
+    width: '100%',
+    maxWidth: 360,
+    alignSelf: 'center'
   },
   primaryButton: {
+    width: '100%',
     backgroundColor: colors.textPrimary,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm + 2,
@@ -228,6 +285,7 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
   secondaryButton: {
+    width: '100%',
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm + 2,
     borderRadius: radii.button,

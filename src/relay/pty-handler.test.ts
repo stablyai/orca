@@ -165,6 +165,76 @@ describe('PtyHandler', () => {
     expect(handler.activePtyCount).toBe(1)
   })
 
+  it.skipIf(process.platform === 'win32')(
+    'enables shell-ready marker env for delivery-hinted startup commands',
+    async () => {
+      const oldShell = process.env.SHELL
+      const oldHome = process.env.HOME
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-shell-ready-spawn-'))
+
+      process.env.SHELL = '/bin/bash'
+      process.env.HOME = homeDir
+      try {
+        await dispatcher.callRequest('pty.spawn', {
+          env: { HOME: homeDir },
+          startupCommandDelivery: 'shell-ready'
+        })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+        if (oldHome === undefined) {
+          delete process.env.HOME
+        } else {
+          process.env.HOME = oldHome
+        }
+        rmSync(homeDir, { recursive: true, force: true })
+      }
+
+      const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
+        | { env?: Record<string, string> }
+        | undefined
+      expect(spawnOptions?.env?.ORCA_SHELL_READY_MARKER).toBe('1')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'enables shell-ready marker env for Codex native prefill commands',
+    async () => {
+      const oldShell = process.env.SHELL
+      const oldHome = process.env.HOME
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-codex-prefill-spawn-'))
+
+      process.env.SHELL = '/bin/bash'
+      process.env.HOME = homeDir
+      try {
+        await dispatcher.callRequest('pty.spawn', {
+          env: { HOME: homeDir },
+          command: "codex --prefill 'linked issue context'"
+        })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+        if (oldHome === undefined) {
+          delete process.env.HOME
+        } else {
+          process.env.HOME = oldHome
+        }
+        rmSync(homeDir, { recursive: true, force: true })
+      }
+
+      const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
+        | { env?: Record<string, string> }
+        | undefined
+      expect(spawnOptions?.env?.ORCA_SHELL_READY_MARKER).toBe('1')
+    }
+  )
+
   it('terminates spawned PTY when request becomes stale before response', async () => {
     const killSpy = vi.fn()
     const term = { ...mockPtyInstance, kill: killSpy, onData: vi.fn(), onExit: vi.fn() }
@@ -212,7 +282,84 @@ describe('PtyHandler', () => {
     expect(dataCallback).toBeDefined()
 
     dataCallback!('hello world')
+    expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.data', expect.anything())
+    vi.advanceTimersByTime(8)
     expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: 'pty-1', data: 'hello world' })
+  })
+
+  it('coalesces background PTY output before notifying the client', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((cb: (data: string) => void) => {
+        dataCallback = cb
+      }),
+      onExit: vi.fn()
+    })
+
+    await dispatcher.callRequest('pty.spawn', {})
+    dataCallback!('hello ')
+    dataCallback!('world')
+
+    expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.data', expect.anything())
+    vi.advanceTimersByTime(8)
+    expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+      id: 'pty-1',
+      data: 'hello world'
+    })
+  })
+
+  it('sends recent-input redraw output immediately', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((cb: (data: string) => void) => {
+        dataCallback = cb
+      }),
+      onExit: vi.fn()
+    })
+
+    await dispatcher.callRequest('pty.spawn', {})
+    dispatcher.callNotification('pty.data', { id: 'pty-1', data: 'a' })
+    dispatcher.notify.mockClear()
+
+    dataCallback!('\x1b[20;2Hredraw')
+
+    expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+      id: 'pty-1',
+      data: '\x1b[20;2Hredraw'
+    })
+    vi.advanceTimersByTime(8)
+    expect(dispatcher.notify).toHaveBeenCalledTimes(1)
+  })
+
+  it('drains large relay PTY output in bounded slices', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((cb: (data: string) => void) => {
+        dataCallback = cb
+      }),
+      onExit: vi.fn()
+    })
+
+    await dispatcher.callRequest('pty.spawn', {})
+    const firstChunk = 'x'.repeat(16 * 1024)
+    dataCallback!(`${firstChunk}tail`)
+
+    vi.advanceTimersByTime(8)
+    expect(dispatcher.notify).toHaveBeenCalledTimes(1)
+    expect(dispatcher.notify).toHaveBeenNthCalledWith(1, 'pty.data', {
+      id: 'pty-1',
+      data: firstChunk
+    })
+
+    vi.advanceTimersByTime(1)
+    expect(dispatcher.notify).toHaveBeenCalledTimes(2)
+    expect(dispatcher.notify).toHaveBeenNthCalledWith(2, 'pty.data', {
+      id: 'pty-1',
+      data: 'tail'
+    })
   })
 
   it('returns attach replay instead of notifying when replay notification is suppressed', async () => {
@@ -235,6 +382,8 @@ describe('PtyHandler', () => {
 
     expect(result).toEqual({ replay: 'buffered output' })
     expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.replay', expect.anything())
+    vi.advanceTimersByTime(8)
+    expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.data', expect.anything())
   })
 
   it('notifies replay on normal attach', async () => {
@@ -258,6 +407,8 @@ describe('PtyHandler', () => {
       id: 'pty-1',
       data: 'buffered output'
     })
+    vi.advanceTimersByTime(8)
+    expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.data', expect.anything())
   })
 
   it('notifies on PTY exit and removes from map', async () => {
@@ -276,6 +427,30 @@ describe('PtyHandler', () => {
     exitCallback!({ exitCode: 0 })
     expect(dispatcher.notify).toHaveBeenCalledWith('pty.exit', { id: 'pty-1', code: 0 })
     expect(handler.activePtyCount).toBe(0)
+  })
+
+  it('flushes pending PTY output before notifying exit', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    let exitCallback: ((info: { exitCode: number }) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((cb: (data: string) => void) => {
+        dataCallback = cb
+      }),
+      onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
+        exitCallback = cb
+      })
+    })
+
+    await dispatcher.callRequest('pty.spawn', {})
+    dataCallback!('final output')
+    exitCallback!({ exitCode: 0 })
+
+    expect(dispatcher.notify).toHaveBeenNthCalledWith(1, 'pty.data', {
+      id: 'pty-1',
+      data: 'final output'
+    })
+    expect(dispatcher.notify).toHaveBeenNthCalledWith(2, 'pty.exit', { id: 'pty-1', code: 0 })
   })
 
   it('writes data to PTY via pty.data notification', async () => {
@@ -318,6 +493,29 @@ describe('PtyHandler', () => {
     await dispatcher.callRequest('pty.spawn', {})
     await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
     expect(mockKill).toHaveBeenCalledWith('SIGTERM')
+  })
+
+  it('flushes pending PTY output before immediate shutdown cleanup', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    const mockKill = vi.fn()
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill: mockKill,
+      onData: vi.fn((cb: (data: string) => void) => {
+        dataCallback = cb
+      }),
+      onExit: vi.fn()
+    })
+
+    await dispatcher.callRequest('pty.spawn', {})
+    dataCallback!('last words')
+    await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+
+    expect(dispatcher.notify).toHaveBeenNthCalledWith(1, 'pty.data', {
+      id: 'pty-1',
+      data: 'last words'
+    })
+    expect(mockKill).toHaveBeenCalledWith('SIGKILL')
   })
 
   it('notifies pty.exit when graceful shutdown falls back to SIGKILL', async () => {
@@ -566,10 +764,12 @@ describe('PtyHandler', () => {
     async () => {
       const oldShell = process.env.SHELL
       const oldHome = process.env.HOME
+      const oldOrcaPi = process.env.ORCA_PI_CODING_AGENT_DIR
       const homeDir = mkdtempSync(join(tmpdir(), 'relay-pty-shell-launch-'))
 
       process.env.SHELL = '/bin/bash'
       process.env.HOME = homeDir
+      delete process.env.ORCA_PI_CODING_AGENT_DIR
       try {
         if (!existsSync('/bin/bash')) {
           return
@@ -578,8 +778,7 @@ describe('PtyHandler', () => {
         handler.addEnvAugmenter(() => ({
           OPENCODE_CONFIG_DIR: '/remote/overlay/opencode',
           ORCA_OPENCODE_CONFIG_DIR: '/remote/overlay/opencode',
-          PI_CODING_AGENT_DIR: '/remote/overlay/pi',
-          ORCA_PI_CODING_AGENT_DIR: '/remote/overlay/pi'
+          ORCA_OMP_STATUS_EXTENSION: '/remote/.omp/agent/extensions/orca-agent-status.ts'
         }))
 
         await dispatcher.callRequest('pty.spawn', { env: { HOME: homeDir } })
@@ -594,6 +793,11 @@ describe('PtyHandler', () => {
         } else {
           process.env.HOME = oldHome
         }
+        if (oldOrcaPi === undefined) {
+          delete process.env.ORCA_PI_CODING_AGENT_DIR
+        } else {
+          process.env.ORCA_PI_CODING_AGENT_DIR = oldOrcaPi
+        }
       }
 
       const shellArgs = mockPtySpawn.mock.calls[0][1]
@@ -602,13 +806,12 @@ describe('PtyHandler', () => {
 
       expect(shellArgs).toEqual(['--rcfile', rcfile])
       expect(spawnOptions.env.ORCA_OPENCODE_CONFIG_DIR).toBe('/remote/overlay/opencode')
-      expect(spawnOptions.env.ORCA_PI_CODING_AGENT_DIR).toBe('/remote/overlay/pi')
+      expect(spawnOptions.env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
       expect(readFileSync(rcfile, 'utf8')).toContain(
         'export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"'
       )
-      expect(readFileSync(rcfile, 'utf8')).toContain(
-        'export PI_CODING_AGENT_DIR="${ORCA_PI_CODING_AGENT_DIR}"'
-      )
+      expect(readFileSync(rcfile, 'utf8')).not.toContain('ORCA_PI_CODING_AGENT_DIR')
+      expect(readFileSync(rcfile, 'utf8')).toContain('command omp --extension')
 
       rmSync(homeDir, { recursive: true, force: true })
     }

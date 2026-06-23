@@ -163,6 +163,8 @@ export async function fetchViaPty(options?: {
     let sentUsage = false
     let stopDetected = false
     let claude21UsageDetected = false
+    let startupDelayTimer: ReturnType<typeof setTimeout> | null = null
+    let stopSettleTimer: ReturnType<typeof setTimeout> | null = null
     let claude21UsageSettleTimer: ReturnType<typeof setTimeout> | null = null
 
     const claudeCommand = resolveClaudeCommand()
@@ -207,18 +209,31 @@ export async function fetchViaPty(options?: {
       env: spawnEnv
     })
     const termDisposables: { dispose: () => void }[] = []
+    let enterInterval: ReturnType<typeof setInterval> | null = null
+
+    function clearFollowupTimers(): void {
+      if (startupDelayTimer) {
+        clearTimeout(startupDelayTimer)
+        startupDelayTimer = null
+      }
+      if (stopSettleTimer) {
+        clearTimeout(stopSettleTimer)
+        stopSettleTimer = null
+      }
+      if (claude21UsageSettleTimer) {
+        clearTimeout(claude21UsageSettleTimer)
+        claude21UsageSettleTimer = null
+      }
+      if (enterInterval) {
+        clearInterval(enterInterval)
+        enterInterval = null
+      }
+    }
 
     const timeout = setTimeout(() => {
       if (!resolved) {
         resolved = true
-        if (claude21UsageSettleTimer) {
-          clearTimeout(claude21UsageSettleTimer)
-          claude21UsageSettleTimer = null
-        }
-        if (enterInterval) {
-          clearInterval(enterInterval)
-          enterInterval = null
-        }
+        clearFollowupTimers()
         cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
         // Even on timeout, try to parse whatever we collected
         const clean = stripTerminalControlSequences(output)
@@ -252,8 +267,6 @@ export async function fetchViaPty(options?: {
 
     // Why: the Claude TUI may have scrollable panels or prompts.
     // Sending Enter every 0.8s advances through them.
-    let enterInterval: ReturnType<typeof setInterval> | null = null
-
     function startEnterPresses(): void {
       if (enterInterval) {
         return
@@ -271,13 +284,7 @@ export async function fetchViaPty(options?: {
       }
       resolved = true
       clearTimeout(timeout)
-      if (claude21UsageSettleTimer) {
-        clearTimeout(claude21UsageSettleTimer)
-        claude21UsageSettleTimer = null
-      }
-      if (enterInterval) {
-        clearInterval(enterInterval)
-      }
+      clearFollowupTimers()
       cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
 
       const clean = stripTerminalControlSequences(output)
@@ -306,7 +313,8 @@ export async function fetchViaPty(options?: {
 
     // Why: wait 2s for the CLI to initialize, then send `/usage\r`
     // directly without detecting the prompt character (see comment above).
-    setTimeout(() => {
+    startupDelayTimer = setTimeout(() => {
+      startupDelayTimer = null
       if (resolved) {
         return
       }
@@ -360,7 +368,7 @@ export async function fetchViaPty(options?: {
             stopDetected = true
             // Why: 2.0s settle time after detecting the stop substring
             // allows the full panel to finish rendering.
-            setTimeout(finalize, SETTLE_AFTER_STOP_MS)
+            stopSettleTimer = setTimeout(finalize, SETTLE_AFTER_STOP_MS)
             break
           }
         }
@@ -372,14 +380,7 @@ export async function fetchViaPty(options?: {
 
     const onExitDisposable = term.onExit(() => {
       cleanupHiddenRateLimitPty(term, termDisposables, { kill: false })
-      if (claude21UsageSettleTimer) {
-        clearTimeout(claude21UsageSettleTimer)
-        claude21UsageSettleTimer = null
-      }
-      if (enterInterval) {
-        clearInterval(enterInterval)
-        enterInterval = null
-      }
+      clearFollowupTimers()
       if (!resolved) {
         resolved = true
         clearTimeout(timeout)

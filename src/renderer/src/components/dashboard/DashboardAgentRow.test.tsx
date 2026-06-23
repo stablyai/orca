@@ -126,6 +126,26 @@ function classTokensForTaggedElement(markup: string, dataAttribute: string): str
 }
 
 describe('DashboardAgentRow', () => {
+  it('renders orchestration task preview instead of the raw dispatch preamble prompt', () => {
+    const markup = renderRow(
+      makeAgent(
+        {},
+        {
+          prompt: 'You are working inside Orca, a multi-agent IDE.',
+          orchestration: {
+            taskId: 'task-1',
+            dispatchId: 'ctx-1',
+            taskTitle: 'Checkout race',
+            displayName: 'Fix checkout race'
+          }
+        }
+      )
+    )
+
+    expect(markup).toContain('Fix checkout race')
+    expect(markup).not.toContain('You are working inside Orca')
+  })
+
   it('uses the hover background as the focused-pane row highlight', () => {
     const markup = renderToStaticMarkup(
       <TooltipProvider>
@@ -348,5 +368,26 @@ describe('DashboardAgentRow', () => {
     expect(markup).toContain('data-agent-lineage-parent-connector="true"')
     expect(classTokens(markup)).toContain('left-[13px]')
     expect(markup).toContain('aria-level="1"')
+  })
+
+  it('marks child-disclosure rows as lineage manager rows', () => {
+    const markup = renderToStaticMarkup(
+      <TooltipProvider>
+        <DashboardAgentRow
+          agent={makeAgent()}
+          onDismiss={vi.fn()}
+          onActivate={vi.fn()}
+          now={NOW}
+          hideIdentityIcon
+          hideExpand
+          childAgentCount={2}
+          childAgentsExpanded={false}
+          onToggleChildAgents={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+
+    expect(classTokens(markup)).toContain('worktree-agent-lineage-parent-row')
+    expect(markup).toContain('aria-label="Show 2 child agents"')
   })
 })

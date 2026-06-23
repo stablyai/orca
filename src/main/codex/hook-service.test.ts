@@ -13,7 +13,7 @@ import {
 import { tmpdir } from 'os'
 import type * as Os from 'os'
 import { join } from 'path'
-import { wrapPosixHookCommand } from '../agent-hooks/installer-utils'
+import { createManagedCommandMatcher, wrapPosixHookCommand } from '../agent-hooks/installer-utils'
 import { upsertHookTrustEntriesInContent } from './config-toml-trust'
 
 const { getPathMock, homedirMock } = vi.hoisted(() => ({
@@ -39,6 +39,11 @@ import { CodexHookService } from './hook-service'
 
 let tmpHome: string
 let userDataDir: string
+
+function isCodexManagedCommand(command: string | undefined): boolean {
+  const scriptFileName = process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
+  return createManagedCommandMatcher(scriptFileName)(command)
+}
 let previousUserDataPath: string | undefined
 
 beforeEach(() => {
@@ -118,14 +123,49 @@ describe('CodexHookService', () => {
         'UserPromptSubmit'
       ].sort()
     )
-    expect(hooksConfig.hooks.PermissionRequest?.[0]?.hooks?.[0]?.command).toContain('agent-hooks')
-    expect(hooksConfig.hooks.PermissionRequest?.[0]?.hooks?.[0]?.command).toContain('codex-hook')
+    expect(
+      isCodexManagedCommand(hooksConfig.hooks.PermissionRequest?.[0]?.hooks?.[0]?.command)
+    ).toBe(true)
 
     const trustConfig = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
     expect(trustConfig).toContain('model = "gpt-5.2-codex"')
     expect(trustConfig).toContain('approval_policy = "on-request"')
     expect(trustConfig).toContain(':permission_request:0:0')
   })
+
+  // Why: #6078 — a Windows user profile path like `C:\Users\Jane Doe` used to
+  // be written verbatim as the hook command, so Codex split it at the space and
+  // the hook exited with code 1. The managed command uses an encoded launcher
+  // so the path never appears raw on the cmd.exe command line.
+  it.skipIf(process.platform !== 'win32')(
+    'wraps the managed hook command in an encoded launcher when the profile path contains a space (#6078)',
+    () => {
+      const spaceHome = join(tmpdir(), 'orca home with spaces')
+      mkdirSync(spaceHome, { recursive: true })
+      homedirMock.mockReturnValue(spaceHome)
+      try {
+        const systemCodexHome = join(spaceHome, '.codex')
+        mkdirSync(systemCodexHome, { recursive: true })
+
+        const status = new CodexHookService().install()
+        expect(status.state).toBe('installed')
+
+        const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
+        const hooksConfig = JSON.parse(
+          readFileSync(join(managedCodexHome, 'hooks.json'), 'utf-8')
+        ) as { hooks: Record<string, { hooks?: { command?: string }[] }[]> }
+
+        for (const eventName of ['SessionStart', 'UserPromptSubmit', 'Stop']) {
+          const command = hooksConfig.hooks[eventName]?.[0]?.hooks?.[0]?.command
+          expect(command).toMatch(
+            /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+          )
+        }
+      } finally {
+        rmSync(spaceHome, { recursive: true, force: true })
+      }
+    }
+  )
 
   it('keeps hooks isolated by Orca userData instead of mutating system ~/.codex', () => {
     const systemCodexHome = join(tmpHome, '.codex')
@@ -165,16 +205,24 @@ describe('CodexHookService', () => {
       const prodHooks = JSON.parse(readFileSync(prodHooksPath, 'utf-8')) as {
         hooks: Record<string, { hooks?: { command?: string }[] }[]>
       }
-      expect(devHooks.hooks.Stop?.[0]?.hooks?.[0]?.command).toBe('user-hook')
-      expect(prodHooks.hooks.Stop?.[0]?.hooks?.[0]?.command).toBe('user-hook')
       expect(
         devHooks.hooks.Stop?.some((definition) =>
-          definition.hooks?.[0]?.command?.includes('codex-hook')
+          definition.hooks?.some((hook) => hook.command === 'user-hook')
         )
       ).toBe(true)
       expect(
         prodHooks.hooks.Stop?.some((definition) =>
-          definition.hooks?.[0]?.command?.includes('codex-hook')
+          definition.hooks?.some((hook) => hook.command === 'user-hook')
+        )
+      ).toBe(true)
+      expect(
+        devHooks.hooks.Stop?.some((definition) =>
+          isCodexManagedCommand(definition.hooks?.[0]?.command)
+        )
+      ).toBe(true)
+      expect(
+        prodHooks.hooks.Stop?.some((definition) =>
+          isCodexManagedCommand(definition.hooks?.[0]?.command)
         )
       ).toBe(true)
       expect(readFileSync(systemHooksPath, 'utf-8')).toBe(existingSystemHooks)
@@ -243,13 +291,62 @@ describe('CodexHookService', () => {
         { matcher?: string; hooks?: { command?: string; statusMessage?: string }[] }[]
       >
     }
-    expect(runtimeHooks.hooks.Stop?.[0]?.matcher).toBe('*')
-    expect(runtimeHooks.hooks.Stop?.[0]?.hooks?.[0]?.command).toBe('user-hook')
-    expect(runtimeHooks.hooks.Stop?.[0]?.hooks?.[0]?.statusMessage).toBe('Running user hook')
+    expect(runtimeHooks.hooks.Stop?.[1]?.matcher).toBe('*')
+    expect(runtimeHooks.hooks.Stop?.[1]?.hooks?.[0]?.command).toBe('user-hook')
+    expect(runtimeHooks.hooks.Stop?.[1]?.hooks?.[0]?.statusMessage).toBe('Running user hook')
 
     const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
     expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:0:0`))
+    expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:1:0`))
     expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:stop:0:0`))
+  })
+
+  it('runs managed PostToolUse status before mirrored user hooks', () => {
+    const systemCodexHome = join(tmpHome, '.codex')
+    const systemHooksPath = join(systemCodexHome, 'hooks.json')
+    mkdirSync(systemCodexHome, { recursive: true })
+    writeFileSync(
+      systemHooksPath,
+      `${JSON.stringify({
+        hooks: {
+          PostToolUse: [{ hooks: [{ type: 'command', command: 'slow-user-post-tool-hook' }] }]
+        }
+      })}\n`,
+      'utf-8'
+    )
+    writeFileSync(
+      join(systemCodexHome, 'config.toml'),
+      upsertHookTrustEntriesInContent('model = "system-model"\n', [
+        {
+          sourcePath: systemHooksPath,
+          eventLabel: 'post_tool_use',
+          groupIndex: 0,
+          handlerIndex: 0,
+          command: 'slow-user-post-tool-hook'
+        }
+      ]),
+      'utf-8'
+    )
+
+    expect(new CodexHookService().install().state).toBe('installed')
+
+    const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
+    const managedHooksPath = join(managedCodexHome, 'hooks.json')
+    const runtimeHooks = JSON.parse(readFileSync(managedHooksPath, 'utf-8')) as {
+      hooks: Record<string, { hooks?: { command?: string }[] }[]>
+    }
+
+    expect(isCodexManagedCommand(runtimeHooks.hooks.PostToolUse?.[0]?.hooks?.[0]?.command)).toBe(
+      true
+    )
+    expect(runtimeHooks.hooks.PostToolUse?.[1]?.hooks?.[0]?.command).toBe(
+      'slow-user-post-tool-hook'
+    )
+
+    const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
+    expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:post_tool_use:0:0`))
+    expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:post_tool_use:1:0`))
+    expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:post_tool_use:0:0`))
   })
 
   it('mirrors system user hook approvals when the system trust indices are stale', () => {
@@ -300,6 +397,7 @@ describe('CodexHookService', () => {
     const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
     expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:0:0`))
     expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:1:0`))
+    expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:2:0`))
     expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:stop:0:0`))
     expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:stop:1:0`))
   })
@@ -374,7 +472,7 @@ describe('CodexHookService', () => {
       ) ?? []
 
     expect(stopCommands).toContain(userCommand)
-    expect(stopCommands.some((command) => command.includes('codex-hook'))).toBe(true)
+    expect(stopCommands.some((command) => isCodexManagedCommand(command))).toBe(true)
     expect(runtimeHooks.hooks.PreCompact).toBeUndefined()
     for (const command of pluginCommands) {
       expect(runtimeHooksText).not.toContain(command)
@@ -382,6 +480,7 @@ describe('CodexHookService', () => {
 
     const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
     expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:0:0`))
+    expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:1:0`))
     for (const command of pluginCommands) {
       expect(runtimeToml).not.toContain(command)
     }
@@ -481,7 +580,7 @@ describe('CodexHookService', () => {
 
     const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
     const managedHooksPath = join(managedCodexHome, 'hooks.json')
-    const runtimeUserTrustHeader = hookTrustHeader(`${managedHooksPath}:stop:0:0`)
+    const runtimeUserTrustHeader = hookTrustHeader(`${managedHooksPath}:stop:1:0`)
     expect(readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')).toContain(
       runtimeUserTrustHeader
     )
@@ -491,7 +590,7 @@ describe('CodexHookService', () => {
 
     const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
     expect(runtimeToml).not.toContain(runtimeUserTrustHeader)
-    expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:1:0`))
+    expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:0:0`))
   })
 
   it('refreshes mirrored system user hooks when the system hooks file changes', () => {
@@ -661,6 +760,47 @@ describe('CodexHookService', () => {
     expect(systemToml).not.toContain(':stop:1:0')
     expect(systemToml).not.toContain(':session_start:0:0')
   })
+
+  it('removes very large legacy Orca-managed hook lists from system ~/.codex', () => {
+    const systemCodexHome = join(tmpHome, '.codex')
+    const systemHooksPath = join(systemCodexHome, 'hooks.json')
+    const legacyScriptPath = join(
+      tmpHome,
+      '.orca',
+      'agent-hooks',
+      process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
+    )
+    const legacyCommand =
+      process.platform === 'win32' ? legacyScriptPath : wrapPosixHookCommand(legacyScriptPath)
+    mkdirSync(systemCodexHome, { recursive: true })
+    writeFileSync(
+      systemHooksPath,
+      `${JSON.stringify({
+        hooks: {
+          Stop: Array.from({ length: 30_000 }, () => ({
+            hooks: [{ type: 'command', command: legacyCommand }]
+          }))
+        }
+      })}\n`,
+      'utf-8'
+    )
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      expect(new CodexHookService().install().state).toBe('installed')
+
+      expect(warnSpy).not.toHaveBeenCalledWith(
+        '[codex-hook-service] failed to clean legacy Codex hooks',
+        expect.anything()
+      )
+    } finally {
+      warnSpy.mockRestore()
+    }
+    const systemHooks = JSON.parse(readFileSync(systemHooksPath, 'utf-8')) as {
+      hooks: Record<string, unknown>
+    }
+    expect(systemHooks.hooks.Stop).toBeUndefined()
+  }, 30_000)
 
   it('removes the legacy Orca Codex profile file when it only contains managed hooks', () => {
     const systemCodexHome = join(tmpHome, '.codex')
@@ -855,8 +995,10 @@ describe('CodexHookService', () => {
         (definition) => definition.hooks?.map((hook) => hook.command ?? '') ?? []
       ) ?? []
     expect(stopCommands).toContain(userCommand)
-    expect(stopCommands.some((command) => command.includes('codex-hook'))).toBe(true)
-    expect(runtimeHooks.hooks.PermissionRequest?.[0]?.hooks?.[0]?.command).toContain('codex-hook')
+    expect(stopCommands.some((command) => isCodexManagedCommand(command))).toBe(true)
+    expect(
+      isCodexManagedCommand(runtimeHooks.hooks.PermissionRequest?.[0]?.hooks?.[0]?.command)
+    ).toBe(true)
 
     const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
     expect(runtimeToml).toContain('[features]\nhooks = true')

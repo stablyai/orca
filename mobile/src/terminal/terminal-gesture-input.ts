@@ -37,7 +37,9 @@ function isSgrMouseGestureSequence(bytes: string, offset: number): number | null
   }
   const sequence = bytes.slice(offset, end + 1)
   const match = SGR_MOUSE_GESTURE_SEQUENCE_RE.exec(sequence)
-  if (!match) return null
+  if (!match) {
+    return null
+  }
   const button = match[1]
   const col = Number(match[2])
   const row = Number(match[3])

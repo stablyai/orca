@@ -254,4 +254,16 @@ describe('runtime metadata', () => {
       expect(statSync(userDataPath).mode & 0o777).toBe(0o700)
     }
   )
+
+  it('replaces oversized E2EE keypair files instead of reading them as metadata', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-large-keypair-'))
+    tempDirs.push(userDataPath)
+    const keypairPath = join(userDataPath, 'orca-e2ee-keypair.json')
+    writeFileSync(keypairPath, 'x'.repeat(9 * 1024))
+
+    const keypair = loadOrCreateE2EEKeypair(userDataPath)
+
+    expect(keypair.publicKey).toHaveLength(32)
+    expect(statSync(keypairPath).size).toBeLessThan(1024)
+  })
 })

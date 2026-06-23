@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { isPathInsideOrEqual, relativePathInsideRoot } from './cross-platform-path'
+import {
+  isPathInsideOrEqual,
+  isRuntimePathAbsolute,
+  relativePathInsideRoot,
+  resolveRuntimePath
+} from './cross-platform-path'
 
 describe('cross-platform path containment', () => {
   it('keeps POSIX sibling prefixes outside the root', () => {
@@ -22,5 +27,21 @@ describe('cross-platform path containment', () => {
       'src'
     )
     expect(isPathInsideOrEqual('\\\\Server\\Share\\Repo', '\\\\server\\share\\repo2')).toBe(false)
+  })
+
+  it('resolves POSIX relative paths without using the process cwd', () => {
+    expect(resolveRuntimePath('/repos/app/repo', '../worktrees/feature')).toBe(
+      '/repos/app/worktrees/feature'
+    )
+    expect(resolveRuntimePath('/repos/app/repo', '/custom/worktrees')).toBe('/custom/worktrees')
+    expect(isRuntimePathAbsolute('../worktrees')).toBe(false)
+  })
+
+  it('resolves Windows relative paths with Windows semantics', () => {
+    expect(resolveRuntimePath('C:\\Repos\\app\\repo', '..\\worktrees\\feature')).toBe(
+      'C:/Repos/app/worktrees/feature'
+    )
+    expect(resolveRuntimePath('C:\\Repos\\app\\repo', 'D:\\worktrees')).toBe('D:/worktrees')
+    expect(isRuntimePathAbsolute('/remote/worktrees', 'windows')).toBe(true)
   })
 })

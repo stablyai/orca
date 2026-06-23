@@ -17,6 +17,11 @@ Staged diff:
 \`\`\`
 `
 
+export {
+  cleanGeneratedCommitMessage,
+  extractAgentErrorMessage
+} from './commit-message-agent-output'
+
 /** Builds the final prompt sent to the agent. The custom suffix is appended verbatim
  *  when non-empty so the user can override style (Conventional Commits, gitmoji, …). */
 export function buildCommitPrompt(diff: string, customSuffix: string): string {
@@ -30,8 +35,82 @@ export function buildCommitPrompt(diff: string, customSuffix: string): string {
 
 export const STAGED_DIFF_BYTE_BUDGET = 200_000
 
-/** Truncates a diff that exceeds the byte budget; appends a marker so the agent
- *  knows the input was clipped. */
+/** Splits a unified diff into one section per file, keyed on the `diff --git`
+ *  header. Each section keeps the leading newline that preceded its header so
+ *  concatenating the sections reproduces the original byte-for-byte. */
+function splitDiffIntoFileSections(diff: string): string[] {
+  const boundary = '\ndiff --git '
+  const sections: string[] = []
+  let start = 0
+  let next = diff.indexOf(boundary)
+  while (next !== -1) {
+    // Include the boundary newline in the current section; the next section
+    // starts at the `diff --git` header itself.
+    sections.push(diff.slice(start, next + 1))
+    start = next + 1
+    next = diff.indexOf(boundary, start)
+  }
+  sections.push(diff.slice(start))
+  return sections
+}
+
+/** Clips one section to `limit` bytes on a line boundary so the agent never sees
+ *  a half-written diff line, and records how many bytes were dropped. */
+function clipSectionOnLineBoundary(section: string, limit: number): string {
+  if (section.length <= limit) {
+    return section
+  }
+  if (limit <= 0) {
+    return ''
+  }
+
+  const markerFor = (omitted: number): string => `\n...(diff truncated, ${omitted} bytes omitted)\n`
+  let marker = markerFor(section.length)
+  if (marker.length >= limit) {
+    return marker.slice(0, limit)
+  }
+
+  // Reserve headroom for the marker, then back up to the previous newline unless
+  // that would discard most of the budget (one very long line).
+  const target = limit - marker.length
+  const lineBreak = section.lastIndexOf('\n', target)
+  const cut = lineBreak > target / 2 ? lineBreak : target
+  const omitted = section.length - cut
+  marker = markerFor(omitted)
+  return `${section.slice(0, Math.min(cut, Math.max(0, limit - marker.length)))}${marker}`
+}
+
+/** Distributes `budget` across `sizes` by water-filling: everyone starts with an
+ *  equal share, and the slack from files that fit is handed back to the files
+ *  that don't. Keeps one huge generated file from starving the human-authored
+ *  changes elsewhere in the diff. */
+function allocateBudgetFairly(sizes: number[], budget: number): number[] {
+  const alloc: number[] = Array.from({ length: sizes.length }, () => 0)
+  let active = sizes.map((_, i) => i)
+  let remaining = budget
+  while (active.length > 0 && remaining > 0) {
+    const share = Math.floor(remaining / active.length)
+    if (share === 0) {
+      break
+    }
+    const stillActive: number[] = []
+    for (const i of active) {
+      const need = sizes[i] - alloc[i]
+      const grant = Math.min(need, share)
+      alloc[i] += grant
+      remaining -= grant
+      if (grant < need) {
+        stillActive.push(i)
+      }
+    }
+    active = stillActive
+  }
+  return alloc
+}
+
+/** Truncates a diff that exceeds the byte budget. Splits the budget fairly across
+ *  files and clips on line boundaries, so a single oversized file can't crowd out
+ *  the rest and the agent never receives a malformed diff. */
 export function truncateDiffForPrompt(
   diff: string,
   budget: number = STAGED_DIFF_BYTE_BUDGET
@@ -39,42 +118,15 @@ export function truncateDiffForPrompt(
   if (diff.length <= budget) {
     return diff
   }
-  const omitted = diff.length - budget
-  return `${diff.slice(0, budget)}\n...(diff truncated, ${omitted} bytes omitted)`
-}
-
-/** Strips noise around the agent's output: surrounding whitespace, a single
- *  enclosing fenced code block, and lone "Generating…" preamble lines some
- *  CLIs print before the real answer. */
-export function cleanGeneratedCommitMessage(raw: string): string {
-  let text = raw.replace(/\r\n/g, '\n').trim()
-
-  // Why: real commit messages never start with an ellipsis or the word
-  // "Generating"/"Thinking" — those leak from CLIs that print a status line
-  // before the actual response.
-  const firstNewline = text.indexOf('\n')
-  if (firstNewline !== -1) {
-    const firstLine = text.slice(0, firstNewline)
-    if (/^(generating|thinking)\b/i.test(firstLine) || /^[.…]+$/.test(firstLine.trim())) {
-      text = text.slice(firstNewline + 1).trim()
-    }
+  const sections = splitDiffIntoFileSections(diff)
+  if (sections.length <= 1) {
+    return clipSectionOnLineBoundary(diff, budget)
   }
-
-  const fence = /^```[a-zA-Z0-9_-]*\n([\s\S]*?)\n```$/
-  const fenced = text.match(fence)
-  if (fenced) {
-    text = fenced[1].trim()
-  }
-
-  // Why: some CLIs format a one-shot answer as a list item even when the
-  // prompt asks for raw text; a Git subject should not carry that marker.
-  text = text.replace(/^(\s*)(?:[-*•●]\s+|\d+[.)]\s+)/, '$1').trim()
-
-  return text
-}
-
-function stripAnsiControlSequences(value: string): string {
-  return value.replace(new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, 'g'), '')
+  const allocations = allocateBudgetFairly(
+    sections.map((section) => section.length),
+    budget
+  )
+  return sections.map((section, i) => clipSectionOnLineBoundary(section, allocations[i])).join('')
 }
 
 export const CUSTOM_PROMPT_PLACEHOLDER = '{prompt}'
@@ -195,58 +247,4 @@ export function planCustomCommand(template: string, prompt: string): CustomComma
     }
   }
   return { ok: true, binary, args: rest, stdinPayload: prompt }
-}
-
-// Why: agent CLIs (Codex, Claude) prefix their stdout/stderr with config
-// preamble, the echoed prompt, and hook lifecycle messages. When something
-// fails, the actionable error is buried far below all of that. This pulls
-// out the real message so the user sees something legible instead of a
-// dump of the agent's runtime state.
-export function extractAgentErrorMessage(stdout: string, stderr: string): string | null {
-  const combined = stripAnsiControlSequences(`${stdout}\n${stderr}`)
-  const lines = combined.split(/\r?\n/)
-
-  // Pass 1: look for an `ERROR:`/`Error:` line carrying a JSON payload.
-  // Walk from the end so the most recent (and usually most meaningful)
-  // error wins when an agent prints multiple.
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const line = lines[i]
-    const match = /^\s*(?:ERROR|Error(?:\s+during\s+[^:]+)?)\s*:\s*(.+)$/i.exec(line)
-    if (!match) {
-      continue
-    }
-    const payload = match[1].trim()
-    if (payload.startsWith('{')) {
-      try {
-        const parsed = JSON.parse(payload) as {
-          message?: string
-          error?: { message?: string }
-        }
-        const inner = parsed.error?.message ?? parsed.message
-        if (typeof inner === 'string' && inner.trim().length > 0) {
-          return inner.trim()
-        }
-      } catch {
-        // Fall through to using the raw payload below.
-      }
-    }
-    if (payload.length > 0) {
-      return payload
-    }
-  }
-
-  const compact = combined.replace(/([A-Za-z])\r?\n\s*([A-Za-z_])/g, '$1$2').replace(/\s+/g, ' ')
-  const errorCodeMatch = /\bError code:\s*\d+\s*-\s*(.+)$/i.exec(compact)
-  if (errorCodeMatch) {
-    const payload = errorCodeMatch[1].trim()
-    const messageMatch = /['"]message['"]\s*:\s*['"]([^'"]+)['"]/i.exec(payload)
-    if (messageMatch?.[1]?.trim()) {
-      return messageMatch[1].trim()
-    }
-    if (payload.length > 0) {
-      return payload
-    }
-  }
-
-  return null
 }

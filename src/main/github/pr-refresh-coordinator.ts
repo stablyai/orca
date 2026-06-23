@@ -10,7 +10,7 @@ import type {
   GitHubPRRefreshSkippedReason,
   PRRefreshOutcome
 } from '../../shared/types'
-import { getPRForBranchOutcome } from './client'
+import { getPRForBranchOutcome, type GitHubPRBranchLookupOptions } from './client'
 import { getRateLimit, noteRateLimitSpend, rateLimitGuard } from './rate-limit'
 
 type QueueEntry = {
@@ -20,6 +20,7 @@ type QueueEntry = {
   reason: GitHubPRRefreshReason
   priority: number
   dueAt: number
+  bypassBackgroundBudget?: boolean
   windowId?: number
 }
 
@@ -28,8 +29,35 @@ type PRRefreshOutcomeObserver = (
   outcome: PRRefreshOutcome
 ) => void
 
+type PRBranchLookupCandidate = Pick<
+  GitHubPRRefreshCandidate,
+  'localGitOptions' | 'linkedPRNumber' | 'fallbackPRNumber' | 'fallbackPRSource'
+>
+
+function shouldAcceptMergedFallbackPR(candidate: PRBranchLookupCandidate): boolean {
+  return (
+    candidate.linkedPRNumber == null &&
+    candidate.fallbackPRNumber != null &&
+    candidate.fallbackPRSource != null
+  )
+}
+
+function hostedReviewOptionArgs(
+  candidate: PRBranchLookupCandidate
+): [] | [GitHubPRBranchLookupOptions] {
+  const options: GitHubPRBranchLookupOptions = {}
+  if (candidate.localGitOptions?.wslDistro) {
+    options.localGitExecOptions = { wslDistro: candidate.localGitOptions.wslDistro }
+  }
+  if (shouldAcceptMergedFallbackPR(candidate)) {
+    options.acceptMergedFallbackPR = true
+  }
+  return Object.keys(options).length > 0 ? [options] : []
+}
+
 const MIN_BACKGROUND_REFRESH_AGE_MS = 60_000
 const MERGEABILITY_PENDING_REFRESH_MS = 10_000
+const MANUAL_MERGEABILITY_PENDING_REFRESH_MS = 2_500
 const BACKGROUND_BUDGET_WINDOW_MS = 5 * 60_000
 const MIN_BACKGROUND_SPACING_MS = 10_000
 const BACKGROUND_BUDGET_MAX = 20
@@ -51,6 +79,30 @@ export function setPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver |
   outcomeObserver = observer
 }
 
+function removeInvisibleVisibleRefreshes(): void {
+  for (const [key, entry] of queue) {
+    if (entry.reason === 'visible' && !isVisibleKey(key)) {
+      queue.delete(key)
+      errorBackoff.delete(key)
+      broadcast({
+        aliases: Array.from(entry.aliases.values()),
+        reason: 'visible',
+        status: 'skipped',
+        skippedReason: 'fresh'
+      })
+    }
+  }
+}
+
+export function clearVisiblePRRefreshWindow(windowId: number): void {
+  if (!visibleByWindow.delete(windowId)) {
+    return
+  }
+  // Why: visible follow-ups are owned by the renderer that reported them.
+  // If that WebContents is destroyed, no later visibility report may arrive.
+  removeInvisibleVisibleRefreshes()
+}
+
 function nextSequence(): number {
   sequence += 1
   return sequence
@@ -67,10 +119,13 @@ function broadcast(event: Omit<GitHubPRRefreshEvent, 'sequence'>, sequenceOverri
 
 function refreshKey(candidate: GitHubPRRefreshCandidate): string {
   const connectionScope = candidate.connectionId ?? 'local'
+  const runtimeScope = candidate.connectionId
+    ? 'remote'
+    : `runtime:${candidate.localGitOptions?.wslDistro ? `wsl:${candidate.localGitOptions.wslDistro}` : 'host'}`
   if (typeof candidate.linkedPRNumber === 'number') {
-    return `${connectionScope}::${candidate.repoPath}::pr::${candidate.linkedPRNumber}`
+    return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::pr::${candidate.linkedPRNumber}`
   }
-  return `${connectionScope}::${candidate.repoPath}::branch::${candidate.branch}`
+  return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::branch::${candidate.branch}`
 }
 
 function isVisibleKey(key: string): boolean {
@@ -107,6 +162,10 @@ function isBackground(reason: GitHubPRRefreshReason): boolean {
 
 function isBudgetedBackground(reason: GitHubPRRefreshReason): boolean {
   return reason === 'visible' || reason === 'swr'
+}
+
+function isBudgetedQueueEntry(entry: QueueEntry): boolean {
+  return isBudgetedBackground(entry.reason) && entry.bypassBackgroundBudget !== true
 }
 
 function validateCandidate(
@@ -249,9 +308,13 @@ function scheduleVisibleFollowUp(
   outcome: PRRefreshOutcome,
   priority: number,
   aliases: GitHubPRRefreshAlias[],
-  windowId?: number
+  windowId?: number,
+  options?: { pendingMergeabilityDelayMs?: number }
 ): void {
   if (!isVisibleKey(key)) {
+    // Why: manual/active refreshes can remove the queued visible retry after
+    // its owner window is gone, leaving the retry backoff without an owner.
+    errorBackoff.delete(key)
     return
   }
   if (outcome.kind === 'upstream-error') {
@@ -275,7 +338,15 @@ function scheduleVisibleFollowUp(
   }
   errorBackoff.delete(key)
   const followUpCandidate = visibleCandidateAfterOutcome(candidate, outcome)
-  const dueAt = freshRetryAt(followUpCandidate) ?? Date.now()
+  const regularDueAt = freshRetryAt(followUpCandidate) ?? Date.now()
+  const pendingMergeabilityDueAt =
+    options?.pendingMergeabilityDelayMs !== undefined && isMergeabilityPendingOutcome(outcome)
+      ? outcome.fetchedAt + options.pendingMergeabilityDelayMs
+      : null
+  const dueAt =
+    pendingMergeabilityDueAt === null
+      ? regularDueAt
+      : Math.min(regularDueAt, pendingMergeabilityDueAt)
   // Why: coalesced linked-PR refreshes may represent several local branches.
   // Preserve every alias for the next visible follow-up so all cache entries
   // keep receiving periodic updates.
@@ -286,6 +357,9 @@ function scheduleVisibleFollowUp(
     reason: 'visible',
     priority,
     dueAt,
+    // Why: this manual one-shot fixes GitHub's transient UNKNOWN state; visible
+    // spacing would otherwise delay it past the intended prompt retry window.
+    bypassBackgroundBudget: pendingMergeabilityDueAt !== null,
     windowId
   })
   scheduleDrain(Math.max(0, dueAt - Date.now()))
@@ -322,6 +396,15 @@ function refreshIntervalForCandidate(candidate: GitHubPRRefreshCandidate): numbe
 
 function hasResolvedMergeStateStatus(status: string | null | undefined): boolean {
   return status === 'CLEAN' || status === 'BEHIND' || status === 'BLOCKED'
+}
+
+function isMergeabilityPendingOutcome(outcome: PRRefreshOutcome): boolean {
+  return (
+    outcome.kind === 'found' &&
+    outcome.pr.state === 'open' &&
+    outcome.pr.mergeable === 'UNKNOWN' &&
+    !hasResolvedMergeStateStatus(outcome.pr.mergeStateStatus)
+  )
 }
 
 function backgroundRefreshBuckets(): ('core' | 'graphql')[] {
@@ -395,7 +478,7 @@ async function drainQueue(): Promise<void> {
         return
       }
 
-      const budgetDelay = isBudgetedBackground(next.reason) ? nextBudgetDelay() : 0
+      const budgetDelay = isBudgetedQueueEntry(next) ? nextBudgetDelay() : 0
       if (budgetDelay > 0) {
         scheduleDrain(budgetDelay)
         return
@@ -452,7 +535,7 @@ async function drainQueue(): Promise<void> {
           scheduleDrain(Math.max(1_000, retryAt - Date.now()))
           continue
         }
-        if (isBudgetedBackground(next.reason)) {
+        if (isBudgetedQueueEntry(next)) {
           noteBackgroundStart()
         }
         for (const bucket of buckets) {
@@ -465,7 +548,8 @@ async function drainQueue(): Promise<void> {
         next.candidate.branch,
         next.candidate.linkedPRNumber ?? null,
         next.candidate.connectionId ?? null,
-        next.candidate.linkedPRNumber == null ? (next.candidate.fallbackPRNumber ?? null) : null
+        next.candidate.linkedPRNumber == null ? (next.candidate.fallbackPRNumber ?? null) : null,
+        ...hostedReviewOptionArgs(next.candidate)
       )
       outcomeObserver?.(next.candidate, outcome)
       broadcast({ aliases, reason: next.reason, outcome, requestStartedAt }, requestSequence)
@@ -548,21 +632,18 @@ export function reportVisiblePRRefreshCandidates(
     return
   }
   visibleByWindow.set(windowId, { generation, keys: new Set(candidates.map(refreshKey)) })
-  for (const [key, entry] of queue) {
-    if (entry.reason === 'visible' && !isVisibleKey(key)) {
-      queue.delete(key)
-      errorBackoff.delete(key)
-      broadcast({
-        aliases: Array.from(entry.aliases.values()),
-        reason: 'visible',
-        status: 'skipped',
-        skippedReason: 'fresh'
-      })
-    }
-  }
+  removeInvisibleVisibleRefreshes()
   for (const candidate of candidates) {
     enqueuePRRefresh(candidate, 'visible', 40, windowId)
   }
+}
+
+export function _getVisiblePRRefreshWindowCountForTests(): number {
+  return visibleByWindow.size
+}
+
+export function _getPRRefreshErrorBackoffCountForTests(): number {
+  return errorBackoff.size
 }
 
 export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise<PRRefreshOutcome> {
@@ -594,10 +675,15 @@ export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise
     candidate.branch,
     candidate.linkedPRNumber ?? null,
     candidate.connectionId ?? null,
-    candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null
+    candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
+    ...hostedReviewOptionArgs(candidate)
   )
   outcomeObserver?.(candidate, outcome)
   broadcast({ aliases, reason: 'manual', outcome, requestStartedAt }, requestSequence)
-  scheduleVisibleFollowUp(key, candidate, outcome, 40, aliases)
+  scheduleVisibleFollowUp(key, candidate, outcome, 40, aliases, undefined, {
+    // Why: GitHub often reports UNKNOWN immediately after `gh pr reopen`;
+    // do one prompt visible retry so conflicts replace the transient label.
+    pendingMergeabilityDelayMs: MANUAL_MERGEABILITY_PENDING_REFRESH_MS
+  })
   return outcome
 }

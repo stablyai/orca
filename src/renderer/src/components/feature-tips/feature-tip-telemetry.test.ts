@@ -8,6 +8,8 @@ vi.mock('@/lib/telemetry', () => ({
 
 import {
   getOrcaCliFeatureTipTelemetrySource,
+  trackCmdJPaletteFeatureTipAcknowledged,
+  trackCmdJPaletteFeatureTipShown,
   trackOrcaCliFeatureTipSetupClicked,
   trackOrcaCliFeatureTipSetupResult,
   trackOrcaCliFeatureTipShown
@@ -30,6 +32,19 @@ describe('feature tip telemetry', () => {
     expect(trackMock).toHaveBeenCalledTimes(1)
     expect(trackMock).toHaveBeenCalledWith('orca_cli_feature_tip_shown', {
       source: 'app_open'
+    })
+  })
+
+  it('tracks command palette tip exposure and acknowledgement', () => {
+    trackCmdJPaletteFeatureTipShown('app_open')
+    trackCmdJPaletteFeatureTipAcknowledged('manual')
+
+    expect(trackMock).toHaveBeenCalledTimes(2)
+    expect(trackMock).toHaveBeenNthCalledWith(1, 'cmd_j_palette_feature_tip_shown', {
+      source: 'app_open'
+    })
+    expect(trackMock).toHaveBeenNthCalledWith(2, 'cmd_j_palette_feature_tip_acknowledged', {
+      source: 'manual'
     })
   })
 
