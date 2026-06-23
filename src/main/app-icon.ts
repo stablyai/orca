@@ -1,4 +1,8 @@
-import { execFile as execFileChildProcess, type ExecFileOptions } from 'node:child_process'
+import {
+  execFile as execFileChildProcess,
+  type ChildProcess,
+  type ExecFileOptions
+} from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { app, BrowserWindow, nativeImage } from 'electron'
 import { is } from '@electron-toolkit/utils'
@@ -28,6 +32,8 @@ type ExecFile = (
   callback?: (error: Error | null) => void
 ) => unknown
 
+type MacDockIconChildProcess = Pick<ChildProcess, 'kill' | 'once'>
+
 type PersistMacDockIconOptions = {
   appBundlePath?: string
   execFile?: ExecFile
@@ -46,12 +52,26 @@ const MAC_DOCK_ICON_SCRIPT = [
   'if ok is false then error "Orca app icon could not be persisted"'
 ]
 
+const MAC_DOCK_ICON_CLEAR_SCRIPT = [
+  'use framework "AppKit"',
+  'use scripting additions',
+  'set appPath to system attribute "ORCA_APP_BUNDLE_PATH"',
+  "set ok to current application's NSWorkspace's sharedWorkspace()'s setIcon:(missing value) forFile:appPath options:0",
+  'if ok is false then error "Orca app icon could not be cleared"'
+]
+
+const MAC_DOCK_ICON_COMMAND_TIMEOUT_MS = 10_000
+const MAC_DOCK_ICON_COMMAND_FALLBACK_MS = 1_000
+
 const defaultExecFile: ExecFile = (file, args, optionsOrCallback, callback) => {
   if (typeof optionsOrCallback === 'function') {
     return execFileChildProcess(file, args, optionsOrCallback)
   }
   return execFileChildProcess(file, args, optionsOrCallback, callback ?? (() => {}))
 }
+
+let macDockIconPersistenceGeneration = 0
+let macDockIconPersistenceQueue = Promise.resolve()
 
 export function getAppIconPath(value: unknown): string {
   return APP_ICON_PATHS[normalizeAppIconId(value)]
@@ -70,36 +90,173 @@ function runMacCustomIconCommand(
   execFile: ExecFile,
   appBundlePath: string,
   iconPath: string
-): void {
-  execFile(
-    '/usr/bin/osascript',
-    MAC_DOCK_ICON_SCRIPT.flatMap((line) => ['-e', line]),
-    {
+): Promise<void> {
+  return runBoundedMacDockIconCommand({
+    args: MAC_DOCK_ICON_SCRIPT.flatMap((line) => ['-e', line]),
+    execFile,
+    file: '/usr/bin/osascript',
+    onError: (error) => {
+      console.warn('[app-icon] failed to persist macOS dock icon:', error)
+    },
+    options: {
       env: {
         ...process.env,
         ORCA_APP_BUNDLE_PATH: appBundlePath,
         ORCA_APP_ICON_PATH: iconPath
       }
     },
-    (error) => {
-      if (error) {
-        console.warn('[app-icon] failed to persist macOS dock icon:', error)
-      }
-    }
+    timeoutWarning: '[app-icon] timed out persisting macOS dock icon'
+  })
+}
+
+type BoundedMacDockIconCommandOptions = {
+  args: string[]
+  execFile: ExecFile
+  file: string
+  onError: (error: Error) => void
+  options?: ExecFileOptions
+  timeoutWarning: string
+}
+
+function toError(value: unknown): Error {
+  return value instanceof Error ? value : new Error(String(value))
+}
+
+function isMacDockIconChildProcess(value: unknown): value is MacDockIconChildProcess {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'kill' in value &&
+    typeof value.kill === 'function' &&
+    'once' in value &&
+    typeof value.once === 'function'
   )
 }
 
-function clearMacCustomIconMetadata(execFile: ExecFile, appBundlePath: string): void {
-  const clearAttribute = (attribute: string): void => {
-    execFile('/usr/bin/xattr', ['-d', attribute, appBundlePath], (error) => {
-      if (error && !error.message.includes('No such xattr')) {
-        console.warn(`[app-icon] failed to clear macOS dock icon metadata ${attribute}:`, error)
+function runBoundedMacDockIconCommand({
+  args,
+  execFile,
+  file,
+  onError,
+  options,
+  timeoutWarning
+}: BoundedMacDockIconCommandOptions): Promise<void> {
+  return new Promise((resolve) => {
+    let childProcess: MacDockIconChildProcess | undefined
+    let settled = false
+    let forceFallback: NodeJS.Timeout | undefined
+
+    const finish = (error: Error | null): void => {
+      if (settled) {
+        return
       }
+      settled = true
+      clearTimeout(fallback)
+      if (forceFallback) {
+        clearTimeout(forceFallback)
+      }
+      if (error) {
+        onError(error)
+      }
+      resolve()
+    }
+
+    const finishAfterFallback = (): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      if (forceFallback) {
+        clearTimeout(forceFallback)
+      }
+      console.warn(timeoutWarning)
+      resolve()
+    }
+
+    const fallback = setTimeout(() => {
+      if (settled) {
+        return
+      }
+      if (!childProcess) {
+        finishAfterFallback()
+        return
+      }
+      // Why: the queue must not release while an older icon process can still win.
+      childProcess.once('exit', finishAfterFallback)
+      childProcess.once('close', finishAfterFallback)
+      forceFallback = setTimeout(finishAfterFallback, MAC_DOCK_ICON_COMMAND_FALLBACK_MS)
+      childProcess.kill()
+    }, MAC_DOCK_ICON_COMMAND_TIMEOUT_MS + MAC_DOCK_ICON_COMMAND_FALLBACK_MS)
+
+    try {
+      const maybeChildProcess = execFile(
+        file,
+        args,
+        {
+          ...options,
+          timeout: MAC_DOCK_ICON_COMMAND_TIMEOUT_MS
+        },
+        finish
+      )
+      if (isMacDockIconChildProcess(maybeChildProcess)) {
+        childProcess = maybeChildProcess
+      }
+    } catch (error) {
+      finish(toError(error))
+    }
+  })
+}
+
+function handleMacDockIconQueueError(error: unknown): void {
+  console.warn('[app-icon] failed to persist macOS dock icon:', error)
+}
+
+function enqueueMacDockIconPersistence(work: () => Promise<void>): void {
+  macDockIconPersistenceQueue = macDockIconPersistenceQueue
+    .catch(handleMacDockIconQueueError)
+    .then(work)
+    .catch(handleMacDockIconQueueError)
+}
+
+function clearMacCustomIconMetadata(execFile: ExecFile, appBundlePath: string): Promise<void> {
+  const clearAppKitIcon = (): Promise<void> => {
+    return runBoundedMacDockIconCommand({
+      args: MAC_DOCK_ICON_CLEAR_SCRIPT.flatMap((line) => ['-e', line]),
+      execFile,
+      file: '/usr/bin/osascript',
+      onError: (error) => {
+        console.warn('[app-icon] failed to clear macOS dock icon:', error)
+      },
+      options: {
+        env: {
+          ...process.env,
+          ORCA_APP_BUNDLE_PATH: appBundlePath
+        }
+      },
+      timeoutWarning: '[app-icon] timed out clearing macOS dock icon'
     })
   }
 
-  clearAttribute('com.apple.FinderInfo')
-  clearAttribute('com.apple.ResourceFork')
+  const clearAttribute = (attribute: string): Promise<void> => {
+    return runBoundedMacDockIconCommand({
+      args: ['-d', attribute, appBundlePath],
+      execFile,
+      file: '/usr/bin/xattr',
+      onError: (error) => {
+        if (!error.message.includes('No such xattr')) {
+          console.warn(`[app-icon] failed to clear macOS dock icon metadata ${attribute}:`, error)
+        }
+      },
+      timeoutWarning: `[app-icon] timed out clearing macOS dock icon metadata ${attribute}`
+    })
+  }
+
+  return clearAppKitIcon().then(() =>
+    Promise.all([
+      clearAttribute('com.apple.FinderInfo'),
+      clearAttribute('com.apple.ResourceFork')
+    ]).then(() => {})
+  )
 }
 
 export function persistMacDockIcon(value: unknown, options: PersistMacDockIconOptions = {}): void {
@@ -114,13 +271,20 @@ export function persistMacDockIcon(value: unknown, options: PersistMacDockIconOp
   }
   const execFile = options.execFile ?? defaultExecFile
   const iconId = normalizeAppIconId(value)
-  if (iconId === 'classic') {
-    clearMacCustomIconMetadata(execFile, appBundlePath)
-    return
-  }
-  // Why: a stopped app's Dock tile is resolved from Finder metadata, not
-  // Electron's live app.dock.setIcon state.
-  runMacCustomIconCommand(execFile, appBundlePath, MAC_DOCK_ICON_PATHS[iconId])
+  const generation = ++macDockIconPersistenceGeneration
+  enqueueMacDockIconPersistence(async () => {
+    // Why: stale queued writes must not reapply an older Dock pin icon.
+    if (generation !== macDockIconPersistenceGeneration) {
+      return
+    }
+    if (iconId === 'classic') {
+      await clearMacCustomIconMetadata(execFile, appBundlePath)
+      return
+    }
+    // Why: a stopped app's Dock tile is resolved from Finder metadata, not
+    // Electron's live app.dock.setIcon state.
+    await runMacCustomIconCommand(execFile, appBundlePath, MAC_DOCK_ICON_PATHS[iconId])
+  })
 }
 
 export function applyAppIcon(value: unknown): void {
