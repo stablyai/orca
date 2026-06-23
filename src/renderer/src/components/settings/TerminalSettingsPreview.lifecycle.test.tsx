@@ -68,8 +68,10 @@ vi.mock('@xterm/xterm', () => ({
     open: Mock
     write: Mock
     reset: Mock
+    refresh: Mock
     dispose: Mock
     loadAddon: Mock
+    rows: number
 
     constructor(options: Record<string, unknown>) {
       this.options = { ...options }
