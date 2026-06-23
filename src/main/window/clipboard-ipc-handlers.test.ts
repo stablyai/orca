@@ -12,6 +12,8 @@ const {
   spawnMock,
   childStdinEndMock,
   resolveAuthorizedPathMock,
+  fsMkdirMock,
+  fsRmMock,
   fsWriteFileMock,
   fsStatMock,
   clipboardReadTextMock,
@@ -39,6 +41,8 @@ const {
     return child
   }),
   resolveAuthorizedPathMock: vi.fn(),
+  fsMkdirMock: vi.fn(),
+  fsRmMock: vi.fn(),
   fsWriteFileMock: vi.fn(),
   fsStatMock: vi.fn(),
   clipboardReadTextMock: vi.fn(),
@@ -56,6 +60,8 @@ vi.mock('node:child_process', () => ({
 }))
 
 vi.mock('node:fs/promises', () => ({
+  mkdir: fsMkdirMock,
+  rm: fsRmMock,
   stat: fsStatMock,
   default: {
     writeFile: fsWriteFileMock
@@ -159,6 +165,10 @@ describe('registerClipboardHandlers', () => {
     childStdinEndMock.mockClear()
     resolveAuthorizedPathMock.mockReset()
     resolveAuthorizedPathMock.mockImplementation(async (path: string) => path)
+    fsMkdirMock.mockReset()
+    fsMkdirMock.mockResolvedValue(undefined)
+    fsRmMock.mockReset()
+    fsRmMock.mockResolvedValue(undefined)
     fsWriteFileMock.mockReset()
     fsStatMock.mockReset()
     fsStatMock.mockResolvedValue({})
@@ -254,6 +264,84 @@ describe('registerClipboardHandlers', () => {
     } else {
       expect(spawnMock).toHaveBeenCalled()
     }
+  })
+
+  it('materializes remote files before writing them to the OS clipboard', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 12, type: 'file', mtime: 123 }),
+      downloadFile: vi.fn().mockResolvedValue(undefined)
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    registerClipboardHandlers({} as never)
+
+    const handlers = getRegisteredHandlers()
+    const tempDir = join(
+      '/tmp',
+      'orca-clipboard-file-1760000000000-00000000-0000-4000-8000-000000000000'
+    )
+    const tempPath = join(tempDir, 'report.pdf')
+
+    await expect(
+      handlers.get('clipboard:writeFile')?.(makeClipboardEvent(), {
+        filePath: '/remote/report.pdf',
+        connectionId: 'ssh-1'
+      })
+    ).resolves.toEqual({ ok: true })
+
+    expect(provider.stat).toHaveBeenCalledWith('/remote/report.pdf')
+    expect(fsMkdirMock).toHaveBeenCalledWith(tempDir, { recursive: true })
+    expect(provider.downloadFile).toHaveBeenCalledWith('/remote/report.pdf', tempPath)
+    expect(fsStatMock).toHaveBeenCalledWith(tempPath)
+    expect(resolveAuthorizedPathMock).not.toHaveBeenCalled()
+    expect(fsRmMock).not.toHaveBeenCalled()
+  })
+
+  it('does not materialize remote directories for OS clipboard copy', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
+      downloadFile: vi.fn()
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    registerClipboardHandlers({} as never)
+
+    const handlers = getRegisteredHandlers()
+    await expect(
+      handlers.get('clipboard:writeFile')?.(makeClipboardEvent(), {
+        filePath: '/remote/src',
+        connectionId: 'ssh-1'
+      })
+    ).resolves.toEqual({ ok: false, reason: 'is-directory' })
+
+    expect(provider.downloadFile).not.toHaveBeenCalled()
+    expect(fsMkdirMock).not.toHaveBeenCalled()
+    expect(clipboardWriteBufferMock).not.toHaveBeenCalled()
+  })
+
+  it('cleans up remote clipboard temp files when transfer fails', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 12, type: 'file', mtime: 123 }),
+      downloadFile: vi.fn().mockRejectedValue(new Error('transfer failed'))
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    registerClipboardHandlers({} as never)
+
+    const handlers = getRegisteredHandlers()
+    const tempDir = join(
+      '/tmp',
+      'orca-clipboard-file-1760000000000-00000000-0000-4000-8000-000000000000'
+    )
+    const tempPath = join(tempDir, 'report.pdf')
+
+    await expect(
+      handlers.get('clipboard:writeFile')?.(makeClipboardEvent(), {
+        filePath: '/remote/report.pdf',
+        connectionId: 'ssh-1'
+      })
+    ).rejects.toThrow('transfer failed')
+
+    expect(provider.downloadFile).toHaveBeenCalledWith('/remote/report.pdf', tempPath)
+    expect(fsRmMock).toHaveBeenCalledWith(tempDir, { recursive: true, force: true })
+    expect(clipboardWriteBufferMock).not.toHaveBeenCalled()
   })
 
   it('rejects unauthorized local files before touching the OS clipboard', async () => {

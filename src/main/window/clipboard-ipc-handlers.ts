@@ -23,9 +23,19 @@ import {
   assertClipboardImageByteLengthWithinLimit,
   assertClipboardImageDimensionsWithinLimit
 } from '../../shared/clipboard-image'
-import { writeFileToClipboard } from './clipboard-file-copy'
+import {
+  writeFileToClipboard,
+  type ClipboardFileDeps,
+  type ClipboardFileResult
+} from './clipboard-file-copy'
+import { writeRemoteFileToClipboard } from './clipboard-remote-file-copy'
 
 let trustedClipboardRendererWebContentsId: number | null = null
+
+type ClipboardWriteFileRequest = {
+  filePath: string
+  connectionId?: string
+}
 
 export function setTrustedClipboardRendererWebContentsId(webContentsId: number | null): void {
   trustedClipboardRendererWebContentsId = webContentsId
@@ -80,13 +90,16 @@ export function registerClipboardHandlers(store: Store): void {
     }
   )
   // Why: copy the actual file to the OS clipboard so pasting in Finder/Explorer
-  // drops the file itself, not its path as text. Local files only.
-  ipcMain.handle('clipboard:writeFile', (event, filePath: string) => {
-    assertTrustedClipboardSender(event)
-    return writeFileToClipboard(filePath, {
-      platform: process.platform,
-      desktop: process.env.XDG_CURRENT_DESKTOP,
-      resolveFilePath: async (path) => {
+  // drops the file itself, not its path as text.
+  ipcMain.handle(
+    'clipboard:writeFile',
+    (event, args: unknown): ClipboardFileResult | Promise<ClipboardFileResult> => {
+      assertTrustedClipboardSender(event)
+      const request = normalizeClipboardWriteFileRequest(args)
+      if (!request) {
+        return { ok: false, reason: 'invalid-path' }
+      }
+      const deps = makeClipboardFileDeps(async (path) => {
         try {
           const authorizedPath = await resolveAuthorizedPath(path, store)
           await stat(authorizedPath)
@@ -97,11 +110,17 @@ export function registerClipboardHandlers(store: Store): void {
           }
           return { ok: false, reason: isENOENT(error) ? 'not-found' : 'invalid-path' }
         }
-      },
-      writeBuffer: (format, buffer) => clipboard.writeBuffer(format, buffer),
-      runCommand
-    })
-  })
+      })
+      if (request.connectionId) {
+        return writeRemoteFileToClipboard({
+          remotePath: request.filePath,
+          connectionId: request.connectionId,
+          deps
+        })
+      }
+      return writeFileToClipboard(request.filePath, deps)
+    }
+  )
   ipcMain.handle('clipboard:writeText', async (event, text: string) => {
     assertTrustedClipboardSender(event)
     return clipboard.writeText(await assertClipboardTextWriteWithinLimitWithYield(text))
@@ -149,6 +168,36 @@ export function registerClipboardHandlers(store: Store): void {
     }
     clipboard.writeImage(image)
   })
+}
+
+function normalizeClipboardWriteFileRequest(args: unknown): ClipboardWriteFileRequest | null {
+  if (typeof args === 'string') {
+    return { filePath: args }
+  }
+  if (!args || typeof args !== 'object' || Array.isArray(args)) {
+    return null
+  }
+  const filePath = (args as { filePath?: unknown }).filePath
+  if (typeof filePath !== 'string') {
+    return null
+  }
+  const connectionId = (args as { connectionId?: unknown }).connectionId
+  if (typeof connectionId === 'string' && connectionId.trim() !== '') {
+    return { filePath, connectionId }
+  }
+  return { filePath }
+}
+
+function makeClipboardFileDeps(
+  resolveFilePath: ClipboardFileDeps['resolveFilePath']
+): ClipboardFileDeps {
+  return {
+    platform: process.platform,
+    desktop: process.env.XDG_CURRENT_DESKTOP,
+    resolveFilePath,
+    writeBuffer: (format, buffer) => clipboard.writeBuffer(format, buffer),
+    runCommand
+  }
 }
 
 function assertTrustedClipboardSender(event: IpcMainInvokeEvent): void {
