@@ -86,6 +86,21 @@ describe('Electron runtime package contract', () => {
     )
   })
 
+  it('publishes both Linux release matrix entries', () => {
+    const releaseWorkflow = readFileSync(
+      join(projectDir, '.github/workflows/release-cut.yml'),
+      'utf8'
+    )
+    const parsedWorkflow = parse(releaseWorkflow)
+    const publishLinuxStep = parsedWorkflow.jobs.build.steps.find(
+      (step) => step.name === 'Publish release artifacts (Linux)'
+    )
+
+    expect(publishLinuxStep.if).toContain("matrix.platform == 'linux-x64'")
+    expect(publishLinuxStep.if).toContain("matrix.platform == 'linux-arm64'")
+    expect(publishLinuxStep.with.command).toBe('${{ matrix.release_command }}')
+  })
+
   it('lets release-cut tag a version that is already present on main', () => {
     const releaseWorkflow = readFileSync(
       join(projectDir, '.github/workflows/release-cut.yml'),
