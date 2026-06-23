@@ -421,10 +421,24 @@ function mergeWorktreesForHost<T extends { hostId?: ExecutionHostId }>(
   hostId: ExecutionHostId,
   options?: WorktreeHostMatchOptions
 ): T[] {
-  return [
-    ...(current ?? []).filter((worktree) => !worktreeMatchesHost(worktree, hostId, options)),
-    ...refreshed
-  ]
+  // Why: host-scoped refreshes should replace that host in place so alternating
+  // local/runtime refreshes do not churn sibling row order or sortEpoch.
+  const existing = current ?? []
+  const next: T[] = []
+  let inserted = false
+
+  for (const worktree of existing) {
+    if (worktreeMatchesHost(worktree, hostId, options)) {
+      if (!inserted) {
+        next.push(...refreshed)
+        inserted = true
+      }
+      continue
+    }
+    next.push(worktree)
+  }
+
+  return inserted ? next : [...next, ...refreshed]
 }
 
 function mergeDetectedWorktreesForHost(
@@ -461,7 +475,7 @@ function getKnownWorktreeIdsForPurge(
       }
     }
   }
-  if (!state.hasHydratedWorktreePurge && hostId === LOCAL_EXECUTION_HOST_ID) {
+  if (!state.hasHydratedWorktreePurge && matchOptions.unhostedWorktreesMatchHost === true) {
     // Why (#1158): hydration can preserve tab keys before worktree metadata exists;
     // the first authoritative scan still needs to reap deleted session-only keys.
     for (const id of getHydratedSessionWorktreeIdsForRepo(state, repoId)) {
