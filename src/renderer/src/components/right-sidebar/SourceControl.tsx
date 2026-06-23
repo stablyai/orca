@@ -738,7 +738,7 @@ function SourceControlInner(): React.JSX.Element {
       : EMPTY_GIT_STATUS_ENTRIES
   )
   const activeGitStatusHead = useAppStore((s) =>
-    activeWorktreeId ? (s.gitStatusHeadByWorktree[activeWorktreeId] ?? null) : null
+    activeWorktreeId ? (s.gitStatusHeadByWorktree?.[activeWorktreeId] ?? null) : null
   )
   const repositoryHuge = useAppStore((s) =>
     activeWorktreeId ? s.gitStatusHugeByWorktree?.[activeWorktreeId] : undefined
