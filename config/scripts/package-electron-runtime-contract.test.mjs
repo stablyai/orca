@@ -109,6 +109,8 @@ describe('Electron runtime package contract', () => {
 
     expect(afterInstallScript).toContain('chrome-sandbox')
     expect(afterInstallScript).toContain('unshare --user true')
+    expect(afterInstallScript).toContain('/proc/sys/kernel/unprivileged_userns_clone')
+    expect(afterInstallScript).toContain('/proc/sys/user/max_user_namespaces')
     expect(afterInstallScript).toContain('chmod 4755 "$sandbox"')
     expect(afterInstallScript).toContain('chmod 0755 "$sandbox"')
   })

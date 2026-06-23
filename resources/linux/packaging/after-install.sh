@@ -15,11 +15,33 @@ for dir in /opt/Orca /opt/orca-ide /opt/orca; do
   sandbox="$dir/chrome-sandbox"
   if [ -f "$sandbox" ]; then
     # Why: this custom postinst replaces electron-builder's default script, so
-    # it must preserve Chromium's Linux sandbox permission repair.
+    # it must preserve Chromium's sandbox repair for normal desktop users.
+    userns_available=1
     if ! { [ -L /proc/self/ns/user ] && unshare --user true; }; then
-      chmod 4755 "$sandbox" || true
-    else
+      userns_available=0
+    fi
+    if [ -r /proc/sys/kernel/unprivileged_userns_clone ] &&
+      [ "$(cat /proc/sys/kernel/unprivileged_userns_clone)" != "1" ]; then
+      userns_available=0
+    fi
+    if [ -r /proc/sys/user/max_user_namespaces ]; then
+      max_user_namespaces="$(cat /proc/sys/user/max_user_namespaces)"
+      case "$max_user_namespaces" in
+        '' | *[!0-9]*)
+          userns_available=0
+          ;;
+        *)
+          if [ "$max_user_namespaces" -le 0 ]; then
+            userns_available=0
+          fi
+          ;;
+      esac
+    fi
+
+    if [ "$userns_available" -eq 1 ]; then
       chmod 0755 "$sandbox" || true
+    else
+      chmod 4755 "$sandbox" || true
     fi
   fi
 
