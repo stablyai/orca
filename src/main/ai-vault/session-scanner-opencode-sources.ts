@@ -1,6 +1,6 @@
 import { readdir } from 'fs/promises'
 import { homedir } from 'os'
-import { join } from 'path'
+import { dirname, join } from 'path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { listOpenCodeDatabases } from '../opencode-usage/scanner'
 import { discoverOpenCodeSessions } from './session-scanner-opencode-sqlite-discovery'
@@ -21,7 +21,7 @@ export function opencodeDiscoveries(
   return storageDirs.map(async (storageDir, index) =>
     discoverOpenCodeSessions({
       storageDir,
-      dbPaths: await opencodeDbPathsForSource(options, wslHomeDirs, index),
+      dbPaths: await opencodeDbPathsForSource(options, wslHomeDirs, storageDir, index),
       limitPerAgent: limit,
       issues
     })
@@ -41,10 +41,15 @@ function opencodeStorageDirs(
 async function opencodeDbPathsForSource(
   options: AiVaultScanOptions,
   wslHomeDirs: readonly string[],
+  storageDir: string,
   sourceIndex: number
 ): Promise<readonly string[]> {
   if (options.opencodeDbPaths) {
     return sourceIndex === 0 ? options.opencodeDbPaths : []
+  }
+  // Why: custom OpenCode storage roots still keep SQLite DBs in the parent data dir.
+  if (sourceIndex === 0 && options.opencodeStorageDir) {
+    return listOpenCodeDatabasesInDirectory(dirname(storageDir))
   }
   if (sourceIndex === 0) {
     return listOpenCodeDatabases()

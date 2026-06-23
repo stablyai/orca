@@ -89,6 +89,44 @@ function applyOpenCodeSchema(db: Database.Database): void {
 }
 
 describe('scanAiVaultSessions — OpenCode SQLite + legacy file coexistence', () => {
+  it('discovers SQLite sessions next to a custom OpenCode storage directory', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-custom-opencode-'))
+    tempRoots.push(root)
+    const roots = isolatedScanRoots(root)
+    const opencodeDataDir = join(root, 'custom-opencode')
+    const opencodeStorageDir = join(opencodeDataDir, 'storage')
+    await mkdir(opencodeStorageDir, { recursive: true })
+
+    const dbPath = join(opencodeDataDir, 'opencode.db')
+    const db = new Database(dbPath)
+    applyOpenCodeSchema(db)
+    db.prepare(
+      `INSERT INTO session (id, project_id, slug, directory, title, version,
+         time_created, time_updated, model, agent, cost,
+         tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write)
+       VALUES ('custom-db-session', 'proj-1', 'slug', '/tmp/custom-opencode',
+         'Custom SQLite session', '1.0.0',
+         1777634010000, 1777634011000, NULL, 'build', 0,
+         8, 13, 21, 34, 0)`
+    ).run()
+    db.close()
+
+    const result = await scanAiVaultSessions({
+      ...roots,
+      opencodeStorageDir,
+      opencodeDbPaths: undefined,
+      platform: 'darwin',
+      limit: 50
+    })
+
+    const session = result.sessions.find((s) => s.sessionId === 'custom-db-session')
+    expect(session).toBeDefined()
+    expect(session!.agent).toBe('opencode')
+    expect(session!.title).toBe('Custom SQLite session')
+    expect(session!.filePath).toBe(dbPath)
+    expect(session!.totalTokens).toBe(42)
+  })
+
   it('surfaces SQLite sessions alongside legacy file sessions and dedups by sessionId', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-mixed-'))
     tempRoots.push(root)
