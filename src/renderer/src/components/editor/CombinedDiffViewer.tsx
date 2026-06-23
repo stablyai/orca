@@ -8,6 +8,10 @@ import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { useAppStore } from '@/store'
+import {
+  useVirtualizedScrollAnchor,
+  type VirtualizedScrollAnchor
+} from '@/hooks/useVirtualizedScrollAnchor'
 import { joinPath } from '@/lib/path'
 import { detectLanguage } from '@/lib/language-detect'
 import { setWithLRU } from '@/lib/scroll-cache'
@@ -92,6 +96,7 @@ type CombinedDiffScrollThumb = {
 
 const combinedDiffViewStateCache = new Map<string, CachedCombinedDiffViewState>()
 const combinedDiffScrollTopCache = new Map<string, number>()
+const combinedDiffScrollAnchorCache = new Map<string, VirtualizedScrollAnchor>()
 
 function buildCombinedGitStatusSignature(
   sections: readonly { path: string }[],
@@ -259,7 +264,14 @@ export default function CombinedDiffViewer({
     top: 0,
     height: COMBINED_DIFF_SCROLLBAR_THUMB_MIN_HEIGHT
   })
-  const pendingRestoreScrollTopRef = useRef<number | null>(null)
+  const scrollOffsetRef = useRef(combinedDiffScrollTopCache.get(viewStateKey) ?? 0)
+  const scrollAnchorRef = useRef<VirtualizedScrollAnchor>(
+    combinedDiffScrollAnchorCache.get(viewStateKey) ?? null
+  )
+  const latestDomScrollAnchorRef = useRef<VirtualizedScrollAnchor>(
+    combinedDiffScrollAnchorCache.get(viewStateKey) ?? null
+  )
+  const directScrollInputUntilRef = useRef(0)
   const activeScrollbarDragCleanupRef = useRef<CombinedDiffScrollbarDragCleanup | null>(null)
   const loadedIndicesRef = useRef<Set<number>>(new Set())
   const loadingIndicesRef = useRef<Set<number>>(new Set())
@@ -294,6 +306,15 @@ export default function CombinedDiffViewer({
     const top = ((trackHeight - height) * container.scrollTop) / maxScrollTop
     setScrollThumb({ visible: true, top, height })
   }, [])
+
+  const markDirectScrollInput = useCallback((): void => {
+    directScrollInputUntilRef.current = window.performance.now() + 250
+  }, [])
+
+  const hasDirectScrollInput = useCallback(
+    () => window.performance.now() < directScrollInputUntilRef.current,
+    []
+  )
 
   const clearNotesCopiedResetTimer = useCallback((): void => {
     if (notesCopiedResetTimerRef.current !== null) {
@@ -490,12 +511,15 @@ export default function CombinedDiffViewer({
         cached.loadedIndices.filter((index) => !restoredSections[index]?.loading)
       )
       loadingIndicesRef.current.clear()
-      pendingRestoreScrollTopRef.current =
-        combinedDiffScrollTopCache.get(viewStateKey) ?? cached.scrollTop
+      scrollOffsetRef.current = combinedDiffScrollTopCache.get(viewStateKey) ?? cached.scrollTop
+      scrollAnchorRef.current = combinedDiffScrollAnchorCache.get(viewStateKey) ?? null
+      latestDomScrollAnchorRef.current = scrollAnchorRef.current
       return
     }
 
-    pendingRestoreScrollTopRef.current = combinedDiffScrollTopCache.get(viewStateKey) ?? null
+    scrollOffsetRef.current = combinedDiffScrollTopCache.get(viewStateKey) ?? 0
+    scrollAnchorRef.current = combinedDiffScrollAnchorCache.get(viewStateKey) ?? null
+    latestDomScrollAnchorRef.current = scrollAnchorRef.current
     setSections(
       entries.map((entry) => ({
         key: getCombinedDiffFileTreeSectionKey(treeMode, entry),
@@ -771,6 +795,7 @@ export default function CombinedDiffViewer({
       })
     },
     overscan: COMBINED_DIFF_OVERSCAN,
+    initialOffset: () => scrollOffsetRef.current,
     getItemKey: (index) => {
       const section = sections[index]
       if (!section) {
@@ -778,6 +803,90 @@ export default function CombinedDiffViewer({
       }
       return `${section.key}:${section.collapsed ? 'collapsed' : 'expanded'}:${generation}`
     }
+  })
+  const combinedDiffTotalSize = virtualizer.getTotalSize()
+  const getCombinedDiffSectionKey = useCallback((section: DiffSection): string => section.key, [])
+  const getCombinedDiffSectionElementKey = useCallback(
+    (element: Element): string | null =>
+      element instanceof HTMLElement ? (element.dataset.combinedDiffSectionKey ?? null) : null,
+    []
+  )
+  const recordCombinedDiffDomScrollAnchor = useCallback((): boolean => {
+    const container = scrollContainerRef.current
+    if (!container) {
+      return false
+    }
+
+    const containerRect = container.getBoundingClientRect()
+    const visibleRows = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-combined-diff-section-row]')
+    )
+      .map((row) => {
+        const key = row.dataset.combinedDiffSectionKey
+        if (!key || !row.isConnected) {
+          return null
+        }
+        const rect = row.getBoundingClientRect()
+        if (
+          rect.height <= 0 ||
+          rect.bottom <= containerRect.top ||
+          rect.top >= containerRect.bottom
+        ) {
+          return null
+        }
+        return { key, rect }
+      })
+      .filter((row): row is { key: string; rect: DOMRect } => row !== null)
+      .sort((a, b) => a.rect.top - b.rect.top)
+
+    const firstVisible = visibleRows[0]
+    if (!firstVisible) {
+      return false
+    }
+
+    const anchor: NonNullable<VirtualizedScrollAnchor> = {
+      fallbackKeys: visibleRows.slice(1).map((row) => row.key),
+      key: firstVisible.key,
+      offset: Math.min(
+        firstVisible.rect.height,
+        Math.max(0, containerRect.top - firstVisible.rect.top)
+      )
+    }
+    scrollAnchorRef.current = anchor
+    latestDomScrollAnchorRef.current = anchor
+    return true
+  }, [])
+  const writeCombinedDiffScrollAnchor = useCallback((): void => {
+    const anchor = scrollAnchorRef.current
+    if (anchor) {
+      setWithLRU(combinedDiffScrollAnchorCache, viewStateKey, anchor)
+    } else {
+      combinedDiffScrollAnchorCache.delete(viewStateKey)
+    }
+  }, [viewStateKey])
+  const persistCombinedDiffScrollAnchor = useCallback(
+    (refreshDomAnchor = true): void => {
+      if (refreshDomAnchor) {
+        recordCombinedDiffDomScrollAnchor()
+      }
+      writeCombinedDiffScrollAnchor()
+    },
+    [recordCombinedDiffDomScrollAnchor, writeCombinedDiffScrollAnchor]
+  )
+
+  useVirtualizedScrollAnchor({
+    anchorRef: scrollAnchorRef,
+    getItemElementKey: getCombinedDiffSectionElementKey,
+    getRowKey: getCombinedDiffSectionKey,
+    hasDirectScrollInput,
+    itemElementSelector: '[data-combined-diff-section-row]',
+    recordAnchorOnCleanup: false,
+    recordAnchorOnScroll: false,
+    rows: sections,
+    scrollElementRef: scrollContainerRef,
+    scrollOffsetRef,
+    totalSize: combinedDiffTotalSize,
+    virtualizer
   })
 
   useLayoutEffect(() => {
@@ -824,13 +933,18 @@ export default function CombinedDiffViewer({
   )
   const handleTreeNavigate = useCallback(
     (entry: GitStatusEntry | GitBranchChangeEntry) => {
+      markDirectScrollInput()
       const navigatedIndex = handleCombinedDiffFileTreeNavigation({
         mode: treeMode,
         entry,
         sections: sectionsRef.current,
         sectionIndexByKey,
         toggleSection,
-        scrollToIndex: (index) => virtualizer.scrollToIndex(index, { align: 'start' })
+        scrollToIndex: (index) => {
+          scrollAnchorRef.current = null
+          latestDomScrollAnchorRef.current = null
+          virtualizer.scrollToIndex(index, { align: 'start' })
+        }
       })
       if (navigatedIndex !== null) {
         // Why: tree navigation is also the user's explicit "show me this diff"
@@ -845,6 +959,7 @@ export default function CombinedDiffViewer({
     },
     [
       entrySignature,
+      markDirectScrollInput,
       requestCombinedDiffSectionReload,
       sectionIndexByKey,
       toggleSection,
@@ -1095,19 +1210,69 @@ export default function CombinedDiffViewer({
 
     const cached = combinedDiffViewStateCache.get(viewStateKey)
     if (cached && cached.entrySignature === entrySignature) {
-      pendingRestoreScrollTopRef.current =
-        combinedDiffScrollTopCache.get(viewStateKey) ?? cached.scrollTop
+      scrollOffsetRef.current = combinedDiffScrollTopCache.get(viewStateKey) ?? cached.scrollTop
     }
 
-    const updateCachedScrollPosition = (): void => {
+    let anchorIdleTimerId: number | null = null
+    let anchorFrameId: number | null = null
+    const cancelScheduledAnchorPersist = (): void => {
+      if (anchorIdleTimerId !== null) {
+        window.clearTimeout(anchorIdleTimerId)
+        anchorIdleTimerId = null
+      }
+      if (anchorFrameId !== null) {
+        window.cancelAnimationFrame(anchorFrameId)
+        anchorFrameId = null
+      }
+    }
+    const scheduleSettledAnchorPersist = (): void => {
+      cancelScheduledAnchorPersist()
+      anchorIdleTimerId = window.setTimeout(() => {
+        anchorIdleTimerId = null
+        anchorFrameId = window.requestAnimationFrame(() => {
+          anchorFrameId = null
+          persistCombinedDiffScrollAnchor()
+        })
+      }, 150)
+    }
+
+    const updateCachedScrollPosition = ({
+      recordDomAnchor,
+      scheduleSettled,
+      scrollTop
+    }: {
+      recordDomAnchor: boolean
+      scheduleSettled: boolean
+      scrollTop: number
+    }): void => {
       const existing = combinedDiffViewStateCache.get(viewStateKey)
-      setWithLRU(combinedDiffScrollTopCache, viewStateKey, container.scrollTop)
+      scrollOffsetRef.current = scrollTop
+      setWithLRU(combinedDiffScrollTopCache, viewStateKey, scrollTop)
+      if (recordDomAnchor) {
+        persistCombinedDiffScrollAnchor()
+      } else {
+        writeCombinedDiffScrollAnchor()
+      }
+      if (scheduleSettled) {
+        scheduleSettledAnchorPersist()
+      }
       updateCombinedDiffScrollbar()
       if (!existing || existing.entrySignature !== entrySignature) {
         return
       }
       setWithLRU(combinedDiffViewStateCache, viewStateKey, {
         ...existing,
+        scrollTop
+      })
+    }
+    const handleScroll = (): void => {
+      if (!hasDirectScrollInput()) {
+        updateCombinedDiffScrollbar()
+        return
+      }
+      updateCachedScrollPosition({
+        recordDomAnchor: false,
+        scheduleSettled: true,
         scrollTop: container.scrollTop
       })
     }
@@ -1119,54 +1284,33 @@ export default function CombinedDiffViewer({
     updateCombinedDiffScrollbar()
     const resizeObserver = new ResizeObserver(updateCombinedDiffScrollbar)
     resizeObserver.observe(container)
-    container.addEventListener('scroll', updateCachedScrollPosition)
+    container.addEventListener('scroll', handleScroll)
     return () => {
-      updateCachedScrollPosition()
+      cancelScheduledAnchorPersist()
+      if (latestDomScrollAnchorRef.current) {
+        scrollAnchorRef.current = latestDomScrollAnchorRef.current
+      }
+      updateCachedScrollPosition({
+        recordDomAnchor: false,
+        scheduleSettled: false,
+        scrollTop: scrollOffsetRef.current
+      })
       resizeObserver.disconnect()
-      container.removeEventListener('scroll', updateCachedScrollPosition)
+      container.removeEventListener('scroll', handleScroll)
     }
-  }, [entrySignature, sections.length, updateCombinedDiffScrollbar, viewStateKey])
+  }, [
+    entrySignature,
+    hasDirectScrollInput,
+    persistCombinedDiffScrollAnchor,
+    sections.length,
+    updateCombinedDiffScrollbar,
+    writeCombinedDiffScrollAnchor,
+    viewStateKey
+  ])
 
   useLayoutEffect(() => {
     updateCombinedDiffScrollbar()
   }, [sectionHeights, sections, updateCombinedDiffScrollbar])
-
-  useLayoutEffect(() => {
-    const container = scrollContainerRef.current
-    const targetScrollTop = pendingRestoreScrollTopRef.current
-    if (!container || targetScrollTop === null) {
-      return
-    }
-
-    let frameId = 0
-    let attempts = 0
-
-    const restoreScrollPosition = (): void => {
-      const liveContainer = scrollContainerRef.current
-      const liveTarget = pendingRestoreScrollTopRef.current
-      if (!liveContainer || liveTarget === null) {
-        return
-      }
-
-      const maxScrollTop = Math.max(0, liveContainer.scrollHeight - liveContainer.clientHeight)
-      const nextScrollTop = Math.min(liveTarget, maxScrollTop)
-      liveContainer.scrollTop = nextScrollTop
-      setWithLRU(combinedDiffScrollTopCache, viewStateKey, nextScrollTop)
-
-      if (Math.abs(liveContainer.scrollTop - liveTarget) <= 1 || maxScrollTop >= liveTarget) {
-        pendingRestoreScrollTopRef.current = null
-        return
-      }
-
-      attempts += 1
-      if (attempts < 30) {
-        frameId = window.requestAnimationFrame(restoreScrollPosition)
-      }
-    }
-
-    restoreScrollPosition()
-    return () => window.cancelAnimationFrame(frameId)
-  }, [sectionHeights, sections, viewStateKey])
 
   const openAlternateDiff = useCallback(() => {
     if (!file.combinedAlternate) {
@@ -1193,6 +1337,7 @@ export default function CombinedDiffViewer({
       }
 
       event.preventDefault()
+      markDirectScrollInput()
       const track = event.currentTarget
       const thumb =
         event.target instanceof HTMLElement
@@ -1231,6 +1376,7 @@ export default function CombinedDiffViewer({
 
       const handlePointerMove = (moveEvent: PointerEvent): void => {
         moveEvent.preventDefault()
+        markDirectScrollInput()
         container.scrollTop = getScrollTopForPointer(moveEvent.clientY, grabOffset)
         updateCombinedDiffScrollbar()
       }
@@ -1248,7 +1394,7 @@ export default function CombinedDiffViewer({
       })
       activeScrollbarDragCleanupRef.current = cleanupPointerDrag
     },
-    [cleanupActiveScrollbarDrag, updateCombinedDiffScrollbar]
+    [cleanupActiveScrollbarDrag, markDirectScrollInput, updateCombinedDiffScrollbar]
   )
 
   const handleCopyNotes = useCallback(async (): Promise<void> => {
@@ -1592,12 +1738,11 @@ export default function CombinedDiffViewer({
             <div
               ref={setScrollContainerRef}
               className="combined-diff-scroll-container h-full overflow-auto pr-5 scrollbar-editor"
+              onWheel={markDirectScrollInput}
+              onTouchMove={markDirectScrollInput}
             >
               {skippedConflictNotice}
-              <div
-                className="relative w-full"
-                style={{ height: `${virtualizer.getTotalSize()}px` }}
-              >
+              <div className="relative w-full" style={{ height: `${combinedDiffTotalSize}px` }}>
                 {virtualizer.getVirtualItems().map((virtualItem) => {
                   const section = sections[virtualItem.index]
                   if (!section) {
@@ -1608,6 +1753,8 @@ export default function CombinedDiffViewer({
                     <div
                       key={virtualItem.key}
                       data-index={virtualItem.index}
+                      data-combined-diff-section-row
+                      data-combined-diff-section-key={section.key}
                       ref={virtualizer.measureElement}
                       className="absolute left-0 top-0 w-full"
                       // Why: `top` preserves sticky file headers inside each row;

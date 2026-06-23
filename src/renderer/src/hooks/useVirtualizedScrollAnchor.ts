@@ -8,6 +8,10 @@ import {
 } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { shouldCancelVirtualizedScrollOffsetRestore } from './virtualizedScrollOffsetRestore'
+import {
+  findVirtualizedDomScrollAnchor,
+  getVirtualizedScrollAnchorForOffset
+} from './virtualized-scroll-anchor-recording'
 
 export type VirtualizedScrollAnchor = {
   fallbackKeys?: readonly string[]
@@ -27,6 +31,10 @@ type UseVirtualizedScrollAnchorOptions<
   getRowKey: (row: TRow) => string
   hasDirectScrollInput?: () => boolean
   itemElementSelector?: string
+  recordAnchorOnCleanup?: boolean
+  // Why: some callers record user scroll anchors outside this hook; passive
+  // programmatic scroll events during remount must not teach them a transient row.
+  recordAnchorOnScroll?: boolean
   rows: readonly TRow[]
   scrollElementRef: RefObject<TScrollElement | null>
   scrollOffsetRef: MutableRefObject<number>
@@ -53,6 +61,8 @@ export function useVirtualizedScrollAnchor<
   getRowKey,
   hasDirectScrollInput,
   itemElementSelector,
+  recordAnchorOnCleanup = true,
+  recordAnchorOnScroll = true,
   rows,
   scrollElementRef,
   scrollOffsetRef,
@@ -68,64 +78,14 @@ export function useVirtualizedScrollAnchor<
     return indexByKey
   }, [getRowKey, rows])
 
-  const findDomAnchor = useCallback(
-    (scrollElement: TScrollElement) => {
-      if (!itemElementSelector || !getItemElementKey) {
-        return null
-      }
-      const scrollRect = scrollElement.getBoundingClientRect()
-      type DomAnchorItem = { element: TItemElement; key: string; rect: DOMRect }
-      const visibleItems = Array.from(
-        scrollElement.querySelectorAll<TItemElement>(itemElementSelector)
-      )
-        .map((element) => {
-          const key = getItemElementKey(element)
-          if (!key || !rowIndexByKey.has(key) || !element.isConnected) {
-            return null
-          }
-          const rect = element.getBoundingClientRect()
-          if (rect.height <= 0 || rect.bottom <= scrollRect.top || rect.top >= scrollRect.bottom) {
-            return null
-          }
-          return { element, key, rect }
-        })
-        .filter((item): item is DomAnchorItem => item != null)
-        .sort((a, b) => a.rect.top - b.rect.top)
-
-      const [firstVisible] = visibleItems
-      if (!firstVisible) {
-        return null
-      }
-      return {
-        fallbackKeys: visibleItems.slice(1).map((item) => item.key),
-        key: firstVisible.key,
-        offset: Math.min(
-          firstVisible.rect.height,
-          Math.max(0, scrollRect.top - firstVisible.rect.top)
-        )
-      }
-    },
-    [getItemElementKey, itemElementSelector, rowIndexByKey]
-  )
-
   const recordVirtualScrollAnchor = useCallback(
     (scrollTop: number) => {
-      const virtualItems = virtualizer.getVirtualItems()
-      const firstVisible = virtualItems.find((item) => item.end > scrollTop)
-      const row = firstVisible ? rows[firstVisible.index] : undefined
-      if (!firstVisible || !row) {
-        anchorRef.current = null
-        return
-      }
-      anchorRef.current = {
-        fallbackKeys: virtualItems
-          .slice(virtualItems.indexOf(firstVisible) + 1)
-          .map((item) => rows[item.index])
-          .filter((row): row is TRow => row != null)
-          .map(getRowKey),
-        key: getRowKey(row),
-        offset: Math.max(0, scrollTop - firstVisible.start)
-      }
+      anchorRef.current = getVirtualizedScrollAnchorForOffset({
+        getRowKey,
+        rows,
+        scrollTop,
+        virtualItems: virtualizer.getVirtualItems()
+      })
     },
     [anchorRef, getRowKey, rows, virtualizer]
   )
@@ -133,17 +93,36 @@ export function useVirtualizedScrollAnchor<
   const recordScrollAnchor = useCallback(
     (scrollTop: number) => {
       const scrollElement = scrollElementRef.current
-      if (scrollElement) {
-        const domAnchor = findDomAnchor(scrollElement)
+      if (scrollElement && itemElementSelector && getItemElementKey) {
+        const domAnchor = findVirtualizedDomScrollAnchor<TItemElement>({
+          getItemElementKey,
+          itemElementSelector,
+          rowIndexByKey,
+          scrollElement
+        })
         if (domAnchor) {
           anchorRef.current = domAnchor
           return
         }
       }
 
-      recordVirtualScrollAnchor(scrollTop)
+      anchorRef.current = getVirtualizedScrollAnchorForOffset({
+        getRowKey,
+        rows,
+        scrollTop,
+        virtualItems: virtualizer.getVirtualItems()
+      })
     },
-    [anchorRef, findDomAnchor, recordVirtualScrollAnchor, scrollElementRef]
+    [
+      anchorRef,
+      getItemElementKey,
+      getRowKey,
+      itemElementSelector,
+      rowIndexByKey,
+      rows,
+      scrollElementRef,
+      virtualizer
+    ]
   )
 
   // Why: row changes must not re-register the scroll listener; cleanup records
@@ -154,6 +133,10 @@ export function useVirtualizedScrollAnchor<
   recordVirtualScrollAnchorRef.current = recordVirtualScrollAnchor
   const hasDirectScrollInputRef = useRef(hasDirectScrollInput)
   hasDirectScrollInputRef.current = hasDirectScrollInput
+  const recordAnchorOnCleanupRef = useRef(recordAnchorOnCleanup)
+  recordAnchorOnCleanupRef.current = recordAnchorOnCleanup
+  const recordAnchorOnScrollRef = useRef(recordAnchorOnScroll)
+  recordAnchorOnScrollRef.current = recordAnchorOnScroll
 
   useLayoutEffect(() => {
     const el = scrollElementRef.current
@@ -216,16 +199,27 @@ export function useVirtualizedScrollAnchor<
         // user's real position until the intended offset is reachable.
         if (el.scrollTop === targetOffset) {
           restoring = false
-          recordCurrentAnchor()
+          if (recordAnchorOnScrollRef.current) {
+            recordCurrentAnchor()
+          } else {
+            scrollOffsetRef.current = el.scrollTop
+          }
           return
         }
         if (el.scrollHeight - el.clientHeight >= targetOffset) {
           el.scrollTop = targetOffset
           if (el.scrollTop === targetOffset) {
             restoring = false
-            recordCurrentAnchor()
+            if (recordAnchorOnScrollRef.current) {
+              recordCurrentAnchor()
+            } else {
+              scrollOffsetRef.current = el.scrollTop
+            }
           }
         }
+        return
+      }
+      if (!recordAnchorOnScrollRef.current) {
         return
       }
       scrollOffsetRef.current = el.scrollTop
@@ -237,8 +231,10 @@ export function useVirtualizedScrollAnchor<
     el.addEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, recordCurrentAnchor)
     return () => {
       cancelScheduledRecord()
-      scrollOffsetRef.current = el.scrollTop
-      recordScrollAnchorRef.current(el.scrollTop)
+      if (recordAnchorOnCleanupRef.current) {
+        scrollOffsetRef.current = el.scrollTop
+        recordScrollAnchorRef.current(el.scrollTop)
+      }
       el.removeEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, recordCurrentAnchor)
       el.removeEventListener('scroll', onScroll)
     }
@@ -250,9 +246,10 @@ export function useVirtualizedScrollAnchor<
     if (!anchor || !el) {
       return
     }
-    if (virtualizer.isScrolling) {
+    if (virtualizer.isScrolling && hasDirectScrollInputRef.current?.() === true) {
       // Why: remeasurement during wheel scrolling can change totalSize. Restoring
       // the anchor in that window writes scrollTop and fights the user's wheel.
+      // Programmatic scrolls during remount still need anchor correction.
       return
     }
     if (shouldSkipRestore?.()) {
@@ -287,7 +284,11 @@ export function useVirtualizedScrollAnchor<
       const desiredTop = scrollRect.top - offset
       const delta = rect.top - desiredTop
       if (Math.abs(delta) > 1) {
+        // Why: this scroll write is still part of restore; keep the target
+        // anchor until a later layout confirms the intended row is in place.
         el.scrollTop += delta
+        scrollOffsetRef.current = el.scrollTop
+        return true
       }
       scrollOffsetRef.current = el.scrollTop
       recordScrollAnchor(el.scrollTop)
@@ -304,8 +305,9 @@ export function useVirtualizedScrollAnchor<
       if (Math.abs(el.scrollTop - nextScrollTop) > 1) {
         el.scrollTop = nextScrollTop
       }
+      // Why: measured fallback can run while TanStack's virtual window is
+      // transitional, so recording here can replace the target with a wrong row.
       scrollOffsetRef.current = el.scrollTop
-      recordScrollAnchor(el.scrollTop)
       return true
     }
 

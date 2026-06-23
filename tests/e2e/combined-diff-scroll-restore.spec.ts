@@ -1,0 +1,286 @@
+import { execFileSync } from 'child_process'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'fs'
+import os from 'os'
+import path from 'path'
+import type { Page } from '@stablyai/playwright-test'
+import { test, expect } from './helpers/orca-app'
+import { waitForSessionReady } from './helpers/store'
+
+type CombinedDiffScrollRepo = {
+  repoPath: string
+}
+
+type ViewportAnchor = {
+  key: string
+  index: number
+  top: number
+  bottom: number
+  scrollTop: number
+  scrollHeight: number
+  clientHeight: number
+}
+
+const FILE_COUNT = 18
+const ADDED_LINES_PER_FILE = 180
+
+function runGit(repoPath: string, args: string[]): void {
+  execFileSync('git', args, { cwd: repoPath, stdio: 'pipe' })
+}
+
+function buildBaseFile(fileIndex: number): string {
+  return `${Array.from(
+    { length: 20 },
+    (_, lineIndex) => `export const base_${fileIndex}_${lineIndex} = ${lineIndex}`
+  ).join('\n')}\n`
+}
+
+function buildModifiedFile(fileIndex: number): string {
+  const added = Array.from(
+    { length: ADDED_LINES_PER_FILE },
+    (_, lineIndex) => `export const changed_${fileIndex}_${lineIndex} = ${fileIndex + lineIndex}`
+  ).join('\n')
+  return `${buildBaseFile(fileIndex)}${added}\n`
+}
+
+function createCombinedDiffScrollRepo(): CombinedDiffScrollRepo {
+  const repoPath = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-combined-diff-scroll-')))
+  runGit(repoPath, ['init'])
+  runGit(repoPath, ['config', 'user.email', 'e2e@test.local'])
+  runGit(repoPath, ['config', 'user.name', 'E2E Test'])
+
+  const srcDir = path.join(repoPath, 'src')
+  mkdirSync(srcDir, { recursive: true })
+  for (let index = 0; index < FILE_COUNT; index += 1) {
+    writeFileSync(
+      path.join(srcDir, `scroll-${String(index).padStart(2, '0')}.ts`),
+      buildBaseFile(index)
+    )
+  }
+  runGit(repoPath, ['add', '-A'])
+  runGit(repoPath, ['commit', '-m', 'Initial combined diff scroll fixture'])
+
+  for (let index = 0; index < FILE_COUNT; index += 1) {
+    writeFileSync(
+      path.join(srcDir, `scroll-${String(index).padStart(2, '0')}.ts`),
+      buildModifiedFile(index)
+    )
+  }
+
+  return { repoPath }
+}
+
+async function addAndActivateRepo(page: Page, repoPath: string): Promise<string> {
+  const repoId = await page.evaluate(async (pathToRepo: string) => {
+    const store = window.__store
+    if (!store) {
+      throw new Error('window.__store is not available')
+    }
+
+    const addedRepo = await store.getState().addRepoPath(pathToRepo)
+    if (!addedRepo) {
+      throw new Error(`isolated combined-diff repo not found: ${pathToRepo}`)
+    }
+    return addedRepo.id
+  }, repoPath)
+
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async (targetRepoId: string) => {
+          const store = window.__store
+          if (!store) {
+            return 0
+          }
+          await store.getState().fetchWorktrees(targetRepoId)
+          return store.getState().worktreesByRepo[targetRepoId]?.length ?? 0
+        }, repoId),
+      {
+        timeout: 30_000,
+        message: 'isolated combined-diff worktree did not load'
+      }
+    )
+    .toBeGreaterThan(0)
+
+  return page.evaluate(
+    ({ targetRepoId, pathToRepo }) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available')
+      }
+
+      const state = store.getState()
+      const worktrees = state.worktreesByRepo[targetRepoId] ?? []
+      const worktree = worktrees.find((entry) => entry.path === pathToRepo) ?? worktrees[0]
+      if (!worktree) {
+        throw new Error(`isolated combined-diff worktree not found: ${pathToRepo}`)
+      }
+      state.setActiveRepo(targetRepoId)
+      state.setActiveWorktree(worktree.id)
+      return worktree.id
+    },
+    { targetRepoId: repoId, pathToRepo: repoPath }
+  )
+}
+
+async function openCombinedDiff(page: Page, worktreeId: string, repoPath: string): Promise<string> {
+  return page.evaluate(
+    async ({ wId, pathToRepo }) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available')
+      }
+      const state = store.getState()
+      const status = await window.api.git.status({ worktreePath: pathToRepo })
+      const entries = status.entries.filter((entry) => entry.area === 'unstaged')
+      if (entries.length < 2) {
+        throw new Error(`expected multiple unstaged entries, received ${entries.length}`)
+      }
+      state.setGitStatus(wId, status)
+      state.openAllDiffs(wId, pathToRepo, undefined, 'unstaged', entries)
+
+      const nextState = store.getState()
+      const activeGroupId = nextState.activeGroupIdByWorktree[wId]
+      const activeFileId = nextState.activeFileId
+      const tab = (nextState.unifiedTabsByWorktree[wId] ?? []).find(
+        (candidate) => candidate.groupId === activeGroupId && candidate.entityId === activeFileId
+      )
+      if (!tab) {
+        throw new Error('combined diff tab was not created')
+      }
+      return tab.id
+    },
+    { wId: worktreeId, pathToRepo: repoPath }
+  )
+}
+
+async function scrollCombinedDiffDeep(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const container = document.querySelector<HTMLElement>('.combined-diff-scroll-container')
+    if (!container) {
+      throw new Error('combined diff scroll container not found')
+    }
+    const target = Math.min(7_000, Math.max(0, container.scrollHeight - container.clientHeight - 1))
+    container.dispatchEvent(
+      new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: target })
+    )
+    container.scrollTop = target
+    container.dispatchEvent(new Event('scroll', { bubbles: true }))
+  })
+}
+
+async function readViewportAnchor(page: Page): Promise<ViewportAnchor | null> {
+  return page.evaluate(() => {
+    const container = document.querySelector<HTMLElement>('.combined-diff-scroll-container')
+    if (!container) {
+      return null
+    }
+    const containerRect = container.getBoundingClientRect()
+    const visibleRows = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-combined-diff-section-row]')
+    )
+      .map((row) => {
+        const rect = row.getBoundingClientRect()
+        const key = row.dataset.combinedDiffSectionKey
+        const index = Number(row.dataset.index)
+        if (
+          !key ||
+          !Number.isFinite(index) ||
+          rect.height <= 0 ||
+          rect.bottom <= containerRect.top ||
+          rect.top >= containerRect.bottom
+        ) {
+          return null
+        }
+        return {
+          key,
+          index,
+          top: rect.top - containerRect.top,
+          bottom: rect.bottom - containerRect.top,
+          scrollTop: container.scrollTop,
+          scrollHeight: container.scrollHeight,
+          clientHeight: container.clientHeight
+        }
+      })
+      .filter((row): row is ViewportAnchor => row !== null)
+      .sort((a, b) => a.top - b.top)
+    return visibleRows[0] ?? null
+  })
+}
+
+async function waitForStableViewportAnchor(page: Page): Promise<ViewportAnchor> {
+  const startedAt = Date.now()
+  let lastSignature = ''
+  let stableSamples = 0
+  let lastAnchor: ViewportAnchor | null = null
+
+  while (Date.now() - startedAt < 15_000) {
+    const anchor = await readViewportAnchor(page)
+    if (anchor) {
+      const signature = `${anchor.key}:${Math.round(anchor.top)}:${Math.round(
+        anchor.bottom
+      )}:${Math.round(anchor.scrollHeight)}`
+      if (signature === lastSignature) {
+        stableSamples += 1
+        if (stableSamples >= 2) {
+          return anchor
+        }
+      } else {
+        lastSignature = signature
+        stableSamples = 0
+      }
+      lastAnchor = anchor
+    }
+    await page.waitForTimeout(100)
+  }
+
+  throw new Error(`combined diff viewport anchor did not settle: ${JSON.stringify(lastAnchor)}`)
+}
+
+test.describe('Combined diff scroll restore', () => {
+  test.describe.configure({ mode: 'serial' })
+  test.use({ seedTestRepo: false })
+
+  test('keeps the visible section anchored after switching tabs', async ({ orcaPage }) => {
+    await waitForSessionReady(orcaPage)
+    const fixture = createCombinedDiffScrollRepo()
+
+    try {
+      const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
+      const diffTabId = await openCombinedDiff(orcaPage, worktreeId, fixture.repoPath)
+      await expect(orcaPage.locator('.combined-diff-scroll-container')).toBeVisible()
+      await expect(orcaPage.getByText(`${FILE_COUNT} changed files`)).toBeVisible()
+
+      await scrollCombinedDiffDeep(orcaPage)
+      const beforeSwitch = await waitForStableViewportAnchor(orcaPage)
+      expect(beforeSwitch.index).toBeGreaterThan(0)
+
+      await orcaPage.evaluate((wId) => {
+        const store = window.__store
+        if (!store) {
+          throw new Error('window.__store is not available')
+        }
+        store.getState().createTab(wId)
+      }, worktreeId)
+      await expect(orcaPage.locator('.combined-diff-scroll-container')).toHaveCount(0)
+
+      await orcaPage.locator(`[data-tab-id="${diffTabId}"]`).click({ force: true })
+      await expect(orcaPage.locator('.combined-diff-scroll-container')).toBeVisible()
+      const afterSwitch = await waitForStableViewportAnchor(orcaPage)
+
+      expect(afterSwitch.key).toBe(beforeSwitch.key)
+      expect(Math.abs(afterSwitch.top - beforeSwitch.top)).toBeLessThan(80)
+
+      const visibleLine = orcaPage
+        .locator('.combined-diff-scroll-container .monaco-diff-editor .view-line')
+        .first()
+      await expect(visibleLine).toBeVisible()
+      await visibleLine.click({ force: true })
+      const afterLineClick = await waitForStableViewportAnchor(orcaPage)
+
+      expect(afterLineClick.key).toBe(afterSwitch.key)
+      expect(Math.abs(afterLineClick.top - afterSwitch.top)).toBeLessThan(80)
+    } finally {
+      rmSync(fixture.repoPath, { recursive: true, force: true })
+    }
+  })
+})

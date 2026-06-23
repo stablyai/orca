@@ -534,6 +534,44 @@ function buildActiveSurfacePatch(
   }
 }
 
+function activeSurfacePatchMatchesState(
+  state: Pick<
+    AppState,
+    | 'activeBrowserTabId'
+    | 'activeBrowserTabIdByWorktree'
+    | 'activeFileId'
+    | 'activeFileIdByWorktree'
+    | 'activeTabId'
+    | 'activeTabIdByWorktree'
+    | 'activeTabType'
+    | 'activeTabTypeByWorktree'
+  >,
+  worktreeId: string,
+  patch: Pick<
+    AppState,
+    | 'activeBrowserTabId'
+    | 'activeBrowserTabIdByWorktree'
+    | 'activeFileId'
+    | 'activeFileIdByWorktree'
+    | 'activeTabId'
+    | 'activeTabIdByWorktree'
+    | 'activeTabType'
+    | 'activeTabTypeByWorktree'
+  >
+): boolean {
+  return (
+    state.activeBrowserTabId === patch.activeBrowserTabId &&
+    state.activeBrowserTabIdByWorktree[worktreeId] ===
+      patch.activeBrowserTabIdByWorktree[worktreeId] &&
+    state.activeFileId === patch.activeFileId &&
+    state.activeFileIdByWorktree[worktreeId] === patch.activeFileIdByWorktree[worktreeId] &&
+    state.activeTabId === patch.activeTabId &&
+    state.activeTabIdByWorktree[worktreeId] === patch.activeTabIdByWorktree[worktreeId] &&
+    state.activeTabType === patch.activeTabType &&
+    state.activeTabTypeByWorktree[worktreeId] === patch.activeTabTypeByWorktree[worktreeId]
+  )
+}
+
 export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, get) => ({
   unifiedTabsByWorktree: {},
   renamingTabId: null,
@@ -1171,10 +1209,13 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
 
   focusGroup: (worktreeId, groupId) =>
     set((state) => {
-      const nextActiveGroupIdByWorktree = {
-        ...state.activeGroupIdByWorktree,
-        [worktreeId]: groupId
-      }
+      const groupAlreadyFocused = state.activeGroupIdByWorktree[worktreeId] === groupId
+      const nextActiveGroupIdByWorktree = groupAlreadyFocused
+        ? state.activeGroupIdByWorktree
+        : {
+            ...state.activeGroupIdByWorktree,
+            [worktreeId]: groupId
+          }
       // Why: focusing a split group surfaces whichever terminal tab is already
       // active in that group, so the tab-level bell is no longer needed.
       //
@@ -1185,6 +1226,9 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       // before the user ever sees the tab. All current callers only fire for
       // the active worktree, but this guard prevents future misuse.
       if (state.activeWorktreeId !== worktreeId) {
+        if (groupAlreadyFocused) {
+          return state
+        }
         return {
           activeGroupIdByWorktree: nextActiveGroupIdByWorktree
         }
@@ -1214,8 +1258,23 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
               return changed ? copy : state.unreadTerminalTabs
             })()
           : state.unreadTerminalTabs
+      const activeSurfacePatch = buildActiveSurfacePatch(
+        {
+          ...state,
+          activeGroupIdByWorktree: nextActiveGroupIdByWorktree
+        },
+        worktreeId,
+        groupId
+      )
+      if (
+        groupAlreadyFocused &&
+        nextUnreadTerminalTabs === state.unreadTerminalTabs &&
+        activeSurfacePatchMatchesState(state, worktreeId, activeSurfacePatch)
+      ) {
+        return state
+      }
       return {
-        activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
+        ...(groupAlreadyFocused ? {} : { activeGroupIdByWorktree: nextActiveGroupIdByWorktree }),
         // Why: only write unreadTerminalTabs back into state when it actually
         // changed. The IIFE above returns state.unreadTerminalTabs by reference
         // on no-op; preserving that reference via conditional spread keeps
@@ -1224,14 +1283,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         ...(nextUnreadTerminalTabs !== state.unreadTerminalTabs
           ? { unreadTerminalTabs: nextUnreadTerminalTabs }
           : {}),
-        ...buildActiveSurfacePatch(
-          {
-            ...state,
-            activeGroupIdByWorktree: nextActiveGroupIdByWorktree
-          },
-          worktreeId,
-          groupId
-        )
+        ...activeSurfacePatch
       }
     }),
 
