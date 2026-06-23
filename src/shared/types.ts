@@ -2693,6 +2693,10 @@ export type GlobalSettings = {
    *  - 'blank': blank terminal (no agent launched)
    *  - TuiAgent: a specific agent id */
   defaultTuiAgent: TuiAgent | 'blank' | null
+  /** When true, activating a worktree with no existing tabs launches the
+   *  `defaultTuiAgent` instead of opening a plain terminal. Only applies
+   *  when the worktree has no `createdWithAgent` (which takes precedence). */
+  openWorktreeWithAgent: boolean
   /** Agents hidden from future picker and automatic launch choices. Detection
    *  remains a raw PATH capability snapshot. */
   disabledTuiAgents: TuiAgent[]

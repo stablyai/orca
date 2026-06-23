@@ -838,6 +838,26 @@ export function AgentsPane({
         wslCapabilitiesLoading={wslCapabilitiesLoading}
       />
 
+      {/* Why: only show the "open with agent" toggle when the user has picked a
+          concrete default agent. With Auto or blank, launching on worktree
+          click would either be unpredictable (Auto) or a no-op (blank). */}
+      {defaultAgent !== null && defaultAgent !== 'blank' && (
+        <SettingsSwitchRow
+          checked={settings.openWorktreeWithAgent}
+          onChange={() => {
+            updateSettings({ openWorktreeWithAgent: !settings.openWorktreeWithAgent })
+          }}
+          label={translate(
+            'auto.components.settings.AgentsPane.openWorktreeWithAgentTitle',
+            'Open worktrees with default agent'
+          )}
+          description={translate(
+            'auto.components.settings.AgentsPane.openWorktreeWithAgentDescription',
+            'When you click a worktree with no open tabs, launch the default agent instead of a blank terminal. Worktrees created with a specific agent always reopen that agent.'
+          )}
+        />
+      )}
+
       <AgentStatusHooksSetting settings={settings} updateSettings={updateSettings} />
 
       <AgentGeneratedTabTitlesSetting settings={settings} updateSettings={updateSettings} />

@@ -45,6 +45,7 @@ import {
 } from '../../../shared/tui-agent-launch-defaults'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
+import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
@@ -273,6 +274,64 @@ function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayl
   }
 }
 
+function buildDefaultAgentReopenStartup(
+  state: ReturnType<typeof useAppStore.getState>,
+  worktree: Worktree
+): WorktreeStartupPayload | undefined {
+  // Why: opt-in setting. When disabled (default), worktrees open a plain
+  // terminal exactly as before.
+  if (!state.settings?.openWorktreeWithAgent) {
+    return undefined
+  }
+  const agent = state.settings?.defaultTuiAgent
+  // Why: 'blank' and null mean the user explicitly chose no agent — respect
+  // that and fall through to a plain terminal.
+  if (!isTuiAgent(agent)) {
+    return undefined
+  }
+  if (!isTuiAgentEnabled(agent, state.settings?.disabledTuiAgents)) {
+    return undefined
+  }
+
+  const repo = state.repos.find((entry) => entry.id === worktree.repoId)
+  const launchPlatform = repo
+    ? getAgentLaunchPlatformForRepo(
+        repo,
+        repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(state, worktree.id)
+      )
+    : CLIENT_PLATFORM
+
+  const startupPlan = buildAgentStartupPlan({
+    agent,
+    prompt: '',
+    cmdOverrides: state.settings?.agentCmdOverrides ?? {},
+    agentArgs: resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs),
+    agentEnv: resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
+    platform: launchPlatform,
+    allowEmptyPromptLaunch: true
+  })
+  if (!startupPlan) {
+    return undefined
+  }
+
+  return {
+    command: startupPlan.launchCommand,
+    ...(startupPlan.env ? { env: startupPlan.env } : {}),
+    launchConfig: startupPlan.launchConfig,
+    launchAgent: agent,
+    ...(startupPlan.startupCommandDelivery
+      ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+      : {}),
+    telemetry: {
+      agent_kind: tuiAgentToAgentKind(agent),
+      launch_source: 'sidebar',
+      // Why: 'default' distinguishes "user's global default agent" from
+      // 'resume' (worktree was created with this specific agent).
+      request_kind: 'default'
+    }
+  }
+}
+
 export function activateAndRevealWorktree(
   worktreeId: string,
   opts?: {
@@ -356,7 +415,9 @@ export function activateAndRevealWorktree(
   const primaryTabId = ensureWorktreeHasInitialTerminal(
     useAppStore.getState(),
     worktreeId,
-    opts?.startup ?? buildCreatedAgentReopenStartup(wt),
+    opts?.startup ??
+      buildCreatedAgentReopenStartup(wt) ??
+      buildDefaultAgentReopenStartup(useAppStore.getState(), wt),
     opts?.setup,
     opts?.issueCommand,
     opts?.defaultTabs
