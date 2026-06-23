@@ -23,11 +23,9 @@ function normalizeTitle(value: string | null | undefined): string | null {
 }
 
 function isBranchTitle(
-  displayName: string | null | undefined,
-  branchName: string | null | undefined
+  normalizedDisplayName: string | null,
+  normalizedBranchName: string | null
 ): boolean {
-  const normalizedDisplayName = normalizeComparableTitle(displayName)
-  const normalizedBranchName = normalizeComparableTitle(branchName)
   return normalizedDisplayName !== null && normalizedDisplayName === normalizedBranchName
 }
 
@@ -52,7 +50,10 @@ export function getWorktreeCardTitleDisplay({
     return normalizedStoredDisplayName ? visibleStoredDisplayName : ''
   }
 
-  if (normalizedStoredDisplayName && !isBranchTitle(storedDisplayName, branchName)) {
+  if (
+    normalizedStoredDisplayName &&
+    !isBranchTitle(normalizedStoredDisplayName, normalizedBranchName)
+  ) {
     return visibleStoredDisplayName
   }
 
