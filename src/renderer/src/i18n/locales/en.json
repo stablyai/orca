@@ -3833,6 +3833,7 @@
           "1b0a156717": "Agents"
         },
         "WorktreeCardReviewDetailSection": {
+          "copyLink": "Copy link",
           "reviewHeader": "{{value0}} #{{value1}}"
         },
         "WorktreeCardMeta": {
@@ -3849,6 +3850,12 @@
           "807b13b9ec": "Edit issue",
           "b22f058067": "View on GitHub",
           "e97d8f2876": "Issue #{{value0}}",
+          "moreIssueActions": "More issue actions",
+          "copyLink": "Copy link",
+          "copyLinkSuccess": "{{value0}} copied",
+          "copyLinkFailure": "Failed to copy link",
+          "issueLinkLabel": "Issue link",
+          "reviewLinkLabel": "{{value0}} link",
           "3ea2702e62": "Linked {{value0}} #{{value1}}",
           "b105fd3057": "Linked Linear {{value0}}",
           "3f2649eeb8": "Linked issue #{{value0}}",
