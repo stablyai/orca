@@ -1561,6 +1561,23 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       mutateGitPaths('git.bulkStage', worktreePath, filePaths),
     unstage: async ({ worktreePath, filePath }) =>
       mutateGitPath('git.unstage', worktreePath, filePath),
+    diffPatch: async ({ worktreePath, filePath, staged }) => {
+      const file = await resolveRuntimeFilePath(filePath, worktreePath)
+      return callRuntimeResult('git.diffPatch', {
+        worktree: toRuntimeWorktreeSelector(file.worktree.id),
+        filePath: file.relativePath,
+        staged
+      })
+    },
+    applyPatch: async ({ worktreePath, filePath, patch, reverse }) => {
+      const file = await resolveRuntimeFilePath(filePath, worktreePath)
+      await callRuntimeResult('git.applyPatch', {
+        worktree: toRuntimeWorktreeSelector(file.worktree.id),
+        filePath: file.relativePath,
+        patch,
+        reverse
+      })
+    },
     bulkUnstage: async ({ worktreePath, filePaths }) =>
       mutateGitPaths('git.bulkUnstage', worktreePath, filePaths),
     discard: async ({ worktreePath, filePath }) =>

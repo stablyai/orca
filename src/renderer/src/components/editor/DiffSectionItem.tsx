@@ -34,6 +34,7 @@ import { disposeUnattachedMonacoModelPaths } from './diff-monaco-model-disposal'
 import { getLiveDiffSectionRenderLimit } from './diff-section-live-render-limit'
 import { useDiffSectionFallbackCleanup } from './useDiffSectionFallbackCleanup'
 import { submitDiffSectionComment } from './diff-section-comment-submit'
+import { useDiffSectionHunkStaging, type DiffSectionHunkStaging } from './useDiffSectionHunkStaging'
 
 export function DiffSectionItem({
   section,
@@ -58,7 +59,8 @@ export function DiffSectionItem({
   setSectionHeights,
   setSections,
   modifiedEditorsRef,
-  handleSectionSaveRef
+  handleSectionSaveRef,
+  hunkStaging
 }: {
   section: DiffSection
   index: number
@@ -90,6 +92,7 @@ export function DiffSectionItem({
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
   modifiedEditorsRef: MutableRefObject<Map<number, monacoEditor.IStandaloneCodeEditor>>
   handleSectionSaveRef: MutableRefObject<(index: number) => Promise<void>>
+  hunkStaging?: DiffSectionHunkStaging
 }): React.JSX.Element {
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
@@ -132,6 +135,8 @@ export function DiffSectionItem({
     lineHeight: number
   } | null>(null)
   const hasLineCommentAction = Boolean(worktreeId || onAddLineComment)
+
+  useDiffSectionHunkStaging({ section, worktreeId, modifiedEditor, hunkStaging })
 
   const disposeDiffModels = useCallback(() => {
     window.setTimeout(() => {

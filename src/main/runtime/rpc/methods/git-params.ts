@@ -27,6 +27,18 @@ export const GitDiff = GitFilePath.extend({
   compareAgainstHead: z.boolean().optional()
 })
 
+export const GitDiffPatch = GitFilePath.extend({
+  staged: z.boolean()
+})
+
+export const GitApplyPatch = GitFilePath.extend({
+  patch: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string().min(1, 'Missing patch')),
+  reverse: z.boolean()
+})
+
 export const GitBranchCompare = WorktreeSelector.extend({
   baseRef: z
     .unknown()

@@ -20,8 +20,10 @@ import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
 import {
   getRuntimeGitBranchDiff,
   getRuntimeGitCommitDiff,
-  getRuntimeGitDiff
+  getRuntimeGitDiff,
+  getRuntimeGitStatus
 } from '@/runtime/runtime-git-client'
+import type { DiffSectionHunkStaging } from './useDiffSectionHunkStaging'
 import '@/lib/monaco-setup'
 import { Button } from '@/components/ui/button'
 import {
@@ -191,6 +193,7 @@ export default function CombinedDiffViewer({
   viewStateKey: string
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const setGitStatus = useAppStore((s) => s.setGitStatus)
   const gitStatusEntries = useAppStore(
     (s) => s.gitStatusByWorktree[file.worktreeId] ?? EMPTY_GIT_STATUS_ENTRIES
   )
@@ -361,6 +364,50 @@ export default function CombinedDiffViewer({
 
   const isBranchMode = file.diffSource === 'combined-branch'
   const isCommitMode = file.diffSource === 'combined-commit'
+
+  const hunkStagingOwnerSettings = React.useMemo(
+    () => settingsForRuntimeOwner(settings, file.runtimeEnvironmentId),
+    [settings, file.runtimeEnvironmentId]
+  )
+  const refreshGitStatusAfterHunkApply = useCallback(async (): Promise<void> => {
+    if (!file.worktreeId) {
+      return
+    }
+    try {
+      const connectionId = getConnectionId(file.worktreeId) ?? undefined
+      const status = await getRuntimeGitStatus({
+        settings: hunkStagingOwnerSettings,
+        worktreeId: file.worktreeId,
+        worktreePath: file.filePath,
+        connectionId
+      })
+      setGitStatus(file.worktreeId, status)
+    } catch {
+      // Best-effort: the diff/status will also refresh on the next status poll.
+    }
+  }, [file.worktreeId, file.filePath, hunkStagingOwnerSettings, setGitStatus])
+  // Per-hunk staging only applies to the local working-tree changes view, not
+  // read-only branch/commit comparisons.
+  const hunkStaging = React.useMemo<DiffSectionHunkStaging | undefined>(() => {
+    if (isBranchMode || isCommitMode || !file.worktreeId) {
+      return undefined
+    }
+    return {
+      worktreePath: file.filePath,
+      connectionId: getConnectionId(file.worktreeId) ?? undefined,
+      settings: hunkStagingOwnerSettings,
+      onApplied: () => {
+        void refreshGitStatusAfterHunkApply()
+      }
+    }
+  }, [
+    isBranchMode,
+    isCommitMode,
+    file.worktreeId,
+    file.filePath,
+    hunkStagingOwnerSettings,
+    refreshGitStatusAfterHunkApply
+  ])
   const branchCompare =
     file.branchCompare?.baseOid && file.branchCompare.headOid && file.branchCompare.mergeBase
       ? file.branchCompare
@@ -1607,6 +1654,7 @@ export default function CombinedDiffViewer({
                         setSections={setSections}
                         modifiedEditorsRef={modifiedEditorsRef}
                         handleSectionSaveRef={handleSectionSaveRef}
+                        hunkStaging={hunkStaging}
                         renderHeaderTrailingContent={(section) => {
                           const fileNotes = diffCommentsForWorktree.filter(
                             (comment) => comment.filePath === section.path

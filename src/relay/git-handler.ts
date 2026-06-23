@@ -12,6 +12,7 @@ import {
   parseWorktreeList
 } from './git-handler-utils'
 import { parseNumstat } from '../shared/git-uncommitted-line-stats'
+import { patchTouchesOnlyPath } from '../shared/git-hunk-patch'
 import {
   computeDiff,
   branchCompare as branchCompareOp,
@@ -104,6 +105,8 @@ export class GitHandler {
     this.dispatcher.onRequest('git.diff', (p) => this.getDiff(p))
     this.dispatcher.onRequest('git.stage', (p) => this.stage(p))
     this.dispatcher.onRequest('git.unstage', (p) => this.unstage(p))
+    this.dispatcher.onRequest('git.diffPatch', (p) => this.getDiffPatch(p))
+    this.dispatcher.onRequest('git.applyPatch', (p, context) => this.applyPatch(p, context))
     this.dispatcher.onRequest('git.bulkStage', (p) => this.bulkStage(p))
     this.dispatcher.onRequest('git.bulkUnstage', (p) => this.bulkUnstage(p))
     this.dispatcher.onRequest('git.abortMerge', (p) => this.abortMerge(p))
@@ -239,6 +242,118 @@ export class GitHandler {
     const worktreePath = params.worktreePath as string
     const filePath = params.filePath as string
     await this.git(['restore', '--staged', '--', filePath], worktreePath)
+  }
+
+  private async getDiffPatch(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    const filePath = params.filePath as string
+    // Why: filePath is relative; reject traversal before passing it to git diff.
+    const resolved = path.resolve(worktreePath, filePath)
+    const rel = path.relative(path.resolve(worktreePath), resolved)
+    if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
+      throw new Error(`Path "${filePath}" resolves outside the worktree`)
+    }
+    const staged = params.staged === true
+    const { stdout } = await this.git(
+      // Why: core.quotePath=false keeps non-ASCII paths literal so the patch's
+      // file headers match the validated path (git octal-quotes them otherwise).
+      [
+        '-c',
+        'core.quotePath=false',
+        'diff',
+        ...(staged ? ['--cached'] : []),
+        '--no-color',
+        '--no-ext-diff',
+        '--',
+        filePath
+      ],
+      worktreePath
+    )
+    return { patch: stdout }
+  }
+
+  private async applyPatch(params: Record<string, unknown>, context?: RequestContext) {
+    const worktreePath = params.worktreePath as string
+    const filePath = params.filePath as string
+    const patch = params.patch as string
+    const reverse = params.reverse === true
+    // Why: bind the patch to the expected path — git apply honors every file
+    // header it's given, so a stray patch could otherwise stage unrelated files.
+    if (!patchTouchesOnlyPath(patch, filePath)) {
+      throw new Error(`Patch does not match the expected path "${filePath}"`)
+    }
+    await this.gitWithStdin(
+      ['apply', '--cached', ...(reverse ? ['--reverse'] : [])],
+      worktreePath,
+      patch,
+      context?.signal
+    )
+  }
+
+  private gitWithStdin(
+    args: string[],
+    cwd: string,
+    input: string,
+    signal?: AbortSignal
+  ): Promise<{ stdout: string; stderr: string }> {
+    return new Promise((resolve, reject) => {
+      const child = spawn('git', args, {
+        cwd: expandTilde(cwd),
+        env: buildRelayCommandEnv(),
+        windowsHide: true
+      })
+      let stdout = ''
+      let stderr = ''
+      let stdoutBytes = 0
+      let stderrBytes = 0
+      let settled = false
+      const finish = (error: Error | null): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        if (error) {
+          reject(Object.assign(error, { stdout, stderr }))
+          return
+        }
+        resolve({ stdout, stderr })
+      }
+      // Why: bound the buffers so a pathological git invocation can't blow up
+      // relay memory (mirrors the MAX_GIT_BUFFER cap on this.git()).
+      child.stdout?.on('data', (chunk: Buffer) => {
+        stdoutBytes += chunk.byteLength
+        if (stdoutBytes > MAX_GIT_BUFFER) {
+          child.kill()
+          finish(new Error('git stdout exceeded maxBuffer.'))
+          return
+        }
+        stdout += chunk.toString('utf-8')
+      })
+      child.stderr?.on('data', (chunk: Buffer) => {
+        stderrBytes += chunk.byteLength
+        if (stderrBytes > MAX_GIT_BUFFER) {
+          child.kill()
+          finish(new Error('git stderr exceeded maxBuffer.'))
+          return
+        }
+        stderr += chunk.toString('utf-8')
+      })
+      child.on('error', finish)
+      child.on('close', (code) =>
+        code === 0 ? finish(null) : finish(new Error(`git exited with ${code}: ${stderr.trim()}`))
+      )
+      signal?.addEventListener(
+        'abort',
+        () => {
+          child.kill()
+          finish(new Error('git apply aborted'))
+        },
+        { once: true }
+      )
+      // Why: git may exit before draining stdin (malformed patch) → EPIPE.
+      child.stdin?.on('error', () => {})
+      child.stdin?.end(input)
+    })
   }
 
   private async bulkStage(params: Record<string, unknown>) {

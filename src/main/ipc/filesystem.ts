@@ -43,6 +43,8 @@ import {
   commitChanges,
   stageFile,
   unstageFile,
+  getFileDiffPatch,
+  applyIndexPatch,
   bulkStageFiles,
   bulkUnstageFiles,
   bulkDiscardChanges,
@@ -1780,6 +1782,67 @@ export function registerFilesystemHandlers(
         worktreePath
       )
       await unstageFile(worktreePath, filePath, gitOptions)
+    }
+  )
+
+  ipcMain.handle(
+    'git:diffPatch',
+    async (
+      _event,
+      args: { worktreePath: string; filePath: string; staged: boolean; connectionId?: string }
+    ): Promise<{ patch: string }> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return {
+          patch: await provider.getFileDiffPatch(args.worktreePath, args.filePath, args.staged)
+        }
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return { patch: await getFileDiffPatch(worktreePath, filePath, args.staged, gitOptions) }
+    }
+  )
+
+  ipcMain.handle(
+    'git:applyPatch',
+    async (
+      _event,
+      args: {
+        worktreePath: string
+        filePath: string
+        patch: string
+        reverse: boolean
+        connectionId?: string
+      }
+    ): Promise<void> => {
+      // Why: coerce to a strict boolean so a malformed payload (e.g. the string
+      // 'false') can't apply the patch in the wrong direction. Matches git:push.
+      const reverse = args.reverse === true
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.applyIndexPatch(args.worktreePath, args.filePath, args.patch, reverse)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      // Why: confine to the worktree before applying, matching stage/unstage —
+      // git apply also rejects patch paths escaping the repo as defense in depth.
+      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      await applyIndexPatch(worktreePath, filePath, args.patch, reverse, gitOptions)
     }
   )
 

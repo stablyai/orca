@@ -27,6 +27,7 @@ import { getRemoteCommitUrl, getRemoteFileUrl } from '../git/repo'
 import {
   abortMerge,
   abortRebase,
+  applyIndexPatch,
   bulkDiscardChanges,
   bulkStageFiles,
   bulkUnstageFiles,
@@ -38,6 +39,7 @@ import {
   getCommitCompare,
   getCommitDiff,
   getDiff,
+  getFileDiffPatch,
   getStagedCommitContext,
   getStatus as getGitStatus,
   stageFile,
@@ -822,6 +824,60 @@ export class RuntimeGitCommands {
       return { ok: true }
     }
     await unstageFile(target.worktree.path, relativePath, localGitOptionsForTarget(target))
+    return { ok: true }
+  }
+
+  /** Raw unified diff for one file in a runtime worktree (local or SSH). */
+  async getRuntimeGitFileDiffPatch(
+    worktreeSelector: string,
+    filePath: string,
+    staged: boolean
+  ): Promise<{ patch: string }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const relativePath = normalizeRuntimeGitRelativePath(filePath)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+      return { patch: await provider.getFileDiffPatch(target.worktree.path, relativePath, staged) }
+    }
+    return {
+      patch: await getFileDiffPatch(
+        target.worktree.path,
+        relativePath,
+        staged,
+        localGitOptionsForTarget(target)
+      )
+    }
+  }
+
+  /** Apply a hunk patch to the index of a runtime worktree (reverse unstages). */
+  async applyRuntimeGitIndexPatch(
+    worktreeSelector: string,
+    filePath: string,
+    patch: string,
+    reverse: boolean
+  ): Promise<{ ok: true }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    // Why: confine to the worktree, and bind the patch to this path so it can't
+    // stage unrelated files (enforced again in applyIndexPatch / the relay).
+    const relativePath = normalizeRuntimeGitRelativePath(filePath)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+      await provider.applyIndexPatch(target.worktree.path, relativePath, patch, reverse)
+      return { ok: true }
+    }
+    await applyIndexPatch(
+      target.worktree.path,
+      relativePath,
+      patch,
+      reverse,
+      localGitOptionsForTarget(target)
+    )
     return { ok: true }
   }
 
