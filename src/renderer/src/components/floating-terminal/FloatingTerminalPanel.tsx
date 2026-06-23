@@ -7,6 +7,7 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { FileText, Globe, Minus, TerminalSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import BrowserPane from '@/components/browser-pane/BrowserPane'
+import EmulatorPane from '@/components/emulator-pane/EmulatorPane'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import TabBar from '@/components/tab-bar/TabBar'
@@ -186,6 +187,7 @@ export function FloatingTerminalPanel({
   const closeTab = useAppStore((s) => s.closeTab)
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
   const closeFile = useAppStore((s) => s.closeFile)
+  const closeUnifiedTab = useAppStore((s) => s.closeUnifiedTab)
   const markFileDirty = useAppStore((s) => s.markFileDirty)
   const activateTab = useAppStore((s) => s.activateTab)
   const setActiveTab = useAppStore((s) => s.setActiveTab)
@@ -279,11 +281,17 @@ export function FloatingTerminalPanel({
   const activeTerminalId = activeTab?.contentType === 'terminal' ? activeTab.entityId : null
   const activeBrowserId = activeTab?.contentType === 'browser' ? activeTab.entityId : null
   const activeEditorUnifiedId =
-    activeTab && activeTab.contentType !== 'terminal' && activeTab.contentType !== 'browser'
+    activeTab &&
+    activeTab.contentType !== 'terminal' &&
+    activeTab.contentType !== 'browser' &&
+    activeTab.contentType !== 'simulator'
       ? activeTab.id
       : null
   const activeEditorFileId =
-    activeTab && activeTab.contentType !== 'terminal' && activeTab.contentType !== 'browser'
+    activeTab &&
+    activeTab.contentType !== 'terminal' &&
+    activeTab.contentType !== 'browser' &&
+    activeTab.contentType !== 'simulator'
       ? activeTab.entityId
       : null
   const terminalTabById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs])
@@ -333,7 +341,12 @@ export function FloatingTerminalPanel({
   const editorItems = useMemo(
     () =>
       groupTabs
-        .filter((tab) => tab.contentType !== 'terminal' && tab.contentType !== 'browser')
+        .filter(
+          (tab) =>
+            tab.contentType !== 'terminal' &&
+            tab.contentType !== 'browser' &&
+            tab.contentType !== 'simulator'
+        )
         .map((tab) => {
           const file = floatingFiles.find((candidate) => candidate.id === tab.entityId)
           return file ? { ...file, tabId: tab.id } : null
@@ -341,11 +354,19 @@ export function FloatingTerminalPanel({
         .filter((file): file is OpenFile & { tabId: string } => file !== null),
     [floatingFiles, groupTabs]
   )
-  // Why: restored sessions can retain unified tabs whose backing terminal/file/browser
-  // records are gone; the empty landing should follow what the user can see.
+  const simulatorItems = useMemo(
+    () => groupTabs.filter((tab) => tab.contentType === 'simulator'),
+    [groupTabs]
+  )
+  // Why: restored sessions can retain unified tabs whose backing records are
+  // gone; the empty landing should follow what the user can see.
   const hasVisibleFloatingTabs =
-    terminalItems.length > 0 || browserItems.length > 0 || editorItems.length > 0
-  const visibleFloatingItemCount = terminalItems.length + browserItems.length + editorItems.length
+    terminalItems.length > 0 ||
+    browserItems.length > 0 ||
+    editorItems.length > 0 ||
+    simulatorItems.length > 0
+  const visibleFloatingItemCount =
+    terminalItems.length + browserItems.length + editorItems.length + simulatorItems.length
   const activeClosableTab = hasVisibleFloatingTabs ? activeTab : null
   const tabBarOrder = useMemo(
     () =>
@@ -385,7 +406,9 @@ export function FloatingTerminalPanel({
       ? 'browser'
       : activeTab?.contentType === 'terminal'
         ? 'terminal'
-        : 'editor'
+        : activeTab?.contentType === 'simulator'
+          ? 'simulator'
+          : 'editor'
 
   useContextualTour('floating-workspace', open, 'floating_workspace_visible', {
     recordFeatureInteraction: tourInteractionSnapshot?.recordFeatureInteractionForTour ?? false,
@@ -803,6 +826,8 @@ export function FloatingTerminalPanel({
         } else if (item.contentType === 'browser') {
           destroyWorkspaceWebviews(state.browserPagesByWorkspace, item.entityId)
           closeBrowserTab(item.entityId)
+        } else if (item.contentType === 'simulator') {
+          closeUnifiedTab(item.id)
         } else {
           const file = state.openFiles.find((candidate) => candidate.id === item.entityId)
           if (file?.isDirty) {
@@ -816,7 +841,7 @@ export function FloatingTerminalPanel({
         queueEditorCloseRequests(dirtyEditorFileIds)
       }
     },
-    [activeGroup, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
+    [activeGroup, closeBrowserTab, closeFile, closeTab, closeUnifiedTab, queueEditorCloseRequests]
   )
 
   const closeFloatingItem = useCallback(
@@ -887,7 +912,13 @@ export function FloatingTerminalPanel({
     closeFloatingItems(
       currentGroupTabs
         .filter(
-          (tab) => tab.contentType !== 'terminal' && tab.contentType !== 'browser' && !tab.isPinned
+          (tab) =>
+            tab.contentType !== 'terminal' &&
+            tab.contentType !== 'browser' &&
+            // Why: simulator tabs are not files; "Close All Files" must leave
+            // the Mobile Emulator open like terminal/browser tabs do.
+            tab.contentType !== 'simulator' &&
+            !tab.isPinned
         )
         .map((tab) => tab.id)
     )
@@ -1504,6 +1535,7 @@ export function FloatingTerminalPanel({
               browserTabs={browserItems}
               activeFileId={activeEditorUnifiedId}
               activeBrowserTabId={activeBrowserId}
+              activeSimulatorTabId={activeTab?.contentType === 'simulator' ? activeTab.id : null}
               activeTabType={activeTabType}
               onActivateFile={activateFloatingItem}
               onCloseFile={closeFloatingItem}
@@ -1590,6 +1622,18 @@ export function FloatingTerminalPanel({
                 aria-hidden={!isActive}
               >
                 <BrowserPane browserTab={tab} isActive={open && isActive} />
+              </div>
+            )
+          })}
+          {simulatorItems.map((tab) => {
+            const isActive = tab.id === activeTab?.id
+            return (
+              <div
+                key={tab.id}
+                className={isActive ? 'absolute inset-0 flex' : 'absolute inset-0 hidden'}
+                aria-hidden={!isActive}
+              >
+                <EmulatorPane tab={tab} worktreeId={tab.worktreeId} isActive={open && isActive} />
               </div>
             )
           })}

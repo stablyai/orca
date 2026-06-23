@@ -582,7 +582,11 @@ import {
   shouldRunSetupForCreate,
   writeIssueCommand
 } from '../hooks'
-import { DEFAULT_REPO_BADGE_COLOR, getDefaultVoiceSettings } from '../../shared/constants'
+import {
+  DEFAULT_REPO_BADGE_COLOR,
+  FLOATING_TERMINAL_WORKTREE_ID,
+  getDefaultVoiceSettings
+} from '../../shared/constants'
 import { listRepoWorktrees } from '../repo-worktrees'
 import { createWorktreeLinkedPaths, removeWorktreeLinkedPaths } from '../ipc/worktree-symlinks'
 import { deleteWorktreeHistoryDir } from '../terminal-history'
@@ -1784,6 +1788,12 @@ export class OrcaRuntimeService {
   private authoritativeWindowId: number | null = null
   private tabs = new Map<string, RuntimeSyncedTab>()
   private mobileSessionTabsByWorktree = new Map<string, RuntimeMobileSessionTabsSnapshot>()
+  // Why: idempotency map for mobile terminal creation — a retried create with the
+  // same clientMutationId returns the in-flight operation instead of duplicating.
+  private mobileTerminalCreateByMutationId = new Map<
+    string,
+    Promise<RuntimeMobileSessionCreateTerminalResult>
+  >()
   private mobileSessionTabListeners = new Set<(snapshot: RuntimeMobileSessionTabsResult) => void>()
   private leaves = new Map<string, RuntimeLeafRecord>()
   // Why: PTY output is a per-keystroke hot path. Looking up affected leaves by
@@ -13388,7 +13398,8 @@ export class OrcaRuntimeService {
 
   async updateManagedWorktreeMeta(
     worktreeSelector: string,
-    updates: Partial<WorktreeMeta> & {
+    updates: Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
+      pushTarget?: GitPushTarget | null
       lineage?: {
         parentWorktree?: string
         noParent?: boolean
@@ -13400,6 +13411,26 @@ export class OrcaRuntimeService {
     }
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     const { lineage, ...metaUpdates } = updates
+    const shouldClearPushTarget =
+      Object.prototype.hasOwnProperty.call(metaUpdates, 'pushTarget') &&
+      metaUpdates.pushTarget === null
+    const normalizedMetaUpdates: Partial<WorktreeMeta> = shouldClearPushTarget
+      ? { ...metaUpdates, pushTarget: undefined }
+      : (metaUpdates as Partial<WorktreeMeta>)
+    const persistedMetaUpdates: Partial<WorktreeMeta> = omitUndefinedProperties(
+      normalizedMetaUpdates.displayName !== undefined
+        ? {
+            ...normalizedMetaUpdates,
+            pendingFirstAgentMessageRename: false,
+            firstAgentMessageRenameError: null
+          }
+        : normalizedMetaUpdates
+    )
+    if (shouldClearPushTarget) {
+      // Why: omitUndefinedProperties protects ordinary optional RPC fields, but
+      // pushTarget:null is an explicit request to remove persisted target metadata.
+      persistedMetaUpdates.pushTarget = undefined
+    }
     if (lineage?.noParent === true) {
       this.store.removeWorktreeLineage?.(worktree.id)
       this.store.removeWorkspaceLineage?.(worktreeWorkspaceKey(worktree.id))
@@ -13439,20 +13470,7 @@ export class OrcaRuntimeService {
         createdAt
       })
     }
-    this.store.setWorktreeMeta(
-      worktree.id,
-      stripOrcaProvenanceMetaUpdates(
-        omitUndefinedProperties(
-          metaUpdates.displayName !== undefined
-            ? {
-                ...metaUpdates,
-                pendingFirstAgentMessageRename: false,
-                firstAgentMessageRenameError: null
-              }
-            : metaUpdates
-        )
-      )
-    )
+    this.store.setWorktreeMeta(worktree.id, stripOrcaProvenanceMetaUpdates(persistedMetaUpdates))
     // Why: unlike renderer-initiated optimistic updates, CLI callers need an
     // explicit push so the editor refreshes metadata changed outside the UI.
     this.invalidateResolvedWorktreeCache()
@@ -14633,6 +14651,47 @@ export class OrcaRuntimeService {
       launchConfig?: SleepingAgentLaunchConfig
       launchAgent?: TuiAgent
       activate?: boolean
+      clientMutationId?: string
+    } = {}
+  ): Promise<RuntimeMobileSessionCreateTerminalResult> {
+    const mutationId = opts.clientMutationId
+    if (!mutationId) {
+      return this.runCreateMobileSessionTerminal(worktreeSelector, opts)
+    }
+    const mutationKey = `${worktreeSelector}\0${mutationId}`
+    // Why: a retried create (double-tap, reconnect replay) with the same
+    // idempotency key must return the in-flight operation instead of spawning a
+    // duplicate terminal. Settled entries are dropped so a later retry — after a
+    // failure or after the result is consumed — can start a fresh create.
+    const inflight = this.mobileTerminalCreateByMutationId.get(mutationKey)
+    if (inflight) {
+      return inflight
+    }
+    const run = this.runCreateMobileSessionTerminal(worktreeSelector, opts)
+    this.mobileTerminalCreateByMutationId.set(mutationKey, run)
+    void run
+      .catch(() => {})
+      .finally(() => {
+        if (this.mobileTerminalCreateByMutationId.get(mutationKey) === run) {
+          this.mobileTerminalCreateByMutationId.delete(mutationKey)
+        }
+      })
+    return run
+  }
+
+  private async runCreateMobileSessionTerminal(
+    worktreeSelector: string,
+    opts: {
+      afterTabId?: string
+      targetGroupId?: string
+      command?: string
+      env?: Record<string, string>
+      startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
+      agent?: TuiAgent
+      launchConfig?: SleepingAgentLaunchConfig
+      launchAgent?: TuiAgent
+      activate?: boolean
+      clientMutationId?: string
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     this.assertGraphReady()
@@ -14705,7 +14764,16 @@ export class OrcaRuntimeService {
     if (opts.activate !== false) {
       this.notifier?.focusTerminal(reply.tabId, worktreeId, null)
     }
-    return await this.waitForMobileTerminalSurface(worktreeId, reply.tabId)
+    try {
+      return await this.waitForMobileTerminalSurface(worktreeId, reply.tabId)
+    } catch (error) {
+      // Why: the renderer created the tab but its terminal surface never
+      // published (PTY spawn/handle failure). Roll the half-created tab back via
+      // the renderer close path so it can't linger as a ghost in mobile
+      // snapshots, then surface the failure to the caller.
+      this.notifier?.closeTerminal(reply.tabId)
+      throw error
+    }
   }
 
   private async resolveMobileSessionTerminalCommand(
@@ -15622,6 +15690,21 @@ export class OrcaRuntimeService {
   private async resolveTerminalWorkspaceLaunchScope(
     selector: string
   ): Promise<TerminalWorkspaceLaunchScope> {
+    const floatingTerminalSelector =
+      selector === FLOATING_TERMINAL_WORKTREE_ID ||
+      selector === `id:${FLOATING_TERMINAL_WORKTREE_ID}`
+    if (floatingTerminalSelector) {
+      // Why: the floating sentinel is terminal-only; other workspace APIs must
+      // keep rejecting it because there is no backing repo/worktree record.
+      return {
+        id: FLOATING_TERMINAL_WORKTREE_ID,
+        path: homedir(),
+        connectionId: null,
+        repo: null,
+        folderWorkspace: null
+      }
+    }
+
     const folderScope = await this.resolveFolderWorkspaceLaunchScope(selector)
     if (folderScope) {
       return folderScope

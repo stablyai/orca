@@ -48,14 +48,45 @@ describe('CommandCodeHookService', () => {
     expect(config.hooks.PreToolUse[0].matcher).toBe('.*')
     expect(config.hooks.PostToolUse[0].matcher).toBe('.*')
     expect(config.hooks.Stop[0].matcher).toBeUndefined()
-    expect(config.hooks.PreToolUse[0].hooks[0].command).toContain('command-code-hook')
-    expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
-    if (process.platform === 'win32') {
-      expect(config.hooks.PreToolUse[0].hooks[0].command).toContain('command-code-hook.cmd')
-    } else {
+    expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(
+      process.platform === 'win32'
+        ? /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+        : /command-code-hook/
+    )
+    if (process.platform !== 'win32') {
+      expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
+    }
+    if (process.platform !== 'win32') {
       expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(/^if \[ -x /)
     }
   })
+
+  // Why: #6078 — a Windows user profile path with a space used to be written
+  // verbatim as the hook command, so the agent split it at the space. The
+  // managed command must use an encoded launcher so the path never appears raw
+  // on the cmd.exe command line.
+  it.skipIf(process.platform !== 'win32')(
+    'wraps the managed hook command to survive spaces in the profile path (#6078)',
+    () => {
+      const spaceHome = join(tmpdir(), 'orca command-code home with spaces')
+      mkdirSync(spaceHome, { recursive: true })
+      homedirMock.mockReturnValue(spaceHome)
+      try {
+        expect(new CommandCodeHookService().install().state).toBe('installed')
+
+        const config = JSON.parse(
+          readFileSync(join(spaceHome, '.commandcode', 'settings.json'), 'utf8')
+        ) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
+
+        const command = config.hooks.PreToolUse[0].hooks[0].command
+        expect(command).toMatch(
+          /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+        )
+      } finally {
+        rmSync(spaceHome, { recursive: true, force: true })
+      }
+    }
+  )
 
   it('installs a hook script that can recover the endpoint when Command Code strips token env', () => {
     new CommandCodeHookService().install()

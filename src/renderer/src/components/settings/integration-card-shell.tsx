@@ -1,5 +1,6 @@
 import { LoaderCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useIntegrationCardShellClass } from './integration-card-presentation'
 
 export type IntegrationCardStatusTone = 'connected' | 'attention' | 'neutral'
 
@@ -20,6 +21,7 @@ export function IntegrationCardShell(props: {
   actions?: React.ReactNode
   children?: React.ReactNode
 }): React.JSX.Element {
+  const shellClass = useIntegrationCardShellClass(props.className)
   const status = props.checking ? (
     <LoaderCircle className="size-4 shrink-0 animate-spin text-muted-foreground" />
   ) : (
@@ -34,12 +36,7 @@ export function IntegrationCardShell(props: {
   )
 
   return (
-    <div
-      className={cn(
-        'rounded-xl border border-border bg-card px-4 py-3.5 shadow-xs',
-        props.className
-      )}
-    >
+    <div className={shellClass}>
       <div className="flex flex-wrap items-start gap-3">
         <span className="shrink-0 text-muted-foreground">{props.icon}</span>
         <div className="min-w-0 flex-1 basis-[16rem] space-y-0.5">

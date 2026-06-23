@@ -9,6 +9,10 @@ import {
 import { openTerminal } from './pane-lifecycle'
 import {
   buildDefaultTerminalOptions,
+  DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
+  DEFAULT_TERMINAL_SCROLL_SENSITIVITY,
+  normalizeTerminalFastScrollSensitivity,
+  normalizeTerminalScrollSensitivity,
   resolveTerminalCursorInactiveStyle
 } from './pane-terminal-options'
 
@@ -38,6 +42,7 @@ function createPane(): ManagedPaneInternal {
     stablePaneId: leafId,
     terminal: {
       loadAddon: vi.fn(),
+      attachCustomWheelEventHandler: vi.fn(),
       refresh: vi.fn(),
       rows: 24
     } as never,
@@ -81,6 +86,28 @@ describe('buildDefaultTerminalOptions', () => {
     // the v1.4.51 table corruption that once forced width 0 was the ZWJ
     // width bug, fixed separately by the Orca unicode provider.
     expect(buildDefaultTerminalOptions().scrollbar?.width).toBe(7)
+  })
+
+  it('slightly increases default terminal wheel scrolling while preserving fast scroll', () => {
+    const options = buildDefaultTerminalOptions()
+
+    expect(options.scrollSensitivity).toBe(DEFAULT_TERMINAL_SCROLL_SENSITIVITY)
+    expect(options.fastScrollSensitivity).toBe(DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY)
+  })
+
+  it('normalizes configurable terminal scroll sensitivity values', () => {
+    expect(normalizeTerminalScrollSensitivity(undefined)).toBe(DEFAULT_TERMINAL_SCROLL_SENSITIVITY)
+    expect(normalizeTerminalScrollSensitivity(0)).toBe(0.1)
+    expect(normalizeTerminalScrollSensitivity(20)).toBe(10)
+    expect(normalizeTerminalFastScrollSensitivity(undefined)).toBe(
+      DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY
+    )
+    expect(normalizeTerminalFastScrollSensitivity(0)).toBe(1)
+    expect(normalizeTerminalFastScrollSensitivity(25)).toBe(20)
+  })
+
+  it('enables xterm contrast correction for low-contrast CLI colors', () => {
+    expect(buildDefaultTerminalOptions().minimumContrastRatio).toBe(4.5)
   })
 
   it('only uses inactive outline for block cursors', () => {
@@ -382,6 +409,7 @@ describe('openTerminal — Unicode 11 ordering', () => {
           events.push('loadAddon:webLinks')
         }
       }),
+      attachCustomWheelEventHandler: vi.fn(),
       write: vi.fn(() => {
         events.push('write')
       }),

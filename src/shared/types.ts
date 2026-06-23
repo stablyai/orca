@@ -2391,6 +2391,9 @@ export type GlobalSettings = {
   terminalFontFamily: string
   terminalFontWeight: number
   terminalLineHeight: number
+  terminalScrollSensitivity: number
+  terminalFastScrollSensitivity: number
+  terminalTuiScrollSensitivity: number
   /** Terminal renderer policy.
    *  - 'auto': try xterm WebGL and fall back to DOM when unsupported or risky.
    *  - 'on': always try xterm WebGL.

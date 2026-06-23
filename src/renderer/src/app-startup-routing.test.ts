@@ -11,7 +11,7 @@ describe('renderer startup runtime routing', () => {
 
     expect(startupBlock.indexOf('await actions.fetchSettings()')).toBeGreaterThanOrEqual(0)
     expect(startupBlock.indexOf('await actions.fetchSettings()')).toBeLessThan(
-      startupBlock.indexOf('await actions.fetchRepos()')
+      startupBlock.indexOf('await actions.fetchReposForAllHosts()')
     )
     expect(startupBlock.indexOf('await actions.fetchSettings()')).toBeLessThan(
       startupBlock.indexOf('await actions.fetchAllWorktrees()')

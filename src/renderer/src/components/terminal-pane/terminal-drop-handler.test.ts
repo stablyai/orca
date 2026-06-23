@@ -66,6 +66,7 @@ vi.mock('./terminal-input-activity', () => ({
 }))
 
 import { handleTerminalFileDrop } from './terminal-drop-handler'
+import { wrapTerminalBracketedPasteText } from './terminal-bracketed-paste'
 
 function createTerminalTransport(
   sendInput: ReturnType<typeof vi.fn>,
@@ -147,7 +148,9 @@ describe('handleTerminalFileDrop', () => {
       ['/Users/me/logo.png'],
       '/remote/repo/.orca/drops'
     )
-    expect(sendInput).toHaveBeenCalledWith('/remote/repo/.orca/drops/logo.png ')
+    expect(sendInput).toHaveBeenCalledWith(
+      wrapTerminalBracketedPasteText('/remote/repo/.orca/drops/logo.png')
+    )
     expect(focus).toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
     expect(mocks.toastError).not.toHaveBeenCalled()
@@ -237,7 +240,9 @@ describe('handleTerminalFileDrop', () => {
       ['/Users/me/logo.png'],
       '\\\\server\\share\\repo\\.orca\\drops'
     )
-    expect(sendInput).toHaveBeenCalledWith('\\\\server\\share\\repo\\.orca\\drops\\logo.png ')
+    expect(sendInput).toHaveBeenCalledWith(
+      wrapTerminalBracketedPasteText('\\\\server\\share\\repo\\.orca\\drops\\logo.png')
+    )
   })
 
   it('uploads to the worktree owner runtime instead of the focused runtime', async () => {

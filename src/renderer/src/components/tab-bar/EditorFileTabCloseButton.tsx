@@ -27,6 +27,9 @@ export function EditorFileTabCloseButton({
                 : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
           }`}
           type="button"
+          // Why: simulator unified tabs reuse this tab chrome, so E2E needs
+          // the same stable close affordance on the real button users click.
+          data-tab-close-button="true"
           aria-label={translate(
             'auto.components.tab.bar.EditorFileTabCloseButton.4655cf570e',
             'Close tab'

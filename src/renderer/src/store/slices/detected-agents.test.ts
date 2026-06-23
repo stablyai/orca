@@ -451,6 +451,23 @@ describe('createDetectedAgentsSlice remote detection', () => {
     expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
   })
 
+  it('re-runs remote detection after an empty result instead of pinning it', async () => {
+    const store = createTestStore()
+    // An empty [] is truthy, so a prior "no agents found" must not be cached:
+    // a later install / PATH fix has to be picked up without a reconnect.
+    detectRemoteAgents.mockResolvedValueOnce([])
+
+    await expect(store.getState().ensureRemoteDetectedAgents('ssh-1')).resolves.toEqual([])
+    expect(store.getState().remoteDetectedAgentIds['ssh-1']).toEqual([])
+    expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
+
+    detectRemoteAgents.mockResolvedValueOnce(['kilo'])
+
+    await expect(store.getState().ensureRemoteDetectedAgents('ssh-1')).resolves.toEqual(['kilo'])
+    expect(detectRemoteAgents).toHaveBeenCalledTimes(2)
+    expect(store.getState().remoteDetectedAgentIds['ssh-1']).toEqual(['kilo'])
+  })
+
   it('detects runtime environment agents through the owning runtime', async () => {
     const store = createTestStore()
 
@@ -477,5 +494,44 @@ describe('createDetectedAgentsSlice remote detection', () => {
       params: undefined,
       timeoutMs: undefined
     })
+  })
+
+  it('re-runs runtime detection after an empty result instead of pinning it', async () => {
+    const store = createTestStore()
+    // An empty [] is truthy, so a prior "no agents found" must not be cached:
+    // a later install / PATH fix has to be picked up without a reconnect. This is
+    // the Orca-serve path (kind: 'runtime'), distinct from the SSH remote path.
+    let detectCalls = 0
+    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
+      let result: unknown
+      if (method === 'status.get') {
+        result = {
+          runtimeId: 'remote-runtime',
+          rendererGraphEpoch: 1,
+          graphStatus: 'ready',
+          authoritativeWindowId: null,
+          liveTabCount: 0,
+          liveLeafCount: 0,
+          runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+          minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+        }
+      } else {
+        detectCalls += 1
+        result = detectCalls === 1 ? [] : ['kilo']
+      }
+      return Promise.resolve({
+        id: method,
+        ok: true,
+        result,
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    })
+
+    await expect(store.getState().ensureRuntimeDetectedAgents('env-1')).resolves.toEqual([])
+    expect(store.getState().runtimeDetectedAgentIds['env-1']).toEqual([])
+
+    await expect(store.getState().ensureRuntimeDetectedAgents('env-1')).resolves.toEqual(['kilo'])
+    expect(store.getState().runtimeDetectedAgentIds['env-1']).toEqual(['kilo'])
+    expect(detectCalls).toBe(2)
   })
 })

@@ -4,7 +4,12 @@ import type { IDisposable, Terminal } from '@xterm/xterm'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { consumePendingWebRuntimeSplitMirrorTelemetry } from '@/runtime/web-runtime-session'
-import { resolveTerminalCursorInactiveStyle } from '@/lib/pane-manager/pane-terminal-options'
+import {
+  normalizeTerminalFastScrollSensitivity,
+  normalizeTerminalScrollSensitivity,
+  resolveTerminalCursorInactiveStyle
+} from '@/lib/pane-manager/pane-terminal-options'
+import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-mouse-wheel'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
 import { useAppStore } from '@/store'
 import {
@@ -63,6 +68,7 @@ import { connectPanePty } from './pty-connection'
 import type { PtyTransport } from './pty-transport'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { getConnectionId } from '@/lib/connection-context'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { isPaneReplaying, type ReplayingPanesRef } from './replay-guard'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import { registerRuntimeTerminalTab, scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
@@ -1049,7 +1055,8 @@ export function useTerminalPaneLifecycle({
           osRelease: platformInfo?.osRelease,
           connectionId: getConnectionId(worktreeId),
           cwd: startupCwd,
-          shellOverride: currentTab?.shellOverride
+          shellOverride: currentTab?.shellOverride,
+          executionHostId: getExecutionHostIdForWorktree(storeState, worktreeId)
         })
         return {
           ...windowsPtyCompatibilityOptions,
@@ -1067,11 +1074,19 @@ export function useTerminalPaneLifecycle({
           cursorStyle,
           cursorInactiveStyle: resolveTerminalCursorInactiveStyle(cursorStyle),
           cursorBlink: currentSettings?.terminalCursorBlink ?? true,
+          scrollSensitivity: normalizeTerminalScrollSensitivity(
+            currentSettings?.terminalScrollSensitivity
+          ),
+          fastScrollSensitivity: normalizeTerminalFastScrollSensitivity(
+            currentSettings?.terminalFastScrollSensitivity
+          ),
           macOptionIsMeta: effectiveMacOptionAsAltRef.current === 'true',
           lineHeight: currentSettings?.terminalLineHeight ?? 1,
           wordSeparator: currentSettings?.terminalWordSeparator
         }
       },
+      terminalTuiScrollSensitivity: () =>
+        normalizeTerminalTuiMouseWheelMultiplier(settingsRef.current?.terminalTuiScrollSensitivity),
       onLinkClick: (event, url) => {
         if (!event) {
           return

@@ -2146,20 +2146,31 @@ export default function TerminalPane({
     return [...ptyIds]
   }, [])
 
-  const restorePaneTerminalFit = useCallback(async (pane: ManagedPane): Promise<void> => {
-    // Why: local and remote runtime PTYs use different transports, but the
-    // desktop reclaim button should have one visible recovery behavior.
-    const id = paneTransportsRef.current.get(pane.id)?.getPtyId()
-    if (!id) {
-      return
-    }
-    const restored = await restoreTerminalFitToDesktop(id, settingsRef.current ?? undefined)
-    if (restored) {
-      // Why: after the overlay unmounts, focus would otherwise stay on the
-      // removed button/body instead of the terminal the user just reclaimed.
-      pane.terminal.focus()
-    }
+  const scheduleRestoredTerminalRefit = useCallback((): void => {
+    // Why: desktop-fit events can clear runtime state before xterm has repainted;
+    // restore actions get one settled-frame pass that does not depend on focus.
+    requestAnimationFrame(refitAndRefreshAllTerminalPanes)
+    window.setTimeout(refitAndRefreshAllTerminalPanes, 100)
   }, [])
+
+  const restorePaneTerminalFit = useCallback(
+    async (pane: ManagedPane): Promise<void> => {
+      // Why: local and remote runtime PTYs use different transports, but the
+      // desktop reclaim button should have one visible recovery behavior.
+      const id = paneTransportsRef.current.get(pane.id)?.getPtyId()
+      if (!id) {
+        return
+      }
+      const restored = await restoreTerminalFitToDesktop(id, settingsRef.current ?? undefined)
+      if (restored) {
+        scheduleRestoredTerminalRefit()
+        // Why: after the overlay unmounts, focus would otherwise stay on the
+        // removed button/body instead of the terminal the user just reclaimed.
+        pane.terminal.focus()
+      }
+    },
+    [scheduleRestoredTerminalRefit]
+  )
 
   const restoreAllTerminalFits = useCallback(
     async (focusPane: ManagedPane): Promise<void> => {
@@ -2170,12 +2181,11 @@ export default function TerminalPane({
         settingsRef.current ?? undefined
       )
       if (restored) {
-        requestAnimationFrame(refitAndRefreshAllTerminalPanes)
-        window.setTimeout(refitAndRefreshAllTerminalPanes, 100)
+        scheduleRestoredTerminalRefit()
         focusPane.terminal.focus()
       }
     },
-    [getMobileOwnedTerminalPtyIds]
+    [getMobileOwnedTerminalPtyIds, scheduleRestoredTerminalRefit]
   )
 
   const terminalShouldHandleMiddleClick = useCallback(

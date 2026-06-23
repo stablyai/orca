@@ -9,6 +9,7 @@ import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-t
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
+import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
 import type { TuiAgent } from '../../../../shared/types'
 import { ackPtyData, exposeE2eTerminalPtyAckGate } from './terminal-pty-ack-gate'
@@ -212,7 +213,7 @@ export function getEagerPtyBufferHandle(ptyId: string): EagerPtyHandle | undefin
 // Why: 512 KB matches the scrollback buffer cap used by TerminalPane's
 // serialization. Prevents unbounded memory growth if a restored shell
 // runs a long-lived command (e.g. tail -f) in a worktree the user never opens.
-const EAGER_BUFFER_MAX_BYTES = 512 * 1024
+const EAGER_BUFFER_MAX_BYTES = TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
 
 export function registerEagerPtyBuffer(
   ptyId: string,
