@@ -3156,7 +3156,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     })
   },
 
-  setActiveWorktree: (worktreeId) => {
+  setActiveWorktree: (worktreeId, options) => {
     if (worktreeId && shouldDeferActivationTerminalPrep()) {
       markInputQuietSchedulerInput()
     }
@@ -3182,7 +3182,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       }
 
       const worktree = findKnownWorktreeById(s, worktreeId)
-      shouldClearUnread = Boolean(worktree?.isUnread)
+      shouldClearUnread = options?.preserveUnread === true ? false : Boolean(worktree?.isUnread)
 
       // Restore per-worktree editor state
       // Why: Search now lives under Explorer, so the files/search sub-route

@@ -131,6 +131,20 @@ function getTerminalTabOwnerWorktreeId(
   return terminalTabOwnerCache.get(tabId) ?? null
 }
 
+function worktreeHasUnreadTerminalTab(
+  tabsByWorktree: Record<string, TerminalTab[]>,
+  worktreeId: string,
+  unreadTerminalTabs: Record<string, true>
+): boolean {
+  const worktreeTabs = tabsByWorktree[worktreeId] ?? []
+  for (const tab of worktreeTabs) {
+    if (unreadTerminalTabs[tab.id]) {
+      return true
+    }
+  }
+  return false
+}
+
 function updateUnifiedTerminalLabel(
   unifiedTabs: Tab[],
   terminalTabId: string,
@@ -1110,6 +1124,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   setActiveTab: (tabId) => {
+    let worktreeIdToClearUnread: string | null = null
     set((s) => {
       // Why: focusing a terminal tab clears the tab-level bell — the user has
       // moved to this tab.
@@ -1135,6 +1150,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
               return copy
             })()
           : s.unreadTerminalTabs
+      if (
+        tabOwnerWorktreeId &&
+        nextUnreadTerminalTabs !== s.unreadTerminalTabs &&
+        !worktreeHasUnreadTerminalTab(s.tabsByWorktree, tabOwnerWorktreeId, nextUnreadTerminalTabs)
+      ) {
+        // Why: keyboard tab cycling lands directly in this legacy terminal-tab
+        // path, so it must dismiss the workspace dot with the last tab bell.
+        worktreeIdToClearUnread = tabOwnerWorktreeId
+      }
       // Why: only write the global activeTabId when the tab belongs to the
       // currently active worktree. markTerminalTabUnread treats activeTabId
       // as "the tab the user is looking at" and suppresses BELs on it; if we
@@ -1153,6 +1177,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         unreadTerminalTabs: nextUnreadTerminalTabs
       }
     })
+    if (worktreeIdToClearUnread) {
+      get().clearWorktreeUnread(worktreeIdToClearUnread)
+    }
     const item = Object.values(get().unifiedTabsByWorktree)
       .flat()
       .find((entry) => entry.contentType === 'terminal' && entry.entityId === tabId)

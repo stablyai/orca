@@ -215,6 +215,101 @@ describe('keybindings', () => {
     })
   })
 
+  it('defaults shifted arrow tab switching to all visible tab types', () => {
+    expect(getEffectiveKeybindingsForAction('tab.nextSameType', 'darwin')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('tab.previousSameType', 'darwin')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('tab.nextAllTypes', 'darwin')).toEqual([
+      'Mod+Shift+ArrowRight'
+    ])
+    expect(getEffectiveKeybindingsForAction('tab.previousAllTypes', 'linux')).toEqual([
+      'Mod+Shift+ArrowLeft'
+    ])
+    expect(
+      keybindingMatchesAction(
+        'tab.nextAllTypes',
+        {
+          key: 'ArrowRight',
+          code: 'ArrowRight',
+          control: false,
+          meta: true,
+          alt: false,
+          shift: true
+        },
+        'darwin'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'tab.previousAllTypes',
+        {
+          key: 'ArrowLeft',
+          code: 'ArrowLeft',
+          control: true,
+          meta: false,
+          alt: false,
+          shift: true
+        },
+        'linux'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'tab.nextAllTypes',
+        {
+          key: '}',
+          code: 'BracketRight',
+          control: false,
+          meta: true,
+          alt: false,
+          shift: true
+        },
+        'darwin'
+      )
+    ).toBe(false)
+  })
+
+  it('defaults mark active terminal unread to macOS and Windows only', () => {
+    expect(getEffectiveKeybindingsForAction('terminal.markUnread', 'darwin')).toEqual([
+      'Mod+Shift+U'
+    ])
+    expect(getEffectiveKeybindingsForAction('terminal.markUnread', 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('terminal.markUnread', 'win32')).toEqual([
+      'Mod+Shift+U'
+    ])
+    expect(
+      keybindingMatchesAction(
+        'terminal.markUnread',
+        {
+          key: 'u',
+          code: 'KeyU',
+          control: false,
+          meta: true,
+          alt: false,
+          shift: true
+        },
+        'darwin',
+        undefined,
+        { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'terminal.markUnread',
+        {
+          key: 'u',
+          code: 'KeyU',
+          control: true,
+          meta: false,
+          alt: false,
+          shift: true
+        },
+        'win32',
+        undefined,
+        { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+      )
+    ).toBe(true)
+  })
+
   it('defines macOS-only rename shortcuts that stay conflict-free', () => {
     expect(getEffectiveKeybindingsForAction('tab.rename', 'darwin')).toEqual(['Mod+R'])
     expect(getEffectiveKeybindingsForAction('tab.rename', 'linux')).toEqual([])
@@ -719,7 +814,7 @@ describe('keybindings', () => {
     ).toBe(false)
   })
 
-  it('matches logical bracket shortcuts on JIS keyboards without changing code fallback', () => {
+  it('matches custom JIS bracket shortcuts without changing code fallback', () => {
     const jisLeftBracket = {
       key: '[',
       code: 'BracketRight',
@@ -738,11 +833,18 @@ describe('keybindings', () => {
     }
     const jisLeftBracketShifted = { ...jisLeftBracket, key: '{', shift: true }
     const jisRightBracketShifted = { ...jisRightBracket, key: '}', shift: true }
+    const allTypesBracketOverrides = {
+      'tab.previousAllTypes': ['Mod+Shift+BracketLeft', 'Mod+Alt+BracketLeft'],
+      'tab.nextAllTypes': ['Mod+Shift+BracketRight', 'Mod+Alt+BracketRight']
+    }
 
     expect(
-      keybindingMatchesAction('tab.previousSameType', jisLeftBracketShifted, 'darwin', {
-        'tab.previousSameType': ['Mod+Shift+BracketLeft']
-      })
+      keybindingMatchesAction(
+        'tab.previousAllTypes',
+        jisLeftBracketShifted,
+        'darwin',
+        allTypesBracketOverrides
+      )
     ).toBe(true)
     expect(
       keybindingMatchesAction('tab.previousSameType', jisRightBracketShifted, 'darwin', {
@@ -750,9 +852,12 @@ describe('keybindings', () => {
       })
     ).toBe(false)
     expect(
-      keybindingMatchesAction('tab.nextSameType', jisRightBracketShifted, 'darwin', {
-        'tab.nextSameType': ['Mod+Shift+BracketRight']
-      })
+      keybindingMatchesAction(
+        'tab.nextAllTypes',
+        jisRightBracketShifted,
+        'darwin',
+        allTypesBracketOverrides
+      )
     ).toBe(true)
     expect(
       keybindingMatchesAction('tab.nextSameType', jisLeftBracketShifted, 'darwin', {
@@ -767,16 +872,27 @@ describe('keybindings', () => {
     expect(keybindingMatchesAction('terminal.focusNextPane', jisRightBracket, 'darwin')).toBe(true)
 
     expect(
-      keybindingMatchesAction('tab.previousAllTypes', { ...jisLeftBracket, alt: true }, 'darwin')
+      keybindingMatchesAction(
+        'tab.previousAllTypes',
+        { ...jisLeftBracket, alt: true },
+        'darwin',
+        allTypesBracketOverrides
+      )
     ).toBe(true)
     expect(
-      keybindingMatchesAction('tab.nextAllTypes', { ...jisRightBracket, alt: true }, 'darwin')
+      keybindingMatchesAction(
+        'tab.nextAllTypes',
+        { ...jisRightBracket, alt: true },
+        'darwin',
+        allTypesBracketOverrides
+      )
     ).toBe(true)
     expect(
       keybindingMatchesAction(
         'tab.previousAllTypes',
         { ...jisLeftBracket, control: true, meta: false, alt: true },
-        'linux'
+        'linux',
+        allTypesBracketOverrides
       )
     ).toBe(true)
     expect(
@@ -790,7 +906,8 @@ describe('keybindings', () => {
       keybindingMatchesAction(
         'tab.nextAllTypes',
         { ...jisRightBracket, control: true, meta: false, alt: true },
-        'linux'
+        'linux',
+        allTypesBracketOverrides
       )
     ).toBe(true)
 
@@ -800,6 +917,21 @@ describe('keybindings', () => {
       })
     ).toBe(false)
 
+    expect(
+      keybindingMatchesAction(
+        'tab.nextAllTypes',
+        {
+          key: 'Dead',
+          code: 'BracketRight',
+          control: false,
+          meta: true,
+          alt: false,
+          shift: true
+        },
+        'darwin',
+        allTypesBracketOverrides
+      )
+    ).toBe(true)
     expect(
       keybindingMatchesAction(
         'tab.nextSameType',
@@ -842,6 +974,21 @@ describe('keybindings', () => {
           shift: false
         },
         'linux'
+      )
+    ).toBe(false)
+    expect(
+      keybindingMatchesAction(
+        'tab.previousAllTypes',
+        {
+          key: 'Dead',
+          code: 'BracketLeft',
+          control: true,
+          meta: false,
+          alt: true,
+          shift: false
+        },
+        'linux',
+        allTypesBracketOverrides
       )
     ).toBe(true)
   })
@@ -952,12 +1099,21 @@ describe('keybindings', () => {
       alt: true,
       shift: false
     }
+    const overrides = {
+      'tab.previousAllTypes': ['Mod+Alt+BracketLeft'],
+      'tab.nextAllTypes': ['Mod+Alt+BracketRight']
+    }
 
     expect(keybindingMatchesAction('tab.previousAllTypes', macOptionLeftBracket, 'darwin')).toBe(
-      true
+      false
     )
+    expect(
+      keybindingMatchesAction('tab.previousAllTypes', macOptionLeftBracket, 'darwin', overrides)
+    ).toBe(true)
     expect(keybindingMatchesAction('tab.nextAllTypes', macOptionLeftBracket, 'darwin')).toBe(false)
-    expect(keybindingMatchesAction('tab.nextAllTypes', macOptionRightBracket, 'darwin')).toBe(true)
+    expect(
+      keybindingMatchesAction('tab.nextAllTypes', macOptionRightBracket, 'darwin', overrides)
+    ).toBe(true)
     expect(keybindingMatchesAction('tab.previousAllTypes', macOptionRightBracket, 'darwin')).toBe(
       false
     )

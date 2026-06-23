@@ -34,6 +34,24 @@ import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
+function worktreeHasUnreadTerminalTab(
+  state: Pick<AppState, 'unifiedTabsByWorktree'>,
+  worktreeId: string,
+  unreadTerminalTabs: Record<string, true>
+): boolean {
+  const terminalEntityIds = new Set(
+    (state.unifiedTabsByWorktree[worktreeId] ?? [])
+      .filter((tab) => tab.contentType === 'terminal')
+      .map((tab) => tab.entityId)
+  )
+  for (const terminalEntityId of Object.keys(unreadTerminalTabs)) {
+    if (terminalEntityIds.has(terminalEntityId)) {
+      return true
+    }
+  }
+  return false
+}
+
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
 export type TabsSlice = {
@@ -744,6 +762,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     findTabByEntityInGroup(get().unifiedTabsByWorktree, worktreeId, groupId, entityId, contentType),
 
   activateTab: (tabId, opts) => {
+    let worktreeIdToClearUnread: string | null = null
     set((state) => {
       const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
       if (!found) {
@@ -768,6 +787,14 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
               return copy
             })()
           : state.unreadTerminalTabs
+      if (
+        nextUnreadTerminalTabs !== state.unreadTerminalTabs &&
+        !worktreeHasUnreadTerminalTab(state, worktreeId, nextUnreadTerminalTabs)
+      ) {
+        // Why: the sidebar dot mirrors terminal attention. Once the selected
+        // tab was the last unread terminal in this workspace, dismiss both.
+        worktreeIdToClearUnread = worktreeId
+      }
       return {
         unifiedTabsByWorktree: opts?.preservePreview
           ? state.unifiedTabsByWorktree
@@ -808,6 +835,9 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
           : {})
       }
     })
+    if (worktreeIdToClearUnread) {
+      get().clearWorktreeUnread(worktreeIdToClearUnread)
+    }
   },
 
   closeUnifiedTab: (tabId, opts) => {
@@ -1169,7 +1199,8 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     return groupId
   },
 
-  focusGroup: (worktreeId, groupId) =>
+  focusGroup: (worktreeId, groupId) => {
+    let worktreeIdToClearUnread: string | null = null
     set((state) => {
       const nextActiveGroupIdByWorktree = {
         ...state.activeGroupIdByWorktree,
@@ -1214,6 +1245,14 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
               return changed ? copy : state.unreadTerminalTabs
             })()
           : state.unreadTerminalTabs
+      if (
+        nextUnreadTerminalTabs !== state.unreadTerminalTabs &&
+        !worktreeHasUnreadTerminalTab(state, worktreeId, nextUnreadTerminalTabs)
+      ) {
+        // Why: split-group focus can acknowledge multiple terminal tabs at
+        // once; clear the workspace dot only after the last one is dismissed.
+        worktreeIdToClearUnread = worktreeId
+      }
       return {
         activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
         // Why: only write unreadTerminalTabs back into state when it actually
@@ -1233,7 +1272,11 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
           groupId
         )
       }
-    }),
+    })
+    if (worktreeIdToClearUnread) {
+      get().clearWorktreeUnread(worktreeIdToClearUnread)
+    }
+  },
 
   closeEmptyGroup: (worktreeId, groupId) => {
     const state = get()

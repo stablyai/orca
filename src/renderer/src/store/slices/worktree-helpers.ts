@@ -45,6 +45,10 @@ export type WorktreeRenameRequest = {
   rowKey?: string
 }
 
+export type SetActiveWorktreeOptions = {
+  preserveUnread?: boolean
+}
+
 export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
   detectedWorktreesByRepo: Record<string, DetectedWorktreeListResult>
@@ -228,7 +232,7 @@ export type WorktreeSlice = {
    * fresh visit.
    */
   seedActiveWorktreeLastVisitedIfMissing: () => void
-  setActiveWorktree: (worktreeId: string | null) => void
+  setActiveWorktree: (worktreeId: string | null, options?: SetActiveWorktreeOptions) => void
   setActiveFolderWorkspace: (folderWorkspaceId: string) => void
   setRenamingWorktreeId: (request: string | WorktreeRenameRequest | null) => void
   allWorktrees: () => Worktree[]

@@ -313,9 +313,10 @@ export function setupGuestShortcutForwarding(args: {
       return true
     }
 
-    // Why: Cmd/Ctrl+Alt+[ / ] cycles across every tab type. Handled before
-    // the generic modifier-chord gate below because that gate rejects Alt.
-    // Mirrors the Alt-exempt branch pattern used for worktreeHistoryNavigate.
+    // Why: tab switching must leave the guest before Chromium handles it.
+    // Keep this before the generic modifier-chord branch so the default
+    // Mod+Shift+ArrowLeft/Right chord routes through the renderer-owned
+    // workspace tab model instead of Chromium guest history/selection handling.
     const switchAllTypesDirection = keybindingMatchesAction(
       'tab.nextAllTypes',
       input,

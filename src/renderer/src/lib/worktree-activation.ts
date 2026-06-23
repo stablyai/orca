@@ -271,6 +271,7 @@ export function activateAndRevealWorktree(
     sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
     notifyHostRuntime?: boolean
     revealInSidebar?: boolean
+    preserveUnread?: boolean
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
@@ -300,8 +301,8 @@ export function activateAndRevealWorktree(
   }
 
   // 3. Core activation: sets activeWorktreeId, restores per-worktree state,
-  // clears unread, bumps dead PTY generations, triggers GitHub refresh
-  state.setActiveWorktree(worktreeId)
+  // optionally clears unread, bumps dead PTY generations, triggers GitHub refresh
+  state.setActiveWorktree(worktreeId, opts?.preserveUnread ? { preserveUnread: true } : undefined)
   const postActivationState = useAppStore.getState()
   const ownerRuntimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(postActivationState, wt.id)
   if (opts?.notifyHostRuntime !== false && isWebRuntimeSessionActive(ownerRuntimeEnvironmentId)) {

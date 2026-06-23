@@ -92,11 +92,13 @@ import {
   isFloatingWorkspacePanelFocused,
   switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
+import { markActiveTerminalUnread } from '@/lib/terminal-unread-marking'
 import {
   keybindingMatchesAction,
   type KeybindingActionId,
   type KeybindingContext
 } from '../../../shared/keybindings'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { useContextualTour } from './contextual-tours/use-contextual-tour'
@@ -1483,14 +1485,23 @@ function Terminal(): React.JSX.Element | null {
         return
       }
 
-      // Cmd/Ctrl+Shift+] and Cmd/Ctrl+Shift+[ - switch tabs (scoped to the
-      // active tab type). Cmd/Ctrl+Alt+] and Cmd/Ctrl+Alt+[ cycles across
-      // every tab type as an escape hatch from the type-scoped default, and
-      // matches the platform tab-switch chord on macOS.
-      // Why: use e.code instead of e.key because on macOS, Shift+[ reports '{'
-      // as the key value (the shifted character), not '['. Option+[ also
-      // composes to dead-key / punctuation on many layouts, so matching on
-      // event.key would miss the chord entirely on non-US layouts.
+      if (context === 'terminal' && !e.repeat && matchShortcut('terminal.markUnread')) {
+        e.preventDefault()
+        e.stopPropagation()
+        e.stopImmediatePropagation()
+        notifyTerminalCapture('terminal.markUnread')
+        markActiveTerminalUnread(
+          floatingWorkspaceFocused ? FLOATING_TERMINAL_WORKTREE_ID : undefined
+        )
+        return
+      }
+
+      // Cmd/Ctrl+Shift+Right and Cmd/Ctrl+Shift+Left switch across every
+      // visible workspace tab. Same-type cycling remains available for
+      // custom keybindings.
+      // Why: keybinding matching stays centralized so user overrides and
+      // non-US keyboard layouts behave consistently across terminal, browser,
+      // and renderer-owned shortcut paths.
       const switchSameTypeDirection = matchShortcut('tab.nextSameType')
         ? 1
         : matchShortcut('tab.previousSameType')
