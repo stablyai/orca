@@ -323,6 +323,49 @@ describe('registerGitHubHandlers', () => {
     expect(enqueuePRRefreshMock).not.toHaveBeenCalled()
   })
 
+  it('uses registered repo routing fields for automatic PR refresh candidates', async () => {
+    repos = [
+      {
+        id: 'repo-ssh',
+        path: '/workspace/remote-repo',
+        displayName: 'repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        connectionId: 'ssh-real',
+        executionHostId: 'ssh:ssh-real'
+      }
+    ]
+    registerGitHubHandlers(store as never, stats as never)
+
+    await handlers['gh:enqueuePRRefresh'](null, {
+      candidate: {
+        cacheKey: 'remote::feature/test',
+        repoPath: '/workspace/remote-repo',
+        repoId: 'repo-ssh',
+        branch: 'feature/test',
+        repoKind: 'git',
+        connectionId: 'ssh-stale',
+        executionHostId: 'runtime:stale',
+        connectionState: 'disconnected',
+        localGitOptions: { wslDistro: 'Stale' }
+      },
+      reason: 'active',
+      priority: 80
+    })
+
+    const candidate = enqueuePRRefreshMock.mock.calls[0]?.[0]
+    expect(candidate).toEqual(
+      expect.objectContaining({
+        repoPath: '/workspace/remote-repo',
+        repoId: 'repo-ssh',
+        connectionId: 'ssh-real',
+        executionHostId: 'ssh:ssh-real',
+        connectionState: 'connected'
+      })
+    )
+    expect(candidate).not.toHaveProperty('localGitOptions')
+  })
+
   it('keeps manual PR refresh validation strict', async () => {
     registerGitHubHandlers(store as never, stats as never)
 

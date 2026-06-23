@@ -31,6 +31,7 @@ vi.mock('fs', () => ({
 }))
 
 import {
+  clearEffectiveUpstreamNegativeStatusCache,
   clearEffectiveUpstreamStatusCacheForTests,
   getEffectiveUpstreamStatusCacheCountForTests,
   getEffectiveUpstreamStatusGenerationCountForTests,
@@ -198,6 +199,66 @@ describe('local upstream negative cache', () => {
       behind: 1
     })
     expect(nextAutomatic.upstreamStatus).toEqual(strict.upstreamStatus)
+    expect(getEffectiveUpstreamStatusGenerationCountForTests()).toBeLessThanOrEqual(512)
+  })
+
+  it('does not trim generation for a cleared automatic probe before it settles', async () => {
+    let originBranchExists = false
+    let deferredOriginReject: ((error: Error) => void) | null = null
+    const branchQueue = [
+      'feature',
+      ...Array.from({ length: 512 }, (_, index) => `other-${index}`),
+      'feature'
+    ]
+    let currentBranch = 'feature'
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args.includes('status')) {
+        currentBranch = branchQueue.shift() ?? currentBranch
+        return {
+          stdout: `# branch.oid abcdef1234567890\n# branch.head ${currentBranch}\n`
+        }
+      }
+      if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
+        return { stdout: `${currentBranch}\n` }
+      }
+      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
+        throw new Error(`fatal: no upstream configured for branch ${currentBranch}`)
+      }
+      if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))) {
+        if (originBranchExists) {
+          return { stdout: 'abc123\n' }
+        }
+        return await new Promise<{ stdout: string }>((_, reject) => {
+          deferredOriginReject = reject
+        })
+      }
+      if (args[0] === 'rev-list' && args.some((arg) => arg.startsWith('HEAD...origin/'))) {
+        return { stdout: '0\t1\n' }
+      }
+      throw new Error(`unexpected git command: ${args.join(' ')}`)
+    })
+
+    const automatic = getStatus('/repo')
+    await vi.waitFor(() => expect(deferredOriginReject).toBeTruthy())
+
+    originBranchExists = true
+    clearEffectiveUpstreamNegativeStatusCache({ worktreePath: '/repo', branchName: 'feature' })
+    for (let index = 0; index < 512; index += 1) {
+      await getStatus('/repo', { bypassEffectiveUpstreamNegativeCache: true })
+    }
+    if (!deferredOriginReject) {
+      throw new Error('expected deferred origin reject')
+    }
+    ;(deferredOriginReject as (error: Error) => void)(new Error('missing remote branch'))
+    await automatic
+    const nextAutomatic = await getStatus('/repo')
+
+    expect(nextAutomatic.upstreamStatus).toEqual({
+      hasUpstream: true,
+      upstreamName: 'origin/feature',
+      ahead: 0,
+      behind: 1
+    })
     expect(getEffectiveUpstreamStatusGenerationCountForTests()).toBeLessThanOrEqual(512)
   })
 

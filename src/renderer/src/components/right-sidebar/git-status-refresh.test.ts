@@ -5,14 +5,14 @@ import {
   refreshGitStatusForWorktreeStrict,
   type GitStatusRefreshDeps
 } from './git-status-refresh'
-import type { GitStatusResult } from '../../../../shared/types'
+import type { GitStatusResult, GitUpstreamStatus } from '../../../../shared/types'
 
 function makeDeps(): GitStatusRefreshDeps {
   return {
     setGitStatus: vi.fn(),
     updateWorktreeGitIdentity: vi.fn(),
     setUpstreamStatus: vi.fn(),
-    fetchUpstreamStatus: vi.fn().mockResolvedValue(undefined)
+    fetchUpstreamStatus: vi.fn().mockResolvedValue(null)
   }
 }
 
@@ -97,7 +97,8 @@ describe('refreshGitStatusForWorktree', () => {
 
     expect(deps.setUpstreamStatus).not.toHaveBeenCalled()
     expect(deps.fetchUpstreamStatus).toHaveBeenCalledWith('wt-1', '/repo', undefined, undefined, {
-      runtimeTargetSettings: undefined
+      runtimeTargetSettings: undefined,
+      applyUpstreamStatus: false
     })
   })
 
@@ -126,7 +127,8 @@ describe('refreshGitStatusForWorktree', () => {
     })
     expect(deps.setUpstreamStatus).not.toHaveBeenCalled()
     expect(deps.fetchUpstreamStatus).toHaveBeenCalledWith('wt-2', '/repo', 'ssh-2', undefined, {
-      runtimeTargetSettings: undefined
+      runtimeTargetSettings: undefined,
+      applyUpstreamStatus: false
     })
   })
 
@@ -226,6 +228,52 @@ describe('refreshGitStatusForWorktree', () => {
 
     expect(deps.setUpstreamStatus).toHaveBeenCalledTimes(1)
     expect(deps.setUpstreamStatus).toHaveBeenCalledWith('wt-race', strictStatus.upstreamStatus)
+  })
+
+  it('does not let an older automatic explicit upstream fetch overwrite a strict result', async () => {
+    const automaticFetch = deferred<GitUpstreamStatus | null>()
+    const strictStatus: GitStatusResult = {
+      entries: [],
+      conflictOperation: 'unknown',
+      upstreamStatus: {
+        hasUpstream: true,
+        upstreamName: 'origin/feature',
+        ahead: 0,
+        behind: 1
+      }
+    }
+    const staleAutomaticUpstream: GitUpstreamStatus = { hasUpstream: false, ahead: 0, behind: 0 }
+    const gitStatus = vi
+      .fn()
+      .mockResolvedValueOnce({
+        entries: [],
+        conflictOperation: 'unknown'
+      } satisfies GitStatusResult)
+      .mockResolvedValueOnce(strictStatus)
+    vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
+    const deps = makeDeps()
+    vi.mocked(deps.fetchUpstreamStatus).mockReturnValueOnce(automaticFetch.promise)
+
+    const automatic = refreshGitStatusForWorktree({
+      worktreeId: 'wt-fetch-race',
+      worktreePath: '/repo',
+      deps
+    })
+    await vi.waitFor(() => expect(deps.fetchUpstreamStatus).toHaveBeenCalledTimes(1))
+
+    await refreshGitStatusForWorktreeStrict({
+      worktreeId: 'wt-fetch-race',
+      worktreePath: '/repo',
+      deps
+    })
+    automaticFetch.resolve(staleAutomaticUpstream)
+    await automatic
+
+    expect(deps.setUpstreamStatus).toHaveBeenCalledTimes(1)
+    expect(deps.setUpstreamStatus).toHaveBeenCalledWith(
+      'wt-fetch-race',
+      strictStatus.upstreamStatus
+    )
   })
 
   it('clears stale branch identity when git status reports detached HEAD', async () => {

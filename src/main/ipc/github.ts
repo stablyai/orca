@@ -210,13 +210,19 @@ function applyRepoToPRRefreshCandidate(
   candidate: GitHubPRRefreshCandidate
 ): GitHubPRRefreshCandidate {
   const localGitOptions = localGitOptionArgs(store, repo)[0]
+  const appliedCandidate = { ...candidate }
+  delete appliedCandidate.localGitOptions
+  delete appliedCandidate.connectionId
+  delete appliedCandidate.executionHostId
+  delete appliedCandidate.connectionState
   return {
-    ...candidate,
+    ...appliedCandidate,
     repoPath: repo.path,
     repoId: repo.id,
     ...(localGitOptions ? { localGitOptions } : {}),
-    connectionId: repo.connectionId ?? candidate.connectionId,
-    connectionState: repo.connectionId ? 'connected' : candidate.connectionState
+    connectionId: repoConnectionId(repo),
+    executionHostId: repo.executionHostId ?? null,
+    connectionState: repo.connectionId ? 'connected' : 'unknown'
   }
 }
 

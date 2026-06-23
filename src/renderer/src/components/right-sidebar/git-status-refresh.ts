@@ -18,8 +18,11 @@ export type GitStatusRefreshDeps = {
     worktreePath: string,
     connectionId?: string,
     pushTarget?: GitPushTarget,
-    options?: { runtimeTargetSettings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null }
-  ) => Promise<void>
+    options?: {
+      runtimeTargetSettings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+      applyUpstreamStatus?: boolean
+    }
+  ) => Promise<GitUpstreamStatus | null>
 }
 
 const MAX_REFRESH_ORDERING_WORKTREES = 1024
@@ -58,6 +61,38 @@ function finishAutomaticUpstreamRefresh(worktreeId: string): void {
 
 function shouldApplyAutomaticUpstreamRefresh(worktreeId: string, startGeneration: number): boolean {
   return (strictUpstreamRefreshGenerationByWorktree.get(worktreeId) ?? 0) === startGeneration
+}
+
+async function fetchAndApplyAutomaticUpstreamStatus({
+  settings,
+  worktreeId,
+  worktreePath,
+  connectionId,
+  pushTarget,
+  deps,
+  startGeneration
+}: {
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  worktreeId: string
+  worktreePath: string
+  connectionId?: string
+  pushTarget?: GitPushTarget
+  deps: GitStatusRefreshDeps
+  startGeneration: number
+}): Promise<void> {
+  const upstreamStatus = await deps.fetchUpstreamStatus(
+    worktreeId,
+    worktreePath,
+    connectionId,
+    pushTarget,
+    {
+      runtimeTargetSettings: settings,
+      applyUpstreamStatus: false
+    }
+  )
+  if (upstreamStatus && shouldApplyAutomaticUpstreamRefresh(worktreeId, startGeneration)) {
+    deps.setUpstreamStatus(worktreeId, upstreamStatus)
+  }
 }
 
 function beginStrictUpstreamRefresh(worktreeId: string): void {
@@ -113,8 +148,14 @@ export async function refreshGitStatusForWorktree({
       // Why: porcelain status reports Git's configured upstream. Source Control
       // actions for PR-created worktrees must instead reconcile with Orca's
       // explicit publish target.
-      await deps.fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
-        runtimeTargetSettings: settings
+      await fetchAndApplyAutomaticUpstreamStatus({
+        settings,
+        worktreeId,
+        worktreePath,
+        connectionId,
+        pushTarget,
+        deps,
+        startGeneration: upstreamStartGeneration
       })
       return
     }
@@ -127,16 +168,27 @@ export async function refreshGitStatusForWorktree({
         // Why: porcelain status has counts but cannot tell stale post-rebase
         // upstream commits from real remote work. Writing it first makes the
         // primary action flicker between Sync and Force Push on every poll.
-        await deps.fetchUpstreamStatus(worktreeId, worktreePath, connectionId, undefined, {
-          runtimeTargetSettings: settings
+        await fetchAndApplyAutomaticUpstreamStatus({
+          settings,
+          worktreeId,
+          worktreePath,
+          connectionId,
+          deps,
+          startGeneration: upstreamStartGeneration
         })
         return
       }
       deps.setUpstreamStatus(worktreeId, status.upstreamStatus)
       return
     }
-    await deps.fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
-      runtimeTargetSettings: settings
+    await fetchAndApplyAutomaticUpstreamStatus({
+      settings,
+      worktreeId,
+      worktreePath,
+      connectionId,
+      pushTarget,
+      deps,
+      startGeneration: upstreamStartGeneration
     })
   } finally {
     finishAutomaticUpstreamRefresh(worktreeId)

@@ -295,6 +295,7 @@ type EditorOpenTargetOptions = {
 
 type GitRuntimeOperationOptions = {
   runtimeTargetSettings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  applyUpstreamStatus?: boolean
 }
 
 export type PendingEditorReveal = {
@@ -596,7 +597,7 @@ export type EditorSlice = {
     connectionId?: string,
     pushTarget?: GitPushTarget,
     options?: GitRuntimeOperationOptions
-  ) => Promise<void>
+  ) => Promise<GitUpstreamStatus | null>
   pushBranch: (
     worktreeId: string,
     worktreePath: string,
@@ -3540,7 +3541,10 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         },
         pushTarget
       )
-      get().setUpstreamStatus(worktreeId, status)
+      if (options?.applyUpstreamStatus !== false) {
+        get().setUpstreamStatus(worktreeId, status)
+      }
+      return status
     } catch (error) {
       // Why: on error we leave the prior status in place rather than writing a
       // synthetic {hasUpstream:false} — that would flash 'Publish Branch' on a
@@ -3549,6 +3553,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       // genuinely newly unpublished, the polling effect will eventually correct
       // the status on success.
       console.error('fetchUpstreamStatus failed', error)
+      return null
     }
   },
   pushBranch: async (

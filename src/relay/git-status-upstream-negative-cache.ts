@@ -18,6 +18,7 @@ type NoEffectiveUpstreamCacheEntry = {
 
 const noEffectiveUpstreamByIdentity = new Map<string, NoEffectiveUpstreamCacheEntry>()
 const noEffectiveUpstreamInFlight = new Map<string, Promise<GitUpstreamStatus>>()
+const retiredNoEffectiveUpstreamInFlight = new Map<string, Promise<GitUpstreamStatus>>()
 const noEffectiveUpstreamWriteGeneration = new Map<string, number>()
 
 function noEffectiveUpstreamCacheKey(identity: NoEffectiveUpstreamCacheIdentity): string {
@@ -39,12 +40,18 @@ function readCachedNoEffectiveUpstreamStatus(
   return entry.status
 }
 
+function hasPendingNoEffectiveUpstreamProbe(cacheKey: string): boolean {
+  return (
+    noEffectiveUpstreamInFlight.has(cacheKey) || retiredNoEffectiveUpstreamInFlight.has(cacheKey)
+  )
+}
+
 function trimNoEffectiveUpstreamWriteGeneration(): void {
   for (const cacheKey of noEffectiveUpstreamWriteGeneration.keys()) {
     if (noEffectiveUpstreamWriteGeneration.size <= MAX_NO_EFFECTIVE_UPSTREAM_CACHE_ENTRIES) {
       break
     }
-    if (noEffectiveUpstreamInFlight.has(cacheKey)) {
+    if (hasPendingNoEffectiveUpstreamProbe(cacheKey)) {
       continue
     }
     noEffectiveUpstreamWriteGeneration.delete(cacheKey)
@@ -134,6 +141,7 @@ export async function readOrProbeNoEffectiveUpstreamStatus(
 export function clearNoEffectiveUpstreamStatusCache(): void {
   noEffectiveUpstreamByIdentity.clear()
   noEffectiveUpstreamInFlight.clear()
+  retiredNoEffectiveUpstreamInFlight.clear()
   noEffectiveUpstreamWriteGeneration.clear()
 }
 
@@ -141,12 +149,29 @@ export function clearNoEffectiveUpstreamStatusCacheEntry(
   identity: NoEffectiveUpstreamCacheIdentity
 ): void {
   const cacheKey = noEffectiveUpstreamCacheKey(identity)
+  retireNoEffectiveUpstreamProbe(cacheKey)
   noEffectiveUpstreamByIdentity.delete(cacheKey)
   noEffectiveUpstreamInFlight.delete(cacheKey)
   noEffectiveUpstreamWriteGeneration.set(
     cacheKey,
     (noEffectiveUpstreamWriteGeneration.get(cacheKey) ?? 0) + 1
   )
+}
+
+function retireNoEffectiveUpstreamProbe(cacheKey: string): void {
+  const retiredProbe = noEffectiveUpstreamInFlight.get(cacheKey)
+  if (!retiredProbe) {
+    return
+  }
+  retiredNoEffectiveUpstreamInFlight.set(cacheKey, retiredProbe)
+  void retiredProbe
+    .finally(() => {
+      if (retiredNoEffectiveUpstreamInFlight.get(cacheKey) === retiredProbe) {
+        retiredNoEffectiveUpstreamInFlight.delete(cacheKey)
+        trimNoEffectiveUpstreamWriteGeneration()
+      }
+    })
+    .catch(() => undefined)
 }
 
 export function getNoEffectiveUpstreamStatusCacheCountForTests(): number {

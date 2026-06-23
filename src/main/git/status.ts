@@ -62,11 +62,13 @@ type EffectiveUpstreamStatusCacheEntry = {
 
 const effectiveUpstreamStatusCache = new Map<string, EffectiveUpstreamStatusCacheEntry>()
 const effectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatus>>()
+const retiredEffectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatus>>()
 const effectiveUpstreamStatusWriteGeneration = new Map<string, number>()
 
 export function clearEffectiveUpstreamStatusCacheForTests(): void {
   effectiveUpstreamStatusCache.clear()
   effectiveUpstreamStatusInFlight.clear()
+  retiredEffectiveUpstreamStatusInFlight.clear()
   effectiveUpstreamStatusWriteGeneration.clear()
 }
 
@@ -307,11 +309,35 @@ export function clearEffectiveUpstreamNegativeStatusCache(identity: {
     identity.upstreamName,
     identity.options
   )
+  retireEffectiveUpstreamStatusProbe(cacheKey)
   effectiveUpstreamStatusCache.delete(cacheKey)
   effectiveUpstreamStatusInFlight.delete(cacheKey)
   effectiveUpstreamStatusWriteGeneration.set(
     cacheKey,
     (effectiveUpstreamStatusWriteGeneration.get(cacheKey) ?? 0) + 1
+  )
+}
+
+function retireEffectiveUpstreamStatusProbe(cacheKey: string): void {
+  const retiredProbe = effectiveUpstreamStatusInFlight.get(cacheKey)
+  if (!retiredProbe) {
+    return
+  }
+  retiredEffectiveUpstreamStatusInFlight.set(cacheKey, retiredProbe)
+  void retiredProbe
+    .finally(() => {
+      if (retiredEffectiveUpstreamStatusInFlight.get(cacheKey) === retiredProbe) {
+        retiredEffectiveUpstreamStatusInFlight.delete(cacheKey)
+        trimEffectiveUpstreamStatusGeneration()
+      }
+    })
+    .catch(() => undefined)
+}
+
+function hasPendingEffectiveUpstreamStatusProbe(cacheKey: string): boolean {
+  return (
+    effectiveUpstreamStatusInFlight.has(cacheKey) ||
+    retiredEffectiveUpstreamStatusInFlight.has(cacheKey)
   )
 }
 
@@ -322,7 +348,7 @@ function trimEffectiveUpstreamStatusGeneration(): void {
     ) {
       break
     }
-    if (effectiveUpstreamStatusInFlight.has(cacheKey)) {
+    if (hasPendingEffectiveUpstreamStatusProbe(cacheKey)) {
       continue
     }
     effectiveUpstreamStatusWriteGeneration.delete(cacheKey)
