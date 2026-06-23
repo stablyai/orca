@@ -8635,7 +8635,7 @@ export default function TaskPage(): React.JSX.Element {
             )
           ) : taskSource === 'github' && githubMode === 'project' ? (
             <div className="mt-3 flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-md border border-border/50 bg-muted/50 shadow-sm">
-              <ProjectViewWrapper />
+              <ProjectViewWrapper selectedRepoIds={repoSelection} />
             </div>
           ) : taskSource === 'github' ? (
             <div className="flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-muted/50 shadow-sm">

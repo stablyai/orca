@@ -1846,7 +1846,10 @@
             "22df63c393": "您的 Token 无法获取子议题数据。",
             "067119985c": "GitHub 搜索，例如 assignee:@me is:open",
             "1850fceac8": "{{value0}}/{{value1}} 未添加到 Orca。添加它以开始工作，或在 GitHub 中打开。",
-            "1aa7c952b9": "项目视图"
+            "1aa7c952b9": "项目视图",
+            "f352abf7c3": "Repository list is updating.",
+            "1ce21b8cff": "This item is outside the selected repositories.",
+            "030de75bc5": "This item matches multiple selected repositories."
           },
           "slug": {
             "dialog": {
@@ -3800,7 +3803,8 @@
           "1b0a156717": "Agents"
         },
         "WorktreeCardReviewDetailSection": {
-          "reviewHeader": "{{value0}} #{{value1}}"
+          "reviewHeader": "{{value0}} #{{value1}}",
+          "copyLink": "Copy link"
         },
         "WorktreeCardMeta": {
           "3e65e11cc6": "工作区元数据",
@@ -3827,7 +3831,13 @@
           "checkingAutomationAvailability": "正在检查自动化可用性...",
           "automationMissing": "自动化已不可用。",
           "automationRunMissing": "运行历史已不可用。",
-          "automationAvailabilityUnavailable": "无法检查自动化可用性。"
+          "automationAvailabilityUnavailable": "无法检查自动化可用性。",
+          "moreIssueActions": "More issue actions",
+          "copyLink": "Copy link",
+          "copyLinkSuccess": "{{value0}} copied",
+          "copyLinkFailure": "Failed to copy link",
+          "issueLinkLabel": "Issue link",
+          "reviewLinkLabel": "{{value0}} link"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "状态：开放",

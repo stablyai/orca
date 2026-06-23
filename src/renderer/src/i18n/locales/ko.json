@@ -1846,7 +1846,10 @@
             "22df63c393": "토큰에 대한 하위 이슈 데이터를 사용할 수 없습니다.",
             "067119985c": "GitHub 검색, 예: assignee:@me is:open",
             "1850fceac8": "{{value0}}/{{value1}}이(가) Orca에 추가되어 있지 않습니다. 작업을 시작하려면 추가하거나 GitHub에서 여세요.",
-            "1aa7c952b9": "프로젝트 보기"
+            "1aa7c952b9": "프로젝트 보기",
+            "f352abf7c3": "Repository list is updating.",
+            "1ce21b8cff": "This item is outside the selected repositories.",
+            "030de75bc5": "This item matches multiple selected repositories."
           },
           "slug": {
             "dialog": {
@@ -3800,7 +3803,8 @@
           "1b0a156717": "Agents"
         },
         "WorktreeCardReviewDetailSection": {
-          "reviewHeader": "{{value0}} #{{value1}}"
+          "reviewHeader": "{{value0}} #{{value1}}",
+          "copyLink": "Copy link"
         },
         "WorktreeCardMeta": {
           "3e65e11cc6": "워크스페이스 메타데이터",
@@ -3827,7 +3831,13 @@
           "checkingAutomationAvailability": "자동화 사용 가능 여부 확인 중...",
           "automationMissing": "자동화를 더 이상 사용할 수 없습니다.",
           "automationRunMissing": "실행 기록을 더 이상 사용할 수 없습니다.",
-          "automationAvailabilityUnavailable": "자동화 사용 가능 여부를 확인할 수 없습니다."
+          "automationAvailabilityUnavailable": "자동화 사용 가능 여부를 확인할 수 없습니다.",
+          "moreIssueActions": "More issue actions",
+          "copyLink": "Copy link",
+          "copyLinkSuccess": "{{value0}} copied",
+          "copyLinkFailure": "Failed to copy link",
+          "issueLinkLabel": "Issue link",
+          "reviewLinkLabel": "{{value0}} link"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "상태: 열림",
