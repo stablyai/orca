@@ -214,6 +214,19 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result.validationCwd).toBe('C:\\Users\\alice\\project')
   })
 
+  it('does not treat MSYS drive cwd as a WSL POSIX cwd', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'wsl.exe',
+      '/c/Users/alice/project',
+      'C:\\Users\\alice',
+      { distro: 'Ubuntu', treatPosixCwdAsWsl: true }
+    )
+
+    expect(result.shellArgs).toEqual(expectedWslArgs('/mnt/c/Users/alice/project', 'Ubuntu'))
+    expect(result.effectiveCwd).toBe('C:\\Users\\alice')
+    expect(result.validationCwd).toBe('C:\\Users\\alice\\project')
+  })
+
   it('escapes single quotes when translating a WSL cwd', () => {
     const result = resolveWindowsShellLaunchArgs('wsl.exe', "C:\\weird'path", 'C:\\Users\\alice')
     // The injected sh cmd must not break out of the surrounding single quotes
