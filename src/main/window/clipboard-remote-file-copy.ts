@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, rm, stat } from 'node:fs/promises'
+import type { Dirent } from 'node:fs'
+import { mkdir, readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { app } from 'electron'
@@ -15,6 +16,7 @@ import {
 type RemoteClipboardFileDeps = Omit<ClipboardFileDeps, 'resolveFilePath'>
 
 const REMOTE_CLIPBOARD_FILE_TTL_MS = 60 * 60 * 1000
+const REMOTE_CLIPBOARD_FILE_PREFIX = 'orca-clipboard-file-'
 const WINDOWS_RESERVED_LOCAL_BASENAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i
 const LOCAL_FILENAME_REPLACEMENT_CHARS = new Set(['<', '>', ':', '"', '/', '\\', '|', '?', '*'])
 
@@ -36,8 +38,11 @@ export async function writeRemoteFileToClipboard({
     throw new Error('Remote file download is unavailable. Reconnect the SSH target and retry.')
   }
 
-  const tempDir = join(app.getPath('temp'), `orca-clipboard-file-${Date.now()}-${randomUUID()}`)
-  await mkdir(tempDir, { recursive: true })
+  const tempDir = join(
+    app.getPath('temp'),
+    `${REMOTE_CLIPBOARD_FILE_PREFIX}${Date.now()}-${randomUUID()}`
+  )
+  await mkdir(tempDir, { mode: 0o700 })
   const localPath = join(
     tempDir,
     sanitizeLocalClipboardFilename(getRuntimePathBasename(remotePath))
@@ -72,6 +77,34 @@ export async function writeRemoteFileToClipboard({
       await rm(tempDir, { recursive: true, force: true }).catch(() => undefined)
     }
   }
+}
+
+export async function cleanupExpiredRemoteClipboardFiles(nowMs = Date.now()): Promise<void> {
+  const tempRoot = app.getPath('temp')
+  let entries: Dirent[]
+  try {
+    entries = await readdir(tempRoot, { withFileTypes: true })
+  } catch {
+    return
+  }
+
+  await Promise.all(
+    entries.map(async (entry) => {
+      if (!entry.isDirectory() || !entry.name.startsWith(REMOTE_CLIPBOARD_FILE_PREFIX)) {
+        return
+      }
+      const tempDir = join(tempRoot, entry.name)
+      try {
+        const tempStats = await stat(tempDir)
+        if (nowMs - tempStats.mtimeMs < REMOTE_CLIPBOARD_FILE_TTL_MS) {
+          return
+        }
+        await rm(tempDir, { recursive: true, force: true })
+      } catch {
+        // Why: stale staged SSH files should not make startup cleanup noisy.
+      }
+    })
+  )
 }
 
 function sanitizeLocalClipboardFilename(remoteBasename: string): string {

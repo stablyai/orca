@@ -577,15 +577,20 @@ describe('FileExplorerRow collapse folder action', () => {
   })
 
   it('shows OS file copy for single local rows and SSH file rows on desktop', () => {
-    expect(shouldShowCopyFileAction(fileNode, null, 1)).toBe(true)
-    expect(shouldShowCopyFileAction(directoryNode, null, 1)).toBe(true)
-    expect(shouldShowCopyFileAction(fileNode, undefined, 2)).toBe(false)
-    expect(shouldShowCopyFileAction(fileNode, 'ssh-1', 1)).toBe(true)
-    expect(shouldShowCopyFileAction(directoryNode, 'ssh-1', 1)).toBe(false)
+    const previous = (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
+    try {
+      expect(shouldShowCopyFileAction(fileNode, null, 1)).toBe(true)
+      expect(shouldShowCopyFileAction(directoryNode, null, 1)).toBe(true)
+      expect(shouldShowCopyFileAction(fileNode, undefined, 2)).toBe(false)
+      expect(shouldShowCopyFileAction(fileNode, 'ssh-1', 1)).toBe(true)
+      expect(shouldShowCopyFileAction(directoryNode, 'ssh-1', 1)).toBe(false)
 
-    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+      ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
 
-    expect(shouldShowCopyFileAction(fileNode, null, 1)).toBe(false)
+      expect(shouldShowCopyFileAction(fileNode, null, 1)).toBe(false)
+    } finally {
+      ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = previous
+    }
   })
 
   it('copies local and SSH file rows through the clipboard file API', async () => {

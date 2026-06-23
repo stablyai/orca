@@ -13,6 +13,7 @@ const {
   childStdinEndMock,
   resolveAuthorizedPathMock,
   fsMkdirMock,
+  fsReaddirMock,
   fsRmMock,
   fsWriteFileMock,
   fsStatMock,
@@ -42,6 +43,7 @@ const {
   }),
   resolveAuthorizedPathMock: vi.fn(),
   fsMkdirMock: vi.fn(),
+  fsReaddirMock: vi.fn(),
   fsRmMock: vi.fn(),
   fsWriteFileMock: vi.fn(),
   fsStatMock: vi.fn(),
@@ -61,6 +63,7 @@ vi.mock('node:child_process', () => ({
 
 vi.mock('node:fs/promises', () => ({
   mkdir: fsMkdirMock,
+  readdir: fsReaddirMock,
   rm: fsRmMock,
   stat: fsStatMock,
   default: {
@@ -117,6 +120,7 @@ import {
   registerClipboardHandlers,
   setTrustedClipboardRendererWebContentsId
 } from './clipboard-ipc-handlers'
+import { cleanupExpiredRemoteClipboardFiles } from './clipboard-remote-file-copy'
 
 function getRegisteredHandlers(): Map<string, (...args: unknown[]) => unknown> {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
@@ -156,6 +160,10 @@ function trackPromiseSettled(promise: Promise<unknown>): () => boolean {
   return () => settled
 }
 
+function dirent(name: string, directory = true): { name: string; isDirectory: () => boolean } {
+  return { name, isDirectory: () => directory }
+}
+
 describe('registerClipboardHandlers', () => {
   beforeEach(() => {
     vi.spyOn(Date, 'now').mockReturnValue(1760000000000)
@@ -167,6 +175,8 @@ describe('registerClipboardHandlers', () => {
     resolveAuthorizedPathMock.mockImplementation(async (path: string) => path)
     fsMkdirMock.mockReset()
     fsMkdirMock.mockResolvedValue(undefined)
+    fsReaddirMock.mockReset()
+    fsReaddirMock.mockResolvedValue([])
     fsRmMock.mockReset()
     fsRmMock.mockResolvedValue(undefined)
     fsWriteFileMock.mockReset()
@@ -266,6 +276,33 @@ describe('registerClipboardHandlers', () => {
     }
   })
 
+  it('sweeps expired remote clipboard staging directories', async () => {
+    const nowMs = 1760000000000
+    fsReaddirMock.mockResolvedValue([
+      dirent('orca-clipboard-file-expired'),
+      dirent('orca-clipboard-file-fresh'),
+      dirent('orca-clipboard-file-plain-file', false),
+      dirent('unrelated-temp')
+    ])
+    fsStatMock.mockImplementation(async (targetPath: string) => {
+      if (targetPath.endsWith('expired')) {
+        return { mtimeMs: nowMs - 60 * 60 * 1000 - 1 }
+      }
+      if (targetPath.endsWith('fresh')) {
+        return { mtimeMs: nowMs - 1000 }
+      }
+      throw new Error(`unexpected stat: ${targetPath}`)
+    })
+
+    await cleanupExpiredRemoteClipboardFiles(nowMs)
+
+    expect(fsRmMock).toHaveBeenCalledTimes(1)
+    expect(fsRmMock).toHaveBeenCalledWith(join('/tmp', 'orca-clipboard-file-expired'), {
+      recursive: true,
+      force: true
+    })
+  })
+
   it('materializes remote files before writing them to the OS clipboard', async () => {
     const provider = {
       stat: vi.fn().mockResolvedValue({ size: 12, type: 'file', mtime: 123 }),
@@ -289,7 +326,7 @@ describe('registerClipboardHandlers', () => {
     ).resolves.toEqual({ ok: true })
 
     expect(provider.stat).toHaveBeenCalledWith('/remote/report.pdf')
-    expect(fsMkdirMock).toHaveBeenCalledWith(tempDir, { recursive: true })
+    expect(fsMkdirMock).toHaveBeenCalledWith(tempDir, { mode: 0o700 })
     expect(provider.downloadFile).toHaveBeenCalledWith('/remote/report.pdf', tempPath)
     expect(fsStatMock).toHaveBeenCalledWith(tempPath)
     expect(resolveAuthorizedPathMock).not.toHaveBeenCalled()

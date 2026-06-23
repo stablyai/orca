@@ -28,7 +28,10 @@ import {
   type ClipboardFileDeps,
   type ClipboardFileResult
 } from './clipboard-file-copy'
-import { writeRemoteFileToClipboard } from './clipboard-remote-file-copy'
+import {
+  cleanupExpiredRemoteClipboardFiles,
+  writeRemoteFileToClipboard
+} from './clipboard-remote-file-copy'
 
 let trustedClipboardRendererWebContentsId: number | null = null
 
@@ -62,6 +65,8 @@ export function registerClipboardHandlers(store: Store): void {
   ipcMain.removeHandler('clipboard:writeImage')
   ipcMain.removeHandler('clipboard:writeFile')
   ipcMain.removeHandler('clipboard:saveImageAsTempFile')
+
+  void cleanupExpiredRemoteClipboardFiles()
 
   ipcMain.handle('clipboard:readText', async (event, options?: ReadClipboardTextOptions) => {
     assertTrustedClipboardSender(event)
