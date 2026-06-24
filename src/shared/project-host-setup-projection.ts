@@ -48,15 +48,23 @@ export function isGitHubBackedRepo(repo: Pick<Repo, 'upstream' | 'repoIcon'>): b
   return getProjectProviderIdentity(repo) !== null
 }
 
-export function getProjectIdentityKey(repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon'>): string {
+export function getProjectIdentityKey(
+  repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'originRemoteKey'>
+): string {
   const identity = getProjectProviderIdentity(repo)
-  if (!identity) {
-    return `repo:${repo.id}`
+  if (identity) {
+    return `github:${normalizeIdentityPart(identity.owner)}/${normalizeIdentityPart(identity.repo)}`
   }
-  return `github:${normalizeIdentityPart(identity.owner)}/${normalizeIdentityPart(identity.repo)}`
+  // Why: non-GitHub remotes (Forgejo/GitLab/self-hosted) have no provider
+  // identity, so without this they key on `repo:<id>` (unique per checkout) and
+  // can never group across hosts. Key on the shared origin remote instead.
+  if (repo.originRemoteKey) {
+    return `git:${normalizeIdentityPart(repo.originRemoteKey)}`
+  }
+  return `repo:${repo.id}`
 }
 
-function getProjectId(repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon'>): string {
+function getProjectId(repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'originRemoteKey'>): string {
   return getProjectIdentityKey(repo)
 }
 

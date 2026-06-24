@@ -1,6 +1,12 @@
-export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira'
+export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira' | 'gitea'
 
-export const TASK_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
+export const TASK_PROVIDERS: readonly TaskProvider[] = [
+  'github',
+  'gitlab',
+  'linear',
+  'jira',
+  'gitea'
+]
 
 const TASK_PROVIDER_SET = new Set<TaskProvider>(TASK_PROVIDERS)
 
@@ -55,6 +61,7 @@ export function normalizeVisibleTaskProviders(value: unknown): TaskProvider[] {
 export type TaskProviderAvailability = {
   gitlabInstalled: boolean
   linearConnected: boolean
+  giteaConfigured?: boolean
 }
 
 export function filterAvailableTaskProviders(
@@ -99,6 +106,9 @@ function isTaskProviderAvailable(
   }
   if (provider === 'gitlab') {
     return availability.gitlabInstalled
+  }
+  if (provider === 'gitea') {
+    return availability.giteaConfigured ?? false
   }
   // Why: Jira can be connected from the Tasks surface itself, so hiding it
   // when disconnected would remove the entry point for first-time setup.

@@ -8,6 +8,7 @@ import {
 import { cn } from '@/lib/utils'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { GiteaIcon } from '@/components/icons/GiteaIcon'
 import { Label } from '../ui/label'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
@@ -49,6 +50,19 @@ const TASK_PROVIDER_OPTIONS: readonly {
       )
     },
     Icon: ({ className }) => <Gitlab className={className} />
+  },
+  {
+    id: 'gitea',
+    get label() {
+      return translate('auto.components.settings.TasksPane.gitea_label', 'Gitea')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.gitea_desc',
+        'Show Gitea in the Tasks source picker and sidebar shortcuts.'
+      )
+    },
+    Icon: ({ className }) => <GiteaIcon className={className} />
   },
   {
     id: 'linear',

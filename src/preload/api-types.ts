@@ -1429,6 +1429,38 @@ export type PreloadApi = {
   // Shapes mirror gh.* one-to-one where the data matches; diverge
   // where GitLab's API differs (MR state values, project path with
   // host, paginated envelope from `glab api -i`).
+  gt: {
+    authStatus: () => Promise<unknown>
+    issue: (args: GitLabRepoSelectorArgs & { number: number }) => Promise<unknown>
+    listIssues: (
+      args: GitLabRepoSelectorArgs & {
+        state?: 'open' | 'closed' | 'all'
+        assignee?: string
+        limit?: number
+      }
+    ) => Promise<{ items: unknown[]; error?: unknown }>
+    createIssue: (
+      args: GitLabRepoSelectorArgs & { title: string; body: string }
+    ) => Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }>
+    updateIssue: (
+      args: GitLabRepoSelectorArgs & {
+        number: number
+        updates: {
+          state?: 'open' | 'closed'
+          title?: string
+          body?: string
+          addLabels?: string[]
+          removeLabels?: string[]
+          assignees?: string[]
+        }
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    addIssueComment: (
+      args: GitLabRepoSelectorArgs & { number: number; body: string }
+    ) => Promise<unknown>
+    listLabels: (args: GitLabRepoSelectorArgs) => Promise<string[]>
+    listAssignableUsers: (args: GitLabRepoSelectorArgs) => Promise<unknown[]>
+  }
   gl: {
     viewer: () => Promise<GitLabViewer | null>
     diagnoseAuth: () => Promise<GitLabAuthDiagnostic>

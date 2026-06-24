@@ -239,4 +239,42 @@ describe('isGitHubBackedRepo', () => {
   it('is false for a plain local repo with no provider signal', () => {
     expect(isGitHubBackedRepo(repo({ id: 'r', path: '/r', displayName: 'r' }))).toBe(false)
   })
+
+  it('groups non-GitHub checkouts on different hosts by shared origin remote key', () => {
+    const projection = projectHostSetupProjectionFromRepos(
+      [
+        repo({
+          id: 'local-1',
+          path: '/Users/alice/repos/app',
+          displayName: 'app',
+          originRemoteKey: 'forgejo.example.com/acme/app'
+        }),
+        repo({
+          id: 'remote-1',
+          path: '/home/codi/repos/app',
+          displayName: 'app',
+          connectionId: 'ssh-1',
+          originRemoteKey: 'forgejo.example.com/acme/app'
+        })
+      ],
+      500
+    )
+    // Both checkouts collapse into ONE project keyed on the shared origin remote.
+    expect(projection.projects).toHaveLength(1)
+    expect(projection.projects[0].id).toBe('git:forgejo.example.com/acme/app')
+    expect(projection.projects[0].sourceRepoIds).toEqual(['local-1', 'remote-1'])
+    // ...and each host keeps its own setup under that one project.
+    expect(projection.setups.map((setup) => setup.projectId)).toEqual([
+      'git:forgejo.example.com/acme/app',
+      'git:forgejo.example.com/acme/app'
+    ])
+  })
+
+  it('keeps a non-GitHub repo with no origin remote isolated as repo:<id>', () => {
+    const projection = projectHostSetupProjectionFromRepos(
+      [repo({ id: 'no-remote', path: '/r', displayName: 'r' })],
+      500
+    )
+    expect(projection.projects[0].id).toBe('repo:no-remote')
+  })
 })

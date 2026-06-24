@@ -235,6 +235,11 @@ export type Repo = {
    *  default avatar (upstream owner, not the personal fork) and the fork
    *  indicator. Absent = not a fork, or fork status not yet resolved. */
   upstream?: GitHubRepositoryIdentity | null
+  // Why: normalized git origin identity (`host/owner/repo`, lowercased) for ANY
+  // provider, so two checkouts of the same remote on different hosts group into
+  // one project even without a GitHub provider identity. Populated at add-time
+  // and backfilled on load; null when the repo has no parseable origin remote.
+  originRemoteKey?: string | null
   addedAt: number
   kind?: RepoKind
   gitUsername?: string
@@ -327,7 +332,7 @@ export type FolderWorkspace = {
 }
 
 export type FolderWorkspaceLinkedTask = {
-  provider: 'github' | 'gitlab' | 'linear' | 'jira'
+  provider: 'github' | 'gitlab' | 'linear' | 'jira' | 'gitea'
   type: 'issue' | 'pr' | 'mr'
   number: number
   title: string

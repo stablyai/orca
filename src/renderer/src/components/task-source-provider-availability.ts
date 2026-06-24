@@ -22,7 +22,7 @@ function isDesktopOwnedHost(hostId: TaskSourceContext['hostId']): boolean {
 }
 
 function getRepoBackedProviderToolStatus(
-  provider: Extract<TaskProvider, 'github' | 'gitlab'>,
+  provider: Extract<TaskProvider, 'github' | 'gitlab' | 'gitea'>,
   preflightStatus: PreflightStatus | null
 ): ProviderAvailabilityStatus | null {
   if (!preflightStatus) {
@@ -30,6 +30,19 @@ function getRepoBackedProviderToolStatus(
   }
   if (provider === 'github') {
     return preflightStatus.gh
+  }
+  if (provider === 'gitea') {
+    // Why: Gitea/Forgejo auth is env-based (ORCA_GITEA_API_BASE_URL +
+    // ORCA_GITEA_TOKEN). Map `configured` → installed, `authenticated` →
+    // authenticated so the shared availability reasons apply. Hosts predating
+    // the gitea preflight block are a capability gap, not a user-fixable one.
+    if (!Object.hasOwn(preflightStatus, 'gitea')) {
+      return 'unsupported'
+    }
+    const gitea = preflightStatus.gitea
+    return gitea
+      ? { installed: gitea.configured, authenticated: gitea.authenticated }
+      : { installed: false, authenticated: false }
   }
   // Why: older remote servers can predate GitLab preflight entirely. That is a
   // host capability gap, not a user-fixable missing `glab` install.
@@ -54,7 +67,7 @@ function getProviderReason(
 }
 
 export function getRepoBackedProviderAvailability(args: {
-  provider: Extract<TaskProvider, 'github' | 'gitlab'>
+  provider: Extract<TaskProvider, 'github' | 'gitlab' | 'gitea'>
   contexts: readonly TaskSourceContext[]
   preflightStatus: PreflightStatus | null
   preflightReady: boolean

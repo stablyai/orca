@@ -26,6 +26,8 @@ export function shouldHideTaskPageListChrome({
       return hasGitHubDetail
     case 'gitlab':
       return hasGitLabDetail
+    case 'gitea':
+      return false
     case 'jira':
       return hasJiraDetail
     case 'linear':

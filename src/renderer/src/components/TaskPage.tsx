@@ -377,7 +377,7 @@ function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
 
 function getTaskPageRepoSourceContext(
   repo: Repo | null | undefined,
-  provider: 'github' | 'gitlab',
+  provider: 'github' | 'gitlab' | 'gitea',
   gitlabProjectRef?: GitLabProjectRef | null
 ): TaskSourceContext | null {
   if (!repo) {
@@ -3266,7 +3266,7 @@ export default function TaskPage(): React.JSX.Element {
   )
   const taskSourceRepoContexts = useMemo(
     () =>
-      taskSource === 'github' || taskSource === 'gitlab'
+      taskSource === 'github' || taskSource === 'gitlab' || taskSource === 'gitea'
         ? selectedRepos
             .map((repo) => getTaskPageRepoSourceContext(repo, taskSource))
             .filter((context): context is TaskSourceContext => context !== null)
@@ -3300,7 +3300,7 @@ export default function TaskPage(): React.JSX.Element {
     [hostRegistryById]
   )
   const runtimeTaskSourceHostIds = useMemo(() => {
-    if (taskSource !== 'github' && taskSource !== 'gitlab') {
+    if (taskSource !== 'github' && taskSource !== 'gitlab' && taskSource !== 'gitea') {
       return []
     }
     const hostIds = new Set<TaskSourceContext['hostId']>()
@@ -3373,7 +3373,8 @@ export default function TaskPage(): React.JSX.Element {
   }, [runtimeTaskSourceHostIds])
   const getTaskPickerRepoHostLabel = useCallback(
     (repo: Repo): string | null => {
-      const provider = taskSource === 'gitlab' ? 'gitlab' : 'github'
+      const provider =
+        taskSource === 'gitlab' ? 'gitlab' : taskSource === 'gitea' ? 'gitea' : 'github'
       const context = getTaskPageRepoSourceContext(repo, provider)
       const hostId = context?.hostId ?? repo.executionHostId ?? 'local'
       return hostRegistryById.get(hostId)?.label ?? null
@@ -3381,7 +3382,7 @@ export default function TaskPage(): React.JSX.Element {
     [hostRegistryById, taskSource]
   )
   const taskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(() => {
-    if (taskSource !== 'github' && taskSource !== 'gitlab') {
+    if (taskSource !== 'github' && taskSource !== 'gitlab' && taskSource !== 'gitea') {
       return []
     }
     return [
@@ -3669,6 +3670,12 @@ export default function TaskPage(): React.JSX.Element {
   const [gitlabLoading, setGitlabLoading] = useState(false)
   const [gitlabError, setGitlabError] = useState<string | null>(null)
   const [gitlabRefreshNonce, setGitlabRefreshNonce] = useState(0)
+  // Gitea (Forgejo) — issues-only, repo-backed task source. Rows share the
+  // GitLabWorkItem shape so the repo-backed list renders them with the
+  // shared row component.
+  const [giteaItems, setGiteaItems] = useState<GitLabWorkItem[]>([])
+  const [giteaLoading, setGiteaLoading] = useState(false)
+  const [giteaError, setGiteaError] = useState<string | null>(null)
   // Why: opens GitLabItemDialog when a row is clicked. Separate state from
   // gitlabItems so the dialog target survives a list refresh that might
   // remove the item from the visible filter (e.g. closing an MR while
@@ -4837,6 +4844,83 @@ export default function TaskPage(): React.JSX.Element {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedReposKey encodes the only selectedRepos fields read above; keying off the array ref would re-run on every parent render.
   }, [taskSource, gitlabView, activeGitlabFilter, gitlabRefreshNonce, selectedReposKey])
+
+  // Why: Gitea (Forgejo) issue list — issues-only, repo-backed, fetched via
+  // window.api.gt.listIssues. Mirrors the GitLab issues fetch but without
+  // MRs/todos/views. Rows are GitLabWorkItem-shaped so the shared repo-backed
+  // row renders them.
+  useEffect(() => {
+    if (taskSource !== 'gitea') {
+      return
+    }
+    const eligibleRepos = selectedRepos
+    if (eligibleRepos.length === 0) {
+      setGiteaItems([])
+      setGiteaLoading(false)
+      setGiteaError(null)
+      return
+    }
+    let stale = false
+    setGiteaLoading(true)
+    setGiteaError(null)
+    void Promise.allSettled(
+      eligibleRepos.map((repo) =>
+        window.api.gt
+          .listIssues({
+            repoPath: repo.path,
+            repoId: repo.id,
+            sourceContext: getTaskPageRepoSourceContext(repo, 'gitea'),
+            state: 'open',
+            limit: 50
+          })
+          .then((result) => {
+            const typed = result as {
+              items: GitLabWorkItem[]
+              error?: { kind?: string; message: string }
+            }
+            // Why: not_found just means "this repo isn't a Gitea/Forgejo
+            // remote" (e.g. a GitHub-only repo in a mixed selection). Drop it
+            // silently so the list doesn't show false errors.
+            const error = typed.error?.kind === 'not_found' ? undefined : typed.error
+            return { repoId: repo.id, items: typed.items, error }
+          })
+      )
+    )
+      .then((results) => {
+        if (stale) {
+          return
+        }
+        const merged: GitLabWorkItem[] = []
+        const errs: string[] = []
+        for (const r of results) {
+          if (r.status !== 'fulfilled') {
+            errs.push(r.reason instanceof Error ? r.reason.message : String(r.reason))
+            continue
+          }
+          for (const item of r.value.items) {
+            merged.push({ ...item, repoId: r.value.repoId })
+          }
+          if (r.value.error) {
+            errs.push(r.value.error.message)
+          }
+        }
+        merged.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
+        setGiteaItems(merged)
+        // Why: only surface an error banner when EVERY eligible repo failed.
+        if (errs.length > 0 && merged.length === 0) {
+          setGiteaError(errs[0])
+        }
+      })
+      .finally(() => {
+        if (!stale) {
+          setGiteaLoading(false)
+        }
+      })
+    return () => {
+      stale = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedReposKey encodes the selectedRepos fields read above.
+  }, [taskSource, selectedReposKey])
 
   // Why: Todos fetch lives in its own effect — different trigger
   // condition from the project view (no chip filter dependence) and a
@@ -9684,6 +9768,130 @@ export default function TaskPage(): React.JSX.Element {
                           aria-label={translate(
                             'auto.components.TaskPage.bcdc1330b2',
                             'Open in GitLab'
+                          )}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <ExternalLink className="size-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : taskSource === 'gitea' ? (
+            <div className="flex min-h-0 max-h-full flex-col rounded-md border border-t-0 border-border/50 bg-muted/50 overflow-hidden rounded-t-none shadow-sm">
+              <div className="flex-none grid grid-cols-[80px_minmax(0,3fr)_120px_110px_50px] gap-3 border-b border-border/50 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                <span>{translate('auto.components.TaskPage.eb10c32872', 'ID')}</span>
+                <span>{translate('auto.components.TaskPage.16cba35bee', 'Title')}</span>
+                <span>{translate('auto.components.TaskPage.00b7ffb952', 'Type / State')}</span>
+                <span>{translate('auto.components.TaskPage.f362667d55', 'Updated')}</span>
+                <span />
+              </div>
+              <div
+                className="min-h-0 flex-initial overflow-y-auto scrollbar-sleek"
+                style={{ scrollbarGutter: 'stable' }}
+              >
+                {giteaError ? (
+                  <div className="border-b border-border px-4 py-4 text-sm text-destructive">
+                    {giteaError}
+                  </div>
+                ) : null}
+                {giteaLoading && giteaItems.length === 0 ? (
+                  <div className="divide-y divide-border/50">
+                    {Array.from({ length: 12 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="grid w-full gap-3 px-3 py-2 grid-cols-[80px_minmax(0,3fr)_120px_110px_50px]"
+                      >
+                        <div className="h-4 w-16 animate-pulse rounded bg-muted/70" />
+                        <div>
+                          <div className="h-4 w-3/5 animate-pulse rounded bg-muted/70" />
+                        </div>
+                        <div className="h-3 w-20 animate-pulse rounded bg-muted/60" />
+                        <div className="h-3 w-20 animate-pulse rounded bg-muted/60" />
+                        <div />
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {!giteaLoading && giteaItems.length === 0 && !giteaError ? (
+                  <div className="px-4 py-12 text-center">
+                    <p className="text-base font-medium text-foreground">
+                      {translate(
+                        'auto.components.TaskPage.gitea_empty_title',
+                        'No open Gitea issues'
+                      )}
+                    </p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {translate(
+                        'auto.components.TaskPage.gitea_empty_desc',
+                        'Select a repo backed by a Gitea/Forgejo remote, or open a new issue on the forge.'
+                      )}
+                    </p>
+                  </div>
+                ) : null}
+                <div className="divide-y divide-border/50">
+                  {giteaItems.map((item) => (
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      key={item.id}
+                      onClick={() => {
+                        useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+                        void window.api.shell.openUrl(item.url)
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          void window.api.shell.openUrl(item.url)
+                        }
+                      }}
+                      className="grid w-full cursor-pointer gap-3 px-3 py-2 text-left grid-cols-[80px_minmax(0,3fr)_120px_110px_50px] hover:bg-muted/50"
+                    >
+                      <span className="font-mono text-xs text-muted-foreground">
+                        #{item.number}
+                      </span>
+                      <span className="min-w-0 truncate text-sm">{item.title}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {translate('auto.components.TaskPage.b1eaa18ace', 'Issue')} · {item.state}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : ''}
+                      </span>
+                      <div className="flex items-center justify-end gap-1">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              data-contextual-tour-target="tasks-start-workspace"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                handleUseGitLabItem(item)
+                              }}
+                              aria-label={translate(
+                                'auto.components.TaskPage.5e8061b088',
+                                'Start workspace from {{value0}} {{value1}}',
+                                { value0: 'issue', value1: item.number }
+                              )}
+                            >
+                              <ArrowRight className="size-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}>
+                            {translate('auto.components.TaskPage.9497f2787c', 'Start workspace')}
+                          </TooltipContent>
+                        </Tooltip>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            void window.api.shell.openUrl(item.url)
+                          }}
+                          aria-label={translate(
+                            'auto.components.TaskPage.gitea_open_in',
+                            'Open in Gitea'
                           )}
                           className="text-muted-foreground hover:text-foreground"
                         >

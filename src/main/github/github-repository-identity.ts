@@ -210,6 +210,32 @@ export async function getOwnerRepo(
   return getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
 }
 
+/** Normalized git origin identity (`host/owner/repo`, lowercased) for ANY git
+ *  provider. Lets two checkouts of the same remote on different hosts group into
+ *  one project even without a GitHub provider identity. `parseGitHubRemoteIdentity`
+ *  is generic (host/owner/repo for any URL); only its GitHub-specific callers
+ *  filter to github.com. Returns null when there's no parseable origin remote. */
+export async function getOriginRemoteKey(
+  repoPath: string,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<string | null> {
+  try {
+    const context = githubRepoContext(repoPath, connectionId, localGitOptions)
+    const remoteUrl = await getRemoteUrlForRepo(context, 'origin')
+    if (!remoteUrl) {
+      return null
+    }
+    const identity = parseGitHubRemoteIdentity(remoteUrl)
+    if (!identity) {
+      return null
+    }
+    return `${identity.host}/${identity.owner}/${identity.repo}`.toLowerCase()
+  } catch {
+    return null
+  }
+}
+
 export async function getIssueOwnerRepo(
   repoPath: string,
   connectionId?: string | null,

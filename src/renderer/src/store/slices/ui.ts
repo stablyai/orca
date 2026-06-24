@@ -1229,7 +1229,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       preferredVisibleTaskProviders,
       {
         gitlabInstalled: state.preflightStatus?.glab?.installed === true,
-        linearConnected: state.linearStatus?.connected === true
+        linearConnected: state.linearStatus?.connected === true,
+        giteaConfigured: state.preflightStatus?.gitea?.configured === true
       },
       state.settings?.defaultTaskSource
     )

@@ -81,7 +81,11 @@ import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import type { RepoMethod } from '../../shared/telemetry-events'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
-import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-projection'
+import {
+  getProjectHostSetupForRepo,
+  getProjectIdentityKey
+} from '../../shared/project-host-setup-projection'
+import { getOriginRemoteKey } from '../github/github-repository-identity'
 import { normalizeExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import {
@@ -141,7 +145,10 @@ function alignRepoWithRequestedProject(
   setupMethod: ProjectHostSetupExistingFolderArgs['setupMethod'] = 'imported-existing-folder'
 ): ProjectHostSetupResult {
   let setup = getProjectHostSetupForRepo(store.getProjectHostSetups(), repo)
-  if (setup.projectId !== projectId) {
+  // Why: skip the upstream stamp when the imported folder's identity already
+  // matches the requested project — non-GitHub repos group by origin remote, so
+  // only a genuine identity mismatch needs the GitHub stamp.
+  if (setup.projectId !== projectId && getProjectIdentityKey(repo) !== projectId) {
     const project = store.getProjects().find((entry) => entry.id === projectId)
     if (!project?.providerIdentity || project.providerIdentity.provider !== 'github') {
       throw new Error('Imported folder does not match the selected project identity.')
@@ -190,12 +197,14 @@ async function addLocalRepoFromPath(
   }
 
   const detected = await detectRepoIconAndUpstream({ repoPath: path, kind: repoKind })
+  const originRemoteKey = repoKind === 'git' ? await getOriginRemoteKey(path, null) : null
   const repo: Repo = {
     id: randomUUID(),
     path,
     displayName: getRepoName(path),
     badgeColor: DEFAULT_REPO_BADGE_COLOR,
     ...detected,
+    ...(originRemoteKey ? { originRemoteKey } : {}),
     addedAt: Date.now(),
     kind: repoKind,
     ...(repoKind === 'git'
@@ -289,12 +298,15 @@ async function addRemoteRepoFromPath(
     kind: repoKind,
     connectionId: args.connectionId
   })
+  const originRemoteKey =
+    repoKind === 'git' ? await getOriginRemoteKey(resolvedPath, args.connectionId) : null
   const repo: Repo = {
     id: randomUUID(),
     path: resolvedPath,
     displayName,
     badgeColor: DEFAULT_REPO_BADGE_COLOR,
     ...detected,
+    ...(originRemoteKey ? { originRemoteKey } : {}),
     addedAt: Date.now(),
     kind: repoKind,
     connectionId: args.connectionId,
@@ -739,7 +751,7 @@ const ProjectHostSetupDeleteIpcArgs = z.object({
 
 const FolderWorkspaceLinkedTaskArgs = z
   .object({
-    provider: z.enum(['github', 'gitlab', 'linear', 'jira']),
+    provider: z.enum(['github', 'gitlab', 'linear', 'jira', 'gitea']),
     type: z.enum(['issue', 'pr', 'mr']),
     number: z.number().finite(),
     title: z.string().min(1),
@@ -1089,7 +1101,32 @@ async function runNestedRepoScanForIpc(
   }
 }
 
+/** One-shot enrichment: repos predating `originRemoteKey` get it computed so
+ *  non-GitHub checkouts can group across hosts (see getProjectIdentityKey).
+ *  Best-effort + fire-and-forget; `null` is stored too so remote-less repos are
+ *  not re-probed every launch. */
+async function backfillOriginRemoteKeys(mainWindow: BrowserWindow, store: Store): Promise<void> {
+  const pending = store
+    .getRepos()
+    .filter((repo) => repo.kind !== 'folder' && repo.originRemoteKey === undefined)
+  if (pending.length === 0) {
+    return
+  }
+  let changed = false
+  for (const repo of pending) {
+    const originRemoteKey = await getOriginRemoteKey(repo.path, repo.connectionId ?? null)
+    if (store.updateRepo(repo.id, { originRemoteKey })) {
+      changed = true
+    }
+  }
+  if (changed) {
+    invalidateAuthorizedRootsCache()
+    notifyReposChanged(mainWindow)
+  }
+}
+
 export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): void {
+  void backfillOriginRemoteKeys(mainWindow, store)
   // Remove any previously registered handlers so we can re-register them
   // (e.g. when macOS re-activates the app and creates a new window).
   ipcMain.removeHandler('repos:list')
@@ -1223,11 +1260,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       if (!parsedHost) {
         throw new Error(`Unsupported host: ${args.hostId}`)
       }
-      const existingProject = store.getProjects().find((project) => project.id === args.projectId)
-      if (!existingProject) {
-        throw new Error(`Project not found: ${args.projectId}`)
-      }
-
+      // Why: a project created on another runtime (e.g. an SSH host) is not in
+      // the local store, but the user explicitly chose it to add this host. Allow
+      // proceeding — the imported folder joins the project by its origin-remote
+      // identity (see alignRepoWithRequestedProject / getProjectIdentityKey).
       const result =
         parsedHost.kind === 'local'
           ? await addLocalRepoFromPath(store, args.path, args.kind)

@@ -1101,6 +1101,7 @@ function sanitizeRepoUpdatesForPersistence<
       | 'worktreeBasePath'
       | 'projectHostSetupMethod'
       | 'forkSyncMode'
+      | 'originRemoteKey'
     >
   >
 >(updates: T): T {
@@ -3732,6 +3733,7 @@ export class Store {
         | 'projectGroupId'
         | 'projectGroupOrder'
         | 'projectHostSetupMethod'
+        | 'originRemoteKey'
       >
     > & { sourceControlAi?: Repo['sourceControlAi'] | null }
   ): Repo | null {
