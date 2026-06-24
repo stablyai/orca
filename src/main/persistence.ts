@@ -4248,6 +4248,26 @@ export class Store {
     delete this.state.worktreeMeta[worktreeId]
     delete this.state.worktreeLineageById[worktreeId]
     delete this.state.workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
+    // Why: drop the removed worktree's scoped session state, or startup restore
+    // re-spawns a terminal in the deleted worktree's gone directory. Worktree
+    // session state is split across two key forms — the canonical workspace key
+    // (activeWorkspaceKey) and the raw worktree id (activeWorktreeId,
+    // tabsByWorktree, shutdown ids) — and lives in every host partition, so clear
+    // both keys across the local and per-host sessions (cf. migrateWorktreeIdentity).
+    const dropWorktreeOwners = (
+      session: WorkspaceSessionState | undefined
+    ): WorkspaceSessionState =>
+      removeWorkspaceSessionOwner(
+        removeWorkspaceSessionOwner(session, worktreeWorkspaceKey(worktreeId)),
+        worktreeId
+      )!
+    this.state.workspaceSession = dropWorktreeOwners(this.state.workspaceSession)
+    const sessionsByHost = this.state.workspaceSessionsByHostId
+    if (sessionsByHost) {
+      for (const hostId of Object.keys(sessionsByHost)) {
+        sessionsByHost[hostId] = dropWorktreeOwners(sessionsByHost[hostId])
+      }
+    }
     this.scheduleSave()
   }
 

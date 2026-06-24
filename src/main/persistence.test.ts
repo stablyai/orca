@@ -7794,6 +7794,44 @@ describe('Store', () => {
     expect(store.getWorktreeMeta('b')).toBeDefined()
   })
 
+  it('removeWorktreeMeta clears the removed worktree session state across host partitions', async () => {
+    const store = await createStore()
+    const removedId = 'r1::/path/gone'
+    const keptId = 'r1::/path/kept'
+    store.setWorktreeMeta(removedId, { displayName: 'Gone' })
+    // Worktree activation stores the canonical workspace key in activeWorkspaceKey
+    // but the raw worktree id everywhere else (store/slices/worktrees.ts) — the
+    // mix a prefixed-key-only cleanup would miss.
+    const removedTab = makeTerminalTab({ id: 'gone-tab', worktreeId: removedId })
+    const keptTab = makeTerminalTab({ id: 'kept-tab', worktreeId: keptId })
+    const makeSession = (): WorkspaceSessionState => ({
+      ...getDefaultWorkspaceSession(),
+      activeWorkspaceKey: worktreeWorkspaceKey(removedId),
+      activeWorktreeId: removedId,
+      activeTabId: removedTab.id,
+      tabsByWorktree: { [removedId]: [removedTab], [keptId]: [keptTab] },
+      activeWorktreeIdsOnShutdown: [removedId, keptId]
+    })
+    store.setWorkspaceSession(makeSession())
+    // Runtime-host worktrees persist in a per-host partition, not the local one.
+    store.setWorkspaceSession(makeSession(), 'runtime:env-a')
+
+    store.removeWorktreeMeta(removedId)
+
+    for (const hostId of [undefined, 'runtime:env-a']) {
+      const session = store.getWorkspaceSession(hostId)
+      // Why: any of these left dangling makes startup restore reopen a deleted
+      // worktree and spawn a terminal at a path that no longer exists.
+      expect(session.activeWorkspaceKey).toBeNull()
+      expect(session.activeWorktreeId).toBeNull()
+      expect(session.activeTabId).toBeNull()
+      expect(session.tabsByWorktree[removedId]).toBeUndefined()
+      expect(session.activeWorktreeIdsOnShutdown).toEqual([keptId])
+      // Scoped only: an unrelated worktree's session state must survive.
+      expect(session.tabsByWorktree[keptId]).toHaveLength(1)
+    }
+  })
+
   it('stores and removes worktree lineage independently from metadata', async () => {
     const store = await createStore()
     const lineage = makeWorktreeLineage()
