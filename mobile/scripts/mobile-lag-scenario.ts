@@ -68,6 +68,8 @@ export function createMockWorktrees(
       parentWorktreeId: null,
       childWorktreeIds: [],
       displayName: name,
+      workspaceStatus: index % 9 === 0 ? 'in-review' : 'in-progress',
+      sortOrder: now - index * 1000,
       linkedIssue: index % 7 === 0 ? 200 + index : null,
       linkedPR,
       linkedLinearIssue: index % 13 === 0 ? `ORC-${index + 1}` : null,

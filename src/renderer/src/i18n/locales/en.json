@@ -222,7 +222,12 @@
           "0216895fb5": "Failed to delete branch",
           "19db0085fb": "Local branch deleted",
           "2b0afc7f14": "Could not keep local {{value0}} up to date",
-          "670864ab52": "Keeping local {{value0}} up to date"
+          "670864ab52": "Keeping local {{value0}} up to date",
+          "5366d13eec": "Workspace deleted, branch kept",
+          "2e17f825d4": "Worktree deleted, branch kept",
+          "78e08cd877": "Git could not safely delete branch \"{{value0}}\", so Orca kept it to avoid losing local commits.",
+          "3b57982bf6": "Git could not safely delete branch \"{{value0}}\" after deleting workspace \"{{value1}}\", so Orca kept it to avoid losing local commits.",
+          "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits."
         },
         "repos": {
           "b7e14472ae": "Failed to add folder",
@@ -284,7 +289,8 @@
           "bf53f09bf8": "Claude Agent Teams",
           "0708ed89f1": "Claude",
           "fc80296033": "Devin",
-          "da41abbdd4": "Ante"
+          "da41abbdd4": "Ante",
+          "mimo_code_label": "MiMo Code"
         },
         "skill": {
           "cli": {
@@ -1044,6 +1050,7 @@
       "NewWorkspaceComposerCard": {
         "reuseExistingBranch": "Reuse branch",
         "reuseExistingBranchHint": "Check out the existing branch instead of creating a new one from it.",
+        "createMultiple": "Create more",
         "cbb47ee0dc": "Only available for local Git projects.",
         "d861de981b": "Sparse checkout",
         "090cfedeb4": "Write a note",
@@ -1267,7 +1274,10 @@
         "2b4fdb880c": "Unmark viewed",
         "56ec6eafb7": "Open the PR details to view current reviewers.",
         "7f964a365a": "Remove reviewer",
-        "commentTooLarge": "Comment is too large to submit safely."
+        "commentTooLarge": "Comment is too large to submit safely.",
+        "8ff5ae8866": "Assignees",
+        "82c87eceb9": "Edit assignees",
+        "1ff5d979df": "No one assigned"
       },
       "QuickOpen": {
         "1dbd3f59ff": "Move",
@@ -1596,7 +1606,26 @@
         "ff90d0abc7": "Start workspace from {{value0}}",
         "fe28c9821f": "view",
         "8d1e17a3ef": "Open {{value0}} in GitHub",
-        "4ac8ff2275": "Open {{value0}} in Jira"
+        "4ac8ff2275": "Open {{value0}} in Jira",
+        "40eaf2c27c": "Details",
+        "closeAsCompleted": "Close as completed",
+        "closeAsCompletedDescription": "Done, closed, fixed, resolved",
+        "closeAsNotPlanned": "Close as not planned",
+        "closeAsNotPlannedDescription": "Won't fix, can't repro, stale",
+        "closeAsDuplicate": "Close as duplicate",
+        "closeAsDuplicateDescription": "Duplicate of another issue in this repository",
+        "duplicateIssueNumberPlaceholder": "Issue number",
+        "closeAsDuplicateSubmit": "Close duplicate",
+        "duplicateIssueMissing": "Enter an issue number in this repository.",
+        "duplicateIssueNotInteger": "Use a whole issue number.",
+        "duplicateIssueNotPositive": "Use a positive issue number.",
+        "duplicateIssueSameIssue": "Choose a different issue.",
+        "repository": "Repository",
+        "backToCloseReasons": "Back",
+        "searchIssues": "Search issues",
+        "useIssueNumber": "Use issue #{{value0}}",
+        "noMatchingIssuesLoaded": "No matching issues loaded.",
+        "editReviewersWithCurrent": "Edit reviewers: {{value0}}"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -1697,7 +1726,10 @@
         "settingsBadge": "Settings",
         "actionBadge": "Action",
         "paletteHostBadge": "Host: {{value0}}",
-        "workspaceTabMissing": "Tab no longer exists"
+        "workspaceTabMissing": "Tab no longer exists",
+        "projectsGroupsHeader": "Projects & Groups",
+        "projectBadge": "Project",
+        "repoGroupBadge": "Repo group"
       },
       "github": {
         "pr": {
@@ -1840,7 +1872,10 @@
             "22df63c393": "Sub-issue data is unavailable for your token.",
             "067119985c": "GitHub search, e.g. assignee:@me is:open",
             "1850fceac8": "{{value0}}/{{value1}} isn't added to Orca. Add it to start work, or open in GitHub.",
-            "1aa7c952b9": "Project view"
+            "1aa7c952b9": "Project view",
+            "f352abf7c3": "Repository list is updating.",
+            "1ce21b8cff": "This item is outside the selected repositories.",
+            "030de75bc5": "This item matches multiple selected repositories."
           },
           "slug": {
             "dialog": {
@@ -2431,7 +2466,9 @@
             "9acaf92093": "Pane Actions",
             "1bce81dba6": "simulator",
             "1ff1c77616": "browser",
-            "586d2ac445": "terminal"
+            "586d2ac445": "terminal",
+            "addSplitPane": "Add split pane",
+            "closePaneColumn": "Close split pane"
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "Drop onto a terminal pane to resume this session.",
@@ -2439,6 +2476,9 @@
             "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
             "openLocalWorkspace": "Open a local workspace before resuming a session.",
             "sessionQueued": "Session queued"
+          },
+          "TabGroupDropOverlay": {
+            "paneColumnLabel": "New split"
           }
         },
         "bar": {
@@ -2486,7 +2526,8 @@
           "SortableTab": {
             "ab19f603eb": "Rename tab {{value0}}",
             "6df69d9388": "Close tab {{value0}}",
-            "fdb2691425": "Collapse pane"
+            "fdb2691425": "Collapse pane",
+            "95db5f2f7d": "Close tab"
           },
           "SortableTabContextMenu": {
             "35e8892fd0": "Tab Color",
@@ -2509,7 +2550,9 @@
             "cb3eadefd2": "Blue",
             "20baa43c05": "None",
             "60f958ec75": "Pin Tab",
-            "417722e9c2": "Unpin Tab"
+            "417722e9c2": "Unpin Tab",
+            "splitTerminalRight": "Split terminal right",
+            "splitTerminalDown": "Split terminal down"
           },
           "TabBar": {
             "b1a132357f": "New tab",
@@ -2601,6 +2644,17 @@
                 }
               }
             }
+          },
+          "TabWorkspaceLayoutMenuSection": {
+            "right": "Right",
+            "left": "Left",
+            "down": "Down",
+            "up": "Up",
+            "moveToPaneColumn": "Move Tab to Split"
+          },
+          "EditorFileTabCloseButton": {
+            "4655cf570e": "Close tab",
+            "a768f428f1": "Close tab"
           }
         }
       },
@@ -3331,22 +3385,17 @@
           "496f68cf8c": "Scanning repositories. Click to stop.",
           "a32bef9516": "Stop scanning",
           "2f8298f3c3": "Stop scan",
-          "c157f31a95": "Import as group",
-          "40199ef7b3": "Group name",
-          "b20bb7c24f": "Keeps these repos together in one group. Best for related repos like microservices.",
-          "787412361a": "What is a group name?",
           "5f857ba8e6": "in",
           "4df0d08cc5": "Found",
           "8db50afe1a": "Import repositories from folder",
           "5b2e6fe3c8": "Import separately",
           "cf9d382ca1": "Import",
           "220dd32d83": "Scanning...",
-          "fb33359f69": "Is this a monorepo?",
-          "d75170194e": "Choose this if these projects belong together. Orca will group them and let you work from the parent folder.",
-          "39d51212cc": "Monorepo name",
-          "e907ec8935": "What is a monorepo name?",
+          "fb33359f69": "Group these repositories?",
+          "d75170194e": "Choose this if these projects belong together — a monorepo, or just a set of related repos. Orca will group them and let you work from the parent folder.",
+          "39d51212cc": "Group name",
           "aa0247680d": "No, import separately",
-          "a0bc4d1f8e": "Yes, import as monorepo",
+          "a0bc4d1f8e": "Yes, import as group",
           "8401a7a0d0": "1 repository",
           "d4f1df62ef": "{{value0}} repositories",
           "b4263a2ac4": "Found {{value0}} in {{value1}}.",
@@ -3731,7 +3780,8 @@
           "8d62c68b35": "Notes",
           "2d74665a56": "Ports",
           "65a9820bd1": "Agent statuses",
-          "219ebf1961": "Branch name"
+          "219ebf1961": "Branch name",
+          "folderPathIdentity": "Branch / folder path"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "Connecting...",
@@ -3807,12 +3857,15 @@
           "021538e1d1": "SSH disconnected",
           "runtimeHostDisconnected": "Server disconnected",
           "runtimeHostProject": "Project on Orca server",
-          "automationCreated": "Created by automation"
+          "automationCreated": "Created by automation",
+          "branchIdentity": "Branch",
+          "branchFolderPathIdentity": "Branch or folder path"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
         },
         "WorktreeCardReviewDetailSection": {
+          "copyLink": "Copy link",
           "reviewHeader": "{{value0}} #{{value1}}"
         },
         "WorktreeCardMeta": {
@@ -3829,6 +3882,12 @@
           "807b13b9ec": "Edit issue",
           "b22f058067": "View on GitHub",
           "e97d8f2876": "Issue #{{value0}}",
+          "moreIssueActions": "More issue actions",
+          "copyLink": "Copy link",
+          "copyLinkSuccess": "{{value0}} copied",
+          "copyLinkFailure": "Failed to copy link",
+          "issueLinkLabel": "Issue link",
+          "reviewLinkLabel": "{{value0}} link",
           "3ea2702e62": "Linked {{value0}} #{{value1}}",
           "b105fd3057": "Linked Linear {{value0}}",
           "3f2649eeb8": "Linked issue #{{value0}}",
@@ -3930,7 +3989,8 @@
           "f94466bc39": "{{value0}} of {{value1}} contained project{{value2}} remained after deleting the group.",
           "groupDeleteFailed": "Failed to delete group",
           "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
-          "failedNestWorkspace": "Failed to nest workspace"
+          "failedNestWorkspace": "Failed to nest workspace",
+          "sidebarRowMissing": "Target no longer exists"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -4245,6 +4305,9 @@
           "current": "Current",
           "searchPlaceholder": "Search worktrees...",
           "empty": "No matching eligible worktrees."
+        },
+        "WorktreeCardStatusSlot": {
+          "branchIdentity": "Branch"
         }
       },
       "shared": {
@@ -6236,7 +6299,19 @@
           "ab20575a8a": "off",
           "ab3a1f9068": "wsl.exe",
           "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
-          "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent."
+          "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent.",
+          "scrollSpeed": {
+            "title": "Scroll Speed",
+            "description": "Tune normal terminal scrollback, fast modifier scrolling, and full-screen TUI wheel speed.",
+            "helper": "Adjust how wheel input feels in scrollback and in mouse-aware terminal apps.",
+            "reset": "Reset",
+            "normal": "Normal",
+            "normalDescription": "Scrollback wheel multiplier.",
+            "fast": "Fast",
+            "fastDescription": "Extra multiplier while scrolling with a modifier key.",
+            "tui": "TUI",
+            "tuiDescription": "Discrete wheel reports for full-screen terminal apps."
+          }
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "Preview {{value0}} theme",
@@ -7872,7 +7947,11 @@
             "0fe0073f0c": "Default terminal font size for new panes and live updates.",
             "5930244899": "Font Size",
             "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
-            "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent."
+            "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent.",
+            "scrollSpeed": {
+              "title": "Scroll Speed",
+              "description": "Tune normal terminal scrollback, fast modifier scrolling, and full-screen TUI wheel speed."
+            }
           },
           "windows": {
             "search": {
@@ -8330,6 +8409,8 @@
             "66a29dde82": "Copy Relative Path",
             "42e10cbf57": "Copy Relative Paths",
             "b5d436aa30": "Copy Path",
+            "98a79948b3": "Copy",
+            "b234ab25b4": "Could not copy the file to the clipboard",
             "f9d7ca753d": "Copy Paths",
             "3161c4e425": "folder"
           },
@@ -8813,10 +8894,20 @@
                 "084c516efb": "Copy commands",
                 "5dc3af25c0": "Select comment",
                 "d7a2f9c401": "Send unresolved {{value0}} comments",
-                "d91f2a6c39": "Send {{value0}} queued comments",
+                "d91f2a6c39": "Send {{value0}} queued comments to AI",
                 "a6de3e5a20": "Clear queued comments",
                 "49ea0937e4": "Add comment to resolve list",
-                "9fecebb29d": "Add"
+                "9fecebb29d": "Add",
+                "f8a2c91d04": "Queue for agent",
+                "b4e8a1c902": "Queued",
+                "7c1f0a2b11": "Open",
+                "e8b4c1a903": "Resolved · {{value0}}",
+                "c3a8e5d710": "Needs review · {{value0}}",
+                "a7f0c7e8d1": "Queue",
+                "8a621a2c4f": "Grouped",
+                "b13f85d75c": "Timeline",
+                "f5cf324efa": "Comment display options",
+                "5e6e5a13fa": "View"
               },
               "empty": {
                 "state": {
@@ -9083,7 +9174,10 @@
             "hideEmptySessions": "Hide empty sessions",
             "workspaceScope": "Workspace",
             "worktreeScope": "Worktree",
-            "globalScope": "Global"
+            "globalScope": "Global",
+            "projectScope": "Project",
+            "currentProjectLower": "current project",
+            "project": "Project"
           },
           "AiVaultSessionDetails": {
             "originalAsk": "Original ask",
@@ -10115,7 +10209,6 @@
             "3dddb2d565": "connected for tasks",
             "33b650af52": "Connect where your team tracks work. Orca starts workspaces with the issue title, link, and context already attached.",
             "5b3577a492": "connected for review status",
-            "3a1fcdddad": "Two quick steps: connect where your code is reviewed, then where your team plans work.",
             "list_end": ", and ",
             "list_pair": " and ",
             "list_mid": ", ",
@@ -10339,7 +10432,8 @@
           "4cc7b83ffe": "Filter files...",
           "21783df79f": "Collapse file tree",
           "481e63ca52": "Files",
-          "d5ac717d65": "uncommitted"
+          "d5ac717d65": "uncommitted",
+          "39b6b9e4e4": "Committed on Branch"
         },
         "CombinedDiffViewer": {
           "35cc27aeb2": "in Source Control",
@@ -10366,7 +10460,7 @@
           "f786fd54e1": "Inline",
           "ea08dae15b": "Collapse All",
           "19c45cfdc0": "Expand All",
-          "982d14bfa5": "Open Uncommitted Diff",
+          "982d14bfa5": "Open All Changes",
           "3d909843bb": "Open Branch Diff",
           "8368d256ec": "combined-branch",
           "8f68ad9ca9": "Show {{value0}} AI {{value1}}",
@@ -10992,6 +11086,14 @@
                 "trashWorktree": "trash worktree",
                 "addQuickCommand": "add quick command",
                 "newQuickCommand": "new quick command"
+              }
+            }
+          },
+          "palette": {
+            "project": {
+              "results": {
+                "repoGroup": "Repo group",
+                "project": "Project"
               }
             }
           }

@@ -1,6 +1,6 @@
 import type { DropZone, ManagedPane, ManagedPaneInternal } from './pane-manager-types'
 import type { PaneStyleOptions } from './pane-manager-types'
-import { detachPaneFromTree, insertPaneNextTo } from './pane-tree-ops'
+import { detachPaneFromTree, findPaneChildren, insertPaneNextTo } from './pane-tree-ops'
 
 // ---------------------------------------------------------------------------
 // Drag-to-reorder panes
@@ -46,6 +46,47 @@ export function cancelActivePaneDrag(state: DragReorderState): void {
   state.currentDropTarget = null
 }
 
+/** True when dropping source onto target in zone would leave pane order unchanged. */
+export function isPaneDropNoOp(
+  sourcePaneId: number,
+  targetPaneId: number,
+  zone: DropZone,
+  panes: Map<number, ManagedPaneInternal>
+): boolean {
+  if (sourcePaneId === targetPaneId) {
+    return true
+  }
+  const source = panes.get(sourcePaneId)
+  const target = panes.get(targetPaneId)
+  if (!source || !target) {
+    return true
+  }
+
+  const parent = target.container.parentElement
+  if (!parent?.classList.contains('pane-split')) {
+    return false
+  }
+  if (source.container.parentElement !== parent) {
+    return false
+  }
+
+  const children = findPaneChildren(parent)
+  const targetIndex = children.indexOf(target.container)
+  const sourceIndex = children.indexOf(source.container)
+  if (targetIndex === -1 || sourceIndex === -1) {
+    return false
+  }
+
+  const isVerticalSplit = parent.classList.contains('is-vertical')
+  const zoneIsHorizontal = zone === 'top' || zone === 'bottom'
+  if (zoneIsHorizontal === isVerticalSplit) {
+    return false
+  }
+  return zone === 'right' || zone === 'bottom'
+    ? sourceIndex === targetIndex + 1
+    : sourceIndex === targetIndex - 1
+}
+
 /** Move a pane from its current position to a new position relative to a target pane. */
 export function handlePaneDrop(
   sourcePaneId: number,
@@ -58,6 +99,9 @@ export function handlePaneDrop(
     return
   }
   const panes = callbacks.getPanes()
+  if (isPaneDropNoOp(sourcePaneId, targetPaneId, zone, panes)) {
+    return
+  }
   const source = panes.get(sourcePaneId)
   const target = panes.get(targetPaneId)
   if (!source || !target) {

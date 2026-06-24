@@ -8,8 +8,11 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 // evicts the entry.
 
 const dropStatusEntry = vi.fn()
+const dropStatusEntriesByTabPrefix = vi.fn()
 const getStatusSnapshot = vi.fn()
 const inferInterrupt = vi.fn()
+const clearMigrationUnsupportedPtysByTabPrefix = vi.fn()
+const clearMigrationUnsupportedPtysForPaneKey = vi.fn()
 const onHandlers = new Map<string, (event: unknown, ...args: unknown[]) => void>()
 const handleHandlers = new Map<string, (event: unknown, ...args: unknown[]) => unknown>()
 const removeHandler = vi.fn()
@@ -38,11 +41,18 @@ vi.mock('../agent-hooks/server', async () => {
     ...actual,
     agentHookServer: {
       dropStatusEntry,
+      dropStatusEntriesByTabPrefix,
       getStatusSnapshot,
       inferInterrupt
     }
   }
 })
+
+vi.mock('../agent-hooks/migration-unsupported-pty-state', () => ({
+  clearMigrationUnsupportedPtysByTabPrefix,
+  clearMigrationUnsupportedPtysForPaneKey,
+  getMigrationUnsupportedPtySnapshot: vi.fn(() => [])
+}))
 
 vi.mock('../claude/hook-service', () => ({
   claudeHookService: { getStatus: vi.fn(() => ({ agent: 'claude', state: 'absent' })) }
@@ -89,8 +99,11 @@ vi.mock('../kimi/hook-service', () => ({
 
 beforeEach(() => {
   dropStatusEntry.mockReset()
+  dropStatusEntriesByTabPrefix.mockReset()
   getStatusSnapshot.mockReset()
   inferInterrupt.mockReset()
+  clearMigrationUnsupportedPtysByTabPrefix.mockReset()
+  clearMigrationUnsupportedPtysForPaneKey.mockReset()
   onHandlers.clear()
   handleHandlers.clear()
   removeHandler.mockReset()
@@ -294,6 +307,7 @@ describe('agentStatus:drop IPC', () => {
     expect(handler).toBeDefined()
     handler!({}, PANE_KEY)
     expect(dropStatusEntry).toHaveBeenCalledWith(PANE_KEY)
+    expect(clearMigrationUnsupportedPtysForPaneKey).toHaveBeenCalledWith(PANE_KEY)
   })
 
   it('rejects non-string paneKey (defensive against a malformed renderer message)', async () => {
@@ -318,5 +332,49 @@ describe('agentStatus:drop IPC', () => {
       expect(() => handler({}, value)).not.toThrow()
     }
     expect(dropStatusEntry).not.toHaveBeenCalled()
+  })
+})
+
+describe('agentStatus:dropByTabPrefix IPC', () => {
+  it('forwards valid tab ids to tab-prefix cache eviction', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = onHandlers.get('agentStatus:dropByTabPrefix')
+    expect(handler).toBeDefined()
+    handler!({}, 'tab-1')
+    expect(dropStatusEntriesByTabPrefix).toHaveBeenCalledWith('tab-1')
+    expect(clearMigrationUnsupportedPtysByTabPrefix).toHaveBeenCalledWith('tab-1')
+  })
+
+  it('rejects malformed tab ids', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = onHandlers.get('agentStatus:dropByTabPrefix')!
+    const bad: unknown[] = [
+      123,
+      undefined,
+      '',
+      null,
+      {},
+      [],
+      'tab-1:leaf',
+      ' leading-space',
+      'trailing-space ',
+      'x'.repeat(161)
+    ]
+    for (const value of bad) {
+      expect(() => handler({}, value)).not.toThrow()
+    }
+    expect(dropStatusEntriesByTabPrefix).not.toHaveBeenCalled()
+    expect(clearMigrationUnsupportedPtysByTabPrefix).not.toHaveBeenCalled()
+  })
+
+  it('removes any existing listener before registering the tab-prefix channel', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    expect(removeAllListeners).toHaveBeenCalledWith('agentStatus:dropByTabPrefix')
   })
 })

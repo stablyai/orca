@@ -40,12 +40,14 @@ export function getEditorPanelRenderModel({
   const isSingleDiff =
     activeFile.mode === 'diff' &&
     activeFile.diffSource !== undefined &&
+    activeFile.diffSource !== 'combined-all' &&
     activeFile.diffSource !== 'combined-uncommitted' &&
     activeFile.diffSource !== 'combined-branch' &&
     activeFile.diffSource !== 'combined-commit'
   const isCombinedDiff =
     activeFile.mode === 'diff' &&
-    (activeFile.diffSource === 'combined-uncommitted' ||
+    (activeFile.diffSource === 'combined-all' ||
+      activeFile.diffSource === 'combined-uncommitted' ||
       activeFile.diffSource === 'combined-branch' ||
       activeFile.diffSource === 'combined-commit')
   const resolvedLanguage =

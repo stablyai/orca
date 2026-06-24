@@ -177,7 +177,7 @@ describe('activateAndRevealWorktree created agent reopen', () => {
     expect(state.pendingStartupByTabId[reopenedTab!.id]?.command).not.toContain("'don''t'")
   })
 
-  it('automatically resumes sleeping agent sessions when activating a slept worktree', () => {
+  it('does not duplicate a sleeping agent session owned by a preserved slept pane', () => {
     const worktree = makeWorktree()
     const revealWorktreeInSidebar = vi.fn()
 
@@ -250,25 +250,12 @@ describe('activateAndRevealWorktree created agent reopen', () => {
     const resumedTab = state.tabsByWorktree[worktree.id]?.find((tab) => tab.id !== 'slept-tab')
 
     expect(result).toEqual({ primaryTabId: null })
-    expect(resumedTab?.launchAgent).toBe('codex')
-    expect(state.pendingStartupByTabId[resumedTab!.id]).toEqual({
-      command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
-      env: {},
-      launchAgent: 'codex',
-      launchConfig: {
-        agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox'",
-        agentArgs: '--dangerously-bypass-approvals-and-sandbox',
-        agentEnv: {}
-      },
-      launchToken: expect.any(String),
-      showSessionRestoredBanner: true,
-      telemetry: {
-        agent_kind: 'codex',
-        launch_source: 'sidebar',
-        request_kind: 'resume'
-      }
+    expect(resumedTab).toBeUndefined()
+    expect(state.pendingStartupByTabId).toEqual({})
+    expect(state.sleepingAgentSessionsByPaneKey['slept-tab:0']).toMatchObject({
+      paneKey: 'slept-tab:0',
+      providerSession: { key: 'session_id', id: 'codex-session-1' }
     })
-    expect(state.sleepingAgentSessionsByPaneKey['slept-tab:0']).toBeUndefined()
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id)
   })
 

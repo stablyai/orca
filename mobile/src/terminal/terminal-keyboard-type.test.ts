@@ -14,9 +14,9 @@ describe('terminal keyboard type', () => {
     expect(getTerminalCommandKeyboardType('android', true)).toBe('default')
   })
 
-  it('keeps the iOS ASCII keyboard when terminal autocomplete is disabled', () => {
-    expect(getTerminalLiveInputKeyboardType('ios')).toBe('ascii-capable')
-    expect(getTerminalCommandKeyboardType('ios', false)).toBe('ascii-capable')
+  it('keeps iOS IME keyboards available for terminal input', () => {
+    expect(getTerminalLiveInputKeyboardType('ios')).toBe('default')
+    expect(getTerminalCommandKeyboardType('ios', false)).toBe('default')
     expect(getTerminalCommandKeyboardType('ios', true)).toBe('default')
   })
 })

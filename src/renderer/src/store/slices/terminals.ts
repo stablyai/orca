@@ -41,7 +41,6 @@ import {
   updateGroup
 } from './tab-group-state'
 import {
-  ensurePtyDispatcher,
   restorePtyDataHandlersAfterFailedShutdown,
   unregisterPtyDataHandlers
 } from '@/components/terminal-pane/pty-transport'
@@ -60,6 +59,7 @@ import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-co
 import {
   collectHibernatedCompletionEvidenceForWorktree,
   collectSleepingAgentSessionRecordsForWorktree,
+  removeSleepingRecordsReplacedByManualWorktreeSleep,
   type AgentStatusWorktreeShutdownReason
 } from './agent-status'
 
@@ -1727,7 +1727,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     const sleepingAgentSessionRecords = collectSleepingAgentSessionRecordsForWorktree(
       state,
       worktreeId,
-      paneKeys
+      {
+        paneKeys,
+        captureMode: 'completed-agent-hibernation'
+      }
     )
     const retainedCompletionEvidence = collectHibernatedCompletionEvidenceForWorktree(
       state,
@@ -1912,7 +1915,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     const expectedRuntimePtyIds = sortedUniquePtyIds(opts?.expectedRuntimePtyIds)
     const shutdownPtyIds = sortedUniquePtyIds([...ptyIds, ...expectedRuntimePtyIds])
     const sleepingAgentSessionRecords = keepIdentifiers
-      ? collectSleepingAgentSessionRecordsForWorktree(get(), worktreeId, opts?.sleepingPaneKeys)
+      ? collectSleepingAgentSessionRecordsForWorktree(get(), worktreeId, {
+          paneKeys: opts?.sleepingPaneKeys,
+          ...(shutdownReason === 'manual-sleep' ? { captureMode: 'manual-worktree-sleep' } : {}),
+          ...(shutdownReason === 'auto-hibernate-completed-agent'
+            ? { captureMode: 'completed-agent-hibernation' }
+            : {})
+        })
       : {}
     const retainedCompletionEvidence =
       shutdownReason === 'auto-hibernate-completed-agent'
@@ -2178,12 +2187,22 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
 
     if (keepIdentifiers) {
-      set((s) => ({
-        sleepingAgentSessionsByPaneKey: {
-          ...s.sleepingAgentSessionsByPaneKey,
-          ...sleepingAgentSessionRecords
+      set((s) => {
+        const base =
+          shutdownReason === 'manual-sleep'
+            ? removeSleepingRecordsReplacedByManualWorktreeSleep(
+                s.sleepingAgentSessionsByPaneKey,
+                worktreeId,
+                opts?.sleepingPaneKeys
+              ).records
+            : s.sleepingAgentSessionsByPaneKey
+        return {
+          sleepingAgentSessionsByPaneKey: {
+            ...base,
+            ...sleepingAgentSessionRecords
+          }
         }
-      }))
+      })
     } else {
       get().clearSleepingAgentSessionsByWorktree(worktreeId)
     }
@@ -2541,10 +2560,22 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           validWorktreeIds.has(record.worktreeId)
         )
       )
-      const activeWorktreeId =
-        session.activeWorktreeId && validWorktreeIds.has(session.activeWorktreeId)
-          ? session.activeWorktreeId
+      const fallbackActiveWorktreeId =
+        !session.activeWorktreeId && session.activeRepoId && knownRepoIds.has(session.activeRepoId)
+          ? (s.worktreesByRepo[session.activeRepoId]?.find((worktree) => worktree.isMainWorktree)
+              ?.id ??
+            s.worktreesByRepo[session.activeRepoId]?.[0]?.id ??
+            null)
           : null
+      const activeWorktreeId = (() => {
+        if (session.activeWorktreeId && validWorktreeIds.has(session.activeWorktreeId)) {
+          return session.activeWorktreeId
+        }
+        // Why: a workspace with no terminal tabs is still a valid workspace.
+        // Falling back from the active repo prevents the blank landing screen
+        // when session tabs were pruned or never created.
+        return fallbackActiveWorktreeId
+      })()
       const activeWorkspaceKey: WorkspaceKey | null =
         session.activeWorkspaceKey && validWorktreeIds.has(session.activeWorkspaceKey)
           ? session.activeWorkspaceKey
@@ -2564,10 +2595,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // reconnectPersistedTerminals() after all eager PTY spawns complete.
       // This prevents TerminalPane from mounting and spawning duplicate PTYs
       // before the reconnect phase has set ptyId on each tab.
-      // Why: fall back to deriving the list from tabsByWorktree ptyIds when
-      // activeWorktreeIdsOnShutdown is absent (upgrade from older build).
-      // The raw tabs still carry ptyId values before clearTransientTerminalState
-      // nulls them, so we can infer which worktrees had active terminals.
+      // Why: match the pre-idle-runtime-optimization startup contract.
+      // activeWorktreeIdsOnShutdown is authoritative when present; persisted
+      // tab/layout PTY IDs are wake hints, not a broader active-workspace list.
       const shutdownIds =
         session.activeWorktreeIdsOnShutdown ??
         Object.entries(session.tabsByWorktree)
@@ -2787,8 +2817,6 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // The layout's ptyIdsByLeafId (preserved from shutdown) already has per-leaf
     // mappings. For single-pane tabs without leaf mappings, store the tab-level
     // ptyId as a sentinel so connectPanePty knows to reattach.
-    ensurePtyDispatcher()
-
     for (const worktreeId of ids) {
       const tabs = tabsByWorktree[worktreeId] ?? []
       const worktree = Object.values(get().worktreesByRepo)
@@ -2844,9 +2872,6 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
             if (!next[worktreeId]) {
               return {}
             }
-            next[worktreeId] = next[worktreeId].map((t) =>
-              t.id === tabId ? { ...t, ptyId: tabLevelPtyId } : t
-            )
 
             // Why: populate ptyIdsByTabId so the sessions status segment
             // can map daemon session IDs back to tabs (for bound/orphan
@@ -2854,9 +2879,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
             // appear as orphans until the terminal pane mounts.
             const allPtyIds = hasLeafMappings
               ? (Object.values(leafPtyMap).filter(Boolean) as string[])
-              : [tabLevelPtyId]
+              : [tabLevelPtyId!]
+            next[worktreeId] = next[worktreeId].map((t) =>
+              t.id === tabId ? { ...t, ptyId: tabLevelPtyId } : t
+            )
             return {
               tabsByWorktree: next,
+              // Why: hide-sleeping uses ptyIdsByTabId as the liveness source.
+              // Restored daemon sessions are still running even before their
+              // pane remounts, so background workspaces must advertise them.
               ptyIdsByTabId: {
                 ...s.ptyIdsByTabId,
                 [tabId]: allPtyIds

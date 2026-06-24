@@ -249,13 +249,11 @@ function resolveOAuthCredentialReadOptions(
   if (!authPreparation) {
     return undefined
   }
+  // Why: Claude Code 2.1+ can scope even the default config dir's macOS
+  // Keychain item. Try scoped first, with legacy still handled as fallback.
   const readOptions: OAuthCredentialReadOptions = {
-    credentialsFileConfigDir: authPreparation.configDir
-  }
-  // Why: host system-default launches do not inject CLAUDE_CONFIG_DIR, so
-  // their Keychain lookup must mirror Claude's legacy service ordering.
-  if (authPreparation.envPatch.CLAUDE_CONFIG_DIR) {
-    readOptions.keychainConfigDir = authPreparation.configDir
+    credentialsFileConfigDir: authPreparation.configDir,
+    keychainConfigDir: authPreparation.configDir
   }
   return readOptions
 }
@@ -443,6 +441,21 @@ function metadataForAttempt(input: {
   }
 }
 
+function classifyClaudeCliUsageFailure(
+  limits: ProviderRateLimits
+): UsageRateLimitFailureKind | undefined {
+  if (!limits.error) {
+    return undefined
+  }
+  if (/rate limited/i.test(limits.error)) {
+    return 'rate-limited'
+  }
+  if (/plan usage is unavailable|usage is unavailable/i.test(limits.error)) {
+    return 'usage-unavailable'
+  }
+  return 'cli-unavailable'
+}
+
 async function fetchClaudeUsageViaCli(input: {
   authPreparation?: ClaudeRuntimeAuthPreparation
   oauthCredentials: OAuthCredentialReadResult
@@ -456,7 +469,8 @@ async function fetchClaudeUsageViaCli(input: {
       attemptedSources: input.attempts.attemptedSources,
       oauthCredentials: input.oauthCredentials,
       authPreparation: input.authPreparation,
-      source: 'cli'
+      source: 'cli',
+      failureKind: classifyClaudeCliUsageFailure(limits)
     })
   )
 }

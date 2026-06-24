@@ -1888,6 +1888,10 @@ function Terminal(): React.JSX.Element | null {
                           // Keeping `isVisible` true for the portaled tab lets
                           // xterm fit and stream foreground output in-place.
                           isVisible={isActiveTerminalTab || isActivityPortalTab}
+                          // Why: inactive tabs in the visible legacy surface
+                          // are tab-hidden, not worktree-hidden, so they need
+                          // the same light resume path as split-group overlays.
+                          isWorktreeActive={isVisible || isActivityPortalTab}
                           // Why: when portaled to Activity for a specific agent
                           // pane, isolate that leaf so split siblings stay
                           // hidden. Workspace renders pass null → no override.

@@ -10,6 +10,7 @@ import { createCoalescedPollRunner } from './coalesced-poll-runner'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { shouldPollActiveGitStatus } from '@/lib/passive-macos-app-data-access'
 import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
+import { useGitStatusFileWatchRefresh } from './git-status-file-watch-refresh'
 
 const POLL_INTERVAL_MS = 3000
 
@@ -164,6 +165,21 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     // unfocused windows still need fresh status for second-display workflows.
     return installWindowVisibilityInterval({ run: fetchStatus, intervalMs: POLL_INTERVAL_MS })
   }, [enabled, fetchStatus])
+
+  useGitStatusFileWatchRefresh({
+    activeConnectionId,
+    activeRepoSupportsGit,
+    activeWorktreeId,
+    enabled,
+    fetchStatus,
+    gitStatusHugeByWorktree,
+    isConnectionReady,
+    openFiles,
+    rightSidebarExplorerView,
+    rightSidebarOpen,
+    rightSidebarTab,
+    worktreePath
+  })
 
   // Why: poll conflict operation for non-active worktrees that have a stale
   // non-unknown operation. This is a lightweight fs-only check (no git status)

@@ -1,13 +1,95 @@
 import { toast } from 'sonner'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import {
+  buildAgentDraftLaunchPlan,
+  buildAgentStartupPlan,
+  type AgentStartupPlan
+} from '@/lib/tui-agent-startup'
 import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../../shared/types'
+import {
+  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv
+} from '../../../shared/tui-agent-launch-defaults'
 import { translate } from '@/i18n/i18n'
+
+export function buildDirectWorkItemAgentStartupPlan(args: {
+  agent: TuiAgent | null
+  agentArgs?: string | null
+  draftContent: string
+  promptDelivery: 'draft' | 'submit-after-ready'
+  settings:
+    | {
+        agentCmdOverrides?: Partial<Record<TuiAgent, string>>
+        agentDefaultArgs?: Partial<Record<TuiAgent, string>>
+        agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
+      }
+    | null
+    | undefined
+  launchPlatform: NodeJS.Platform
+}): {
+  startupPlan: AgentStartupPlan | null
+  draftLaunchedNatively: boolean
+  startupPlanFailed: boolean
+} {
+  if (args.agent === null) {
+    return { startupPlan: null, draftLaunchedNatively: false, startupPlanFailed: false }
+  }
+
+  const effectiveAgentArgs =
+    args.agentArgs === undefined
+      ? resolveTuiAgentLaunchArgs(args.agent, args.settings?.agentDefaultArgs)
+      : args.agentArgs
+  const effectiveAgentEnv = resolveTuiAgentLaunchEnv(args.agent, args.settings?.agentDefaultEnv)
+  const draftLaunchPlan =
+    args.promptDelivery === 'submit-after-ready'
+      ? null
+      : buildAgentDraftLaunchPlan({
+          agent: args.agent,
+          draft: args.draftContent,
+          cmdOverrides: args.settings?.agentCmdOverrides ?? {},
+          platform: args.launchPlatform,
+          agentArgs: effectiveAgentArgs,
+          agentEnv: effectiveAgentEnv
+        })
+
+  if (draftLaunchPlan) {
+    return {
+      startupPlan: {
+        agent: draftLaunchPlan.agent,
+        launchCommand: draftLaunchPlan.launchCommand,
+        expectedProcess: draftLaunchPlan.expectedProcess,
+        followupPrompt: null,
+        launchConfig: draftLaunchPlan.launchConfig,
+        ...(draftLaunchPlan.startupCommandDelivery
+          ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
+          : {}),
+        ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
+      },
+      draftLaunchedNatively: true,
+      startupPlanFailed: false
+    }
+  }
+
+  const startupPlan = buildAgentStartupPlan({
+    agent: args.agent,
+    prompt: '',
+    cmdOverrides: args.settings?.agentCmdOverrides ?? {},
+    platform: args.launchPlatform,
+    agentArgs: effectiveAgentArgs,
+    agentEnv: effectiveAgentEnv,
+    allowEmptyPromptLaunch: true
+  })
+  return {
+    startupPlan,
+    draftLaunchedNatively: false,
+    startupPlanFailed: startupPlan === null
+  }
+}
 
 export function buildDirectWorkItemStartupOpts(
   agent: TuiAgent | null,

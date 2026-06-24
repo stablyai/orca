@@ -212,6 +212,16 @@ describe('provider usage error copy', () => {
     expect(getProviderUsageStatusLabel(p)).toBe('Sign-in unavailable')
     expect(getProviderUsageErrorMessage(p)).toBe('Claude sign-in credentials could not be read.')
   })
+
+  it('uses structured unavailable copy for Claude CLI usage shell failures', () => {
+    const p = provider({
+      error: 'Claude plan usage is unavailable for this Claude CLI session.',
+      usageMetadata: { failureKind: 'usage-unavailable' }
+    })
+
+    expect(getProviderUsageStatusLabel(p)).toBe('Usage unavailable')
+    expect(getProviderUsageErrorMessage(p)).toBe('Claude usage is unavailable right now.')
+  })
 })
 
 describe('getWindowSections', () => {

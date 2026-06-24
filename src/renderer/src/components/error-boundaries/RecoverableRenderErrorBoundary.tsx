@@ -2,6 +2,7 @@ import React from 'react'
 import { AlertTriangle, RotateCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { isLazyChunkLoadError } from '@/lib/lazy-with-retry'
 import { reportReactErrorBoundaryCrash } from '@/lib/react-error-boundary-reporting'
 import type { ReactErrorBoundaryReportArgs } from '../../../../shared/crash-reporting'
 import { translate } from '@/i18n/i18n'
@@ -46,6 +47,9 @@ export class RecoverableRenderErrorBoundary extends React.Component<Props, State
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
     console.error(`[${this.props.boundaryId}] render crash contained by boundary`, error, errorInfo)
     if (this.props.reportAsCrash === false) {
+      return
+    }
+    if (isLazyChunkLoadError(error)) {
       return
     }
     void reportReactErrorBoundaryCrash({

@@ -6,6 +6,7 @@ import {
   chunkAgentDraftPasteContent,
   getSettingsForAgentTabRuntimeOwner,
   iterateAgentDraftPasteContentChunks,
+  pasteDraftToAgentPtyWhenReady,
   pasteDraftWhenAgentReady,
   sendAgentDraftPasteContent,
   sendBracketedPasteToRunningAgent
@@ -35,7 +36,7 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
   subscribeToPtyData: testState.subscribeToPtyData
 }))
 
@@ -273,6 +274,30 @@ describe('pasteDraftWhenAgentReady', () => {
       'pty-1',
       PASTED_ISSUE_URL
     )
+  })
+
+  it('honors the fallback inspection deadline for pty-bound draft paste', async () => {
+    const onTimeout = vi.fn()
+    testState.inspectRuntimeTerminalProcess.mockReturnValue(new Promise(() => {}))
+
+    const promise = pasteDraftToAgentPtyWhenReady({
+      tabId: 'tab-1',
+      ptyId: 'pty-1',
+      content: ISSUE_URL,
+      agent: 'codex',
+      forcePaste: true,
+      timeoutMs: 1,
+      onTimeout
+    })
+    await flushMicrotasks()
+
+    await vi.advanceTimersByTimeAsync(1)
+    await flushMicrotasks(5)
+    await vi.advanceTimersByTimeAsync(1000)
+
+    await expect(promise).resolves.toBe(false)
+    expect(onTimeout).toHaveBeenCalledTimes(1)
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
   })
 
   it('routes tab-owned paste writes through the worktree runtime owner', async () => {

@@ -655,7 +655,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       onMigrationUnsupported: () => noopUnsubscribe,
       onMigrationUnsupportedClear: () => noopUnsubscribe,
       getMigrationUnsupportedSnapshot: () => Promise.resolve([]),
-      drop: () => {}
+      drop: () => {},
+      dropByTabPrefix: () => {}
     },
     mobile: {
       listNetworkInterfaces: () => Promise.resolve({ interfaces: [] }),
@@ -1216,13 +1217,19 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         branchName,
         expectedHead
       }),
-    updateMeta: async ({ worktreeId, updates }) =>
-      (
+    updateMeta: async ({ worktreeId, updates }) => {
+      const rpcUpdates =
+        Object.prototype.hasOwnProperty.call(updates, 'pushTarget') &&
+        updates.pushTarget === undefined
+          ? { ...updates, pushTarget: null }
+          : updates
+      return (
         await callRuntimeResult<{ worktree: Worktree }>('worktree.set', {
           worktree: toRuntimeWorktreeSelector(worktreeId),
-          ...updates
+          ...rpcUpdates
         })
-      ).worktree,
+      ).worktree
+    },
     listLineage: async () =>
       await callRuntimeResult<{
         lineage: Record<string, WorktreeLineage>
@@ -2034,6 +2041,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     writeSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     writeClipboardImage: () => Promise.resolve(),
+    writeClipboardFile: () => Promise.resolve({ ok: false, reason: 'unsupported-platform' }),
     performNativePaste: () => {
       document.execCommand?.('paste')
     },

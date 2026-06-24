@@ -25,6 +25,7 @@ export type AgentStartupPlan = {
   expectedProcess: string
   followupPrompt: string | null
   launchConfig: SleepingAgentLaunchConfig
+  launchToken?: string
   draftPrompt?: string | null
   env?: Record<string, string>
   startupCommandDelivery?: StartupCommandDelivery

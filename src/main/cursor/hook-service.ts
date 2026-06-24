@@ -3,12 +3,14 @@ import { join } from 'path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
+  buildManagedCommandDefinition,
   createManagedCommandMatcher,
   buildWindowsAgentHookPostCommand,
   getSharedManagedScriptPath,
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
+  wrapWindowsHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
@@ -59,7 +61,9 @@ function getManagedScriptPath(): string {
 }
 
 function getManagedCommand(scriptPath: string): string {
-  return process.platform === 'win32' ? scriptPath : wrapPosixHookCommand(scriptPath)
+  return process.platform === 'win32'
+    ? wrapWindowsHookCommand(scriptPath)
+    : wrapPosixHookCommand(scriptPath)
 }
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
@@ -227,7 +231,7 @@ export class CursorHookService {
       // Why: Cursor's documented schema puts `command` directly on the
       // definition (not under `hooks`). Emit that shape so cursor-agent
       // actually invokes the script.
-      const definition: HookDefinition = { command }
+      const definition: HookDefinition = buildManagedCommandDefinition(command)
       nextHooks[eventName] = [...cleaned, definition]
     }
 
@@ -277,7 +281,7 @@ export class CursorHookService {
         const cleaned = removeManagedCommands(current, isManagedCommand).filter(
           (definition) => !isManagedCommand(definition.command as string | undefined)
         )
-        const definition: HookDefinition = { command }
+        const definition: HookDefinition = buildManagedCommandDefinition(command)
         nextHooks[eventName] = [...cleaned, definition]
       }
 

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPaneInternal } from './pane-manager-types'
+import type * as PaneTreeOpsModule from './pane-tree-ops'
 import { attachPaneDrag } from './pane-drag-pointer'
 import { createDragReorderState } from './pane-drag-reorder'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
@@ -7,10 +8,14 @@ import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 const detachPaneFromTree = vi.hoisted(() => vi.fn())
 const insertPaneNextTo = vi.hoisted(() => vi.fn())
 
-vi.mock('./pane-tree-ops', () => ({
-  detachPaneFromTree,
-  insertPaneNextTo
-}))
+vi.mock('./pane-tree-ops', async (importOriginal) => {
+  const actual = await importOriginal<typeof PaneTreeOpsModule>()
+  return {
+    ...actual,
+    detachPaneFromTree,
+    insertPaneNextTo
+  }
+})
 
 type FakeListener = (event: PointerEvent) => void
 

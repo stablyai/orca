@@ -61,7 +61,10 @@ import { onOnboardingReopened } from './components/onboarding/show-onboarding-ev
 import { shouldShowOnboarding } from './components/onboarding/should-show-onboarding'
 import { MarkdownTemplatePicker } from './components/editor/MarkdownTemplatePicker'
 import { FloatingTerminalToggleButton } from './components/floating-terminal/FloatingTerminalToggleButton'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
+import {
+  TOGGLE_FLOATING_TERMINAL_EVENT,
+  requestFloatingTerminalOpenMaximized
+} from '@/lib/floating-terminal'
 import {
   isFloatingWorkspacePanelFocused,
   isFloatingWorkspacePanelShortcut,
@@ -130,6 +133,7 @@ import {
   canGoForwardWorktreeHistory
 } from '@/store/slices/worktree-nav-history'
 import { selectFloatingVisibleTabCount } from './store/selectors'
+import { selectActiveTerminalChromeState } from './store/active-terminal-chrome-selector'
 import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor'
 import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
 import type { OnboardingState, UpdateStatus } from '../../shared/types'
@@ -387,8 +391,11 @@ function App(): React.JSX.Element {
     useShallow((s) => ({
       toggleSidebar: s.toggleSidebar,
       fetchRepos: s.fetchRepos,
+      fetchReposForAllHosts: s.fetchReposForAllHosts,
       fetchProjectGroups: s.fetchProjectGroups,
+      fetchProjectGroupsForAllHosts: s.fetchProjectGroupsForAllHosts,
       fetchFolderWorkspaces: s.fetchFolderWorkspaces,
+      fetchFolderWorkspacesForAllHosts: s.fetchFolderWorkspacesForAllHosts,
       fetchAllWorktrees: s.fetchAllWorktrees,
       fetchWorktreeLineage: s.fetchWorktreeLineage,
       fetchSettings: s.fetchSettings,
@@ -430,7 +437,13 @@ function App(): React.JSX.Element {
   const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
   const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
-  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const {
+    activeWorktreeId,
+    tabCount,
+    effectiveActiveTabId,
+    activeTabCanExpand,
+    effectiveActiveTabExpanded
+  } = useAppStore(useShallow(selectActiveTerminalChromeState))
   const activePendingCreationId = useAppStore((s) => s.activePendingCreationId)
   // Why: the creation surface owns the tab strip from the first pending frame.
   // Gating it on the delayed loader flag made the tab bar swap in mid-create.
@@ -444,11 +457,7 @@ function App(): React.JSX.Element {
   // that remount so the left workspace list doesn't restart at scrollTop 0.
   const worktreeSidebarScrollOffsetRef = useRef(0)
   const worktreeSidebarScrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const floatingVisibleTabCount = useAppStore(selectFloatingVisibleTabCount)
-  const activeTabId = useAppStore((s) => s.activeTabId)
-  const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
-  const canExpandPaneByTabId = useAppStore((s) => s.canExpandPaneByTabId)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const keybindings = useAppStore((s) => s.keybindings)
   const updateStatus = useAppStore((s) => s.updateStatus)
@@ -837,9 +846,12 @@ function App(): React.JSX.Element {
         // Load settings first so a persisted remote runtime does not boot against
         // the local filesystem and then hydrate stale local workspace state.
         await actions.fetchSettings()
-        await actions.fetchRepos()
-        await actions.fetchProjectGroups()
-        await actions.fetchFolderWorkspaces()
+        // Why: load local + every configured runtime environment (not just the
+        // active one) so a cold start that restored a remote workspace doesn't
+        // hide local repos. The sidebar "All hosts" scope then shows them all.
+        await actions.fetchReposForAllHosts()
+        await actions.fetchProjectGroupsForAllHosts()
+        await actions.fetchFolderWorkspacesForAllHosts()
         await actions.fetchAllWorktrees()
         await actions.fetchWorktreeLineage()
         const persistedUI = await window.api.ui.get()
@@ -1345,15 +1357,7 @@ function App(): React.JSX.Element {
     return () => document.removeEventListener('visibilitychange', handler)
   }, [actions])
 
-  const tabs = activeWorktreeId ? (tabsByWorktree[activeWorktreeId] ?? []) : []
-  const hasTabBar = tabs.length >= 2
-  const effectiveActiveTabId = activeTabId ?? tabs[0]?.id ?? null
-  const activeTabCanExpand = effectiveActiveTabId
-    ? (canExpandPaneByTabId[effectiveActiveTabId] ?? false)
-    : false
-  const effectiveActiveTabExpanded = effectiveActiveTabId
-    ? (expandedPaneByTabId[effectiveActiveTabId] ?? false)
-    : false
+  const hasTabBar = tabCount >= 2
   const showTitlebarExpandButton = workspaceChromeActive && !hasTabBar && effectiveActiveTabExpanded
   // Why: Activity and Space are full-page navigation surfaces — same
   // treatment as Settings — so the worktree sidebar is removed for those views.
@@ -1394,6 +1398,7 @@ function App(): React.JSX.Element {
     activeView,
     activeWorktreeId,
     actions,
+    floatingTerminalEnabled,
     floatingTerminalOpen,
     floatingVisibleTabCount,
     keybindings,
@@ -1408,6 +1413,7 @@ function App(): React.JSX.Element {
     activeView,
     activeWorktreeId,
     actions,
+    floatingTerminalEnabled,
     floatingTerminalOpen,
     floatingVisibleTabCount,
     keybindings,
@@ -1425,6 +1431,7 @@ function App(): React.JSX.Element {
         activeView,
         activeWorktreeId,
         actions,
+        floatingTerminalEnabled,
         floatingTerminalOpen,
         floatingVisibleTabCount,
         keybindings,
@@ -1520,6 +1527,22 @@ function App(): React.JSX.Element {
         return
       }
 
+      // Why: when the floating workspace is closed, its own keydown handler is
+      // unmounted and cannot claim Cmd+Opt+Shift+A. Honor the maximize chord
+      // here by opening the panel with a one-shot intent so it mounts straight
+      // into the maximized state. While the panel is open, this is a no-op: the
+      // panel's handler owns the maximize/restore toggle.
+      if (
+        !floatingTerminalOpen &&
+        matchShortcut('floatingWorkspace.maximize') &&
+        floatingTerminalEnabled
+      ) {
+        input.preventDefault()
+        requestFloatingTerminalOpenMaximized()
+        setFloatingTerminalOpenWithFocus(true)
+        return
+      }
+
       // Why: keep this guard. TipTap's Cmd+B bold binding depends on the
       // window-level handler *not* toggling the sidebar when focus lives in an
       // editable surface. The main-process before-input-event already carves out
@@ -1578,6 +1601,21 @@ function App(): React.JSX.Element {
         input.preventDefault()
         notifyTerminalCapture('sidebar.left.toggle')
         actions.toggleSidebar()
+        return
+      }
+
+      // Toggle the "show sleeping workspaces" sidebar filter without opening the
+      // filters menu (issue #5209). When revealing them, open the left sidebar
+      // so the now-visible sleeping worktrees are actually reachable.
+      if (matchShortcut('sidebar.sleepingWorkspaces.toggle')) {
+        input.preventDefault()
+        notifyTerminalCapture('sidebar.sleepingWorkspaces.toggle')
+        const store = useAppStore.getState()
+        const nextShowSleeping = !store.showSleepingWorkspaces
+        store.setShowSleepingWorkspaces(nextShowSleeping)
+        if (nextShowSleeping) {
+          store.setSidebarOpen(true)
+        }
         return
       }
 

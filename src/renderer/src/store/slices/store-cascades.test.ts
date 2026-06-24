@@ -80,6 +80,10 @@ import {
 } from './store-test-helpers'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import { buildOrphanTerminalCleanupPatch } from './terminal-orphan-helpers'
+import {
+  loadSessionCommitDrafts,
+  saveSessionCommitDrafts
+} from '@/lib/source-control-commit-draft-session'
 
 // ─── Tests ────────────────────────────────────────────────────────────
 
@@ -87,6 +91,7 @@ describe('removeWorktree cascade', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     clearRuntimeCompatibilityCacheForTests()
+    saveSessionCommitDrafts({})
     mockApi.worktrees.remove.mockResolvedValue(undefined)
     mockApi.worktrees.forceDeletePreservedBranch.mockResolvedValue({ deleted: true })
     mockApi.runtimeEnvironments.call.mockReset()
@@ -149,6 +154,10 @@ describe('removeWorktree cascade', () => {
       activeTabTypeByWorktree: { [worktreeId]: 'editor' },
       rightSidebarExplorerViewByWorktree: { [worktreeId]: 'search' }
     })
+    saveSessionCommitDrafts({
+      [worktreeId]: 'feat: stale draft',
+      'repo1::/path/wt2': 'fix: keep draft'
+    })
 
     const result = await store.getState().removeWorktree(worktreeId)
     const s = store.getState()
@@ -170,6 +179,7 @@ describe('removeWorktree cascade', () => {
     expect(s.activeFileIdByWorktree[worktreeId]).toBeUndefined()
     expect(s.activeTabTypeByWorktree[worktreeId]).toBeUndefined()
     expect(s.rightSidebarExplorerViewByWorktree[worktreeId]).toBeUndefined()
+    expect(loadSessionCommitDrafts()).toEqual({ 'repo1::/path/wt2': 'fix: keep draft' })
   })
 
   it('warns when workspace removal keeps the local branch', async () => {
@@ -199,27 +209,10 @@ describe('removeWorktree cascade', () => {
       preservedBranch: { branchName: 'feature/test', head: 'def456' }
     })
     expect(toast.warning).toHaveBeenCalledWith('Worktree deleted, branch kept', {
-      description:
-        'Git could not safely delete branch "feature/test" after deleting worktree "Review cleanup", so Orca kept it to avoid losing local commits.',
-      action: {
-        label: 'Force Delete Branch',
-        onClick: expect.any(Function)
-      }
-    })
-
-    const action = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]?.action as
-      | { onClick?: () => void }
-      | undefined
-    action?.onClick?.()
-    await vi.waitFor(() => {
-      expect(mockApi.worktrees.forceDeletePreservedBranch).toHaveBeenCalledWith({
-        worktreeId,
-        branchName: 'feature/test',
-        expectedHead: 'def456'
-      })
-    })
-    expect(toast.success).toHaveBeenCalledWith('Local branch deleted', {
-      description: 'Deleted "feature/test".'
+      id: 'preserved-branch:feature/test:def456',
+      description: expect.anything(),
+      dismissible: true,
+      duration: Infinity
     })
   })
 
@@ -2714,6 +2707,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       [siblingLeaf]: 'pty-shell'
     })
     expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toMatchObject({
+      origin: 'worktree-sleep',
       providerSession: { key: 'session_id', id: 'target-session' }
     })
     expect(state.sleepingAgentSessionsByPaneKey[siblingPaneKey]).toBe(siblingSleepingRecordBefore)
@@ -3235,6 +3229,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   it('commits sleep state after exact runtime stop for runtime-backed PTYs', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
+    const now = Date.now()
     mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) =>
       Promise.resolve(
         createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
@@ -3262,12 +3257,12 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     store.getState().setAgentStatus(
       'tab-1:live',
       {
-        state: 'done',
+        state: 'working',
         prompt: 'resume live',
         agentType: 'codex'
       },
       'Codex',
-      { updatedAt: 1000, stateStartedAt: 1000 },
+      { updatedAt: now, stateStartedAt: now },
       { tabId: 'tab-1', worktreeId: wt },
       { providerSession: { key: 'session_id', id: 'live-session' } }
     )
@@ -3286,6 +3281,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       })
     )
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
+      origin: 'worktree-sleep',
       providerSession: { key: 'session_id', id: 'live-session' }
     })
     expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeUndefined()
@@ -3549,6 +3545,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   it('commits the pre-stop sleeping record when exact-stop exit clears live status', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
+    const now = Date.now()
     mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
       if (args.method === 'terminal.stopExact') {
         store.getState().removeAgentStatus('tab-1:live')
@@ -3582,12 +3579,12 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     store.getState().setAgentStatus(
       'tab-1:live',
       {
-        state: 'done',
+        state: 'working',
         prompt: 'resume live',
         agentType: 'codex'
       },
       'Codex',
-      { updatedAt: 1000, stateStartedAt: 1000 },
+      { updatedAt: now, stateStartedAt: now },
       { tabId: 'tab-1', worktreeId: wt },
       { providerSession: { key: 'session_id', id: 'live-session' } }
     )
@@ -3599,6 +3596,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
 
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
+      origin: 'worktree-sleep',
       providerSession: { key: 'session_id', id: 'live-session' }
     })
   })
@@ -3873,6 +3871,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   it('captures resumable provider session metadata before dropping sleep-time rows', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
+    const now = Date.now()
 
     seedStore(store, {
       worktreesByRepo: {
@@ -3892,7 +3891,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
         agentType: 'codex'
       },
       'Codex',
-      { updatedAt: 1000, stateStartedAt: 1000 },
+      { updatedAt: now, stateStartedAt: now },
       { tabId: 'tab-1', worktreeId: wt },
       { providerSession: { key: 'session_id', id: 'codex-session-1' } }
     )
@@ -3906,13 +3905,14 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       tabId: 'tab-1',
       worktreeId: wt,
       agent: 'codex',
+      origin: 'worktree-sleep',
       providerSession: { key: 'session_id', id: 'codex-session-1' },
       prompt: 'resume this',
       terminalTitle: 'Codex'
     })
   })
 
-  it('captures only allowlisted sleeping pane sessions when requested', async () => {
+  it('skips allowlisted done live sleeping pane sessions during manual sleep', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
 
@@ -3963,10 +3963,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
 
     const state = store.getState()
-    expect(state.sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
-      paneKey: 'tab-1:live',
-      providerSession: { key: 'session_id', id: 'live-session' }
-    })
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:live']).toBeUndefined()
     expect(state.sleepingAgentSessionsByPaneKey['tab-1:retained']).toBeUndefined()
   })
 
@@ -4093,6 +4090,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
     expect(state.sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
       paneKey: 'tab-1:live',
+      origin: 'worktree-sleep',
       providerSession: { key: 'session_id', id: 'live-session' }
     })
     expect(state.retainedAgentsByPaneKey['tab-1:retained']).toBeUndefined()
@@ -4157,6 +4155,9 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
 
     const state = store.getState()
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:interrupted']).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:working']).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:retained-only']).toBeUndefined()
     expect(state.retainedAgentsByPaneKey['tab-1:interrupted']).toBeUndefined()
     expect(state.retainedAgentsByPaneKey['tab-1:working']).toBeUndefined()
     expect(state.retainedAgentsByPaneKey['tab-1:retained-only']).toBeUndefined()

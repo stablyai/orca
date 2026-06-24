@@ -14,17 +14,30 @@ type RepoNotInOrcaDialogState = {
   repo: string
 }
 
-type LookupSlug = (slug: string) => readonly unknown[]
+type RepoMatch = {
+  id: string
+}
 
-function hasRepoMatch(lookupSlug: LookupSlug, owner: string, repo: string): boolean {
-  return lookupSlug(`${owner}/${repo}`).length > 0
+type LookupSlug = (slug: string) => readonly RepoMatch[]
+
+function shouldCloseFallbackDialog(args: {
+  lookupSlug: LookupSlug
+  selectedRepoIds: ReadonlySet<string>
+  owner: string
+  repo: string
+}): boolean {
+  const matches = args.lookupSlug(`${args.owner}/${args.repo}`)
+  const selectedMatchCount = matches.filter((match) => args.selectedRepoIds.has(match.id)).length
+  const unselectedMatchCount = matches.length - selectedMatchCount
+  return selectedMatchCount > 0 || unselectedMatchCount > 0
 }
 
 export function resolveRepoBackedProjectDialogState<T extends RepoBackedProjectDialogState>(
   dialog: T | null,
-  liveRepoIds: ReadonlySet<string>
+  liveRepoIds: ReadonlySet<string>,
+  selectedRepoIds: ReadonlySet<string>
 ): T | null {
-  if (dialog && !liveRepoIds.has(dialog.repoId)) {
+  if (dialog && (!liveRepoIds.has(dialog.repoId) || !selectedRepoIds.has(dialog.repoId))) {
     return null
   }
   return dialog
@@ -38,21 +51,34 @@ export function resolveMissingRepoProjectDialogState<
   slugDialog: TSlugDialog | null
   repoNotInOrca: TRepoNotInOrca | null
   lookupSlug: LookupSlug
+  selectedRepoIds: ReadonlySet<string>
 }): {
   slugDialog: TSlugDialog | null
   repoNotInOrca: TRepoNotInOrca | null
 } {
-  const { lookupSlug, repoNotInOrca, slugDialog, slugIndexReady } = args
+  const { lookupSlug, repoNotInOrca, selectedRepoIds, slugDialog, slugIndexReady } = args
   if (!slugIndexReady) {
-    return { slugDialog, repoNotInOrca }
+    return { slugDialog: null, repoNotInOrca: null }
   }
   return {
     slugDialog:
-      slugDialog && hasRepoMatch(lookupSlug, slugDialog.origin.owner, slugDialog.origin.repo)
+      slugDialog &&
+      shouldCloseFallbackDialog({
+        lookupSlug,
+        selectedRepoIds,
+        owner: slugDialog.origin.owner,
+        repo: slugDialog.origin.repo
+      })
         ? null
         : slugDialog,
     repoNotInOrca:
-      repoNotInOrca && hasRepoMatch(lookupSlug, repoNotInOrca.owner, repoNotInOrca.repo)
+      repoNotInOrca &&
+      shouldCloseFallbackDialog({
+        lookupSlug,
+        selectedRepoIds,
+        owner: repoNotInOrca.owner,
+        repo: repoNotInOrca.repo
+      })
         ? null
         : repoNotInOrca
   }

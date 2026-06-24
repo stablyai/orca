@@ -2070,7 +2070,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   // destination directory that may not be a git repo yet.
   ipcMain.handle('repos:pickDirectory', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
-      properties: ['openDirectory', 'createDirectory']
+      // Why: macOS can materialize typed partial paths when directory creation
+      // is enabled; clone/create actions already create the final path on submit.
+      properties: ['openDirectory']
     })
     if (result.canceled || result.filePaths.length === 0) {
       return null

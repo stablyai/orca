@@ -58,7 +58,11 @@ export type TerminalHostOptions = {
   // Why: on graceful shutdown, the host writes final checkpoints for all live
   // sessions before killing them. This bypasses the RPC round-trip — the daemon
   // writes checkpoints in-process, guaranteeing completion before teardown.
-  onFinalCheckpoint?: (sessionId: string, snapshot: TerminalSnapshot) => void
+  onFinalCheckpoint?: (
+    sessionId: string,
+    snapshot: TerminalSnapshot,
+    records: TakePendingOutputResult['records']
+  ) => void
   // Why: production keeps a large cap, but tests need a small deterministic cap
   // without spawning thousands of full terminal sessions.
   maxTombstones?: number
@@ -258,12 +262,16 @@ export class TerminalHost {
 
   // Why: same null-not-throw semantics as getSnapshot — incremental
   // checkpoints are best-effort against sessions that may have just exited.
-  takePendingOutput(sessionId: string, includeSnapshot: boolean): TakePendingOutputResult | null {
+  takePendingOutput(
+    sessionId: string,
+    includeSnapshot: boolean,
+    opts: { teardownSnapshot?: boolean } = {}
+  ): TakePendingOutputResult | null {
     const session = this.sessions.get(sessionId)
     if (!session || !session.isAlive) {
       return null
     }
-    return session.takePendingOutput(includeSnapshot)
+    return session.takePendingOutput(includeSnapshot, opts)
   }
 
   isKilled(sessionId: string): boolean {
@@ -300,10 +308,10 @@ export class TerminalHost {
         if (!session.isAlive) {
           continue
         }
-        const snapshot = session.getSnapshot()
-        if (snapshot) {
+        const take = session.takePendingOutput(true, { teardownSnapshot: true })
+        if (take?.snapshot) {
           try {
-            this.onFinalCheckpoint(sessionId, snapshot)
+            this.onFinalCheckpoint(sessionId, take.snapshot, take.records)
           } catch {
             // Best-effort — don't block shutdown
           }

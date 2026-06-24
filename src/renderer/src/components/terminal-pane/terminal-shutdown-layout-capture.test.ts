@@ -1,5 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
 import type { TerminalLayoutSnapshot } from '../../../../shared/types'
+import { getUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111' as const
 
@@ -136,6 +138,42 @@ describe('captureTerminalShutdownLayout', () => {
     expect(layout.buffersByLeafId).toBeUndefined()
     expect(layout.ptyIdsByLeafId).toEqual({ [LEAF_ID]: 'pty-1' })
     expect(layout.titlesByLeafId).toEqual({ [LEAF_ID]: 'local shell' })
+  })
+
+  it('caps shutdown scrollback snapshots by UTF-8 bytes', async () => {
+    const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+    const multibyteRow = 'é'.repeat(1024)
+    const pane = {
+      id: 1,
+      leafId: LEAF_ID,
+      stablePaneId: LEAF_ID,
+      terminal: { options: { scrollback: 512 } },
+      serializeAddon: {
+        serialize: vi.fn((options?: { scrollback?: number }) =>
+          multibyteRow.repeat(options?.scrollback ?? 0)
+        )
+      }
+    }
+    const manager = {
+      getPanes: vi.fn(() => [pane]),
+      getActivePane: vi.fn(() => pane)
+    }
+
+    const layout = captureTerminalShutdownLayout({
+      manager: manager as never,
+      container: mockRootForPane(1),
+      expandedPaneId: null,
+      paneTransports: new Map([[1, { getPtyId: vi.fn(() => 'pty-1') }]]),
+      paneTitlesByPaneId: { 1: 'ssh shell' },
+      existingLayout: undefined
+    })
+
+    const buffer = layout.buffersByLeafId?.[LEAF_ID] ?? ''
+    expect(buffer.length).toBeGreaterThan(0)
+    expect(getUtf8ByteLength(buffer)).toBeLessThanOrEqual(
+      TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
+    )
+    expect(buffer).toHaveLength(TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT / 2)
   })
 
   it('does not preserve prior scrollback buffers or refs for a cleared leaf', async () => {

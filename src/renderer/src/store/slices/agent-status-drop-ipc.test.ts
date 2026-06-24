@@ -24,12 +24,16 @@ afterEach(() => {
   }
 })
 
-function stubWindowApi(): { drop: ReturnType<typeof vi.fn> } {
+function stubWindowApi(): {
+  drop: ReturnType<typeof vi.fn>
+  dropByTabPrefix: ReturnType<typeof vi.fn>
+} {
   const drop = vi.fn()
+  const dropByTabPrefix = vi.fn()
   ;(globalThis as { window?: unknown }).window = {
-    api: { agentStatus: { drop } }
+    api: { agentStatus: { drop, dropByTabPrefix } }
   }
-  return { drop }
+  return { drop, dropByTabPrefix }
 }
 
 describe('dropAgentStatus → IPC fan-out', () => {
@@ -70,6 +74,50 @@ describe('dropAgentStatus → IPC fan-out', () => {
     store.getState().dropAgentStatus('tab-1:0')
     store.getState().dropAgentStatus('tab-1:0')
     expect(drop).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('dropAgentStatusByTabPrefix -> IPC fan-out', () => {
+  it('fires window.api.agentStatus.dropByTabPrefix after dropping local tab rows', () => {
+    const { dropByTabPrefix } = stubWindowApi()
+    const store = createTestStore()
+    store
+      .getState()
+      .setAgentStatus('tab-1:0', { state: 'working', prompt: 'p', agentType: 'claude' })
+    store
+      .getState()
+      .setAgentStatus('tab-2:0', { state: 'working', prompt: 'p', agentType: 'claude' })
+
+    store.getState().dropAgentStatusByTabPrefix('tab-1')
+
+    expect(dropByTabPrefix).toHaveBeenCalledTimes(1)
+    expect(dropByTabPrefix).toHaveBeenCalledWith('tab-1')
+    expect(store.getState().agentStatusByPaneKey['tab-1:0']).toBeUndefined()
+    expect(store.getState().agentStatusByPaneKey['tab-2:0']).toBeDefined()
+  })
+
+  it('fires dropByTabPrefix when no local rows match so stale main cache can be evicted', () => {
+    const { dropByTabPrefix } = stubWindowApi()
+    const store = createTestStore()
+
+    store.getState().dropAgentStatusByTabPrefix('tab-missing')
+
+    expect(dropByTabPrefix).toHaveBeenCalledTimes(1)
+    expect(dropByTabPrefix).toHaveBeenCalledWith('tab-missing')
+    expect(store.getState().recentlyClosedAgentStatusTabIds['tab-missing']).toBe(true)
+  })
+
+  it('keeps closed tab markers for the renderer session', () => {
+    stubWindowApi()
+    const store = createTestStore()
+
+    store.getState().dropAgentStatusByTabPrefix('tab-old')
+    store.getState().dropAgentStatusByTabPrefix('tab-new')
+
+    expect(store.getState().recentlyClosedAgentStatusTabIds).toEqual({
+      'tab-old': true,
+      'tab-new': true
+    })
   })
 })
 

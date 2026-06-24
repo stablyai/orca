@@ -33,6 +33,10 @@ import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/sta
 import { getRemoteRuntimePtyEnvironmentId, toRemoteRuntimePtyId } from './runtime-terminal-stream'
 import { sanitizeTerminalLayoutPaneTitlesForLabels } from '@/lib/terminal-pane-title-sanitization'
 import {
+  getExplicitRuntimeEnvironmentIdForWorktree,
+  getRuntimeSessionMirrorEnvironmentIds
+} from '@/lib/worktree-runtime-owner'
+import {
   createWebRuntimeSessionTerminal,
   HOST_TERMINAL_SURFACE_SEPARATOR,
   isWebTerminalSurfaceTabId,
@@ -240,16 +244,23 @@ export function shouldRespawnWebRuntimeTerminalAfterWake(args: {
 }
 
 export function shouldSyncRuntimeSessionTabs(args: {
-  activeRuntimeEnvironmentId: string | null | undefined
   activeWorktreeId?: string | null
+  activeWorktreeRuntimeEnvironmentId?: string | null
   workspaceSessionReady: boolean
-  requireActiveWorktree?: boolean
 }): boolean {
-  const environmentId = args.activeRuntimeEnvironmentId?.trim()
+  const environmentId = args.activeWorktreeRuntimeEnvironmentId?.trim()
   if (!environmentId || !args.workspaceSessionReady) {
     return false
   }
-  return args.requireActiveWorktree === true ? Boolean(args.activeWorktreeId) : true
+  return Boolean(args.activeWorktreeId?.trim())
+}
+
+export function shouldSyncAllRuntimeSessionTabs(args: {
+  activeRuntimeEnvironmentId: string | null | undefined
+  workspaceSessionReady: boolean
+}): boolean {
+  const environmentId = args.activeRuntimeEnvironmentId?.trim()
+  return Boolean(environmentId && args.workspaceSessionReady)
 }
 
 export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
@@ -2319,136 +2330,150 @@ export function applyFreshWebSessionTabsSnapshots(
 
 export function useWebSessionTabsSync(): void {
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
-  const activeRuntimeEnvironmentId = useAppStore(
-    (state) => state.settings?.activeRuntimeEnvironmentId ?? null
+  const runtimeSessionMirrorEnvironmentKey = useAppStore((state) =>
+    getRuntimeSessionMirrorEnvironmentIds(state).join('\u0000')
+  )
+  const activeWorktreeRuntimeEnvironmentId = useAppStore((state) =>
+    getExplicitRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId)
   )
   const workspaceSessionReady = useAppStore((state) => state.workspaceSessionReady)
 
   useEffect(() => {
-    const environmentId = activeRuntimeEnvironmentId?.trim()
+    const environmentIds = runtimeSessionMirrorEnvironmentKey
+      ? runtimeSessionMirrorEnvironmentKey.split('\u0000').filter((id) => id.trim())
+      : []
     // Why: startup hydration writes browser-local session state; applying the
     // host snapshot before that point gets clobbered and leaves the sidebar stale.
-    if (
-      !shouldSyncRuntimeSessionTabs({
-        activeRuntimeEnvironmentId,
-        workspaceSessionReady
-      }) ||
-      !environmentId
-    ) {
+    // Selectedness is not liveness: desktop and web clients both mirror the
+    // runtime's session bindings so background worktrees do not look asleep.
+    if (!workspaceSessionReady || environmentIds.length === 0) {
       return
     }
 
     let disposed = false
-    let unsubscribe: (() => void) | null = null
+    const unsubscribes: (() => void)[] = []
     // Why: the streaming RPC emits an initial snapshots event, but startup can
     // render a paired web session before that event is applied. A one-shot
     // fetch makes initial parity deterministic; the stream remains the live
     // update path afterward.
-    void window.api.runtimeEnvironments
-      .call({
-        selector: environmentId,
-        method: 'session.tabs.listAll',
-        params: {},
-        timeoutMs: 15_000
-      })
-      .then((response: RuntimeRpcResponse<unknown>) => {
-        if (disposed) {
-          return
-        }
-        if (response.ok === false) {
-          console.warn('[web-session-tabs-sync] initial listAll failed:', response.error.message)
-          return
-        }
-        const result = response.result
-        if (!isSessionTabsListAllResult(result)) {
-          console.warn('[web-session-tabs-sync] initial listAll returned an invalid payload')
-          return
-        }
-        useAppStore.setState((state) =>
-          applyFreshWebSessionTabsSnapshots(state, result.snapshots, environmentId)
-        )
-      })
-      .catch((error) => {
-        if (!disposed) {
-          console.warn(
-            '[web-session-tabs-sync] failed to load initial session tabs:',
-            error instanceof Error ? error.message : String(error)
-          )
-        }
-      })
-
-    void window.api.runtimeEnvironments
-      .subscribe(
-        {
+    for (const environmentId of environmentIds) {
+      if (
+        !shouldSyncAllRuntimeSessionTabs({
+          activeRuntimeEnvironmentId: environmentId,
+          workspaceSessionReady
+        })
+      ) {
+        continue
+      }
+      void window.api.runtimeEnvironments
+        .call({
           selector: environmentId,
-          method: 'session.tabs.subscribeAll',
+          method: 'session.tabs.listAll',
           params: {},
           timeoutMs: 15_000
-        },
-        {
-          onResponse: (response: RuntimeRpcResponse<unknown>) => {
-            if (disposed) {
-              return
-            }
-            if (response.ok === false) {
-              console.warn(
-                '[web-session-tabs-sync] global subscription failed:',
-                response.error.message
-              )
-              return
-            }
-            const event = response.result as SessionTabsStreamEvent
-            if (event.type === 'snapshots') {
-              useAppStore.setState((state) =>
-                applyFreshWebSessionTabsSnapshots(state, event.snapshots, environmentId)
-              )
-              return
-            }
-            if (event.type !== 'snapshot' && event.type !== 'updated') {
-              return
-            }
-            useAppStore.setState((state) =>
-              applyFreshWebSessionTabsSnapshot(state, event, environmentId)
-            )
-          },
-          onError: (error) => {
-            console.warn('[web-session-tabs-sync] global subscription error:', error.message)
+        })
+        .then((response: RuntimeRpcResponse<unknown>) => {
+          if (disposed) {
+            return
           }
-        }
-      )
-      .then((handle) => {
-        if (disposed) {
-          handle.unsubscribe()
-          return
-        }
-        unsubscribe = handle.unsubscribe
-      })
-      .catch((error) => {
-        if (!disposed) {
-          console.warn(
-            '[web-session-tabs-sync] failed to subscribe globally:',
-            error instanceof Error ? error.message : String(error)
+          if (response.ok === false) {
+            console.warn('[web-session-tabs-sync] initial listAll failed:', response.error.message)
+            return
+          }
+          const result = response.result
+          if (!isSessionTabsListAllResult(result)) {
+            console.warn('[web-session-tabs-sync] initial listAll returned an invalid payload')
+            return
+          }
+          useAppStore.setState((state) =>
+            applyFreshWebSessionTabsSnapshots(state, result.snapshots, environmentId)
           )
-        }
-      })
+        })
+        .catch((error) => {
+          if (!disposed) {
+            console.warn(
+              '[web-session-tabs-sync] failed to load initial session tabs:',
+              error instanceof Error ? error.message : String(error)
+            )
+          }
+        })
+
+      void window.api.runtimeEnvironments
+        .subscribe(
+          {
+            selector: environmentId,
+            method: 'session.tabs.subscribeAll',
+            params: {},
+            timeoutMs: 15_000
+          },
+          {
+            onResponse: (response: RuntimeRpcResponse<unknown>) => {
+              if (disposed) {
+                return
+              }
+              if (response.ok === false) {
+                console.warn(
+                  '[web-session-tabs-sync] global subscription failed:',
+                  response.error.message
+                )
+                return
+              }
+              const event = response.result as SessionTabsStreamEvent
+              if (event.type === 'snapshots') {
+                useAppStore.setState((state) =>
+                  applyFreshWebSessionTabsSnapshots(state, event.snapshots, environmentId)
+                )
+                return
+              }
+              if (event.type !== 'snapshot' && event.type !== 'updated') {
+                return
+              }
+              useAppStore.setState((state) =>
+                applyFreshWebSessionTabsSnapshot(state, event, environmentId)
+              )
+            },
+            onError: (error) => {
+              console.warn('[web-session-tabs-sync] global subscription error:', error.message)
+            }
+          }
+        )
+        .then((handle) => {
+          if (disposed) {
+            handle.unsubscribe()
+            return
+          }
+          unsubscribes.push(handle.unsubscribe)
+        })
+        .catch((error) => {
+          if (!disposed) {
+            console.warn(
+              '[web-session-tabs-sync] failed to subscribe globally:',
+              error instanceof Error ? error.message : String(error)
+            )
+          }
+        })
+    }
 
     return () => {
       disposed = true
-      unsubscribe?.()
+      for (const unsubscribe of unsubscribes) {
+        unsubscribe()
+      }
       // Why: environment ids can churn as paired runtimes reconnect or switch;
       // stale freshness/mapping entries should not live for the renderer lifetime.
-      clearWebSessionTabsTrackingForEnvironment(environmentId)
+      for (const environmentId of environmentIds) {
+        clearWebSessionTabsTrackingForEnvironment(environmentId)
+      }
     }
-  }, [activeRuntimeEnvironmentId, workspaceSessionReady])
+  }, [runtimeSessionMirrorEnvironmentKey, workspaceSessionReady])
 
   useEffect(() => {
-    const environmentId = activeRuntimeEnvironmentId?.trim()
+    const environmentId = activeWorktreeRuntimeEnvironmentId?.trim()
     if (
       !shouldSyncRuntimeSessionTabs({
-        activeRuntimeEnvironmentId,
         activeWorktreeId,
-        workspaceSessionReady,
-        requireActiveWorktree: true
+        activeWorktreeRuntimeEnvironmentId,
+        workspaceSessionReady
       }) ||
       !environmentId ||
       !activeWorktreeId
@@ -2559,5 +2584,5 @@ export function useWebSessionTabsSync(): void {
       disposed = true
       unsubscribe?.()
     }
-  }, [activeRuntimeEnvironmentId, activeWorktreeId, workspaceSessionReady])
+  }, [activeWorktreeId, activeWorktreeRuntimeEnvironmentId, workspaceSessionReady])
 }

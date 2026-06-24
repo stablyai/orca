@@ -130,6 +130,69 @@ function getRuntimeRepoTarget(
   return repo ? { target, repo } : null
 }
 
+function getPRRefreshOwnerRuntimeEnvironmentId(
+  candidate: Pick<GitHubPRRefreshCandidate, 'cacheKey' | 'executionHostId'>
+): string | null {
+  const parsed = parseExecutionHostId(candidate.executionHostId)
+  if (parsed?.kind === 'runtime') {
+    return parsed.environmentId
+  }
+  const cacheScope = candidate.cacheKey.split('::', 1)[0]
+  const cacheScopeHost = parseExecutionHostId(cacheScope)
+  return cacheScopeHost?.kind === 'runtime' ? cacheScopeHost.environmentId : null
+}
+
+function getPRRefreshRuntimeRepoTarget(
+  state: AppState,
+  candidate: GitHubPRRefreshCandidate
+): { target: { kind: 'environment'; environmentId: string }; repo: Repo } | null {
+  const ownerRuntimeEnvironmentId = getPRRefreshOwnerRuntimeEnvironmentId(candidate)
+  if (!ownerRuntimeEnvironmentId) {
+    return null
+  }
+  // Why: PR refreshes must follow the repo owner host, not the Active Server
+  // dropdown. A runtime-owned worktree can be visible while Local desktop is focused.
+  return getRuntimeRepoTarget(
+    state,
+    candidate.repoPath,
+    state.settings
+      ? { ...state.settings, activeRuntimeEnvironmentId: ownerRuntimeEnvironmentId }
+      : ({ activeRuntimeEnvironmentId: ownerRuntimeEnvironmentId } as AppState['settings'])
+  )
+}
+
+function shouldEnqueueLocalPRRefresh(candidate: GitHubPRRefreshCandidate): boolean {
+  // Why: the local PR coordinator owns local git and SSH bridge refreshes, but
+  // runtime-owned repos and disconnected SSH repos must not hit the IPC crash path.
+  if (getPRRefreshOwnerRuntimeEnvironmentId(candidate) !== null) {
+    return false
+  }
+  return !candidate.connectionId || candidate.connectionState === 'connected'
+}
+
+function enqueueLocalGitHubPRRefresh(
+  args: {
+    candidate: GitHubPRRefreshCandidate
+    reason: GitHubPRRefreshReason
+    priority: number
+  },
+  onNotQueued?: () => void | Promise<unknown>
+): void {
+  const enqueue = window.api.gh.enqueuePRRefresh
+  if (!enqueue) {
+    return
+  }
+  // Why: main can reject stale/unknown local paths; renderer refresh triggers
+  // are best-effort and must not become unhandled rejection crash breadcrumbs.
+  void enqueue(args)
+    .then((queued) =>
+      queued === false || queued?.kind === 'fallback' ? onNotQueued?.() : undefined
+    )
+    .catch((err) => {
+      console.warn('Failed to enqueue PR refresh:', err)
+    })
+}
+
 type GitHubWorkItemRequestContext = {
   repoId: string
   repoPath: string
@@ -3383,7 +3446,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (!candidate) {
       return
     }
-    if (getRuntimeRepoTarget(state, candidate.repoPath)) {
+    if (getPRRefreshRuntimeRepoTarget(state, candidate)) {
       void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
         force: bypassesGitHubPRRefreshFreshness(reason),
         repoId: candidate.repoId,
@@ -3394,26 +3457,19 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       })
       return
     }
-    const enqueue = window.api.gh.enqueuePRRefresh
-    if (enqueue) {
-      void enqueue({ candidate, reason, priority })
-        .then((queued) => {
-          if (queued === false) {
-            return get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
-              force: bypassesGitHubPRRefreshFreshness(reason),
-              repoId: candidate.repoId,
-              worktreeId: candidate.worktreeId,
-              linkedPRNumber: candidate.linkedPRNumber ?? null,
-              fallbackPRNumber: candidate.fallbackPRNumber ?? null,
-              fallbackPRSource: candidate.fallbackPRSource ?? null
-            })
-          }
-          return null
-        })
-        .catch((err) => {
-          console.warn('Failed to enqueue PR refresh:', err)
-        })
+    if (!shouldEnqueueLocalPRRefresh(candidate)) {
+      return
     }
+    enqueueLocalGitHubPRRefresh({ candidate, reason, priority }, async () => {
+      await get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
+        force: bypassesGitHubPRRefreshFreshness(reason),
+        repoId: candidate.repoId,
+        worktreeId: candidate.worktreeId,
+        linkedPRNumber: candidate.linkedPRNumber ?? null,
+        fallbackPRNumber: candidate.fallbackPRNumber ?? null,
+        fallbackPRSource: candidate.fallbackPRSource ?? null
+      })
+    })
   },
 
   reportVisibleGitHubPRRefreshCandidates: (worktreeIds, generation) => {
@@ -3424,8 +3480,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         return worktree ? buildPRRefreshCandidate(state, worktree) : null
       })
       .filter((candidate): candidate is GitHubPRRefreshCandidate => candidate !== null)
-    if (getActiveRuntimeTarget(state.settings).kind === 'environment') {
-      for (const candidate of candidates) {
+    const localCandidates: GitHubPRRefreshCandidate[] = []
+    for (const candidate of candidates) {
+      if (getPRRefreshRuntimeRepoTarget(state, candidate)) {
         void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
           repoId: candidate.repoId,
           worktreeId: candidate.worktreeId,
@@ -3433,12 +3490,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           fallbackPRNumber: candidate.fallbackPRNumber ?? null,
           fallbackPRSource: candidate.fallbackPRSource ?? null
         })
+        continue
       }
-      return
+      if (shouldEnqueueLocalPRRefresh(candidate)) {
+        localCandidates.push(candidate)
+      }
     }
     const reportVisible = window.api.gh.reportVisiblePRRefreshCandidates
     if (reportVisible) {
-      void reportVisible({ candidates, generation }).catch((err) => {
+      void reportVisible({ candidates: localCandidates, generation }).catch((err) => {
         console.warn('Failed to report visible PR refresh candidates:', err)
       })
     }
@@ -3733,8 +3793,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           fallbackPRNumber: candidate.fallbackPRNumber ?? null,
           fallbackPRSource: candidate.fallbackPRSource ?? null
         })
-      } else {
-        void window.api.gh.enqueuePRRefresh?.({ candidate, reason: 'swr', priority: 10 })
+      } else if (shouldEnqueueLocalPRRefresh(candidate)) {
+        enqueueLocalGitHubPRRefresh({ candidate, reason: 'swr', priority: 10 })
       }
     }
   },
@@ -3797,7 +3857,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (!worktree.isBare && branch) {
       const candidate = buildPRRefreshCandidate(get(), worktree)
       if (candidate) {
-        if (getRuntimeRepoTarget(get(), candidate.repoPath)) {
+        if (getPRRefreshRuntimeRepoTarget(get(), candidate)) {
           void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
             force: true,
             repoId: candidate.repoId,
@@ -3806,8 +3866,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             fallbackPRNumber: candidate.fallbackPRNumber ?? null,
             fallbackPRSource: candidate.fallbackPRSource ?? null
           })
-        } else {
-          void window.api.gh.enqueuePRRefresh?.({ candidate, reason: 'post-push', priority: 100 })
+        } else if (shouldEnqueueLocalPRRefresh(candidate)) {
+          enqueueLocalGitHubPRRefresh({ candidate, reason: 'post-push', priority: 100 })
         }
       }
     }
@@ -3995,7 +4055,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (shouldRefreshPR && !worktree.isBare && branch) {
       const candidate = buildPRRefreshCandidate(state, worktree)
       if (candidate) {
-        if (getRuntimeRepoTarget(state, candidate.repoPath)) {
+        if (getPRRefreshRuntimeRepoTarget(state, candidate)) {
           void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
             force: true,
             repoId: candidate.repoId,
@@ -4004,8 +4064,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             fallbackPRNumber: candidate.fallbackPRNumber ?? null,
             fallbackPRSource: candidate.fallbackPRSource ?? null
           })
-        } else {
-          void window.api.gh.enqueuePRRefresh?.({ candidate, reason: 'active', priority: 80 })
+        } else if (shouldEnqueueLocalPRRefresh(candidate)) {
+          enqueueLocalGitHubPRRefresh({ candidate, reason: 'active', priority: 80 })
         }
       }
     }

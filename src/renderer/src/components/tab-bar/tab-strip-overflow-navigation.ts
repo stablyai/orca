@@ -9,6 +9,21 @@ import {
 const TAB_STRIP_SCROLL_FRACTION = 0.75
 const TAB_STRIP_MIN_SCROLL_STEP_PX = 120
 
+export function scrollTabStripByStep(
+  el: HTMLElement,
+  direction: 'start' | 'end',
+  behavior: ScrollBehavior = 'smooth'
+): void {
+  const scrollStep = Math.max(
+    TAB_STRIP_MIN_SCROLL_STEP_PX,
+    el.clientWidth * TAB_STRIP_SCROLL_FRACTION
+  )
+  el.scrollBy({
+    left: direction === 'start' ? -scrollStep : scrollStep,
+    behavior
+  })
+}
+
 const EMPTY_TAB_STRIP_OVERFLOW_STATE: TabStripScrollMetrics = {
   hasOverflow: false,
   canScrollStart: false,
@@ -30,7 +45,7 @@ export function useTabStripOverflowNavigation({
 }): {
   tabStripRef: RefObject<HTMLDivElement | null>
   tabStripOverflowState: TabStripScrollMetrics
-  scrollTabStrip: (direction: 'start' | 'end') => void
+  scrollTabStrip: (direction: 'start' | 'end', behavior?: ScrollBehavior) => void
 } {
   const tabStripRef = useRef<HTMLDivElement>(null)
   const prevStripLenRef = useRef<{ worktreeId: string; len: number } | null>(null)
@@ -48,20 +63,16 @@ export function useTabStripOverflowNavigation({
       sameTabStripScrollMetrics(previous, next) ? previous : next
     )
   }, [])
-  const scrollTabStrip = useCallback((direction: 'start' | 'end'): void => {
-    const el = tabStripRef.current
-    if (!el) {
-      return
-    }
-    const scrollStep = Math.max(
-      TAB_STRIP_MIN_SCROLL_STEP_PX,
-      el.clientWidth * TAB_STRIP_SCROLL_FRACTION
-    )
-    el.scrollBy({
-      left: direction === 'start' ? -scrollStep : scrollStep,
-      behavior: 'smooth'
-    })
-  }, [])
+  const scrollTabStrip = useCallback(
+    (direction: 'start' | 'end', behavior: ScrollBehavior = 'smooth'): void => {
+      const el = tabStripRef.current
+      if (!el) {
+        return
+      }
+      scrollTabStripByStep(el, direction, behavior)
+    },
+    []
+  )
 
   useEffect(() => {
     const el = tabStripRef.current

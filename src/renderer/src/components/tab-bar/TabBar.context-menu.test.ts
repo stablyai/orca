@@ -88,6 +88,15 @@ vi.mock('@dnd-kit/sortable', () => ({
   }
 }))
 
+vi.mock('./tab-strip-drag-scroll', () => ({
+  useTabStripDragScrollHandlers: () => ({
+    isTabDragActive: false,
+    onDragScrollStartEnter: vi.fn(),
+    onDragScrollEndEnter: vi.fn(),
+    onDragScrollLeave: vi.fn()
+  })
+}))
+
 const useAppStoreExport = (selector: Parameters<typeof useAppStoreMock>[0]): unknown =>
   useAppStoreMock(selector)
 useAppStoreExport.getState = vi.fn(() => ({
@@ -173,6 +182,18 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   },
   DropdownMenuShortcut: function DropdownMenuShortcut(props: { children?: unknown }) {
     return { type: 'DropdownMenuShortcut', props }
+  },
+  DropdownMenuLabel: function DropdownMenuLabel(props: { children?: unknown }) {
+    return { type: 'DropdownMenuLabel', props }
+  },
+  DropdownMenuSub: function DropdownMenuSub(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSub', props }
+  },
+  DropdownMenuSubContent: function DropdownMenuSubContent(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubContent', props }
+  },
+  DropdownMenuSubTrigger: function DropdownMenuSubTrigger(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubTrigger', props }
   },
   DropdownMenuTrigger: function DropdownMenuTrigger(props: { children?: unknown }) {
     return { type: 'DropdownMenuTrigger', props }
@@ -444,7 +465,7 @@ describe('TabBar context menu wiring', () => {
     )
 
     expect(menuLabels[0]).toContain('New Markdown')
-    expect(menuLabels[1]).toBe('Open Markdown...')
+    expect(menuLabels[1]).toContain('Open Markdown...')
     expect(menuLabels[2]).toContain('New Terminal')
     expect(menuLabels[3]).toContain('New Browser Tab')
   })

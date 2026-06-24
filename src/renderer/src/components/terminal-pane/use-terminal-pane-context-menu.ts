@@ -5,11 +5,10 @@ import { toast } from 'sonner'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { getConnectionId } from '@/lib/connection-context'
-import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
+import type { PaneCwdMap } from './resolve-split-cwd'
 import type { TerminalQuickCommand } from '../../../../shared/types'
 import { isTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-commands'
 import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatch'
-import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-session'
 import { pasteTerminalText } from './terminal-bracketed-paste'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
 import {
@@ -35,6 +34,7 @@ import {
   type PreparedAgentSessionFork
 } from './terminal-agent-session-fork'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
+import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
@@ -310,39 +310,26 @@ export function useTerminalPaneContextMenu({
 
   const onPaste = async (): Promise<void> => pasteResolvedPane('context-menu')
 
-  // Split-pane CWD inheritance (docs/ssh-split-pane-inherit-cwd.md):
-  // mirror the Cmd+D path — sync split on confirmed OSC 7 cache hit,
-  // otherwise fall back to async resolveSplitCwd.
   const splitWithInheritedCwd = useCallback(
     (
       direction: 'vertical' | 'horizontal',
       source: 'contextual_tour' | 'context_menu' = 'context_menu'
     ): void => {
       const pane = resolveMenuPane()
-      if (!pane) {
+      const manager = managerRef.current
+      if (!pane || !manager) {
         return
       }
-      const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
-      if (splitWebRuntimeTerminal(ptyId, direction, source)) {
-        return
-      }
-      const cached = paneCwdRef.current.get(pane.id)
-      if (cached?.confirmed && cached.cwd) {
-        const createdPane = managerRef.current?.splitPane(pane.id, direction, { cwd: cached.cwd })
-        recordContextMenuCreatedTerminalPaneSplit(createdPane, { source, direction })
-        return
-      }
-      const paneId = pane.id
-      void (async () => {
-        const cwd = await resolveSplitCwd({
-          paneCwdMap: paneCwdRef.current,
-          sourcePaneId: paneId,
-          sourcePtyId: ptyId,
-          fallbackCwd
-        })
-        const createdPane = managerRef.current?.splitPane(paneId, direction, { cwd })
-        recordContextMenuCreatedTerminalPaneSplit(createdPane, { source, direction })
-      })()
+      splitTerminalPaneWithInheritedCwd({
+        manager,
+        getManager: () => managerRef.current,
+        paneTransports: paneTransportsRef.current,
+        paneCwdMap: paneCwdRef.current,
+        fallbackCwd,
+        pane,
+        direction,
+        source
+      })
     },
     [fallbackCwd, managerRef, paneCwdRef, paneTransportsRef, resolveMenuPane]
   )

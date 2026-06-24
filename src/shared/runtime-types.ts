@@ -526,6 +526,9 @@ export type RuntimeWorktreePsSummary = {
   parentWorktreeId: string | null
   childWorktreeIds: string[]
   displayName: string
+  workspaceStatus: string
+  sortOrder: number
+  manualOrder?: number
   linkedIssue: number | null
   linkedPR: { number: number; state: string } | null
   linkedLinearIssue: string | null

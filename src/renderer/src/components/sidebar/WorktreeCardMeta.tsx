@@ -2,6 +2,7 @@ import React from 'react'
 import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 import { CalendarClock, CircleDot, ExternalLink, MonitorUp, Pencil, StickyNote } from 'lucide-react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
@@ -12,7 +13,7 @@ import {
   WorktreeCardDetailSectionContent
 } from './WorktreeCardDetailSection'
 import { DetailHeader, MetaIconBadge, MetadataActionIcon } from './WorktreeCardMetadataControls'
-import { IssueStateBadge, LinearStateBadge } from './WorktreeCardMetadataStatusBadges'
+import { LinearStateBadge } from './WorktreeCardMetadataStatusBadges'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 import { getReviewLabel, ReviewIcon } from './worktree-review-helpers'
 import type {
@@ -25,6 +26,7 @@ import type {
 import { translate } from '@/i18n/i18n'
 import { WorktreeCardReviewDetailSection } from './WorktreeCardReviewDetailSection'
 import { WorktreeCardAutomationDetailSection } from './WorktreeCardAutomationDetailSection'
+import { WorktreeCardIssueDetailSection } from './WorktreeCardIssueDetailSection'
 
 export type {
   WorktreeCardIssueDisplay,
@@ -155,8 +157,10 @@ export function WorktreeCardDetailsHover({
   const internalHoverControl = useWorktreeCardDetailsHoverControl()
   const {
     hoverOpen,
+    issueMenuOpen,
     reviewMenuOpen,
     handleHoverOpenChange,
+    handleIssueMenuOpenChange,
     handleReviewMenuOpenChange,
     closeHover
   } = hoverControl ?? internalHoverControl
@@ -167,6 +171,43 @@ export function WorktreeCardDetailsHover({
     },
     [closeHover]
   )
+  const copyLinkedWorkItemLink = React.useCallback(async (url: string, label: string) => {
+    try {
+      // Why: Electron clipboard IPC remains reliable from nested hover/dropdown
+      // overlays where browser clipboard activation can be lost.
+      await window.api.ui.writeClipboardText(url)
+      toast.success(
+        translate('auto.components.sidebar.WorktreeCardMeta.copyLinkSuccess', '{{value0}} copied', {
+          value0: label
+        })
+      )
+    } catch {
+      toast.error(
+        translate('auto.components.sidebar.WorktreeCardMeta.copyLinkFailure', 'Failed to copy link')
+      )
+    }
+  }, [])
+  const handleCopyIssueLink = React.useCallback((): void => {
+    if (!issue?.url) {
+      return
+    }
+    closeHover()
+    void copyLinkedWorkItemLink(
+      issue.url,
+      translate('auto.components.sidebar.WorktreeCardMeta.issueLinkLabel', 'Issue link')
+    )
+  }, [closeHover, copyLinkedWorkItemLink, issue?.url])
+  const handleCopyReviewLink = React.useCallback((): void => {
+    if (!review?.url) {
+      return
+    }
+    void copyLinkedWorkItemLink(
+      review.url,
+      translate('auto.components.sidebar.WorktreeCardMeta.reviewLinkLabel', '{{value0}} link', {
+        value0: getReviewLabel(review)
+      })
+    )
+  }, [copyLinkedWorkItemLink, review])
 
   const showIdentityHeader = Boolean(branchName || workspaceTitle)
 
@@ -178,11 +219,12 @@ export function WorktreeCardDetailsHover({
     return children
   }
 
-  const issueLabels = issue?.labels ?? []
   const branchIdentity = branchName ? (
     <div
       className={cn(
-        'break-all font-mono text-[11px] leading-snug text-muted-foreground',
+        // Why: the hover panel is where users read full git identity; wrap instead
+        // of truncating so long branch names stay readable like issue titles below.
+        'break-words font-mono text-[11px] leading-snug text-muted-foreground',
         identityOrder === 'workspace-first' && 'mt-1'
       )}
     >
@@ -228,70 +270,16 @@ export function WorktreeCardDetailsHover({
             </div>
           )}
 
-          {issue && (
-            <WorktreeCardDetailSection>
-              <DetailHeader
-                icon={<CircleDot className="size-3 text-muted-foreground" />}
-                label={translate(
-                  'auto.components.sidebar.WorktreeCardMeta.e97d8f2876',
-                  'Issue #{{value0}}',
-                  { value0: issue.number }
-                )}
-                actions={
-                  <>
-                    {onEditIssue && (
-                      <MetadataActionIcon
-                        label={translate(
-                          'auto.components.sidebar.WorktreeCardMeta.807b13b9ec',
-                          'Edit issue'
-                        )}
-                        onClick={onEditIssue}
-                      >
-                        <Pencil className="size-3" />
-                      </MetadataActionIcon>
-                    )}
-                    {issue.url && onOpenGitHubIssueInOrca && (
-                      <MetadataActionIcon
-                        label={translate(
-                          'auto.components.sidebar.WorktreeCardMeta.2c67730e07',
-                          'Open in Orca'
-                        )}
-                        onClick={dismissAndRun(onOpenGitHubIssueInOrca)}
-                      >
-                        <MonitorUp className="size-3" />
-                      </MetadataActionIcon>
-                    )}
-                    {issue.url && (
-                      <MetadataActionIcon
-                        label={translate(
-                          'auto.components.sidebar.WorktreeCardMeta.b22f058067',
-                          'View on GitHub'
-                        )}
-                        href={issue.url}
-                      >
-                        <ExternalLink className="size-3" />
-                      </MetadataActionIcon>
-                    )}
-                  </>
-                }
-              />
-              <WorktreeCardDetailSectionContent className="space-y-1.5">
-                <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
-                  {issue.title}
-                </div>
-                {(issue.state || issueLabels.length > 0) && (
-                  <div className="flex flex-wrap gap-1">
-                    {issue.state && <IssueStateBadge state={issue.state} />}
-                    {issueLabels.map((label) => (
-                      <Badge key={label} variant="outline" className="h-4 px-1.5 text-[9px]">
-                        {label}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </WorktreeCardDetailSectionContent>
-            </WorktreeCardDetailSection>
-          )}
+          <WorktreeCardIssueDetailSection
+            issue={issue}
+            issueMenuOpen={issueMenuOpen}
+            onIssueMenuOpenChange={handleIssueMenuOpenChange}
+            onCopyIssueLink={issue?.url ? handleCopyIssueLink : undefined}
+            onEditIssue={onEditIssue}
+            onOpenGitHubIssueInOrca={
+              onOpenGitHubIssueInOrca ? dismissAndRun(onOpenGitHubIssueInOrca) : undefined
+            }
+          />
 
           {linearIssue && (
             <WorktreeCardDetailSection>
@@ -355,6 +343,7 @@ export function WorktreeCardDetailsHover({
             reviewMenuOpen={reviewMenuOpen}
             onReviewMenuOpenChange={handleReviewMenuOpenChange}
             onOpenReviewInOrca={onOpenReviewInOrca}
+            onCopyReviewLink={review?.url ? handleCopyReviewLink : undefined}
             onUnlinkReview={onUnlinkReview}
             closeHover={closeHover}
           />

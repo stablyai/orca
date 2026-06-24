@@ -16,6 +16,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../../shared/tui-agent-launch-defaults'
 import { translate } from '@/i18n/i18n'
+import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 
 type FloatingTerminalWindowControlsProps = {
   maximized: boolean
@@ -26,6 +27,14 @@ type FloatingTerminalWindowControlsProps = {
 const controlButtonClassName =
   'border-border bg-secondary text-secondary-foreground shadow-xs hover:bg-accent hover:text-accent-foreground'
 
+// Why: matches the repo convention (e.g. ReviewPRViewAnimatedVisual) of
+// surfacing the live keybinding in a tooltip as "Label (shortcut)", while
+// degrading to a bare label when the action is unbound (default on Win/Linux,
+// and for minimize on every platform).
+function withShortcutHint(label: string, shortcutLabel: string | null): string {
+  return shortcutLabel ? `${label} (${shortcutLabel})` : label
+}
+
 export function FloatingTerminalWindowControls({
   maximized,
   onToggleMaximized,
@@ -34,6 +43,8 @@ export function FloatingTerminalWindowControls({
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
   const createTab = useAppStore((s) => s.createTab)
   const setActiveTabForWorktree = useAppStore((s) => s.setActiveTabForWorktree)
+  const maximizeShortcutLabel = useOptionalShortcutLabel('floatingWorkspace.maximize')
+  const minimizeShortcutLabel = useOptionalShortcutLabel('floatingWorkspace.minimize')
 
   const disabledTuiAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
   const defaultAgent =
@@ -160,13 +171,19 @@ export function FloatingTerminalWindowControls({
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
           {maximized
-            ? translate(
-                'auto.components.floating.terminal.FloatingTerminalWindowControls.b5686fee1e',
-                'Restore'
+            ? withShortcutHint(
+                translate(
+                  'auto.components.floating.terminal.FloatingTerminalWindowControls.b5686fee1e',
+                  'Restore'
+                ),
+                maximizeShortcutLabel
               )
-            : translate(
-                'auto.components.floating.terminal.FloatingTerminalWindowControls.109870e023',
-                'Maximize'
+            : withShortcutHint(
+                translate(
+                  'auto.components.floating.terminal.FloatingTerminalWindowControls.109870e023',
+                  'Maximize'
+                ),
+                maximizeShortcutLabel
               )}
         </TooltipContent>
       </Tooltip>
@@ -187,9 +204,12 @@ export function FloatingTerminalWindowControls({
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          {translate(
-            'auto.components.floating.terminal.FloatingTerminalWindowControls.2f6054342c',
-            'Minimize'
+          {withShortcutHint(
+            translate(
+              'auto.components.floating.terminal.FloatingTerminalWindowControls.2f6054342c',
+              'Minimize'
+            ),
+            minimizeShortcutLabel
           )}
         </TooltipContent>
       </Tooltip>

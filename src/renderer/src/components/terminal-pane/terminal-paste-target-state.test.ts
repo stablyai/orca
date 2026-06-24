@@ -17,6 +17,21 @@ function makePaneContainer(acceptedElement: Element): Element {
   } as unknown as Element
 }
 
+function makePaneContainerFor(acceptedElements: readonly Element[]): Element {
+  return {
+    contains: vi.fn((element: Element | null) => acceptedElements.includes(element as Element))
+  } as unknown as Element
+}
+
+function makeElement(tagName: string, classNames: string[] = []): Element {
+  return {
+    tagName,
+    classList: {
+      contains: (className: string) => classNames.includes(className)
+    }
+  } as unknown as Element
+}
+
 describe('terminal paste target state', () => {
   it('accepts the same mounted pane, transport, and PTY identity', () => {
     const transport = makeTransport()
@@ -124,6 +139,51 @@ describe('terminal paste target state', () => {
         activeElementAtDispatch: terminalInput,
         paneContainer,
         activeElement: renameInput
+      })
+    ).toBe(false)
+  })
+
+  it('keeps keyboard-owned paste current across transient document blur', () => {
+    const terminalInput = {} as Element
+    const body = makeElement('body')
+    const paneContainer = makePaneContainer(terminalInput)
+
+    expect(
+      isTerminalPanePasteFocusCurrent({
+        requireSameFocusedElement: true,
+        activeElementAtDispatch: terminalInput,
+        paneContainer,
+        activeElement: body
+      })
+    ).toBe(true)
+  })
+
+  it('keeps keyboard-owned paste current when xterm replaces its helper textarea', () => {
+    const originalTerminalInput = makeElement('textarea', ['xterm-helper-textarea'])
+    const replacementTerminalInput = makeElement('textarea', ['xterm-helper-textarea'])
+    const paneContainer = makePaneContainerFor([originalTerminalInput, replacementTerminalInput])
+
+    expect(
+      isTerminalPanePasteFocusCurrent({
+        requireSameFocusedElement: true,
+        activeElementAtDispatch: originalTerminalInput,
+        paneContainer,
+        activeElement: replacementTerminalInput
+      })
+    ).toBe(true)
+  })
+
+  it('rejects keyboard-owned paste when focus moves to another control in the pane', () => {
+    const terminalInput = makeElement('textarea', ['xterm-helper-textarea'])
+    const searchInput = makeElement('input')
+    const paneContainer = makePaneContainerFor([terminalInput, searchInput])
+
+    expect(
+      isTerminalPanePasteFocusCurrent({
+        requireSameFocusedElement: true,
+        activeElementAtDispatch: terminalInput,
+        paneContainer,
+        activeElement: searchInput
       })
     ).toBe(false)
   })

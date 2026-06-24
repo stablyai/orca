@@ -14,6 +14,9 @@ export type AiVaultScanOptions = {
   copilotSessionsDir?: string
   cursorProjectsDir?: string
   opencodeStorageDir?: string
+  // Why: OpenCode 1.17.x stores sessions in SQLite; tests inject a temp DB
+  // here so they don't depend on the real ~/.local/share/opencode.
+  opencodeDbPaths?: readonly string[]
   grokSessionsDir?: string
   devinTranscriptsDir?: string
   hermesSessionsDir?: string

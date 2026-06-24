@@ -667,6 +667,31 @@ describe('worktree RPC methods', () => {
     )
   })
 
+  it('forwards push target clears through worktree.set', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateManagedWorktreeMeta: vi.fn().mockResolvedValue({ id: 'wt-1' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('worktree.set', {
+        worktree: 'id:wt-1',
+        linkedPR: null,
+        pushTarget: null
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.updateManagedWorktreeMeta).toHaveBeenCalledWith(
+      'id:wt-1',
+      expect.objectContaining({
+        linkedPR: null,
+        pushTarget: null
+      })
+    )
+  })
+
   it('rejects worktree.set when both parent and no-parent are supplied', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

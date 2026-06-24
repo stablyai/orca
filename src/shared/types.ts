@@ -1125,6 +1125,11 @@ export type PRRefreshOutcome =
 
 export type GitHubPRRefreshReason = 'visible' | 'active' | 'post-push' | 'manual' | 'swr'
 
+export type GitHubPRRefreshEnqueueResult =
+  | { kind: 'queued' }
+  | { kind: 'skipped'; skippedReason: 'validation-denied' | 'validation-backoff' }
+  | { kind: 'fallback' }
+
 export type GitHubPRRefreshAlias = {
   cacheKey: string
   repoId?: string
@@ -2216,6 +2221,7 @@ export type TuiAgent =
   | 'codex' // OpenAI Codex
   | 'autohand' // Autohand Code CLI
   | 'opencode' // OpenCode
+  | 'mimo-code'
   | 'pi' // Pi (pi.dev)
   | 'omp' // OMP (omp.sh)
   | 'gemini' // Gemini CLI
@@ -2391,6 +2397,9 @@ export type GlobalSettings = {
   terminalFontFamily: string
   terminalFontWeight: number
   terminalLineHeight: number
+  terminalScrollSensitivity: number
+  terminalFastScrollSensitivity: number
+  terminalTuiScrollSensitivity: number
   /** Terminal renderer policy.
    *  - 'auto': try xterm WebGL and fall back to DOM when unsupported or risky.
    *  - 'on': always try xterm WebGL.

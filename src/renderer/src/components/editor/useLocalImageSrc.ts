@@ -10,6 +10,7 @@ import { readRuntimeFilePreview } from '@/runtime/runtime-file-client'
 
 const BLOB_URL_CACHE_MAX_SIZE = 100
 const blobUrlCache = new Map<string, string>()
+const inFlightBlobUrlLoads = new Map<string, Promise<string | null>>()
 
 export function getLocalImageCacheKey(
   absolutePath: string,
@@ -35,8 +36,8 @@ function cacheBlobUrl(key: string, url: string): void {
   if (previousUrl !== undefined) {
     blobUrlCache.delete(key)
     if (previousUrl !== url) {
-      // Why: concurrent loads for the same image key can both create blob URLs;
-      // overwriting the cache must release the superseded Blob.
+      // Why: cache replacements must release the superseded Blob even when
+      // they come from rare stale state or future loader changes.
       URL.revokeObjectURL(previousUrl)
     }
   }
@@ -93,6 +94,7 @@ function scheduleBlobUrlRevocation(urls: string[]): void {
 function invalidateImageCache(): void {
   const staleUrls = Array.from(blobUrlCache.values())
   blobUrlCache.clear()
+  inFlightBlobUrlLoads.clear()
   cacheGeneration += 1
   for (const listener of cacheListeners) {
     listener()
@@ -119,6 +121,7 @@ function disposeImageCacheModuleState(): void {
     URL.revokeObjectURL(url)
   }
   blobUrlCache.clear()
+  inFlightBlobUrlLoads.clear()
   cacheListeners.clear()
 }
 
@@ -211,20 +214,13 @@ export function useLocalImageSrc(
     }
 
     let cancelled = false
-    readImagePreview(absolutePath, connectionId, runtimeContext)
-      .then((result) => {
+    const effectGeneration = generation
+    loadLocalImageAbsolutePath(absolutePath, connectionId, runtimeContext)
+      .then((url) => {
         if (cancelled) {
           return
         }
-        if (result.isBinary && result.content) {
-          const url = base64ToBlobUrl(result.content, result.mimeType ?? 'image/png')
-          cacheBlobUrl(cacheKey, url)
-          setDisplaySrc(url)
-        } else {
-          // Why: local image paths must stay behind IPC/runtime authorization;
-          // handing raw file: or relative paths back to Chromium can escape it.
-          setDisplaySrc(undefined)
-        }
+        setDisplaySrc(cacheGeneration === effectGeneration && url ? url : undefined)
       })
       .catch(() => {
         if (!cancelled) {
@@ -271,21 +267,69 @@ export async function loadLocalImageSrc(
     return cached
   }
 
-  try {
-    const result = await readImagePreview(absolutePath, connectionId, runtimeContext)
-    if (result.isBinary && result.content) {
-      const url = base64ToBlobUrl(result.content, result.mimeType ?? 'image/png')
-      cacheBlobUrl(cacheKey, url)
-      return url
-    }
-    // Why: local image paths must stay behind IPC/runtime authorization;
-    // callers should render a missing image instead of falling back to raw src.
-    return null
-  } catch {
-    // Fall through
+  return loadLocalImageAbsolutePath(absolutePath, connectionId, runtimeContext)
+}
+
+export function loadLocalImageAbsolutePath(
+  absolutePath: string,
+  connectionId?: string | null,
+  runtimeContext?: Omit<RuntimeFileOperationArgs, 'connectionId'> & { connectionId?: string | null }
+): Promise<string | null> {
+  const cacheKey = getLocalImageCacheKey(absolutePath, connectionId, runtimeContext)
+  const cached = blobUrlCache.get(cacheKey)
+  if (cached) {
+    return Promise.resolve(cached)
   }
 
-  return null
+  const inFlight = inFlightBlobUrlLoads.get(cacheKey)
+  if (inFlight) {
+    return inFlight
+  }
+
+  const readGeneration = cacheGeneration
+  const loadPromise = readImagePreview(absolutePath, connectionId, runtimeContext)
+    .then((result) => {
+      if (!result.isBinary || !result.content || cacheGeneration !== readGeneration) {
+        // Why: local image paths must stay behind IPC/runtime authorization;
+        // handing raw file: or relative paths back to Chromium can escape it.
+        return null
+      }
+      const url = base64ToBlobUrl(result.content, result.mimeType ?? 'image/png')
+      if (cacheGeneration !== readGeneration) {
+        URL.revokeObjectURL(url)
+        return null
+      }
+      cacheBlobUrl(cacheKey, url)
+      return url
+    })
+    .catch(() => null)
+    .finally(() => {
+      if (inFlightBlobUrlLoads.get(cacheKey) === loadPromise) {
+        inFlightBlobUrlLoads.delete(cacheKey)
+      }
+    })
+  inFlightBlobUrlLoads.set(cacheKey, loadPromise)
+  return loadPromise
+}
+
+export function resetLocalImageSrcStateForTests(): void {
+  if (pendingBlobUrlRevocationTimer !== null) {
+    clearTimeout(pendingBlobUrlRevocationTimer)
+    pendingBlobUrlRevocationTimer = null
+  }
+  revokePendingBlobUrls()
+  for (const url of blobUrlCache.values()) {
+    URL.revokeObjectURL(url)
+  }
+  blobUrlCache.clear()
+  inFlightBlobUrlLoads.clear()
+  cacheGeneration = 0
+  pendingBlobUrlRevocations.clear()
+  cacheListeners.clear()
+}
+
+export function invalidateLocalImageSrcCacheForTests(): void {
+  invalidateImageCache()
 }
 
 function readImagePreview(
@@ -293,17 +337,21 @@ function readImagePreview(
   connectionId?: string | null,
   runtimeContext?: Omit<RuntimeFileOperationArgs, 'connectionId'> & { connectionId?: string | null }
 ) {
-  if (!runtimeContext) {
-    return window.api.fs.readFile({
-      filePath: absolutePath,
-      connectionId: connectionId ?? undefined
-    })
+  try {
+    if (!runtimeContext) {
+      return window.api.fs.readFile({
+        filePath: absolutePath,
+        connectionId: connectionId ?? undefined
+      })
+    }
+    return readRuntimeFilePreview(
+      {
+        ...runtimeContext,
+        connectionId: runtimeContext.connectionId ?? connectionId ?? undefined
+      },
+      absolutePath
+    )
+  } catch (error) {
+    return Promise.reject(error)
   }
-  return readRuntimeFilePreview(
-    {
-      ...runtimeContext,
-      connectionId: runtimeContext.connectionId ?? connectionId ?? undefined
-    },
-    absolutePath
-  )
 }

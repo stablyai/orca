@@ -78,7 +78,10 @@ import {
   releaseBrowserAutomationVisibility
 } from '@/components/browser-pane/browser-automation-visibility'
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
+import { closeMobileSessionTabInStore } from '@/runtime/mobile-session-tab-close'
+import { createWorktreeChangeRefreshQueue } from './worktree-change-refresh-queue'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
+import { createRuntimeProjectRefreshScheduler } from './runtime-project-refresh-scheduler'
 import { createRuntimeClientEventsSync } from './runtime-client-events-sync'
 import { detectLanguage } from '@/lib/language-detect'
 import { makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
@@ -127,6 +130,7 @@ function getShortcutPlatform(): NodeJS.Platform {
 }
 
 const BROWSER_AUTOMATION_BOOTSTRAP_LEASE_MS = 10_000
+const RUNTIME_PROJECT_REFRESH_CONCURRENCY = 5
 const browserAutomationBootstrapLeaseByPageId = new Map<string, { token: string; timer: number }>()
 
 function isPinnedSessionTab(store: AppState, worktreeId: string, visibleId: string): boolean {
@@ -226,6 +230,17 @@ let remoteWorkspaceSnapshotApplyDepth = 0
 let remoteWorkspaceSnapshotWriteSuppressUntil = 0
 const REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS = 1000
 
+function isAgentStatusForRecentlyClosedTab(
+  store: Pick<AppState, 'recentlyClosedAgentStatusTabIds'>,
+  paneKey: string
+): boolean {
+  const tabId = parsePaneKey(paneKey)?.tabId
+  if (!tabId) {
+    return false
+  }
+  return store.recentlyClosedAgentStatusTabIds[tabId] === true
+}
+
 function getAuthoritativeDetectedWorktreeIds(state: AppState, repoId: string): Set<string> | null {
   const detected = state.detectedWorktreesByRepo[repoId]
   if (detected?.authoritative !== true) {
@@ -253,6 +268,17 @@ function resolveActiveBrowserPageId(state: AppState): string | null {
   }
   const pages = state.browserPagesByWorkspace[workspace.id] ?? []
   return workspace.activePageId ?? workspace.pageIds?.[0] ?? pages[0]?.id ?? null
+}
+
+function activateTerminalInitiatedWorktree(store: AppState, worktreeId: string): void {
+  store.setActiveView('terminal')
+  store.setActiveWorktree(worktreeId)
+  // Why: CLI/runtime terminal focus is user-visible worktree navigation, so it
+  // must feed both Cmd+J recency and the titlebar back/forward stack.
+  store.markWorktreeVisited(worktreeId)
+  if (!store.isNavigatingHistory) {
+    store.recordWorktreeVisit(worktreeId)
+  }
 }
 
 type TerminalSplitDirection = 'horizontal' | 'vertical'
@@ -712,12 +738,74 @@ function getRuntimeClientEventEnvironmentIds(): string[] {
   return [...ids]
 }
 
+function getReachableRuntimeEnvironmentIds(): string[] {
+  const state = useAppStore.getState()
+  const ids: string[] = []
+  for (const [environmentId, status] of state.runtimeStatusByEnvironmentId ?? []) {
+    if (status?.status) {
+      ids.push(environmentId)
+    }
+  }
+  return ids
+}
+
 export function buildRuntimeClientEventEnvironmentKey(environmentIds: string[]): string {
   return [...new Set(environmentIds)].sort().join('\u0000')
 }
 
-function getRuntimeClientEventEnvironmentKey(): string {
-  return buildRuntimeClientEventEnvironmentKey(getRuntimeClientEventEnvironmentIds())
+/** Ids in `next` not in `previous` — runtime environments that just became
+ *  connected. Exported to unit-test the on-connect discovery trigger. */
+export function getNewlyConnectedRuntimeEnvironmentIds(
+  previous: readonly string[],
+  next: readonly string[]
+): string[] {
+  const known = new Set(previous)
+  return [...new Set(next)].filter((environmentId) => !known.has(environmentId))
+}
+
+export function getRuntimeProjectRefreshEnvironmentIds(args: {
+  previousDesired: readonly string[]
+  nextDesired: readonly string[]
+  previousReachable: readonly string[]
+  nextReachable: readonly string[]
+}): string[] {
+  return [
+    ...new Set([
+      ...getNewlyConnectedRuntimeEnvironmentIds(args.previousDesired, args.nextDesired),
+      ...getNewlyConnectedRuntimeEnvironmentIds(args.previousReachable, args.nextReachable)
+    ])
+  ]
+}
+
+async function refreshRuntimeProjectWorktrees(repos: readonly { id: string }[]): Promise<void> {
+  let nextIndex = 0
+  const failures: { repoId: string; error: unknown }[] = []
+  const workerCount = Math.min(RUNTIME_PROJECT_REFRESH_CONCURRENCY, repos.length)
+
+  // Why: one coalesced remote repo event can still represent many repos; keep the
+  // expensive worktree probes bounded so idle refresh never floods the renderer.
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < repos.length) {
+        const index = nextIndex
+        nextIndex += 1
+        const repoId = repos[index].id
+        try {
+          await useAppStore.getState().fetchWorktrees(repoId)
+        } catch (error) {
+          failures.push({ repoId, error })
+        }
+      }
+    })
+  )
+  if (failures.length > 0) {
+    throw new AggregateError(
+      failures.map((failure) => failure.error),
+      `Failed to refresh ${failures.length} runtime project worktree(s): ${failures
+        .map((failure) => failure.repoId)
+        .join(', ')}`
+    )
+  }
 }
 
 function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined): string | null {
@@ -807,6 +895,8 @@ export function useIpcEvents(): void {
         afterState.removeWorkspaceSpaceWorktrees(removed)
       }
     }
+    const worktreeChangeRefreshQueue = createWorktreeChangeRefreshQueue(handleWorktreesChanged)
+    unsubs.push(worktreeChangeRefreshQueue.dispose)
 
     const activateNotifiedWorktree = async (
       {
@@ -856,18 +946,25 @@ export function useIpcEvents(): void {
       await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
     }
 
+    const runtimeProjectRefreshScheduler = createRuntimeProjectRefreshScheduler({
+      refresh: async (environmentId) => {
+        const repos = await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
+        await refreshRuntimeProjectWorktrees(repos)
+        await useAppStore.getState().fetchWorktreeLineage()
+      },
+      onError: (error) => {
+        console.error('Failed to refresh runtime projects:', error)
+      }
+    })
+
     const handleRuntimeClientEvent = (environmentId: string, event: RuntimeClientEvent): void => {
       if (event.type === 'reposChanged') {
-        const state = useAppStore.getState()
-        void state.fetchRuntimeEnvironmentRepos(environmentId).then(async (repos) => {
-          await Promise.all(repos.map((repo) => useAppStore.getState().fetchWorktrees(repo.id)))
-          await useAppStore.getState().fetchWorktreeLineage()
-        })
+        runtimeProjectRefreshScheduler.request(environmentId)
         return
       }
       if (event.type === 'worktreesChanged') {
         void ensureRuntimeEventRepoKnown(environmentId, event.repoId).then(() =>
-          handleWorktreesChanged(event.repoId)
+          worktreeChangeRefreshQueue.enqueue({ repoId: event.repoId })
         )
         return
       }
@@ -894,28 +991,66 @@ export function useIpcEvents(): void {
     })
 
     runtimeClientEventsSync.sync()
-    let runtimeClientEventEnvironmentKey = getRuntimeClientEventEnvironmentKey()
+    // Why: PR #2 removed desktop's eager session-sync discovery and there is no
+    // on-connect repo fetch, so remote projects only appeared after the user
+    // opened the Add-Project dropdown. Seed discovery for runtimes already
+    // connected at mount, and for each newly-connected one below. The scheduler
+    // debounces/throttles, so this stays cheap even with chatty status updates.
+    let runtimeClientEventEnvironmentIds = getRuntimeClientEventEnvironmentIds()
+    for (const environmentId of runtimeClientEventEnvironmentIds) {
+      runtimeProjectRefreshScheduler.request(environmentId)
+    }
+    let runtimeClientEventEnvironmentKey = buildRuntimeClientEventEnvironmentKey(
+      runtimeClientEventEnvironmentIds
+    )
+    let reachableRuntimeEnvironmentIds = getReachableRuntimeEnvironmentIds()
+    let reachableRuntimeEnvironmentKey = buildRuntimeClientEventEnvironmentKey(
+      reachableRuntimeEnvironmentIds
+    )
     unsubs.push(
       useAppStore.subscribe(() => {
-        const nextKey = getRuntimeClientEventEnvironmentKey()
-        if (nextKey === runtimeClientEventEnvironmentKey) {
+        const nextEnvironmentIds = getRuntimeClientEventEnvironmentIds()
+        const nextKey = buildRuntimeClientEventEnvironmentKey(nextEnvironmentIds)
+        const nextReachableEnvironmentIds = getReachableRuntimeEnvironmentIds()
+        const nextReachableKey = buildRuntimeClientEventEnvironmentKey(nextReachableEnvironmentIds)
+        if (
+          nextKey === runtimeClientEventEnvironmentKey &&
+          nextReachableKey === reachableRuntimeEnvironmentKey
+        ) {
           return
         }
+        for (const environmentId of getRuntimeProjectRefreshEnvironmentIds({
+          previousDesired: runtimeClientEventEnvironmentIds,
+          nextDesired: nextEnvironmentIds,
+          previousReachable: reachableRuntimeEnvironmentIds,
+          nextReachable: nextReachableEnvironmentIds
+        })) {
+          runtimeProjectRefreshScheduler.request(environmentId)
+        }
+        runtimeClientEventEnvironmentIds = nextEnvironmentIds
         runtimeClientEventEnvironmentKey = nextKey
+        reachableRuntimeEnvironmentIds = nextReachableEnvironmentIds
+        reachableRuntimeEnvironmentKey = nextReachableKey
         runtimeClientEventsSync.sync()
       })
     )
     unsubs.push(runtimeClientEventsSync.stop)
+    unsubs.push(runtimeProjectRefreshScheduler.stop)
 
     unsubs.push(
       window.api.repos.onChanged(() => {
+        const state = useAppStore.getState()
         if (isRuntimeEnvironmentActive()) {
-          // Why: this event comes from the local Electron store. While a
-          // runtime server is selected, repo hydration must be driven by the
-          // selected server instead of local-disk changes.
+          // Why: the all-host sidebar includes local repos even when a runtime
+          // is focused, so local store changes must refresh the local slice
+          // without dropping the runtime-owned slices already shown.
+          void (async () => {
+            await state.fetchReposForAllHosts()
+            await state.fetchProjectGroupsForAllHosts()
+            await state.fetchFolderWorkspacesForAllHosts()
+          })()
           return
         }
-        const state = useAppStore.getState()
         void state.fetchProjectGroups()
         void state.fetchFolderWorkspaces()
         void state.fetchRepos()
@@ -935,7 +1070,7 @@ export function useIpcEvents(): void {
           }
           // A folder rename changes the worktree id; handleWorktreesChanged
           // re-keys state and shields it from the deletion diff (see there).
-          await handleWorktreesChanged(data.repoId, data.renamed)
+          worktreeChangeRefreshQueue.enqueue(data)
         }
       )
     )
@@ -1234,13 +1369,7 @@ export function useIpcEvents(): void {
             const store = useAppStore.getState()
             const shouldActivate = activate !== false
             if (shouldActivate) {
-              store.setActiveView('terminal')
-              store.setActiveWorktree(worktreeId)
-              // Why: CLI-driven terminal focus is a user-initiated worktree switch
-              // and must stamp focus recency for Cmd+J. Doesn't route through
-              // activateAndRevealWorktree because it has custom terminal-creation
-              // logic; see docs/cmd-j-empty-query-ordering.md.
-              store.markWorktreeVisited(worktreeId)
+              activateTerminalInitiatedWorktree(store, worktreeId)
             }
             const existingTab = ptyId
               ? (store.tabsByWorktree[worktreeId] ?? []).find(
@@ -1413,11 +1542,7 @@ export function useIpcEvents(): void {
           }
           const shouldActivate = data.activate !== false
           if (shouldActivate) {
-            store.setActiveView('terminal')
-            store.setActiveWorktree(worktreeId)
-            // Why: CLI-driven focused terminal-create requests are user-initiated
-            // worktree switches; unfocused renderer-backed creates must not reorder Cmd+J.
-            store.markWorktreeVisited(worktreeId)
+            activateTerminalInitiatedWorktree(store, worktreeId)
           } else {
             // Why: renderer-backed Codex startup must mount a TerminalPane so the
             // PTY is born in the renderer, but it must not switch the active UI.
@@ -1526,11 +1651,7 @@ export function useIpcEvents(): void {
           scrollToBottomIfOutputSinceLastView
         }) => {
           const store = useAppStore.getState()
-          store.setActiveWorktree(worktreeId)
-          // Why: CLI-driven focus is a user-initiated switch; stamp focus
-          // recency for Cmd+J. See docs/cmd-j-empty-query-ordering.md.
-          store.markWorktreeVisited(worktreeId)
-          store.setActiveView('terminal')
+          activateTerminalInitiatedWorktree(store, worktreeId)
           store.setActiveTab(tabId)
           store.revealWorktreeInSidebar(worktreeId)
           if (ackPaneKeyOnSuccess || flashFocusedPane || scrollToBottomIfOutputSinceLastView) {
@@ -1604,7 +1725,10 @@ export function useIpcEvents(): void {
         guardPinnedTabClose({
           isPinned: isPinnedSessionTab(store, worktreeId, tabId),
           tabLabel: resolvePinnedTabLabel(store, worktreeId, tabId),
-          onClose: () => useAppStore.getState().closeUnifiedTab(tabId)
+          onClose: () => {
+            const currentStore = useAppStore.getState()
+            closeMobileSessionTabInStore(currentStore, worktreeId, tabId)
+          }
         })
       })
     )
@@ -2635,6 +2759,9 @@ export function useIpcEvents(): void {
     ): AgentStatusApplyResult => {
       const store = useAppStore.getState()
       if (!store.workspaceSessionReady) {
+        return 'dropped'
+      }
+      if (isAgentStatusForRecentlyClosedTab(store, data.paneKey)) {
         return 'dropped'
       }
       const payload = normalizeAgentStatusPayload({

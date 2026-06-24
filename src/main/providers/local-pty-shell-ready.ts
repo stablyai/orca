@@ -27,66 +27,23 @@ import {
   getZshShellReadyMarkerRegistrationBlock,
   getZshStartupFileSourceBlock
 } from '../shell-templates'
+export {
+  createShellReadyScanState,
+  drainShellReadyHeldBytes,
+  scanForShellReady,
+  SHELL_READY_MARKER_PREFIX
+} from '../shell-ready-marker-scanner'
+export type { ShellReadyScanResult, ShellReadyScanState } from '../shell-ready-marker-scanner'
 
 let didEnsureShellReadyWrappers = false
 
 const STARTUP_COMMAND_READY_MAX_WAIT_MS = 1500
-const SHELL_READY_MARKER = '\x1b]777;orca-shell-ready'
+const POST_SHELL_READY_STARTUP_COMMAND_DELAY_MS = 30
+const POST_SHELL_READY_STARTUP_COMMAND_FALLBACK_MS = 200
 const SHELL_READY_MARKER_ESCAPED = '\\033]777;orca-shell-ready\\007'
 
-// ── OSC 777 shell-ready scanner ─────────────────────────────────────
-
-export type ShellReadyScanState = {
-  matchPos: number
-  heldBytes: string
-}
-
-export function createShellReadyScanState(): ShellReadyScanState {
-  return { matchPos: 0, heldBytes: '' }
-}
-
-export function scanForShellReady(
-  state: ShellReadyScanState,
-  data: string
-): { output: string; matched: boolean } {
-  let output = ''
-
-  for (let i = 0; i < data.length; i += 1) {
-    const ch = data[i] as string
-    if (state.matchPos < SHELL_READY_MARKER.length) {
-      if (ch === SHELL_READY_MARKER[state.matchPos]) {
-        state.heldBytes += ch
-        state.matchPos += 1
-      } else {
-        output += state.heldBytes
-        state.heldBytes = ''
-        state.matchPos = 0
-        if (ch === SHELL_READY_MARKER[0]) {
-          state.heldBytes = ch
-          state.matchPos = 1
-        } else {
-          output += ch
-        }
-      }
-    } else if (ch === '\x07') {
-      const remaining = data.slice(i + 1)
-      state.heldBytes = ''
-      state.matchPos = 0
-      return { output: output + remaining, matched: true }
-    } else {
-      output += state.heldBytes
-      state.heldBytes = ''
-      state.matchPos = 0
-      if (ch === SHELL_READY_MARKER[0]) {
-        state.heldBytes = ch
-        state.matchPos = 1
-      } else {
-        output += ch
-      }
-    }
-  }
-
-  return { output, matched: false }
+export type ShellReadySignal = {
+  postMarkerBytesObserved: boolean
 }
 
 // ── Shell wrapper files ─────────────────────────────────────────────
@@ -183,6 +140,7 @@ __orca_restore_agent_teams_path
 # Why: user startup files may set the default OpenCode config after Orca's
 # spawn env; restore the Orca-managed config dir before the first prompt.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
+[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
 ${getPosixOmpShellWrapper()}
 # Why: Codex must keep using Orca's runtime CODEX_HOME after profile scripts.
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
@@ -298,6 +256,7 @@ __orca_restore_agent_teams_path() {
 if [[ ! -o login ]]; then
   # Why: ~/.zshrc can export the user's default OpenCode config after spawn.
   [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
+[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
   ${getPosixOmpShellWrapper()}
   # Why: Codex must keep using Orca's runtime CODEX_HOME after rc files.
   [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
@@ -361,6 +320,7 @@ __orca_restore_agent_teams_path() {
 __orca_restore_agent_teams_path
 # Why: .zlogin is the final login startup file before the prompt is shown.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
+[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
 ${getPosixOmpShellWrapper()}
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
 ${getZshShellReadyMarkerRegistrationBlock(SHELL_READY_MARKER_ESCAPED)}
@@ -469,7 +429,7 @@ export function getAttributionShellLaunchConfig(shellPath: string): ShellReadyLa
 // ── Startup command writer ──────────────────────────────────────────
 
 export function writeStartupCommandWhenShellReady(
-  readyPromise: Promise<void>,
+  readyPromise: Promise<void | ShellReadySignal>,
   proc: pty.IPty,
   startupCommand: string,
   onExit: (cleanup: () => void) => void
@@ -518,7 +478,11 @@ export function writeStartupCommandWhenShellReady(
     proc.write(payload)
   }
 
-  readyPromise.then(() => {
+  const schedulePostReadyFlush = (): void => {
+    postReadyTimer = setTimeout(flush, POST_SHELL_READY_STARTUP_COMMAND_DELAY_MS)
+  }
+
+  readyPromise.then((signal) => {
     if (sent) {
       return
     }
@@ -528,26 +492,28 @@ export function writeStartupCommandWhenShellReady(
     // causes the characters to be echoed once by the kernel and then redisplayed
     // by the line editor after the prompt — producing a visible duplicate.
     //
-    // Strategy: wait for the next PTY data event after the ready marker. That
-    // data is the shell drawing its prompt, which means the shell is about to
-    // (or has already) switched to raw mode. A brief follow-up delay covers the
-    // gap between the last prompt write() and the tcsetattr() that enables raw
-    // mode. The 50ms fallback timeout handles the case where the prompt data
-    // arrived in the same chunk as the ready marker (no subsequent onData).
+    // Strategy: if the marker-completing scan already observed post-marker
+    // bytes, use the short settle delay directly. Otherwise, wait for the next
+    // PTY data event after the ready marker, with a conservative fallback for
+    // ambiguous marker-only or markerless cases.
+    if (signal?.postMarkerBytesObserved === true) {
+      schedulePostReadyFlush()
+      return
+    }
     postReadyDataDisposable = proc.onData(() => {
       postReadyDataDisposable?.dispose()
       postReadyDataDisposable = null
       if (postReadyTimer !== null) {
         clearTimeout(postReadyTimer)
       }
-      postReadyTimer = setTimeout(flush, 30)
+      schedulePostReadyFlush()
     })
     postReadyTimer = setTimeout(() => {
       postReadyDataDisposable?.dispose()
       postReadyDataDisposable = null
       postReadyTimer = null
       flush()
-    }, 50)
+    }, POST_SHELL_READY_STARTUP_COMMAND_FALLBACK_MS)
   })
   onExit(cleanup)
 }
