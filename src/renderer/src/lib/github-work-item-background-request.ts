@@ -6,7 +6,10 @@ import {
 } from '@/lib/tui-agent-startup'
 import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
 import { pickQuickWorkspaceAgent } from '@/lib/quick-workspace-agent-selection'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import type {
+  PendingWorktreeCreation,
+  WorktreeCreationRequest
+} from '@/lib/pending-worktree-creation'
 import { CLIENT_PLATFORM, getWorkspaceIntentName, getWorkspaceSeedName } from '@/lib/new-workspace'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
@@ -23,6 +26,7 @@ import { projectHostSetupProjectionFromRepos } from '../../../shared/project-hos
 
 export type GitHubWorkItemBackgroundStoreSnapshot = {
   repos: readonly Repo[]
+  pendingWorktreeCreations: Record<string, PendingWorktreeCreation>
   settings:
     | Partial<
         Pick<

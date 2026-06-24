@@ -27,9 +27,13 @@ export type BackgroundGitHubWorkItemCreateResult =
   | { kind: 'error' }
   | { kind: 'fallback'; reason: 'repo-missing' | 'setup-ask' | 'pr-start-point' }
 
+type AppActiveView = ReturnType<typeof useAppStore.getState>['activeView']
+
 type BackgroundGitHubWorkItemCreateDeps = {
   getStore: () => GitHubWorkItemBackgroundStoreSnapshot
+  getActiveView: () => AppActiveView
   hasPendingCreate: (creationId: string) => boolean
+  isPendingCreateActive: (creationId: string) => boolean
   resolveSetupDecision: typeof resolveDirectSetupDecision
   resolvePrStartPoint: typeof resolveDirectPrStartPoint
   confirmHooks: (
@@ -39,7 +43,9 @@ type BackgroundGitHubWorkItemCreateDeps = {
   ) => ReturnType<typeof ensureHooksConfirmed>
   beginBackgroundCreate: typeof beginBackgroundWorktreePreparation
   continueBackgroundCreate: typeof continueBackgroundWorktreeCreation
+  activatePendingCreate: (creationId: string) => void
   removePendingCreate: (creationId: string) => void
+  setActiveView: (view: AppActiveView) => void
   toastError: (message: string) => void
 }
 
@@ -54,17 +60,59 @@ export type BackgroundGitHubWorkItemCreateArgs = {
 
 const DEFAULT_DEPS: BackgroundGitHubWorkItemCreateDeps = {
   getStore: () => useAppStore.getState(),
+  getActiveView: () => useAppStore.getState().activeView,
   hasPendingCreate: (creationId) =>
     useAppStore.getState().pendingWorktreeCreations[creationId] != null,
+  isPendingCreateActive: (creationId) =>
+    useAppStore.getState().activePendingCreationId === creationId,
   resolveSetupDecision: resolveDirectSetupDecision,
   resolvePrStartPoint: resolveDirectPrStartPoint,
   confirmHooks: (store, repoId, scope) =>
     ensureHooksConfirmed(store as ReturnType<typeof useAppStore.getState>, repoId, scope),
   beginBackgroundCreate: beginBackgroundWorktreePreparation,
   continueBackgroundCreate: continueBackgroundWorktreeCreation,
+  activatePendingCreate: (creationId) => {
+    const store = useAppStore.getState()
+    store.setActivePendingWorktreeCreation(creationId)
+    store.setActiveView('terminal')
+    store.setSidebarOpen(true)
+  },
   removePendingCreate: (creationId) =>
     useAppStore.getState().removePendingWorktreeCreation(creationId),
+  setActiveView: (view) => useAppStore.getState().setActiveView(view),
   toastError: (message) => toast.error(message)
+}
+
+function findPendingGitHubWorkItemCreate(
+  store: GitHubWorkItemBackgroundStoreSnapshot,
+  request: WorktreeCreationRequest
+): string | null {
+  if (!request.linkedIssue && !request.linkedPR) {
+    return null
+  }
+  const match = Object.values(store.pendingWorktreeCreations).find((entry) => {
+    const pending = entry.request
+    return (
+      pending.repoId === request.repoId &&
+      pending.linkedIssue === request.linkedIssue &&
+      pending.linkedPR === request.linkedPR
+    )
+  })
+  return match?.creationId ?? null
+}
+
+function abandonStagedCreate(
+  creationId: string,
+  restoreView: AppActiveView,
+  deps: BackgroundGitHubWorkItemCreateDeps
+): void {
+  // Why: fallback paths abandon the temporary creation surface, so return to the
+  // flow that launched it unless the user already activated something else.
+  const shouldRestoreView = deps.isPendingCreateActive(creationId)
+  deps.removePendingCreate(creationId)
+  if (shouldRestoreView) {
+    deps.setActiveView(restoreView)
+  }
 }
 
 export async function createGitHubWorkItemWorkspaceInBackground(
@@ -79,6 +127,13 @@ export async function createGitHubWorkItemWorkspaceInBackground(
   }
 
   const initialRequest = buildInitialGitHubWorkItemRequest(args, repo)
+  const existingPendingCreateId = findPendingGitHubWorkItemCreate(store, initialRequest)
+  if (existingPendingCreateId) {
+    deps.activatePendingCreate(existingPendingCreateId)
+    return { kind: 'background-started' }
+  }
+
+  const restoreView = deps.getActiveView()
   const creationId = deps.beginBackgroundCreate(initialRequest)
 
   try {
@@ -90,7 +145,7 @@ export async function createGitHubWorkItemWorkspaceInBackground(
       return { kind: 'background-started' }
     }
     if (setupResolution.kind === 'needs-modal') {
-      deps.removePendingCreate(creationId)
+      abandonStagedCreate(creationId, restoreView, deps)
       args.openModalFallback()
       return { kind: 'fallback', reason: 'setup-ask' }
     }
@@ -119,7 +174,7 @@ export async function createGitHubWorkItemWorkspaceInBackground(
           return { kind: 'background-started' }
         }
         deps.toastError(error instanceof Error ? error.message : 'Unable to resolve pull request.')
-        deps.removePendingCreate(creationId)
+        abandonStagedCreate(creationId, restoreView, deps)
         args.openModalFallback()
         return { kind: 'fallback', reason: 'pr-start-point' }
       }
@@ -163,7 +218,7 @@ export async function createGitHubWorkItemWorkspaceInBackground(
     if (!deps.hasPendingCreate(creationId)) {
       return { kind: 'background-started' }
     }
-    deps.removePendingCreate(creationId)
+    abandonStagedCreate(creationId, restoreView, deps)
     deps.toastError(error instanceof Error ? error.message : 'Unable to prepare workspace.')
     return { kind: 'error' }
   }

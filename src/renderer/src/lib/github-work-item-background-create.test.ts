@@ -53,7 +53,9 @@ function makeStore(overrides: Partial<ReturnType<typeof baseStore>> = {}) {
 
 function baseStore() {
   return {
+    activeView: 'tasks' as const,
     repos: [repo],
+    pendingWorktreeCreations: {},
     settings: {
       activeRuntimeEnvironmentId: null,
       defaultTuiAgent: 'codex' as const,
@@ -68,13 +70,17 @@ function baseStore() {
 function makeDeps(store = makeStore()) {
   return {
     getStore: () => store,
+    getActiveView: vi.fn(() => store.activeView),
     hasPendingCreate: vi.fn(() => true),
+    isPendingCreateActive: vi.fn(() => true),
     resolveSetupDecision: vi.fn().mockResolvedValue({ kind: 'decided', decision: 'inherit' }),
     resolvePrStartPoint: vi.fn(),
     confirmHooks: vi.fn().mockResolvedValue('run'),
     beginBackgroundCreate: vi.fn(() => 'creation-1'),
     continueBackgroundCreate: vi.fn(() => true),
+    activatePendingCreate: vi.fn(),
     removePendingCreate: vi.fn(),
+    setActiveView: vi.fn(),
     toastError: vi.fn()
   }
 }
@@ -156,6 +162,50 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
     await pending
 
     expect(deps.continueBackgroundCreate).toHaveBeenCalledTimes(1)
+  })
+
+  it('reuses an existing pending issue create instead of staging a duplicate', async () => {
+    const pendingRequest: WorktreeCreationRequest = {
+      repoId: 'repo-1',
+      name: 'issue-42-make-issue-workspace',
+      setupDecision: 'inherit',
+      linkedIssue: 42,
+      agent: null,
+      pendingFirstAgentMessageRename: false,
+      note: '',
+      startupPlan: null,
+      quickPrompt: '',
+      quickTelemetry: null
+    }
+    const deps = makeDeps(
+      makeStore({
+        pendingWorktreeCreations: {
+          'creation-existing': {
+            creationId: 'creation-existing',
+            phase: 'preparing',
+            status: 'creating',
+            indeterminate: false,
+            loaderVisible: true,
+            request: pendingRequest
+          }
+        }
+      })
+    )
+
+    const result = await createGitHubWorkItemWorkspaceInBackground(
+      {
+        item: makeIssue(),
+        repoId: 'repo-1',
+        openModalFallback: vi.fn()
+      },
+      deps
+    )
+
+    expect(result).toEqual({ kind: 'background-started' })
+    expect(deps.activatePendingCreate).toHaveBeenCalledWith('creation-existing')
+    expect(deps.beginBackgroundCreate).not.toHaveBeenCalled()
+    expect(deps.resolveSetupDecision).not.toHaveBeenCalled()
+    expect(deps.continueBackgroundCreate).not.toHaveBeenCalled()
   })
 
   it('uses the preferred quick agent when one is available', async () => {
@@ -304,7 +354,26 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
     expect(result).toEqual({ kind: 'fallback', reason: 'setup-ask' })
     expect(openModalFallback).toHaveBeenCalledTimes(1)
     expect(deps.removePendingCreate).toHaveBeenCalledWith('creation-1')
+    expect(deps.setActiveView).toHaveBeenCalledWith('tasks')
     expect(deps.continueBackgroundCreate).not.toHaveBeenCalled()
+  })
+
+  it('leaves the current view alone on fallback after the user leaves the staged create', async () => {
+    const deps = makeDeps()
+    deps.resolveSetupDecision.mockResolvedValueOnce({ kind: 'needs-modal' })
+    deps.isPendingCreateActive.mockReturnValueOnce(false)
+
+    await createGitHubWorkItemWorkspaceInBackground(
+      {
+        item: makeIssue(),
+        repoId: 'repo-1',
+        openModalFallback: vi.fn()
+      },
+      deps
+    )
+
+    expect(deps.removePendingCreate).toHaveBeenCalledWith('creation-1')
+    expect(deps.setActiveView).not.toHaveBeenCalled()
   })
 
   it('falls back to the composer when PR start point cannot be resolved', async () => {
@@ -325,6 +394,7 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
     expect(deps.toastError).toHaveBeenCalledWith('No PR head')
     expect(openModalFallback).toHaveBeenCalledTimes(1)
     expect(deps.removePendingCreate).toHaveBeenCalledWith('creation-1')
+    expect(deps.setActiveView).toHaveBeenCalledWith('tasks')
     expect(deps.continueBackgroundCreate).not.toHaveBeenCalled()
   })
 
