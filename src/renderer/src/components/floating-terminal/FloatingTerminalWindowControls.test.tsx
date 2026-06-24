@@ -142,12 +142,19 @@ function findOnClickByAriaLabel(node: unknown, ariaLabel: string): () => void {
 }
 
 const NEW_AGENT_TAB_ID = 'floating-agent-tab'
+const EXISTING_TAB_ID = 'floating-existing-tab'
 
 beforeEach(() => {
   for (const mock of Object.values(mocks)) {
     mock.mockReset()
   }
-  mocks.createTab.mockReturnValue({ id: NEW_AGENT_TAB_ID })
+  mocks.createTab.mockImplementation(() => {
+    const tab = { id: NEW_AGENT_TAB_ID }
+    const state = storeBox.state as { tabsByWorktree: Record<string, { id: string }[]> }
+    const existing = state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
+    state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] = [...existing, tab]
+    return tab
+  })
   mocks.buildAgentStartupPlan.mockReturnValue({
     launchCommand: 'claude',
     launchConfig: {},
@@ -167,8 +174,8 @@ beforeEach(() => {
     setActiveTabForWorktree: mocks.setActiveTabForWorktree,
     setTabBarOrder: mocks.setTabBarOrder,
     queueTabStartupCommand: mocks.queueTabStartupCommand,
-    tabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [{ id: NEW_AGENT_TAB_ID }] },
-    tabBarOrderByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [] }
+    tabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [{ id: EXISTING_TAB_ID }] },
+    tabBarOrderByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [EXISTING_TAB_ID] }
   }
 })
 
@@ -193,10 +200,34 @@ describe('FloatingTerminalWindowControls default-agent launch', () => {
       undefined,
       { activate: false }
     )
+    // Why: TerminalPane consumes any pending startup command on first render, so
+    // the launch command must be queued before activation can mount the surface -
+    // otherwise the new tab can come up as a bare shell.
+    expect(mocks.queueTabStartupCommand).toHaveBeenCalledWith(
+      NEW_AGENT_TAB_ID,
+      expect.objectContaining({
+        command: 'claude',
+        launchAgent: 'claude'
+      })
+    )
+    expect(mocks.queueTabStartupCommand.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.activateTab.mock.invocationCallOrder[0]
+    )
     // Why: the floating panel renders its visible tab from the unified group's
-    // activeTabId, which only activateTab writes. Without it the new agent tab
-    // would be appended but never selected/focused.
+    // activeTabId, which only activateTab writes. setActiveTabForWorktree updates
+    // the complementary legacy per-worktree map. Without activateTab the new agent
+    // tab would be appended but never selected/focused.
+    expect(mocks.setActiveTabForWorktree).toHaveBeenCalledWith(
+      FLOATING_TERMINAL_WORKTREE_ID,
+      NEW_AGENT_TAB_ID
+    )
     expect(mocks.activateTab).toHaveBeenCalledWith(NEW_AGENT_TAB_ID)
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith(NEW_AGENT_TAB_ID)
+    // Why: createTab appends the new tab to the worktree; the order reconciliation
+    // must keep the pre-existing tab and place the new agent tab last.
+    expect(mocks.setTabBarOrder).toHaveBeenCalledWith(FLOATING_TERMINAL_WORKTREE_ID, [
+      EXISTING_TAB_ID,
+      NEW_AGENT_TAB_ID
+    ])
   })
 })
