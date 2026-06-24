@@ -148,23 +148,21 @@ describe('resolveZoomTarget', () => {
     ).toBe('ui')
   })
 
-  it('routes to browser zoom for active browser tabs before stale DOM focus', () => {
+  it('routes to ui zoom for active browser tabs before stale DOM focus', () => {
     expect(
       resolveZoomTarget({
         activeView: 'terminal',
         activeTabType: 'browser',
-        activeBrowserPageId: 'page-1',
         activeElement: makeTarget({ editorClosest: true, hasXtermClass: true })
       })
-    ).toBe('browser')
+    ).toBe('ui')
   })
 
-  it('does not route to browser zoom without an active browser page', () => {
+  it('routes to ui zoom for browser tabs without an active browser page', () => {
     expect(
       resolveZoomTarget({
         activeView: 'terminal',
         activeTabType: 'browser',
-        activeBrowserPageId: null,
         activeElement: makeTarget({})
       })
     ).toBe('ui')
@@ -177,11 +175,10 @@ describe('useIpcEvents zoom routing', () => {
     vi.unstubAllGlobals()
   })
 
-  it('dispatches browser page zoom without applying or persisting UI zoom', async () => {
+  it('applies app zoom for an active browser tab', async () => {
     const terminalZoomListenerRef: {
       current: ((direction: 'in' | 'out' | 'reset') => void) | null
     } = { current: null }
-    const dispatchEvent = vi.fn()
     const setUI = vi.fn()
 
     vi.doMock('react', async () => {
@@ -245,7 +242,8 @@ describe('useIpcEvents zoom routing', () => {
       computeEditorFontSize: vi.fn(() => 13)
     }))
     vi.doMock('@/components/settings/SettingsConstants', () => ({
-      zoomLevelToPercent: vi.fn(() => 100),
+      zoomLevelToPercent: vi.fn(() => 120),
+      ZOOM_STEP: 0.5,
       ZOOM_MIN: -3,
       ZOOM_MAX: 3
     }))
@@ -265,7 +263,7 @@ describe('useIpcEvents zoom routing', () => {
     })
 
     vi.stubGlobal('window', {
-      dispatchEvent,
+      dispatchEvent: vi.fn(),
       setTimeout: vi.fn(() => 1),
       clearTimeout: vi.fn(),
       api: {
@@ -323,19 +321,10 @@ describe('useIpcEvents zoom routing', () => {
     if (!listener) {
       throw new Error('Expected terminal zoom listener to be registered')
     }
-    listener('reset')
+    listener('in')
 
-    expect(dispatchEvent).toHaveBeenCalledTimes(1)
-    const event = dispatchEvent.mock.calls[0]?.[0] as CustomEvent<{
-      browserPageId: string
-      direction: string
-    }>
-    expect(event.type).toBe('orca:browser-page-zoom')
-    expect(event.detail).toEqual({ browserPageId: 'page-1', direction: 'reset' })
-    expect(applyUIZoom).not.toHaveBeenCalled()
-    expect(setUI).not.toHaveBeenCalledWith(
-      expect.objectContaining({ uiZoomLevel: expect.anything() })
-    )
+    expect(applyUIZoom).toHaveBeenCalledWith(0.5)
+    expect(setUI).toHaveBeenCalledWith({ uiZoomLevel: 0.5 })
   })
 
   it('applies app zoom for an active terminal tab after terminal focus is released', async () => {
