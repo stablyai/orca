@@ -80,9 +80,10 @@ export function hideTerminalVisibility({
 }: HideTerminalVisibilityArgs): HideTerminalVisibilityResult {
   const surfaceBecameHidden = wasWorktreeActive && !isWorktreeActive
   if (wasVisible) {
-    // Why: hidden DOM/layout churn can mutate xterm's viewport before the
-    // pane becomes visible again. Preserve the last visible position.
-    captureViewportPositions(false)
+    // Why: React hides the terminal before this effect runs. Prefer the last
+    // tracked visible scroll event so hidden layout churn cannot overwrite it
+    // with xterm's transient top-of-buffer viewport.
+    captureViewportPositions(true)
   }
   if (!isWorktreeActive && (wasVisible || surfaceBecameHidden)) {
     // Suspend WebGL when going hidden. xterm.write() continues to land in

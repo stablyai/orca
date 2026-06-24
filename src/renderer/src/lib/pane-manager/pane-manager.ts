@@ -5,7 +5,8 @@ import type {
   ManagedPane,
   ManagedPaneInternal,
   PaneRenderingDiagnostics,
-  DropZone
+  DropZone,
+  PaneSplitOptions
 } from './pane-manager-types'
 import type { SplitPaneAroundLeafIdsOptions } from './pane-subtree-split'
 import {
@@ -93,7 +94,7 @@ export class PaneManager {
   splitPane(
     paneId: number,
     direction: 'vertical' | 'horizontal',
-    opts?: { ratio?: number; cwd?: string; leafId?: string; ptyId?: string }
+    opts?: PaneSplitOptions
   ): ManagedPane | null {
     return splitManagedPane({
       paneId,

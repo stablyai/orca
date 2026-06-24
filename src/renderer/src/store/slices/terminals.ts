@@ -5,6 +5,7 @@ import type {
   SetupSplitDirection,
   Tab,
   TerminalLayoutSnapshot,
+  TerminalScrollStateSnapshot,
   TerminalTab,
   TuiAgent,
   Worktree,
@@ -78,6 +79,26 @@ function getNextTerminalOrdinal(tabs: TerminalTab[]): number {
     nextOrdinal += 1
   }
   return nextOrdinal
+}
+
+function terminalScrollStatesEqual(
+  left: Record<string, TerminalScrollStateSnapshot> | undefined,
+  right: Record<string, TerminalScrollStateSnapshot>
+): boolean {
+  const leftEntries = Object.entries(left ?? {})
+  if (leftEntries.length !== Object.keys(right).length) {
+    return false
+  }
+  return leftEntries.every(([leafId, leftState]) => {
+    const rightState = right[leafId]
+    return (
+      rightState !== undefined &&
+      leftState.bufferType === rightState.bufferType &&
+      leftState.wasAtBottom === rightState.wasAtBottom &&
+      leftState.viewportY === rightState.viewportY &&
+      leftState.baseY === rightState.baseY
+    )
+  })
 }
 
 function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean {
@@ -444,6 +465,10 @@ export type TerminalSlice = {
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setTabLayout: (tabId: string, layout: TerminalLayoutSnapshot | null) => void
+  updateTabScrollStates: (
+    tabId: string,
+    scrollStatesByLeafId: Record<string, TerminalScrollStateSnapshot>
+  ) => void
   queueTabStartupCommand: (
     tabId: string,
     startup: {
@@ -2353,6 +2378,24 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         delete next[tabId]
       }
       return { terminalLayoutsByTabId: next }
+    })
+  },
+
+  updateTabScrollStates: (tabId, scrollStatesByLeafId) => {
+    set((s) => {
+      const existing = s.terminalLayoutsByTabId[tabId]
+      if (!existing) {
+        return s
+      }
+      if (terminalScrollStatesEqual(existing.scrollStatesByLeafId, scrollStatesByLeafId)) {
+        return s
+      }
+      return {
+        terminalLayoutsByTabId: {
+          ...s.terminalLayoutsByTabId,
+          [tabId]: { ...existing, scrollStatesByLeafId }
+        }
+      }
     })
   },
 

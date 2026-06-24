@@ -2,7 +2,8 @@ import type {
   ManagedPane,
   ManagedPaneInternal,
   PaneManagerOptions,
-  PaneStyleOptions
+  PaneStyleOptions,
+  PaneSplitOptions
 } from './pane-manager-types'
 import type { DragReorderCallbacks } from './pane-drag-reorder'
 import { updateMultiPaneState } from './pane-drag-reorder'
@@ -30,7 +31,7 @@ type MovedPaneSplitState = {
 type SplitManagedPaneArgs = {
   paneId: number
   direction: 'vertical' | 'horizontal'
-  opts?: { ratio?: number; cwd?: string; leafId?: string; ptyId?: string }
+  opts?: PaneSplitOptions
   sourceContainer?: HTMLElement
   panes: Map<number, ManagedPaneInternal>
   root: HTMLElement
@@ -67,14 +68,16 @@ export function splitManagedPane(args: SplitManagedPaneArgs): ManagedPane | null
   args.setActivePaneId(newPane.id)
   openSplitPane(args, newPane, args.opts?.cwd)
 
-  for (const movedPaneState of movedPaneStates) {
-    scheduleSplitScrollRestore(
-      (id) => args.panes.get(id),
-      movedPaneState.pane.id,
-      movedPaneState.scrollState,
-      args.isDestroyed,
-      movedPaneState.hadWebgl ? reattachWebglIfNeeded : undefined
-    )
+  if (args.opts?.restoreMovedPaneScroll !== false) {
+    for (const movedPaneState of movedPaneStates) {
+      scheduleSplitScrollRestore(
+        (id) => args.panes.get(id),
+        movedPaneState.pane.id,
+        movedPaneState.scrollState,
+        args.isDestroyed,
+        movedPaneState.hadWebgl ? reattachWebglIfNeeded : undefined
+      )
+    }
   }
 
   return toPublicPane(newPane)

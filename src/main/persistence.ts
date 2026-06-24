@@ -1330,15 +1330,15 @@ function cloneLayoutWithLeafIds(
   }
 }
 
-function remapLeafRecordForPersistence(
-  source: Record<string, string> | undefined,
+function remapLeafRecordForPersistence<T>(
+  source: Record<string, T> | undefined,
   leafIdByInputLeafId: Map<string, string>,
   duplicatedInputLeafIds: Set<string>
-): Record<string, string> | undefined {
+): Record<string, T> | undefined {
   if (!source) {
     return undefined
   }
-  const next: Record<string, string> = {}
+  const next: Record<string, T> = {}
   for (const [leafId, value] of Object.entries(source)) {
     if (duplicatedInputLeafIds.has(leafId)) {
       continue
@@ -1351,9 +1351,9 @@ function remapLeafRecordForPersistence(
   return Object.keys(next).length > 0 ? next : undefined
 }
 
-function leafRecordEquivalent(
-  left: Record<string, string> | undefined,
-  right: Record<string, string> | undefined
+function leafRecordEquivalent<T>(
+  left: Record<string, T> | undefined,
+  right: Record<string, T> | undefined
 ): boolean {
   const leftEntries = Object.entries(left ?? {})
   const rightRecord = right ?? {}
@@ -1363,11 +1363,11 @@ function leafRecordEquivalent(
   return leftEntries.every(([key, value]) => rightRecord[key] === value)
 }
 
-function preserveMissingLeafRecordEntries(
-  priorRecord: Record<string, string> | undefined,
-  incomingRecord: Record<string, string> | undefined,
+function preserveMissingLeafRecordEntries<T>(
+  priorRecord: Record<string, T> | undefined,
+  incomingRecord: Record<string, T> | undefined,
   liveLeafIds: Set<string>
-): Record<string, string> | undefined {
+): Record<string, T> | undefined {
   const preserved = Object.fromEntries(
     Object.entries(priorRecord ?? {}).filter(
       ([leafId]) => liveLeafIds.has(leafId) && incomingRecord?.[leafId] === undefined
@@ -1608,6 +1608,11 @@ function normalizeTerminalLayoutSnapshotForPersistence(
     leafIdByInputLeafId,
     duplicatedInputLeafIds
   )
+  const scrollStatesByLeafId = remapLeafRecordForPersistence(
+    inputSnapshot.scrollStatesByLeafId,
+    leafIdByInputLeafId,
+    duplicatedInputLeafIds
+  )
   const titlesByLeafId = remapLeafRecordForPersistence(
     inputSnapshot.titlesByLeafId,
     leafIdByInputLeafId,
@@ -1617,6 +1622,7 @@ function normalizeTerminalLayoutSnapshotForPersistence(
     !leafRecordEquivalent(inputSnapshot.ptyIdsByLeafId, ptyIdsByLeafId) ||
     !leafRecordEquivalent(inputSnapshot.buffersByLeafId, buffersByLeafId) ||
     !leafRecordEquivalent(inputSnapshot.scrollbackRefsByLeafId, scrollbackRefsByLeafId) ||
+    !leafRecordEquivalent(inputSnapshot.scrollStatesByLeafId, scrollStatesByLeafId) ||
     !leafRecordEquivalent(inputSnapshot.titlesByLeafId, titlesByLeafId)
   const metadataChanged =
     activeLeafId !== inputSnapshot.activeLeafId || expandedLeafId !== inputSnapshot.expandedLeafId
@@ -1627,6 +1633,7 @@ function normalizeTerminalLayoutSnapshotForPersistence(
     ptyIdsByLeafId: _oldPtyIdsByLeafId,
     buffersByLeafId: _oldBuffersByLeafId,
     scrollbackRefsByLeafId: _oldScrollbackRefsByLeafId,
+    scrollStatesByLeafId: _oldScrollStatesByLeafId,
     titlesByLeafId: _oldTitlesByLeafId,
     ...snapshotWithoutLeafRecords
   } = inputSnapshot
@@ -1639,6 +1646,7 @@ function normalizeTerminalLayoutSnapshotForPersistence(
       ...(ptyIdsByLeafId ? { ptyIdsByLeafId } : {}),
       ...(buffersByLeafId ? { buffersByLeafId } : {}),
       ...(scrollbackRefsByLeafId ? { scrollbackRefsByLeafId } : {}),
+      ...(scrollStatesByLeafId ? { scrollStatesByLeafId } : {}),
       ...(titlesByLeafId ? { titlesByLeafId } : {})
     },
     changed: true,
@@ -5084,6 +5092,11 @@ export class Store {
             layout.scrollbackRefsByLeafId,
             liveLeafIds
           )
+          const scrollStatesByLeafId = preserveMissingLeafRecordEntries(
+            priorLayout.scrollStatesByLeafId,
+            layout.scrollStatesByLeafId,
+            liveLeafIds
+          )
           const titlesByLeafId = preserveMissingLeafRecordEntries(
             priorLayout.titlesByLeafId,
             layout.titlesByLeafId,
@@ -5094,6 +5107,9 @@ export class Store {
           }
           if (scrollbackRefsByLeafId) {
             layout.scrollbackRefsByLeafId = scrollbackRefsByLeafId
+          }
+          if (scrollStatesByLeafId) {
+            layout.scrollStatesByLeafId = scrollStatesByLeafId
           }
           if (titlesByLeafId) {
             layout.titlesByLeafId = titlesByLeafId

@@ -10,6 +10,7 @@ import {
   resolveTerminalCursorInactiveStyle
 } from '@/lib/pane-manager/pane-terminal-options'
 import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-mouse-wheel'
+import { restoreScrollStateAfterLayout } from '@/lib/pane-manager/pane-scroll'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
 import { useAppStore } from '@/store'
 import {
@@ -244,6 +245,24 @@ export function mapRestoredPaneTitlesByPaneId(
     }
   }
   return restored
+}
+
+export function restoreLayoutScrollStates(
+  manager: PaneManager,
+  scrollStatesByLeafId: TerminalLayoutSnapshot['scrollStatesByLeafId'] | undefined,
+  restoredPaneByLeafId: ReadonlyMap<string, number>
+): void {
+  if (!scrollStatesByLeafId) {
+    return
+  }
+  const panesById = new Map(manager.getPanes().map((pane) => [pane.id, pane]))
+  for (const [leafId, scrollState] of Object.entries(scrollStatesByLeafId)) {
+    const paneId = restoredPaneByLeafId.get(leafId)
+    const pane = paneId != null ? panesById.get(paneId) : null
+    if (pane) {
+      restoreScrollStateAfterLayout(pane.terminal, scrollState)
+    }
+  }
 }
 
 function terminalSelectionExceedsPrimaryLimit(terminal: Terminal): boolean {
@@ -589,7 +608,8 @@ export function useTerminalPaneLifecycle({
       dispatchNotification,
       setCacheTimerStartedAt,
       syncPanePtyLayoutBinding,
-      restoredPtyIdByLeafId: initialLayoutRef.current.ptyIdsByLeafId ?? {}
+      restoredPtyIdByLeafId: initialLayoutRef.current.ptyIdsByLeafId ?? {},
+      restoredScrollStatesByLeafId: initialLayoutRef.current.scrollStatesByLeafId
     }
 
     const unregisterRuntimeTab = registerRuntimeTerminalTab({
@@ -1131,6 +1151,11 @@ export function useTerminalPaneLifecycle({
 
     const restoredBuffers = initialLayoutRef.current.buffersByLeafId
     restoreScrollbackBuffers(manager, restoredBuffers, restoredPaneByLeafId, replayingPanesRef)
+    restoreLayoutScrollStates(
+      manager,
+      initialLayoutRef.current.scrollStatesByLeafId,
+      restoredPaneByLeafId
+    )
     if (restoredBuffers && initialLayoutRef.current.scrollbackRefsByLeafId) {
       const layoutWithoutRestoredBuffers = { ...initialLayoutRef.current }
       delete layoutWithoutRestoredBuffers.buffersByLeafId

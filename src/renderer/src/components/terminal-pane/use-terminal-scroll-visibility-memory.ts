@@ -12,6 +12,7 @@ import type { ScrollState } from '@/lib/pane-manager/pane-manager-types'
 type VisibleScrollSnapshot = {
   scrollState: ScrollState
   outputEpoch: number
+  source: 'lifecycle' | 'visible'
 }
 
 type UseTerminalScrollVisibilityMemoryArgs = {
@@ -38,21 +39,26 @@ export function useTerminalScrollVisibilityMemory({
 }: UseTerminalScrollVisibilityMemoryArgs): TerminalScrollVisibilityMemory {
   const visibleScrollSnapshotsRef = useRef<Map<number, VisibleScrollSnapshot>>(new Map())
   const scrollDisposablesRef = useRef<Map<number, IDisposable>>(new Map())
+  const scrollContainerTargetsRef = useRef<Map<number, HTMLElement>>(new Map())
   const suppressScrollTrackingRef = useRef(false)
   const pendingFollowOutputPaneIdsRef = useRef<Set<number>>(new Set())
   const followOutputFrameIdsRef = useRef<number[]>([])
 
   const captureVisibleScrollSnapshot = useCallback(
-    (terminal: Terminal): VisibleScrollSnapshot => ({
+    (terminal: Terminal, source: VisibleScrollSnapshot['source']): VisibleScrollSnapshot => ({
       scrollState: captureScrollState(terminal),
-      outputEpoch: getTerminalOutputEpoch(terminal)
+      outputEpoch: getTerminalOutputEpoch(terminal),
+      source
     }),
     []
   )
 
   const rememberVisibleScrollSnapshot = useCallback(
     (paneId: number, terminal: Terminal): void => {
-      visibleScrollSnapshotsRef.current.set(paneId, captureVisibleScrollSnapshot(terminal))
+      visibleScrollSnapshotsRef.current.set(
+        paneId,
+        captureVisibleScrollSnapshot(terminal, 'visible')
+      )
     },
     [captureVisibleScrollSnapshot]
   )
@@ -64,19 +70,21 @@ export function useTerminalScrollVisibilityMemory({
         return new Map()
       }
       return new Map(
-        manager.getPanes().map((pane) => {
+        manager.getPanes().flatMap((pane) => {
           const remembered = visibleScrollSnapshotsRef.current.get(pane.id)
-          if (useRememberedSnapshots && remembered) {
-            return [pane.id, remembered.scrollState] as const
+          if (useRememberedSnapshots && remembered?.source === 'visible') {
+            return [[pane.id, remembered.scrollState] as const]
+          }
+          if (useRememberedSnapshots) {
+            return []
           }
           const state = captureScrollState(pane.terminal)
-          if (!useRememberedSnapshots || !remembered) {
-            visibleScrollSnapshotsRef.current.set(pane.id, {
-              scrollState: state,
-              outputEpoch: getTerminalOutputEpoch(pane.terminal)
-            })
-          }
-          return [pane.id, state] as const
+          visibleScrollSnapshotsRef.current.set(pane.id, {
+            scrollState: state,
+            outputEpoch: getTerminalOutputEpoch(pane.terminal),
+            source: 'lifecycle'
+          })
+          return [[pane.id, state] as const]
         })
       )
     },
@@ -160,48 +168,98 @@ export function useTerminalScrollVisibilityMemory({
   useEffect(() => cancelPendingFollowOutputFrames, [cancelPendingFollowOutputFrames])
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const rememberScrolledPane = (event: Event): void => {
+      if (!isVisibleRef.current || suppressScrollTrackingRef.current) {
+        return
+      }
+      const target = event.target
+      if (!(target instanceof Node)) {
+        return
+      }
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      const pane = manager.getPanes().find((candidate) => candidate.container.contains(target))
+      if (pane) {
+        rememberVisibleScrollSnapshot(pane.id, pane.terminal)
+      }
+    }
+    // Why: split layout can replace pane containers without changing pane ids.
+    // Delegating catches xterm viewport scrolls even while pane bindings churn.
+    window.addEventListener('scroll', rememberScrolledPane, true)
+    return () => window.removeEventListener('scroll', rememberScrolledPane, true)
+  }, [isVisibleRef, managerRef, rememberVisibleScrollSnapshot])
+
+  useEffect(() => {
     const manager = managerRef.current
     if (!manager) {
       return
     }
     const disposables = scrollDisposablesRef.current
+    const scrollContainerTargets = scrollContainerTargetsRef.current
     const panes = manager.getPanes()
-    const livePaneIds = new Set(panes.map((pane) => pane.id))
+    const paneById = new Map(panes.map((pane) => [pane.id, pane]))
     for (const [paneId, disposable] of disposables) {
-      if (!livePaneIds.has(paneId)) {
+      const pane = paneById.get(paneId)
+      if (!pane || scrollContainerTargets.get(paneId) !== pane.container) {
         disposable.dispose()
         disposables.delete(paneId)
-        visibleScrollSnapshotsRef.current.delete(paneId)
-        pendingFollowOutputPaneIdsRef.current.delete(paneId)
+        scrollContainerTargets.delete(paneId)
+        if (!pane) {
+          visibleScrollSnapshotsRef.current.delete(paneId)
+          pendingFollowOutputPaneIdsRef.current.delete(paneId)
+        }
       }
     }
     for (const pane of panes) {
       if (disposables.has(pane.id)) {
         continue
       }
+      const paneDisposables: IDisposable[] = []
+      const rememberPaneScroll = (): void => {
+        if (!isVisibleRef.current || suppressScrollTrackingRef.current) {
+          return
+        }
+        rememberVisibleScrollSnapshot(pane.id, pane.terminal)
+      }
       const onScroll = (
         pane.terminal as Terminal & {
           onScroll?: (listener: (position: number) => void) => IDisposable
         }
       ).onScroll
-      if (typeof onScroll !== 'function') {
+      if (typeof onScroll === 'function') {
+        paneDisposables.push(onScroll.call(pane.terminal, rememberPaneScroll))
+      }
+      if (pane.container) {
+        // Why: xterm's viewport element may be recreated after this effect.
+        // Capture-phase listening on the pane catches descendant scrollbar moves.
+        pane.container.addEventListener('scroll', rememberPaneScroll, true)
+        paneDisposables.push({
+          dispose: () => pane.container.removeEventListener('scroll', rememberPaneScroll, true)
+        })
+      }
+      if (paneDisposables.length === 0) {
         continue
       }
-      disposables.set(
-        pane.id,
-        onScroll.call(pane.terminal, () => {
-          if (!isVisibleRef.current || suppressScrollTrackingRef.current) {
-            return
+      disposables.set(pane.id, {
+        dispose: () => {
+          for (const disposable of paneDisposables) {
+            disposable.dispose()
           }
-          rememberVisibleScrollSnapshot(pane.id, pane.terminal)
-        })
-      )
+        }
+      })
+      scrollContainerTargets.set(pane.id, pane.container)
     }
     return () => {
       for (const disposable of disposables.values()) {
         disposable.dispose()
       }
       disposables.clear()
+      scrollContainerTargets.clear()
     }
   }, [isVisibleRef, managerRef, paneCount, rememberVisibleScrollSnapshot])
 

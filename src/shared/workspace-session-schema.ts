@@ -59,6 +59,17 @@ const terminalLayoutSnapshotSchema = z.object({
   ptyIdsByLeafId: z.record(z.string(), z.string()).optional(),
   buffersByLeafId: z.record(z.string(), z.string()).optional(),
   scrollbackRefsByLeafId: z.record(z.string(), z.string()).optional(),
+  scrollStatesByLeafId: z
+    .record(
+      z.string(),
+      z.object({
+        bufferType: z.enum(['normal', 'alternate']),
+        wasAtBottom: z.boolean(),
+        viewportY: z.number(),
+        baseY: z.number()
+      })
+    )
+    .optional(),
   titlesByLeafId: z.record(z.string(), z.string()).optional()
 })
 

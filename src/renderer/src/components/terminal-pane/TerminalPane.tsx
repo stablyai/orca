@@ -15,6 +15,7 @@ import {
   resolveEffectiveTerminalAppearance
 } from '@/lib/terminal-theme'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
+import { captureScrollState, restoreScrollStateAfterLayout } from '@/lib/pane-manager/pane-scroll'
 import TerminalSearch from '@/components/TerminalSearch'
 import type { PtyTransport } from './pty-transport'
 import { fitPanes, isWindowsUserAgent } from './pane-helpers'
@@ -94,7 +95,11 @@ import {
   isHostAuthoritativeLayout,
   planTerminalLiveLayoutInsertions
 } from './terminal-live-layout-reconciliation'
-import type { TerminalQuickCommand, TerminalQuickCommandScope } from '../../../../shared/types'
+import type {
+  TerminalQuickCommand,
+  TerminalQuickCommandScope,
+  TerminalScrollStateSnapshot
+} from '../../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager-registry'
@@ -260,6 +265,13 @@ export default function TerminalPane({
   isActiveRef.current = isActive
   const isVisibleRef = useRef(isVisible)
   isVisibleRef.current = isVisible
+  const suppressScrollPersistenceRef = useRef(false)
+  const previousVisibleForScrollPersistenceRef = useRef(isVisible)
+  const lastVisibleScrollStatesByLeafIdRef = useRef<Record<
+    string,
+    TerminalScrollStateSnapshot
+  > | null>(null)
+  const transitionScrollRestoreFrameIdsRef = useRef<number[]>([])
 
   const [expandedPaneId, setExpandedPaneId] = useState<number | null>(null)
   // Why: tracked in React state (not derived from managerRef.getPanes().length)
@@ -452,10 +464,13 @@ export default function TerminalPane({
   )
   const clearCodexRestartNotice = useAppStore((store) => store.clearCodexRestartNotice)
   const savedLayout = useAppStore((store) => store.terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT)
+  const savedScrollStatesByLeafIdRef = useRef(savedLayout.scrollStatesByLeafId)
+  savedScrollStatesByLeafIdRef.current = savedLayout.scrollStatesByLeafId
   const terminalTab = useAppStore((store) =>
     getCachedTerminalTabForWorktree(store.tabsByWorktree, worktreeId, tabId)
   )
   const setTabLayout = useAppStore((store) => store.setTabLayout)
+  const updateTabScrollStates = useAppStore((store) => store.updateTabScrollStates)
   const restoredLayout = useMemo(
     () => (terminalTab ? sanitizeTerminalLayoutPaneTitles(savedLayout, terminalTab) : savedLayout),
     [savedLayout, terminalTab]
@@ -697,6 +712,23 @@ export default function TerminalPane({
     if (Object.keys(mergedScrollbackRefs).length > 0) {
       layout.scrollbackRefsByLeafId = mergedScrollbackRefs
     }
+    // Why: hidden xterm instances can transiently report viewportY=0 during
+    // WebGL suspend/refit; keep the last visible leaf state durable instead.
+    const scrollStatesByLeafId = isVisibleRef.current
+      ? Object.fromEntries(
+          currentPanes.map((pane) => {
+            const { bufferType, wasAtBottom, viewportY, baseY } = captureScrollState(pane.terminal)
+            return [pane.leafId, { bufferType, wasAtBottom, viewportY, baseY }]
+          })
+        )
+      : mergeCapturedLeafState({
+          prior: existing?.scrollStatesByLeafId,
+          fresh: {},
+          currentLeafIds
+        })
+    if (Object.keys(scrollStatesByLeafId).length > 0) {
+      layout.scrollStatesByLeafId = scrollStatesByLeafId
+    }
     // Why: between pane creation and the deferred rAF where PTYs actually
     // attach, all transports have getPtyId() === null. The merge below
     // preserves the *prior* snapshot's leaf→PTY mappings while still letting
@@ -762,6 +794,104 @@ export default function TerminalPane({
       clearedScrollbackLeafIds.delete(leafId)
     }
   }, [tabId, setTabLayout, worktreeId])
+
+  const persistCurrentScrollStates = useCallback(
+    (options?: { useLastVisible?: boolean }): void => {
+      const rememberedScrollStates = options?.useLastVisible
+        ? lastVisibleScrollStatesByLeafIdRef.current
+        : null
+      if (rememberedScrollStates && Object.keys(rememberedScrollStates).length > 0) {
+        updateTabScrollStates(tabId, rememberedScrollStates)
+        return
+      }
+      if (options?.useLastVisible) {
+        return
+      }
+      if (suppressScrollPersistenceRef.current) {
+        const manager = managerRef.current
+        const scrollStatesByLeafId = savedScrollStatesByLeafIdRef.current
+        if (manager && scrollStatesByLeafId) {
+          for (const pane of manager.getPanes()) {
+            const scrollState = scrollStatesByLeafId[pane.leafId]
+            if (scrollState) {
+              restoreScrollStateAfterLayout(pane.terminal, scrollState)
+            }
+          }
+        }
+        return
+      }
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      const scrollStatesByLeafId = Object.fromEntries(
+        manager.getPanes().map((pane) => {
+          const { bufferType, wasAtBottom, viewportY, baseY } = captureScrollState(pane.terminal)
+          return [pane.leafId, { bufferType, wasAtBottom, viewportY, baseY }]
+        })
+      )
+      if (Object.keys(scrollStatesByLeafId).length > 0) {
+        if (isVisibleRef.current) {
+          lastVisibleScrollStatesByLeafIdRef.current = scrollStatesByLeafId
+        }
+        updateTabScrollStates(tabId, scrollStatesByLeafId)
+      }
+    },
+    [tabId, updateTabScrollStates]
+  )
+
+  useLayoutEffect(() => {
+    if (!isVisible) {
+      return
+    }
+    return () => {
+      // Why: workspace switches can hide terminals before the next scroll rAF.
+      // Persist the last visible xterm viewport without serializing layout.
+      persistCurrentScrollStates({ useLastVisible: true })
+    }
+  }, [isVisible, persistCurrentScrollStates])
+
+  useEffect(() => {
+    if (!isVisible) {
+      return
+    }
+    const scrollDisposables: IDisposable[] = []
+    const persistScrolledLayout = (event: Event): void => {
+      const root = containerRef.current
+      const target = event.target
+      if (!root || !(target instanceof Node) || !root.contains(target)) {
+        return
+      }
+      persistCurrentScrollStates()
+    }
+    const persistScrolledTerminal = (): void => {
+      persistCurrentScrollStates()
+    }
+    const manager = managerRef.current
+    if (manager) {
+      for (const pane of manager.getPanes()) {
+        const onScroll = (
+          pane.terminal as typeof pane.terminal & {
+            onScroll?: (listener: (position: number) => void) => IDisposable
+          }
+        ).onScroll
+        if (typeof onScroll === 'function') {
+          scrollDisposables.push(onScroll.call(pane.terminal, persistScrolledTerminal))
+        }
+      }
+    }
+    // Why: workspace switches can remount or refit xterm before passive
+    // visibility effects run; keep the durable leaf state current as the user scrolls.
+    window.addEventListener('scroll', persistScrolledLayout, true)
+    return () => {
+      window.removeEventListener('scroll', persistScrolledLayout, true)
+      for (const disposable of scrollDisposables) {
+        disposable.dispose()
+      }
+    }
+  }, [isVisible, paneCount, persistCurrentScrollStates])
+
+  const wasVisibleForScrollRestoreRef = useRef(isVisible)
 
   const clearPaneScrollback = useCallback(
     (pane: ManagedPane): void => {
@@ -1219,6 +1349,7 @@ export default function TerminalPane({
         worktreeId,
         cwd,
         startup: { command: 'codex' },
+        restoredScrollStatesByLeafId: savedScrollStatesByLeafIdRef.current,
         paneTransportsRef,
         paneMode2031Ref,
         paneLastThemeModeRef,
@@ -1319,6 +1450,16 @@ export default function TerminalPane({
     terminalShortcutPolicy: settings?.terminalShortcutPolicy ?? 'orca-first'
   })
 
+  useLayoutEffect(() => {
+    const wasVisible = previousVisibleForScrollPersistenceRef.current
+    previousVisibleForScrollPersistenceRef.current = isVisible
+    if (wasVisible !== isVisible) {
+      // Why: xterm emits programmatic top-scroll events while panes suspend,
+      // resume, and refit. Those are layout mechanics, not user scrolls.
+      suppressScrollPersistenceRef.current = true
+    }
+  }, [isVisible])
+
   useTerminalPaneGlobalEffects({
     tabId,
     // Why: use the pane's own `worktreeId` prop (not global activeWorktreeId)
@@ -1342,6 +1483,59 @@ export default function TerminalPane({
     isVisibleRef,
     toggleExpandPane
   })
+
+  useLayoutEffect(() => {
+    const wasVisible = wasVisibleForScrollRestoreRef.current
+    wasVisibleForScrollRestoreRef.current = isVisible
+    if (!isVisible) {
+      return undefined
+    }
+    const manager = managerRef.current
+    const restoreSavedScrollStates = (): void => {
+      const currentManager = managerRef.current
+      const scrollStatesByLeafId = savedScrollStatesByLeafIdRef.current
+      if (!currentManager || !scrollStatesByLeafId) {
+        return
+      }
+      for (const pane of currentManager.getPanes()) {
+        const scrollState = scrollStatesByLeafId[pane.leafId]
+        if (scrollState) {
+          restoreScrollStateAfterLayout(pane.terminal, scrollState)
+        }
+      }
+    }
+    if (manager && !wasVisible && savedScrollStatesByLeafIdRef.current) {
+      restoreSavedScrollStates()
+      let remainingFrames = 24
+      const restoreDuringTransition = (): void => {
+        if (!isVisibleRef.current) {
+          suppressScrollPersistenceRef.current = false
+          return
+        }
+        restoreSavedScrollStates()
+        remainingFrames -= 1
+        if (remainingFrames <= 0) {
+          suppressScrollPersistenceRef.current = false
+          return
+        }
+        const frameId = requestAnimationFrame(restoreDuringTransition)
+        transitionScrollRestoreFrameIdsRef.current.push(frameId)
+      }
+      const frameId = requestAnimationFrame(restoreDuringTransition)
+      transitionScrollRestoreFrameIdsRef.current.push(frameId)
+      return () => {
+        for (const pendingFrameId of transitionScrollRestoreFrameIdsRef.current) {
+          cancelAnimationFrame(pendingFrameId)
+        }
+        transitionScrollRestoreFrameIdsRef.current = []
+        suppressScrollPersistenceRef.current = false
+      }
+    }
+    if (suppressScrollPersistenceRef.current) {
+      suppressScrollPersistenceRef.current = false
+    }
+    return undefined
+  }, [isVisible])
 
   useEffect(() => {
     if (

@@ -139,10 +139,10 @@ function restoreScrollStateNow(terminal: Terminal, state: ScrollState): void {
       ? state.firstVisibleLineMarker.line
       : -1
   const targetLine = Math.min(markerLine >= 0 ? markerLine : state.viewportY, buf.baseY)
-  state.viewportY = targetLine
   // Why: deferred rAF/timeout restores re-invoke this function after xterm
-  // reflow settles; keep the marker alive so each call consults the live
-  // line. Callers (restoreScrollState, the timeout in
+  // reflow settles; keep the original viewport and marker alive so later
+  // retries can recover after snapshot replay grows the buffer. Callers
+  // (restoreScrollState, the timeout in
   // restoreScrollStateAfterLayout, cancelDeferredScrollRestore) own disposal.
   if (safeScrollCall(() => terminal.scrollToLine(targetLine))) {
     forceViewportScrollbarSync(terminal)

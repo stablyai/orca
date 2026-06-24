@@ -800,6 +800,7 @@ export function connectPanePty(
   let unregisterDocumentVisibilityRecovery: (() => void) | null = null
   let cleanupHiddenOutputRestoreDeferredRetry = (): void => {}
   let unregisterE2ePtyDataInjection = (): void => {}
+  let hiddenOutputRestoreScrollDisposable: IDisposable | null = null
   let startupInjectTimer: ReturnType<typeof setTimeout> | null = null
   let sshShellReadyFallbackTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteNotificationGraceTimer: ReturnType<typeof setTimeout> | null = null
@@ -3141,12 +3142,12 @@ export function connectPanePty(
       restoreScrollStateAfterLayout(pane.terminal, state)
     }
 
-    function applyMainBufferSnapshot(snapshot: {
+    async function applyMainBufferSnapshot(snapshot: {
       data: string
       cols: number
       rows: number
       seq?: number
-    }): void {
+    }): Promise<void> {
       const scrollState = captureScrollStateForSnapshotReplay()
       const colsBeforeReplay = pane.terminal.cols
       const rowsBeforeReplay = pane.terminal.rows
@@ -3170,9 +3171,9 @@ export function connectPanePty(
           suppressSnapshotReplayPtyResize = false
         }
       }
-      writeReplayData('\x1b[2J\x1b[3J\x1b[H')
-      writeReplayData(snapshot.data)
-      writeReplayData(POST_REPLAY_LIVE_SNAPSHOT_RESET)
+      await writeReplayDataAsync(
+        `\x1b[2J\x1b[3J\x1b[H${snapshot.data}${POST_REPLAY_LIVE_SNAPSHOT_RESET}`
+      )
       hiddenRendererStateDirty = false
       recordTerminalOutput(pane.terminal)
       const currentPtyId = transport.getPtyId()
@@ -3194,7 +3195,10 @@ export function connectPanePty(
       restoreScrollStateAfterSnapshotReplay(scrollState)
     }
 
-    function requestHiddenOutputRestoreIfNeeded(opts?: { bypassScheduler?: boolean }): boolean {
+    function requestHiddenOutputRestoreIfNeeded(opts?: {
+      bypassScheduler?: boolean
+      ignoreRestoredScrollState?: boolean
+    }): boolean {
       resetHiddenOutputRestoreIfPtyChanged()
       const ptyId = hiddenOutputRestorePtyId ?? transport.getPtyId()
       if (!hiddenOutputRestoreNeeded && hiddenOutputRestorePendingChunks.length === 0) {
@@ -3204,6 +3208,12 @@ export function connectPanePty(
         return false
       }
       hiddenOutputRestorePtyId = ptyId
+      if (shouldDeferHiddenOutputRestoreForScrolledViewport(opts)) {
+        // Why: snapshot replay clears and rebuilds xterm from the top. If the
+        // user is reading scrollback, wait until they return to bottom.
+        hiddenOutputRestoreRetryDeferred = true
+        return true
+      }
       if (hiddenOutputRestoreInFlight) {
         return true
       }
@@ -3298,7 +3308,7 @@ export function connectPanePty(
             return
           }
           hiddenOutputRestoreDeferredRetryAttempts = 0
-          applyMainBufferSnapshot(snapshot)
+          await applyMainBufferSnapshot(snapshot)
           const needsFreshSnapshot = hiddenOutputRestoreFreshSnapshotNeeded
           hiddenOutputRestoreFreshSnapshotNeeded = false
           if (drainPendingLiveChunksAfterSnapshot(snapshot.seq) && !needsFreshSnapshot) {
@@ -3329,6 +3339,41 @@ export function connectPanePty(
         }
       })
       return true
+    }
+
+    function shouldDeferHiddenOutputRestoreForScrolledViewport(opts?: {
+      ignoreRestoredScrollState?: boolean
+    }): boolean {
+      if (!shouldWritePtyOutputForeground(deps.isVisibleRef.current)) {
+        return false
+      }
+      const restoredScrollState = deps.restoredScrollStatesByLeafId?.[pane.leafId]
+      if (
+        !opts?.ignoreRestoredScrollState &&
+        restoredScrollState?.bufferType === 'normal' &&
+        !restoredScrollState.wasAtBottom
+      ) {
+        return true
+      }
+      const buffer = pane.terminal.buffer.active
+      return buffer.type === 'normal' && buffer.baseY > 0 && buffer.viewportY < buffer.baseY
+    }
+
+    const terminalOnScroll = (
+      pane.terminal as typeof pane.terminal & {
+        onScroll?: (listener: (position: number) => void) => IDisposable
+      }
+    ).onScroll
+    if (typeof terminalOnScroll === 'function') {
+      hiddenOutputRestoreScrollDisposable = terminalOnScroll.call(pane.terminal, () => {
+        if (
+          hiddenOutputRestoreRetryDeferred &&
+          !shouldDeferHiddenOutputRestoreForScrolledViewport({ ignoreRestoredScrollState: true })
+        ) {
+          hiddenOutputRestoreRetryDeferred = false
+          requestHiddenOutputRestoreIfNeeded({ ignoreRestoredScrollState: true })
+        }
+      })
     }
 
     unregisterBacklogRecovery = registerTerminalBacklogRecovery(
@@ -4123,6 +4168,8 @@ export function connectPanePty(
       unregisterBacklogRecovery = null
       unregisterDocumentVisibilityRecovery?.()
       unregisterDocumentVisibilityRecovery = null
+      hiddenOutputRestoreScrollDisposable?.dispose()
+      hiddenOutputRestoreScrollDisposable = null
       clearPanePtyFitBinding()
       discardTerminalOutput(pane.terminal)
       unregisterE2ePtyDataInjection()

@@ -4,7 +4,7 @@ import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinat
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TerminalScrollStateSnapshot, TuiAgent } from '../../../../shared/types'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
 
 export type PtyConnectionDeps = {
@@ -31,6 +31,7 @@ export type PtyConnectionDeps = {
   } | null
   restoredLeafId?: string | null
   restoredPtyIdByLeafId?: Record<string, string>
+  restoredScrollStatesByLeafId?: Record<string, TerminalScrollStateSnapshot>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   paneMode2031Ref: React.RefObject<Map<number, boolean>>
   paneLastThemeModeRef: React.RefObject<Map<number, TerminalColorSchemeMode>>

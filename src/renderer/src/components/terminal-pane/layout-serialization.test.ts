@@ -1,6 +1,6 @@
 /* oxlint-disable max-lines -- Why: this test keeps split layout replay fixtures together so
  * stable leaf-id migration regressions are visible in one focused suite. */
-import { describe, expect, it, beforeAll } from 'vitest'
+import { describe, expect, it, beforeAll, vi } from 'vitest'
 import type { TerminalPaneLayoutNode } from '../../../../shared/types'
 
 // ---------------------------------------------------------------------------
@@ -40,7 +40,8 @@ import {
   serializeTerminalLayout,
   EMPTY_LAYOUT,
   collectLeafIdsInOrder,
-  collectLeafIdsInReplayCreationOrder
+  collectLeafIdsInReplayCreationOrder,
+  replayTerminalLayout
 } from './layout-serialization'
 
 // ---------------------------------------------------------------------------
@@ -318,6 +319,42 @@ describe('serializeTerminalLayout', () => {
       root: { type: 'leaf', leafId: LEAF_1 },
       activeLeafId: null,
       expandedLeafId: null
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// replayTerminalLayout
+// ---------------------------------------------------------------------------
+describe('replayTerminalLayout', () => {
+  it('does not schedule moved-pane scroll restore while rebuilding saved splits', () => {
+    const initialPane = { id: 1, leafId: LEAF_1 }
+    const createdPane = { id: 2, leafId: LEAF_2 }
+    const manager = {
+      createInitialPane: vi.fn(() => initialPane),
+      splitPane: vi.fn(() => createdPane),
+      getActivePane: vi.fn(() => initialPane)
+    }
+
+    replayTerminalLayout(
+      manager as never,
+      {
+        root: {
+          type: 'split',
+          direction: 'vertical',
+          first: { type: 'leaf', leafId: LEAF_1 },
+          second: { type: 'leaf', leafId: LEAF_2 }
+        },
+        activeLeafId: LEAF_1,
+        expandedLeafId: null
+      },
+      true
+    )
+
+    expect(manager.splitPane).toHaveBeenCalledWith(1, 'vertical', {
+      ratio: undefined,
+      leafId: LEAF_2,
+      restoreMovedPaneScroll: false
     })
   })
 })

@@ -274,7 +274,11 @@ export function replayTerminalLayout(
 
     const createdPane = manager.splitPane(paneId, node.direction as TerminalPaneSplitDirection, {
       ratio: node.ratio,
-      leafId: getLeftmostLeafId(node.second)
+      leafId: getLeftmostLeafId(node.second),
+      // Why: replay splits an empty initial pane before scrollback restore.
+      // Restoring that pre-replay viewport later would jump the restored pane
+      // back to the top.
+      restoreMovedPaneScroll: false
     })
     if (!createdPane) {
       restoreNode(node.first, paneId)

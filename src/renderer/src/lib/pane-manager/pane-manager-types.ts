@@ -24,6 +24,14 @@ export type PaneSpawnHints = {
   ptyId?: string
 }
 
+export type PaneSplitOptions = {
+  ratio?: number
+  cwd?: string
+  leafId?: string
+  ptyId?: string
+  restoreMovedPaneScroll?: boolean
+}
+
 export type ClosedPaneInfo = {
   paneId: number
   leafId: TerminalLeafId

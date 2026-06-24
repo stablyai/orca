@@ -46,6 +46,9 @@ vi.mock('react', async (importOriginal) => {
     useEffect: (effect: () => void | (() => void)) => {
       effect()
     },
+    useLayoutEffect: (effect: () => void | (() => void)) => {
+      effect()
+    },
     useRef: <T>(value: T) => {
       const index = reactRefState.index
       reactRefState.index += 1
@@ -576,7 +579,6 @@ describe('useTerminalPaneGlobalEffects', () => {
     }
     const initialState = { marker: 'initial' }
     const preHideState = { marker: 'before-hide' }
-    const corruptedHiddenState = { marker: 'hidden-corrupted' }
     let nextCapturedState = initialState
     mocks.captureScrollState.mockImplementation(() => nextCapturedState)
 
@@ -608,7 +610,6 @@ describe('useTerminalPaneGlobalEffects', () => {
       isVisible: false
     })
 
-    nextCapturedState = corruptedHiddenState
     beginHookRender()
     useTerminalPaneGlobalEffects({
       ...baseArgs,
@@ -616,9 +617,9 @@ describe('useTerminalPaneGlobalEffects', () => {
       isVisible: true
     })
 
-    expect(mocks.captureScrollState).toHaveBeenCalledTimes(2)
+    expect(mocks.captureScrollState).toHaveBeenCalledTimes(1)
     expect(manager.suspendRendering).toHaveBeenCalledTimes(1)
-    expect(mocks.restoreScrollStateAfterLayout).toHaveBeenLastCalledWith(terminalA, preHideState)
+    expect(mocks.restoreScrollStateAfterLayout).toHaveBeenLastCalledWith(terminalA, initialState)
   })
 
   it('clears WebGL texture atlases when the active visible terminal regains focus', () => {

@@ -3342,6 +3342,9 @@ export class OrcaRuntimeService {
     if (layout.scrollbackRefsByLeafId) {
       cloned.scrollbackRefsByLeafId = { ...layout.scrollbackRefsByLeafId }
     }
+    if (layout.scrollStatesByLeafId) {
+      cloned.scrollStatesByLeafId = { ...layout.scrollStatesByLeafId }
+    }
     if (layout.titlesByLeafId) {
       cloned.titlesByLeafId = { ...layout.titlesByLeafId }
     }

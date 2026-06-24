@@ -149,4 +149,95 @@ describe('useTerminalScrollVisibilityMemory', () => {
     expect(cancelAnimationFrame).toHaveBeenCalledWith(7)
     expect(mocks.flushTerminalOutput).not.toHaveBeenCalled()
   })
+
+  it('uses remembered visible scroll snapshots when requested', () => {
+    const visibleState = {
+      bufferType: 'normal',
+      wasAtBottom: false,
+      viewportY: 42,
+      baseY: 80
+    }
+    const scrollHandlers: (() => void)[] = []
+    const terminal = {
+      onScroll: vi.fn((handler: () => void) => {
+        scrollHandlers.push(handler)
+        return { dispose: vi.fn() }
+      })
+    }
+    const manager = {
+      getPanes: vi.fn(() => [{ id: 1, terminal }])
+    }
+    mocks.captureScrollState.mockReturnValue(visibleState)
+
+    beginHookRender()
+    const visibilityMemory = useTerminalScrollVisibilityMemory({
+      managerRef: { current: manager as never },
+      isVisibleRef: { current: true },
+      visibleResumeCompleteRef: { current: true },
+      paneCount: 1
+    })
+
+    const [scrollHandler] = scrollHandlers
+    if (!scrollHandler) {
+      throw new Error('expected scroll handler')
+    }
+    scrollHandler()
+    const captured = visibilityMemory.captureViewportPositions(true)
+
+    expect(captured.get(1)).toBe(visibleState)
+    expect(mocks.captureScrollState).toHaveBeenCalledTimes(1)
+  })
+
+  it('tracks xterm viewport scroll events as visible snapshots', () => {
+    const visibleState = {
+      bufferType: 'normal',
+      wasAtBottom: false,
+      viewportY: 31,
+      baseY: 60
+    }
+    const hiddenState = {
+      bufferType: 'normal',
+      wasAtBottom: false,
+      viewportY: 0,
+      baseY: 60
+    }
+    const container = {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    }
+    const terminal = {
+      onScroll: vi.fn(() => ({ dispose: vi.fn() }))
+    }
+    const manager = {
+      getPanes: vi.fn(() => [
+        {
+          id: 1,
+          terminal,
+          container
+        }
+      ])
+    }
+    mocks.captureScrollState.mockReturnValueOnce(visibleState).mockReturnValueOnce(hiddenState)
+
+    beginHookRender()
+    const visibilityMemory = useTerminalScrollVisibilityMemory({
+      managerRef: { current: manager as never },
+      isVisibleRef: { current: true },
+      visibleResumeCompleteRef: { current: true },
+      paneCount: 1
+    })
+
+    const viewportScrollHandler = container.addEventListener.mock.calls[0]?.[1] as
+      | (() => void)
+      | undefined
+    if (!viewportScrollHandler) {
+      throw new Error('expected viewport scroll handler')
+    }
+    viewportScrollHandler()
+    mocks.captureScrollState.mockReturnValue(hiddenState)
+    const captured = visibilityMemory.captureViewportPositions(true)
+
+    expect(captured.get(1)).toBe(visibleState)
+    expect(mocks.captureScrollState).toHaveBeenCalledTimes(1)
+  })
 })
