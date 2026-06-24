@@ -168,6 +168,20 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
   ].includes(joined)
 }
 
+// Why: the flags a command actually accepts are its own allowedFlags plus the
+// always-accepted globals and the conditional --page. validateCommandAndFlags and
+// agent-context must report the same effective set so the schema doesn't
+// under-report valid flags like --json/--help.
+export function effectiveAllowedFlags(spec: CommandSpec): string[] {
+  return [
+    ...new Set([
+      ...GLOBAL_FLAGS,
+      ...spec.allowedFlags,
+      ...(supportsBrowserPageFlag(spec.path) ? ['page'] : [])
+    ])
+  ]
+}
+
 export function isCommandGroup(commandPath: string[]): boolean {
   return (
     (commandPath.length === 1 &&
@@ -206,7 +220,10 @@ export function isCommandGroup(commandPath: string[]): boolean {
 export function normalizeCommandPositionals(specs: CommandSpec[], parsed: ParsedArgs): ParsedArgs {
   for (const spec of specs) {
     const positionalArgs = spec.positionalArgs ?? []
-    if (positionalArgs.length === 0) {
+    // Why: a spec with no positionals AND no aliases has nothing to normalize.
+    // Aliased specs still fall through so an aliased path is canonicalized even
+    // when the command takes no positionals (e.g. `worktree remove` → `rm`).
+    if (positionalArgs.length === 0 && !spec.aliases) {
       continue
     }
     // Why: match against the canonical path AND any alias so an aliased
@@ -214,8 +231,10 @@ export function normalizeCommandPositionals(specs: CommandSpec[], parsed: Parsed
     // validation run. This is the single canonicalization point — dispatch then
     // keys the handler map on `spec.path`, never the alias the user typed.
     for (const base of specPaths(spec)) {
+      // Why: `< 0` (not `<= 0`) so an exact base match with zero positionals
+      // still canonicalizes an aliased path; upper bound guards over-consumption.
       const positionalCount = parsed.commandPath.length - base.length
-      if (positionalCount <= 0 || positionalCount > positionalArgs.length) {
+      if (positionalCount < 0 || positionalCount > positionalArgs.length) {
         continue
       }
       if (!matches(parsed.commandPath.slice(0, base.length), base)) {
@@ -269,13 +288,10 @@ export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs
   for (const flag of parsed.flags.keys()) {
     const isGlobalFlag = GLOBAL_FLAGS.includes(flag)
     if (!isGlobalFlag && !spec.allowedFlags.includes(flag) && !(flag === 'page' && pageAllowed)) {
-      const validFlags = [
-        ...new Set([...GLOBAL_FLAGS, ...spec.allowedFlags, ...(pageAllowed ? ['page'] : [])])
-      ]
       throw new RuntimeClientError(
         'invalid_argument',
         `Unknown flag --${flag} for command: ${spec.path.join(' ')}`,
-        unknownFlagData(flag, validFlags)
+        unknownFlagData(flag, effectiveAllowedFlags(spec))
       )
     }
   }

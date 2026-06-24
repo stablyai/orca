@@ -40,6 +40,15 @@ describe('buildAgentContext', () => {
     ])
   })
 
+  it('reports effective flags including globals, not just allowedFlags', () => {
+    const schema = buildAgentContext(specs)
+    const rm = schema.commands.find((command) => command.command === 'worktree rm')
+    expect(rm?.flags).toContain('worktree')
+    expect(rm?.flags).toContain('force')
+    expect(rm?.flags).toContain('json')
+    expect(rm?.flags).toContain('help')
+  })
+
   it('orders commands deterministically', () => {
     const schema = buildAgentContext(specs)
     expect(schema.commands.map((command) => command.command)).toEqual([

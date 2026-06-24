@@ -113,18 +113,23 @@ import {
   main,
   normalizeWorktreeSelector
 } from './index'
-import { GLOBAL_FLAGS } from './args'
+import { GLOBAL_FLAGS, specPaths } from './args'
 import { RuntimeRpcFailureError } from './runtime-client'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../shared/pairing'
 
 describe('COMMAND_SPECS collision check', () => {
-  it('has no duplicate command paths', () => {
+  it('has no duplicate command or alias paths', () => {
+    // Why: resolution is first-match-wins over canonical paths AND aliases, so a
+    // duplicate alias (colliding with a canonical path or another alias) would
+    // silently shadow a real command. Fail the build if one is ever introduced.
     const seen = new Set<string>()
     for (const spec of COMMAND_SPECS) {
-      const key = spec.path.join(' ')
-      expect(seen.has(key), `Duplicate COMMAND_SPECS path: "${key}"`).toBe(false)
-      seen.add(key)
+      for (const path of specPaths(spec)) {
+        const key = path.join(' ')
+        expect(seen.has(key), `Duplicate command/alias path: "${key}"`).toBe(false)
+        seen.add(key)
+      }
     }
   })
 

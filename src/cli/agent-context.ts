@@ -1,4 +1,5 @@
 import type { CommandSpec } from './args'
+import { effectiveAllowedFlags } from './args'
 
 // Why: introspection layer 2 — a machine-readable dump of the whole command
 // surface so an agent with no skill loaded can discover the real verbs, aliases,
@@ -33,7 +34,9 @@ export function buildAgentContext(specs: CommandSpec[]): AgentContextSchema {
       aliases: spec.aliases ?? [],
       summary: spec.summary,
       usage: spec.usage,
-      flags: spec.allowedFlags,
+      // Why: the effective accepted set (globals + conditional --page), not just
+      // allowedFlags — otherwise agents treat --json/--help as unsupported.
+      flags: effectiveAllowedFlags(spec),
       positionalArgs: spec.positionalArgs ?? [],
       examples: spec.examples ?? [],
       notes: spec.notes ?? []
