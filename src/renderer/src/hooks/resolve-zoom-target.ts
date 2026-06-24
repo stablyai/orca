@@ -55,11 +55,10 @@ export function resolveZoomTarget(args: {
   if (activeTabType === 'editor' || editorFocused) {
     return 'editor'
   }
-  // Why: terminal tabs should keep using per-pane terminal font zoom even when
-  // focus leaves the xterm textarea (e.g. clicking tab bar/sidebar controls).
-  // Falling back to UI zoom here would resize the whole app for a terminal-only
-  // action and break parity with terminal zoom behavior.
-  if (activeTabType === 'terminal' || terminalInputFocused) {
+  // Why: terminal zoom is focus-owned. After the user clicks app chrome or
+  // whitespace, the active terminal tab remains visible but app zoom should own
+  // Cmd/Ctrl +/- until xterm focus returns.
+  if (terminalInputFocused) {
     return 'terminal'
   }
   return 'ui'
