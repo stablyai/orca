@@ -52,6 +52,19 @@ export type BuildInitialGitHubWorkItemRequestArgs = {
   telemetrySource?: WorktreeCreationRequest['telemetrySource']
 }
 
+type QuickCreateLinkedWorkItemPromptResult = ReturnType<
+  typeof resolveQuickCreateLinkedWorkItemPrompt
+>
+
+function resolveGitHubWorkItemPrompt(item: GitHubWorkItem): QuickCreateLinkedWorkItemPromptResult {
+  const resolver = resolveQuickCreateLinkedWorkItemPrompt as unknown as (
+    linkedWorkItem: GitHubWorkItem,
+    note: string,
+    opts?: { cliAvailable: boolean }
+  ) => QuickCreateLinkedWorkItemPromptResult
+  return resolver(item, '', { cliAvailable: false })
+}
+
 export function buildGitHubWorkItemBackendStartup(
   agent: TuiAgent | null,
   startupPlan: AgentStartupPlan | null,
@@ -129,9 +142,7 @@ export function buildGitHubWorkItemStartupPlan(args: {
   if (!agent) {
     return { startupPlan: null, quickPrompt: '', quickTelemetry: null }
   }
-  const { prompt: quickPrompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(item, '', {
-    cliAvailable: false
-  })
+  const { prompt: quickPrompt, draftPrompt } = resolveGitHubWorkItemPrompt(item)
   const projectRuntime = repo.connectionId
     ? undefined
     : getLocalRepoProjectExecutionRuntimeContext(
