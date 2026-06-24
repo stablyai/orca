@@ -230,7 +230,7 @@ export default function TabGroupPanel({
           user can only drag from the tiny left-sidebar header strip. */}
       <div
         className="h-[32px] shrink-0 border-b border-border bg-card"
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        data-terminal-focus-release-surface="true"
       >
         <div className="flex h-full items-stretch pr-1.5">
           {/* Why: Electron's native drag hit-test only respects no-drag on DOM

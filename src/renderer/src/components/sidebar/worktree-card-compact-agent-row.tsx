@@ -10,6 +10,7 @@ import { translate } from '@/i18n/i18n'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { getAgentRowTabName } from '@/lib/agent-row-tab-name'
 import type { AgentRowContentMode } from '../../../../shared/types'
+import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
 
 function formatShortTimeAgo(ts: number, now: number): string {
   const delta = now - ts
@@ -98,6 +99,7 @@ type CompactAgentRowProps = {
   reserveDisclosureGutter?: boolean
   isFocusedPane?: boolean
   hideIdentityIcon?: boolean
+  cacheTimerActive?: boolean
 }
 
 export const CompactAgentRow = React.memo(function CompactAgentRow({
@@ -113,7 +115,8 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   onToggleChildAgents,
   reserveDisclosureGutter = false,
   isFocusedPane = false,
-  hideIdentityIcon = false
+  hideIdentityIcon = false,
+  cacheTimerActive = true
 }: CompactAgentRowProps) {
   const hasChildDisclosure =
     typeof childAgentCount === 'number' &&
@@ -128,6 +131,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const isLineageChild = agent.lineage?.depth === 1
   const secondary = isTabNameMode ? agentStateLabel(dotState) : getCompactAgentSecondary(agent)
   const shortTime = getCompactAgentTime(agent, now)
+  const cacheTimer = usePromptCacheCountdownForPane(agent.paneKey, cacheTimerActive)
 
   const handleActivate = useCallback(
     (e: React.MouseEvent) => {
@@ -224,6 +228,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           +{childAgentCount}
         </span>
       )}
+      {cacheTimer && <CacheTimer startedAt={cacheTimer.startedAt} ttlMs={cacheTimer.ttlMs} />}
       {shortTime && (
         <span
           className={cn(
