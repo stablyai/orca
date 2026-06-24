@@ -15,7 +15,10 @@ describe('contextual tour definitions', () => {
       'tasks',
       'automations',
       'floating-workspace',
-      'workspace-creation'
+      'workspace-creation',
+      'folder-workspace-create-callout',
+      'folder-workspace-creation',
+      'folder-workspace-overview'
     ]
 
     expect(CONTEXTUAL_TOURS.map((tour) => tour.id)).toEqual(expectedIds)
@@ -23,9 +26,8 @@ describe('contextual tour definitions', () => {
       expect(tour.steps[0]?.requiredForStart).toBe(true)
       const stepCount = (tour.steps as readonly unknown[]).length
       if (stepCount === 1) {
-        expect(
-          (tour.steps[0] as ContextualTour['steps'][number]).advanceOnFeatureInteraction
-        ).toBeTruthy()
+        const step = tour.steps[0] as ContextualTour['steps'][number]
+        expect(step.advanceOnFeatureInteraction ?? step.primaryAction).toBeTruthy()
       } else {
         expect(stepCount).toBeGreaterThanOrEqual(2)
       }
@@ -185,8 +187,13 @@ describe('contextual tour definitions', () => {
       (tour) => tour.allowedActiveModals?.length
     )
 
-    expect(modalTours.map((tour) => tour.id)).toEqual(['workspace-creation'])
-    expect(modalTours[0]?.allowedActiveModals).toEqual(['new-workspace-composer'])
+    expect(modalTours.map((tour) => tour.id)).toEqual([
+      'workspace-creation',
+      'folder-workspace-creation'
+    ])
+    for (const tour of modalTours) {
+      expect(tour.allowedActiveModals).toEqual(['new-workspace-composer'])
+    }
   })
 
   it('normalizes persisted ids by removing unknowns and duplicates', () => {
@@ -197,9 +204,16 @@ describe('contextual tour definitions', () => {
         'workspace-agent-sessions',
         'browser',
         'tasks',
+        'folder-workspace-create-callout',
         null,
         'workspace-creation'
       ])
-    ).toEqual(['tasks', 'workspace-agent-sessions', 'browser', 'workspace-creation'])
+    ).toEqual([
+      'tasks',
+      'workspace-agent-sessions',
+      'browser',
+      'folder-workspace-create-callout',
+      'workspace-creation'
+    ])
   })
 })

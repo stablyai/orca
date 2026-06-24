@@ -516,19 +516,36 @@ export default function NewWorkspaceComposerCard({
     () => projectHostSetupOptions.filter((option) => option.kind === 'ready'),
     [projectHostSetupOptions]
   )
+  const selectedProjectOption = React.useMemo(
+    () => projectOptions.find((option) => option.id === selectedProjectId) ?? null,
+    [projectOptions, selectedProjectId]
+  )
+  const isFolderWorkspaceTarget = selectedProjectOption?.kind === 'project-group'
   const handleProjectHostSetupChange = React.useCallback(
     (setupId: string): void => {
       onProjectHostSetupChange?.(setupId)
     },
     [onProjectHostSetupChange]
   )
+  const isOnboardingFolderWorkspaceTourHandoff =
+    isFolderWorkspaceTarget && contextualTourSource === 'folder_workspace_creation_modal'
   useContextualTour(
-    'workspace-creation',
+    isFolderWorkspaceTarget ? 'folder-workspace-creation' : 'workspace-creation',
     projectOptions.length > 0 && Boolean(selectedProjectId),
     contextualTourSource ??
       (activeModal === 'new-workspace-composer'
-        ? 'workspace_creation_modal'
-        : 'workspace_creation_visible')
+        ? isFolderWorkspaceTarget
+          ? 'folder_workspace_creation_modal'
+          : 'workspace_creation_modal'
+        : isFolderWorkspaceTarget
+          ? 'folder_workspace_creation_visible'
+          : 'workspace_creation_visible'),
+    {
+      recordFeatureInteraction: !isOnboardingFolderWorkspaceTourHandoff,
+      featureInteractionPersisted: isOnboardingFolderWorkspaceTourHandoff
+        ? Promise.resolve()
+        : undefined
+    }
   )
 
   return (

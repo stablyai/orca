@@ -54,7 +54,9 @@ describe('RepoStep', () => {
     expect(html).toContain('Browse for a folder')
     expect(html).toContain('group-hover:translate-x-0.5')
     expect(html).toContain('w-fit max-w-[calc(100%-3.75rem)]')
-    expect(html).toContain('Want to import many repos at once? Select the parent folder.')
+    expect(html).toContain(
+      'Working in a monorepo? Select the folder above your apps/services to import them as a group.'
+    )
   })
 
   it('disables the nested import action when no repositories are selected', () => {
@@ -75,9 +77,10 @@ describe('RepoStep', () => {
 
     expect(html).toContain('Import repositories')
     expect(html).toContain('Scanned folder: platform - /workspace/platform')
-    expect(html).not.toContain('Group name')
-    expect(html).not.toContain('Import separately')
-    expect(html).not.toContain('Import as project group')
+    expect(html).toContain('Is this a monorepo?')
+    expect(html).toContain('Group name')
+    expect(html).toContain('No, import separately')
+    expect(html).toContain('Import as group')
     expect(html.match(/disabled=""/g)?.length).toBeGreaterThanOrEqual(1)
   })
 
@@ -130,6 +133,6 @@ describe('RepoStep', () => {
     expect(html).toContain('web')
     expect(html).toContain('payments/api')
     expect(html).toContain('billing/api')
-    expect(html).not.toContain('Project group')
+    expect(html).toContain('Import as group')
   })
 })

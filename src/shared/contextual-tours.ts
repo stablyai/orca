@@ -8,6 +8,9 @@ export type ContextualTourId =
   | 'automations'
   | 'floating-workspace'
   | 'workspace-creation'
+  | 'folder-workspace-create-callout'
+  | 'folder-workspace-creation'
+  | 'folder-workspace-overview'
 
 export type ContextualTourStepControl = {
   kind: 'auto-rename-branch-from-work'
@@ -21,6 +24,12 @@ export type ContextualTourStepActionKind =
   | 'show-worktrees'
   | 'open-tasks'
   | 'open-getting-started'
+  | 'create-folder-workspace'
+
+export type ContextualTourStepPreAction = {
+  kind: 'show-folder-sidebar-tab'
+  tab: 'workspaces' | 'pr-checks'
+}
 
 export type ContextualTourStepAction = {
   kind: ContextualTourStepActionKind
@@ -42,6 +51,7 @@ export type ContextualTourStep = {
   primaryAction?: ContextualTourStepAction
   secondaryAction?: ContextualTourStepAction
   advanceOnFeatureInteraction?: FeatureInteractionId
+  preStepAction?: ContextualTourStepPreAction
 }
 
 export type ContextualTour = {
@@ -200,6 +210,76 @@ export const CONTEXTUAL_TOURS = [
         title: 'Choose what agent starts the work',
         body: 'Pick the agent that should be opened when this worktree is created.',
         targetSelector: '[data-contextual-tour-target="workspace-creation-agent"]'
+      }
+    ]
+  },
+  {
+    id: 'folder-workspace-create-callout',
+    steps: [
+      {
+        title: 'Create a folder workspace',
+        body: 'Run an agent from the parent folder when a task spans multiple repos.',
+        targetSelector: '[data-contextual-tour-target="folder-workspace-create-onboarding"]',
+        requiredForStart: true,
+        preferredPlacement: 'right',
+        primaryAction: { kind: 'create-folder-workspace', label: 'Create workspace' }
+      }
+    ]
+  },
+  {
+    id: 'folder-workspace-creation',
+    allowedActiveModals: ['new-workspace-composer'],
+    steps: [
+      {
+        title: 'Pick the folder group',
+        body: 'Choose the parent folder that this workspace should run from.',
+        targetSelector: '[data-contextual-tour-target="workspace-creation-project"]',
+        requiredForStart: true
+      },
+      {
+        title: 'Name the parent workspace',
+        body: 'Give this parent workspace a short name for the task spanning these repos.',
+        targetSelector: '[data-contextual-tour-target="workspace-creation-name"]'
+      },
+      {
+        title: 'Choose what agent starts in the parent folder',
+        body: 'Pick the agent that should open in the parent folder workspace.',
+        targetSelector: '[data-contextual-tour-target="workspace-creation-agent"]'
+      }
+    ]
+  },
+  {
+    id: 'folder-workspace-overview',
+    steps: [
+      {
+        title: 'Attached worktrees',
+        body: 'Worktrees created from this parent workspace appear here.',
+        targetSelector:
+          '[data-contextual-tour-target="folder-workspace-worktrees-tab"], [data-contextual-tour-target="folder-workspace-attached-empty"]',
+        requiredForStart: true,
+        preferredPlacement: 'left',
+        // Why: these targets live behind right-sidebar tabs; pre-route before
+        // measuring so the overlay never attaches to a hidden tab panel.
+        preStepAction: { kind: 'show-folder-sidebar-tab', tab: 'workspaces' },
+        primaryAction: { kind: 'next', label: 'Next' }
+      },
+      {
+        title: 'Review checks',
+        body: 'Once attached worktrees have PRs or MRs, this rolls up failing, pending, and passing checks across repos.',
+        targetSelector:
+          '[data-contextual-tour-target="folder-workspace-review-checks-tab"], [data-contextual-tour-target="folder-workspace-review-checks-empty"]',
+        preferredPlacement: 'left',
+        // Why: these targets live behind right-sidebar tabs; pre-route before
+        // measuring so the overlay never attaches to a hidden tab panel.
+        preStepAction: { kind: 'show-folder-sidebar-tab', tab: 'pr-checks' },
+        primaryAction: { kind: 'next', label: 'Next' }
+      },
+      {
+        title: 'Start a child workspace',
+        body: 'Creating from the parent workspace keeps related child work attached.',
+        targetSelector: '[data-contextual-tour-target="folder-workspace-child-create"]',
+        preferredPlacement: 'right',
+        primaryAction: { kind: 'complete', label: 'Done' }
       }
     ]
   }

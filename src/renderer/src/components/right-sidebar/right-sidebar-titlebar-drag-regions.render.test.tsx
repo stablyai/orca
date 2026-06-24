@@ -321,7 +321,9 @@ describe('rendered right sidebar titlebar drag regions', () => {
     expect(markup).toContain('aria-label="Agents')
     expect(markup).not.toContain('aria-label="Search')
     expect(markup).toContain('aria-label="Attached worktrees')
-    expect(markup).toContain('aria-label="PR Checks')
+    expect(markup).toContain('aria-label="Review checks')
+    expect(markup).toContain('data-contextual-tour-target="folder-workspace-worktrees-tab"')
+    expect(markup).toContain('data-contextual-tour-target="folder-workspace-review-checks-tab"')
     expect(markup).not.toContain('aria-label="Source Control')
     expect(markup).not.toContain('aria-label="Checks')
   })
@@ -362,7 +364,7 @@ describe('rendered right sidebar titlebar drag regions', () => {
 
     await act(async () => {
       container
-        .querySelector<HTMLButtonElement>('[aria-label^="PR Checks"]')
+        .querySelector<HTMLButtonElement>('[aria-label^="Review checks"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 

@@ -5,6 +5,8 @@ import {
   type ContextualTourId,
   type ContextualTourStepAction
 } from '../../../../shared/contextual-tours'
+import { getFeatureInteractionIdForContextualTour } from '../../../../shared/contextual-tour-feature-interactions'
+import { hasFeatureInteraction } from '../../../../shared/feature-interactions'
 import type { ContextualTourOutcome } from '../../../../shared/feature-education-telemetry'
 import {
   trackContextualTourOutcome,
@@ -23,7 +25,10 @@ import {
 } from './ContextualTourOverlaySurface'
 import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-active-terminal-pane-split'
 import { performContextualTourStepAction } from './contextual-tour-step-actions'
-import { openWorkspaceCreationComposerWithTourHandoff } from './workspace-creation-tour-handoff'
+import {
+  openFolderWorkspaceCreationComposerWithTourHandoff,
+  openWorkspaceCreationComposerWithTourHandoff
+} from './workspace-creation-tour-handoff'
 
 export function ContextualTourOverlay(): JSX.Element | null {
   const activeTourId = useAppStore((s) => s.activeContextualTourId)
@@ -41,6 +46,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const canCreateWorkspace = useAppStore((s) => s.repos.length > 0)
   const markContextualToursSeen = useAppStore((s) => s.markContextualToursSeen)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const advanceContextualTour = useAppStore((s) => s.advanceContextualTour)
   const regressContextualTour = useAppStore((s) => s.regressContextualTour)
   const dismissContextualTour = useAppStore((s) => s.dismissContextualTour)
@@ -205,7 +211,14 @@ export function ContextualTourOverlay(): JSX.Element | null {
     // paints, so missing or removed surfaces can retry on a later visit.
     markedTourIdRef.current = activeTourId
     markContextualToursSeen([activeTourId])
-  }, [activeTourId, markContextualToursSeen, renderState])
+    const featureInteractionId = getFeatureInteractionIdForContextualTour(activeTourId)
+    if (
+      featureInteractionId &&
+      !hasFeatureInteraction(useAppStore.getState().featureInteractions, featureInteractionId)
+    ) {
+      void recordFeatureInteraction(featureInteractionId)
+    }
+  }, [activeTourId, markContextualToursSeen, recordFeatureInteraction, renderState])
 
   useEffect(() => {
     if (!activeTourId || !renderState || telemetryTourIdRef.current === activeTourId) {
@@ -318,6 +331,13 @@ export function ContextualTourOverlay(): JSX.Element | null {
       openModal,
       canCreateWorkspace,
       openWorkspaceComposer: openWorkspaceCreationComposerWithTourHandoff,
+      openFolderWorkspaceComposer: (projectGroupId) => {
+        openFolderWorkspaceCreationComposerWithTourHandoff(projectGroupId)
+      },
+      folderWorkspaceGroupId:
+        renderState.targetElement instanceof HTMLElement
+          ? renderState.targetElement.getAttribute('data-folder-workspace-group-id')
+          : null,
       dispatchTerminalPaneSplit: requestActiveTerminalPaneSplit,
       schedule: (callback) => {
         window.setTimeout(callback, 0)

@@ -3403,7 +3403,10 @@
           "8401a7a0d0": "1 repository",
           "d4f1df62ef": "{{value0}} repositories",
           "b4263a2ac4": "Found {{value0}} in {{value1}}.",
-          "24eda6c8b2": "Scanning... {{value0}}"
+          "24eda6c8b2": "Scanning... {{value0}}",
+          "groupImportCopy": "Import them as a group if they're a monorepo or otherwise belong together. Orca will group them and let you work from the parent folder.",
+          "groupNameLabel": "Group name",
+          "importAsGroup": "Import as group"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "Stop scan",
@@ -8969,7 +8972,8 @@
             "fc3095d2ed": "explorer",
             "aiVaultSessionHistory": "Agents",
             "folderWorkspaces": "Attached worktrees",
-            "parentPrChecks": "PR Checks"
+            "parentPrChecks": "PR Checks",
+            "folderReviewChecks": "Review checks"
           },
           "right": {
             "panel": {
@@ -9481,7 +9485,14 @@
           "c3d9d44ca2": "Stop scan",
           "cf23006ba7": "Selected host",
           "7ec3f48820": "/home/user",
-          "2e6438dd34": "{{value0}}Found {{value1}} {{value2}} in this folder."
+          "220dd32d83": "Scanning...",
+          "2e6438dd34": "Found {{value0}} {{value1}} in this folder.",
+          "monorepoParentFolderHint": "Working in a monorepo? Select the folder above your apps/services to import them as a group.",
+          "fb33359f69": "Is this a monorepo?",
+          "d75170194e": "Import them as a group if they belong together. Orca will group them and let you work from the parent folder.",
+          "39d51212cc": "Group name",
+          "aa0247680d": "No, import separately",
+          "a0bc4d1f8e": "Import as group"
         },
         "ThemeStep": {
           "a4b254779d": "macOS Option key",
@@ -11644,13 +11655,15 @@
           "countOne": "1 attached worktree",
           "countMany": "{{value0}} attached worktrees",
           "emptyTitle": "No attached worktrees yet",
-          "emptyCopy": "Worktrees created from this workspace will show up here."
+          "emptyCopy": "Worktrees created from this workspace will show up here.",
+          "previewApiAuthFix": "api auth fix",
+          "previewWebSignupFlow": "web signup flow"
         },
         "FolderWorkspacePrChecksPanel": {
-          "unavailable": "PR checks are only shown for folder workspaces.",
-          "refresh": "Refresh PR checks",
+          "unavailable": "Review checks are only shown for folder workspaces.",
+          "refresh": "Refresh review checks",
           "emptyTitle": "No attached worktrees yet",
-          "emptyCopy": "PR checks will appear here after worktrees are attached to this folder workspace.",
+          "emptyCopy": "Review checks will appear here after worktrees are attached to this folder workspace.",
           "openChecksTab": "Open {{value0}} Checks tab",
           "openReviewExternally": "Open {{value0}} externally",
           "summary": "{{value0}} attached · {{value1}} with PR/MR · {{value2}} attention · {{value3}} pending · {{value4}} passing · {{value5}} no PR · {{value6}} unknown",

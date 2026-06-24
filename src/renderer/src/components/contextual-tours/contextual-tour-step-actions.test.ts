@@ -20,6 +20,8 @@ describe('performContextualTourStepAction', () => {
       openModal: vi.fn(),
       canCreateWorkspace: true,
       openWorkspaceComposer: vi.fn(),
+      openFolderWorkspaceComposer: vi.fn(),
+      folderWorkspaceGroupId: null,
       dispatchTerminalPaneSplit: vi.fn(),
       schedule: vi.fn()
     })
@@ -45,6 +47,8 @@ describe('performContextualTourStepAction', () => {
       openModal: vi.fn(),
       canCreateWorkspace: true,
       openWorkspaceComposer: vi.fn(),
+      openFolderWorkspaceComposer: vi.fn(),
+      folderWorkspaceGroupId: null,
       dispatchTerminalPaneSplit,
       schedule: vi.fn()
     })
@@ -73,6 +77,8 @@ describe('performContextualTourStepAction', () => {
       openModal: vi.fn(),
       canCreateWorkspace: true,
       openWorkspaceComposer,
+      openFolderWorkspaceComposer: vi.fn(),
+      folderWorkspaceGroupId: null,
       dispatchTerminalPaneSplit: vi.fn(),
       schedule: vi.fn()
     })
@@ -101,11 +107,41 @@ describe('performContextualTourStepAction', () => {
       openModal: vi.fn(),
       canCreateWorkspace: false,
       openWorkspaceComposer,
+      openFolderWorkspaceComposer: vi.fn(),
+      folderWorkspaceGroupId: null,
       dispatchTerminalPaneSplit: vi.fn(),
       schedule: vi.fn()
     })
 
     expect(detachContextualTourSource).not.toHaveBeenCalled()
     expect(openWorkspaceComposer).not.toHaveBeenCalled()
+  })
+
+  it('finishes the folder workspace callout before scheduling the composer handoff', () => {
+    const finishTour = vi.fn()
+    const openFolderWorkspaceComposer = vi.fn()
+    const schedule = vi.fn((callback: () => void) => callback())
+
+    performContextualTourStepAction({
+      action: { kind: 'create-folder-workspace', label: 'Create workspace' },
+      activeTabId: 'tab-1',
+      isLastStep: true,
+      finishTour,
+      advanceContextualTour: vi.fn(),
+      detachContextualTourSource: vi.fn(),
+      setSidebarOpen: vi.fn(),
+      openTaskPage: vi.fn(),
+      openModal: vi.fn(),
+      canCreateWorkspace: true,
+      openWorkspaceComposer: vi.fn(),
+      openFolderWorkspaceComposer,
+      folderWorkspaceGroupId: 'group-1',
+      dispatchTerminalPaneSplit: vi.fn(),
+      schedule
+    })
+
+    expect(finishTour).toHaveBeenCalledTimes(1)
+    expect(schedule).toHaveBeenCalledTimes(1)
+    expect(openFolderWorkspaceComposer).toHaveBeenCalledWith('group-1')
   })
 })

@@ -395,4 +395,29 @@ describe('contextual tour gate', () => {
       })
     ).toBeNull()
   })
+
+  it('runs folder sidebar pre-step routing before deciding whether the next step is visible', () => {
+    const tour = getContextualTour('folder-workspace-overview')
+    const routedTabs: string[] = []
+    const targetExists = (selector: string): boolean => {
+      if (selector.includes('folder-workspace-review-checks')) {
+        return routedTabs.at(-1) === 'pr-checks'
+      }
+      return false
+    }
+
+    expect(
+      getNextVisibleContextualTourStepIndex({
+        tour,
+        currentStepIndex: 0,
+        targetExists,
+        prepareStep: (step) => {
+          if (step.preStepAction?.kind === 'show-folder-sidebar-tab') {
+            routedTabs.push(step.preStepAction.tab)
+          }
+        }
+      })
+    ).toBe(1)
+    expect(routedTabs).toEqual(['pr-checks'])
+  })
 })

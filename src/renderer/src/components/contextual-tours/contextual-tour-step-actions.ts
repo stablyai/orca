@@ -13,6 +13,8 @@ export function performContextualTourStepAction(args: {
   openModal: (modal: 'setup-guide', data?: Record<string, unknown>) => void
   canCreateWorkspace: boolean
   openWorkspaceComposer: () => void
+  openFolderWorkspaceComposer: (projectGroupId: string) => void
+  folderWorkspaceGroupId: string | null
   dispatchTerminalPaneSplit: (detail: RequestActiveTerminalPaneSplitDetail) => void
   schedule: (callback: () => void) => void
 }): void {
@@ -44,6 +46,19 @@ export function performContextualTourStepAction(args: {
         args.detachContextualTourSource()
         args.setSidebarOpen(true)
         args.openWorkspaceComposer()
+      }
+      return
+    case 'create-folder-workspace':
+      if (args.folderWorkspaceGroupId) {
+        const projectGroupId = args.folderWorkspaceGroupId
+        // Why: opening the composer replaces this tour surface; finish first so
+        // the scheduled handoff does not compete with active-tour cleanup.
+        args.finishTour()
+        args.schedule(() => {
+          args.openFolderWorkspaceComposer(projectGroupId)
+        })
+      } else {
+        advanceOrFinish()
       }
       return
     case 'show-worktrees':

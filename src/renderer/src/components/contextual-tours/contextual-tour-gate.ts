@@ -72,11 +72,15 @@ export function hasContextualTourTarget(selector: string, root?: ParentNode): bo
 
 export function getContextualTourStartStepIndex(
   tour: ContextualTour,
-  targetExists: (selector: string) => boolean
+  targetExists: (selector: string) => boolean,
+  prepareStep?: (step: ContextualTourStep, index: number) => void
 ): number | null {
   const requiredStepIndex = tour.steps.findIndex((step) => step.requiredForStart === true)
   const startIndex = Math.max(requiredStepIndex, 0)
   const step = tour.steps[startIndex]
+  if (step) {
+    prepareStep?.(step, startIndex)
+  }
   if (!step || !targetExists(step.targetSelector)) {
     return null
   }
@@ -85,10 +89,12 @@ export function getContextualTourStartStepIndex(
 
 export function getVisibleContextualTourStepIndexes(
   tour: ContextualTour,
-  targetExists: (selector: string) => boolean
+  targetExists: (selector: string) => boolean,
+  prepareStep?: (step: ContextualTourStep, index: number) => void
 ): number[] {
   const indexes: number[] = []
   tour.steps.forEach((step, index) => {
+    prepareStep?.(step, index)
     if (targetExists(step.targetSelector)) {
       indexes.push(index)
     }
@@ -100,28 +106,38 @@ export function getNextVisibleContextualTourStepIndex(args: {
   tour: ContextualTour
   currentStepIndex: number
   targetExists: (selector: string) => boolean
+  prepareStep?: (step: ContextualTourStep, index: number) => void
 }): number | null {
-  return (
-    getVisibleContextualTourStepIndexes(args.tour, args.targetExists).find(
-      (index) => index > args.currentStepIndex
-    ) ?? null
-  )
+  for (let index = args.currentStepIndex + 1; index < args.tour.steps.length; index += 1) {
+    const step = args.tour.steps[index]
+    if (!step) {
+      continue
+    }
+    args.prepareStep?.(step, index)
+    if (step.preStepAction || args.targetExists(step.targetSelector)) {
+      return index
+    }
+  }
+  return null
 }
 
 export function getPreviousVisibleContextualTourStepIndex(args: {
   tour: ContextualTour
   currentStepIndex: number
   targetExists: (selector: string) => boolean
+  prepareStep?: (step: ContextualTourStep, index: number) => void
 }): number | null {
-  const visible = getVisibleContextualTourStepIndexes(args.tour, args.targetExists)
-  let prev: number | null = null
-  for (const index of visible) {
-    if (index >= args.currentStepIndex) {
-      break
+  for (let index = args.currentStepIndex - 1; index >= 0; index -= 1) {
+    const step = args.tour.steps[index]
+    if (!step) {
+      continue
     }
-    prev = index
+    args.prepareStep?.(step, index)
+    if (step.preStepAction || args.targetExists(step.targetSelector)) {
+      return index
+    }
   }
-  return prev
+  return null
 }
 
 export function getContextualTourRequestDecision(args: {
@@ -135,6 +151,7 @@ export function getContextualTourRequestDecision(args: {
   activeModal: string
   blockingSurfaceVisible: boolean
   targetExists: (selector: string) => boolean
+  prepareStep?: (step: ContextualTourStep, index: number) => void
 }): ContextualTourRequestDecision {
   if (!args.persistedUIReady) {
     return { kind: 'blocked', reason: 'persisted-ui-not-ready' }
@@ -161,7 +178,7 @@ export function getContextualTourRequestDecision(args: {
     return { kind: 'blocked', reason: 'blocking-surface' }
   }
 
-  const stepIndex = getContextualTourStartStepIndex(args.tour, args.targetExists)
+  const stepIndex = getContextualTourStartStepIndex(args.tour, args.targetExists, args.prepareStep)
   if (stepIndex === null) {
     return { kind: 'blocked', reason: 'missing-start-target' }
   }
@@ -214,6 +231,9 @@ function getContextualTourTargetCandidates(
 }
 
 function isContextualTourTargetVisible(element: Element): boolean {
+  if (isDisabledContextualTourTarget(element)) {
+    return false
+  }
   if (
     typeof element.closest === 'function' &&
     element.closest('[hidden],[inert],[aria-hidden="true"]')
@@ -238,4 +258,16 @@ function isContextualTourTargetVisible(element: Element): boolean {
     current = current.parentElement
   }
   return true
+}
+
+function isDisabledContextualTourTarget(element: Element): boolean {
+  if (
+    typeof element.getAttribute === 'function' &&
+    element.getAttribute('aria-disabled') === 'true'
+  ) {
+    return true
+  }
+  return typeof HTMLButtonElement !== 'undefined' && element instanceof HTMLButtonElement
+    ? element.disabled
+    : false
 }

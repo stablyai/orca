@@ -7,7 +7,10 @@ export const FEATURE_EDUCATION_CONTEXTUAL_TOUR_IDS = [
   'tasks',
   'automations',
   'floating-workspace',
-  'workspace-creation'
+  'workspace-creation',
+  'folder-workspace-create-callout',
+  'folder-workspace-creation',
+  'folder-workspace-overview'
 ] as const satisfies readonly ContextualTourId[]
 
 export const FEATURE_EDUCATION_SOURCES = [
@@ -19,6 +22,12 @@ export const FEATURE_EDUCATION_SOURCES = [
   'floating_workspace_visible',
   'workspace_creation_visible',
   'workspace_creation_modal',
+  'folder_workspace_create_onboarding',
+  'onboarding_group_import',
+  'folder_workspace_creation_visible',
+  'folder_workspace_creation_modal',
+  'folder_workspace_overview_visible',
+  'folder_workspace_active',
   'setup_guide_parallel_work',
   'unknown'
 ] as const

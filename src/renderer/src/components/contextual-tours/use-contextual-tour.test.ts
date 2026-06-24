@@ -61,6 +61,39 @@ describe('createContextualTourInteractionSnapshot', () => {
     await expect(snapshot.persisted).resolves.toBeUndefined()
   })
 
+  it('does not record feature interactions for tours mapped to none', () => {
+    const recordFeatureInteraction = vi.fn(() => Promise.resolve())
+
+    const snapshot = createContextualTourInteractionSnapshot({
+      id: 'folder-workspace-create-callout',
+      featureInteractions: {},
+      recordFeatureInteraction,
+      recordFeatureInteractionForTour: true
+    })
+
+    expect(recordFeatureInteraction).not.toHaveBeenCalled()
+    expect(snapshot.wasPreviouslyInteracted).toBe(false)
+  })
+
+  it('uses explicit tour-to-feature mappings when recording', () => {
+    const recordFeatureInteraction = vi.fn(() => Promise.resolve())
+
+    const snapshot = createContextualTourInteractionSnapshot({
+      id: 'folder-workspace-overview',
+      featureInteractions: {
+        'folder-workspace-right-sidebar': {
+          firstInteractedAt: 1,
+          interactionCount: 1
+        }
+      },
+      recordFeatureInteraction,
+      recordFeatureInteractionForTour: true
+    })
+
+    expect(recordFeatureInteraction).toHaveBeenCalledWith('folder-workspace-right-sidebar')
+    expect(snapshot.wasPreviouslyInteracted).toBe(true)
+  })
+
   it('reuses the floating workspace pre-open snapshot without double-recording', async () => {
     const persisted = Promise.resolve()
     const recordFeatureInteraction = vi.fn(() => Promise.resolve())

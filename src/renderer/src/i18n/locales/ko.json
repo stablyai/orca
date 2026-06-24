@@ -3378,7 +3378,10 @@
           "b4263a2ac4": "{{value1}}에서 {{value0}}을(를) 찾았습니다.",
           "24eda6c8b2": "스캔 중... {{value0}}",
           "b20bb7c24f": "이 리포지토리들을 하나의 그룹으로 묶어 둡니다. 마이크로서비스처럼 서로 관련된 리포지토리에 적합합니다.",
-          "e907ec8935": "모노 repo 이름이란?"
+          "e907ec8935": "모노 repo 이름이란?",
+          "groupImportCopy": "모노레포이거나 함께 속한 프로젝트라면 그룹으로 가져오세요. Orca가 그룹으로 묶고 상위 폴더에서 작업할 수 있게 합니다.",
+          "groupNameLabel": "그룹 이름",
+          "importAsGroup": "그룹으로 가져오기"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "스캔 중지",
@@ -8969,7 +8972,8 @@
             "fc3095d2ed": "탐색기",
             "aiVaultSessionHistory": "Agents",
             "folderWorkspaces": "연결된 워크트리",
-            "parentPrChecks": "PR 검사"
+            "parentPrChecks": "PR 검사",
+            "folderReviewChecks": "리뷰 검사"
           },
           "right": {
             "panel": {
@@ -9481,7 +9485,14 @@
           "c3d9d44ca2": "스캔 중지",
           "cf23006ba7": "선택한 호스트",
           "7ec3f48820": "/home/user",
-          "2e6438dd34": "{{value0}}이 폴더에서 {{value1}} {{value2}}을(를) 찾았습니다."
+          "220dd32d83": "스캔 중...",
+          "2e6438dd34": "이 폴더에서 {{value0}} {{value1}}을(를) 찾았습니다.",
+          "monorepoParentFolderHint": "모노레포에서 작업 중인가요? 앱/서비스 위의 폴더를 선택해 그룹으로 가져오세요.",
+          "fb33359f69": "이 폴더가 모노레포인가요?",
+          "d75170194e": "함께 속한 프로젝트라면 그룹으로 가져오세요. Orca가 그룹으로 묶고 상위 폴더에서 작업할 수 있게 합니다.",
+          "39d51212cc": "그룹 이름",
+          "aa0247680d": "아니요, 별도로 가져오기",
+          "a0bc4d1f8e": "그룹으로 가져오기"
         },
         "ThemeStep": {
           "a4b254779d": "macOS 옵션 키",
@@ -10431,7 +10442,7 @@
           "21783df79f": "파일 트리 축소",
           "481e63ca52": "파일",
           "d5ac717d65": "commit 안 됨",
-          "39b6b9e4e4": "Committed on Branch"
+          "39b6b9e4e4": "브랜치에 커밋됨"
         },
         "CombinedDiffViewer": {
           "35cc27aeb2": "소스 제어에서",
@@ -11644,13 +11655,15 @@
           "countOne": "연결된 워크트리 1개",
           "countMany": "연결된 워크트리 {{value0}}개",
           "emptyTitle": "아직 연결된 워크트리가 없습니다",
-          "emptyCopy": "이 워크스페이스에서 만든 워크트리가 여기에 표시됩니다."
+          "emptyCopy": "이 워크스페이스에서 만든 워크트리가 여기에 표시됩니다.",
+          "previewApiAuthFix": "API 인증 수정",
+          "previewWebSignupFlow": "웹 가입 흐름"
         },
         "FolderWorkspacePrChecksPanel": {
-          "unavailable": "PR 검사는 폴더 워크스페이스에서만 표시됩니다.",
-          "refresh": "PR 체크 새로고침",
+          "unavailable": "리뷰 검사는 폴더 워크스페이스에서만 표시됩니다.",
+          "refresh": "리뷰 검사 새로 고침",
           "emptyTitle": "아직 연결된 워크트리가 없습니다",
-          "emptyCopy": "이 폴더 워크스페이스에 워크트리가 연결되면 PR 검사가 여기에 표시됩니다.",
+          "emptyCopy": "이 폴더 워크스페이스에 워크트리가 연결되면 리뷰 검사가 여기에 표시됩니다.",
           "openChecksTab": "{{value0}} 검사 탭 열기",
           "openReviewExternally": "{{value0}} 외부에서 열기",
           "summary": "{{value0}}개 연결됨 · PR/MR 있음 {{value1}}개 · 주의 필요 {{value2}}개 · 대기 중 {{value3}}개 · 통과 {{value4}}개 · PR 없음 {{value5}}개 · 알 수 없음 {{value6}}개",

@@ -1102,7 +1102,8 @@
         "importHostSetup": "导入",
         "notePasteTooLarge": "笔记字段的粘贴内容过大。",
         "reuseExistingBranch": "复用分支",
-        "reuseExistingBranchHint": "检出已有分支，而不是基于它创建新分支。"
+        "reuseExistingBranchHint": "检出已有分支，而不是基于它创建新分支。",
+        "createMultiple": "创建更多"
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "创建工作区之前选择项目、工作区名称和 Agent。"
@@ -3377,7 +3378,10 @@
           "b4263a2ac4": "在 {{value1}} 中找到 {{value0}}。",
           "24eda6c8b2": "正在扫描... {{value0}}",
           "b20bb7c24f": "Keeps these repos together in one group. Best for related repos like microservices.",
-          "e907ec8935": "What is a monorepo name?"
+          "e907ec8935": "What is a monorepo name?",
+          "groupImportCopy": "如果它们是 Monorepo，或本来就应该放在一起，请将它们作为组导入。Orca 会将它们分组，并让你从父文件夹开始工作。",
+          "groupNameLabel": "组名称",
+          "importAsGroup": "作为组导入"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "停止扫描",
@@ -8968,7 +8972,8 @@
             "fc3095d2ed": "探险家",
             "aiVaultSessionHistory": "Agents",
             "folderWorkspaces": "已附加的工作树",
-            "parentPrChecks": "PR 检查"
+            "parentPrChecks": "PR 检查",
+            "folderReviewChecks": "评审检查"
           },
           "right": {
             "panel": {
@@ -9480,7 +9485,14 @@
           "c3d9d44ca2": "停止扫描",
           "cf23006ba7": "运行时服务器",
           "7ec3f48820": "/home/user",
-          "2e6438dd34": "{{value0}}在此文件夹中找到{{value1}} {{value2}}。"
+          "220dd32d83": "正在扫描...",
+          "2e6438dd34": "在此文件夹中找到 {{value0}} {{value1}}。",
+          "monorepoParentFolderHint": "正在使用 Monorepo？请选择 apps/services 上一级的文件夹，将它们作为组导入。",
+          "fb33359f69": "这是 Monorepo 吗？",
+          "d75170194e": "如果这些项目属于同一组，请将它们作为组导入。Orca 会将它们分组，并让你从父文件夹开始工作。",
+          "39d51212cc": "组名称",
+          "aa0247680d": "否，单独导入",
+          "a0bc4d1f8e": "作为组导入"
         },
         "ThemeStep": {
           "a4b254779d": "macOS Option 键",
@@ -10430,7 +10442,7 @@
           "21783df79f": "折叠文件树",
           "481e63ca52": "文件",
           "d5ac717d65": "未提交",
-          "39b6b9e4e4": "Committed on Branch"
+          "39b6b9e4e4": "已在分支上提交"
         },
         "CombinedDiffViewer": {
           "35cc27aeb2": "在源代码控制中",
@@ -11643,13 +11655,15 @@
           "countOne": "1 个附加的工作树",
           "countMany": "{{value0}} 个附加的工作树",
           "emptyTitle": "还没有附加的工作树",
-          "emptyCopy": "从此工作区创建的工作树将显示在这里。"
+          "emptyCopy": "从此工作区创建的工作树将显示在这里。",
+          "previewApiAuthFix": "API 认证修复",
+          "previewWebSignupFlow": "网页注册流程"
         },
         "FolderWorkspacePrChecksPanel": {
-          "unavailable": "PR 检查仅在文件夹工作区中显示。",
-          "refresh": "刷新 PR 检查",
+          "unavailable": "评审检查仅在文件夹工作区中显示。",
+          "refresh": "刷新评审检查",
           "emptyTitle": "还没有附加的工作树",
-          "emptyCopy": "将工作树附加到此文件夹工作区后，PR 检查会显示在这里。",
+          "emptyCopy": "将工作树附加到此文件夹工作区后，评审检查会显示在这里。",
           "openChecksTab": "打开 {{value0}} 的检查标签页",
           "openReviewExternally": "在外部打开 {{value0}}",
           "summary": "已附加 {{value0}} 个 · 有 PR/MR {{value1}} 个 · 需注意 {{value2}} 个 · 等待中 {{value3}} 个 · 通过 {{value4}} 个 · 无 PR {{value5}} 个 · 未知 {{value6}} 个",

@@ -11,7 +11,7 @@ import {
   type BackgroundMountTerminalWorktreeDetail
 } from '@/constants/terminal'
 import { useAppStore } from '../store'
-import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { useAllWorktrees } from '../store/selectors'
 import { getConnectionId } from '../lib/connection-context'
 import { basename } from '../lib/path'
@@ -37,6 +37,7 @@ import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import EditorAutosaveController from './editor/EditorAutosaveController'
 import type { Tab, TabContentType, TabGroupLayoutNode, TuiAgent } from '../../../shared/types'
 import { hasFeatureInteraction } from '../../../shared/feature-interactions'
+import { requestContextualTourWhenReady } from './contextual-tours/request-contextual-tour-when-ready'
 import BrowserPane from './browser-pane/BrowserPane'
 import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
 import EmulatorPaneOverlayLayer from './emulator-pane/EmulatorPaneOverlayLayer'
@@ -333,8 +334,22 @@ function Terminal(): React.JSX.Element | null {
     ? (browserTabsByWorktree[renderedActiveWorktreeId] ?? []).map((tab) => tab.id).join(',')
     : ''
   const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
+  const activeWorkspaceKey = useAppStore((s) => s.activeWorkspaceKey)
+  const featureInteractions = useAppStore((s) => s.featureInteractions)
+  const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
+  const contextualToursSeenIds = useAppStore((s) => s.contextualToursSeenIds)
+  const contextualTourShownThisSession = useAppStore((s) => s.contextualTourShownThisSession)
+  const contextualToursOnboardingVisible = useAppStore((s) => s.contextualToursOnboardingVisible)
+  const contextualToursBlockingSurfaceVisible = useAppStore(
+    (s) => s.contextualToursBlockingSurfaceVisible
+  )
+  const activeModal = useAppStore((s) => s.activeModal)
   const hasSplitTerminalPane = useAppStore((s) =>
     hasFeatureInteraction(s.featureInteractions, 'terminal-pane-split')
+  )
+  const hasFolderSidebarEducation = hasFeatureInteraction(
+    featureInteractions,
+    'folder-workspace-right-sidebar'
   )
 
   useContextualTour(
@@ -349,6 +364,55 @@ function Terminal(): React.JSX.Element | null {
     ),
     'workspace_agent_sessions_visible'
   )
+
+  useEffect(() => {
+    // Why: this auto tour should not appear after the user leaves the folder
+    // workspace or already discovers the right sidebar through normal use.
+    const scope = parseWorkspaceKey(activeWorkspaceKey ?? activeWorktreeId ?? '')
+    if (
+      scope?.type !== 'folder' ||
+      !workspaceSessionReady ||
+      hasFolderSidebarEducation ||
+      contextualToursAutoEligible !== true ||
+      contextualToursSeenIds.includes('folder-workspace-overview') ||
+      contextualTourShownThisSession ||
+      contextualToursOnboardingVisible ||
+      contextualToursBlockingSurfaceVisible ||
+      activeContextualTourId !== null ||
+      activeModal !== 'none'
+    ) {
+      return
+    }
+
+    return requestContextualTourWhenReady({
+      id: 'folder-workspace-overview',
+      source: 'folder_workspace_active',
+      wasFeaturePreviouslyInteracted: false,
+      force: false,
+      shouldContinue: () => {
+        const state = useAppStore.getState()
+        const latestScope = parseWorkspaceKey(
+          state.activeWorkspaceKey ?? state.activeWorktreeId ?? ''
+        )
+        return (
+          latestScope?.type === 'folder' &&
+          !hasFeatureInteraction(state.featureInteractions, 'folder-workspace-right-sidebar')
+        )
+      }
+    })
+  }, [
+    activeWorkspaceKey,
+    activeWorktreeId,
+    activeContextualTourId,
+    activeModal,
+    contextualTourShownThisSession,
+    contextualToursAutoEligible,
+    contextualToursBlockingSurfaceVisible,
+    contextualToursOnboardingVisible,
+    contextualToursSeenIds,
+    hasFolderSidebarEducation,
+    workspaceSessionReady
+  ])
 
   // Save confirmation dialog state
   const [saveDialogFileId, setSaveDialogFileId] = useState<string | null>(null)

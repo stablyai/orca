@@ -138,6 +138,7 @@ describe('requestContextualTourWhenReady', () => {
     vi.useFakeTimers()
     const requestContextualTour = vi.fn()
     const shouldContinue = vi.fn(() => false)
+    const onAbandon = vi.fn()
     vi.spyOn(useAppStore, 'getState').mockImplementation(
       () =>
         ({
@@ -150,6 +151,7 @@ describe('requestContextualTourWhenReady', () => {
       id: 'workspace-creation',
       source: 'setup_guide_parallel_work',
       shouldContinue,
+      onAbandon,
       retryDelayMs: 10,
       maxAttempts: 5
     })
@@ -157,6 +159,62 @@ describe('requestContextualTourWhenReady', () => {
     vi.advanceTimersByTime(50)
 
     expect(shouldContinue).toHaveBeenCalledTimes(1)
+    expect(onAbandon).toHaveBeenCalledWith('invalid')
     expect(requestContextualTour).not.toHaveBeenCalled()
+  })
+
+  it('abandons after the retry window when the target never starts', () => {
+    vi.useFakeTimers()
+    const requestContextualTour = vi.fn()
+    const onAbandon = vi.fn()
+    vi.spyOn(useAppStore, 'getState').mockImplementation(
+      () =>
+        ({
+          activeContextualTourId: null,
+          requestContextualTour
+        }) as unknown as ReturnType<typeof useAppStore.getState>
+    )
+
+    requestContextualTourWhenReady({
+      id: 'workspace-creation',
+      source: 'workspace_creation_modal',
+      retryDelayMs: 10,
+      maxAttempts: 3,
+      onAbandon
+    })
+
+    vi.advanceTimersByTime(40)
+
+    expect(requestContextualTour).toHaveBeenCalledTimes(3)
+    expect(onAbandon).toHaveBeenCalledTimes(1)
+    expect(onAbandon).toHaveBeenCalledWith('exhausted')
+  })
+
+  it('abandons when another active tour never clears', () => {
+    vi.useFakeTimers()
+    const requestContextualTour = vi.fn()
+    const onAbandon = vi.fn()
+    vi.spyOn(useAppStore, 'getState').mockImplementation(
+      () =>
+        ({
+          activeContextualTourId: 'tasks',
+          requestContextualTour
+        }) as unknown as ReturnType<typeof useAppStore.getState>
+    )
+
+    requestContextualTourWhenReady({
+      id: 'workspace-creation',
+      source: 'workspace_creation_modal',
+      retryDelayMs: 10,
+      maxAttempts: 3,
+      waitForActiveTourToClear: true,
+      onAbandon
+    })
+
+    vi.advanceTimersByTime(40)
+
+    expect(requestContextualTour).not.toHaveBeenCalled()
+    expect(onAbandon).toHaveBeenCalledTimes(1)
+    expect(onAbandon).toHaveBeenCalledWith('blocked')
   })
 })

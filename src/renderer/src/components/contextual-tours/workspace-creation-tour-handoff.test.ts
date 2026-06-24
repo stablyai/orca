@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { openWorkspaceCreationComposerWithTourHandoff } from './workspace-creation-tour-handoff'
+import {
+  openFolderWorkspaceCreationComposerWithTourHandoff,
+  openWorkspaceCreationComposerWithTourHandoff
+} from './workspace-creation-tour-handoff'
 import { requestContextualTourWhenReady } from './request-contextual-tour-when-ready'
 
 vi.mock('./request-contextual-tour-when-ready', () => ({
@@ -142,5 +145,53 @@ describe('openWorkspaceCreationComposerWithTourHandoff', () => {
       telemetrySource: 'sidebar'
     })
     expect(requestContextualTourWhenReady).not.toHaveBeenCalled()
+  })
+})
+
+describe('openFolderWorkspaceCreationComposerWithTourHandoff', () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+    vi.restoreAllMocks()
+  })
+
+  it('completes the onboarding callout and requests the folder composer tour', () => {
+    const openModal = vi.fn()
+    const completeContextualTour = vi.fn()
+    const setPendingFolderWorkspaceCreateTourGroupId = vi.fn()
+    let activeModal: ReturnType<typeof useAppStore.getState>['activeModal'] = 'none'
+    vi.spyOn(useAppStore, 'getState').mockImplementation(
+      () =>
+        ({
+          activeContextualTourId: 'folder-workspace-create-callout',
+          activeModal,
+          contextualToursSeenIds: [],
+          completeContextualTour,
+          openModal,
+          setPendingFolderWorkspaceCreateTourGroupId
+        }) as unknown as ReturnType<typeof useAppStore.getState>
+    )
+
+    openFolderWorkspaceCreationComposerWithTourHandoff('group-1')
+
+    expect(completeContextualTour).toHaveBeenCalledWith('folder-workspace-create-callout')
+    expect(setPendingFolderWorkspaceCreateTourGroupId).toHaveBeenCalledWith(null)
+    expect(openModal).toHaveBeenCalledWith('new-workspace-composer', {
+      initialProjectGroupId: 'group-1',
+      telemetrySource: 'onboarding',
+      contextualTourSource: 'folder_workspace_creation_modal'
+    })
+    expect(requestContextualTourWhenReady).toHaveBeenCalledWith({
+      id: 'folder-workspace-creation',
+      source: 'folder_workspace_creation_modal',
+      wasFeaturePreviouslyInteracted: false,
+      waitForActiveTourToClear: true,
+      shouldContinue: expect.any(Function)
+    })
+
+    const [{ shouldContinue }] = vi.mocked(requestContextualTourWhenReady).mock.calls[0]
+    activeModal = 'new-workspace-composer'
+    expect(shouldContinue?.()).toBe(true)
+    activeModal = 'none'
+    expect(shouldContinue?.()).toBe(false)
   })
 })

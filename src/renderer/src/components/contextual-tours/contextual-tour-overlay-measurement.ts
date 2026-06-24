@@ -10,6 +10,7 @@ import {
   getMeasurableContextualTourTarget,
   getVisibleContextualTourStepIndexes
 } from './contextual-tour-gate'
+import { performContextualTourPreStepAction } from './contextual-tour-pre-step-actions'
 import type { ActiveTourRenderState } from './ContextualTourOverlaySurface'
 import { translate } from '@/i18n/i18n'
 
@@ -82,12 +83,15 @@ export function measureContextualTourOverlayRenderState(args: {
 }): ContextualTourOverlayMeasurementResult {
   const targetExists = (selector: string): boolean =>
     getMeasurableContextualTourTarget(selector) !== null
-  const visibleStepIndexes = getVisibleContextualTourStepIndexes(args.tour, targetExists)
+  const visibleStepIndexes = getVisibleContextualTourStepIndexes(args.tour, targetExists, (step) =>
+    performContextualTourPreStepAction(step)
+  )
   const telemetryTotalSteps = Math.max(
     args.previousTelemetryTotalSteps,
     getContextualTourOutcomeStepTotal(visibleStepIndexes)
   )
   const activeStep = args.tour.steps[args.activeStepIndex]
+  const activePreStepReady = performContextualTourPreStepAction(activeStep)
   const target = activeStep ? getMeasurableContextualTourTarget(activeStep.targetSelector) : null
   const progress = getContextualTourDisplayProgress({
     tour: args.tour,
@@ -95,6 +99,10 @@ export function measureContextualTourOverlayRenderState(args: {
     stepIndex: args.activeStepIndex,
     activeStep
   })
+
+  if (activeStep?.preStepAction && !target) {
+    return activePreStepReady ? { kind: 'wait' } : { kind: 'cancel' }
+  }
 
   if (visibleStepIndexes.length === 0 || !activeStep || !progress) {
     return { kind: 'cancel' }

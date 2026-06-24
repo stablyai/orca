@@ -240,7 +240,7 @@ import { buildSidebarHostOptions } from './sidebar-host-options'
 import { HostSectionHeaderMenu } from './HostSectionHeaderMenu'
 import { ProjectHeaderActions } from './ProjectHeaderActions'
 import { translate } from '@/i18n/i18n'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import {
   isConfirmedStaleFolderPathStatus,
@@ -251,6 +251,7 @@ import {
   getKnownSidebarWorktreeById,
   sidebarWorkspaceStillExists
 } from './worktree-list-folder-reveal'
+import { openFolderWorkspaceCreationComposerWithTourHandoff } from '@/components/contextual-tours/workspace-creation-tour-handoff'
 import {
   getFolderPathStatusRouteOptionsForRows,
   getFolderWorkspaceExecutionHostIdForRows,
@@ -594,6 +595,8 @@ type VirtualizedWorktreeViewportProps = {
   handleRenameProjectGroup: (groupId: string, currentName: string) => void
   handleDeleteProjectGroup: (groupId: string, groupName: string) => void
   handleCreateFolderWorkspace: (projectGroup: ProjectGroup) => void
+  pendingFolderWorkspaceCreateTourGroupId: string | null
+  activeFolderWorkspaceProjectGroupId: string | null
   activeModal: string
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
   pendingRevealSidebarRow: PendingSidebarRowReveal | null
@@ -1222,6 +1225,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   handleRenameProjectGroup,
   handleDeleteProjectGroup,
   handleCreateFolderWorkspace,
+  pendingFolderWorkspaceCreateTourGroupId,
+  activeFolderWorkspaceProjectGroupId,
   activeModal,
   pendingRevealWorktree,
   pendingRevealSidebarRow,
@@ -3955,6 +3960,16 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 projectGroupPathStatus?.exists === false &&
                 (isConfirmedStaleFolderPathStatus(projectGroupPathStatus) ||
                   projectGroupPathStatus.reason === 'ambiguous-connection')
+              const projectGroupId = row.projectGroup?.id ?? null
+              const isOnboardingFolderWorkspaceCreateTarget =
+                Boolean(projectGroupId) &&
+                projectGroupId === pendingFolderWorkspaceCreateTourGroupId &&
+                !folderWorkspaceCreateDisabled
+              const isFolderWorkspaceChildCreateTarget =
+                Boolean(projectGroupId) &&
+                projectGroupId === activeFolderWorkspaceProjectGroupId &&
+                !isOnboardingFolderWorkspaceCreateTarget &&
+                !folderWorkspaceCreateDisabled
               const projectGroupDepth = row.projectGroupDepth ?? 0
               const isHeaderCollapsed = collapsedGroups.has(row.key)
               // Why: repo/project headers already reveal actions on hover; tuck
@@ -4095,7 +4110,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       </div>
                     </div>
 
-                    <ProjectHeaderActions>
+                    <ProjectHeaderActions
+                      className={
+                        isOnboardingFolderWorkspaceCreateTarget ||
+                        isFolderWorkspaceChildCreateTarget
+                          ? 'pointer-events-auto opacity-100 can-hover:pointer-events-auto can-hover:opacity-100'
+                          : undefined
+                      }
+                    >
                       {showHeaderCollapseAffordance ? (
                         <div
                           className="flex size-5 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
@@ -4193,8 +4215,19 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                               variant="ghost"
                               size="icon-xs"
                               data-repo-header-action=""
+                              data-contextual-tour-target={
+                                isOnboardingFolderWorkspaceCreateTarget
+                                  ? 'folder-workspace-create-onboarding'
+                                  : isFolderWorkspaceChildCreateTarget
+                                    ? 'folder-workspace-child-create'
+                                    : undefined
+                              }
+                              data-folder-workspace-group-id={row.projectGroup.id}
                               className={cn(
                                 REPO_HEADER_ACTION_BUTTON_CLASS,
+                                (isOnboardingFolderWorkspaceCreateTarget ||
+                                  isFolderWorkspaceChildCreateTarget) &&
+                                  'ml-0 max-w-5 opacity-100',
                                 folderWorkspaceCreateDisabled &&
                                   'cursor-not-allowed text-muted-foreground/60 hover:bg-transparent hover:text-muted-foreground/60'
                               )}
@@ -4913,6 +4946,10 @@ const WorktreeList = React.memo(function WorktreeList({
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const detectedWorktreesByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeWorkspaceKey = useAppStore((s) => s.activeWorkspaceKey)
+  const pendingFolderWorkspaceCreateTourGroupId = useAppStore(
+    (s) => s.pendingFolderWorkspaceCreateTourGroupId
+  )
   const currentSidebarWorktreeId = activeWorktreeId
   const groupBy = useAppStore((s) => s.groupBy)
   const setGroupBy = useAppStore((s) => s.setGroupBy)
@@ -5333,6 +5370,16 @@ const WorktreeList = React.memo(function WorktreeList({
   )
   const projectGroups = useAppStore((s) => s.projectGroups ?? EMPTY_PROJECT_GROUPS)
   const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
+  const activeFolderWorkspaceProjectGroupId = useMemo(() => {
+    const scope = parseWorkspaceKey(activeWorkspaceKey ?? activeWorktreeId ?? '')
+    if (scope?.type !== 'folder') {
+      return null
+    }
+    return (
+      folderWorkspaces.find((workspace) => workspace.id === scope.folderWorkspaceId)
+        ?.projectGroupId ?? null
+    )
+  }, [activeWorktreeId, activeWorkspaceKey, folderWorkspaces])
   const effectiveCollapsedGroups = useMemo(() => {
     if (!agentSendTargetWorktreeId) {
       return collapsedGroups
@@ -5962,6 +6009,10 @@ const WorktreeList = React.memo(function WorktreeList({
       if (!projectGroup.parentPath) {
         return
       }
+      if (projectGroup.id === useAppStore.getState().pendingFolderWorkspaceCreateTourGroupId) {
+        openFolderWorkspaceCreationComposerWithTourHandoff(projectGroup.id)
+        return
+      }
       openModal('new-workspace-composer', {
         initialProjectGroupId: projectGroup.id,
         telemetrySource: 'sidebar'
@@ -6401,6 +6452,8 @@ const WorktreeList = React.memo(function WorktreeList({
         handleRenameProjectGroup={handleRenameProjectGroup}
         handleDeleteProjectGroup={handleDeleteProjectGroup}
         handleCreateFolderWorkspace={handleCreateFolderWorkspace}
+        pendingFolderWorkspaceCreateTourGroupId={pendingFolderWorkspaceCreateTourGroupId}
+        activeFolderWorkspaceProjectGroupId={activeFolderWorkspaceProjectGroupId}
         activeModal={activeModal}
         pendingRevealWorktree={pendingRevealWorktree}
         pendingRevealSidebarRow={pendingRevealSidebarRow}

@@ -47,8 +47,10 @@ import {
 import {
   getContextualTour,
   normalizeContextualTourIds,
+  type ContextualTourStep,
   type ContextualTourId
 } from '../../../../shared/contextual-tours'
+import { getFeatureInteractionIdForContextualTour } from '../../../../shared/contextual-tour-feature-interactions'
 import { PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items'
 import {
   normalizeVisibleTaskProviders,
@@ -109,6 +111,7 @@ import {
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
@@ -173,6 +176,27 @@ function mergeFeatureInteractionState(
       : incomingRecord
   }
   return merged
+}
+
+function hasFeatureInteractionForContextualTour(
+  state: FeatureInteractionState,
+  id: ContextualTourId
+): boolean {
+  const featureInteractionId = getFeatureInteractionIdForContextualTour(id)
+  return featureInteractionId ? hasFeatureInteraction(state, featureInteractionId) : false
+}
+
+function prepareContextualTourStepWithState(step: ContextualTourStep, state: AppState): void {
+  const action = step.preStepAction
+  if (action?.kind !== 'show-folder-sidebar-tab') {
+    return
+  }
+  const scope = parseWorkspaceKey(state.activeWorkspaceKey ?? state.activeWorktreeId ?? '')
+  if (scope?.type !== 'folder') {
+    return
+  }
+  state.setRightSidebarOpen(true)
+  state.setRightSidebarTab(action.tab)
 }
 
 function mergeContextualTourSeenIds(
@@ -740,6 +764,8 @@ export type UISlice = {
   contextualToursOnboardingVisible: boolean
   contextualToursBlockingSurfaceVisible: boolean
   lastCompletedContextualTourId: ContextualTourId | null
+  pendingFolderWorkspaceCreateTourGroupId: string | null
+  setPendingFolderWorkspaceCreateTourGroupId: (groupId: string | null) => void
   setContextualToursAutoEligible: (eligible: boolean) => void
   setContextualToursOnboardingVisible: (visible: boolean) => void
   setContextualToursBlockingSurfaceVisible: (visible: boolean) => void
@@ -1541,6 +1567,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   contextualToursOnboardingVisible: false,
   contextualToursBlockingSurfaceVisible: false,
   lastCompletedContextualTourId: null,
+  pendingFolderWorkspaceCreateTourGroupId: null,
+  setPendingFolderWorkspaceCreateTourGroupId: (groupId) =>
+    set((s) =>
+      s.pendingFolderWorkspaceCreateTourGroupId === groupId
+        ? s
+        : { pendingFolderWorkspaceCreateTourGroupId: groupId }
+    ),
   setContextualToursAutoEligible: (eligible) =>
     set((s) => {
       if (s.contextualToursAutoEligible === eligible) {
@@ -1576,7 +1609,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         activeTourId: s.activeContextualTourId,
         activeModal: s.activeModal,
         blockingSurfaceVisible: s.contextualToursBlockingSurfaceVisible,
-        targetExists: hasContextualTourTarget
+        targetExists: hasContextualTourTarget,
+        prepareStep: (step) => prepareContextualTourStepWithState(step, get())
       })
       if (decision.kind !== 'start') {
         if (s.contextualTourNavigationInteractionSnapshot[id] === undefined) {
@@ -1599,7 +1633,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         activeContextualTourWasFeaturePreviouslyInteracted:
           wasFeaturePreviouslyInteracted ??
           navigationSnapshot ??
-          hasFeatureInteraction(s.featureInteractions, id),
+          hasFeatureInteractionForContextualTour(s.featureInteractions, id),
         contextualTourNavigationInteractionSnapshot: remainingNavigationSnapshot,
         activeContextualTourSuppressed: false,
         contextualTourShownThisSession: true,
@@ -1633,7 +1667,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       const nextStepIndex = getNextVisibleContextualTourStepIndex({
         tour,
         currentStepIndex: s.activeContextualTourStepIndex,
-        targetExists: hasContextualTourTarget
+        targetExists: hasContextualTourTarget,
+        prepareStep: (step) => prepareContextualTourStepWithState(step, get())
       })
       if (nextStepIndex !== null) {
         return { activeContextualTourStepIndex: nextStepIndex }
@@ -1655,7 +1690,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       const previousStepIndex = getPreviousVisibleContextualTourStepIndex({
         tour: getContextualTour(s.activeContextualTourId),
         currentStepIndex: s.activeContextualTourStepIndex,
-        targetExists: hasContextualTourTarget
+        targetExists: hasContextualTourTarget,
+        prepareStep: (step) => prepareContextualTourStepWithState(step, get())
       })
       if (previousStepIndex === null) {
         return s
@@ -1682,7 +1718,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         activeContextualTourSourceDetached: false,
         activeContextualTourWasFeaturePreviouslyInteracted: false,
         activeContextualTourSuppressed: false,
-        lastCompletedContextualTourId: null
+        lastCompletedContextualTourId: null,
+        ...(tourId === 'folder-workspace-create-callout'
+          ? { pendingFolderWorkspaceCreateTourGroupId: null }
+          : {})
       }
     })
   },
@@ -1706,7 +1745,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         activeContextualTourSourceDetached: false,
         activeContextualTourWasFeaturePreviouslyInteracted: false,
         activeContextualTourSuppressed: false,
-        lastCompletedContextualTourId: tourId ?? null
+        lastCompletedContextualTourId: tourId ?? null,
+        ...(tourId === 'folder-workspace-create-callout'
+          ? { pendingFolderWorkspaceCreateTourGroupId: null }
+          : {})
       }
     })
   },
@@ -1726,7 +1768,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         activeContextualTourWasFeaturePreviouslyInteracted: false,
         activeContextualTourSuppressed: false,
         lastCompletedContextualTourId: null,
-        contextualTourShownThisSession: alreadyShown ? s.contextualTourShownThisSession : false
+        contextualTourShownThisSession: alreadyShown ? s.contextualTourShownThisSession : false,
+        ...(tourId === 'folder-workspace-create-callout'
+          ? { pendingFolderWorkspaceCreateTourGroupId: null }
+          : {})
       }
     }),
   markContextualToursSeen: (ids) =>

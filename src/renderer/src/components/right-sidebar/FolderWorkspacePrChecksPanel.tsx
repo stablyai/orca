@@ -13,6 +13,7 @@ import {
   type ParentPrChecksRefreshOutcome,
   type ParentPrChecksRow
 } from './parent-pr-checks-rows'
+import { PARENT_PR_CHECKS_GROUP_LABELS } from './parent-pr-checks-row-types'
 import {
   getParentPrChecksRefreshCandidates,
   runLimitedParentPrChecksRefreshes
@@ -202,7 +203,7 @@ export default function FolderWorkspacePrChecksPanel({
       <div className="flex min-h-0 flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground">
         {translate(
           'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.unavailable',
-          'PR checks are only shown for folder workspaces.'
+          'Review checks are only shown for folder workspaces.'
         )}
       </div>
     )
@@ -233,7 +234,7 @@ export default function FolderWorkspacePrChecksPanel({
                 disabled={childWorktrees.length === 0 || isRefreshing}
                 aria-label={translate(
                   'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.refresh',
-                  'Refresh PR checks'
+                  'Refresh review checks'
                 )}
               >
                 <RefreshCw className={cn('size-3.5', isRefreshing && 'animate-spin')} />
@@ -242,7 +243,7 @@ export default function FolderWorkspacePrChecksPanel({
             <TooltipContent side="bottom">
               {translate(
                 'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.refresh',
-                'Refresh PR checks'
+                'Refresh review checks'
               )}
             </TooltipContent>
           </Tooltip>
@@ -250,7 +251,26 @@ export default function FolderWorkspacePrChecksPanel({
       </div>
 
       {childWorktrees.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+        <div
+          className="flex flex-1 flex-col items-center justify-center px-6 text-center"
+          data-contextual-tour-target="folder-workspace-review-checks-empty"
+        >
+          <div className="mb-4 grid w-full max-w-[15rem] gap-2" aria-hidden="true">
+            {[
+              [PARENT_PR_CHECKS_GROUP_LABELS.needsAttention, 'bg-rose-500/55'],
+              [PARENT_PR_CHECKS_GROUP_LABELS.pending, 'bg-amber-500/55'],
+              [PARENT_PR_CHECKS_GROUP_LABELS.passing, 'bg-emerald-500/55']
+            ].map(([label, dotClass]) => (
+              <div
+                key={label}
+                className="flex items-center gap-2 rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-left opacity-55"
+              >
+                <div className={cn('size-2 rounded-full', dotClass)} />
+                <div className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{label}</div>
+                <div className="h-1.5 w-7 rounded-full bg-muted-foreground/20" />
+              </div>
+            ))}
+          </div>
           <div className="text-sm font-medium text-foreground">
             {translate(
               'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.emptyTitle',
@@ -260,7 +280,7 @@ export default function FolderWorkspacePrChecksPanel({
           <div className="mt-2 max-w-[16rem] text-xs leading-5 text-muted-foreground">
             {translate(
               'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.emptyCopy',
-              'PR checks will appear here after worktrees are attached to this folder workspace.'
+              'Review checks will appear here after worktrees are attached to this folder workspace.'
             )}
           </div>
         </div>

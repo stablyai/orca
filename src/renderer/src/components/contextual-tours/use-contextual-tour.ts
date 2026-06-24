@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react'
 import type { ContextualTourId } from '../../../../shared/contextual-tours'
+import { getFeatureInteractionIdForContextualTour } from '../../../../shared/contextual-tour-feature-interactions'
 import {
   hasFeatureInteraction,
+  type FeatureInteractionId,
   type FeatureInteractionState
 } from '../../../../shared/feature-interactions'
 import { useAppStore } from '@/store'
@@ -13,7 +15,10 @@ const TOUR_SOURCES = {
   tasks: 'tasks_open',
   automations: 'automations_open',
   'floating-workspace': 'floating_workspace_visible',
-  'workspace-creation': 'workspace_creation_visible'
+  'workspace-creation': 'workspace_creation_visible',
+  'folder-workspace-create-callout': 'folder_workspace_create_onboarding',
+  'folder-workspace-creation': 'folder_workspace_creation_visible',
+  'folder-workspace-overview': 'folder_workspace_overview_visible'
 } satisfies Record<ContextualTourId, string>
 
 export type UseContextualTourOptions = {
@@ -25,18 +30,23 @@ export type UseContextualTourOptions = {
 export function createContextualTourInteractionSnapshot(args: {
   id: ContextualTourId
   featureInteractions: FeatureInteractionState
-  recordFeatureInteraction: (id: ContextualTourId) => Promise<void>
+  recordFeatureInteraction: (id: FeatureInteractionId) => Promise<void>
   recordFeatureInteractionForTour: boolean
   featureInteractionPersisted?: Promise<void> | undefined
   wasFeaturePreviouslyInteracted?: boolean | undefined
 }): { persisted: Promise<void>; wasPreviouslyInteracted: boolean } {
+  const featureInteractionId = getFeatureInteractionIdForContextualTour(args.id)
   const wasPreviouslyInteracted =
-    args.wasFeaturePreviouslyInteracted ?? hasFeatureInteraction(args.featureInteractions, args.id)
+    args.wasFeaturePreviouslyInteracted ??
+    (featureInteractionId
+      ? hasFeatureInteraction(args.featureInteractions, featureInteractionId)
+      : false)
   return {
     wasPreviouslyInteracted,
-    persisted: args.recordFeatureInteractionForTour
-      ? args.recordFeatureInteraction(args.id)
-      : (args.featureInteractionPersisted ?? Promise.resolve())
+    persisted:
+      args.recordFeatureInteractionForTour && featureInteractionId
+        ? args.recordFeatureInteraction(featureInteractionId)
+        : (args.featureInteractionPersisted ?? Promise.resolve())
   }
 }
 
@@ -209,7 +219,7 @@ export function useContextualTour(
             source,
             latestSnapshot?.id === id && latestSnapshot.source === source
               ? latestSnapshot.wasPreviouslyInteracted
-              : hasFeatureInteraction(useAppStore.getState().featureInteractions, id)
+              : getWasTourFeaturePreviouslyInteracted(id)
           )
         })
       })
@@ -260,4 +270,11 @@ export function useContextualTour(
     requestContextualTour,
     source
   ])
+}
+
+function getWasTourFeaturePreviouslyInteracted(id: ContextualTourId): boolean {
+  const featureInteractionId = getFeatureInteractionIdForContextualTour(id)
+  return featureInteractionId
+    ? hasFeatureInteraction(useAppStore.getState().featureInteractions, featureInteractionId)
+    : false
 }

@@ -3378,7 +3378,10 @@
           "b4263a2ac4": "{{value1}} で {{value0}} が見つかりました。",
           "24eda6c8b2": "スキャン中... {{value0}}",
           "b20bb7c24f": "Keeps these repos together in one group. Best for related repos like microservices.",
-          "e907ec8935": "What is a monorepo name?"
+          "e907ec8935": "What is a monorepo name?",
+          "groupImportCopy": "モノレポ、または一緒に扱うべきプロジェクトの場合は、グループとしてインポートします。Orca がグループ化し、親フォルダーから作業できるようにします。",
+          "groupNameLabel": "グループ名",
+          "importAsGroup": "グループとしてインポート"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "スキャンの停止",
@@ -8969,7 +8972,8 @@
             "fc3095d2ed": "エクスプローラ",
             "aiVaultSessionHistory": "Agents",
             "folderWorkspaces": "添付ワークツリー",
-            "parentPrChecks": "PR チェック"
+            "parentPrChecks": "PR チェック",
+            "folderReviewChecks": "レビューチェック"
           },
           "right": {
             "panel": {
@@ -9481,7 +9485,14 @@
           "c3d9d44ca2": "スキャンの停止",
           "cf23006ba7": "ランタイムサーバー",
           "7ec3f48820": "/home/user",
-          "2e6438dd34": "{{value0}}このフォルダー内で {{value1}} {{value2}} が見つかりました。"
+          "220dd32d83": "スキャン中...",
+          "2e6438dd34": "このフォルダー内で {{value0}} {{value1}} が見つかりました。",
+          "monorepoParentFolderHint": "モノレポで作業していますか？アプリ/サービスの上位フォルダーを選択して、グループとしてインポートします。",
+          "fb33359f69": "これはモノレポですか？",
+          "d75170194e": "関連するプロジェクトの場合はグループとしてインポートします。Orca がグループ化し、親フォルダーから作業できるようにします。",
+          "39d51212cc": "グループ名",
+          "aa0247680d": "いいえ、個別にインポート",
+          "a0bc4d1f8e": "グループとしてインポート"
         },
         "ThemeStep": {
           "a4b254779d": "macOSのオプションキー",
@@ -10431,7 +10442,7 @@
           "21783df79f": "ファイルツリーを折りたたむ",
           "481e63ca52": "ファイル",
           "d5ac717d65": "commit されていない",
-          "39b6b9e4e4": "Committed on Branch"
+          "39b6b9e4e4": "ブランチにコミット済み"
         },
         "CombinedDiffViewer": {
           "35cc27aeb2": "ソース管理内",
@@ -11644,13 +11655,15 @@
           "countOne": "1 attached worktree",
           "countMany": "{{value0}} attached worktrees",
           "emptyTitle": "No attached worktrees yet",
-          "emptyCopy": "Worktrees created from this workspace will show up here."
+          "emptyCopy": "Worktrees created from this workspace will show up here.",
+          "previewApiAuthFix": "API 認証修正",
+          "previewWebSignupFlow": "Web サインアップフロー"
         },
         "FolderWorkspacePrChecksPanel": {
-          "unavailable": "PR チェックはフォルダーワークスペースでのみ表示されます。",
-          "refresh": "PR チェックを更新",
+          "unavailable": "レビューチェックはフォルダーワークスペースでのみ表示されます。",
+          "refresh": "レビューチェックを更新",
           "emptyTitle": "添付ワークツリーはまだありません",
-          "emptyCopy": "このフォルダーワークスペースにワークツリーを添付すると、ここに PR チェックが表示されます。",
+          "emptyCopy": "このフォルダーワークスペースにワークツリーを添付すると、ここにレビューチェックが表示されます。",
           "openChecksTab": "{{value0}} のチェックタブを開く",
           "openReviewExternally": "{{value0}} を外部で開く",
           "summary": "{{value0}} 件添付 · PR/MR あり {{value1}} 件 · 要対応 {{value2}} 件 · 保留中 {{value3}} 件 · 成功 {{value4}} 件 · PR なし {{value5}} 件 · 不明 {{value6}} 件",

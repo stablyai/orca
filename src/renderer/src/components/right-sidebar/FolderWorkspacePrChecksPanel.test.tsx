@@ -273,6 +273,25 @@ describe('FolderWorkspacePrChecksPanel', () => {
     expect(container.textContent).not.toContain('unknown')
   })
 
+  it('renders a targetable illustrative empty preview when no child worktrees are attached', () => {
+    mockState.store.workspaceLineageByChildKey = {}
+    mockState.store.worktreesByRepo = {}
+
+    renderPanel()
+
+    expect(
+      container.querySelector(
+        '[data-contextual-tour-target="folder-workspace-review-checks-empty"]'
+      )
+    ).not.toBeNull()
+    expect(container.textContent).toContain(
+      'Review checks will appear here after worktrees are attached to this folder workspace.'
+    )
+    expect(container.textContent).toContain('Needs attention')
+    expect(container.textContent).toContain('Pending')
+    expect(container.textContent).toContain('Passing')
+  })
+
   it('summarizes failing and pending rows before the worktree count', () => {
     const repo = mockState.store.repos[0]
     const passingWorktree = mockState.store.worktreesByRepo[repo.id][0]
@@ -407,13 +426,13 @@ describe('FolderWorkspacePrChecksPanel', () => {
     })
     await vi.waitFor(() => {
       expect(
-        container.querySelector<HTMLButtonElement>('[aria-label="Refresh PR checks"]')?.disabled
+        container.querySelector<HTMLButtonElement>('[aria-label="Refresh review checks"]')?.disabled
       ).toBe(false)
     })
 
     mockState.store.fetchHostedReviewForBranch.mockClear()
     act(() => {
-      container.querySelector<HTMLButtonElement>('[aria-label="Refresh PR checks"]')?.click()
+      container.querySelector<HTMLButtonElement>('[aria-label="Refresh review checks"]')?.click()
     })
     await vi.waitFor(() => {
       expect(mockState.store.fetchHostedReviewForBranch).toHaveBeenCalled()
@@ -424,7 +443,7 @@ describe('FolderWorkspacePrChecksPanel', () => {
 
     await vi.waitFor(() => {
       expect(
-        container.querySelector<HTMLButtonElement>('[aria-label="Refresh PR checks"]')?.disabled
+        container.querySelector<HTMLButtonElement>('[aria-label="Refresh review checks"]')?.disabled
       ).toBe(false)
     })
     mockState.store.fetchHostedReviewForBranch.mockClear()
@@ -469,12 +488,12 @@ describe('FolderWorkspacePrChecksPanel', () => {
 
     await vi.waitFor(() => {
       expect(
-        container.querySelector<HTMLButtonElement>('[aria-label="Refresh PR checks"]')?.disabled
+        container.querySelector<HTMLButtonElement>('[aria-label="Refresh review checks"]')?.disabled
       ).toBe(false)
     })
     mockState.store.fetchHostedReviewForBranch.mockClear()
     act(() => {
-      container.querySelector<HTMLButtonElement>('[aria-label="Refresh PR checks"]')?.click()
+      container.querySelector<HTMLButtonElement>('[aria-label="Refresh review checks"]')?.click()
     })
 
     await vi.waitFor(() => {

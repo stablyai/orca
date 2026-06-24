@@ -145,7 +145,31 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
       </div>
 
       {childWorktrees.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+        <div
+          className="flex flex-1 flex-col items-center justify-center px-6 text-center"
+          data-contextual-tour-target="folder-workspace-attached-empty"
+        >
+          <div className="mb-4 w-full max-w-[15rem] space-y-2" aria-hidden="true">
+            {[
+              translate(
+                'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.previewApiAuthFix',
+                'api auth fix'
+              ),
+              translate(
+                'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.previewWebSignupFlow',
+                'web signup flow'
+              )
+            ].map((label) => (
+              <div
+                key={label}
+                className="flex items-center gap-2 rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-left opacity-55"
+              >
+                <div className="size-2 rounded-full bg-muted-foreground/40" />
+                <div className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{label}</div>
+                <div className="h-1.5 w-8 rounded-full bg-muted-foreground/20" />
+              </div>
+            ))}
+          </div>
           <div className="text-sm font-medium text-foreground">
             {translate(
               'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyTitle',

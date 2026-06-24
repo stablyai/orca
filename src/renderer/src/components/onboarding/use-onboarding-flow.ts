@@ -36,6 +36,7 @@ import { translate } from '@/i18n/i18n'
 import { resolveAgentPermissionModeSummary } from '../../../../shared/tui-agent-permissions'
 import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { buildWindowsTerminalSnapshotPayload } from './windows-terminal-onboarding-telemetry'
+import { requestContextualTourWhenReady } from '@/components/contextual-tours/request-contextual-tour-when-ready'
 
 export { STEPS } from './use-onboarding-flow-types'
 export type { StepId, StepNumber } from './use-onboarding-flow-types'
@@ -228,6 +229,10 @@ export function useOnboardingFlow(
   const pathFailureReason = useAppStore((s) => s.pathFailureReason)
   const fetchRepos = useAppStore((s) => s.fetchRepos)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
+  const setSidebarOpen = useAppStore((s) => s.setSidebarOpen)
+  const setPendingFolderWorkspaceCreateTourGroupId = useAppStore(
+    (s) => s.setPendingFolderWorkspaceCreateTourGroupId
+  )
   const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const addRepoPath = useAppStore((s) => s.addRepoPath)
   const scanNestedRepos = useAppStore((s) => s.scanNestedRepos)
@@ -614,7 +619,7 @@ export function useOnboardingFlow(
         path
       )
       if (!closed) {
-        return
+        return false
       }
       // Why: the repo step has no keyboard-vs-button advance — Cmd+Enter
       // routes to `openFolder()` which collapses both into the path-clicked
@@ -625,6 +630,7 @@ export function useOnboardingFlow(
         value_kind: 'repo',
         duration_ms: consumeStepDurationMs()
       })
+      return true
     },
     [
       closeWith,
@@ -894,83 +900,51 @@ export function useOnboardingFlow(
     ]
   )
 
-  const importNested = useCallback(async () => {
-    const mode = 'separate'
-    const attemptId = nestedAttemptId
-    if (
-      !nestedScan ||
-      !attemptId ||
-      !shouldEmitNestedRepoImportSubmitTelemetry({
-        attemptId,
-        selectedCount: nestedSelectedPaths.size,
-        isBusy: busyLabel !== null
-      })
-    ) {
-      return
-    }
-    const foundCount = nestedScan.repos.length
-    const selectedCount = nestedSelectedPaths.size
-    const runtimeKind = nestedRuntimeKind ?? onboardingNestedRepoRuntimeKind
-    setError(null)
-    setBusyLabel('Importing repositories…')
-    track(
-      'add_repo_nested_import_action',
-      buildNestedRepoImportActionTelemetry({
-        attemptId,
-        surface: 'onboarding',
-        runtimeKind,
-        action: 'import_separate',
-        foundCount,
-        selectedCount
-      })
-    )
-    let resultTracked = false
-    try {
-      const selectedProjectPaths = getSelectedNestedRepoPathsInScanOrder(
-        nestedScan,
-        nestedSelectedPaths
-      )
-      const result = await importNestedRepos({
-        parentPath: nestedScan.selectedPath,
-        groupName: '',
-        // Why: Set insertion order can drift after deselect/reselect; import
-        // ordering should match the visible scan order users reviewed.
-        projectPaths: selectedProjectPaths,
-        ...(nestedImportScanId ? { scanId: nestedImportScanId } : {}),
-        mode
-      })
+  const importNested = useCallback(
+    async (mode: 'group' | 'separate', groupName: string) => {
+      const attemptId = nestedAttemptId
+      if (
+        !nestedScan ||
+        !attemptId ||
+        !shouldEmitNestedRepoImportSubmitTelemetry({
+          attemptId,
+          selectedCount: nestedSelectedPaths.size,
+          isBusy: busyLabel !== null
+        })
+      ) {
+        return
+      }
+      const foundCount = nestedScan.repos.length
+      const selectedCount = nestedSelectedPaths.size
+      const runtimeKind = nestedRuntimeKind ?? onboardingNestedRepoRuntimeKind
+      setError(null)
+      setBusyLabel('Importing repositories…')
       track(
-        'add_repo_nested_import_result',
-        buildNestedRepoImportResultTelemetry({
+        'add_repo_nested_import_action',
+        buildNestedRepoImportActionTelemetry({
           attemptId,
           surface: 'onboarding',
           runtimeKind,
-          mode,
+          action: mode === 'group' ? 'import_group' : 'import_separate',
           foundCount,
-          selectedCount,
-          result
+          selectedCount
         })
       )
-      resultTracked = true
-      const importedRepoIds =
-        result?.projects
-          .map((entry) => entry.projectId)
-          .filter((projectId): projectId is string => typeof projectId === 'string') ?? []
-      const projectId = importedRepoIds[0]
-      if (!projectId) {
-        const firstFailure = result?.projects.find((entry) => entry.status === 'failed')?.error
-        throw new Error(
-          firstFailure ? `No repositories imported: ${firstFailure}` : 'No repositories imported'
+      let resultTracked = false
+      try {
+        const selectedProjectPaths = getSelectedNestedRepoPathsInScanOrder(
+          nestedScan,
+          nestedSelectedPaths
         )
-      }
-      for (const importedRepoId of importedRepoIds) {
-        // Why: imported repos are already persisted; non-authoritative SSH
-        // refreshes should not block onboarding from revealing the first project.
-        await fetchWorktrees(importedRepoId, { requireAuthoritative: true })
-      }
-      await completeRepo(projectId, true, 'open_folder')
-    } catch (err) {
-      if (!resultTracked) {
+        const result = await importNestedRepos({
+          parentPath: nestedScan.selectedPath,
+          groupName,
+          // Why: Set insertion order can drift after deselect/reselect; import
+          // ordering should match the visible scan order users reviewed.
+          projectPaths: selectedProjectPaths,
+          ...(nestedImportScanId ? { scanId: nestedImportScanId } : {}),
+          mode
+        })
         track(
           'add_repo_nested_import_result',
           buildNestedRepoImportResultTelemetry({
@@ -980,27 +954,102 @@ export function useOnboardingFlow(
             mode,
             foundCount,
             selectedCount,
-            result: null
+            result
           })
         )
+        resultTracked = true
+        const importedRepoIds =
+          result?.projects
+            .map((entry) => entry.projectId)
+            .filter((projectId): projectId is string => typeof projectId === 'string') ?? []
+        const projectId = importedRepoIds[0]
+        if (!projectId) {
+          const firstFailure = result?.projects.find((entry) => entry.status === 'failed')?.error
+          throw new Error(
+            firstFailure ? `No repositories imported: ${firstFailure}` : 'No repositories imported'
+          )
+        }
+        for (const importedRepoId of importedRepoIds) {
+          // Why: imported repos are already persisted; non-authoritative SSH
+          // refreshes should not block onboarding from revealing the first project.
+          await fetchWorktrees(importedRepoId, { requireAuthoritative: true })
+        }
+        const completed = await completeRepo(projectId, true, 'open_folder')
+        if (completed && mode === 'group' && result?.group) {
+          const shouldRequestFolderWorkspaceCallout = (() => {
+            const state = useAppStore.getState()
+            return (
+              state.contextualToursAutoEligible === true &&
+              !state.contextualToursSeenIds.includes('folder-workspace-create-callout')
+            )
+          })()
+          if (!shouldRequestFolderWorkspaceCallout) {
+            return
+          }
+          setPendingFolderWorkspaceCreateTourGroupId(result.group.id)
+          setSidebarOpen(true)
+          requestContextualTourWhenReady({
+            id: 'folder-workspace-create-callout',
+            source: 'onboarding_group_import',
+            wasFeaturePreviouslyInteracted: false,
+            waitForActiveTourToClear: true,
+            force: false,
+            maxAttempts: 120,
+            retryDelayMs: 250,
+            onAbandon: () => {
+              const state = useAppStore.getState()
+              if (
+                state.pendingFolderWorkspaceCreateTourGroupId === result.group?.id &&
+                state.activeContextualTourId !== 'folder-workspace-create-callout'
+              ) {
+                state.setPendingFolderWorkspaceCreateTourGroupId(null)
+              }
+            },
+            shouldContinue: () => {
+              const state = useAppStore.getState()
+              return (
+                state.pendingFolderWorkspaceCreateTourGroupId === result.group?.id &&
+                state.projectGroups.some((group) => group.id === result.group?.id)
+              )
+            }
+          })
+        }
+      } catch (err) {
+        if (!resultTracked) {
+          track(
+            'add_repo_nested_import_result',
+            buildNestedRepoImportResultTelemetry({
+              attemptId,
+              surface: 'onboarding',
+              runtimeKind,
+              mode,
+              foundCount,
+              selectedCount,
+              result: null
+            })
+          )
+        }
+        setError(err instanceof Error ? err.message : String(err))
+        track('onboarding_step4_path_failed', { path: 'open_folder', reason: 'invalid_path' })
+      } finally {
+        setBusyLabel(null)
       }
-      setError(err instanceof Error ? err.message : String(err))
-      track('onboarding_step4_path_failed', { path: 'open_folder', reason: 'invalid_path' })
-    } finally {
-      setBusyLabel(null)
-    }
-  }, [
-    busyLabel,
-    completeRepo,
-    fetchWorktrees,
-    importNestedRepos,
-    nestedAttemptId,
-    nestedScan,
-    nestedSelectedPaths,
-    nestedImportScanId,
-    nestedRuntimeKind,
-    onboardingNestedRepoRuntimeKind
-  ])
+    },
+    [
+      busyLabel,
+      completeRepo,
+      fetchWorktrees,
+      importNestedRepos,
+      nestedAttemptId,
+      nestedScan,
+      nestedSelectedPaths,
+      nestedImportScanId,
+      nestedRuntimeKind,
+      onboardingNestedRepoRuntimeKind,
+      setPendingFolderWorkspaceCreateTourGroupId,
+      setSidebarOpen
+    ]
+  )
 
   const trackNestedBackAndClear = useCallback(() => {
     if (nestedScan && nestedAttemptId) {

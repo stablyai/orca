@@ -67,6 +67,7 @@ function RightSidebarInner(): React.JSX.Element {
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const rightSidebarRouteRequestId = useAppStore((s) => s.rightSidebarRouteRequestId)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const showRightSidebarFiles = useAppStore((s) => s.showRightSidebarFiles)
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
   const checksStatus = useAppStore((s) => (s.rightSidebarOpen ? getActiveChecksStatus(s) : null))
@@ -107,14 +108,16 @@ function RightSidebarInner(): React.JSX.Element {
           'Attached worktrees'
         ),
         shortcut: '',
-        folderOnly: true
+        folderOnly: true,
+        contextualTourTarget: 'folder-workspace-worktrees-tab'
       },
       {
         id: 'pr-checks',
         icon: ListChecks,
-        title: translate('auto.components.right.sidebar.index.parentPrChecks', 'PR Checks'),
+        title: translate('auto.components.right.sidebar.index.folderReviewChecks', 'Review checks'),
         shortcut: '',
-        folderOnly: true
+        folderOnly: true,
+        contextualTourTarget: 'folder-workspace-review-checks-tab'
       },
       {
         id: 'source-control',
@@ -188,6 +191,9 @@ function RightSidebarInner(): React.JSX.Element {
   const selectActivityTab = (tab: ActiveRightSidebarTab): void => {
     if (activeFolderWorkspaceKey) {
       rememberedFolderTabByWorkspaceKeyRef.current[activeFolderWorkspaceKey] = tab
+      if (tab === 'workspaces' || tab === 'pr-checks') {
+        void recordFeatureInteraction?.('folder-workspace-right-sidebar')
+      }
     }
     if (tab === 'explorer') {
       showRightSidebarFiles()

@@ -110,7 +110,7 @@ export function AddRepoNestedImportStep({
           </p>
           <p className="text-xs text-muted-foreground">
             {translate(
-              'auto.components.sidebar.AddRepoNestedImportStep.d75170194e',
+              'auto.components.sidebar.AddRepoNestedImportStep.groupImportCopy',
               "Import them as a group if they're a monorepo or otherwise belong together. Orca will group them and let you work from the parent folder."
             )}
           </p>
@@ -119,7 +119,7 @@ export function AddRepoNestedImportStep({
           <div className="flex shrink-0 items-center gap-1">
             <Label htmlFor={groupNameInputId} className="text-[11px] text-muted-foreground">
               {translate(
-                'auto.components.sidebar.AddRepoNestedImportStep.39d51212cc',
+                'auto.components.sidebar.AddRepoNestedImportStep.groupNameLabel',
                 'Group name'
               )}
             </Label>
@@ -127,7 +127,7 @@ export function AddRepoNestedImportStep({
           <Input
             id={groupNameInputId}
             aria-label={translate(
-              'auto.components.sidebar.AddRepoNestedImportStep.39d51212cc',
+              'auto.components.sidebar.AddRepoNestedImportStep.groupNameLabel',
               'Group name'
             )}
             value={groupName}
@@ -155,7 +155,7 @@ export function AddRepoNestedImportStep({
           >
             {showGroupSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
             {translate(
-              'auto.components.sidebar.AddRepoNestedImportStep.a0bc4d1f8e',
+              'auto.components.sidebar.AddRepoNestedImportStep.importAsGroup',
               'Import as group'
             )}
           </Button>

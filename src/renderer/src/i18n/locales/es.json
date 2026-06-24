@@ -3397,7 +3397,10 @@
           "b4263a2ac4": "Se encontraron {{value0}} en {{value1}}.",
           "24eda6c8b2": "Explorando... {{value0}}",
           "b20bb7c24f": "Keeps these repos together in one group. Best for related repos like microservices.",
-          "e907ec8935": "What is a monorepo name?"
+          "e907ec8935": "What is a monorepo name?",
+          "groupImportCopy": "Impórtalos como grupo si son un monorepo o si pertenecen juntos. Orca los agrupará y te permitirá trabajar desde la carpeta principal.",
+          "groupNameLabel": "Nombre del grupo",
+          "importAsGroup": "Importar como grupo"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "Detener escaneo",
@@ -8969,7 +8972,8 @@
             "fc3095d2ed": "explorador",
             "aiVaultSessionHistory": "Agents",
             "folderWorkspaces": "Árboles de trabajo adjuntos",
-            "parentPrChecks": "Comprobaciones de PR"
+            "parentPrChecks": "Comprobaciones de PR",
+            "folderReviewChecks": "Comprobaciones de revisión"
           },
           "right": {
             "panel": {
@@ -9481,7 +9485,14 @@
           "c3d9d44ca2": "Detener escaneo",
           "cf23006ba7": "Servidor de ejecución",
           "7ec3f48820": "/casa/usuario",
-          "2e6438dd34": "{{value0}}Encontrado {{value1}} {{value2}} en esta carpeta."
+          "220dd32d83": "Escaneando...",
+          "2e6438dd34": "Encontrado {{value0}} {{value1}} en esta carpeta.",
+          "monorepoParentFolderHint": "¿Trabajas en un monorepo? Selecciona la carpeta que está encima de tus apps/servicios para importarlas como grupo.",
+          "fb33359f69": "¿Es esto un monorepo?",
+          "d75170194e": "Impórtalos como grupo si pertenecen juntos. Orca los agrupará y te permitirá trabajar desde la carpeta principal.",
+          "39d51212cc": "Nombre del grupo",
+          "aa0247680d": "No, importar por separado",
+          "a0bc4d1f8e": "Importar como grupo"
         },
         "ThemeStep": {
           "a4b254779d": "Tecla de opción de macOS",
@@ -10431,7 +10442,7 @@
           "21783df79f": "Contraer árbol de archivos",
           "481e63ca52": "Archivos",
           "d5ac717d65": "no comprometido",
-          "39b6b9e4e4": "Committed on Branch"
+          "39b6b9e4e4": "Confirmado en la rama"
         },
         "CombinedDiffViewer": {
           "35cc27aeb2": "en control de fuente",
@@ -11644,13 +11655,15 @@
           "countOne": "1 attached worktree",
           "countMany": "{{value0}} attached worktrees",
           "emptyTitle": "No attached worktrees yet",
-          "emptyCopy": "Worktrees created from this workspace will show up here."
+          "emptyCopy": "Worktrees created from this workspace will show up here.",
+          "previewApiAuthFix": "corrección de autenticación de API",
+          "previewWebSignupFlow": "flujo de registro web"
         },
         "FolderWorkspacePrChecksPanel": {
-          "unavailable": "Las comprobaciones de PR solo se muestran en espacios de trabajo de carpeta.",
-          "refresh": "Actualizar comprobaciones de PR",
+          "unavailable": "Las comprobaciones de revisión solo se muestran en espacios de trabajo de carpeta.",
+          "refresh": "Actualizar comprobaciones de revisión",
           "emptyTitle": "Aún no hay árboles de trabajo adjuntos",
-          "emptyCopy": "Las comprobaciones de PR aparecerán aquí cuando se adjunten árboles de trabajo a este espacio de trabajo de carpeta.",
+          "emptyCopy": "Las comprobaciones de revisión aparecerán aquí cuando se adjunten árboles de trabajo a este espacio de trabajo de carpeta.",
           "openChecksTab": "Abrir la pestaña Comprobaciones de {{value0}}",
           "openReviewExternally": "Abrir {{value0}} externamente",
           "summary": "{{value0}} adjuntos · {{value1}} con PR/MR · {{value2}} requieren atención · {{value3}} pendientes · {{value4}} correctos · {{value5}} sin PR · {{value6}} desconocidos",

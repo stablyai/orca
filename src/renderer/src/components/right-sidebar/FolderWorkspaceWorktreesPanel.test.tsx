@@ -239,6 +239,19 @@ describe('FolderWorkspaceWorktreesPanel', () => {
     expect(container.textContent).toContain('Workspace-key child')
   })
 
+  it('renders a targetable illustrative empty preview when no child worktrees are attached', () => {
+    renderPanel()
+
+    expect(
+      container.querySelector('[data-contextual-tour-target="folder-workspace-attached-empty"]')
+    ).not.toBeNull()
+    expect(container.textContent).toContain(
+      'Worktrees created from this workspace will show up here.'
+    )
+    expect(container.textContent).toContain('api auth fix')
+    expect(container.textContent).toContain('web signup flow')
+  })
+
   it('renders attached child worktrees as affiliate WorktreeCards in recent order', () => {
     const oldChild = makeWorktree({
       id: 'repo-1::/old',

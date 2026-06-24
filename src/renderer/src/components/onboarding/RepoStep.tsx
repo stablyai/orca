@@ -21,7 +21,7 @@ type RepoStepProps = {
   nestedScanInProgress: boolean
   nestedSelectedPaths: Set<string>
   onNestedSelectedPathsChange: Dispatch<SetStateAction<Set<string>>>
-  onImportNested: () => void
+  onImportNested: (mode: 'group' | 'separate', groupName: string) => void
   onCancelNested: () => void
   onStopNestedScan: () => void
   onOpenFolder: () => void
@@ -172,8 +172,8 @@ export function RepoStep({
             </span>
             <span>
               {translate(
-                'auto.components.onboarding.RepoStep.6558d50c69',
-                'Want to import many repos at once? Select the parent folder.'
+                'auto.components.onboarding.RepoStep.monorepoParentFolderHint',
+                'Working in a monorepo? Select the folder above your apps/services to import them as a group.'
               )}
             </span>
           </div>

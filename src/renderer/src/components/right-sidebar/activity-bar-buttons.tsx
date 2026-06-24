@@ -25,6 +25,7 @@ export type ActivityBarItem = {
   folderOnly?: boolean
   /** When true, shown only for worktrees that belong to an SSH repo. */
   sshOnly?: boolean
+  contextualTourTarget?: string
 }
 
 const STATUS_DOT_COLOR: Record<CheckStatus, string> = {
@@ -126,6 +127,7 @@ export function ActivityBarButton({
           )}
           onClick={onClick}
           aria-label={item.shortcut ? `${item.title} (${item.shortcut})` : item.title}
+          data-contextual-tour-target={item.contextualTourTarget}
         >
           <Icon size={isTop ? 16 : 18} />
 

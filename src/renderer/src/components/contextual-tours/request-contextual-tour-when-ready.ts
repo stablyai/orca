@@ -9,6 +9,8 @@ type RequestContextualTourWhenReadyArgs = {
   retryDelayMs?: number
   waitForActiveTourToClear?: boolean
   shouldContinue?: () => boolean
+  onAbandon?: (reason: 'blocked' | 'exhausted' | 'invalid') => void
+  force?: boolean
 }
 
 export type { RequestContextualTourWhenReadyArgs }
@@ -21,13 +23,23 @@ export function requestContextualTourWhenReady(
   let attempts = 0
   let timeoutId: ReturnType<typeof setTimeout> | null = null
   let cancelled = false
+  let abandoned = false
+
+  const abandon = (reason: 'blocked' | 'exhausted' | 'invalid'): void => {
+    if (abandoned) {
+      return
+    }
+    abandoned = true
+    cancelled = true
+    args.onAbandon?.(reason)
+  }
 
   const attempt = (): void => {
     if (cancelled) {
       return
     }
     if (args.shouldContinue && !args.shouldContinue()) {
-      cancelled = true
+      abandon('invalid')
       return
     }
     attempts += 1
@@ -36,16 +48,22 @@ export function requestContextualTourWhenReady(
     if (before.activeContextualTourId && before.activeContextualTourId !== args.id) {
       if (args.waitForActiveTourToClear && attempts < maxAttempts) {
         timeoutId = setTimeout(attempt, retryDelayMs)
+      } else {
+        abandon('blocked')
       }
       return
     }
 
     before.requestContextualTour(args.id, args.source, args.wasFeaturePreviouslyInteracted, {
-      force: true
+      force: args.force ?? true
     })
 
     const after = useAppStore.getState()
-    if (after.activeContextualTourId === args.id || attempts >= maxAttempts) {
+    if (after.activeContextualTourId === args.id) {
+      return
+    }
+    if (attempts >= maxAttempts) {
+      abandon('exhausted')
       return
     }
     timeoutId = setTimeout(attempt, retryDelayMs)

@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { CONTEXTUAL_TOUR_FEATURE_INTERACTION_BY_ID } from './contextual-tour-feature-interactions'
 import {
   FEATURE_INTERACTIONS,
   FEATURE_INTERACTION_CATEGORIES,
@@ -55,6 +56,8 @@ describe('feature interactions', () => {
       'browser-grab',
       'markdown-file-created',
       'workspace-creation',
+      'folder-workspace-creation',
+      'folder-workspace-right-sidebar',
       'agent-browser-setup',
       'agent-browser-use',
       'agent-orchestration-setup',
@@ -199,6 +202,19 @@ describe('feature interactions', () => {
 
   it('keeps every catalog id wired to a production writer', () => {
     const productionText = collectProductionSourceText()
+    const mappedFeatureInteractionIds = new Set<FeatureInteractionId>()
+    for (const [tourId, featureInteractionId] of Object.entries(
+      CONTEXTUAL_TOUR_FEATURE_INTERACTION_BY_ID
+    )) {
+      // Why: keep tour-id detection near runtime request/use sites so the
+      // catalog mapping cannot satisfy the wiring test by mentioning itself.
+      const requestedByRuntimePath = new RegExp(
+        `\\b(?:requestContextualTourWhenReady|requestContextualTour|useContextualTour)\\b[\\s\\S]{0,500}['"]${escapeRegExp(tourId)}['"]`
+      )
+      if (featureInteractionId && requestedByRuntimePath.test(productionText)) {
+        mappedFeatureInteractionIds.add(featureInteractionId)
+      }
+    }
     const missingWriters = FEATURE_INTERACTIONS.map((feature) => feature.id).filter((id) => {
       const escaped = escapeRegExp(id)
       const directRecord = new RegExp(
@@ -209,12 +225,13 @@ describe('feature interactions', () => {
       return (
         !directRecord.test(productionText) &&
         !contextualTourRecord.test(productionText) &&
-        !runtimeMappingReturn.test(productionText)
+        !runtimeMappingReturn.test(productionText) &&
+        !mappedFeatureInteractionIds.has(id)
       )
     })
 
     expect(missingWriters).toEqual([])
-  }, 15_000)
+  }, 45_000)
 })
 
 function collectProductionSourceText(): string {

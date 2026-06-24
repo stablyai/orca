@@ -2599,6 +2599,19 @@ describe('createUISlice contextual tours', () => {
     expect(store.getState().activeContextualTourWasFeaturePreviouslyInteracted).toBe(true)
   })
 
+  it('uses mapped feature interactions for contextual tour telemetry snapshots', () => {
+    const store = createUIStore()
+    const overviewFirstSelector =
+      '[data-contextual-tour-target="folder-workspace-worktrees-tab"], [data-contextual-tour-target="folder-workspace-attached-empty"]'
+    stubContextualTourTargets([overviewFirstSelector])
+    store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
+
+    store.getState().recordFeatureInteraction('folder-workspace-right-sidebar')
+    store.getState().requestContextualTour('folder-workspace-overview', 'folder_workspace_active')
+
+    expect(store.getState().activeContextualTourWasFeaturePreviouslyInteracted).toBe(true)
+  })
+
   it('lets the caller preserve the pre-enable interaction snapshot for telemetry', () => {
     const store = createUIStore()
     const tasksFirstSelector = '[data-contextual-tour-target="tasks-source-filters"]'
