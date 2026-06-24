@@ -102,6 +102,8 @@ export function useGitStatusFileWatchRefresh({
       if (refreshTimer) {
         clearTimeout(refreshTimer)
       }
+      // Why: file watchers deliver atomic writes as bursts, but git status is
+      // already coalesced and should only be nudged once per burst.
       refreshTimer = setTimeout(() => {
         refreshTimer = null
         fetchStatusRef.current()

@@ -197,6 +197,8 @@ export function useEditorPanelContentState({
           compareAgainstHead
         )
         if (options?.force) {
+          // Why: forced diff reloads must not attach to a read started before
+          // the external change landed.
           inFlightDiffReads.delete(key)
         }
         let pending = inFlightDiffReads.get(key)
