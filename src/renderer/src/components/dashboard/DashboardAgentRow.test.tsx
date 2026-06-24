@@ -125,6 +125,42 @@ function classTokensForTaggedElement(markup: string, dataAttribute: string): str
   return classMatch[1].split(/\s+/).filter(Boolean)
 }
 
+describe('DashboardAgentRow content mode', () => {
+  function renderRowWithMode(
+    agent: DashboardAgentRowData,
+    contentMode: ComponentProps<typeof DashboardAgentRow>['contentMode']
+  ): string {
+    return renderToStaticMarkup(
+      <TooltipProvider>
+        <DashboardAgentRow
+          agent={agent}
+          onDismiss={vi.fn()}
+          onActivate={vi.fn()}
+          now={NOW}
+          contentMode={contentMode}
+          hideIdentityIcon
+          hideExpand
+        />
+      </TooltipProvider>
+    )
+  }
+
+  it('shows the prompt as the headline in progress mode (default)', () => {
+    const markup = renderRowWithMode(makeAgent({}, { prompt: 'Fix hover scope' }), 'progress')
+    expect(markup).toContain('Fix hover scope')
+  })
+
+  it('shows the tab name instead of the prompt in tabName mode', () => {
+    const agent = makeAgent(
+      { tab: { ...makeAgent().tab, title: 'auth-refactor' } },
+      { prompt: 'Fix hover scope' }
+    )
+    const markup = renderRowWithMode(agent, 'tabName')
+    expect(markup).toContain('auth-refactor')
+    expect(markup).not.toContain('Fix hover scope')
+  })
+})
+
 describe('DashboardAgentRow', () => {
   it('renders orchestration task preview instead of the raw dispatch preamble prompt', () => {
     const markup = renderRow(

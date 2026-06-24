@@ -20,7 +20,10 @@ import {
   CompactAgentSummaryButton
 } from './worktree-card-compact-agents'
 import { buildAgentRowLineageTree } from '@/components/dashboard/agent-row-lineage-model'
-import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
+import {
+  DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
+  DEFAULT_AGENT_ROW_CONTENT_MODE
+} from '../../../../shared/constants'
 import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
 import { translate } from '@/i18n/i18n'
 
@@ -83,6 +86,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
 }: BodyProps) {
   const agentActivityDisplayMode =
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
+  const agentRowContentMode =
+    useAppStore((s) => s.agentRowContentMode) ?? DEFAULT_AGENT_ROW_CONTENT_MODE
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
   const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
   const agentSendPopoverTargetMode = useAppStore((s) => s.agentSendPopoverTargetMode)
@@ -308,6 +313,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
             agent.rowSource === 'retained' ? handleActivateRetainedAgent : handleActivateAgentTab
           }
           now={now}
+          contentMode={agentRowContentMode}
           // Why: bold an agent row until the user has visited its tab.
           // useAutoAckViewedAgent acks automatically when the user
           // focuses the agent's tab, which mutes the row in lockstep.
@@ -378,6 +384,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
         <CompactAgentRow
           agent={agent}
           now={now}
+          contentMode={agentRowContentMode}
           onActivate={
             agent.rowSource === 'retained' ? handleActivateRetainedAgent : handleActivateAgentTab
           }

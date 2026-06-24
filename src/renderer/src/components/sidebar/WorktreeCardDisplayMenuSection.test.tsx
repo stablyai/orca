@@ -9,6 +9,7 @@ import { WorktreeCardDisplayMenuSection } from './WorktreeCardDisplayMenuSection
 const setWorktreeCardMode = vi.fn()
 const setWorktreeCardProperties = vi.fn()
 const setAgentActivityDisplayMode = vi.fn()
+const setAgentRowContentMode = vi.fn()
 
 let settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: false }
 let projectGroups: unknown[] = []
@@ -28,8 +29,10 @@ vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
     selector({
       agentActivityDisplayMode: 'compact',
+      agentRowContentMode: 'progress',
       projectGroups,
       setAgentActivityDisplayMode,
+      setAgentRowContentMode,
       setWorktreeCardMode,
       setWorktreeCardProperties,
       settings,
@@ -127,6 +130,7 @@ beforeEach(() => {
     'inline-agents'
   ]
   setAgentActivityDisplayMode.mockReset()
+  setAgentRowContentMode.mockReset()
   setWorktreeCardMode.mockReset()
   setWorktreeCardProperties.mockReset()
 })
@@ -155,6 +159,38 @@ describe('WorktreeCardDisplayMenuSection', () => {
     })
 
     expect(setWorktreeCardMode).toHaveBeenCalledWith('Compact')
+  })
+
+  it('switches the agent row content mode from the visible properties menu', () => {
+    renderMenu()
+
+    const tabNameButton = document.querySelector<HTMLButtonElement>(
+      '[data-radio-group-value="progress"] [data-radio-item-value="tabName"]'
+    )
+    expect(tabNameButton).not.toBeNull()
+
+    act(() => {
+      tabNameButton?.click()
+    })
+
+    expect(setAgentRowContentMode).toHaveBeenCalledWith('tabName')
+  })
+
+  it('exposes the agent row content mode in the new card style menu', () => {
+    settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }
+
+    renderMenu()
+
+    const tabNameButton = document.querySelector<HTMLButtonElement>(
+      '[data-radio-group-value="progress"] [data-radio-item-value="tabName"]'
+    )
+    expect(tabNameButton).not.toBeNull()
+
+    act(() => {
+      tabNameButton?.click()
+    })
+
+    expect(setAgentRowContentMode).toHaveBeenCalledWith('tabName')
   })
 
   it('keeps branch-only copy when project groups are unavailable', () => {

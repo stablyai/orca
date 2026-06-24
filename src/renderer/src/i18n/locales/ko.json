@@ -3748,7 +3748,10 @@
           "65a9820bd1": "Agent 상태",
           "219ebf1961": "브랜치 이름",
           "automation": "자동화",
-          "folderPathIdentity": "Branch / folder path"
+          "folderPathIdentity": "Branch / folder path",
+          "agentRowContentTitle": "에이전트 행 내용",
+          "agentRowContentProgress": "진행 상황",
+          "agentRowContentTabName": "탭 이름"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "연결 중...",

@@ -3781,7 +3781,10 @@
           "2d74665a56": "Ports",
           "65a9820bd1": "Agent statuses",
           "219ebf1961": "Branch name",
-          "folderPathIdentity": "Branch / folder path"
+          "folderPathIdentity": "Branch / folder path",
+          "agentRowContentTitle": "Agent row content",
+          "agentRowContentProgress": "Progress",
+          "agentRowContentTabName": "Tab name"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "Connecting...",

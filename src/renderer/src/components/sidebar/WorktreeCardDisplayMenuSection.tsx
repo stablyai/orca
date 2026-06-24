@@ -10,9 +10,14 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
-import type { AgentActivityDisplayMode, WorktreeCardProperty } from '../../../../shared/types'
+import type {
+  AgentActivityDisplayMode,
+  AgentRowContentMode,
+  WorktreeCardProperty
+} from '../../../../shared/types'
 import {
   AGENT_ACTIVITY_DISPLAY_OPTIONS,
+  AGENT_ROW_CONTENT_OPTIONS,
   CARD_LAYOUT_OPTIONS,
   getWorktreeCardPropertyOptions
 } from './sidebar-workspace-option-items'
@@ -32,6 +37,8 @@ export function WorktreeCardDisplayMenuSection({
   const setWorktreeCardMode = useAppStore((s) => s.setWorktreeCardMode)
   const agentActivityDisplayMode = useAppStore((s) => s.agentActivityDisplayMode)
   const setAgentActivityDisplayMode = useAppStore((s) => s.setAgentActivityDisplayMode)
+  const agentRowContentMode = useAppStore((s) => s.agentRowContentMode)
+  const setAgentRowContentMode = useAppStore((s) => s.setAgentRowContentMode)
   const projectGroups = useAppStore((s) => s.projectGroups)
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
   const cardLayout = settings?.compactWorktreeCards ? 'compact' : 'detailed'
@@ -84,6 +91,27 @@ export function WorktreeCardDisplayMenuSection({
               {opt.label}
             </DropdownMenuCheckboxItem>
           ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
+            {translate(
+              'auto.components.sidebar.SidebarWorkspaceOptionsMenu.agentRowContentTitle',
+              'Agent row content'
+            )}
+          </DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={agentRowContentMode}
+            onValueChange={(value) => setAgentRowContentMode(value as AgentRowContentMode)}
+          >
+            {AGENT_ROW_CONTENT_OPTIONS.map((opt) => (
+              <DropdownMenuRadioItem
+                key={opt.id}
+                value={opt.id}
+                onSelect={(e) => e.preventDefault()}
+              >
+                {opt.label}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
         </DropdownMenuSubContent>
       </DropdownMenuSub>
     )
@@ -181,6 +209,27 @@ export function WorktreeCardDisplayMenuSection({
             }
           >
             {AGENT_ACTIVITY_DISPLAY_OPTIONS.map((opt) => (
+              <DropdownMenuRadioItem
+                key={opt.id}
+                value={opt.id}
+                onSelect={(e) => e.preventDefault()}
+              >
+                {opt.label}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
+            {translate(
+              'auto.components.sidebar.SidebarWorkspaceOptionsMenu.agentRowContentTitle',
+              'Agent row content'
+            )}
+          </DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={agentRowContentMode}
+            onValueChange={(value) => setAgentRowContentMode(value as AgentRowContentMode)}
+          >
+            {AGENT_ROW_CONTENT_OPTIONS.map((opt) => (
               <DropdownMenuRadioItem
                 key={opt.id}
                 value={opt.id}

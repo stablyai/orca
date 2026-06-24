@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils'
 import { getAgentDotState } from './worktree-card-agent-summary'
 import { translate } from '@/i18n/i18n'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { getAgentRowTabName } from '@/lib/agent-row-tab-name'
+import type { AgentRowContentMode } from '../../../../shared/types'
 
 function formatShortTimeAgo(ts: number, now: number): string {
   const delta = now - ts
@@ -80,6 +82,10 @@ function stopActivationKeyPropagation(e: React.KeyboardEvent): void {
 type CompactAgentRowProps = {
   agent: DashboardAgentRowData
   now: number
+  // Why: 'tabName' swaps the prompt/last-message text for the terminal tab name
+  // plus the agent state label. Defaults to 'progress' so callers that don't
+  // thread the setting (prototype/marketing surfaces) keep current behavior.
+  contentMode?: AgentRowContentMode
   onActivate: (tabId: string, paneKey: string) => void
   // Why: send-popover target mode temporarily turns compact sidebar rows into
   // the picker surface, matching the full DashboardAgentRow behavior.
@@ -97,6 +103,7 @@ type CompactAgentRowProps = {
 export const CompactAgentRow = React.memo(function CompactAgentRow({
   agent,
   now,
+  contentMode = 'progress',
   onActivate,
   sendTargetStatus,
   sendTargetDisabledReason,
@@ -113,9 +120,13 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     childAgentCount > 0 &&
     typeof onToggleChildAgents === 'function'
   const dotState = getAgentDotState(agent)
-  const primary = getCompactAgentPrimary(agent)
+  // Why: tab-name mode shows the tab label as the headline and the state label
+  // ("Idle"/"Working"/…) as the secondary; progress mode keeps the prompt +
+  // last-message/tool text.
+  const isTabNameMode = contentMode === 'tabName'
+  const primary = isTabNameMode ? getAgentRowTabName(agent.tab) : getCompactAgentPrimary(agent)
   const isLineageChild = agent.lineage?.depth === 1
-  const secondary = getCompactAgentSecondary(agent)
+  const secondary = isTabNameMode ? agentStateLabel(dotState) : getCompactAgentSecondary(agent)
   const shortTime = getCompactAgentTime(agent, now)
 
   const handleActivate = useCallback(

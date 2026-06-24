@@ -11,6 +11,8 @@ import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { getAgentRowTabName } from '@/lib/agent-row-tab-name'
+import type { AgentRowContentMode } from '../../../../shared/types'
 
 // Why: the dashboard tracks its own rollup states (incl. 'idle'); narrow to the
 // shared dot states for rendering, falling back to 'idle' for any unknown
@@ -84,6 +86,11 @@ type Props = {
    * owns the tick for the inline-in-card list.
    */
   now: number
+  // Why: 'tabName' replaces the prompt headline with the terminal tab name and
+  // hides the live progress sub-rows (tool step + last message); state stays in
+  // the leading dot. Defaults to 'progress' so non-sidebar callers
+  // (prototype/marketing) keep current behavior.
+  contentMode?: AgentRowContentMode
   /**
    * Why: bold weight for the prompt rides on the enclosing workspace card's
    * unvisited signal, not on the per-agent state. Passed in from
@@ -134,6 +141,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   onDismiss,
   onActivate,
   now,
+  contentMode = 'progress',
   isUnvisited = false,
   stateDotSize = 'md',
   hideIdentityIcon = false,
@@ -196,7 +204,13 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   // readable label — just a state dot and icon. Fall back to the state label
   // ("Working", "Done", "Waiting", …) so every row is identifiable at a
   // glance.
-  const displayLabel = prompt || agentStateLabel(asDotState(agent.state))
+  // Why: tab-name mode shows the terminal tab label as the headline instead of
+  // the prompt; the progress sub-rows below are hidden so the row reads as
+  // "state(dot) → who(icon) → tab name".
+  const isTabNameMode = contentMode === 'tabName'
+  const displayLabel = isTabNameMode
+    ? getAgentRowTabName(agent.tab)
+    : prompt || agentStateLabel(asDotState(agent.state))
   // Why: the tool row describes what the agent is *currently* doing; once it
   // leaves working, that line goes stale and misleads (a done row showing
   // "Bash: pnpm test" reads as if the command is still running). Gate tool
@@ -391,17 +405,23 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           onSendTargetClick={onSendTargetClick}
         />
       </div>
-      <DashboardAgentRowToolStep
-        expanded={expanded}
-        isWorking={isWorking}
-        toolName={toolName}
-        toolInput={toolInput}
-      />
-      <DashboardAgentRowMessage
-        expanded={expanded}
-        isInterrupted={isInterrupted}
-        lastAssistantMessage={lastAssistantMessage}
-      />
+      {/* Why: progress detail (tool step + last message) is exactly what
+          tab-name mode opts out of, so suppress both sub-rows in that mode. */}
+      {!isTabNameMode && (
+        <>
+          <DashboardAgentRowToolStep
+            expanded={expanded}
+            isWorking={isWorking}
+            toolName={toolName}
+            toolInput={toolInput}
+          />
+          <DashboardAgentRowMessage
+            expanded={expanded}
+            isInterrupted={isInterrupted}
+            lastAssistantMessage={lastAssistantMessage}
+          />
+        </>
+      )}
     </div>
   )
 })

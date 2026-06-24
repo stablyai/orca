@@ -2975,6 +2975,11 @@ export type WorktreeCardMode = 'Default' | 'Compact'
 
 export type AgentActivityDisplayMode = 'compact' | 'full'
 
+// Why: orthogonal to AgentActivityDisplayMode (which picks compact vs full row
+// layout). This picks what the row's primary text shows — the agent's live
+// progress (prompt + last message) or the terminal tab's name.
+export type AgentRowContentMode = 'progress' | 'tabName'
+
 export type StatusBarItem =
   | 'claude'
   | 'codex'
@@ -3073,6 +3078,7 @@ export type PersistedUIState = {
    *  user-facing worktree card modes. */
   _worktreeCardModeDefaulted?: boolean
   agentActivityDisplayMode?: AgentActivityDisplayMode
+  agentRowContentMode?: AgentRowContentMode
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number
   workspaceBoardColumnWidth?: number

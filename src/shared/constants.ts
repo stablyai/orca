@@ -8,7 +8,8 @@ import type {
   PersistedUIState,
   RepoHookSettings,
   WorkspaceSessionState,
-  AgentActivityDisplayMode
+  AgentActivityDisplayMode,
+  AgentRowContentMode
 } from './types'
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
@@ -49,6 +50,14 @@ export const DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE: AgentActivityDisplayMode = 'co
 
 export function normalizeAgentActivityDisplayMode(value: unknown): AgentActivityDisplayMode {
   return value === 'full' || value === 'compact' ? value : DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
+}
+
+// Why: default to 'progress' so existing users' rows keep showing live agent
+// activity; tab-name display is opt-in.
+export const DEFAULT_AGENT_ROW_CONTENT_MODE: AgentRowContentMode = 'progress'
+
+export function normalizeAgentRowContentMode(value: unknown): AgentRowContentMode {
+  return value === 'tabName' || value === 'progress' ? value : DEFAULT_AGENT_ROW_CONTENT_MODE
 }
 
 // Why: the onboarding wizard's last step index. Centralized so backfill,
@@ -460,6 +469,7 @@ export function getDefaultUIState(): PersistedUIState {
     worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
     _worktreeCardModeDefaulted: true,
     agentActivityDisplayMode: DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
+    agentRowContentMode: DEFAULT_AGENT_ROW_CONTENT_MODE,
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
     workspaceBoardOpacity: 1,
     workspaceBoardColumnWidth: 308,
