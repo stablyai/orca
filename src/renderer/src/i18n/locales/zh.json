@@ -1102,7 +1102,8 @@
         "importHostSetup": "导入",
         "notePasteTooLarge": "笔记字段的粘贴内容过大。",
         "reuseExistingBranch": "复用分支",
-        "reuseExistingBranchHint": "检出已有分支，而不是基于它创建新分支。"
+        "reuseExistingBranchHint": "检出已有分支，而不是基于它创建新分支。",
+        "createMultiple": "Create more"
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "创建工作区之前选择项目、工作区名称和 Agent。"

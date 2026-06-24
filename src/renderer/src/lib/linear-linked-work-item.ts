@@ -3,14 +3,11 @@ import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { getLinearOrganizationUrlKeyFromIssueUrl } from '../../../shared/linear-links'
 
 export function isLinearLinkedWorkItem(
-  item: Pick<LinkedWorkItemSummary, 'linearIdentifier'> | null | undefined
+  item: Pick<LinkedWorkItemSummary, 'provider' | 'linearIdentifier'> | null | undefined
 ): boolean {
-  return Boolean(item?.linearIdentifier)
+  return item?.provider === 'linear' || Boolean(item?.linearIdentifier)
 }
 
-// Why: launch prompts carry only the trusted Linear pointer (identifier,
-// title, URL) — never a ticket snapshot. Agents fetch full ticket data via
-// the `orca linear` CLI, so no rendered context rides on the work item.
 export function buildLinearIssueLinkedWorkItem(issue: LinearIssue): LinkedWorkItemSummary {
   const organizationUrlKey = getLinearOrganizationUrlKeyFromIssueUrl(issue.url)
   return {

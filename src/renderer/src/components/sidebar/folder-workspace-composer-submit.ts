@@ -4,7 +4,6 @@ import {
   type LinkedWorkItemSummary
 } from '@/lib/new-workspace'
 import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
-import { isOrcaCliAvailableForLaunch } from '@/lib/orca-cli-launch-availability'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   buildAgentDraftLaunchPlan,
@@ -66,7 +65,6 @@ function buildFolderWorkspaceLinkedStartupPlan(args: {
   agent: TuiAgent
   linkedWorkItem: LinkedWorkItemSummary
   note: string
-  cliAvailable: boolean
   agentCmdOverrides: Record<string, string> | undefined
   agentArgs?: string | null
   agentEnv?: Record<string, string>
@@ -74,10 +72,7 @@ function buildFolderWorkspaceLinkedStartupPlan(args: {
 }): AgentStartupPlan | null {
   const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(
     args.linkedWorkItem,
-    args.note,
-    {
-      cliAvailable: args.cliAvailable
-    }
+    args.note
   )
   const linkedDraftPrompt = (draftPrompt ?? prompt.trim()) || null
   const draftLaunchPlan = linkedDraftPrompt
@@ -155,7 +150,6 @@ export async function submitFolderWorkspaceCreate({
   agentCmdOverrides,
   agentArgs,
   agentEnv,
-  isRemote,
   launchSource = 'sidebar',
   runtimeEnvironmentId = null,
   createFolderWorkspace,
@@ -168,19 +162,12 @@ export async function submitFolderWorkspaceCreate({
       ? linkedName
       : name.trim() || linkedName || `${projectGroup.name} workspace`
   const launchPlatform = getFolderWorkspaceAgentLaunchPlatform(projectGroup)
-  // Why: only suggest `orca linear` when the launched terminal can actually
-  // resolve the CLI; SSH launches get the relay shim, local launches may not.
-  const linearCliAvailable =
-    quickAgent && linkedWorkItem?.linearIdentifier
-      ? await isOrcaCliAvailableForLaunch({ remote: isRemote ?? projectGroup.connectionId != null })
-      : false
   const startupPlan =
     quickAgent && linkedWorkItem
       ? buildFolderWorkspaceLinkedStartupPlan({
           agent: quickAgent,
           linkedWorkItem,
           note,
-          cliAvailable: linearCliAvailable,
           agentCmdOverrides,
           agentArgs,
           agentEnv,

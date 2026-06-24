@@ -1,14 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import {
-  buildAgentDraftLaunchPlan,
-  buildAgentStartupPlan,
-  planAgentCliArgsSuffix
-} from '@/lib/tui-agent-startup'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
+import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../../shared/tui-agent-selection'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -25,6 +17,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import type { GitPushTarget, SetupDecision, TuiAgent } from '../../../shared/types'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import {
+  buildDirectWorkItemAgentStartupPlan,
   buildDirectWorkItemStartupOpts,
   pasteDirectWorkItemDraftWhenAgentReady
 } from '@/lib/launch-work-item-direct-agent'
@@ -40,10 +33,6 @@ import {
   getLocalProjectExecutionRuntimeContext,
   getLocalRepoProjectExecutionRuntimeContext
 } from '@/lib/local-preflight-context'
-
-// Why: bracketed paste markers and ready-wait grace timing live in
-// agent-paste-draft.ts so the new-workspace and "Use" flows share one
-// definition of "type into the agent's input as a non-submitted draft".
 
 /**
  * "Use" flow: create the workspace, activate it, launch the default agent,
@@ -154,7 +143,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
 
   let worktreeId: string
   let primaryTabId: string | null
-  let startupPlan: ReturnType<typeof buildAgentStartupPlan> = null
+  let startupPlan = null as ReturnType<typeof buildDirectWorkItemAgentStartupPlan>['startupPlan']
   let effectiveAgent: TuiAgent | null = null
   let draftLaunchedNatively = false
   const draftContent = await getDirectWorkItemDraftContent(item, repoConnectionId)
@@ -268,52 +257,15 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       }
     }
 
-    // Why: draft launches prefer a native prefill flag when the CLI exposes one;
-    // submit-after-ready launches must avoid native drafts so Orca can send the
-    // generated prompt as the first turn after the TUI is ready.
-    const effectiveAgentArgs =
-      effectiveAgent && agentArgs === undefined
-        ? resolveTuiAgentLaunchArgs(effectiveAgent, settings?.agentDefaultArgs)
-        : agentArgs
-    const effectiveAgentEnv = effectiveAgent
-      ? resolveTuiAgentLaunchEnv(effectiveAgent, settings?.agentDefaultEnv)
-      : null
-    const draftLaunchPlan =
-      promptDelivery === 'submit-after-ready' || effectiveAgent === null
-        ? null
-        : buildAgentDraftLaunchPlan({
-            agent: effectiveAgent,
-            draft: draftContent,
-            cmdOverrides: settings?.agentCmdOverrides ?? {},
-            platform: launchPlatform,
-            agentArgs: effectiveAgentArgs,
-            agentEnv: effectiveAgentEnv
-          })
-    if (draftLaunchPlan) {
-      startupPlan = {
-        agent: draftLaunchPlan.agent,
-        launchCommand: draftLaunchPlan.launchCommand,
-        expectedProcess: draftLaunchPlan.expectedProcess,
-        followupPrompt: null,
-        launchConfig: draftLaunchPlan.launchConfig,
-        ...(draftLaunchPlan.startupCommandDelivery
-          ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
-          : {}),
-        ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
-      }
-      draftLaunchedNatively = true
-    } else if (effectiveAgent !== null) {
-      startupPlan = buildAgentStartupPlan({
+    ;({ startupPlan, draftLaunchedNatively, startupPlanFailed } =
+      buildDirectWorkItemAgentStartupPlan({
         agent: effectiveAgent,
-        prompt: '',
-        cmdOverrides: settings?.agentCmdOverrides ?? {},
-        platform: launchPlatform,
-        agentArgs: effectiveAgentArgs,
-        agentEnv: effectiveAgentEnv,
-        allowEmptyPromptLaunch: true
-      })
-      startupPlanFailed = startupPlan === null
-    }
+        agentArgs,
+        draftContent,
+        promptDelivery,
+        settings,
+        launchPlatform
+      }))
 
     const activation = activateAndRevealWorktree(worktreeId, {
       sidebarRevealBehavior: 'auto',
@@ -350,10 +302,6 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     return true
   }
 
-  // Why: the workspace is already created and visible; do not block selection
-  // latency on agent readiness. Run the paste in the background so the
-  // "Use" CTA's spinner ends when the worktree is ready, not when the TUI
-  // input buffer is ready.
   void pasteDirectWorkItemDraftWhenAgentReady({
     primaryTabId,
     startupPlan,
