@@ -47,7 +47,13 @@ describe('Session History session drag data', () => {
       agent: 'claude',
       sessionId: 'session-1',
       title: 'Fix terminal split',
-      command: "cd '/repo' && claude --resume session-1"
+      command: "cd '/repo' && claude --resume session-1",
+      env: { ANTHROPIC_BASE_URL: 'https://claude.example.test' },
+      launchConfig: {
+        agentCommand: 'claude --dangerously-skip-permissions',
+        agentArgs: '--dangerously-skip-permissions',
+        agentEnv: { ANTHROPIC_BASE_URL: 'https://claude.example.test' }
+      }
     }
 
     writeAiVaultSessionDragData(transfer, payload)

@@ -189,6 +189,8 @@ export default function AiVaultSessionDropLayer({
         agent: payload.agent,
         worktreeId,
         command: payload.command,
+        ...(payload.env ? { env: payload.env } : {}),
+        ...(payload.launchConfig ? { launchConfig: payload.launchConfig } : {}),
         targetGroupId: dropTarget.groupId,
         splitDirection: dropTarget.zone === 'center' ? undefined : dropTarget.zone
       })
