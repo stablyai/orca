@@ -199,6 +199,30 @@ describe('safeFit', () => {
     expect(activeBuffer.viewportY).toBe(42)
   })
 
+  it('prefers a preserved leaf scroll state over a transient current viewport during fit', () => {
+    const pane = createPane({
+      proposedCols: 100,
+      proposedRows: 32,
+      terminalCols: 120,
+      terminalRows: 32
+    })
+    const activeBuffer = pane.terminal.buffer.active as { viewportY: number; baseY: number }
+    activeBuffer.viewportY = 0
+    activeBuffer.baseY = 154
+    const preservedState = {
+      bufferType: 'normal',
+      wasAtBottom: false,
+      viewportY: 150,
+      baseY: 154
+    } satisfies ScrollState
+
+    safeFit(pane, { scrollStatesByLeafId: new Map([[pane.leafId, preservedState]]) })
+
+    expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
+    expect(pane.terminal.scrollToLine).toHaveBeenCalledWith(150)
+    expect(activeBuffer.viewportY).toBe(150)
+  })
+
   it('does not throw when xterm rejects scroll restoration during layout', () => {
     const pane = createPane({
       proposedCols: 100,

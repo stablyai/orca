@@ -72,6 +72,19 @@ import {
 } from '@/lib/pane-manager/mobile-driver-state'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
+import {
+  captureScrollState,
+  getPendingScrollRestoreState,
+  rememberTerminalContainerScrollState,
+  rememberTerminalLeafScrollState,
+  rememberTerminalScrollState,
+  restoreScrollStateAfterLayout
+} from '@/lib/pane-manager/pane-scroll'
+import {
+  logTerminalScrollRestore,
+  terminalScrollStateForDebug,
+  terminalViewportForDebug
+} from '@/lib/pane-manager/terminal-scroll-restore-debug'
 import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
 import {
   inspectRuntimeTerminalProcess,
@@ -94,7 +107,11 @@ import {
   isHostAuthoritativeLayout,
   planTerminalLiveLayoutInsertions
 } from './terminal-live-layout-reconciliation'
-import type { TerminalQuickCommand, TerminalQuickCommandScope } from '../../../../shared/types'
+import type {
+  TerminalQuickCommand,
+  TerminalQuickCommandScope,
+  TerminalScrollStateSnapshot
+} from '../../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager-registry'
@@ -196,6 +213,22 @@ function formatClipboardImagePasteError(error: unknown): string {
 
 function isXtermHelperTextarea(target: EventTarget | null): target is HTMLElement {
   return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
+}
+
+function isTransientTerminalEdgeSnap(
+  current: TerminalScrollStateSnapshot,
+  previous: TerminalScrollStateSnapshot | undefined
+): boolean {
+  if (!previous || previous.wasAtBottom || current.bufferType !== previous.bufferType) {
+    return false
+  }
+  if (current.viewportY === previous.viewportY) {
+    return false
+  }
+  return (
+    Math.abs(current.baseY - previous.baseY) <= 2 &&
+    (current.viewportY === 0 || current.wasAtBottom)
+  )
 }
 
 function arePaneTitleOverlayRectsEqual(
@@ -464,6 +497,10 @@ export default function TerminalPane({
     [savedLayout, terminalTab]
   )
   const initialLayoutRef = useRef(restoredLayout)
+  const savedScrollStatesByLeafIdRef = useRef(savedLayout.scrollStatesByLeafId)
+  savedScrollStatesByLeafIdRef.current = savedLayout.scrollStatesByLeafId
+  const lastVisibleScrollStatesByLeafIdRef = useRef(savedLayout.scrollStatesByLeafId)
+  const wasVisibleForDurableRestoreRef = useRef(false)
   const updateTabTitle = useAppStore((store) => store.updateTabTitle)
   const setRuntimePaneTitle = useAppStore((store) => store.setRuntimePaneTitle)
   const clearRuntimePaneTitle = useAppStore((store) => store.clearRuntimePaneTitle)
@@ -700,6 +737,56 @@ export default function TerminalPane({
     if (Object.keys(mergedScrollbackRefs).length > 0) {
       layout.scrollbackRefsByLeafId = mergedScrollbackRefs
     }
+    // Why: xterm can report a transient top viewport while hidden or during
+    // WebGL/layout resume. Only visible captures are allowed to redefine the
+    // user's durable scroll position.
+    const scrollStatesByLeafId = isVisibleRef.current
+      ? Object.fromEntries(
+          currentPanes.map((pane) => {
+            const { bufferType, wasAtBottom, viewportY, baseY } =
+              getPendingScrollRestoreState(pane.terminal) ?? captureScrollState(pane.terminal)
+            const current = { bufferType, wasAtBottom, viewportY, baseY }
+            const previous = lastVisibleScrollStatesByLeafIdRef.current?.[pane.leafId]
+            const stable =
+              previous && isTransientTerminalEdgeSnap(current, previous) ? previous : current
+            rememberTerminalScrollState(pane.terminal, stable)
+            rememberTerminalContainerScrollState(pane.container, stable)
+            rememberTerminalLeafScrollState(pane.leafId, stable)
+            logTerminalScrollRestore('layout-persist', {
+              baseY: stable.baseY,
+              bufferType: stable.bufferType,
+              isVisible: isVisibleRef.current,
+              leafId: pane.leafId,
+              paneId: pane.id,
+              source: 'persistLayoutSnapshot',
+              tabId,
+              viewportY: stable.viewportY,
+              wasAtBottom: stable.wasAtBottom,
+              worktreeId
+            })
+            return [pane.leafId, stable]
+          })
+        )
+      : mergeCapturedLeafState<TerminalScrollStateSnapshot>({
+          prior: existing?.scrollStatesByLeafId,
+          fresh: {},
+          currentLeafIds
+        })
+    if (Object.keys(scrollStatesByLeafId).length > 0) {
+      layout.scrollStatesByLeafId = scrollStatesByLeafId
+      if (isVisibleRef.current) {
+        lastVisibleScrollStatesByLeafIdRef.current = scrollStatesByLeafId
+      }
+      if (!isVisibleRef.current) {
+        logTerminalScrollRestore('layout-persist', {
+          isVisible: false,
+          leafIds: Object.keys(scrollStatesByLeafId),
+          source: 'preserve-hidden-prior',
+          tabId,
+          worktreeId
+        })
+      }
+    }
     // Why: between pane creation and the deferred rAF where PTYs actually
     // attach, all transports have getPtyId() === null. The merge below
     // preserves the *prior* snapshot's leaf→PTY mappings while still letting
@@ -765,6 +852,112 @@ export default function TerminalPane({
       clearedScrollbackLeafIds.delete(leafId)
     }
   }, [tabId, setTabLayout, worktreeId])
+
+  const persistCurrentScrollStates = useCallback(
+    (scrollStatesByLeafId: Record<string, TerminalScrollStateSnapshot>): void => {
+      if (Object.keys(scrollStatesByLeafId).length === 0) {
+        return
+      }
+      lastVisibleScrollStatesByLeafIdRef.current = scrollStatesByLeafId
+      const existingLayout = useAppStore.getState().terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT
+      setTabLayout(tabId, {
+        ...existingLayout,
+        scrollStatesByLeafId
+      })
+    },
+    [setTabLayout, tabId]
+  )
+
+  const captureCurrentScrollStatesByLeafId = useCallback((): Record<
+    string,
+    TerminalScrollStateSnapshot
+  > | null => {
+    const manager = managerRef.current
+    if (!manager) {
+      return null
+    }
+    return Object.fromEntries(
+      manager.getPanes().map((pane) => {
+        const { bufferType, wasAtBottom, viewportY, baseY } =
+          getPendingScrollRestoreState(pane.terminal) ?? captureScrollState(pane.terminal)
+        const current = { bufferType, wasAtBottom, viewportY, baseY }
+        const previous = lastVisibleScrollStatesByLeafIdRef.current?.[pane.leafId]
+        const stable =
+          previous && isTransientTerminalEdgeSnap(current, previous) ? previous : current
+        rememberTerminalScrollState(pane.terminal, stable)
+        rememberTerminalContainerScrollState(pane.container, stable)
+        rememberTerminalLeafScrollState(pane.leafId, stable)
+        logTerminalScrollRestore('capture-current', {
+          baseY: stable.baseY,
+          bufferType: stable.bufferType,
+          leafId: pane.leafId,
+          paneId: pane.id,
+          source: 'visible-cleanup',
+          tabId,
+          viewportY: stable.viewportY,
+          wasAtBottom: stable.wasAtBottom,
+          worktreeId
+        })
+        return [pane.leafId, stable]
+      })
+    )
+  }, [tabId, worktreeId])
+
+  useLayoutEffect(() => {
+    if (!isVisible) {
+      return
+    }
+    return () => {
+      const captured = captureCurrentScrollStatesByLeafId()
+      if (captured) {
+        // Why: workspace switches can hide terminals before the next passive
+        // effect; capture the visible viewport at the synchronous boundary.
+        persistCurrentScrollStates(captured)
+      }
+    }
+  }, [captureCurrentScrollStatesByLeafId, isVisible, persistCurrentScrollStates])
+
+  useLayoutEffect(() => {
+    const shouldRestore = isVisible && !wasVisibleForDurableRestoreRef.current
+    wasVisibleForDurableRestoreRef.current = isVisible
+    if (!shouldRestore) {
+      return
+    }
+    const scrollStatesByLeafId =
+      savedScrollStatesByLeafIdRef.current ?? lastVisibleScrollStatesByLeafIdRef.current
+    const manager = managerRef.current
+    if (!manager || !scrollStatesByLeafId) {
+      return
+    }
+    const panes = manager.getPanes()
+    if (panes.length === 0) {
+      return
+    }
+    const liveLeafIds = new Set<string>(panes.map((pane) => pane.leafId))
+    if (Object.keys(scrollStatesByLeafId).some((leafId) => !liveLeafIds.has(leafId))) {
+      return
+    }
+    // Why: this is a remount fallback for leaf-durable state. Live mounted
+    // visibility changes use useTerminalScrollVisibilityMemory's in-memory path.
+    for (const pane of panes) {
+      const scrollState = scrollStatesByLeafId[pane.leafId]
+      if (scrollState) {
+        logTerminalScrollRestore('durable-restore', {
+          current: terminalViewportForDebug(pane.terminal),
+          leafId: pane.leafId,
+          paneId: pane.id,
+          saved: terminalScrollStateForDebug(scrollState),
+          source: 'visible-remount-fallback',
+          tabId,
+          worktreeId
+        })
+        restoreScrollStateAfterLayout(pane.terminal, scrollState, {
+          debugSource: 'durable-remount-restore',
+          syncScrollbar: false
+        })
+      }
+    }
+  }, [isVisible, paneCount, tabId, worktreeId])
 
   const clearPaneScrollback = useCallback(
     (pane: ManagedPane): void => {

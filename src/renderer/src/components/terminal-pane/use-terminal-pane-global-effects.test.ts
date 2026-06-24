@@ -15,10 +15,14 @@ const mocks = vi.hoisted(() => ({
   fitPanes: vi.fn(),
   focusActivePane: vi.fn(),
   flushTerminalOutput: vi.fn(),
+  getPendingScrollRestoreState: vi.fn(() => null),
   getTerminalOutputEpoch: vi.fn(() => 0),
   handleTerminalFileDrop: vi.fn(),
   pasteTerminalText: vi.fn(),
   recordTerminalUserInputForLeaf: vi.fn(),
+  rememberTerminalContainerScrollState: vi.fn(),
+  rememberTerminalLeafScrollState: vi.fn(),
+  rememberTerminalScrollState: vi.fn(),
   requestTerminalBacklogRecovery: vi.fn(),
   restoreScrollState: vi.fn(),
   restoreScrollStateAfterLayout: vi.fn()
@@ -70,7 +74,11 @@ vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
 
 vi.mock('@/lib/pane-manager/pane-scroll', () => ({
   captureScrollState: mocks.captureScrollState,
+  getPendingScrollRestoreState: mocks.getPendingScrollRestoreState,
   getTerminalOutputEpoch: mocks.getTerminalOutputEpoch,
+  rememberTerminalContainerScrollState: mocks.rememberTerminalContainerScrollState,
+  rememberTerminalLeafScrollState: mocks.rememberTerminalLeafScrollState,
+  rememberTerminalScrollState: mocks.rememberTerminalScrollState,
   restoreScrollState: mocks.restoreScrollState,
   restoreScrollStateAfterLayout: mocks.restoreScrollStateAfterLayout
 }))
@@ -267,9 +275,9 @@ describe('useTerminalPaneGlobalEffects', () => {
       'flush:terminal-b',
       'resume',
       'fit-focus',
+      'reset-atlas',
       'restore:terminal-a',
-      'restore:terminal-b',
-      'reset-atlas'
+      'restore:terminal-b'
     ])
     expect(mocks.flushTerminalOutput).toHaveBeenNthCalledWith(1, terminalA, {
       maxChars: 256 * 1024
@@ -529,7 +537,12 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(mocks.requestTerminalBacklogRecovery).toHaveBeenCalledWith(terminal)
     expect(mocks.flushTerminalOutput).toHaveBeenCalledWith(terminal, { maxChars: 256 * 1024 })
     expect(manager.resumeRendering).toHaveBeenCalledTimes(1)
-    expect(mocks.fitAndFocusPanes).toHaveBeenCalledWith(manager)
+    expect(mocks.fitAndFocusPanes).toHaveBeenCalledWith(manager, {
+      debugSource: 'visibility-resume-fit',
+      scrollStatesByLeafId: expect.any(Map),
+      syncScrollbar: false,
+      useMarkers: false
+    })
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
   })
 
@@ -618,7 +631,11 @@ describe('useTerminalPaneGlobalEffects', () => {
 
     expect(mocks.captureScrollState).toHaveBeenCalledTimes(2)
     expect(manager.suspendRendering).toHaveBeenCalledTimes(1)
-    expect(mocks.restoreScrollStateAfterLayout).toHaveBeenLastCalledWith(terminalA, preHideState)
+    expect(mocks.restoreScrollStateAfterLayout).toHaveBeenLastCalledWith(terminalA, preHideState, {
+      debugSource: 'visibility-restore',
+      syncScrollbar: false,
+      useMarkers: false
+    })
   })
 
   it('clears WebGL texture atlases when the active visible terminal regains focus', () => {

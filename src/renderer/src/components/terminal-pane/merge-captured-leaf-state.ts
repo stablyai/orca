@@ -6,14 +6,14 @@
 // This helper merges prior state with this pass's fresh state so a no-op
 // capture never erases a known-good buffer.
 
-export type LeafStringMap = Record<string, string>
+export type LeafStateMap<T> = Record<string, T>
 
-export function mergeCapturedLeafState(opts: {
-  prior: LeafStringMap | undefined
-  fresh: LeafStringMap
+export function mergeCapturedLeafState<T>(opts: {
+  prior: LeafStateMap<T> | undefined
+  fresh: LeafStateMap<T>
   currentLeafIds: ReadonlySet<string>
-}): LeafStringMap {
-  const merged: LeafStringMap = {}
+}): LeafStateMap<T> {
+  const merged: LeafStateMap<T> = {}
   if (opts.prior) {
     for (const [leafId, value] of Object.entries(opts.prior)) {
       if (opts.currentLeafIds.has(leafId)) {

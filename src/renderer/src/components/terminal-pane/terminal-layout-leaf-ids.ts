@@ -28,14 +28,14 @@ function cloneLayoutWithLeafRewrite(
   }
 }
 
-function remapLeafRecord(
-  source: Record<string, string> | undefined,
+function remapLeafRecord<T>(
+  source: Record<string, T> | undefined,
   rewrite: LeafIdRewrite
-): Record<string, string> | undefined {
+): Record<string, T> | undefined {
   if (!source) {
     return undefined
   }
-  const next: Record<string, string> = {}
+  const next: Record<string, T> = {}
   for (const [leafId, value] of Object.entries(source)) {
     if (rewrite.duplicatedInputLeafIds.has(leafId)) {
       continue
@@ -108,11 +108,13 @@ export function normalizeTerminalLayoutSnapshot(
   const ptyIdsByLeafId = remapLeafRecord(snapshot.ptyIdsByLeafId, rewrite)
   const buffersByLeafId = remapLeafRecord(snapshot.buffersByLeafId, rewrite)
   const scrollbackRefsByLeafId = remapLeafRecord(snapshot.scrollbackRefsByLeafId, rewrite)
+  const scrollStatesByLeafId = remapLeafRecord(snapshot.scrollStatesByLeafId, rewrite)
   const titlesByLeafId = remapLeafRecord(snapshot.titlesByLeafId, rewrite)
   const {
     ptyIdsByLeafId: _oldPtyIdsByLeafId,
     buffersByLeafId: _oldBuffersByLeafId,
     scrollbackRefsByLeafId: _oldScrollbackRefsByLeafId,
+    scrollStatesByLeafId: _oldScrollStatesByLeafId,
     titlesByLeafId: _oldTitlesByLeafId,
     ...snapshotWithoutLeafRecords
   } = snapshot
@@ -125,6 +127,7 @@ export function normalizeTerminalLayoutSnapshot(
       ...(ptyIdsByLeafId ? { ptyIdsByLeafId } : {}),
       ...(buffersByLeafId ? { buffersByLeafId } : {}),
       ...(scrollbackRefsByLeafId ? { scrollbackRefsByLeafId } : {}),
+      ...(scrollStatesByLeafId ? { scrollStatesByLeafId } : {}),
       ...(titlesByLeafId ? { titlesByLeafId } : {})
     },
     changed: true

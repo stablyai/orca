@@ -40,7 +40,8 @@ import {
   serializeTerminalLayout,
   EMPTY_LAYOUT,
   collectLeafIdsInOrder,
-  collectLeafIdsInReplayCreationOrder
+  collectLeafIdsInReplayCreationOrder,
+  normalizeTerminalLayoutSnapshot
 } from './layout-serialization'
 
 // ---------------------------------------------------------------------------
@@ -318,6 +319,36 @@ describe('serializeTerminalLayout', () => {
       root: { type: 'leaf', leafId: LEAF_1 },
       activeLeafId: null,
       expandedLeafId: null
+    })
+  })
+})
+
+describe('normalizeTerminalLayoutSnapshot', () => {
+  it('remaps durable scroll states with leaf ids', () => {
+    const normalized = normalizeTerminalLayoutSnapshot({
+      root: { type: 'leaf', leafId: 'legacy-pane' },
+      activeLeafId: 'legacy-pane',
+      expandedLeafId: null,
+      scrollStatesByLeafId: {
+        'legacy-pane': {
+          bufferType: 'normal',
+          wasAtBottom: false,
+          viewportY: 12,
+          baseY: 90
+        }
+      }
+    })
+
+    const nextLeafId = normalized.snapshot.activeLeafId
+    expect(normalized.changed).toBe(true)
+    expect(nextLeafId).toBeTruthy()
+    expect(normalized.snapshot.scrollStatesByLeafId).toEqual({
+      [nextLeafId as string]: {
+        bufferType: 'normal',
+        wasAtBottom: false,
+        viewportY: 12,
+        baseY: 90
+      }
     })
   })
 })

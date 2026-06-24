@@ -43,7 +43,15 @@ describe('parseWorkspaceSession', () => {
           },
           activeLeafId: 'pane:1',
           expandedLeafId: null,
-          ptyIdsByLeafId: { 'pane:1': 'daemon-session-A' }
+          ptyIdsByLeafId: { 'pane:1': 'daemon-session-A' },
+          scrollStatesByLeafId: {
+            'pane:1': {
+              bufferType: 'normal',
+              wasAtBottom: false,
+              viewportY: 42,
+              baseY: 100
+            }
+          }
         }
       },
       activeWorktreeIdsOnShutdown: ['repo1::/path/wt1']

@@ -9,7 +9,14 @@ import type {
 import { createDivider, disposeDivider } from './pane-divider'
 import { getFitOverrideForPty } from './mobile-fit-overrides'
 import { disposeWebgl, attachWebgl } from './pane-webgl-renderer'
-import { captureScrollState, restoreScrollStateAfterLayout } from './pane-scroll'
+import {
+  captureScrollStateForLayout,
+  getRememberedTerminalContainerScrollState,
+  getRememberedTerminalLeafScrollState,
+  rememberTerminalContainerScrollState,
+  rememberTerminalLeafScrollState,
+  restoreScrollStateAfterLayout
+} from './pane-scroll'
 
 export { captureScrollState, restoreScrollState } from './pane-scroll'
 
@@ -25,6 +32,13 @@ type TreeOpsCallbacks = {
   onLayoutChanged?: () => void
   isDestroyed?: () => boolean
   requestPaneReparentFrame?: (callback: FrameRequestCallback) => void
+}
+
+type SafeFitOptions = {
+  debugSource?: string
+  scrollStatesByLeafId?: Map<ManagedPane['leafId'], ScrollState>
+  syncScrollbar?: boolean
+  useMarkers?: boolean
 }
 
 const MIN_PANE_FIT_WIDTH_PX = 48
@@ -62,10 +76,14 @@ function captureScrollStateForFit(pane: ManagedPane): ScrollState | null {
   // Why: split reparent has its own delayed restore; restoring here can fight that timer.
   return 'pendingSplitScrollState' in pane && (pane as ManagedPaneInternal).pendingSplitScrollState
     ? null
-    : captureScrollState(pane.terminal)
+    : captureScrollStateForLayout(
+        pane.terminal,
+        getRememberedTerminalContainerScrollState(pane.container) ??
+          getRememberedTerminalLeafScrollState(pane.leafId)
+      )
 }
 
-export function safeFit(pane: ManagedPane): void {
+export function safeFit(pane: ManagedPane, options: SafeFitOptions = {}): void {
   if (!canMeasurePaneForFit(pane)) {
     return
   }
@@ -95,7 +113,11 @@ export function safeFit(pane: ManagedPane): void {
       // churn, which was causing visible terminal blinking while resizing.
       return
     }
-    scrollState = captureScrollStateForFit(pane)
+    scrollState = options.scrollStatesByLeafId?.get(pane.leafId) ?? captureScrollStateForFit(pane)
+    if (scrollState) {
+      rememberTerminalContainerScrollState(pane.container, scrollState)
+      rememberTerminalLeafScrollState(pane.leafId, scrollState)
+    }
     shouldRestoreScroll = true
     pane.fitAddon.fit()
   } catch {
@@ -103,7 +125,11 @@ export function safeFit(pane: ManagedPane): void {
   } finally {
     if (shouldRestoreScroll && scrollState) {
       try {
-        restoreScrollStateAfterLayout(pane.terminal, scrollState)
+        restoreScrollStateAfterLayout(pane.terminal, scrollState, {
+          debugSource: options.debugSource ?? 'safeFit',
+          syncScrollbar: options.syncScrollbar,
+          useMarkers: options.useMarkers
+        })
       } catch {
         // Why: xterm can temporarily expose a terminal whose renderer has not
         // initialized dimensions yet during SSH reattach/layout. Fit is best-effort.
@@ -112,9 +138,12 @@ export function safeFit(pane: ManagedPane): void {
   }
 }
 
-export function fitAllPanesInternal(panes: Map<number, ManagedPaneInternal>): void {
+export function fitAllPanesInternal(
+  panes: Map<number, ManagedPaneInternal>,
+  options: SafeFitOptions = {}
+): void {
   for (const pane of panes.values()) {
-    safeFit(pane)
+    safeFit(pane, options)
   }
 }
 

@@ -960,6 +960,13 @@ export type TerminalPaneLayoutNode =
       ratio?: number
     }
 
+export type TerminalScrollStateSnapshot = {
+  bufferType: 'normal' | 'alternate'
+  wasAtBottom: boolean
+  viewportY: number
+  baseY: number
+}
+
 export type TerminalLayoutSnapshot = {
   root: TerminalPaneLayoutNode | null
   activeLeafId: string | null
@@ -971,6 +978,8 @@ export type TerminalLayoutSnapshot = {
   buffersByLeafId?: Record<string, string>
   /** Durable scrollback snapshot refs per leaf; raw bytes live outside session JSON. */
   scrollbackRefsByLeafId?: Record<string, string>
+  /** Last visible viewport per leaf for remounting without jumping scroll position. */
+  scrollStatesByLeafId?: Record<string, TerminalScrollStateSnapshot>
   /** User-assigned pane titles, keyed by stable layout leaf UUID.
    *  Persisted alongside buffers via the existing session:set flow. */
   titlesByLeafId?: Record<string, string>

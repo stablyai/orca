@@ -1,11 +1,16 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { ScrollState } from '@/lib/pane-manager/pane-manager-types'
+import type { ManagedPane, ScrollState } from '@/lib/pane-manager/pane-manager-types'
 import { resetAllTerminalWebglAtlases } from '@/lib/pane-manager/pane-manager-registry'
 import {
   flushTerminalOutput,
   requestTerminalBacklogRecovery
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { restoreScrollStateAfterLayout } from '@/lib/pane-manager/pane-scroll'
+import {
+  logTerminalScrollRestore,
+  terminalScrollStateForDebug,
+  terminalViewportForDebug
+} from '@/lib/pane-manager/terminal-scroll-restore-debug'
 import { fitAndFocusPanes, fitPanes, focusActivePane } from './pane-helpers'
 
 const VISIBLE_RESUME_FLUSH_CHARS = 256 * 1024
@@ -17,7 +22,9 @@ type ResumeTerminalVisibilityArgs = {
   isActive: boolean
   wasVisible: boolean
   shouldUseLightTabResume: boolean
-  captureViewportPositions: (useRememberedSnapshots: boolean) => Map<number, ScrollState>
+  captureViewportPositions: (
+    useRememberedSnapshots: boolean
+  ) => Map<ManagedPane['leafId'], ScrollState>
   withSuppressedScrollTracking: (callback: () => void) => void
 }
 
@@ -27,7 +34,9 @@ type HideTerminalVisibilityArgs = {
   wasWorktreeActive: boolean
   isWorktreeActive: boolean
   hasCompletedVisibleResume: boolean
-  captureViewportPositions: (useRememberedSnapshots: boolean) => Map<number, ScrollState>
+  captureViewportPositions: (
+    useRememberedSnapshots: boolean
+  ) => Map<ManagedPane['leafId'], ScrollState>
 }
 
 type HideTerminalVisibilityResult = {
@@ -48,6 +57,12 @@ export function resumeTerminalVisibility({
   // restore path avoids content matching so duplicate agent log lines do
   // not jump to the wrong history entry.
   const viewportPositions = captureViewportPositions(!wasVisible)
+  logTerminalScrollRestore('visibility-resume', {
+    isActive,
+    paneCount: manager.getPanes().length,
+    shouldUseLightTabResume,
+    wasVisible
+  })
   withSuppressedScrollTracking(() => {
     if (shouldUseLightTabResume) {
       // Why: intra-worktree tab switches only toggle the overlay. Keeping
@@ -59,14 +74,15 @@ export function resumeTerminalVisibility({
         focusActivePane(manager)
       }
     } else {
-      resumeTerminalVisibilityHeavy(manager, isActive)
+      resumeTerminalVisibilityHeavy(manager, isActive, viewportPositions)
     }
-    restoreTerminalViewportPositions(manager, viewportPositions)
     if (!shouldUseLightTabResume) {
       // Why: this clear wipes the glyph atlas shared with other same-config
-      // terminals; the global reset rebuilds their render models too.
+      // terminals; do it before scroll restore because WebGL rebuild can
+      // disturb xterm's viewport bookkeeping during visibility resume.
       resetAllTerminalWebglAtlases()
     }
+    restoreTerminalViewportPositions(manager, viewportPositions)
   })
 }
 
@@ -83,6 +99,13 @@ export function hideTerminalVisibility({
     // Why: hidden DOM/layout churn can mutate xterm's viewport before the
     // pane becomes visible again. Preserve the last visible position.
     captureViewportPositions(false)
+    logTerminalScrollRestore('visibility-hide', {
+      hasCompletedVisibleResume,
+      isWorktreeActive,
+      paneCount: manager.getPanes().length,
+      wasVisible,
+      wasWorktreeActive
+    })
   }
   if (!isWorktreeActive && (wasVisible || surfaceBecameHidden)) {
     // Suspend WebGL when going hidden. xterm.write() continues to land in
@@ -113,7 +136,11 @@ function requestLightTabBacklogRecovery(manager: PaneManager): void {
   }
 }
 
-function resumeTerminalVisibilityHeavy(manager: PaneManager, isActive: boolean): void {
+function resumeTerminalVisibilityHeavy(
+  manager: PaneManager,
+  isActive: boolean,
+  viewportPositions: Map<ManagedPane['leafId'], ScrollState>
+): void {
   // Why: hidden panes can accumulate large PTY bursts while Chromium is
   // occluded. Drain a bounded slice before fitting; the scheduler keeps
   // ordering and continues the rest asynchronously so return-to-app does
@@ -131,20 +158,41 @@ function resumeTerminalVisibilityHeavy(manager: PaneManager, isActive: boolean):
   // above, so this fit only absorbs container dimension changes that
   // happened while hidden (e.g. sidebar toggle on another worktree).
   if (isActive) {
-    fitAndFocusPanes(manager)
+    fitAndFocusPanes(manager, {
+      debugSource: 'visibility-resume-fit',
+      scrollStatesByLeafId: viewportPositions,
+      syncScrollbar: false,
+      useMarkers: false
+    })
   } else {
-    fitPanes(manager)
+    fitPanes(manager, {
+      debugSource: 'visibility-resume-fit',
+      scrollStatesByLeafId: viewportPositions,
+      syncScrollbar: false,
+      useMarkers: false
+    })
   }
 }
 
 function restoreTerminalViewportPositions(
   manager: PaneManager,
-  viewportPositions: Map<number, ScrollState>
+  viewportPositions: Map<ManagedPane['leafId'], ScrollState>
 ): void {
   for (const pane of manager.getPanes()) {
-    const position = viewportPositions.get(pane.id)
+    const position = viewportPositions.get(pane.leafId)
     if (position) {
-      restoreScrollStateAfterLayout(pane.terminal, position)
+      logTerminalScrollRestore('visibility-restore', {
+        before: terminalViewportForDebug(pane.terminal),
+        leafId: pane.leafId,
+        paneId: pane.id,
+        saved: terminalScrollStateForDebug(position),
+        source: 'resumeTerminalVisibility'
+      })
+      restoreScrollStateAfterLayout(pane.terminal, position, {
+        debugSource: 'visibility-restore',
+        syncScrollbar: false,
+        useMarkers: false
+      })
     }
   }
 }

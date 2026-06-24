@@ -4,10 +4,15 @@ import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-sch
 import {
   cancelDeferredScrollRestore,
   captureScrollState,
-  getTerminalOutputEpoch
+  getPendingScrollRestoreState,
+  getTerminalOutputEpoch,
+  isTerminalScrollRestoreInProgress,
+  rememberTerminalContainerScrollState,
+  rememberTerminalLeafScrollState,
+  rememberTerminalScrollState
 } from '@/lib/pane-manager/pane-scroll'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { ScrollState } from '@/lib/pane-manager/pane-manager-types'
+import type { ManagedPane, ScrollState } from '@/lib/pane-manager/pane-manager-types'
 
 type VisibleScrollSnapshot = {
   scrollState: ScrollState
@@ -22,13 +27,28 @@ type UseTerminalScrollVisibilityMemoryArgs = {
 }
 
 type TerminalScrollVisibilityMemory = {
-  captureViewportPositions: (useRememberedSnapshots: boolean) => Map<number, ScrollState>
+  captureViewportPositions: (
+    useRememberedSnapshots: boolean
+  ) => Map<ManagedPane['leafId'], ScrollState>
   withSuppressedScrollTracking: (callback: () => void) => void
   applyPendingFollowOutputRequests: () => boolean
-  scheduleFollowOutputIfNeeded: (paneId: number) => void
+  scheduleFollowOutputIfNeeded: (leafId: ManagedPane['leafId']) => void
 }
 
 const FOLLOW_OUTPUT_FLUSH_CHARS = 256 * 1024
+
+function isTransientTerminalEdgeSnap(current: ScrollState, previous: ScrollState): boolean {
+  if (previous.wasAtBottom || current.bufferType !== previous.bufferType) {
+    return false
+  }
+  if (current.viewportY === previous.viewportY) {
+    return false
+  }
+  return (
+    Math.abs(current.baseY - previous.baseY) <= 2 &&
+    (current.viewportY === 0 || current.wasAtBottom)
+  )
+}
 
 export function useTerminalScrollVisibilityMemory({
   managerRef,
@@ -36,47 +56,72 @@ export function useTerminalScrollVisibilityMemory({
   visibleResumeCompleteRef,
   paneCount
 }: UseTerminalScrollVisibilityMemoryArgs): TerminalScrollVisibilityMemory {
-  const visibleScrollSnapshotsRef = useRef<Map<number, VisibleScrollSnapshot>>(new Map())
-  const scrollDisposablesRef = useRef<Map<number, IDisposable>>(new Map())
+  const visibleScrollSnapshotsRef = useRef<Map<ManagedPane['leafId'], VisibleScrollSnapshot>>(
+    new Map()
+  )
+  const scrollDisposablesRef = useRef<Map<ManagedPane['leafId'], IDisposable>>(new Map())
   const suppressScrollTrackingRef = useRef(false)
-  const pendingFollowOutputPaneIdsRef = useRef<Set<number>>(new Set())
+  const pendingFollowOutputLeafIdsRef = useRef<Set<ManagedPane['leafId']>>(new Set())
   const followOutputFrameIdsRef = useRef<number[]>([])
 
-  const captureVisibleScrollSnapshot = useCallback(
-    (terminal: Terminal): VisibleScrollSnapshot => ({
-      scrollState: captureScrollState(terminal),
+  const captureVisibleScrollSnapshot = useCallback((terminal: Terminal): VisibleScrollSnapshot => {
+    const scrollState = captureScrollState(terminal)
+    rememberTerminalScrollState(terminal, scrollState)
+    return {
+      scrollState,
       outputEpoch: getTerminalOutputEpoch(terminal)
-    }),
-    []
-  )
+    }
+  }, [])
 
   const rememberVisibleScrollSnapshot = useCallback(
-    (paneId: number, terminal: Terminal): void => {
-      visibleScrollSnapshotsRef.current.set(paneId, captureVisibleScrollSnapshot(terminal))
+    (leafId: ManagedPane['leafId'], terminal: Terminal): void => {
+      const snapshot = captureVisibleScrollSnapshot(terminal)
+      const previous = visibleScrollSnapshotsRef.current.get(leafId)
+      const scrollState =
+        previous && isTransientTerminalEdgeSnap(snapshot.scrollState, previous.scrollState)
+          ? previous.scrollState
+          : snapshot.scrollState
+      const pane = managerRef.current?.getPanes().find((candidate) => candidate.leafId === leafId)
+      if (pane) {
+        rememberTerminalContainerScrollState(pane.container, scrollState)
+      }
+      rememberTerminalLeafScrollState(leafId, scrollState)
+      visibleScrollSnapshotsRef.current.set(leafId, {
+        outputEpoch: snapshot.outputEpoch,
+        scrollState
+      })
     },
-    [captureVisibleScrollSnapshot]
+    [captureVisibleScrollSnapshot, managerRef]
   )
 
   const captureViewportPositions = useCallback(
-    (useRememberedSnapshots: boolean): Map<number, ScrollState> => {
+    (useRememberedSnapshots: boolean): Map<ManagedPane['leafId'], ScrollState> => {
       const manager = managerRef.current
       if (!manager) {
         return new Map()
       }
       return new Map(
         manager.getPanes().map((pane) => {
-          const remembered = visibleScrollSnapshotsRef.current.get(pane.id)
+          const remembered = visibleScrollSnapshotsRef.current.get(pane.leafId)
           if (useRememberedSnapshots && remembered) {
-            return [pane.id, remembered.scrollState] as const
+            return [pane.leafId, remembered.scrollState] as const
           }
-          const state = captureScrollState(pane.terminal)
+          const state =
+            getPendingScrollRestoreState(pane.terminal) ?? captureScrollState(pane.terminal)
+          const stableState =
+            remembered && isTransientTerminalEdgeSnap(state, remembered.scrollState)
+              ? remembered.scrollState
+              : state
           if (!useRememberedSnapshots || !remembered) {
-            visibleScrollSnapshotsRef.current.set(pane.id, {
-              scrollState: state,
+            rememberTerminalScrollState(pane.terminal, stableState)
+            rememberTerminalContainerScrollState(pane.container, stableState)
+            rememberTerminalLeafScrollState(pane.leafId, stableState)
+            visibleScrollSnapshotsRef.current.set(pane.leafId, {
+              scrollState: stableState,
               outputEpoch: getTerminalOutputEpoch(pane.terminal)
             })
           }
-          return [pane.id, state] as const
+          return [pane.leafId, stableState] as const
         })
       )
     },
@@ -93,7 +138,7 @@ export function useTerminalScrollVisibilityMemory({
   }, [])
 
   const applyPendingFollowOutputRequests = useCallback((): boolean => {
-    const pending = pendingFollowOutputPaneIdsRef.current
+    const pending = pendingFollowOutputLeafIdsRef.current
     if (pending.size === 0) {
       return false
     }
@@ -106,23 +151,23 @@ export function useTerminalScrollVisibilityMemory({
     }
     let didScroll = false
     for (const pane of manager.getPanes()) {
-      if (!pending.has(pane.id)) {
+      if (!pending.has(pane.leafId)) {
         continue
       }
-      const previous = visibleScrollSnapshotsRef.current.get(pane.id)
+      const previous = visibleScrollSnapshotsRef.current.get(pane.leafId)
       // Why: focus/follow can run immediately after a hidden pane becomes
       // visible. A bounded flush is enough to observe new output without
       // putting the whole hidden PTY backlog back on the interaction path.
       flushTerminalOutput(pane.terminal, { maxChars: FOLLOW_OUTPUT_FLUSH_CHARS })
       const currentEpoch = getTerminalOutputEpoch(pane.terminal)
       const hasNewOutput = previous ? currentEpoch > previous.outputEpoch : currentEpoch > 0
-      if (hasNewOutput) {
+      if (hasNewOutput && (previous?.scrollState.wasAtBottom ?? true)) {
         cancelDeferredScrollRestore(pane.terminal)
         pane.terminal.scrollToBottom()
-        rememberVisibleScrollSnapshot(pane.id, pane.terminal)
+        rememberVisibleScrollSnapshot(pane.leafId, pane.terminal)
         didScroll = true
       }
-      pending.delete(pane.id)
+      pending.delete(pane.leafId)
     }
     return didScroll
   }, [isVisibleRef, managerRef, rememberVisibleScrollSnapshot, visibleResumeCompleteRef])
@@ -135,8 +180,8 @@ export function useTerminalScrollVisibilityMemory({
   }, [])
 
   const scheduleFollowOutputIfNeeded = useCallback(
-    (paneId: number): void => {
-      pendingFollowOutputPaneIdsRef.current.add(paneId)
+    (leafId: ManagedPane['leafId']): void => {
+      pendingFollowOutputLeafIdsRef.current.add(leafId)
       if (followOutputFrameIdsRef.current.length > 0) {
         return
       }
@@ -166,17 +211,16 @@ export function useTerminalScrollVisibilityMemory({
     }
     const disposables = scrollDisposablesRef.current
     const panes = manager.getPanes()
-    const livePaneIds = new Set(panes.map((pane) => pane.id))
-    for (const [paneId, disposable] of disposables) {
-      if (!livePaneIds.has(paneId)) {
+    const liveLeafIds = new Set(panes.map((pane) => pane.leafId))
+    for (const [leafId, disposable] of disposables) {
+      if (!liveLeafIds.has(leafId)) {
         disposable.dispose()
-        disposables.delete(paneId)
-        visibleScrollSnapshotsRef.current.delete(paneId)
-        pendingFollowOutputPaneIdsRef.current.delete(paneId)
+        disposables.delete(leafId)
+        visibleScrollSnapshotsRef.current.delete(leafId)
       }
     }
     for (const pane of panes) {
-      if (disposables.has(pane.id)) {
+      if (disposables.has(pane.leafId)) {
         continue
       }
       const onScroll = (
@@ -188,12 +232,16 @@ export function useTerminalScrollVisibilityMemory({
         continue
       }
       disposables.set(
-        pane.id,
+        pane.leafId,
         onScroll.call(pane.terminal, () => {
-          if (!isVisibleRef.current || suppressScrollTrackingRef.current) {
+          if (
+            !isVisibleRef.current ||
+            suppressScrollTrackingRef.current ||
+            isTerminalScrollRestoreInProgress(pane.terminal)
+          ) {
             return
           }
-          rememberVisibleScrollSnapshot(pane.id, pane.terminal)
+          rememberVisibleScrollSnapshot(pane.leafId, pane.terminal)
         })
       )
     }

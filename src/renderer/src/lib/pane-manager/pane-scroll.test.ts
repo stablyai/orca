@@ -2,7 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { IMarker, Terminal } from '@xterm/xterm'
 import {
   captureScrollState,
+  captureScrollStateForLayout,
+  getRememberedTerminalLeafScrollState,
   getTerminalOutputEpoch,
+  isTerminalScrollRestoreInProgress,
+  rememberTerminalLeafScrollState,
+  rememberTerminalScrollState,
   recordTerminalOutput,
   restoreScrollState,
   restoreScrollStateAfterLayout
@@ -89,6 +94,53 @@ describe('scroll state', () => {
     expect(getTerminalOutputEpoch(terminalB)).toBe(1)
   })
 
+  it('rejects transient layout edge snaps against the last stable scroll state', () => {
+    const terminal = createTerminal({ viewportY: 150, baseY: 154 })
+    rememberTerminalScrollState(terminal, {
+      bufferType: 'normal',
+      wasAtBottom: false,
+      viewportY: 150,
+      baseY: 154
+    })
+    ;(terminal.buffer.active as { baseY: number; viewportY: number }).viewportY = 0
+    ;(terminal.buffer.active as { baseY: number; viewportY: number }).baseY = 155
+
+    expect(captureScrollStateForLayout(terminal)).toMatchObject({
+      bufferType: 'normal',
+      wasAtBottom: false,
+      viewportY: 150,
+      baseY: 154
+    })
+
+    rememberTerminalScrollState(terminal, {
+      bufferType: 'normal',
+      wasAtBottom: false,
+      viewportY: 0,
+      baseY: 154
+    })
+    expect(captureScrollStateForLayout(terminal)).toMatchObject({
+      viewportY: 0,
+      baseY: 155
+    })
+  })
+
+  it('rejects transient layout edge snaps using leaf-stable state after remount', () => {
+    const terminal = createTerminal({ viewportY: 0, baseY: 155 })
+    rememberTerminalLeafScrollState('leaf-a', {
+      bufferType: 'normal',
+      wasAtBottom: false,
+      viewportY: 150,
+      baseY: 154
+    })
+
+    expect(
+      captureScrollStateForLayout(terminal, getRememberedTerminalLeafScrollState('leaf-a'))
+    ).toMatchObject({
+      viewportY: 150,
+      baseY: 154
+    })
+  })
+
   it('restores the captured viewport line', () => {
     const terminal = createTerminal({ viewportY: 10, baseY: 100 })
     const state: ScrollState = {
@@ -102,6 +154,27 @@ describe('scroll state', () => {
 
     expect(terminal.scrollToLine).toHaveBeenCalledWith(42)
     expect(terminal.buffer.active.viewportY).toBe(42)
+  })
+
+  it('marks imperative restore scrolls through the current task', () => {
+    vi.useFakeTimers()
+    const terminal = createTerminal({ viewportY: 10, baseY: 100 })
+    ;(terminal.scrollToLine as ReturnType<typeof vi.fn>).mockImplementation((line: number) => {
+      expect(isTerminalScrollRestoreInProgress(terminal)).toBe(true)
+      ;(terminal.buffer.active as { viewportY: number }).viewportY = line
+    })
+    const state: ScrollState = {
+      bufferType: 'normal',
+      wasAtBottom: false,
+      viewportY: 42,
+      baseY: 100
+    }
+
+    restoreScrollState(terminal, state)
+
+    expect(isTerminalScrollRestoreInProgress(terminal)).toBe(true)
+    vi.advanceTimersByTime(0)
+    expect(isTerminalScrollRestoreInProgress(terminal)).toBe(false)
   })
 
   it('skips restore when the terminal element is gone (post WebGL teardown)', () => {
@@ -170,6 +243,41 @@ describe('scroll state', () => {
     expect(marker.dispose).toHaveBeenCalledTimes(1)
   })
 
+  it('ignores a drifted marker when the buffer base has not changed', () => {
+    const terminal = createTerminal({ viewportY: 10, baseY: 154 })
+    const marker = createMarker(28)
+    const state: ScrollState = {
+      bufferType: 'normal',
+      wasAtBottom: false,
+      viewportY: 148,
+      baseY: 154,
+      firstVisibleLineMarker: marker
+    }
+
+    restoreScrollState(terminal, state)
+
+    expect(terminal.scrollToLine).toHaveBeenCalledWith(148)
+    expect(terminal.buffer.active.viewportY).toBe(148)
+    expect(marker.dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('can disable marker restore for visibility resume', () => {
+    const terminal = createTerminal({ viewportY: 10, baseY: 300 })
+    const marker = createMarker(71)
+    const state: ScrollState = {
+      bufferType: 'normal',
+      wasAtBottom: false,
+      viewportY: 150,
+      baseY: 154,
+      firstVisibleLineMarker: marker
+    }
+
+    restoreScrollStateAfterLayout(terminal, state, { useMarkers: false })
+
+    expect(terminal.scrollToLine).toHaveBeenCalledWith(150)
+    expect(terminal.buffer.active.viewportY).toBe(150)
+  })
+
   it('reapplies a layout restore after xterm settles asynchronously', () => {
     vi.useFakeTimers()
     const rafCallbacks: FrameRequestCallback[] = []
@@ -198,6 +306,37 @@ describe('scroll state', () => {
 
     expect(terminal.buffer.active.viewportY).toBe(42)
     expect(terminal.scrollToLine).toHaveBeenCalledWith(42)
+  })
+
+  it('can restore after layout without a scrollbar sync jiggle', () => {
+    vi.useFakeTimers()
+    const rafCallbacks: FrameRequestCallback[] = []
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        rafCallbacks.push(callback)
+        return rafCallbacks.length
+      })
+    )
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    const terminal = createTerminal({ viewportY: 97, baseY: 100 })
+    const state: ScrollState = {
+      bufferType: 'normal',
+      wasAtBottom: false,
+      viewportY: 98,
+      baseY: 100
+    }
+
+    restoreScrollStateAfterLayout(terminal, state, { syncScrollbar: false })
+    const activeBuffer = terminal.buffer.active as { viewportY: number }
+    activeBuffer.viewportY = 0
+    rafCallbacks.shift()?.(0)
+    activeBuffer.viewportY = 0
+    vi.advanceTimersByTime(80)
+
+    expect(terminal.scrollToLine).toHaveBeenCalledWith(98)
+    expect(terminal.scrollLines).not.toHaveBeenCalled()
+    expect(terminal.buffer.active.viewportY).toBe(98)
   })
 
   it('keeps the visible line marker alive across deferred layout restores', () => {

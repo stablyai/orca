@@ -92,7 +92,7 @@ describe('handleFocusTerminalPaneDetail', () => {
     )
 
     expect(manager.setActivePane).toHaveBeenCalledWith(7, { focus: true })
-    expect(scrollToBottomIfOutputSinceLastView).toHaveBeenCalledWith(7)
+    expect(scrollToBottomIfOutputSinceLastView).toHaveBeenCalledWith(LEAF_ID)
   })
 
   it('does not focus, flash, or ack when the numeric pane no longer owns the leaf', () => {

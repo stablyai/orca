@@ -52,6 +52,13 @@ const terminalPaneLayoutNodeSchema: z.ZodType<TerminalPaneLayoutNode> = z.lazy((
   ])
 )
 
+const terminalScrollStateSnapshotSchema = z.object({
+  bufferType: z.enum(['normal', 'alternate']),
+  wasAtBottom: z.boolean(),
+  viewportY: z.number(),
+  baseY: z.number()
+})
+
 const terminalLayoutSnapshotSchema = z.object({
   root: terminalPaneLayoutNodeSchema.nullable(),
   activeLeafId: z.string().nullable(),
@@ -59,6 +66,7 @@ const terminalLayoutSnapshotSchema = z.object({
   ptyIdsByLeafId: z.record(z.string(), z.string()).optional(),
   buffersByLeafId: z.record(z.string(), z.string()).optional(),
   scrollbackRefsByLeafId: z.record(z.string(), z.string()).optional(),
+  scrollStatesByLeafId: z.record(z.string(), terminalScrollStateSnapshotSchema).optional(),
   titlesByLeafId: z.record(z.string(), z.string()).optional()
 })
 
