@@ -2383,6 +2383,9 @@ export type GlobalSettings = {
   editorMinimapEnabled: boolean
   /** Whether local markdown review note controls and the review panel are shown. */
   markdownReviewToolsEnabled: boolean
+  /** Master toggle for the embedded browser's password manager (detect, click-to-fill,
+   *  save-on-submit). On by default. */
+  browserPasswordAutofillEnabled: boolean
   /** Why: mirrors terminal selection-paste muscle memory without mutating the
    *  normal system clipboard; Linux and macOS enable it by default, Windows
    *  leaves middle-click semantics unchanged unless the user opts in. */

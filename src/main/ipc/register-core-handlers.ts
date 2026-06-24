@@ -1,3 +1,7 @@
+import { safeStorage, app } from 'electron'
+import { join } from 'path'
+import { BrowserCredentialVault } from '../browser/credential-vault'
+import { browserManager } from '../browser/browser-manager'
 import { registerAppHandlers } from './app'
 import { registerCliHandlers } from './cli'
 import { registerPreflightHandlers } from './preflight'
@@ -29,7 +33,11 @@ import { registerNotebookHandlers } from './notebook'
 import { registerOnboardingHandlers } from './onboarding'
 import { registerDeveloperPermissionHandlers } from './developer-permissions'
 import { registerComputerUsePermissionHandlers } from './computer-use-permissions'
-import { setTrustedBrowserRendererWebContentsId, setAgentBrowserBridgeRef } from './browser'
+import {
+  setTrustedBrowserRendererWebContentsId,
+  setAgentBrowserBridgeRef,
+  isTrustedBrowserRenderer
+} from './browser'
 import { registerSessionHandlers } from './session'
 import { registerSettingsHandlers } from './settings'
 import { registerDiagnosticsHandlers } from './diagnostics'
@@ -40,6 +48,7 @@ import { registerAutomationHandlers } from './automations'
 import { registerKeybindingHandlers } from './keybindings'
 import { registerTelemetryHandlers } from './telemetry'
 import { registerBrowserHandlers } from './browser'
+import { registerBrowserCredentialHandlers } from './browser-credentials'
 import { registerShellHandlers } from './shell'
 import { registerPetHandlers } from './pet'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from './ui'
@@ -102,6 +111,14 @@ export function registerCoreHandlers(
     return
   }
   registered = true
+  // Why: constructed here (not module scope) so app.getPath is available;
+  // registerCoreHandlers is called once so the vault is effectively a singleton.
+  const browserCredentialVault = new BrowserCredentialVault({
+    filePath: join(app.getPath('userData'), 'orca-browser-credentials.json'),
+    encryptionAvailable: () => safeStorage.isEncryptionAvailable(),
+    encrypt: (p) => safeStorage.encryptString(p),
+    decrypt: (b) => safeStorage.decryptString(b)
+  })
 
   registerAppHandlers(store, { onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch })
   registerCliHandlers()
@@ -146,6 +163,11 @@ export function registerCoreHandlers(
   }
   registerTelemetryHandlers(store)
   registerBrowserHandlers()
+  registerBrowserCredentialHandlers({
+    vault: browserCredentialVault,
+    browserManager,
+    isTrusted: isTrustedBrowserRenderer
+  })
   registerShellHandlers()
   registerPetHandlers()
   registerSessionHandlers(store)

@@ -56,6 +56,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     editorAutoSaveDelayMs: 1000,
     editorMinimapEnabled: false,
     markdownReviewToolsEnabled: true,
+    browserPasswordAutofillEnabled: true,
     terminalFontSize: 14,
     terminalFontFamily: 'JetBrains Mono',
     terminalFontWeight: 500,

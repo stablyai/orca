@@ -2221,7 +2221,29 @@ const api = {
       ipcRenderer.invoke('browser:session:clearDefaultCookies'),
 
     notifyActiveTabChanged: (args: { browserPageId: string }): Promise<boolean> =>
-      ipcRenderer.invoke('browser:activeTabChanged', args)
+      ipcRenderer.invoke('browser:activeTabChanged', args),
+
+    credentials: {
+      status: () => ipcRenderer.invoke('browser:credentials:status'),
+      matchesForOrigin: (origin: string) =>
+        ipcRenderer.invoke('browser:credentials:matchesForOrigin', { origin }),
+      list: () => ipcRenderer.invoke('browser:credentials:list'),
+      reveal: (id: string) => ipcRenderer.invoke('browser:credentials:reveal', { id }),
+      save: (args: { origin: string; username: string; password: string }) =>
+        ipcRenderer.invoke('browser:credentials:save', args),
+      add: (args: { origin: string; username: string; password: string }) =>
+        ipcRenderer.invoke('browser:credentials:add', args),
+      update: (args: { id: string; username?: string; password?: string }) =>
+        ipcRenderer.invoke('browser:credentials:update', args),
+      delete: (id: string) => ipcRenderer.invoke('browser:credentials:delete', { id }),
+      injectBridge: (args: { browserTabId: string; token: string; enabled: boolean }) =>
+        ipcRenderer.invoke('browser:credentials:injectBridge', args),
+      fill: (args: { browserTabId: string; entryId: string; fieldId: string }) =>
+        ipcRenderer.invoke('browser:credentials:fill', args),
+      detectImportBrowsers: () => ipcRenderer.invoke('browser:credentials:detectImportBrowsers'),
+      importFromBrowser: (args: { browserFamily: string; browserProfile?: string }) =>
+        ipcRenderer.invoke('browser:credentials:importFromBrowser', args)
+    }
   },
 
   emulator: {

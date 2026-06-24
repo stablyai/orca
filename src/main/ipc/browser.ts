@@ -146,7 +146,7 @@ export function setAgentBrowserBridgeRef(bridge: AgentBrowserBridge | null): voi
   agentBrowserBridgeRef = bridge
 }
 
-function isTrustedBrowserRenderer(sender: Electron.WebContents): boolean {
+export function isTrustedBrowserRenderer(sender: Electron.WebContents): boolean {
   if (sender.isDestroyed() || sender.getType() !== 'window') {
     return false
   }

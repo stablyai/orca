@@ -15,6 +15,7 @@ import {
   Globe,
   Keyboard,
   ListChecks,
+  KeyRound,
   Lock,
   Mic,
   MousePointerClick,
@@ -65,6 +66,7 @@ import { getComputerUsePaneSearchEntries } from '@/components/settings/computer-
 import { getVoicePaneSearchEntries } from '@/components/settings/voice-pane-search'
 import { getDeveloperPermissionsPaneSearchEntries } from '@/components/settings/developer-permissions-search'
 import { getPrivacyPaneSearchEntries } from '@/components/settings/privacy-search'
+import { getPasswordsPaneSearchEntries } from '@/components/settings/passwords-search'
 import { getAdvancedPaneSearchEntries } from '@/components/settings/advanced-search'
 import { getShortcutsPaneSearchEntries } from '@/components/settings/shortcuts-search'
 import { getStatsPaneSearchEntries } from '@/components/stats/stats-search'
@@ -456,6 +458,17 @@ export function buildSettingsNavigationMetadata({
       ),
       icon: Lock,
       searchEntries: getPrivacyPaneSearchEntries(),
+      group: 'security'
+    },
+    {
+      id: 'passwords',
+      title: translate('auto.hooks.useSettingsNavigationMetadata.passwords_title', 'Passwords'),
+      description: translate(
+        'auto.hooks.useSettingsNavigationMetadata.passwords_description',
+        'Saved logins for the built-in browser.'
+      ),
+      icon: KeyRound,
+      searchEntries: getPasswordsPaneSearchEntries(),
       group: 'security'
     },
     ...(showDesktopOnlySettings

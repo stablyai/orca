@@ -104,6 +104,12 @@ describe('getDefaultSettings', () => {
   })
 })
 
+describe('getDefaultSettings password autofill', () => {
+  it('enables browser password autofill by default', () => {
+    expect(getDefaultSettings('/home/u').browserPasswordAutofillEnabled).toBe(true)
+  })
+})
+
 describe('getDefaultPrimarySelectionMiddleClickPaste', () => {
   it('enables primary selection paste on Linux by default', () => {
     expect(getDefaultPrimarySelectionMiddleClickPaste('linux')).toBe(true)

@@ -618,7 +618,9 @@
         "b1c2f8b0ac": "Claude, Codex, Gemini 및 OpenCode Go에 대한 선택적 계정 전환.",
         "f70ac54d38": "AI 제공업체 계정",
         "4121f7a0a2": "AI agents를 관리하고, 기본값을 설정하고, 명령을 사용자 정의하세요.",
-        "b49abbd2f7": "Agents"
+        "b49abbd2f7": "Agents",
+        "passwords_title": "Passwords",
+        "passwords_description": "Saved logins for the built-in browser."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -5883,7 +5885,9 @@
           "9abb9be3bc": "설정 시작",
           "23c6874fdf": "AI 기능",
           "2309068a6f": "파괴적",
-          "65358016ea": "버리기"
+          "65358016ea": "버리기",
+          "passwords_title": "Passwords",
+          "passwords_description": "Saved logins for the built-in browser."
         },
         "SettingsFormControls": {
           "42a4d15a30": "일치하는 글꼴이 없습니다.",
@@ -8294,6 +8298,54 @@
         "ShortcutRemoveButton": {
           "9e29aff18b": "Remove {{value0}} shortcut {{value1}}",
           "2a9588b1c2": "Remove this binding"
+        },
+        "PasswordsPane": {
+          "add_login_header": "Add Login",
+          "field_origin": "Website",
+          "field_origin_placeholder": "https://example.com",
+          "field_username": "Username",
+          "field_username_placeholder": "user@example.com",
+          "field_password": "Password",
+          "field_password_placeholder": "••••••••",
+          "add_login_btn": "Save Login",
+          "edit_password_placeholder": "New password (leave blank to keep current)",
+          "save_btn": "Save",
+          "cancel_btn": "Cancel",
+          "hide_password_aria": "Hide password",
+          "reveal_password_aria": "Reveal password",
+          "edit_aria": "Edit login",
+          "delete_aria": "Delete login",
+          "delete_confirm_title": "Delete login?",
+          "delete_confirm_description": "This will permanently remove the saved login for {{value0}}.",
+          "delete_confirm_btn": "Delete",
+          "autofill_section_title": "Password Autofill",
+          "autofill_section_description": "Automatically fill saved usernames and passwords in the built-in browser.",
+          "autofill_toggle_label": "Enable password autofill",
+          "autofill_toggle_description": "Suggests and fills saved logins when visiting matching sites.",
+          "vault_unavailable_title": "Secure storage unavailable",
+          "vault_unavailable_fallback": "Passwords cannot be saved without OS keychain support.",
+          "saved_logins_title": "Saved Logins",
+          "saved_logins_description": "Manage usernames and passwords stored by Orca.",
+          "loading": "Loading…",
+          "empty_list": "No saved logins yet.",
+          "add_section_title": "Add Login",
+          "add_section_description": "Manually add a login to the vault."
+        },
+        "passwordImport": {
+          "success_toast": "Imported {{value0}} logins from {{value1}}{{value2}}. {{value3}} skipped, {{value4}} invalid.",
+          "trigger_label": "Import from browser…",
+          "from_browser": "From {{value0}}",
+          "no_browsers_found": "No supported browsers found",
+          "detect_failed": "Could not detect supported browsers",
+          "import_failed": "Import failed. Please try again."
+        },
+        "passwords": {
+          "search": {
+            "autofill_title": "Password Autofill",
+            "autofill_description": "Enable or disable automatic password filling in the built-in browser.",
+            "title": "Passwords",
+            "description": "Saved logins for the built-in browser."
+          }
         }
       },
       "right": {
@@ -11261,6 +11313,16 @@
                 }
               }
             }
+          },
+          "PasswordAutofillOverlay": {
+            "fillPassword": "Fill password"
+          },
+          "PasswordSaveBanner": {
+            "updatePrompt": "Update password for {{value0}}?",
+            "savePrompt": "Save password for {{value0}}?",
+            "update": "Update",
+            "save": "Save",
+            "dismiss": "Dismiss"
           }
         }
       },

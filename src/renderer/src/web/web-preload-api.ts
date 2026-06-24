@@ -1667,7 +1667,29 @@ function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
         )
       }),
     sessionClearDefaultCookies: () => Promise.resolve(false),
-    notifyActiveTabChanged: () => Promise.resolve(false)
+    notifyActiveTabChanged: () => Promise.resolve(false),
+    // Password autofill is an Electron-main feature (isolated-world injection); not available in the web client.
+    credentials: {
+      status: async () => ({
+        available: false,
+        reason: 'Password autofill is unavailable in the web client.'
+      }),
+      matchesForOrigin: async () => [],
+      list: async () => [],
+      reveal: async () => null,
+      save: async () => ({ outcome: 'unchanged' as const, entry: null }),
+      add: async () => null,
+      update: async () => null,
+      delete: async () => false,
+      injectBridge: async () => false,
+      fill: async () => false,
+      // Password import requires local Chromium profile access; not available in the web client.
+      detectImportBrowsers: async () => [],
+      importFromBrowser: async () => ({
+        ok: false,
+        reason: 'Password import is unavailable in the web client.'
+      })
+    }
   } as unknown as NonNullable<Partial<PreloadApi>['browser']>
 }
 

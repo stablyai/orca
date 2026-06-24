@@ -2,9 +2,19 @@
    that must stay together so the encryption, schema, and staging steps remain in sync. */
 import { app, type BrowserWindow, dialog, session } from 'electron'
 import { execFileSync } from 'node:child_process'
-import { createDecipheriv, pbkdf2Sync, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
+import { decryptChromiumValue } from './chromium-value-decrypt'
+import { getEncryptionKey } from './chromium-encryption-key'
+import { diag, reasonWithDiagLog } from './chromium-diag'
 import {
-  appendFileSync,
+  type BrowserProfile,
+  CHROMIUM_BROWSERS,
+  browserRootPath,
+  detectChromiumBrowsers,
+  isSafeBrowserProfileDirectory
+} from './chromium-profile-discovery'
+import { copyChromiumStoreToTemp } from './sqlite-store-copy'
+import {
   copyFileSync,
   existsSync,
   mkdtempSync,
@@ -19,22 +29,6 @@ import { DatabaseSync } from 'node:sqlite'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-// Why: writing to userData instead of tmpdir() so the diag log is only
-// readable by the current user, not world-readable in /tmp.
-let _diagLog: string | null = null
-function getDiagLogPath(): string {
-  if (!_diagLog) {
-    try {
-      _diagLog = join(app.getPath('userData'), 'cookie-import-diag.log')
-    } catch {
-      _diagLog = join(tmpdir(), 'orca-cookie-import-diag.log')
-    }
-  }
-  return _diagLog
-}
-function reasonWithDiagLog(reason: string): string {
-  return `${reason} Details were written to ${getDiagLogPath()}.`
-}
 const COOKIE_IMPORT_ERROR_SUMMARY_MAX_CHARS = 180
 const COOKIE_IMPORT_ERROR_SCAN_MAX_CHARS = 512
 
@@ -62,15 +56,6 @@ export function summarizeCookieImportError(err: unknown): string {
   }
   return summary
 }
-function diag(msg: string): void {
-  const line = `[${new Date().toISOString()}] ${msg}\n`
-  try {
-    appendFileSync(getDiagLogPath(), line)
-  } catch {
-    /* best-effort */
-  }
-  console.log('[cookie-import]', msg)
-}
 import type {
   BrowserCookieImportResult,
   BrowserCookieImportSummary,
@@ -83,10 +68,7 @@ import { setupClientHintsOverride } from './browser-session-ua'
 // Browser detection
 // ---------------------------------------------------------------------------
 
-export type BrowserProfile = {
-  name: string
-  directory: string
-}
+export type { BrowserProfile } from './chromium-profile-discovery'
 
 export type DetectedBrowser = {
   family: BrowserSessionProfileSource['browserFamily']
@@ -96,90 +78,6 @@ export type DetectedBrowser = {
   keychainAccount?: string
   profiles: BrowserProfile[]
   selectedProfile: string
-}
-
-type ChromiumBrowserDef = {
-  family: BrowserSessionProfileSource['browserFamily']
-  label: string
-  keychainService: string
-  keychainAccount: string
-  // Why: each platform stores browser data in a different location. The per-platform
-  // root paths are resolved at detection time via browserRootPath().
-  macRoot?: string
-  winRoot?: string
-  linuxRoot?: string
-}
-
-const CHROMIUM_BROWSERS: ChromiumBrowserDef[] = [
-  {
-    family: 'chrome',
-    label: 'Google Chrome',
-    keychainService: 'Chrome Safe Storage',
-    keychainAccount: 'Chrome',
-    macRoot: 'Google/Chrome',
-    winRoot: 'Google/Chrome/User Data',
-    linuxRoot: 'google-chrome'
-  },
-  {
-    family: 'edge',
-    label: 'Microsoft Edge',
-    keychainService: 'Microsoft Edge Safe Storage',
-    keychainAccount: 'Microsoft Edge',
-    macRoot: 'Microsoft Edge',
-    winRoot: 'Microsoft/Edge/User Data',
-    linuxRoot: 'microsoft-edge'
-  },
-  {
-    family: 'arc',
-    label: 'Arc',
-    keychainService: 'Arc Safe Storage',
-    keychainAccount: 'Arc',
-    macRoot: 'Arc/User Data'
-  },
-  {
-    family: 'chromium',
-    label: 'Brave',
-    keychainService: 'Brave Safe Storage',
-    keychainAccount: 'Brave',
-    macRoot: 'BraveSoftware/Brave-Browser',
-    winRoot: 'BraveSoftware/Brave-Browser/User Data',
-    linuxRoot: 'BraveSoftware/Brave-Browser'
-  },
-  {
-    family: 'comet',
-    label: 'Comet',
-    keychainService: 'Comet Safe Storage',
-    keychainAccount: 'Comet',
-    macRoot: 'Comet',
-    winRoot: 'Comet/User Data'
-    // linuxRoot intentionally omitted — Comet does not ship a Linux build as of 2026-05-15
-  }
-]
-
-function browserRootPath(def: ChromiumBrowserDef): string | null {
-  if (process.platform === 'darwin') {
-    if (!def.macRoot) {
-      return null
-    }
-    const home = process.env.HOME ?? ''
-    return join(home, 'Library', 'Application Support', def.macRoot)
-  }
-  if (process.platform === 'win32') {
-    if (!def.winRoot) {
-      return null
-    }
-    const localAppData = process.env.LOCALAPPDATA ?? ''
-    if (!localAppData) {
-      return null
-    }
-    return join(localAppData, def.winRoot)
-  }
-  // Linux
-  if (!def.linuxRoot) {
-    return null
-  }
-  const configHome = process.env.XDG_CONFIG_HOME ?? join(process.env.HOME ?? '', '.config')
-  return join(configHome, def.linuxRoot)
 }
 
 // Why: Chromium 96+ moved the cookies DB from <Profile>/Cookies to
@@ -194,47 +92,6 @@ function resolveCookiesPath(profileDir: string): string | null {
     return legacyPath
   }
   return null
-}
-
-function isSafeBrowserProfileDirectory(directory: string): boolean {
-  return (
-    directory.length > 0 &&
-    directory !== '.' &&
-    !directory.includes('\0') &&
-    !directory.includes('/') &&
-    !directory.includes('\\') &&
-    !directory.includes('..')
-  )
-}
-
-// Why: Chrome's Local State JSON contains profile.info_cache which maps profile
-// directory names (e.g. "Default", "Profile 1") to metadata including the
-// user-visible display name. This lets us show human-readable names in the picker.
-function discoverProfiles(browserRoot: string): BrowserProfile[] {
-  try {
-    const localStatePath = join(browserRoot, 'Local State')
-    if (!existsSync(localStatePath)) {
-      return [{ name: 'Default', directory: 'Default' }]
-    }
-    const raw = readFileSync(localStatePath, 'utf-8')
-    const localState = JSON.parse(raw)
-    const infoCache = localState?.profile?.info_cache
-    if (!infoCache || typeof infoCache !== 'object') {
-      return [{ name: 'Default', directory: 'Default' }]
-    }
-    const profiles: BrowserProfile[] = []
-    for (const [dir, info] of Object.entries(infoCache)) {
-      // Why: Local State is external metadata, but profile dirs become path segments.
-      if (!isSafeBrowserProfileDirectory(dir)) {
-        continue
-      }
-      const profileName = (info as { name?: string })?.name ?? dir
-      profiles.push({ name: profileName, directory: dir })
-    }
-    return profiles.length > 0 ? profiles : [{ name: 'Default', directory: 'Default' }]
-  } catch {
-    return [{ name: 'Default', directory: 'Default' }]
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -352,32 +209,24 @@ function detectSafari(): DetectedBrowser | null {
 }
 
 export function detectInstalledBrowsers(): DetectedBrowser[] {
-  const detected: DetectedBrowser[] = []
-  for (const browser of CHROMIUM_BROWSERS) {
-    const root = browserRootPath(browser)
-    if (!root) {
-      continue
-    }
-    const profiles = discoverProfiles(root)
-    // Why: a browser is "detected" if at least one profile has a cookies DB.
-    // Use the first profile with a valid cookies path as the default selection.
-    for (const profile of profiles) {
-      const profileDir = join(root, profile.directory)
-      const cookiesPath = resolveCookiesPath(profileDir)
-      if (cookiesPath) {
-        detected.push({
-          family: browser.family,
-          label: browser.label,
-          keychainService: browser.keychainService,
-          keychainAccount: browser.keychainAccount,
-          cookiesPath,
-          profiles,
-          selectedProfile: profile.directory
-        })
-        break
-      }
-    }
+  // Why: cookiesResolver is the cookies-specific store path resolver. Passing it
+  // to detectChromiumBrowsers keeps the loop store-agnostic so the password
+  // importer can plug in a "Login Data" resolver instead.
+  const cookiesResolver = (root: string, profileDir: string): string | null => {
+    return resolveCookiesPath(join(root, profileDir))
   }
+
+  const chromiumBrowsers = detectChromiumBrowsers(cookiesResolver).map((b) => ({
+    family: b.family,
+    label: b.label,
+    keychainService: b.keychainService,
+    keychainAccount: b.keychainAccount,
+    cookiesPath: cookiesResolver(b.root, b.selectedProfile)!,
+    profiles: b.profiles,
+    selectedProfile: b.selectedProfile
+  }))
+
+  const detected: DetectedBrowser[] = [...chromiumBrowsers]
 
   const firefox = detectFirefox()
   if (firefox) {
@@ -774,10 +623,6 @@ export function getUserAgentForBrowser(
   }
 }
 
-const PBKDF2_ITERATIONS = 1003
-const PBKDF2_KEY_LENGTH = 16
-const PBKDF2_SALT = 'saltysalt'
-
 const CHROMIUM_EPOCH_OFFSET = 11644473600n
 
 function chromiumTimestampToUnix(chromiumTs: bigint | number | string): number {
@@ -796,19 +641,6 @@ function chromiumTimestampToUnix(chromiumTs: bigint | number | string): number {
   } catch {
     return 0
   }
-}
-
-// Why: each platform uses a different mechanism to protect the Chromium cookie encryption key.
-// macOS: PBKDF2(keychain password, "saltysalt", 1003 iterations) → AES-128-CBC
-// Linux: PBKDF2(keyring password or "peanuts", "saltysalt", 1 iteration) → AES-128-CBC
-// Windows: DPAPI-encrypted master key from Local State → AES-256-GCM
-
-type EncryptionKeyResult = {
-  key: Buffer
-  mode: 'aes-128-cbc' | 'aes-256-gcm'
-  // Why: Linux v10 cookies use a hardcoded "peanuts" password while v11 uses the
-  // keyring password. We need both keys to decrypt the full cookie set.
-  fallbackKey?: Buffer
 }
 
 export type ChromiumCookieColumnInfo = {
@@ -923,216 +755,6 @@ export function buildChromiumCookieInsertParams(
     // Missing NOT NULL target columns must get safe Chromium defaults, not NULL.
     return fallbackChromiumCookieColumnValue(column, sourceRow)
   })
-}
-
-function getEncryptionKey(
-  keychainService: string,
-  keychainAccount: string,
-  browser?: DetectedBrowser
-): EncryptionKeyResult | null {
-  if (process.platform === 'darwin') {
-    return getMacEncryptionKey(keychainService, keychainAccount)
-  }
-  if (process.platform === 'linux') {
-    return getLinuxEncryptionKey(keychainService, keychainAccount)
-  }
-  if (process.platform === 'win32' && browser) {
-    return getWindowsEncryptionKey(browser)
-  }
-  return null
-}
-
-function getMacEncryptionKey(
-  keychainService: string,
-  keychainAccount: string
-): EncryptionKeyResult | null {
-  try {
-    const raw = execFileSync(
-      'security',
-      ['find-generic-password', '-s', keychainService, '-a', keychainAccount, '-w'],
-      { encoding: 'utf-8', timeout: 30_000 }
-    ).trim()
-    return {
-      key: pbkdf2Sync(raw, PBKDF2_SALT, PBKDF2_ITERATIONS, PBKDF2_KEY_LENGTH, 'sha1'),
-      mode: 'aes-128-cbc'
-    }
-  } catch {
-    return null
-  }
-}
-
-function getLinuxEncryptionKey(
-  keychainService: string,
-  keychainAccount: string
-): EncryptionKeyResult | null {
-  // Why: Linux v10 cookies use the hardcoded password "peanuts" with 1 PBKDF2
-  // iteration. v11 cookies use the actual keyring password. We derive both keys
-  // so the decrypt function can try each based on the version prefix.
-  const v10Key = pbkdf2Sync('peanuts', PBKDF2_SALT, 1, PBKDF2_KEY_LENGTH, 'sha1')
-
-  let keyringPassword = ''
-  try {
-    // Why: GNOME keyring stores the Chrome Safe Storage password via secret-tool.
-    keyringPassword = execFileSync(
-      'secret-tool',
-      ['lookup', 'service', keychainService, 'account', keychainAccount],
-      { encoding: 'utf-8', timeout: 5_000 }
-    ).trim()
-  } catch {
-    // Why: fall back to application-based lookup used by newer Chromium versions.
-    try {
-      const app = keychainAccount.toLowerCase().replaceAll(' ', '')
-      keyringPassword = execFileSync('secret-tool', ['lookup', 'application', app], {
-        encoding: 'utf-8',
-        timeout: 5_000
-      }).trim()
-    } catch {
-      diag('  Linux keyring unavailable — v11 cookies may fail to decrypt')
-    }
-  }
-
-  const v11Key = pbkdf2Sync(keyringPassword, PBKDF2_SALT, 1, PBKDF2_KEY_LENGTH, 'sha1')
-  return { key: v11Key, mode: 'aes-128-cbc', fallbackKey: v10Key }
-}
-
-function getWindowsEncryptionKey(browser: DetectedBrowser): EncryptionKeyResult | null {
-  const browserDef = CHROMIUM_BROWSERS.find((b) => b.family === browser.family)
-  if (!browserDef) {
-    return null
-  }
-  const root = browserRootPath(browserDef)
-  if (!root) {
-    return null
-  }
-
-  const localStatePath = join(root, 'Local State')
-  if (!existsSync(localStatePath)) {
-    return null
-  }
-
-  try {
-    const raw = readFileSync(localStatePath, 'utf-8')
-    const localState = JSON.parse(raw)
-    const encryptedKeyB64 = localState?.os_crypt?.encrypted_key
-    if (typeof encryptedKeyB64 !== 'string') {
-      return null
-    }
-
-    const encryptedKey = Buffer.from(encryptedKeyB64, 'base64')
-    const dpapiPrefix = Buffer.from('DPAPI', 'utf-8')
-    if (!encryptedKey.subarray(0, dpapiPrefix.length).equals(dpapiPrefix)) {
-      return null
-    }
-
-    // Why: PowerShell DPAPI decrypt is the only way to access the master key
-    // without native addons. The key is passed via stdin to prevent injection.
-    const dpapiData = encryptedKey.subarray(dpapiPrefix.length).toString('base64')
-    const script = [
-      'try { Add-Type -AssemblyName System.Security.Cryptography.ProtectedData -ErrorAction Stop }',
-      'catch { try { Add-Type -AssemblyName System.Security -ErrorAction Stop } catch {} };',
-      '$in=[Convert]::FromBase64String([Console]::In.ReadLine());',
-      '$out=[System.Security.Cryptography.ProtectedData]::Unprotect($in,$null,',
-      '[System.Security.Cryptography.DataProtectionScope]::CurrentUser);',
-      '[Convert]::ToBase64String($out)'
-    ].join('')
-
-    const result = execFileSync(
-      'powershell',
-      ['-NoProfile', '-NonInteractive', '-Command', script],
-      { encoding: 'utf-8', timeout: 10_000, input: dpapiData }
-    ).trim()
-
-    return { key: Buffer.from(result, 'base64'), mode: 'aes-256-gcm' }
-  } catch (err) {
-    diag(`  Windows DPAPI key extraction failed: ${err}`)
-    return null
-  }
-}
-
-// Why: Chromium 127+ prepends a 32-byte per-host HMAC to the cookie value
-// before encrypting. After AES-CBC decryption, the raw output is:
-//   [32-byte HMAC] [actual cookie value]
-// Detection: the HMAC is a hash, so roughly half its bytes are non-printable
-// ASCII. Real cookie values are overwhelmingly printable. If ≥8 of the first
-// 32 bytes are non-printable, it's an HMAC prefix.
-const CHROMIUM_COOKIE_HMAC_LEN = 32
-
-function hasHmacPrefix(buf: Buffer): boolean {
-  if (buf.length <= CHROMIUM_COOKIE_HMAC_LEN) {
-    return false
-  }
-  let nonPrintable = 0
-  for (let i = 0; i < CHROMIUM_COOKIE_HMAC_LEN; i++) {
-    if (buf[i] < 0x20 || buf[i] > 0x7e) {
-      nonPrintable++
-    }
-  }
-  return nonPrintable >= 8
-}
-
-function stripHmac(buf: Buffer): Buffer {
-  return hasHmacPrefix(buf) ? buf.subarray(CHROMIUM_COOKIE_HMAC_LEN) : buf
-}
-
-function decryptCookieValueRaw(
-  encryptedBuffer: Buffer,
-  keyResult: EncryptionKeyResult
-): Buffer | null {
-  if (!encryptedBuffer || encryptedBuffer.length === 0) {
-    return null
-  }
-  const version = encryptedBuffer.subarray(0, 3).toString('utf-8')
-  if (!/^v\d\d$/.test(version)) {
-    return null
-  }
-
-  if (keyResult.mode === 'aes-256-gcm') {
-    return decryptAes256Gcm(encryptedBuffer.subarray(3), keyResult.key)
-  }
-
-  // AES-128-CBC (macOS and Linux)
-  const ciphertext = encryptedBuffer.subarray(3)
-  if (!ciphertext.length) {
-    return Buffer.alloc(0)
-  }
-
-  // Why: Linux v10 uses "peanuts" key, v11 uses keyring key. Try the primary
-  // key first, then fallback. macOS uses the same key for both versions.
-  const keysToTry =
-    version === 'v10' && keyResult.fallbackKey
-      ? [keyResult.fallbackKey, keyResult.key]
-      : [keyResult.key, ...(keyResult.fallbackKey ? [keyResult.fallbackKey] : [])]
-
-  for (const key of keysToTry) {
-    try {
-      const iv = Buffer.alloc(16, ' ')
-      const decipher = createDecipheriv('aes-128-cbc', key, iv)
-      decipher.setAutoPadding(true)
-      const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()])
-      return stripHmac(decrypted)
-    } catch {
-      continue
-    }
-  }
-  return null
-}
-
-function decryptAes256Gcm(payload: Buffer, key: Buffer): Buffer | null {
-  // Why: Windows AES-256-GCM layout is: [12-byte nonce][ciphertext][16-byte auth tag]
-  if (payload.length < 12 + 16) {
-    return null
-  }
-  const nonce = payload.subarray(0, 12)
-  const authTag = payload.subarray(-16)
-  const ciphertext = payload.subarray(12, -16)
-  try {
-    const decipher = createDecipheriv('aes-256-gcm', key, nonce)
-    decipher.setAuthTag(authTag)
-    const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()])
-    return stripHmac(decrypted)
-  } catch {
-    return null
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1454,29 +1076,15 @@ export async function importCookiesFromBrowser(
 
   // Why: the browser may hold a lock on the Cookies file. Copying to a temp
   // location avoids lock contention and ensures we read a consistent snapshot.
-  const tmpDir = mkdtempSync(join(tmpdir(), 'orca-cookie-import-'))
-  const tmpCookiesPath = join(tmpDir, 'Cookies')
-
+  // WAL + SHM sidecars are included so we capture the browser's current state
+  // even when it is running (see copyChromiumStoreToTemp for details).
+  let tmpCookiesPath: string
+  let cleanupTmpDir: () => void
   try {
-    copyFileSync(browser.cookiesPath, tmpCookiesPath)
-    // Why: when the source browser is running, it uses WAL journal mode. The most
-    // recently written cookies (including fresh auth tokens) may only exist in the
-    // WAL sidecar file, not yet flushed to the main DB. Copying WAL + SHM ensures
-    // our snapshot reflects the browser's current state.
-    for (const suffix of ['-wal', '-shm'] as const) {
-      const sidecar = browser.cookiesPath + suffix
-      if (existsSync(sidecar)) {
-        try {
-          copyFileSync(sidecar, tmpCookiesPath + suffix)
-        } catch {
-          // Why: sidecar copy is best-effort. The main DB alone may still have
-          // enough cookies for a usable session; missing the WAL just means
-          // we might miss the very latest writes.
-        }
-      }
-    }
+    const copy = copyChromiumStoreToTemp(browser.cookiesPath)
+    tmpCookiesPath = copy.tempDbPath
+    cleanupTmpDir = copy.cleanup
   } catch {
-    rmSync(tmpDir, { recursive: true, force: true })
     return {
       ok: false,
       reason: `Could not copy ${browser.label} cookies database. Try closing ${browser.label} first.`
@@ -1493,9 +1101,22 @@ export async function importCookiesFromBrowser(
   // plaintext cookies on its next flush, so this approach is safe in both modes.
 
   // Why: only Chromium browsers reach this point — Firefox/Safari dispatched above.
-  const sourceKey = getEncryptionKey(browser.keychainService!, browser.keychainAccount!, browser)
+  // Resolve localStatePath here so getEncryptionKey stays decoupled from DetectedBrowser.
+  let localStatePath: string | undefined
+  if (process.platform === 'win32') {
+    const browserDef = CHROMIUM_BROWSERS.find((b) => b.family === browser.family)
+    const root = browserDef ? browserRootPath(browserDef) : null
+    if (root) {
+      localStatePath = join(root, 'Local State')
+    }
+  }
+  const sourceKey = getEncryptionKey(
+    browser.keychainService!,
+    browser.keychainAccount!,
+    localStatePath
+  )
   if (!sourceKey) {
-    rmSync(tmpDir, { recursive: true, force: true })
+    cleanupTmpDir()
     return {
       ok: false,
       reason: `Could not access ${browser.label} encryption key. The OS may have denied access.`
@@ -1527,7 +1148,7 @@ export async function importCookiesFromBrowser(
   }
 
   if (!existsSync(liveCookiesPath)) {
-    rmSync(tmpDir, { recursive: true, force: true })
+    cleanupTmpDir()
     return { ok: false, reason: 'Target cookie database not found. Open a browser tab first.' }
   }
 
@@ -1541,7 +1162,7 @@ export async function importCookiesFromBrowser(
     mkdirSync(stagingDir, { recursive: true })
     copyFileSync(liveCookiesPath, stagingCookiesPath)
   } catch {
-    rmSync(tmpDir, { recursive: true, force: true })
+    cleanupTmpDir()
     return { ok: false, reason: 'Could not create staging cookie database.' }
   }
 
@@ -1574,7 +1195,12 @@ export async function importCookiesFromBrowser(
     if (sourceRows.length === 0) {
       stagingDb.close()
       stagingDb = null
-      rmSync(tmpDir, { recursive: true, force: true })
+      try {
+        unlinkSync(stagingCookiesPath)
+      } catch {
+        /* best-effort */
+      }
+      cleanupTmpDir()
       return { ok: false, reason: `No cookies found in ${browser.label}.` }
     }
 
@@ -1636,7 +1262,7 @@ export async function importCookiesFromBrowser(
 
       let decryptedValue: Buffer
       if (encBuf && encBuf.length > 0) {
-        const raw = decryptCookieValueRaw(encBuf, sourceKey)
+        const raw = decryptChromiumValue(encBuf, sourceKey, { stripHmacPrefix: true })
         if (!raw) {
           skipped++
           continue
@@ -1693,7 +1319,7 @@ export async function importCookiesFromBrowser(
     stagingDb.close()
     stagingDb = null
 
-    rmSync(tmpDir, { recursive: true, force: true })
+    cleanupTmpDir()
     diag(`  SQLite staging complete: ${imported} cookies, ${domainSet.size} domains`)
 
     // Why: clearing the session's in-memory cookie store before loading imported
@@ -1779,7 +1405,7 @@ export async function importCookiesFromBrowser(
     } catch {
       /* may already be closed */
     }
-    rmSync(tmpDir, { recursive: true, force: true })
+    cleanupTmpDir()
     // Why: if the import fails after the staging DB was created, clean it up
     // to avoid a stale staged import being applied on the next cold start.
     try {

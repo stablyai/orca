@@ -172,6 +172,9 @@ import {
 import { shouldPollChromiumErrorPage } from './chromium-error-page-polling'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { translate } from '@/i18n/i18n'
+import { usePasswordAutofill } from './password-autofill/use-password-autofill'
+import { PasswordAutofillOverlay } from './password-autofill/PasswordAutofillOverlay'
+import { PasswordSaveBanner } from './password-autofill/PasswordSaveBanner'
 import { isBrowserPagePanePaintable } from './browser-page-paintability'
 
 type BrowserTabPageState = Partial<
@@ -2760,6 +2763,25 @@ function BrowserPagePane({
       ? crypto.randomUUID().replaceAll('-', '')
       : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`
   )
+  // Why: mirrors the annotation bridge token approach — a stable per-tab random
+  // string scoped to this pane so the password bridge can validate messages.
+  const passwordBridgeTokenRef = useRef(
+    typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID().replaceAll('-', '')
+      : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`
+  )
+  // Why: webviewState drives the autofill hook's effect re-run when the
+  // webview element attaches; webviewRef holds the same element for imperative
+  // access without causing re-renders elsewhere.
+  const [webviewState, setWebviewState] = useState<Electron.WebviewTag | null>(null)
+  const passwordAutofillEnabled = useAppStore(
+    (s) => s.settings?.browserPasswordAutofillEnabled ?? true
+  )
+  // Why: a ref lets the webview lifecycle effect (which runs once per tab) read
+  // the current enabled state without being listed as a dependency — matching
+  // the isActiveRef / callbacks-use-refs pattern used throughout this component.
+  const passwordAutofillEnabledRef = useRef(passwordAutofillEnabled)
+  passwordAutofillEnabledRef.current = passwordAutofillEnabled
   const browserAnnotations = useAppStore(
     (s) => s.browserAnnotationsByPageId[browserTab.id] ?? EMPTY_BROWSER_ANNOTATIONS
   )
@@ -3593,6 +3615,7 @@ function BrowserPagePane({
     }
 
     webviewRef.current = webview
+    setWebviewState(webview)
 
     const dismissAddressBarSuggestions = (): void => {
       dismissAddressBarSuggestionsRef.current?.()
@@ -3642,6 +3665,14 @@ function BrowserPagePane({
       void window.api.browser.setViewportOverride({
         browserPageId: browserTab.id,
         override: preset ? browserViewportPresetToOverride(preset) : null
+      })
+      // Why: inject (or tear down) the password bridge on every dom-ready so it
+      // survives cross-origin navigations that replace the renderer. injectBridge
+      // is idempotent and guarded inside the bridge script.
+      void window.api.browser.credentials.injectBridge({
+        browserTabId: browserTab.id,
+        token: passwordBridgeTokenRef.current,
+        enabled: passwordAutofillEnabledRef.current
       })
     }
 
@@ -3754,6 +3785,14 @@ function BrowserPagePane({
         title: webview.getTitle() || browserModelUrl,
         canGoBack: webview.canGoBack(),
         canGoForward: webview.canGoForward()
+      })
+      // Why: re-inject the password bridge on every navigation so it is present
+      // on the new document. SPA navigations that don't trigger dom-ready also
+      // need this; the injection is idempotent.
+      void window.api.browser.credentials.injectBridge({
+        browserTabId: browserTab.id,
+        token: passwordBridgeTokenRef.current,
+        enabled: passwordAutofillEnabledRef.current
       })
     }
 
@@ -3878,6 +3917,7 @@ function BrowserPagePane({
 
       if (webviewRef.current === webview) {
         webviewRef.current = null
+        setWebviewState(null)
       }
 
       if (webviewRegistry.get(browserTab.id) === webview) {
@@ -3913,6 +3953,22 @@ function BrowserPagePane({
     pendingAnnotationPayload,
     syncBrowserAnnotationViewportBridge
   ])
+
+  // Why: the webview lifecycle effect reads passwordAutofillEnabled via a ref
+  // (so it doesn't re-run on toggle), meaning the bridge stays in its old state
+  // until the next navigation. This effect syncs the bridge immediately when the
+  // setting changes on the current page without waiting for a navigation event.
+  useEffect(() => {
+    const webview = webviewState
+    if (!webview) {
+      return
+    }
+    void window.api.browser.credentials.injectBridge({
+      browserTabId: browserTab.id,
+      token: passwordBridgeTokenRef.current,
+      enabled: passwordAutofillEnabled
+    })
+  }, [browserTab.id, passwordAutofillEnabled, webviewState])
 
   useEffect(() => {
     const webview = webviewRef.current
@@ -4597,6 +4653,13 @@ function BrowserPagePane({
     [navigateToUrl, worktreeId]
   )
 
+  const autofill = usePasswordAutofill({
+    webview: webviewState,
+    browserTabId: browserTab.id,
+    token: passwordBridgeTokenRef.current,
+    enabled: passwordAutofillEnabled
+  })
+
   const dismissBrowserDownload = useCallback((downloadId: string) => {
     setDownloadStates((current) => current.filter((download) => download.downloadId !== downloadId))
   }, [])
@@ -5096,6 +5159,11 @@ function BrowserPagePane({
           </div>
         </div>
       ) : null}
+      <PasswordSaveBanner
+        pending={autofill.pendingCapture}
+        onSave={autofill.confirmSave}
+        onDismiss={autofill.dismissCapture}
+      />
       {resourceNotice ? (
         <div className="flex items-center justify-between gap-2 border-b border-border/60 bg-background px-3 py-1.5 text-xs text-muted-foreground">
           <span>{resourceNotice}</span>
@@ -5406,6 +5474,11 @@ function BrowserPagePane({
             onCancel={handleCancelPendingBrowserAnnotation}
           />
         ) : null}
+        <PasswordAutofillOverlay
+          detect={autofill.detect}
+          matchesByFieldId={autofill.matchesByFieldId}
+          onFill={autofill.fillField}
+        />
         {browserAnnotations.length > 0 && browserAnnotationTrayOpen ? (
           <div className="absolute right-3 bottom-3 z-30 flex max-h-[45%] w-[min(20rem,calc(100%-1.5rem))] flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)]">
             <div className="flex items-center gap-2 border-b border-border px-3 py-2">
