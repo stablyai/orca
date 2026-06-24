@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { GitHubWorkItem, Repo } from '../../../shared/types'
+import {
+  MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+  RUNTIME_PROTOCOL_VERSION
+} from '../../../shared/protocol-version'
 
 vi.mock('@/lib/tui-agent-startup', () => ({
   buildAgentDraftLaunchPlan: vi.fn(() => null),
@@ -26,6 +31,20 @@ const repo: Repo = {
   displayName: 'orca',
   badgeColor: 'blue',
   addedAt: 1
+}
+
+function makeRuntimeStatus(overrides: Partial<RuntimeStatus> = {}): RuntimeStatus {
+  return {
+    runtimeId: 'runtime-1',
+    rendererGraphEpoch: 1,
+    graphStatus: 'ready',
+    authoritativeWindowId: null,
+    liveTabCount: 0,
+    liveLeafCount: 0,
+    runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+    minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+    ...overrides
+  }
 }
 
 function makeIssue(overrides: Partial<GitHubWorkItem> = {}): GitHubWorkItem {
@@ -56,6 +75,8 @@ function baseStore() {
     activeView: 'tasks' as const,
     repos: [repo],
     pendingWorktreeCreations: {},
+    sshConnectionStates: new Map(),
+    runtimeStatusByEnvironmentId: new Map(),
     settings: {
       activeRuntimeEnvironmentId: null,
       defaultTuiAgent: 'codex' as const,
@@ -208,6 +229,65 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
     expect(deps.continueBackgroundCreate).not.toHaveBeenCalled()
   })
 
+  it('falls back without staging when the SSH repo is disconnected', async () => {
+    const sshRepo: Repo = {
+      ...repo,
+      connectionId: 'devbox'
+    }
+    const deps = makeDeps(
+      makeStore({
+        repos: [sshRepo],
+        sshConnectionStates: new Map([['devbox', { status: 'disconnected' }]])
+      })
+    )
+    const openModalFallback = vi.fn()
+
+    const result = await createGitHubWorkItemWorkspaceInBackground(
+      {
+        item: makeIssue(),
+        repoId: 'repo-1',
+        openModalFallback
+      },
+      deps
+    )
+
+    expect(result).toEqual({ kind: 'fallback', reason: 'host-unavailable' })
+    expect(openModalFallback).toHaveBeenCalledTimes(1)
+    expect(deps.beginBackgroundCreate).not.toHaveBeenCalled()
+    expect(deps.resolveSetupDecision).not.toHaveBeenCalled()
+    expect(deps.confirmHooks).not.toHaveBeenCalled()
+  })
+
+  it('falls back without staging when the runtime repo is unreachable', async () => {
+    const runtimeRepo: Repo = {
+      ...repo,
+      executionHostId: 'runtime:env-1'
+    }
+    const deps = makeDeps(
+      makeStore({
+        repos: [runtimeRepo],
+        runtimeStatusByEnvironmentId: new Map([['env-1', { status: null, checkedAt: 1 }]])
+      })
+    )
+    const openModalFallback = vi.fn()
+
+    const result = await createGitHubWorkItemWorkspaceInBackground(
+      {
+        item: makeIssue(),
+        repoId: 'repo-1',
+        openModalFallback
+      },
+      deps
+    )
+
+    expect(result).toEqual({ kind: 'fallback', reason: 'host-unavailable' })
+    expect(openModalFallback).toHaveBeenCalledTimes(1)
+    expect(deps.beginBackgroundCreate).not.toHaveBeenCalled()
+    expect(deps.resolveSetupDecision).not.toHaveBeenCalled()
+    expect(deps.confirmHooks).not.toHaveBeenCalled()
+    expect(deps.continueBackgroundCreate).not.toHaveBeenCalled()
+  })
+
   it('uses the preferred quick agent when one is available', async () => {
     const store = makeStore({
       ensureDetectedAgents: vi.fn().mockResolvedValue(['codex'])
@@ -244,6 +324,9 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
     }
     const store = makeStore({
       repos: [runtimeRepo],
+      runtimeStatusByEnvironmentId: new Map([
+        ['env-1', { status: makeRuntimeStatus({ runtimeId: 'runtime-env-1' }), checkedAt: 1 }]
+      ]),
       ensureDetectedAgents: vi.fn().mockResolvedValue([]),
       ensureRemoteDetectedAgents: vi.fn().mockResolvedValue([]),
       ensureRuntimeDetectedAgents: vi.fn().mockResolvedValue(['codex'])

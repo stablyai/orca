@@ -19,13 +19,23 @@ import {
 } from '@/lib/launch-work-item-direct-preflight'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import { evaluateRuntimeCompat } from '../../../shared/protocol-compat'
+import {
+  MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
+  RUNTIME_PROTOCOL_VERSION
+} from '../../../shared/protocol-version'
 import type { GitHubWorkItem, SetupDecision } from '../../../shared/types'
+import type { Repo } from '../../../shared/types'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 
 export type BackgroundGitHubWorkItemCreateResult =
   | { kind: 'background-started' }
   | { kind: 'error' }
-  | { kind: 'fallback'; reason: 'repo-missing' | 'setup-ask' | 'pr-start-point' }
+  | {
+      kind: 'fallback'
+      reason: 'repo-missing' | 'host-unavailable' | 'setup-ask' | 'pr-start-point'
+    }
 
 type AppActiveView = ReturnType<typeof useAppStore.getState>['activeView']
 
@@ -101,6 +111,28 @@ function findPendingGitHubWorkItemCreate(
   return match?.creationId ?? null
 }
 
+function repoHostUnavailable(store: GitHubWorkItemBackgroundStoreSnapshot, repo: Repo): boolean {
+  const host = parseExecutionHostId(getRepoExecutionHostId(repo))
+  if (host?.kind === 'ssh') {
+    return store.sshConnectionStates.get(host.targetId)?.status !== 'connected'
+  }
+  if (host?.kind !== 'runtime') {
+    return false
+  }
+  const status = store.runtimeStatusByEnvironmentId.get(host.environmentId)?.status
+  if (!status) {
+    return true
+  }
+  const compatibility = evaluateRuntimeCompat({
+    clientProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+    minCompatibleServerProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
+    serverProtocolVersion: status.runtimeProtocolVersion ?? status.protocolVersion,
+    serverMinCompatibleClientProtocolVersion:
+      status.minCompatibleRuntimeClientVersion ?? status.minCompatibleMobileVersion
+  })
+  return compatibility.kind === 'blocked'
+}
+
 function abandonStagedCreate(
   creationId: string,
   restoreView: AppActiveView,
@@ -131,6 +163,12 @@ export async function createGitHubWorkItemWorkspaceInBackground(
   if (existingPendingCreateId) {
     deps.activatePendingCreate(existingPendingCreateId)
     return { kind: 'background-started' }
+  }
+  // Why: disconnected hosts make hook and agent probes fall back to skip/no-agent;
+  // keep the old composer gate so Retry cannot reuse degraded preflight values.
+  if (repoHostUnavailable(store, repo)) {
+    args.openModalFallback()
+    return { kind: 'fallback', reason: 'host-unavailable' }
   }
 
   const restoreView = deps.getActiveView()

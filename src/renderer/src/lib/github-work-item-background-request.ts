@@ -27,6 +27,10 @@ import { projectHostSetupProjectionFromRepos } from '../../../shared/project-hos
 export type GitHubWorkItemBackgroundStoreSnapshot = {
   repos: readonly Repo[]
   pendingWorktreeCreations: Record<string, PendingWorktreeCreation>
+  sshConnectionStates: ReturnType<typeof useAppStore.getState>['sshConnectionStates']
+  runtimeStatusByEnvironmentId: ReturnType<
+    typeof useAppStore.getState
+  >['runtimeStatusByEnvironmentId']
   settings:
     | Partial<
         Pick<
