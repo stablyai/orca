@@ -6219,7 +6219,19 @@
           "ab20575a8a": "apagado",
           "ab3a1f9068": "wsl.exe",
           "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
-          "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent."
+          "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent.",
+          "scrollSpeed": {
+            "title": "Scroll Speed",
+            "description": "Tune normal terminal scrollback, fast modifier scrolling, and full-screen TUI wheel speed.",
+            "helper": "Adjust how wheel input feels in scrollback and in mouse-aware terminal apps.",
+            "reset": "Reset",
+            "normal": "Normal",
+            "normalDescription": "Scrollback wheel multiplier.",
+            "fast": "Fast",
+            "fastDescription": "Extra multiplier while scrolling with a modifier key.",
+            "tui": "TUI",
+            "tuiDescription": "Discrete wheel reports for full-screen terminal apps."
+          }
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "Vista previa del tema {{value0}}",
@@ -7855,7 +7867,11 @@
               "keyword_custom": "custom"
             },
             "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
-            "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent."
+            "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent.",
+            "scrollSpeed": {
+              "title": "Scroll Speed",
+              "description": "Tune normal terminal scrollback, fast modifier scrolling, and full-screen TUI wheel speed."
+            }
           },
           "windows": {
             "search": {
