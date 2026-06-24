@@ -469,7 +469,12 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       from,
       pollIntervalMs: getOptionalPositiveIntegerFlag(flags, 'poll-interval-ms'),
       maxConcurrent: getOptionalPositiveIntegerFlag(flags, 'max-concurrent'),
-      worktree: getOptionalStringFlag(flags, 'worktree')
+      worktree: getOptionalStringFlag(flags, 'worktree'),
+      // Why (F2 #13): opt-in worktree-per-track dispatch + the agent launched in
+      // each track worktree. Default off → legacy bare-terminal dispatch. The RPC
+      // validates the agent id and requires --worktree as the lineage parent.
+      worktreeBacked: flags.get('worktree-backed') === true ? true : undefined,
+      workerAgent: getOptionalStringFlag(flags, 'worker-agent')
     })
     printResult(result, json, (r) => `Run ${r.runId} started (${r.status})`)
   },

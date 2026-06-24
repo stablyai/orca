@@ -3,6 +3,7 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
+import { getOrchestratorsSearchEntry } from './orchestrators-search-entry'
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
@@ -230,7 +231,8 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
           'node_modules'
         )
       ]
-    }
+    },
+    getOrchestratorsSearchEntry()
   ]
 )
 
@@ -271,6 +273,9 @@ export function getExperimentalSearchEntry() {
         'auto.components.settings.experimental.search.78c2a8dc74',
         'Shared paths on worktrees'
       )
+    ),
+    orchestrators: findEntry(
+      translate('auto.components.settings.experimental.search.orchestrators.title', 'Orcastrators')
     )
   } as const
 }

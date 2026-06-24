@@ -284,6 +284,28 @@ describe('OrchestrationDb', () => {
       expect(dispatchedRow?.dispatch_id).toBe(ctx.id)
     })
 
+    it('listTasksWithDispatch surfaces the active dispatch status + heartbeat (#6)', () => {
+      const d = createDb()
+      const task = d.createTask({ spec: 'active task' })
+      const ctx = d.createDispatchContext(task.id, 'term_worker')
+      d.recordHeartbeat(ctx.id, '2026-06-01T00:00:00.000Z')
+
+      const row = d.listTasksWithDispatch().find((r) => r.id === task.id)
+      expect(row?.dispatch_status).toBe('dispatched')
+      expect(row?.dispatch_last_heartbeat_at).toBe('2026-06-01T00:00:00.000Z')
+    })
+
+    it('listTasksWithDispatch scopes to a coordinator run (#6/#12 — runs do not bleed)', () => {
+      const d = createDb()
+      const runA = d.createCoordinatorRun({ spec: 'A', coordinatorHandle: 'term_coord_a' })
+      const runB = d.createCoordinatorRun({ spec: 'B', coordinatorHandle: 'term_coord_b' })
+      const taskA = d.createTask({ spec: 'a task', coordinatorRunId: runA.id })
+      d.createTask({ spec: 'b task', coordinatorRunId: runB.id })
+
+      const rowsA = d.listTasksWithDispatch({ coordinatorRunId: runA.id })
+      expect(rowsA.map((r) => r.id)).toEqual([taskA.id])
+    })
+
     it('listTasksWithDispatch does not surface completed dispatches', () => {
       const d = createDb()
       const task = d.createTask({ spec: 'work' })
@@ -531,6 +553,103 @@ describe('OrchestrationDb', () => {
 
       d.updateCoordinatorRun(run.id, 'completed')
       expect(d.getActiveCoordinatorRun()).toBeUndefined()
+    })
+
+    it('lists every running run, not just the latest', () => {
+      const d = createDb()
+      const a = d.createCoordinatorRun({ spec: 'a', coordinatorHandle: 'coord_a' })
+      const b = d.createCoordinatorRun({ spec: 'b', coordinatorHandle: 'coord_b' })
+      const done = d.createCoordinatorRun({ spec: 'c', coordinatorHandle: 'coord_c' })
+      d.updateCoordinatorRun(done.id, 'completed')
+
+      const running = d.listCoordinatorRuns({ status: 'running' })
+      expect(running.map((r) => r.id).sort()).toEqual([a.id, b.id].sort())
+      expect(d.listCoordinatorRuns()).toHaveLength(3)
+    })
+
+    // Why (F3 #14): resume-on-boot reconstructs a crashed run's coordinator from
+    // the row, so the v9 options must round-trip. A persisted worktreeBacked=false
+    // must read back as 0 (an explicit legacy run), distinct from NULL (unknown).
+    it('persists and round-trips the v9 resume options (worktree-backed run)', () => {
+      const d = createDb()
+      const run = d.startCoordinatorRun({
+        spec: 'build',
+        coordinatorHandle: 'coord',
+        targetKey: 'worktree:wt-1',
+        maxConcurrent: 7,
+        worktreeBacked: true,
+        workerAgent: 'claude'
+      })
+      const read = d.getCoordinatorRun(run.id)!
+      expect(read.max_concurrent).toBe(7)
+      expect(read.worktree_backed).toBe(1)
+      expect(read.worker_agent).toBe('claude')
+    })
+
+    it('records worktreeBacked=false as 0 (explicit legacy), unset options as NULL', () => {
+      const d = createDb()
+      const legacy = d.startCoordinatorRun({
+        spec: 'legacy',
+        coordinatorHandle: 'coord',
+        worktreeBacked: false
+      })
+      expect(d.getCoordinatorRun(legacy.id)?.worktree_backed).toBe(0)
+
+      const bare = d.createCoordinatorRun({ spec: 'bare', coordinatorHandle: 'coord2' })
+      const read = d.getCoordinatorRun(bare.id)!
+      expect(read.worktree_backed).toBeNull()
+      expect(read.max_concurrent).toBeNull()
+      expect(read.worker_agent).toBeNull()
+    })
+
+    // Why (F3 #14): the boot-time-fenced resume claim. One winner per fence; a
+    // strictly-greater later fence reclaims a stale (crashed-resumer) claim; a
+    // non-running run can't be claimed.
+    it('tryClaimRunForResume: one winner per fence, later fence reclaims, terminal not claimable', () => {
+      const d = createDb()
+      const run = d.startCoordinatorRun({
+        spec: 'go',
+        coordinatorHandle: 'c',
+        targetKey: 'worktree:wt'
+      })
+      const fence1 = '2026-06-23T10:00:00.000Z'
+      // Two runtimes at the SAME fence: exactly one wins.
+      expect(d.tryClaimRunForResume(run.id, fence1)).toBe(true)
+      expect(d.tryClaimRunForResume(run.id, fence1)).toBe(false)
+      expect(d.getCoordinatorRun(run.id)?.resumed_at).toBe(fence1)
+
+      // A later boot (strictly-greater fence) reclaims a stale claim.
+      const fence2 = '2026-06-23T11:00:00.000Z'
+      expect(d.tryClaimRunForResume(run.id, fence2)).toBe(true)
+      expect(d.getCoordinatorRun(run.id)?.resumed_at).toBe(fence2)
+
+      // An earlier fence cannot steal a newer claim.
+      expect(d.tryClaimRunForResume(run.id, fence1)).toBe(false)
+
+      // Once terminal, the run is never claimable.
+      d.updateCoordinatorRun(run.id, 'failed')
+      expect(d.tryClaimRunForResume(run.id, '2026-06-23T12:00:00.000Z')).toBe(false)
+    })
+
+    it('counts outstanding tasks and active dispatches', () => {
+      const d = createDb()
+      expect(d.countOutstandingTasks()).toBe(0)
+      expect(d.countActiveDispatches()).toBe(0)
+
+      const t1 = d.createTask({ spec: 'one' })
+      d.createTask({ spec: 'two' })
+      // Two ready tasks outstanding, none dispatched yet.
+      expect(d.countOutstandingTasks()).toBe(2)
+      expect(d.countActiveDispatches()).toBe(0)
+
+      d.createDispatchContext(t1.id, 'term_worker')
+      expect(d.countActiveDispatches()).toBe(1)
+      // t1 is now 'dispatched' (still outstanding); both tasks remain.
+      expect(d.countOutstandingTasks()).toBe(2)
+
+      d.updateTaskStatus(t1.id, 'completed')
+      expect(d.countOutstandingTasks()).toBe(1)
+      expect(d.countActiveDispatches()).toBe(0)
     })
   })
 

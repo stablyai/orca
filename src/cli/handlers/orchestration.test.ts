@@ -62,6 +62,48 @@ describe('orchestration reset CLI handler', () => {
   })
 })
 
+describe('orchestration run worktree-backed flags (F2 #13)', () => {
+  beforeEach(() => {
+    callMock.mockReset().mockResolvedValue({ result: { runId: 'run_1', status: 'running' } })
+    getTerminalHandleMock.mockReset().mockResolvedValue('term_coord')
+    delete process.env.ORCA_TERMINAL_HANDLE
+  })
+
+  const invokeRun = (flags: Map<string, string | boolean>) =>
+    ORCHESTRATION_HANDLERS['orchestration run']({
+      flags,
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+  it('forwards --worktree-backed and --worker-agent to the RPC', async () => {
+    await invokeRun(
+      new Map<string, string | boolean>([
+        ['spec', 'build it'],
+        ['worktree', 'director-wt'],
+        ['worktree-backed', true],
+        ['worker-agent', 'claude']
+      ])
+    )
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.run',
+      expect.objectContaining({
+        worktree: 'director-wt',
+        worktreeBacked: true,
+        workerAgent: 'claude'
+      })
+    )
+  })
+
+  it('omits worktreeBacked (default off) when the flag is absent', async () => {
+    await invokeRun(new Map<string, string | boolean>([['spec', 'build it']]))
+    const [, params] = callMock.mock.calls[0]
+    expect(params.worktreeBacked).toBeUndefined()
+    expect(params.workerAgent).toBeUndefined()
+  })
+})
+
 describe('orchestration send structured payload flags', () => {
   beforeEach(() => {
     callMock.mockReset().mockResolvedValue({ result: { message: { id: 'msg_1' } } })

@@ -20,6 +20,14 @@ export type AgentDotState =
   | 'interrupted'
   | 'done'
   | 'idle'
+  // Why: an Orcastrator director hands control back (its hook reports 'done')
+  // while it still supervises background workers. 'supervising' renders a calm
+  // emerald pulse so that liveness reads as "working for you in the background"
+  // — never the checkmark, which implies the mission is finished. 'stalled' is
+  // the same supervision but with a hung worker (heartbeat past threshold),
+  // rendered amber so a wedged run cannot masquerade as healthy.
+  | 'supervising'
+  | 'stalled'
   // Why: the sidebar's title-based status flow (StatusIndicator/WorktreeCard)
   // collapses blocked + waiting into a single "needs attention" state. Keep
   // this as a distinct member so that flow can render without inventing a new
@@ -41,6 +49,10 @@ export function agentStateLabel(state: AgentDotState): string {
       return 'Done'
     case 'idle':
       return 'Idle'
+    case 'supervising':
+      return 'Supervising'
+    case 'stalled':
+      return 'Supervision stalled'
     case 'permission':
       return 'Needs attention'
   }
@@ -90,6 +102,27 @@ export const AgentStateDot = React.memo(function AgentStateDot({
         aria-label={agentStateLabel(state)}
       >
         <CircleCheck className={cn('text-emerald-500', icon)} aria-hidden="true" />
+      </span>
+    )
+  }
+
+  if (state === 'supervising' || state === 'stalled') {
+    // Why: foreground turn ended but the orchestration run is still in flight.
+    // A slow pulse reads as "alive, working in the background" — distinct from
+    // the working spinner (actively producing) and never the completion check.
+    // Stalled keeps the same shape in amber so a hung run stays legible.
+    return (
+      <span
+        className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
+        aria-label={agentStateLabel(state)}
+      >
+        <span
+          className={cn(
+            'block rounded-full [animation:pulse_1.6s_ease-in-out_infinite]',
+            inner,
+            state === 'stalled' ? 'bg-amber-500' : 'bg-emerald-500/70'
+          )}
+        />
       </span>
     )
   }

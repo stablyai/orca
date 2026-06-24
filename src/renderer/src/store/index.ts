@@ -24,6 +24,8 @@ import { createBrowserSlice } from './slices/browser'
 import { createRateLimitSlice } from './slices/rate-limits'
 import { createSshSlice } from './slices/ssh'
 import { createAgentStatusSlice } from './slices/agent-status'
+import { createOrchestrationActivitySlice } from './slices/orchestration-activity'
+import { createOrchestrationRunDagSlice } from './slices/orchestration-run-dag'
 import { createDiffCommentsSlice } from './slices/diffComments'
 import { createDetectedAgentsSlice } from './slices/detected-agents'
 import { createWorktreeNavHistorySlice } from './slices/worktree-nav-history'
@@ -32,6 +34,7 @@ import { createWorkspaceCleanupSlice } from './slices/workspace-cleanup'
 import { createRuntimeStatusSlice } from './slices/runtime-status'
 import { createPullRequestGenerationSlice } from './slices/pull-request-generation'
 import { createCommitMessageGenerationSlice } from './slices/commit-message-generation'
+import { createOrchestratorsSlice } from './slices/orchestrators'
 import { createPinnedTabCloseConfirmSlice } from './slices/pinned-tab-close-confirm'
 import { e2eConfig } from '@/lib/e2e-config'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
@@ -61,6 +64,8 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createRateLimitSlice(...a),
   ...createSshSlice(...a),
   ...createAgentStatusSlice(...a),
+  ...createOrchestrationActivitySlice(...a),
+  ...createOrchestrationRunDagSlice(...a),
   ...createDiffCommentsSlice(...a),
   ...createDetectedAgentsSlice(...a),
   ...createWorktreeNavHistorySlice(...a),
@@ -69,6 +74,7 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createRuntimeStatusSlice(...a),
   ...createPullRequestGenerationSlice(...a),
   ...createCommitMessageGenerationSlice(...a),
+  ...createOrchestratorsSlice(...a),
   ...createPinnedTabCloseConfirmSlice(...a)
 }))
 

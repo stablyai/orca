@@ -33,6 +33,7 @@ import { initOnboardingCohortClassifier } from './telemetry/onboarding-cohort-cl
 import { resolveConsent } from './telemetry/consent'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
 import { OrcaRuntimeService } from './runtime/orca-runtime'
+import { runOrchestrationBootReconcile } from './runtime/rpc/methods/orchestration-gates'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
 import { awaitRuntimeFileWatcherUnsubscribes } from './runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
@@ -1523,6 +1524,25 @@ app.whenReady().then(async () => {
   })
 
   logStartupMilestone('services-initialized')
+
+  // Why (F3 #14): the coordinator is in-memory with no boot hook, so a leftover
+  // `coordinator_runs.status='running'` row from a pre-restart run is a zombie —
+  // it blocks a fresh run for that target via F1's active-run guard while nothing
+  // drives it. Reconcile on boot (finalize / resume / fail) so the guard unblocks.
+  // Gated on the experimental flag (the only surface that starts runs) to stay
+  // additive, fire-and-forget so a reconcile error can never block startup, and
+  // run here — before any window is shown — so it lands before a user-triggered
+  // run could hit the guard. This runs in serve mode too; the resume path's atomic
+  // boot-time-fenced claim (tryClaimRunForResume) makes that safe — a desktop and a
+  // serve runtime sharing one DB can't both drive the same resumed run.
+  if (store.getSettings().experimentalOrchestrators) {
+    void runOrchestrationBootReconcile(runtimeService, (msg) =>
+      console.log('[orchestration-resume]', msg)
+    ).catch((error) => {
+      console.error('[orchestration-resume] boot reconcile failed:', error)
+    })
+  }
+
   await ensureMainI18n()
   await setMainUiLanguage(store.getSettings().uiLanguage)
   logStartupMilestone('i18n-ready')

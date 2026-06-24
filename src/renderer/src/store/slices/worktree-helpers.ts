@@ -152,7 +152,13 @@ export type WorktreeSlice = {
     compareBaseRef?: string,
     // Why: reserved for automation-dispatch flows so host-side provenance can
     // be minted securely; regular create callers should omit this.
-    options?: { automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest'] }
+    options?: {
+      automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
+      /** When true, a startup-bearing remote create does NOT ask the host to
+       *  activate the new worktree — programmatic (director/coordinator) creates
+       *  reveal it without yanking the user's active tab. Manual creates omit it. */
+      suppressActivation?: boolean
+    }
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
   beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void

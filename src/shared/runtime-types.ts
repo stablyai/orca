@@ -109,10 +109,107 @@ export type RuntimeSyncWindowGraph = {
   mobileSessionTabs?: RuntimeMobileSessionTabsSnapshot[]
 }
 
+/** Live snapshot of a coordinator's in-flight orchestration run, keyed in the
+ *  graph-sync result by the coordinator's own paneKey. Lets the renderer show a
+ *  director that has handed control back (its Stop hook fired `done`) but is
+ *  still supervising background work — a state the per-pane agent hook cannot
+ *  express. Counts come from the global orchestration DB (one namespace, no
+ *  per-run association), so with multiple concurrent runs they are shared
+ *  across runs; `coordinatorRunning` stays per-run accurate. */
+export type OrchestrationActivity = {
+  /** Coordinator run id (coordinator_runs.id) that is still `running`. */
+  runId: string
+  /** Tasks not in a terminal state (pending/ready/dispatched/blocked). */
+  pendingTasks: number
+  /** Dispatch contexts still pending or dispatched (workers not yet done). */
+  activeDispatches: number
+  /** Dispatched workers whose heartbeat has gone quiet past the hung threshold
+   *  — drives a distinct "stalled" affordance instead of healthy supervising. */
+  staleDispatches: number
+}
+
+/** Raw task lifecycle status from the orchestration DB (`tasks.status`). Mirrors
+ *  the main-side `TaskStatus`; redefined here so shared/renderer code maps it to
+ *  an `AgentStateDot` state without importing main-only DB types. */
+export type OrchestrationTaskStatus =
+  | 'pending'
+  | 'ready'
+  | 'dispatched'
+  | 'completed'
+  | 'failed'
+  | 'blocked'
+
+/** Raw dispatch lifecycle status (`dispatch_contexts.status`). Mirrors the
+ *  main-side `DispatchStatus`. */
+export type OrchestrationDispatchStatus =
+  | 'pending'
+  | 'dispatched'
+  | 'completed'
+  | 'failed'
+  | 'circuit_broken'
+
+/** The active dispatch backing one task: who is working it and how alive it is.
+ *  `stale` is computed in main (it owns the clock + hung threshold) so the
+ *  renderer maps task→dot without re-deriving liveness. */
+export type OrchestrationTaskDispatch = {
+  assigneeHandle: string | null
+  /** Worker agent type, resolved in main from the assignee's PTY launch agent,
+   *  so the renderer can pick the right agent glyph without guessing. */
+  assigneeAgent: TuiAgent | null
+  status: OrchestrationDispatchStatus
+  lastHeartbeatAt: string | null
+  /** Dispatched but the heartbeat is older than the hung threshold. */
+  stale: boolean
+}
+
+/** Latest worker signal for a task's active dispatch — the most recent
+ *  `heartbeat` phase or `worker_done` summary from the messages table. */
+export type OrchestrationTaskSignal = {
+  /** Heartbeat phase (e.g. "implementing"); null when the latest signal is a
+   *  worker_done. */
+  phase: string | null
+  /** worker_done one-line summary; null when the latest signal is a heartbeat. */
+  summary: string | null
+}
+
+/** One node of a coordinator run's live task DAG, scoped to the run (#12). */
+export type OrchestrationTaskNode = {
+  id: string
+  status: OrchestrationTaskStatus
+  /** Ids of tasks this one waits on (parsed from `tasks.deps`). */
+  deps: string[]
+  /** Human title — display_name ?? task_title ?? first spec line. */
+  title: string
+  targetKey: string | null
+  dispatch: OrchestrationTaskDispatch | null
+  signal: OrchestrationTaskSignal | null
+}
+
+/** A running coordinator's task DAG, keyed in the graph-sync result by the
+ *  coordinator's own paneKey (same keying as {@link OrchestrationActivity}).
+ *  Mode-agnostic: the LLM director and a future recipe director both produce
+ *  this shape from the same DB. */
+export type OrchestrationRunDag = {
+  /** coordinator_runs.id of the `running` run. */
+  runId: string
+  /** Recipe name for a recipe director; null for an LLM director (no recipe). */
+  recipe: string | null
+  tasks: OrchestrationTaskNode[]
+  /** Tasks dropped to bound the payload (0 when nothing was truncated). */
+  truncatedTaskCount: number
+}
+
 export type RuntimeSyncWindowGraphResult = RuntimeStatus & {
   /** Main owns terminal handles/dispatches, so renderer graph sync returns the
    *  parent metadata needed by title-derived agent rows without name guessing. */
   agentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
+  /** In-flight orchestration runs keyed by coordinator paneKey, so an
+   *  Orcastrator's sidebar dot can reflect background supervision. */
+  orchestrationActivityByPaneKey?: Record<string, OrchestrationActivity>
+  /** Per-coordinator live task DAG (tasks + dispatch detail + latest worker
+   *  signal), keyed by coordinator paneKey, so Mission Control can render the
+   *  run's DAG instead of only aggregate counts. */
+  orchestrationRunDagByPaneKey?: Record<string, OrchestrationRunDag>
 }
 
 export type RuntimeMobileSessionTerminalTab = {

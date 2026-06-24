@@ -4913,6 +4913,9 @@ const WorktreeList = React.memo(function WorktreeList({
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  // Why: an Orcastrator (director) runs in its own dedicated worktree, shown
+  // only in the ORCASTRATORS section — never as a project worktree here.
+  const orchestrators = useAppStore((s) => s.orchestrators)
   const detectedWorktreesByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const currentSidebarWorktreeId = activeWorktreeId
@@ -5305,7 +5308,10 @@ const WorktreeList = React.memo(function WorktreeList({
       // filters; closing the popover naturally restores the filtered view.
       ids.push(agentSendTargetWorktreeId)
     }
-    return ids.map((id) => worktreeMap.get(id)).filter((w): w is Worktree => w != null)
+    const orchestratorWorktreeIds = new Set((orchestrators ?? []).map((entry) => entry.worktreeId))
+    return ids
+      .map((id) => worktreeMap.get(id))
+      .filter((w): w is Worktree => w != null && !orchestratorWorktreeIds.has(w.id))
   }, [
     agentSendTargetWorktreeId,
     filterRepoIds,
@@ -5322,7 +5328,8 @@ const WorktreeList = React.memo(function WorktreeList({
     sortedIds,
     worktreeMap,
     worktreeLineageById,
-    worktreesByRepo
+    worktreesByRepo,
+    orchestrators
   ])
 
   const worktrees = visibleWorktrees

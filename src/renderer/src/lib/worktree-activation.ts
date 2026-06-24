@@ -271,6 +271,12 @@ export function activateAndRevealWorktree(
     sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
     notifyHostRuntime?: boolean
     revealInSidebar?: boolean
+    /** When true, reveal the worktree (sidebar tree + Mission Control DAG) and
+     *  seed its terminal surface WITHOUT switching the user's active tab/view to
+     *  it. Programmatic Orcastrator/coordinator creates set this so an
+     *  automated worktree never yanks the user away from their current work;
+     *  manual (+-button) creates leave it unset so they still jump to it. */
+    suppressActivation?: boolean
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
@@ -278,6 +284,7 @@ export function activateAndRevealWorktree(
   if (!wt) {
     return false
   }
+  const suppressActivation = opts?.suppressActivation === true
   const hasActivationWork = Boolean(
     opts?.startup || opts?.setup || opts?.defaultTabs || opts?.issueCommand
   )
@@ -289,48 +296,54 @@ export function activateAndRevealWorktree(
     state.activeWorktreeId === worktreeId &&
     state.activeView === 'terminal'
 
-  // 1. Set activeRepoId if crossing repos
-  if (wt.repoId !== state.activeRepoId) {
-    state.setActiveRepo(wt.repoId)
-  }
+  // Why: `suppressActivation` keeps the user where they are — a programmatic
+  // (director/coordinator) create reveals the new worktree but must NOT switch
+  // the active repo/view/worktree, restamp focus recency, or pull the paired
+  // host onto it. The reveal + terminal-surface seeding below still run.
+  if (!suppressActivation) {
+    // 1. Set activeRepoId if crossing repos
+    if (wt.repoId !== state.activeRepoId) {
+      state.setActiveRepo(wt.repoId)
+    }
 
-  // 2. Switch any non-terminal view back to terminal
-  if (state.activeView !== 'terminal') {
-    state.setActiveView('terminal')
-  }
+    // 2. Switch any non-terminal view back to terminal
+    if (state.activeView !== 'terminal') {
+      state.setActiveView('terminal')
+    }
 
-  // 3. Core activation: sets activeWorktreeId, restores per-worktree state,
-  // clears unread, bumps dead PTY generations, triggers GitHub refresh
-  state.setActiveWorktree(worktreeId)
-  const postActivationState = useAppStore.getState()
-  const ownerRuntimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(postActivationState, wt.id)
-  if (opts?.notifyHostRuntime !== false && isWebRuntimeSessionActive(ownerRuntimeEnvironmentId)) {
-    // Why: paired web clients own only local selection state. The desktop host
-    // must also activate the worktree so hidden renderer-owned terminal panes
-    // mount and publish session surfaces back to the web client.
-    void activateWebRuntimeSessionWorktree({
-      worktreeId,
-      environmentId: ownerRuntimeEnvironmentId
-    })
-  }
+    // 3. Core activation: sets activeWorktreeId, restores per-worktree state,
+    // clears unread, bumps dead PTY generations, triggers GitHub refresh
+    state.setActiveWorktree(worktreeId)
+    const postActivationState = useAppStore.getState()
+    const ownerRuntimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(postActivationState, wt.id)
+    if (opts?.notifyHostRuntime !== false && isWebRuntimeSessionActive(ownerRuntimeEnvironmentId)) {
+      // Why: paired web clients own only local selection state. The desktop host
+      // must also activate the worktree so hidden renderer-owned terminal panes
+      // mount and publish session surfaces back to the web client.
+      void activateWebRuntimeSessionWorktree({
+        worktreeId,
+        environmentId: ownerRuntimeEnvironmentId
+      })
+    }
 
-  // Why: record focus recency for Cmd+J's empty-query ordering BEFORE any
-  // later async step (initial terminal / reveal) could throw — the user
-  // already perceives the switch as successful the instant activeWorktreeId
-  // flips, so the recency stamp must land with the same guarantee. Separate
-  // from recordWorktreeVisit (nav-history) and from worktree.lastActivityAt
-  // (background signal) on purpose — see docs/cmd-j-empty-query-ordering.md.
-  if (!isPlainAlreadyActiveTerminal) {
-    state.markWorktreeVisited(worktreeId)
-  }
+    // Why: record focus recency for Cmd+J's empty-query ordering BEFORE any
+    // later async step (initial terminal / reveal) could throw — the user
+    // already perceives the switch as successful the instant activeWorktreeId
+    // flips, so the recency stamp must land with the same guarantee. Separate
+    // from recordWorktreeVisit (nav-history) and from worktree.lastActivityAt
+    // (background signal) on purpose — see docs/cmd-j-empty-query-ordering.md.
+    if (!isPlainAlreadyActiveTerminal) {
+      state.markWorktreeVisited(worktreeId)
+    }
 
-  // Why: activateAndRevealWorktree always ends in 'terminal' view (step 2),
-  // and Settings/Tasks transitions do not pass through this function, so no
-  // view-guard is needed here. The guard skips re-recording when the caller
-  // is goBackWorktree/goForwardWorktree, which mutate the history index
-  // directly instead of treating the target as a new visit.
-  if (!isPlainAlreadyActiveTerminal && !state.isNavigatingHistory) {
-    state.recordWorktreeVisit(worktreeId)
+    // Why: activateAndRevealWorktree always ends in 'terminal' view (step 2),
+    // and Settings/Tasks transitions do not pass through this function, so no
+    // view-guard is needed here. The guard skips re-recording when the caller
+    // is goBackWorktree/goForwardWorktree, which mutate the history index
+    // directly instead of treating the target as a new visit.
+    if (!isPlainAlreadyActiveTerminal && !state.isNavigatingHistory) {
+      state.recordWorktreeVisit(worktreeId)
+    }
   }
 
   // Why: sleeping an agent destroys the local PTY but preserves the provider
@@ -371,7 +384,9 @@ export function activateAndRevealWorktree(
     }
   }
 
-  if (opts?.notifyHostRuntime !== false) {
+  // Why: gated on activation too — waking the paired host's terminal pulls the
+  // host onto this worktree, which a suppressed (background) reveal must avoid.
+  if (!suppressActivation && opts?.notifyHostRuntime !== false) {
     ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId)
   }
 

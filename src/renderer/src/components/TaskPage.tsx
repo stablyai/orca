@@ -29,6 +29,7 @@ import {
   LoaderCircle,
   Lock,
   Minus,
+  Network,
   Plus,
   RefreshCw,
   Search,
@@ -269,6 +270,7 @@ import {
   clampLinearIssueListLimit
 } from '../../../shared/linear-issue-read-limits'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
+import { openOrchestratorLaunchForWorkItem } from '@/lib/send-work-item-to-orchestrator'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import {
@@ -3027,6 +3029,9 @@ export default function TaskPage(): React.JSX.Element {
   const repoMap = useRepoMap()
   const allWorktrees = useAllWorktrees()
   const openModal = useAppStore((s) => s.openModal)
+  // Why: "Send to Orcastrator" issue actions ride the same experimental gate as
+  // the rest of the director feature, so they stay hidden until it's enabled.
+  const showOrchestrators = useAppStore((s) => s.settings?.experimentalOrchestrators ?? false)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const fetchWorkItemsAcrossRepos = useAppStore((s) => s.fetchWorkItemsAcrossRepos)
   const fetchPRChecks = useAppStore((s) => s.fetchPRChecks)
@@ -9362,6 +9367,25 @@ export default function TaskPage(): React.JSX.Element {
                                       )}
                                     </DropdownMenuItem>
                                   ) : null}
+                                  {showOrchestrators ? (
+                                    <DropdownMenuItem
+                                      onSelect={() =>
+                                        openOrchestratorLaunchForWorkItem({
+                                          provider: 'github',
+                                          title: item.title,
+                                          url: item.url,
+                                          number: item.number,
+                                          repoId: item.repoId
+                                        })
+                                      }
+                                    >
+                                      <Network className="size-4" />
+                                      {translate(
+                                        'auto.components.TaskPage.send_to_orchestrator',
+                                        'Send to Orcastrator'
+                                      )}
+                                    </DropdownMenuItem>
+                                  ) : null}
                                   <DropdownMenuItem
                                     onSelect={() => window.api.shell.openUrl(item.url)}
                                   >
@@ -9425,6 +9449,25 @@ export default function TaskPage(): React.JSX.Element {
                                       {translate(
                                         'auto.components.TaskPage.b6329379ca',
                                         'Start new workspace'
+                                      )}
+                                    </DropdownMenuItem>
+                                  ) : null}
+                                  {showOrchestrators ? (
+                                    <DropdownMenuItem
+                                      onSelect={() =>
+                                        openOrchestratorLaunchForWorkItem({
+                                          provider: 'github',
+                                          title: item.title,
+                                          url: item.url,
+                                          number: item.number,
+                                          repoId: item.repoId
+                                        })
+                                      }
+                                    >
+                                      <Network className="size-4" />
+                                      {translate(
+                                        'auto.components.TaskPage.send_to_orchestrator',
+                                        'Send to Orcastrator'
                                       )}
                                     </DropdownMenuItem>
                                   ) : null}

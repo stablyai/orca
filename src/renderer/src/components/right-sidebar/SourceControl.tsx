@@ -43,6 +43,8 @@ import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
+import OrchestratorMissionControl from '@/components/right-sidebar/OrchestratorMissionControl'
+import { useIsOrchestratorActiveWorktree } from '@/lib/use-orchestrator-active-worktree'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import {
   DropdownMenu,
@@ -741,6 +743,11 @@ function SourceControlInner(): React.JSX.Element {
     activeWorktreeId ? s.activeGroupIdByWorktree[activeWorktreeId] : undefined
   )
   const worktreeMap = useWorktreeMap()
+  // Why: an Orcastrator's worktree is coordination scratch space — the director
+  // directs, it never commits to its own branch (workers open their own PRs), so
+  // the publish/PR view doesn't apply; render Mission Control instead. Shared hook
+  // so the Checks panel gates on the same rule.
+  const isOrchestratorWorktree = useIsOrchestratorActiveWorktree()
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const entries = useAppStore((s) =>
@@ -5160,6 +5167,12 @@ function SourceControlInner(): React.JSX.Element {
         )}
       </div>
     )
+  }
+  // Why: a director has no branch to publish — show its Mission Control console
+  // (the workers it spawned + their state) instead of the misleading "Branch not
+  // published / create a pull request" empty state.
+  if (isOrchestratorWorktree) {
+    return <OrchestratorMissionControl key={activeWorktree.id} worktreeId={activeWorktree.id} />
   }
 
   const hasFilteredUncommittedEntries =

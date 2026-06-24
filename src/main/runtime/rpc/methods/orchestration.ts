@@ -2,12 +2,36 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, OptionalBoolean, requiredString } from '../schemas'
-import type { MessageType, MessagePriority, TaskStatus } from '../../orchestration/db'
+import type {
+  MessageType,
+  MessagePriority,
+  TaskStatus,
+  OrchestrationDb
+} from '../../orchestration/db'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
 import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
+
+// Why (#12): manual dispatch must address a per-run coordinator inbox, never the
+// dead literal 'coordinator' (which no per-run coordinator reads — black-holed
+// worker_done/heartbeat). Prefer an explicit --from; else, when exactly one run
+// is active, use its handle. Returns undefined when ambiguous (zero or multiple
+// active runs and no --from) — the live --inject path errors, previews fall back
+// to a clearly non-live placeholder.
+function resolveDispatchCoordinatorHandle(db: OrchestrationDb, from?: string): string | undefined {
+  if (from) {
+    return from
+  }
+  const running = db.listCoordinatorRuns({ status: 'running' })
+  return running.length === 1 ? running[0].coordinator_handle : undefined
+}
+
+// Why: previews (dry-run, dispatchShow) are not injected into a worker, so a
+// placeholder handle is harmless when none can be resolved — it only affects
+// displayed text, not message routing.
+const PREVIEW_COORDINATOR_PLACEHOLDER = 'coordinator'
 
 const MESSAGE_TYPES: MessageType[] = [
   'status',
@@ -353,7 +377,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.taskCreate',
     params: TaskCreateParams,
-    handler: (params, { runtime }) => {
+    handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       let deps: string[] | undefined
       if (params.deps) {
@@ -367,13 +391,26 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           throw new Error('Invalid --deps: must be a JSON array of task IDs')
         }
       }
+      // Why (#12): stamp the task with its OWN target (the creating terminal's
+      // worktree) so adoption only binds it to a same-target run — never poached
+      // by a concurrent run on another target.
+      const targetKey = await runtime.resolveOrchestrationTargetKeyForTerminal(
+        params.callerTerminalHandle
+      )
+      // Why (#12): a task created while a run is active belongs to that run so
+      // the coordinator's run-scoped listTasks sees it — but only the run on the
+      // SAME target (getActiveCoordinatorRunForTarget, not the global latest).
+      // No same-target run yet → stays unowned (NULL), adopted at run-start.
+      const activeRunId = db.getActiveCoordinatorRunForTarget(targetKey)?.id
       const task = db.createTask({
         spec: params.spec,
         taskTitle: params.taskTitle,
         displayName: params.displayName,
         deps,
         parentId: params.parent,
-        createdByTerminalHandle: params.callerTerminalHandle
+        createdByTerminalHandle: params.callerTerminalHandle,
+        coordinatorRunId: activeRunId,
+        targetKey
       })
       return { task }
     }
@@ -388,12 +425,24 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       // assignee_handle + dispatch_id joined in for tasks that currently have an
       // active dispatch. Non-dispatched tasks get NULL for those fields, so
       // consumers reading the legacy shape are unaffected.
+      // Why (#12): intentionally global (not run-scoped) — this is the
+      // supervisor/debug view. The coordinator's own dispatch decisions use the
+      // run-scoped listTasks({ coordinatorRunId }) path, not this RPC.
       const joined = db.listTasksWithDispatch({
         status: params.status as TaskStatus,
         ready: params.ready
       })
       const tasks = joined.map((row) => {
-        const { assignee_handle, dispatch_id, ...base } = row
+        // Why: the dispatch_* fields exist for the Control Panel sync (#6);
+        // strip them here so this debug RPC's shape is unchanged.
+        const {
+          assignee_handle,
+          dispatch_id,
+          dispatch_status: _dispatchStatus,
+          dispatch_last_heartbeat_at: _dispatchLastHeartbeatAt,
+          dispatch_dispatched_at: _dispatchDispatchedAt,
+          ...base
+        } = row
         if (base.status === 'dispatched') {
           return { ...base, assignee_handle, dispatch_id }
         }
@@ -438,7 +487,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           taskId: task.id,
           dispatchId: 'ctx_dryrun',
           taskSpec: task.spec,
-          coordinatorHandle: params.from ?? 'coordinator',
+          coordinatorHandle:
+            resolveDispatchCoordinatorHandle(db, params.from) ?? PREVIEW_COORDINATOR_PLACEHOLDER,
           devMode: params.devMode
         })
         return { dispatch: null, injected: false, dryRun: true, preamble }
@@ -453,6 +503,13 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         throw new Error(`Task ${params.task} is ${task.status}; only ready tasks can be dispatched`)
       }
 
+      // Why (#12): an injected preamble carries the coordinator handle the worker
+      // replies to. Refuse a live inject we can't address rather than black-holing
+      // the worker's worker_done/heartbeat to the dead 'coordinator' inbox. Runs
+      // after the agent-detection check below (target validity first), before any
+      // state mutation.
+      const injectCoordinatorHandle = resolveDispatchCoordinatorHandle(db, params.from)
+
       // Why: dispatching with --inject to a bare shell (zsh/bash) dumps the
       // preamble as shell commands, producing gibberish. Check both OSC title
       // status and foreground process — Claude Code doesn't emit recognized OSC
@@ -464,6 +521,12 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             `Cannot dispatch --inject to terminal ${to}: no recognized agent detected. ` +
               'Start an agent CLI (e.g. claude, codex, gemini, droid) in the terminal first, ' +
               'or dispatch without --inject and send the prompt manually.'
+          )
+        }
+        if (!injectCoordinatorHandle) {
+          throw new Error(
+            'Cannot resolve a coordinator handle for --inject: pass --from <coordinator handle> ' +
+              '(no single active run to infer it from).'
           )
         }
       }
@@ -478,7 +541,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         taskId: task.id,
         dispatchId: ctx.id,
         taskSpec: task.spec,
-        coordinatorHandle: params.from ?? 'coordinator',
+        // Defined when injecting (checked above); a non-inject dispatch only
+        // returns the preamble, so the placeholder never reaches a worker.
+        coordinatorHandle: injectCoordinatorHandle ?? PREVIEW_COORDINATOR_PLACEHOLDER,
         devMode: params.devMode
       })
 
@@ -529,7 +594,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           // to a placeholder when no dispatch has occurred yet.
           dispatchId: ctx?.id ?? 'ctx_preview',
           taskSpec: task.spec,
-          coordinatorHandle: params.from ?? 'coordinator',
+          coordinatorHandle:
+            resolveDispatchCoordinatorHandle(db, params.from) ?? PREVIEW_COORDINATOR_PLACEHOLDER,
           devMode: params.devMode
         })
         return { dispatch: ctx ?? null, preamble }

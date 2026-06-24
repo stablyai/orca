@@ -40,6 +40,11 @@ import { homedir } from 'os'
 import { isAbsolute, join, resolve } from 'path'
 import { mkdir, readFile, readdir, rm, stat } from 'fs/promises'
 import { OrchestrationDb } from './orchestration/db'
+import {
+  buildRunDagSnapshot,
+  indexLatestWorkerSignals,
+  RUN_DAG_SIGNAL_SCAN_LIMIT
+} from './orchestration/run-dag-snapshot'
 import { formatMessagesForInjection } from './orchestration/formatter'
 import type {
   Automation,
@@ -272,6 +277,8 @@ import type {
   RuntimeTerminalDriverState,
   RuntimeSyncWindowGraph,
   RuntimeWorktreeListResult,
+  OrchestrationActivity,
+  OrchestrationRunDag,
   BrowserTabInfo,
   BrowserScreencastResult
 } from '../../shared/runtime-types'
@@ -756,6 +763,7 @@ type RuntimeStore = {
     defaultLinearTeamSelection?: GlobalSettings['defaultLinearTeamSelection']
     githubProjects?: GlobalSettings['githubProjects']
     experimentalNewWorktreeCardStyle?: GlobalSettings['experimentalNewWorktreeCardStyle']
+    experimentalOrchestrators?: GlobalSettings['experimentalOrchestrators']
     compactWorktreeCards?: GlobalSettings['compactWorktreeCards']
     gitlabProjects?: GlobalSettings['gitlabProjects']
     experimentalWorktreeSymlinks?: boolean
@@ -1044,6 +1052,10 @@ function getAgentLaunchPlatformForRepo(
 
 const FOREGROUND_AGENT_WRAPPER_RETRY_INTERVAL_MS = 150
 const FOREGROUND_AGENT_WRAPPER_RETRY_TIMEOUT_MS = 6_500
+// Why: matches the coordinator's HUNG_THRESHOLD_MS (orchestration/coordinator.ts)
+// so the sidebar's "stalled supervision" read agrees with when the coordinator
+// itself treats a worker's heartbeat as hung.
+const ORCHESTRATION_HUNG_THRESHOLD_MS = 10 * 60 * 1000
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const CODEX_COMPOSER_PROMPT = '›'
 const BRACKETED_PASTE_BEGIN = '\x1b[200~'
@@ -1815,6 +1827,11 @@ export class OrcaRuntimeService {
   private resolvedWorktreeCache: ResolvedWorktreeCache | null = null
   private resolvedWorktreeInFlight: ResolvedWorktreeInFlight | null = null
   private resolvedWorktreeGeneration = 0
+  // Why (#6 O1, perf): cache each run's last-built DAG snapshot keyed by run id,
+  // alongside the cheap change token it was built from, so the heavy
+  // listTasksWithDispatch/getAllMessagesForHandle work is skipped on graph-sync
+  // ticks where the run is unchanged. Pruned to the running set each build.
+  private orchestrationRunDagCache = new Map<string, { token: string; dag: OrchestrationRunDag }>()
   private cloneInFlightByPath = new Map<string, Promise<void>>()
   private agentDetector: AgentDetector | null = null
   private _orchestrationDb: OrchestrationDb | null = null
@@ -2449,6 +2466,43 @@ export class OrcaRuntimeService {
     this._orchestrationDb = db
   }
 
+  // Why (#12): the per-target run-start guard and per-target task ownership are
+  // only correct if a given target resolves to ONE stable key everywhere. A
+  // worktree id is that stable identity. We deliberately do NOT fall back to the
+  // raw selector on failure: the same worktree could resolve in one runtime and
+  // throw in another (SSH/headless/transient), yielding two different keys and
+  // letting two coordinators run on the same target — the original #12 clash.
+  // So this FAILS CLOSED — it throws when a given selector can't be resolved to
+  // a stable id, and the caller refuses the run rather than guess. Returns null
+  // only when no selector was supplied (those runs share the null slot).
+  async resolveOrchestrationTargetKey(selector?: string): Promise<string | null> {
+    if (!selector) {
+      return null
+    }
+    const worktree = await this.resolveWorktreeSelector(selector)
+    return `worktree:${worktree.id}`
+  }
+
+  // Why (#12): tasks resolve their target from the creating terminal's worktree
+  // (taskCreate carries ORCA_TERMINAL_HANDLE, not a --worktree selector). The
+  // terminal's worktreeId IS the stable id used by resolveOrchestrationTargetKey,
+  // so the key matches a run started with --worktree on the same worktree.
+  // Unlike run-start this does NOT fail closed: an unresolvable/absent caller
+  // yields null (the task shares the null slot and is adopted only by a
+  // null-target run), so manual task creation never hard-errors on a stale
+  // handle. The cost is a possibly-stranded task when the handle can't resolve.
+  async resolveOrchestrationTargetKeyForTerminal(handle?: string): Promise<string | null> {
+    if (!handle) {
+      return null
+    }
+    try {
+      const terminal = await this.showTerminal(handle)
+      return `worktree:${terminal.worktreeId}`
+    } catch {
+      return null
+    }
+  }
+
   setAutomationService(service: AutomationService): void {
     this.automationService = service
   }
@@ -2694,9 +2748,18 @@ export class OrcaRuntimeService {
     }
 
     const agentOrchestrationByPaneKey = this.buildAgentOrchestrationByPaneKey()
+    // Why (nit): resolve the running runs + hung threshold once and share them
+    // across both orchestration builders instead of each re-querying.
+    const runningOrchestration = this.collectRunningOrchestration()
+    const orchestrationActivityByPaneKey =
+      this.buildOrchestrationActivityByPaneKey(runningOrchestration)
+    const orchestrationRunDagByPaneKey =
+      this.buildOrchestrationRunDagByPaneKey(runningOrchestration)
     return {
       ...this.getStatus(),
-      ...(agentOrchestrationByPaneKey ? { agentOrchestrationByPaneKey } : {})
+      ...(agentOrchestrationByPaneKey ? { agentOrchestrationByPaneKey } : {}),
+      ...(orchestrationActivityByPaneKey ? { orchestrationActivityByPaneKey } : {}),
+      ...(orchestrationRunDagByPaneKey ? { orchestrationRunDagByPaneKey } : {})
     }
   }
 
@@ -7519,7 +7582,15 @@ export class OrcaRuntimeService {
     // Why: create an escalation message so the coordinator is notified about
     // the unexpected exit on its next check cycle, even if the circuit breaker
     // hasn't tripped yet.
-    const run = this._orchestrationDb.getActiveCoordinatorRun()
+    // Why (#12): route to the dispatch's OWN run, not getActiveCoordinatorRun()
+    // (latest running). With concurrent runs, the latest run's handle may belong
+    // to a different coordinator that never reads this inbox — black-holing the
+    // escalation. Fall back to the active run only for legacy dispatches with no
+    // recorded run id.
+    const run = dispatch.coordinator_run_id
+      ? (this._orchestrationDb.getCoordinatorRun(dispatch.coordinator_run_id) ??
+        this._orchestrationDb.getActiveCoordinatorRun())
+      : this._orchestrationDb.getActiveCoordinatorRun()
     if (run) {
       this._orchestrationDb.insertMessage({
         from: handle,
@@ -12542,6 +12613,11 @@ export class OrcaRuntimeService {
     let didSpawnSetup = false
     let startupTerminalHandle: string | null = null
     let startupTerminalTabId: string | null = null
+    // Why (F2 #13): hoisted so the plain initial terminal's handle (opened in the
+    // no-startup branch below) can be surfaced on the result for the orchestration
+    // createWorktree adapter — letting it target the known interactive shell
+    // rather than positionally re-discovering (and risking the "Setup" terminal).
+    let initialTerminalHandle: string | null = null
     if (effectiveStartup && this.ptyController?.spawn) {
       try {
         // Why: automation startup must not depend on a renderer TerminalPane
@@ -12632,7 +12708,6 @@ export class OrcaRuntimeService {
       }
     } else if (this.ptyController?.spawn) {
       try {
-        let initialTerminalHandle: string | null = null
         if (!didSpawnStartup) {
           const terminal = await this.createTerminal(`id:${worktree.id}`)
           initialTerminalHandle = terminal.handle
@@ -12698,8 +12773,77 @@ export class OrcaRuntimeService {
               surface: 'background' as const
             }
           }
-        : {})
+        : {}),
+      ...(initialTerminalHandle ? { initialTerminal: { handle: initialTerminalHandle } } : {})
     }
+  }
+
+  // Why (F2 #13): the coordinator's `createWorktree` capability (CoordinatorRuntime).
+  // A thin adapter over createManagedWorktree that stamps the lineage parent =
+  // director worktree via orchestrationContext, so coordinator-driven workers
+  // become visible in Mission Control (selectSpawnedWorktreeIds keys on
+  // parentWorktreeId === directorWorktreeId). No git logic is forked — base-ref
+  // handling, SSH/relay parity, and lineage recording are all inherited. The
+  // run's F1 `target_key` stays the director worktree; these children are new
+  // worktrees with their own ids and do not change it.
+  async createWorktree(opts: {
+    parentWorktree: string
+    name: string
+    baseBranch?: string
+    orchestrationRunId?: string
+    taskId?: string
+    coordinatorHandle?: string
+    startup?: { agent: TuiAgent; prompt?: string }
+  }): Promise<{ worktreeId: string; branch: string; terminalHandle?: string }> {
+    // Resolve the director selector to its stable id + repo so the child is
+    // created in the same repo and the lineage edge points at a concrete id.
+    const parent = await this.resolveWorktreeSelector(opts.parentWorktree)
+    const result = await this.createManagedWorktree({
+      repoSelector: `id:${parent.repoId}`,
+      name: opts.name,
+      ...(opts.baseBranch ? { baseBranch: opts.baseBranch } : {}),
+      lineage: {
+        orchestrationContext: {
+          parentWorktreeId: parent.id,
+          ...(opts.orchestrationRunId ? { orchestrationRunId: opts.orchestrationRunId } : {}),
+          ...(opts.taskId ? { taskId: opts.taskId } : {}),
+          ...(opts.coordinatorHandle ? { coordinatorHandle: opts.coordinatorHandle } : {})
+        }
+      },
+      // Why (design Q3): launch the worker agent IN the worktree; the coordinator
+      // sends the dispatch preamble afterwards via sendTerminal (dispatchTask
+      // mechanics unchanged). When no agent is given, createManagedWorktree still
+      // opens a plain initial terminal in the worktree (see the no-startup branch
+      // in createManagedWorktree); we reuse THAT handle below rather than spawn a
+      // second terminal.
+      ...(opts.startup
+        ? {
+            startupAgent: opts.startup.agent,
+            ...(opts.startup.prompt ? { startupPrompt: opts.startup.prompt } : {})
+          }
+        : {})
+    })
+    // Why (round 3): use the handles createManagedWorktree returns DIRECTLY — the
+    // startup-agent terminal when one was launched, else the plain initial
+    // (interactive) terminal it opened. This avoids the prior positional
+    // listTerminals[0] pick, which could grab the separate "Setup" runner terminal
+    // and dispatch the preamble into the setup process instead of the shell. A
+    // missing handle (no PTY controller / spawn failed) stays undefined so the
+    // coordinator tears the worktree down instead of dispatching into nothing.
+    const terminalHandle = result.startupTerminal?.handle ?? result.initialTerminal?.handle
+    return {
+      worktreeId: result.worktree.id,
+      branch: result.worktree.git?.branch ?? opts.name,
+      ...(terminalHandle ? { terminalHandle } : {})
+    }
+  }
+
+  // Why (F2 #13, round 2): the coordinator's `removeWorktree` capability — tears
+  // down a child worktree it created when a post-create dispatch step fails, so
+  // repeated failures don't accumulate orphan worktrees. force=true because the
+  // target is a freshly created, unpublished worktree with no work to protect.
+  async removeWorktree(worktreeId: string): Promise<void> {
+    await this.removeManagedWorktree(`id:${worktreeId}`, true)
   }
 
   private async createManagedRemoteWorktree(
@@ -17488,6 +17632,150 @@ export class OrcaRuntimeService {
       }
     }
     return Object.keys(contexts).length > 0 ? contexts : undefined
+  }
+
+  // Why: a director's per-pane agent hook fires `done` when its turn ends, even
+  // while it still supervises background workers/watchers. The orchestration DB
+  // knows the run is alive, so surface it keyed by the coordinator's own pane —
+  // the renderer maps that pane to its Orcastrator and shows a "supervising"
+  // dot instead of a misleading completion check. Counts are scoped per run
+  // (#12) so each Orcastrator's dot reflects only its own tasks/dispatches.
+  // Why (nit): the running runs + hung threshold are needed by both the activity
+  // and the DAG builders; compute them once per sync tick. `listCoordinatorRuns`
+  // is a single indexed query; the threshold mirrors the coordinator's own
+  // hung-worker window (10 min) so every "stalled" read agrees.
+  private collectRunningOrchestration():
+    | {
+        db: OrchestrationDb
+        runs: ReturnType<OrchestrationDb['listCoordinatorRuns']>
+        staleThresholdIso: string
+      }
+    | undefined {
+    const db = this.getOrchestrationDbIfAvailable()
+    if (!db?.listCoordinatorRuns) {
+      return undefined
+    }
+    const runs = db.listCoordinatorRuns({ status: 'running' })
+    if (runs.length === 0) {
+      return undefined
+    }
+    return {
+      db,
+      runs,
+      staleThresholdIso: new Date(Date.now() - ORCHESTRATION_HUNG_THRESHOLD_MS).toISOString()
+    }
+  }
+
+  private buildOrchestrationActivityByPaneKey(
+    running: ReturnType<OrcaRuntimeService['collectRunningOrchestration']>
+  ): Record<string, OrchestrationActivity> | undefined {
+    if (!running) {
+      return undefined
+    }
+    const { db, runs: runningRuns, staleThresholdIso } = running
+
+    const activityByPaneKey: Record<string, OrchestrationActivity> = {}
+    for (const run of runningRuns) {
+      const paneKey = this.getPaneKeyForTerminalHandle(run.coordinator_handle)
+      // Why: skip runs whose coordinator pane is not resolvable in this window —
+      // there is no Orcastrator row here to attribute the activity to.
+      if (!paneKey) {
+        continue
+      }
+      activityByPaneKey[paneKey] = {
+        runId: run.id,
+        pendingTasks: db.countOutstandingTasks?.(run.id) ?? 0,
+        activeDispatches: db.countActiveDispatches?.(run.id) ?? 0,
+        staleDispatches: db.getStaleDispatches?.(staleThresholdIso, run.id)?.length ?? 0
+      }
+    }
+    return Object.keys(activityByPaneKey).length > 0 ? activityByPaneKey : undefined
+  }
+
+  // Why (#6 O1): sync each running coordinator's live task DAG (tasks + active
+  // dispatch detail + latest worker signal) keyed by coordinator paneKey, so
+  // Mission Control can render the DAG instead of only the aggregate counts.
+  // Run-scoped per #12 so two concurrent runs sharing the DB never bleed.
+  private buildOrchestrationRunDagByPaneKey(
+    running: ReturnType<OrcaRuntimeService['collectRunningOrchestration']>
+  ): Record<string, OrchestrationRunDag> | undefined {
+    // Why (#2): the DAG sync is only consumed by the Mission Control panel, which
+    // is behind experimentalOrchestrators. Gate the builder on the same flag so
+    // un-opted-in users with a running coordinator don't pay the per-tick cost
+    // (#1) for a panel they can't see.
+    if (this.store?.getSettings().experimentalOrchestrators !== true) {
+      this.orchestrationRunDagCache.clear()
+      return undefined
+    }
+    if (!running) {
+      this.orchestrationRunDagCache.clear()
+      return undefined
+    }
+    const { db, runs: runningRuns, staleThresholdIso } = running
+    // Why: same defensive guards as before — these methods exist on the real DB
+    // but may be absent on partial fakes in tests.
+    if (!db.listTasksWithDispatch || !db.getAllMessagesForHandle || !db.getRunDagChangeToken) {
+      return undefined
+    }
+
+    const dagByPaneKey: Record<string, OrchestrationRunDag> = {}
+    for (const run of runningRuns) {
+      // Why (nit): one malformed run must not throw out of syncWindowGraph and
+      // forfeit the whole tick (leaves + activity + the other runs' DAGs).
+      try {
+        const paneKey = this.getPaneKeyForTerminalHandle(run.coordinator_handle)
+        // Why: skip runs whose coordinator pane is not in this window — no row.
+        // (Its cache entry is preserved below: it is still a running run.)
+        if (!paneKey) {
+          continue
+        }
+        // Why (#1, perf): the cheap change token is computed every tick; the heavy
+        // listTasksWithDispatch/getAllMessagesForHandle only run when it changed.
+        const token = db.getRunDagChangeToken(run.id, run.coordinator_handle)
+        const cached = this.orchestrationRunDagCache.get(run.id)
+        if (cached && cached.token === token) {
+          dagByPaneKey[paneKey] = cached.dag
+          continue
+        }
+        const tasks = db.listTasksWithDispatch({ coordinatorRunId: run.id })
+        // Why: worker_done/heartbeat are addressed to the run's coordinator
+        // handle, scoping signals to the run without a run column on messages.
+        const signalsByTaskId = indexLatestWorkerSignals(
+          db.getAllMessagesForHandle(run.coordinator_handle, RUN_DAG_SIGNAL_SCAN_LIMIT, [
+            'heartbeat',
+            'worker_done'
+          ])
+        )
+        const dag = buildRunDagSnapshot({
+          runId: run.id,
+          // Recipe directors (#9) will populate this; LLM directors have none.
+          recipe: null,
+          tasks,
+          staleThresholdIso,
+          signalsByTaskId,
+          resolveAgent: (handle) => this.getLivePtyForHandle(handle)?.pty.launchAgent ?? null
+        })
+        if (dag.truncatedTaskCount > 0) {
+          console.warn(
+            `[orchestration] run ${run.id} DAG truncated: ${dag.truncatedTaskCount} task(s) dropped from sync payload`
+          )
+        }
+        this.orchestrationRunDagCache.set(run.id, { token, dag })
+        dagByPaneKey[paneKey] = dag
+      } catch (error) {
+        console.warn(`[orchestration] failed to build DAG for run ${run.id}:`, error)
+      }
+    }
+    // Why: drop cache entries for runs that are no longer running so the cache
+    // can't grow without bound. Keyed on the running set (not this window's
+    // panes), so a run live in another window keeps its cached snapshot.
+    const runningRunIds = new Set(runningRuns.map((run) => run.id))
+    for (const cachedRunId of this.orchestrationRunDagCache.keys()) {
+      if (!runningRunIds.has(cachedRunId)) {
+        this.orchestrationRunDagCache.delete(cachedRunId)
+      }
+    }
+    return Object.keys(dagByPaneKey).length > 0 ? dagByPaneKey : undefined
   }
 
   private getAgentStatusOrchestrationContextForHandle(

@@ -31,7 +31,8 @@ export function buildWorktree(
   path: string,
   branch: string,
   head = 'abc',
-  repoId = 'repo'
+  repoId = 'repo',
+  displayName = ''
 ): WorktreeFixture {
   return {
     id: `${repoId}::${path}`,
@@ -43,7 +44,7 @@ export function buildWorktree(
     lineage: null,
     linkedIssue: null,
     git: { path, head, branch, isBare: false, isMainWorktree: false },
-    displayName: '',
+    displayName,
     comment: ''
   }
 }

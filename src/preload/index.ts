@@ -67,6 +67,14 @@ import type {
   RuntimeTerminalDriverState
 } from '../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
+import {
+  ORCHESTRATION_RUN_RPC_METHOD,
+  ORCHESTRATION_TASK_CREATE_RPC_METHOD,
+  type OrchestrationRunParams,
+  type OrchestrationRunResult,
+  type OrchestrationTaskCreateParams,
+  type OrchestrationTaskCreateResult
+} from '../shared/orchestration-binding'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
 import type { RemoteWorkspaceChangedEvent } from '../shared/remote-workspace-types'
 import type {
@@ -406,6 +414,21 @@ document.addEventListener(
   },
   true
 )
+
+// Why (#15): orchestration methods are registered as runtime RPC methods (not
+// dedicated IPC channels), so the binding forwards through the existing
+// `runtime:call` envelope and unwraps it — the same path local/remote runtimes
+// already use, keeping the renderer binding SSH-safe without a new main handler.
+async function callOrchestrationRpc<TResult>(method: string, params: unknown): Promise<TResult> {
+  const response = (await ipcRenderer.invoke('runtime:call', {
+    method,
+    params
+  })) as RuntimeRpcResponse<TResult>
+  if (!response.ok) {
+    throw new Error(response.error.message)
+  }
+  return response.result
+}
 
 // Custom APIs for renderer
 const api = {
@@ -1685,6 +1708,16 @@ const api = {
       ipcRenderer.invoke('cli:installWsl', args),
     removeWsl: (args?: { distro?: string | null }): Promise<CliInstallStatus> =>
       ipcRenderer.invoke('cli:removeWsl', args)
+  },
+
+  orchestration: {
+    run: (params: OrchestrationRunParams): Promise<OrchestrationRunResult> =>
+      callOrchestrationRpc<OrchestrationRunResult>(ORCHESTRATION_RUN_RPC_METHOD, params),
+    taskCreate: (params: OrchestrationTaskCreateParams): Promise<OrchestrationTaskCreateResult> =>
+      callOrchestrationRpc<OrchestrationTaskCreateResult>(
+        ORCHESTRATION_TASK_CREATE_RPC_METHOD,
+        params
+      )
   },
 
   agentHooks: {

@@ -100,13 +100,21 @@ Dispatch rules:
 orca orchestration gate-create --task <task_id> --question <text> [--options <json_array>] [--json]
 orca orchestration gate-resolve --id <gate_id> --resolution <text> [--json]
 orca orchestration gate-list [--task <task_id>] [--status <status>] [--json]
-orca orchestration run --spec <text> [--from <handle>] [--poll-interval-ms <n>] [--max-concurrent <n>] [--worktree <selector>] [--json]
+orca orchestration run --spec <text> [--from <handle>] [--poll-interval-ms <n>] [--max-concurrent <n>] [--worktree <selector>] [--worktree-backed --worker-agent <id>] [--json]
 orca orchestration run-stop [--json]
 ```
 
 `run` returns immediately with a run ID. Query progress with `task-list`. Use `ask` for worker-to-coordinator questions; it creates a `decision_gate` message that the coordinator answers with `reply`. Use `gate-create` only for coordinator-managed task DAG decisions, not for answering a worker's `ask`.
 
 Recovery only: `orca orchestration reset --tasks|--messages|--all --json` clears runtime-global orchestration state. Do not run it during active coordination unless explicitly abandoning that state.
+
+### Worktree-backed runs and tracks
+
+`run --worktree-backed --worker-agent <id>` makes the coordinator launch each worker as an agent in its own lineage-visible child worktree (off by default; legacy bare-terminal dispatch is unchanged when omitted). A **track** is the unit of `worktree = branch = PR`:
+
+- A task may declare `track: <key>` on its own line in the spec. Same-track tasks share one worktree (the `implement → review` handoff — review continues implement's branch, one PR); distinct tracks run concurrently up to `--max-concurrent`. When unset, the track key defaults to the task id (one worktree per task).
+- The `track:` line is stripped from the worker's `--- TASK ---` block. It is ignored inside fenced code blocks, but keep it on its own top-level line and out of prose to avoid surprises.
+- **Order same-track work with `--deps`.** Per-track serialization gives mutual exclusion, NOT ordering. A `review` task that must run after `implement` FINISHES must declare `--deps '["<implement_task_id>"]'` so it stays `pending` until implement completes. Without the dep, two same-second same-track tasks have only a stable-but-arbitrary dispatch order and review could run against an empty branch.
 
 ## Full Handoffs
 

@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ChecksPanelReviewHeader } from './ChecksPanel'
+import { ChecksPanelReviewHeader } from './ChecksPanelReviewHeader'
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -29,10 +29,12 @@ afterEach(() => {
 
 function renderHeader({
   canUnlinkPullRequest = true,
+  canManagePullRequestLink = true,
   provider = 'github',
   showSystemBrowserHint = true
 }: {
   canUnlinkPullRequest?: boolean
+  canManagePullRequestLink?: boolean
   provider?: 'github' | 'gitlab'
   showSystemBrowserHint?: boolean
 } = {}): string {
@@ -53,6 +55,7 @@ function renderHeader({
       }}
       isRefreshing={false}
       canUnlinkPullRequest={canUnlinkPullRequest}
+      canManagePullRequestLink={canManagePullRequestLink}
       showSystemBrowserHint={showSystemBrowserHint}
       onRefresh={vi.fn()}
       onOpenReview={vi.fn()}
@@ -101,6 +104,15 @@ describe('ChecksPanelReviewHeader', () => {
 
     expect(markup).toContain('data-disabled="true"')
     expect(markup).toContain('unlink PR')
+  })
+
+  it('hides link management when there is no live worktree to edit (shipped card)', () => {
+    const markup = renderHeader({ canManagePullRequestLink: false })
+
+    expect(markup).toContain('#2964')
+    expect(markup).not.toContain('More PR actions')
+    expect(markup).not.toContain('unlink PR')
+    expect(markup).not.toContain('Link another PR')
   })
 
   it('shows GitLab MR identity without GitHub-only link management actions', () => {

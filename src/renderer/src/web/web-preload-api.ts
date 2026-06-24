@@ -97,6 +97,12 @@ import {
   type FeatureInteractionState
 } from '../../../shared/feature-interactions'
 import { normalizeContextualTourIds, type ContextualTourId } from '../../../shared/contextual-tours'
+import {
+  ORCHESTRATION_RUN_RPC_METHOD,
+  ORCHESTRATION_TASK_CREATE_RPC_METHOD,
+  type OrchestrationRunResult,
+  type OrchestrationTaskCreateResult
+} from '../../../shared/orchestration-binding'
 import { translate } from '@/i18n/i18n'
 import { getDefaultCreateProjectParent } from '@/components/sidebar/create-project-defaults'
 
@@ -629,6 +635,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     codexAccounts: createAccountsApi(),
     claudeAccounts: createAccountsApi(),
     cli: createCliApi(),
+    orchestration: createOrchestrationApi(),
     agentHooks: createAgentHooksApi(),
     developerPermissions: createDeveloperPermissionsApi(),
     computerUsePermissions: createComputerUsePermissionsApi(),
@@ -2210,6 +2217,18 @@ function createCliApi(): NonNullable<Partial<PreloadApi>['cli']> {
     installWsl: (_args?: { distro?: string | null }) => Promise.resolve(status),
     removeWsl: (_args?: { distro?: string | null }) => Promise.resolve(status)
   } as NonNullable<Partial<PreloadApi>['cli']>
+}
+
+// Why (#15): orchestration RPC methods run on the paired runtime, so the web
+// binding forwards through callRuntimeResult — the same unwrap path every other
+// runtime-backed namespace uses — keeping it correct for remote/SSH hosts.
+function createOrchestrationApi(): NonNullable<Partial<PreloadApi>['orchestration']> {
+  return {
+    run: (params) =>
+      callRuntimeResult<OrchestrationRunResult>(ORCHESTRATION_RUN_RPC_METHOD, params),
+    taskCreate: (params) =>
+      callRuntimeResult<OrchestrationTaskCreateResult>(ORCHESTRATION_TASK_CREATE_RPC_METHOD, params)
+  }
 }
 
 function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {

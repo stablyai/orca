@@ -514,6 +514,15 @@
         "distroRequired": "安装此技能前，请为此项目选择一个 WSL 发行版。",
         "distroMissing": "所选 WSL 发行版不可用。请选择可用发行版，或将此项目切换到 Windows。",
         "wslDefault": "WSL 默认"
+      },
+      "orchestrator": {
+        "launch": {
+          "no_checkout": "No checkout found for this project yet — open it once, then launch an Orcastrator.",
+          "no_command": "Could not build the Orcastrator launch command for this agent.",
+          "no_workspace": "Could not open the Orcastrator workspace.",
+          "no_repo": "This project has no repo to launch an Orcastrator in.",
+          "create_failed": "Failed to create the Orcastrator."
+        }
       }
     },
     "hooks": {
@@ -944,7 +953,8 @@
         "0d0ace8861": "在 GitHub 上加星标",
         "ec43b38ba7": "已在 GitHub 上加星标",
         "157bb5ecbb": "打开 GitHub",
-        "preflightDismiss": "关闭"
+        "preflightDismiss": "关闭",
+        "orchestrator_cta": "Create Orcastrator"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -1104,7 +1114,8 @@
         "notePasteTooLarge": "笔记字段的粘贴内容过大。",
         "reuseExistingBranch": "复用分支",
         "reuseExistingBranchHint": "检出已有分支，而不是基于它创建新分支。",
-        "createMultiple": "创建更多"
+        "createMultiple": "创建更多",
+        "send_to_orchestrator": "Send to Orcastrator"
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "创建工作区之前选择项目、工作区名称和 Agent。"
@@ -1625,7 +1636,8 @@
         "searchIssues": "Search issues",
         "useIssueNumber": "Use issue #{{value0}}",
         "noMatchingIssuesLoaded": "No matching issues loaded.",
-        "editReviewersWithCurrent": "Edit reviewers: {{value0}}"
+        "editReviewersWithCurrent": "Edit reviewers: {{value0}}",
+        "send_to_orchestrator": "Send to Orcastrator"
       },
       "Terminal": {
         "73768427cf": "关闭",
@@ -4308,6 +4320,13 @@
         },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "Branch"
+        },
+        "OrchestratorsSidebarSection": {
+          "title": "Orcastrators",
+          "new": "New Orcastrator",
+          "pick": "Launch an Orcastrator in…",
+          "empty": "No projects yet",
+          "close": "Close Orcastrator"
         }
       },
       "shared": {
@@ -4877,6 +4896,11 @@
             "description": "预览更新后的 worktree 卡片布局、元数据位置、卡片显示菜单选项和状态呈现。",
             "title": "新卡片样式",
             "toggleLabel": "切换新卡片样式"
+          },
+          "orchestrators": {
+            "title": "Orcastrators",
+            "description": "A sidebar section for launching persistent coordinator chats that plan and run multi-worktree work.",
+            "detail": "Adds an \"Orcastrators\" section above Projects. Launch a coordinator chat per repo — it plans the work, spins up worktrees and worker agents, and supervises them. Experimental while the create-flow and multi-coordinator isolation are settling."
           }
         },
         "FloatingWorkspacePane": {
@@ -6966,6 +6990,10 @@
               "title": "新卡片样式",
               "worktree": "worktree",
               "worktrees": "worktrees"
+            },
+            "orchestrators": {
+              "title": "Orcastrators",
+              "description": "A sidebar section for launching persistent coordinator chats that plan and run multi-worktree work."
             }
           }
         },
@@ -8759,7 +8787,9 @@
             "b715ef615b": "领先 {{value1}} {{value0}} 个提交",
             "c1a8f3e204": "落后 {{value0}} 1 个提交",
             "d2b9g4f315": "落后 {{value1}} {{value0}} 个提交",
-            "e9c2a5d416": "与 {{value0}} 同步"
+            "e9c2a5d416": "与 {{value0}} 同步",
+            "orchestrator_title": "Orcastrator",
+            "orchestrator_body": "This director coordinates worker agents in their own worktrees. It has no branch to publish — each worker opens its own pull request."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的 Agent。",
@@ -9292,6 +9322,42 @@
                 "copyCommand": "Copy command"
               }
             }
+          },
+          "OrchestratorMissionControl": {
+            "fallback": "Orcastrator",
+            "summary": "Directs worker agents in their own worktrees — it has no branch to publish. Each worker opens its own pull request.",
+            "spawned": "Spawned work",
+            "empty": "No worktrees yet — the director creates them as it plans the work.",
+            "pr_open": "open",
+            "pr_merged": "merged",
+            "pr_closed": "closed",
+            "pr_draft": "draft",
+            "shipped": "Shipped",
+            "shipped_note": "来自总控日志 — 工作树在合并后被移除，但每个分支都会匹配到其已合并的拉取请求。",
+            "pr_number": "PR #{{value0}}",
+            "view_pr": "View PR",
+            "supervising": "Supervising",
+            "supervising_stalled": "Supervision stalled",
+            "supervising_counts": "{{value0}} tasks · {{value1}} workers · {{value2}} stalled",
+            "recipe": "recipe: {{value0}}",
+            "tasks": "Tasks",
+            "tasks_empty": "No tasks yet — the coordinator decomposes the work as it plans.",
+            "tasks_truncated": "+{{value0}} more task(s) not shown",
+            "task_status_queued": "queued",
+            "task_status_working": "working",
+            "task_status_stalled": "stalled",
+            "task_status_blocked": "blocked",
+            "task_status_done": "done",
+            "task_status_failed": "failed",
+            "task_waiting_on": "waiting on {{value0}}"
+          },
+          "OrchestratorPanelNotice": {
+            "title": "Orcastrator",
+            "body": "A director has no branch or pull request of its own, so there are no checks here. Each worker opens its own pull request, where its checks run.",
+            "open_mission_control": "Open Mission Control"
+          },
+          "MissionControlPrReviewCard": {
+            "loading": "Loading review…"
           }
         }
       },
@@ -11785,6 +11851,19 @@
             "later": "Later"
           }
         }
+      },
+      "OrchestratorLaunchModal": {
+        "title": "New Orcastrator",
+        "description": "A director plans the work and runs agents in worktrees for you — it directs, it does not write the code itself.",
+        "project": "Project",
+        "pick_project": "Select a project",
+        "name": "Name",
+        "name_placeholder": "Orcastrator",
+        "agent": "Agent",
+        "task": "What should it orchestrate?",
+        "task_placeholder": "Describe the work — the director plans how to split it into worktrees/PRs. Optional.",
+        "cancel": "Cancel",
+        "launch": "Launch Orcastrator"
       }
     },
     "i18n": {

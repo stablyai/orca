@@ -60,7 +60,21 @@ const WorktreeCardAgents = React.memo(function WorktreeCardAgents({
   worktreeId,
   className
 }: Props) {
-  const agents = useWorktreeAgentRows(worktreeId)
+  const allAgents = useWorktreeAgentRows(worktreeId)
+  const orchestrators = useAppStore((s) => s.orchestrators)
+  // Why: an Orcastrator (director) is surfaced only in the ORCASTRATORS sidebar
+  // section, never as an agent row under its project's worktree. Exclude its
+  // agent tab here so the worktree card doesn't double-list it.
+  const agents = useMemo(() => {
+    if (!orchestrators || orchestrators.length === 0) {
+      return allAgents
+    }
+    const orchestratorTabIds = new Set(orchestrators.map((entry) => entry.tabId))
+    return allAgents.filter((agent) => {
+      const parsed = parsePaneKey(agent.paneKey)
+      return !parsed || !orchestratorTabIds.has(parsed.tabId)
+    })
+  }, [allAgents, orchestrators])
   if (agents.length === 0) {
     return null
   }

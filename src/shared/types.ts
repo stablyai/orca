@@ -2022,6 +2022,12 @@ export type CreateWorktreeResult = {
     tabId?: string
     surface?: 'visible' | 'background'
   }
+  // Why (F2 #13): when no startup agent is launched, createManagedWorktree still
+  // opens a plain interactive terminal in the worktree. Surfacing its handle lets
+  // callers (the orchestration createWorktree adapter) dispatch into the known
+  // interactive shell instead of re-discovering a terminal positionally, which
+  // could grab the separate "Setup" runner terminal.
+  initialTerminal?: { handle: string }
   timing?: WorktreeCreateTiming
 }
 
@@ -2736,6 +2742,12 @@ export type GlobalSettings = {
    *  configuration surface and edge cases (conflicts with existing paths,
    *  cleanup on worktree delete) are still being worked out. */
   experimentalWorktreeSymlinks: boolean
+  /** Experimental: an "Orcastrators" sidebar section for launching persistent
+   *  coordinator chats (one per repo) that run the orchestrate workflow —
+   *  planning, worktree/agent fan-out, and supervision — from a single entry
+   *  point. Opt-in while the create-flow and multi-coordinator isolation are
+   *  being worked out. */
+  experimentalOrchestrators?: boolean
 
   /** Active non-local runtime environment for client-routed RPC. `null`
    *  preserves the current local desktop behavior. */

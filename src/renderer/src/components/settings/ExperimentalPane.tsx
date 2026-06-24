@@ -5,6 +5,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { getExperimentalPaneSearchEntries, getExperimentalSearchEntry } from './experimental-search'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
+import { OrchestratorsExperimentalToggle } from './OrchestratorsExperimentalToggle'
 import { NumberField, SettingsSwitch } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import {
@@ -196,6 +197,12 @@ export function ExperimentalPane({
           </div>
         </SearchableSetting>
       ) : null}
+
+      <OrchestratorsExperimentalToggle
+        settings={settings}
+        updateSettings={updateSettings}
+        searchQuery={searchQuery}
+      />
 
       {showAgentHibernation ? (
         <SearchableSetting

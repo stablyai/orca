@@ -1008,6 +1008,7 @@ describe('orchestration RPC methods', () => {
         call('orchestration.dispatch', {
           task: task.id,
           to: 'term_a',
+          from: 'coordinator-test',
           inject: true
         })
       ).rejects.toThrow('terminal_not_writable')
@@ -1029,6 +1030,7 @@ describe('orchestration RPC methods', () => {
       await call('orchestration.dispatch', {
         task: task.id,
         to: 'term_a',
+        from: 'coordinator-test',
         inject: true,
         devMode: true
       })
@@ -1048,6 +1050,39 @@ describe('orchestration RPC methods', () => {
           inject: true
         })
       ).rejects.toThrow('no recognized agent detected')
+    })
+
+    it('refuses inject without --from when no single active run can supply a handle (#12)', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      const send = vi.spyOn(runtime, 'sendTerminal')
+
+      await expect(
+        call('orchestration.dispatch', { task: task.id, to: 'term_a', inject: true })
+      ).rejects.toThrow(/Cannot resolve a coordinator handle/)
+      // No black-holed inject: nothing was sent to the terminal.
+      expect(send).not.toHaveBeenCalled()
+    })
+
+    it('infers the per-run handle from the single active run for inject (#12)', async () => {
+      setup()
+      db.createCoordinatorRun({ spec: 'go', coordinatorHandle: 'coordinator-zzz' })
+      const task = db.createTask({ spec: 'work' })
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      const send = vi.spyOn(runtime, 'sendTerminal').mockResolvedValue({
+        handle: 'term_a',
+        accepted: true,
+        bytesWritten: 1
+      })
+
+      await call('orchestration.dispatch', { task: task.id, to: 'term_a', inject: true })
+
+      // Worker preamble addresses the per-run coordinator handle, not 'coordinator'.
+      expect(send.mock.calls[0]?.[1].text).toContain('coordinator-zzz')
+      expect(send.mock.calls[0]?.[1].text).not.toContain(
+        "Your coordinator's terminal handle is: coordinator\n"
+      )
     })
 
     it('rejects dispatch to occupied terminal', async () => {
@@ -1435,6 +1470,164 @@ describe('orchestration RPC methods', () => {
       const outbound = db.getInbox(10).find((m) => m.type === 'decision_gate')
       const payload = JSON.parse(outbound!.payload ?? '{}')
       expect(payload.options).toEqual(['a', 'b', 'c'])
+    })
+  })
+
+  describe('orchestration.run (per-run isolation #12)', () => {
+    it('derives a unique coordinator handle instead of the literal "coordinator"', async () => {
+      setup()
+      // Capture the handle passed to the atomic start and abort before the
+      // background loop is constructed (keeps the test deterministic / leak-free).
+      const startSpy = vi.spyOn(db, 'startCoordinatorRun').mockImplementation(() => {
+        throw new Error('abort-after-capture')
+      })
+
+      await expect(call('orchestration.run', { spec: 'build it' })).rejects.toThrow(
+        'abort-after-capture'
+      )
+
+      expect(startSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          coordinatorHandle: expect.stringMatching(/^coordinator-[0-9a-f]+$/)
+        })
+      )
+      const handle = startSpy.mock.calls[0][0].coordinatorHandle
+      expect(handle).not.toBe('coordinator')
+    })
+
+    it('honors an explicit --from handle without deriving one', async () => {
+      setup()
+      const startSpy = vi.spyOn(db, 'startCoordinatorRun').mockImplementation(() => {
+        throw new Error('abort-after-capture')
+      })
+
+      await expect(
+        call('orchestration.run', { spec: 'build it', from: 'coordinator-explicit' })
+      ).rejects.toThrow('abort-after-capture')
+
+      expect(startSpy.mock.calls[0][0].coordinatorHandle).toBe('coordinator-explicit')
+    })
+
+    it('rejects a second run on the same target (no worktree → shared null slot)', async () => {
+      setup()
+      // Seed an active run directly (simulates another runtime's in-flight run).
+      db.createCoordinatorRun({ spec: 'first', coordinatorHandle: 'coordinator-aaa' })
+
+      await expect(call('orchestration.run', { spec: 'second' })).rejects.toThrow(
+        /Coordinator already running/
+      )
+    })
+
+    it('threads the resolved target key into startCoordinatorRun', async () => {
+      setup()
+      vi.spyOn(runtime, 'resolveOrchestrationTargetKey').mockResolvedValue('worktree:abc')
+      const startSpy = vi.spyOn(db, 'startCoordinatorRun').mockImplementation(() => {
+        throw new Error('abort-after-capture')
+      })
+
+      await expect(call('orchestration.run', { spec: 'x', worktree: 'id:abc' })).rejects.toThrow(
+        'abort-after-capture'
+      )
+
+      expect(startSpy.mock.calls[0][0].targetKey).toBe('worktree:abc')
+    })
+
+    it('refuses to start when the worktree cannot be resolved (fails closed)', async () => {
+      setup()
+      // resolveOrchestrationTargetKey fails closed; the handler must refuse
+      // rather than start a run with a guess-key that could clash on the target.
+      vi.spyOn(runtime, 'resolveOrchestrationTargetKey').mockRejectedValue(
+        new Error('selector_not_found')
+      )
+      const startSpy = vi.spyOn(db, 'startCoordinatorRun')
+
+      await expect(call('orchestration.run', { spec: 'x', worktree: 'id:gone' })).rejects.toThrow(
+        /did not resolve to a known worktree/
+      )
+      expect(startSpy).not.toHaveBeenCalled()
+    })
+
+    // Round 3 should-fix #4: --worktree-backed without --worker-agent is a
+    // worktree-backed BARE-SHELL mode (workers can never emit worker_done). Refuse it.
+    it('refuses --worktree-backed without --worker-agent (bare-shell mode)', async () => {
+      setup()
+      const startSpy = vi.spyOn(db, 'startCoordinatorRun')
+
+      await expect(
+        call('orchestration.run', { spec: 'x', worktree: 'id:abc', worktreeBacked: true })
+      ).rejects.toThrow(/--worktree-backed requires --worker-agent/)
+      expect(startSpy).not.toHaveBeenCalled()
+    })
+
+    it('allows --worktree-backed with a valid --worker-agent', async () => {
+      setup()
+      vi.spyOn(runtime, 'resolveOrchestrationTargetKey').mockResolvedValue('worktree:abc')
+      const startSpy = vi.spyOn(db, 'startCoordinatorRun').mockImplementation(() => {
+        throw new Error('abort-after-capture')
+      })
+
+      await expect(
+        call('orchestration.run', {
+          spec: 'x',
+          worktree: 'id:abc',
+          worktreeBacked: true,
+          workerAgent: 'claude'
+        })
+      ).rejects.toThrow('abort-after-capture')
+      // Got past the coupling guard to the atomic start.
+      expect(startSpy).toHaveBeenCalled()
+    })
+  })
+
+  describe('orchestration.taskCreate run stamping (#12)', () => {
+    it('stamps the active same-target run on tasks created mid-run', async () => {
+      setup()
+      vi.spyOn(runtime, 'resolveOrchestrationTargetKeyForTerminal').mockResolvedValue('worktree:w1')
+      const run = db.createCoordinatorRun({
+        spec: 'go',
+        coordinatorHandle: 'coordinator-bbb',
+        targetKey: 'worktree:w1'
+      })
+
+      const result = (await call('orchestration.taskCreate', {
+        spec: 'subtask created during the run',
+        callerTerminalHandle: 'term_w1'
+      })) as { task: { id: string } }
+
+      expect(db.getTask(result.task.id)?.coordinator_run_id).toBe(run.id)
+      expect(db.getTask(result.task.id)?.target_key).toBe('worktree:w1')
+    })
+
+    it('does NOT stamp a run on a different target (no cross-target poaching)', async () => {
+      setup()
+      // An active run exists, but on a different target than the task's.
+      db.createCoordinatorRun({
+        spec: 'other',
+        coordinatorHandle: 'coordinator-other',
+        targetKey: 'worktree:other'
+      })
+      vi.spyOn(runtime, 'resolveOrchestrationTargetKeyForTerminal').mockResolvedValue(
+        'worktree:mine'
+      )
+
+      const result = (await call('orchestration.taskCreate', {
+        spec: 'my task',
+        callerTerminalHandle: 'term_mine'
+      })) as { task: { id: string } }
+
+      // Stamped with its own target, left unowned for its own run to adopt.
+      expect(db.getTask(result.task.id)?.target_key).toBe('worktree:mine')
+      expect(db.getTask(result.task.id)?.coordinator_run_id).toBeNull()
+    })
+
+    it('leaves tasks unowned/untargeted when no caller terminal resolves', async () => {
+      setup()
+      const result = (await call('orchestration.taskCreate', {
+        spec: 'pre-run task'
+      })) as { task: { id: string } }
+
+      expect(db.getTask(result.task.id)?.coordinator_run_id).toBeNull()
+      expect(db.getTask(result.task.id)?.target_key).toBeNull()
     })
   })
 

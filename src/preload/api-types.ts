@@ -16,6 +16,7 @@ import type { TaskSourceContext } from '../shared/task-source-context'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
 import type { SleepingAgentLaunchConfig } from '../shared/agent-session-resume'
+import type { OrchestrationPreloadApi } from '../shared/orchestration-binding'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
@@ -1836,6 +1837,12 @@ export type PreloadApi = {
     installWsl: (args?: { distro?: string | null }) => Promise<CliInstallStatus>
     removeWsl: (args?: { distro?: string | null }) => Promise<CliInstallStatus>
   }
+  // Why (#15): exposes the already-registered orchestration RPC methods to the
+  // renderer so a recipe director can start a coordinator run (or create a task)
+  // from the app, over the same runtime channel the CLI uses. Additive plumbing —
+  // no UI calls it yet (recipe backend, #9). Routes through runtime.call, so it
+  // works for local and remote/SSH runtimes alike.
+  orchestration: OrchestrationPreloadApi
   agentHooks: {
     claudeStatus: () => Promise<AgentHookInstallStatus>
     openClaudeStatus: () => Promise<AgentHookInstallStatus>

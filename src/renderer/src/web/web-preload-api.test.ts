@@ -1477,6 +1477,131 @@ describe('web repos preload API', () => {
   )
 })
 
+describe('web orchestration preload API', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.doUnmock('./web-runtime-client')
+  })
+
+  it('forwards orchestration.run params (incl. worktree-backed pass-throughs) and unwraps the result', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { runId: 'run-1', status: 'running' },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const runParams = {
+      spec: 'ship the recipe',
+      from: 'coordinator-abc',
+      pollIntervalMs: 1000,
+      maxConcurrent: 3,
+      worktree: 'repo-1::/work/dir',
+      worktreeBacked: true,
+      workerAgent: 'claude'
+    }
+    await expect(globals.window.api.orchestration.run(runParams)).resolves.toEqual({
+      runId: 'run-1',
+      status: 'running'
+    })
+    expect(runtimeCalls).toEqual([{ method: 'orchestration.run', params: runParams }])
+  })
+
+  it('forwards orchestration.taskCreate params (incl. callerTerminalHandle) and unwraps the task', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    const task = {
+      id: 'task-1',
+      parent_id: null,
+      created_by_terminal_handle: 'terminal-7',
+      coordinator_run_id: null,
+      target_key: 'repo-1::/work/dir',
+      task_title: 'Recipe step',
+      display_name: null,
+      spec: 'do the thing',
+      status: 'ready',
+      deps: '[]',
+      result: null,
+      created_at: '2026-01-01T00:00:00.000Z',
+      completed_at: null
+    }
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { task },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const taskParams = {
+      spec: 'do the thing',
+      taskTitle: 'Recipe step',
+      deps: '["task-0"]',
+      parent: 'task-root',
+      callerTerminalHandle: 'terminal-7'
+    }
+    await expect(globals.window.api.orchestration.taskCreate(taskParams)).resolves.toEqual({ task })
+    expect(runtimeCalls).toEqual([{ method: 'orchestration.taskCreate', params: taskParams }])
+  })
+
+  it('rejects when the runtime reports an orchestration failure', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.resolve({
+            id: method,
+            ok: false,
+            error: { code: 'runtime_error', message: 'no resolvable worktree' },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.orchestration.run({ spec: 'x' })).rejects.toThrow(
+      'no resolvable worktree'
+    )
+  })
+})
+
 describe('web worktree preload API', () => {
   beforeEach(() => {
     vi.resetModules()

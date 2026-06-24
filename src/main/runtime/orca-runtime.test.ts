@@ -7,10 +7,12 @@ import { homedir, tmpdir } from 'os'
 import { join } from 'path'
 import { ipcMain } from 'electron'
 import type {
+  CreateWorktreeResult,
   FolderWorkspace,
   ProjectGroup,
   Tab,
   TerminalLayoutSnapshot,
+  TuiAgent,
   WorktreeLineage,
   WorktreeMeta,
   WorkspaceLineage,
@@ -37,7 +39,8 @@ import {
   shouldRunSetupForCreate
 } from '../hooks'
 import { getBranchConflictKind, getDefaultBaseRef } from '../git/repo'
-import type { OrchestrationDb } from './orchestration/db'
+import { OrchestrationDb } from './orchestration/db'
+import { Coordinator } from './orchestration/coordinator'
 import type { MessagePriority, MessageRow, MessageType } from './orchestration/types'
 import {
   appendNormalizedToTailBuffer,
@@ -1007,6 +1010,67 @@ const store = {
   getProjects: () => []
 }
 
+// Why (#2/#6): the run-DAG builder is gated on experimentalOrchestrators, so
+// tests that exercise it opt in via a store whose settings enable the flag.
+function storeWithOrchestratorsFlag(): typeof store {
+  return {
+    ...store,
+    getSettings: () => ({ ...store.getSettings(), experimentalOrchestrators: true })
+  }
+}
+
+// Why (#6): a row in the shape listTasksWithDispatch returns, used to feed the
+// DAG builder a deterministic dispatched task without a real DB.
+function makeDagTaskRow(overrides: {
+  id: string
+  assignee_handle?: string
+}): Record<string, unknown> {
+  return {
+    id: overrides.id,
+    parent_id: null,
+    created_by_terminal_handle: null,
+    coordinator_run_id: 'run-a',
+    target_key: 'repo:/x',
+    task_title: overrides.id,
+    display_name: null,
+    spec: overrides.id,
+    status: 'dispatched',
+    deps: '[]',
+    result: null,
+    created_at: '2026-01-01T00:00:00.000Z',
+    completed_at: null,
+    assignee_handle: overrides.assignee_handle ?? 'term_worker',
+    dispatch_id: `ctx_${overrides.id}`,
+    dispatch_status: 'dispatched',
+    dispatch_last_heartbeat_at: '2026-06-01T00:00:00.000Z',
+    dispatch_dispatched_at: '2025-06-01T00:00:00.000Z'
+  }
+}
+
+// Why (#6): a heartbeat message in the shape getAllMessagesForHandle returns,
+// carrying the taskId the DAG builder keys signals on.
+function makeSignalMessage(overrides: { taskId: string; phase: string }): Record<string, unknown> {
+  return {
+    id: `msg_${overrides.taskId}`,
+    from_handle: 'term_worker',
+    to_handle: 'term_coord',
+    subject: 'alive',
+    body: '',
+    type: 'heartbeat',
+    priority: 'normal',
+    thread_id: null,
+    payload: JSON.stringify({
+      taskId: overrides.taskId,
+      dispatchId: `ctx_${overrides.taskId}`,
+      phase: overrides.phase
+    }),
+    read: 0,
+    sequence: 1,
+    created_at: '2026-01-01T00:00:00.000Z',
+    delivered_at: null
+  }
+}
+
 function makeHeadlessTerminalLayout(
   ptyIdsByLeafId: Record<string, string | undefined>
 ): TerminalLayoutSnapshot {
@@ -1883,6 +1947,374 @@ describe('OrcaRuntimeService', () => {
     await expect(freshLookup).resolves.toMatchObject({
       id: result.worktree.id,
       path: createdWorktree.path
+    })
+  })
+
+  // F2 #13 round 3 — the orchestration createWorktree adapter must pick the
+  // dispatch terminal from createManagedWorktree's RESULT (startup agent, else
+  // the known initial interactive terminal), never re-discover one positionally
+  // (which could grab the separate "Setup" runner). createManagedWorktree is
+  // stubbed so this isolates the adapter's terminal-selection contract.
+  describe('createWorktree adapter terminal selection', () => {
+    function stubResolveParent(runtime: OrcaRuntimeService): void {
+      vi.spyOn(
+        runtime as unknown as { resolveWorktreeSelector: (s: string) => Promise<unknown> },
+        'resolveWorktreeSelector'
+      ).mockResolvedValue({ id: 'repo-1::/wt/parent', repoId: 'repo-1' })
+    }
+
+    it('dispatches into the known initial terminal, not a positionally-discovered Setup terminal', async () => {
+      const runtime = new OrcaRuntimeService(store)
+      stubResolveParent(runtime)
+      // No startup agent → createManagedWorktree opened a plain initial terminal
+      // AND a separate "Setup" terminal; the result names the interactive one.
+      vi.spyOn(runtime, 'createManagedWorktree').mockResolvedValue({
+        worktree: { id: 'repo-1::/wt/child', git: { branch: 'orch-child' } },
+        initialTerminal: { handle: 'term-initial' }
+      } as unknown as CreateWorktreeResult)
+      // If the adapter regressed to a positional pick, THIS list (Setup first) is
+      // what it would grab — assert it neither consults the list nor returns Setup.
+      const listSpy = vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
+        terminals: [
+          {
+            handle: 'term-setup',
+            worktreeId: 'repo-1::/wt/child',
+            connected: true,
+            writable: true
+          },
+          {
+            handle: 'term-initial',
+            worktreeId: 'repo-1::/wt/child',
+            connected: true,
+            writable: true
+          }
+        ]
+      } as unknown as Awaited<ReturnType<OrcaRuntimeService['listTerminals']>>)
+
+      const result = await runtime.createWorktree({
+        parentWorktree: 'id:repo-1::/wt/parent',
+        name: 'orch-child'
+      })
+
+      expect(result.terminalHandle).toBe('term-initial')
+      expect(result.terminalHandle).not.toBe('term-setup')
+      expect(result.worktreeId).toBe('repo-1::/wt/child')
+      expect(result.branch).toBe('orch-child')
+      expect(listSpy).not.toHaveBeenCalled()
+    })
+
+    it('returns the startup-agent terminal when one was launched', async () => {
+      const runtime = new OrcaRuntimeService(store)
+      stubResolveParent(runtime)
+      vi.spyOn(runtime, 'createManagedWorktree').mockResolvedValue({
+        worktree: { id: 'repo-1::/wt/child', git: { branch: 'orch-child' } },
+        startupTerminal: { spawned: true, handle: 'term-agent', surface: 'background' },
+        initialTerminal: { handle: 'term-initial' }
+      } as unknown as CreateWorktreeResult)
+
+      const result = await runtime.createWorktree({
+        parentWorktree: 'id:repo-1::/wt/parent',
+        name: 'orch-child',
+        startup: { agent: 'claude' }
+      })
+
+      expect(result.terminalHandle).toBe('term-agent')
+    })
+
+    it('returns no terminalHandle when createManagedWorktree opened no terminal', async () => {
+      const runtime = new OrcaRuntimeService(store)
+      stubResolveParent(runtime)
+      vi.spyOn(runtime, 'createManagedWorktree').mockResolvedValue({
+        worktree: { id: 'repo-1::/wt/child', git: { branch: 'orch-child' } }
+      } as unknown as CreateWorktreeResult)
+
+      const result = await runtime.createWorktree({
+        parentWorktree: 'id:repo-1::/wt/parent',
+        name: 'orch-child'
+      })
+
+      expect(result.terminalHandle).toBeUndefined()
+    })
+  })
+
+  // F2 #13 slice 2 — the track-reuse path driven through the REAL createWorktree
+  // adapter (not the coordinator's fully-mocked createWorktree). createManagedWorktree
+  // is stubbed (no real git/PTY), so the real adapter shapes {worktreeId, branch,
+  // terminalHandle} and the real Coordinator's track map decides create-vs-reuse.
+  // Proves: two same-track tasks → ONE adapter worktree, serialized, the 2nd
+  // dispatched into the 1st's interactive terminal.
+  describe('createWorktree adapter — real track-reuse path', () => {
+    it('a 2nd same-track task reuses the 1st real-adapter worktree, serialized after it', async () => {
+      const runtime = new OrcaRuntimeService(store)
+      vi.spyOn(
+        runtime as unknown as { resolveWorktreeSelector: (s: string) => Promise<unknown> },
+        'resolveWorktreeSelector'
+      ).mockResolvedValue({ id: 'repo-1::/wt/director', repoId: 'repo-1' })
+
+      // The real adapter calls createManagedWorktree; stub it to return a launched
+      // agent terminal (and register it so the reuse path's listTerminals finds it).
+      const agentTerminals: {
+        handle: string
+        worktreeId: string
+        connected: boolean
+        writable: boolean
+      }[] = []
+      let createCount = 0
+      const cmwSpy = vi.spyOn(runtime, 'createManagedWorktree').mockImplementation(async () => {
+        const idx = createCount++
+        const worktreeId = `repo-1::/wt/track-${idx}`
+        const handle = `agent-term-${idx}`
+        agentTerminals.push({ handle, worktreeId, connected: true, writable: true })
+        return {
+          worktree: { id: worktreeId, git: { branch: `orch-track-${idx}` } },
+          startupTerminal: { spawned: true, handle, surface: 'background' }
+        } as unknown as CreateWorktreeResult
+      })
+
+      // Stub the terminal I/O layer (no real PTYs in a unit test). listTerminals
+      // reflects the agent terminal so the reuse path finds and reuses it.
+      vi.spyOn(runtime, 'listTerminals').mockImplementation(async (selector?: string) => {
+        const id = selector?.replace(/^id:/, '')
+        return {
+          terminals: agentTerminals.filter((t) => !id || t.worktreeId === id)
+        } as unknown as Awaited<ReturnType<OrcaRuntimeService['listTerminals']>>
+      })
+      const sends: { handle: string; text: string }[] = []
+      vi.spyOn(runtime, 'sendTerminal').mockImplementation(
+        async (handle: string, action: { text?: string }) => {
+          sends.push({ handle, text: action.text ?? '' })
+          return { handle, accepted: true, bytesWritten: 0 } as unknown as Awaited<
+            ReturnType<OrcaRuntimeService['sendTerminal']>
+          >
+        }
+      )
+      vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
+        handle: 'agent',
+        condition: 'tui-idle'
+      } as unknown as Awaited<ReturnType<OrcaRuntimeService['waitForTerminal']>>)
+      vi.spyOn(runtime, 'probeWorktreeDrift').mockResolvedValue(null)
+      const createTerminalSpy = vi.spyOn(runtime, 'createTerminal')
+
+      const odb = new OrchestrationDb(':memory:')
+      const t1 = odb.createTask({ spec: 'implement\ntrack: shared' })
+      // deps make the track totally ordered (required by the round-3 safe-by-default
+      // guard); review (t2) stays pending until implement (t1) finishes, then reuses.
+      const t2 = odb.createTask({ spec: 'review\ntrack: shared', deps: [t1.id] })
+
+      const coordinator = new Coordinator(odb, runtime, {
+        spec: 'go',
+        coordinatorHandle: 'coord',
+        pollIntervalMs: 20,
+        worktree: 'id:repo-1::/wt/director',
+        worktreeBacked: true,
+        workerAgent: 'claude',
+        maxConcurrent: 4
+      })
+
+      const runPromise = coordinator.run()
+      await new Promise((r) => {
+        setTimeout(r, 80)
+      })
+
+      // The real adapter created exactly ONE worktree; the 2nd same-track task is
+      // gated (pending on its dep) behind the 1st.
+      expect(cmwSpy).toHaveBeenCalledTimes(1)
+      expect(odb.listTasks({ status: 'dispatched' })).toHaveLength(1)
+      const first = t1
+      const second = t2
+      expect(odb.getTask(second.id)?.status).toBe('pending')
+
+      // Complete the first → the track frees up for the successor.
+      const firstCtx = odb.getDispatchContext(first.id)!
+      odb.insertMessage({
+        from: firstCtx.assignee_handle!,
+        to: 'coord',
+        subject: 'done',
+        type: 'worker_done',
+        payload: JSON.stringify({ taskId: first.id, dispatchId: firstCtx.id })
+      })
+      await new Promise((r) => {
+        setTimeout(r, 80)
+      })
+
+      // STILL one adapter worktree (the 2nd reused it — no recreate, no extra
+      // terminal), and both preambles landed in the SAME interactive terminal.
+      expect(cmwSpy).toHaveBeenCalledTimes(1)
+      expect(createTerminalSpy).not.toHaveBeenCalled()
+      expect(sends.filter((s) => s.handle === 'agent-term-0')).toHaveLength(2)
+
+      const secondCtx = odb.getDispatchContext(second.id)!
+      odb.insertMessage({
+        from: secondCtx.assignee_handle!,
+        to: 'coord',
+        subject: 'done',
+        type: 'worker_done',
+        payload: JSON.stringify({ taskId: second.id, dispatchId: secondCtx.id })
+      })
+      const result = await runPromise
+      expect(result.status).toBe('completed')
+      expect(result.completedTasks).toContain(t1.id)
+      expect(result.completedTasks).toContain(t2.id)
+      odb.close()
+    })
+
+    // Round 3 must-fix #1, real-adapter: launchAgentTerminal is the REAL agent
+    // spawn — it must build an actual launch COMMAND (via buildStartupForAgent),
+    // unlike createTerminal({ launchAgent }) which spawns a bare shell and only
+    // tags it. Spy the spawn primitive (createTerminal) and assert a non-empty
+    // agent command is produced. Fails for a bare-shell relaunch (no command).
+    it('launchAgentTerminal builds a real agent launch command (not a bare shell)', async () => {
+      const runtime = new OrcaRuntimeService(store)
+      vi.spyOn(
+        runtime as unknown as { resolveWorktreeSelector: (s: string) => Promise<unknown> },
+        'resolveWorktreeSelector'
+      ).mockResolvedValue({ id: 'repo-1::/wt/track-0', repoId: 'repo-1', path: '/tmp/repo' })
+
+      const createTerminalCalls: { selector?: string; command?: string; launchAgent?: TuiAgent }[] =
+        []
+      vi.spyOn(runtime, 'createTerminal').mockImplementation(
+        async (selector?: string, opts?: { command?: string; launchAgent?: TuiAgent }) => {
+          createTerminalCalls.push({
+            selector,
+            command: opts?.command,
+            launchAgent: opts?.launchAgent
+          })
+          return {
+            handle: 'agent-relaunch',
+            worktreeId: 'repo-1::/wt/track-0'
+          } as unknown as Awaited<ReturnType<OrcaRuntimeService['createTerminal']>>
+        }
+      )
+
+      const created = await runtime.launchAgentTerminal('id:repo-1::/wt/track-0', {
+        agent: 'claude',
+        prompt: ''
+      })
+
+      expect(created.handle).toBe('agent-relaunch')
+      expect(createTerminalCalls).toHaveLength(1)
+      // The spawn carried a REAL command (the agent launch), not an empty shell.
+      expect(createTerminalCalls[0].command).toBeTruthy()
+      expect((createTerminalCalls[0].command ?? '').length).toBeGreaterThan(0)
+      expect(createTerminalCalls[0].launchAgent).toBe('claude')
+    })
+
+    // Round 3 must-fix #1+#2, real-adapter: when the cached agent terminal is gone,
+    // the reuse path must invoke launchAgentTerminal (the real agent spawn), NOT a
+    // bare-shell createTerminal. Drives the real Coordinator; launchAgentTerminal is
+    // spied (so we assert it is the method used) and createManagedWorktree / I/O are
+    // stubbed. Fails against the round-2 bare-shell code (which used createTerminal).
+    it('reuse relaunch invokes launchAgentTerminal (real agent spawn), not a bare-shell createTerminal', async () => {
+      const runtime = new OrcaRuntimeService(store)
+      vi.spyOn(
+        runtime as unknown as { resolveWorktreeSelector: (s: string) => Promise<unknown> },
+        'resolveWorktreeSelector'
+      ).mockResolvedValue({ id: 'repo-1::/wt/director', repoId: 'repo-1' })
+
+      const agentTerminals: {
+        handle: string
+        worktreeId: string
+        connected: boolean
+        writable: boolean
+      }[] = []
+      let createCount = 0
+      const cmwSpy = vi.spyOn(runtime, 'createManagedWorktree').mockImplementation(async () => {
+        const idx = createCount++
+        const worktreeId = `repo-1::/wt/track-${idx}`
+        const handle = `agent-term-${idx}`
+        agentTerminals.push({ handle, worktreeId, connected: true, writable: true })
+        return {
+          worktree: { id: worktreeId, git: { branch: `orch-track-${idx}` } },
+          startupTerminal: { spawned: true, handle, surface: 'background' }
+        } as unknown as CreateWorktreeResult
+      })
+      vi.spyOn(runtime, 'listTerminals').mockImplementation(async (selector?: string) => {
+        const id = selector?.replace(/^id:/, '')
+        return {
+          terminals: agentTerminals.filter((t) => (!id || t.worktreeId === id) && t.connected)
+        } as unknown as Awaited<ReturnType<OrcaRuntimeService['listTerminals']>>
+      })
+      const sends: { handle: string; text: string }[] = []
+      vi.spyOn(runtime, 'sendTerminal').mockImplementation(
+        async (handle: string, action: { text?: string }) => {
+          sends.push({ handle, text: action.text ?? '' })
+          return { handle, accepted: true, bytesWritten: 0 } as unknown as Awaited<
+            ReturnType<OrcaRuntimeService['sendTerminal']>
+          >
+        }
+      )
+      vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
+        handle: 'agent',
+        condition: 'tui-idle'
+      } as unknown as Awaited<ReturnType<OrcaRuntimeService['waitForTerminal']>>)
+      vi.spyOn(runtime, 'probeWorktreeDrift').mockResolvedValue(null)
+      // The REAL agent-spawn path — spied so we assert the coordinator uses it.
+      const launchAgentCalls: { selector: string; agent: TuiAgent }[] = []
+      vi.spyOn(runtime, 'launchAgentTerminal').mockImplementation(
+        async (selector: string, opts: { agent: TuiAgent }) => {
+          launchAgentCalls.push({ selector, agent: opts.agent })
+          const worktreeId = selector.replace(/^id:/, '')
+          const handle = `agent-relaunch-${launchAgentCalls.length}`
+          agentTerminals.push({ handle, worktreeId, connected: true, writable: true })
+          return { handle, worktreeId } as unknown as Awaited<
+            ReturnType<OrcaRuntimeService['launchAgentTerminal']>
+          >
+        }
+      )
+      // The bare-shell path must NOT be used to carry an agent dispatch.
+      const createTerminalSpy = vi.spyOn(runtime, 'createTerminal')
+
+      const odb = new OrchestrationDb(':memory:')
+      const t1 = odb.createTask({ spec: 'implement\ntrack: shared' })
+      const t2 = odb.createTask({ spec: 'review\ntrack: shared', deps: [t1.id] })
+
+      const coordinator = new Coordinator(odb, runtime, {
+        spec: 'go',
+        coordinatorHandle: 'coord',
+        pollIntervalMs: 20,
+        worktree: 'id:repo-1::/wt/director',
+        worktreeBacked: true,
+        workerAgent: 'claude',
+        maxConcurrent: 4
+      })
+
+      const runPromise = coordinator.run()
+      await new Promise((r) => {
+        setTimeout(r, 80)
+      })
+      const firstCtx = odb.getDispatchContext(t1.id)!
+      odb.insertMessage({
+        from: firstCtx.assignee_handle!,
+        to: 'coord',
+        subject: 'done',
+        type: 'worker_done',
+        payload: JSON.stringify({ taskId: t1.id, dispatchId: firstCtx.id })
+      })
+      // Implement's agent terminal exits → no longer listed for reuse.
+      agentTerminals.find((t) => t.handle === 'agent-term-0')!.connected = false
+
+      await new Promise((r) => {
+        setTimeout(r, 80)
+      })
+
+      // No new worktree; the REAL agent spawn (launchAgentTerminal) was invoked for
+      // the existing worktree — and the bare-shell createTerminal was NOT used.
+      expect(cmwSpy).toHaveBeenCalledTimes(1)
+      expect(launchAgentCalls).toEqual([{ selector: 'id:repo-1::/wt/track-0', agent: 'claude' }])
+      expect(createTerminalSpy).not.toHaveBeenCalled()
+
+      const secondCtx = odb.getDispatchContext(t2.id)!
+      odb.insertMessage({
+        from: secondCtx.assignee_handle!,
+        to: 'coord',
+        subject: 'done',
+        type: 'worker_done',
+        payload: JSON.stringify({ taskId: t2.id, dispatchId: secondCtx.id })
+      })
+      const result = await runPromise
+      expect(result.status).toBe('completed')
+      expect(result.completedTasks).toContain(t2.id)
+      odb.close()
     })
   })
 
@@ -17115,6 +17547,264 @@ describe('OrcaRuntimeService', () => {
     expect(result.agentOrchestrationByPaneKey).toBeUndefined()
   })
 
+  it('returns orchestration activity keyed by the coordinator pane for a running run', () => {
+    const runtime = new OrcaRuntimeService(store)
+    const coordinatorLeafId = '88888888-8888-4888-8888-888888888888'
+    const coordinatorPaneKey = makePaneKey('tab-coordinator', coordinatorLeafId)
+    const coordinatorHandle = runtime.preAllocateHandleForPty('pty-coordinator')
+    runtime.setOrchestrationDb({
+      getActiveDispatchForTerminal: vi.fn(() => undefined),
+      getLatestDispatchForTerminal: vi.fn(() => undefined),
+      listCoordinatorRuns: vi.fn(() => [
+        { id: 'run-active', coordinator_handle: coordinatorHandle }
+      ]),
+      countOutstandingTasks: vi.fn(() => 3),
+      countActiveDispatches: vi.fn(() => 2),
+      getStaleDispatches: vi.fn(() => [{ id: 'ctx-stale' }])
+    } as never)
+    runtime.attachWindow(1)
+
+    const result = runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-coordinator',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Codex',
+          activeLeafId: coordinatorLeafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-coordinator',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: coordinatorLeafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-coordinator',
+          paneTitle: null
+        }
+      ]
+    })
+
+    expect(result.orchestrationActivityByPaneKey?.[coordinatorPaneKey]).toEqual({
+      runId: 'run-active',
+      pendingTasks: 3,
+      activeDispatches: 2,
+      staleDispatches: 1
+    })
+  })
+
+  it('omits orchestration activity when no coordinator run is running', () => {
+    const runtime = new OrcaRuntimeService(store)
+    const coordinatorLeafId = '99999999-9999-4999-8999-999999999999'
+    runtime.preAllocateHandleForPty('pty-coordinator')
+    runtime.setOrchestrationDb({
+      getActiveDispatchForTerminal: vi.fn(() => undefined),
+      getLatestDispatchForTerminal: vi.fn(() => undefined),
+      listCoordinatorRuns: vi.fn(() => []),
+      countOutstandingTasks: vi.fn(() => 0),
+      countActiveDispatches: vi.fn(() => 0),
+      getStaleDispatches: vi.fn(() => [])
+    } as never)
+    runtime.attachWindow(1)
+
+    const result = runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-coordinator',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Codex',
+          activeLeafId: coordinatorLeafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-coordinator',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: coordinatorLeafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-coordinator',
+          paneTitle: null
+        }
+      ]
+    })
+
+    expect(result.orchestrationActivityByPaneKey).toBeUndefined()
+  })
+
+  // Why (#2): the DAG builder is gated on experimentalOrchestrators so un-opted-in
+  // users with a running coordinator don't pay the hot-path cost.
+  it('omits the run DAG when experimentalOrchestrators is off', () => {
+    const runtime = new OrcaRuntimeService(store) // store.getSettings has no flag
+    const coordinatorLeafId = '11111111-1111-4111-8111-111111111111'
+    const coordinatorHandle = runtime.preAllocateHandleForPty('pty-coordinator')
+    const listTasksWithDispatch = vi.fn(() => [])
+    runtime.setOrchestrationDb({
+      listCoordinatorRuns: vi.fn(() => [{ id: 'run-a', coordinator_handle: coordinatorHandle }]),
+      listTasksWithDispatch,
+      getAllMessagesForHandle: vi.fn(() => []),
+      getRunDagChangeToken: vi.fn(() => 'tok')
+    } as never)
+    runtime.attachWindow(1)
+
+    const result = runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-coordinator',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Codex',
+          activeLeafId: coordinatorLeafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-coordinator',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: coordinatorLeafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-coordinator',
+          paneTitle: null
+        }
+      ]
+    })
+
+    expect(result.orchestrationRunDagByPaneKey).toBeUndefined()
+    // The heavy query never ran — the flag gate short-circuits before it.
+    expect(listTasksWithDispatch).not.toHaveBeenCalled()
+  })
+
+  // Why (#6): two concurrent runs on distinct panes must not bleed — pane
+  // resolution, task scoping, and per-handle signal scoping each stay run-local.
+  it('keys each running coordinator run DAG to its own pane without bleeding', () => {
+    const runtime = new OrcaRuntimeService(storeWithOrchestratorsFlag())
+    const leafA = '22222222-2222-4222-8222-222222222222'
+    const leafB = '33333333-3333-4333-8333-333333333333'
+    const paneKeyA = makePaneKey('tab-coord-a', leafA)
+    const paneKeyB = makePaneKey('tab-coord-b', leafB)
+    const handleA = runtime.preAllocateHandleForPty('pty-coord-a')
+    const handleB = runtime.preAllocateHandleForPty('pty-coord-b')
+
+    runtime.setOrchestrationDb({
+      listCoordinatorRuns: vi.fn(() => [
+        { id: 'run-a', coordinator_handle: handleA },
+        { id: 'run-b', coordinator_handle: handleB }
+      ]),
+      listTasksWithDispatch: vi.fn(({ coordinatorRunId }: { coordinatorRunId: string }) =>
+        coordinatorRunId === 'run-a'
+          ? [makeDagTaskRow({ id: 'task-a', assignee_handle: 'term_worker_a' })]
+          : [makeDagTaskRow({ id: 'task-b', assignee_handle: 'term_worker_b' })]
+      ),
+      getAllMessagesForHandle: vi.fn((handle: string) =>
+        handle === handleA
+          ? [makeSignalMessage({ taskId: 'task-a', phase: 'implementing' })]
+          : [makeSignalMessage({ taskId: 'task-b', phase: 'reviewing' })]
+      ),
+      getRunDagChangeToken: vi.fn((runId: string) => `${runId}:1`)
+    } as never)
+    runtime.attachWindow(1)
+
+    const result = runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-coord-a',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'A',
+          activeLeafId: leafA,
+          layout: null
+        },
+        {
+          tabId: 'tab-coord-b',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'B',
+          activeLeafId: leafB,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-coord-a',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: leafA,
+          paneRuntimeId: 1,
+          ptyId: 'pty-coord-a',
+          paneTitle: null
+        },
+        {
+          tabId: 'tab-coord-b',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: leafB,
+          paneRuntimeId: 2,
+          ptyId: 'pty-coord-b',
+          paneTitle: null
+        }
+      ]
+    })
+
+    const dagA = result.orchestrationRunDagByPaneKey?.[paneKeyA]
+    const dagB = result.orchestrationRunDagByPaneKey?.[paneKeyB]
+    expect(dagA?.runId).toBe('run-a')
+    expect(dagA?.tasks.map((task) => task.id)).toEqual(['task-a'])
+    expect(dagA?.tasks[0]?.dispatch?.assigneeHandle).toBe('term_worker_a')
+    expect(dagA?.tasks[0]?.signal).toEqual({ phase: 'implementing', summary: null })
+    expect(dagB?.runId).toBe('run-b')
+    expect(dagB?.tasks.map((task) => task.id)).toEqual(['task-b'])
+    expect(dagB?.tasks[0]?.dispatch?.assigneeHandle).toBe('term_worker_b')
+    // Run B's signal never bleeds into run A.
+    expect(dagB?.tasks[0]?.signal).toEqual({ phase: 'reviewing', summary: null })
+  })
+
+  // Why (#1, perf): the heavy listTasksWithDispatch/getAllMessagesForHandle run
+  // only when the cheap change token moves, not on every coalesced sync tick.
+  it('reuses the cached run DAG snapshot while the change token is unchanged', () => {
+    const runtime = new OrcaRuntimeService(storeWithOrchestratorsFlag())
+    const leafId = '44444444-4444-4444-8444-444444444444'
+    const handle = runtime.preAllocateHandleForPty('pty-coordinator')
+    let token = 'tok-1'
+    const listTasksWithDispatch = vi.fn(() => [makeDagTaskRow({ id: 'task-a' })])
+    const getAllMessagesForHandle = vi.fn(() => [] as unknown[])
+    runtime.setOrchestrationDb({
+      listCoordinatorRuns: vi.fn(() => [{ id: 'run-a', coordinator_handle: handle }]),
+      listTasksWithDispatch,
+      getAllMessagesForHandle,
+      getRunDagChangeToken: vi.fn(() => token)
+    } as never)
+    runtime.attachWindow(1)
+
+    const graph = {
+      tabs: [
+        {
+          tabId: 'tab-coordinator',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Codex',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-coordinator',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-coordinator',
+          paneTitle: null
+        }
+      ]
+    }
+
+    runtime.syncWindowGraph(1, graph)
+    runtime.syncWindowGraph(1, graph) // token unchanged → served from cache
+    expect(listTasksWithDispatch).toHaveBeenCalledTimes(1)
+    expect(getAllMessagesForHandle).toHaveBeenCalledTimes(1)
+
+    token = 'tok-2' // a real change → recompute
+    runtime.syncWindowGraph(1, graph)
+    expect(listTasksWithDispatch).toHaveBeenCalledTimes(2)
+    expect(getAllMessagesForHandle).toHaveBeenCalledTimes(2)
+  })
+
   it('falls back to cwd lineage when the caller terminal handle is stale', async () => {
     const parentPath = '/tmp/worktree-parent'
     const childPath = '/tmp/workspaces/cwd-child'
@@ -17640,7 +18330,11 @@ describe('OrcaRuntimeService', () => {
           ORCA_ROOT_PATH: '/tmp/repo',
           ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-hook-skip'
         }
-      }
+      },
+      // F2 #13: the plain initial (interactive) terminal — spawn #1, NOT the
+      // Setup terminal (spawn #2) — is surfaced so the orchestration adapter can
+      // target it directly instead of re-discovering positionally.
+      initialTerminal: { handle: expect.any(String) }
     })
     expect(activateWorktree).not.toHaveBeenCalled()
     expect(spawn).toHaveBeenNthCalledWith(

@@ -42,6 +42,7 @@ import { branchName } from '@/lib/git-utils'
 import { markInputQuietSchedulerInput, scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
 import { clearSessionCommitDraftForWorktree } from '@/lib/source-control-commit-draft-session'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
+import { ORCASTRATOR_DISPLAY_PREFIX } from '@/store/slices/orchestrators'
 import { showPreservedBranchToast } from '@/components/sidebar/preserved-branch-toast'
 import { translate } from '@/i18n/i18n'
 import {
@@ -2246,7 +2247,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                           ...(startup.startupCommandDelivery
                             ? { startupCommandDelivery: startup.startupCommandDelivery }
                             : {}),
-                          activate: true
+                          // Why: programmatic (director/coordinator) creates pass
+                          // suppressActivation so the host reveals the worktree
+                          // without switching the user's active tab to it; manual
+                          // creates leave it unset and still activate.
+                          activate: options?.suppressActivation !== true
                         }
                       : {})
                   },
@@ -2294,12 +2299,18 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             }
           })
           showLocalBaseRefRefreshToast(result.localBaseRefRefresh)
-          showLocalBaseRefUpdateSuggestionToast(result.localBaseRefUpdateSuggestion, {
-            updateSettings: get().updateSettings,
-            getSettings: () => get().settings,
-            openSettingsPage: get().openSettingsPage,
-            openSettingsTarget: get().openSettingsTarget
-          })
+          // Why: an Orcastrator's worktree is coordination scratch space, not a
+          // place AI diffs are generated against base — the "local main is behind"
+          // nudge is a false alarm there, so suppress it for director worktrees.
+          const isOrchestratorWorktree = (displayName ?? '').startsWith(ORCASTRATOR_DISPLAY_PREFIX)
+          if (!isOrchestratorWorktree) {
+            showLocalBaseRefUpdateSuggestionToast(result.localBaseRefUpdateSuggestion, {
+              updateSettings: get().updateSettings,
+              getSettings: () => get().settings,
+              openSettingsPage: get().openSettingsPage,
+              openSettingsTarget: get().openSettingsTarget
+            })
+          }
           return result
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)

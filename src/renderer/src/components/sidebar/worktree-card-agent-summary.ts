@@ -47,6 +47,10 @@ export function formatSummaryStateLabel(state: AgentDotState): string {
       return 'done'
     case 'idle':
       return 'idle'
+    case 'supervising':
+      return 'supervising'
+    case 'stalled':
+      return 'stalled'
     case 'permission':
       return 'needs attention'
   }

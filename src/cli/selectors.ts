@@ -5,6 +5,7 @@ import type {
   RuntimeWorktreeRecord
 } from '../shared/runtime-types'
 import { isPathInsideOrEqual } from '../shared/cross-platform-path'
+import { isOrchestratorDisplayName } from '../shared/orchestrator-identity'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime-client'
 import { getOptionalStringFlag, getRequiredStringFlag } from './flags'
@@ -51,10 +52,10 @@ function isWithinPath(parentPath: string, childPath: string): boolean {
   return relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath))
 }
 
-export async function resolveCurrentWorktreeSelector(
+async function resolveEnclosingWorktreeRecord(
   cwd: string,
   client: RuntimeClient
-): Promise<string> {
+): Promise<RuntimeWorktreeRecord> {
   assertLocalCwdWorktreeSelector('current', client)
 
   const currentPath = resolvePath(cwd)
@@ -79,11 +80,35 @@ export async function resolveCurrentWorktreeSelector(
     )
   }
 
-  // Why: users expect "active/current" to mean the enclosing managed worktree
-  // even from nested subdirectories. Resolve to the concrete runtime id here:
-  // duplicate repo registrations can expose the same Git worktree path, and a
-  // path selector would throw selector_ambiguous after losing the repo id.
-  return `id:${enclosingWorktree.id}`
+  return enclosingWorktree
+}
+
+// Why: users expect "active/current" to mean the enclosing managed worktree even
+// from nested subdirectories. Resolve to the concrete runtime id: duplicate repo
+// registrations can expose the same Git worktree path, and a path selector would
+// throw selector_ambiguous after losing the repo id. `isOrchestrator` lets the
+// create path suppress worker focus-steal when a director spawns from its shell.
+export type CurrentWorktreeContext = {
+  selector: string
+  isOrchestrator: boolean
+}
+
+export async function resolveCurrentWorktreeContext(
+  cwd: string,
+  client: RuntimeClient
+): Promise<CurrentWorktreeContext> {
+  const enclosingWorktree = await resolveEnclosingWorktreeRecord(cwd, client)
+  return {
+    selector: `id:${enclosingWorktree.id}`,
+    isOrchestrator: isOrchestratorDisplayName(enclosingWorktree.displayName)
+  }
+}
+
+export async function resolveCurrentWorktreeSelector(
+  cwd: string,
+  client: RuntimeClient
+): Promise<string> {
+  return (await resolveCurrentWorktreeContext(cwd, client)).selector
 }
 
 export async function getOptionalWorktreeSelector(

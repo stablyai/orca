@@ -25,6 +25,7 @@ import type {
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
+import { openOrchestratorLaunchForWorkItem } from '@/lib/send-work-item-to-orchestrator'
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/folder-workspace-composer-helpers'
 
 type ComposerModalData = {
@@ -178,6 +179,30 @@ function QuickTabBody({
   const handleCreate = useCallback(async (): Promise<void> => {
     await submitQuick(quickAgent)
   }, [quickAgent, submitQuick])
+
+  // Why: when the composer was opened from a tracked issue, offer to hand that
+  // issue to a director instead of creating a single worktree — covers every
+  // provider in one place since all of them route their "Use" through here.
+  // Gated on the experimental flag and only when an issue is actually attached.
+  const linkedWorkItem = modalData.linkedWorkItem ?? null
+  const showOrchestrators = settings?.experimentalOrchestrators ?? false
+  const selectedRepoId = cardProps.repoId
+  const handleSendToOrchestrator = useMemo<(() => void) | undefined>(() => {
+    if (!showOrchestrators || !linkedWorkItem) {
+      return undefined
+    }
+    const item = linkedWorkItem
+    return () => {
+      openOrchestratorLaunchForWorkItem({
+        provider: item.provider,
+        title: item.title,
+        url: item.url,
+        number: item.number,
+        identifier: item.jiraIdentifier ?? item.linearIdentifier,
+        repoId: item.repoId ?? selectedRepoId
+      })
+    }
+  }, [showOrchestrators, linkedWorkItem, selectedRepoId])
   const selectedProjectOption = cardProps.projectOptions.find(
     (option) => option.id === cardProps.selectedProjectId
   )
@@ -269,6 +294,7 @@ function QuickTabBody({
         primaryActionLabel={primaryActionLabel}
         onOpenAgentSettings={() => setAgentSettingsOpen(true)}
         onCreate={() => void handleCreate()}
+        onSendToOrchestrator={handleSendToOrchestrator}
       />
       <AgentSettingsDialog open={agentSettingsOpen} onOpenChange={setAgentSettingsOpen} />
     </>

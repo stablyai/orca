@@ -184,6 +184,14 @@
   --git-decoration-untracked: #007100;
   --git-decoration-copied: #007acc;
   --git-decoration-ignored: #8c8c8c;
+  /* GitHub-convention PR/MR state badge colors (merged = purple, open = green,
+     closed = red, draft = gray). Same provider-parity exception the
+     git-decoration palette makes for VS Code; identical in both themes so the
+     saturated solid pills read consistently on light and dark. */
+  --pr-state-merged: #8250df;
+  --pr-state-open: #1a7f37;
+  --pr-state-closed: #cf222e;
+  --pr-state-draft: #6e7781;
   --git-graph-ref: #007acc;
   --git-graph-remote-ref: #b66dff;
   --git-graph-base-ref: #ea5c00;
@@ -963,13 +971,15 @@
   background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
 }
 
-[data-worktree-card-surface][data-worktree-card-active='primary'] {
+[data-worktree-card-surface][data-worktree-card-active='primary'],
+.orcastrator-active-surface {
   border-color: color-mix(in srgb, var(--sidebar-border) 40%, transparent);
   background: color-mix(in srgb, var(--sidebar-foreground) 8%, transparent);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--sidebar-foreground) 4%, transparent);
 }
 
-.dark [data-worktree-card-surface][data-worktree-card-active='primary'] {
+.dark [data-worktree-card-surface][data-worktree-card-active='primary'],
+.dark .orcastrator-active-surface {
   background: color-mix(in srgb, var(--sidebar-foreground) 10%, transparent);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--sidebar-foreground) 3%, transparent);
 }

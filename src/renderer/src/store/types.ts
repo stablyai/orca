@@ -22,6 +22,8 @@ import type { BrowserSlice } from './slices/browser'
 import type { RateLimitSlice } from './slices/rate-limits'
 import type { SshSlice } from './slices/ssh'
 import type { AgentStatusSlice } from './slices/agent-status'
+import type { OrchestrationActivitySlice } from './slices/orchestration-activity'
+import type { OrchestrationRunDagSlice } from './slices/orchestration-run-dag'
 import type { DiffCommentsSlice } from './slices/diffComments'
 import type { DetectedAgentsSlice } from './slices/detected-agents'
 import type { WorktreeNavHistorySlice } from './slices/worktree-nav-history'
@@ -30,6 +32,7 @@ import type { WorkspaceCleanupSlice } from './slices/workspace-cleanup'
 import type { RuntimeStatusSlice } from './slices/runtime-status'
 import type { PullRequestGenerationSlice } from './slices/pull-request-generation'
 import type { CommitMessageGenerationSlice } from './slices/commit-message-generation'
+import type { OrchestratorsSlice } from './slices/orchestrators'
 import type { PinnedTabCloseConfirmSlice } from './slices/pinned-tab-close-confirm'
 
 export type AppState = RepoSlice &
@@ -56,6 +59,8 @@ export type AppState = RepoSlice &
   RateLimitSlice &
   SshSlice &
   AgentStatusSlice &
+  OrchestrationActivitySlice &
+  OrchestrationRunDagSlice &
   DiffCommentsSlice &
   DetectedAgentsSlice &
   WorktreeNavHistorySlice &
@@ -64,4 +69,5 @@ export type AppState = RepoSlice &
   RuntimeStatusSlice &
   PullRequestGenerationSlice &
   CommitMessageGenerationSlice &
+  OrchestratorsSlice &
   PinnedTabCloseConfirmSlice

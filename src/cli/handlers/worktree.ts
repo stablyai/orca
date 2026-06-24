@@ -18,6 +18,7 @@ import {
 import {
   getOptionalWorktreeSelector,
   getRequiredWorktreeSelector,
+  resolveCurrentWorktreeContext,
   resolveCurrentWorktreeSelector
 } from '../selectors'
 import { isTuiAgent } from '../../shared/tui-agent-config'
@@ -213,7 +214,11 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       !noParent && !explicitParentWorkspace && !explicitParentWorktree
         ? getEnvParentWorkspace()
         : undefined
+    const explicitActivate = flags.get('activate') === true
+    const derivedActivate = flags.get('run-hooks') === true || Boolean(startupAgent)
     let cwdParentWorktree: string | undefined
+    let originIsOrchestrator = false
+    let resolvedCwdContext = false
     const needsCwdRepoInference = !flags.has('repo') && !hasWorkspaceProjectTarget(flags)
     if (
       (!explicitParentWorktree && !explicitParentWorkspace && !noParent) ||
@@ -223,12 +228,29 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         // Why: agent shells can lose ORCA_TERMINAL_HANDLE while still running
         // inside an Orca worktree. Cwd keeps CLI-created children nestable and
         // lets create infer the repo for the common current-workspace case.
-        cwdParentWorktree = await resolveCurrentWorktreeSelector(cwd, client)
+        const current = await resolveCurrentWorktreeContext(cwd, client)
+        cwdParentWorktree = current.selector
+        originIsOrchestrator = current.isOrchestrator
       } catch {
         cwdParentWorktree = undefined
       }
+      resolvedCwdContext = true
+    }
+    // Why: a director spawns workers via `orca worktree create --agent`, commonly
+    // with `--no-parent --repo` — which skips the cwd block above. The agent/
+    // run-hooks-derived activation would steal the user's active tab to each new
+    // worker, so resolve the originating (cwd) worktree even when that gate
+    // skipped it, and suppress the activation when the origin is a director shell.
+    // An explicit --activate still wins; the worktree is still created + revealed.
+    if (derivedActivate && !explicitActivate && !resolvedCwdContext) {
+      try {
+        originIsOrchestrator = (await resolveCurrentWorktreeContext(cwd, client)).isOrchestrator
+      } catch {
+        originIsOrchestrator = false
+      }
     }
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
+    const suppressActivation = !explicitActivate && derivedActivate && originIsOrchestrator
     const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
       repo: await getCreateRepoSelector(flags, cwdParentWorktree, client),
       name: getRequiredStringFlag(flags, 'name'),
@@ -237,8 +259,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       runHooks: flags.get('run-hooks') === true,
-      activate:
-        flags.get('activate') === true || flags.get('run-hooks') === true || Boolean(startupAgent),
+      activate: !suppressActivation && (explicitActivate || derivedActivate),
       ...(setupDecision ? { setupDecision } : {}),
       parentWorktree: explicitParentWorktree,
       ...(explicitParentWorkspace ? { parentWorkspace: explicitParentWorkspace } : {}),

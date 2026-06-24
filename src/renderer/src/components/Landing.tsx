@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star, X } from 'lucide-react'
+import {
+  AlertTriangle,
+  ExternalLink,
+  FolderPlus,
+  GitBranchPlus,
+  Network,
+  Star,
+  X
+} from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useAppStore } from '../store'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -230,6 +238,7 @@ function PreflightBanner({
 export default function Landing(): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
   const openModal = useAppStore((s) => s.openModal)
+  const showOrchestrators = useAppStore((s) => s.settings?.experimentalOrchestrators ?? false)
 
   const createTargetLabel =
     repos.length > 0 && repos.every((repo) => isGitRepoKind(repo)) ? 'Worktree' : 'Workspace'
@@ -365,6 +374,22 @@ export default function Landing(): React.JSX.Element {
               {translate('auto.components.Landing.76a95f7f47', 'Create')}
               {createTargetLabel}
             </button>
+
+            {showOrchestrators ? (
+              <button
+                className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-4 py-2 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed enabled:cursor-pointer enabled:hover:bg-accent"
+                disabled={!canCreateWorktree}
+                title={
+                  !canCreateWorktree
+                    ? translate('auto.components.Landing.f05d237049', 'Add a project first')
+                    : undefined
+                }
+                onClick={() => openModal('orchestrator-launch')}
+              >
+                <Network className="size-3.5" />
+                {translate('auto.components.Landing.orchestrator_cta', 'Create Orcastrator')}
+              </button>
+            ) : null}
           </div>
 
           <div className="mt-6 w-full max-w-xs space-y-2">
