@@ -376,6 +376,55 @@ describe('useEditorPanelContentState', () => {
     expect(latestFileContents[activeFile.id]?.content).toBe('fresh content')
   })
 
+  it('keeps non-tab conflict-review file generations until the load resolves', async () => {
+    const activeFile = createOpenFile({
+      id: 'wt-1::conflict-review',
+      filePath: '/repo',
+      relativePath: 'Conflict Review',
+      language: 'plaintext',
+      mode: 'conflict-review',
+      conflictReview: {
+        source: 'live-summary',
+        snapshotTimestamp: 123,
+        entries: [{ path: 'src/conflict.ts', conflictKind: 'both_modified' }]
+      }
+    })
+    const conflictRead = createDeferred<FileContent>()
+    mocks.readRuntimeFileContent.mockReturnValueOnce(conflictRead.promise)
+
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    await act(async () => {
+      root?.render(
+        <HookProbe
+          activeFile={activeFile}
+          openFiles={[activeFile]}
+          gitStatusByWorktree={{
+            'wt-1': [
+              {
+                path: 'src/conflict.ts',
+                status: 'modified',
+                area: 'unstaged',
+                conflictStatus: 'unresolved',
+                conflictKind: 'both_modified'
+              }
+            ]
+          }}
+        />
+      )
+    })
+    await vi.waitFor(() => expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(1))
+
+    await act(async () => {
+      conflictRead.resolve({ content: '<<<<<<< HEAD\ncurrent\n=======\nincoming\n>>>>>>> branch', isBinary: false })
+      await conflictRead.promise
+    })
+
+    expect(latestFileContents['/repo/src/conflict.ts']?.content).toContain('incoming')
+  })
+
   it('ignores an older file read after closing and reopening the same tab id', async () => {
     const activeFile = createOpenFile()
     const staleRead = createDeferred<FileContent>()

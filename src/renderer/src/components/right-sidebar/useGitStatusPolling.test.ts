@@ -388,6 +388,102 @@ describe('useGitStatusPolling', () => {
     vi.useRealTimers()
   })
 
+  it('does not refresh git status from file-watch events while the window is hidden', async () => {
+    vi.resetModules()
+    vi.useFakeTimers()
+    const windowListeners = new Map<string, EventListener[]>()
+    const emitWorktreeFileChange = (payload: FsChangedPayload): void => {
+      for (const listener of windowListeners.get('orca:worktree-file-change') ?? []) {
+        listener({ detail: { payload, runtimeEnvironmentId: null } } as CustomEvent)
+      }
+    }
+    const status: GitStatusResult = {
+      entries: [],
+      conflictOperation: 'unknown',
+      head: 'abc123',
+      branch: 'refs/heads/main'
+    }
+    const state: PollState = {
+      activeWorktreeId: worktree.id,
+      updateWorktreeGitIdentity: vi.fn(),
+      setGitStatus: vi.fn(),
+      fetchUpstreamStatus: vi.fn().mockResolvedValue(undefined),
+      setUpstreamStatus: vi.fn(),
+      setConflictOperation: vi.fn(),
+      gitConflictOperationByWorktree: {},
+      sshConnectionStates: new Map(),
+      rightSidebarOpen: true,
+      rightSidebarTab: 'source-control',
+      openFiles: []
+    }
+    const gitStatus = vi.fn().mockResolvedValue(status)
+
+    vi.doMock('react', async () => {
+      const actual = await vi.importActual<typeof React>('react')
+      return {
+        ...actual,
+        useCallback: (callback: unknown) => callback,
+        useEffect: (effect: () => void | (() => void)) => {
+          effect()
+        },
+        useMemo: (factory: () => unknown) => factory(),
+        useRef: <T>(initial: T) => ({ current: initial })
+      }
+    })
+    vi.doMock('@/store', () => ({
+      useAppStore: Object.assign((selector: (s: PollState) => unknown) => selector(state), {
+        getState: () => ({ settings: null })
+      })
+    }))
+    vi.doMock('@/store/selectors', () => ({
+      useActiveWorktree: () => worktree,
+      useWorktreeById: () => worktree,
+      useAllWorktrees: () => [worktree],
+      useRepoById: () => repo,
+      useRepoMap: () => new Map([[repo.id, repo]])
+    }))
+    vi.doMock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
+    vi.stubGlobal('window', {
+      api: {
+        git: { status: gitStatus },
+        fs: {
+          watchWorktree: vi.fn().mockResolvedValue(undefined),
+          unwatchWorktree: vi.fn().mockResolvedValue(undefined),
+          onFsChanged: vi.fn(() => vi.fn())
+        }
+      },
+      addEventListener: vi.fn((type: string, listener: EventListener) => {
+        windowListeners.set(type, [...(windowListeners.get(type) ?? []), listener])
+      }),
+      removeEventListener: vi.fn((type: string, listener: EventListener) => {
+        windowListeners.set(
+          type,
+          (windowListeners.get(type) ?? []).filter((candidate) => candidate !== listener)
+        )
+      })
+    })
+    vi.stubGlobal('document', {
+      visibilityState: 'hidden',
+      hasFocus: () => false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    })
+
+    const { useGitStatusPolling: runPolling } = await import('./useGitStatusPolling')
+    GitStatusPollingHarness({ runPolling })
+
+    expect(windowListeners.get('orca:worktree-file-change')?.length).toBe(1)
+    emitWorktreeFileChange({
+      worktreePath: '/repo',
+      events: [{ kind: 'update', absolutePath: '/repo/a.ts' }]
+    })
+    await vi.advanceTimersByTimeAsync(200)
+
+    expect(gitStatus).not.toHaveBeenCalled()
+
+    vi.useRealTimers()
+  })
+
   it('keeps a pending file-watch refresh across harmless open-file rerenders', async () => {
     vi.resetModules()
     vi.useFakeTimers()

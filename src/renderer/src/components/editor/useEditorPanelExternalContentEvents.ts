@@ -1,4 +1,4 @@
-import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
+import { useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import type { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import {
@@ -124,22 +124,27 @@ export function usePruneClosedEditorContent(
   setFileContents: Dispatch<SetStateAction<Record<string, FileContent>>>,
   setDiffContents: Dispatch<SetStateAction<Record<string, DiffContent>>>
 ): void {
+  const knownOpenFileIdsRef = useRef<Set<string>>(new Set())
+
   useEffect(() => {
     const openIds = new Set(openFiles.map((f) => f.id))
+    for (const fileId of openIds) {
+      knownOpenFileIdsRef.current.add(fileId)
+    }
     for (const fileId of Object.keys(fileLoadRetryAttemptsRef.current)) {
       if (!openIds.has(fileId)) {
         delete fileLoadRetryAttemptsRef.current[fileId]
       }
     }
-    // Why: read generations are per-open-tab race guards; closed tab ids should
-    // not accumulate across long editor sessions.
+    // Why: conflict-review entry loads use absolute paths as content ids; only
+    // ids that have belonged to tabs are safe to prune as closed tabs.
     for (const fileId of Object.keys(fileReadGenerationRef.current)) {
-      if (!openIds.has(fileId)) {
+      if (knownOpenFileIdsRef.current.has(fileId) && !openIds.has(fileId)) {
         delete fileReadGenerationRef.current[fileId]
       }
     }
     for (const fileId of Object.keys(diffReadGenerationRef.current)) {
-      if (!openIds.has(fileId)) {
+      if (knownOpenFileIdsRef.current.has(fileId) && !openIds.has(fileId)) {
         delete diffReadGenerationRef.current[fileId]
       }
     }
@@ -153,6 +158,7 @@ export function usePruneClosedEditorContent(
     diffReadGenerationRef,
     fileLoadRetryAttemptsRef,
     fileReadGenerationRef,
+    knownOpenFileIdsRef,
     openFiles,
     setDiffContents,
     setFileContents

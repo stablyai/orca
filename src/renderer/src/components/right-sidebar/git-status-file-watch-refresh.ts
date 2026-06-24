@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { shouldPollActiveGitStatus } from '@/lib/passive-macos-app-data-access'
+import { isWindowVisible } from '@/lib/window-visibility-interval'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   normalizeRuntimePathForComparison,
@@ -99,6 +100,9 @@ export function useGitStatusFileWatchRefresh({
     let refreshTimer: ReturnType<typeof setTimeout> | null = null
 
     const scheduleRefresh = (): void => {
+      if (!isWindowVisible()) {
+        return
+      }
       if (refreshTimer) {
         clearTimeout(refreshTimer)
       }
@@ -106,6 +110,9 @@ export function useGitStatusFileWatchRefresh({
       // already coalesced and should only be nudged once per burst.
       refreshTimer = setTimeout(() => {
         refreshTimer = null
+        if (!isWindowVisible()) {
+          return
+        }
         fetchStatusRef.current()
       }, WATCH_REFRESH_DEBOUNCE_MS)
     }
