@@ -16,6 +16,8 @@ function stopNestedWorktreeCardBubble(event: React.SyntheticEvent<HTMLElement>):
 export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorkspaceKey = useAppStore((s) => s.activeWorkspaceKey)
+  const experimentalNewWorktreeCardStyle =
+    useAppStore((s) => s.settings?.experimentalNewWorktreeCardStyle) === true
   const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
@@ -58,9 +60,7 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
     const safeLineageChildren = lineageChildren.filter((child) => !nextAncestorIds.has(child.id))
     const hasSafeLineageChildren = safeLineageChildren.length > 0
     const lineageGeometry = getLineageNestedRowGeometry({
-      // Why: folder-workspace lineage always uses the in-card child geometry,
-      // regardless of the main sidebar experimental-card toggle.
-      experimentalNewWorktreeCardStyle: true,
+      experimentalNewWorktreeCardStyle,
       inheritedCardContentIndent: 0,
       lineageDepth: ancestorIds.size
     })

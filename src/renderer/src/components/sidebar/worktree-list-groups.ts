@@ -145,14 +145,24 @@ type ProjectGroupingIndex = {
   multiSetupProjectHostKeys: Set<string>
 }
 
+const projectGroupingIndexCache = new WeakMap<ProjectGroupingModel, ProjectGroupingIndex | null>()
+
 function projectHostKey(projectId: string, hostId: string): string {
   return `${projectId}::${hostId}`
 }
 
 function buildProjectGroupingIndex(model?: ProjectGroupingModel): ProjectGroupingIndex | null {
-  const projects = model?.projects ?? []
-  const projectHostSetups = model?.projectHostSetups ?? []
+  if (!model) {
+    return null
+  }
+  const cached = projectGroupingIndexCache.get(model)
+  if (cached !== undefined) {
+    return cached
+  }
+  const projects = model.projects ?? []
+  const projectHostSetups = model.projectHostSetups ?? []
   if (projects.length === 0 || projectHostSetups.length === 0) {
+    projectGroupingIndexCache.set(model, null)
     return null
   }
   const setupCountByProjectHost = new Map<string, number>()
@@ -166,18 +176,27 @@ function buildProjectGroupingIndex(model?: ProjectGroupingModel): ProjectGroupin
       multiSetupProjectHostKeys.add(key)
     }
   }
-  return {
+  const index = {
     projectById: new Map(projects.map((project) => [project.id, project])),
     setupByRepoId: new Map(projectHostSetups.map((setup) => [setup.repoId, setup])),
     multiSetupProjectHostKeys
   }
+  projectGroupingIndexCache.set(model, index)
+  return index
+}
+
+export type ProjectHeaderRevealTarget = {
+  key: string
+  label: string
+  repo?: Repo
+  projectId?: string
 }
 
 function getProjectGroupingForRepo(
   repoId: string,
   repoMap: Map<string, Repo>,
   projectIndex: ProjectGroupingIndex | null
-): { key: string; label: string; repo?: Repo; projectId?: string } {
+): ProjectHeaderRevealTarget {
   const repo = repoMap.get(repoId)
   const setup = projectIndex?.setupByRepoId.get(repoId)
   const project = setup ? projectIndex?.projectById.get(setup.projectId) : undefined
@@ -205,6 +224,14 @@ function getProjectGroupingForRepo(
     repo,
     projectId: project.id
   }
+}
+
+export function getProjectHeaderRevealTarget(
+  repoId: string,
+  repoMap: Map<string, Repo>,
+  projectGrouping?: ProjectGroupingModel
+): ProjectHeaderRevealTarget {
+  return getProjectGroupingForRepo(repoId, repoMap, buildProjectGroupingIndex(projectGrouping))
 }
 
 function addRepoIdToGroup(group: WorktreeGroupEntry, repoId: string): void {
@@ -1153,8 +1180,17 @@ export function buildRows(
     appendProjectGroup(projectGroup, 0)
   }
 
+  const remainingRepoEntries = [...(groupByProjectGroupId.get(null) ?? [])]
+  for (const [projectGroupId, entries] of groupByProjectGroupId) {
+    if (projectGroupId === null || projectGroupsById.has(projectGroupId)) {
+      continue
+    }
+    // Why: startup can have repos from hosts whose project-group metadata was
+    // not fetched yet; missing metadata must not make those repos disappear.
+    remainingRepoEntries.push(...entries)
+  }
   appendOrderedGroups(
-    withRepoSectionDisplayLabels(sortRepoEntriesWithinGroup(groupByProjectGroupId.get(null) ?? [])),
+    withRepoSectionDisplayLabels(sortRepoEntriesWithinGroup(remainingRepoEntries)),
     0
   )
 
@@ -1217,9 +1253,15 @@ export function getGroupKeysForWorktree(
   const visited = new Set<string>()
   let currentGroupId = repo?.projectGroupId ?? null
   while (currentGroupId && !visited.has(currentGroupId)) {
+    const group = groupsById.get(currentGroupId)
+    if (!group) {
+      // Why: repos can arrive before their remote Project Group metadata; reveal
+      // keys must match the top-level fallback rows buildRows actually renders.
+      break
+    }
     visited.add(currentGroupId)
     groupIds.unshift(currentGroupId)
-    const parentId = groupsById.get(currentGroupId)?.parentGroupId ?? null
+    const parentId = group.parentGroupId ?? null
     currentGroupId = parentId && groupsById.has(parentId) ? parentId : null
   }
   return [...groupIds.map((id) => getProjectGroupHeaderKey(id)), groupKey]

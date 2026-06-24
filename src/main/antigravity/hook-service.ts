@@ -6,9 +6,11 @@ import { join } from 'path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
+  buildManagedCommandHook,
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
   hookDefinitionHasManagedCommand,
+  MANAGED_HOOK_TIMEOUT_SECONDS,
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
@@ -228,10 +230,12 @@ function buildEventDefinition(event: AntigravityEvent, command: string): HookDef
   if (event.schema === 'tool') {
     return {
       matcher: '*',
-      hooks: [{ type: 'command', command }]
+      hooks: [buildManagedCommandHook(command)]
     }
   }
-  return { type: 'command', command }
+  // Antigravity's direct-command event schema carries the command on the
+  // definition; add the host-level timeout backstop alongside it.
+  return { type: 'command', command, timeout: MANAGED_HOOK_TIMEOUT_SECONDS }
 }
 
 function removeManagedCommandsFromBundle(

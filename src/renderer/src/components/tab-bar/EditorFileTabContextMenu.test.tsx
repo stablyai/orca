@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const shortcutLabelMock = vi.hoisted(() => vi.fn(() => '⌘⌥W'))
+const shortcutLabelMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: function DropdownMenu(props: { children?: unknown }) {
@@ -63,10 +63,10 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
-// Why: the menu reads the live binding for tab.closeAll; stub it to a fixed
-// label so the test asserts the shortcut is surfaced, not its platform glyphs.
+// Why: the menu reads live shortcut bindings; stub them to fixed labels so
+// the test asserts each assigned action surfaces its own shortcut chip.
 vi.mock('@/hooks/useShortcutLabel', () => ({
-  useShortcutLabel: shortcutLabelMock
+  useOptionalShortcutLabel: shortcutLabelMock
 }))
 
 const useAppStoreMock = Object.assign(
@@ -208,10 +208,23 @@ async function renderMenu(): Promise<unknown> {
   })
 }
 
+function assignedShortcutLabel(actionId: string): string | null {
+  switch (actionId) {
+    case 'tab.rename':
+      return '⌘R'
+    case 'tab.close':
+      return '⌘W'
+    case 'tab.closeAll':
+      return '⌘⌥W'
+    default:
+      return null
+  }
+}
+
 describe('EditorFileTabContextMenu close-all shortcut', () => {
   beforeEach(() => {
     vi.resetModules()
-    shortcutLabelMock.mockReturnValue('⌘⌥W')
+    shortcutLabelMock.mockImplementation(assignedShortcutLabel)
     vi.stubGlobal('navigator', { userAgent: 'Mac' })
   })
 
@@ -219,26 +232,37 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
     vi.unstubAllGlobals()
   })
 
-  it('renders the tab.closeAll shortcut next to Close All Editor Tabs', async () => {
+  it('renders assigned shortcuts next to Rename, Close, and Close All Editor Tabs', async () => {
     const tree = expandNode(await renderMenu())
+    const menuItems = findElementsByType(tree, 'DropdownMenuItem')
 
-    const closeAllItem = findElementsByType(tree, 'DropdownMenuItem').find((item) =>
+    const renameItem = menuItems.find((item) => extractText(item.props.children).includes('Rename'))
+    const closeItem = menuItems.find((item) => extractText(item.props.children) === 'Close⌘W')
+    const closeAllItem = menuItems.find((item) =>
       extractText(item.props.children).includes('Close All Editor Tabs')
     )
 
+    expect(renameItem).toBeTruthy()
+    expect(closeItem).toBeTruthy()
     expect(closeAllItem).toBeTruthy()
 
-    const shortcut = findElementsByType(closeAllItem, 'DropdownMenuShortcut')
-    expect(shortcut).toHaveLength(1)
-    expect(extractText(shortcut[0].props.children)).toBe('⌘⌥W')
+    const shortcutExpectations: [ReactElementLike | undefined, string][] = [
+      [renameItem, '⌘R'],
+      [closeItem, '⌘W'],
+      [closeAllItem, '⌘⌥W']
+    ]
 
-    // Why: the shortcut hint is exclusive to Close All; sibling items (Close,
-    // Close Tabs To The Right) must not sprout their own chips.
-    expect(findElementsByType(tree, 'DropdownMenuShortcut')).toHaveLength(1)
+    for (const [item, expectedLabel] of shortcutExpectations) {
+      const shortcut = findElementsByType(item, 'DropdownMenuShortcut')
+      expect(shortcut).toHaveLength(1)
+      expect(extractText(shortcut[0].props.children)).toBe(expectedLabel)
+    }
+
+    expect(findElementsByType(tree, 'DropdownMenuShortcut')).toHaveLength(3)
   })
 
   it('hides the shortcut chip when close-all is unassigned', async () => {
-    shortcutLabelMock.mockReturnValue('Unassigned')
+    shortcutLabelMock.mockReturnValue(null)
 
     const tree = expandNode(await renderMenu())
 

@@ -16,6 +16,7 @@ type AiVaultPanelHeaderProps = {
   sessionCount: number
   hasScanResult: boolean
   activeWorktreePath: string | null
+  activeProjectKey: string | null
   scope: AiVaultScope
   agents: readonly AiVaultAgent[]
   sort: AiVaultSort
@@ -39,6 +40,7 @@ export function AiVaultPanelHeader({
   sessionCount,
   hasScanResult,
   activeWorktreePath,
+  activeProjectKey,
   scope,
   agents,
   sort,
@@ -56,7 +58,7 @@ export function AiVaultPanelHeader({
 }: AiVaultPanelHeaderProps): React.JSX.Element {
   return (
     <div className="shrink-0 border-b border-sidebar-border px-2.5 py-2">
-      <div className="flex items-center gap-1.5 @max-[300px]/ai-vault:items-start">
+      <div className="flex items-center gap-1.5">
         <div className="min-w-0 flex-1">
           <div className="truncate text-xs font-semibold text-foreground">
             {/* Why: below 300px the header competes with fixed controls, so compact copy prevents overlap. */}
@@ -97,11 +99,6 @@ export function AiVaultPanelHeader({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1 @max-[300px]/ai-vault:gap-0.5">
-          <VaultScopeSwitch
-            scope={scope}
-            workspaceAvailable={Boolean(activeWorktreePath)}
-            onScopeChange={onScopeChange}
-          />
           <VaultViewMenu
             agents={agents}
             sort={sort}
@@ -134,6 +131,15 @@ export function AiVaultPanelHeader({
             )}
           </Button>
         </div>
+      </div>
+
+      <div className="mt-2">
+        <VaultScopeSwitch
+          scope={scope}
+          workspaceAvailable={Boolean(activeWorktreePath)}
+          projectAvailable={Boolean(activeProjectKey)}
+          onScopeChange={onScopeChange}
+        />
       </div>
 
       <div className="mt-2 flex h-8 items-center gap-1.5 rounded-md border border-sidebar-border bg-input/50 px-2 focus-within:border-sidebar-ring focus-within:ring-[2px] focus-within:ring-sidebar-ring/30">

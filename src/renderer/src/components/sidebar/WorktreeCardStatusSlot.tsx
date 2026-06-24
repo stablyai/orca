@@ -1,6 +1,7 @@
 import React from 'react'
 import { Bell, GitBranch } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
 import { FilledBellIcon } from './WorktreeCardHelpers'
@@ -20,13 +21,16 @@ type WorktreeCardStatusSlotProps = {
   prDisplay?: WorktreeCardPrDisplay | null
   newCardStyle?: boolean
   hasBranchIdentity?: boolean
+  branchIdentityLabel?: string
   className?: string
 }
 
 const QUIET_REVIEW_REPLACEABLE_STATUSES = new Set<WorktreeStatus>(['active', 'done', 'inactive'])
 // Why: a missing review display can also mean provider state is unavailable,
-// so the passive label names the branch cue without claiming no review exists.
-const BRANCH_STATUS_LABEL = 'Branch'
+// so the passive label names the identity cue without claiming no review exists.
+function getDefaultBranchIdentityLabel(): string {
+  return translate('auto.components.sidebar.WorktreeCardStatusSlot.branchIdentity', 'Branch')
+}
 // Why: branch-style SVGs are optically left-heavy; this keeps them aligned with
 // the centered activity dots in the shared status column.
 const compactReviewAndBranchStatusIconClassName = 'size-[13px] translate-x-px'
@@ -93,6 +97,7 @@ export function WorktreeCardStatusSlot({
   prDisplay = null,
   newCardStyle = false,
   hasBranchIdentity = false,
+  branchIdentityLabel,
   className
 }: WorktreeCardStatusSlotProps): React.JSX.Element | null {
   const status = useWorktreeActivityStatus(worktreeId)
@@ -112,7 +117,7 @@ export function WorktreeCardStatusSlot({
     canShowReviewStatus && prDisplay
       ? getReviewStatusTooltip(prDisplay)
       : canShowBranchStatus
-        ? BRANCH_STATUS_LABEL
+        ? (branchIdentityLabel ?? getDefaultBranchIdentityLabel())
         : statusLabel
   const passiveStatusTooltip =
     newCardStyle && isUnread ? `${passiveStatusLabel} · Unread` : passiveStatusLabel

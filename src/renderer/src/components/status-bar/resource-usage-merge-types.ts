@@ -1,4 +1,4 @@
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
 
 /** `null` === "no local sample" (e.g. SSH PTY); UI renders as em-dash. */
 export type Metric = number | null
@@ -50,6 +50,8 @@ export type MergeContext = {
   tabsByWorktree: Record<string, TerminalTab[]>
   /** From useAppStore: maps tabId -> ptyIds[] for the bound check. */
   ptyIdsByTabId: Record<string, string[]>
+  /** From useAppStore: persisted per-leaf PTY wake hints for deferred reattach. */
+  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
   /** From useAppStore: per-tab live pane titles (for label resolution). */
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   /** From useAppStore: false until renderer state can distinguish bound/orphan. */

@@ -6,6 +6,7 @@ import { isAbsolute, join, posix, win32 } from 'path'
 import type { Repo } from '../../shared/types'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
 import Database from '../sqlite/sync-database'
+import { columnExists, tableExists } from './schema-helpers'
 import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
 import type {
   OpenCodeUsageAttributedEvent,
@@ -133,18 +134,6 @@ export async function getProcessedDatabaseInfo(
 
 async function yieldToEventLoop(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0))
-}
-
-function tableExists(db: Database.Database, tableName: string): boolean {
-  const row = db
-    .prepare("SELECT 1 AS found FROM sqlite_master WHERE type = 'table' AND name = ?")
-    .get(tableName) as { found?: number } | undefined
-  return row?.found === 1
-}
-
-function columnExists(db: Database.Database, tableName: string, columnName: string): boolean {
-  const rows = db.prepare(`PRAGMA table_info(${tableName})`).all() as { name?: string }[]
-  return rows.some((row) => row.name === columnName)
 }
 
 function getProjectJoin(db: Database.Database): string {

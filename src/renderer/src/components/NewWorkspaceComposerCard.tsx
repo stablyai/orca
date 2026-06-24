@@ -95,6 +95,10 @@ type NewWorkspaceComposerCardProps = {
   canReuseSelectedBranch: boolean
   reuseSelectedBranch: boolean
   onReuseSelectedBranchChange: (next: boolean) => void
+  /** Shows the footer "Create more" switch — worktree targets only. */
+  showCreateMultiple?: boolean
+  createMultiple?: boolean
+  onCreateMultipleChange?: (next: boolean) => void
   smartNameGitHubSourceContext?: TaskSourceContext | null
   /** Advisory shown under the name field when a fork PR can't accept maintainer pushes. */
   forkPushWarning: string | null
@@ -331,6 +335,9 @@ export default function NewWorkspaceComposerCard({
   canReuseSelectedBranch,
   reuseSelectedBranch,
   onReuseSelectedBranchChange,
+  showCreateMultiple = false,
+  createMultiple = false,
+  onCreateMultipleChange,
   smartNameGitHubSourceContext,
   forkPushWarning,
   detectedAgentIds,
@@ -810,7 +817,10 @@ export default function NewWorkspaceComposerCard({
           />
         </div>
 
-        <div>
+        {/* Why: Advanced is a disclosure header, so keep it visually grouped
+            with the content or footer below it while preserving normal spacing
+            from the Agent field above. */}
+        <div className="!mb-2">
           <Button
             type="button"
             variant="ghost"
@@ -828,6 +838,7 @@ export default function NewWorkspaceComposerCard({
         <div
           className={cn(
             'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+            !advancedOpen && '!mt-2',
             advancedOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
           )}
           aria-hidden={!advancedOpen}
@@ -1043,7 +1054,39 @@ export default function NewWorkspaceComposerCard({
         </div>
       ) : null}
 
-      <div className="flex justify-end">
+      <div
+        className={cn(
+          'flex items-center gap-3',
+          showCreateMultiple ? 'justify-between' : 'justify-end'
+        )}
+      >
+        {showCreateMultiple ? (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={createMultiple}
+            onClick={() => onCreateMultipleChange?.(!createMultiple)}
+            className="group flex w-fit cursor-pointer items-center gap-2 rounded-md text-xs text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <span
+              aria-hidden
+              className={cn(
+                'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent transition-colors',
+                createMultiple ? 'bg-foreground' : 'bg-muted-foreground/30'
+              )}
+            >
+              <span
+                className={cn(
+                  'pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform',
+                  createMultiple ? 'translate-x-4' : 'translate-x-0.5'
+                )}
+              />
+            </span>
+            <span>
+              {translate('auto.components.NewWorkspaceComposerCard.createMultiple', 'Create more')}
+            </span>
+          </button>
+        ) : null}
         <Button
           onClick={() => void onCreate()}
           disabled={createDisabled}

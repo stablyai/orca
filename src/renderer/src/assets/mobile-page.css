@@ -557,6 +557,15 @@
   height: 116px;
 }
 
+.mobile-page-root .mp-qr-large {
+  padding: 10px;
+}
+
+.mobile-page-root .mp-qr-large img {
+  width: 164px;
+  height: 164px;
+}
+
 .mobile-page-root .mp-qr-stack {
   display: flex;
   flex-direction: column;
@@ -704,8 +713,9 @@
 }
 
 .mobile-page-root .mp-network-select {
-  min-width: 220px;
-  max-width: 280px;
+  flex: 1 1 180px;
+  min-width: 0;
+  max-width: 240px;
 }
 
 .mobile-page-root .mp-network-refresh {

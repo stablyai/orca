@@ -172,7 +172,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../shared/tui-agent-launch-defaults'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
-import { detectInstalledAgents, detectRemoteAgents } from '../ipc/preflight'
+import { detectInstalledAgentsWithShellPathHydration, detectRemoteAgents } from '../ipc/preflight'
 import {
   markCodexProjectTrusted,
   markCopilotFolderTrusted,
@@ -8518,6 +8518,8 @@ export class OrcaRuntimeService {
         linkedPR = { number: meta.linkedPR, state: 'unknown' }
       }
       summaries.set(worktree.id, {
+        // Why: mobile mirrors desktop workspace grouping/order from persisted
+        // metadata, while older runtimes may not have hydrated every field yet.
         workspaceKind: 'git',
         worktreeId: worktree.id,
         repoId: worktree.repoId,
@@ -8530,6 +8532,9 @@ export class OrcaRuntimeService {
         parentWorktreeId: worktree.parentWorktreeId,
         childWorktreeIds: worktree.childWorktreeIds,
         displayName: worktree.displayName,
+        workspaceStatus: meta?.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
+        sortOrder: meta?.sortOrder ?? 0,
+        ...(meta?.manualOrder !== undefined ? { manualOrder: meta.manualOrder } : {}),
         linkedIssue: worktree.linkedIssue,
         linkedPR,
         linkedLinearIssue: meta?.linkedLinearIssue ?? null,
@@ -8558,6 +8563,8 @@ export class OrcaRuntimeService {
       }
       const worktree = folderWorkspaceToWorktree(folderWorkspace)
       summaries.set(worktree.id, {
+        // Why: folder workspaces use the same mobile grouping/order contract as
+        // git worktrees, but legacy records may be missing order metadata.
         workspaceKind: 'folder-workspace',
         worktreeId: worktree.id,
         repoId: worktree.repoId,
@@ -8570,6 +8577,9 @@ export class OrcaRuntimeService {
         parentWorktreeId: null,
         childWorktreeIds: [],
         displayName: worktree.displayName,
+        workspaceStatus: worktree.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
+        sortOrder: worktree.sortOrder ?? 0,
+        ...(worktree.manualOrder !== undefined ? { manualOrder: worktree.manualOrder } : {}),
         linkedIssue: worktree.linkedIssue ?? null,
         linkedPR: null,
         linkedLinearIssue: worktree.linkedLinearIssue ?? null,
@@ -11436,9 +11446,10 @@ export class OrcaRuntimeService {
     if (!agent) {
       let detected: string[] = []
       try {
+        // Why: startup-draft fallback can run from sparse runtime launch envs too.
         detected = repo.connectionId
           ? await detectRemoteAgents({ connectionId: repo.connectionId })
-          : await detectInstalledAgents()
+          : await detectInstalledAgentsWithShellPathHydration()
       } catch {
         detected = []
       }

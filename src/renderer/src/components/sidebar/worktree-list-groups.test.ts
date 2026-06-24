@@ -1365,6 +1365,89 @@ describe('project groups', () => {
     ])
   })
 
+  it('renders repos whose Project Group metadata is missing as top-level repo rows', () => {
+    const group: ProjectGroup = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const repoWithMissingGroup: Repo = { ...repo, projectGroupId: 'missing-group' }
+
+    const rows = buildRows(
+      'repo',
+      [worktree],
+      new Map([[repoWithMissingGroup.id, repoWithMissingGroup]]),
+      null,
+      new Set(),
+      new Map([[repoWithMissingGroup.id, 0]]),
+      undefined,
+      'manual',
+      {},
+      new Map([[worktree.id, worktree]]),
+      false,
+      undefined,
+      [group]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:group-1',
+      'repo:repo-1'
+    ])
+    expect(rows.find((row) => row.type === 'header' && row.key === 'repo:repo-1')).toMatchObject({
+      projectGroupDepth: 0
+    })
+  })
+
+  it('does not render collapsed child-group repos as missing metadata fallbacks', () => {
+    const parentGroup: ProjectGroup = {
+      id: 'parent-group',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const childGroup: ProjectGroup = {
+      ...parentGroup,
+      id: 'child-group',
+      name: 'Services',
+      parentPath: '/platform/services',
+      parentGroupId: parentGroup.id
+    }
+    const repoInChildGroup: Repo = { ...repo, projectGroupId: childGroup.id }
+
+    const rows = buildRows(
+      'repo',
+      [worktree],
+      new Map([[repoInChildGroup.id, repoInChildGroup]]),
+      null,
+      new Set(['project-group:parent-group']),
+      new Map([[repoInChildGroup.id, 0]]),
+      undefined,
+      'manual',
+      {},
+      new Map([[worktree.id, worktree]]),
+      false,
+      undefined,
+      [parentGroup, childGroup]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:parent-group'
+    ])
+  })
+
   it('disambiguates duplicate top-level repo basenames without renaming repos', () => {
     const group: ProjectGroup = {
       id: 'group-1',
@@ -2106,10 +2189,58 @@ describe('project groups', () => {
 
   it('returns both parent Project Group and repo keys for grouped repo reveals', () => {
     const groupedRepo: Repo = { ...repo, projectGroupId: 'group-1' }
+    const group: ProjectGroup = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
 
     expect(
-      getGroupKeysForWorktree('repo', worktree, new Map([[groupedRepo.id, groupedRepo]]), null)
+      getGroupKeysForWorktree(
+        'repo',
+        worktree,
+        new Map([[groupedRepo.id, groupedRepo]]),
+        null,
+        undefined,
+        undefined,
+        [group]
+      )
     ).toEqual(['project-group:group-1', 'repo:repo-1'])
+  })
+
+  it('returns only the repo key for missing Project Group metadata reveals', () => {
+    const groupedRepo: Repo = { ...repo, projectGroupId: 'missing-group' }
+    const loadedGroup: ProjectGroup = {
+      id: 'loaded-group',
+      name: 'Loaded',
+      parentPath: '/loaded',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+
+    expect(
+      getGroupKeysForWorktree(
+        'repo',
+        worktree,
+        new Map([[groupedRepo.id, groupedRepo]]),
+        null,
+        undefined,
+        undefined,
+        [loadedGroup]
+      )
+    ).toEqual(['repo:repo-1'])
   })
 
   it('returns only the repo key for ungrouped repo reveals', () => {

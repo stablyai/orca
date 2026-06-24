@@ -76,6 +76,7 @@ vi.mock('../gitea/client', () => ({
 import {
   _resetPreflightCache,
   detectInstalledAgents,
+  detectInstalledAgentsWithShellPathHydration,
   registerPreflightHandlers,
   runPreflightCheck
 } from './preflight'
@@ -105,6 +106,7 @@ describe('preflight', () => {
     handleMock.mockReset()
     execFileAsyncMock.mockReset()
     hydrateShellPathMock.mockReset()
+    hydrateShellPathMock.mockResolvedValue({ segments: [], ok: false, failureReason: 'no_shell' })
     mergePathSegmentsMock.mockReset()
     getActiveMultiplexerMock.mockReset()
     getBitbucketAuthStatusMock.mockReset()
@@ -573,6 +575,63 @@ describe('preflight', () => {
     registerPreflightHandlers()
 
     await expect(handlers['preflight:detectAgents']()).resolves.toEqual(['openclaude', 'cursor'])
+  })
+
+  it('hydrates shell PATH before user-facing agent detection', async () => {
+    const originalPath = process.env.PATH
+    process.env.PATH = '/usr/bin'
+    hydrateShellPathMock.mockResolvedValueOnce({
+      segments: ['/home/test/.local/bin'],
+      ok: true,
+      failureReason: 'none'
+    })
+    mergePathSegmentsMock.mockImplementationOnce((segments: string[]) => {
+      process.env.PATH = [...segments, '/usr/bin'].join(':')
+      return segments
+    })
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      if (String(args[0]) === 'codex' && process.env.PATH?.startsWith('/home/test/.local/bin')) {
+        return { stdout: '/home/test/.local/bin/codex\n' }
+      }
+      throw new Error('not found')
+    })
+
+    try {
+      await expect(detectInstalledAgentsWithShellPathHydration()).resolves.toEqual(['codex'])
+    } finally {
+      if (originalPath === undefined) {
+        delete process.env.PATH
+      } else {
+        process.env.PATH = originalPath
+      }
+    }
+    expect(hydrateShellPathMock).toHaveBeenCalledWith()
+    expect(mergePathSegmentsMock).toHaveBeenCalledWith(['/home/test/.local/bin'])
+  })
+
+  it('does not run host shell hydration for WSL agent detection', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'wsl.exe') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      const script = String(args[5])
+      if (script.includes("'claude'")) {
+        return { stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(
+      detectInstalledAgentsWithShellPathHydration({ wslDistro: 'Ubuntu' })
+    ).resolves.toEqual(['claude'])
+    expect(hydrateShellPathMock).not.toHaveBeenCalled()
   })
 
   it('detects Mistral Vibe from the installed vibe executable', async () => {

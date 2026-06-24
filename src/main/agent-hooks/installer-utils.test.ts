@@ -397,6 +397,7 @@ describe('buildWindowsAgentHookPostCommand', () => {
     expect(command).toContain('[Console]::OutputEncoding=$utf8')
     expect(command).toContain('$bodyBytes=$utf8.GetBytes($body)')
     expect(command).toContain("-ContentType 'application/json; charset=utf-8'")
+    expect(command).toContain('-TimeoutSec 2')
     expect(command).toContain('/hook/codex')
     expect(command).not.toContain("'Content-Type'='application/json'")
   })

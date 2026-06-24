@@ -182,7 +182,7 @@ export default function TerminalPaneHeaderOverlay({
               />
             ) : (
               <>
-                {paneCount > 1 && (
+                {paneCount > 1 && !isChromeless && (
                   <div
                     className="pane-title-drag-handle"
                     aria-hidden="true"
@@ -205,7 +205,7 @@ export default function TerminalPaneHeaderOverlay({
                     {title}
                   </button>
                 ) : null}
-                <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0.5">
+                <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0">
                   {showAlwaysOnHeaders ? (
                     <Tooltip>
                       <TooltipTrigger asChild>

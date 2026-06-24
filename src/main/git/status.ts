@@ -52,7 +52,8 @@ import { parseGitRevListFirstParentOid } from '../../shared/git-rev-list-output'
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
 const BULK_CHUNK_SIZE = 100
-const EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS = 30_000
+const EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS = 5 * 60_000
+const MAX_EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_ENTRIES = 512
 
 type EffectiveUpstreamStatusCacheEntry = {
   expiresAt: number
@@ -61,10 +62,22 @@ type EffectiveUpstreamStatusCacheEntry = {
 
 const effectiveUpstreamStatusCache = new Map<string, EffectiveUpstreamStatusCacheEntry>()
 const effectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatus>>()
+const retiredEffectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatus>>()
+const effectiveUpstreamStatusWriteGeneration = new Map<string, number>()
 
 export function clearEffectiveUpstreamStatusCacheForTests(): void {
   effectiveUpstreamStatusCache.clear()
   effectiveUpstreamStatusInFlight.clear()
+  retiredEffectiveUpstreamStatusInFlight.clear()
+  effectiveUpstreamStatusWriteGeneration.clear()
+}
+
+export function getEffectiveUpstreamStatusCacheCountForTests(): number {
+  return effectiveUpstreamStatusCache.size
+}
+
+export function getEffectiveUpstreamStatusGenerationCountForTests(): number {
+  return effectiveUpstreamStatusWriteGeneration.size
 }
 
 export type GetStatusOptions = GitRuntimeOptions & {
@@ -74,6 +87,7 @@ export type GetStatusOptions = GitRuntimeOptions & {
    * `didHitLimit`. Defaults to DEFAULT_GIT_STATUS_LIMIT; 0 disables the cap.
    */
   limit?: number
+  bypassEffectiveUpstreamNegativeCache?: boolean
 }
 
 /**
@@ -168,7 +182,8 @@ export async function getStatus(
           cacheKey,
           worktreePath,
           branchName,
-          options
+          options,
+          options.bypassEffectiveUpstreamNegativeCache === true
         )
       } catch {
         // Why: git status polling should not fail just because the richer
@@ -282,6 +297,64 @@ function getEffectiveUpstreamStatusCacheKey(
   return [worktreePath, options.wslDistro ?? 'host', branchName, upstreamName ?? ''].join('\0')
 }
 
+export function clearEffectiveUpstreamNegativeStatusCache(identity: {
+  worktreePath: string
+  branchName: string
+  upstreamName?: string
+  options?: GitRuntimeOptions
+}): void {
+  const cacheKey = getEffectiveUpstreamStatusCacheKey(
+    identity.worktreePath,
+    identity.branchName,
+    identity.upstreamName,
+    identity.options
+  )
+  retireEffectiveUpstreamStatusProbe(cacheKey)
+  effectiveUpstreamStatusCache.delete(cacheKey)
+  effectiveUpstreamStatusInFlight.delete(cacheKey)
+  effectiveUpstreamStatusWriteGeneration.set(
+    cacheKey,
+    (effectiveUpstreamStatusWriteGeneration.get(cacheKey) ?? 0) + 1
+  )
+}
+
+function retireEffectiveUpstreamStatusProbe(cacheKey: string): void {
+  const retiredProbe = effectiveUpstreamStatusInFlight.get(cacheKey)
+  if (!retiredProbe) {
+    return
+  }
+  retiredEffectiveUpstreamStatusInFlight.set(cacheKey, retiredProbe)
+  void retiredProbe
+    .finally(() => {
+      if (retiredEffectiveUpstreamStatusInFlight.get(cacheKey) === retiredProbe) {
+        retiredEffectiveUpstreamStatusInFlight.delete(cacheKey)
+        trimEffectiveUpstreamStatusGeneration()
+      }
+    })
+    .catch(() => undefined)
+}
+
+function hasPendingEffectiveUpstreamStatusProbe(cacheKey: string): boolean {
+  return (
+    effectiveUpstreamStatusInFlight.has(cacheKey) ||
+    retiredEffectiveUpstreamStatusInFlight.has(cacheKey)
+  )
+}
+
+function trimEffectiveUpstreamStatusGeneration(): void {
+  for (const cacheKey of effectiveUpstreamStatusWriteGeneration.keys()) {
+    if (
+      effectiveUpstreamStatusWriteGeneration.size <= MAX_EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_ENTRIES
+    ) {
+      break
+    }
+    if (hasPendingEffectiveUpstreamStatusProbe(cacheKey)) {
+      continue
+    }
+    effectiveUpstreamStatusWriteGeneration.delete(cacheKey)
+  }
+}
+
 function readCachedEffectiveUpstreamStatus(
   cacheKey: string,
   now: number
@@ -301,12 +374,18 @@ function rememberEffectiveUpstreamStatus(
   cacheKey: string,
   status: GitUpstreamStatus,
   now: number,
-  probedSameNameOriginRef: boolean
+  probedSameNameOriginRef: boolean,
+  writeGeneration: number
 ): void {
   // Why: hasConfiguredPushTarget gates a write action. Re-probe it each poll
   // rather than keeping a stale positive target after branch config changes.
   if (status.hasUpstream || status.hasConfiguredPushTarget) {
     effectiveUpstreamStatusCache.delete(cacheKey)
+    effectiveUpstreamStatusWriteGeneration.set(cacheKey, writeGeneration + 1)
+    trimEffectiveUpstreamStatusGeneration()
+    return
+  }
+  if ((effectiveUpstreamStatusWriteGeneration.get(cacheKey) ?? 0) !== writeGeneration) {
     return
   }
   if (!probedSameNameOriginRef) {
@@ -318,41 +397,58 @@ function rememberEffectiveUpstreamStatus(
     status,
     expiresAt: now + EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS
   })
+  while (effectiveUpstreamStatusCache.size > MAX_EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_ENTRIES) {
+    const oldest = effectiveUpstreamStatusCache.keys().next()
+    if (oldest.done) {
+      break
+    }
+    effectiveUpstreamStatusCache.delete(oldest.value)
+    effectiveUpstreamStatusWriteGeneration.delete(oldest.value)
+  }
+  trimEffectiveUpstreamStatusGeneration()
 }
 
 async function readOrProbeEffectiveUpstreamStatus(
   cacheKey: string,
   worktreePath: string,
   branchName: string,
-  options: GitRuntimeOptions = {}
+  options: GitRuntimeOptions = {},
+  bypassCache = false
 ): Promise<GitUpstreamStatus> {
-  const cached = readCachedEffectiveUpstreamStatus(cacheKey, Date.now())
-  if (cached) {
-    return cached
-  }
+  if (!bypassCache) {
+    const cached = readCachedEffectiveUpstreamStatus(cacheKey, Date.now())
+    if (cached) {
+      return cached
+    }
 
-  const inFlight = effectiveUpstreamStatusInFlight.get(cacheKey)
-  if (inFlight) {
-    return inFlight
+    const inFlight = effectiveUpstreamStatusInFlight.get(cacheKey)
+    if (inFlight) {
+      return inFlight
+    }
   }
 
   // Why: source-control mount and root git refresh can overlap during startup.
   // Coalesce the richer upstream probe so a stable missing ref fails once.
+  const writeGeneration = effectiveUpstreamStatusWriteGeneration.get(cacheKey) ?? 0
   const probe = probeEffectiveUpstreamStatus(worktreePath, branchName, options).then((result) => {
     rememberEffectiveUpstreamStatus(
       cacheKey,
       result.status,
       Date.now(),
-      result.probedSameNameOriginRef
+      result.probedSameNameOriginRef,
+      writeGeneration
     )
     return result.status
   })
-  effectiveUpstreamStatusInFlight.set(cacheKey, probe)
+  if (!bypassCache) {
+    effectiveUpstreamStatusInFlight.set(cacheKey, probe)
+  }
   try {
     return await probe
   } finally {
     if (effectiveUpstreamStatusInFlight.get(cacheKey) === probe) {
       effectiveUpstreamStatusInFlight.delete(cacheKey)
+      trimEffectiveUpstreamStatusGeneration()
     }
   }
 }

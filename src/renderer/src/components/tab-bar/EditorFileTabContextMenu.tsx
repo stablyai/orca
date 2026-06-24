@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
 import { showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { OpenFile } from '../../store/slices/editor'
 import { shouldBlockEditorTabLocalOpen } from './editor-tab-local-open-guard'
 import { translate } from '@/i18n/i18n'
@@ -81,8 +81,9 @@ export function EditorFileTabContextMenu({
   onCloseToRight,
   onOpenMarkdownPreview
 }: EditorFileTabContextMenuProps): React.JSX.Element {
-  const closeAllShortcut = useShortcutLabel('tab.closeAll')
-  const showCloseAllShortcut = closeAllShortcut !== 'Unassigned'
+  const renameShortcut = useOptionalShortcutLabel('tab.rename')
+  const closeShortcut = useOptionalShortcutLabel('tab.close')
+  const closeAllShortcut = useOptionalShortcutLabel('tab.closeAll')
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
@@ -116,6 +117,7 @@ export function EditorFileTabContextMenu({
         >
           <Pencil className="mr-1.5 size-3.5" />
           {translate('auto.components.tab.bar.EditorFileTabContextMenu.68cc610e7f', 'Rename')}
+          {renameShortcut ? <DropdownMenuShortcut>{renameShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onTogglePin}>
@@ -128,13 +130,14 @@ export function EditorFileTabContextMenu({
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
           {translate('auto.components.tab.bar.EditorFileTabContextMenu.1ba8492c5b', 'Close')}
+          {closeShortcut ? <DropdownMenuShortcut>{closeShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onCloseAll}>
           {translate(
             'auto.components.tab.bar.EditorFileTabContextMenu.ba1369dd24',
             'Close All Editor Tabs'
           )}
-          {showCloseAllShortcut ? (
+          {closeAllShortcut ? (
             <DropdownMenuShortcut>{closeAllShortcut}</DropdownMenuShortcut>
           ) : null}
         </DropdownMenuItem>

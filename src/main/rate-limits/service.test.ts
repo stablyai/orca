@@ -353,7 +353,7 @@ describe('RateLimitService', () => {
     expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchClaudeRateLimits).toHaveBeenCalledWith({
       authPreparation: undefined,
-      allowPtyFallback: true
+      allowPtyFallback: false
     })
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(1)
@@ -462,6 +462,67 @@ describe('RateLimitService', () => {
       allowPtyFallback: true
     })
     expect(service.getState().claudeTarget).toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+  })
+
+  it('does not use Claude PTY fallback for system-default usage refreshes', async () => {
+    const service = new RateLimitService()
+    service.setClaudeAuthPreparationResolver(async () => ({
+      configDir: '/tmp/.claude',
+      runtime: 'host',
+      wslDistro: null,
+      wslLinuxConfigDir: null,
+      envPatch: {},
+      stripAuthEnv: false,
+      provenance: 'system'
+    }))
+
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+
+    await service.refresh()
+
+    expect(fetchClaudeRateLimits).toHaveBeenCalledWith({
+      authPreparation: expect.objectContaining({ provenance: 'system' }),
+      allowPtyFallback: false
+    })
+  })
+
+  it('does not use Claude PTY fallback when Claude auth preparation is unavailable', async () => {
+    const service = new RateLimitService()
+
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+
+    await service.refresh()
+
+    expect(fetchClaudeRateLimits).toHaveBeenCalledWith({
+      authPreparation: undefined,
+      allowPtyFallback: false
+    })
+  })
+
+  it('does not use Claude PTY fallback for WSL system-default usage refreshes', async () => {
+    const service = new RateLimitService()
+    service.setClaudeFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    service.setClaudeAuthPreparationResolver(async () => ({
+      configDir: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.claude',
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      wslLinuxConfigDir: '/home/jin/.claude',
+      envPatch: {},
+      stripAuthEnv: true,
+      provenance: 'wsl:Ubuntu:system'
+    }))
+
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+
+    await service.refresh()
+
+    expect(fetchClaudeRateLimits).toHaveBeenCalledWith({
+      authPreparation: expect.objectContaining({ provenance: 'wsl:Ubuntu:system' }),
+      allowPtyFallback: false
+    })
   })
 
   it('does not cache host Codex usage under an outgoing WSL account', async () => {

@@ -30,6 +30,7 @@ describe('getStatusOp', () => {
   })
 
   afterEach(async () => {
+    vi.useRealTimers()
     clearNoEffectiveUpstreamStatusCache()
     await fs.rm(tmpDir, { recursive: true, force: true })
   })
@@ -106,6 +107,34 @@ describe('getStatusOp', () => {
       git.mock.calls.filter(
         ([args]) => args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')
       )
+    ).toHaveLength(1)
+  })
+
+  it('keeps no-effective-upstream probes cached beyond thirty seconds', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args.includes('status')) {
+        return { stdout: buildBranchStatusOutput('abc123', 'feature'), stderr: '' }
+      }
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'feature\n', stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
+        throw new Error('fatal: no upstream configured for branch feature')
+      }
+      if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')) {
+        throw new Error('missing remote branch')
+      }
+      throw new Error(`No upstream fixture for git ${args.join(' ')}`)
+    })
+
+    await getStatusOp(git, { worktreePath: tmpDir })
+    vi.setSystemTime(31_000)
+    await getStatusOp(git, { worktreePath: tmpDir })
+
+    expect(
+      git.mock.calls.filter(([args]) => args[0] === 'rev-parse' && args.includes('HEAD@{u}'))
     ).toHaveLength(1)
   })
 

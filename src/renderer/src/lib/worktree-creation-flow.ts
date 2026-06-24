@@ -196,7 +196,7 @@ async function executeWorktreeCreation(
       startup: request.startupPlan
     })
   }
-  if (stillActive) {
+  if (stillActive && !request.suppressTerminalFocusOnCompletion) {
     queueNewWorkspaceTerminalFocus(worktree.id, activation)
   }
 

@@ -9,6 +9,7 @@ import {
 } from './agent-hibernation-coordinator'
 import { hydrateDrivers, setDriverForPty } from './pane-manager/mobile-driver-state'
 import {
+  registerVisibleTerminalWorktree,
   resetForegroundTerminalWorktreeIdsForTests,
   setForegroundTerminalWorktreeIds
 } from './foreground-terminal-worktrees'
@@ -237,6 +238,29 @@ describe('agent sleep coordinator', () => {
     await vi.advanceTimersByTimeAsync(3000)
 
     expect(shutdown).not.toHaveBeenCalled()
+  })
+
+  it('does not hibernate a worktree with a visible mounted terminal pane', async () => {
+    vi.useFakeTimers()
+    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
+    const unregister = registerVisibleTerminalWorktree('wt-bg')
+    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(shutdown).not.toHaveBeenCalled()
+
+    unregister()
+    // Why: the coordinator requires one tick to confirm a stable candidate
+    // and a second tick to revalidate before shutdown.
+    await vi.advanceTimersByTimeAsync(1000)
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(shutdown).toHaveBeenCalledWith('wt-bg', {
+      paneKey: `tab-1:${LEAF}`,
+      tabId: 'tab-1',
+      leafId: LEAF,
+      ptyId: 'pty-1'
+    })
   })
 
   it('requires the same candidate signature during final revalidation', async () => {

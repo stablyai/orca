@@ -72,6 +72,7 @@ import { openHttpLink } from '@/lib/http-link-routing'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { markdownPreviewUrlTransform } from './markdown-preview-url-transform'
+import { prewarmMarkdownPreviewLocalImages } from './markdown-preview-local-images'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { statRuntimePath } from '@/runtime/runtime-file-client'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -544,6 +545,13 @@ export default function MarkdownPreview({
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
 
   const renderedContent = usePreserveSectionDuringExternalEdit(content, bodyRef)
+
+  useEffect(() => {
+    const prewarm = prewarmMarkdownPreviewLocalImages(renderedContent, filePath, {
+      runtimeContext: imageRuntimeContext
+    })
+    return prewarm.cancel
+  }, [renderedContent, filePath, imageRuntimeContext])
 
   const frontMatter = useMemo(() => extractFrontMatter(renderedContent), [renderedContent])
   const tableOfContentsItems = useMemo(

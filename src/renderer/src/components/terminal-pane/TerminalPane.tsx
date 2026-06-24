@@ -111,6 +111,7 @@ import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
 import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-paste-recovery'
 import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
+import { useVisibleTerminalWorktreeClaim } from './use-visible-terminal-worktree-claim'
 
 // Why: registry lives in a leaf module so the store slice can import it
 // without re-entering the `slice → TerminalPane → store → slice` cycle
@@ -146,6 +147,7 @@ type TerminalPaneProps = {
   cwd?: string
   isActive: boolean
   isVisible?: boolean
+  isWorktreeActive?: boolean
   // Why: when set (Activity portal), this pane visually isolates the given
   // split pane so only that leaf is shown. Implemented as a transient layout
   // override (separate snapshot ref) — does NOT touch expandedPaneId state
@@ -220,6 +222,7 @@ export default function TerminalPane({
   cwd,
   isActive,
   isVisible = true,
+  isWorktreeActive = isVisible,
   isolatedPaneKey = null,
   onPtyExit,
   onCloseTab
@@ -258,6 +261,8 @@ export default function TerminalPane({
   isActiveRef.current = isActive
   const isVisibleRef = useRef(isVisible)
   isVisibleRef.current = isVisible
+
+  useVisibleTerminalWorktreeClaim({ isVisible, worktreeId })
 
   const [expandedPaneId, setExpandedPaneId] = useState<number | null>(null)
   // Why: tracked in React state (not derived from managerRef.getPanes().length)
@@ -485,10 +490,12 @@ export default function TerminalPane({
   // xterm may not know multi-line text needs bracketed-paste protection.
   const forceBracketedMultilineTextPaste = isWindowsUserAgent()
   const [startup] = useState(() => useAppStore.getState().pendingStartupByTabId[tabId])
+  const [shouldMeasureHiddenStartup, setShouldMeasureHiddenStartup] = useState(
+    () => startup !== undefined && !isVisible
+  )
   const [sessionRestoredBannerPaneIds, setSessionRestoredBannerPaneIds] = useState<Set<number>>(
     () => new Set()
   )
-  const shouldMeasureHiddenStartup = startup !== undefined && !isVisible
   const consumeTabStartupCommand = useAppStore((store) => store.consumeTabStartupCommand)
   const [setupSplit] = useState(() => useAppStore.getState().pendingSetupSplitByTabId[tabId])
   const consumeTabSetupSplit = useAppStore((store) => store.consumeTabSetupSplit)
@@ -501,6 +508,14 @@ export default function TerminalPane({
       consumeTabStartupCommand(tabId)
     }
   }, [startup, tabId, consumeTabStartupCommand])
+
+  useLayoutEffect(() => {
+    if (isVisible && shouldMeasureHiddenStartup) {
+      // Why: hidden startup measurement is only for first launch. Keeping it
+      // after first visibility lets inactive agent tabs refit and SIGWINCH.
+      setShouldMeasureHiddenStartup(false)
+    }
+  }, [isVisible, shouldMeasureHiddenStartup])
 
   const clearSessionRestoredBannerForPane = useCallback((paneId: number): void => {
     setSessionRestoredBannerPaneIds((prev) => {
@@ -1318,6 +1333,7 @@ export default function TerminalPane({
     cwd,
     isActive,
     isVisible,
+    isWorktreeActive,
     // Why: hidden startup probes are opacity-hidden but measurable; ordinary
     // hidden tabs are display:none and refit on visibility resume instead.
     isSyncFitEnabled: isVisible || shouldMeasureHiddenStartup,
@@ -1747,25 +1763,25 @@ export default function TerminalPane({
     return subscribeTerminalPaneAttention(tabId, applyTerminalPaneAttention)
   }, [tabId, paneCount, applyTerminalPaneAttention])
 
-  // Sync the pane title reservation before paint. The title UI stays outside
-  // xterm's DOM, but xterm must still fit below it so the first terminal row is
-  // never hidden under the title strip.
+  // Sync the pane title reservation before paint. Text/banner chrome stays
+  // outside xterm's DOM, but xterm must still fit below it so the first
+  // terminal row is never hidden under meaningful status UI.
   useLayoutEffect(() => {
     const manager = managerRef.current
     if (!manager) {
       return
     }
-    // Show the title bar space when the pane has a title, is being
-    // inline-edited, or has transient startup chrome. Unread activity does
-    // not reserve this space; its overlay should not reflow terminal content.
+    // Show title space only for text/status chrome. Chromeless pane controls
+    // float over xterm so untitled panes keep their first row.
     const needsFit = syncSessionRestoredBannerTitleSpace({
       panes: manager.getPanes(),
       paneTitles,
       renamingPaneId,
-      sessionRestoredBannerPaneIds,
-      reservePaneHeaderSpace: isActive && (isVisible || shouldMeasureHiddenStartup)
+      sessionRestoredBannerPaneIds
     })
-    if (needsFit) {
+    if (needsFit && (isVisible || shouldMeasureHiddenStartup)) {
+      // Why: fitting hidden geometry changes PTY rows and wakes TUIs with
+      // SIGWINCH; the visible resume path owns any real layout correction.
       fitPanes(manager)
     }
   }, [
@@ -1774,7 +1790,6 @@ export default function TerminalPane({
     paneTitles,
     renamingPaneId,
     sessionRestoredBannerPaneIds,
-    isActive,
     isVisible,
     shouldMeasureHiddenStartup
   ])

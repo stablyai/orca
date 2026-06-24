@@ -13,10 +13,12 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
@@ -37,6 +39,9 @@ const SidebarFilter = React.memo(function SidebarFilter({
 }: SidebarFilterProps) {
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const setShowSleepingWorkspaces = useAppStore((s) => s.setShowSleepingWorkspaces)
+  // Surface the user-assigned shortcut here so the filter menu doubles as its
+  // discovery point ('Unassigned' until they bind one in Settings → Shortcuts).
+  const sleepingShortcut = useShortcutLabel('sidebar.sleepingWorkspaces.toggle')
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
@@ -183,6 +188,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
           label={translate('auto.components.sidebar.SidebarFilter.638a2d221d', 'Hide sleeping')}
           checked={!showSleepingWorkspaces}
           onChange={(hideSleeping) => setShowSleepingWorkspaces(!hideSleeping)}
+          shortcutLabel={sleepingShortcut === 'Unassigned' ? undefined : sleepingShortcut}
         />
         <FilterToggleRow
           icon={<GitBranch className="size-3.5" />}
@@ -333,12 +339,14 @@ function FilterToggleRow({
   icon,
   label,
   checked,
-  onChange
+  onChange,
+  shortcutLabel
 }: {
   icon: React.ReactNode
   label: string
   checked: boolean
   onChange: (next: boolean) => void
+  shortcutLabel?: string
 }) {
   return (
     <button
@@ -352,19 +360,22 @@ function FilterToggleRow({
         <span className="text-muted-foreground">{icon}</span>
         {label}
       </span>
-      <span
-        aria-hidden
-        className={cn(
-          'relative h-3.5 w-6 shrink-0 rounded-full transition-colors',
-          checked ? 'bg-primary' : 'bg-muted-foreground/30'
-        )}
-      >
+      <span className="inline-flex items-center gap-2">
+        {shortcutLabel ? <DropdownMenuShortcut>{shortcutLabel}</DropdownMenuShortcut> : null}
         <span
+          aria-hidden
           className={cn(
-            'absolute top-0.5 left-0.5 size-2.5 rounded-full bg-background shadow-sm transition-transform',
-            checked && 'translate-x-2.5'
+            'relative h-3.5 w-6 shrink-0 rounded-full transition-colors',
+            checked ? 'bg-primary' : 'bg-muted-foreground/30'
           )}
-        />
+        >
+          <span
+            className={cn(
+              'absolute top-0.5 left-0.5 size-2.5 rounded-full bg-background shadow-sm transition-transform',
+              checked && 'translate-x-2.5'
+            )}
+          />
+        </span>
       </span>
     </button>
   )

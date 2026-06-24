@@ -38,6 +38,7 @@ const {
   spawnMock,
   openCodeBuildPtyEnvMock,
   openCodeClearPtyMock,
+  mimoCodeBuildPtyEnvMock,
   buildAgentHookEnvMock,
   clearAgentHookPaneStateMock,
   registerPaneKeyAliasMock,
@@ -67,6 +68,7 @@ const {
   getPathMock: vi.fn(),
   spawnMock: vi.fn(),
   openCodeBuildPtyEnvMock: vi.fn(),
+  mimoCodeBuildPtyEnvMock: vi.fn(),
   isPwshAvailableMock: vi.fn(),
   openCodeClearPtyMock: vi.fn(),
   buildAgentHookEnvMock: vi.fn(),
@@ -121,6 +123,12 @@ vi.mock('../opencode/hook-service', () => ({
   openCodeHookService: {
     buildPtyEnv: openCodeBuildPtyEnvMock,
     clearPty: openCodeClearPtyMock
+  }
+}))
+
+vi.mock('../mimo/hook-service', () => ({
+  mimoCodeHookService: {
+    buildPtyEnv: mimoCodeBuildPtyEnvMock
   }
 }))
 
@@ -271,6 +279,7 @@ describe('registerPtyHandlers', () => {
     getPathMock.mockReset()
     spawnMock.mockReset()
     openCodeBuildPtyEnvMock.mockReset()
+    mimoCodeBuildPtyEnvMock.mockReset()
     openCodeClearPtyMock.mockReset()
     buildAgentHookEnvMock.mockReset()
     clearAgentHookPaneStateMock.mockReset()
@@ -303,6 +312,9 @@ describe('registerPtyHandlers', () => {
       OPENCODE_CONFIG_DIR: existingConfigDir
         ? '/tmp/orca-opencode-overlay'
         : '/tmp/orca-opencode-config'
+    }))
+    mimoCodeBuildPtyEnvMock.mockImplementation((_ptyId: string, existingHome?: string) => ({
+      MIMOCODE_HOME: existingHome ? '/tmp/orca-mimocode-overlay' : '/tmp/orca-mimocode-shared'
     }))
     buildAgentHookEnvMock.mockReturnValue({
       ORCA_AGENT_HOOK_PORT: '5678',
@@ -756,6 +768,51 @@ describe('registerPtyHandlers', () => {
       expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
       expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
       expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBeUndefined()
+    })
+
+    it('injects MiMo overlay env only when launch command is mimo', async () => {
+      const env = await spawnAndGetEnv(undefined, undefined, undefined, undefined, 'mimo')
+
+      expect(mimoCodeBuildPtyEnvMock).toHaveBeenCalledTimes(1)
+      expect(env.MIMOCODE_HOME).toBe('/tmp/orca-mimocode-shared')
+      expect(env.ORCA_MIMOCODE_HOME).toBe('/tmp/orca-mimocode-shared')
+      expect(env.ORCA_MIMOCODE_SOURCE_HOME).toBeUndefined()
+    })
+
+    it.each(['/usr/local/bin/mimo --prompt hi', '"C:\\Program Files\\MiMo\\mimo.cmd" --prompt hi'])(
+      'injects MiMo overlay env for path-qualified launch command %s',
+      async (launchCommand) => {
+        const env = await spawnAndGetEnv(undefined, undefined, undefined, undefined, launchCommand)
+
+        expect(mimoCodeBuildPtyEnvMock).toHaveBeenCalledTimes(1)
+        expect(env.MIMOCODE_HOME).toBe('/tmp/orca-mimocode-shared')
+        expect(env.ORCA_MIMOCODE_HOME).toBe('/tmp/orca-mimocode-shared')
+      }
+    )
+
+    it('does not inject MiMo overlay for non-mimo launches', async () => {
+      await spawnAndGetEnv()
+
+      expect(mimoCodeBuildPtyEnvMock).not.toHaveBeenCalled()
+    })
+
+    it('restores user MiMo home when agent status hooks are disabled in a nested Orca shell', async () => {
+      const env = await spawnAndGetEnv(
+        {
+          MIMOCODE_HOME: '/tmp/parent-orca-mimocode-overlay',
+          ORCA_MIMOCODE_HOME: '/tmp/parent-orca-mimocode-overlay',
+          ORCA_MIMOCODE_SOURCE_HOME: '/tmp/user-mimocode-home'
+        },
+        undefined,
+        undefined,
+        () => ({ agentStatusHooksEnabled: false }),
+        'mimo'
+      )
+
+      expect(mimoCodeBuildPtyEnvMock).not.toHaveBeenCalled()
+      expect(env.MIMOCODE_HOME).toBe('/tmp/user-mimocode-home')
+      expect(env.ORCA_MIMOCODE_HOME).toBeUndefined()
+      expect(env.ORCA_MIMOCODE_SOURCE_HOME).toBeUndefined()
     })
 
     posixOnlyIt(
@@ -1903,6 +1960,9 @@ describe('registerPtyHandlers', () => {
         expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
         expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
         expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBeUndefined()
+        expect(env.MIMOCODE_HOME).toBeUndefined()
+        expect(env.ORCA_MIMOCODE_HOME).toBeUndefined()
+        expect(env.ORCA_MIMOCODE_SOURCE_HOME).toBeUndefined()
         expect(env.PI_CODING_AGENT_DIR).toBeUndefined()
         expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
         expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()

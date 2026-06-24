@@ -135,6 +135,47 @@ describe('repo slice project runtime updates', () => {
     expect(window.api.projects.listHostSetups).toHaveBeenCalled()
   })
 
+  it('clears stale local runtime preferences when local project refresh omits them', async () => {
+    const staleProject: Project = {
+      id: 'local-project',
+      displayName: 'Project',
+      badgeColor: '#000',
+      sourceRepoIds: ['local-repo'],
+      localWindowsRuntimePreference: { kind: 'windows-host' },
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const refreshedProject: Project = {
+      id: staleProject.id,
+      displayName: staleProject.displayName,
+      badgeColor: staleProject.badgeColor,
+      sourceRepoIds: ['local-repo'],
+      createdAt: 1,
+      updatedAt: 2
+    }
+    const setup: ProjectHostSetup = {
+      id: 'setup-1',
+      projectId: staleProject.id,
+      hostId: 'local',
+      repoId: 'local-repo',
+      path: '/local',
+      displayName: 'Local',
+      setupState: 'ready',
+      setupMethod: 'legacy-repo',
+      createdAt: 1,
+      updatedAt: 1
+    }
+    projectsList.mockResolvedValue([refreshedProject])
+    window.api.projects.listHostSetups = vi.fn().mockResolvedValue([setup])
+    reposList.mockResolvedValue([localRepo])
+    const store = createTestStore()
+    store.setState({ projects: [staleProject], projectHostSetups: [setup] })
+
+    await store.getState().fetchRepos()
+
+    expect(store.getState().projects[0]?.localWindowsRuntimePreference).toBeUndefined()
+  })
+
   it('updates local project runtime preferences through the projects API', async () => {
     const project: Project = {
       id: 'project-1',
@@ -223,5 +264,62 @@ describe('repo slice project runtime updates', () => {
       timeoutMs: 15_000
     })
     expect(projectsUpdate).not.toHaveBeenCalled()
+  })
+
+  it('preserves shared project source repos when updating local runtime preferences', async () => {
+    const project: Project = {
+      id: 'github:stablyai/orca',
+      displayName: 'Orca',
+      badgeColor: '#000',
+      sourceRepoIds: ['local-repo', 'remote-repo'],
+      createdAt: 1,
+      updatedAt: 2
+    }
+    projectsUpdate.mockResolvedValue({
+      ...project,
+      sourceRepoIds: ['local-repo'],
+      localWindowsRuntimePreference: { kind: 'windows-host' },
+      updatedAt: 3
+    })
+    const store = createTestStore()
+    store.setState({ projects: [project] })
+
+    await store.getState().updateProject(project.id, {
+      localWindowsRuntimePreference: { kind: 'windows-host' }
+    })
+
+    expect(store.getState().projects[0]?.sourceRepoIds).toEqual(['local-repo', 'remote-repo'])
+    expect(store.getState().projects[0]?.localWindowsRuntimePreference).toEqual({
+      kind: 'windows-host'
+    })
+  })
+
+  it('clears local runtime preferences without dropping shared project source repos', async () => {
+    const project: Project = {
+      id: 'github:stablyai/orca',
+      displayName: 'Orca',
+      badgeColor: '#000',
+      sourceRepoIds: ['local-repo', 'remote-repo'],
+      localWindowsRuntimePreference: { kind: 'windows-host' },
+      createdAt: 1,
+      updatedAt: 2
+    }
+    projectsUpdate.mockResolvedValue({
+      id: project.id,
+      displayName: project.displayName,
+      badgeColor: project.badgeColor,
+      sourceRepoIds: ['local-repo'],
+      createdAt: project.createdAt,
+      updatedAt: 3
+    })
+    const store = createTestStore()
+    store.setState({ projects: [project] })
+
+    await store.getState().updateProject(project.id, {
+      localWindowsRuntimePreference: undefined
+    })
+
+    expect(store.getState().projects[0]?.sourceRepoIds).toEqual(['local-repo', 'remote-repo'])
+    expect(store.getState().projects[0]?.localWindowsRuntimePreference).toBeUndefined()
   })
 })

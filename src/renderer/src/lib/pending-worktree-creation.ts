@@ -71,6 +71,9 @@ export type WorktreeCreationRequest = {
   startupPlan: AgentStartupPlan | null
   quickPrompt: string
   quickTelemetry: AgentStartedTelemetry | null
+  /** When the composer stays open for sequential creates, completion must not
+   *  steal focus from the next workspace name field. */
+  suppressTerminalFocusOnCompletion?: boolean
 }
 
 /** Renderer-only, session-ephemeral record of an in-flight (or failed) worktree

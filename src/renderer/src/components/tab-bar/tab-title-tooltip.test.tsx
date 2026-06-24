@@ -173,6 +173,19 @@ function firstOpeningTag(markup: string): string {
   return match[0]
 }
 
+function textSpanHtml(markup: string, text: string): string {
+  const textIndex = markup.indexOf(`>${text}</span>`)
+  expect(textIndex).toBeGreaterThanOrEqual(0)
+
+  const tagStart = markup.lastIndexOf('<span', textIndex)
+  expect(tagStart).toBeGreaterThanOrEqual(0)
+
+  const spanEnd = markup.indexOf('</span>', textIndex)
+  expect(spanEnd).toBeGreaterThan(textIndex)
+
+  return markup.slice(tagStart, spanEnd + '</span>'.length)
+}
+
 function expectTabContainerWidth(markup: string, root: string): void {
   const container = firstOpeningTag(markup)
   const widthClasses = 'min-w-[88px] max-w-[280px] flex-[1_1_180px] min-[1280px]:flex-[1_1_220px]'
@@ -357,6 +370,7 @@ describe('tab title tooltips', () => {
     expect(root).toContain('role="tab"')
     expect(root).toContain('tabindex="0"')
     expect(root).toContain('data-tab-id="editor-tab-1"')
+    expect(textSpanHtml(markup, 'VeryLongEditorFileName.tsx')).not.toContain('renamed')
     expectTabContainerWidth(markup, root)
   })
 })

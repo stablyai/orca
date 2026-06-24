@@ -1,9 +1,33 @@
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  getSettingsFocusedExecutionHostId,
+  parseExecutionHostId
+} from '../../../shared/execution-host'
 import type { GlobalSettings, Repo } from '../../../shared/types'
 
 export type RepoRuntimeOwnerState = {
   repos?: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+}
+
+function findRepoOwner(
+  state: RepoRuntimeOwnerState,
+  repoId: string
+): Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | null {
+  const matchingRepos = state.repos?.filter((entry) => entry.id === repoId) ?? []
+  if (matchingRepos.length === 0) {
+    return null
+  }
+  if (matchingRepos.length === 1) {
+    return matchingRepos[0]
+  }
+  const focusedHostId = getSettingsFocusedExecutionHostId(state.settings)
+  const focusedMatches = matchingRepos.filter(
+    (entry) => getRepoExecutionHostId(entry) === focusedHostId
+  )
+  // Why: duplicate bare repo ids are only safe to route when focus selects one
+  // owner unambiguously; otherwise callers must avoid guessing a host.
+  return focusedMatches.length === 1 ? focusedMatches[0] : null
 }
 
 export function getRuntimeEnvironmentIdForRepo(
@@ -13,7 +37,7 @@ export function getRuntimeEnvironmentIdForRepo(
   if (!repoId) {
     return null
   }
-  const repo = state.repos?.find((entry) => entry.id === repoId)
+  const repo = findRepoOwner(state, repoId)
   const hasExplicitOwner = Boolean(repo?.executionHostId?.trim() || repo?.connectionId?.trim())
   if (repo && hasExplicitOwner) {
     const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))

@@ -69,6 +69,22 @@ describe('SshGitProvider', () => {
     })
   })
 
+  it('getStatus forwards upstream-negative-cache bypass only when requested', async () => {
+    const statusResult = { entries: [], conflictOperation: 'unknown' }
+    mux.request.mockResolvedValue(statusResult)
+
+    await provider.getStatus('/home/user/repo', { bypassEffectiveUpstreamNegativeCache: true })
+    await provider.getStatus('/home/user/repo', { bypassEffectiveUpstreamNegativeCache: false })
+
+    expect(mux.request).toHaveBeenNthCalledWith(1, 'git.status', {
+      worktreePath: '/home/user/repo',
+      bypassEffectiveUpstreamNegativeCache: true
+    })
+    expect(mux.request).toHaveBeenNthCalledWith(2, 'git.status', {
+      worktreePath: '/home/user/repo'
+    })
+  })
+
   it('checkIgnoredPaths sends git.checkIgnored request', async () => {
     mux.request.mockResolvedValue(['dist/bundle.js'])
 

@@ -15,6 +15,7 @@ import { runPreflightCommandInWsl } from './preflight-wsl-command'
 import { detectCommandsInInstallDirs } from './local-agent-install-dir-detection'
 import { buildLocalPreflightEnv } from './preflight-local-env'
 import { getPreflightWslTarget, type PreflightRuntimeContext } from './preflight-runtime-target'
+import { hydrateShellPathForAgentDetection } from './agent-detection-shell-path'
 const execFileAsync = promisify(execFile)
 const PREFLIGHT_COMMAND_TIMEOUT_MS = 5000
 
@@ -195,6 +196,13 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
   return uniqueAgentIds(checks.filter((c) => c.installed).map((c) => c.id))
 }
 
+export async function detectInstalledAgentsWithShellPathHydration(
+  context?: PreflightRuntimeContext
+): Promise<string[]> {
+  await hydrateShellPathForAgentDetection(context)
+  return detectInstalledAgents(context)
+}
+
 export type RefreshAgentsResult = {
   /** Agents detected after hydrating PATH from the user's login shell. */
   agents: string[]
@@ -352,11 +360,8 @@ export function registerPreflightHandlers(): void {
     }
   )
 
-  ipcMain.handle(
-    'preflight:detectAgents',
-    async (_event, args?: PreflightRuntimeContext): Promise<string[]> => {
-      return detectInstalledAgents(args)
-    }
+  ipcMain.handle('preflight:detectAgents', async (_event, args?: PreflightRuntimeContext) =>
+    detectInstalledAgentsWithShellPathHydration(args)
   )
 
   ipcMain.handle('preflight:refreshAgents', async (_event, args?: PreflightRuntimeContext) => {

@@ -11,7 +11,12 @@ import {
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { GitStatusEntry, Tab } from '../../../../shared/types'
+import type {
+  GitBranchChangeEntry,
+  GitBranchCompareSummary,
+  GitStatusEntry,
+  Tab
+} from '../../../../shared/types'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -2645,6 +2650,80 @@ describe('createEditorSlice combined diff exclusions', () => {
         id: 'wt-1::all-diffs::uncommitted::unstaged',
         uncommittedEntriesSnapshot: [normalEntry],
         skippedConflicts: []
+      })
+    )
+  })
+
+  it('includes untracked files in the all changes snapshot', () => {
+    const store = createEditorStore()
+    const stagedEntry: GitStatusEntry = {
+      path: 'src/staged.ts',
+      status: 'modified',
+      area: 'staged'
+    }
+    const untrackedEntry: GitStatusEntry = {
+      path: 'src/new.ts',
+      status: 'untracked',
+      area: 'untracked'
+    }
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [stagedEntry, untrackedEntry]
+    })
+    store.getState().openAllDiffs('wt-1', '/repo')
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        id: 'wt-1::all-diffs::uncommitted',
+        uncommittedEntriesSnapshot: [stagedEntry, untrackedEntry]
+      })
+    )
+  })
+
+  it('opens all changes with uncommitted and committed branch snapshots', () => {
+    const store = createEditorStore()
+    const localEntry: GitStatusEntry = {
+      path: 'src/local.ts',
+      status: 'modified',
+      area: 'unstaged'
+    }
+    const branchEntry: GitBranchChangeEntry = {
+      path: 'src/committed.ts',
+      status: 'modified'
+    }
+    const branchSummary: GitBranchCompareSummary = {
+      baseRef: 'origin/main',
+      baseOid: 'base-oid',
+      compareRef: 'HEAD',
+      headOid: 'head-oid',
+      mergeBase: 'merge-base-oid',
+      changedFiles: 1,
+      status: 'ready'
+    }
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [localEntry]
+    })
+    store.setState({
+      gitBranchCompareSummaryByWorktree: { 'wt-1': branchSummary },
+      gitBranchChangesByWorktree: { 'wt-1': [branchEntry] }
+    })
+    store.getState().openAllDiffs('wt-1', '/repo')
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        id: 'wt-1::all-diffs::uncommitted',
+        diffSource: 'combined-all',
+        uncommittedEntriesSnapshot: [localEntry],
+        branchEntriesSnapshot: [branchEntry],
+        branchCompare: expect.objectContaining({
+          baseRef: 'origin/main',
+          baseOid: 'base-oid',
+          headOid: 'head-oid',
+          mergeBase: 'merge-base-oid'
+        })
       })
     )
   })

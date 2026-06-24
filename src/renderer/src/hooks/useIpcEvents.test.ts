@@ -1286,6 +1286,8 @@ describe('useIpcEvents updater integration', () => {
     const createTab = vi.fn(() => ({ id: 'tab-new' }))
     const setActiveView = vi.fn()
     const setActiveWorktree = vi.fn()
+    const markWorktreeVisited = vi.fn()
+    const recordWorktreeVisit = vi.fn()
     const setActiveTabType = vi.fn()
     const setActiveTab = vi.fn()
     const revealWorktreeInSidebar = vi.fn()
@@ -1300,13 +1302,17 @@ describe('useIpcEvents updater integration', () => {
     const dispatchEvent = vi.fn()
     const createFloatingWorkspaceTerminalTab = vi.fn()
     const createWebRuntimeSessionTerminal = vi.fn().mockResolvedValue(false)
+    const focusRuntimeTerminalSurface = vi.fn(() => false)
+    const focusTerminalTabSurface = vi.fn()
     let floatingPanelFocused = false
     const storeState = {
       setUpdateStatus: vi.fn(),
       createTab,
       setActiveView,
       setActiveWorktree,
-      markWorktreeVisited: vi.fn(),
+      markWorktreeVisited,
+      recordWorktreeVisit,
+      isNavigatingHistory: false,
       setActiveTabType,
       setActiveTab,
       revealWorktreeInSidebar,
@@ -1386,6 +1392,18 @@ describe('useIpcEvents updater integration', () => {
           }) => void)
         | null
     } = { current: null }
+    const focusTerminalListenerRef: {
+      current:
+        | ((data: {
+            tabId: string
+            worktreeId: string
+            leafId?: string | null
+            ackPaneKeyOnSuccess?: string
+            flashFocusedPane?: boolean
+            scrollToBottomIfOutputSinceLastView?: boolean
+          }) => void)
+        | null
+    } = { current: null }
     const newTerminalTabListenerRef: { current: (() => void) | null } = { current: null }
 
     vi.resetModules()
@@ -1443,7 +1461,13 @@ describe('useIpcEvents updater integration', () => {
       isWebRuntimeSessionActive: vi.fn(() => false)
     }))
     vi.doMock('@/lib/focus-terminal-tab-surface', () => ({
-      focusTerminalTabSurface: vi.fn()
+      focusTerminalTabSurface
+    }))
+    vi.doMock('@/runtime/sync-runtime-graph', () => ({
+      focusRuntimeTerminalSurface
+    }))
+    vi.doMock('@/lib/activate-tab-and-focus-pane', () => ({
+      activateTabAndFocusPane: vi.fn()
     }))
 
     vi.stubGlobal('window', {
@@ -1514,7 +1538,19 @@ describe('useIpcEvents updater integration', () => {
           replyTerminalCreate,
           onSplitTerminal: () => () => {},
           onRenameTerminal: () => () => {},
-          onFocusTerminal: () => () => {},
+          onFocusTerminal: (
+            listener: (data: {
+              tabId: string
+              worktreeId: string
+              leafId?: string | null
+              ackPaneKeyOnSuccess?: string
+              flashFocusedPane?: boolean
+              scrollToBottomIfOutputSinceLastView?: boolean
+            }) => void
+          ) => {
+            focusTerminalListenerRef.current = listener
+            return () => {}
+          },
           onFocusEditorTab: () => () => {},
           onCloseSessionTab: () => () => {},
           onMoveSessionTab: () => () => {},
@@ -1632,6 +1668,8 @@ describe('useIpcEvents updater integration', () => {
 
     expect(setActiveView).toHaveBeenCalledWith('terminal')
     expect(setActiveWorktree).toHaveBeenCalledWith('wt-2')
+    expect(markWorktreeVisited).toHaveBeenCalledWith('wt-2')
+    expect(recordWorktreeVisit).toHaveBeenCalledWith('wt-2')
     expect(createTab).toHaveBeenCalledWith('wt-2')
     expect(setActiveTabType).toHaveBeenCalledWith('terminal')
     expect(setActiveTab).toHaveBeenCalledWith('tab-new')
@@ -1648,6 +1686,42 @@ describe('useIpcEvents updater integration', () => {
     createTab.mockClear()
     setActiveView.mockClear()
     setActiveWorktree.mockClear()
+    markWorktreeVisited.mockClear()
+    recordWorktreeVisit.mockClear()
+    setActiveTabType.mockClear()
+    setActiveTab.mockClear()
+    revealWorktreeInSidebar.mockClear()
+    setTabCustomTitle.mockClear()
+    queueTabStartupCommand.mockClear()
+    replyTerminalCreate.mockClear()
+    requestTerminalCreateListenerRef.current({
+      requestId: 'req-focused',
+      worktreeId: 'wt-3',
+      title: 'Shell'
+    })
+
+    expect(setActiveView).toHaveBeenCalledWith('terminal')
+    expect(setActiveWorktree).toHaveBeenCalledWith('wt-3')
+    expect(markWorktreeVisited).toHaveBeenCalledWith('wt-3')
+    expect(recordWorktreeVisit).toHaveBeenCalledWith('wt-3')
+    expect(createTab).toHaveBeenCalledWith('wt-3', undefined, undefined, undefined)
+    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(setActiveTab).toHaveBeenCalledWith('tab-new')
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-3')
+    expect(setTabCustomTitle).toHaveBeenCalledWith('tab-new', 'Shell', {
+      recordInteraction: false
+    })
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-focused',
+      tabId: 'tab-new',
+      title: 'Shell'
+    })
+
+    createTab.mockClear()
+    setActiveView.mockClear()
+    setActiveWorktree.mockClear()
+    markWorktreeVisited.mockClear()
+    recordWorktreeVisit.mockClear()
     setActiveTabType.mockClear()
     setActiveTab.mockClear()
     revealWorktreeInSidebar.mockClear()
@@ -1673,6 +1747,8 @@ describe('useIpcEvents updater integration', () => {
     })
     expect(setActiveView).not.toHaveBeenCalled()
     expect(setActiveWorktree).not.toHaveBeenCalled()
+    expect(markWorktreeVisited).not.toHaveBeenCalled()
+    expect(recordWorktreeVisit).not.toHaveBeenCalled()
     expect(setActiveTabType).not.toHaveBeenCalled()
     expect(setActiveTab).not.toHaveBeenCalled()
     expect(revealWorktreeInSidebar).not.toHaveBeenCalled()
@@ -1698,6 +1774,53 @@ describe('useIpcEvents updater integration', () => {
       tabId: 'tab-new',
       title: 'Codex'
     })
+
+    if (typeof focusTerminalListenerRef.current !== 'function') {
+      throw new Error('Expected focus-terminal listener to be registered')
+    }
+
+    setActiveView.mockClear()
+    setActiveWorktree.mockClear()
+    markWorktreeVisited.mockClear()
+    recordWorktreeVisit.mockClear()
+    setActiveTab.mockClear()
+    revealWorktreeInSidebar.mockClear()
+    focusRuntimeTerminalSurface.mockClear()
+    focusTerminalTabSurface.mockClear()
+    focusTerminalListenerRef.current({
+      worktreeId: 'wt-4',
+      tabId: 'tab-focus',
+      leafId: 'leaf-focus'
+    })
+
+    expect(setActiveView).toHaveBeenCalledWith('terminal')
+    expect(setActiveWorktree).toHaveBeenCalledWith('wt-4')
+    expect(markWorktreeVisited).toHaveBeenCalledWith('wt-4')
+    expect(recordWorktreeVisit).toHaveBeenCalledWith('wt-4')
+    expect(setActiveTab).toHaveBeenCalledWith('tab-focus')
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-4')
+    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-focus', 'leaf-focus')
+    expect(focusTerminalTabSurface).toHaveBeenCalledWith('tab-focus', 'leaf-focus')
+
+    storeState.isNavigatingHistory = true
+    setActiveView.mockClear()
+    setActiveWorktree.mockClear()
+    markWorktreeVisited.mockClear()
+    recordWorktreeVisit.mockClear()
+    setActiveTab.mockClear()
+    revealWorktreeInSidebar.mockClear()
+    focusTerminalListenerRef.current({
+      worktreeId: 'wt-history',
+      tabId: 'tab-history'
+    })
+
+    expect(setActiveView).toHaveBeenCalledWith('terminal')
+    expect(setActiveWorktree).toHaveBeenCalledWith('wt-history')
+    expect(markWorktreeVisited).toHaveBeenCalledWith('wt-history')
+    expect(recordWorktreeVisit).not.toHaveBeenCalled()
+    expect(setActiveTab).toHaveBeenCalledWith('tab-history')
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-history')
+    storeState.isNavigatingHistory = false
 
     createTab.mockClear()
     registerAgentLaunchConfig.mockClear()

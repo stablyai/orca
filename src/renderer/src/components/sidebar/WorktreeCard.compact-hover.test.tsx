@@ -21,6 +21,7 @@ const cacheTimerMocks = vi.hoisted(() => ({
 
 let worktreeCardProperties: WorktreeCardProperty[] = ['status', 'ports']
 let hostedReviewCache: Record<string, unknown> = {}
+let projectGroups: unknown[] = []
 let workspacePortScan: { key: string; result: WorkspacePortScanResult } | null = null
 let settings: Partial<GlobalSettings> | null = { compactWorktreeCards: true }
 let agentActivityDisplayMode: 'compact' | 'full' | undefined
@@ -42,6 +43,7 @@ vi.mock('@/store', () => ({
       linearIssueCache: {},
       openModal,
       openTaskPage,
+      projectGroups,
       ptyIdsByTabId: {},
       recordFeatureInteraction,
       remoteBranchConflictByWorktreeId: {},
@@ -183,6 +185,7 @@ describe('WorktreeCard compact hover details', () => {
     vi.clearAllMocks()
     worktreeCardProperties = ['status', 'ports']
     hostedReviewCache = {}
+    projectGroups = []
     workspacePortScan = null
     settings = { compactWorktreeCards: true }
     agentActivityDisplayMode = undefined
@@ -632,6 +635,78 @@ describe('WorktreeCard compact hover details', () => {
     expect(markup).toContain('items-center')
     expect(markup).toContain('w-5 items-center')
     expect(markup).toContain('text-[13px] leading-5')
+  })
+
+  it('does not show a folder path row in new-card mode when no project groups exist', async () => {
+    settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }
+    worktreeCardProperties = ['status', 'branch']
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          displayName: 'Docs folder',
+          branch: '',
+          path: ' /Users/x/projects/my-app '
+        })}
+        repo={{ ...makeRepo(), kind: 'folder' }}
+        isActive={false}
+        hideRepoBadge
+      />
+    )
+
+    expect(markup).not.toContain('data-worktree-card-meta-row=""')
+    expect(markup).toContain('Docs folder')
+    expect(markup).not.toContain('/Users/x/projects/my-app')
+  })
+
+  it('shows a folder path row in new-card mode through the branch setting when project groups exist', async () => {
+    settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }
+    worktreeCardProperties = ['status', 'branch']
+    projectGroups = [{ id: 'group-1' }]
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          displayName: 'Docs folder',
+          branch: '',
+          path: ' /Users/x/projects/my-app '
+        })}
+        repo={{ ...makeRepo(), kind: 'folder' }}
+        isActive={false}
+        hideRepoBadge
+      />
+    )
+
+    expect(markup).toContain('data-worktree-card-meta-row=""')
+    expect(markup).toContain(' /Users/x/projects/my-app ')
+    expect(markup).not.toContain('>Folder</span>')
+  })
+
+  it('keeps hidden folder path identity available from the new-card hover', async () => {
+    settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }
+    worktreeCardProperties = ['status']
+    projectGroups = [{ id: 'group-1' }]
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          displayName: 'Docs folder',
+          branch: '',
+          path: '/Users/x/projects/my-app'
+        })}
+        repo={{ ...makeRepo(), kind: 'folder' }}
+        isActive={false}
+        hideRepoBadge
+      />
+    )
+
+    expect(markup).not.toContain('data-worktree-card-meta-row=""')
+    expect(markup).toContain('data-hover-open-delay="100"')
+    expect(markup).toContain('/Users/x/projects/my-app')
+    expect(markup).toContain('Docs folder')
   })
 
   it('shows the branch row for migrated Default cards with branch enabled', async () => {

@@ -162,6 +162,35 @@ export function getExplicitRuntimeEnvironmentIdForWorktree(
   return getExplicitRuntimeEnvironmentIdFromHost(getRepoExecutionHostId(repo))
 }
 
+export function getRuntimeSessionMirrorEnvironmentIds(state: WorktreeRuntimeOwnerState): string[] {
+  const ids = new Set<string>()
+  const activeRuntimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim()
+  if (activeRuntimeEnvironmentId) {
+    ids.add(activeRuntimeEnvironmentId)
+  }
+  for (const repo of state.repos ?? []) {
+    const environmentId = getExplicitRuntimeEnvironmentIdFromHost(getRepoExecutionHostId(repo))
+    if (environmentId) {
+      ids.add(environmentId)
+    }
+  }
+  for (const worktrees of Object.values(state.worktreesByRepo ?? {})) {
+    for (const worktree of worktrees) {
+      const environmentId = getRuntimeEnvironmentIdFromWorktreeHost(worktree.hostId)
+      if (environmentId) {
+        ids.add(environmentId)
+      }
+    }
+  }
+  for (const group of state.projectGroups ?? []) {
+    const environmentId = getExplicitRuntimeEnvironmentIdFromHost(group.executionHostId)
+    if (environmentId) {
+      ids.add(environmentId)
+    }
+  }
+  return [...ids].sort()
+}
+
 export function getExecutionHostIdForWorktree(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string | null | undefined

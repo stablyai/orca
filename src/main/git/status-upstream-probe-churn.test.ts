@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Repro command:
 //   pnpm exec vitest run --config config/vitest.config.ts src/main/git/status-upstream-probe-churn.test.ts -t "missing-upstream polling churn"
@@ -51,6 +51,10 @@ describe('getStatus missing-upstream polling churn', () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/Initi-Project\n')
   })
 
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('does not repeat failed effective-upstream probes for a branch with no upstream', async () => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args.includes('status')) {
@@ -85,6 +89,39 @@ describe('getStatus missing-upstream polling churn', () => {
 
     expect(upstreamProbeCalls).toHaveLength(1)
     expect(sameNameOriginProbeCalls).toHaveLength(1)
+  })
+
+  it('keeps failed effective-upstream probes cached beyond thirty seconds', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args.includes('status')) {
+        return {
+          stdout: '# branch.oid abcdef1234567890\n# branch.head Initi-Project\n'
+        }
+      }
+      if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
+        return { stdout: 'Initi-Project\n' }
+      }
+      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
+        throw new Error("fatal: no upstream configured for branch 'Initi-Project'")
+      }
+      if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/Initi-Project')) {
+        throw new Error('missing remote branch')
+      }
+      throw new Error(`unexpected git command: ${args.join(' ')}`)
+    })
+
+    await getStatus('/repo')
+    vi.setSystemTime(31_000)
+    await getStatus('/repo')
+
+    const upstreamProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
+      const args = getGitArgs(call)
+      return args[0] === 'rev-parse' && args.includes('HEAD@{u}')
+    })
+
+    expect(upstreamProbeCalls).toHaveLength(1)
   })
 
   it('coalesces concurrent effective-upstream probes for a branch with no upstream', async () => {

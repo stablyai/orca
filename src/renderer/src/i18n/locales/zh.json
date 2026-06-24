@@ -289,7 +289,8 @@
           "bf53f09bf8": "Claude Agent Teams",
           "0708ed89f1": "Claude",
           "fc80296033": "Devin",
-          "da41abbdd4": "Ante"
+          "da41abbdd4": "Ante",
+          "mimo_code_label": "MiMo Code"
         },
         "skill": {
           "cli": {
@@ -1102,7 +1103,8 @@
         "importHostSetup": "导入",
         "notePasteTooLarge": "笔记字段的粘贴内容过大。",
         "reuseExistingBranch": "复用分支",
-        "reuseExistingBranchHint": "检出已有分支，而不是基于它创建新分支。"
+        "reuseExistingBranchHint": "检出已有分支，而不是基于它创建新分支。",
+        "createMultiple": "创建更多"
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "创建工作区之前选择项目、工作区名称和 Agent。"
@@ -1272,7 +1274,10 @@
         "2b4fdb880c": "取消标记已查看",
         "56ec6eafb7": "打开 PR 详情以查看当前评审人。",
         "7f964a365a": "移除评审人",
-        "commentTooLarge": "评论过长，无法安全提交。"
+        "commentTooLarge": "评论过长，无法安全提交。",
+        "8ff5ae8866": "Assignees",
+        "82c87eceb9": "Edit assignees",
+        "1ff5d979df": "No one assigned"
       },
       "QuickOpen": {
         "1dbd3f59ff": "手机",
@@ -1602,7 +1607,25 @@
         "fe28c9821f": "视图",
         "8d1e17a3ef": "在 GitHub 中打开 {{value0}}",
         "4ac8ff2275": "在 Jira 中打开 {{value0}}",
-        "40eaf2c27c": "Details"
+        "40eaf2c27c": "Details",
+        "closeAsCompleted": "Close as completed",
+        "closeAsCompletedDescription": "Done, closed, fixed, resolved",
+        "closeAsNotPlanned": "Close as not planned",
+        "closeAsNotPlannedDescription": "Won't fix, can't repro, stale",
+        "closeAsDuplicate": "Close as duplicate",
+        "closeAsDuplicateDescription": "Duplicate of another issue in this repository",
+        "duplicateIssueNumberPlaceholder": "Issue number",
+        "closeAsDuplicateSubmit": "Close duplicate",
+        "duplicateIssueMissing": "Enter an issue number in this repository.",
+        "duplicateIssueNotInteger": "Use a whole issue number.",
+        "duplicateIssueNotPositive": "Use a positive issue number.",
+        "duplicateIssueSameIssue": "Choose a different issue.",
+        "repository": "Repository",
+        "backToCloseReasons": "Back",
+        "searchIssues": "Search issues",
+        "useIssueNumber": "Use issue #{{value0}}",
+        "noMatchingIssuesLoaded": "No matching issues loaded.",
+        "editReviewersWithCurrent": "Edit reviewers: {{value0}}"
       },
       "Terminal": {
         "73768427cf": "关闭",
@@ -1703,7 +1726,10 @@
         "settingsBadge": "设置",
         "actionBadge": "操作",
         "paletteHostBadge": "主机：{{value0}}",
-        "workspaceTabMissing": "标签页不再存在"
+        "workspaceTabMissing": "标签页不再存在",
+        "projectsGroupsHeader": "Projects & Groups",
+        "projectBadge": "Project",
+        "repoGroupBadge": "Repo group"
       },
       "github": {
         "pr": {
@@ -1846,7 +1872,10 @@
             "22df63c393": "您的 Token 无法获取子议题数据。",
             "067119985c": "GitHub 搜索，例如 assignee:@me is:open",
             "1850fceac8": "{{value0}}/{{value1}} 未添加到 Orca。添加它以开始工作，或在 GitHub 中打开。",
-            "1aa7c952b9": "项目视图"
+            "1aa7c952b9": "项目视图",
+            "f352abf7c3": "Repository list is updating.",
+            "1ce21b8cff": "This item is outside the selected repositories.",
+            "030de75bc5": "This item matches multiple selected repositories."
           },
           "slug": {
             "dialog": {
@@ -2313,7 +2342,7 @@
           "TerminalContextMenu": {
             "b4cdd9314e": "清晰的屏幕",
             "8c17d6786d": "关闭窗格",
-            "copyTerminalId": "复制 Terminal ID",
+            "copyTerminalId": "复制终端 ID",
             "2cf85a6a55": "复制窗格 ID",
             "39809d152f": "设置标题...",
             "06c2b0f043": "均衡窗格大小",
@@ -2497,7 +2526,8 @@
           "SortableTab": {
             "ab19f603eb": "重命名选项卡 {{value0}}",
             "6df69d9388": "关闭选项卡 {{value0}}",
-            "fdb2691425": "折叠窗格"
+            "fdb2691425": "折叠窗格",
+            "95db5f2f7d": "关闭选项卡"
           },
           "SortableTabContextMenu": {
             "35e8892fd0": "标签颜色",
@@ -2621,6 +2651,10 @@
             "down": "下",
             "up": "上",
             "moveToPaneColumn": "将标签页移至拆分"
+          },
+          "EditorFileTabCloseButton": {
+            "4655cf570e": "关闭选项卡",
+            "a768f428f1": "关闭选项卡"
           }
         }
       },
@@ -3326,26 +3360,21 @@
           "496f68cf8c": "扫描存储库。单击停止。",
           "a32bef9516": "停止扫描",
           "2f8298f3c3": "停止扫描",
-          "c157f31a95": "作为组导入",
-          "40199ef7b3": "团体名称",
-          "787412361a": "什么是群组名称？",
           "5f857ba8e6": "在",
           "4df0d08cc5": "成立",
           "8db50afe1a": "从文件夹导入存储库",
           "5b2e6fe3c8": "单独导入",
           "cf9d382ca1": "导入",
           "220dd32d83": "扫描...",
-          "fb33359f69": "这是 Monorepo 吗？",
-          "d75170194e": "如果它们是 Monorepo，或本来就应该放在一起，请将它们作为组导入。Orca 会将它们分组，并让你从父文件夹开始工作。",
+          "fb33359f69": "将这些仓库分组吗？",
+          "d75170194e": "如果这些项目应放在一起（可以是 Monorepo，也可以只是一组相关仓库），请选择此项。Orca 会将它们分组，并让你从父文件夹开始工作。",
           "39d51212cc": "组名称",
           "aa0247680d": "否，单独导入",
-          "a0bc4d1f8e": "作为组导入",
+          "a0bc4d1f8e": "是，作为组导入",
           "8401a7a0d0": "1 个仓库",
           "d4f1df62ef": "{{value0}} 个仓库",
           "b4263a2ac4": "在 {{value1}} 中找到 {{value0}}。",
-          "24eda6c8b2": "正在扫描... {{value0}}",
-          "b20bb7c24f": "Keeps these repos together in one group. Best for related repos like microservices.",
-          "e907ec8935": "What is a monorepo name?"
+          "24eda6c8b2": "正在扫描... {{value0}}"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "停止扫描",
@@ -3718,7 +3747,8 @@
           "2d74665a56": "端口",
           "65a9820bd1": "Agent 状态",
           "219ebf1961": "分支名称",
-          "automation": "Automation"
+          "automation": "Automation",
+          "folderPathIdentity": "Branch / folder path"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "正在连接...",
@@ -3794,13 +3824,16 @@
           "021538e1d1": "SSH 已断开连接",
           "runtimeHostDisconnected": "Server disconnected",
           "runtimeHostProject": "Project on Orca server",
-          "automationCreated": "Created by automation"
+          "automationCreated": "Created by automation",
+          "branchIdentity": "Branch",
+          "branchFolderPathIdentity": "Branch or folder path"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
         },
         "WorktreeCardReviewDetailSection": {
-          "reviewHeader": "{{value0}} #{{value1}}"
+          "reviewHeader": "{{value0}} #{{value1}}",
+          "copyLink": "Copy link"
         },
         "WorktreeCardMeta": {
           "3e65e11cc6": "工作区元数据",
@@ -3827,7 +3860,13 @@
           "checkingAutomationAvailability": "正在检查自动化可用性...",
           "automationMissing": "自动化已不可用。",
           "automationRunMissing": "运行历史已不可用。",
-          "automationAvailabilityUnavailable": "无法检查自动化可用性。"
+          "automationAvailabilityUnavailable": "无法检查自动化可用性。",
+          "moreIssueActions": "More issue actions",
+          "copyLink": "Copy link",
+          "copyLinkSuccess": "{{value0}} copied",
+          "copyLinkFailure": "Failed to copy link",
+          "issueLinkLabel": "Issue link",
+          "reviewLinkLabel": "{{value0}} link"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "状态：开放",
@@ -3917,7 +3956,8 @@
           "7a8b9c0d1e": "Update required",
           "hostAuthNeeded": "Authentication needed",
           "hostDisconnected": "Disconnected",
-          "failedNestWorkspace": "无法嵌套工作区"
+          "failedNestWorkspace": "无法嵌套工作区",
+          "sidebarRowMissing": "Target no longer exists"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "取消",
@@ -4265,6 +4305,9 @@
           "current": "当前",
           "searchPlaceholder": "搜索工作树...",
           "empty": "没有匹配的可用工作树。"
+        },
+        "WorktreeCardStatusSlot": {
+          "branchIdentity": "Branch"
         }
       },
       "shared": {
@@ -6206,16 +6249,16 @@
           "ask_before_closing_running_terminals_title": "关闭运行中的 Terminal 前询问",
           "ask_before_closing_running_terminals_description": "在关闭有运行中命令或 agent 的 terminal 前显示确认。",
           "scrollSpeed": {
-            "title": "Scroll Speed",
-            "description": "Tune normal terminal scrollback, fast modifier scrolling, and full-screen TUI wheel speed.",
-            "helper": "Adjust how wheel input feels in scrollback and in mouse-aware terminal apps.",
-            "reset": "Reset",
-            "normal": "Normal",
-            "normalDescription": "Scrollback wheel multiplier.",
-            "fast": "Fast",
-            "fastDescription": "Extra multiplier while scrolling with a modifier key.",
+            "title": "滚动速度",
+            "description": "调整普通终端回滚、修饰键快速滚动以及全屏 TUI 滚轮速度。",
+            "helper": "调整滚轮输入在回滚和支持鼠标的终端应用中的手感。",
+            "reset": "重置",
+            "normal": "普通",
+            "normalDescription": "回滚滚轮倍数。",
+            "fast": "快速",
+            "fastDescription": "按住修饰键滚动时的额外倍数。",
             "tui": "TUI",
-            "tuiDescription": "Discrete wheel reports for full-screen terminal apps."
+            "tuiDescription": "面向全屏终端应用的离散滚轮报告。"
           }
         },
         "TerminalSettingsPreview": {
@@ -7854,8 +7897,8 @@
             "ask_before_closing_running_terminals_title": "关闭运行中的 Terminal 前询问",
             "ask_before_closing_running_terminals_description": "在关闭有运行中命令或 agent 的 terminal 前显示确认。",
             "scrollSpeed": {
-              "title": "Scroll Speed",
-              "description": "Tune normal terminal scrollback, fast modifier scrolling, and full-screen TUI wheel speed."
+              "title": "滚动速度",
+              "description": "调整普通终端回滚、修饰键快速滚动以及全屏 TUI 滚轮速度。"
             }
           },
           "windows": {
@@ -9131,7 +9174,10 @@
             "hideEmptySessions": "隐藏空会话",
             "workspaceScope": "工作区",
             "worktreeScope": "工作树",
-            "globalScope": "全局"
+            "globalScope": "全局",
+            "projectScope": "项目",
+            "currentProjectLower": "当前项目",
+            "project": "项目"
           },
           "AiVaultSessionDetails": {
             "updated": "更新时间",
@@ -10386,7 +10432,8 @@
           "4cc7b83ffe": "搜索文件...",
           "21783df79f": "折叠文件树",
           "481e63ca52": "文件",
-          "d5ac717d65": "未提交"
+          "d5ac717d65": "未提交",
+          "39b6b9e4e4": "Committed on Branch"
         },
         "CombinedDiffViewer": {
           "35cc27aeb2": "在源代码控制中",
@@ -11039,6 +11086,14 @@
                 "trashWorktree": "垃圾工作树",
                 "addQuickCommand": "添加快捷命令",
                 "newQuickCommand": "新的快速命令"
+              }
+            }
+          },
+          "palette": {
+            "project": {
+              "results": {
+                "repoGroup": "Repo group",
+                "project": "Project"
               }
             }
           }

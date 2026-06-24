@@ -45,9 +45,40 @@ vi.mock('@/store', () => ({
 }))
 
 import { useEditorPanelContentState } from './useEditorPanelContentState'
+import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
+
+type Deferred<T> = {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (reason: unknown) => void
+}
+
+function createDeferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void
+  let reject!: (reason: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+function dispatchExternalFileChange(file: OpenFile, worktreePath: string): void {
+  act(() => {
+    window.dispatchEvent(
+      new CustomEvent(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, {
+        detail: {
+          worktreeId: file.worktreeId,
+          worktreePath,
+          relativePath: file.relativePath
+        }
+      })
+    )
+  })
+}
 
 type ProbeProps = {
-  activeFile: OpenFile
+  activeFile: OpenFile | null
   openFiles: OpenFile[]
   gitStatusByWorktree?: Record<string, GitStatusEntry[]>
 }
@@ -277,5 +308,212 @@ describe('useEditorPanelContentState', () => {
       expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('refreshed diff content')
     )
     expect(mocks.getRuntimeGitDiff).toHaveBeenCalledTimes(2)
+  })
+
+  it('starts a fresh file read for a forced reload instead of reusing the in-flight read', async () => {
+    // A reload nonce on mount makes the lazy-load read and the forced reload
+    // fire in the same effect flush, while the first read is still registered
+    // in flight. The forced reload must delete that entry and start a new read.
+    const activeFile = createOpenFile({ fileContentReloadNonce: 1 })
+    const firstRead = createDeferred<FileContent>()
+    const secondRead = createDeferred<FileContent>()
+    mocks.readRuntimeFileContent
+      .mockReturnValueOnce(firstRead.promise)
+      .mockReturnValueOnce(secondRead.promise)
+
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    await act(async () => {
+      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+    })
+
+    await vi.waitFor(() => expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(2))
+
+    await act(async () => {
+      secondRead.resolve({ content: 'fresh content', isBinary: false })
+      await secondRead.promise
+    })
+    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('fresh content'))
+  })
+
+  it('ignores an older file read that resolves after a newer forced read', async () => {
+    const activeFile = createOpenFile()
+    const staleRead = createDeferred<FileContent>()
+    const freshRead = createDeferred<FileContent>()
+    mocks.readRuntimeFileContent
+      .mockReturnValueOnce(staleRead.promise)
+      .mockReturnValueOnce(freshRead.promise)
+
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    await act(async () => {
+      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+    })
+    await vi.waitFor(() => expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(1))
+
+    dispatchExternalFileChange(activeFile, '/repo')
+    await vi.waitFor(() => expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(2))
+
+    await act(async () => {
+      freshRead.resolve({ content: 'fresh content', isBinary: false })
+      await freshRead.promise
+    })
+    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('fresh content'))
+
+    // The older read resolving last must not clobber the fresh content.
+    await act(async () => {
+      staleRead.resolve({ content: 'stale content', isBinary: false })
+      await staleRead.promise
+    })
+    expect(latestFileContents[activeFile.id]?.content).toBe('fresh content')
+  })
+
+  it('keeps non-tab conflict-review file generations until the load resolves', async () => {
+    const activeFile = createOpenFile({
+      id: 'wt-1::conflict-review',
+      filePath: '/repo',
+      relativePath: 'Conflict Review',
+      language: 'plaintext',
+      mode: 'conflict-review',
+      conflictReview: {
+        source: 'live-summary',
+        snapshotTimestamp: 123,
+        entries: [{ path: 'src/conflict.ts', conflictKind: 'both_modified' }]
+      }
+    })
+    const conflictRead = createDeferred<FileContent>()
+    mocks.readRuntimeFileContent.mockReturnValueOnce(conflictRead.promise)
+
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    await act(async () => {
+      root?.render(
+        <HookProbe
+          activeFile={activeFile}
+          openFiles={[activeFile]}
+          gitStatusByWorktree={{
+            'wt-1': [
+              {
+                path: 'src/conflict.ts',
+                status: 'modified',
+                area: 'unstaged',
+                conflictStatus: 'unresolved',
+                conflictKind: 'both_modified'
+              }
+            ]
+          }}
+        />
+      )
+    })
+    await vi.waitFor(() => expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(1))
+
+    await act(async () => {
+      conflictRead.resolve({
+        content: '<<<<<<< HEAD\ncurrent\n=======\nincoming\n>>>>>>> branch',
+        isBinary: false
+      })
+      await conflictRead.promise
+    })
+
+    expect(latestFileContents['/repo/src/conflict.ts']?.content).toContain('incoming')
+  })
+
+  it('ignores an older file read after closing and reopening the same tab id', async () => {
+    const activeFile = createOpenFile()
+    const staleRead = createDeferred<FileContent>()
+    const freshRead = createDeferred<FileContent>()
+    mocks.readRuntimeFileContent
+      .mockReturnValueOnce(staleRead.promise)
+      .mockReturnValueOnce(freshRead.promise)
+
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    await act(async () => {
+      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+    })
+    await vi.waitFor(() => expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(1))
+
+    await act(async () => {
+      root?.render(<HookProbe activeFile={null} openFiles={[]} />)
+    })
+    expect(latestFileContents[activeFile.id]).toBeUndefined()
+
+    await act(async () => {
+      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+    })
+    await vi.waitFor(() => expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(2))
+
+    await act(async () => {
+      freshRead.resolve({ content: 'fresh reopen content', isBinary: false })
+      await freshRead.promise
+    })
+    await vi.waitFor(() =>
+      expect(latestFileContents[activeFile.id]?.content).toBe('fresh reopen content')
+    )
+
+    await act(async () => {
+      staleRead.resolve({ content: 'stale pre-close content', isBinary: false })
+      await staleRead.promise
+    })
+    expect(latestFileContents[activeFile.id]?.content).toBe('fresh reopen content')
+  })
+
+  it('ignores an older diff read that resolves after a newer forced diff read', async () => {
+    const activeFile = createOpenFile({
+      id: 'wt-1::diff::unstaged::file.ts',
+      mode: 'diff',
+      diffSource: 'unstaged'
+    })
+    const staleDiff = createDeferred<DiffContent>()
+    const freshDiff = createDeferred<DiffContent>()
+    mocks.getRuntimeGitDiff
+      .mockReturnValueOnce(staleDiff.promise)
+      .mockReturnValueOnce(freshDiff.promise)
+
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    await act(async () => {
+      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+    })
+    await vi.waitFor(() => expect(mocks.getRuntimeGitDiff).toHaveBeenCalledTimes(1))
+
+    dispatchExternalFileChange(activeFile, '/repo')
+    await vi.waitFor(() => expect(mocks.getRuntimeGitDiff).toHaveBeenCalledTimes(2))
+
+    await act(async () => {
+      freshDiff.resolve({
+        kind: 'text',
+        originalContent: 'old',
+        modifiedContent: 'fresh diff content',
+        originalIsBinary: false,
+        modifiedIsBinary: false
+      })
+      await freshDiff.promise
+    })
+    await vi.waitFor(() =>
+      expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('fresh diff content')
+    )
+
+    await act(async () => {
+      staleDiff.resolve({
+        kind: 'text',
+        originalContent: 'old',
+        modifiedContent: 'stale diff content',
+        originalIsBinary: false,
+        modifiedIsBinary: false
+      })
+      await staleDiff.promise
+    })
+    expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('fresh diff content')
   })
 })

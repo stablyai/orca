@@ -54,11 +54,17 @@ export class ProcessGoneDedupe {
 }
 
 export function getProcessGoneDedupeKey(
+  source: 'renderer' | 'child',
   processType: string,
   reason: string,
   exitCode: number | null
 ): string {
-  return `${processType}:${reason}:${exitCode ?? 'null'}`
+  // Why: one renderer death can surface as crashed/oom/launch-failed in a
+  // burst. Coalesce that prompt noise while keeping child identities precise.
+  if (source === 'renderer') {
+    return `${source}:${processType}`
+  }
+  return `${source}:${processType}:${reason}:${exitCode ?? 'null'}`
 }
 
 export const processGoneDedupe = new ProcessGoneDedupe()

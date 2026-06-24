@@ -14,7 +14,7 @@ import { tmpdir } from 'os'
 import type * as Os from 'os'
 import { join } from 'path'
 import { createManagedCommandMatcher, wrapPosixHookCommand } from '../agent-hooks/installer-utils'
-import { upsertHookTrustEntriesInContent } from './config-toml-trust'
+import { computeTrustedHash, upsertHookTrustEntriesInContent } from './config-toml-trust'
 
 const { getPathMock, homedirMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>(),
@@ -1037,6 +1037,42 @@ describe('CodexHookService', () => {
     runtimeToml = readFileSync(join(linkedManagedCodexHome, 'config.toml'), 'utf-8')
     expect(runtimeToml).not.toContain(':permission_request:0:0')
     expect(runtimeToml).not.toContain(':stop:0:0')
+  })
+
+  it('removes legacy managed trust entries hashed before hook timeouts existed', () => {
+    const service = new CodexHookService()
+    expect(service.install().state).toBe('installed')
+
+    const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
+    const managedHooksPath = join(managedCodexHome, 'hooks.json')
+    const runtimeTomlPath = join(managedCodexHome, 'config.toml')
+    const hooksConfig = JSON.parse(readFileSync(managedHooksPath, 'utf-8')) as {
+      hooks: Record<string, { hooks?: { command?: string }[] }[]>
+    }
+    const command = hooksConfig.hooks.PermissionRequest?.[0]?.hooks?.[0]?.command
+    expect(command).toBeDefined()
+    const legacyHash = computeTrustedHash({
+      sourcePath: managedHooksPath,
+      eventLabel: 'permission_request',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: command!
+    })
+    writeFileSync(
+      runtimeTomlPath,
+      [
+        hookTrustHeader(`${managedHooksPath}:permission_request:0:0`),
+        'enabled = true',
+        `trusted_hash = "${legacyHash}"`,
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    expect(service.remove().state).toBe('not_installed')
+
+    const runtimeToml = readFileSync(runtimeTomlPath, 'utf-8')
+    expect(runtimeToml).not.toContain(':permission_request:0:0')
   })
 
   it('mirrors system Codex config while preserving runtime hook trust on hook install', () => {

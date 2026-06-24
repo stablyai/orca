@@ -4,10 +4,12 @@ import { join } from 'path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
+  buildManagedCommandHook,
   createManagedCommandMatcher,
   buildWindowsAgentHookPostCommand,
   getSharedManagedScriptPath,
   hookDefinitionHasManagedCommand,
+  MANAGED_HOOK_TIMEOUT_SECONDS,
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
@@ -608,14 +610,19 @@ function removeRuntimeManagedHookTrustEntries(configPath: string): void {
       if (!managedEventLabels.has(parts.eventLabel)) {
         continue
       }
-      const expectedHash = computeTrustedHash({
+      const expectedEntry: CodexTrustEntry = {
         sourcePath: configPath,
         eventLabel: parts.eventLabel,
         groupIndex: parts.groupIndex,
         handlerIndex: parts.handlerIndex,
-        command
-      })
-      if (state.trustedHash !== expectedHash) {
+        command,
+        // Why: match the timeout install() wrote, or remove() would fail to
+        // recognize (and clean up) its own managed trust entries.
+        timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+      }
+      const expectedHash = computeTrustedHash(expectedEntry)
+      const legacyHash = computeTrustedHash({ ...expectedEntry, timeoutSec: undefined })
+      if (state.trustedHash !== expectedHash && state.trustedHash !== legacyHash) {
         continue
       }
       ourKeys.push(key)
@@ -749,12 +756,16 @@ export class CodexHookService {
       // Why: capture the actual handler index — Codex's hook_key uses the
       // positional handlerIndex, and a user-merged hook array can put our
       // command at a non-zero slot, so hardcoding 0 would misreport trust.
+      // Why: the managed hook is written with `timeout` (see install()), and
+      // Codex folds the handler timeout into its trust hash. Hash the same
+      // timeout here or status would report every managed hook as stale-trust.
       const trustInput: CodexTrustEntry = {
         sourcePath: configPath,
         eventLabel: CODEX_EVENT_LABEL[eventName],
         groupIndex: foundGroupIndex,
         handlerIndex: foundHandlerIndex,
-        command
+        command,
+        timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
       }
       const expectedHash = computeTrustedHash(trustInput)
       const actualState = trustEntries.get(computeTrustKey(trustInput))
@@ -858,18 +869,21 @@ export class CodexHookService {
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
       const cleaned = removeManagedCommands(current, isManagedCommand)
       const definition: HookDefinition = {
-        hooks: [{ type: 'command', command }]
+        hooks: [buildManagedCommandHook(command)]
       }
       nextHooks[eventName] = [definition, ...cleaned]
       // Why: the status hook must run before user hooks so a slow
       // PostToolUse/Stop hook cannot leave the sidebar stuck on the previous
       // state while Codex visibly reports that hooks are still running.
+      // timeoutSec mirrors the hook's `timeout` so the trust hash matches the
+      // entry actually written to hooks.json.
       trustEntries.push({
         sourcePath: configPath,
         eventLabel: CODEX_EVENT_LABEL[eventName],
         groupIndex: 0,
         handlerIndex: 0,
-        command
+        command,
+        timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
       })
     }
 
@@ -946,7 +960,7 @@ export class CodexHookService {
         const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
         const cleaned = removeManagedCommands(current, isManagedCommand)
         const definition: HookDefinition = {
-          hooks: [{ type: 'command', command }]
+          hooks: [buildManagedCommandHook(command)]
         }
         nextHooks[eventName] = [...cleaned, definition]
         trustEntries.push({
@@ -954,7 +968,8 @@ export class CodexHookService {
           eventLabel: CODEX_EVENT_LABEL[eventName],
           groupIndex: cleaned.length,
           handlerIndex: 0,
-          command
+          command,
+          timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
         })
       }
 

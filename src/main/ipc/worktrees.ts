@@ -77,6 +77,7 @@ import {
   cleanupUnusedWorktreePushTargetRemoteSsh,
   notifyWorktreesChanged
 } from './worktree-remote'
+import { registerWorktreeChangeInvalidator } from './worktree-change-invalidators'
 import {
   invalidateAuthorizedRootsCache,
   isENOENT,
@@ -387,6 +388,83 @@ function getPreservedBranchCleanupTarget(
 const loggedUnavailableSshGitProviders = new Set<string>()
 const loggedWorktreeListFailures = new Set<string>()
 const loggedMalformedWorktreeMetaKeys = new Set<string>()
+// Why: absorb renderer polling bursts while keeping external worktree-change
+// lag bounded to one short refresh window.
+const DETECTED_WORKTREE_SCAN_CACHE_TTL_MS = 5_000
+
+type DetectedWorktreeScanCacheEntry = {
+  expiresAt: number
+  worktrees: GitWorktreeInfo[]
+}
+
+type DetectedWorktreeScanResult = {
+  gitWorktrees: GitWorktreeInfo[]
+  fresh: boolean
+}
+
+const detectedWorktreeScanCache = new Map<string, DetectedWorktreeScanCacheEntry>()
+const detectedWorktreeScanInFlight = new Map<string, Promise<GitWorktreeInfo[]>>()
+const detectedWorktreeScanGenerations = new Map<string, number>()
+
+function invalidateDetectedWorktreeScanCache(repoId: string): void {
+  detectedWorktreeScanCache.delete(repoId)
+  detectedWorktreeScanInFlight.delete(repoId)
+  detectedWorktreeScanGenerations.set(
+    repoId,
+    (detectedWorktreeScanGenerations.get(repoId) ?? 0) + 1
+  )
+}
+
+registerWorktreeChangeInvalidator(invalidateDetectedWorktreeScanCache)
+
+export function __resetDetectedWorktreeScanCacheForTests(): void {
+  detectedWorktreeScanCache.clear()
+  detectedWorktreeScanInFlight.clear()
+  detectedWorktreeScanGenerations.clear()
+}
+
+async function listDetectedGitWorktrees(
+  store: Store,
+  repo: Repo
+): Promise<DetectedWorktreeScanResult> {
+  if (repo.connectionId || isFolderRepo(repo)) {
+    return {
+      gitWorktrees: await listRepoWorktrees(repo, getLocalProjectWorktreeGitOptions(store, repo)),
+      fresh: true
+    }
+  }
+
+  const cached = detectedWorktreeScanCache.get(repo.id)
+  if (cached && cached.expiresAt > Date.now()) {
+    return { gitWorktrees: cached.worktrees, fresh: false }
+  }
+
+  const inFlight = detectedWorktreeScanInFlight.get(repo.id)
+  if (inFlight) {
+    return { gitWorktrees: await inFlight, fresh: false }
+  }
+
+  const scan = listRepoWorktrees(repo, getLocalProjectWorktreeGitOptions(store, repo))
+  const generation = detectedWorktreeScanGenerations.get(repo.id) ?? 0
+  detectedWorktreeScanInFlight.set(repo.id, scan)
+  try {
+    const gitWorktrees = await scan
+    // Why: a create/remove notification can invalidate while the git scan is
+    // still running. Do not let that stale scan repopulate the cache afterward.
+    const isCurrentGeneration = (detectedWorktreeScanGenerations.get(repo.id) ?? 0) === generation
+    if (isCurrentGeneration) {
+      detectedWorktreeScanCache.set(repo.id, {
+        worktrees: gitWorktrees,
+        expiresAt: Date.now() + DETECTED_WORKTREE_SCAN_CACHE_TTL_MS
+      })
+    }
+    return { gitWorktrees, fresh: isCurrentGeneration }
+  } finally {
+    if (detectedWorktreeScanInFlight.get(repo.id) === scan) {
+      detectedWorktreeScanInFlight.delete(repo.id)
+    }
+  }
+}
 
 function warnOnce(keySet: Set<string>, key: string, message: string, error?: unknown): void {
   if (keySet.has(key)) {
@@ -946,6 +1024,7 @@ export function registerWorktreeHandlers(
 
       try {
         let gitWorktrees: GitWorktreeInfo[]
+        let freshScan = true
         if (isFolderRepo(repo)) {
           return {
             repoId: repo.id,
@@ -966,13 +1045,14 @@ export function registerWorktreeHandlers(
           }
           gitWorktrees = await provider.listWorktrees(repo.path)
         } else {
-          gitWorktrees = await listRepoWorktrees(
-            repo,
-            getLocalProjectWorktreeGitOptions(store, repo)
-          )
+          const scan = await listDetectedGitWorktrees(store, repo)
+          gitWorktrees = scan.gitWorktrees
+          freshScan = scan.fresh
         }
-        rememberLocalWorktreeRoots(store, repo, gitWorktrees)
-        pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
+        if (freshScan) {
+          rememberLocalWorktreeRoots(store, repo, gitWorktrees)
+          pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
+        }
         loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
         return {
           repoId: repo.id,

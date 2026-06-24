@@ -306,19 +306,17 @@ describe('applyWebSessionTabsSnapshot', () => {
     ).toBe(false)
   })
 
-  it('only starts the all-session mirror for paired web clients', () => {
+  it('starts the all-session mirror for desktop and paired web clients', () => {
     expect(
       shouldSyncAllRuntimeSessionTabs({
         activeRuntimeEnvironmentId: ENV,
-        workspaceSessionReady: true,
-        isWebClient: true
+        workspaceSessionReady: true
       })
     ).toBe(true)
     expect(
       shouldSyncAllRuntimeSessionTabs({
         activeRuntimeEnvironmentId: ENV,
-        workspaceSessionReady: true,
-        isWebClient: false
+        workspaceSessionReady: false
       })
     ).toBe(false)
   })
