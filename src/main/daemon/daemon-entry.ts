@@ -8,6 +8,7 @@
  */
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { createPtySubprocess } from './pty-subprocess'
+import { warmPwshAvailability } from '../pwsh'
 
 export function parseArgs(argv: string[]): { socketPath: string; tokenPath: string } {
   let socketPath = ''
@@ -71,6 +72,11 @@ async function main(): Promise<void> {
 
   process.on('SIGTERM', () => void shutdown())
   process.on('SIGINT', () => void shutdown())
+
+  // Why: cold pwsh.exe start exceeds the synchronous probe timeout, so warm the
+  // availability cache async at startup — before the first terminal spawn — so a
+  // PowerShell 7+ selection isn't silently downgraded to Windows PowerShell.
+  warmPwshAvailability()
 
   daemon = await startDaemon({
     socketPath,
