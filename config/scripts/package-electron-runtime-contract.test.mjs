@@ -86,6 +86,62 @@ describe('Electron runtime package contract', () => {
     )
   })
 
+  it('preflights SignPath module install before Windows signing side effects', () => {
+    const releaseWorkflow = readFileSync(
+      join(projectDir, '.github/workflows/release-cut.yml'),
+      'utf8'
+    )
+    const parsedWorkflow = parse(releaseWorkflow)
+    const steps = parsedWorkflow.jobs.build.steps
+    const stepNames = steps.map((step) => step.name)
+    const installStepIndexes = stepNames.flatMap((name, index) =>
+      name === 'Install SignPath PowerShell module' ? [index] : []
+    )
+    const buildIndex = stepNames.indexOf('Build Windows release artifacts')
+    const uploadIndex = stepNames.indexOf('Upload unsigned Windows installer for SignPath')
+    const downloadIndex = stepNames.indexOf('Download signed Windows installer from SignPath')
+
+    expect(installStepIndexes).toEqual([buildIndex + 1])
+    expect(installStepIndexes[0]).toBeLessThan(uploadIndex)
+
+    const uploadThroughDownloadScript = steps
+      .slice(uploadIndex, downloadIndex + 1)
+      .map((step) => step.run ?? '')
+      .join('\n')
+
+    expect(uploadThroughDownloadScript).not.toContain('Install-Module -Name SignPath')
+
+    const installStep = steps[installStepIndexes[0]]
+    const installRun = installStep.run
+    const sleepSeconds = [...installRun.matchAll(/Start-Sleep -Seconds (\d+)/g)].map(
+      ([, seconds]) => seconds
+    )
+
+    expect(installStep.if).toBe("matrix.platform == 'win'")
+    expect(installStep.shell).toBe('pwsh')
+    expect(installRun).toContain('Set-PSRepository -Name PSGallery -InstallationPolicy Trusted')
+    expect(installRun).toMatch(/\$env:PSModulePath -split \[System\.IO\.Path\]::PathSeparator/)
+    expect(installRun).toContain(
+      "$signPathModulePath = Join-Path -Path $currentUserModuleRoot -ChildPath 'SignPath'"
+    )
+    expect(installRun).toMatch(/for \(\$attempt = 1; \$attempt -le 3; \$attempt\+\+\)/)
+    expect(sleepSeconds).toEqual(['15', '30'])
+    expect(installRun).toContain(
+      'Install-Module -Name SignPath -Repository PSGallery -MinimumVersion 4.0.0 -MaximumVersion 4.999.999 -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop'
+    )
+    expect(installRun).toContain('Import-Module SignPath')
+    expect(installRun).toContain(
+      'Get-Command -Name Get-SignedArtifact -Module SignPath -ErrorAction Stop'
+    )
+    expect(installRun).toContain('Remove-Item -LiteralPath $signPathModulePath -Recurse -Force')
+    expect(installRun).not.toContain('SignPath*')
+    expect(installRun.indexOf('if ($attempt -eq 3)')).toBeLessThan(
+      installRun.indexOf('Remove-Item -LiteralPath $signPathModulePath')
+    )
+    expect(installRun).toMatch(/if \(\$attempt -eq 3\) {\s+throw\s+}/)
+    expect(installRun).not.toMatch(/throw\s+\$_/)
+  })
+
   it('publishes both Linux release matrix entries', () => {
     const releaseWorkflow = readFileSync(
       join(projectDir, '.github/workflows/release-cut.yml'),
