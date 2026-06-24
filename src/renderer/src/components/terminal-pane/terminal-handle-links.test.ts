@@ -160,6 +160,15 @@ describe('extractOrchestrationTaskLinks', () => {
       { taskId: 'task_worker', startIndex: 5, endIndex: 16 }
     ])
   })
+
+  it('caps orchestration task IDs by full token length', () => {
+    const maxLengthTaskId = `task_${'a'.repeat(123)}`
+
+    expect(extractOrchestrationTaskLinks(`Open ${maxLengthTaskId}`)).toEqual([
+      { taskId: maxLengthTaskId, startIndex: 5, endIndex: 133 }
+    ])
+    expect(extractOrchestrationTaskLinks(`Open task_${'a'.repeat(124)}`)).toEqual([])
+  })
 })
 
 describe('findTerminalHandleTarget', () => {
