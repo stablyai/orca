@@ -101,7 +101,7 @@ describe('RepositoryWorktreeDefaultsSection — worktree path', () => {
     render(BASE_REPO, updateRepo)
 
     const input = getWorktreePathInput()
-    typeText(input, './worktree')
+    typeText(input, '  ./worktree  ')
     blurInput(input)
 
     expect(updateRepo).toHaveBeenCalledTimes(1)
