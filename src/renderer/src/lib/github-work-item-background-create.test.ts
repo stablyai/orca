@@ -60,7 +60,8 @@ function baseStore() {
       disabledTuiAgents: []
     },
     ensureDetectedAgents: vi.fn().mockResolvedValue([]),
-    ensureRemoteDetectedAgents: vi.fn().mockResolvedValue([])
+    ensureRemoteDetectedAgents: vi.fn().mockResolvedValue([]),
+    ensureRuntimeDetectedAgents: vi.fn().mockResolvedValue([])
   }
 }
 
@@ -184,6 +185,47 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
       request_kind: 'new'
     })
     expect(buildAgentStartupPlan).toHaveBeenCalled()
+  })
+
+  it('uses runtime-owned detection and indeterminate progress for runtime repos', async () => {
+    const runtimeRepo: Repo = {
+      ...repo,
+      executionHostId: 'runtime:env-1'
+    }
+    const store = makeStore({
+      repos: [runtimeRepo],
+      ensureDetectedAgents: vi.fn().mockResolvedValue([]),
+      ensureRemoteDetectedAgents: vi.fn().mockResolvedValue([]),
+      ensureRuntimeDetectedAgents: vi.fn().mockResolvedValue(['codex'])
+    })
+    const deps = makeDeps(store)
+
+    await createGitHubWorkItemWorkspaceInBackground(
+      {
+        item: makeIssue(),
+        repoId: 'repo-1',
+        openModalFallback: vi.fn()
+      },
+      deps
+    )
+
+    expect(store.ensureRuntimeDetectedAgents).toHaveBeenCalledWith('env-1')
+    expect(store.ensureDetectedAgents).not.toHaveBeenCalled()
+    expect(store.ensureRemoteDetectedAgents).not.toHaveBeenCalled()
+    expect(deps.beginBackgroundCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeCreateProgressMode: 'indeterminate',
+        workspaceRunContext: expect.objectContaining({
+          hostId: 'runtime:env-1',
+          repoId: 'repo-1'
+        })
+      })
+    )
+    const continueCall = deps.continueBackgroundCreate.mock.calls[0] as unknown[] | undefined
+    expect(continueCall).toBeDefined()
+    const request = continueCall?.[1] as WorktreeCreationRequest
+    expect(request.worktreeCreateProgressMode).toBe('indeterminate')
+    expect(request.agent).toBe('codex')
   })
 
   it('stops before opening the composer when the staged create is cancelled during setup preflight', async () => {

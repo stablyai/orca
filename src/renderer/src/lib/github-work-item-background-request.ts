@@ -18,7 +18,7 @@ import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import type { GitHubWorkItem, GlobalSettings, Repo, TuiAgent } from '../../../shared/types'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 
 export type GitHubWorkItemBackgroundStoreSnapshot = {
@@ -39,6 +39,9 @@ export type GitHubWorkItemBackgroundStoreSnapshot = {
     | undefined
   ensureDetectedAgents: ReturnType<typeof useAppStore.getState>['ensureDetectedAgents']
   ensureRemoteDetectedAgents: ReturnType<typeof useAppStore.getState>['ensureRemoteDetectedAgents']
+  ensureRuntimeDetectedAgents: ReturnType<
+    typeof useAppStore.getState
+  >['ensureRuntimeDetectedAgents']
 }
 
 export type BuildInitialGitHubWorkItemRequestArgs = {
@@ -98,9 +101,13 @@ export async function resolvePreferredQuickAgentForGitHubWorkItem(
   store: GitHubWorkItemBackgroundStoreSnapshot,
   repo: Repo
 ): Promise<TuiAgent | null> {
-  const detectedAgents = repo.connectionId
-    ? await store.ensureRemoteDetectedAgents(repo.connectionId)
-    : await store.ensureDetectedAgents()
+  const host = parseExecutionHostId(getRepoExecutionHostId(repo))
+  const detectedAgents =
+    host?.kind === 'ssh'
+      ? await store.ensureRemoteDetectedAgents(host.targetId)
+      : host?.kind === 'runtime'
+        ? await store.ensureRuntimeDetectedAgents(host.environmentId)
+        : await store.ensureDetectedAgents()
   return pickQuickWorkspaceAgent(
     store.settings?.defaultTuiAgent,
     detectedAgents,
@@ -207,9 +214,10 @@ export function buildInitialGitHubWorkItemRequest(
 ): WorktreeCreationRequest {
   const { seedName, displayName } = getGitHubWorkItemName(args.item)
   const workspaceRunContext = getWorkspaceRunContextForRepo(repo, args.workspaceRunContext)
+  const ownerHost = parseExecutionHostId(getRepoExecutionHostId(repo))
   return {
     repoId: args.repoId,
-    worktreeCreateProgressMode: repo.connectionId ? 'indeterminate' : 'stepped',
+    worktreeCreateProgressMode: ownerHost?.kind === 'local' ? 'stepped' : 'indeterminate',
     ...(args.taskSourceContext ? { taskSourceContext: args.taskSourceContext } : {}),
     ...(workspaceRunContext ? { workspaceRunContext } : {}),
     name: seedName,
