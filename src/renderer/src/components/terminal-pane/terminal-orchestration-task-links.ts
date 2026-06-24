@@ -46,7 +46,8 @@ export function extractOrchestrationTaskLinks(lineText: string): ParsedOrchestra
 
 export async function focusRuntimeOrchestrationTask(
   taskId: string,
-  runtimeEnvironmentId: string | null
+  runtimeEnvironmentId: string | null,
+  focusRendererTerminal?: (handle: string) => boolean
 ): Promise<void> {
   const environmentId = runtimeEnvironmentId?.trim()
   const target = environmentId
@@ -58,6 +59,9 @@ export async function focusRuntimeOrchestrationTask(
   const terminal = result.dispatch?.assignee_handle?.trim()
   if (!terminal) {
     throw new Error(`No dispatched terminal for orchestration task ${taskId}`)
+  }
+  if (focusRendererTerminal?.(terminal)) {
+    return
   }
   // Why: task IDs are stable orchestration DB records, but terminal.focus owns
   // the app-side navigation contract for local and SSH runtime terminals.

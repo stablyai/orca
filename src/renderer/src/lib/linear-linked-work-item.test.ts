@@ -34,7 +34,7 @@ describe('buildLinearIssueLinkedWorkItem', () => {
       linearIdentifier: 'ENG-123',
       linearOrganizationUrlKey: 'acme'
     })
-    expect(item.linkedContext).toBeUndefined()
+    expect(item).not.toHaveProperty('linkedContext')
   })
 
   it('carries the Linear workspace id when the issue has one', () => {
@@ -48,6 +48,7 @@ describe('isLinearLinkedWorkItem', () => {
   it('recognizes Linear-linked composer sources by provider or identifier', () => {
     expect(isLinearLinkedWorkItem(buildLinearIssueLinkedWorkItem(makeIssue()))).toBe(true)
     expect(isLinearLinkedWorkItem({ provider: 'linear' })).toBe(true)
+    expect(isLinearLinkedWorkItem({ linearIdentifier: '   ' })).toBe(false)
     expect(isLinearLinkedWorkItem({})).toBe(false)
     expect(isLinearLinkedWorkItem(null)).toBe(false)
   })

@@ -10,6 +10,8 @@ import type { TabDragItemData } from './useTabDragSplit'
 import {
   canDropTabForPaneColumnSplit,
   canDropTabIntoPaneBody,
+  getTabDragActivationDistance,
+  TAB_DRAG_ACTIVATION_DISTANCE_PX,
   useTabDragSplit
 } from './useTabDragSplit'
 
@@ -175,6 +177,21 @@ afterEach(() => {
   }
   document.body.replaceChildren()
   vi.clearAllMocks()
+})
+
+describe('tab drag activation distance', () => {
+  it('uses the named threshold for enabled tab drags', () => {
+    expect(TAB_DRAG_ACTIVATION_DISTANCE_PX).toBe(12)
+    expect(getTabDragActivationDistance(true)).toBe(TAB_DRAG_ACTIVATION_DISTANCE_PX)
+  })
+
+  it('keeps enabled tab drags above the old overly-sensitive distance', () => {
+    expect(TAB_DRAG_ACTIVATION_DISTANCE_PX).toBeGreaterThan(5)
+  })
+
+  it('uses an impossible activation distance when tab dragging is disabled', () => {
+    expect(getTabDragActivationDistance(false)).toBe(Number.MAX_SAFE_INTEGER)
+  })
 })
 
 describe('canDropTabIntoPaneBody', () => {

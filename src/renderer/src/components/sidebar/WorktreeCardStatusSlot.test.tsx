@@ -205,7 +205,7 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).not.toContain('bg-neutral-500/40')
   })
 
-  it('uses a branch icon instead of the quiet active dot when new card style has no review', () => {
+  it('uses a branch icon with branch-only tooltip copy by default', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
@@ -221,10 +221,31 @@ describe('WorktreeCardStatusSlot', () => {
     )
 
     expect(markup).toContain('Branch')
+    expect(markup).not.toContain('Branch or folder path')
     expect(markup).toContain('lucide-git-branch')
     expect(markup).toContain('size-[13px] translate-x-px text-muted-foreground/70')
     expect(markup).toContain('text-muted-foreground/70')
     expect(markup).not.toContain('bg-emerald-500')
+  })
+
+  it('uses context-aware branch or folder path tooltip copy', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardStatusSlot
+        worktreeId="wt-1"
+        showStatus
+        showUnreadAction={false}
+        isUnread={false}
+        unreadTooltip="Mark as unread"
+        onPointerDown={vi.fn()}
+        onToggleUnread={vi.fn()}
+        newCardStyle
+        hasBranchIdentity
+        branchIdentityLabel="Branch or folder path"
+      />
+    )
+
+    expect(markup).toContain('Branch or folder path')
+    expect(markup).toContain('lucide-git-branch')
   })
 
   it('keeps the quiet dot when the row has no branch identity', () => {

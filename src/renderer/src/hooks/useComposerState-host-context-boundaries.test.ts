@@ -404,8 +404,8 @@ describe('useComposerState host-context boundaries', () => {
     expect(HOOK_SOURCE).not.toContain('isOrcaCliAvailableForLaunch')
     expect(HOOK_SOURCE).not.toContain('hasGeneratedLinearSourceContext')
     expect(HOOK_SOURCE).not.toContain('shouldDraftGeneratedLinearContext')
-    expect(HOOK_SOURCE).toContain(
-      "Boolean(linkedWorkItem) &&\n    linkedWorkItemProvider !== 'linear'"
+    expect(HOOK_SOURCE).toMatch(
+      /willApplyIssueCommandAsPrompt[\s\S]*linkedWorkItemProvider !== 'linear'/
     )
 
     const previewSection = sourceBetween(
@@ -421,8 +421,8 @@ describe('useComposerState host-context boundaries', () => {
       'const submitQuick = useCallback'
     )
     expect(fullSubmit).toContain("submitLinkedWorkItemProvider !== 'linear'")
-    expect(fullSubmit).toContain(
-      "const submitShouldRunIssueAutomation =\n        enableIssueAutomation &&\n        submitLinkedWorkItemProvider !== 'linear'"
+    expect(fullSubmit).toMatch(
+      /submitShouldRunIssueAutomation[\s\S]*submitLinkedWorkItemProvider !== 'linear'/
     )
     expect(fullSubmit).toContain('prompt: submitStartupPrompt')
     expect(fullSubmit).toContain('const shouldSeedInitialAgentStatus =')

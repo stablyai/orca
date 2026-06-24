@@ -102,6 +102,61 @@ export function getFolderWorkspaceCardSurfaceInset(args: {
   return Math.min(genericSurfaceInset, Math.max(0, maxSurfaceInset))
 }
 
+export function getFolderWorkspaceRowGeometry(args: {
+  experimentalNewWorktreeCardStyle: boolean
+  isFolderBackedWorkspaceChild: boolean
+  isGrouped: boolean
+  groupDepth: number
+  lineageDepth: number
+}): {
+  surfaceInset: number
+  cardContentIndent: number
+} {
+  if (args.experimentalNewWorktreeCardStyle && args.isFolderBackedWorkspaceChild) {
+    // Why: standalone folder workspace rows do not get a lineage wrapper
+    // offset, so align them to the comparable folder-backed repo row anchor.
+    const contentAnchor = getFolderBackedRepoWorktreeCardContentIndent({
+      groupDepth: args.groupDepth,
+      lineageDepth: 0
+    })
+    const surfaceInset = getFolderBackedRepoWorktreeCardSurfaceInset({
+      groupDepth: args.groupDepth,
+      lineageDepth: 0
+    })
+
+    return {
+      surfaceInset,
+      cardContentIndent: Math.max(0, contentAnchor - surfaceInset)
+    }
+  }
+
+  const contentIndent = args.isFolderBackedWorkspaceChild
+    ? getFolderWorkspaceCardContentIndent({
+        groupDepth: args.groupDepth
+      })
+    : getWorktreeCardContentIndent({
+        isGrouped: args.isGrouped,
+        groupDepth: args.groupDepth,
+        lineageDepth: args.lineageDepth
+      })
+  // Why: legacy folder-scanned folder workspaces keep their compact anchor,
+  // while all other folder rows share the normal worktree row surface path.
+  const surfaceInset = args.isFolderBackedWorkspaceChild
+    ? getFolderWorkspaceCardSurfaceInset({
+        isGrouped: true,
+        groupDepth: args.groupDepth
+      })
+    : getWorktreeCardSurfaceInset({
+        isGrouped: args.isGrouped,
+        groupDepth: args.groupDepth
+      })
+
+  return {
+    surfaceInset,
+    cardContentIndent: Math.max(0, contentIndent - surfaceInset)
+  }
+}
+
 export function getWorktreeCardSurfaceInset(args: {
   isGrouped: boolean
   groupDepth: number

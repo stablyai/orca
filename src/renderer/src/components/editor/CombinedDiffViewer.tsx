@@ -66,6 +66,7 @@ import {
 import {
   getCombinedBranchEntries,
   getCombinedUncommittedEntries,
+  resolveCombinedUncommittedSnapshotEntries,
   shouldAutoReloadCombinedDiffFromGitStatus
 } from './combined-diff-entries'
 import { getCombinedDiffCommitMessageBody } from './combined-diff-commit-message'
@@ -125,6 +126,23 @@ function invalidateCombinedDiffCachesForRelativePath(relativePath: string): void
       combinedDiffViewStateCache.delete(key)
     }
   }
+}
+
+function getRetainedResolvedSnapshotEntries(sections: readonly DiffSection[]): GitStatusEntry[] {
+  return sections.flatMap((section) =>
+    section.area === undefined
+      ? []
+      : [
+          {
+            path: section.path,
+            status: section.status as GitStatusEntry['status'],
+            area: section.area,
+            oldPath: section.oldPath,
+            added: section.added,
+            removed: section.removed
+          }
+        ]
+  )
 }
 
 if (typeof window !== 'undefined') {
@@ -423,11 +441,18 @@ export default function CombinedDiffViewer({
     () => file.uncommittedEntriesSnapshot?.filter((e) => e.conflictStatus !== 'unresolved'),
     [file.uncommittedEntriesSnapshot]
   )
-  const uncommittedEntries = React.useMemo(
-    () =>
-      snapshotEntries ?? getCombinedUncommittedEntries(gitStatusEntries, file.combinedAreaFilter),
-    [snapshotEntries, gitStatusEntries, file.combinedAreaFilter]
-  )
+  const uncommittedEntries = React.useMemo(() => {
+    if (!snapshotEntries) {
+      return getCombinedUncommittedEntries(gitStatusEntries, file.combinedAreaFilter)
+    }
+    // Why: row load state changes must not rebuild the snapshot entry list;
+    // the ref is only consulted when live Git status changes.
+    return resolveCombinedUncommittedSnapshotEntries(
+      snapshotEntries,
+      gitStatusEntries,
+      getRetainedResolvedSnapshotEntries(sectionsRef.current)
+    )
+  }, [snapshotEntries, gitStatusEntries, file.combinedAreaFilter])
   const branchEntries = React.useMemo<GitBranchChangeEntry[]>(() => {
     return getCombinedBranchEntries(file.branchEntriesSnapshot, liveBranchEntries)
   }, [file.branchEntriesSnapshot, liveBranchEntries])

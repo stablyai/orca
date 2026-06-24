@@ -3378,26 +3378,21 @@
           "496f68cf8c": "Escaneo de repositorios. Haga clic para detener.",
           "a32bef9516": "Dejar de escanear",
           "2f8298f3c3": "Detener escaneo",
-          "c157f31a95": "Importar como grupo",
-          "40199ef7b3": "Nombre del grupo",
-          "787412361a": "¿Qué es el nombre de un grupo?",
           "5f857ba8e6": "en",
           "4df0d08cc5": "Encontró",
           "8db50afe1a": "Importar repositorios desde la carpeta",
           "5b2e6fe3c8": "Importar por separado",
           "cf9d382ca1": "Importar",
           "220dd32d83": "Exploración...",
-          "fb33359f69": "¿Es esto un monorepo?",
-          "d75170194e": "Impórtalos como grupo si son un monorepo o si pertenecen juntos. Orca los agrupará y te permitirá trabajar desde la carpeta principal.",
+          "fb33359f69": "¿Agrupar estos repositorios?",
+          "d75170194e": "Elige esto si estos proyectos van juntos: un monorepo o simplemente un conjunto de repositorios relacionados. Orca los agrupará y te permitirá trabajar desde la carpeta principal.",
           "39d51212cc": "Nombre del grupo",
           "aa0247680d": "No, importar por separado",
-          "a0bc4d1f8e": "Importar como grupo",
+          "a0bc4d1f8e": "Sí, importar como grupo",
           "8401a7a0d0": "1 repositorio",
           "d4f1df62ef": "{{value0}} repositorios",
           "b4263a2ac4": "Se encontraron {{value0}} en {{value1}}.",
-          "24eda6c8b2": "Explorando... {{value0}}",
-          "b20bb7c24f": "Keeps these repos together in one group. Best for related repos like microservices.",
-          "e907ec8935": "What is a monorepo name?"
+          "24eda6c8b2": "Explorando... {{value0}}"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "Detener escaneo",
@@ -3770,7 +3765,8 @@
           "automation": "Automation",
           "2d74665a56": "Puertos",
           "65a9820bd1": "Estados del agente",
-          "219ebf1961": "Nombre de rama"
+          "219ebf1961": "Nombre de rama",
+          "folderPathIdentity": "Branch / folder path"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "Conectando...",
@@ -3846,7 +3842,9 @@
           "021538e1d1": "SSH desconectado",
           "runtimeHostDisconnected": "Server disconnected",
           "runtimeHostProject": "Project on Orca server",
-          "automationCreated": "Created by automation"
+          "automationCreated": "Created by automation",
+          "branchIdentity": "Branch",
+          "branchFolderPathIdentity": "Branch or folder path"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -4306,6 +4304,9 @@
           "current": "Actual",
           "searchPlaceholder": "Buscar árboles de trabajo...",
           "empty": "No hay árboles de trabajo elegibles que coincidan."
+        },
+        "WorktreeCardStatusSlot": {
+          "branchIdentity": "Branch"
         }
       },
       "shared": {

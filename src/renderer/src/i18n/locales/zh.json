@@ -1103,7 +1103,7 @@
         "notePasteTooLarge": "笔记字段的粘贴内容过大。",
         "reuseExistingBranch": "复用分支",
         "reuseExistingBranchHint": "检出已有分支，而不是基于它创建新分支。",
-        "createMultiple": "Create more"
+        "createMultiple": "创建更多"
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "创建工作区之前选择项目、工作区名称和 Agent。"
@@ -3359,26 +3359,21 @@
           "496f68cf8c": "扫描存储库。单击停止。",
           "a32bef9516": "停止扫描",
           "2f8298f3c3": "停止扫描",
-          "c157f31a95": "作为组导入",
-          "40199ef7b3": "团体名称",
-          "787412361a": "什么是群组名称？",
           "5f857ba8e6": "在",
           "4df0d08cc5": "成立",
           "8db50afe1a": "从文件夹导入存储库",
           "5b2e6fe3c8": "单独导入",
           "cf9d382ca1": "导入",
           "220dd32d83": "扫描...",
-          "fb33359f69": "这是 Monorepo 吗？",
-          "d75170194e": "如果它们是 Monorepo，或本来就应该放在一起，请将它们作为组导入。Orca 会将它们分组，并让你从父文件夹开始工作。",
+          "fb33359f69": "将这些仓库分组吗？",
+          "d75170194e": "如果这些项目应放在一起（可以是 Monorepo，也可以只是一组相关仓库），请选择此项。Orca 会将它们分组，并让你从父文件夹开始工作。",
           "39d51212cc": "组名称",
           "aa0247680d": "否，单独导入",
-          "a0bc4d1f8e": "作为组导入",
+          "a0bc4d1f8e": "是，作为组导入",
           "8401a7a0d0": "1 个仓库",
           "d4f1df62ef": "{{value0}} 个仓库",
           "b4263a2ac4": "在 {{value1}} 中找到 {{value0}}。",
-          "24eda6c8b2": "正在扫描... {{value0}}",
-          "b20bb7c24f": "Keeps these repos together in one group. Best for related repos like microservices.",
-          "e907ec8935": "What is a monorepo name?"
+          "24eda6c8b2": "正在扫描... {{value0}}"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "停止扫描",
@@ -3751,7 +3746,8 @@
           "2d74665a56": "端口",
           "65a9820bd1": "Agent 状态",
           "219ebf1961": "分支名称",
-          "automation": "Automation"
+          "automation": "Automation",
+          "folderPathIdentity": "Branch / folder path"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "正在连接...",
@@ -3827,7 +3823,9 @@
           "021538e1d1": "SSH 已断开连接",
           "runtimeHostDisconnected": "Server disconnected",
           "runtimeHostProject": "Project on Orca server",
-          "automationCreated": "Created by automation"
+          "automationCreated": "Created by automation",
+          "branchIdentity": "Branch",
+          "branchFolderPathIdentity": "Branch or folder path"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -4306,6 +4304,9 @@
           "current": "当前",
           "searchPlaceholder": "搜索工作树...",
           "empty": "没有匹配的可用工作树。"
+        },
+        "WorktreeCardStatusSlot": {
+          "branchIdentity": "Branch"
         }
       },
       "shared": {

@@ -3384,22 +3384,17 @@
           "496f68cf8c": "Scanning repositories. Click to stop.",
           "a32bef9516": "Stop scanning",
           "2f8298f3c3": "Stop scan",
-          "c157f31a95": "Import as group",
-          "40199ef7b3": "Group name",
-          "b20bb7c24f": "Keeps these repos together in one group. Best for related repos like microservices.",
-          "787412361a": "What is a group name?",
           "5f857ba8e6": "in",
           "4df0d08cc5": "Found",
           "8db50afe1a": "Import repositories from folder",
           "5b2e6fe3c8": "Import separately",
           "cf9d382ca1": "Import",
           "220dd32d83": "Scanning...",
-          "fb33359f69": "Is this a monorepo?",
-          "d75170194e": "Choose this if these projects belong together. Orca will group them and let you work from the parent folder.",
-          "39d51212cc": "Monorepo name",
-          "e907ec8935": "What is a monorepo name?",
+          "fb33359f69": "Group these repositories?",
+          "d75170194e": "Choose this if these projects belong together — a monorepo, or just a set of related repos. Orca will group them and let you work from the parent folder.",
+          "39d51212cc": "Group name",
           "aa0247680d": "No, import separately",
-          "a0bc4d1f8e": "Yes, import as monorepo",
+          "a0bc4d1f8e": "Yes, import as group",
           "8401a7a0d0": "1 repository",
           "d4f1df62ef": "{{value0}} repositories",
           "b4263a2ac4": "Found {{value0}} in {{value1}}.",
@@ -3784,7 +3779,8 @@
           "8d62c68b35": "Notes",
           "2d74665a56": "Ports",
           "65a9820bd1": "Agent statuses",
-          "219ebf1961": "Branch name"
+          "219ebf1961": "Branch name",
+          "folderPathIdentity": "Branch / folder path"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "Connecting...",
@@ -3860,7 +3856,9 @@
           "021538e1d1": "SSH disconnected",
           "runtimeHostDisconnected": "Server disconnected",
           "runtimeHostProject": "Project on Orca server",
-          "automationCreated": "Created by automation"
+          "automationCreated": "Created by automation",
+          "branchIdentity": "Branch",
+          "branchFolderPathIdentity": "Branch or folder path"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -4306,6 +4304,9 @@
           "current": "Current",
           "searchPlaceholder": "Search worktrees...",
           "empty": "No matching eligible worktrees."
+        },
+        "WorktreeCardStatusSlot": {
+          "branchIdentity": "Branch"
         }
       },
       "shared": {

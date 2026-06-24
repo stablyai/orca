@@ -7,7 +7,7 @@ import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 import type { ElectronApplication, Locator } from '@stablyai/playwright-test'
 
-const IMPORT_AS_MONOREPO_BUTTON_NAME = 'Yes, import as monorepo'
+const IMPORT_AS_GROUP_BUTTON_NAME = 'Yes, import as group'
 
 const tempRoots: string[] = []
 
@@ -95,11 +95,11 @@ async function chooseFolderInNativeDialog(
   }, folderPath)
 }
 
-function getImportAsMonorepoButton(importDialog: Locator): Locator {
+function getImportAsGroupButton(importDialog: Locator): Locator {
   // Why: the current accessible action is intentional; accepting retired
   // labels would hide deterministic dialog copy drift.
   return importDialog.getByRole('button', {
-    name: IMPORT_AS_MONOREPO_BUTTON_NAME,
+    name: IMPORT_AS_GROUP_BUTTON_NAME,
     exact: true
   })
 }
@@ -129,8 +129,8 @@ test.describe('Folder setup', () => {
     ).toBeVisible()
     await expect(importDialog.getByText('api-service', { exact: true }).first()).toBeVisible()
     await expect(importDialog.getByText('web-client', { exact: true }).first()).toBeVisible()
-    await expect(getImportAsMonorepoButton(importDialog)).toBeEnabled()
-    await getImportAsMonorepoButton(importDialog).click()
+    await expect(getImportAsGroupButton(importDialog)).toBeEnabled()
+    await getImportAsGroupButton(importDialog).click()
 
     await expect
       .poll(
@@ -217,7 +217,7 @@ test.describe('Folder setup', () => {
         .locator('input[type="checkbox"]')
         .check()
     }
-    await getImportAsMonorepoButton(importDialog).click()
+    await getImportAsGroupButton(importDialog).click()
 
     await expect
       .poll(

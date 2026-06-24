@@ -3359,26 +3359,21 @@
           "496f68cf8c": "repos를 스캔하는 중입니다. 중지하려면 클릭하세요.",
           "a32bef9516": "스캔 중지",
           "2f8298f3c3": "스캔 중지",
-          "c157f31a95": "그룹으로 가져오기",
-          "40199ef7b3": "그룹 이름",
-          "787412361a": "그룹 이름은 무엇입니까?",
           "5f857ba8e6": "~에",
           "4df0d08cc5": "발견됨",
           "8db50afe1a": "폴더에서 repos 가져오기",
           "5b2e6fe3c8": "별도로 가져오기",
           "cf9d382ca1": "가져오기",
           "220dd32d83": "스캔 중...",
-          "fb33359f69": "이 폴더가 모노 repo 인가요?",
-          "d75170194e": "모노레포이거나 함께 속한 프로젝트라면 그룹으로 가져오세요. Orca가 그룹으로 묶고 상위 폴더에서 작업할 수 있게 합니다.",
+          "fb33359f69": "이 저장소들을 그룹으로 묶을까요?",
+          "d75170194e": "이 프로젝트들이 함께 속한 경우(모노레포이거나 단순히 관련된 저장소 모음) 이 옵션을 선택하세요. Orca가 그룹으로 묶고 상위 폴더에서 작업할 수 있게 합니다.",
           "39d51212cc": "그룹 이름",
           "aa0247680d": "아니요, 별도로 가져오기",
-          "a0bc4d1f8e": "그룹으로 가져오기",
+          "a0bc4d1f8e": "예, 그룹으로 가져오기",
           "8401a7a0d0": "repos 1개",
           "d4f1df62ef": "repos {{value0}}개",
           "b4263a2ac4": "{{value1}}에서 {{value0}}을(를) 찾았습니다.",
-          "24eda6c8b2": "스캔 중... {{value0}}",
-          "b20bb7c24f": "이 리포지토리들을 하나의 그룹으로 묶어 둡니다. 마이크로서비스처럼 서로 관련된 리포지토리에 적합합니다.",
-          "e907ec8935": "모노 repo 이름이란?"
+          "24eda6c8b2": "스캔 중... {{value0}}"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "스캔 중지",
@@ -3751,7 +3746,8 @@
           "2d74665a56": "포트",
           "65a9820bd1": "Agent 상태",
           "219ebf1961": "브랜치 이름",
-          "automation": "자동화"
+          "automation": "자동화",
+          "folderPathIdentity": "Branch / folder path"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "연결 중...",
@@ -3827,7 +3823,9 @@
           "021538e1d1": "SSH 연결이 끊어졌습니다.",
           "runtimeHostDisconnected": "Server disconnected",
           "runtimeHostProject": "Project on Orca server",
-          "automationCreated": "Created by automation"
+          "automationCreated": "Created by automation",
+          "branchIdentity": "Branch",
+          "branchFolderPathIdentity": "Branch or folder path"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -4306,6 +4304,9 @@
           "current": "현재",
           "searchPlaceholder": "워크트리 검색...",
           "empty": "일치하는 적격 워크트리가 없습니다."
+        },
+        "WorktreeCardStatusSlot": {
+          "branchIdentity": "Branch"
         }
       },
       "shared": {

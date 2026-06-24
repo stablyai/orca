@@ -45,6 +45,10 @@ export type { HoveredTabInsertion }
 
 export type TabDropZone = 'center' | TabSplitDirection
 
+// Why: tab activation waits for pointerup, so dnd-kit needs enough movement
+// tolerance to avoid treating ordinary click jitter as an intentional drag.
+export const TAB_DRAG_ACTIVATION_DISTANCE_PX = 12
+
 export type TabDragItemData = {
   kind: 'tab'
   worktreeId: string
@@ -145,6 +149,10 @@ export function getTabPaneBodyDroppableId(groupId: string): UniqueIdentifier {
   return `tab-group-pane-body:${groupId}`
 }
 
+export function getTabDragActivationDistance(enabled: boolean): number {
+  return enabled ? TAB_DRAG_ACTIVATION_DISTANCE_PX : Number.MAX_SAFE_INTEGER
+}
+
 export function useTabDragSplit({
   worktreeId,
   enabled = true
@@ -187,7 +195,7 @@ export function useTabDragSplit({
   // the sensors array into a useEffect dependency list — changing its
   // length between renders violates React's rules of hooks.
   const pointerSensor = useSensor(PointerSensor, {
-    activationConstraint: { distance: enabled ? 5 : Number.MAX_SAFE_INTEGER }
+    activationConstraint: { distance: getTabDragActivationDistance(enabled) }
   })
   const sensors = useSensors(pointerSensor)
 

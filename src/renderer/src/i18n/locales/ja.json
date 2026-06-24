@@ -3359,26 +3359,21 @@
           "496f68cf8c": "repos をスキャンしています。クリックして停止します。",
           "a32bef9516": "スキャンを停止する",
           "2f8298f3c3": "スキャンの停止",
-          "c157f31a95": "グループとしてインポート",
-          "40199ef7b3": "グループ名",
-          "787412361a": "グループ名とは何ですか?",
           "5f857ba8e6": "で",
           "4df0d08cc5": "見つかった",
           "8db50afe1a": "フォルダーから repos をインポートする",
           "5b2e6fe3c8": "個別にインポート",
           "cf9d382ca1": "インポート",
           "220dd32d83": "スキャン中...",
-          "fb33359f69": "これはモノレポですか？",
-          "d75170194e": "モノレポ、または一緒に扱うべきプロジェクトの場合は、グループとしてインポートします。Orca がグループ化し、親フォルダーから作業できるようにします。",
+          "fb33359f69": "これらのリポジトリをグループ化しますか？",
+          "d75170194e": "これらのプロジェクトをまとめたい場合（モノレポでも、関連するリポジトリの集まりでも）に選択します。Orca がグループ化し、親フォルダーから作業できるようにします。",
           "39d51212cc": "グループ名",
           "aa0247680d": "いいえ、個別にインポート",
-          "a0bc4d1f8e": "グループとしてインポート",
+          "a0bc4d1f8e": "はい、グループとしてインポート",
           "8401a7a0d0": "1 個の repos",
           "d4f1df62ef": "{{value0}} 個の repos",
           "b4263a2ac4": "{{value1}} で {{value0}} が見つかりました。",
-          "24eda6c8b2": "スキャン中... {{value0}}",
-          "b20bb7c24f": "Keeps these repos together in one group. Best for related repos like microservices.",
-          "e907ec8935": "What is a monorepo name?"
+          "24eda6c8b2": "スキャン中... {{value0}}"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "スキャンの停止",
@@ -3751,7 +3746,8 @@
           "2d74665a56": "ポート",
           "65a9820bd1": "Agent ステータス",
           "219ebf1961": "ブランチ名",
-          "automation": "Automation"
+          "automation": "Automation",
+          "folderPathIdentity": "Branch / folder path"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "接続中...",
@@ -3827,7 +3823,9 @@
           "021538e1d1": "SSH が切断されました",
           "runtimeHostDisconnected": "Server disconnected",
           "runtimeHostProject": "Project on Orca server",
-          "automationCreated": "Created by automation"
+          "automationCreated": "Created by automation",
+          "branchIdentity": "Branch",
+          "branchFolderPathIdentity": "Branch or folder path"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -4306,6 +4304,9 @@
           "current": "現在",
           "searchPlaceholder": "ワークツリーを検索...",
           "empty": "一致する対象ワークツリーがありません。"
+        },
+        "WorktreeCardStatusSlot": {
+          "branchIdentity": "Branch"
         }
       },
       "shared": {
