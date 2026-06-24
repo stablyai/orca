@@ -1,5 +1,6 @@
 import { useAppStore } from '../../store'
 import type { TabSplitDirection } from '../../store/slices/tabs'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { mirrorWebRuntimeTabMove } from './web-runtime-tab-move-mirror'
 
 type TabMovePaneColumnState = Pick<
@@ -16,6 +17,12 @@ export function canMoveTabToNewPaneColumnFromState(
     const tab = tabs.find((candidate) => candidate.id === unifiedTabId)
     if (!tab || tab.groupId !== groupId) {
       continue
+    }
+    // Why: the floating panel renders a single group with no split layout, so
+    // moving a tab into a new pane column would orphan it into a group the
+    // surface never paints. Block the affordance for that worktree.
+    if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+      return false
     }
     const group = (state.groupsByWorktree[worktreeId] ?? []).find(
       (candidate) => candidate.id === groupId

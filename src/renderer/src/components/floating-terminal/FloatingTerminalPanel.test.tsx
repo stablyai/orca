@@ -178,6 +178,44 @@ vi.mock('@/components/tab-bar/TabBar', () => ({
   }
 }))
 
+vi.mock('@dnd-kit/core', () => ({
+  DndContext: function DndContext(props: { children?: unknown }) {
+    return props.children
+  },
+  DragOverlay: function DragOverlay() {
+    return null
+  }
+}))
+
+vi.mock('@/components/tab-bar/TabDragPreview', () => ({
+  default: function TabDragPreview() {
+    return null
+  }
+}))
+
+vi.mock('@/components/tab-group/tab-drag-context', () => ({
+  TabDragProvider: function TabDragProvider(props: { children?: unknown }) {
+    return props.children
+  }
+}))
+
+vi.mock('@/components/tab-group/useTabDragSplit', () => ({
+  useTabDragSplit: () => ({
+    activeDrag: null,
+    collisionDetection: vi.fn(),
+    hoveredTabInsertion: null,
+    hoveredDropTarget: null,
+    isTabDragActiveRef: { current: false },
+    onDragCancel: vi.fn(),
+    onDragEnd: vi.fn(),
+    onDragMove: vi.fn(),
+    onDragOver: vi.fn(),
+    onDragStart: vi.fn(),
+    sensors: [],
+    setDragRootNode: vi.fn()
+  })
+}))
+
 vi.mock('@/components/terminal-pane/TerminalPane', () => ({
   default: function TerminalPane() {
     return null
@@ -2362,5 +2400,23 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.closeTab).toHaveBeenCalledWith('tab-a')
     expect(mocks.closeTab).toHaveBeenCalledWith('tab-b')
     expect(mocks.closeTab).not.toHaveBeenCalledWith('tab-c')
+  })
+
+  it('wraps the tab strip in a drag context wired to the reorder engine', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-a' }), makeTab({ id: 'tab-b' })])
+
+    const element = await renderPanel(true)
+    const dndContext = findByTypeName(element, 'DndContext')
+
+    // Why: reordering is driven entirely by the shared useTabDragSplit
+    // handlers, so the context must receive real onDragEnd/sensors, and the
+    // TabBar must receive the live insertion indicator for the drop bar.
+    expect(typeof dndContext.props.onDragEnd).toBe('function')
+    expect(typeof dndContext.props.onDragStart).toBe('function')
+    expect(dndContext.props.sensors).toBeDefined()
+    expect(dndContext.props.autoScroll).toBe(false)
+
+    const tabBar = findByTypeName(element, 'TabBar')
+    expect('hoveredTabInsertion' in tabBar.props).toBe(true)
   })
 })
