@@ -1844,13 +1844,18 @@ describe('OrcaRuntimeRpcServer', () => {
       repo: 'orca',
       commentId: 101
     })
-    expect(updateRepoIssue).toHaveBeenCalledWith('id:repo-1', 123, {
-      title: 'New title',
-      addLabels: ['bug']
-    })
+    expect(updateRepoIssue).toHaveBeenCalledWith(
+      'id:repo-1',
+      123,
+      {
+        title: 'New title',
+        addLabels: ['bug']
+      },
+      undefined
+    )
     expect(listRepoLabels).toHaveBeenCalledWith('id:repo-1')
     expect(listRepoAssignableUsers).toHaveBeenCalledWith('id:repo-1')
-    expect(addRepoIssueComment).toHaveBeenCalledWith('id:repo-1', 123, 'done', null)
+    expect(addRepoIssueComment).toHaveBeenCalledWith('id:repo-1', 123, 'done', null, undefined)
     expect(addRepoPRReviewComment).toHaveBeenCalledWith('id:repo-1', {
       prNumber: 456,
       commitId: 'abc123',

@@ -2779,6 +2779,8 @@ describe('OrcaRuntimeService', () => {
     const result = await runtime.createManagedWorktree({
       repoSelector: TEST_REPO_ID,
       name: 'mobile-feature',
+      linkedJiraIssue: 'STA-776',
+      linkedJiraIssueSiteId: 'site-1',
       linkedGitLabIssue: 321,
       linkedGitLabMR: 654,
       startup: { command: 'claude' }
@@ -2793,10 +2795,14 @@ describe('OrcaRuntimeService', () => {
     expect(result.worktree).toMatchObject({
       id: `${TEST_REPO_ID}::${created.path}`,
       path: created.path,
+      linkedJiraIssue: 'STA-776',
+      linkedJiraIssueSiteId: 'site-1',
       linkedGitLabIssue: 321,
       linkedGitLabMR: 654
     })
     expect(metaById[result.worktree.id]).toMatchObject({
+      linkedJiraIssue: 'STA-776',
+      linkedJiraIssueSiteId: 'site-1',
       linkedGitLabIssue: 321,
       linkedGitLabMR: 654
     })
@@ -3902,7 +3908,8 @@ describe('OrcaRuntimeService', () => {
       12,
       issueUpdates,
       null,
-      localGitOptions
+      localGitOptions,
+      undefined
     )
     expect(addGitHubIssueCommentMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,
@@ -3910,7 +3917,8 @@ describe('OrcaRuntimeService', () => {
       'Comment',
       null,
       null,
-      localGitOptions
+      localGitOptions,
+      undefined
     )
     expect(listGitHubLabelsMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,
@@ -4009,7 +4017,8 @@ describe('OrcaRuntimeService', () => {
       42,
       'pr',
       null,
-      localGitOptions
+      localGitOptions,
+      undefined
     )
     expect(getGitHubWorkItemByOwnerRepoMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,
@@ -4024,7 +4033,8 @@ describe('OrcaRuntimeService', () => {
       42,
       'pr',
       null,
-      localGitOptions
+      localGitOptions,
+      undefined
     )
     expect(getGitHubPRChecksMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,
@@ -14719,10 +14729,14 @@ describe('OrcaRuntimeService', () => {
           workspaceStatus: 'in-progress',
           sortOrder: 0,
           linkedIssue: 123,
+          linkedIssueSourcePreference: null,
           linkedPR: null,
           linkedLinearIssue: null,
+          linkedJiraIssue: null,
+          linkedJiraIssueSiteId: null,
           linkedGitLabMR: null,
           linkedGitLabIssue: null,
+          linkedGitLabProjectRef: null,
           comment: '',
           isPinned: false,
           isActive: false,
@@ -21129,10 +21143,17 @@ describe('OrcaRuntimeService', () => {
           displayName: meta.displayName ?? existingMeta?.displayName ?? '',
           comment: meta.comment ?? existingMeta?.comment ?? '',
           linkedIssue: meta.linkedIssue ?? existingMeta?.linkedIssue ?? null,
+          linkedIssueSourcePreference:
+            meta.linkedIssueSourcePreference ?? existingMeta?.linkedIssueSourcePreference ?? null,
           linkedPR: meta.linkedPR ?? existingMeta?.linkedPR ?? null,
           linkedLinearIssue: meta.linkedLinearIssue ?? existingMeta?.linkedLinearIssue ?? null,
+          linkedJiraIssue: meta.linkedJiraIssue ?? existingMeta?.linkedJiraIssue ?? null,
+          linkedJiraIssueSiteId:
+            meta.linkedJiraIssueSiteId ?? existingMeta?.linkedJiraIssueSiteId ?? null,
           linkedGitLabMR: meta.linkedGitLabMR ?? existingMeta?.linkedGitLabMR ?? null,
           linkedGitLabIssue: meta.linkedGitLabIssue ?? existingMeta?.linkedGitLabIssue ?? null,
+          linkedGitLabProjectRef:
+            meta.linkedGitLabProjectRef ?? existingMeta?.linkedGitLabProjectRef ?? null,
           isArchived: meta.isArchived ?? existingMeta?.isArchived ?? false,
           isUnread: meta.isUnread ?? existingMeta?.isUnread ?? false,
           isPinned: meta.isPinned ?? existingMeta?.isPinned ?? false,

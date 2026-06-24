@@ -1,9 +1,15 @@
-import type { GitHubWorkItem, GitPushTarget } from '../../../shared/types'
+import type {
+  GitHubWorkItem,
+  GitPushTarget,
+  IssueSourcePreference,
+  PersistedIssueSourcePreference
+} from '../../../shared/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { getTaskSourceCacheScope } from '../../../shared/task-source-context'
 import { getLinkedWorkItemWorkspaceName } from '../../../shared/workspace-name'
 import type { LinkedWorkItemSummary } from './new-workspace'
 import { parseGitHubIssueOrPRLink } from './github-links'
+import { toGitHubLinkedWorkItem } from '@/components/sidebar/folder-workspace-composer-helpers'
 
 export type SmartGitHubSubmitIntent =
   | {
@@ -33,6 +39,7 @@ export type SmartGitHubSubmitResolution = {
 export type SmartGitHubSubmitLookup = {
   repoId: string
   repoPath: string
+  issueSourcePreference?: IssueSourcePreference | null
   sourceContext?: TaskSourceContext | null
   intent: SmartGitHubSubmitIntent
   workItem: (args: {
@@ -118,16 +125,19 @@ function parseGitHubIssueOrPRLinkFromText(
 function getSmartGitHubSubmitLookupCacheKey({
   repoId,
   repoPath,
+  issueSourcePreference,
   sourceContext,
   intent
 }: {
   repoId: string
   repoPath: string
+  issueSourcePreference?: IssueSourcePreference | null
   sourceContext?: TaskSourceContext | null
   intent: SmartGitHubSubmitIntent
 }): string {
   const sourceScope = sourceContext ? getTaskSourceCacheScope(sourceContext) : 'default'
-  const repoScope = `${sourceScope}:${repoId}:${repoPath}`
+  const issueSourceScope = getSmartGitHubSubmitIssueSourceScope(issueSourcePreference)
+  const repoScope = `${sourceScope}:${repoId}:${repoPath}:${issueSourceScope}`
   if (intent.kind === 'hash-number') {
     return `${repoScope}:hash:${intent.number}`
   }
@@ -136,15 +146,28 @@ function getSmartGitHubSubmitLookupCacheKey({
   }:${intent.number}`
 }
 
+function getSmartGitHubSubmitIssueSourceScope(
+  preference: IssueSourcePreference | null | undefined
+): PersistedIssueSourcePreference | 'auto' {
+  return preference === 'origin' || preference === 'upstream' ? preference : 'auto'
+}
+
 export function lookupSmartGitHubSubmitItem({
   repoId,
   repoPath,
+  issueSourcePreference,
   sourceContext,
   intent,
   workItem,
   workItemByOwnerRepo
 }: SmartGitHubSubmitLookup): Promise<GitHubWorkItem | null> {
-  const key = getSmartGitHubSubmitLookupCacheKey({ repoId, repoPath, sourceContext, intent })
+  const key = getSmartGitHubSubmitLookupCacheKey({
+    repoId,
+    repoPath,
+    issueSourcePreference,
+    sourceContext,
+    intent
+  })
   const now = Date.now()
   pruneSmartGitHubSubmitLookupCache(now)
   const cached = smartGitHubSubmitLookupCache.get(key)
@@ -152,6 +175,8 @@ export function lookupSmartGitHubSubmitItem({
     return cached.promise
   }
 
+  // Why: the same repo/number can resolve to different issues when the
+  // selected GitHub source switches between origin and upstream.
   const promise =
     intent.kind === 'link'
       ? workItemByOwnerRepo({
@@ -169,7 +194,12 @@ export function lookupSmartGitHubSubmitItem({
           sourceContext,
           number: intent.number
         })
-  const stampedPromise = promise.then((item) => (item ? { ...item, repoId } : null))
+  const allowIssueSourceFallback = intent.kind === 'hash-number'
+  const stampedPromise = promise.then((item) =>
+    item
+      ? stampSmartGitHubSubmitItem(item, repoId, issueSourcePreference, allowIssueSourceFallback)
+      : null
+  )
   smartGitHubSubmitLookupCache.set(key, {
     promise: stampedPromise,
     expiresAt: now + SMART_GITHUB_SUBMIT_LOOKUP_TTL_MS
@@ -185,6 +215,22 @@ export function lookupSmartGitHubSubmitItem({
   return stampedPromise
 }
 
+function stampSmartGitHubSubmitItem(
+  item: GitHubWorkItem,
+  repoId: string,
+  issueSourcePreference: IssueSourcePreference | null | undefined,
+  allowIssueSourceFallback: boolean
+): GitHubWorkItem {
+  const explicitIssueSource = getSmartGitHubSubmitIssueSourceScope(issueSourcePreference)
+  return {
+    ...item,
+    repoId,
+    ...(item.type === 'issue' && explicitIssueSource !== 'auto' && allowIssueSourceFallback
+      ? { issueSourcePreference: item.issueSourcePreference ?? explicitIssueSource }
+      : {})
+  }
+}
+
 export function clearSmartGitHubSubmitLookupCacheForTests(): void {
   smartGitHubSubmitLookupCache.clear()
 }
@@ -194,17 +240,15 @@ export function getSmartGitHubSubmitLookupCacheSizeForTests(): number {
 }
 
 export function getSmartGitHubSubmitResolution(
-  item: Pick<GitHubWorkItem, 'number' | 'title' | 'type' | 'url'>
+  item: Pick<
+    GitHubWorkItem,
+    'number' | 'title' | 'type' | 'url' | 'repoId' | 'issueSourcePreference'
+  >
 ): SmartGitHubSubmitResolution {
   const fallbackName = `${item.type}-${item.number}`
   const titleName = getLinkedWorkItemWorkspaceName(item)
   const workspaceName = titleName?.seedName || fallbackName
-  const linkedWorkItem: LinkedWorkItemSummary = {
-    type: item.type,
-    number: item.number,
-    title: item.title,
-    url: item.url
-  }
+  const linkedWorkItem: LinkedWorkItemSummary = toGitHubLinkedWorkItem(item)
 
   return {
     workspaceName,

@@ -4,6 +4,7 @@
    file. Composed back into `api.gl` from `index.ts`. */
 import { ipcRenderer } from 'electron'
 import type { TaskSourceContext } from '../shared/task-source-context'
+import type { GitLabProjectRef } from '../shared/gitlab-types'
 
 type GitLabRepoSelectorArgs = {
   repoPath: string
@@ -69,13 +70,18 @@ export const glApi = {
   updateIssue: (
     args: GitLabRepoSelectorArgs & {
       number: number
+      projectRef?: GitLabProjectRef | null
       updates: unknown
     }
   ): Promise<{ ok: true } | { ok: false; error: string }> =>
     ipcRenderer.invoke('gitlab:updateIssue', args),
 
   addIssueComment: (
-    args: GitLabRepoSelectorArgs & { number: number; body: string }
+    args: GitLabRepoSelectorArgs & {
+      number: number
+      body: string
+      projectRef?: GitLabProjectRef | null
+    }
   ): Promise<unknown> => ipcRenderer.invoke('gitlab:addIssueComment', args),
 
   listLabels: (args: GitLabRepoSelectorArgs): Promise<string[]> =>

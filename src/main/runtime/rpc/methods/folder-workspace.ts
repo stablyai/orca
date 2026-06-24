@@ -12,6 +12,15 @@ const FolderWorkspaceLinkedTask = z
     url: requiredString('Missing linked task URL'),
     linearIdentifier: OptionalString,
     jiraIdentifier: OptionalString,
+    jiraSiteId: OptionalString,
+    gitLabProjectRef: z
+      .object({
+        host: requiredString('Missing GitLab host'),
+        path: requiredString('Missing GitLab project path')
+      })
+      .nullable()
+      .optional(),
+    issueSourcePreference: z.enum(['origin', 'upstream']).optional(),
     repoId: OptionalString
   })
   .nullable()

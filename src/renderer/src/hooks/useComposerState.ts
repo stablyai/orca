@@ -1664,13 +1664,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
-      setLinkedWorkItem({
-        type: item.type,
-        provider: 'github',
-        number: item.number,
-        title: item.title,
-        url: item.url
-      })
+      setLinkedWorkItem(toGitHubLinkedWorkItem(item))
       const suggestedName =
         getLinkedWorkItemWorkspaceName(item)?.seedName ?? getLinkedWorkItemSuggestedName(item)
       // Why: a pasted URL/#123 in the field is the lookup query that found
@@ -1708,6 +1702,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 lookupSmartGitHubSubmitItem({
                   repoPath: repo.path,
                   repoId: repo.id,
+                  issueSourcePreference: repo.issueSourcePreference,
                   sourceContext: buildTaskSourceContextFromRepo({
                     provider: 'github',
                     projectId: repo.id,
@@ -1726,6 +1721,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           ? await lookupSmartGitHubSubmitItem({
               repoPath: selectedRepo.path,
               repoId: selectedRepo.id,
+              issueSourcePreference: selectedRepo.issueSourcePreference,
               sourceContext: selectedRepoGitHubSourceContext,
               intent,
               workItem: lookupGitHubWorkItemForSource,
@@ -1823,13 +1819,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
       setLinkedIssue('')
       setLinkedPR(null)
-      setLinkedWorkItem({
-        type: item.type,
-        provider: 'gitlab',
-        number: item.number,
-        title: item.title,
-        url: item.url
-      })
+      setLinkedWorkItem(toGitLabLinkedWorkItem(item))
       // Why: GitLabWorkItem.branchName lines up with GitHubWorkItem.branchName
       // structurally; cast to the suggested-name helper's input shape so we
       // reuse the existing naming heuristic without forking it.
@@ -2920,6 +2910,17 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           : smartGitHubResolution.linkedIssueNumber
       const submitLinkedPR =
         smartGitHubResolution.kind === 'none' ? effectiveLinkedPR : smartGitHubResolution.linkedPR
+      const submitLinkedIssueSourcePreference =
+        submitLinkedWorkItem?.provider === 'github' &&
+        submitLinkedWorkItem.type === 'issue' &&
+        (submitLinkedWorkItem.issueSourcePreference === 'origin' ||
+          submitLinkedWorkItem.issueSourcePreference === 'upstream')
+          ? submitLinkedWorkItem.issueSourcePreference
+          : submitLinkedIssueNumber != null &&
+              (selectedRepo?.issueSourcePreference === 'origin' ||
+                selectedRepo?.issueSourcePreference === 'upstream')
+            ? selectedRepo.issueSourcePreference
+            : undefined
       const submitTitleName = submitLinkedWorkItem
         ? getLinkedWorkItemWorkspaceName(submitLinkedWorkItem)
         : null
@@ -3031,6 +3032,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
           ? submitLinkedWorkItem.linearOrganizationUrlKey
           : undefined
+      const linkedJiraIssue =
+        submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'jira'
+          ? submitLinkedWorkItem.jiraIdentifier
+          : undefined
+      const linkedJiraIssueSiteId =
+        submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'jira'
+          ? submitLinkedWorkItem.jiraSiteId
+          : undefined
+      const linkedGitLabProjectRef =
+        submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'gitlab'
+          ? submitLinkedWorkItem.gitLabProjectRef
+          : undefined
       const effectiveBranchNameOverride = resolveComposerBranchNameOverrideForCreate({
         branchNameOverride: submitBranchNameOverride,
         branchAutoName: branchAutoNameRef.current,
@@ -3113,7 +3126,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         undefined,
         undefined,
         undefined,
-        submitCompareBaseRef
+        submitCompareBaseRef,
+        linkedJiraIssue,
+        linkedJiraIssueSiteId,
+        submitLinkedIssueSourcePreference,
+        linkedGitLabProjectRef
       )
       const worktree = result.worktree
 
@@ -3316,6 +3333,17 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             : smartGitHubResolution.linkedIssueNumber
         const submitLinkedPR =
           smartGitHubResolution.kind === 'none' ? effectiveLinkedPR : smartGitHubResolution.linkedPR
+        const submitLinkedIssueSourcePreference =
+          submitLinkedWorkItem?.provider === 'github' &&
+          submitLinkedWorkItem.type === 'issue' &&
+          (submitLinkedWorkItem.issueSourcePreference === 'origin' ||
+            submitLinkedWorkItem.issueSourcePreference === 'upstream')
+            ? submitLinkedWorkItem.issueSourcePreference
+            : submitLinkedIssueNumber != null &&
+                (selectedRepo?.issueSourcePreference === 'origin' ||
+                  selectedRepo?.issueSourcePreference === 'upstream')
+              ? selectedRepo.issueSourcePreference
+              : undefined
         const submitTitleName = submitLinkedWorkItem
           ? getLinkedWorkItemWorkspaceName(submitLinkedWorkItem)
           : null
@@ -3401,6 +3429,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         const linkedLinearIssueOrganizationUrlKey =
           submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
             ? submitLinkedWorkItem.linearOrganizationUrlKey
+            : undefined
+        const linkedJiraIssue =
+          submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'jira'
+            ? submitLinkedWorkItem.jiraIdentifier
+            : undefined
+        const linkedJiraIssueSiteId =
+          submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'jira'
+            ? submitLinkedWorkItem.jiraSiteId
+            : undefined
+        const linkedGitLabProjectRef =
+          submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'gitlab'
+            ? submitLinkedWorkItem.gitLabProjectRef
             : undefined
         const effectiveBranchNameOverride = resolveComposerBranchNameOverrideForCreate({
           branchNameOverride: submitBranchNameOverride,
@@ -3543,6 +3583,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             : {}),
           ...(telemetrySource ? { telemetrySource } : {}),
           ...(submitLinkedIssueNumber != null ? { linkedIssue: submitLinkedIssueNumber } : {}),
+          ...(submitLinkedIssueSourcePreference
+            ? { linkedIssueSourcePreference: submitLinkedIssueSourcePreference }
+            : {}),
           ...(submitLinkedPR != null ? { linkedPR: submitLinkedPR } : {}),
           ...(submitPushTarget ? { pushTarget: submitPushTarget } : {}),
           agent,
@@ -3551,6 +3594,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           ...(linkedLinearIssueOrganizationUrlKey !== undefined
             ? { linkedLinearIssueOrganizationUrlKey }
             : {}),
+          ...(linkedJiraIssue ? { linkedJiraIssue } : {}),
+          ...(linkedJiraIssueSiteId ? { linkedJiraIssueSiteId } : {}),
           ...(effectiveBranchNameOverride
             ? { branchNameOverride: effectiveBranchNameOverride }
             : {}),
@@ -3562,6 +3607,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             : {}),
           ...(smartGitHubResolution.kind === 'none' && linkedGitLabIssue != null
             ? { linkedGitLabIssue }
+            : {}),
+          ...(smartGitHubResolution.kind === 'none' && linkedGitLabProjectRef
+            ? { linkedGitLabProjectRef }
             : {}),
           ...(backendStartup ? { startup: backendStartup } : {}),
           pendingFirstAgentMessageRename,

@@ -8,6 +8,7 @@ import type {
   GitHubPRFileViewedState,
   GitHubWorkItem,
   GitHubWorkItemDetails,
+  IssueSourcePreference,
   PRCheckDetail,
   PRComment
 } from '../../shared/types'
@@ -17,8 +18,10 @@ import {
   release,
   getOwnerRepo,
   getIssueOwnerRepo,
+  getOwnerRepoForRemote,
   ghRepoExecOptions,
   githubRepoContext,
+  type OwnerRepo,
   type LocalGitExecOptions
 } from './gh-utils'
 import { getWorkItem, getPRChecks, getPRComments } from './client'
@@ -37,6 +40,24 @@ const GITHUB_RAW_CONTENT_MAX_BUFFER_BYTES = 8 * 1024 * 1024
 
 function localGitOptionArgs(options: LocalGitExecOptions = {}): [] | [LocalGitExecOptions] {
   return Object.keys(options).length > 0 ? [options] : []
+}
+
+function explicitIssueSourcePreference(
+  preference?: IssueSourcePreference
+): 'origin' | 'upstream' | undefined {
+  return preference === 'origin' || preference === 'upstream' ? preference : undefined
+}
+
+async function getIssueDetailsOwnerRepo(
+  repoPath: string,
+  connectionId: string | null | undefined,
+  localGitOptions: LocalGitExecOptions,
+  issueSourcePreference?: IssueSourcePreference
+): Promise<OwnerRepo | null> {
+  const explicitPreference = explicitIssueSourcePreference(issueSourcePreference)
+  return explicitPreference
+    ? getOwnerRepoForRemote(repoPath, explicitPreference, connectionId, localGitOptions)
+    : getIssueOwnerRepo(repoPath, connectionId, ...localGitOptionArgs(localGitOptions))
 }
 
 const PR_FILE_VIEWED_STATES_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $after: String) {
@@ -130,7 +151,8 @@ async function getIssueDetailsViaGraphQL(
   repoPath: string,
   issueNumber: number,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  issueSourcePreference?: IssueSourcePreference
 ): Promise<{
   body: string
   comments: PRComment[]
@@ -138,10 +160,11 @@ async function getIssueDetailsViaGraphQL(
   participants: GitHubAssignableUser[]
 } | null> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
-  const ownerRepo = await getIssueOwnerRepo(
+  const ownerRepo = await getIssueDetailsOwnerRepo(
     repoPath,
     connectionId,
-    ...localGitOptionArgs(localGitOptions)
+    localGitOptions,
+    issueSourcePreference
   )
   if (!ownerRepo) {
     return null
@@ -470,13 +493,15 @@ async function getIssueBodyAndComments(
   repoPath: string,
   issueNumber: number,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  issueSourcePreference?: IssueSourcePreference
 ): Promise<{ body: string; comments: PRComment[]; assignees: string[] }> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
-  const ownerRepo = await getIssueOwnerRepo(
+  const ownerRepo = await getIssueDetailsOwnerRepo(
     repoPath,
     connectionId,
-    ...localGitOptionArgs(localGitOptions)
+    localGitOptions,
+    issueSourcePreference
   )
   try {
     if (ownerRepo) {
@@ -593,14 +618,20 @@ async function getWorkItemParticipants(
   repoPath: string,
   item: Pick<GitHubWorkItem, 'number' | 'type'>,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  issueSourcePreference?: IssueSourcePreference
 ): Promise<GitHubAssignableUser[]> {
   // Why: issues in a fork live on the upstream remote, so participants must be
   // resolved via getIssueOwnerRepo to stay consistent with getIssueBodyAndComments.
   // PRs remain tied to origin via getOwnerRepo.
   const ownerRepo =
     item.type === 'issue'
-      ? await getIssueOwnerRepo(repoPath, connectionId, ...localGitOptionArgs(localGitOptions))
+      ? await getIssueDetailsOwnerRepo(
+          repoPath,
+          connectionId,
+          localGitOptions,
+          issueSourcePreference
+        )
       : await getOwnerRepo(repoPath, connectionId, ...localGitOptionArgs(localGitOptions))
   if (!ownerRepo) {
     return []
@@ -764,7 +795,8 @@ export async function getWorkItemDetails(
   number: number,
   type?: 'issue' | 'pr',
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  issueSourcePreference?: IssueSourcePreference
 ): Promise<GitHubWorkItemDetails | null> {
   // Why: getWorkItem already handles acquire/release. We call it first (outside
   // our semaphore) so the known-cheap lookup doesn't compete with the richer
@@ -774,7 +806,8 @@ export async function getWorkItemDetails(
     number,
     type,
     connectionId,
-    ...localGitOptionArgs(localGitOptions)
+    localGitOptions,
+    issueSourcePreference
   )
   if (!item) {
     return null
@@ -794,7 +827,8 @@ export async function getWorkItemDetails(
         repoPath,
         item.number,
         connectionId,
-        localGitOptions
+        localGitOptions,
+        issueSourcePreference
       )
       if (collapsed) {
         return {
@@ -808,8 +842,20 @@ export async function getWorkItemDetails(
       // Why: fall back to body/comments and GraphQL participants in parallel;
       // the mention-participant merge is a cheap local operation afterward.
       const [{ body, comments, assignees }, participants] = await Promise.all([
-        getIssueBodyAndComments(repoPath, item.number, connectionId, localGitOptions),
-        getWorkItemParticipants(repoPath, item, connectionId, localGitOptions)
+        getIssueBodyAndComments(
+          repoPath,
+          item.number,
+          connectionId,
+          localGitOptions,
+          issueSourcePreference
+        ),
+        getWorkItemParticipants(
+          repoPath,
+          item,
+          connectionId,
+          localGitOptions,
+          issueSourcePreference
+        )
       ])
       const mentionParticipants = await getMentionParticipants(
         repoPath,

@@ -144,6 +144,7 @@ import { resolveCommentReplyTarget } from '@/components/comment-reply-target-sta
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { githubUpdateIssue } from '@/runtime/runtime-github-issue-client'
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
@@ -195,6 +196,7 @@ import {
 } from '../../../shared/task-source-context'
 import { PER_REPO_FETCH_LIMIT } from '../../../shared/work-items'
 import { translate } from '@/i18n/i18n'
+import { resolvePersistedGitHubIssueSourcePreference } from '@/lib/github-issue-source-preference'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import {
   buildTaskPageGitHubCloseUpdate,
@@ -1710,15 +1712,47 @@ function addIssueCommentForRepo(args: {
   number: number
   body: string
   type?: 'issue' | 'pr'
+  issueSourcePreference?: GitHubWorkItem['issueSourcePreference']
 }): Promise<Awaited<ReturnType<typeof window.api.gh.addIssueComment>>> {
-  return window.api.gh.addIssueComment({
-    repoPath: args.repoPath,
-    repoId: args.repoId,
-    sourceContext: args.sourceContext,
-    number: args.number,
-    body: args.body,
-    type: args.type
-  })
+  const sourceSettings =
+    args.sourceContext?.provider === 'github'
+      ? ({
+          ...getGitHubMutationSettings(args.repoId),
+          ...getTaskSourceRuntimeSettings(args.sourceContext)
+        } as ReturnType<typeof getGitHubMutationSettings>)
+      : getGitHubMutationSettings(args.repoId)
+  const target = getActiveRuntimeTarget(sourceSettings)
+  const runtimeRepoSelector =
+    args.sourceContext?.provider === 'github'
+      ? (args.sourceContext.repoId ?? args.repoId ?? args.repoPath)
+      : (args.repoId ?? args.repoPath)
+  const runtimeRepoId =
+    args.sourceContext?.provider === 'github'
+      ? (args.sourceContext.repoId ?? args.repoId ?? undefined)
+      : (args.repoId ?? undefined)
+  return target.kind === 'environment'
+    ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.addIssueComment>>>(
+        target,
+        'github.addIssueComment',
+        {
+          repo: runtimeRepoSelector,
+          repoId: runtimeRepoId,
+          number: args.number,
+          body: args.body,
+          type: args.type,
+          issueSourcePreference: args.issueSourcePreference ?? undefined
+        },
+        { timeoutMs: 30_000 }
+      )
+    : window.api.gh.addIssueComment({
+        repoPath: args.repoPath,
+        repoId: args.repoId,
+        sourceContext: args.sourceContext,
+        number: args.number,
+        body: args.body,
+        type: args.type,
+        issueSourcePreference: args.issueSourcePreference ?? undefined
+      })
 }
 
 function addPRReviewCommentForRepo(args: {
@@ -1795,13 +1829,15 @@ function getWorkItemDetailsForRepo(args: {
   sourceContext?: TaskSourceContext | null
   number: number
   type: 'issue' | 'pr'
+  issueSourcePreference?: GitHubWorkItem['issueSourcePreference']
 }): Promise<GitHubWorkItemDetails | null> {
   return window.api.gh.workItemDetails({
     repoPath: args.repoPath,
     repoId: args.repoId,
     sourceContext: args.sourceContext,
     number: args.number,
-    type: args.type
+    type: args.type,
+    issueSourcePreference: args.issueSourcePreference ?? undefined
   })
 }
 
@@ -2959,7 +2995,8 @@ function ConversationTab({
               sourceContext,
               number: item.number,
               body: `@${comment.author} ${replyBody}`,
-              type: item.type
+              type: item.type,
+              issueSourcePreference: item.type === 'issue' ? item.issueSourcePreference : undefined
             })
 
       if (!result.ok) {
@@ -2974,7 +3011,15 @@ function ConversationTab({
       toast.success(translate('auto.components.GitHubItemDialog.10f4ff5be8', 'Reply posted.'))
       return true
     },
-    [item.number, item.repoId, item.type, onCommentAdded, repoPath, sourceContext]
+    [
+      item.issueSourcePreference,
+      item.number,
+      item.repoId,
+      item.type,
+      onCommentAdded,
+      repoPath,
+      sourceContext
+    ]
   )
 
   const rightPanel =
@@ -3366,6 +3411,7 @@ function ConversationTab({
             sourceContext={sourceContext}
             issueNumber={item.number}
             itemType={item.type}
+            issueSourcePreference={item.type === 'issue' ? item.issueSourcePreference : undefined}
             onCommentAdded={onCommentAdded}
           />
         )}
@@ -4647,6 +4693,7 @@ async function runIssueUpdate(args: {
   repoId?: string | null
   sourceContext?: TaskSourceContext | null
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
+  issueSourcePreference?: GitHubWorkItem['issueSourcePreference']
   number: number
   updates: Parameters<typeof window.api.gh.updateIssue>[0]['updates']
 }): Promise<void> {
@@ -4677,13 +4724,16 @@ async function runIssueUpdate(args: {
   if (!args.repoPath) {
     throw new Error('No repo context available for this edit.')
   }
-  const res = await window.api.gh.updateIssue({
-    repoPath: args.repoPath,
-    repoId: args.repoId ?? undefined,
-    sourceContext: args.sourceContext,
-    number: args.number,
-    updates: args.updates
-  })
+  const res = await githubUpdateIssue(
+    args.sourceContext ?? getGitHubMutationSettings(args.repoId),
+    {
+      repoPath: args.repoPath,
+      repoId: args.repoId ?? undefined,
+      issueSourcePreference: args.issueSourcePreference ?? undefined,
+      number: args.number,
+      updates: args.updates
+    }
+  )
   if (!res.ok) {
     throw new Error(res.error)
   }
@@ -4733,6 +4783,7 @@ async function runWorkItemBodyUpdate(args: {
     repoId: args.item.repoId,
     sourceContext: args.sourceContext,
     projectOrigin: args.projectOrigin,
+    issueSourcePreference: args.item.issueSourcePreference,
     number: args.item.number,
     updates: { body: args.body }
   })
@@ -4998,6 +5049,7 @@ function GHEditSection({
             repoPath,
             sourceContext,
             projectOrigin,
+            issueSourcePreference: item.issueSourcePreference,
             number: item.number,
             updates:
               newState === 'closed' && closeAction
@@ -5006,17 +5058,26 @@ function GHEditSection({
           }),
         onOptimistic: () => {
           onStateChange(newState)
-          patchWorkItem(item.id, { state: newState }, item.repoId, { sourceContext })
+          patchWorkItem(item.id, { state: newState }, item.repoId, {
+            sourceContext,
+            issueSourcePreference: item.issueSourcePreference
+          })
           patchProjectRowIfNeeded({ state: newState })
         },
         onRevert: () => {
           onStateChange(prevState)
-          patchWorkItem(item.id, { state: prevState }, item.repoId, { sourceContext })
+          patchWorkItem(item.id, { state: prevState }, item.repoId, {
+            sourceContext,
+            issueSourcePreference: item.issueSourcePreference
+          })
           patchProjectRowIfNeeded({ state: prevState })
         },
         onSuccess: () => {
           useAppStore.getState().recordFeatureInteraction('github-tasks')
-          patchWorkItem(item.id, { state: newState }, item.repoId, { sourceContext })
+          patchWorkItem(item.id, { state: newState }, item.repoId, {
+            sourceContext,
+            issueSourcePreference: item.issueSourcePreference
+          })
           patchProjectRowIfNeeded({ state: newState })
           onMutated()
         },
@@ -5027,6 +5088,7 @@ function GHEditSection({
       item.id,
       item.number,
       item.repoId,
+      item.issueSourcePreference,
       localState,
       repoPath,
       sourceContext,
@@ -5089,12 +5151,16 @@ function GHEditSection({
               repoPath,
               sourceContext,
               projectOrigin,
+              issueSourcePreference: item.issueSourcePreference,
               number: item.number,
               updates: { addLabels: [label] }
             }),
           onOptimistic: () => {
             onLabelsChange(newLabels)
-            patchWorkItem(item.id, { labels: newLabels }, item.repoId, { sourceContext })
+            patchWorkItem(item.id, { labels: newLabels }, item.repoId, {
+              sourceContext,
+              issueSourcePreference: item.issueSourcePreference
+            })
             patchProjectRowIfNeeded({ labels: newLabels })
           },
           onSuccess: () => {
@@ -5103,7 +5169,10 @@ function GHEditSection({
           },
           onRevert: () => {
             onLabelsChange(prevLabels)
-            patchWorkItem(item.id, { labels: prevLabels }, item.repoId, { sourceContext })
+            patchWorkItem(item.id, { labels: prevLabels }, item.repoId, {
+              sourceContext,
+              issueSourcePreference: item.issueSourcePreference
+            })
             patchProjectRowIfNeeded({ labels: prevLabels })
           },
           onError: (err) => toast.error(err)
@@ -5116,17 +5185,24 @@ function GHEditSection({
               repoPath,
               sourceContext,
               projectOrigin,
+              issueSourcePreference: item.issueSourcePreference,
               number: item.number,
               updates: { removeLabels: [label] }
             }),
           onOptimistic: () => {
             onLabelsChange(newLabels)
-            patchWorkItem(item.id, { labels: newLabels }, item.repoId, { sourceContext })
+            patchWorkItem(item.id, { labels: newLabels }, item.repoId, {
+              sourceContext,
+              issueSourcePreference: item.issueSourcePreference
+            })
             patchProjectRowIfNeeded({ labels: newLabels })
           },
           onRevert: () => {
             onLabelsChange(prevLabels)
-            patchWorkItem(item.id, { labels: prevLabels }, item.repoId, { sourceContext })
+            patchWorkItem(item.id, { labels: prevLabels }, item.repoId, {
+              sourceContext,
+              issueSourcePreference: item.issueSourcePreference
+            })
             patchProjectRowIfNeeded({ labels: prevLabels })
           },
           onSuccess: () => {
@@ -5141,6 +5217,7 @@ function GHEditSection({
       item.id,
       item.number,
       item.repoId,
+      item.issueSourcePreference,
       localLabels,
       repoPath,
       sourceContext,
@@ -5172,6 +5249,7 @@ function GHEditSection({
               repoPath,
               sourceContext,
               projectOrigin,
+              issueSourcePreference: item.issueSourcePreference,
               number: item.number,
               updates: { removeAssignees: [login] }
             }),
@@ -5197,6 +5275,7 @@ function GHEditSection({
               repoPath,
               sourceContext,
               projectOrigin,
+              issueSourcePreference: item.issueSourcePreference,
               number: item.number,
               updates: { addAssignees: [login] }
             }),
@@ -5219,6 +5298,7 @@ function GHEditSection({
     [
       item.number,
       item.repoId,
+      item.issueSourcePreference,
       assigneesItemKey,
       repoPath,
       sourceContext,
@@ -5894,6 +5974,7 @@ function GHCommentComposer({
   sourceContext,
   issueNumber,
   itemType,
+  issueSourcePreference,
   onCommentAdded
 }: {
   className?: string
@@ -5902,6 +5983,7 @@ function GHCommentComposer({
   sourceContext?: TaskSourceContext | null
   issueNumber: number
   itemType: 'issue' | 'pr'
+  issueSourcePreference?: GitHubWorkItem['issueSourcePreference']
   onCommentAdded: (comment: PRComment) => void
 }): React.JSX.Element {
   const [body, setBody] = useState('')
@@ -5930,7 +6012,8 @@ function GHCommentComposer({
         sourceContext,
         number: issueNumber,
         body: bodyState.body,
-        type: itemType
+        type: itemType,
+        issueSourcePreference: itemType === 'issue' ? issueSourcePreference : undefined
       })
       if (!mountedRef.current) {
         return
@@ -5959,7 +6042,17 @@ function GHCommentComposer({
         setSubmitting(false)
       }
     }
-  }, [body, mountedRef, repoPath, repoId, sourceContext, issueNumber, itemType, onCommentAdded])
+  }, [
+    body,
+    mountedRef,
+    repoPath,
+    repoId,
+    sourceContext,
+    issueNumber,
+    issueSourcePreference,
+    itemType,
+    onCommentAdded
+  ])
   const canSubmitComment = hasBoundedCommentBodyText(body)
 
   return (
@@ -6089,13 +6182,30 @@ export default function GitHubItemDialog({
   const workItemState = workItem?.state
   const workItemLabels = workItem?.labels
   const effectiveRepoId = repoId ?? workItem?.repoId ?? null
+  const repoIssueSourcePreference = useAppStore((s) =>
+    effectiveRepoId
+      ? s.repos.find((candidate) => candidate.id === effectiveRepoId)?.issueSourcePreference
+      : undefined
+  )
+  const issueSourcePreference =
+    workItem?.type === 'issue'
+      ? resolvePersistedGitHubIssueSourcePreference(
+          workItem.issueSourcePreference,
+          repoIssueSourcePreference
+        )
+      : undefined
   const allWorktrees = useAllWorktrees()
   const issueAttachedWorkspace = useMemo(
     () =>
       workItem?.type === 'issue'
-        ? findGithubIssueWorkspaceAttachment(allWorktrees, effectiveRepoId, workItem.number)
+        ? findGithubIssueWorkspaceAttachment(
+            allWorktrees,
+            effectiveRepoId,
+            workItem.number,
+            issueSourcePreference
+          )
         : null,
-    [allWorktrees, effectiveRepoId, workItem]
+    [allWorktrees, effectiveRepoId, issueSourcePreference, workItem]
   )
   const issueAttachedWorkspaceLabel = issueAttachedWorkspace
     ? getGithubWorkItemWorkspaceAttachmentLabel(issueAttachedWorkspace)
@@ -6106,7 +6216,8 @@ export default function GitHubItemDialog({
       const currentAttached = findGithubIssueWorkspaceAttachment(
         useAppStore.getState().allWorktrees(),
         effectiveRepoId,
-        item.number
+        item.number,
+        issueSourcePreference
       )
       if (!currentAttached) {
         onUse(item)
@@ -6123,21 +6234,8 @@ export default function GitHubItemDialog({
         )
       }
     },
-    [effectiveRepoId, onUse]
+    [effectiveRepoId, issueSourcePreference, onUse]
   )
-
-  // Why: the cache key has to include the issue source preference so a user
-  // toggling between origin/upstream for the same issue number doesn't read
-  // back the wrong repo's details. We pull it from the repos slice rather
-  // than threading it as a prop because every existing call site already has
-  // the repo registered in the store.
-  const issueSourcePreference = useAppStore((s) => {
-    if (!repoPath && !effectiveRepoId) {
-      return undefined
-    }
-    return s.repos.find((r) => (effectiveRepoId ? r.id === effectiveRepoId : r.path === repoPath))
-      ?.issueSourcePreference
-  })
   const detailsCacheKey = useMemo(() => {
     if (!workItem || !repoPath || !effectiveRepoId) {
       return null
@@ -6307,7 +6405,8 @@ export default function GitHubItemDialog({
         repoId: effectiveRepoId ?? undefined,
         sourceContext,
         number: workItem.number,
-        type: workItem.type
+        type: workItem.type,
+        issueSourcePreference
       })
 
     // Why: snapshot the invalidation generation at fetch start; if the
@@ -6366,18 +6465,29 @@ export default function GitHubItemDialog({
           error: message
         })
       })
-  }, [repoPath, effectiveRepoId, sourceContext, workItem, detailsCacheKey, initialTab, refetchTick])
+  }, [
+    repoPath,
+    effectiveRepoId,
+    sourceContext,
+    workItem,
+    detailsCacheKey,
+    initialTab,
+    refetchTick,
+    issueSourcePreference
+  ])
 
   const Icon = workItem?.type === 'pr' ? GitPullRequest : CircleDot
   const displayWorkItem = useMemo<GitHubWorkItem | null>(() => {
     if (!workItem) {
       return null
     }
+    const sourcePatch =
+      workItem.type === 'issue' ? { issueSourcePreference: issueSourcePreference ?? null } : {}
     if (!details?.item) {
-      return workItem
+      return { ...workItem, ...sourcePatch }
     }
-    return { ...workItem, ...details.item, repoId: workItem.repoId }
-  }, [details?.item, workItem])
+    return { ...workItem, ...details.item, ...sourcePatch, repoId: workItem.repoId }
+  }, [details?.item, issueSourcePreference, workItem])
 
   useEffect(() => {
     if (!workItem || details?.item.reviewRequests === undefined) {
@@ -6636,7 +6746,7 @@ export default function GitHubItemDialog({
                       <Button
                         type="button"
                         size="sm"
-                        onClick={() => handleOpenOrUseIssueWorkspace(workItem)}
+                        onClick={() => handleOpenOrUseIssueWorkspace(displayWorkItem ?? workItem)}
                         className="gap-1.5 whitespace-nowrap"
                         aria-label={translate(
                           'auto.components.GitHubItemDialog.84855fedd0',
@@ -6660,7 +6770,7 @@ export default function GitHubItemDialog({
                       </DropdownMenuTrigger>
                     </ButtonGroup>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onSelect={() => onUse(workItem)}>
+                      <DropdownMenuItem onSelect={() => onUse(displayWorkItem ?? workItem)}>
                         <Plus className="size-4" />
                         {translate(
                           'auto.components.GitHubItemDialog.36182aa57f',
@@ -6677,7 +6787,7 @@ export default function GitHubItemDialog({
                   <Button
                     type="button"
                     size="sm"
-                    onClick={() => onUse(workItem)}
+                    onClick={() => onUse(displayWorkItem ?? workItem)}
                     className="gap-1.5 whitespace-nowrap"
                     aria-label={translate(
                       'auto.components.GitHubItemDialog.0ab4664a8b',
@@ -6800,7 +6910,7 @@ export default function GitHubItemDialog({
                 <Button
                   type="button"
                   size="sm"
-                  onClick={() => onUse(workItem)}
+                  onClick={() => onUse(displayWorkItem ?? workItem)}
                   className="gap-1.5 whitespace-nowrap"
                   aria-label={translate(
                     'auto.components.GitHubItemDialog.0caac1a18f',
@@ -6865,7 +6975,7 @@ export default function GitHubItemDialog({
 
       {!isIssuePage && (repoPath || projectOrigin) && (
         <GHEditSection
-          item={workItem}
+          item={displayWorkItem ?? workItem}
           repoPath={repoPath}
           repoId={effectiveRepoId}
           sourceContext={sourceContext}
@@ -6955,7 +7065,7 @@ export default function GitHubItemDialog({
                 <div className="min-w-0">
                   <div className="lg:sticky lg:top-4">
                     <GHEditSection
-                      item={workItem}
+                      item={displayWorkItem ?? workItem}
                       repoPath={repoPath}
                       repoId={effectiveRepoId}
                       sourceContext={sourceContext}

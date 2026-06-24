@@ -1,5 +1,10 @@
 import type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
-import type { TuiAgent, WorkspaceCreateTelemetrySource } from '../../../shared/types'
+import type {
+  GitLabProjectRef,
+  PersistedIssueSourcePreference,
+  TuiAgent,
+  WorkspaceCreateTelemetrySource
+} from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 
 export type LaunchableWorkItem = {
@@ -15,6 +20,10 @@ export type LaunchableWorkItem = {
   linearIdentifier?: string
   linearWorkspaceId?: string
   linearOrganizationUrlKey?: string
+  jiraIdentifier?: string
+  jiraSiteId?: string
+  gitLabProjectRef?: GitLabProjectRef | null
+  issueSourcePreference?: PersistedIssueSourcePreference | null
   linkedContext?: LinkedWorkItemContext
 }
 

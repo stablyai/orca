@@ -42,6 +42,8 @@ describe('worktree RPC methods', () => {
         manualOrder: 123_456,
         linkedIssue: 123,
         linkedPR: 456,
+        linkedJiraIssue: 'STA-776',
+        linkedJiraIssueSiteId: 'site-1',
         linkedGitLabIssue: 789,
         linkedGitLabMR: 321,
         sparseCheckout: { directories: ['src'], presetId: 'preset-1' },
@@ -60,6 +62,8 @@ describe('worktree RPC methods', () => {
       linkedLinearIssue: undefined,
       linkedLinearIssueWorkspaceId: undefined,
       linkedLinearIssueOrganizationUrlKey: undefined,
+      linkedJiraIssue: 'STA-776',
+      linkedJiraIssueSiteId: 'site-1',
       linkedGitLabIssue: 789,
       linkedGitLabMR: 321,
       linkedBitbucketPR: undefined,
@@ -640,7 +644,7 @@ describe('worktree RPC methods', () => {
     })
   })
 
-  it('forwards Linear metadata through worktree.set', async () => {
+  it('forwards issue source metadata through worktree.set', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       updateManagedWorktreeMeta: vi.fn().mockResolvedValue({ id: 'wt-1' })
@@ -652,7 +656,9 @@ describe('worktree RPC methods', () => {
         worktree: 'id:wt-1',
         linkedLinearIssue: 'STA-335',
         linkedLinearIssueWorkspaceId: null,
-        linkedLinearIssueOrganizationUrlKey: 'stably'
+        linkedLinearIssueOrganizationUrlKey: 'stably',
+        linkedJiraIssue: 'STA-776',
+        linkedJiraIssueSiteId: 'site-1'
       })
     )
 
@@ -662,7 +668,9 @@ describe('worktree RPC methods', () => {
       expect.objectContaining({
         linkedLinearIssue: 'STA-335',
         linkedLinearIssueWorkspaceId: null,
-        linkedLinearIssueOrganizationUrlKey: 'stably'
+        linkedLinearIssueOrganizationUrlKey: 'stably',
+        linkedJiraIssue: 'STA-776',
+        linkedJiraIssueSiteId: 'site-1'
       })
     )
   })

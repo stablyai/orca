@@ -6,6 +6,7 @@ import type {
   AgentType
 } from './agent-status-types'
 import type {
+  GitLabProjectRef,
   BaseRefSearchResult,
   BrowserCookieImportResult,
   BrowserSessionProfile,
@@ -530,10 +531,14 @@ export type RuntimeWorktreePsSummary = {
   sortOrder: number
   manualOrder?: number
   linkedIssue: number | null
+  linkedIssueSourcePreference: 'origin' | 'upstream' | null
   linkedPR: { number: number; state: string } | null
   linkedLinearIssue: string | null
+  linkedJiraIssue: string | null
+  linkedJiraIssueSiteId: string | null
   linkedGitLabMR: number | null
   linkedGitLabIssue: number | null
+  linkedGitLabProjectRef: GitLabProjectRef | null
   comment: string
   isPinned: boolean
   /** True for the worktree currently focused on the desktop/host

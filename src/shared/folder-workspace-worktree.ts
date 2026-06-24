@@ -6,13 +6,22 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
   return {
     id: folderWorkspaceKey(folderWorkspace.id),
     repoId: `folder-workspace:${folderWorkspace.projectGroupId}`,
+    sourceRepoId: linkedTask?.repoId ?? null,
     displayName: folderWorkspace.name,
     comment: folderWorkspace.comment,
     linkedIssue:
       linkedTask?.provider === 'github' && linkedTask.type === 'issue' ? linkedTask.number : null,
+    linkedIssueSourcePreference:
+      linkedTask?.provider === 'github' && linkedTask.type === 'issue'
+        ? (linkedTask.issueSourcePreference ?? null)
+        : null,
     linkedPR: null,
     linkedLinearIssue:
       linkedTask?.provider === 'linear' ? (linkedTask.linearIdentifier ?? null) : null,
+    linkedJiraIssue: linkedTask?.provider === 'jira' ? (linkedTask.jiraIdentifier ?? null) : null,
+    linkedJiraIssueSiteId: linkedTask?.provider === 'jira' ? (linkedTask.jiraSiteId ?? null) : null,
+    linkedGitLabProjectRef:
+      linkedTask?.provider === 'gitlab' ? (linkedTask.gitLabProjectRef ?? null) : null,
     linkedGitLabMR: null,
     linkedGitLabIssue:
       linkedTask?.provider === 'gitlab' && linkedTask.type === 'issue' ? linkedTask.number : null,

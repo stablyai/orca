@@ -82,10 +82,16 @@ describe('github RPC methods', () => {
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
-      makeRequest('github.workItem', { repo: 'repo-1', number: 12, type: 'pr' })
+      makeRequest('github.workItem', {
+        repo: '/stale/path',
+        repoId: 'repo-1',
+        number: 12,
+        type: 'pr',
+        issueSourcePreference: 'origin'
+      })
     )
 
-    expect(runtime.getRepoWorkItem).toHaveBeenCalledWith('repo-1', 12, 'pr')
+    expect(runtime.getRepoWorkItem).toHaveBeenCalledWith('id:repo-1', 12, 'pr', 'origin')
     expect(response).toMatchObject({ ok: true, result: { number: 12, type: 'pr' } })
   })
 
@@ -123,10 +129,21 @@ describe('github RPC methods', () => {
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
-      makeRequest('github.workItemDetails', { repo: 'repo-1', number: 12, type: 'issue' })
+      makeRequest('github.workItemDetails', {
+        repo: '/stale/path',
+        repoId: 'repo-1',
+        number: 12,
+        type: 'issue',
+        issueSourcePreference: 'upstream'
+      })
     )
 
-    expect(runtime.getRepoWorkItemDetails).toHaveBeenCalledWith('repo-1', 12, 'issue')
+    expect(runtime.getRepoWorkItemDetails).toHaveBeenCalledWith(
+      'id:repo-1',
+      12,
+      'issue',
+      'upstream'
+    )
     expect(response).toMatchObject({ ok: true, result: { body: 'Details' } })
   })
 
@@ -495,16 +512,23 @@ describe('github RPC methods', () => {
 
     const response = await dispatcher.dispatch(
       makeRequest('github.updateIssue', {
-        repo: 'repo-1',
+        repo: '/stale/path',
+        repoId: 'repo-1',
         number: 3,
-        updates: { state: 'closed', addLabels: ['bug'] }
+        updates: { state: 'closed', addLabels: ['bug'] },
+        issueSourcePreference: 'origin'
       })
     )
 
-    expect(runtime.updateRepoIssue).toHaveBeenCalledWith('repo-1', 3, {
-      state: 'closed',
-      addLabels: ['bug']
-    })
+    expect(runtime.updateRepoIssue).toHaveBeenCalledWith(
+      'id:repo-1',
+      3,
+      {
+        state: 'closed',
+        addLabels: ['bug']
+      },
+      'origin'
+    )
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
   })
 
@@ -517,18 +541,26 @@ describe('github RPC methods', () => {
 
     const response = await dispatcher.dispatch(
       makeRequest('github.addIssueComment', {
-        repo: 'repo-1',
+        repo: '/stale/path',
+        repoId: 'repo-1',
         number: 3,
         body: 'Looks good',
         type: 'pr',
-        prRepo: { owner: 'acme', repo: 'widgets' }
+        prRepo: { owner: 'acme', repo: 'widgets' },
+        issueSourcePreference: 'origin'
       })
     )
 
-    expect(runtime.addRepoIssueComment).toHaveBeenCalledWith('repo-1', 3, 'Looks good', {
-      owner: 'acme',
-      repo: 'widgets'
-    })
+    expect(runtime.addRepoIssueComment).toHaveBeenCalledWith(
+      'id:repo-1',
+      3,
+      'Looks good',
+      {
+        owner: 'acme',
+        repo: 'widgets'
+      },
+      'origin'
+    )
     expect(response).toMatchObject({ ok: true, result: { ok: true, comment: { id: 1 } } })
   })
 

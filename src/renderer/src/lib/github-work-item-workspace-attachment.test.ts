@@ -47,6 +47,29 @@ describe('GitHub work-item workspace attachment', () => {
     expect(findGithubIssueWorkspaceAttachment([first, second], 'repo-1', 42)).toBe(first)
   })
 
+  it('matches issue attachments by source when an explicit source is requested', () => {
+    const origin = worktree({
+      id: 'origin',
+      linkedIssue: 42,
+      linkedIssueSourcePreference: 'origin'
+    })
+    const upstream = worktree({
+      id: 'upstream',
+      linkedIssue: 42,
+      linkedIssueSourcePreference: 'upstream'
+    })
+
+    expect(findGithubIssueWorkspaceAttachment([origin, upstream], 'repo-1', 42, 'upstream')).toBe(
+      upstream
+    )
+  })
+
+  it('does not match unsourced issue attachments for an explicit source', () => {
+    const unsourced = worktree({ linkedIssue: 42, linkedIssueSourcePreference: null })
+
+    expect(findGithubIssueWorkspaceAttachment([unsourced], 'repo-1', 42, 'origin')).toBeNull()
+  })
+
   it('matches PRs and issues through the generic helper', () => {
     const pr = worktree({ id: 'pr', linkedPR: 42 })
     const issue = worktree({ id: 'issue', linkedIssue: 42 })

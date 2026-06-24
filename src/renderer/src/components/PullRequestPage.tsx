@@ -143,6 +143,7 @@ import { resolveCommentReplyTarget } from '@/components/comment-reply-target-sta
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { githubUpdateIssue } from '@/runtime/runtime-github-issue-client'
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import {
@@ -154,7 +155,10 @@ import {
   filterGitHubPRReviewerCandidates,
   getGitHubPRReviewerQueryState
 } from '@/components/github/github-pr-reviewer-candidate-filter'
-import { githubAvatarUrl } from '@/components/github/github-issue-comment-helpers'
+import {
+  addIssueCommentForRepo,
+  githubAvatarUrl
+} from '@/components/github/github-issue-comment-helpers'
 import { filterGitHubMentionOptions } from '@/components/github/github-mention-option-filter'
 import {
   getCommentBodySubmitState,
@@ -202,6 +206,7 @@ import type {
   PRComment
 } from '../../../shared/types'
 import { translate } from '@/i18n/i18n'
+import { resolvePersistedGitHubIssueSourcePreference } from '@/lib/github-issue-source-preference'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 
 // Why: the GH item dialog can be opened from any work-item list surface and
@@ -1714,22 +1719,6 @@ function loadPRFileContents(args: {
   return request
 }
 
-function addIssueCommentForRepo(args: {
-  repoId?: string
-  repoPath: string
-  number: number
-  body: string
-  type?: 'issue' | 'pr'
-}): Promise<Awaited<ReturnType<typeof window.api.gh.addIssueComment>>> {
-  return window.api.gh.addIssueComment({
-    repoPath: args.repoPath,
-    repoId: args.repoId,
-    number: args.number,
-    body: args.body,
-    type: args.type
-  })
-}
-
 function addPRReviewCommentForRepo(args: {
   repoId?: string
   repoPath: string
@@ -1797,12 +1786,14 @@ function getWorkItemDetailsForRepo(args: {
   repoPath: string
   number: number
   type: 'issue' | 'pr'
+  issueSourcePreference?: GitHubWorkItem['issueSourcePreference']
 }): Promise<GitHubWorkItemDetails | null> {
   return window.api.gh.workItemDetails({
     repoPath: args.repoPath,
     repoId: args.repoId,
     number: args.number,
-    type: args.type
+    type: args.type,
+    issueSourcePreference: args.issueSourcePreference ?? undefined
   })
 }
 
@@ -3105,9 +3096,11 @@ function ConversationTab({
           : await addIssueCommentForRepo({
               repoPath,
               repoId: item.repoId,
+              sourceSettings: getGitHubMutationSettings(item.repoId),
               number: item.number,
               body: `@${comment.author} ${replyBody}`,
-              type: item.type
+              type: item.type,
+              issueSourcePreference: item.type === 'issue' ? item.issueSourcePreference : undefined
             })
 
       if (!result.ok) {
@@ -3122,7 +3115,7 @@ function ConversationTab({
       toast.success(translate('auto.components.PullRequestPage.11505c7a71', 'Reply posted.'))
       return true
     },
-    [item.number, item.repoId, item.type, onCommentAdded, repoPath]
+    [item.issueSourcePreference, item.number, item.repoId, item.type, onCommentAdded, repoPath]
   )
 
   const rightPanel =
@@ -3519,6 +3512,7 @@ function ConversationTab({
             repoId={item.repoId}
             issueNumber={item.number}
             itemType={item.type}
+            issueSourcePreference={item.type === 'issue' ? item.issueSourcePreference : undefined}
             mentionOptions={mentionOptions}
             onCommentAdded={onCommentAdded}
           />
@@ -5078,6 +5072,7 @@ async function runIssueUpdate(args: {
   repoPath: string | null
   repoId?: string | null
   projectOrigin: PullRequestPageProjectOrigin | undefined
+  issueSourcePreference?: GitHubWorkItem['issueSourcePreference']
   number: number
   updates: Parameters<typeof window.api.gh.updateIssue>[0]['updates']
 }): Promise<void> {
@@ -5108,9 +5103,10 @@ async function runIssueUpdate(args: {
   if (!args.repoPath) {
     throw new Error('No repo context available for this edit.')
   }
-  const res = await window.api.gh.updateIssue({
+  const res = await githubUpdateIssue(getGitHubMutationSettings(args.repoId), {
     repoPath: args.repoPath,
     repoId: args.repoId ?? undefined,
+    issueSourcePreference: args.issueSourcePreference ?? undefined,
     number: args.number,
     updates: args.updates
   })
@@ -5161,6 +5157,7 @@ async function runWorkItemBodyUpdate(args: {
     repoPath: args.repoPath,
     repoId: args.item.repoId,
     projectOrigin: args.projectOrigin,
+    issueSourcePreference: args.item.issueSourcePreference,
     number: args.item.number,
     updates: { body: args.body }
   })
@@ -5312,21 +5309,28 @@ function GHEditSection({
             repoId: item.repoId,
             repoPath,
             projectOrigin,
+            issueSourcePreference: item.issueSourcePreference,
             number: item.number,
             updates: { state: newState }
           }),
         onOptimistic: () => {
           onStateChange(newState)
-          patchWorkItem(item.id, { state: newState }, item.repoId)
+          patchWorkItem(item.id, { state: newState }, item.repoId, {
+            issueSourcePreference: item.issueSourcePreference
+          })
           patchProjectRowIfNeeded({ state: newState })
         },
         onRevert: () => {
           onStateChange(prevState)
-          patchWorkItem(item.id, { state: prevState }, item.repoId)
+          patchWorkItem(item.id, { state: prevState }, item.repoId, {
+            issueSourcePreference: item.issueSourcePreference
+          })
           patchProjectRowIfNeeded({ state: prevState })
         },
         onSuccess: () => {
-          patchWorkItem(item.id, { state: newState }, item.repoId)
+          patchWorkItem(item.id, { state: newState }, item.repoId, {
+            issueSourcePreference: item.issueSourcePreference
+          })
           patchProjectRowIfNeeded({ state: newState })
           onMutated()
         },
@@ -5337,6 +5341,7 @@ function GHEditSection({
       item.id,
       item.number,
       item.repoId,
+      item.issueSourcePreference,
       localState,
       repoPath,
       projectOrigin,
@@ -5361,12 +5366,15 @@ function GHEditSection({
               repoId: item.repoId,
               repoPath,
               projectOrigin,
+              issueSourcePreference: item.issueSourcePreference,
               number: item.number,
               updates: { addLabels: [label] }
             }),
           onOptimistic: () => {
             onLabelsChange(newLabels)
-            patchWorkItem(item.id, { labels: newLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: newLabels }, item.repoId, {
+              issueSourcePreference: item.issueSourcePreference
+            })
             patchProjectRowIfNeeded({ labels: newLabels })
           },
           onSuccess: () => {
@@ -5374,7 +5382,9 @@ function GHEditSection({
           },
           onRevert: () => {
             onLabelsChange(prevLabels)
-            patchWorkItem(item.id, { labels: prevLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: prevLabels }, item.repoId, {
+              issueSourcePreference: item.issueSourcePreference
+            })
             patchProjectRowIfNeeded({ labels: prevLabels })
           },
           onError: (err) => toast.error(err)
@@ -5386,17 +5396,22 @@ function GHEditSection({
               repoId: item.repoId,
               repoPath,
               projectOrigin,
+              issueSourcePreference: item.issueSourcePreference,
               number: item.number,
               updates: { removeLabels: [label] }
             }),
           onOptimistic: () => {
             onLabelsChange(newLabels)
-            patchWorkItem(item.id, { labels: newLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: newLabels }, item.repoId, {
+              issueSourcePreference: item.issueSourcePreference
+            })
             patchProjectRowIfNeeded({ labels: newLabels })
           },
           onRevert: () => {
             onLabelsChange(prevLabels)
-            patchWorkItem(item.id, { labels: prevLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: prevLabels }, item.repoId, {
+              issueSourcePreference: item.issueSourcePreference
+            })
             patchProjectRowIfNeeded({ labels: prevLabels })
           },
           onSuccess: () => {
@@ -5410,6 +5425,7 @@ function GHEditSection({
       item.id,
       item.number,
       item.repoId,
+      item.issueSourcePreference,
       localLabels,
       repoPath,
       projectOrigin,
@@ -5439,6 +5455,7 @@ function GHEditSection({
               repoId: item.repoId,
               repoPath,
               projectOrigin,
+              issueSourcePreference: item.issueSourcePreference,
               number: item.number,
               updates: { removeAssignees: [login] }
             }),
@@ -5462,6 +5479,7 @@ function GHEditSection({
               repoId: item.repoId,
               repoPath,
               projectOrigin,
+              issueSourcePreference: item.issueSourcePreference,
               number: item.number,
               updates: { addAssignees: [login] }
             }),
@@ -5483,6 +5501,7 @@ function GHEditSection({
     [
       item.number,
       item.repoId,
+      item.issueSourcePreference,
       assigneesItemKey,
       repoPath,
       projectOrigin,
@@ -5696,6 +5715,7 @@ function GHCommentComposer({
   repoId,
   issueNumber,
   itemType,
+  issueSourcePreference,
   mentionOptions,
   onCommentAdded
 }: {
@@ -5704,6 +5724,7 @@ function GHCommentComposer({
   repoId?: string | null
   issueNumber: number
   itemType: 'issue' | 'pr'
+  issueSourcePreference?: GitHubWorkItem['issueSourcePreference']
   mentionOptions: MentionOption[]
   onCommentAdded: (comment: PRComment) => void
 }): React.JSX.Element {
@@ -5740,9 +5761,11 @@ function GHCommentComposer({
       const result = await addIssueCommentForRepo({
         repoPath,
         repoId: repoId ?? undefined,
+        sourceSettings: getGitHubMutationSettings(repoId),
         number: issueNumber,
         body: bodyState.body,
-        type: itemType
+        type: itemType,
+        issueSourcePreference: itemType === 'issue' ? issueSourcePreference : undefined
       })
       if (!mountedRef.current) {
         return
@@ -5772,7 +5795,17 @@ function GHCommentComposer({
         setSubmitting(false)
       }
     }
-  }, [autoGrow, body, mountedRef, repoPath, repoId, issueNumber, itemType, onCommentAdded])
+  }, [
+    autoGrow,
+    body,
+    mountedRef,
+    repoPath,
+    repoId,
+    issueNumber,
+    issueSourcePreference,
+    itemType,
+    onCommentAdded
+  ])
   const canSubmitComment = hasBoundedCommentBodyText(body)
 
   const handleKeyDown = useCallback(
@@ -5857,6 +5890,11 @@ export default function PullRequestPage({
   const workItemLabels = workItem?.labels
   const workItemType = workItem?.type
   const effectiveRepoId = repoId ?? workItem?.repoId ?? null
+  const repoIssueSourcePreference = useAppStore((s) =>
+    effectiveRepoId
+      ? s.repos.find((candidate) => candidate.id === effectiveRepoId)?.issueSourcePreference
+      : undefined
+  )
   const allWorktrees = useAllWorktrees()
   const attachedWorkspace = useMemo(
     () =>
@@ -5869,18 +5907,13 @@ export default function PullRequestPage({
     ? getGithubPrWorkspaceAttachmentLabel(attachedWorkspace)
     : null
 
-  // Why: the cache key has to include the issue source preference so a user
-  // toggling between origin/upstream for the same issue number doesn't read
-  // back the wrong repo's details. We pull it from the repos slice rather
-  // than threading it as a prop because every existing call site already has
-  // the repo registered in the store.
-  const issueSourcePreference = useAppStore((s) => {
-    if (!repoPath && !effectiveRepoId) {
-      return undefined
-    }
-    return s.repos.find((r) => (effectiveRepoId ? r.id === effectiveRepoId : r.path === repoPath))
-      ?.issueSourcePreference
-  })
+  const issueSourcePreference =
+    workItem?.type === 'issue'
+      ? resolvePersistedGitHubIssueSourcePreference(
+          workItem.issueSourcePreference,
+          repoIssueSourcePreference
+        )
+      : undefined
   const detailsCacheKey = useMemo(() => {
     if (!workItem || !repoPath || !effectiveRepoId) {
       return null
@@ -6091,7 +6124,8 @@ export default function PullRequestPage({
         repoPath,
         repoId: effectiveRepoId ?? undefined,
         number: workItem.number,
-        type: workItem.type
+        type: workItem.type,
+        issueSourcePreference
       })
 
     // Why: snapshot the invalidation generation at fetch start; if the
@@ -6150,18 +6184,25 @@ export default function PullRequestPage({
           error: message
         })
       })
-  }, [repoPath, effectiveRepoId, workItem, detailsCacheKey, refetchTick])
+  }, [repoPath, effectiveRepoId, workItem, detailsCacheKey, refetchTick, issueSourcePreference])
 
   const Icon = workItem?.type === 'pr' ? GitPullRequest : CircleDot
   const displayWorkItem = useMemo<GitHubWorkItem | null>(() => {
     if (!workItem) {
       return null
     }
+    const sourcePatch =
+      workItem.type === 'issue' ? { issueSourcePreference: issueSourcePreference ?? null } : {}
     if (!details?.item) {
-      return workItem
+      return { ...workItem, ...sourcePatch }
     }
-    return { ...workItem, ...details.item, repoId: workItem.repoId }
-  }, [details?.item, workItem])
+    return {
+      ...workItem,
+      ...details.item,
+      ...sourcePatch,
+      repoId: effectiveRepoId ?? workItem.repoId
+    }
+  }, [details?.item, effectiveRepoId, issueSourcePreference, workItem])
 
   useEffect(() => {
     if (!workItem || details?.item.reviewRequests === undefined) {
@@ -6523,7 +6564,7 @@ export default function PullRequestPage({
 
       {(repoPath || projectOrigin) && (
         <GHEditSection
-          item={workItem}
+          item={displayWorkItem ?? workItem}
           repoPath={repoPath}
           repoId={effectiveRepoId}
           projectOrigin={projectOrigin}
@@ -6644,7 +6685,7 @@ export default function PullRequestPage({
 
               <TabsContent value="checks" className="mt-0">
                 <ChecksTab
-                  item={workItem}
+                  item={displayWorkItem ?? workItem}
                   repoPath={repoPath}
                   repoId={effectiveRepoId}
                   headSha={details?.headSha}

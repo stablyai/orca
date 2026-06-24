@@ -270,7 +270,11 @@ describe('launchWorkItemDirect', () => {
       undefined,
       undefined,
       undefined,
-      'refs/remotes/origin/main'
+      'refs/remotes/origin/main',
+      undefined,
+      undefined,
+      undefined,
+      undefined
     )
   })
 
@@ -316,8 +320,85 @@ describe('launchWorkItemDirect', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
       undefined
     )
+  })
+
+  it('passes Jira identity through direct-launch workspace creation', async () => {
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+
+    await launchWorkItemDirect({
+      repoId: 'repo-1',
+      launchSource: 'task_page',
+      telemetrySource: 'sidebar',
+      openModalFallback: vi.fn(),
+      item: {
+        type: 'issue',
+        number: null,
+        title: 'Sync board status',
+        url: 'https://example.atlassian.net/browse/STA-776',
+        jiraIdentifier: 'STA-776',
+        jiraSiteId: 'site-1'
+      }
+    })
+
+    expect(mocks.createWorktree).toHaveBeenCalledWith(
+      'repo-1',
+      '',
+      undefined,
+      'inherit',
+      undefined,
+      'sidebar',
+      'Sync board status',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'STA-776',
+      'site-1',
+      undefined,
+      undefined
+    )
+  })
+
+  it('prefers item GitHub issue source preference for direct issue launches', async () => {
+    const [repo] = mocks.store.repos as AppState['repos']
+    mocks.store.repos = [{ ...repo, issueSourcePreference: 'origin' }] as AppState['repos']
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+
+    await launchWorkItemDirect({
+      repoId: 'repo-1',
+      launchSource: 'task_page',
+      telemetrySource: 'sidebar',
+      openModalFallback: vi.fn(),
+      item: {
+        type: 'issue',
+        number: 42,
+        title: 'Sync board status',
+        url: 'https://github.com/acme/repo/issues/42',
+        issueSourcePreference: 'upstream'
+      }
+    })
+
+    expect(mocks.createWorktree.mock.calls[0]?.at(27)).toBe('upstream')
   })
 
   it('uses remote cursor-agent detection, trust preflight, and paste launch for SSH repos', async () => {

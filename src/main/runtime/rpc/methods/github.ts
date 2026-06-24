@@ -4,8 +4,15 @@ import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 
 const RepoSelector = z.object({
-  repo: requiredString('Missing repo selector')
+  repo: requiredString('Missing repo selector'),
+  repoId: OptionalString
 })
+
+function repoSelector(params: z.infer<typeof RepoSelector>): string {
+  // Why: repoId is the canonical runtime identity when present; repo paths can
+  // be stale display/fallback values after a repository is moved or renamed.
+  return params.repoId ? `id:${params.repoId}` : params.repo
+}
 
 const WorkItemsList = RepoSelector.extend({
   limit: OptionalFiniteNumber,
@@ -20,7 +27,8 @@ const IssuesList = RepoSelector.extend({
 
 const WorkItem = RepoSelector.extend({
   number: z.number().int().positive(),
-  type: z.enum(['issue', 'pr']).optional()
+  type: z.enum(['issue', 'pr']).optional(),
+  issueSourcePreference: z.enum(['auto', 'upstream', 'origin']).optional()
 })
 
 const WorkItemByOwnerRepo = RepoSelector.extend({
@@ -30,7 +38,9 @@ const WorkItemByOwnerRepo = RepoSelector.extend({
   type: z.enum(['issue', 'pr'])
 })
 
-const WorkItemDetails = WorkItem
+const WorkItemDetails = WorkItem.extend({
+  issueSourcePreference: z.enum(['auto', 'upstream', 'origin']).optional()
+})
 
 const WorkItemsCount = RepoSelector.extend({
   query: OptionalString
@@ -167,14 +177,16 @@ const IssueUpdate = z.object({
 
 const UpdateIssue = RepoSelector.extend({
   number: z.number().int().positive(),
-  updates: IssueUpdate
+  updates: IssueUpdate,
+  issueSourcePreference: z.enum(['auto', 'upstream', 'origin']).optional()
 })
 
 const IssueComment = RepoSelector.extend({
   number: z.number().int().positive(),
   body: requiredString('Comment body required'),
   type: z.enum(['issue', 'pr']).optional(),
-  prRepo: SlugRepo.nullable().optional()
+  prRepo: SlugRepo.nullable().optional(),
+  issueSourcePreference: z.enum(['auto', 'upstream', 'origin']).optional()
 })
 
 const PRReviewComment = RepoSelector.extend({
@@ -333,7 +345,12 @@ export const GITHUB_METHODS: RpcMethod[] = [
     name: 'github.workItem',
     params: WorkItem,
     handler: async (params, { runtime }) =>
-      runtime.getRepoWorkItem(params.repo, params.number, params.type)
+      runtime.getRepoWorkItem(
+        repoSelector(params),
+        params.number,
+        params.type,
+        params.issueSourcePreference
+      )
   }),
   defineMethod({
     name: 'github.workItemByOwnerRepo',
@@ -350,7 +367,12 @@ export const GITHUB_METHODS: RpcMethod[] = [
     name: 'github.workItemDetails',
     params: WorkItemDetails,
     handler: async (params, { runtime }) =>
-      runtime.getRepoWorkItemDetails(params.repo, params.number, params.type)
+      runtime.getRepoWorkItemDetails(
+        repoSelector(params),
+        params.number,
+        params.type,
+        params.issueSourcePreference
+      )
   }),
   defineMethod({
     name: 'github.prForBranch',
@@ -505,13 +527,24 @@ export const GITHUB_METHODS: RpcMethod[] = [
     name: 'github.updateIssue',
     params: UpdateIssue,
     handler: async (params, { runtime }) =>
-      runtime.updateRepoIssue(params.repo, params.number, params.updates)
+      runtime.updateRepoIssue(
+        repoSelector(params),
+        params.number,
+        params.updates,
+        params.issueSourcePreference
+      )
   }),
   defineMethod({
     name: 'github.addIssueComment',
     params: IssueComment,
     handler: async (params, { runtime }) =>
-      runtime.addRepoIssueComment(params.repo, params.number, params.body, params.prRepo ?? null)
+      runtime.addRepoIssueComment(
+        repoSelector(params),
+        params.number,
+        params.body,
+        params.prRepo ?? null,
+        params.issueSourcePreference
+      )
   }),
   defineMethod({
     name: 'github.addPRReviewComment',

@@ -50,7 +50,13 @@ vi.mock('./rate-limit', () => ({
   noteRateLimitSpend: noteRateLimitSpendMock
 }))
 
-import { countWorkItems, getWorkItem, listWorkItems, _resetOwnerRepoCache } from './client'
+import {
+  countWorkItems,
+  getWorkItem,
+  getWorkItemByOwnerRepo,
+  listWorkItems,
+  _resetOwnerRepoCache
+} from './client'
 
 describe('GitHub issue source split', () => {
   beforeEach(() => {
@@ -269,6 +275,38 @@ describe('GitHub issue source split', () => {
     )
   })
 
+  it('stamps direct owner/repo issue lookups with the matching explicit source', async () => {
+    getOwnerRepoForRemoteMock
+      .mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+      .mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        number: 2635,
+        title: 'Origin-only issue',
+        state: 'open',
+        html_url: 'https://github.com/fork/orca/issues/2635',
+        labels: [],
+        updated_at: '2026-05-26T00:00:00.000Z',
+        user: { login: 'octocat' }
+      })
+    })
+
+    const item = await getWorkItemByOwnerRepo(
+      '/repo-root',
+      { owner: 'fork', repo: 'orca' },
+      2635,
+      'issue'
+    )
+
+    expect(item).toMatchObject({
+      type: 'issue',
+      number: 2635,
+      issueSourcePreference: 'origin'
+    })
+    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith('/repo-root', 'origin', undefined, {})
+    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith('/repo-root', 'upstream', undefined, {})
+  })
+
   it("uses upstream for PR counts when preference='upstream'", async () => {
     resolveIssueSourceMock.mockResolvedValueOnce({
       source: { owner: 'stablyai', repo: 'orca' },
@@ -388,6 +426,72 @@ describe('GitHub issue source split', () => {
       { cwd: '/repo-root' }
     )
     expect(item?.type).toBe('pr')
+  })
+
+  it('stamps typed issue lookups with the explicit issue source preference', async () => {
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        number: 42,
+        title: 'Origin issue',
+        state: 'open',
+        html_url: 'https://github.com/fork/orca/issues/42',
+        labels: [],
+        updated_at: '2026-04-02T00:00:00Z',
+        user: { login: 'octocat' }
+      })
+    })
+
+    const item = await getWorkItem('/repo-root', 42, 'issue', undefined, {}, 'origin')
+
+    expect(item).toMatchObject({
+      type: 'issue',
+      number: 42,
+      issueSourcePreference: 'origin'
+    })
+  })
+
+  it('does not fall back to inferred repo when typed explicit issue source is unresolved', async () => {
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce(null)
+
+    const item = await getWorkItem('/repo-root', 42, 'issue', undefined, {}, 'upstream')
+
+    expect(item).toBeNull()
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('stamps raw number issue lookups with the explicit issue source preference', async () => {
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        number: 42,
+        title: 'Origin issue',
+        state: 'open',
+        html_url: 'https://github.com/fork/orca/issues/42',
+        labels: [],
+        updated_at: '2026-04-02T00:00:00Z',
+        user: { login: 'octocat' }
+      })
+    })
+
+    const item = await getWorkItem('/repo-root', 42, undefined, undefined, {}, 'origin')
+
+    expect(item).toMatchObject({
+      type: 'issue',
+      number: 42,
+      issueSourcePreference: 'origin'
+    })
+    expect(getOwnerRepoMock).not.toHaveBeenCalled()
+  })
+
+  it('does not fall back to inferred repo when raw explicit issue source is unresolved', async () => {
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce(null)
+
+    const item = await getWorkItem('/repo-root', 42, undefined, undefined, {}, 'upstream')
+
+    expect(item).toBeNull()
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(getOwnerRepoMock).not.toHaveBeenCalled()
   })
 
   it('raw number lookup tries upstream issue before origin PR', async () => {

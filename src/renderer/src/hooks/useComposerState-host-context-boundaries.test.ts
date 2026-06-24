@@ -261,6 +261,7 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(githubApply).toContain('setLinkedGitLabIssue(null)')
     expect(githubApply).toContain('setLinkedGitLabMR(null)')
+    expect(githubApply).toContain('setLinkedWorkItem(toGitHubLinkedWorkItem(item))')
 
     const gitlabApply = sourceBetween(
       HOOK_SOURCE,

@@ -234,6 +234,41 @@ describe('GitLab IPC handlers', () => {
     ).rejects.toThrow('source host does not match')
   })
 
+  it('preserves project refs on GitLab issue list work items', async () => {
+    const projectRef = { host: 'gitlab.example.com', path: 'group/project' }
+    listIssuesMock.mockResolvedValueOnce({
+      projectRef,
+      items: [
+        {
+          number: 7,
+          title: 'Fix issue routing',
+          state: 'opened',
+          url: 'https://gitlab.example.com/group/project/-/issues/7',
+          labels: ['bug'],
+          updatedAt: '2026-04-02T00:00:00Z',
+          author: 'octocat'
+        }
+      ]
+    })
+    registerGitLabHandlers(storeWithRepos([repo()]) as Store)
+
+    const result = await ipcHandlers.get('gitlab:listIssues')?.(null, {
+      repoPath: '/local/orca',
+      state: 'opened',
+      limit: 20
+    })
+
+    expect(result).toMatchObject({
+      items: [
+        {
+          type: 'issue',
+          number: 7,
+          projectRef
+        }
+      ]
+    })
+  })
+
   it('resolves pasted URL lookups by repoId and source host context', async () => {
     const remoteRepo = repo({
       id: 'repo-ssh',

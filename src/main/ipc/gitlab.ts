@@ -7,6 +7,7 @@ import type {
   GitLabIssueUpdate,
   GitLabMRInlineCommentInput,
   GitLabMRUpdate,
+  GitLabProjectRef,
   GitLabWorkItem,
   Repo
 } from '../../shared/types'
@@ -236,6 +237,7 @@ export function registerGitLabHandlers(store: Store): void {
         labels: issue.labels,
         updatedAt: issue.updatedAt ?? '',
         author: issue.author ?? null,
+        ...(result.projectRef ? { projectRef: result.projectRef } : {}),
         repoId: repo.id
       }))
       return { items: workItems, ...(result.error ? { error: result.error } : {}) }
@@ -261,7 +263,11 @@ export function registerGitLabHandlers(store: Store): void {
     'gitlab:updateIssue',
     async (
       _event,
-      args: GitLabRepoSelectorArgs & { number: number; updates: GitLabIssueUpdate }
+      args: GitLabRepoSelectorArgs & {
+        number: number
+        projectRef?: GitLabProjectRef | null
+        updates: GitLabIssueUpdate
+      }
     ) => {
       const repo = assertRegisteredRepo(args, store)
       return updateIssue(
@@ -270,7 +276,7 @@ export function registerGitLabHandlers(store: Store): void {
         args.updates,
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        undefined,
+        args.projectRef ?? undefined,
         ...localGitOptionArgs(store, repo)
       )
     }
@@ -278,7 +284,14 @@ export function registerGitLabHandlers(store: Store): void {
 
   ipcMain.handle(
     'gitlab:addIssueComment',
-    async (_event, args: GitLabRepoSelectorArgs & { number: number; body: string }) => {
+    async (
+      _event,
+      args: GitLabRepoSelectorArgs & {
+        number: number
+        body: string
+        projectRef?: GitLabProjectRef | null
+      }
+    ) => {
       const repo = assertRegisteredRepo(args, store)
       return addIssueComment(
         repo.path,
@@ -286,7 +299,7 @@ export function registerGitLabHandlers(store: Store): void {
         args.body,
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        undefined,
+        args.projectRef ?? undefined,
         ...localGitOptionArgs(store, repo)
       )
     }

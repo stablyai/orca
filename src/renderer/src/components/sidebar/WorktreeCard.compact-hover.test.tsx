@@ -1,5 +1,8 @@
+// @vitest-environment happy-dom
+
+import React, { act, type ReactNode } from 'react'
+import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import React, { type ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { GlobalSettings, Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
@@ -17,6 +20,7 @@ const setWorkspacePortScanRefreshing = vi.fn()
 
 let worktreeCardProperties: WorktreeCardProperty[] = ['status', 'ports']
 let hostedReviewCache: Record<string, unknown> = {}
+let issueCache: Record<string, unknown> = {}
 let workspacePortScan: { key: string; result: WorkspacePortScanResult } | null = null
 let settings: Partial<GlobalSettings> | null = { compactWorktreeCards: true }
 
@@ -31,7 +35,7 @@ vi.mock('@/store', () => ({
       fetchLinearIssue,
       gitConflictOperationByWorktree: {},
       hostedReviewCache,
-      issueCache: {},
+      issueCache,
       linearIssueCache: {},
       openModal,
       openTaskPage,
@@ -172,6 +176,7 @@ describe('WorktreeCard compact hover details', () => {
     vi.clearAllMocks()
     worktreeCardProperties = ['status', 'ports']
     hostedReviewCache = {}
+    issueCache = {}
     workspacePortScan = null
     settings = { compactWorktreeCards: true }
   })
@@ -277,6 +282,52 @@ describe('WorktreeCard compact hover details', () => {
     expect(markup).toContain('Live Ports')
     expect(markup).toContain('58941')
     expect(markup).not.toContain('data-worktree-card-meta-row=""')
+  }, 30_000)
+
+  it('preserves the linked GitHub issue source when opening from card details', async () => {
+    settings = { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: true }
+    worktreeCardProperties = ['status']
+    issueCache = {
+      'repo-1::123': {
+        data: {
+          number: 123,
+          title: 'Origin issue',
+          state: 'open',
+          url: 'https://github.com/acme/orca-origin/issues/123',
+          labels: []
+        },
+        fetchedAt: Date.now()
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+    const container = document.createElement('div')
+    const root = createRoot(container)
+
+    act(() => {
+      root.render(
+        <WorktreeCard
+          worktree={makeWorktree({ linkedIssue: 123, linkedIssueSourcePreference: 'origin' })}
+          repo={makeRepo()}
+          isActive={false}
+        />
+      )
+    })
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Open in Orca"]')?.click()
+    })
+
+    expect(openTaskPage).toHaveBeenCalledWith({
+      taskSource: 'github',
+      preselectedRepoId: 'repo-1',
+      openGitHubWorkItem: expect.objectContaining({
+        number: 123,
+        repoId: 'repo-1',
+        issueSourcePreference: 'origin'
+      })
+    })
+
+    act(() => root.unmount())
   }, 30_000)
 
   it('shows selected task and note metadata on the compact card title row', async () => {

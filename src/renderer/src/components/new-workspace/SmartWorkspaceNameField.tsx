@@ -600,6 +600,7 @@ export default function SmartWorkspaceNameField({
           const item = await lookupSmartGitHubSubmitItem({
             repoPath: selectedRepo.path,
             repoId: selectedRepo.id,
+            issueSourcePreference: selectedRepo.issueSourcePreference,
             sourceContext: githubSourceContext,
             intent: {
               kind: 'link',
@@ -662,6 +663,7 @@ export default function SmartWorkspaceNameField({
           lookupSmartGitHubSubmitItem({
             repoPath: target.repo.path,
             repoId: target.repo.id,
+            issueSourcePreference: target.repo.issueSourcePreference,
             sourceContext: target.githubSourceContext,
             intent,
             workItem: lookupGitHubWorkItemForSource,

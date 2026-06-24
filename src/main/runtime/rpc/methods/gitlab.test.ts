@@ -79,7 +79,8 @@ describe('gitlab RPC methods', () => {
     await dispatcher.dispatch(makeRequest('gitlab.listLabels', { repo: 'id:repo-1' }))
     await dispatcher.dispatch(
       makeRequest('gitlab.updateIssue', {
-        repo: 'id:repo-1',
+        repo: '/stale/path',
+        repoId: 'repo-1',
         number: 7,
         updates: { state: 'closed', title: 'Done', body: 'Updated body' },
         projectRef

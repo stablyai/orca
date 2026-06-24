@@ -15,7 +15,7 @@ import type {
 import { mapIssueInfo } from './mappers'
 import type { LocalGitExecOptions, OwnerRepo } from './gh-utils'
 // prettier-ignore
-import { ghExecFileAsync, acquire, release, getIssueOwnerRepo, resolveIssueSource, classifyGhError, classifyListIssuesError, ghRepoExecOptions, githubRepoContext } from './gh-utils'
+import { ghExecFileAsync, acquire, release, getIssueOwnerRepo, getOwnerRepoForRemote, resolveIssueSource, classifyGhError, classifyListIssuesError, ghRepoExecOptions, githubRepoContext } from './gh-utils'
 
 // Why: distinguishes a successful-empty listing from a failed fetch. The
 // previous `catch { return [] }` conflated a 403 on a private upstream with an
@@ -100,12 +100,18 @@ export async function listIssues(
 ): Promise<IssueListResult> {
   const context = githubRepoContext(repoPath, connectionId, localGitOptions)
   const ghOptions = ghRepoExecOptions(context)
-  const { source: ownerRepo } = await resolveIssueSource(
-    repoPath,
-    preference,
-    connectionId,
-    localGitOptions
-  )
+  const explicitPreference = preference === 'origin' || preference === 'upstream'
+  const ownerRepo = explicitPreference
+    ? await getOwnerRepoForRemote(repoPath, preference, connectionId, localGitOptions)
+    : (await resolveIssueSource(repoPath, preference, connectionId, localGitOptions)).source
+  if (!ownerRepo && explicitPreference) {
+    return {
+      items: [],
+      error: classifyListIssuesError(
+        `Could not resolve GitHub ${preference} owner/repo for this repository`
+      )
+    }
+  }
   await acquire()
   try {
     if (ownerRepo) {
@@ -169,12 +175,10 @@ export async function createIssue(
   }
   const context = githubRepoContext(repoPath, connectionId, localGitOptions)
   const ghOptions = ghRepoExecOptions(context)
-  const { source: ownerRepo } = await resolveIssueSource(
-    repoPath,
-    preference,
-    connectionId,
-    localGitOptions
-  )
+  const ownerRepo =
+    preference === 'origin' || preference === 'upstream'
+      ? await getOwnerRepoForRemote(repoPath, preference, connectionId, localGitOptions)
+      : (await resolveIssueSource(repoPath, preference, connectionId, localGitOptions)).source
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
@@ -219,25 +223,24 @@ export async function createIssue(
  * Update an existing GitHub issue. Fans out to separate gh commands for
  * state changes vs field edits since `gh issue edit` does not support state.
  *
- * Why this path doesn't take a preference (mirrors `getIssue`): mutations
- * target an issue number already bound to a worktree / linked elsewhere in
- * the UI. Routing an update through the live per-repo preference would let
- * a user open upstream#N, toggle the selector to origin, save, and silently
- * write to origin#N — a different issue (or 404). That is the exact
- * silent-source-switch class of wrongness #1186 / the parent design doc
- * guard against. List and create paths honor preference; mutations stay on
- * the heuristic `getIssueOwnerRepo`.
+ * Why preference is explicit: persisted issue numbers may come from a
+ * selected origin/upstream source. Callers that know that source must pass it
+ * so identical issue numbers cannot be mutated in the wrong repo.
  */
 export async function updateIssue(
   repoPath: string,
   issueNumber: number,
   updates: GitHubIssueUpdate,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  preference?: IssueSourcePreference
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const context = githubRepoContext(repoPath, connectionId, localGitOptions)
   const ghOptions = ghRepoExecOptions(context)
-  const ownerRepo = await getIssueOwnerRepo(repoPath, connectionId, localGitOptions)
+  const ownerRepo =
+    preference === 'origin' || preference === 'upstream'
+      ? await getOwnerRepoForRemote(repoPath, preference, connectionId, localGitOptions)
+      : (await resolveIssueSource(repoPath, preference, connectionId, localGitOptions)).source
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
@@ -338,30 +341,23 @@ export async function updateIssue(
   return { ok: true }
 }
 
-/**
- * Add a comment to an existing GitHub issue.
- *
- * Why this path doesn't take a preference (mirrors `getIssue` / `updateIssue`):
- * a comment is posted against an issue number already bound to a worktree or
- * surfaced from a prior read. Routing through the live per-repo preference
- * would let a user read upstream#N, toggle the selector to origin, and have
- * their reply silently post on origin#N — a different issue entirely. That
- * is the same silent-source-switch class of wrongness #1186 / the parent
- * design doc guard against. List and create paths honor preference;
- * mutations stay on the heuristic `getIssueOwnerRepo`.
- */
+/** Add a comment to an existing GitHub issue. */
 export async function addIssueComment(
   repoPath: string,
   issueNumber: number,
   body: string,
   connectionId?: string | null,
   ownerRepoOverride?: OwnerRepo | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  preference?: IssueSourcePreference
 ): Promise<GitHubCommentResult> {
   const context = githubRepoContext(repoPath, connectionId, localGitOptions)
   const ghOptions = ghRepoExecOptions(context)
   const ownerRepo =
-    ownerRepoOverride ?? (await getIssueOwnerRepo(repoPath, connectionId, localGitOptions))
+    ownerRepoOverride ??
+    (preference === 'origin' || preference === 'upstream'
+      ? await getOwnerRepoForRemote(repoPath, preference, connectionId, localGitOptions)
+      : await getIssueOwnerRepo(repoPath, connectionId, localGitOptions))
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }

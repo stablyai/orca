@@ -8,6 +8,7 @@ const {
   ghExecFileAsyncMock,
   getOwnerRepoMock,
   getIssueOwnerRepoMock,
+  getOwnerRepoForRemoteMock,
   getWorkItemMock,
   getPRChecksMock,
   getPRCommentsMock,
@@ -21,6 +22,7 @@ const {
   ghExecFileAsyncMock: vi.fn(),
   getOwnerRepoMock: vi.fn(),
   getIssueOwnerRepoMock: vi.fn(),
+  getOwnerRepoForRemoteMock: vi.fn(),
   getWorkItemMock: vi.fn(),
   getPRChecksMock: vi.fn(),
   getPRCommentsMock: vi.fn(),
@@ -44,6 +46,7 @@ vi.mock('./gh-utils', () => ({
   ghExecFileAsync: ghExecFileAsyncMock,
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: getIssueOwnerRepoMock,
+  getOwnerRepoForRemote: getOwnerRepoForRemoteMock,
   ghRepoExecOptions: ghRepoExecOptionsMock,
   githubRepoContext: githubRepoContextMock,
   acquire: acquireMock,
@@ -68,6 +71,7 @@ describe('getWorkItemDetails', () => {
     ghExecFileAsyncMock.mockReset()
     getOwnerRepoMock.mockReset()
     getIssueOwnerRepoMock.mockReset()
+    getOwnerRepoForRemoteMock.mockReset()
     getWorkItemMock.mockReset()
     getPRChecksMock.mockReset()
     getPRCommentsMock.mockReset()
@@ -123,7 +127,14 @@ describe('getWorkItemDetails', () => {
 
     const details = await getWorkItemDetails('/repo-root', 923, 'issue')
 
-    expect(getWorkItemMock).toHaveBeenCalledWith('/repo-root', 923, 'issue', undefined)
+    expect(getWorkItemMock).toHaveBeenCalledWith(
+      '/repo-root',
+      923,
+      'issue',
+      undefined,
+      {},
+      undefined
+    )
     // Why: a single gh subprocess call replaces the previous REST + REST + GraphQL fan-out.
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(ghExecFileAsyncMock.mock.calls[0][0][0]).toBe('api')
@@ -133,6 +144,43 @@ describe('getWorkItemDetails', () => {
     expect(details?.comments).toHaveLength(1)
     expect(details?.comments[0].id).toBe(7)
     expect(details?.participants?.[0]?.login).toBe('octocat')
+  })
+
+  it('uses explicit issue source preference for issue detail reads', async () => {
+    getWorkItemMock.mockResolvedValueOnce({
+      id: 'issue:923',
+      type: 'issue',
+      number: 923,
+      title: 'Use upstream issues',
+      state: 'open',
+      url: 'https://github.com/upstream/orca/issues/923',
+      labels: [],
+      updatedAt: '2026-04-01T00:00:00Z',
+      author: 'octocat'
+    })
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'upstream', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        data: {
+          repository: {
+            issue: {
+              body: 'Upstream issue body',
+              assignees: { nodes: [] },
+              participants: { nodes: [] },
+              comments: { nodes: [] }
+            }
+          }
+        }
+      })
+    })
+
+    const details = await getWorkItemDetails('/repo-root', 923, 'issue', null, {}, 'upstream')
+
+    expect(getWorkItemMock).toHaveBeenCalledWith('/repo-root', 923, 'issue', null, {}, 'upstream')
+    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith('/repo-root', 'upstream', null, {})
+    expect(getIssueOwnerRepoMock).not.toHaveBeenCalled()
+    expect(ghExecFileAsyncMock.mock.calls[0][0]).toContain('owner=upstream')
+    expect(details?.body).toBe('Upstream issue body')
   })
 
   it('falls back to REST + GraphQL when the collapsed issue query fails', async () => {
@@ -239,7 +287,14 @@ describe('getWorkItemDetails', () => {
 
     const details = await getWorkItemDetails('/home/jinwoo/orca', 923, 'issue', 'openclaw-2')
 
-    expect(getWorkItemMock).toHaveBeenCalledWith('/home/jinwoo/orca', 923, 'issue', 'openclaw-2')
+    expect(getWorkItemMock).toHaveBeenCalledWith(
+      '/home/jinwoo/orca',
+      923,
+      'issue',
+      'openclaw-2',
+      {},
+      undefined
+    )
     expect(getIssueOwnerRepoMock).toHaveBeenCalledWith('/home/jinwoo/orca', 'openclaw-2')
     expect(ghExecFileAsyncMock.mock.calls[0][1]).toEqual({})
     expect(details?.body).toBe('Remote issue body')
@@ -303,7 +358,14 @@ describe('getWorkItemDetails', () => {
     const details = await getWorkItemDetails('/repo-root', 42, 'pr', null, localGitOptions)
 
     expect(details?.body).toBe('PR body')
-    expect(getWorkItemMock).toHaveBeenCalledWith('/repo-root', 42, 'pr', null, localGitOptions)
+    expect(getWorkItemMock).toHaveBeenCalledWith(
+      '/repo-root',
+      42,
+      'pr',
+      null,
+      localGitOptions,
+      undefined
+    )
     expect(getOwnerRepoMock).toHaveBeenCalledWith('/repo-root', null, localGitOptions)
     expect(getPRCommentsMock).toHaveBeenCalledWith(
       '/repo-root',

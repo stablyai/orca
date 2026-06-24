@@ -549,6 +549,43 @@ describe('createGitHubSlice.patchWorkItem', () => {
     })
     expect(secondPatched).toBe(secondItem)
   })
+
+  it('can scope issue patches by issue source preference when same-number issues share a repo', () => {
+    const store = createTestStore()
+    const originItem = {
+      id: 'issue:42',
+      repoId: 'repo-1',
+      type: 'issue',
+      number: 42,
+      title: 'Origin issue',
+      issueSourcePreference: 'origin'
+    } as GitHubWorkItem
+    const upstreamItem = {
+      id: 'issue:42',
+      repoId: 'repo-1',
+      type: 'issue',
+      number: 42,
+      title: 'Upstream issue',
+      issueSourcePreference: 'upstream'
+    } as GitHubWorkItem
+
+    store.setState({
+      workItemsCache: {
+        [workItemsCacheKey('repo-1', 20, 'is:issue')]: {
+          data: [originItem, upstreamItem],
+          fetchedAt: 1
+        }
+      }
+    })
+
+    store.getState().patchWorkItem('issue:42', { state: 'closed' }, 'repo-1', {
+      issueSourcePreference: 'origin'
+    })
+
+    const items = store.getState().workItemsCache[workItemsCacheKey('repo-1', 20, 'is:issue')]?.data
+    expect(items?.[0]).toMatchObject({ title: 'Origin issue', state: 'closed' })
+    expect(items?.[1]).toBe(upstreamItem)
+  })
 })
 
 describe('createGitHubSlice.fetchPRChecks', () => {
@@ -4495,18 +4532,20 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       )
 
       expect(result.failedCount).toBe(0)
-      expect(result.items).toEqual([{ ...item, repoId: 'github-repo' }])
+      expect(result.items).toEqual([
+        { ...item, repoId: 'github-repo', issueSourcePreference: 'origin' }
+      ])
       expect(consoleWarn).not.toHaveBeenCalled()
     } finally {
       consoleWarn.mockRestore()
     }
   })
 
-  it('routes work-item next-page fetches through the active runtime environment', async () => {
+  it('routes work-item next-page fetches through the active runtime environment with source stamps', async () => {
     const item = {
-      type: 'pr',
+      type: 'issue',
       number: 9,
-      title: 'Server PR',
+      title: 'Server issue',
       url: 'https://example.test/9',
       updatedAt: '2026-05-22T00:00:00Z'
     } as GitHubWorkItem
@@ -4516,9 +4555,9 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       result: {
         items: [item],
         sources: {
-          issues: null,
+          issues: { owner: 'origin-owner', repo: 'repo' },
           prs: { owner: 'up', repo: 'r' },
-          originCandidate: { owner: 'up', repo: 'r' },
+          originCandidate: { owner: 'origin-owner', repo: 'repo' },
           upstreamCandidate: null
         }
       },
@@ -4553,7 +4592,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       timeoutMs: 30_000
     })
     expect(result).toEqual({
-      items: [{ ...item, repoId: 'caller-repo-id' }],
+      items: [{ ...item, repoId: 'caller-repo-id', issueSourcePreference: 'origin' }],
       failedCount: 0
     })
   })

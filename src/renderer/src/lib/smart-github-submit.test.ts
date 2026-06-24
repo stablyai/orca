@@ -119,6 +119,74 @@ describe('lookupSmartGitHubSubmitItem', () => {
     expect(workItem).not.toHaveBeenCalled()
   })
 
+  it('preserves direct URL issue source preference on looked-up items', async () => {
+    const item = {
+      id: 'issue-2049',
+      type: 'issue' as const,
+      number: 2049,
+      title: 'Fix fork issue routing',
+      state: 'open' as const,
+      url: 'https://github.com/fork/orca/issues/2049',
+      labels: [],
+      updatedAt: '2026-05-26T00:00:00.000Z',
+      author: 'octocat',
+      repoId: 'repo-1',
+      issueSourcePreference: 'origin' as const
+    }
+    const workItemByOwnerRepo = vi.fn().mockResolvedValue(item)
+    const workItem = vi.fn()
+
+    await expect(
+      lookupSmartGitHubSubmitItem({
+        repoId: 'repo-1',
+        repoPath: '/repo',
+        intent: {
+          kind: 'link',
+          owner: 'fork',
+          repo: 'orca',
+          number: 2049,
+          type: 'issue'
+        },
+        workItem,
+        workItemByOwnerRepo
+      })
+    ).resolves.toEqual(item)
+  })
+
+  it('does not stamp direct URL issue lookups with the selected repo source preference', async () => {
+    const item = {
+      id: 'issue-2049',
+      type: 'issue' as const,
+      number: 2049,
+      title: 'Explicit link issue',
+      state: 'open' as const,
+      url: 'https://github.com/fork/orca/issues/2049',
+      labels: [],
+      updatedAt: '2026-05-26T00:00:00.000Z',
+      author: 'octocat',
+      repoId: 'repo-1'
+    }
+    const workItemByOwnerRepo = vi.fn().mockResolvedValue(item)
+    const workItem = vi.fn()
+
+    await expect(
+      lookupSmartGitHubSubmitItem({
+        repoId: 'repo-1',
+        repoPath: '/repo',
+        issueSourcePreference: 'upstream',
+        intent: {
+          kind: 'link',
+          owner: 'fork',
+          repo: 'orca',
+          number: 2049,
+          type: 'issue'
+        },
+        workItem,
+        workItemByOwnerRepo
+      })
+    ).resolves.toEqual(item)
+  })
+
   it('scopes direct URL cache entries by repo path', async () => {
     const intent = {
       kind: 'link' as const,
@@ -175,6 +243,96 @@ describe('lookupSmartGitHubSubmitItem', () => {
     ).resolves.toEqual(firstItem)
     expect(workItemByOwnerRepo).toHaveBeenCalledTimes(2)
     expect(workItem).not.toHaveBeenCalled()
+  })
+
+  it('scopes hash lookup cache entries by issue source preference', async () => {
+    const upstreamItem = {
+      id: 'issue-2049-upstream',
+      type: 'issue' as const,
+      number: 2049,
+      title: 'Upstream issue',
+      state: 'open' as const,
+      url: 'https://github.com/upstream/orca/issues/2049',
+      labels: [],
+      updatedAt: '2026-05-26T00:00:00.000Z',
+      author: 'octocat',
+      repoId: 'repo-1',
+      issueSourcePreference: 'upstream' as const
+    }
+    const originItem = {
+      ...upstreamItem,
+      id: 'issue-2049-origin',
+      title: 'Origin issue',
+      url: 'https://github.com/origin/orca/issues/2049',
+      issueSourcePreference: 'origin' as const
+    }
+    const workItem = vi.fn().mockResolvedValueOnce(upstreamItem).mockResolvedValueOnce(originItem)
+    const workItemByOwnerRepo = vi.fn()
+
+    await expect(
+      lookupSmartGitHubSubmitItem({
+        repoId: 'repo-1',
+        repoPath: '/repo',
+        issueSourcePreference: 'upstream',
+        intent: { kind: 'hash-number', number: 2049 },
+        workItem,
+        workItemByOwnerRepo
+      })
+    ).resolves.toEqual(upstreamItem)
+    await expect(
+      lookupSmartGitHubSubmitItem({
+        repoId: 'repo-1',
+        repoPath: '/repo',
+        issueSourcePreference: 'origin',
+        intent: { kind: 'hash-number', number: 2049 },
+        workItem,
+        workItemByOwnerRepo
+      })
+    ).resolves.toEqual(originItem)
+    await expect(
+      lookupSmartGitHubSubmitItem({
+        repoId: 'repo-1',
+        repoPath: '/repo',
+        issueSourcePreference: 'upstream',
+        intent: { kind: 'hash-number', number: 2049 },
+        workItem,
+        workItemByOwnerRepo
+      })
+    ).resolves.toEqual(upstreamItem)
+
+    expect(workItem).toHaveBeenCalledTimes(2)
+    expect(workItemByOwnerRepo).not.toHaveBeenCalled()
+  })
+
+  it('stamps hash lookup issue results with the source used for lookup', async () => {
+    const item = {
+      id: 'issue-2049',
+      type: 'issue' as const,
+      number: 2049,
+      title: 'Origin issue',
+      state: 'open' as const,
+      url: 'https://github.com/origin/orca/issues/2049',
+      labels: [],
+      updatedAt: '2026-05-26T00:00:00.000Z',
+      author: 'octocat',
+      repoId: 'repo-1'
+    }
+    const workItem = vi.fn().mockResolvedValue(item)
+    const workItemByOwnerRepo = vi.fn()
+
+    await expect(
+      lookupSmartGitHubSubmitItem({
+        repoId: 'repo-1',
+        repoPath: '/repo',
+        issueSourcePreference: 'origin',
+        intent: { kind: 'hash-number', number: 2049 },
+        workItem,
+        workItemByOwnerRepo
+      })
+    ).resolves.toMatchObject({
+      ...item,
+      issueSourcePreference: 'origin'
+    })
   })
 
   it('evicts rejected direct URL lookups so immediate retries can recover', async () => {
@@ -270,16 +428,19 @@ describe('getSmartGitHubSubmitResolution', () => {
         type: 'pr',
         number: 2049,
         title: 'Fix smart resolution delay',
-        url: 'https://github.com/stablyai/orca/pull/2049'
+        url: 'https://github.com/stablyai/orca/pull/2049',
+        repoId: 'repo-1'
       })
     ).toEqual({
       workspaceName: 'fix-smart-resolution-delay',
       displayName: 'Fix smart resolution delay',
       linkedWorkItem: {
         type: 'pr',
+        provider: 'github',
         number: 2049,
         title: 'Fix smart resolution delay',
-        url: 'https://github.com/stablyai/orca/pull/2049'
+        url: 'https://github.com/stablyai/orca/pull/2049',
+        repoId: 'repo-1'
       },
       linkedIssueNumber: null,
       linkedPR: 2049
@@ -291,11 +452,18 @@ describe('getSmartGitHubSubmitResolution', () => {
       type: 'issue',
       number: 2050,
       title: 'Issue #2050: Make create feel instant',
-      url: 'https://github.com/stablyai/orca/issues/2050'
+      url: 'https://github.com/stablyai/orca/issues/2050',
+      repoId: 'repo-1',
+      issueSourcePreference: 'upstream'
     })
 
     expect(resolution.workspaceName).toBe('make-create-feel-instant')
     expect(resolution.displayName).toBe('Make create feel instant')
+    expect(resolution.linkedWorkItem).toMatchObject({
+      provider: 'github',
+      repoId: 'repo-1',
+      issueSourcePreference: 'upstream'
+    })
     expect(resolution.linkedIssueNumber).toBe(2050)
     expect(resolution.linkedPR).toBeNull()
   })

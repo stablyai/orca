@@ -646,6 +646,7 @@ export type UISlice = {
       title: string
       url: string
       linearIdentifier?: string
+      jiraIdentifier?: string
     } | null
     /** Why: starting from a task must preserve where provider data came from
      *  separately from the host selected to run the workspace. */

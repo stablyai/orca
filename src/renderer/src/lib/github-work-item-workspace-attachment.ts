@@ -1,4 +1,8 @@
-import type { GitHubWorkItem, Worktree } from '../../../shared/types'
+import type {
+  GitHubWorkItem,
+  PersistedIssueSourcePreference,
+  Worktree
+} from '../../../shared/types'
 import { basename } from './path'
 
 type GitHubWorkItemType = GitHubWorkItem['type']
@@ -7,7 +11,8 @@ export function findGithubWorkItemWorkspaceAttachment(
   worktrees: readonly Worktree[],
   repoId: string | null | undefined,
   type: GitHubWorkItemType,
-  number: number
+  number: number,
+  issueSourcePreference?: PersistedIssueSourcePreference | null
 ): Worktree | null {
   if (!repoId) {
     return null
@@ -19,7 +24,19 @@ export function findGithubWorkItemWorkspaceAttachment(
         return false
       }
 
-      return type === 'pr' ? worktree.linkedPR === number : worktree.linkedIssue === number
+      if (type === 'pr') {
+        return worktree.linkedPR === number
+      }
+
+      if (worktree.linkedIssue !== number) {
+        return false
+      }
+
+      // Why: issue numbers can overlap between origin/upstream repos. When a
+      // persisted source preference exists, keep attachment matching source-bound.
+      return issueSourcePreference
+        ? worktree.linkedIssueSourcePreference === issueSourcePreference
+        : true
     }) ?? null
   )
 }
@@ -35,9 +52,16 @@ export function findGithubPrWorkspaceAttachment(
 export function findGithubIssueWorkspaceAttachment(
   worktrees: readonly Worktree[],
   repoId: string | null | undefined,
-  issueNumber: number
+  issueNumber: number,
+  issueSourcePreference?: PersistedIssueSourcePreference | null
 ): Worktree | null {
-  return findGithubWorkItemWorkspaceAttachment(worktrees, repoId, 'issue', issueNumber)
+  return findGithubWorkItemWorkspaceAttachment(
+    worktrees,
+    repoId,
+    'issue',
+    issueNumber,
+    issueSourcePreference
+  )
 }
 
 export function getGithubWorkItemWorkspaceAttachmentLabel(worktree: Worktree): string {

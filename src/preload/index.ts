@@ -986,6 +986,7 @@ const api = {
       sourceContext?: TaskSourceContext | null
       number: number
       type?: 'issue' | 'pr'
+      issueSourcePreference?: 'origin' | 'upstream' | 'auto'
     }): Promise<unknown> => ipcRenderer.invoke('gh:workItem', args),
 
     workItemByOwnerRepo: (args: {
@@ -1003,6 +1004,7 @@ const api = {
       sourceContext?: TaskSourceContext | null
       number: number
       type?: 'issue' | 'pr'
+      issueSourcePreference?: 'origin' | 'upstream' | 'auto'
     }): Promise<unknown> => ipcRenderer.invoke('gh:workItemDetails', args),
 
     prFileContents: (args: {
@@ -1165,6 +1167,7 @@ const api = {
       repoPath: string
       repoId?: string
       sourceContext?: TaskSourceContext | null
+      issueSourcePreference?: 'origin' | 'upstream' | 'auto'
       number: number
       updates: unknown
     }): Promise<{ ok: true } | { ok: false; error: string }> =>
@@ -1178,6 +1181,7 @@ const api = {
       body: string
       type?: 'issue' | 'pr'
       prRepo?: { owner: string; repo: string } | null
+      issueSourcePreference?: 'origin' | 'upstream' | 'auto'
     }): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addIssueComment', args),
 
     addPRReviewCommentReply: (args: {

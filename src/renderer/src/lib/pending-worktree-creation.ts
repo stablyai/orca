@@ -1,5 +1,6 @@
 import type {
   CreateSparseCheckoutRequest,
+  GitLabProjectRef,
   GitPushTarget,
   SetupDecision,
   TuiAgent,
@@ -46,16 +47,20 @@ export type WorktreeCreationRequest = {
   sparseCheckout?: CreateSparseCheckoutRequest
   telemetrySource?: WorkspaceCreateTelemetrySource
   linkedIssue?: number
+  linkedIssueSourcePreference?: 'origin' | 'upstream' | null
   linkedPR?: number
   pushTarget?: GitPushTarget
   agent: TuiAgent | null
   linkedLinearIssue?: string
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
+  linkedJiraIssue?: string | null
+  linkedJiraIssueSiteId?: string | null
   branchNameOverride?: string
   workspaceStatus?: WorkspaceStatus
   linkedGitLabMR?: number
   linkedGitLabIssue?: number
+  linkedGitLabProjectRef?: GitLabProjectRef | null
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null

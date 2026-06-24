@@ -1,6 +1,17 @@
 import type { FolderWorkspace, FolderWorkspaceLinkedTask, ProjectGroup } from './types'
 import { isTuiAgent } from './tui-agent-config'
 
+function normalizeGitLabProjectRef(
+  value: FolderWorkspaceLinkedTask['gitLabProjectRef'] | undefined
+): FolderWorkspaceLinkedTask['gitLabProjectRef'] {
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+  const host = typeof value.host === 'string' ? value.host.trim() : ''
+  const path = typeof value.path === 'string' ? value.path.trim() : ''
+  return host && path ? { host, path } : undefined
+}
+
 export function normalizeFolderWorkspaceName(
   name: string | null | undefined,
   fallback = 'Untitled workspace'
@@ -16,6 +27,7 @@ export function normalizeFolderWorkspaceLinkedTask(
     return null
   }
   const raw = value as Partial<FolderWorkspaceLinkedTask>
+  const gitLabProjectRef = normalizeGitLabProjectRef(raw.gitLabProjectRef)
   if (
     raw.provider !== 'github' &&
     raw.provider !== 'gitlab' &&
@@ -48,6 +60,15 @@ export function normalizeFolderWorkspaceLinkedTask(
       : {}),
     ...(typeof raw.jiraIdentifier === 'string' && raw.jiraIdentifier.trim().length > 0
       ? { jiraIdentifier: raw.jiraIdentifier.trim() }
+      : {}),
+    ...(typeof raw.jiraSiteId === 'string' && raw.jiraSiteId.trim().length > 0
+      ? { jiraSiteId: raw.jiraSiteId.trim() }
+      : {}),
+    ...(raw.provider === 'gitlab' && gitLabProjectRef ? { gitLabProjectRef } : {}),
+    ...(raw.provider === 'github' &&
+    raw.type === 'issue' &&
+    (raw.issueSourcePreference === 'origin' || raw.issueSourcePreference === 'upstream')
+      ? { issueSourcePreference: raw.issueSourcePreference }
       : {}),
     ...(typeof raw.repoId === 'string' && raw.repoId.trim().length > 0
       ? { repoId: raw.repoId.trim() }

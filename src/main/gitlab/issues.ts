@@ -19,6 +19,7 @@ import { glabExecFileAsync, acquire, release, getIssueProjectRef, resolveIssueSo
 // empty listing from a failed fetch.
 export type IssueListResult = {
   items: GitLabIssueInfo[]
+  projectRef?: ProjectRef
   error?: ClassifiedError
 }
 
@@ -119,7 +120,8 @@ export async function listIssues(
       // (MRs are a separate endpoint), so no equivalent of GitHub's
       // pull_request filter is needed here.
       return {
-        items: data.map((d) => mapGitLabIssueInfo(d as Parameters<typeof mapGitLabIssueInfo>[0]))
+        items: data.map((d) => mapGitLabIssueInfo(d as Parameters<typeof mapGitLabIssueInfo>[0])),
+        projectRef
       }
     }
     // Fallback — let glab infer project from cwd. glab issue list defaults

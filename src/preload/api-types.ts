@@ -1175,6 +1175,7 @@ export type PreloadApi = {
       sourceContext?: TaskSourceContext | null
       number: number
       type?: 'issue' | 'pr'
+      issueSourcePreference?: 'origin' | 'upstream' | 'auto'
     }) => Promise<Omit<GitHubWorkItem, 'repoId'> | null>
     workItemByOwnerRepo: (args: {
       repoPath: string
@@ -1188,6 +1189,7 @@ export type PreloadApi = {
       args: GitHubRepoSelectorArgs & {
         number: number
         type?: 'issue' | 'pr'
+        issueSourcePreference?: 'origin' | 'upstream' | 'auto'
       }
     ) => Promise<GitHubWorkItemDetails | null>
     prFileContents: (
@@ -1313,6 +1315,7 @@ export type PreloadApi = {
     ) => Promise<{ ok: true } | { ok: false; error: string }>
     updateIssue: (
       args: GitHubRepoSelectorArgs & {
+        issueSourcePreference?: 'origin' | 'upstream' | 'auto'
         number: number
         updates: GitHubIssueUpdate
       }
@@ -1328,6 +1331,7 @@ export type PreloadApi = {
          *  evicting an unrelated PR/issue that happens to share the number. */
         type?: 'issue' | 'pr'
         prRepo?: GitHubOwnerRepo | null
+        issueSourcePreference?: 'origin' | 'upstream' | 'auto'
       }
     ) => Promise<GitHubCommentResult>
     addPRReviewCommentReply: (
@@ -1477,6 +1481,7 @@ export type PreloadApi = {
     updateIssue: (
       args: GitLabRepoSelectorArgs & {
         number: number
+        projectRef?: GitLabProjectRef | null
         updates: GitLabIssueUpdate
       }
     ) => Promise<{ ok: true } | { ok: false; error: string }>
@@ -1484,6 +1489,7 @@ export type PreloadApi = {
       args: GitLabRepoSelectorArgs & {
         number: number
         body: string
+        projectRef?: GitLabProjectRef | null
       }
     ) => Promise<GitLabCommentResult>
     listLabels: (args: GitLabRepoSelectorArgs) => Promise<string[]>

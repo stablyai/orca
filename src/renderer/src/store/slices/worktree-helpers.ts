@@ -6,6 +6,7 @@ import type {
   DetectedWorktreeListResult,
   ForceDeleteWorktreeBranchResult,
   GitPushTarget,
+  GitLabProjectRef,
   RemoveWorktreeResult,
   SetupDecision,
   TuiAgent,
@@ -150,6 +151,10 @@ export type WorktreeSlice = {
     linkedAzureDevOpsPR?: number | null,
     linkedGiteaPR?: number | null,
     compareBaseRef?: string,
+    linkedJiraIssue?: string | null,
+    linkedJiraIssueSiteId?: string | null,
+    linkedIssueSourcePreference?: CreateWorktreeArgs['linkedIssueSourcePreference'],
+    linkedGitLabProjectRef?: GitLabProjectRef | null,
     // Why: reserved for automation-dispatch flows so host-side provenance can
     // be minted securely; regular create callers should omit this.
     options?: { automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest'] }

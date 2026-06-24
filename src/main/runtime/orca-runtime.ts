@@ -1255,12 +1255,16 @@ function mergeRuntimeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     displayName: meta.displayName || repo.displayName,
     comment: meta.comment || '',
     linkedIssue: meta.linkedIssue ?? null,
+    linkedIssueSourcePreference: meta.linkedIssueSourcePreference ?? null,
     linkedPR: meta.linkedPR ?? null,
     linkedLinearIssue: meta.linkedLinearIssue ?? null,
     linkedLinearIssueWorkspaceId: meta.linkedLinearIssueWorkspaceId ?? null,
     linkedLinearIssueOrganizationUrlKey: meta.linkedLinearIssueOrganizationUrlKey ?? null,
+    linkedJiraIssue: meta.linkedJiraIssue ?? null,
+    linkedJiraIssueSiteId: meta.linkedJiraIssueSiteId ?? null,
     linkedGitLabMR: meta.linkedGitLabMR ?? null,
     linkedGitLabIssue: meta.linkedGitLabIssue ?? null,
+    linkedGitLabProjectRef: meta.linkedGitLabProjectRef ?? null,
     linkedBitbucketPR: meta.linkedBitbucketPR ?? null,
     linkedAzureDevOpsPR: meta.linkedAzureDevOpsPR ?? null,
     linkedGiteaPR: meta.linkedGiteaPR ?? null,
@@ -8536,10 +8540,14 @@ export class OrcaRuntimeService {
         sortOrder: meta?.sortOrder ?? 0,
         ...(meta?.manualOrder !== undefined ? { manualOrder: meta.manualOrder } : {}),
         linkedIssue: worktree.linkedIssue,
+        linkedIssueSourcePreference: meta?.linkedIssueSourcePreference ?? null,
         linkedPR,
         linkedLinearIssue: meta?.linkedLinearIssue ?? null,
+        linkedJiraIssue: meta?.linkedJiraIssue ?? null,
+        linkedJiraIssueSiteId: meta?.linkedJiraIssueSiteId ?? null,
         linkedGitLabMR: meta?.linkedGitLabMR ?? null,
         linkedGitLabIssue: meta?.linkedGitLabIssue ?? null,
+        linkedGitLabProjectRef: meta?.linkedGitLabProjectRef ?? null,
         comment: meta?.comment ?? '',
         isPinned: meta?.isPinned ?? false,
         isActive: false,
@@ -8581,10 +8589,14 @@ export class OrcaRuntimeService {
         sortOrder: worktree.sortOrder ?? 0,
         ...(worktree.manualOrder !== undefined ? { manualOrder: worktree.manualOrder } : {}),
         linkedIssue: worktree.linkedIssue ?? null,
+        linkedIssueSourcePreference: worktree.linkedIssueSourcePreference ?? null,
         linkedPR: null,
         linkedLinearIssue: worktree.linkedLinearIssue ?? null,
+        linkedJiraIssue: worktree.linkedJiraIssue ?? null,
+        linkedJiraIssueSiteId: worktree.linkedJiraIssueSiteId ?? null,
         linkedGitLabMR: worktree.linkedGitLabMR ?? null,
         linkedGitLabIssue: worktree.linkedGitLabIssue ?? null,
+        linkedGitLabProjectRef: worktree.linkedGitLabProjectRef ?? null,
         comment: worktree.comment,
         isPinned: worktree.isPinned,
         isActive: false,
@@ -9961,7 +9973,8 @@ export class OrcaRuntimeService {
   async getRepoWorkItem(
     repoSelector: string,
     number: number,
-    type?: 'issue' | 'pr'
+    type?: 'issue' | 'pr',
+    issueSourcePreference?: Repo['issueSourcePreference']
   ): Promise<Awaited<ReturnType<typeof getWorkItem>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
     return getWorkItem(
@@ -9969,7 +9982,8 @@ export class OrcaRuntimeService {
       number,
       type,
       repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
+      this.getLocalGitExecutionOptionArgs(repo)[0] ?? {},
+      issueSourcePreference ?? repo.issueSourcePreference
     )
   }
 
@@ -9993,7 +10007,8 @@ export class OrcaRuntimeService {
   async getRepoWorkItemDetails(
     repoSelector: string,
     number: number,
-    type?: 'issue' | 'pr'
+    type?: 'issue' | 'pr',
+    issueSourcePreference?: Repo['issueSourcePreference']
   ): Promise<Awaited<ReturnType<typeof getWorkItemDetails>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
     return getWorkItemDetails(
@@ -10001,7 +10016,8 @@ export class OrcaRuntimeService {
       number,
       type,
       repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
+      this.getLocalGitExecutionOptionArgs(repo)[0] ?? {},
+      issueSourcePreference ?? repo.issueSourcePreference
     )
   }
 
@@ -10236,6 +10252,7 @@ export class OrcaRuntimeService {
       labels: issue.labels,
       updatedAt: issue.updatedAt ?? '',
       author: issue.author ?? null,
+      ...(result.projectRef ? { projectRef: result.projectRef } : {}),
       repoId: repo.id
     }))
     return { items, ...(result.error ? { error: result.error } : {}) }
@@ -10814,7 +10831,8 @@ export class OrcaRuntimeService {
   async updateRepoIssue(
     repoSelector: string,
     number: number,
-    updates: GitHubIssueUpdate
+    updates: GitHubIssueUpdate,
+    issueSourcePreference?: Repo['issueSourcePreference']
   ): Promise<Awaited<ReturnType<typeof updateIssue>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
     return updateIssue(
@@ -10822,7 +10840,8 @@ export class OrcaRuntimeService {
       number,
       updates,
       repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
+      this.getLocalGitExecutionOptionArgs(repo)[0] ?? {},
+      issueSourcePreference ?? repo.issueSourcePreference
     )
   }
 
@@ -10830,7 +10849,8 @@ export class OrcaRuntimeService {
     repoSelector: string,
     number: number,
     body: string,
-    prRepo?: GitHubOwnerRepo | null
+    prRepo?: GitHubOwnerRepo | null,
+    issueSourcePreference?: Repo['issueSourcePreference']
   ): Promise<Awaited<ReturnType<typeof addIssueComment>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
     return addIssueComment(
@@ -10839,7 +10859,8 @@ export class OrcaRuntimeService {
       body,
       repo.connectionId ?? null,
       prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
+      this.getLocalGitExecutionOptionArgs(repo)[0] ?? {},
+      issueSourcePreference ?? repo.issueSourcePreference
     )
   }
 
@@ -11841,12 +11862,16 @@ export class OrcaRuntimeService {
     compareBaseRef?: string
     branchNameOverride?: string
     linkedIssue?: number | null
+    linkedIssueSourcePreference?: 'origin' | 'upstream' | null
     linkedPR?: number | null
     linkedLinearIssue?: string
     linkedLinearIssueWorkspaceId?: string | null
     linkedLinearIssueOrganizationUrlKey?: string | null
+    linkedJiraIssue?: string | null
+    linkedJiraIssueSiteId?: string | null
     linkedGitLabMR?: number | null
     linkedGitLabIssue?: number | null
+    linkedGitLabProjectRef?: GitLabProjectRef | null
     linkedBitbucketPR?: number | null
     linkedAzureDevOpsPR?: number | null
     linkedGiteaPR?: number | null
@@ -11926,6 +11951,9 @@ export class OrcaRuntimeService {
         },
         ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
         ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
+        ...(args.linkedIssueSourcePreference !== undefined
+          ? { linkedIssueSourcePreference: args.linkedIssueSourcePreference }
+          : {}),
         ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
         ...(args.linkedLinearIssue !== undefined
           ? { linkedLinearIssue: args.linkedLinearIssue }
@@ -11936,8 +11964,15 @@ export class OrcaRuntimeService {
         ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
           ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
           : {}),
+        ...(args.linkedJiraIssue !== undefined ? { linkedJiraIssue: args.linkedJiraIssue } : {}),
+        ...(args.linkedJiraIssueSiteId !== undefined
+          ? { linkedJiraIssueSiteId: args.linkedJiraIssueSiteId }
+          : {}),
         ...(args.linkedGitLabIssue !== undefined
           ? { linkedGitLabIssue: args.linkedGitLabIssue }
+          : {}),
+        ...(args.linkedGitLabProjectRef !== undefined
+          ? { linkedGitLabProjectRef: args.linkedGitLabProjectRef }
           : {}),
         ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
         ...(args.linkedBitbucketPR !== undefined
@@ -12423,6 +12458,9 @@ export class OrcaRuntimeService {
           }
         : {}),
       ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
+      ...(args.linkedIssueSourcePreference !== undefined
+        ? { linkedIssueSourcePreference: args.linkedIssueSourcePreference }
+        : {}),
       ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
       ...(args.linkedLinearIssue !== undefined
         ? { linkedLinearIssue: args.linkedLinearIssue }
@@ -12433,8 +12471,15 @@ export class OrcaRuntimeService {
       ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
         ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
         : {}),
+      ...(args.linkedJiraIssue !== undefined ? { linkedJiraIssue: args.linkedJiraIssue } : {}),
+      ...(args.linkedJiraIssueSiteId !== undefined
+        ? { linkedJiraIssueSiteId: args.linkedJiraIssueSiteId }
+        : {}),
       ...(args.linkedGitLabIssue !== undefined
         ? { linkedGitLabIssue: args.linkedGitLabIssue }
+        : {}),
+      ...(args.linkedGitLabProjectRef !== undefined
+        ? { linkedGitLabProjectRef: args.linkedGitLabProjectRef }
         : {}),
       ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
       ...(args.linkedBitbucketPR !== undefined
@@ -12710,12 +12755,16 @@ export class OrcaRuntimeService {
       compareBaseRef?: string
       branchNameOverride?: string
       linkedIssue?: number | null
+      linkedIssueSourcePreference?: 'origin' | 'upstream' | null
       linkedPR?: number | null
       linkedLinearIssue?: string
       linkedLinearIssueWorkspaceId?: string | null
       linkedLinearIssueOrganizationUrlKey?: string | null
+      linkedJiraIssue?: string | null
+      linkedJiraIssueSiteId?: string | null
       linkedGitLabMR?: number | null
       linkedGitLabIssue?: number | null
+      linkedGitLabProjectRef?: GitLabProjectRef | null
       linkedBitbucketPR?: number | null
       linkedAzureDevOpsPR?: number | null
       linkedGiteaPR?: number | null
@@ -12760,6 +12809,9 @@ export class OrcaRuntimeService {
         ...(!args.runHooks && args.setupDecision ? { setupDecision: args.setupDecision } : {}),
         ...(args.sparseCheckout ? { sparseCheckout: args.sparseCheckout } : {}),
         ...(args.linkedIssue != null ? { linkedIssue: args.linkedIssue } : {}),
+        ...(args.linkedIssueSourcePreference
+          ? { linkedIssueSourcePreference: args.linkedIssueSourcePreference }
+          : {}),
         ...(args.linkedPR != null ? { linkedPR: args.linkedPR } : {}),
         ...(args.linkedLinearIssue ? { linkedLinearIssue: args.linkedLinearIssue } : {}),
         ...(args.linkedLinearIssueWorkspaceId !== undefined
@@ -12768,8 +12820,15 @@ export class OrcaRuntimeService {
         ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
           ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
           : {}),
+        ...(args.linkedJiraIssue ? { linkedJiraIssue: args.linkedJiraIssue } : {}),
+        ...(args.linkedJiraIssueSiteId
+          ? { linkedJiraIssueSiteId: args.linkedJiraIssueSiteId }
+          : {}),
         ...(args.linkedGitLabMR != null ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
         ...(args.linkedGitLabIssue != null ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),
+        ...(args.linkedGitLabProjectRef
+          ? { linkedGitLabProjectRef: args.linkedGitLabProjectRef }
+          : {}),
         ...(args.linkedBitbucketPR != null ? { linkedBitbucketPR: args.linkedBitbucketPR } : {}),
         ...(args.linkedAzureDevOpsPR != null
           ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }

@@ -9,7 +9,6 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../../shared/tui-agent-selection'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { CLIENT_PLATFORM, getWorkspaceIntentName, getWorkspaceSeedName } from '@/lib/new-workspace'
@@ -40,10 +39,8 @@ import {
   getLocalProjectExecutionRuntimeContext,
   getLocalRepoProjectExecutionRuntimeContext
 } from '@/lib/local-preflight-context'
-
-// Why: bracketed paste markers and ready-wait grace timing live in
-// agent-paste-draft.ts so the new-workspace and "Use" flows share one
-// definition of "type into the agent's input as a non-submitted draft".
+import { getLinkedIssueSourcePreference } from '@/lib/launch-work-item-linked-issue-source'
+import { markDirectLaunchAgentTrusted } from '@/lib/launch-work-item-agent-trust'
 
 /**
  * "Use" flow: create the workspace, activate it, launch the default agent,
@@ -93,6 +90,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     })
   const shell = preflightLaunchPlatform === 'win32' ? 'powershell' : 'posix'
   const agentArgsPlan = planAgentCliArgsSuffix(agentArgs, shell)
+  const linkedIssueSourcePreference = getLinkedIssueSourcePreference(item, repo)
   if (!agentArgsPlan.ok) {
     // Why: direct launches may create a worktree before the agent startup plan
     // is built; reject malformed saved args before touching user workspaces.
@@ -185,7 +183,11 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       undefined,
       undefined,
       undefined,
-      resolvedCompareBaseRef
+      resolvedCompareBaseRef,
+      item.jiraIdentifier,
+      item.jiraSiteId,
+      linkedIssueSourcePreference,
+      item.gitLabProjectRef
     )
     worktreeId = result.worktree.id
     const worktreePath = result.worktree.path
@@ -245,28 +247,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         // Non-critical: activation still has the explicit startup below.
       })
     }
-    // Why: agents that gate first-launch behind a "Do you trust this folder?"
-    // menu (cursor-agent, copilot) consume the bracketed paste as menu input.
-    // Pre-write the same trust artifact those CLIs write after the user
-    // accepts so the menu never fires. Best-effort — main swallows errors,
-    // and we guard the IPC presence so a stale preload bundle (which can
-    // ship a renderer that's ahead of the loaded preload) doesn't crash the
-    // launch with "Cannot read properties of undefined".
-    if (effectiveAgent && worktreePath && window.api.agentTrust?.markTrusted) {
-      const preflight = TUI_AGENT_CONFIG[effectiveAgent].preflightTrust
-      if (preflight) {
-        try {
-          await window.api.agentTrust.markTrusted({
-            preset: preflight,
-            workspacePath: worktreePath,
-            ...(repo.connectionId ? { connectionId: repo.connectionId } : {})
-          })
-        } catch {
-          // Best-effort: continue with launch even if the trust write
-          // throws. The user can dismiss the trust menu manually.
-        }
-      }
-    }
+    await markDirectLaunchAgentTrusted(effectiveAgent, worktreePath, repoConnectionId)
 
     // Why: draft launches prefer a native prefill flag when the CLI exposes one;
     // submit-after-ready launches must avoid native drafts so Orca can send the

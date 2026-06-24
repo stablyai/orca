@@ -4,12 +4,14 @@ import type * as GhUtils from './gh-utils'
 const {
   ghExecFileAsyncMock,
   getIssueOwnerRepoMock,
+  getOwnerRepoForRemoteMock,
   resolveIssueSourceMock,
   acquireMock,
   releaseMock
 } = vi.hoisted(() => ({
   ghExecFileAsyncMock: vi.fn(),
   getIssueOwnerRepoMock: vi.fn(),
+  getOwnerRepoForRemoteMock: vi.fn(),
   resolveIssueSourceMock: vi.fn(),
   acquireMock: vi.fn(),
   releaseMock: vi.fn()
@@ -21,6 +23,7 @@ vi.mock('./gh-utils', async () => {
     ...actual,
     ghExecFileAsync: ghExecFileAsyncMock,
     getIssueOwnerRepo: getIssueOwnerRepoMock,
+    getOwnerRepoForRemote: getOwnerRepoForRemoteMock,
     resolveIssueSource: resolveIssueSourceMock,
     acquire: acquireMock,
     release: releaseMock
@@ -41,6 +44,7 @@ describe('issue source operations', () => {
   beforeEach(() => {
     ghExecFileAsyncMock.mockReset()
     getIssueOwnerRepoMock.mockReset()
+    getOwnerRepoForRemoteMock.mockReset()
     resolveIssueSourceMock.mockReset()
     acquireMock.mockReset()
     releaseMock.mockReset()
@@ -153,6 +157,17 @@ describe('issue source operations', () => {
       ],
       { cwd: '/repo-root' }
     )
+  })
+
+  it('does not fall back to gh issue list when an explicit issue source cannot resolve', async () => {
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce(null)
+
+    const result = await listIssues('/repo-root', 5, 'upstream')
+
+    expect(result.items).toEqual([])
+    expect(result.error?.type).toBe('unknown')
+    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith('/repo-root', 'upstream', undefined, {})
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
   it('surfaces a classified permission_denied error instead of collapsing to empty', async () => {
@@ -298,5 +313,40 @@ describe('issue source operations', () => {
       ['issue', 'reopen', '924', '--repo', 'stablyai/orca'],
       { cwd: '/repo-root' }
     )
+  })
+
+  it('does not fall back to origin when updating an explicit upstream issue', async () => {
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce(null)
+    resolveIssueSourceMock.mockResolvedValueOnce({
+      source: { owner: 'origin-owner', repo: 'origin-repo' },
+      fellBack: true
+    })
+
+    await expect(
+      updateIssue('/repo-root', 924, { body: 'Updated body' }, null, {}, 'upstream')
+    ).resolves.toEqual({
+      ok: false,
+      error: 'Could not resolve GitHub owner/repo for this repository'
+    })
+
+    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith('/repo-root', 'upstream', null, {})
+    expect(resolveIssueSourceMock).not.toHaveBeenCalled()
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('does not fall back to origin when commenting on an explicit upstream issue', async () => {
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce(null)
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'origin-owner', repo: 'origin-repo' })
+
+    await expect(
+      addIssueComment('/repo-root', 924, 'Comment', null, null, {}, 'upstream')
+    ).resolves.toEqual({
+      ok: false,
+      error: 'Could not resolve GitHub owner/repo for this repository'
+    })
+
+    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith('/repo-root', 'upstream', null, {})
+    expect(getIssueOwnerRepoMock).not.toHaveBeenCalled()
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 })

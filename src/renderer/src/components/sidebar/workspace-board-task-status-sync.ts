@@ -5,14 +5,27 @@ import {
   type LinearMutationResult,
   type RuntimeLinearSettings
 } from '@/runtime/runtime-linear-client'
+import { githubUpdateIssue } from '@/runtime/runtime-github-issue-client'
+import { gitlabUpdateIssue } from '@/runtime/runtime-gitlab-issue-client'
+import { jiraGetIssue, jiraListTransitions, jiraUpdateIssue } from '@/runtime/runtime-jira-client'
 import type {
   LinearIssue,
   LinearWorkflowState,
+  Repo,
   WorkspaceStatus,
   WorkspaceStatusDefinition,
   Worktree
 } from '../../../../shared/types'
 import { getWorkspaceStatus } from '../../../../shared/workspace-statuses'
+import { syncNonLinearWorktreeStatus } from './workspace-board-nonlinear-task-status-sync'
+import {
+  createTaskStatusSyncResult,
+  markTaskStatusSyncFailed,
+  markTaskStatusSyncSkipped,
+  mergeTaskStatusSyncResult
+} from './workspace-board-task-status-sync-result'
+
+type TaskStatusSyncProvider = 'Linear' | 'GitHub' | 'GitLab' | 'Jira'
 
 export type WorkspaceBoardTaskStatusSyncResult = {
   updated: number
@@ -22,17 +35,43 @@ export type WorkspaceBoardTaskStatusSyncResult = {
 }
 
 export type WorkspaceBoardTaskStatusSyncMessage =
-  | { kind: 'issue-read-failed'; issueIdentifier: string }
-  | { kind: 'missing-workflow-state'; statusLabel: string }
-  | { kind: 'ambiguous-workflow-state'; statusLabel: string }
-  | { kind: 'update-failed'; issueIdentifier: string; detail?: string }
-  | { kind: 'provider-error'; issueIdentifier: string; detail?: string }
+  | { kind: 'issue-read-failed'; provider: TaskStatusSyncProvider; issueIdentifier: string }
+  | { kind: 'linked-issue-missing'; provider: TaskStatusSyncProvider }
+  | {
+      kind: 'missing-provider-status-mapping'
+      provider: TaskStatusSyncProvider
+      statusLabel: string
+    }
+  | {
+      kind: 'ambiguous-provider-status-mapping'
+      provider: TaskStatusSyncProvider
+      statusLabel: string
+    }
+  | { kind: 'repo-context-missing'; provider: 'GitHub' | 'GitLab'; issueNumber: number }
+  | { kind: 'unsupported-linked-item-kind'; provider: 'GitHub'; issueNumber: number }
+  | {
+      kind: 'update-failed'
+      provider: TaskStatusSyncProvider
+      issueIdentifier: string
+      detail?: string
+    }
+  | {
+      kind: 'provider-error'
+      provider: TaskStatusSyncProvider
+      issueIdentifier: string
+      detail?: string
+    }
   | { kind: 'unexpected-error'; detail?: string }
 
-type WorkspaceBoardTaskStatusSyncDependencies = {
+export type WorkspaceBoardTaskStatusSyncDependencies = {
   getIssue: typeof linearGetIssue
   teamStates: typeof linearTeamStates
   updateIssue: typeof linearUpdateIssue
+  updateGitHubIssue: typeof githubUpdateIssue
+  updateGitLabIssue: typeof gitlabUpdateIssue
+  getJiraIssue: typeof jiraGetIssue
+  listJiraTransitions: typeof jiraListTransitions
+  updateJiraIssue: typeof jiraUpdateIssue
 }
 
 export type SyncWorkspaceBoardTaskStatusesArgs = {
@@ -40,8 +79,22 @@ export type SyncWorkspaceBoardTaskStatusesArgs = {
   targetStatus: WorkspaceStatusDefinition
   worktreesById: ReadonlyMap<
     string,
-    Pick<Worktree, 'linkedLinearIssue' | 'linkedLinearIssueWorkspaceId'>
+    Pick<
+      Worktree,
+      | 'repoId'
+      | 'sourceRepoId'
+      | 'linkedIssue'
+      | 'linkedIssueSourcePreference'
+      | 'linkedPR'
+      | 'linkedLinearIssue'
+      | 'linkedLinearIssueWorkspaceId'
+      | 'linkedJiraIssue'
+      | 'linkedJiraIssueSiteId'
+      | 'linkedGitLabIssue'
+      | 'linkedGitLabProjectRef'
+    >
   >
+  repoById?: ReadonlyMap<string, Pick<Repo, 'id' | 'path' | 'issueSourcePreference'>>
   settings?: RuntimeLinearSettings
   getSettingsForWorktree?: (worktreeId: string) => RuntimeLinearSettings
   getLatestWorkspaceStatus: (worktreeId: string) => WorkspaceStatus | null | undefined
@@ -80,7 +133,12 @@ export function getWorkspaceBoardTaskStatusSyncRequest(args: {
 const defaultDeps: WorkspaceBoardTaskStatusSyncDependencies = {
   getIssue: linearGetIssue,
   teamStates: linearTeamStates,
-  updateIssue: linearUpdateIssue
+  updateIssue: linearUpdateIssue,
+  updateGitHubIssue: githubUpdateIssue,
+  updateGitLabIssue: gitlabUpdateIssue,
+  getJiraIssue: jiraGetIssue,
+  listJiraTransitions: jiraListTransitions,
+  updateJiraIssue: jiraUpdateIssue
 }
 
 const worktreeSyncQueues = new Map<string, Promise<unknown>>()
@@ -97,57 +155,11 @@ function matchingWorkflowStates(
   return states.filter((state) => normalizeStateName(state.name) === targetName)
 }
 
-function getMessageKey(message: WorkspaceBoardTaskStatusSyncMessage): string {
-  return JSON.stringify(message)
-}
-
-function addMessage(
-  result: WorkspaceBoardTaskStatusSyncResult,
-  message: WorkspaceBoardTaskStatusSyncMessage
-): void {
-  const key = getMessageKey(message)
-  if (!result.messages.some((item) => getMessageKey(item) === key)) {
-    result.messages.push(message)
-  }
-}
-
-function skipped(
-  result: WorkspaceBoardTaskStatusSyncResult,
-  message?: WorkspaceBoardTaskStatusSyncMessage
-): WorkspaceBoardTaskStatusSyncResult {
-  result.skipped += 1
-  if (message) {
-    addMessage(result, message)
-  }
-  return result
-}
-
-function failed(
-  result: WorkspaceBoardTaskStatusSyncResult,
-  message: WorkspaceBoardTaskStatusSyncMessage
-): WorkspaceBoardTaskStatusSyncResult {
-  result.failed += 1
-  addMessage(result, message)
-  return result
-}
-
 function isAlreadyInState(issue: LinearIssue, workflowState: LinearWorkflowState): boolean {
   return (
     normalizeStateName(issue.state.name) === normalizeStateName(workflowState.name) &&
     issue.state.type === workflowState.type
   )
-}
-
-function mergeResult(
-  aggregate: WorkspaceBoardTaskStatusSyncResult,
-  item: WorkspaceBoardTaskStatusSyncResult
-): void {
-  aggregate.updated += item.updated
-  aggregate.skipped += item.skipped
-  aggregate.failed += item.failed
-  for (const message of item.messages) {
-    addMessage(aggregate, message)
-  }
 }
 
 async function enqueueWorktreeSync(
@@ -170,15 +182,10 @@ async function syncLinearWorktreeStatus(
   worktreeId: string,
   deps: WorkspaceBoardTaskStatusSyncDependencies
 ): Promise<WorkspaceBoardTaskStatusSyncResult> {
-  const result: WorkspaceBoardTaskStatusSyncResult = {
-    updated: 0,
-    skipped: 0,
-    failed: 0,
-    messages: []
-  }
+  const result = createTaskStatusSyncResult()
   const worktree = args.worktreesById.get(worktreeId)
   if (!worktree?.linkedLinearIssue) {
-    return skipped(result)
+    return markTaskStatusSyncSkipped(result)
   }
 
   const settings = args.getSettingsForWorktree
@@ -189,8 +196,9 @@ async function syncLinearWorktreeStatus(
   try {
     const issue = await deps.getIssue(settings, worktree.linkedLinearIssue, linkedWorkspaceId)
     if (!issue?.team?.id) {
-      return skipped(result, {
+      return markTaskStatusSyncSkipped(result, {
         kind: 'issue-read-failed',
+        provider: 'Linear',
         issueIdentifier: worktree.linkedLinearIssue
       })
     }
@@ -199,27 +207,29 @@ async function syncLinearWorktreeStatus(
     const states = await deps.teamStates(settings, issue.team.id, workspaceId)
     const matches = matchingWorkflowStates(states, args.targetStatus)
     if (matches.length === 0) {
-      return skipped(result, {
-        kind: 'missing-workflow-state',
+      return markTaskStatusSyncSkipped(result, {
+        kind: 'missing-provider-status-mapping',
+        provider: 'Linear',
         statusLabel: args.targetStatus.label
       })
     }
     if (matches.length > 1) {
-      return skipped(result, {
-        kind: 'ambiguous-workflow-state',
+      return markTaskStatusSyncSkipped(result, {
+        kind: 'ambiguous-provider-status-mapping',
+        provider: 'Linear',
         statusLabel: args.targetStatus.label
       })
     }
 
     const [workflowState] = matches
     if (isAlreadyInState(issue, workflowState)) {
-      return skipped(result)
+      return markTaskStatusSyncSkipped(result)
     }
 
     // Why: board moves are local-first; slow provider reads must not let an
     // older board move overwrite a newer local status in Linear.
     if (args.getLatestWorkspaceStatus(worktreeId) !== args.targetStatus.id) {
-      return skipped(result)
+      return markTaskStatusSyncSkipped(result)
     }
 
     const updateResult: LinearMutationResult = await deps.updateIssue(
@@ -229,8 +239,9 @@ async function syncLinearWorktreeStatus(
       workspaceId
     )
     if (updateResult.ok === false) {
-      return failed(result, {
+      return markTaskStatusSyncFailed(result, {
         kind: 'update-failed',
+        provider: 'Linear',
         issueIdentifier: issue.identifier,
         detail: updateResult.error
       })
@@ -238,32 +249,40 @@ async function syncLinearWorktreeStatus(
     result.updated += 1
     return result
   } catch (error) {
-    return failed(result, {
+    return markTaskStatusSyncFailed(result, {
       kind: 'provider-error',
+      provider: 'Linear',
       issueIdentifier: worktree.linkedLinearIssue,
       detail: error instanceof Error ? error.message : undefined
     })
   }
 }
 
+async function syncWorktreeStatus(
+  args: SyncWorkspaceBoardTaskStatusesArgs,
+  worktreeId: string,
+  deps: WorkspaceBoardTaskStatusSyncDependencies
+): Promise<WorkspaceBoardTaskStatusSyncResult> {
+  const worktree = args.worktreesById.get(worktreeId)
+  if (worktree?.linkedLinearIssue) {
+    return syncLinearWorktreeStatus(args, worktreeId, deps)
+  }
+  return syncNonLinearWorktreeStatus(args, worktreeId, deps)
+}
+
 export async function syncWorkspaceBoardTaskStatuses(
   args: SyncWorkspaceBoardTaskStatusesArgs
 ): Promise<WorkspaceBoardTaskStatusSyncResult> {
   const deps = { ...defaultDeps, ...args.deps }
-  const aggregate: WorkspaceBoardTaskStatusSyncResult = {
-    updated: 0,
-    skipped: 0,
-    failed: 0,
-    messages: []
-  }
+  const aggregate = createTaskStatusSyncResult()
 
   const uniqueIds = new Set(args.worktreeIds)
   await Promise.all(
     [...uniqueIds].map(async (worktreeId) => {
       const item = await enqueueWorktreeSync(worktreeId, () =>
-        syncLinearWorktreeStatus(args, worktreeId, deps)
+        syncWorktreeStatus(args, worktreeId, deps)
       )
-      mergeResult(aggregate, item)
+      mergeTaskStatusSyncResult(aggregate, item)
     })
   )
 

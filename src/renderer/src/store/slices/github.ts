@@ -6,6 +6,7 @@ import type { AppState } from '../types'
 import type {
   ClassifiedError,
   GitHubOwnerRepo,
+  PersistedIssueSourcePreference,
   GitHubPRRefreshAlias,
   IssueSourcePreference,
   PRInfo,
@@ -83,6 +84,7 @@ export type ProjectRowContentUpdate = {
 
 export type GitHubPatchWorkItemOptions = {
   sourceContext?: TaskSourceContext | null
+  issueSourcePreference?: GitHubWorkItem['issueSourcePreference']
 }
 
 /** Optimistic, IPC-free patch shape for `projectViewCache` rows.
@@ -345,6 +347,27 @@ function listGitHubWorkItemsForRepo(
     repoId: context.repoId,
     ...args
   })
+}
+
+function ownerRepoMatches(a: GitHubOwnerRepo | null, b: GitHubOwnerRepo | null): boolean {
+  return Boolean(
+    a &&
+    b &&
+    a.owner.toLowerCase() === b.owner.toLowerCase() &&
+    a.repo.toLowerCase() === b.repo.toLowerCase()
+  )
+}
+
+function getResolvedIssueSourcePreference(
+  sources: ListWorkItemsResult<unknown>['sources']
+): PersistedIssueSourcePreference | null {
+  if (ownerRepoMatches(sources.issues, sources.originCandidate)) {
+    return 'origin'
+  }
+  if (ownerRepoMatches(sources.issues, sources.upstreamCandidate)) {
+    return 'upstream'
+  }
+  return null
 }
 
 function countGitHubWorkItemsForRepo(
@@ -2372,7 +2395,12 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         // Why: stamp repoId at the renderer fetch boundary so every downstream
         // consumer (cross-repo merge, row rendering, drawer) can rely on the
         // field being present. Main doesn't know Orca's Repo.id.
-        const items: GitHubWorkItem[] = envelope.items.map((item) => ({ ...item, repoId }))
+        const issueSourcePreference = getResolvedIssueSourcePreference(envelope.sources)
+        const items: GitHubWorkItem[] = envelope.items.map((item) => ({
+          ...item,
+          repoId,
+          ...(item.type === 'issue' && issueSourcePreference ? { issueSourcePreference } : {})
+        }))
         // Why: only surface the issues-side error in the cache entry. The
         // parent design doc §2 scopes feature 1 to the new class of silent
         // wrongness introduced by the issue-source split in #1076; PR-side
@@ -2528,7 +2556,14 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               envelope.errors.issues
             )
           }
-          return envelope.items.map((item): GitHubWorkItem => ({ ...item, repoId: r.repoId }))
+          const issueSourcePreference = getResolvedIssueSourcePreference(envelope.sources)
+          return envelope.items.map(
+            (item): GitHubWorkItem => ({
+              ...item,
+              repoId: r.repoId,
+              ...(item.type === 'issue' && issueSourcePreference ? { issueSourcePreference } : {})
+            })
+          )
         } catch (err) {
           if (isGitHubWorkItemsSshRemoteRequiredError(err)) {
             return [] as GitHubWorkItem[]
@@ -3884,7 +3919,12 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         // Why: GitHub issue/PR ids are only unique within a repo. Cross-repo
         // task views can contain the same `pr:42` id from multiple repos.
         const idx = entry.data.findIndex(
-          (item) => item.id === itemId && (!repoId || item.repoId === repoId)
+          (item) =>
+            item.id === itemId &&
+            (!repoId || item.repoId === repoId) &&
+            (options?.issueSourcePreference && item.type === 'issue'
+              ? item.issueSourcePreference === options.issueSourcePreference
+              : true)
         )
         if (idx === -1) {
           continue

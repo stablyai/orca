@@ -60,33 +60,51 @@ function formatTaskStatusSyncMessage(message: WorkspaceBoardTaskStatusSyncMessag
   switch (message.kind) {
     case 'issue-read-failed':
       return translate(
-        'auto.components.sidebar.WorkspaceKanbanDrawer.c1d2e3f4a5',
-        'Linear issue {{value0}} could not be read.',
-        { value0: message.issueIdentifier }
+        'auto.components.sidebar.WorkspaceKanbanDrawer.providerIssueReadFailed',
+        '{{value0}} issue {{value1}} could not be read.',
+        { value0: message.provider, value1: message.issueIdentifier }
       )
-    case 'missing-workflow-state':
+    case 'linked-issue-missing':
       return translate(
-        'auto.components.sidebar.WorkspaceKanbanDrawer.d2e3f4a5b6',
-        'No matching Linear workflow state for {{value0}}.',
-        { value0: message.statusLabel }
+        'auto.components.sidebar.WorkspaceKanbanDrawer.linkedIssueMissing',
+        '{{value0}} source is missing a linked issue.',
+        { value0: message.provider }
       )
-    case 'ambiguous-workflow-state':
+    case 'missing-provider-status-mapping':
       return translate(
-        'auto.components.sidebar.WorkspaceKanbanDrawer.e3f4a5b6c7',
-        'Multiple Linear workflow states match {{value0}}.',
-        { value0: message.statusLabel }
+        'auto.components.sidebar.WorkspaceKanbanDrawer.missingProviderStatusMapping',
+        'No matching {{value0}} status for {{value1}}.',
+        { value0: message.provider, value1: message.statusLabel }
+      )
+    case 'ambiguous-provider-status-mapping':
+      return translate(
+        'auto.components.sidebar.WorkspaceKanbanDrawer.ambiguousProviderStatusMapping',
+        'Multiple {{value0}} statuses match {{value1}}.',
+        { value0: message.provider, value1: message.statusLabel }
+      )
+    case 'repo-context-missing':
+      return translate(
+        'auto.components.sidebar.WorkspaceKanbanDrawer.repoContextMissing',
+        '{{value0}} issue #{{value1}} is missing repo context.',
+        { value0: message.provider, value1: message.issueNumber }
+      )
+    case 'unsupported-linked-item-kind':
+      return translate(
+        'auto.components.sidebar.WorkspaceKanbanDrawer.unsupportedLinkedItemKind',
+        'GitHub #{{value0}} looks like a pull request, so it was not updated.',
+        { value0: message.issueNumber }
       )
     case 'update-failed':
       return translate(
-        'auto.components.sidebar.WorkspaceKanbanDrawer.f4a5b6c7d8',
-        'Could not update Linear issue {{value0}}.',
-        { value0: message.issueIdentifier }
+        'auto.components.sidebar.WorkspaceKanbanDrawer.providerUpdateFailed',
+        'Could not update {{value0}} issue {{value1}}.',
+        { value0: message.provider, value1: message.issueIdentifier }
       )
     case 'provider-error':
       return translate(
-        'auto.components.sidebar.WorkspaceKanbanDrawer.a5b6c7d8e9',
-        'Could not sync Linear issue {{value0}}.',
-        { value0: message.issueIdentifier }
+        'auto.components.sidebar.WorkspaceKanbanDrawer.providerSyncError',
+        'Could not sync {{value0}} issue {{value1}}.',
+        { value0: message.provider, value1: message.issueIdentifier }
       )
     case 'unexpected-error':
       return translate(
@@ -248,6 +266,7 @@ export default function WorkspaceKanbanDrawer({
         worktreeIds: request.worktreeIds,
         targetStatus: request.targetStatus,
         worktreesById: worktreeById,
+        repoById: repoMap,
         getSettingsForWorktree: (worktreeId) =>
           getSettingsForWorktreeRuntimeOwner(useAppStore.getState(), worktreeId),
         getLatestWorkspaceStatus: (worktreeId) =>
@@ -274,7 +293,13 @@ export default function WorkspaceKanbanDrawer({
           })
         })
     },
-    [handleTaskStatusSyncResult, syncTaskStatusFromWorkspaceBoard, workspaceStatuses, worktreeById]
+    [
+      handleTaskStatusSyncResult,
+      repoMap,
+      syncTaskStatusFromWorkspaceBoard,
+      workspaceStatuses,
+      worktreeById
+    ]
   )
   const moveWorktreeToStatus = useCallback(
     (worktreeId: string, status: WorkspaceStatus) => {

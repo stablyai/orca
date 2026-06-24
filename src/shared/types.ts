@@ -13,6 +13,7 @@ import type { VoiceSettings } from './speech-types'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup'
 import type { LargeDiffRenderLimit } from './large-diff-render-limit'
 import type { GitLabProjectSettings } from './gitlab-types'
+import type { GitLabProjectRef } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
 import type { FeatureTipId } from './feature-tips'
 import type { ContextualTourId } from './contextual-tours'
@@ -93,6 +94,7 @@ export type RepoKind = 'git' | 'folder'
  * - `'origin'`: explicit origin. Same precedence.
  */
 export type IssueSourcePreference = 'upstream' | 'origin' | 'auto'
+export type PersistedIssueSourcePreference = Exclude<IssueSourcePreference, 'auto'>
 export type { ForkSyncMode, GitForkSyncExpectedUpstream, GitForkSyncResult } from './git-fork-sync'
 export type ExternalWorktreeVisibility = 'hide' | 'show'
 
@@ -334,6 +336,9 @@ export type FolderWorkspaceLinkedTask = {
   url: string
   linearIdentifier?: string
   jiraIdentifier?: string
+  jiraSiteId?: string
+  gitLabProjectRef?: GitLabProjectRef | null
+  issueSourcePreference?: PersistedIssueSourcePreference | null
   repoId?: string
 }
 
@@ -435,6 +440,7 @@ export type Worktree = {
   id: string // `${repoId}::${path}`
   instanceId?: string
   repoId: string
+  sourceRepoId?: string | null
   /** Durable project identity. Optional while legacy repo-only workspaces migrate. */
   projectId?: string
   /** Execution host that owns the workspace. Optional for pre-project-host metadata. */
@@ -444,10 +450,17 @@ export type Worktree = {
   displayName: string
   comment: string
   linkedIssue: number | null
+  linkedIssueSourcePreference?: PersistedIssueSourcePreference | null
   linkedPR: number | null
   linkedLinearIssue: string | null
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
+  /** Optional persisted Jira key for task status sync. Older worktrees omit it. */
+  linkedJiraIssue?: string | null
+  /** Optional persisted Jira site id for task status sync. Older worktrees omit it. */
+  linkedJiraIssueSiteId?: string | null
+  /** Optional persisted GitLab project ref for issue status sync. Older worktrees omit it. */
+  linkedGitLabProjectRef?: GitLabProjectRef | null
   // Why: parallel slots for non-GitHub work-item references. Kept as separate
   // fields (rather than reusing linkedIssue / linkedPR with a provider
   // discriminator) so the persistence layer is unambiguous when a user
@@ -556,14 +569,21 @@ export type WorktreeMeta = {
   displayName: string
   comment: string
   linkedIssue: number | null
+  linkedIssueSourcePreference?: PersistedIssueSourcePreference | null
   linkedPR: number | null
   linkedLinearIssue: string | null
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
+  /** Optional for backward compatibility — see Worktree.linkedJiraIssue. */
+  linkedJiraIssue?: string | null
+  /** Optional for backward compatibility — see Worktree.linkedJiraIssueSiteId. */
+  linkedJiraIssueSiteId?: string | null
   /** Optional for backward compatibility — see Worktree.linkedGitLabMR. */
   linkedGitLabMR?: number | null
   /** Optional for backward compatibility — see Worktree.linkedGitLabIssue. */
   linkedGitLabIssue?: number | null
+  /** Optional for backward compatibility — see Worktree.linkedGitLabProjectRef. */
+  linkedGitLabProjectRef?: GitLabProjectRef | null
   /** Optional for backward compatibility — see Worktree.linkedBitbucketPR. */
   linkedBitbucketPR?: number | null
   /** Optional for backward compatibility — see Worktree.linkedAzureDevOpsPR. */
@@ -1354,6 +1374,7 @@ export type GitHubWorkItem = {
   title: string
   state: 'open' | 'closed' | 'merged' | 'draft'
   url: string
+  issueSourcePreference?: PersistedIssueSourcePreference | null
   labels: string[]
   updatedAt: string
   author: string | null
@@ -1960,11 +1981,15 @@ export type CreateWorktreeArgs = {
   setupDecision?: SetupDecision
   sparseCheckout?: CreateSparseCheckoutRequest
   linkedIssue?: number
+  linkedIssueSourcePreference?: PersistedIssueSourcePreference | null
   linkedPR?: number
   linkedLinearIssue?: string
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
+  linkedJiraIssue?: string | null
+  linkedJiraIssueSiteId?: string | null
   linkedGitLabIssue?: number
+  linkedGitLabProjectRef?: GitLabProjectRef | null
   linkedGitLabMR?: number
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null

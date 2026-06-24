@@ -698,12 +698,16 @@ function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: WorktreeMeta
     displayName: meta.displayName || repo.displayName,
     comment: meta.comment || '',
     linkedIssue: meta.linkedIssue ?? null,
+    linkedIssueSourcePreference: meta.linkedIssueSourcePreference ?? null,
     linkedPR: meta.linkedPR ?? null,
     linkedLinearIssue: meta.linkedLinearIssue ?? null,
     linkedLinearIssueWorkspaceId: meta.linkedLinearIssueWorkspaceId ?? null,
     linkedLinearIssueOrganizationUrlKey: meta.linkedLinearIssueOrganizationUrlKey ?? null,
+    linkedJiraIssue: meta.linkedJiraIssue ?? null,
+    linkedJiraIssueSiteId: meta.linkedJiraIssueSiteId ?? null,
     linkedGitLabMR: meta.linkedGitLabMR ?? null,
     linkedGitLabIssue: meta.linkedGitLabIssue ?? null,
+    linkedGitLabProjectRef: meta.linkedGitLabProjectRef ?? null,
     linkedBitbucketPR: meta.linkedBitbucketPR ?? null,
     linkedAzureDevOpsPR: meta.linkedAzureDevOpsPR ?? null,
     linkedGiteaPR: meta.linkedGiteaPR ?? null,
@@ -810,6 +814,9 @@ function createFolderWorkspace(
     ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
     ...(args.createdWithAgent ? { createdWithAgent: args.createdWithAgent } : {}),
     ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
+    ...(args.linkedIssueSourcePreference !== undefined
+      ? { linkedIssueSourcePreference: args.linkedIssueSourcePreference }
+      : {}),
     ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
     ...(args.linkedLinearIssue !== undefined ? { linkedLinearIssue: args.linkedLinearIssue } : {}),
     ...(args.linkedLinearIssueWorkspaceId !== undefined
@@ -818,9 +825,16 @@ function createFolderWorkspace(
     ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
       ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
       : {}),
+    ...(args.linkedJiraIssue !== undefined ? { linkedJiraIssue: args.linkedJiraIssue } : {}),
+    ...(args.linkedJiraIssueSiteId !== undefined
+      ? { linkedJiraIssueSiteId: args.linkedJiraIssueSiteId }
+      : {}),
     ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
     ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {}),
     ...(args.linkedGitLabIssue !== undefined ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),
+    ...(args.linkedGitLabProjectRef !== undefined
+      ? { linkedGitLabProjectRef: args.linkedGitLabProjectRef }
+      : {}),
     ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
     ...(args.linkedBitbucketPR !== undefined ? { linkedBitbucketPR: args.linkedBitbucketPR } : {}),
     ...(args.linkedAzureDevOpsPR !== undefined

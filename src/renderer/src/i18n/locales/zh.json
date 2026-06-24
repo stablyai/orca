@@ -1102,7 +1102,8 @@
         "importHostSetup": "导入",
         "notePasteTooLarge": "笔记字段的粘贴内容过大。",
         "reuseExistingBranch": "复用分支",
-        "reuseExistingBranchHint": "检出已有分支，而不是基于它创建新分支。"
+        "reuseExistingBranchHint": "检出已有分支，而不是基于它创建新分支。",
+        "createMultiple": "Create more"
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "创建工作区之前选择项目、工作区名称和 Agent。"
@@ -4298,7 +4299,15 @@
           "b6c7d8e9f0": "无法完成任务状态同步。",
           "c7d8e9f0a1": "已更新 {{value0}} 个",
           "d8e9f0a1b2": "已跳过 {{value0}} 个",
-          "e9f0a1b2c3": "失败 {{value0}} 个"
+          "e9f0a1b2c3": "失败 {{value0}} 个",
+          "providerIssueReadFailed": "{{value0}} issue {{value1}} could not be read.",
+          "linkedIssueMissing": "{{value0}} source is missing a linked issue.",
+          "missingProviderStatusMapping": "No matching {{value0}} status for {{value1}}.",
+          "ambiguousProviderStatusMapping": "Multiple {{value0}} statuses match {{value1}}.",
+          "repoContextMissing": "{{value0}} issue #{{value1}} is missing repo context.",
+          "unsupportedLinkedItemKind": "GitHub #{{value0}} looks like a pull request, so it was not updated.",
+          "providerUpdateFailed": "Could not update {{value0}} issue {{value1}}.",
+          "providerSyncError": "Could not sync {{value0}} issue {{value1}}."
         },
         "WorktreeParentPickerPopover": {
           "failedSetParent": "无法设置父工作树",

@@ -72,6 +72,15 @@ export function toFolderWorkspaceLinkedTask(
     url: item.url,
     ...(item.linearIdentifier ? { linearIdentifier: item.linearIdentifier } : {}),
     ...(item.jiraIdentifier ? { jiraIdentifier: item.jiraIdentifier } : {}),
+    ...(item.jiraSiteId ? { jiraSiteId: item.jiraSiteId } : {}),
+    ...(provider === 'github' &&
+    item.type === 'issue' &&
+    (item.issueSourcePreference === 'origin' || item.issueSourcePreference === 'upstream')
+      ? { issueSourcePreference: item.issueSourcePreference }
+      : {}),
+    ...(provider === 'gitlab' && item.gitLabProjectRef
+      ? { gitLabProjectRef: item.gitLabProjectRef }
+      : {}),
     ...(item.repoId ? { repoId: item.repoId } : {})
   }
 }
@@ -109,13 +118,22 @@ export function getLinkedItemDisplayName(item: LinkedWorkItemSummary): string | 
   return getLinkedWorkItemWorkspaceName(item)?.displayName ?? (item.title.trim() || null)
 }
 
-export function toGitHubLinkedWorkItem(item: GitHubWorkItem): LinkedWorkItemSummary {
+export function toGitHubLinkedWorkItem(
+  item: Pick<
+    GitHubWorkItem,
+    'type' | 'number' | 'title' | 'url' | 'repoId' | 'issueSourcePreference'
+  >
+): LinkedWorkItemSummary {
   return {
     type: item.type,
     provider: 'github',
     number: item.number,
     title: item.title,
     url: item.url,
+    ...(item.type === 'issue' &&
+    (item.issueSourcePreference === 'origin' || item.issueSourcePreference === 'upstream')
+      ? { issueSourcePreference: item.issueSourcePreference }
+      : {}),
     repoId: item.repoId
   }
 }
@@ -127,6 +145,7 @@ export function toGitLabLinkedWorkItem(item: GitLabWorkItem): LinkedWorkItemSumm
     number: item.number,
     title: item.title,
     url: item.url,
+    ...(item.projectRef ? { gitLabProjectRef: item.projectRef } : {}),
     repoId: item.repoId
   }
 }

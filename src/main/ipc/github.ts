@@ -466,7 +466,13 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle('gh:workItem', (_event, args: WorkItemArgs) => {
     const repo = assertRegisteredRepo(args, store)
-    return dispatchWorkItem(args, repo, getWorkItem, localGitOptionArgs(store, repo)[0])
+    return dispatchWorkItem(
+      args,
+      repo,
+      getWorkItem,
+      localGitOptionArgs(store, repo)[0],
+      repo.issueSourcePreference
+    )
   })
   ipcMain.handle(
     'gh:workItemByOwnerRepo',
@@ -491,10 +497,19 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       )
     }
   )
-  ipcMain.handle('gh:workItemDetails', (_event, args: WorkItemArgs) => {
-    const repo = assertRegisteredRepo(args, store)
-    return dispatchWorkItem(args, repo, getWorkItemDetails, localGitOptionArgs(store, repo)[0])
-  })
+  ipcMain.handle(
+    'gh:workItemDetails',
+    (_event, args: WorkItemArgs & { issueSourcePreference?: Repo['issueSourcePreference'] }) => {
+      const repo = assertRegisteredRepo(args, store)
+      return dispatchWorkItem(
+        args,
+        repo,
+        getWorkItemDetails,
+        localGitOptionArgs(store, repo)[0] ?? {},
+        args.issueSourcePreference ?? repo.issueSourcePreference
+      )
+    }
+  )
 
   ipcMain.handle(
     'gh:prFileContents',
@@ -1006,7 +1021,14 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle(
     'gh:updateIssue',
-    async (event, args: RepoScopedArgs & { number: number; updates: GitHubIssueUpdate }) => {
+    async (
+      event,
+      args: RepoScopedArgs & {
+        issueSourcePreference?: Repo['issueSourcePreference']
+        number: number
+        updates: GitHubIssueUpdate
+      }
+    ) => {
       const repo = assertRegisteredRepo(args, store)
       if (typeof args.number !== 'number' || !Number.isInteger(args.number) || args.number < 1) {
         return { ok: false, error: 'Invalid issue number' }
@@ -1019,7 +1041,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         args.number,
         args.updates,
         repoConnectionId(repo),
-        ...localGitOptionArgs(store, repo)
+        localGitOptionArgs(store, repo)[0] ?? {},
+        args.issueSourcePreference
       )
       if (result.ok) {
         broadcastWorkItemMutated(
@@ -1043,6 +1066,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         body: string
         type?: 'issue' | 'pr'
         prRepo?: GitHubOwnerRepo | null
+        issueSourcePreference?: Repo['issueSourcePreference']
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
@@ -1058,7 +1082,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         args.body.trim(),
         repoConnectionId(repo),
         args.prRepo ?? null,
-        ...localGitOptionArgs(store, repo)
+        localGitOptionArgs(store, repo)[0] ?? {},
+        args.issueSourcePreference
       )
       if (result.ok) {
         // Why: PR conversation comments hit `/issues/N/comments` too, but the

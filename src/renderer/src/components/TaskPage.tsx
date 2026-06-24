@@ -1129,7 +1129,10 @@ function GHStatusCell({
           ? buildTaskPageGitHubCloseUpdate(closeAction)
           : { state: newState }
       updateLocalState(newState)
-      patchWorkItem(item.id, { state: newState }, item.repoId, { sourceContext })
+      patchWorkItem(item.id, { state: newState }, item.repoId, {
+        sourceContext,
+        issueSourcePreference: item.issueSourcePreference
+      })
       const target = getActiveRuntimeTarget(sourceSettings)
       // Why: issue rows can be sourced by owner/repo URL instead of the local
       // repo context; slug-aware writes preserve close reasons and duplicates.
@@ -1162,13 +1165,19 @@ function GHStatusCell({
               ? callRuntimeRpc<{ ok?: boolean; error?: string }>(
                   target,
                   'github.updateIssue',
-                  { repo: runtimeRepoId, number: item.number, updates },
+                  {
+                    repo: runtimeRepoId,
+                    issueSourcePreference: item.issueSourcePreference ?? repo.issueSourcePreference,
+                    number: item.number,
+                    updates
+                  },
                   { timeoutMs: 30_000 }
                 )
               : window.api.gh.updateIssue({
                   repoPath: repo.path,
                   repoId: repo.id,
                   sourceContext,
+                  issueSourcePreference: item.issueSourcePreference ?? repo.issueSourcePreference,
                   number: item.number,
                   updates
                 })
@@ -1185,7 +1194,7 @@ function GHStatusCell({
               item.id,
               { state: newState === 'closed' ? 'open' : 'closed' },
               item.repoId,
-              { sourceContext }
+              { sourceContext, issueSourcePreference: item.issueSourcePreference }
             )
             toast.error(
               typeof typed.error === 'string'
@@ -1210,7 +1219,8 @@ function GHStatusCell({
             { state: newState === 'closed' ? 'open' : 'closed' },
             item.repoId,
             {
-              sourceContext
+              sourceContext,
+              issueSourcePreference: item.issueSourcePreference
             }
           )
           toast.error(translate('auto.components.TaskPage.1c893195ac', 'Failed to update state'))
@@ -1770,7 +1780,10 @@ function GHAssigneesCell({
         ? assignees.filter((a) => a.login.toLowerCase() !== userLoginKey)
         : [...assignees, user]
       setPendingLogin(user.login)
-      patchWorkItem(item.id, { assignees: nextAssignees }, item.repoId, { sourceContext })
+      patchWorkItem(item.id, { assignees: nextAssignees }, item.repoId, {
+        sourceContext,
+        issueSourcePreference: item.issueSourcePreference
+      })
 
       try {
         const updates = isOn ? { removeAssignees: [user.login] } : { addAssignees: [user.login] }
@@ -1802,13 +1815,19 @@ function GHAssigneesCell({
               ? await callRuntimeRpc<{ ok?: boolean; error?: string }>(
                   target,
                   'github.updateIssue',
-                  { repo: runtimeRepoId, number: item.number, updates },
+                  {
+                    repo: runtimeRepoId,
+                    issueSourcePreference: item.issueSourcePreference ?? repo.issueSourcePreference,
+                    number: item.number,
+                    updates
+                  },
                   { timeoutMs: 30_000 }
                 )
               : await window.api.gh.updateIssue({
                   repoPath: repo.path,
                   repoId: repo.id,
                   sourceContext,
+                  issueSourcePreference: item.issueSourcePreference ?? repo.issueSourcePreference,
                   number: item.number,
                   updates
                 })
@@ -1820,7 +1839,10 @@ function GHAssigneesCell({
         }
         useAppStore.getState().recordFeatureInteraction('github-tasks')
       } catch (err) {
-        patchWorkItem(item.id, { assignees: previousAssignees }, item.repoId, { sourceContext })
+        patchWorkItem(item.id, { assignees: previousAssignees }, item.repoId, {
+          sourceContext,
+          issueSourcePreference: item.issueSourcePreference
+        })
         toast.error(
           err instanceof Error
             ? err.message
@@ -1835,6 +1857,7 @@ function GHAssigneesCell({
       item.id,
       item.number,
       item.repoId,
+      item.issueSourcePreference,
       item.type,
       owner,
       patchWorkItem,
@@ -6478,9 +6501,15 @@ export default function TaskPage(): React.JSX.Element {
     (item: GitHubWorkItem): void => {
       const linkedWorkItem: LinkedWorkItemSummary = {
         type: item.type,
+        provider: 'github',
         number: item.number,
         title: item.title,
-        url: item.url
+        url: item.url,
+        repoId: item.repoId,
+        ...(item.type === 'issue' &&
+        (item.issueSourcePreference === 'origin' || item.issueSourcePreference === 'upstream')
+          ? { issueSourcePreference: item.issueSourcePreference }
+          : {})
       }
       openModal('new-workspace-composer', {
         linkedWorkItem,
@@ -6514,7 +6543,8 @@ export default function TaskPage(): React.JSX.Element {
         useAppStore.getState().allWorktrees(),
         item.repoId,
         item.type,
-        item.number
+        item.number,
+        item.type === 'issue' ? item.issueSourcePreference : undefined
       )
       if (!currentAttached) {
         handleUseWorkItem(item)
@@ -6545,9 +6575,12 @@ export default function TaskPage(): React.JSX.Element {
     (item: GitLabWorkItem): void => {
       const linkedWorkItem: LinkedWorkItemSummary = {
         type: item.type,
+        provider: 'gitlab',
         number: item.number,
         title: item.title,
-        url: item.url
+        url: item.url,
+        gitLabProjectRef: item.projectRef,
+        repoId: item.repoId
       }
       openModal('new-workspace-composer', {
         linkedWorkItem,
@@ -7757,7 +7790,12 @@ export default function TaskPage(): React.JSX.Element {
         number: 0,
         title: `${issue.key} ${issue.title}`,
         url: issue.url,
-        jiraIdentifier: issue.key
+        jiraIdentifier: issue.key,
+        jiraSiteId:
+          issue.siteId ??
+          (jiraTaskSourceContext?.providerIdentity?.provider === 'jira'
+            ? (jiraTaskSourceContext.providerIdentity.siteId ?? undefined)
+            : undefined)
       }
       openModal('new-workspace-composer', {
         linkedWorkItem,
@@ -9104,7 +9142,8 @@ export default function TaskPage(): React.JSX.Element {
                         allWorktrees,
                         item.repoId,
                         item.type,
-                        item.number
+                        item.number,
+                        item.type === 'issue' ? item.issueSourcePreference : undefined
                       )
                       const attachedWorkspaceLabel = attachedWorkspace
                         ? getGithubWorkItemWorkspaceAttachmentLabel(attachedWorkspace)

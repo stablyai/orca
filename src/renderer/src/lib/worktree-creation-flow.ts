@@ -111,7 +111,11 @@ async function executeWorktreeCreation(
         request.linkedBitbucketPR,
         request.linkedAzureDevOpsPR,
         request.linkedGiteaPR,
-        request.compareBaseRef
+        request.compareBaseRef,
+        request.linkedJiraIssue,
+        request.linkedJiraIssueSiteId,
+        request.linkedIssueSourcePreference,
+        request.linkedGitLabProjectRef
       )
   } catch (error) {
     // Why: a missing entry means the user cancelled mid-flight — abandon

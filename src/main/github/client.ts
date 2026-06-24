@@ -4,6 +4,7 @@ import type {
   ClassifiedError,
   GitPushTarget,
   IssueSourcePreference,
+  PersistedIssueSourcePreference,
   ListWorkItemsResult,
   PRInfo,
   PRConflictSummary,
@@ -1405,6 +1406,25 @@ function sameOwnerRepo(left: OwnerRepo | null, right: OwnerRepo | null): boolean
   )
 }
 
+async function getExplicitIssueSourcePreferenceForOwnerRepo(
+  repoPath: string,
+  ownerRepo: OwnerRepo,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<PersistedIssueSourcePreference | undefined> {
+  const [origin, upstream] = await Promise.all([
+    getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions),
+    getOwnerRepoForRemote(repoPath, 'upstream', connectionId, localGitOptions)
+  ])
+  if (sameOwnerRepo(origin, ownerRepo)) {
+    return 'origin'
+  }
+  if (sameOwnerRepo(upstream, ownerRepo)) {
+    return 'upstream'
+  }
+  return undefined
+}
+
 function defaultOpenWorkItemQuery(): ParsedTaskQuery {
   return {
     scope: 'all',
@@ -1860,18 +1880,32 @@ export async function getWorkItem(
   number: number,
   type?: 'issue' | 'pr',
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  issueSourcePreference?: IssueSourcePreference
 ): Promise<MainWorkItem | null> {
   await acquire()
   try {
     if (type === 'issue') {
-      return await fetchIssueWorkItem(
+      const explicitIssueSource =
+        issueSourcePreference === 'origin' || issueSourcePreference === 'upstream'
+          ? issueSourcePreference
+          : undefined
+      const issueOwnerRepo = explicitIssueSource
+        ? await getOwnerRepoForRemote(repoPath, explicitIssueSource, connectionId, localGitOptions)
+        : await getIssueOwnerRepo(repoPath, connectionId, localGitOptions)
+      if (explicitIssueSource && !issueOwnerRepo) {
+        return null
+      }
+      const item = await fetchIssueWorkItem(
         repoPath,
-        await getIssueOwnerRepo(repoPath, connectionId, localGitOptions),
+        issueOwnerRepo,
         number,
         connectionId,
         localGitOptions
       )
+      return item && explicitIssueSource
+        ? { ...item, issueSourcePreference: explicitIssueSource }
+        : item
     }
     if (type === 'pr') {
       return await fetchPullRequestWorkItem(
@@ -1883,16 +1917,34 @@ export async function getWorkItem(
       )
     }
 
+    const issueOwnerRepo =
+      issueSourcePreference === 'origin' || issueSourcePreference === 'upstream'
+        ? await getOwnerRepoForRemote(
+            repoPath,
+            issueSourcePreference,
+            connectionId,
+            localGitOptions
+          )
+        : await getIssueOwnerRepo(repoPath, connectionId, localGitOptions)
+    const explicitIssueSource =
+      issueSourcePreference === 'origin' || issueSourcePreference === 'upstream'
+        ? issueSourcePreference
+        : undefined
+    if (explicitIssueSource && !issueOwnerRepo) {
+      return null
+    }
     try {
       const issue = await fetchIssueWorkItem(
         repoPath,
-        await getIssueOwnerRepo(repoPath, connectionId, localGitOptions),
+        issueOwnerRepo,
         number,
         connectionId,
         localGitOptions
       )
       if (issue) {
-        return issue
+        return explicitIssueSource
+          ? { ...issue, issueSourcePreference: explicitIssueSource }
+          : issue
       }
     } catch (err) {
       // Why: the issue lookup now targets `upstream` while the PR lookup targets `origin`,
@@ -1931,7 +1983,16 @@ export async function getWorkItemByOwnerRepo(
   await acquire()
   try {
     if (type === 'issue') {
-      return await fetchIssueWorkItem(repoPath, ownerRepo, number, connectionId, localGitOptions)
+      const [item, issueSourcePreference] = await Promise.all([
+        fetchIssueWorkItem(repoPath, ownerRepo, number, connectionId, localGitOptions),
+        getExplicitIssueSourcePreferenceForOwnerRepo(
+          repoPath,
+          ownerRepo,
+          connectionId,
+          localGitOptions
+        )
+      ])
+      return item && issueSourcePreference ? { ...item, issueSourcePreference } : item
     }
     return await fetchPullRequestWorkItem(
       repoPath,

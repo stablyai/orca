@@ -1699,7 +1699,17 @@ describe('createWorktree base status merge', () => {
         undefined,
         undefined,
         undefined,
-        true
+        true,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'origin'
       )
 
     expect(mockApi.worktrees.create).toHaveBeenCalledWith(
@@ -1707,6 +1717,7 @@ describe('createWorktree base status merge', () => {
         repoId: 'repo1',
         name: 'feature',
         linkedIssue: 123,
+        linkedIssueSourcePreference: 'origin',
         linkedPR: 456,
         createdWithAgent: 'codex',
         linkedLinearIssue: 'ENG-123',
@@ -2594,7 +2605,25 @@ describe('worktree remote runtime mutations', () => {
         'Feature title',
         123,
         456,
-        { remoteName: 'fork', branchName: 'feature' }
+        { remoteName: 'fork', branchName: 'feature' },
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'origin'
       )
 
     expect(result).toEqual({ worktree: wt })
@@ -2610,6 +2639,7 @@ describe('worktree remote runtime mutations', () => {
         telemetrySource: 'sidebar',
         displayName: 'Feature title',
         linkedIssue: 123,
+        linkedIssueSourcePreference: 'origin',
         linkedPR: 456,
         pushTarget: { remoteName: 'fork', branchName: 'feature' }
       },

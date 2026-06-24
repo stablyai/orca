@@ -38,6 +38,7 @@ export function GitHubIssueCommentComposer({
   itemType,
   itemState,
   itemId,
+  issueSourcePreference,
   sourceContext,
   sourceSettings,
   projectOrigin,
@@ -53,6 +54,7 @@ export function GitHubIssueCommentComposer({
   itemType: 'issue' | 'pr'
   itemState?: GitHubWorkItem['state']
   itemId?: string
+  issueSourcePreference?: GitHubWorkItem['issueSourcePreference']
   sourceContext?: TaskSourceContext | null
   sourceSettings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   projectOrigin?: GitHubIssueCommentProjectOrigin
@@ -93,18 +95,11 @@ export function GitHubIssueCommentComposer({
   const selectedCloseReason =
     CLOSE_ISSUE_REASONS.find((option) => option.reason === closeReason) ?? CLOSE_ISSUE_REASONS[0]
 
+  const canChangeIssueState =
+    itemType === 'issue' && Boolean(onStateChange) && Boolean(repoPath || projectOrigin)
   const canMutateIssueState =
-    itemType === 'issue' &&
-    itemState !== undefined &&
-    itemState !== 'closed' &&
-    Boolean(onStateChange) &&
-    Boolean(repoPath || projectOrigin)
-
-  const canReopenIssue =
-    itemType === 'issue' &&
-    itemState === 'closed' &&
-    Boolean(onStateChange) &&
-    Boolean(repoPath || projectOrigin)
+    canChangeIssueState && itemState !== undefined && itemState !== 'closed'
+  const canReopenIssue = canChangeIssueState && itemState === 'closed'
 
   const patchProjectRowIfNeeded = useCallback(
     (state: GitHubWorkItem['state']) => {
@@ -120,11 +115,11 @@ export function GitHubIssueCommentComposer({
     (state: GitHubWorkItem['state']) => {
       onStateChange?.(state)
       if (itemId) {
-        patchWorkItem(itemId, { state }, repoId ?? undefined)
+        patchWorkItem(itemId, { state }, repoId ?? undefined, { issueSourcePreference })
       }
       patchProjectRowIfNeeded(state)
     },
-    [itemId, onStateChange, patchProjectRowIfNeeded, patchWorkItem, repoId]
+    [issueSourcePreference, itemId, onStateChange, patchProjectRowIfNeeded, patchWorkItem, repoId]
   )
 
   const handleSubmit = useCallback(async () => {
@@ -147,9 +142,11 @@ export function GitHubIssueCommentComposer({
         repoPath,
         repoId: repoId ?? undefined,
         sourceContext,
+        sourceSettings,
         number: issueNumber,
         body: bodyState.body,
-        type: itemType
+        type: itemType,
+        issueSourcePreference: itemType === 'issue' ? issueSourcePreference : undefined
       })
       if (!mountedRef.current) {
         return
@@ -182,7 +179,18 @@ export function GitHubIssueCommentComposer({
         setSubmitting(false)
       }
     }
-  }, [body, issueNumber, itemType, mountedRef, onCommentAdded, repoId, repoPath, sourceContext])
+  }, [
+    body,
+    issueNumber,
+    issueSourcePreference,
+    itemType,
+    mountedRef,
+    onCommentAdded,
+    repoId,
+    repoPath,
+    sourceContext,
+    sourceSettings
+  ])
 
   const handleCloseIssue = useCallback(
     async (reason: GitHubIssueCloseReason = closeReason) => {
@@ -199,6 +207,7 @@ export function GitHubIssueCommentComposer({
           sourceContext,
           sourceSettings,
           projectOrigin,
+          issueSourcePreference,
           number: issueNumber,
           updates: { state: 'closed', stateReason: reason }
         })
@@ -228,6 +237,7 @@ export function GitHubIssueCommentComposer({
       canMutateIssueState,
       closeReason,
       issueNumber,
+      issueSourcePreference,
       itemState,
       mountedRef,
       onMutated,
@@ -254,6 +264,7 @@ export function GitHubIssueCommentComposer({
         sourceContext,
         sourceSettings,
         projectOrigin,
+        issueSourcePreference,
         number: issueNumber,
         updates: { state: 'open' }
       })
@@ -281,6 +292,7 @@ export function GitHubIssueCommentComposer({
     applyStatePatch,
     canReopenIssue,
     issueNumber,
+    issueSourcePreference,
     itemState,
     mountedRef,
     onMutated,

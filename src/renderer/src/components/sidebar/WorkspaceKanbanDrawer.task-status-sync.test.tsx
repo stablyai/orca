@@ -312,6 +312,7 @@ describe('WorkspaceKanbanDrawer task status sync wiring', () => {
       expect.objectContaining({
         worktreeIds: [item.id],
         targetStatus: { id: 'in-review', label: 'In review' },
+        repoById: expect.any(Map),
         getSettingsForWorktree: expect.any(Function),
         getLatestWorkspaceStatus: expect.any(Function)
       })
@@ -382,7 +383,9 @@ describe('WorkspaceKanbanDrawer task status sync wiring', () => {
       updated: 0,
       skipped: 1,
       failed: 0,
-      messages: [{ kind: 'missing-workflow-state', statusLabel: 'In review' }]
+      messages: [
+        { kind: 'missing-provider-status-mapping', provider: 'GitHub', statusLabel: 'In review' }
+      ]
     })
     const item = worktree()
     renderDrawer(item)
@@ -395,7 +398,7 @@ describe('WorkspaceKanbanDrawer task status sync wiring', () => {
     expect(toastWarningMock).toHaveBeenCalledWith(
       'Task status sync skipped',
       expect.objectContaining({
-        description: '1 skipped. No matching Linear workflow state for In review.'
+        description: '1 skipped. No matching GitHub status for In review.'
       })
     )
   })

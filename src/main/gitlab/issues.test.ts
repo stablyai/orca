@@ -166,7 +166,10 @@ describe('gitlab issue operations', () => {
     getIssueProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'stablyai/orca' })
     glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
 
-    await expect(listIssues('/repo-root', 5)).resolves.toEqual({ items: [] })
+    await expect(listIssues('/repo-root', 5)).resolves.toEqual({
+      items: [],
+      projectRef: { host: 'gitlab.com', path: 'stablyai/orca' }
+    })
 
     expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
       [

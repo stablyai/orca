@@ -32,7 +32,9 @@ describe('folderWorkspaceToWorktree', () => {
           type: 'issue',
           number: 42,
           title: 'Refund flow fails',
-          url: 'https://github.com/acme/app/issues/42'
+          url: 'https://github.com/acme/app/issues/42',
+          issueSourcePreference: 'origin',
+          repoId: 'repo-1'
         }
       })
     )
@@ -43,13 +45,16 @@ describe('folderWorkspaceToWorktree', () => {
           type: 'issue',
           number: 7,
           title: 'Import fails',
-          url: 'https://gitlab.com/acme/app/-/issues/7'
+          url: 'https://gitlab.com/acme/app/-/issues/7',
+          gitLabProjectRef: { host: 'gitlab.com', path: 'acme/app' }
         }
       })
     )
 
     expect(githubIssue).toMatchObject({
+      sourceRepoId: 'repo-1',
       linkedIssue: 42,
+      linkedIssueSourcePreference: 'origin',
       linkedPR: null,
       linkedGitLabMR: null,
       linkedGitLabIssue: null
@@ -58,7 +63,8 @@ describe('folderWorkspaceToWorktree', () => {
       linkedIssue: null,
       linkedPR: null,
       linkedGitLabMR: null,
-      linkedGitLabIssue: 7
+      linkedGitLabIssue: 7,
+      linkedGitLabProjectRef: { host: 'gitlab.com', path: 'acme/app' }
     })
   })
 
@@ -77,6 +83,28 @@ describe('folderWorkspaceToWorktree', () => {
     )
 
     expect(worktree.linkedLinearIssue).toBe('ENG-123')
+    expect(worktree.linkedPR).toBeNull()
+    expect(worktree.linkedGitLabMR).toBeNull()
+  })
+
+  it('projects Jira tasks by identifier', () => {
+    const worktree = folderWorkspaceToWorktree(
+      makeFolderWorkspace({
+        linkedTask: {
+          provider: 'jira',
+          type: 'issue',
+          number: 0,
+          title: 'STA-776 Sync board status',
+          url: 'https://example.atlassian.net/browse/STA-776',
+          jiraIdentifier: 'STA-776',
+          jiraSiteId: 'site-1'
+        }
+      })
+    )
+
+    expect(worktree.linkedJiraIssue).toBe('STA-776')
+    expect(worktree.linkedJiraIssueSiteId).toBe('site-1')
+    expect(worktree.linkedLinearIssue).toBeNull()
     expect(worktree.linkedPR).toBeNull()
     expect(worktree.linkedGitLabMR).toBeNull()
   })

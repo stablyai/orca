@@ -31,6 +31,7 @@ export function mergeWorktree(
     displayName: meta?.displayName || branchShort || defaultDisplayName || basename(git.path),
     comment: meta?.comment || '',
     linkedIssue: meta?.linkedIssue ?? null,
+    linkedIssueSourcePreference: meta?.linkedIssueSourcePreference ?? null,
     linkedPR: meta?.linkedPR ?? null,
     linkedLinearIssue: meta?.linkedLinearIssue ?? null,
     linkedLinearIssueWorkspaceId: meta?.linkedLinearIssueWorkspaceId ?? null,

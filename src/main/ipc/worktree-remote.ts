@@ -1674,6 +1674,9 @@ export async function createRemoteWorktree(
         }
       : {}),
     ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
+    ...(args.linkedIssueSourcePreference !== undefined
+      ? { linkedIssueSourcePreference: args.linkedIssueSourcePreference }
+      : {}),
     ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
     ...(args.linkedLinearIssue !== undefined ? { linkedLinearIssue: args.linkedLinearIssue } : {}),
     ...(args.linkedLinearIssueWorkspaceId !== undefined
@@ -1682,8 +1685,15 @@ export async function createRemoteWorktree(
     ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
       ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
       : {}),
+    ...(args.linkedJiraIssue !== undefined ? { linkedJiraIssue: args.linkedJiraIssue } : {}),
+    ...(args.linkedJiraIssueSiteId !== undefined
+      ? { linkedJiraIssueSiteId: args.linkedJiraIssueSiteId }
+      : {}),
     ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
     ...(args.linkedGitLabIssue !== undefined ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),
+    ...(args.linkedGitLabProjectRef !== undefined
+      ? { linkedGitLabProjectRef: args.linkedGitLabProjectRef }
+      : {}),
     ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
     ...(args.linkedBitbucketPR !== undefined ? { linkedBitbucketPR: args.linkedBitbucketPR } : {}),
     ...(args.linkedAzureDevOpsPR !== undefined
@@ -2271,6 +2281,9 @@ export async function createLocalWorktree(
       ? { pendingFirstAgentMessageRename: true }
       : {}),
     ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
+    ...(args.linkedIssueSourcePreference !== undefined
+      ? { linkedIssueSourcePreference: args.linkedIssueSourcePreference }
+      : {}),
     ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
     ...(args.linkedLinearIssue !== undefined ? { linkedLinearIssue: args.linkedLinearIssue } : {}),
     ...(args.linkedLinearIssueWorkspaceId !== undefined
@@ -2279,8 +2292,15 @@ export async function createLocalWorktree(
     ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
       ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
       : {}),
+    ...(args.linkedJiraIssue !== undefined ? { linkedJiraIssue: args.linkedJiraIssue } : {}),
+    ...(args.linkedJiraIssueSiteId !== undefined
+      ? { linkedJiraIssueSiteId: args.linkedJiraIssueSiteId }
+      : {}),
     ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
     ...(args.linkedGitLabIssue !== undefined ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),
+    ...(args.linkedGitLabProjectRef !== undefined
+      ? { linkedGitLabProjectRef: args.linkedGitLabProjectRef }
+      : {}),
     ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
     ...(args.linkedBitbucketPR !== undefined ? { linkedBitbucketPR: args.linkedBitbucketPR } : {}),
     ...(args.linkedAzureDevOpsPR !== undefined

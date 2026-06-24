@@ -4,8 +4,15 @@ import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas
 import { normalizeGitLabIssueListArgs } from '../../../gitlab/gitlab-preload-args'
 
 const RepoSelector = z.object({
-  repo: requiredString('Missing repo selector')
+  repo: requiredString('Missing repo selector'),
+  repoId: OptionalString
 })
+
+function repoSelector(params: z.infer<typeof RepoSelector>): string {
+  // Why: repoId is the canonical runtime identity when present; repo paths can
+  // be stale display/fallback values after a repository is moved or renamed.
+  return params.repoId ? `id:${params.repoId}` : params.repo
+}
 
 const EmptyParams = z.object({}).optional().default({})
 const GitLabRateLimit = z
@@ -210,7 +217,12 @@ export const GITLAB_METHODS: RpcMethod[] = [
     name: 'gitlab.updateIssue',
     params: UpdateIssue,
     handler: async (params, { runtime }) =>
-      runtime.updateGitLabRepoIssue(params.repo, params.number, params.updates, params.projectRef)
+      runtime.updateGitLabRepoIssue(
+        repoSelector(params),
+        params.number,
+        params.updates,
+        params.projectRef
+      )
   }),
   defineMethod({
     name: 'gitlab.addIssueComment',

@@ -201,6 +201,7 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.projectId === candidate.projectId &&
       worktree.hostId === candidate.hostId &&
       worktree.projectHostSetupId === candidate.projectHostSetupId &&
+      worktree.sourceRepoId === candidate.sourceRepoId &&
       worktree.path === candidate.path &&
       worktree.head === candidate.head &&
       worktree.branch === candidate.branch &&
@@ -210,9 +211,14 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.displayName === candidate.displayName &&
       worktree.comment === candidate.comment &&
       worktree.linkedIssue === candidate.linkedIssue &&
+      worktree.linkedIssueSourcePreference === candidate.linkedIssueSourcePreference &&
       worktree.linkedPR === candidate.linkedPR &&
+      worktree.linkedJiraIssue === candidate.linkedJiraIssue &&
+      worktree.linkedJiraIssueSiteId === candidate.linkedJiraIssueSiteId &&
       worktree.linkedGitLabMR === candidate.linkedGitLabMR &&
       worktree.linkedGitLabIssue === candidate.linkedGitLabIssue &&
+      JSON.stringify(worktree.linkedGitLabProjectRef ?? null) ===
+        JSON.stringify(candidate.linkedGitLabProjectRef ?? null) &&
       worktree.linkedBitbucketPR === candidate.linkedBitbucketPR &&
       worktree.linkedAzureDevOpsPR === candidate.linkedAzureDevOpsPR &&
       worktree.linkedGiteaPR === candidate.linkedGiteaPR &&
@@ -2130,6 +2136,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     linkedAzureDevOpsPR,
     linkedGiteaPR,
     compareBaseRef,
+    linkedJiraIssue,
+    linkedJiraIssueSiteId,
+    linkedIssueSourcePreference,
+    linkedGitLabProjectRef,
     options
   ) => {
     const automationProvenanceRequest = options?.automationProvenanceRequest
@@ -2184,11 +2194,15 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(linkedLinearIssueOrganizationUrlKey !== undefined
               ? { linkedLinearIssueOrganizationUrlKey }
               : {}),
+            ...(linkedJiraIssue !== undefined ? { linkedJiraIssue } : {}),
+            ...(linkedJiraIssueSiteId !== undefined ? { linkedJiraIssueSiteId } : {}),
+            ...(linkedIssueSourcePreference !== undefined ? { linkedIssueSourcePreference } : {}),
             ...(manualOrder !== undefined ? { manualOrder } : {}),
             ...(parentWorkspace ? { parentWorkspace } : {}),
             ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
             ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
             ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {}),
+            ...(linkedGitLabProjectRef !== undefined ? { linkedGitLabProjectRef } : {}),
             ...(linkedBitbucketPR !== undefined ? { linkedBitbucketPR } : {}),
             ...(linkedAzureDevOpsPR !== undefined ? { linkedAzureDevOpsPR } : {}),
             ...(linkedGiteaPR !== undefined ? { linkedGiteaPR } : {}),
@@ -2214,6 +2228,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                     ...(displayName ? { displayName } : {}),
                     ...(telemetrySource ? { telemetrySource } : {}),
                     ...(linkedIssue !== undefined ? { linkedIssue } : {}),
+                    ...(linkedIssueSourcePreference !== undefined
+                      ? { linkedIssueSourcePreference }
+                      : {}),
                     ...(linkedPR !== undefined ? { linkedPR } : {}),
                     ...(pushTarget ? { pushTarget } : {}),
                     ...(createdWithAgent ? { createdWithAgent } : {}),
@@ -2227,11 +2244,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                     ...(linkedLinearIssueOrganizationUrlKey !== undefined
                       ? { linkedLinearIssueOrganizationUrlKey }
                       : {}),
+                    ...(linkedJiraIssue !== undefined ? { linkedJiraIssue } : {}),
+                    ...(linkedJiraIssueSiteId !== undefined ? { linkedJiraIssueSiteId } : {}),
                     ...(manualOrder !== undefined ? { manualOrder } : {}),
                     ...(parentWorkspace ? { parentWorkspace } : {}),
                     ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
                     ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
                     ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {}),
+                    ...(linkedGitLabProjectRef !== undefined ? { linkedGitLabProjectRef } : {}),
                     ...(linkedBitbucketPR !== undefined ? { linkedBitbucketPR } : {}),
                     ...(linkedAzureDevOpsPR !== undefined ? { linkedAzureDevOpsPR } : {}),
                     ...(linkedGiteaPR !== undefined ? { linkedGiteaPR } : {}),

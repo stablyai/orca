@@ -35,15 +35,58 @@ describe('task drawer source boundaries', () => {
       'function GHCommentComposer'
     )
 
-    expect(issueUpdate).toContain('sourceContext: args.sourceContext')
+    expect(issueUpdate).toContain('githubUpdateIssue(')
+    expect(issueUpdate).toContain('args.sourceContext ?? getGitHubMutationSettings(args.repoId)')
     expect(commentUpdate).toContain('sourceContext: args.sourceContext')
+    expect(commentUpdate).toContain("'github.addIssueComment'")
+    expect(commentUpdate).toContain('const runtimeRepoId =')
+    expect(commentUpdate).toContain('repoId: runtimeRepoId')
+    expect(commentUpdate).toContain(
+      'issueSourcePreference: args.issueSourcePreference ?? undefined'
+    )
     expect(editSection).toContain('sourceContext,')
-    expect(editSection).toContain(
-      'patchWorkItem(item.id, { state: newState }, item.repoId, { sourceContext })'
+    expect(editSection).toContain('issueSourcePreference: item.issueSourcePreference')
+  })
+
+  it('routes GitHub full-page comments through runtime RPC with source metadata', () => {
+    const source = componentSource('PullRequestPage.tsx')
+    const sharedSource = componentSource('github/github-issue-comment-helpers.ts')
+
+    expect(source).toContain('addIssueCommentForRepo,')
+    expect(source).toContain('sourceSettings: getGitHubMutationSettings(item.repoId)')
+    expect(source).toContain('sourceSettings: getGitHubMutationSettings(repoId)')
+    expect(sharedSource).toContain("'github.addIssueComment'")
+    expect(sharedSource).toContain('repoId: runtimeRepoId')
+    expect(sharedSource).toContain('issueSourcePreference: args.issueSourcePreference ?? undefined')
+  })
+
+  it('routes GitHub full-page issue edits through runtime-owned issue mutations', () => {
+    const source = componentSource('PullRequestPage.tsx')
+    const issueUpdate = sourceBetween(
+      source,
+      'async function runIssueUpdate',
+      'async function runWorkItemBodyUpdate'
     )
-    expect(editSection).toContain(
-      'patchWorkItem(item.id, { labels: newLabels }, item.repoId, { sourceContext })'
+
+    expect(issueUpdate).toContain('githubUpdateIssue(getGitHubMutationSettings(args.repoId)')
+    expect(issueUpdate).toContain('issueSourcePreference: args.issueSourcePreference ?? undefined')
+  })
+
+  it('keeps GitHub task-page workspace attachment lookups scoped to issue source', () => {
+    const source = componentSource('TaskPage.tsx')
+    const openOrUse = sourceBetween(
+      source,
+      'const handleOpenOrUseGitHubWorkItem',
+      'const openComposerForGitLabItem'
     )
+    const taskRows = sourceBetween(
+      source,
+      'const attachedWorkspace = findGithubWorkItemWorkspaceAttachment',
+      'const attachedWorkspaceLabel = attachedWorkspace'
+    )
+
+    expect(openOrUse).toContain("item.type === 'issue' ? item.issueSourcePreference : undefined")
+    expect(taskRows).toContain("item.type === 'issue' ? item.issueSourcePreference : undefined")
   })
 
   it('threads GitLab task source context through the shared drawer selector', () => {

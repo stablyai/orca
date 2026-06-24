@@ -584,6 +584,86 @@ describe('registerGitHubHandlers', () => {
     )
   })
 
+  it('threads issueSourcePreference through gh:workItem', async () => {
+    repos[0].issueSourcePreference = 'origin'
+    getWorkItemMock.mockResolvedValue(null)
+
+    registerGitHubHandlers(store as never, stats as never)
+
+    await handlers['gh:workItem'](null, {
+      repoPath: '/workspace/repo',
+      number: 42,
+      type: 'issue'
+    })
+
+    expect(getWorkItemMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      42,
+      'issue',
+      null,
+      undefined,
+      'origin'
+    )
+  })
+
+  it('lets gh:workItem per-call issueSourcePreference override the repo default', async () => {
+    repos[0].issueSourcePreference = 'upstream'
+    getWorkItemMock.mockResolvedValue(null)
+
+    registerGitHubHandlers(store as never, stats as never)
+
+    await handlers['gh:workItem'](null, {
+      repoPath: '/workspace/repo',
+      number: 42,
+      type: 'issue',
+      issueSourcePreference: 'origin'
+    })
+
+    expect(getWorkItemMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      42,
+      'issue',
+      null,
+      undefined,
+      'origin'
+    )
+  })
+
+  it('threads repo issueSourcePreference through gh:workItemDetails by default', async () => {
+    repos[0].issueSourcePreference = 'origin'
+    getWorkItemDetailsMock.mockResolvedValue(null)
+
+    registerGitHubHandlers(store as never, stats as never)
+
+    await handlers['gh:workItemDetails'](null, {
+      repoPath: '/workspace/repo',
+      number: 42,
+      type: 'issue'
+    })
+
+    expect(getWorkItemDetailsMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      42,
+      'issue',
+      null,
+      {},
+      'origin'
+    )
+  })
+
+  it('rejects malformed gh:workItemDetails input before GitHub lookup', async () => {
+    registerGitHubHandlers(store as never, stats as never)
+
+    const invalidNumberResult = await handlers['gh:workItemDetails'](null, {
+      repoPath: '/workspace/repo',
+      number: 0,
+      type: 'issue'
+    })
+
+    expect(invalidNumberResult).toBeNull()
+    expect(getWorkItemDetailsMock).not.toHaveBeenCalled()
+  })
+
   it('routes local WSL project GitHub issue and work-item IPC through project git options', async () => {
     setPlatform('win32')
     projects = [
@@ -652,6 +732,7 @@ describe('registerGitHubHandlers', () => {
       { sender: { id: 1 } },
       {
         repoPath: '/workspace/repo',
+        issueSourcePreference: 'origin',
         number: 7,
         updates: { body: 'Updated' }
       }
@@ -660,6 +741,7 @@ describe('registerGitHubHandlers', () => {
       { sender: { id: 1 } },
       {
         repoPath: '/workspace/repo',
+        issueSourcePreference: 'origin',
         number: 7,
         body: 'Comment'
       }
@@ -725,7 +807,8 @@ describe('registerGitHubHandlers', () => {
       7,
       { body: 'Updated' },
       null,
-      localGitOptions
+      localGitOptions,
+      'origin'
     )
     expect(addIssueCommentMock).toHaveBeenCalledWith(
       '/workspace/repo',
@@ -733,7 +816,8 @@ describe('registerGitHubHandlers', () => {
       'Comment',
       null,
       null,
-      localGitOptions
+      localGitOptions,
+      'origin'
     )
     expect(listLabelsMock).toHaveBeenCalledWith('/workspace/repo', undefined, null, localGitOptions)
     expect(listAssignableUsersMock).toHaveBeenCalledWith(
@@ -790,7 +874,8 @@ describe('registerGitHubHandlers', () => {
     await handlers['gh:workItemDetails'](null, {
       repoPath: '/workspace/repo',
       number: 42,
-      type: 'pr'
+      type: 'pr',
+      issueSourcePreference: 'upstream'
     })
     await handlers['gh:prFileContents'](null, {
       repoPath: '/workspace/repo',
@@ -919,7 +1004,14 @@ describe('registerGitHubHandlers', () => {
       }
     )
 
-    expect(getWorkItemMock).toHaveBeenCalledWith('/workspace/repo', 42, 'pr', null, localGitOptions)
+    expect(getWorkItemMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      42,
+      'pr',
+      null,
+      localGitOptions,
+      undefined
+    )
     expect(getWorkItemByOwnerRepoMock).toHaveBeenCalledWith(
       '/workspace/repo',
       prRepo,
@@ -933,7 +1025,8 @@ describe('registerGitHubHandlers', () => {
       42,
       'pr',
       null,
-      localGitOptions
+      localGitOptions,
+      'upstream'
     )
     expect(getPRFileContentsMock).toHaveBeenCalledWith(
       expect.objectContaining({ repoPath: '/workspace/repo', localGitOptions })

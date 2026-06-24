@@ -205,6 +205,10 @@ export function useAutomationDispatchEvents(): void {
                       undefined,
                       undefined,
                       undefined,
+                      undefined,
+                      undefined,
+                      undefined,
+                      undefined,
                       {
                         automationProvenanceRequest: {
                           automationId: automation.id,

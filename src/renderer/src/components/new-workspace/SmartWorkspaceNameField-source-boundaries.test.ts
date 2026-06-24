@@ -91,6 +91,26 @@ describe('SmartWorkspaceNameField repo-backed source boundaries', () => {
     expect(FIELD_SOURCE).toContain('[mode, onActiveSourceModeChange]')
   })
 
+  it('scopes smart GitHub submit lookups by repo issue source preference', () => {
+    const selectedRepoLookupSection = sourceBetween(
+      FIELD_SOURCE,
+      'const item = await lookupSmartGitHubSubmitItem({',
+      'return { items: item ? [item] : [], prompt: null }'
+    )
+    expect(selectedRepoLookupSection).toContain(
+      'issueSourcePreference: selectedRepo.issueSourcePreference'
+    )
+
+    const repoBackedLookupSection = sourceBetween(
+      FIELD_SOURCE,
+      'repoBackedSearchTargets.map((target) =>',
+      ').catch(() => null)'
+    )
+    expect(repoBackedLookupSection).toContain(
+      'issueSourcePreference: target.repo.issueSourcePreference'
+    )
+  })
+
   it('defers the source popover until composer interaction', () => {
     expect(FIELD_SOURCE).toContain('deferSourcePopoverUntilInteractionRef')
     expect(FIELD_SOURCE).toContain('handleSourcePopoverOpenChange')

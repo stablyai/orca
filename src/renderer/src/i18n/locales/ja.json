@@ -4299,7 +4299,15 @@
           "b6c7d8e9f0": "タスクステータスの同期を完了できませんでした。",
           "c7d8e9f0a1": "{{value0}} 件更新",
           "d8e9f0a1b2": "{{value0}} 件スキップ",
-          "e9f0a1b2c3": "{{value0}} 件失敗"
+          "e9f0a1b2c3": "{{value0}} 件失敗",
+          "providerIssueReadFailed": "{{value0}} issue {{value1}} could not be read.",
+          "linkedIssueMissing": "{{value0}} source is missing a linked issue.",
+          "missingProviderStatusMapping": "No matching {{value0}} status for {{value1}}.",
+          "ambiguousProviderStatusMapping": "Multiple {{value0}} statuses match {{value1}}.",
+          "repoContextMissing": "{{value0}} issue #{{value1}} is missing repo context.",
+          "unsupportedLinkedItemKind": "GitHub #{{value0}} looks like a pull request, so it was not updated.",
+          "providerUpdateFailed": "Could not update {{value0}} issue {{value1}}.",
+          "providerSyncError": "Could not sync {{value0}} issue {{value1}}."
         },
         "WorktreeParentPickerPopover": {
           "failedSetParent": "親ワークツリーを設定できませんでした",

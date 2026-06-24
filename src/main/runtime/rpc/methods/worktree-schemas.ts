@@ -28,6 +28,14 @@ const AutomationWorkspaceProvenanceRequest = z.object({
   createRequestId: z.string()
 })
 
+const GitLabProjectRef = z
+  .object({
+    host: z.string().min(1),
+    path: z.string().min(1)
+  })
+  .nullable()
+  .optional()
+
 export const WorktreeListParams = z.object({
   repo: OptionalString,
   limit: OptionalFiniteNumber
@@ -66,12 +74,16 @@ export const WorktreeCreate = z
     compareBaseRef: OptionalString,
     branchNameOverride: OptionalString,
     linkedIssue: TriStateLinkedIssue,
+    linkedIssueSourcePreference: z.enum(['origin', 'upstream']).nullable().optional(),
     linkedPR: TriStateLinkedIssue,
     linkedLinearIssue: z.string().optional(),
     linkedLinearIssueWorkspaceId: z.union([z.string(), z.null()]).optional(),
     linkedLinearIssueOrganizationUrlKey: z.union([z.string(), z.null()]).optional(),
+    linkedJiraIssue: z.union([z.string(), z.null()]).optional(),
+    linkedJiraIssueSiteId: z.union([z.string(), z.null()]).optional(),
     linkedGitLabMR: TriStateLinkedIssue,
     linkedGitLabIssue: TriStateLinkedIssue,
+    linkedGitLabProjectRef: GitLabProjectRef,
     linkedBitbucketPR: TriStateLinkedIssue,
     linkedAzureDevOpsPR: TriStateLinkedIssue,
     linkedGiteaPR: TriStateLinkedIssue,
@@ -176,12 +188,16 @@ export const WorktreeSet = WorktreeSelector.extend({
   // string parser instead of OptionalString's empty-as-undefined behavior.
   comment: OptionalPlainString,
   linkedIssue: TriStateLinkedIssue,
+  linkedIssueSourcePreference: z.enum(['origin', 'upstream']).nullable().optional(),
   linkedPR: TriStateLinkedIssue,
   linkedLinearIssue: z.union([z.string(), z.null()]).optional(),
   linkedLinearIssueWorkspaceId: z.union([z.string(), z.null()]).optional(),
   linkedLinearIssueOrganizationUrlKey: z.union([z.string(), z.null()]).optional(),
+  linkedJiraIssue: z.union([z.string(), z.null()]).optional(),
+  linkedJiraIssueSiteId: z.union([z.string(), z.null()]).optional(),
   linkedGitLabMR: TriStateLinkedIssue,
   linkedGitLabIssue: TriStateLinkedIssue,
+  linkedGitLabProjectRef: GitLabProjectRef,
   linkedBitbucketPR: TriStateLinkedIssue,
   linkedAzureDevOpsPR: TriStateLinkedIssue,
   linkedGiteaPR: TriStateLinkedIssue,

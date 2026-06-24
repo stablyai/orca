@@ -959,11 +959,14 @@ const WorktreeCard = React.memo(function WorktreeCard({
         labels: 'labels' in hoverIssue ? (hoverIssue.labels ?? []) : [],
         updatedAt: new Date().toISOString(),
         author: null,
-        repoId: repo.id
+        repoId: repo.id,
+        // Why: same-number issues can exist in origin/upstream; opening the
+        // card must keep the persisted workspace source boundary intact.
+        issueSourcePreference: worktree.linkedIssueSourcePreference ?? undefined
       }
       openTaskPage({ taskSource: 'github', preselectedRepoId: repo.id, openGitHubWorkItem: item })
     },
-    [hoverIssue, openTaskPage, repo]
+    [hoverIssue, openTaskPage, repo, worktree.linkedIssueSourcePreference]
   )
   const handleOpenReviewInOrca = useCallback(
     (e: React.MouseEvent) => {

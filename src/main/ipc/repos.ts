@@ -746,6 +746,15 @@ const FolderWorkspaceLinkedTaskArgs = z
     url: z.string().min(1),
     linearIdentifier: z.string().min(1).optional(),
     jiraIdentifier: z.string().min(1).optional(),
+    jiraSiteId: z.string().min(1).optional(),
+    gitLabProjectRef: z
+      .object({
+        host: z.string().min(1),
+        path: z.string().min(1)
+      })
+      .nullable()
+      .optional(),
+    issueSourcePreference: z.enum(['origin', 'upstream']).optional(),
     repoId: z.string().min(1).optional()
   })
   .nullable()
