@@ -63,7 +63,6 @@ export type LinearLaunchContextArgs = {
   identifier: string | undefined
   title?: string
   url?: string
-  linkedContext?: LinkedWorkItemContext
 }
 
 function isLinearWorkItemReference(
@@ -165,8 +164,7 @@ export function getLinkedWorkItemPromptContext(
       provider: linkedWorkItem?.provider,
       identifier: linkedWorkItem?.linearIdentifier,
       title: linkedWorkItem?.title,
-      url: linkedWorkItem?.url,
-      linkedContext: linkedWorkItem?.linkedContext
+      url: linkedWorkItem?.url
     })
     return linearBlock
       ? { linkedUrls: [], linkedContextBlocks: [linearBlock] }
@@ -194,8 +192,7 @@ export function getLaunchableWorkItemDraftContent(args: {
       provider: args.provider,
       identifier: args.linearIdentifier,
       title: args.title,
-      url: args.url,
-      linkedContext: args.linkedContext
+      url: args.url
     })
     return linearBlock ? formatDraftContextBlock(linearBlock) : ''
   }
@@ -224,8 +221,7 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
         provider: linkedWorkItem?.provider,
         identifier: linkedWorkItem?.linearIdentifier,
         title: linkedWorkItem?.title,
-        url: linkedWorkItem?.url,
-        linkedContext: linkedWorkItem?.linkedContext
+        url: linkedWorkItem?.url
       })
     : null
   const linearDraft = linearBlock ? formatDraftContextBlock(linearBlock) : null

@@ -120,8 +120,7 @@ describe('buildLinearLaunchContextBlock', () => {
       provider: 'linear',
       identifier: 'ENG-123',
       title: LINEAR_ITEM.title,
-      url: LINEAR_ITEM.url,
-      linkedContext: LINEAR_ITEM.linkedContext
+      url: LINEAR_ITEM.url
     })
 
     expect(block?.split('\n')).toEqual([
@@ -284,8 +283,7 @@ describe('buildAgentPromptWithContext', () => {
     const linearBlock = buildLinearLaunchContextBlock({
       provider: 'linear',
       identifier: 'ENG-123',
-      url: LINEAR_ITEM.url,
-      linkedContext: LINEAR_ITEM.linkedContext
+      url: LINEAR_ITEM.url
     })
 
     const prompt = buildAgentPromptWithContext(
