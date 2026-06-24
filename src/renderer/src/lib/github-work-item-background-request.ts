@@ -136,6 +136,32 @@ export async function resolvePreferredQuickAgentForGitHubWorkItem(
   )
 }
 
+function resolveGitHubWorkItemLaunchPlatform(
+  store: GitHubWorkItemBackgroundStoreSnapshot,
+  repo: Repo
+): NodeJS.Platform {
+  const host = parseExecutionHostId(getRepoExecutionHostId(repo))
+  if (host?.kind === 'runtime') {
+    // Why: the background runtime path gates on hostPlatform before this point;
+    // POSIX is safer than client PowerShell if another caller violates that.
+    return (
+      store.runtimeStatusByEnvironmentId.get(host.environmentId)?.status?.hostPlatform ?? 'linux'
+    )
+  }
+  const projectRuntime = repo.connectionId
+    ? undefined
+    : getLocalRepoProjectExecutionRuntimeContext(
+        store as ReturnType<typeof useAppStore.getState>,
+        repo.id,
+        CLIENT_PLATFORM
+      )
+  return resolveSourceControlLaunchPlatform({
+    connectionId: repo.connectionId,
+    worktreePath: repo.path,
+    projectRuntime
+  })
+}
+
 export function buildGitHubWorkItemStartupPlan(args: {
   agent: TuiAgent | null
   item: GitHubWorkItem
@@ -151,18 +177,9 @@ export function buildGitHubWorkItemStartupPlan(args: {
     return { startupPlan: null, quickPrompt: '', quickTelemetry: null }
   }
   const { prompt: quickPrompt, draftPrompt } = resolveGitHubWorkItemPrompt(item)
-  const projectRuntime = repo.connectionId
-    ? undefined
-    : getLocalRepoProjectExecutionRuntimeContext(
-        store as ReturnType<typeof useAppStore.getState>,
-        repo.id,
-        CLIENT_PLATFORM
-      )
-  const platform = resolveSourceControlLaunchPlatform({
-    connectionId: repo.connectionId,
-    worktreePath: repo.path,
-    projectRuntime
-  })
+  // Why: runtime-owned repos launch on their owner host, not on the client
+  // desktop, so startup shell quoting must use the runtime platform.
+  const platform = resolveGitHubWorkItemLaunchPlatform(store, repo)
   const draftLaunchPlan = draftPrompt
     ? buildAgentDraftLaunchPlan({
         agent,

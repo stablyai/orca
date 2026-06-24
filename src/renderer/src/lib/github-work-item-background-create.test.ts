@@ -288,6 +288,38 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
     expect(deps.continueBackgroundCreate).not.toHaveBeenCalled()
   })
 
+  it('falls back without staging when the runtime host platform is unknown', async () => {
+    const runtimeRepo: Repo = {
+      ...repo,
+      executionHostId: 'runtime:env-1'
+    }
+    const deps = makeDeps(
+      makeStore({
+        repos: [runtimeRepo],
+        runtimeStatusByEnvironmentId: new Map([
+          ['env-1', { status: makeRuntimeStatus({ runtimeId: 'runtime-env-1' }), checkedAt: 1 }]
+        ])
+      })
+    )
+    const openModalFallback = vi.fn()
+
+    const result = await createGitHubWorkItemWorkspaceInBackground(
+      {
+        item: makeIssue(),
+        repoId: 'repo-1',
+        openModalFallback
+      },
+      deps
+    )
+
+    expect(result).toEqual({ kind: 'fallback', reason: 'host-unavailable' })
+    expect(openModalFallback).toHaveBeenCalledTimes(1)
+    expect(deps.beginBackgroundCreate).not.toHaveBeenCalled()
+    expect(deps.resolveSetupDecision).not.toHaveBeenCalled()
+    expect(deps.confirmHooks).not.toHaveBeenCalled()
+    expect(deps.continueBackgroundCreate).not.toHaveBeenCalled()
+  })
+
   it('uses the preferred quick agent when one is available', async () => {
     const store = makeStore({
       ensureDetectedAgents: vi.fn().mockResolvedValue(['codex'])
@@ -325,7 +357,13 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
     const store = makeStore({
       repos: [runtimeRepo],
       runtimeStatusByEnvironmentId: new Map([
-        ['env-1', { status: makeRuntimeStatus({ runtimeId: 'runtime-env-1' }), checkedAt: 1 }]
+        [
+          'env-1',
+          {
+            status: makeRuntimeStatus({ runtimeId: 'runtime-env-1', hostPlatform: 'win32' }),
+            checkedAt: 1
+          }
+        ]
       ]),
       ensureDetectedAgents: vi.fn().mockResolvedValue([]),
       ensureRemoteDetectedAgents: vi.fn().mockResolvedValue([]),
@@ -359,6 +397,34 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
     const request = continueCall?.[1] as WorktreeCreationRequest
     expect(request.worktreeCreateProgressMode).toBe('indeterminate')
     expect(request.agent).toBe('codex')
+    expect(buildAgentStartupPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ platform: 'win32' })
+    )
+  })
+
+  it('falls back before creating when the selected agent startup plan cannot be built', async () => {
+    vi.mocked(buildAgentStartupPlan).mockReturnValueOnce(null)
+    const store = makeStore({
+      ensureDetectedAgents: vi.fn().mockResolvedValue(['codex'])
+    })
+    const deps = makeDeps(store)
+    const openModalFallback = vi.fn()
+
+    const result = await createGitHubWorkItemWorkspaceInBackground(
+      {
+        item: makeIssue(),
+        repoId: 'repo-1',
+        openModalFallback
+      },
+      deps
+    )
+
+    expect(result).toEqual({ kind: 'fallback', reason: 'agent-startup' })
+    expect(deps.toastError).toHaveBeenCalledWith('Could not build the agent launch command.')
+    expect(deps.removePendingCreate).toHaveBeenCalledWith('creation-1')
+    expect(deps.setActiveView).toHaveBeenCalledWith('tasks')
+    expect(openModalFallback).toHaveBeenCalledTimes(1)
+    expect(deps.continueBackgroundCreate).not.toHaveBeenCalled()
   })
 
   it('stops before opening the composer when the staged create is cancelled during setup preflight', async () => {

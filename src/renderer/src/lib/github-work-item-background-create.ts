@@ -17,6 +17,7 @@ import {
   resolveDirectPrStartPoint,
   resolveDirectSetupDecision
 } from '@/lib/launch-work-item-direct-preflight'
+import { agentLaunchCommandErrorMessage } from '@/lib/launch-work-item-direct-messages'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
@@ -34,7 +35,7 @@ export type BackgroundGitHubWorkItemCreateResult =
   | { kind: 'error' }
   | {
       kind: 'fallback'
-      reason: 'repo-missing' | 'host-unavailable' | 'setup-ask' | 'pr-start-point'
+      reason: 'repo-missing' | 'host-unavailable' | 'setup-ask' | 'pr-start-point' | 'agent-startup'
     }
 
 type AppActiveView = ReturnType<typeof useAppStore.getState>['activeView']
@@ -121,6 +122,9 @@ function repoHostUnavailable(store: GitHubWorkItemBackgroundStoreSnapshot, repo:
   }
   const status = store.runtimeStatusByEnvironmentId.get(host.environmentId)?.status
   if (!status) {
+    return true
+  }
+  if (!status.hostPlatform) {
     return true
   }
   const compatibility = evaluateRuntimeCompat({
@@ -234,6 +238,12 @@ export async function createGitHubWorkItemWorkspaceInBackground(
       repo,
       store
     })
+    if (agent && !startupPlan) {
+      deps.toastError(agentLaunchCommandErrorMessage())
+      abandonStagedCreate(creationId, restoreView, deps)
+      args.openModalFallback()
+      return { kind: 'fallback', reason: 'agent-startup' }
+    }
     const backendStartup = buildGitHubWorkItemBackendStartup(agent, startupPlan, quickTelemetry)
 
     const request: WorktreeCreationRequest = {
