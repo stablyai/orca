@@ -138,8 +138,27 @@ type FloatingTerminalPanelBoundsState = {
   source: FloatingTerminalPanelBoundsSource
 }
 
+function resolveDragTargetElement(target: EventTarget): Element | null {
+  // Why: pointer targets can be SVG icons or text nodes nested inside a tab
+  // root, neither of which is an HTMLElement. Normalize any Node to its nearest
+  // Element (text nodes via parentElement) so closest() can match a
+  // [data-tab-id] ancestor. typeof guards keep this safe in non-DOM contexts.
+  if (typeof Element !== 'undefined' && target instanceof Element) {
+    return target
+  }
+  if (typeof Node !== 'undefined' && target instanceof Node) {
+    return target.parentElement
+  }
+  // Fallback for hosts/targets that duck-type the DOM (e.g. test doubles).
+  const candidate = target as { closest?: unknown; parentElement?: Element | null }
+  if (typeof candidate.closest === 'function') {
+    return candidate as unknown as Element
+  }
+  return candidate.parentElement ?? null
+}
+
 function isFloatingTerminalDragTarget(target: EventTarget): boolean {
-  return !(target instanceof HTMLElement && target.closest(FLOATING_TERMINAL_NO_DRAG_SELECTOR))
+  return !resolveDragTargetElement(target)?.closest(FLOATING_TERMINAL_NO_DRAG_SELECTOR)
 }
 
 function readInitialPanelBounds(): FloatingTerminalPanelBoundsState {
@@ -275,8 +294,9 @@ export function FloatingTerminalPanel({
   // Why: reuse the workspace tab drag/reorder engine so floating tabs reorder
   // identically. The floating worktree renders no split-pane layout, so the
   // hook's split-target resolution naturally returns null (no panel geometry)
-  // and only the same-group reorder path runs. enabled is gated on `open` so
-  // the hidden panel registers no document-level pointer sensors.
+  // and only the same-group reorder path runs. enabled is gated on `open` so a
+  // hidden panel's pointer sensor uses an impossible activation distance,
+  // preventing drag activation while hidden.
   const dragSplit = useTabDragSplit({ worktreeId: FLOATING_TERMINAL_WORKTREE_ID, enabled: open })
   const groupTabs = useMemo(
     () => (activeGroup ? unifiedTabs.filter((tab) => tab.groupId === activeGroup.id) : unifiedTabs),

@@ -123,6 +123,33 @@ const saveDialogBox = vi.hoisted(() => ({
   fileId: null as string | null
 }))
 
+const dragSplitBox = vi.hoisted(() => {
+  const setDragRootNode = vi.fn()
+  const onDragEnd = vi.fn()
+  const onDragStart = vi.fn()
+  const onDragMove = vi.fn()
+  const onDragOver = vi.fn()
+  const onDragCancel = vi.fn()
+  const collisionDetection = vi.fn()
+  const sensors = [{ sensor: vi.fn(), options: {} }]
+  const hoveredTabInsertion = { groupId: 'group-floating', index: 0 }
+  const value = {
+    activeDrag: null as unknown,
+    collisionDetection,
+    hoveredTabInsertion,
+    hoveredDropTarget: null,
+    isTabDragActiveRef: { current: false },
+    onDragCancel,
+    onDragEnd,
+    onDragMove,
+    onDragOver,
+    onDragStart,
+    sensors,
+    setDragRootNode
+  }
+  return { hook: vi.fn(() => value), value }
+})
+
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   return {
@@ -200,20 +227,7 @@ vi.mock('@/components/tab-group/tab-drag-context', () => ({
 }))
 
 vi.mock('@/components/tab-group/useTabDragSplit', () => ({
-  useTabDragSplit: () => ({
-    activeDrag: null,
-    collisionDetection: vi.fn(),
-    hoveredTabInsertion: null,
-    hoveredDropTarget: null,
-    isTabDragActiveRef: { current: false },
-    onDragCancel: vi.fn(),
-    onDragEnd: vi.fn(),
-    onDragMove: vi.fn(),
-    onDragOver: vi.fn(),
-    onDragStart: vi.fn(),
-    sensors: [],
-    setDragRootNode: vi.fn()
-  })
+  useTabDragSplit: dragSplitBox.hook
 }))
 
 vi.mock('@/components/terminal-pane/TerminalPane', () => ({
@@ -2057,6 +2071,76 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(panelElement.focus).not.toHaveBeenCalled()
   })
 
+  it('does not start a window drag from an SVG icon nested inside a tab', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    const element = await renderPanel(true)
+    const panel = findByProp(element, 'data-floating-terminal-panel')
+    const titlebar = findByProp(element, 'data-floating-terminal-shortcut-surface')
+    const panelElement = { focus: vi.fn() }
+    attachRef(panel.props.ref, panelElement)
+    vi.stubGlobal('document', { activeElement: null })
+    const setPointerCapture = vi.fn()
+
+    // Why: model the real DOM hierarchy so the helper's Element normalization
+    // runs — an SVGElement is an Element, so closest() must resolve the
+    // [data-tab-id] tab root and the titlebar yields the pointer to dnd-kit.
+    class StubNode {}
+    class StubElement extends StubNode {
+      closest = vi.fn().mockReturnValue({})
+    }
+    class StubSVGElement extends StubElement {}
+    vi.stubGlobal('Node', StubNode)
+    vi.stubGlobal('Element', StubElement)
+    vi.stubGlobal('SVGElement', StubSVGElement)
+    const svgTarget = new StubSVGElement()
+
+    ;(titlebar.props.onPointerDown as (event: unknown) => void)({
+      button: 0,
+      clientX: 10,
+      clientY: 20,
+      currentTarget: { setPointerCapture },
+      pointerId: 1,
+      target: svgTarget
+    })
+
+    expect(svgTarget.closest).toHaveBeenCalledWith(expect.stringContaining('[data-tab-id]'))
+    expect(setPointerCapture).not.toHaveBeenCalled()
+  })
+
+  it('does not start a window drag from a text node inside a tab', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    const element = await renderPanel(true)
+    const panel = findByProp(element, 'data-floating-terminal-panel')
+    const titlebar = findByProp(element, 'data-floating-terminal-shortcut-surface')
+    const panelElement = { focus: vi.fn() }
+    attachRef(panel.props.ref, panelElement)
+    vi.stubGlobal('document', { activeElement: null })
+    const setPointerCapture = vi.fn()
+
+    // Why: a text node is a Node but not an Element, so normalization must walk
+    // to parentElement before closest() can match the [data-tab-id] ancestor.
+    class StubNode {}
+    class StubElement extends StubNode {
+      closest = vi.fn().mockReturnValue({})
+    }
+    vi.stubGlobal('Node', StubNode)
+    vi.stubGlobal('Element', StubElement)
+    const parentElement = new StubElement()
+    const textTarget = Object.assign(new StubNode(), { parentElement })
+
+    ;(titlebar.props.onPointerDown as (event: unknown) => void)({
+      button: 0,
+      clientX: 10,
+      clientY: 20,
+      currentTarget: { setPointerCapture },
+      pointerId: 1,
+      target: textTarget
+    })
+
+    expect(parentElement.closest).toHaveBeenCalledWith(expect.stringContaining('[data-tab-id]'))
+    expect(setPointerCapture).not.toHaveBeenCalled()
+  })
+
   it('focuses the floating panel for titlebar shortcuts when focus starts outside it', async () => {
     setFloatingTabs([makeTab({ id: 'tab-1' })])
     const element = await renderPanel(true)
@@ -2406,17 +2490,51 @@ describe('FloatingTerminalPanel close behavior', () => {
     setFloatingTabs([makeTab({ id: 'tab-a' }), makeTab({ id: 'tab-b' })])
 
     const element = await renderPanel(true)
-    const dndContext = findByTypeName(element, 'DndContext')
+
+    // Why: the panel must key the shared reorder engine to the floating
+    // worktree and enable it while the panel is open.
+    expect(dragSplitBox.hook).toHaveBeenCalledWith({
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      enabled: true
+    })
 
     // Why: reordering is driven entirely by the shared useTabDragSplit
-    // handlers, so the context must receive real onDragEnd/sensors, and the
-    // TabBar must receive the live insertion indicator for the drop bar.
-    expect(typeof dndContext.props.onDragEnd).toBe('function')
-    expect(typeof dndContext.props.onDragStart).toBe('function')
-    expect(dndContext.props.sensors).toBeDefined()
+    // handlers, so DndContext must receive the exact references the hook
+    // returned — not re-wrapped copies that could drop drag events.
+    const dndContext = findByTypeName(element, 'DndContext')
+    expect(dndContext.props.sensors).toBe(dragSplitBox.value.sensors)
+    expect(dndContext.props.collisionDetection).toBe(dragSplitBox.value.collisionDetection)
+    expect(dndContext.props.onDragStart).toBe(dragSplitBox.value.onDragStart)
+    expect(dndContext.props.onDragMove).toBe(dragSplitBox.value.onDragMove)
+    expect(dndContext.props.onDragOver).toBe(dragSplitBox.value.onDragOver)
+    expect(dndContext.props.onDragEnd).toBe(dragSplitBox.value.onDragEnd)
+    expect(dndContext.props.onDragCancel).toBe(dragSplitBox.value.onDragCancel)
     expect(dndContext.props.autoScroll).toBe(false)
 
+    // Why: the drag root must register with the hook so webview passthrough
+    // teardown fires on unmount.
+    let dragRootRef: unknown = null
+    visit(element, (entry) => {
+      if (entry.props.ref === dragSplitBox.value.setDragRootNode) {
+        dragRootRef = entry.props.ref
+      }
+    })
+    expect(dragRootRef).toBe(dragSplitBox.value.setDragRootNode)
+
+    // Why: the drop indicator bar is driven by the hook's live insertion state,
+    // so TabBar must receive that exact object.
     const tabBar = findByTypeName(element, 'TabBar')
-    expect('hoveredTabInsertion' in tabBar.props).toBe(true)
+    expect(tabBar.props.hoveredTabInsertion).toBe(dragSplitBox.value.hoveredTabInsertion)
+  })
+
+  it('disables drag activation when the panel is closed', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-a' })])
+
+    await renderPanel(false)
+
+    expect(dragSplitBox.hook).toHaveBeenCalledWith({
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      enabled: false
+    })
   })
 })

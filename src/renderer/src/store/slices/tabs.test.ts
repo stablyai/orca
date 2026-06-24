@@ -1274,6 +1274,41 @@ describe('TabsSlice', () => {
         store.getState().unifiedTabsByWorktree[WT].find((tab) => tab.id === right.id)?.groupId
       ).toBe(rightGroupId)
     })
+
+    it('rejects a split drop for the floating worktree without mutating groups or layout', () => {
+      const first = store.getState().createUnifiedTab(FLOATING_TERMINAL_WORKTREE_ID, 'terminal', {
+        id: 'floating-a',
+        label: 'A'
+      })
+      const second = store.getState().createUnifiedTab(FLOATING_TERMINAL_WORKTREE_ID, 'terminal', {
+        id: 'floating-b',
+        label: 'B'
+      })
+      const groupId = store.getState().groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID][0].id
+      const layoutBefore = store.getState().layoutByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
+
+      const moved = store.getState().dropUnifiedTab(second.id, {
+        groupId,
+        splitDirection: 'right'
+      })
+
+      expect(moved).toBe(false)
+      const state = store.getState()
+      // Why: the floating surface paints a single group, so no new group or
+      // split layout may be created and the tab must stay where it was.
+      expect(state.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toHaveLength(1)
+      expect(state.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID][0].id).toBe(groupId)
+      expect(state.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID][0].tabOrder).toEqual([
+        first.id,
+        second.id
+      ])
+      expect(
+        state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID].find(
+          (tab) => tab.id === second.id
+        )?.groupId
+      ).toBe(groupId)
+      expect(state.layoutByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toEqual(layoutBefore)
+    })
   })
 
   // ─── setTabLabel / setTabCustomLabel / setUnifiedTabColor ─────────

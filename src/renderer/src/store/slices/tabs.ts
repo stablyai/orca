@@ -1499,6 +1499,12 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       }
 
       const isSplitDrop = Boolean(target.splitDirection)
+      // Why: the floating panel renders a single group with no split layout, so
+      // a split drop would create a group/layout the surface never paints,
+      // orphaning the tab. Reject it at the store boundary before any mutation.
+      if (isSplitDrop && worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+        return {}
+      }
       if (!isSplitDrop && tab.groupId === target.groupId) {
         return {}
       }
