@@ -1416,7 +1416,9 @@ export default function TerminalPane({
     if (!container) {
       return
     }
+    let ownsRegularTerminalFocus = false
     const syncFocused = (focused: boolean): void => {
+      ownsRegularTerminalFocus = focused
       setRegularTerminalInputFocusAttribute(focused)
       window.api.ui.setTerminalInputFocused?.(focused)
     }
@@ -1478,10 +1480,9 @@ export default function TerminalPane({
       document.removeEventListener('pointerdown', onPointerDown, true)
       window.removeEventListener('blur', onWindowBlur)
       window.removeEventListener('focus', onWindowFocus)
-      if (
-        isXtermHelperTextarea(document.activeElement) &&
-        container.contains(document.activeElement)
-      ) {
+      // Why: the helper textarea may be removed before cleanup observes
+      // document.activeElement, so clear by this pane's mirrored ownership.
+      if (ownsRegularTerminalFocus) {
         syncFocused(false)
       }
     }
