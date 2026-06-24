@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { quoteCliCommandArgument } from './shell-command-quote'
-import { RuntimeRpcFailureError } from './runtime-client'
+import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
 import {
   formatCliError,
   formatAutomationShow,
@@ -88,6 +88,18 @@ describe('formatCliError', () => {
     expect(output).toContain('desktop browser app/window')
     expect(output).toContain('--app <web app>')
     expect(output).not.toContain('orca goto')
+  })
+
+  it('prints did-you-mean next steps for an unknown-command error carrying data', () => {
+    const error = new RuntimeClientError('invalid_argument', 'Unknown command: worktree remov', {
+      suggestions: ['worktree rm'],
+      nextSteps: ['Did you mean: orca worktree rm']
+    })
+
+    const output = formatCliError(error)
+
+    expect(output).toContain('Unknown command: worktree remov')
+    expect(output).toContain('Next step: Did you mean: orca worktree rm')
   })
 
   it('prints runtime next steps for structured lineage errors', () => {

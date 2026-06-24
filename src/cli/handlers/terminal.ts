@@ -147,9 +147,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     })
     printResult(result, json, formatTerminalCreate)
   },
-  // Why: `focus` and `switch` are aliases — register the same handler under
-  // both keys so the dispatch table stays a plain command-path lookup.
-  'terminal focus': terminalFocusHandler,
+  // `focus` resolves to this canonical path via CommandSpec.aliases before dispatch.
   'terminal switch': terminalFocusHandler,
   'terminal close': async ({ flags, client, cwd, json }) => {
     const result = await client.call<{ close: RuntimeTerminalClose }>('terminal.close', {

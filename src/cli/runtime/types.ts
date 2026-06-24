@@ -8,10 +8,14 @@ export type {
 
 export class RuntimeClientError extends Error {
   readonly code: string
+  // Why: optional structured recovery payload (e.g. did-you-mean suggestions,
+  // valid-flag enumeration) surfaced into both the human and --json error output.
+  readonly data?: unknown
 
-  constructor(code: string, message: string) {
+  constructor(code: string, message: string, data?: unknown) {
     super(message)
     this.code = code
+    this.data = data
   }
 }
 

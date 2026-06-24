@@ -1,4 +1,5 @@
 import { RuntimeClientError } from './runtime-client'
+import { unknownCommandData, unknownFlagData } from './command-suggestion'
 
 export type ParsedArgs = {
   commandPath: string[]
@@ -8,6 +9,11 @@ export type ParsedArgs = {
 
 export type CommandSpec = {
   path: string[]
+  // Why: alternate command paths that resolve to this same canonical spec, so
+  // agents reaching for a conventional verb (git's `worktree remove`) succeed
+  // instead of dead-ending. Each alias is a full command path. Additive only —
+  // dispatch always keys on the canonical `path`, never the alias.
+  aliases?: string[][]
   summary: string
   usage: string
   allowedFlags: string[]
@@ -123,6 +129,12 @@ export function matches(actual: string[], expected: string[]): boolean {
   )
 }
 
+// Why: a spec is reachable by its canonical path plus any declared aliases — one
+// definition so resolution, validation, help, and agent-context never disagree.
+export function specPaths(spec: CommandSpec): string[][] {
+  return spec.aliases ? [spec.path, ...spec.aliases] : [spec.path]
+}
+
 export function supportsBrowserPageFlag(commandPath: string[]): boolean {
   const joined = commandPath.join(' ')
   if (['open', 'status'].includes(commandPath[0])) {
@@ -197,26 +209,32 @@ export function normalizeCommandPositionals(specs: CommandSpec[], parsed: Parsed
     if (positionalArgs.length === 0) {
       continue
     }
-    const positionalCount = parsed.commandPath.length - spec.path.length
-    if (positionalCount <= 0 || positionalCount > positionalArgs.length) {
-      continue
-    }
-    if (!matches(parsed.commandPath.slice(0, spec.path.length), spec.path)) {
-      continue
-    }
-    const flags = new Map(parsed.flags)
-    const values = parsed.commandPath.slice(spec.path.length)
-    // Why: validation runs inside main's error-reporting path, so normalization
-    // records ambiguity instead of throwing before CLI errors can be formatted.
-    const providedPositionals = values.map((_, index) => positionalArgs[index])
-    const positionalFlagConflicts = providedPositionals.filter((name) => flags.has(name))
-    values.forEach((value, index) => {
-      const name = positionalArgs[index]
-      if (!flags.has(name)) {
-        flags.set(name, value)
+    // Why: match against the canonical path AND any alias so an aliased
+    // invocation is rewritten to the canonical path here, before dispatch and
+    // validation run. This is the single canonicalization point — dispatch then
+    // keys the handler map on `spec.path`, never the alias the user typed.
+    for (const base of specPaths(spec)) {
+      const positionalCount = parsed.commandPath.length - base.length
+      if (positionalCount <= 0 || positionalCount > positionalArgs.length) {
+        continue
       }
-    })
-    return { commandPath: spec.path, flags, positionalFlagConflicts }
+      if (!matches(parsed.commandPath.slice(0, base.length), base)) {
+        continue
+      }
+      const flags = new Map(parsed.flags)
+      const values = parsed.commandPath.slice(base.length)
+      // Why: validation runs inside main's error-reporting path, so normalization
+      // records ambiguity instead of throwing before CLI errors can be formatted.
+      const providedPositionals = values.map((_, index) => positionalArgs[index])
+      const positionalFlagConflicts = providedPositionals.filter((name) => flags.has(name))
+      values.forEach((value, index) => {
+        const name = positionalArgs[index]
+        if (!flags.has(name)) {
+          flags.set(name, value)
+        }
+      })
+      return { commandPath: spec.path, flags, positionalFlagConflicts }
+    }
   }
   return parsed
 }
@@ -225,7 +243,7 @@ export function findCommandSpec(
   specs: CommandSpec[],
   commandPath: string[]
 ): CommandSpec | undefined {
-  return specs.find((spec) => matches(spec.path, commandPath))
+  return specs.find((spec) => specPaths(spec).some((candidate) => matches(candidate, commandPath)))
 }
 
 export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs): void {
@@ -233,7 +251,8 @@ export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs
   if (!spec) {
     throw new RuntimeClientError(
       'invalid_argument',
-      `Unknown command: ${parsed.commandPath.join(' ')}`
+      `Unknown command: ${parsed.commandPath.join(' ')}`,
+      unknownCommandData(specs, parsed.commandPath)
     )
   }
 
@@ -246,16 +265,17 @@ export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs
     )
   }
 
+  const pageAllowed = supportsBrowserPageFlag(spec.path)
   for (const flag of parsed.flags.keys()) {
     const isGlobalFlag = GLOBAL_FLAGS.includes(flag)
-    if (
-      !isGlobalFlag &&
-      !spec.allowedFlags.includes(flag) &&
-      !(flag === 'page' && supportsBrowserPageFlag(spec.path))
-    ) {
+    if (!isGlobalFlag && !spec.allowedFlags.includes(flag) && !(flag === 'page' && pageAllowed)) {
+      const validFlags = [
+        ...new Set([...GLOBAL_FLAGS, ...spec.allowedFlags, ...(pageAllowed ? ['page'] : [])])
+      ]
       throw new RuntimeClientError(
         'invalid_argument',
-        `Unknown flag --${flag} for command: ${spec.path.join(' ')}`
+        `Unknown flag --${flag} for command: ${spec.path.join(' ')}`,
+        unknownFlagData(flag, validFlags)
       )
     }
   }

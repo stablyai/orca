@@ -90,6 +90,15 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
       computerUseErrorRecoveryData('invalid_argument')?.nextSteps ?? []
     )
   }
+  // Why: errors carrying a structured recovery payload (did-you-mean,
+  // valid-flag enumeration) render their nextSteps the same way computer errors
+  // do. RuntimeRpcFailureError has no `data`, so it falls through to its branch.
+  if (error instanceof RuntimeClientError) {
+    const nextSteps = nextStepsFromData(error.data)
+    if (nextSteps.length > 0) {
+      return formatMessageWithNextSteps(message, nextSteps)
+    }
+  }
   if (
     error instanceof RuntimeRpcFailureError &&
     error.response.error.code === 'runtime_unavailable'
@@ -97,14 +106,7 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
     return `${message}\nOrca is not running. Run 'orca open' first.`
   }
   if (error instanceof RuntimeRpcFailureError) {
-    const data = error.response.error.data
-    const nextSteps =
-      data && typeof data === 'object' && Array.isArray((data as { nextSteps?: unknown }).nextSteps)
-        ? (data as { nextSteps: unknown[] }).nextSteps.filter(
-            (step): step is string => typeof step === 'string'
-          )
-        : []
-    return formatMessageWithNextSteps(message, nextSteps)
+    return formatMessageWithNextSteps(message, nextStepsFromData(error.response.error.data))
   }
   return message
 }
@@ -140,7 +142,25 @@ function formatMessageWithNextSteps(message: string, nextSteps: readonly string[
   return `${message}\n${nextSteps.map((step) => `Next step: ${step}`).join('\n')}`
 }
 
+function nextStepsFromData(data: unknown): string[] {
+  if (
+    data &&
+    typeof data === 'object' &&
+    Array.isArray((data as { nextSteps?: unknown }).nextSteps)
+  ) {
+    return (data as { nextSteps: unknown[] }).nextSteps.filter(
+      (step): step is string => typeof step === 'string'
+    )
+  }
+  return []
+}
+
 function localCliErrorData(error: unknown, context: CliErrorContext): unknown {
+  // Why: an error's own structured payload (command/flag suggestions) wins; the
+  // computer special case stays as a fallback for errors that don't carry data.
+  if (error instanceof RuntimeClientError && error.data !== undefined) {
+    return error.data
+  }
   if (
     error instanceof RuntimeClientError &&
     error.code === 'invalid_argument' &&

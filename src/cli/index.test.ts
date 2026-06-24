@@ -51,10 +51,12 @@ vi.mock('./runtime-client', () => {
 
   class RuntimeClientError extends Error {
     readonly code: string
+    readonly data?: unknown
 
-    constructor(code: string, message: string) {
+    constructor(code: string, message: string, data?: unknown) {
       super(message)
       this.code = code
+      this.data = data
     }
   }
 
@@ -138,6 +140,88 @@ describe('COMMAND_SPECS collision check', () => {
         ).toBe(true)
       }
     }
+  })
+})
+
+describe('command aliases dispatch to the canonical handler', () => {
+  let logSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    callMock.mockReset()
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    callMock.mockReset()
+    // Why: restore console.log so a downstream describe's vi.spyOn starts from a
+    // clean spy — otherwise this block's --json output leaks into its calls[0].
+    logSpy.mockRestore()
+  })
+
+  it('runs `worktree remove` as the canonical `worktree rm` (the incident)', async () => {
+    queueFixtures(callMock, okFixture('req', { removed: true }))
+
+    await main(['worktree', 'remove', '--worktree', 'id:wt-1', '--force', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.rm',
+      expect.objectContaining({ worktree: 'id:wt-1', force: true })
+    )
+  })
+
+  it('runs `worktree delete` as the canonical `worktree rm`', async () => {
+    queueFixtures(callMock, okFixture('req', { removed: true }))
+
+    await main(['worktree', 'delete', '--worktree', 'id:wt-1', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.rm',
+      expect.objectContaining({ worktree: 'id:wt-1' })
+    )
+  })
+
+  it('still runs `terminal focus` after the handler de-duplication', async () => {
+    queueFixtures(callMock, okFixture('req', { focus: { ok: true } }))
+
+    await main(['terminal', 'focus', '--terminal', 'term_abc', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('terminal.focus', expect.objectContaining({}))
+  })
+
+  it('serves `agent-context --json` without contacting the runtime', async () => {
+    await main(['agent-context', '--json'], '/tmp/repo')
+
+    // Why: pure local read — proves the SSH/offline property (no RPC).
+    expect(callMock).not.toHaveBeenCalled()
+    const schema = JSON.parse(String(logSpy.mock.calls.at(-1)?.[0]))
+    expect(schema.schemaVersion).toBe(1)
+    const rm = schema.commands.find(
+      (command: { command: string }) => command.command === 'worktree rm'
+    )
+    expect(rm.aliases).toContainEqual(['worktree', 'remove'])
+  })
+})
+
+describe('unknown command surfaces a suggestion', () => {
+  let errorSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    callMock.mockReset()
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    errorSpy.mockRestore()
+    process.exitCode = 0
+  })
+
+  it('prints did-you-mean for a near-miss command and exits non-zero', async () => {
+    await main(['worktree', 'remov'], '/tmp/repo')
+
+    expect(process.exitCode).toBe(1)
+    const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(stderr).toContain('Unknown command: worktree remov')
+    expect(stderr).toContain('orca worktree')
   })
 })
 
