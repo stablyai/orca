@@ -12,6 +12,7 @@ export type AiVaultSessionDragPayload = {
   sessionId: string
   title: string
   command: string
+  // Why: drag/drop resume must preserve planned env/default args, not just the shell command.
   env?: Record<string, string>
   launchConfig?: SleepingAgentLaunchConfig
 }
@@ -32,7 +33,7 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 function isStringRecord(value: unknown): value is Record<string, string> {
-  if (!value || typeof value !== 'object') {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
   }
   return Object.values(value).every((entry) => typeof entry === 'string')

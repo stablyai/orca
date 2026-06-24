@@ -49,7 +49,8 @@ export default function AiVaultPanel(): React.JSX.Element {
   const repos = useRepos()
   const allWorktrees = useAllWorktrees()
   const projectHostSetupProjection = useProjectHostSetupProjection()
-  const agentCmdOverrides = useAppStore((s) => s.settings?.agentCmdOverrides ?? {})
+  const settings = useAppStore((s) => s.settings)
+  const agentCmdOverrides = settings?.agentCmdOverrides ?? {}
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState<AiVaultScope>(DEFAULT_AI_VAULT_SCOPE)
   const [sort, setSort] = useState<AiVaultSort>('updated')
@@ -210,7 +211,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         session,
         commandOverride: agentCmdOverrides[session.agent]
       }),
-    [activeWorktree?.id, agentCmdOverrides]
+    [activeWorktree?.id, agentCmdOverrides, settings]
   )
 
   const buildResumeStartup = useCallback(
@@ -221,7 +222,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         session,
         commandOverride: agentCmdOverrides[session.agent]
       }),
-    [activeWorktree?.id, agentCmdOverrides]
+    [activeWorktree?.id, agentCmdOverrides, settings]
   )
 
   const copyResumeCommand = useCallback(
