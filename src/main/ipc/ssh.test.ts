@@ -18,7 +18,8 @@ const {
   mockPortForwardManager,
   mockPortScannerCallbacks,
   mockNextConnectionManagers,
-  mockNextPortForwardManagers
+  mockNextPortForwardManagers,
+  broadcastToMainWindowsMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   powerMonitorOffMock: vi.fn(),
@@ -72,7 +73,8 @@ const {
   },
   mockPortScannerCallbacks: new Map<string, unknown>(),
   mockNextConnectionManagers: [] as unknown[],
-  mockNextPortForwardManagers: [] as unknown[]
+  mockNextPortForwardManagers: [] as unknown[],
+  broadcastToMainWindowsMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -155,6 +157,15 @@ vi.mock('./pty', () => ({
   getSshPtyProvider: vi.fn(),
   getPtyIdsForConnection: vi.fn().mockReturnValue([]),
   isRendererPtyOutputPaused: vi.fn().mockReturnValue(false)
+}))
+
+vi.mock('../window/main-window-registry', () => ({
+  broadcastToMainWindows: broadcastToMainWindowsMock,
+  sendToWindow: (
+    window: { webContents: { send: (channel: string, ...args: unknown[]) => void } },
+    channel: string,
+    ...args: unknown[]
+  ) => window.webContents.send(channel, ...args)
 }))
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
@@ -296,6 +307,7 @@ describe('SSH IPC handlers', () => {
     mockPortForwardManager.dispose.mockReset()
     powerMonitorOnMock.mockReset()
     powerMonitorOffMock.mockReset()
+    broadcastToMainWindowsMock.mockReset()
     vi.mocked(getSshPtyProvider).mockReset()
     vi.mocked(getPtyIdsForConnection).mockReset().mockReturnValue([])
     vi.mocked(clearProviderPtyState).mockReset()
@@ -470,7 +482,7 @@ describe('SSH IPC handlers', () => {
       reconnectAttempt: 0,
       remotePlatform: 'win32'
     })
-    expect(mockWindow.webContents.send).toHaveBeenCalledWith('ssh:state-changed', {
+    expect(broadcastToMainWindowsMock).toHaveBeenCalledWith('ssh:state-changed', {
       targetId: 'ssh-1',
       state: {
         targetId: 'ssh-1',
@@ -510,7 +522,7 @@ describe('SSH IPC handlers', () => {
 
       onDispose?.('connection_lost')
 
-      expect(mockWindow.webContents.send).toHaveBeenCalledWith('ssh:state-changed', {
+      expect(broadcastToMainWindowsMock).toHaveBeenCalledWith('ssh:state-changed', {
         targetId: 'ssh-1',
         state: {
           targetId: 'ssh-1',
@@ -528,7 +540,7 @@ describe('SSH IPC handlers', () => {
 
       await vi.advanceTimersByTimeAsync(500)
 
-      expect(mockWindow.webContents.send).toHaveBeenCalledWith('ssh:state-changed', {
+      expect(broadcastToMainWindowsMock).toHaveBeenCalledWith('ssh:state-changed', {
         targetId: 'ssh-1',
         state: {
           targetId: 'ssh-1',
@@ -847,8 +859,7 @@ describe('SSH IPC handlers', () => {
       'linux-x64'
     )
 
-    expect(firstWindow.webContents.send).not.toHaveBeenCalled()
-    expect(secondWindow.webContents.send).toHaveBeenCalledWith('ssh:state-changed', {
+    expect(broadcastToMainWindowsMock).toHaveBeenCalledWith('ssh:state-changed', {
       targetId: 'ssh-1',
       state: {
         targetId: 'ssh-1',
@@ -857,6 +868,7 @@ describe('SSH IPC handlers', () => {
         reconnectAttempt: 0
       }
     })
+    expect(firstWindow.webContents.send).not.toHaveBeenCalled()
     expect(secondWindow.webContents.send).toHaveBeenCalledWith(
       'pty:data',
       expect.objectContaining({ id: 'remote-pty', data: 'hello' })
@@ -865,7 +877,7 @@ describe('SSH IPC handlers', () => {
       id: 'remote-pty',
       code: 9
     })
-    expect(secondWindow.webContents.send).toHaveBeenCalledWith('ssh:detected-ports-changed', {
+    expect(broadcastToMainWindowsMock).toHaveBeenCalledWith('ssh:detected-ports-changed', {
       targetId: 'ssh-1',
       ports: expect.arrayContaining([expect.objectContaining({ port: 3000 })])
     })

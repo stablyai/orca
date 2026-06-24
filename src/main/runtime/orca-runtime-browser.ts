@@ -143,6 +143,8 @@ export type RuntimeBrowserCommandHost = {
   resolveWorktreeSelector(selector: string): Promise<{ id: string }>
   getAuthoritativeWindow(): BrowserWindow
   getAvailableAuthoritativeWindow(): BrowserWindow | null
+  getPreferredRendererWindow(): BrowserWindow | null
+  getBrowserPageOwnerWindow(browserPageId: string): BrowserWindow | null
   // Why: headless serve has no renderer window; browser pages are backed by a
   // main-process offscreen backend instead. Null when offscreen browsing is
   // unavailable (e.g. environment can't support it), which keeps capability
@@ -300,8 +302,11 @@ export class RuntimeBrowserCommands {
   // and registerGuest fires, but automation must not steal the user's visible
   // worktree/browser pane. Ask the renderer to background-mount the worktree and
   // acquire a hidden automation visibility lease instead of activating the UI.
-  private async ensureBrowserWorktreeActive(worktreeId: string | undefined): Promise<void> {
-    const win = this.host.getAuthoritativeWindow()
+  private async ensureBrowserWorktreeActive(
+    worktreeId: string | undefined,
+    window?: BrowserWindow | null
+  ): Promise<void> {
+    const win = window ?? this.getReadyRendererWindow()
     win.webContents.send('browser:activateView', worktreeId ? { worktreeId } : {})
     // Why: hidden/restored browser panes become operable only after the
     // renderer's webview mounts and calls registerGuest. Waiting on that IPC is
@@ -311,9 +316,10 @@ export class RuntimeBrowserCommands {
 
   private async ensureBrowserPageActive(
     worktreeId: string | undefined,
-    browserPageId: string
+    browserPageId: string,
+    window?: BrowserWindow | null
   ): Promise<void> {
-    const win = this.host.getAuthoritativeWindow()
+    const win = window ?? this.getOwnedBrowserPageWindow(browserPageId)
     win.webContents.send(
       'browser:activateView',
       worktreeId ? { worktreeId, browserPageId } : { browserPageId }
@@ -328,7 +334,10 @@ export class RuntimeBrowserCommands {
   // any navigation-causing command so the UI stays in sync.
   private notifyRendererNavigation(browserPageId: string, url: string, title: string): void {
     try {
-      const win = this.host.getAuthoritativeWindow()
+      const win = this.host.getBrowserPageOwnerWindow(browserPageId)
+      if (!win) {
+        return
+      }
       win.webContents.send('browser:navigation-update', { browserPageId, url, title })
     } catch {
       // Window may not exist during shutdown
@@ -352,7 +361,10 @@ export class RuntimeBrowserCommands {
     browserPageId: string
   ): void {
     try {
-      const win = this.host.getAuthoritativeWindow()
+      const win = this.host.getBrowserPageOwnerWindow(browserPageId)
+      if (!win) {
+        return
+      }
       win.webContents.send('browser:pane-focus', {
         worktreeId: worktreeId ?? null,
         browserPageId
@@ -360,6 +372,17 @@ export class RuntimeBrowserCommands {
     } catch {
       // Window may not exist during shutdown
     }
+  }
+
+  private getOwnedBrowserPageWindow(browserPageId: string): BrowserWindow {
+    const win = this.host.getBrowserPageOwnerWindow(browserPageId)
+    if (!win) {
+      throw new BrowserError(
+        'browser_tab_not_found',
+        `Browser page ${browserPageId} is no longer available`
+      )
+    }
+    return win
   }
 
   async browserSnapshot(params: BrowserCommandTargetParams): Promise<BrowserSnapshotResult> {
@@ -1433,7 +1456,7 @@ export class RuntimeBrowserCommands {
       }
     }
 
-    const win = this.host.getAuthoritativeWindow()
+    const win = this.getOwnedBrowserPageWindow(browserPageId)
     const requestId = randomUUID()
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -1442,10 +1465,10 @@ export class RuntimeBrowserCommands {
       }, 10_000)
 
       const handler = (
-        _event: Electron.IpcMainEvent,
+        event: Electron.IpcMainEvent,
         reply: { requestId: string; error?: string }
       ): void => {
-        if (reply.requestId !== requestId) {
+        if (event.sender !== win.webContents || reply.requestId !== requestId) {
           return
         }
         clearTimeout(timer)
@@ -1682,7 +1705,7 @@ export class RuntimeBrowserCommands {
       return { closed: true }
     }
 
-    const win = this.host.getAuthoritativeWindow()
+    const win = tabId ? this.getOwnedBrowserPageWindow(tabId) : this.getReadyRendererWindow()
     const requestId = randomUUID()
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -1691,10 +1714,10 @@ export class RuntimeBrowserCommands {
       }, 10_000)
 
       const handler = (
-        _event: Electron.IpcMainEvent,
+        event: Electron.IpcMainEvent,
         reply: { requestId: string; error?: string }
       ): void => {
-        if (reply.requestId !== requestId) {
+        if (event.sender !== win.webContents || reply.requestId !== requestId) {
           return
         }
         clearTimeout(timer)
@@ -1785,7 +1808,7 @@ export class RuntimeBrowserCommands {
     profileId?: string,
     activate?: boolean
   ): Promise<{ browserPageId: string }> {
-    const win = this.host.getAuthoritativeWindow()
+    const win = this.getReadyRendererWindow()
     const requestId = randomUUID()
 
     const browserPageId = await new Promise<string>((resolve, reject) => {
@@ -1795,10 +1818,10 @@ export class RuntimeBrowserCommands {
       }, 10_000)
 
       const handler = (
-        _event: Electron.IpcMainEvent,
+        event: Electron.IpcMainEvent,
         reply: { requestId: string; browserPageId?: string; error?: string }
       ): void => {
-        if (reply.requestId !== requestId) {
+        if (event.sender !== win.webContents || reply.requestId !== requestId) {
           return
         }
         clearTimeout(timer)
@@ -1821,4 +1844,26 @@ export class RuntimeBrowserCommands {
 
     return { browserPageId }
   }
+
+  private getReadyRendererWindow(): BrowserWindow {
+    const readyWindow = this.host.getAvailableAuthoritativeWindow()
+    if (isUsableRendererWindow(readyWindow)) {
+      return readyWindow
+    }
+    const preferredWindow = this.host.getPreferredRendererWindow()
+    if (isUsableRendererWindow(preferredWindow)) {
+      return preferredWindow
+    }
+    return this.host.getAuthoritativeWindow()
+  }
+}
+
+function isUsableRendererWindow(window: BrowserWindow | null | undefined): window is BrowserWindow {
+  if (!window || !window.webContents) {
+    return false
+  }
+  if (typeof window.isDestroyed === 'function' && window.isDestroyed()) {
+    return false
+  }
+  return !(typeof window.webContents.isDestroyed === 'function' && window.webContents.isDestroyed())
 }

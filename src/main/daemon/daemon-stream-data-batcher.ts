@@ -14,6 +14,10 @@ type PendingStreamDataBatch = {
 // Why: match main-process PTY IPC batching to avoid adding latency while
 // removing daemon socket writes and JSON framing during bursty output.
 const STREAM_DATA_BATCH_INTERVAL_MS = 8
+// Why: once bytes are written to the daemon stream socket, active output is
+// stuck behind them in FIFO order. A per-turn write budget leaves room for
+// later interactive flushes to jump ahead of retained background batches.
+const STREAM_DATA_FLUSH_BUDGET_CHARS = 64 * 1024
 
 type EnqueueOptions = {
   flushImmediately?: boolean
@@ -143,9 +147,7 @@ export class DaemonStreamDataBatcher {
       this.flushSession(clientId, sessionId)
       return
     }
-    if (!batch.timer) {
-      batch.timer = setTimeout(() => this.flush(clientId), STREAM_DATA_BATCH_INTERVAL_MS)
-    }
+    this.scheduleFlush(clientId, batch)
   }
 
   flush(clientId: string): void {
@@ -158,16 +160,50 @@ export class DaemonStreamDataBatcher {
       clearTimeout(batch.timer)
       batch.timer = null
     }
-    this.pendingByClient.delete(clientId)
-
     const client = this.getClient(clientId)
     if (!client?.streamSocket || client.streamSocket.destroyed) {
+      this.pendingByClient.delete(clientId)
       return
     }
 
+    const retained: PendingStreamDataBatch['queue'] = []
+    let retainedChars = 0
+    let remainingBudget = STREAM_DATA_FLUSH_BUDGET_CHARS
     for (const entry of batch.queue) {
-      this.writeStreamDataEvent(client.streamSocket, entry.sessionId, entry.data)
+      if (remainingBudget <= 0) {
+        retained.push(entry)
+        retainedChars += entry.data.length
+        continue
+      }
+      if (entry.data.length <= remainingBudget) {
+        this.writeStreamDataEvent(client.streamSocket, entry.sessionId, entry.data)
+        remainingBudget -= entry.data.length
+        continue
+      }
+      const splitIndex =
+        clampToSafeSplitIndex(entry.data, 0, remainingBudget) || nextSafeSplitIndex(entry.data, 0)
+      this.writeStreamDataEvent(
+        client.streamSocket,
+        entry.sessionId,
+        entry.data.slice(0, splitIndex)
+      )
+      const rest = entry.data.slice(splitIndex)
+      retained.push({ sessionId: entry.sessionId, data: rest })
+      retainedChars += rest.length
+      remainingBudget = 0
     }
+
+    if (retained.length === 0) {
+      this.pendingByClient.delete(clientId)
+      return
+    }
+    batch.queue = retained
+    batch.queuedChars = retainedChars
+    this.scheduleFlush(clientId, batch)
+  }
+
+  flushSession(clientId: string, sessionId: string): void {
+    this.flushSessionData(clientId, sessionId)
   }
 
   private queuedCharsForSession(batch: PendingStreamDataBatch, sessionId: string): number {
@@ -180,7 +216,7 @@ export class DaemonStreamDataBatcher {
     return chars
   }
 
-  private flushSession(clientId: string, sessionId: string): void {
+  private flushSessionData(clientId: string, sessionId: string): void {
     const batch = this.pendingByClient.get(clientId)
     if (!batch) {
       return
@@ -218,6 +254,12 @@ export class DaemonStreamDataBatcher {
 
     for (const entry of flushed) {
       this.writeStreamDataEvent(client.streamSocket, entry.sessionId, entry.data)
+    }
+  }
+
+  private scheduleFlush(clientId: string, batch: PendingStreamDataBatch): void {
+    if (!batch.timer) {
+      batch.timer = setTimeout(() => this.flush(clientId), STREAM_DATA_BATCH_INTERVAL_MS)
     }
   }
 

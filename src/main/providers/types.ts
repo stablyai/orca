@@ -109,6 +109,8 @@ export type IPtyProvider = {
   getInitialCwd(id: string): Promise<string>
   clearBuffer(id: string): Promise<void>
   acknowledgeDataEvent(id: string, charCount: number): void
+  supportsLosslessDataFlowPause?: boolean
+  setDataFlowPaused?: (id: string, paused: boolean) => boolean
   hasChildProcesses(id: string): Promise<boolean>
   getForegroundProcess(id: string): Promise<string | null>
   serialize(ids: string[]): Promise<string>

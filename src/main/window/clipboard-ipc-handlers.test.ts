@@ -117,6 +117,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 }))
 
 import {
+  clearTrustedClipboardRendererWebContentsId,
   registerClipboardHandlers,
   setTrustedClipboardRendererWebContentsId
 } from './clipboard-ipc-handlers'
@@ -254,6 +255,25 @@ describe('registerClipboardHandlers', () => {
     expect(clipboardWriteImageMock).not.toHaveBeenCalled()
     expect(clipboardWriteBufferMock).not.toHaveBeenCalled()
     expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
+  })
+
+  it('trusts multiple registered main-window renderers independently', async () => {
+    setTrustedClipboardRendererWebContentsId(17)
+    setTrustedClipboardRendererWebContentsId(42)
+    clipboardReadTextMock.mockReturnValue('shared clipboard')
+    registerClipboardHandlers({} as never)
+
+    const readText = getRegisteredHandlers().get('clipboard:readText')
+
+    await expect(readText?.(makeClipboardEvent({ id: 17 }))).resolves.toBe('shared clipboard')
+    await expect(readText?.(makeClipboardEvent({ id: 42 }))).resolves.toBe('shared clipboard')
+
+    clearTrustedClipboardRendererWebContentsId(42)
+
+    await expect(readText?.(makeClipboardEvent({ id: 17 }))).resolves.toBe('shared clipboard')
+    await expect(readText?.(makeClipboardEvent({ id: 42 }))).rejects.toThrow(
+      'Unauthorized clipboard IPC sender'
+    )
   })
 
   it('writes local files through the trusted clipboard IPC handler', async () => {

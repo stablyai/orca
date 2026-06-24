@@ -7,26 +7,30 @@ const {
   registerGuestMock,
   unregisterGuestMock,
   getGuestWebContentsIdMock,
+  getRendererWebContentsIdMock,
   getWebContentsIdByTabIdMock,
   getWorktreeIdForTabMock,
   openDevToolsMock,
   setAnnotationViewportBridgeMock,
   cancelDownloadMock,
   browserWindowFromWebContentsMock,
-  webContentsFromIdMock
+  webContentsFromIdMock,
+  getMainWindowForWebContentsMock
 } = vi.hoisted(() => ({
   removeHandlerMock: vi.fn(),
   handleMock: vi.fn(),
   registerGuestMock: vi.fn(),
   unregisterGuestMock: vi.fn(),
   getGuestWebContentsIdMock: vi.fn(),
+  getRendererWebContentsIdMock: vi.fn(),
   getWebContentsIdByTabIdMock: vi.fn(() => new Map()),
   getWorktreeIdForTabMock: vi.fn(),
   openDevToolsMock: vi.fn().mockResolvedValue(true),
   setAnnotationViewportBridgeMock: vi.fn().mockResolvedValue(true),
   cancelDownloadMock: vi.fn(),
   browserWindowFromWebContentsMock: vi.fn(),
-  webContentsFromIdMock: vi.fn()
+  webContentsFromIdMock: vi.fn(),
+  getMainWindowForWebContentsMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -47,6 +51,7 @@ vi.mock('../browser/browser-manager', () => ({
     registerGuest: registerGuestMock,
     unregisterGuest: unregisterGuestMock,
     getGuestWebContentsId: getGuestWebContentsIdMock,
+    getRendererWebContentsId: getRendererWebContentsIdMock,
     getWebContentsIdByTabId: getWebContentsIdByTabIdMock,
     getWorktreeIdForTab: getWorktreeIdForTabMock,
     openDevTools: openDevToolsMock,
@@ -55,9 +60,15 @@ vi.mock('../browser/browser-manager', () => ({
   }
 }))
 
+vi.mock('../window/main-window-registry', () => ({
+  getMainWindowForWebContents: getMainWindowForWebContentsMock
+}))
+
 import {
+  removeTrustedBrowserRendererWebContentsId,
   registerBrowserHandlers,
   setAgentBrowserBridgeRef,
+  setTrustedBrowserRendererWebContentsId,
   waitForAnyTabRegistration,
   waitForTabRegistration,
   waitForWorktreeTabRegistration
@@ -71,6 +82,8 @@ describe('registerBrowserHandlers', () => {
     registerGuestMock.mockReset()
     unregisterGuestMock.mockReset()
     getGuestWebContentsIdMock.mockReset()
+    getRendererWebContentsIdMock.mockReset()
+    getRendererWebContentsIdMock.mockReturnValue(91)
     getWebContentsIdByTabIdMock.mockReset()
     getWebContentsIdByTabIdMock.mockReturnValue(new Map())
     getWorktreeIdForTabMock.mockReset()
@@ -79,10 +92,12 @@ describe('registerBrowserHandlers', () => {
     cancelDownloadMock.mockReset()
     browserWindowFromWebContentsMock.mockReset()
     webContentsFromIdMock.mockReset()
+    getMainWindowForWebContentsMock.mockReset()
     webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
     openDevToolsMock.mockResolvedValue(true)
     setAnnotationViewportBridgeMock.mockResolvedValue(true)
     setAgentBrowserBridgeRef(null)
+    setTrustedBrowserRendererWebContentsId(null)
   })
 
   afterEach(() => {
@@ -105,6 +120,44 @@ describe('registerBrowserHandlers', () => {
         } as Electron.WebContents
       },
       { browserTabId: 'browser-1', webContentsId: 101 }
+    )
+
+    expect(result).toBe(false)
+    expect(registerGuestMock).not.toHaveBeenCalled()
+  })
+
+  it('does not fall back to URL trust after explicit trusted renderers are removed', () => {
+    setTrustedBrowserRendererWebContentsId(91)
+    removeTrustedBrowserRendererWebContentsId(91)
+    registerBrowserHandlers()
+
+    const registerHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:registerGuest'
+    )?.[1] as (
+      event: { sender: Electron.WebContents },
+      args: {
+        browserPageId: string
+        workspaceId: string
+        worktreeId: string
+        webContentsId: number
+      }
+    ) => boolean
+
+    const result = registerHandler(
+      {
+        sender: {
+          id: 91,
+          isDestroyed: () => false,
+          getType: () => 'window',
+          getURL: () => 'file:///renderer/index.html'
+        } as Electron.WebContents
+      },
+      {
+        browserPageId: 'page-closed-window',
+        workspaceId: 'workspace-1',
+        worktreeId: 'worktree-1',
+        webContentsId: 123
+      }
     )
 
     expect(result).toBe(false)
@@ -174,6 +227,7 @@ describe('registerBrowserHandlers', () => {
       {
         sender: {
           isDestroyed: () => false,
+          id: 91,
           getType: () => 'window',
           getURL: () => 'file:///renderer/index.html'
         } as Electron.WebContents
@@ -346,6 +400,51 @@ describe('registerBrowserHandlers', () => {
     expect(result).toBe(true)
     await expect(wait).resolves.toBeUndefined()
     expect(resolved).toBe(true)
+  })
+
+  it('allows another renderer to register a page after the previous guest is gone', () => {
+    getRendererWebContentsIdMock.mockReturnValue(90)
+    getGuestWebContentsIdMock.mockReturnValue(123)
+    webContentsFromIdMock.mockReturnValue({ isDestroyed: () => true })
+    registerBrowserHandlers()
+
+    const registerHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:registerGuest'
+    )?.[1] as (
+      event: { sender: Electron.WebContents },
+      args: {
+        browserPageId: string
+        workspaceId: string
+        worktreeId: string
+        webContentsId: number
+      }
+    ) => boolean
+
+    const result = registerHandler(
+      {
+        sender: {
+          id: 91,
+          isDestroyed: () => false,
+          getType: () => 'window',
+          getURL: () => 'file:///renderer/index.html'
+        } as Electron.WebContents
+      },
+      {
+        browserPageId: 'page-1',
+        workspaceId: 'workspace-1',
+        worktreeId: 'worktree-1',
+        webContentsId: 456
+      }
+    )
+
+    expect(result).toBe(true)
+    expect(registerGuestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        browserPageId: 'page-1',
+        rendererWebContentsId: 91,
+        webContentsId: 456
+      })
+    )
   })
 
   it('validates annotation viewport bridge requests before syncing to the guest', async () => {

@@ -8,6 +8,7 @@ import {
 
 describe('window-close-request-coordinator', () => {
   const confirmWindowClose = vi.fn()
+  const cancelWindowClose = vi.fn()
   const unregisterFns: (() => void)[] = []
 
   const addGuard = (guard: () => boolean | Promise<boolean>): void => {
@@ -16,11 +17,14 @@ describe('window-close-request-coordinator', () => {
 
   beforeEach(() => {
     confirmWindowClose.mockClear()
+    cancelWindowClose.mockClear()
     // Why: dispatch falls back to the preload bridge when no rich handler is
     // registered; stub just the surface it touches.
     ;(
-      globalThis as unknown as { window: { api: { ui: { confirmWindowClose: () => void } } } }
-    ).window = { api: { ui: { confirmWindowClose } } }
+      globalThis as unknown as {
+        window: { api: { ui: { confirmWindowClose: () => void; cancelWindowClose: () => void } } }
+      }
+    ).window = { api: { ui: { confirmWindowClose, cancelWindowClose } } }
   })
 
   afterEach(() => {
@@ -74,6 +78,7 @@ describe('window-close-request-coordinator', () => {
     await dispatchWindowCloseRequest({ isQuitting: true })
 
     expect(confirmWindowClose).not.toHaveBeenCalled()
+    expect(cancelWindowClose).toHaveBeenCalledTimes(1)
     expect(handler).not.toHaveBeenCalled()
   })
 
@@ -95,6 +100,7 @@ describe('window-close-request-coordinator', () => {
 
     expect(second).not.toHaveBeenCalled()
     expect(confirmWindowClose).not.toHaveBeenCalled()
+    expect(cancelWindowClose).toHaveBeenCalledTimes(1)
   })
 
   it('ignores a re-entrant close request while a guard is still pending', async () => {

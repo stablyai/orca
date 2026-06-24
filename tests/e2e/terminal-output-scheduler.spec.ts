@@ -66,11 +66,7 @@ async function createTerminalTab(page: Page): Promise<string> {
   const tabsBefore = await countRenderedTabs(page)
   const activeBefore = await getActiveTabId(page)
 
-  await page.getByRole('button', { name: 'New tab' }).click()
-  await page
-    .getByRole('menuitem', { name: /New Terminal/i })
-    .first()
-    .click()
+  await clickNewTerminalMenuItem(page)
 
   await expect
     .poll(() => countRenderedTabs(page), {
@@ -97,6 +93,30 @@ async function createTerminalTab(page: Page): Promise<string> {
     throw new Error('createTerminalTab: active tab id was unavailable after creating terminal')
   }
   return tabId
+}
+
+async function clickNewTerminalMenuItem(page: Page): Promise<void> {
+  let lastError: unknown
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await page.keyboard.press('Escape')
+      // Why: headless Electron can keep terminal paints in flight, so this
+      // setup path follows the user menu flow while bypassing stability churn.
+      await page.getByRole('button', { name: 'New tab' }).click({ force: true })
+      const newTerminalMenuItem = page.getByRole('menuitem', { name: /New Terminal/i }).first()
+      await expect(newTerminalMenuItem).toBeVisible({ timeout: 2_000 })
+      // Why: Radix dropdown items may remount during open/close animation;
+      // retrying keeps this perf test focused on scheduler behavior.
+      await newTerminalMenuItem.click({ force: true, timeout: 2_000 })
+      return
+    } catch (error) {
+      lastError = error
+      await page.waitForTimeout(150)
+    }
+  }
+
+  throw lastError ?? new Error('New Terminal menu item could not be clicked')
 }
 
 async function waitForTabPtyId(page: Page, tabId: string): Promise<string> {

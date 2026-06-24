@@ -52,6 +52,7 @@ import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspec
 import {
   discardTerminalOutput,
   flushTerminalOutput,
+  recordLatencySensitiveTerminalInput,
   registerTerminalBacklogRecovery,
   waitForTerminalOutputParsed,
   writeTerminalOutput
@@ -1201,6 +1202,9 @@ export function connectPanePty(
   const onTerminalKeyDown = (event: KeyboardEvent): void => {
     if (isPlainEscapeKeyEvent(event)) {
       setPendingTerminalInputIntent('plain-escape')
+      // Why: keydown reaches us before xterm emits onData; quiet background
+      // drains at the earliest user-input signal, not after PTY bytes are built.
+      recordLatencySensitiveTerminalInput()
       // Why: plain Escape produces real terminal input (\x1b), so it is a
       // genuine "user is here" signal and must still dismiss attention before
       // the early return for interrupt-intent inference.
@@ -1236,6 +1240,9 @@ export function connectPanePty(
     ) {
       return
     }
+    // Why: keydown reaches us before xterm emits onData; quiet background drains
+    // at the earliest user-input signal, not after PTY bytes are built.
+    recordLatencySensitiveTerminalInput()
     deps.clearTerminalTabUnread(deps.tabId)
     deps.clearTerminalPaneUnread(cacheKey)
     deps.clearWorktreeUnread(deps.worktreeId)
@@ -1786,6 +1793,7 @@ export function connectPanePty(
   let hasReceivedPtyOutput = false
   const markTerminalInputSent = (): void => {
     lastTerminalInputAt = performance.now()
+    recordLatencySensitiveTerminalInput()
   }
   const recordAcceptedTerminalInputForHibernation = (): void => {
     useAppStore.getState().recordTerminalInput(cacheKey)
@@ -1982,6 +1990,8 @@ export function connectPanePty(
     //   transitions where override may not be set (e.g. legacy code paths).
     // The pty:resize IPC has a defense-in-depth twin. See
     // docs/mobile-presence-lock.md.
+    // Hidden panes still resize/replay their local xterm; only visible panes
+    // should drive live PTY dimensions and SIGWINCH.
     if (shouldSuppressDesktopPtyResize()) {
       return
     }
@@ -2028,6 +2038,9 @@ export function connectPanePty(
   let pendingGeometryReportRaf: number | null = null
   const reportPaneGeometry = (): void => {
     pendingGeometryReportRaf = null
+    if (!deps.isVisibleRef.current) {
+      return
+    }
     const currentPtyId = transport.getPtyId()
     if (!currentPtyId) {
       return
@@ -2746,6 +2759,7 @@ export function connectPanePty(
       if (foreground) {
         resetHiddenOutputRestoreIfPtyChanged()
       }
+      const activeForeground = foreground && isActiveSplitPane()
       const parseHiddenStartupOutput =
         !foreground &&
         canUseHiddenOutputSnapshot(transport.getPtyId()) &&
@@ -2753,41 +2767,47 @@ export function connectPanePty(
         (opts?.hiddenStartupRendererQuery === true || containsHiddenStartupRendererQuery(data))
       const synchronizedOutputStarted =
         shouldProtectNativeWindowsSynchronizedOutput &&
-        foreground &&
+        activeForeground &&
         containsSynchronizedOutputStart(data)
       const synchronizedOutputEnded =
         shouldProtectNativeWindowsSynchronizedOutput &&
-        foreground &&
+        activeForeground &&
         containsSynchronizedOutputEnd(data)
       const synchronizedForegroundOutput =
         shouldProtectNativeWindowsSynchronizedOutput &&
-        foreground &&
+        activeForeground &&
         (synchronizedForegroundOutputActive || synchronizedOutputStarted || synchronizedOutputEnded)
       const nextSynchronizedForegroundOutputActive =
         shouldProtectNativeWindowsSynchronizedOutput &&
-        foreground &&
+        activeForeground &&
         shouldSynchronizedOutputRemainActive(data, synchronizedForegroundOutputActive)
       // Why: xterm's DOM renderer draws the cursor as row content; Windows
       // cursor-only restores need row invalidation even outside DEC 2026.
       const nativeWindowsCursorRestore =
-        shouldProtectNativeWindowsSynchronizedOutput && foreground && containsCursorRestore(data)
+        shouldProtectNativeWindowsSynchronizedOutput &&
+        activeForeground &&
+        containsCursorRestore(data)
       synchronizedForegroundOutputActive = nextSynchronizedForegroundOutputActive
       if (hiddenMode2031ScanTail) {
         respondToSkippedMode2031Subscribe(data)
       }
       writeTerminalOutput(pane.terminal, data, {
-        foreground: foreground || parseHiddenStartupOutput,
+        // Why: visible inactive split panes can emit synchronized TUI redraws
+        // in bulk; keep active-pane foreground protection off that hot path.
+        foreground: activeForeground || parseHiddenStartupOutput,
         beforeWrite: beforeTerminalOutputWrite,
         onBackgroundBacklogDropped: markHiddenOutputRestoreNeeded,
         latencySensitive:
-          !foreground || parseHiddenStartupOutput ? true : isLatencySensitiveForegroundOutput(data),
+          activeForeground && !parseHiddenStartupOutput
+            ? isLatencySensitiveForegroundOutput(data)
+            : parseHiddenStartupOutput,
         forceForegroundRefresh:
-          (foreground || parseHiddenStartupOutput) &&
+          (activeForeground || parseHiddenStartupOutput) &&
           (synchronizedForegroundOutput ||
             nativeWindowsCursorRestore ||
             shouldForceForegroundRenderRefresh(data)),
         followupForegroundRefresh: nativeWindowsCursorRestore,
-        stripTransientCursorShows: shouldProtectNativeWindowsSynchronizedOutput && foreground,
+        stripTransientCursorShows: shouldProtectNativeWindowsSynchronizedOutput && activeForeground,
         coalesceForeground: synchronizedForegroundOutput && synchronizedOutputEnded,
         holdForeground: synchronizedForegroundOutput && nextSynchronizedForegroundOutputActive
       })
@@ -3176,7 +3196,7 @@ export function connectPanePty(
       hiddenRendererStateDirty = false
       recordTerminalOutput(pane.terminal)
       const currentPtyId = transport.getPtyId()
-      if (currentPtyId && !getFitOverrideForPty(currentPtyId)) {
+      if (currentPtyId && deps.isVisibleRef.current && !getFitOverrideForPty(currentPtyId)) {
         safeFit(pane)
         const replayChangedDimensions = hasSnapshotDimensions
           ? pane.terminal.cols !== snapshot.cols || pane.terminal.rows !== snapshot.rows
@@ -3550,13 +3570,13 @@ export function connectPanePty(
       // Why: when a mobile-fit override is active, skip sending desktop dims
       // to the PTY — the PTY is already at phone dimensions and must stay there.
       const reattachPtyId = transport.getPtyId()
-      if (!reattachPtyId || !getFitOverrideForPty(reattachPtyId)) {
+      if (deps.isVisibleRef.current && (!reattachPtyId || !getFitOverrideForPty(reattachPtyId))) {
         transport.resize(cols, rows)
       }
       // Why: POSIX only delivers SIGWINCH when terminal dimensions actually
       // change. Sending it explicitly guarantees restored TUIs repaint at
       // the correct cursor position after snapshot replay.
-      if (!isRemoteRuntimePtyId(ptyId)) {
+      if (deps.isVisibleRef.current && !isRemoteRuntimePtyId(ptyId)) {
         window.api.pty.signal(ptyId, 'SIGWINCH')
       }
       scheduleReattachIdleAgentCursorReset()

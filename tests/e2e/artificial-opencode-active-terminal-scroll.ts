@@ -5,9 +5,20 @@ export type ActiveTerminalScrollState = {
   scrollTop: number | null
 }
 
-export async function scrollActiveTerminalToBottom(page: Page): Promise<void> {
-  await page.evaluate(() => {
+export async function scrollActiveTerminalToBottom(page: Page, ptyId?: string): Promise<void> {
+  await page.evaluate((targetPtyId) => {
     const pane = (() => {
+      if (targetPtyId) {
+        for (const manager of window.__paneManagers?.values() ?? []) {
+          const candidate = manager
+            .getPanes?.()
+            .find((terminalPane) => terminalPane.container?.dataset?.ptyId === targetPtyId)
+          if (candidate) {
+            return candidate
+          }
+        }
+        throw new Error(`Terminal PTY ${targetPtyId} is unavailable`)
+      }
       const store = window.__store
       const state = store?.getState()
       const worktreeId = state?.activeWorktreeId
@@ -25,12 +36,26 @@ export async function scrollActiveTerminalToBottom(page: Page): Promise<void> {
       return candidate
     })()
     pane.terminal.scrollToBottom()
-  })
+  }, ptyId ?? null)
 }
 
-export async function scrollActiveTerminalViewportElement(page: Page): Promise<void> {
-  await page.evaluate(() => {
+export async function scrollActiveTerminalViewportElement(
+  page: Page,
+  ptyId?: string
+): Promise<void> {
+  await page.evaluate((targetPtyId) => {
     const pane = (() => {
+      if (targetPtyId) {
+        for (const manager of window.__paneManagers?.values() ?? []) {
+          const candidate = manager
+            .getPanes?.()
+            .find((terminalPane) => terminalPane.container?.dataset?.ptyId === targetPtyId)
+          if (candidate) {
+            return candidate
+          }
+        }
+        throw new Error(`Terminal PTY ${targetPtyId} is unavailable`)
+      }
       const store = window.__store
       const state = store?.getState()
       const worktreeId = state?.activeWorktreeId
@@ -55,12 +80,23 @@ export async function scrollActiveTerminalViewportElement(page: Page): Promise<v
     // the viewport scrollTop exercises xterm's DOM scroll synchronization.
     viewport.scrollTop = Math.max(0, viewport.scrollTop - 1200)
     viewport.dispatchEvent(new Event('scroll', { bubbles: true }))
-  })
+  }, ptyId ?? null)
 }
 
-export async function scrollActiveTerminalByApi(page: Page): Promise<void> {
-  await page.evaluate(() => {
+export async function scrollActiveTerminalByApi(page: Page, ptyId?: string): Promise<void> {
+  await page.evaluate((targetPtyId) => {
     const pane = (() => {
+      if (targetPtyId) {
+        for (const manager of window.__paneManagers?.values() ?? []) {
+          const candidate = manager
+            .getPanes?.()
+            .find((terminalPane) => terminalPane.container?.dataset?.ptyId === targetPtyId)
+          if (candidate) {
+            return candidate
+          }
+        }
+        throw new Error(`Terminal PTY ${targetPtyId} is unavailable`)
+      }
       const store = window.__store
       const state = store?.getState()
       const worktreeId = state?.activeWorktreeId
@@ -81,12 +117,23 @@ export async function scrollActiveTerminalByApi(page: Page): Promise<void> {
     // xterm's public API keeps this probe about viewport responsiveness.
     const targetLine = Math.max(0, pane.terminal.buffer.active.viewportY - 20)
     pane.terminal.scrollToLine(targetLine)
-  })
+  }, ptyId ?? null)
 }
 
-export async function dispatchActiveTerminalWheelEvent(page: Page): Promise<void> {
-  await page.evaluate(() => {
+export async function dispatchActiveTerminalWheelEvent(page: Page, ptyId?: string): Promise<void> {
+  await page.evaluate((targetPtyId) => {
     const pane = (() => {
+      if (targetPtyId) {
+        for (const manager of window.__paneManagers?.values() ?? []) {
+          const candidate = manager
+            .getPanes?.()
+            .find((terminalPane) => terminalPane.container?.dataset?.ptyId === targetPtyId)
+          if (candidate) {
+            return candidate
+          }
+        }
+        throw new Error(`Terminal PTY ${targetPtyId} is unavailable`)
+      }
       const store = window.__store
       const state = store?.getState()
       const worktreeId = state?.activeWorktreeId
@@ -123,7 +170,7 @@ export async function dispatchActiveTerminalWheelEvent(page: Page): Promise<void
         })
       )
     }
-  })
+  }, ptyId ?? null)
 }
 
 // Why: Linux/Xvfb can drop CDP wheel delivery, and tall wrapped tables need
@@ -172,10 +219,22 @@ export async function scrollActiveTerminalToText(page: Page, text: string): Prom
 }
 
 export async function readActiveTerminalScrollState(
-  page: Page
+  page: Page,
+  ptyId?: string
 ): Promise<ActiveTerminalScrollState> {
-  return page.evaluate(() => {
+  return page.evaluate((targetPtyId) => {
     const pane = (() => {
+      if (targetPtyId) {
+        for (const manager of window.__paneManagers?.values() ?? []) {
+          const candidate = manager
+            .getPanes?.()
+            .find((terminalPane) => terminalPane.container?.dataset?.ptyId === targetPtyId)
+          if (candidate) {
+            return candidate
+          }
+        }
+        throw new Error(`Terminal PTY ${targetPtyId} is unavailable`)
+      }
       const store = window.__store
       const state = store?.getState()
       const worktreeId = state?.activeWorktreeId
@@ -197,5 +256,23 @@ export async function readActiveTerminalScrollState(
       viewportY: pane.terminal.buffer.active.viewportY,
       scrollTop: viewport?.scrollTop ?? null
     }
-  })
+  }, ptyId ?? null)
+}
+
+export async function waitForActiveTerminalViewportChange(
+  page: Page,
+  beforeViewportY: number,
+  timeoutMs: number,
+  ptyId?: string
+): Promise<ActiveTerminalScrollState> {
+  const start = performance.now()
+  let state = await readActiveTerminalScrollState(page, ptyId)
+  while (performance.now() - start < timeoutMs) {
+    state = await readActiveTerminalScrollState(page, ptyId)
+    if (state.viewportY < beforeViewportY) {
+      break
+    }
+    await page.waitForTimeout(5)
+  }
+  return state
 }

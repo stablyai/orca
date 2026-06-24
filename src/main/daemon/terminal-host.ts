@@ -66,6 +66,7 @@ export type TerminalHostOptions = {
   // Why: production keeps a large cap, but tests need a small deterministic cap
   // without spawning thousands of full terminal sessions.
   maxTombstones?: number
+  onBeforeSubprocessData?: (sessionId: string, charCount: number) => void
 }
 
 export class TerminalHost {
@@ -73,11 +74,13 @@ export class TerminalHost {
   private killedTombstones = new Map<string, number>()
   private spawnSubprocess: TerminalHostOptions['spawnSubprocess']
   private onFinalCheckpoint: TerminalHostOptions['onFinalCheckpoint']
+  private onBeforeSubprocessData: TerminalHostOptions['onBeforeSubprocessData']
   private maxTombstones: number
 
   constructor(opts: TerminalHostOptions) {
     this.spawnSubprocess = opts.spawnSubprocess
     this.onFinalCheckpoint = opts.onFinalCheckpoint
+    this.onBeforeSubprocessData = opts.onBeforeSubprocessData
     this.maxTombstones = opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES
   }
 
@@ -143,6 +146,7 @@ export class TerminalHost {
       // lifetime. Nothing reads a dead session's emulator (getSnapshot/
       // takePendingOutput/listSessions all skip !isAlive sessions).
       onExit: () => this.reapSession(opts.sessionId),
+      onBeforeSubprocessData: this.onBeforeSubprocessData,
       ...(opts.shellReadyTimeoutMs !== undefined
         ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
         : {})
@@ -181,6 +185,18 @@ export class TerminalHost {
 
   resize(sessionId: string, cols: number, rows: number): void {
     this.getAliveSession(sessionId).resize(cols, rows)
+  }
+
+  setDataFlowPaused(sessionId: string, paused: boolean): void {
+    this.getAliveSession(sessionId).setDataFlowPaused(paused)
+  }
+
+  setDaemonStreamBackpressurePaused(sessionId: string, paused: boolean): void {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
+      return
+    }
+    session.setDaemonStreamBackpressurePaused(paused)
   }
 
   kill(sessionId: string, opts: { immediate?: boolean } = {}): void {

@@ -169,6 +169,22 @@ describe('pane terminal output scheduler', () => {
     expect(terminal.write).toHaveBeenCalledWith('ab')
   })
 
+  it('moves background drains out of the post-input quiet window', async () => {
+    vi.useFakeTimers()
+    const { recordLatencySensitiveTerminalInput, writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    writeTerminalOutput(terminal, 'background', { foreground: false })
+    vi.advanceTimersByTime(40)
+    recordLatencySensitiveTerminalInput()
+
+    vi.advanceTimersByTime(749)
+    expect(terminal.write).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+    expect(terminal.write).toHaveBeenCalledWith('background')
+  })
+
   it('defers throughput foreground output to the shared high-priority drain', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()
@@ -185,7 +201,8 @@ describe('pane terminal output scheduler', () => {
 
     expect(terminal.write).not.toHaveBeenCalled()
     vi.advanceTimersByTime(0)
-
+    expect(terminal.write).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(16)
     expect(terminal.write).toHaveBeenCalledTimes(2)
     expect(terminal.write.mock.calls.map(([data]) => data).join('')).toBe(
       `${'a'.repeat(16 * 1024)}${'b'.repeat(16 * 1024)}`
@@ -651,11 +668,71 @@ describe('pane terminal output scheduler', () => {
 
     vi.advanceTimersByTime(50)
     expect(terminals[0].write).toHaveBeenCalledWith('pane-0')
+    expect(terminals[1].write).not.toHaveBeenCalled()
+    expect(terminals[2].write).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(16)
     expect(terminals[1].write).toHaveBeenCalledWith('pane-1')
     expect(terminals[2].write).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(16)
     expect(terminals[2].write).toHaveBeenCalledWith('pane-2')
+  })
+
+  it('prioritizes latency-sensitive foreground during the post-input quiet window', async () => {
+    vi.useFakeTimers()
+    const { recordLatencySensitiveTerminalInput, writeTerminalOutput } = await loadScheduler()
+    const backgroundTerminals = [createTerminal(), createTerminal(), createTerminal()]
+    const activeTerminal = createTerminal()
+
+    backgroundTerminals.forEach((terminal, index) => {
+      writeTerminalOutput(terminal, `pane-${index}`, { foreground: false })
+    })
+
+    vi.advanceTimersByTime(50)
+    expect(backgroundTerminals[0].write).toHaveBeenCalledWith('pane-0')
+
+    recordLatencySensitiveTerminalInput()
+    writeTerminalOutput(activeTerminal, '\x1b[?25l\x1b[1;1Hactive\x1b[?25h', {
+      foreground: true,
+      coalesceForeground: true,
+      latencySensitive: true
+    })
+
+    vi.advanceTimersByTime(0)
+    expect(activeTerminal.write).toHaveBeenCalledWith(
+      '\x1b[?25l\x1b[1;1Hactive\x1b[?25h',
+      expect.any(Function)
+    )
+    expect(backgroundTerminals[1].write).not.toHaveBeenCalled()
+    expect(backgroundTerminals[2].write).not.toHaveBeenCalled()
+  })
+
+  it('keeps latency-insensitive synchronized foreground drains bounded', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminals = [createTerminal(), createTerminal(), createTerminal()]
+
+    terminals.forEach((terminal) => {
+      writeTerminalOutput(terminal, '\x1b[?2026l', {
+        foreground: true,
+        coalesceForeground: true,
+        latencySensitive: false
+      })
+    })
+
+    vi.advanceTimersByTime(1000)
+    vi.runOnlyPendingTimers()
+    expect(terminals[0].write).toHaveBeenCalledWith('\x1b[?2026l', expect.any(Function))
+    expect(terminals[1].write).not.toHaveBeenCalled()
+    expect(terminals[2].write).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(16)
+    expect(terminals[1].write).toHaveBeenCalledWith('\x1b[?2026l', expect.any(Function))
+    expect(terminals[2].write).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(16)
+    expect(terminals[2].write).toHaveBeenCalledWith('\x1b[?2026l', expect.any(Function))
   })
 
   it('rotates terminals with remaining backlog behind untouched queued terminals', async () => {
@@ -670,15 +747,20 @@ describe('pane terminal output scheduler', () => {
 
     vi.advanceTimersByTime(50)
     expect(terminals[0].write).toHaveBeenCalledTimes(1)
-    expect(terminals[1].write).toHaveBeenCalledWith('pane-1')
+    expect(terminals[1].write).not.toHaveBeenCalled()
     expect(terminals[2].write).not.toHaveBeenCalled()
 
     // Why: a terminal with leftover bytes is deleted/re-set after each drain
     // chunk, moving it to the back of the Map so a big burst cannot starve
     // other queued panes.
     vi.advanceTimersByTime(16)
+    expect(terminals[1].write).toHaveBeenCalledWith('pane-1')
+    expect(terminals[2].write).not.toHaveBeenCalled()
+    expect(terminals[0].write).toHaveBeenCalledTimes(1)
+
+    vi.advanceTimersByTime(16)
     expect(terminals[2].write).toHaveBeenCalledWith('pane-2')
-    expect(terminals[0].write).toHaveBeenCalledTimes(2)
+    expect(terminals[0].write).toHaveBeenCalledTimes(1)
   })
 
   it('reports current and peak queued renderer backlog in debug snapshots', async () => {
@@ -716,12 +798,17 @@ describe('pane terminal output scheduler', () => {
     vi.advanceTimersByTime(50)
 
     expect(debug?.snapshot()).toMatchObject({
-      queuedTerminalCount: 0,
-      queuedChars: 0,
+      queuedTerminalCount: 1,
+      queuedChars: 20,
       peakQueuedTerminalCount: 2,
       peakQueuedChars: 30,
       peakQueuedCharsByTerminal: 20,
       droppedBacklogCount: 0
+    })
+    vi.advanceTimersByTime(16)
+    expect(debug?.snapshot()).toMatchObject({
+      queuedTerminalCount: 0,
+      queuedChars: 0
     })
   })
 
@@ -738,14 +825,18 @@ describe('pane terminal output scheduler', () => {
     vi.advanceTimersByTime(50)
     vi.advanceTimersByTime(16)
 
-    expect(terminal.write).toHaveBeenCalledTimes(4)
+    expect(terminal.write).toHaveBeenCalledTimes(2)
 
     vi.advanceTimersByTime(16)
+
+    expect(terminal.write).toHaveBeenCalledTimes(3)
+
+    vi.advanceTimersByTime(16 * 3)
 
     expect(terminal.write).toHaveBeenCalledTimes(6)
   })
 
-  it('promotes large background backlogs to high-priority drains', async () => {
+  it('starts large background backlogs promptly while keeping each drain bounded', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()
     const terminal = createTerminal()
@@ -758,10 +849,10 @@ describe('pane terminal output scheduler', () => {
     expect(terminal.write).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(0)
-    expect(terminal.write).toHaveBeenCalledTimes(16)
+    expect(terminal.write).toHaveBeenCalledTimes(1)
 
-    vi.advanceTimersByTime(1)
-    expect(terminal.write).toHaveBeenCalledTimes(32)
+    vi.advanceTimersByTime(16)
+    expect(terminal.write).toHaveBeenCalledTimes(2)
   })
 
   it('caps hidden backlog memory and writes a warning instead of retaining all output', async () => {

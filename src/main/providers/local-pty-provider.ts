@@ -63,6 +63,7 @@ const ptyAgentForegroundContextPaths = new Map<string, string[]>()
 // to invoke/clean them up on a destroyed environment, triggering a SIGABRT.
 const ptyDisposables = new Map<string, { dispose: () => void }[]>()
 const ptyCleanupCallbacks = new Map<string, () => void>()
+const ptyDataFlowPaused = new Set<string>()
 
 let loadGeneration = 0
 const ptyLoadGeneration = new Map<string, number>()
@@ -177,6 +178,7 @@ function clearPtyState(id: string): void {
   ptyProcesses.delete(id)
   ptyShellName.delete(id)
   ptyAgentForegroundContextPaths.delete(id)
+  ptyDataFlowPaused.delete(id)
   ptyLoadGeneration.delete(id)
 }
 
@@ -300,6 +302,8 @@ export type LocalPtyProviderOptions = {
 
 export class LocalPtyProvider implements IPtyProvider {
   private opts: LocalPtyProviderOptions
+
+  readonly supportsLosslessDataFlowPause = true
 
   constructor(opts: LocalPtyProviderOptions = {}) {
     this.opts = opts
@@ -834,6 +838,27 @@ export class LocalPtyProvider implements IPtyProvider {
   acknowledgeDataEvent(_id: string, _charCount: number): void {
     /* no flow control for local */
   }
+  setDataFlowPaused(id: string, paused: boolean): boolean {
+    const proc = ptyProcesses.get(id)
+    if (!proc || ptyDataFlowPaused.has(id) === paused) {
+      return Boolean(proc)
+    }
+    try {
+      if (paused) {
+        proc.pause()
+        ptyDataFlowPaused.add(id)
+      } else {
+        proc.resume()
+        ptyDataFlowPaused.delete(id)
+      }
+      return true
+    } catch {
+      if (paused) {
+        ptyDataFlowPaused.delete(id)
+      }
+      return false
+    }
+  }
 
   async hasChildProcesses(id: string): Promise<boolean> {
     const proc = ptyProcesses.get(id)
@@ -929,9 +954,15 @@ export class LocalPtyProvider implements IPtyProvider {
   // ─── Local-only helpers (not part of IPtyProvider interface) ───────
 
   /** Kill orphaned PTYs from previous page loads. */
-  killOrphanedPtys(currentGeneration: number): { id: string }[] {
+  killOrphanedPtys(currentGeneration: number, candidateIds?: Iterable<string>): { id: string }[] {
     const killed: { id: string }[] = []
-    for (const [id, proc] of ptyProcesses) {
+    const candidates = candidateIds
+      ? [...candidateIds].flatMap((id) => {
+          const proc = ptyProcesses.get(id)
+          return proc ? ([[id, proc]] as [string, pty.IPty][]) : []
+        })
+      : ptyProcesses.entries()
+    for (const [id, proc] of candidates) {
       if ((ptyLoadGeneration.get(id) ?? -1) < currentGeneration) {
         safeKillAndClean(id, proc)
         killed.push({ id })

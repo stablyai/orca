@@ -27,6 +27,7 @@ function createMockSubprocess() {
       written.push(data)
     },
     resize(_cols: number, _rows: number) {},
+    setDataFlowPaused: vi.fn(),
     kill() {
       killed = true
       // Simulate async exit
@@ -118,6 +119,22 @@ describe('Session', () => {
   })
 
   describe('data flow', () => {
+    it('keeps client data-flow pause active after daemon stream pause clears', () => {
+      createSession()
+
+      session.setDataFlowPaused(true)
+      session.setDaemonStreamBackpressurePaused(true)
+      session.setDaemonStreamBackpressurePaused(false)
+
+      expect(subprocess.setDataFlowPaused).toHaveBeenCalledTimes(1)
+      expect(subprocess.setDataFlowPaused).toHaveBeenLastCalledWith(true)
+
+      session.setDataFlowPaused(false)
+
+      expect(subprocess.setDataFlowPaused).toHaveBeenCalledTimes(2)
+      expect(subprocess.setDataFlowPaused).toHaveBeenLastCalledWith(false)
+    })
+
     it('forwards subprocess data to attached clients', () => {
       createSession()
       const received: string[] = []

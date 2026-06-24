@@ -1,5 +1,13 @@
 import { spawnSync } from 'node:child_process'
-import { closeSync, copyFileSync, mkdirSync, mkdtempSync, openSync, rmSync } from 'node:fs'
+import {
+  closeSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -58,6 +66,24 @@ function exitCode(result) {
   return result.status ?? 1
 }
 
+export function extractPlaywrightJsonReport(rawReport) {
+  let offset = 0
+  let jsonStart = -1
+  for (const line of rawReport.split('\n')) {
+    if (line.startsWith('{')) {
+      jsonStart = offset
+      break
+    }
+    offset += line.length + 1
+  }
+  if (jsonStart === -1) {
+    return rawReport
+  }
+  const jsonReport = rawReport.slice(jsonStart)
+  JSON.parse(jsonReport)
+  return jsonReport
+}
+
 export function runTerminalScalePerfReportGate({
   argv = process.argv.slice(2),
   env = process.env,
@@ -85,7 +111,7 @@ export function runTerminalScalePerfReportGate({
 
     scaleExitCode = exitCode(scaleResult)
     mkdirSync(dirname(reportPath), { recursive: true })
-    copyFileSync(tempReportPath, reportPath)
+    writeFileSync(reportPath, extractPlaywrightJsonReport(readFileSync(tempReportPath, 'utf8')))
   } finally {
     rmSync(tempDir, { force: true, recursive: true })
   }

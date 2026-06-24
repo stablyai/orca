@@ -33,8 +33,10 @@ import {
   isValidBrowserAnnotationViewportBridgeToken,
   type BrowserSetAnnotationViewportBridgeArgs
 } from '../../shared/browser-annotation-viewport-bridge'
+import { getMainWindowForWebContents } from '../window/main-window-registry'
 
-let trustedBrowserRendererWebContentsId: number | null = null
+const trustedBrowserRendererWebContentsIds = new Set<number>()
+let explicitBrowserRendererTrustInitialized = false
 let agentBrowserBridgeRef: AgentBrowserBridge | null = null
 
 // Why: CLI-driven tab creation must wait until the renderer mounts the webview
@@ -139,7 +141,17 @@ export function waitForAnyTabRegistration(timeoutMs = 8_000): Promise<void> {
 }
 
 export function setTrustedBrowserRendererWebContentsId(webContentsId: number | null): void {
-  trustedBrowserRendererWebContentsId = webContentsId
+  if (webContentsId === null) {
+    trustedBrowserRendererWebContentsIds.clear()
+    explicitBrowserRendererTrustInitialized = false
+    return
+  }
+  explicitBrowserRendererTrustInitialized = true
+  trustedBrowserRendererWebContentsIds.add(webContentsId)
+}
+
+export function removeTrustedBrowserRendererWebContentsId(webContentsId: number): void {
+  trustedBrowserRendererWebContentsIds.delete(webContentsId)
 }
 
 export function setAgentBrowserBridgeRef(bridge: AgentBrowserBridge | null): void {
@@ -150,8 +162,11 @@ function isTrustedBrowserRenderer(sender: Electron.WebContents): boolean {
   if (sender.isDestroyed() || sender.getType() !== 'window') {
     return false
   }
-  if (trustedBrowserRendererWebContentsId != null) {
-    return sender.id === trustedBrowserRendererWebContentsId
+  if (explicitBrowserRendererTrustInitialized) {
+    return (
+      trustedBrowserRendererWebContentsIds.has(sender.id) &&
+      getMainWindowForWebContents(sender) !== null
+    )
   }
 
   const senderUrl = sender.getURL()
@@ -164,6 +179,10 @@ function isTrustedBrowserRenderer(sender: Electron.WebContents): boolean {
   }
 
   return senderUrl.startsWith('file://')
+}
+
+function ownsBrowserPage(sender: Electron.WebContents, browserPageId: string): boolean {
+  return browserManager.getRendererWebContentsId(browserPageId) === sender.id
 }
 
 export function registerBrowserHandlers(): void {
@@ -196,6 +215,16 @@ export function registerBrowserHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return false
       }
+      const existingRendererWebContentsId = browserManager.getRendererWebContentsId(
+        args.browserPageId
+      )
+      if (
+        existingRendererWebContentsId !== null &&
+        existingRendererWebContentsId !== event.sender.id &&
+        isLiveBrowserWebContentsId(browserManager.getGuestWebContentsId(args.browserPageId))
+      ) {
+        return false
+      }
       // Why: when Chromium swaps a guest's renderer process (navigation,
       // crash recovery), the renderer re-registers the same browserPageId
       // with a new webContentsId. The bridge must destroy the old session's
@@ -225,6 +254,9 @@ export function registerBrowserHandlers(): void {
     if (!isTrustedBrowserRenderer(event.sender)) {
       return false
     }
+    if (!ownsBrowserPage(event.sender, args.browserPageId)) {
+      return false
+    }
     // Why: notify bridge before unregistering so it can destroy the session
     // process and proxy. Must happen before unregisterGuest clears the mapping.
     const wcId = browserManager.getGuestWebContentsId(args.browserPageId)
@@ -240,6 +272,9 @@ export function registerBrowserHandlers(): void {
   // on the previous tab, which is confusing.
   ipcMain.handle('browser:activeTabChanged', (event, args: { browserPageId: string }) => {
     if (!isTrustedBrowserRenderer(event.sender)) {
+      return false
+    }
+    if (!ownsBrowserPage(event.sender, args.browserPageId)) {
       return false
     }
     if (!agentBrowserBridgeRef) {
@@ -262,6 +297,9 @@ export function registerBrowserHandlers(): void {
     if (!isTrustedBrowserRenderer(event.sender)) {
       return false
     }
+    if (!ownsBrowserPage(event.sender, args.browserPageId)) {
+      return false
+    }
     return browserManager.openDevTools(args.browserPageId)
   })
 
@@ -275,6 +313,9 @@ export function registerBrowserHandlers(): void {
       }
     ) => {
       if (!isTrustedBrowserRenderer(event.sender)) {
+        return false
+      }
+      if (!ownsBrowserPage(event.sender, args.browserPageId)) {
         return false
       }
       // Why: CDP misbehaves on non-finite/negative metrics (NaN/Infinity can
@@ -319,6 +360,9 @@ export function registerBrowserHandlers(): void {
         !isValidBrowserAnnotationViewportBridgeMarkers(args.markers) ||
         !isValidBrowserAnnotationViewportBridgeToken(args.token)
       ) {
+        return false
+      }
+      if (!ownsBrowserPage(event.sender, args.browserPageId)) {
         return false
       }
       return browserManager.setAnnotationViewportBridge(args.browserPageId, {

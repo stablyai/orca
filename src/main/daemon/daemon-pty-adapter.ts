@@ -55,6 +55,7 @@ export class TerminalKilledError extends Error {
 
 export class DaemonPtyAdapter implements IPtyProvider {
   readonly protocolVersion: number
+  readonly supportsLosslessDataFlowPause: boolean
   private socketPath: string
   private tokenPath: string
   private client: DaemonClient
@@ -81,6 +82,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // second mount until the renderer explicitly acknowledges it.
   private coldRestoreCache = new Map<string, ColdRestorePayload>()
   private activeSessionIds = new Set<string>()
+  private dataFlowPausedSessionIds = new Set<string>()
+  private reconnectDataFlowPauseOnNotifyFailure = true
   private dirtySessionVersions = new Map<string, number>()
   // Why: a cold-restored session is a fresh shell whose on-disk checkpoint and
   // log belong to the pre-crash session. Incremental appends would land on
@@ -100,6 +103,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
   constructor(opts: DaemonPtyAdapterOptions) {
     this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION
+    this.supportsLosslessDataFlowPause = this.protocolVersion >= 19
     this.socketPath = opts.socketPath
     this.tokenPath = opts.tokenPath
     this.client = new DaemonClient({
@@ -294,6 +298,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+    await this.resumeDataFlowPausedSessionForTeardown(id)
     // Why: sleep/exact-stop must preserve restorable terminal history,
     // so force a final checkpoint before killing the daemon session.
     if (opts.keepHistory) {
@@ -301,6 +306,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
     await this.client.request('kill', { sessionId: id, immediate: opts.immediate ?? false })
     this.activeSessionIds.delete(id)
+    this.dataFlowPausedSessionIds.delete(id)
     this.dirtySessionVersions.delete(id)
     this.coldRestoreCache.delete(id)
     // Why: the !keepHistory close path doesn't take a final checkpoint, so a
@@ -369,6 +375,29 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
   acknowledgeDataEvent(_id: string, _charCount: number): void {
     // No flow control for daemon-backed terminals
+  }
+
+  setDataFlowPaused(id: string, paused: boolean): boolean {
+    if (!this.supportsLosslessDataFlowPause) {
+      return false
+    }
+    if (this.dataFlowPausedSessionIds.has(id) === paused) {
+      return true
+    }
+    // Why: main only marks a daemon-backed source paused after the control
+    // socket accepts the request; disconnected notifications are retried.
+    if (!this.client.notify('setDataFlowPaused', { sessionId: id, paused })) {
+      if (!paused) {
+        this.retryDataFlowPauseAfterReconnect(id, paused)
+      }
+      return false
+    }
+    if (paused) {
+      this.dataFlowPausedSessionIds.add(id)
+    } else {
+      this.dataFlowPausedSessionIds.delete(id)
+    }
+    return true
   }
 
   async hasChildProcesses(id: string): Promise<boolean> {
@@ -547,6 +576,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
   dispose(): void {
     this.stopCheckpointTimer()
+    this.reconnectDataFlowPauseOnNotifyFailure = false
+    this.resumeDataFlowPausedSessions()
     this.dirtySessionVersions.clear()
     this.coldRestoreCache.clear()
     this.removeEventListener?.()
@@ -570,6 +601,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // later crashes while Orca is closed, checkpoint.json has recovery data.
   async disconnectOnly(): Promise<void> {
     this.stopCheckpointTimer()
+    await this.resumeDataFlowPausedSessionsForTeardown()
     // Why: wait for any in-flight timer pass to finish before starting
     // the final checkpoint. Otherwise both passes race on the shared tmp
     // file, risking ENOENT on rename and disabling future writes.
@@ -586,7 +618,56 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.coldRestoreCache.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
+    this.reconnectDataFlowPauseOnNotifyFailure = false
     this.client.disconnect()
+  }
+
+  private resumeDataFlowPausedSessions(): void {
+    // Why: setDataFlowPaused(false) mutates the paused-id set while we drain it.
+    const pausedSessionIds = Array.from(this.dataFlowPausedSessionIds)
+    for (const id of pausedSessionIds) {
+      this.resumeDataFlowPausedSession(id)
+    }
+  }
+
+  private resumeDataFlowPausedSession(id: string): void {
+    this.setDataFlowPaused(id, false)
+  }
+
+  private async resumeDataFlowPausedSessionsForTeardown(): Promise<void> {
+    const pausedSessionIds = Array.from(this.dataFlowPausedSessionIds)
+    await Promise.all(pausedSessionIds.map((id) => this.resumeDataFlowPausedSessionForTeardown(id)))
+  }
+
+  private async resumeDataFlowPausedSessionForTeardown(id: string): Promise<void> {
+    if (!this.dataFlowPausedSessionIds.has(id)) {
+      return
+    }
+    if (this.setDataFlowPaused(id, false)) {
+      return
+    }
+    try {
+      await this.ensureConnected()
+    } catch {
+      return
+    }
+    this.setDataFlowPaused(id, false)
+  }
+
+  private retryDataFlowPauseAfterReconnect(id: string, paused: boolean): void {
+    if (!this.reconnectDataFlowPauseOnNotifyFailure) {
+      return
+    }
+    // Why: daemon-side pause reasons survive a dropped control socket. Reconnect
+    // so watchdog resume attempts can actually release the server-side stream.
+    void this.ensureConnected()
+      .then(() => {
+        if (!this.reconnectDataFlowPauseOnNotifyFailure) {
+          return
+        }
+        this.setDataFlowPaused(id, paused)
+      })
+      .catch(() => {})
   }
 
   private async ensureConnected(): Promise<void> {

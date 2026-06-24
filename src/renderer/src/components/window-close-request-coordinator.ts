@@ -60,6 +60,7 @@ export async function dispatchWindowCloseRequest(data: { isQuitting: boolean }):
   closeInFlight = true
   try {
     if (!(await runWindowCloseGuards())) {
+      window.api.ui.cancelWindowClose()
       return
     }
   } finally {

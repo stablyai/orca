@@ -3593,6 +3593,32 @@ function BrowserPagePane({
     }
 
     webviewRef.current = webview
+    let registerRetryTimer: ReturnType<typeof setTimeout> | null = null
+
+    const registerGuestWithMain = (targetWebContentsId: number): void => {
+      void window.api.browser
+        .registerGuest({
+          browserPageId: browserTab.id,
+          workspaceId,
+          worktreeId,
+          sessionProfileId,
+          webContentsId: targetWebContentsId
+        })
+        .then((registered) => {
+          if (registered) {
+            registeredWebContentsIds.set(browserTab.id, targetWebContentsId)
+            return
+          }
+          if (
+            webviewRef.current !== webview ||
+            webview.getWebContentsId() !== targetWebContentsId
+          ) {
+            return
+          }
+          registerRetryTimer = setTimeout(() => registerGuestWithMain(targetWebContentsId), 1_000)
+        })
+        .finally(() => syncBrowserAnnotationViewportBridge())
+    }
 
     const dismissAddressBarSuggestions = (): void => {
       dismissAddressBarSuggestionsRef.current?.()
@@ -3602,17 +3628,12 @@ function BrowserPagePane({
       const webContentsId = webview.getWebContentsId()
       let queuedAnnotationViewportBridgeSync = false
       if (registeredWebContentsIds.get(browserTab.id) !== webContentsId) {
-        registeredWebContentsIds.set(browserTab.id, webContentsId)
         queuedAnnotationViewportBridgeSync = true
-        void window.api.browser
-          .registerGuest({
-            browserPageId: browserTab.id,
-            workspaceId,
-            worktreeId,
-            sessionProfileId,
-            webContentsId
-          })
-          .finally(() => syncBrowserAnnotationViewportBridge())
+        if (registerRetryTimer) {
+          clearTimeout(registerRetryTimer)
+          registerRetryTimer = null
+        }
+        registerGuestWithMain(webContentsId)
       }
       syncNavigationState(webview)
       if (keepAddressBarFocusRef.current) {
@@ -3864,6 +3885,10 @@ function BrowserPagePane({
     }
 
     return () => {
+      if (registerRetryTimer) {
+        clearTimeout(registerRetryTimer)
+        registerRetryTimer = null
+      }
       webview.removeEventListener('dom-ready', handleDomReady)
       webview.removeEventListener('focus', dismissAddressBarSuggestions)
       webview.removeEventListener('did-start-loading', handleDidStartLoading)

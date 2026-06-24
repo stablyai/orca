@@ -38,6 +38,7 @@ export type DaemonServerOptions = {
 type ConnectedClient = {
   clientId: string
   controlSocket: Socket
+  dataFlowPausedSessionIds: Set<string>
   streamSocket: Socket | null
 }
 
@@ -52,19 +53,39 @@ export class DaemonServer {
   private clients = new Map<string, ConnectedClient>()
   private streamDataBatcher = new DaemonStreamDataBatcher((clientId) => this.clients.get(clientId))
   private lastInputAtBySessionId = new Map<string, number>()
+  private streamBackpressurePauseTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private streamOutputBurstCharsBySession = new Map<string, number>()
+  private streamOutputBurstSessionIds = new Set<string>()
+  private streamOutputBurstTotalChars = 0
+  private streamOutputMultiSessionPressure = false
+  private streamOutputBurstResetTimer: ReturnType<typeof setTimeout> | null = null
 
   // Why: main-process PTY IPC has the same recent-input bypass, but daemon
   // output reaches main only after this stream layer. Keeping the window here
   // removes the daemon's fixed batch delay from keystroke echo/redraws while
   // preserving batching for background and large output.
-  private static readonly INTERACTIVE_OUTPUT_WINDOW_MS = 100
+  private static readonly INTERACTIVE_OUTPUT_WINDOW_MS = 2_000
   private static readonly INTERACTIVE_OUTPUT_MAX_CHARS = 1024
+  // Why: the daemon control socket shares an event loop with PTY data fanout.
+  // Briefly pausing bursty sources gives write/control requests a turn without
+  // dropping PTY bytes or throttling normal small interactive echoes.
+  private static readonly STREAM_OUTPUT_BURST_WINDOW_MS = 16
+  private static readonly STREAM_OUTPUT_SESSION_YIELD_HIGH_WATER_CHARS = 64 * 1024
+  private static readonly STREAM_OUTPUT_PRESSURED_SESSION_YIELD_HIGH_WATER_CHARS = 8 * 1024
+  private static readonly STREAM_OUTPUT_PRESSURE_SESSION_COUNT = 4
+  private static readonly STREAM_OUTPUT_PRESSURE_TOTAL_CHARS = 256 * 1024
+  private static readonly STREAM_OUTPUT_SESSION_YIELD_MS = 32
 
   constructor(opts: DaemonServerOptions) {
     this.socketPath = opts.socketPath
     this.tokenPath = opts.tokenPath
     this.token = randomUUID()
-    this.host = new TerminalHost({ spawnSubprocess: opts.spawnSubprocess })
+    this.host = new TerminalHost({
+      spawnSubprocess: opts.spawnSubprocess,
+      onBeforeSubprocessData: (sessionId, charCount) => {
+        this.recordStreamOutputPressure(sessionId, charCount)
+      }
+    })
     this.ptySpawnHealthCheck = opts.ptySpawnHealthCheck ?? checkPtySpawnHealth
   }
 
@@ -93,6 +114,7 @@ export class DaemonServer {
   }
 
   async shutdown(): Promise<void> {
+    this.clearStreamBackpressurePauses({ resume: false })
     this.host.dispose()
     this.streamDataBatcher.clear()
 
@@ -163,6 +185,7 @@ export class DaemonServer {
       const client: ConnectedClient = {
         clientId: hello.clientId,
         controlSocket: socket,
+        dataFlowPausedSessionIds: new Set(previous?.dataFlowPausedSessionIds),
         streamSocket: null
       }
       this.clients.set(hello.clientId, client)
@@ -205,6 +228,7 @@ export class DaemonServer {
         return
       }
       this.streamDataBatcher.clear(clientId)
+      this.releaseClientDataFlowPauses(client)
       client.streamSocket?.destroy()
       this.clients.delete(clientId)
     })
@@ -297,7 +321,8 @@ export class DaemonServer {
             onExit: (code) => {
               // Why: exit tears down renderer handlers; flush final output first
               // so the last few milliseconds of PTY data are not stranded.
-              this.streamDataBatcher.flush(clientId)
+              this.streamDataBatcher.flushSession(clientId, p.sessionId)
+              this.clearStreamBackpressurePause(p.sessionId, { resume: false })
               this.lastInputAtBySessionId.delete(p.sessionId)
               if (client?.streamSocket) {
                 client.streamSocket.write(
@@ -325,6 +350,8 @@ export class DaemonServer {
 
       case 'write':
         try {
+          this.clearStreamBackpressurePause(request.payload.sessionId, { resume: true })
+          this.streamOutputBurstCharsBySession.delete(request.payload.sessionId)
           this.lastInputAtBySessionId.set(request.payload.sessionId, performance.now())
           this.host.write(request.payload.sessionId, request.payload.data)
         } catch (err) {
@@ -347,7 +374,17 @@ export class DaemonServer {
         }
         return {}
 
+      case 'setDataFlowPaused':
+        this.host.setDataFlowPaused(request.payload.sessionId, request.payload.paused)
+        if (request.payload.paused && client) {
+          client.dataFlowPausedSessionIds.add(request.payload.sessionId)
+        } else if (client) {
+          client.dataFlowPausedSessionIds.delete(request.payload.sessionId)
+        }
+        return {}
+
       case 'kill':
+        this.clearStreamBackpressurePause(request.payload.sessionId, { resume: false })
         this.lastInputAtBySessionId.delete(request.payload.sessionId)
         this.host.kill(request.payload.sessionId, { immediate: request.payload.immediate })
         return {}
@@ -408,6 +445,19 @@ export class DaemonServer {
     throw new Error(`Unknown request type: ${(request as { type: string }).type}`)
   }
 
+  private releaseClientDataFlowPauses(client: ConnectedClient): void {
+    for (const sessionId of client.dataFlowPausedSessionIds) {
+      try {
+        this.host.setDataFlowPaused(sessionId, false)
+      } catch (err) {
+        if (!(err instanceof SessionNotFoundError)) {
+          throw err
+        }
+      }
+    }
+    client.dataFlowPausedSessionIds.clear()
+  }
+
   private sendExitEvent(
     client: ConnectedClient | undefined,
     sessionId: string,
@@ -427,5 +477,74 @@ export class DaemonServer {
         payload: { code }
       })
     )
+  }
+
+  private recordStreamOutputPressure(sessionId: string, charCount: number): void {
+    if (charCount <= 0) {
+      return
+    }
+    const nextChars = (this.streamOutputBurstCharsBySession.get(sessionId) ?? 0) + charCount
+    this.streamOutputBurstCharsBySession.set(sessionId, nextChars)
+    this.streamOutputBurstSessionIds.add(sessionId)
+    this.streamOutputBurstTotalChars += charCount
+    if (
+      this.streamOutputBurstSessionIds.size >= DaemonServer.STREAM_OUTPUT_PRESSURE_SESSION_COUNT ||
+      this.streamOutputBurstTotalChars >= DaemonServer.STREAM_OUTPUT_PRESSURE_TOTAL_CHARS
+    ) {
+      this.streamOutputMultiSessionPressure = true
+    }
+    if (!this.streamOutputBurstResetTimer) {
+      this.streamOutputBurstResetTimer = setTimeout(() => {
+        this.streamOutputBurstResetTimer = null
+        this.streamOutputBurstCharsBySession.clear()
+        this.streamOutputBurstSessionIds.clear()
+        this.streamOutputBurstTotalChars = 0
+        this.streamOutputMultiSessionPressure = false
+      }, DaemonServer.STREAM_OUTPUT_BURST_WINDOW_MS)
+    }
+    const highWater = this.streamOutputMultiSessionPressure
+      ? DaemonServer.STREAM_OUTPUT_PRESSURED_SESSION_YIELD_HIGH_WATER_CHARS
+      : DaemonServer.STREAM_OUTPUT_SESSION_YIELD_HIGH_WATER_CHARS
+    if (nextChars < highWater) {
+      return
+    }
+    this.streamOutputBurstCharsBySession.set(sessionId, 0)
+    this.pauseStreamForBackpressure(sessionId)
+  }
+
+  private pauseStreamForBackpressure(sessionId: string): void {
+    this.clearStreamBackpressurePause(sessionId, { resume: false })
+    this.host.setDaemonStreamBackpressurePaused(sessionId, true)
+    const timer = setTimeout(() => {
+      this.streamBackpressurePauseTimers.delete(sessionId)
+      this.host.setDaemonStreamBackpressurePaused(sessionId, false)
+    }, DaemonServer.STREAM_OUTPUT_SESSION_YIELD_MS)
+    this.streamBackpressurePauseTimers.set(sessionId, timer)
+  }
+
+  private clearStreamBackpressurePause(sessionId: string, options: { resume: boolean }): void {
+    const timer = this.streamBackpressurePauseTimers.get(sessionId)
+    if (timer) {
+      clearTimeout(timer)
+      this.streamBackpressurePauseTimers.delete(sessionId)
+    }
+    if (options.resume) {
+      this.host.setDaemonStreamBackpressurePaused(sessionId, false)
+    }
+  }
+
+  private clearStreamBackpressurePauses(options: { resume: boolean }): void {
+    if (this.streamOutputBurstResetTimer) {
+      clearTimeout(this.streamOutputBurstResetTimer)
+      this.streamOutputBurstResetTimer = null
+    }
+    this.streamOutputBurstCharsBySession.clear()
+    this.streamOutputBurstSessionIds.clear()
+    this.streamOutputBurstTotalChars = 0
+    this.streamOutputMultiSessionPressure = false
+    const sessionIds = Array.from(this.streamBackpressurePauseTimers.keys())
+    for (const sessionId of sessionIds) {
+      this.clearStreamBackpressurePause(sessionId, options)
+    }
   }
 }

@@ -638,6 +638,10 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let pendingPreListenerData: string[] = []
   let pendingPreListenerDataChars = 0
   let pendingPreListenerExitCode: number | null = null
+  let dataFlowPaused = false
+  let nativeDataFlowPaused = false
+  let pendingPausedData: string[] = []
+  let pausedDataFlushTimer: ReturnType<typeof setTimeout> | null = null
 
   const bufferPreListenerData = (data: string): void => {
     // Why: Windows shell-arg startup commands can print before Session wires
@@ -666,15 +670,72 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     }
   }
 
-  proc.onData((data) => {
+  const deliverData = (data: string): void => {
     if (onDataCb) {
       onDataCb(data)
     } else {
       bufferPreListenerData(data)
     }
+  }
+
+  const schedulePausedDataFlush = (): void => {
+    if (pausedDataFlushTimer || nativeDataFlowPaused || pendingPausedData.length === 0) {
+      return
+    }
+    pausedDataFlushTimer = setTimeout(() => {
+      pausedDataFlushTimer = null
+      flushPausedData(32 * 1024)
+    }, 0)
+  }
+
+  const flushPausedData = (
+    budgetChars = Number.POSITIVE_INFINITY,
+    options: { force?: boolean } = {}
+  ): void => {
+    if (nativeDataFlowPaused && options.force !== true) {
+      return
+    }
+    if (pendingPausedData.length === 0) {
+      dataFlowPaused = false
+      return
+    }
+    let remaining = budgetChars
+    while (remaining > 0 && pendingPausedData.length > 0) {
+      const data = pendingPausedData[0]
+      if (data.length <= remaining) {
+        pendingPausedData.shift()
+        remaining -= data.length
+        deliverData(data)
+        continue
+      }
+      const chunk = data.slice(0, remaining)
+      pendingPausedData[0] = data.slice(remaining)
+      remaining = 0
+      deliverData(chunk)
+    }
+    if (pendingPausedData.length === 0) {
+      dataFlowPaused = false
+      return
+    }
+    schedulePausedDataFlush()
+  }
+
+  const bufferPausedData = (data: string): void => {
+    pendingPausedData.push(data)
+  }
+
+  proc.onData((data) => {
+    if (dataFlowPaused) {
+      bufferPausedData(data)
+      return
+    }
+    deliverData(data)
   })
   proc.onExit(({ exitCode }) => {
     if (onExitCb) {
+      dataFlowPaused = false
+      nativeDataFlowPaused = false
+      flushPausedData(undefined, { force: true })
       flushPreListenerData()
       onExitCb(exitCode)
     } else {
@@ -852,6 +913,34 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         dead = true
       }
     },
+    setDataFlowPaused: (paused) => {
+      if (dead || nativeDataFlowPaused === paused) {
+        return
+      }
+      try {
+        if (paused) {
+          proc.pause()
+          nativeDataFlowPaused = true
+          dataFlowPaused = true
+          if (pausedDataFlushTimer) {
+            clearTimeout(pausedDataFlushTimer)
+            pausedDataFlushTimer = null
+          }
+        } else {
+          proc.resume()
+          nativeDataFlowPaused = false
+          // Why: keep live data buffered until the paused queue drains so
+          // post-resume bytes cannot overtake older output.
+          if (pendingPausedData.length > 0) {
+            schedulePausedDataFlush()
+          } else {
+            dataFlowPaused = false
+          }
+        }
+      } catch {
+        dead = true
+      }
+    },
     kill: () => {
       if (dead) {
         return
@@ -918,6 +1007,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       pendingPreListenerData = []
       pendingPreListenerDataChars = 0
       pendingPreListenerExitCode = null
+      pendingPausedData = []
+      if (pausedDataFlushTimer) {
+        clearTimeout(pausedDataFlushTimer)
+        pausedDataFlushTimer = null
+      }
       // Why: UnixTerminal.destroy() registers `_socket.once('close', () => this.kill('SIGHUP'))`
       // (unixTerminal.js:219-229). The socket close fires asynchronously; by then
       // the child may have exited and its pid been recycled to an unrelated

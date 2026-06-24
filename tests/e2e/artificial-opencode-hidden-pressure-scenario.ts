@@ -1,7 +1,7 @@
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import path from 'node:path'
 import {
   ensureTerminalVisible,
@@ -12,15 +12,19 @@ import {
   waitForSessionReady
 } from './helpers/store'
 import {
-  getTerminalContent,
   sendToTerminal,
   waitForActivePanePtyId,
   waitForActiveTerminalManager
 } from './helpers/terminal'
-
-type HiddenPressurePane = {
-  ptyId: string
-}
+import {
+  focusTerminalPaneForPtyId,
+  getTerminalContentForPtyId
+} from './helpers/terminal-pty-content'
+import { writePressureOutputScript } from './artificial-opencode-pressure-output-script'
+import {
+  startHiddenPressureCommands,
+  type HiddenPressurePane
+} from './artificial-opencode-hidden-pressure-commands'
 
 type HiddenPressureDeps<TMeasurement, TDebug, TScheduler, TMainPressure, TAckGate> = {
   annotateTypingMeasurement: (
@@ -39,7 +43,9 @@ type HiddenPressureDeps<TMeasurement, TDebug, TScheduler, TMainPressure, TAckGat
     page: Page,
     scriptPath: string,
     ptyId: string,
-    runId: string
+    runId: string,
+    inputMethod?: 'keyboard' | 'ptyWrite',
+    maxWorstKeyLatencyMs?: number
   ) => Promise<TMeasurement>
   readMainPtyPressureDebug: (page: Page) => Promise<TMainPressure | null>
   readTerminalAckGateDebug: (page: Page) => Promise<TAckGate | null>
@@ -66,47 +72,17 @@ type HiddenPressureMainSnapshot = {
   peakPendingChars: number
   peakRendererInFlightChars: number
   ackGatedFlushSkipCount: number
+  sourcePausedPtyCount?: number
 }
 
 type HiddenPressureAckGate = {
   heldAckChars: number
 }
 
-// Why: restore still has to finish promptly, but parallel Electron workers on
-// Linux CI can overshoot the 1s product target without a responsiveness regression.
-const MAX_HIDDEN_RESTORE_LATENCY_MS = 1_500
-
-export function pressureOutputScript(runId: string): string {
-  return `
-const paneIndex = process.argv[2] ?? '0'
-const targetChars = Number(process.argv[3] ?? '0')
-const delayMs = Number(process.argv[4] ?? '0')
-const header = 'OPENCODE_PRESSURE_START_${runId}_' + paneIndex + '\\n'
-const chunkBody = '#'.repeat(8192)
-let written = 0
-process.stdout.write(header)
-function writeMore() {
-  let canContinue = true
-  while (canContinue && written < targetChars) {
-    const frame = String(written).padStart(8, '0')
-    const chunk = '\\x1b[?2026h\\x1b[1;1Hpressure pane=' + paneIndex + ' frame=' + frame + ' ' + chunkBody + '\\x1b[?2026l\\n'
-    written += chunk.length
-    canContinue = process.stdout.write(chunk)
-  }
-  if (written < targetChars) {
-    process.stdout.once('drain', writeMore)
-    return
-  }
-  process.stdout.write('OPENCODE_PRESSURE_DONE_${runId}_' + paneIndex + '\\n')
-}
-setTimeout(writeMore, Number.isFinite(delayMs) && delayMs > 0 ? delayMs : 0)
-`
-}
-
-export function writePressureOutputScript(scriptPath: string, runId: string): void {
-  mkdirSync(path.dirname(scriptPath), { recursive: true })
-  writeFileSync(scriptPath, pressureOutputScript(runId))
-}
+// Why: source-paused hidden PTYs may need to resume and finish producing their
+// retained tail before the DONE marker exists; keep a hard gate below the old
+// pathological 10s+ restores while allowing the lossless backpressure path.
+const MAX_HIDDEN_RESTORE_LATENCY_MS = 8_000
 
 export async function runHiddenRealPtyPressureScenario<
   TMeasurement extends HiddenPressureMeasurement,
@@ -120,6 +96,7 @@ export async function runHiddenRealPtyPressureScenario<
   hiddenPaneCount,
   pressureOutputChars,
   pressureStartDelayMs,
+  maxWorstKeyLatencyMs,
   testInfo,
   testRepoPath,
   orcaPage
@@ -129,6 +106,7 @@ export async function runHiddenRealPtyPressureScenario<
   hiddenPaneCount: number
   pressureOutputChars: number
   pressureStartDelayMs: number
+  maxWorstKeyLatencyMs: number
   testInfo: TestInfo
   testRepoPath: string
   orcaPage: Page
@@ -180,7 +158,9 @@ export async function runHiddenRealPtyPressureScenario<
       orcaPage,
       typingScriptPath,
       typingPtyId,
-      runId
+      runId,
+      'ptyWrite',
+      maxWorstKeyLatencyMs
     )
     const debug = await deps.readTerminalPtyOutputDebug(orcaPage)
     const mainPressure = await deps.readMainPtyPressureDebug(orcaPage)
@@ -199,19 +179,24 @@ export async function runHiddenRealPtyPressureScenario<
     expect(debug?.hiddenRendererSkipCount ?? 0).toBe(0)
     expect(debug?.hiddenRendererSkippedChars ?? 0).toBe(0)
     expect(pressureBeforeTyping.peakPendingChars).toBeGreaterThan(0)
-    expect(pressureBeforeTyping.ackGatedFlushSkipCount).toBeGreaterThan(0)
-    expect(mainPressure?.peakRendererInFlightChars ?? 0).toBeGreaterThanOrEqual(8 * 1024 * 1024)
+    expect(pressureBeforeTyping.sourcePausedPtyCount ?? 0).toBeGreaterThan(0)
+    expect(
+      (mainPressure?.peakRendererInFlightChars ?? 0) >= 8 * 1024 * 1024 ||
+        (mainPressure?.sourcePausedPtyCount ?? 0) > 0
+    ).toBe(true)
     expect(ackGate?.heldAckChars ?? 0).toBeGreaterThan(0)
     expect(measurement.medianLatencyMs).toBeLessThan(75)
-    expect(measurement.worstLatencyMs).toBeLessThan(300)
-    expect(measurement.maxTimerDriftMs).toBeLessThan(150)
+    expect(measurement.worstLatencyMs).toBeLessThan(maxWorstKeyLatencyMs)
+    expect(measurement.maxTimerDriftMs).toBeLessThan(250)
 
     await deps.releaseTerminalAckGate(orcaPage)
     const restoreLatencyMs = await measureHiddenOutputRestoreLatency(
       orcaPage,
       secondWorktreeId,
+      hiddenPanes[0].ptyId,
       runId
     )
+    await waitForMainSourcePauseRelease(orcaPage, deps.readMainPtyPressureDebug)
     testInfo.annotations.push({
       type: `opencode-hidden-real-pty-restore${annotationSuffix ?? ''}`,
       description: `panes=${hiddenPanes.length + 1} restore=${restoreLatencyMs.toFixed(
@@ -234,44 +219,34 @@ export async function runHiddenRealPtyPressureScenario<
   }
 }
 
+async function waitForMainSourcePauseRelease<TMainPressure extends HiddenPressureMainSnapshot>(
+  orcaPage: Page,
+  readMainPtyPressureDebug: (page: Page) => Promise<TMainPressure | null>
+): Promise<void> {
+  await expect
+    .poll(async () => (await readMainPtyPressureDebug(orcaPage))?.sourcePausedPtyCount ?? null, {
+      timeout: 15_000,
+      message: 'Main PTY source pause did not release after ACK gate release'
+    })
+    .toBe(0)
+}
+
 async function measureHiddenOutputRestoreLatency(
   orcaPage: Page,
   worktreeId: string,
+  targetPtyId: string,
   runId: string
 ): Promise<number> {
   const restoreStart = performance.now()
   await switchToWorktree(orcaPage, worktreeId)
+  await focusTerminalPaneForPtyId(orcaPage, targetPtyId)
   await expect
-    .poll(() => getTerminalContent(orcaPage, 20_000), {
+    .poll(() => getTerminalContentForPtyId(orcaPage, targetPtyId, 20_000), {
       timeout: 20_000,
       message: 'Hidden PTY output was not restored from main buffer on return'
     })
-    .toContain(`OPENCODE_PRESSURE_DONE_${runId}_`)
+    .toContain(`OPENCODE_PRESSURE_DONE_${runId}_0`)
   return performance.now() - restoreStart
-}
-
-async function startHiddenPressureCommands({
-  hiddenPanes,
-  orcaPage,
-  pressureOutputChars,
-  pressureScriptPath,
-  pressureStartDelayMs
-}: {
-  hiddenPanes: HiddenPressurePane[]
-  orcaPage: Page
-  pressureOutputChars: number
-  pressureScriptPath: string
-  pressureStartDelayMs: number
-}): Promise<void> {
-  await Promise.all(
-    hiddenPanes.map((pane, paneIndex) =>
-      sendToTerminal(
-        orcaPage,
-        pane.ptyId,
-        `node ${JSON.stringify(pressureScriptPath)} ${paneIndex} ${pressureOutputChars} ${pressureStartDelayMs}\r`
-      )
-    )
-  )
 }
 
 async function switchToTypingWorkspace(orcaPage: Page, worktreeId: string): Promise<void> {

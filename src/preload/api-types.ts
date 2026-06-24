@@ -402,7 +402,7 @@ export type BrowserApi = {
     worktreeId: string
     sessionProfileId?: string | null
     webContentsId: number
-  }) => Promise<void>
+  }) => Promise<boolean>
   unregisterGuest: (args: { browserPageId: string }) => Promise<void>
   openDevTools: (args: { browserPageId: string }) => Promise<boolean>
   setViewportOverride: (args: {
@@ -1081,6 +1081,9 @@ export type PreloadApi = {
       rendererInFlightChars: number
       maxRendererInFlightCharsByPty: number
       activeRendererPtyCount: number
+      sourcePausedPtyCount: number
+      inputTrackedPtyCount: number
+      latestInputAgeMs: number | null
       flushScheduled: boolean
       peakPendingChars: number
       peakMaxPendingCharsByPty: number
@@ -2509,6 +2512,7 @@ export type PreloadApi = {
     popupMenu: () => void
     onWindowCloseRequested: (callback: (data: { isQuitting: boolean }) => void) => () => void
     confirmWindowClose: () => void
+    cancelWindowClose: () => void
   }
   runtime: {
     syncWindowGraph: (graph: RuntimeSyncWindowGraph) => Promise<RuntimeSyncWindowGraphResult>

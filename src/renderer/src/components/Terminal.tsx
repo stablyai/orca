@@ -209,7 +209,10 @@ function Terminal(): React.JSX.Element | null {
   const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
   const workspaceSurfaces = useMemo(
     () => [
-      ...allWorktrees.map((worktree) => ({ id: worktree.id, path: worktree.path })),
+      ...allWorktrees.map((worktree) => ({
+        id: worktree.id,
+        path: worktree.path
+      })),
       ...folderWorkspaces.map((workspace) => ({
         id: folderWorkspaceKey(workspace.id),
         path: workspace.folderPath
@@ -383,12 +386,23 @@ function Terminal(): React.JSX.Element | null {
   // Window close confirmation dialog — shown for local terminals with running
   // child processes. SSH terminals detach/persist through the relay lifecycle.
   const [windowCloseDialogOpen, setWindowCloseDialogOpen] = useState(false)
+  const handleWindowCloseDialogCancel = useCallback(() => {
+    setWindowCloseDialogOpen(false)
+    window.api.ui.cancelWindowClose()
+  }, [])
 
   // Why: when the main process requests a close while editor tabs are dirty, we
   // must not call confirmWindowClose() until the user saves or discards. The
   // global beforeunload guard still calls preventDefault() while any file is
   // dirty, so an immediate confirm would leave the window open with no UI.
   const windowCloseAfterDirtyRef = useRef<{ isQuitting: boolean } | null>(null)
+  const cancelPendingWindowClose = useCallback(() => {
+    if (!windowCloseAfterDirtyRef.current) {
+      return
+    }
+    windowCloseAfterDirtyRef.current = null
+    window.api.ui.cancelWindowClose()
+  }, [])
 
   const proceedToNativeWindowClose = useCallback((isQuitting: boolean) => {
     // Why: defer this synthetic unload until we are actually ready to close so
@@ -596,6 +610,7 @@ function Terminal(): React.JSX.Element | null {
           'Save timed out or failed. Fix errors before closing.'
         )
       )
+      cancelPendingWindowClose()
       setSaveDialogFileId(fileId)
       // Why: a genuine timeout leaves the user back on the same dialog, so
       // release the guard immediately — a new click here is a deliberate
@@ -610,6 +625,7 @@ function Terminal(): React.JSX.Element | null {
     releaseCloseDialogGuardAfterDebounce()
   }, [
     advanceEditorCloseQueue,
+    cancelPendingWindowClose,
     releaseCloseDialogGuardAfterDebounce,
     saveDialogFileId,
     waitForFileClosed
@@ -663,10 +679,10 @@ function Terminal(): React.JSX.Element | null {
     }
     isClosingRef.current = true
     pendingEditorCloseQueueRef.current = []
-    windowCloseAfterDirtyRef.current = null
+    cancelPendingWindowClose()
     setSaveDialogFileId(null)
     releaseCloseDialogGuardAfterDebounce()
-  }, [releaseCloseDialogGuardAfterDebounce])
+  }, [cancelPendingWindowClose, releaseCloseDialogGuardAfterDebounce])
 
   useEffect(() => {
     const onRequestEditorClose = (event: Event): void => {
@@ -2018,7 +2034,7 @@ function Terminal(): React.JSX.Element | null {
         open={windowCloseDialogOpen}
         onOpenChange={(open) => {
           if (!open) {
-            setWindowCloseDialogOpen(false)
+            handleWindowCloseDialogCancel()
           }
         }}
       >
@@ -2039,7 +2055,7 @@ function Terminal(): React.JSX.Element | null {
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setWindowCloseDialogOpen(false)}
+              onClick={handleWindowCloseDialogCancel}
             >
               {translate('auto.components.Terminal.f82e9f02df', 'Cancel')}
             </Button>

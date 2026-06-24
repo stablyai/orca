@@ -44,6 +44,7 @@ function createMockSubprocess(): SubprocessHandle & {
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
     forceKill: vi.fn(),
     signal: vi.fn(),
+    setDataFlowPaused: vi.fn(),
     onData(cb) {
       onDataCb = cb
     },
@@ -246,6 +247,64 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     it('does not throw', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
       await expect(adapter.clearBuffer(id)).resolves.toBeUndefined()
+    })
+  })
+
+  describe('setDataFlowPaused', () => {
+    it('does not claim a daemon pause change was accepted after disconnect', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+
+      expect(adapter.setDataFlowPaused(id, true)).toBe(true)
+      const setDataFlowPaused = vi.mocked(lastSubprocess.setDataFlowPaused!)
+      await waitFor(() => setDataFlowPaused.mock.calls.length > 0)
+      expect(setDataFlowPaused).toHaveBeenLastCalledWith(true)
+
+      adapter.dispose()
+      setDataFlowPaused.mockClear()
+      expect(adapter.setDataFlowPaused(id, true)).toBe(false)
+      expect(setDataFlowPaused).not.toHaveBeenCalled()
+    })
+
+    it('resumes daemon data flow before warm disconnect', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+
+      expect(adapter.setDataFlowPaused(id, true)).toBe(true)
+      const setDataFlowPaused = vi.mocked(lastSubprocess.setDataFlowPaused!)
+      await waitFor(() => setDataFlowPaused.mock.calls.length > 0)
+      expect(setDataFlowPaused).toHaveBeenLastCalledWith(true)
+
+      await adapter.disconnectOnly()
+
+      await waitFor(() => setDataFlowPaused.mock.calls.some(([paused]) => paused === false))
+      expect(setDataFlowPaused).toHaveBeenLastCalledWith(false)
+    })
+
+    it('reconnects to resume daemon data flow after a socket disconnect', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+
+      expect(adapter.setDataFlowPaused(id, true)).toBe(true)
+      const setDataFlowPaused = vi.mocked(lastSubprocess.setDataFlowPaused!)
+      await waitFor(() => setDataFlowPaused.mock.calls.some(([paused]) => paused === true))
+
+      ;(adapter as unknown as { client: { disconnect: () => void } }).client.disconnect()
+      setDataFlowPaused.mockClear()
+
+      expect(adapter.setDataFlowPaused(id, false)).toBe(false)
+
+      await waitFor(() => setDataFlowPaused.mock.calls.some(([paused]) => paused === false))
+      expect(setDataFlowPaused).toHaveBeenLastCalledWith(false)
+    })
+
+    it('does not reconnect to apply an untracked daemon pause after notify failure', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      const setDataFlowPaused = vi.mocked(lastSubprocess.setDataFlowPaused!)
+
+      ;(adapter as unknown as { client: { disconnect: () => void } }).client.disconnect()
+
+      expect(adapter.setDataFlowPaused(id, true)).toBe(false)
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      expect(setDataFlowPaused).not.toHaveBeenCalledWith(true)
     })
   })
 
@@ -793,6 +852,30 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         expect.objectContaining({ snapshotAnsi: expect.stringContaining('fresh output') })
       )
       expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(true)
+    })
+
+    it('resumes daemon data flow before keepHistory shutdown checkpoint', async () => {
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
+      const { id } = await historyAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/home/user',
+        sessionId: 'sleep-checkpoint-paused'
+      })
+      const setDataFlowPaused = vi.mocked(lastSubprocess.setDataFlowPaused!)
+      const checkpointSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'checkpoint')
+
+      expect(historyAdapter.setDataFlowPaused(id, true)).toBe(true)
+      await waitFor(() => setDataFlowPaused.mock.calls.some(([paused]) => paused === true))
+
+      await historyAdapter.shutdown(id, { immediate: true, keepHistory: true })
+      await waitFor(() => setDataFlowPaused.mock.calls.some(([paused]) => paused === false))
+
+      const resumeOrder = setDataFlowPaused.mock.invocationCallOrder.at(-1) ?? 0
+      const checkpointOrder = checkpointSpy.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
+      expect(setDataFlowPaused).toHaveBeenLastCalledWith(false)
+      expect(resumeOrder).toBeLessThan(checkpointOrder)
     })
 
     it('persists final take records that are not represented in the snapshot', async () => {

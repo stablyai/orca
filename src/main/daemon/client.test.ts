@@ -455,12 +455,18 @@ describe('DaemonClient', () => {
       client = new DaemonClient({ socketPath, tokenPath })
       await client.ensureConnected()
 
-      client.notify('write', { sessionId: 'session-1', data: 'hello' })
+      expect(client.notify('write', { sessionId: 'session-1', data: 'hello' })).toBe(true)
 
       await waitFor(() => received.length > 0)
       const msg = received[0] as { id: string; type: string }
       expect(msg.id).toMatch(/^notify_/)
       expect(msg.type).toBe('write')
+    })
+
+    it('reports when a notification cannot be accepted by a live socket', () => {
+      client = new DaemonClient({ socketPath, tokenPath })
+
+      expect(client.notify('write', { sessionId: 'session-1', data: 'hello' })).toBe(false)
     })
   })
 })

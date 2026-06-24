@@ -63,6 +63,11 @@ type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
   automationProvenance?: AutomationWorkspaceProvenance
 }
 import {
+  broadcastToMainWindows,
+  getMainWindows,
+  sendToWindow
+} from '../window/main-window-registry'
+import {
   sanitizeWorktreeName,
   sanitizeWorktreeDisplayName,
   computeBranchName,
@@ -989,7 +994,11 @@ async function prepareWorktreePushTargetSsh(
     target.branchName,
     `refs/remotes/${remoteName}/${target.branchName}`
   )
-  return { ...sanitizedTarget, remoteName, ...(remoteCreated ? { remoteCreated: true } : {}) }
+  return {
+    ...sanitizedTarget,
+    remoteName,
+    ...(remoteCreated ? { remoteCreated: true } : {})
+  }
 }
 
 export async function cleanupUnusedWorktreePushTargetRemoteSsh(
@@ -1212,7 +1221,10 @@ async function refreshLocalBaseRefForRemoteWorktreeCreate(
     return evaluation.result
   }
 
-  const resultBase = { baseRef: evaluation.baseRef, localBranch: evaluation.localBranch }
+  const resultBase = {
+    baseRef: evaluation.baseRef,
+    localBranch: evaluation.localBranch
+  }
   try {
     await provider.refreshLocalBaseRefForWorktreeCreate({
       repoPath,
@@ -1252,7 +1264,10 @@ async function evaluateRemoteLocalBaseRefRefreshability(
     )
     behind = countNonEmptyGitOutputLines(stdout)
   } catch {
-    return { refreshable: false, result: { ...resultBase, status: 'skipped_not_fast_forward' } }
+    return {
+      refreshable: false,
+      result: { ...resultBase, status: 'skipped_not_fast_forward' }
+    }
   }
 
   try {
@@ -1293,7 +1308,10 @@ async function evaluateRemoteLocalBaseRefRefreshability(
       behind
     }
   } catch {
-    return { refreshable: false, result: { ...resultBase, status: 'skipped_error' } }
+    return {
+      refreshable: false,
+      result: { ...resultBase, status: 'skipped_error' }
+    }
   }
 }
 
@@ -1332,8 +1350,9 @@ export function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string
   // Why: invalidate detected-worktree caches before renderer observers react,
   // so follow-up listDetected reads post-change state.
   runWorktreeChangeInvalidators(repoId)
-  if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('worktrees:changed', { repoId })
+  broadcastToMainWindows('worktrees:changed', { repoId })
+  if (getMainWindows().length === 0 && !mainWindow.isDestroyed()) {
+    sendToWindow(mainWindow, 'worktrees:changed', { repoId })
   }
 }
 
@@ -1346,9 +1365,7 @@ export function emitCreateWorktreeProgress(
   phase: 'fetching' | 'creating',
   creationId?: string
 ): void {
-  if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('createWorktree:progress', { creationId, phase })
-  }
+  sendToWindow(mainWindow, 'createWorktree:progress', { creationId, phase })
 }
 
 export async function createRemoteWorktree(
@@ -1565,7 +1582,10 @@ export async function createRemoteWorktree(
         remotePath,
         checkoutExistingBranch
           ? { checkoutExistingBranch }
-          : { base: baseBranch, ...(sparseDirectories.length > 0 ? { noCheckout: true } : {}) }
+          : {
+              base: baseBranch,
+              ...(sparseDirectories.length > 0 ? { noCheckout: true } : {})
+            }
       )
     )
   } catch (err) {
@@ -1680,7 +1700,9 @@ export async function createRemoteWorktree(
       ? { linkedLinearIssueWorkspaceId: args.linkedLinearIssueWorkspaceId }
       : {}),
     ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
-      ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
+      ? {
+          linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey
+        }
       : {}),
     ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
     ...(args.linkedGitLabIssue !== undefined ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),
@@ -2277,7 +2299,9 @@ export async function createLocalWorktree(
       ? { linkedLinearIssueWorkspaceId: args.linkedLinearIssueWorkspaceId }
       : {}),
     ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
-      ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
+      ? {
+          linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey
+        }
       : {}),
     ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
     ...(args.linkedGitLabIssue !== undefined ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),

@@ -64,6 +64,8 @@ function mockPtyProcess(pid = 12345) {
     pid,
     write: vi.fn(),
     resize: vi.fn(),
+    pause: vi.fn(),
+    resume: vi.fn(),
     kill: vi.fn(),
     process: 'zsh',
     onData: vi.fn((cb: (data: string) => void) => {
@@ -148,6 +150,72 @@ describe('createPtySubprocess', () => {
         name: 'xterm-256color'
       })
     )
+  })
+
+  it('keeps paused output ordered across resume', () => {
+    vi.useFakeTimers()
+    try {
+      const proc = mockPtyProcess()
+      spawnMock.mockReturnValue(proc)
+      const subprocess = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: '/home/user',
+        env: { SHELL: '/bin/bash' }
+      })
+      const received: string[] = []
+      subprocess.onData((data) => received.push(data))
+
+      subprocess.setDataFlowPaused?.(true)
+      proc._simulateData('old')
+      subprocess.setDataFlowPaused?.(false)
+      proc._simulateData('new')
+
+      expect(received).toEqual([])
+
+      vi.advanceTimersByTime(0)
+
+      expect(received).toEqual(['old', 'new'])
+      expect(proc.pause).toHaveBeenCalledTimes(1)
+      expect(proc.resume).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('honors a new pause request while paused output is draining', () => {
+    vi.useFakeTimers()
+    try {
+      const proc = mockPtyProcess()
+      spawnMock.mockReturnValue(proc)
+      const subprocess = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: '/home/user',
+        env: { SHELL: '/bin/bash' }
+      })
+      const received: string[] = []
+      subprocess.onData((data) => received.push(data))
+
+      subprocess.setDataFlowPaused?.(true)
+      proc._simulateData('old')
+      subprocess.setDataFlowPaused?.(false)
+      subprocess.setDataFlowPaused?.(true)
+      vi.advanceTimersByTime(0)
+
+      expect(received).toEqual([])
+      expect(proc.pause).toHaveBeenCalledTimes(2)
+      expect(proc.resume).toHaveBeenCalledTimes(1)
+
+      subprocess.setDataFlowPaused?.(false)
+      vi.advanceTimersByTime(0)
+
+      expect(received).toEqual(['old'])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   itOnMacHost('repairs a deleted macOS daemon cwd before spawning node-pty', () => {

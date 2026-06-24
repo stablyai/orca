@@ -139,27 +139,29 @@ describe('registerUIHandlers', () => {
     expect(pasteAndMatchStyle).not.toHaveBeenCalled()
   })
 
-  it('clears the trusted renderer id without clearing a newer window id', () => {
+  it('clears one trusted renderer id without clearing another window id', () => {
     const paste = vi.fn()
     const pasteAndMatchStyle = vi.fn()
     setTrustedUIRendererWebContentsId(17)
-    clearTrustedUIRendererWebContentsId(42)
+    setTrustedUIRendererWebContentsId(42)
     fromWebContentsMock.mockReturnValue({ webContents: { paste, pasteAndMatchStyle } })
 
     registerUIHandlers(makeStore() as never)
 
     getNativePasteHandler()?.(makeUIEvent())
+    getNativePasteHandler()?.(makeUIEvent({ id: 42 }))
 
-    expect(paste).toHaveBeenCalledTimes(1)
+    expect(paste).toHaveBeenCalledTimes(2)
 
-    clearTrustedUIRendererWebContentsId(17)
+    clearTrustedUIRendererWebContentsId(42)
     fromWebContentsMock.mockClear()
     paste.mockClear()
 
     getNativePasteHandler()?.(makeUIEvent())
+    getNativePasteHandler()?.(makeUIEvent({ id: 42 }))
 
-    expect(fromWebContentsMock).not.toHaveBeenCalled()
-    expect(paste).not.toHaveBeenCalled()
+    expect(fromWebContentsMock).toHaveBeenCalledTimes(1)
+    expect(paste).toHaveBeenCalledTimes(1)
   })
 
   it('allows native paste fallback only from the configured dev renderer origin', () => {

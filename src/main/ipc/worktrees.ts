@@ -102,6 +102,7 @@ type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
 }
 import { classifyWorkspaceCreateError } from './workspace-create-error-classifier'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
+import { getMainWindowForWebContents } from '../window/main-window-registry'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canCleanupUnregisteredOrcaWorktreeDirectory,
@@ -860,6 +861,9 @@ export function registerWorktreeHandlers(
   store: Store,
   runtime: OrcaRuntimeService
 ): void {
+  const getTargetWindow = (event: Electron.IpcMainInvokeEvent | null | undefined): BrowserWindow =>
+    event?.sender ? (getMainWindowForWebContents(event.sender) ?? mainWindow) : mainWindow
+
   // Remove any previously registered handlers so we can re-register them
   // (e.g. when macOS re-activates the app and creates a new window).
   ipcMain.removeHandler('worktrees:listAll')
@@ -1099,7 +1103,7 @@ export function registerWorktreeHandlers(
 
   ipcMain.handle(
     'worktrees:create',
-    async (_event, args: CreateWorktreeArgs): Promise<CreateWorktreeResult> => {
+    async (event, args: CreateWorktreeArgs): Promise<CreateWorktreeResult> => {
       // Why span here: worktree creation chains a clone-or-checkout, an
       // install hook, and several git invocations. Wrapping the IPC entry
       // gives every child git span a parent to attach to, so a failure in
@@ -1138,8 +1142,8 @@ export function registerWorktreeHandlers(
           result = isFolderRepo(repo)
             ? createFolderWorkspace(createArgs, repo, store)
             : repo.connectionId
-              ? await createRemoteWorktree(createArgs, repo, store, mainWindow)
-              : await createLocalWorktree(createArgs, repo, store, mainWindow, runtime)
+              ? await createRemoteWorktree(createArgs, repo, store, getTargetWindow(event))
+              : await createLocalWorktree(createArgs, repo, store, getTargetWindow(event), runtime)
         } catch (error) {
           releaseAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
           track('workspace_create_failed', {

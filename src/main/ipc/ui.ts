@@ -3,16 +3,21 @@ import type { Store } from '../persistence'
 import type { PersistedUIState } from '../../shared/types'
 import { isFeatureInteractionId } from '../../shared/feature-interactions'
 
-let trustedUIRendererWebContentsId: number | null = null
+const trustedUIRendererWebContentsIds = new Set<number>()
+let explicitUIRendererTrustInitialized = false
 
 export function setTrustedUIRendererWebContentsId(webContentsId: number | null): void {
-  trustedUIRendererWebContentsId = webContentsId
+  if (webContentsId === null) {
+    trustedUIRendererWebContentsIds.clear()
+    explicitUIRendererTrustInitialized = false
+    return
+  }
+  explicitUIRendererTrustInitialized = true
+  trustedUIRendererWebContentsIds.add(webContentsId)
 }
 
 export function clearTrustedUIRendererWebContentsId(webContentsId: number): void {
-  if (trustedUIRendererWebContentsId === webContentsId) {
-    trustedUIRendererWebContentsId = null
-  }
+  trustedUIRendererWebContentsIds.delete(webContentsId)
 }
 
 export function registerUIHandlers(store: Store): void {
@@ -62,8 +67,8 @@ function isTrustedUIRenderer(sender: WebContents): boolean {
   if (sender.isDestroyed() || sender.getType() !== 'window') {
     return false
   }
-  if (trustedUIRendererWebContentsId != null) {
-    return sender.id === trustedUIRendererWebContentsId
+  if (explicitUIRendererTrustInitialized) {
+    return trustedUIRendererWebContentsIds.has(sender.id)
   }
 
   const senderUrl = sender.getURL()

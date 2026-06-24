@@ -9,10 +9,13 @@ import type { SshPortForwardManager } from './ssh-port-forward'
 import { AGENT_HOOK_INSTALL_PLUGINS_METHOD } from '../../shared/agent-hook-relay'
 import { SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD } from '../../shared/ssh-types'
 
-const { muxRequestMock, installRemoteManagedAgentHooksMock } = vi.hoisted(() => ({
-  muxRequestMock: vi.fn(),
-  installRemoteManagedAgentHooksMock: vi.fn()
-}))
+const { muxRequestMock, installRemoteManagedAgentHooksMock, getMainWindowByIdMock } = vi.hoisted(
+  () => ({
+    muxRequestMock: vi.fn(),
+    installRemoteManagedAgentHooksMock: vi.fn(),
+    getMainWindowByIdMock: vi.fn()
+  })
+)
 
 vi.mock('./ssh-relay-deploy', () => ({
   deployAndLaunchRelay: vi.fn()
@@ -89,6 +92,16 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
   unregisterSshGitProvider: vi.fn()
 }))
 
+vi.mock('../window/main-window-registry', () => ({
+  broadcastToMainWindows: vi.fn(),
+  getMainWindowById: getMainWindowByIdMock,
+  sendToWindow: (
+    window: { webContents: { send: (channel: string, ...args: unknown[]) => void } },
+    channel: string,
+    ...args: unknown[]
+  ) => window.webContents.send(channel, ...args)
+}))
+
 const { deployAndLaunchRelay } = await import('./ssh-relay-deploy')
 const { execCommand } = await import('./ssh-relay-deploy-helpers')
 const { getRemoteHostPlatform } = await import('./ssh-remote-platform')
@@ -120,8 +133,10 @@ function createMockDeps() {
     isDestroyed: () => false,
     webContents: { send: vi.fn() }
   }
+  const windowId = 1
   const getMainWindow = vi.fn().mockReturnValue(mockWindow)
-  return { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow }
+  getMainWindowByIdMock.mockImplementation((id: number) => (id === windowId ? mockWindow : null))
+  return { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow, windowId }
 }
 
 function mockDeploySuccess() {
@@ -139,6 +154,7 @@ function mockDeploySuccess() {
 describe('SshRelaySession', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    getMainWindowByIdMock.mockReset()
     delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
     muxRequestMock.mockReset()
     muxRequestMock.mockResolvedValue([])
@@ -391,6 +407,293 @@ describe('SshRelaySession', () => {
     })
   })
 
+  it('retries reconnect replay until runtime ownership is available', async () => {
+    vi.useFakeTimers()
+    try {
+      const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+      let ownerWindowId: number | null = null
+      const runtime = {
+        resolveOwnerWindowIdForPtyId: vi.fn(() => ownerWindowId),
+        onPtyExit: vi.fn()
+      }
+      const session = new SshRelaySession(
+        'target-1',
+        getMainWindow,
+        mockStore,
+        mockPortForward,
+        runtime as never
+      )
+      await session.establish(mockConn)
+      vi.clearAllMocks()
+      mockDeploySuccess()
+
+      const { getSshPtyProvider } = await import('../ipc/pty')
+      const mockAttach = vi.fn().mockResolvedValue({ replay: 'late-owned-output' })
+      vi.mocked(getSshPtyProvider).mockReturnValue({
+        attachForReconnect: mockAttach,
+        dispose: vi.fn()
+      } as unknown as ReturnType<typeof getSshPtyProvider>)
+      vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1'])
+
+      await session.reconnect(mockConn)
+      await vi.advanceTimersByTimeAsync(49)
+      expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:replay', expect.anything())
+
+      ownerWindowId = 1
+      await vi.advanceTimersByTimeAsync(1)
+
+      expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:replay', {
+        id: 'ssh:target-1@@pty-1',
+        data: 'late-owned-output'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not fallback-broadcast PTY stream events when runtime ownership is unknown', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+    const runtime = {
+      resolveOwnerWindowIdForPtyId: vi.fn().mockReturnValue(null),
+      onPtyData: vi.fn().mockReturnValue(42),
+      onPtyExit: vi.fn()
+    }
+    const session = new SshRelaySession(
+      'target-1',
+      getMainWindow,
+      mockStore,
+      mockPortForward,
+      runtime as never
+    )
+    await session.establish(mockConn)
+
+    const ptyProvider = vi.mocked(registerSshPtyProvider).mock.calls[0]?.[1] as unknown as {
+      onData: ReturnType<typeof vi.fn>
+      onReplay: ReturnType<typeof vi.fn>
+      onExit: ReturnType<typeof vi.fn>
+    }
+    const onData = ptyProvider.onData.mock.calls[0]?.[0]
+    const onReplay = ptyProvider.onReplay.mock.calls[0]?.[0]
+    const onExit = ptyProvider.onExit.mock.calls[0]?.[0]
+
+    onData({ id: 'pty-unknown', data: 'hello' })
+    onReplay({ id: 'pty-unknown', data: 'snapshot' })
+    onExit({ id: 'pty-unknown', code: 0 })
+
+    expect(getMainWindow).not.toHaveBeenCalled()
+    expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', expect.anything())
+    expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:replay', expect.anything())
+    expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:exit', expect.anything())
+    expect(runtime.onPtyData).toHaveBeenCalledWith('pty-unknown', 'hello', expect.any(Number))
+    expect(runtime.onPtyExit).toHaveBeenCalledWith('pty-unknown', 0)
+    expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(
+      'target-1',
+      'pty-unknown',
+      'terminated'
+    )
+  })
+
+  it('retries fresh PTY stream events until runtime ownership is available', async () => {
+    vi.useFakeTimers()
+    try {
+      const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+      let ownerWindowId: number | null = null
+      const runtime = {
+        resolveOwnerWindowIdForPtyId: vi.fn(() => ownerWindowId),
+        onPtyData: vi.fn().mockReturnValueOnce(7).mockReturnValueOnce(8),
+        onPtyExit: vi.fn()
+      }
+      const session = new SshRelaySession(
+        'target-1',
+        getMainWindow,
+        mockStore,
+        mockPortForward,
+        runtime as never
+      )
+      await session.establish(mockConn)
+
+      const ptyProvider = vi.mocked(registerSshPtyProvider).mock.calls[0]?.[1] as unknown as {
+        onData: ReturnType<typeof vi.fn>
+      }
+      const onData = ptyProvider.onData.mock.calls[0]?.[0]
+
+      onData({ id: 'pty-late-owner', data: 'hello ' })
+      onData({ id: 'pty-late-owner', data: 'world' })
+      await vi.advanceTimersByTimeAsync(24)
+      expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', expect.anything())
+
+      ownerWindowId = 1
+      await vi.advanceTimersByTimeAsync(1)
+
+      expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: 'pty-late-owner',
+        data: 'hello ',
+        seq: 7,
+        rawLength: 6
+      })
+      expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: 'pty-late-owner',
+        data: 'world',
+        seq: 8,
+        rawLength: 5
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves queued ownerless PTY stream data above the startup retry burst size', async () => {
+    vi.useFakeTimers()
+    try {
+      const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+      let ownerWindowId: number | null = null
+      let nextSeq = 0
+      const runtime = {
+        resolveOwnerWindowIdForPtyId: vi.fn(() => ownerWindowId),
+        onPtyData: vi.fn((_id: string, data: string) => {
+          nextSeq += data.length
+          return nextSeq
+        }),
+        onPtyExit: vi.fn()
+      }
+      const session = new SshRelaySession(
+        'target-1',
+        getMainWindow,
+        mockStore,
+        mockPortForward,
+        runtime as never
+      )
+      await session.establish(mockConn)
+
+      const ptyProvider = vi.mocked(registerSshPtyProvider).mock.calls[0]?.[1] as unknown as {
+        onData: ReturnType<typeof vi.fn>
+      }
+      const onData = ptyProvider.onData.mock.calls[0]?.[0]
+      const chunks = ['a'.repeat(128 * 1024), 'b'.repeat(128 * 1024), 'c'.repeat(128 * 1024)]
+
+      for (const data of chunks) {
+        onData({ id: 'pty-late-owner-large', data })
+      }
+      await vi.advanceTimersByTimeAsync(24)
+      expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', expect.anything())
+
+      ownerWindowId = 1
+      await vi.advanceTimersByTimeAsync(1)
+
+      const sentData = mockWindow.webContents.send.mock.calls
+        .filter(([channel]) => channel === 'pty:data')
+        .map(([, payload]) => payload)
+      expect(sentData).toEqual([
+        {
+          id: 'pty-late-owner-large',
+          data: chunks[0],
+          seq: 128 * 1024,
+          rawLength: 128 * 1024
+        },
+        {
+          id: 'pty-late-owner-large',
+          data: chunks[1],
+          seq: 256 * 1024,
+          rawLength: 128 * 1024
+        },
+        {
+          id: 'pty-late-owner-large',
+          data: chunks[2],
+          seq: 384 * 1024,
+          rawLength: 128 * 1024
+        }
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not deliver queued ownerless PTY stream data after dispose', async () => {
+    vi.useFakeTimers()
+    try {
+      const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+      let ownerWindowId: number | null = null
+      const runtime = {
+        resolveOwnerWindowIdForPtyId: vi.fn(() => ownerWindowId),
+        onPtyData: vi.fn().mockReturnValue(9),
+        onPtyExit: vi.fn()
+      }
+      const session = new SshRelaySession(
+        'target-1',
+        getMainWindow,
+        mockStore,
+        mockPortForward,
+        runtime as never
+      )
+      await session.establish(mockConn)
+
+      const ptyProvider = vi.mocked(registerSshPtyProvider).mock.calls[0]?.[1] as unknown as {
+        onData: ReturnType<typeof vi.fn>
+      }
+      const onData = ptyProvider.onData.mock.calls[0]?.[0]
+
+      onData({ id: 'pty-late-owner', data: 'stale output' })
+      session.dispose()
+      ownerWindowId = 1
+      await vi.advanceTimersByTimeAsync(50)
+
+      expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', expect.anything())
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('retries ownerless PTY stream data before exit when ownership appears late', async () => {
+    vi.useFakeTimers()
+    try {
+      const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+      let ownerWindowId: number | null = null
+      const runtime = {
+        resolveOwnerWindowIdForPtyId: vi.fn(() => ownerWindowId),
+        onPtyData: vi.fn().mockReturnValue(10),
+        onPtyExit: vi.fn()
+      }
+      const session = new SshRelaySession(
+        'target-1',
+        getMainWindow,
+        mockStore,
+        mockPortForward,
+        runtime as never
+      )
+      await session.establish(mockConn)
+
+      const ptyProvider = vi.mocked(registerSshPtyProvider).mock.calls[0]?.[1] as unknown as {
+        onData: ReturnType<typeof vi.fn>
+        onExit: ReturnType<typeof vi.fn>
+      }
+      const onData = ptyProvider.onData.mock.calls[0]?.[0]
+      const onExit = ptyProvider.onExit.mock.calls[0]?.[0]
+      mockWindow.webContents.send.mockClear()
+
+      onData({ id: 'pty-short-lived', data: 'startup output' })
+      onExit({ id: 'pty-short-lived', code: 0 })
+      await vi.advanceTimersByTimeAsync(24)
+      expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', expect.anything())
+      expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:exit', expect.anything())
+
+      ownerWindowId = 1
+      await vi.advanceTimersByTimeAsync(1)
+
+      expect(mockWindow.webContents.send).toHaveBeenNthCalledWith(1, 'pty:data', {
+        id: 'pty-short-lived',
+        data: 'startup output',
+        seq: 10,
+        rawLength: 'startup output'.length
+      })
+      expect(mockWindow.webContents.send).toHaveBeenNthCalledWith(2, 'pty:exit', {
+        id: 'pty-short-lived',
+        code: 0
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('drops identical reconnect replay payloads inside one reconnect burst', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
@@ -414,6 +717,45 @@ describe('SshRelaySession', () => {
       .mock.calls.filter(([channel]) => channel === 'pty:replay')
     expect(mockAttach).toHaveBeenCalledTimes(2)
     expect(replaySends).toHaveLength(1)
+  })
+
+  it('does not deliver delayed reconnect replay after dispose', async () => {
+    vi.useFakeTimers()
+    try {
+      const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+      let ownerWindowId: number | null = null
+      const runtime = {
+        resolveOwnerWindowIdForPtyId: vi.fn(() => ownerWindowId),
+        onPtyExit: vi.fn()
+      }
+      const session = new SshRelaySession(
+        'target-1',
+        getMainWindow,
+        mockStore,
+        mockPortForward,
+        runtime as never
+      )
+      await session.establish(mockConn)
+      vi.clearAllMocks()
+      mockDeploySuccess()
+
+      const { getSshPtyProvider } = await import('../ipc/pty')
+      const mockAttach = vi.fn().mockResolvedValue({ replay: 'stale-replay' })
+      vi.mocked(getSshPtyProvider).mockReturnValue({
+        attachForReconnect: mockAttach,
+        dispose: vi.fn()
+      } as unknown as ReturnType<typeof getSshPtyProvider>)
+      vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1'])
+
+      await session.reconnect(mockConn)
+      session.dispose()
+      ownerWindowId = 1
+      await vi.advanceTimersByTimeAsync(50)
+
+      expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:replay', expect.anything())
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('establish re-attaches owned PTYs after explicit disconnect', async () => {
@@ -551,6 +893,59 @@ describe('SshRelaySession', () => {
       id: 'ssh:target-1@@pty-stale',
       code: -1
     })
+  })
+
+  it('retries stale reconnect PTY exits when ownership appears late', async () => {
+    vi.useFakeTimers()
+    try {
+      const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+      let ownerWindowId: number | null = null
+      const runtime = {
+        resolveOwnerWindowIdForPtyId: vi.fn(() => ownerWindowId),
+        onPtyExit: vi.fn()
+      }
+      const session = new SshRelaySession(
+        'target-1',
+        getMainWindow,
+        mockStore,
+        mockPortForward,
+        runtime as never
+      )
+      await session.establish(mockConn)
+      vi.clearAllMocks()
+      mockDeploySuccess()
+
+      const { getSshPtyProvider } = await import('../ipc/pty')
+      const mockAttach = vi.fn().mockRejectedValue(new Error('PTY "pty-stale" not found'))
+      vi.mocked(getSshPtyProvider).mockReturnValue({
+        attachForReconnect: mockAttach,
+        dispose: vi.fn()
+      } as unknown as ReturnType<typeof getSshPtyProvider>)
+      vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-stale'])
+
+      await session.reconnect(mockConn)
+      await vi.advanceTimersByTimeAsync(24)
+
+      expect(clearProviderPtyState).toHaveBeenCalledWith('ssh:target-1@@pty-stale')
+      expect(deletePtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-stale')
+      expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(
+        'target-1',
+        'pty-stale',
+        'expired'
+      )
+      expect(runtime.onPtyExit).toHaveBeenCalledWith('ssh:target-1@@pty-stale', -1)
+      expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:exit', expect.anything())
+
+      ownerWindowId = 1
+      await vi.advanceTimersByTimeAsync(1)
+
+      expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
+        id: 'ssh:target-1@@pty-stale',
+        code: -1
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('routes transient reattach failures through relay-lost retry handling', async () => {

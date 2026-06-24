@@ -56,7 +56,8 @@
     "zoomOut": "Zoom Out",
     "openWorktreePalette": "Open Worktree Palette",
     "window": "Window",
-    "help": "Help"
+    "help": "Help",
+    "newWindow": "New Window"
   },
   "tray": {
     "openOrca": "Open Orca",
@@ -4892,7 +4893,21 @@
           },
           "ca2219fe5e": "Shows a small animated pet pinned to the bottom-right corner. Pick a character (Claudino, OpenCode, Gremlin) or upload your own PNG, APNG, GIF, WebP, JPG, or SVG from the status-bar pet menu. Hide it any time from the same menu without disabling this setting.",
           "dd6f0a1d45": "Pet",
-          "0e89a574ae": "Floating animated pet in the bottom-right corner."
+          "0e89a574ae": "Floating animated pet in the bottom-right corner.",
+          "efc5cd3ad7": "Multi-window",
+          "9403a2fffb": "Enable File > New Window for multiple monitor workflows. Requires restart.",
+          "73d191586e": "Adds File > New Window for multiple monitor workflows. Requires restart.",
+          "31d6d8d7b4": "Restart required",
+          "45513cd4aa": "Orca applies multi-window support at startup.",
+          "c709b5448c": "Restart",
+          "847886cf3e": "Smart New Tab menu",
+          "523b819a55": "Type in the New Tab menu to open a terminal, launch an agent, visit a URL, or open/create a file.",
+          "multiWindow": {
+            "toggleLabel": "Toggle multi-window"
+          },
+          "smartNewTab": {
+            "toggleLabel": "Toggle Smart New Tab menu"
+          }
         },
         "FloatingWorkspacePane": {
           "aeaf76fda9": "Status Bar",
@@ -7018,7 +7033,29 @@
             "b54cea709b": "sidekick",
             "051203d37c": "pet",
             "6b5a56ac35": "Floating animated pet in the bottom-right corner.",
-            "87d99e634b": "Pet"
+            "87d99e634b": "Pet",
+            "4f0b2bb8d1": "Smart New Tab menu",
+            "e71f86b9a2": "Type in the New Tab menu to open a terminal, launch an agent, visit a URL, or open/create a file.",
+            "f515b6259c": "smart",
+            "d9e01f4b2c": "new tab",
+            "330c22c19f": "new tab menu",
+            "18c6b47e01": "launcher",
+            "9a2ee68f51": "unified",
+            "717c8d2462": "plus",
+            "79f3c739d8": "url",
+            "8c7dd922ad": "file",
+            "818dac284f": "Multi-window",
+            "7b91eb5445": "Enable File > New Window for multiple monitor workflows. Requires restart.",
+            "80f98894e2": "window",
+            "453f52ca4f": "windows",
+            "0769e2ac8b": "multi-window",
+            "a546df85b7": "multiple windows",
+            "065be2a752": "new window",
+            "f45e79f16d": "monitor",
+            "d7c9a0880c": "monitors",
+            "e6798b719e": "display",
+            "991fc15475": "displays",
+            "834ea7f3aa": "restart"
           }
         },
         "floating": {

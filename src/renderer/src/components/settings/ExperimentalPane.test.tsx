@@ -48,6 +48,20 @@ describe('ExperimentalPane', () => {
     )
   })
 
+  it('renders multi-window as a restart-required off-by-default experimental switch', () => {
+    const markup = renderToStaticMarkup(
+      <ExperimentalPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />
+    )
+
+    expect(markup).toContain('Multi-window')
+    expect(markup).toContain('File &gt; New Window')
+    expect(markup).toContain('Requires restart')
+    expect(markup).toContain('aria-checked="false"')
+    expect(
+      getExperimentalPaneSearchEntries().find((entry) => entry.title === 'Multi-window')?.keywords
+    ).toContain('monitors')
+  })
+
   it('renders agent sleep as an off-by-default searchable experimental switch', () => {
     const settings = getDefaultSettings('/tmp')
     const markup = renderToStaticMarkup(

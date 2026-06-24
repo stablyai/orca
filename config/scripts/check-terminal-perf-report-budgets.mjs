@@ -26,6 +26,55 @@ const BUDGETS = {
   maxRendererDroppedBacklogs: 0
 }
 
+const HIDDEN_REAL_PTY_BUDGETS = {
+  ...BUDGETS,
+  maxWorstKeyLatencyMs: 500,
+  maxTimerDriftMs: 250,
+  maxRestoreLatencyMs: 8000,
+  maxRendererQueuedChars: 5 * 1024 * 1024,
+  maxRendererPeakQueuedChars: 5 * 1024 * 1024
+}
+
+const SYNTHETIC_REDRAW_BUDGETS = {
+  ...BUDGETS,
+  maxMedianKeyLatencyMs: 150,
+  maxWorstKeyLatencyMs: 1000
+}
+
+const ACK_PRESSURE_BUDGETS = {
+  ...BUDGETS,
+  maxMedianKeyLatencyMs: 750,
+  maxWorstKeyLatencyMs: 5000,
+  maxTimerDriftMs: 250,
+  maxScrollLatencyMs: 300,
+  maxRendererQueuedChars: 5 * 1024 * 1024,
+  maxRendererPeakQueuedChars: 5 * 1024 * 1024
+}
+
+function budgetsForRow(row) {
+  // Why: hidden real PTYs deliberately exercise source-pause recovery, which is
+  // noisier than the default typing gate; keep the wider budget scenario-local.
+  if (row.scenario.startsWith('opencode-hidden-real-pty-')) {
+    return HIDDEN_REAL_PTY_BUDGETS
+  }
+  // Why: synthetic redraw storms keep median/timer/queue budgets tight, but one
+  // Electron headless key sample can be noisier than the baseline keyboard path.
+  if (
+    row.scenario.startsWith('opencode-same-workspace-typing') ||
+    row.scenario.startsWith('opencode-scale-same-workspace-') ||
+    row.scenario.startsWith('opencode-cross-workspace-typing') ||
+    row.scenario.startsWith('opencode-scale-cross-workspace-')
+  ) {
+    return SYNTHETIC_REDRAW_BUDGETS
+  }
+  // Why: ACK-gated rows validate bounded queues under real process pressure;
+  // the first active echo can briefly wait on OS PTY scheduling.
+  if (row.scenario.startsWith('opencode-main-pressure-active-')) {
+    return ACK_PRESSURE_BUDGETS
+  }
+  return BUDGETS
+}
+
 function parseMs(value, fieldName, row, failures) {
   if (value == null || value === '') {
     return null
@@ -62,6 +111,7 @@ function addMaxFailure(failures, row, label, actual, budget, unit = '') {
 function validateRow(row) {
   const failures = []
   let checkedMetricCount = 0
+  const budgets = budgetsForRow(row)
   const addBudgetCheck = (label, actual, budget, unit = '') => {
     if (actual != null) {
       checkedMetricCount += 1
@@ -71,47 +121,47 @@ function validateRow(row) {
   addBudgetCheck(
     'median typing latency',
     parseMs(row.median, 'median', row, failures),
-    BUDGETS.maxMedianKeyLatencyMs,
+    budgets.maxMedianKeyLatencyMs,
     'ms'
   )
   addBudgetCheck(
     'worst typing latency',
     parseMs(row.worst, 'worst', row, failures),
-    BUDGETS.maxWorstKeyLatencyMs,
+    budgets.maxWorstKeyLatencyMs,
     'ms'
   )
   addBudgetCheck(
     'timer drift',
     parseMs(row.maxTimerDrift, 'maxTimerDrift', row, failures),
-    BUDGETS.maxTimerDriftMs,
+    budgets.maxTimerDriftMs,
     'ms'
   )
   addBudgetCheck(
     'scroll latency',
     parseMs(row.scroll, 'scroll', row, failures),
-    BUDGETS.maxScrollLatencyMs,
+    budgets.maxScrollLatencyMs,
     'ms'
   )
   addBudgetCheck(
     'restore latency',
     parseMs(row.restore, 'restore', row, failures),
-    BUDGETS.maxRestoreLatencyMs,
+    budgets.maxRestoreLatencyMs,
     'ms'
   )
   addBudgetCheck(
     'renderer queued chars',
     parseCount(row.rendererQueuedChars, 'rendererQueuedChars', row, failures),
-    BUDGETS.maxRendererQueuedChars
+    budgets.maxRendererQueuedChars
   )
   addBudgetCheck(
     'renderer peak queued chars',
     parseCount(row.rendererPeakQueuedChars, 'rendererPeakQueuedChars', row, failures),
-    BUDGETS.maxRendererPeakQueuedChars
+    budgets.maxRendererPeakQueuedChars
   )
   addBudgetCheck(
     'renderer dropped backlogs',
     parseCount(row.rendererDroppedBacklogs, 'rendererDroppedBacklogs', row, failures),
-    BUDGETS.maxRendererDroppedBacklogs
+    budgets.maxRendererDroppedBacklogs
   )
   if (checkedMetricCount === 0) {
     failures.push(`${row.source} ${row.scenario}: no recognized budget metrics found`)

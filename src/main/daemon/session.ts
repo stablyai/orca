@@ -41,6 +41,7 @@ export type SubprocessHandle = {
   startupCommandDeliveredInShellArgs?: boolean
   write(data: string): void
   resize(cols: number, rows: number): void
+  setDataFlowPaused?(paused: boolean): void
   kill(): void
   forceKill(): void
   signal(sig: string): void
@@ -66,6 +67,7 @@ export type SessionOptions = {
   // reaper, dead sessions (and their ~5000-row scrollback emulators) accumulate
   // for the lifetime of the long-lived daemon process.
   onExit?: (code: number) => void
+  onBeforeSubprocessData?: (sessionId: string, charCount: number) => void
 }
 
 type AttachedClient = {
@@ -73,6 +75,8 @@ type AttachedClient = {
   onData: (data: string) => void
   onExit: (code: number) => void
 }
+
+type DataFlowPauseReason = 'client' | 'daemon-stream'
 
 export class Session {
   readonly sessionId: string
@@ -84,6 +88,7 @@ export class Session {
   private emulator: HeadlessEmulator
   private subprocess: SubprocessHandle
   private readonly onSessionExit?: (code: number) => void
+  private readonly onBeforeSubprocessData?: (sessionId: string, charCount: number) => void
   private attachedClients: AttachedClient[] = []
   private preReadyStdinQueue: string[] = []
   private shellReadyScanState: ShellReadyScanState | null = null
@@ -94,11 +99,14 @@ export class Session {
   private pendingOutputBytes = 0
   private pendingOutputOverflowed = false
   private pendingOutputSeq = 0
+  private dataFlowPauseReasons = new Set<DataFlowPauseReason>()
+  private dataFlowPaused = false
 
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
     this.subprocess = opts.subprocess
     this.onSessionExit = opts.onExit
+    this.onBeforeSubprocessData = opts.onBeforeSubprocessData
     const size = normalizePtySize(opts.cols, opts.rows)
     this.emulator = new HeadlessEmulator({
       cols: size.cols,
@@ -178,6 +186,14 @@ export class Session {
     // the emulator, or cold-restore replay reflows at the wrong point.
     this.recordPendingOutput({ kind: 'resize', cols, rows })
     this.subprocess.resize(cols, rows)
+  }
+
+  setDataFlowPaused(paused: boolean): void {
+    this.setDataFlowPausedForReason('client', paused)
+  }
+
+  setDaemonStreamBackpressurePaused(paused: boolean): void {
+    this.setDataFlowPausedForReason('daemon-stream', paused)
   }
 
   kill(): void {
@@ -409,10 +425,32 @@ export class Session {
     this.pendingOutputBytes += bytes
   }
 
+  private setDataFlowPausedForReason(reason: DataFlowPauseReason, paused: boolean): void {
+    if (
+      this._state === 'exited' ||
+      this._disposed ||
+      typeof this.subprocess.setDataFlowPaused !== 'function'
+    ) {
+      return
+    }
+    if (paused) {
+      this.dataFlowPauseReasons.add(reason)
+    } else {
+      this.dataFlowPauseReasons.delete(reason)
+    }
+    const shouldPause = this.dataFlowPauseReasons.size > 0
+    if (shouldPause === this.dataFlowPaused) {
+      return
+    }
+    this.subprocess.setDataFlowPaused(shouldPause)
+    this.dataFlowPaused = shouldPause
+  }
+
   private handleSubprocessData(data: string): void {
     if (this._disposed) {
       return
     }
+    this.onBeforeSubprocessData?.(this.sessionId, data.length)
 
     if (this._shellState === 'pending' && this.shellReadyScanState) {
       const scanned = scanForShellReady(this.shellReadyScanState, data)

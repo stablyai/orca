@@ -893,8 +893,28 @@ export class BrowserManager {
     this.annotationViewportBridgeOpsByTabId.clear()
   }
 
+  unregisterGuestsForRenderer(rendererWebContentsId: number): void {
+    for (const [
+      browserTabId,
+      registeredRendererWebContentsId
+    ] of this.rendererWebContentsIdByTabId.entries()) {
+      if (registeredRendererWebContentsId === rendererWebContentsId) {
+        this.unregisterGuest(browserTabId)
+      }
+    }
+    for (const [downloadId, download] of this.downloadsById.entries()) {
+      if (download.rendererWebContentsId === rendererWebContentsId) {
+        this.cancelDownloadInternal(downloadId, 'Owning Orca window closed.')
+      }
+    }
+  }
+
   getGuestWebContentsId(browserTabId: string): number | null {
     return this.webContentsIdByTabId.get(browserTabId) ?? null
+  }
+
+  getRendererWebContentsId(browserTabId: string): number | null {
+    return this.rendererWebContentsIdByTabId.get(browserTabId) ?? null
   }
 
   getWebContentsIdByTabId(): Map<string, number> {

@@ -62,8 +62,9 @@ const BACKGROUND_FLUSH_DELAY_MS = 50
 const BACKGROUND_DRAIN_INTERVAL_MS = 16
 const HIGH_PRIORITY_DRAIN_INTERVAL_MS = 1
 const BACKGROUND_CHUNK_CHARS = 16 * 1024
-const MAX_WRITES_PER_DRAIN = 2
+const MAX_WRITES_PER_DRAIN = 1
 const HIGH_PRIORITY_MAX_WRITES_PER_DRAIN = 16
+const POST_INPUT_BACKGROUND_QUIET_MS = 750
 const LARGE_BACKLOG_CHARS = 512 * 1024
 const SYNC_FOREGROUND_FLUSH_CHARS = 256 * 1024
 const MAX_BACKGROUND_QUEUE_CHARS = 2 * 1024 * 1024
@@ -90,6 +91,7 @@ const backlogRecoveryByTerminal = new WeakMap<
 >()
 let drainTimer: ReturnType<typeof setTimeout> | null = null
 let drainTimerDelayMs: number | null = null
+let backgroundDrainQuietUntil = 0
 const debugEnabled = e2eConfig.exposeStore
 
 // Why the cap is lossy: a hidden/backgrounded Chromium document can throttle
@@ -210,8 +212,12 @@ function exposeDebugApi(): void {
 }
 
 function scheduleDrain(delayMs: number): void {
+  const effectiveDelayMs =
+    hasHighPriorityBacklog() || backgroundDrainQuietUntil <= performance.now()
+      ? delayMs
+      : Math.max(delayMs, backgroundDrainQuietUntil - performance.now())
   if (drainTimer !== null) {
-    if (drainTimerDelayMs !== null && drainTimerDelayMs <= delayMs) {
+    if (drainTimerDelayMs !== null && drainTimerDelayMs <= effectiveDelayMs) {
       return
     }
     clearTimeout(drainTimer)
@@ -224,8 +230,23 @@ function scheduleDrain(delayMs: number): void {
   if (debugEnabled) {
     debugState.scheduledDrainCount++
   }
-  drainTimer = setTimeout(drainQueuedOutput, delayMs)
-  drainTimerDelayMs = delayMs
+  drainTimer = setTimeout(drainQueuedOutput, effectiveDelayMs)
+  drainTimerDelayMs = effectiveDelayMs
+}
+
+export function recordLatencySensitiveTerminalInput(): void {
+  backgroundDrainQuietUntil = Math.max(
+    backgroundDrainQuietUntil,
+    performance.now() + POST_INPUT_BACKGROUND_QUIET_MS
+  )
+  if (drainTimer !== null && !hasHighPriorityBacklog()) {
+    clearTimeout(drainTimer)
+    drainTimer = null
+    drainTimerDelayMs = null
+    if (hasDrainableBacklog()) {
+      scheduleDrain(BACKGROUND_DRAIN_INTERVAL_MS)
+    }
+  }
 }
 
 function createQueueEntry(
@@ -248,6 +269,13 @@ function createQueueEntry(
     foregroundHoldSafetyTimer: null,
     foregroundCoalesceTimer: null
   }
+}
+
+function shouldUseHighPriorityForegroundQueue(
+  entry: QueueEntry | undefined,
+  options: WriteTerminalOutputOptions
+): boolean {
+  return entry?.highPriority === true || options.latencySensitive !== false
 }
 
 function clearForegroundHoldSafety(entry: QueueEntry): void {
@@ -581,10 +609,7 @@ function hasQueuedChunks(entry: QueueEntry): boolean {
 
 function hasHighPriorityBacklog(): boolean {
   for (const entry of queuedByTerminal.values()) {
-    if (
-      isEntryDrainable(entry) &&
-      (entry.highPriority || entry.queuedChars > LARGE_BACKLOG_CHARS)
-    ) {
+    if (isEntryDrainable(entry) && entry.highPriority) {
       return true
     }
   }
@@ -600,7 +625,17 @@ function hasDrainableBacklog(): boolean {
   return false
 }
 
-function takeNextDrainableEntry(): QueueEntry | null {
+function takeNextDrainableEntry(options: { highPriorityOnly?: boolean } = {}): QueueEntry | null {
+  for (const entry of queuedByTerminal.values()) {
+    if (!isEntryDrainable(entry) || !entry.highPriority) {
+      continue
+    }
+    queuedByTerminal.delete(entry.terminal)
+    return entry
+  }
+  if (options.highPriorityOnly === true) {
+    return null
+  }
   for (const entry of queuedByTerminal.values()) {
     if (!isEntryDrainable(entry)) {
       continue
@@ -651,12 +686,14 @@ function drainQueuedOutput(): void {
   drainTimer = null
   drainTimerDelayMs = null
   let writes = 0
+  const prioritizeHighPriority =
+    hasHighPriorityBacklog() && backgroundDrainQuietUntil > performance.now()
   const maxWrites = hasHighPriorityBacklog()
     ? HIGH_PRIORITY_MAX_WRITES_PER_DRAIN
     : MAX_WRITES_PER_DRAIN
 
   while (queuedByTerminal.size > 0 && writes < maxWrites) {
-    const entry = takeNextDrainableEntry()
+    const entry = takeNextDrainableEntry({ highPriorityOnly: prioritizeHighPriority })
     if (!entry) {
       break
     }
@@ -708,7 +745,9 @@ export function writeTerminalOutput(
       const queued = entry ?? createQueueEntry(terminal, options)
       queued.beforeWrite = options.beforeWrite
       queued.onBackgroundBacklogDropped = options.onBackgroundBacklogDropped
-      queued.highPriority = true
+      // Why: inactive visible split panes use synchronized output too. Their
+      // repaint protection must not promote throughput redraws over active input.
+      queued.highPriority = shouldUseHighPriorityForegroundQueue(entry, options)
       queuedByTerminal.set(terminal, queued)
       enqueueChunk(queued, data, {
         foreground: true,
@@ -773,7 +812,11 @@ export function writeTerminalOutput(
       scheduleDrain(0)
       return
     }
-    if (entry && entry.queuedChars > SYNC_FOREGROUND_FLUSH_CHARS) {
+    if (
+      options.latencySensitive !== false &&
+      entry &&
+      entry.queuedChars > SYNC_FOREGROUND_FLUSH_CHARS
+    ) {
       entry.beforeWrite = options.beforeWrite
       entry.highPriority = true
       enqueueChunk(entry, data, {
@@ -796,11 +839,12 @@ export function writeTerminalOutput(
       let queued = entry
       if (!queued) {
         queued = createQueueEntry(terminal, options)
+        queued.highPriority = false
         queuedByTerminal.set(terminal, queued)
       } else {
         queued.beforeWrite = options.beforeWrite
         queued.onBackgroundBacklogDropped = options.onBackgroundBacklogDropped
-        queued.highPriority = true
+        queued.highPriority = false
       }
       enqueueChunk(queued, data, {
         foreground: true,

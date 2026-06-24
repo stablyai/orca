@@ -1590,7 +1590,7 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
 
 function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
   return {
-    registerGuest: () => Promise.resolve(),
+    registerGuest: () => Promise.resolve(false),
     unregisterGuest: () => Promise.resolve(),
     openDevTools: () => Promise.resolve(false),
     setViewportOverride: () => Promise.resolve(false),
@@ -2129,7 +2129,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     requestClose: () => {},
     popupMenu: () => {},
     onWindowCloseRequested: () => noopUnsubscribe,
-    confirmWindowClose: () => {}
+    confirmWindowClose: () => {},
+    cancelWindowClose: () => {}
   }
 }
 
@@ -2428,6 +2429,9 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
         rendererInFlightChars: 0,
         maxRendererInFlightCharsByPty: 0,
         activeRendererPtyCount: 0,
+        sourcePausedPtyCount: 0,
+        inputTrackedPtyCount: 0,
+        latestInputAgeMs: null,
         flushScheduled: false,
         peakPendingChars: 0,
         peakMaxPendingCharsByPty: 0,

@@ -4606,6 +4606,45 @@ describe('connectPanePty', () => {
     }
   })
 
+  it('does not forward hidden terminal resize events to the live PTY', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    transport.connect.mockResolvedValue('pty-id')
+    transportFactoryQueue.push(transport)
+    const resizeHandlerRef: {
+      current: ((size: { cols: number; rows: number }) => void) | null
+    } = { current: null }
+
+    const pane = createPane(1)
+    ;(
+      pane.terminal as unknown as {
+        onResize: (handler: (size: { cols: number; rows: number }) => void) => {
+          dispose: () => void
+        }
+      }
+    ).onResize = vi.fn((handler: (size: { cols: number; rows: number }) => void) => {
+      resizeHandlerRef.current = handler
+      return { dispose: vi.fn() }
+    })
+    const manager = createManager(1)
+    const deps = createDeps({
+      isVisibleRef: { current: false }
+    })
+
+    const binding = connectPanePty(pane as never, manager as never, deps as never)
+    try {
+      await flushAsyncTicks(6)
+      if (!resizeHandlerRef.current) {
+        throw new Error('Expected terminal resize handler to be registered')
+      }
+      resizeHandlerRef.current({ cols: 100, rows: 30 })
+
+      expect(transport.resize).not.toHaveBeenCalled()
+    } finally {
+      binding.dispose()
+    }
+  })
+
   it('keeps split hidden synchronized output frames on the live xterm path', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
@@ -4670,9 +4709,10 @@ describe('connectPanePty', () => {
     const redraw = '\x1b[2J\x1b[Hvisible split output\r\n'
     capturedDataCallback.current?.(redraw)
 
-    expect(pane.terminal.write).not.toHaveBeenCalledWith(redraw, expect.any(Function))
-    vi.advanceTimersByTime(0)
-    expect(pane.terminal.write).toHaveBeenCalledWith(redraw, expect.any(Function))
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(redraw)
+    vi.advanceTimersByTime(50)
+    await flushAsyncTicks(4)
+    expect(pane.terminal.write).toHaveBeenCalledWith(redraw)
   })
 
   it('queues visible ANSI redraws when only another split pane is active', async () => {
@@ -4703,9 +4743,10 @@ describe('connectPanePty', () => {
     const redraw = '\x1b[2J\x1b[Hvisible inactive split output\r\n'
     capturedDataCallback.current?.(redraw)
 
-    expect(pane.terminal.write).not.toHaveBeenCalledWith(redraw, expect.any(Function))
-    vi.advanceTimersByTime(0)
-    expect(pane.terminal.write).toHaveBeenCalledWith(redraw, expect.any(Function))
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(redraw)
+    vi.advanceTimersByTime(50)
+    await flushAsyncTicks(4)
+    expect(pane.terminal.write).toHaveBeenCalledWith(redraw)
   })
 
   it('routes visible pane PTY bytes through the background scheduler when the document is hidden', async () => {
@@ -5803,12 +5844,11 @@ describe('connectPanePty', () => {
 
       // Why: inactive split restore is frame-spaced, so this waits past one
       // scheduler tick without depending on fake timers for xterm callbacks.
-      await new Promise((resolve) => setTimeout(resolve, 30))
+      await new Promise((resolve) => setTimeout(resolve, 75))
       await flushAsyncTicks(20)
 
       expect(getMainBufferSnapshot).not.toHaveBeenCalled()
-      expect(pane.terminal.write).toHaveBeenCalledWith(hidden)
-      expect(pane.terminal.write).toHaveBeenCalledWith(live, expect.any(Function))
+      expect(pane.terminal.write).toHaveBeenCalledWith(`${hidden}${live}`)
     } finally {
       disposable?.dispose()
       resetHiddenOutputRestoreSchedulerForTests()

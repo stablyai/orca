@@ -40,7 +40,13 @@ import {
 } from '../../shared/keybindings'
 import { getMainE2EConfig } from '../e2e-config'
 import { buildEditableContextMenuTemplate } from './editable-context-menu'
+import {
+  getLastActiveMainWindow,
+  getMainWindowForWebContents,
+  sendToWindow
+} from './main-window-registry'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
+import { clearTrustedClipboardRendererWebContentsId } from './clipboard-ipc-handlers'
 
 function forceRepaint(window: BrowserWindow): void {
   if (window.isDestroyed()) {
@@ -100,6 +106,59 @@ const TRAFFIC_LIGHT_RADIUS = 6
 const TRAFFIC_LIGHT_X = 16
 const MIN_WIDTH = 600
 const MIN_HEIGHT = 400
+let windowControlHandlersRegistered = false
+const confirmedCloseByWindow = new WeakMap<BrowserWindow, () => void>()
+const quitCloseRequestByWindow = new WeakMap<BrowserWindow, () => boolean>()
+const hideToTrayRequestByWindow = new WeakMap<BrowserWindow, () => boolean>()
+
+export function _resetWindowControlIpcHandlersForTests(): void {
+  // Why: tests replace the ipcMain mock between cases while this module keeps
+  // the production one-time registration latch.
+  windowControlHandlersRegistered = false
+}
+
+function registerWindowControlIpcHandlers(): void {
+  if (windowControlHandlersRegistered) {
+    return
+  }
+  windowControlHandlersRegistered = true
+
+  ipcMain.on('window:minimize', (event) => {
+    getMainWindowForWebContents(event.sender)?.minimize()
+  })
+  ipcMain.on('window:maximize', (event) => {
+    const window = getMainWindowForWebContents(event.sender)
+    if (!window) {
+      return
+    }
+    if (window.isMaximized()) {
+      window.unmaximize()
+    } else {
+      window.maximize()
+    }
+  })
+  // Why: derive window controls from the sending renderer so additional
+  // top-level windows cannot operate on whichever window registered last.
+  ipcMain.on('window:request-close', (event) => {
+    const window = getMainWindowForWebContents(event.sender)
+    if (!window) {
+      return
+    }
+    if (hideToTrayRequestByWindow.get(window)?.() === true) {
+      return
+    }
+    sendToWindow(window, 'window:close-requested', { isQuitting: false })
+  })
+  ipcMain.on('menu:popup', (event) => {
+    const window = getMainWindowForWebContents(event.sender)
+    if (window) {
+      Menu.getApplicationMenu()?.popup({ window })
+    }
+  })
+  ipcMain.handle('window:isMaximized', (event): boolean => {
+    return getMainWindowForWebContents(event.sender)?.isMaximized() ?? false
+  })
+}
 
 function syncTrafficLightPosition(win: BrowserWindow, zoomFactor: number): void {
   if (process.platform !== 'darwin' || win.isDestroyed()) {
@@ -119,6 +178,11 @@ type CreateMainWindowOptions = {
    *  latch must be cleared or later window closes will be misclassified as
    *  quit attempts. */
   onQuitAborted?: () => void
+  /** Returns true while app-level quit is collecting every window's close
+   *  decision. Why: no window may be destroyed until all live windows have
+   *  accepted, or a later veto would leave a partially closed app. */
+  isQuitConfirmationCollecting?: () => boolean
+  onQuitWindowCloseConfirmed?: (window: BrowserWindow) => void
   onRendererProcessGone?: (
     details: Electron.RenderProcessGoneDetails,
     webContentsId: number
@@ -145,6 +209,14 @@ type CreateMainWindowOptions = {
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
 }
 
+export function closeWindowAfterConfirmation(window: BrowserWindow): void {
+  confirmedCloseByWindow.get(window)?.()
+}
+
+export function requestWindowCloseForQuit(window: BrowserWindow): boolean {
+  return quitCloseRequestByWindow.get(window)?.() ?? false
+}
+
 export function loadMainWindow(mainWindow: BrowserWindow): void {
   if (is.dev && process.env.ELECTRON_RENDERER_URL) {
     void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
@@ -157,6 +229,7 @@ export function createMainWindow(
   store: Store | null,
   opts?: CreateMainWindowOptions
 ): BrowserWindow {
+  registerWindowControlIpcHandlers()
   const rawSavedBounds = store?.getUI().windowBounds
   // Why: defense in depth — if a previous quit/update path persisted
   // shrink-to-min bounds (see freezeBoundsOnQuit), discard them on restore
@@ -206,6 +279,20 @@ export function createMainWindow(
     )
   }
   const savedMaximized = store?.getUI().windowMaximized ?? false
+  const lastActiveWindow = getLastActiveMainWindow()
+  const offsetBounds = (() => {
+    if (!lastActiveWindow || lastActiveWindow.isDestroyed()) {
+      return undefined
+    }
+    const bounds = lastActiveWindow.getBounds()
+    const candidate = {
+      x: bounds.x + 32,
+      y: bounds.y + 32,
+      width: bounds.width,
+      height: bounds.height
+    }
+    return rectHasVisibleAreaOnAnyDisplay(candidate) ? candidate : undefined
+  })()
   // Why: on first launch (no saved bounds), fill the primary display work area
   // so the window feels spacious without calling maximize(). Saved bounds still
   // win on subsequent launches.
@@ -239,9 +326,13 @@ export function createMainWindow(
     : {}
 
   const mainWindow = new BrowserWindow({
-    width: savedBounds?.width ?? defaultBounds.width,
-    height: savedBounds?.height ?? defaultBounds.height,
-    ...(savedBounds ? { x: savedBounds.x, y: savedBounds.y } : {}),
+    width: offsetBounds?.width ?? savedBounds?.width ?? defaultBounds.width,
+    height: offsetBounds?.height ?? savedBounds?.height ?? defaultBounds.height,
+    ...(offsetBounds
+      ? { x: offsetBounds.x, y: offsetBounds.y }
+      : savedBounds
+        ? { x: savedBounds.x, y: savedBounds.y }
+        : {}),
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
     title: opts?.title ?? 'Orca',
@@ -342,7 +433,7 @@ export function createMainWindow(
     if (e2eConfig.headless) {
       return
     }
-    if (savedMaximized) {
+    if (!offsetBounds && savedMaximized) {
       mainWindow.maximize()
     }
     mainWindow.show()
@@ -950,7 +1041,28 @@ export function createMainWindow(
   // when terminals with running processes would be killed. The renderer
   // replies with 'window:confirm-close' to proceed, or does nothing to cancel.
   let windowCloseConfirmed = false
+  let pendingQuitCloseRequest = false
   const confirmCloseChannel = 'window:confirm-close'
+  const closeControlWebContents = mainWindow.webContents
+  confirmedCloseByWindow.set(mainWindow, () => {
+    windowCloseConfirmed = true
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.close()
+    }
+  })
+  quitCloseRequestByWindow.set(mainWindow, () => {
+    if (mainWindow.isDestroyed() || closeControlWebContents.isDestroyed()) {
+      return false
+    }
+    const isRendererCrashed =
+      rendererProcessGone || (closeControlWebContents.isCrashed?.() ?? false)
+    if (isRendererCrashed) {
+      return false
+    }
+    pendingQuitCloseRequest = true
+    closeControlWebContents.send('window:close-requested', { isQuitting: true })
+    return true
+  })
 
   // Why: Windows minimize-to-tray. Hides the window instead of closing when the
   // setting is on, this isn't a real quit (Ctrl+Q / tray "Quit" set
@@ -987,6 +1099,7 @@ export function createMainWindow(
     }
     return true
   }
+  hideToTrayRequestByWindow.set(mainWindow, hideToTrayIfEnabled)
 
   mainWindow.on('close', (e) => {
     // Why: Alt+F4 and programmatic closes reach the native event; apply the same
@@ -1022,11 +1135,12 @@ export function createMainWindow(
       return
     }
     e.preventDefault()
+    pendingQuitCloseRequest = opts?.getIsQuitting?.() ?? false
     // Why: the renderer owns the close decision (dirty-file save dialogs,
     // running-process confirmation). The subscription lives at the always-
     // mounted App root, so even pre-workspace states reply — see #5144.
     mainWindow.webContents.send('window:close-requested', {
-      isQuitting: opts?.getIsQuitting?.() ?? false
+      isQuitting: pendingQuitCloseRequest
     })
   })
   mainWindow.webContents.on('will-prevent-unload', () => {
@@ -1037,81 +1151,61 @@ export function createMainWindow(
     opts?.onQuitAborted?.()
   })
 
-  const onConfirmClose = (): void => {
+  const onConfirmClose = (event: Electron.IpcMainEvent): void => {
+    if (event.sender !== closeControlWebContents) {
+      return
+    }
+    if (opts?.getIsQuitting?.() && opts?.isQuitConfirmationCollecting?.()) {
+      pendingQuitCloseRequest = false
+      windowClosing = true
+      if (boundsTimer) {
+        clearTimeout(boundsTimer)
+        boundsTimer = null
+      }
+      opts?.onQuitWindowCloseConfirmed?.(mainWindow)
+      return
+    }
+    if (pendingQuitCloseRequest && opts?.getIsQuitting?.()) {
+      pendingQuitCloseRequest = false
+      windowCloseConfirmed = true
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.close()
+      }
+      return
+    }
+    if (pendingQuitCloseRequest) {
+      // Why: a quit can be canceled by another window while this renderer is
+      // still confirming. Do not reinterpret that stale quit confirmation as a
+      // normal single-window close.
+      pendingQuitCloseRequest = false
+      return
+    }
     windowCloseConfirmed = true
     if (!mainWindow.isDestroyed()) {
       mainWindow.close()
     }
   }
+  const cancelCloseChannel = 'window:cancel-close'
+  const onCancelClose = (event: Electron.IpcMainEvent): void => {
+    if (event.sender !== closeControlWebContents) {
+      return
+    }
+    if (opts?.getIsQuitting?.() && opts?.isQuitConfirmationCollecting?.()) {
+      pendingQuitCloseRequest = false
+      opts?.onQuitAborted?.()
+    }
+  }
   const trafficLightChannel = 'ui:sync-traffic-lights'
-  const onSyncTrafficLights = (_event: Electron.IpcMainEvent, zoomFactor: number): void => {
+  const onSyncTrafficLights = (event: Electron.IpcMainEvent, zoomFactor: number): void => {
+    if (event.sender !== closeControlWebContents) {
+      return
+    }
     syncTrafficLightPosition(mainWindow, zoomFactor)
   }
   ipcMain.on(trafficLightChannel, onSyncTrafficLights)
 
-  // Why: renderer-drawn window controls on Windows/Linux desktop send these to
-  // replicate the native title bar buttons hidden by custom chrome.
-  const minimizeChannel = 'window:minimize'
-  const onMinimize = (): void => {
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.minimize()
-    }
-  }
-  const maximizeChannel = 'window:maximize'
-  const onMaximize = (): void => {
-    if (mainWindow.isDestroyed()) {
-      return
-    }
-    if (mainWindow.isMaximized()) {
-      mainWindow.unmaximize()
-    } else {
-      mainWindow.maximize()
-    }
-  }
-  // Why: send window:close-requested directly rather than calling
-  // mainWindow.close() and letting the 'close' event re-send it. Calling
-  // mainWindow.close() from within an IPC message handler on Windows can cause
-  // the 'close' event to misfire (e.preventDefault() doesn't suppress the OS
-  // close in all Windows configurations). Going straight to the renderer's
-  // close guard (Terminal.tsx onWindowCloseRequested) keeps the flow identical
-  // to what happens when confirmWindowClose() ultimately calls mainWindow.close()
-  // with windowCloseConfirmed = true.
-  const requestCloseChannel = 'window:request-close'
-  const onRequestClose = (): void => {
-    if (mainWindow.isDestroyed()) {
-      return
-    }
-    // Why: the renderer-drawn X on Windows routes here (not the native close
-    // event), so the minimize-to-tray guard must run on this path too — hide
-    // instead of asking the renderer to close.
-    if (hideToTrayIfEnabled()) {
-      return
-    }
-    mainWindow.webContents.send('window:close-requested', { isQuitting: false })
-  }
-  // Why: the ··· button in the renderer-drawn title bar on Windows/Linux
-  // desktop pops up the application menu at the cursor position, replicating
-  // the Alt-key reveal that autoHideMenuBar normally provides.
-  const popupMenuChannel = 'menu:popup'
-  const onPopupMenu = (): void => {
-    Menu.getApplicationMenu()?.popup({ window: mainWindow })
-  }
-  // Why: the renderer's WindowControls mounts after ready-to-show, which is
-  // also when savedMaximized is restored — so window:maximize-changed has
-  // already fired (or not fired, if maximize() was called pre-mount) before
-  // the listener attaches. Expose a synchronous getter so the button can
-  // initialize its icon to match the current state on mount.
-  const isMaximizedChannel = 'window:isMaximized'
-  const onIsMaximized = (): boolean => {
-    return !mainWindow.isDestroyed() && mainWindow.isMaximized()
-  }
-  ipcMain.on(minimizeChannel, onMinimize)
-  ipcMain.on(maximizeChannel, onMaximize)
-  ipcMain.on(requestCloseChannel, onRequestClose)
-  ipcMain.on(popupMenuChannel, onPopupMenu)
-  ipcMain.handle(isMaximizedChannel, onIsMaximized)
-
   ipcMain.on(confirmCloseChannel, onConfirmClose)
+  ipcMain.on(cancelCloseChannel, onCancelClose)
   mainWindow.on('closed', () => {
     // Why: default-deny the Cmd+B carve-out after the window is gone so a
     // stale-true flag can't leak past subsequent state transitions. Paired
@@ -1122,18 +1216,18 @@ export function createMainWindow(
     shortcutRecorderFocused = false
     clearRendererRecoveryTimer()
     ipcMain.removeListener(trafficLightChannel, onSyncTrafficLights)
-    ipcMain.removeListener(minimizeChannel, onMinimize)
-    ipcMain.removeListener(maximizeChannel, onMaximize)
     browserManager.setDictationShortcutForwardingPredicate(null)
-    ipcMain.removeListener(requestCloseChannel, onRequestClose)
-    ipcMain.removeListener(popupMenuChannel, onPopupMenu)
-    ipcMain.removeHandler(isMaximizedChannel)
+    confirmedCloseByWindow.delete(mainWindow)
+    quitCloseRequestByWindow.delete(mainWindow)
+    hideToTrayRequestByWindow.delete(mainWindow)
     ipcMain.removeListener(confirmCloseChannel, onConfirmClose)
+    ipcMain.removeListener(cancelCloseChannel, onCancelClose)
     ipcMain.removeListener(markdownFocusChannel, onMarkdownEditorFocused)
     ipcMain.removeListener(terminalInputFocusChannel, onTerminalInputFocused)
     ipcMain.removeListener(floatingTerminalInputFocusChannel, onFloatingTerminalInputFocused)
     ipcMain.removeListener(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
     clearTrustedUIRendererWebContentsId(rendererWebContentsId)
+    clearTrustedClipboardRendererWebContentsId(rendererWebContentsId)
     // Why: on updater-triggered shutdown, BrowserWindow can emit `closed`
     // after its webContents has already been destroyed. The destroyed
     // webContents owns its listeners, so do not touch `mainWindow.webContents`

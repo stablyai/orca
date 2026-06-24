@@ -144,6 +144,8 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     experimentalTerminalAttention: false,
     compactWorktreeCards: false,
     experimentalWorktreeSymlinks: false,
+    experimentalUnifiedNewTabLauncher: false,
+    experimentalMultiWindow: false,
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsPowerShellImplementation: 'powershell.exe',
     enableGitHubAttribution: true,
@@ -413,7 +415,9 @@ describe('CodexAccountService config sync', () => {
   })
 
   it('does not throw on startup when the canonical config path is unreadable', async () => {
-    mkdirSync(join(testState.fakeHomeDir, '.codex', 'config.toml'), { recursive: true })
+    mkdirSync(join(testState.fakeHomeDir, '.codex', 'config.toml'), {
+      recursive: true
+    })
     const managedHomePath = createManagedHome(
       testState.userDataDir,
       'account-1',
@@ -782,7 +786,10 @@ describe('CodexAccountService config sync', () => {
         runtimeHome as never
       )
 
-      const result = await service.addAccount({ runtime: 'wsl', wslDistro: 'Debian' })
+      const result = await service.addAccount({
+        runtime: 'wsl',
+        wslDistro: 'Debian'
+      })
 
       expect(result.accounts[0]).toMatchObject({
         email: 'wsl@example.com',

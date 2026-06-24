@@ -5,6 +5,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { getExperimentalPaneSearchEntries, getExperimentalSearchEntry } from './experimental-search'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
+import { ExperimentalMultiWindowSetting } from './ExperimentalMultiWindowSetting'
 import { NumberField, SettingsSwitch } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import {
@@ -41,6 +42,9 @@ export function ExperimentalPane({
   const showWorktreeSymlinks = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().symlinksOnWorktrees
   ])
+  const showMultiWindow = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().multiWindow
+  ])
   const showAgentHibernation = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentHibernation
   ])
@@ -54,7 +58,6 @@ export function ExperimentalPane({
   const agentHibernationIdleMinutes = Math.round(
     getEffectiveAgentHibernationIdleMs(settings.agentHibernationIdleMs) / MS_PER_MINUTE
   )
-
   return (
     <div className="space-y-4">
       {showPet ? (
@@ -362,6 +365,13 @@ export function ExperimentalPane({
             </button>
           </div>
         </SearchableSetting>
+      ) : null}
+
+      {showMultiWindow ? (
+        <ExperimentalMultiWindowSetting
+          enabled={settings.experimentalMultiWindow}
+          updateSettings={updateSettings}
+        />
       ) : null}
 
       {hiddenExperimentalUnlocked ? <HiddenExperimentalGroup /> : null}

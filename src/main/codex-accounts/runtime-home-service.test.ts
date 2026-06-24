@@ -140,6 +140,8 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     experimentalTerminalAttention: false,
     compactWorktreeCards: false,
     experimentalWorktreeSymlinks: false,
+    experimentalUnifiedNewTabLauncher: false,
+    experimentalMultiWindow: false,
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsPowerShellImplementation: 'powershell.exe',
     enableGitHubAttribution: true,
@@ -775,7 +777,10 @@ describe('CodexRuntimeHomeService', () => {
 
     const account1Home = service.prepareForCodexLaunch()
     settings.activeCodexManagedAccountId = 'account-2'
-    settings.activeCodexManagedAccountIdsByRuntime = { host: 'account-2', wsl: {} }
+    settings.activeCodexManagedAccountIdsByRuntime = {
+      host: 'account-2',
+      wsl: {}
+    }
     const account2Home = service.prepareForCodexLaunch()
 
     expect(account1Home).toBe(getRuntimeCodexHomePath())
@@ -829,7 +834,10 @@ describe('CodexRuntimeHomeService', () => {
 
     writeFileSync(runtimeAuthPath, account1RefreshedAuth, 'utf-8')
     settings.activeCodexManagedAccountId = 'account-2'
-    settings.activeCodexManagedAccountIdsByRuntime = { host: 'account-2', wsl: {} }
+    settings.activeCodexManagedAccountIdsByRuntime = {
+      host: 'account-2',
+      wsl: {}
+    }
 
     expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
     expect(readFileSync(join(managedHomePath1, 'auth.json'), 'utf-8')).toBe(account1RefreshedAuth)
@@ -1049,7 +1057,10 @@ describe('CodexRuntimeHomeService', () => {
 
     writeFileSync(runtimeAuthPath, account1RefreshedAuth, 'utf-8')
     settings.activeCodexManagedAccountId = 'account-3'
-    settings.activeCodexManagedAccountIdsByRuntime = { host: 'account-3', wsl: {} }
+    settings.activeCodexManagedAccountIdsByRuntime = {
+      host: 'account-3',
+      wsl: {}
+    }
     service.syncForCurrentSelection()
 
     expect(readFileSync(join(managedHomePath1, 'auth.json'), 'utf-8')).toBe(account1RefreshedAuth)
@@ -1124,7 +1135,9 @@ describe('CodexRuntimeHomeService', () => {
       '26',
       'rollout-conflict.jsonl'
     )
-    mkdirSync(join(getSystemCodexHomePath(), 'sessions', '2026', '05', '26'), { recursive: true })
+    mkdirSync(join(getSystemCodexHomePath(), 'sessions', '2026', '05', '26'), {
+      recursive: true
+    })
     mkdirSync(join(getRuntimeCodexHomePath(), 'sessions', '2026', '05', '26'), {
       recursive: true
     })
@@ -1188,7 +1201,10 @@ describe('CodexRuntimeHomeService', () => {
 
   it('does not touch host auth on startup when the active account is WSL-backed', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
     const wslHome = join(testState.userDataDir, 'wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
@@ -1219,7 +1235,10 @@ describe('CodexRuntimeHomeService', () => {
         }
       ],
       activeCodexManagedAccountId: null,
-      activeCodexManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: 'account-1' } }
+      activeCodexManagedAccountIdsByRuntime: {
+        host: null,
+        wsl: { Ubuntu: 'account-1' }
+      }
     })
     const store = createStore(settings)
 
@@ -1244,9 +1263,12 @@ describe('CodexRuntimeHomeService', () => {
         '{"account":"wsl"}\n'
       )
       expect(service.prepareForRateLimitFetch()).toBe(getRuntimeCodexHomePath())
-      expect(service.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toBe(
-        wslRuntimeHomePath
-      )
+      expect(
+        service.prepareForRateLimitFetch({
+          runtime: 'wsl',
+          wslDistro: 'Ubuntu'
+        })
+      ).toBe(wslRuntimeHomePath)
     } finally {
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
@@ -1256,7 +1278,10 @@ describe('CodexRuntimeHomeService', () => {
 
   it('clears a selected WSL managed account when auth.json is missing', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
     const wslHome = join(testState.userDataDir, 'wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
@@ -1291,7 +1316,10 @@ describe('CodexRuntimeHomeService', () => {
           }
         ],
         activeCodexManagedAccountId: null,
-        activeCodexManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: 'account-1' } }
+        activeCodexManagedAccountIdsByRuntime: {
+          host: null,
+          wsl: { Ubuntu: 'account-1' }
+        }
       })
     )
 
@@ -1312,7 +1340,10 @@ describe('CodexRuntimeHomeService', () => {
       )
       expect(store.updateSettings).toHaveBeenCalledWith({
         activeCodexManagedAccountId: null,
-        activeCodexManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: null } }
+        activeCodexManagedAccountIdsByRuntime: {
+          host: null,
+          wsl: { Ubuntu: null }
+        }
       })
       expect(readFileSync(join(wslRuntimeHomePath, 'auth.json'), 'utf-8')).toBe(systemAuth)
     } finally {
@@ -1324,7 +1355,10 @@ describe('CodexRuntimeHomeService', () => {
 
   it('switches WSL accounts by rewriting one stable WSL runtime home', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
     const wslHome = join(testState.userDataDir, 'wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
@@ -1367,7 +1401,10 @@ describe('CodexRuntimeHomeService', () => {
           }
         ],
         activeCodexManagedAccountId: null,
-        activeCodexManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: 'account-1' } }
+        activeCodexManagedAccountIdsByRuntime: {
+          host: null,
+          wsl: { Ubuntu: 'account-1' }
+        }
       })
     )
 
@@ -1388,7 +1425,10 @@ describe('CodexRuntimeHomeService', () => {
       expect(readFileSync(join(wslRuntimeHomePath, 'auth.json'), 'utf-8')).toBe(firstAuth)
 
       store.updateSettings({
-        activeCodexManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: 'account-2' } }
+        activeCodexManagedAccountIdsByRuntime: {
+          host: null,
+          wsl: { Ubuntu: 'account-2' }
+        }
       })
       service.syncForCurrentSelection(target)
 
@@ -1403,7 +1443,10 @@ describe('CodexRuntimeHomeService', () => {
 
   it('does not use host auth baseline to accept stale WSL runtime auth', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
     const wslHome = join(testState.userDataDir, 'wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
@@ -1494,7 +1537,10 @@ describe('CodexRuntimeHomeService', () => {
 
   it('does not clobber fresh WSL tokens after clearLastWrittenAuthJson', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
     const wslHome = join(testState.userDataDir, 'wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
@@ -1632,7 +1678,10 @@ describe('CodexRuntimeHomeService', () => {
 
   it('uses the stable WSL runtime home for WSL system-default rate-limit fetches', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
     const wslHome = join(testState.userDataDir, 'wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
@@ -1641,7 +1690,10 @@ describe('CodexRuntimeHomeService', () => {
     const store = createStore(
       createSettings({
         activeCodexManagedAccountId: null,
-        activeCodexManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: null } }
+        activeCodexManagedAccountIdsByRuntime: {
+          host: null,
+          wsl: { Ubuntu: null }
+        }
       })
     )
 
@@ -1649,9 +1701,12 @@ describe('CodexRuntimeHomeService', () => {
       const { CodexRuntimeHomeService } = await import('./runtime-home-service')
       const service = new CodexRuntimeHomeService(store as never)
 
-      expect(service.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toBe(
-        join(wslHome, '.local', 'share', 'orca', 'codex-runtime-home', 'home')
-      )
+      expect(
+        service.prepareForRateLimitFetch({
+          runtime: 'wsl',
+          wslDistro: 'Ubuntu'
+        })
+      ).toBe(join(wslHome, '.local', 'share', 'orca', 'codex-runtime-home', 'home'))
     } finally {
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
@@ -1661,7 +1716,10 @@ describe('CodexRuntimeHomeService', () => {
 
   it('uses the default distro selection for WSL-default rate-limit fetches', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
     const wslHome = join(testState.userDataDir, 'wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
@@ -1736,7 +1794,10 @@ describe('CodexRuntimeHomeService', () => {
 
   it('does not write WSL system-default auth into managed accounts', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
     const wslHome = join(testState.userDataDir, 'wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
@@ -1772,7 +1833,10 @@ describe('CodexRuntimeHomeService', () => {
           }
         ],
         activeCodexManagedAccountId: null,
-        activeCodexManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: null } }
+        activeCodexManagedAccountIdsByRuntime: {
+          host: null,
+          wsl: { Ubuntu: null }
+        }
       })
     )
 
@@ -1788,9 +1852,12 @@ describe('CodexRuntimeHomeService', () => {
         'home'
       )
 
-      expect(service.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toBe(
-        wslRuntimeHomePath
-      )
+      expect(
+        service.prepareForRateLimitFetch({
+          runtime: 'wsl',
+          wslDistro: 'Ubuntu'
+        })
+      ).toBe(wslRuntimeHomePath)
       expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')).toBe(managedAuth)
       expect(readFileSync(join(wslRuntimeHomePath, 'auth.json'), 'utf-8')).toBe(systemDefaultAuth)
     } finally {
@@ -1802,7 +1869,10 @@ describe('CodexRuntimeHomeService', () => {
 
   it('reads WSL system-default token refreshes back to WSL system auth', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
     const wslHome = join(testState.userDataDir, 'wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
@@ -1821,7 +1891,10 @@ describe('CodexRuntimeHomeService', () => {
     const store = createStore(
       createSettings({
         activeCodexManagedAccountId: null,
-        activeCodexManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: null } }
+        activeCodexManagedAccountIdsByRuntime: {
+          host: null,
+          wsl: { Ubuntu: null }
+        }
       })
     )
 
@@ -1853,7 +1926,10 @@ describe('CodexRuntimeHomeService', () => {
 
   it('preserves WSL system-default token refreshes after app restart', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
     const wslHome = join(testState.userDataDir, 'wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
@@ -1882,7 +1958,10 @@ describe('CodexRuntimeHomeService', () => {
     const store = createStore(
       createSettings({
         activeCodexManagedAccountId: null,
-        activeCodexManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: null } }
+        activeCodexManagedAccountIdsByRuntime: {
+          host: null,
+          wsl: { Ubuntu: null }
+        }
       })
     )
 

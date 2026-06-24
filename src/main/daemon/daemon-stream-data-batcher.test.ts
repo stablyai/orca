@@ -102,6 +102,36 @@ describe('DaemonStreamDataBatcher', () => {
     }
   })
 
+  it('keeps oversized background output queued so interactive output can pass it', () => {
+    vi.useFakeTimers()
+    try {
+      const { batcher, streamSocket } = createBatcher()
+      const background = 'x'.repeat(200 * 1024)
+
+      batcher.enqueue('client-1', 'session-background', background)
+      vi.advanceTimersByTime(8)
+      expect(streamSocket.write).toHaveBeenCalledTimes(1)
+
+      batcher.enqueue('client-1', 'session-interactive', 'echo', {
+        flushImmediately: true,
+        flushMaxChars: 1024
+      })
+      expect(streamSocket.write).toHaveBeenCalledTimes(2)
+      expect(String(streamSocket.write.mock.calls[1]?.[0])).toContain(
+        '"sessionId":"session-interactive"'
+      )
+      expect(String(streamSocket.write.mock.calls[1]?.[0])).toContain('"data":"echo"')
+
+      vi.advanceTimersByTime(8)
+      expect(streamSocket.write).toHaveBeenCalledTimes(3)
+      expect(String(streamSocket.write.mock.calls[2]?.[0])).toContain(
+        '"sessionId":"session-background"'
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('writes large stream data as parser-sized NDJSON events', () => {
     vi.useFakeTimers()
     try {

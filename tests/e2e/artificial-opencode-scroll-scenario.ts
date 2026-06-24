@@ -1,20 +1,22 @@
-import type { Page, TestInfo } from '@stablyai/playwright-test'
+import type { Page } from '@stablyai/playwright-test'
+import { expect } from '@stablyai/playwright-test'
 import {
   dispatchActiveTerminalWheelEvent,
   readActiveTerminalScrollState,
   scrollActiveTerminalByApi,
   scrollActiveTerminalToBottom,
   scrollActiveTerminalViewportElement,
-  type ActiveTerminalScrollState
+  waitForActiveTerminalViewportChange
 } from './artificial-opencode-active-terminal-scroll'
 import {
-  formatScrollAttempts,
   getResponsiveScrollPath,
   type ScrollAttemptMeasurement
 } from './artificial-opencode-scroll-measurement'
-import { sendToTerminal, waitForTerminalOutput } from './helpers/terminal'
+import { annotateScrollMeasurement } from './artificial-opencode-scroll-annotation'
+import { writePtyInputAccepted } from './helpers/terminal-accepted-input'
+import { terminalOutputIncludesMarker } from './helpers/terminal-pty-content'
 
-export { getResponsiveScrollPath }
+export { annotateScrollMeasurement, getResponsiveScrollPath }
 
 export type ScrollMeasurement = {
   scrollLatencyMs: number
@@ -23,18 +25,6 @@ export type ScrollMeasurement = {
   afterViewportY: number
   baseY: number
   attempts: ScrollAttemptMeasurement[]
-}
-
-type ScrollMainPressureSnapshot = {
-  peakPendingChars: number
-  peakRendererInFlightChars: number
-  ackGatedFlushSkipCount: number
-}
-
-type ScrollAckGateSnapshot = {
-  heldAckChars: number
-  heldAckCount: number
-  gatedPtyCount: number
 }
 
 const TIMER_SAMPLE_MS = 16
@@ -46,20 +36,40 @@ export async function seedActiveTerminalScrollback(
   runId: string
 ): Promise<void> {
   const marker = `OPENCODE_SCROLL_READY_${runId}`
+  const markerParts = JSON.stringify(['OPENCODE_SCROLL_READY', runId])
   const script = [
     `for (let i = 0; i < 420; i++) console.log('OPENCODE_SCROLL_${runId}_' + i)`,
-    `console.log('${marker}')`
+    `console.log(${markerParts}.join('_'))`
   ].join(';')
-  await sendToTerminal(page, ptyId, `node -e ${JSON.stringify(script)}\r`)
-  await waitForTerminalOutput(page, marker, 10_000)
-  await scrollActiveTerminalToBottom(page)
+  await writePtyInputAccepted(page, ptyId, `\x03\x15node -e ${JSON.stringify(script)}\r`)
+  await expect
+    .poll(async () => terminalOutputIncludesMarker(page, ptyId, marker, true), {
+      timeout: 20_000,
+      message: `Terminal PTY ${ptyId} did not contain "${marker}"`
+    })
+    .toBe(true)
+  await scrollActiveTerminalToBottom(page, ptyId)
 }
 
 export { scrollActiveTerminalToBottom }
 
-export async function measureActiveTerminalWheelScroll(page: Page): Promise<ScrollMeasurement> {
-  const target = await page.evaluate(() => {
+export async function measureActiveTerminalWheelScroll(
+  page: Page,
+  ptyId?: string
+): Promise<ScrollMeasurement> {
+  const target = await page.evaluate((targetPtyId) => {
     const pane = (() => {
+      if (targetPtyId) {
+        for (const manager of window.__paneManagers?.values() ?? []) {
+          const candidate = manager
+            .getPanes?.()
+            .find((terminalPane) => terminalPane.container?.dataset?.ptyId === targetPtyId)
+          if (candidate) {
+            return candidate
+          }
+        }
+        throw new Error(`Terminal PTY ${targetPtyId} is unavailable`)
+      }
       const store = window.__store
       const state = store?.getState()
       const worktreeId = state?.activeWorktreeId
@@ -95,9 +105,13 @@ export async function measureActiveTerminalWheelScroll(page: Page): Promise<Scro
       x: rect.left + rect.width / 2,
       y: rect.top + rect.height / 2
     }
-  })
+  }, ptyId ?? null)
   if (target.baseY <= 0) {
-    throw new Error('Active terminal has no scrollback to measure')
+    throw new Error(
+      ptyId
+        ? `Terminal PTY ${ptyId} has no scrollback to measure`
+        : 'Active terminal has no scrollback to measure'
+    )
   }
 
   const eventLoop = await page.evaluateHandle((sampleMs) => {
@@ -120,35 +134,59 @@ export async function measureActiveTerminalWheelScroll(page: Page): Promise<Scro
   try {
     const start = performance.now()
     const attempts: ScrollAttemptMeasurement[] = []
-    let afterViewportY = await measureScrollAttempt(page, attempts, 'cdpWheel', async () => {
-      await page.mouse.move(target.x, target.y)
-      await page.mouse.wheel(0, -1200)
-    })
+    let afterViewportY = await measureScrollAttempt(
+      page,
+      attempts,
+      'cdpWheel',
+      async () => {
+        await page.mouse.move(target.x, target.y)
+        await page.mouse.wheel(0, -1200)
+      },
+      ptyId
+    )
     let scrollLatencyMs = performance.now() - start
     const cdpWheelMoved = afterViewportY < target.beforeViewportY
     if (cdpWheelMoved && scrollLatencyMs >= SLOW_SCROLL_DIAGNOSTIC_MS) {
-      await measureAdditionalScrollAttempts(page, attempts)
+      await measureAdditionalScrollAttempts(page, attempts, ptyId)
     }
     if (afterViewportY >= target.beforeViewportY) {
-      afterViewportY = await measureScrollAttempt(page, attempts, 'domWheel', async () => {
-        await dispatchActiveTerminalWheelEvent(page)
-      })
+      afterViewportY = await measureScrollAttempt(
+        page,
+        attempts,
+        'domWheel',
+        async () => {
+          await dispatchActiveTerminalWheelEvent(page, ptyId)
+        },
+        ptyId
+      )
       if (afterViewportY < target.beforeViewportY) {
         scrollLatencyMs = performance.now() - start
       }
     }
     if (afterViewportY >= target.beforeViewportY) {
-      afterViewportY = await measureScrollAttempt(page, attempts, 'domScroll', async () => {
-        await scrollActiveTerminalViewportElement(page)
-      })
+      afterViewportY = await measureScrollAttempt(
+        page,
+        attempts,
+        'domScroll',
+        async () => {
+          await scrollActiveTerminalViewportElement(page, ptyId)
+        },
+        ptyId
+      )
       if (afterViewportY < target.beforeViewportY) {
         scrollLatencyMs = performance.now() - start
       }
     }
     if (afterViewportY >= target.beforeViewportY) {
-      afterViewportY = await measureScrollAttempt(page, attempts, 'xtermApi', async () => {
-        await scrollActiveTerminalByApi(page)
-      })
+      afterViewportY = await measureScrollAttempt(
+        page,
+        attempts,
+        'xtermApi',
+        async () => {
+          await scrollActiveTerminalByApi(page, ptyId)
+        },
+        ptyId
+      )
       if (afterViewportY < target.beforeViewportY) {
         scrollLatencyMs = performance.now() - start
       }
@@ -158,7 +196,8 @@ export async function measureActiveTerminalWheelScroll(page: Page): Promise<Scro
       const finalState = await waitForActiveTerminalViewportChange(
         page,
         target.beforeViewportY,
-        remainingMs
+        remainingMs,
+        ptyId
       )
       afterViewportY = finalState.viewportY
       const lastAttempt = attempts.at(-1)
@@ -190,63 +229,49 @@ export async function measureActiveTerminalWheelScroll(page: Page): Promise<Scro
 
 async function measureAdditionalScrollAttempts(
   page: Page,
-  attempts: ScrollAttemptMeasurement[]
+  attempts: ScrollAttemptMeasurement[],
+  ptyId?: string
 ): Promise<void> {
-  await scrollActiveTerminalToBottom(page)
-  await measureScrollAttempt(page, attempts, 'domWheelAfterSlowCdp', async () => {
-    await dispatchActiveTerminalWheelEvent(page)
-  })
-  await scrollActiveTerminalToBottom(page)
-  await measureScrollAttempt(page, attempts, 'domScrollAfterSlowCdp', async () => {
-    await scrollActiveTerminalViewportElement(page)
-  })
-  await scrollActiveTerminalToBottom(page)
-  await measureScrollAttempt(page, attempts, 'xtermApiAfterSlowCdp', async () => {
-    await scrollActiveTerminalByApi(page)
-  })
-}
-
-export function annotateScrollMeasurement(
-  testInfo: TestInfo,
-  type: string,
-  paneCount: number,
-  measurement: ScrollMeasurement,
-  mainPressure: ScrollMainPressureSnapshot | null,
-  ackGate: ScrollAckGateSnapshot | null
-): void {
-  const scrollMoved = measurement.afterViewportY < measurement.beforeViewportY
-  const responsiveScroll = getResponsiveScrollPath(measurement)
-  const scrollMetric = responsiveScroll
-    ? ` scroll=${responsiveScroll.latencyMs.toFixed(1)}ms scrollPath=${responsiveScroll.name}${
-        responsiveScroll.name === 'cdpWheel'
-          ? ''
-          : ` cdpScroll=${measurement.scrollLatencyMs.toFixed(1)}ms`
-      }`
-    : ''
-  const attempts = formatScrollAttempts(measurement.attempts)
-  testInfo.annotations.push({
-    type,
-    description: `panes=${paneCount}${scrollMetric} scrollMoved=${scrollMoved} maxTimerDrift=${measurement.maxTimerDriftMs.toFixed(
-      1
-    )}ms viewportBefore=${measurement.beforeViewportY} viewportAfter=${
-      measurement.afterViewportY
-    } baseY=${measurement.baseY} scrollAttempts=${attempts} mainPeakPendingChars=${
-      mainPressure?.peakPendingChars ?? 0
-    } mainPeakInFlightChars=${mainPressure?.peakRendererInFlightChars ?? 0} mainAckGatedFlushSkips=${
-      mainPressure?.ackGatedFlushSkipCount ?? 0
-    } heldAckPtys=${ackGate?.heldAckCount ?? 0} heldAckChars=${
-      ackGate?.heldAckChars ?? 0
-    } gatedAckPtys=${ackGate?.gatedPtyCount ?? 0}`
-  })
+  await scrollActiveTerminalToBottom(page, ptyId)
+  await measureScrollAttempt(
+    page,
+    attempts,
+    'domWheelAfterSlowCdp',
+    async () => {
+      await dispatchActiveTerminalWheelEvent(page, ptyId)
+    },
+    ptyId
+  )
+  await scrollActiveTerminalToBottom(page, ptyId)
+  await measureScrollAttempt(
+    page,
+    attempts,
+    'domScrollAfterSlowCdp',
+    async () => {
+      await scrollActiveTerminalViewportElement(page, ptyId)
+    },
+    ptyId
+  )
+  await scrollActiveTerminalToBottom(page, ptyId)
+  await measureScrollAttempt(
+    page,
+    attempts,
+    'xtermApiAfterSlowCdp',
+    async () => {
+      await scrollActiveTerminalByApi(page, ptyId)
+    },
+    ptyId
+  )
 }
 
 async function measureScrollAttempt(
   page: Page,
   attempts: ScrollAttemptMeasurement[],
   name: string,
-  action: () => Promise<void>
+  action: () => Promise<void>,
+  ptyId?: string
 ): Promise<number> {
-  const before = await readActiveTerminalScrollState(page)
+  const before = await readActiveTerminalScrollState(page, ptyId)
   let error: string | undefined
   const actionStart = performance.now()
   try {
@@ -255,9 +280,9 @@ async function measureScrollAttempt(
     error = caught instanceof Error ? caught.message : String(caught)
   }
   const actionMs = performance.now() - actionStart
-  const afterAction = await readActiveTerminalScrollState(page)
+  const afterAction = await readActiveTerminalScrollState(page, ptyId)
   const observeStart = performance.now()
-  const after = await waitForActiveTerminalViewportChange(page, before.viewportY, 75)
+  const after = await waitForActiveTerminalViewportChange(page, before.viewportY, 75, ptyId)
   const observeMs = performance.now() - observeStart
   attempts.push({
     name,
@@ -272,21 +297,4 @@ async function measureScrollAttempt(
     error
   })
   return after.viewportY
-}
-
-async function waitForActiveTerminalViewportChange(
-  page: Page,
-  beforeViewportY: number,
-  timeoutMs: number
-): Promise<ActiveTerminalScrollState> {
-  const start = performance.now()
-  let state = await readActiveTerminalScrollState(page)
-  while (performance.now() - start < timeoutMs) {
-    state = await readActiveTerminalScrollState(page)
-    if (state.viewportY < beforeViewportY) {
-      break
-    }
-    await page.waitForTimeout(5)
-  }
-  return state
 }

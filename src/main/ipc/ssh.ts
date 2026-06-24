@@ -29,6 +29,7 @@ import {
 } from '../ports/ssh-advertised-url-enrichment'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { requestCredential, registerCredentialHandler } from './ssh-passphrase'
+import { broadcastToMainWindows } from '../window/main-window-registry'
 import {
   clearProviderPtyState,
   deletePtyOwnership,
@@ -149,17 +150,14 @@ function clearRelayLostBackoff(targetId: string): void {
 }
 
 function broadcastSshState(
-  getMainWindow: () => BrowserWindow | null,
+  _getMainWindow: () => BrowserWindow | null,
   targetId: string,
   state: SshConnectionState
 ): void {
-  const win = getMainWindow()
-  if (win && !win.isDestroyed()) {
-    win.webContents.send('ssh:state-changed', {
-      targetId,
-      state: withSshRemotePlatform(targetId, state)
-    })
-  }
+  broadcastToMainWindows('ssh:state-changed', {
+    targetId,
+    state: withSshRemotePlatform(targetId, state)
+  })
 }
 
 function withSshRemotePlatform(targetId: string, state: SshConnectionState): SshConnectionState {
@@ -188,28 +186,20 @@ function getPublicSshState(targetId: string): SshConnectionState | undefined {
   return state ? withSshRemotePlatform(targetId, state) : undefined
 }
 
-function broadcastPortForwards(getMainWindow: () => BrowserWindow | null, targetId: string): void {
-  const win = getMainWindow()
-  if (!win || win.isDestroyed()) {
-    return
-  }
-  win.webContents.send('ssh:port-forwards-changed', {
+function broadcastPortForwards(_getMainWindow: () => BrowserWindow | null, targetId: string): void {
+  broadcastToMainWindows('ssh:port-forwards-changed', {
     targetId,
     forwards: listForwardsEnriched(targetId)
   })
 }
 
 function broadcastDetectedPorts(
-  getMainWindow: () => BrowserWindow | null,
+  _getMainWindow: () => BrowserWindow | null,
   targetId: string,
   ports: DetectedPort[],
   options?: Parameters<typeof enrichSshDetectedPorts>[3]
 ): void {
-  const win = getMainWindow()
-  if (!win || win.isDestroyed()) {
-    return
-  }
-  win.webContents.send('ssh:detected-ports-changed', {
+  broadcastToMainWindows('ssh:detected-ports-changed', {
     targetId,
     ports: enrichDetected(targetId, ports, options)
   })
@@ -760,19 +750,13 @@ export function registerSshHandlers(
       // state is stuck there. Send `connected` directly to the renderer
       // instead of going through callbacks.onStateChange, which would
       // trigger the reconnection logic.
-      const win = getCurrentMainWindow()
-      if (win && !win.isDestroyed()) {
-        clearRelayStateOverride(targetId)
-        win.webContents.send('ssh:state-changed', {
-          targetId,
-          state: withSshRemotePlatform(targetId, {
-            targetId,
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0
-          })
-        })
-      }
+      clearRelayStateOverride(targetId)
+      broadcastSshState(getCurrentMainWindow, targetId, {
+        targetId,
+        status: 'connected',
+        error: null,
+        reconnectAttempt: 0
+      })
     } catch (err) {
       // Relay deployment failed — disconnect SSH
       activeSessions.delete(targetId)

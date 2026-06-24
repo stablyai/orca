@@ -70,6 +70,8 @@ describe('LocalPtyProvider', () => {
     write: ReturnType<typeof vi.fn>
     resize: ReturnType<typeof vi.fn>
     kill: ReturnType<typeof vi.fn>
+    pause: ReturnType<typeof vi.fn>
+    resume: ReturnType<typeof vi.fn>
     process: string
     pid: number
   }
@@ -111,6 +113,8 @@ describe('LocalPtyProvider', () => {
       kill: vi.fn(() => {
         exitCb?.({ exitCode: -1 })
       }),
+      pause: vi.fn(),
+      resume: vi.fn(),
       process: 'zsh',
       pid: 12345
     }
@@ -695,6 +699,31 @@ describe('LocalPtyProvider', () => {
       const { id } = await provider.spawn({ cols: 80, rows: 24 })
       provider.resize(id, 120, 40)
       expect(mockProc.resize).toHaveBeenCalledWith(120, 40)
+    })
+  })
+
+  describe('setDataFlowPaused', () => {
+    it('pauses and resumes the node-pty read stream once per state change', async () => {
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      provider.setDataFlowPaused(id, true)
+      provider.setDataFlowPaused(id, true)
+      provider.setDataFlowPaused(id, false)
+      provider.setDataFlowPaused(id, false)
+
+      expect(mockProc.pause).toHaveBeenCalledTimes(1)
+      expect(mockProc.resume).toHaveBeenCalledTimes(1)
+    })
+
+    it('forgets paused state after PTY cleanup', async () => {
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      provider.setDataFlowPaused(id, true)
+      await provider.shutdown(id, { immediate: true })
+      provider.setDataFlowPaused(id, false)
+
+      expect(mockProc.pause).toHaveBeenCalledTimes(1)
+      expect(mockProc.resume).not.toHaveBeenCalled()
     })
   })
 

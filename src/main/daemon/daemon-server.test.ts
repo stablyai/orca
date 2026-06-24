@@ -26,6 +26,7 @@ function createMockSubprocess(): SubprocessHandle & {
     getForegroundProcess: vi.fn(() => null),
     write: vi.fn(),
     resize: vi.fn(),
+    setDataFlowPaused: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
     forceKill: vi.fn(),
     signal: vi.fn(),
@@ -52,6 +53,7 @@ type DaemonServerPrivate = {
     {
       clientId: string
       controlSocket: Socket
+      dataFlowPausedSessionIds: Set<string>
       streamSocket: Socket | null
     }
   >
@@ -330,6 +332,7 @@ describe('DaemonServer', () => {
         daemon.clients.set('client-1', {
           clientId: 'client-1',
           controlSocket,
+          dataFlowPausedSessionIds: new Set(),
           streamSocket
         })
 
@@ -363,6 +366,66 @@ describe('DaemonServer', () => {
       }
     })
 
+    it('briefly pauses bursty daemon stream sources and releases them on input', async () => {
+      vi.useFakeTimers()
+      try {
+        const subprocesses = new Map<string, ReturnType<typeof createMockSubprocess>>()
+        server = new DaemonServer({
+          socketPath,
+          tokenPath,
+          spawnSubprocess: (opts) => {
+            const subprocess = createMockSubprocess()
+            subprocesses.set(opts.sessionId, subprocess)
+            return subprocess
+          }
+        })
+        const daemon = server as unknown as DaemonServerPrivate
+        const controlSocket = { destroy: vi.fn() } as unknown as Socket
+        const streamSocket = {
+          destroyed: false,
+          destroy: vi.fn(),
+          write: vi.fn()
+        } as unknown as Socket & { write: ReturnType<typeof vi.fn> }
+
+        daemon.clients.set('client-1', {
+          clientId: 'client-1',
+          controlSocket,
+          dataFlowPausedSessionIds: new Set(),
+          streamSocket
+        })
+
+        await daemon.routeRequest('client-1', {
+          id: 'req-1',
+          type: 'createOrAttach',
+          payload: { sessionId: 'load-session', cols: 80, rows: 24 }
+        })
+        const loadSubprocess = subprocesses.get('load-session')
+        if (!loadSubprocess) {
+          throw new Error('load session subprocess was not created')
+        }
+        const setDataFlowPaused = loadSubprocess.setDataFlowPaused as ReturnType<typeof vi.fn>
+
+        loadSubprocess._simulateData('x'.repeat(65 * 1024))
+
+        expect(setDataFlowPaused).toHaveBeenCalledWith(true)
+        vi.advanceTimersByTime(32)
+        expect(setDataFlowPaused).toHaveBeenLastCalledWith(false)
+
+        setDataFlowPaused.mockClear()
+        loadSubprocess._simulateData('x'.repeat(65 * 1024))
+        await daemon.routeRequest('client-1', {
+          id: 'req-2',
+          type: 'write',
+          payload: { sessionId: 'load-session', data: 'x' }
+        })
+
+        expect(setDataFlowPaused).toHaveBeenLastCalledWith(false)
+        expect(loadSubprocess.write).toHaveBeenCalledWith('x')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it('flushes pending batched stream output before the exit event', async () => {
       vi.useFakeTimers()
       try {
@@ -386,6 +449,7 @@ describe('DaemonServer', () => {
         daemon.clients.set('client-1', {
           clientId: 'client-1',
           controlSocket,
+          dataFlowPausedSessionIds: new Set(),
           streamSocket
         })
 
@@ -395,16 +459,25 @@ describe('DaemonServer', () => {
           payload: { sessionId: 'test-session', cols: 80, rows: 24 }
         })
 
-        subprocess!._simulateData('final-output')
+        const finalOutput = 'f'.repeat(200 * 1024)
+        subprocess!._simulateData(finalOutput)
         subprocess!._simulateExit(42)
 
-        expect(streamSocket.write).toHaveBeenCalledTimes(2)
-        expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain('"event":"data"')
-        expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain('"data":"final-output"')
-        expect(String(streamSocket.write.mock.calls[1]?.[0])).toContain('"event":"exit"')
-        expect(String(streamSocket.write.mock.calls[1]?.[0])).toContain('"code":42')
+        const events = streamSocket.write.mock.calls.map(([line]) => JSON.parse(String(line)))
+        const exitIndex = events.findIndex((event) => event.event === 'exit')
+        expect(exitIndex).toBeGreaterThan(0)
+        expect(events.at(-1)).toMatchObject({
+          event: 'exit',
+          payload: { code: 42 }
+        })
+        expect(
+          events
+            .slice(0, exitIndex)
+            .map((event) => event.payload?.data ?? '')
+            .join('')
+        ).toBe(finalOutput)
         vi.advanceTimersByTime(8)
-        expect(streamSocket.write).toHaveBeenCalledTimes(2)
+        expect(streamSocket.write).toHaveBeenCalledTimes(events.length)
       } finally {
         vi.useRealTimers()
       }
@@ -492,6 +565,85 @@ describe('DaemonServer', () => {
       expect(daemon.clients.get('raw-client')?.controlSocket).toBeTruthy()
       expect(daemon.clients.get('raw-client')?.streamSocket).toBeNull()
       secondControl.destroy()
+    })
+
+    it('releases client-requested data-flow pauses when the control socket closes', async () => {
+      const subprocesses: ReturnType<typeof createMockSubprocess>[] = []
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        spawnSubprocess: () => {
+          const subprocess = createMockSubprocess()
+          subprocesses.push(subprocess)
+          return subprocess
+        }
+      })
+      await server.start()
+      const daemon = server as unknown as DaemonServerPrivate
+      const control = await connectRawHello('control', 'raw-client')
+
+      await daemon.routeRequest('raw-client', {
+        id: 'req-1',
+        type: 'createOrAttach',
+        payload: { sessionId: 'paused-session', cols: 80, rows: 24 }
+      })
+      await daemon.routeRequest('raw-client', {
+        id: 'req-2',
+        type: 'setDataFlowPaused',
+        payload: { sessionId: 'paused-session', paused: true }
+      })
+      const subprocess = subprocesses[0]
+      if (!subprocess) {
+        throw new Error('subprocess was not created')
+      }
+
+      expect(subprocess.setDataFlowPaused).toHaveBeenLastCalledWith(true)
+
+      control.destroy()
+      await waitFor(() => !daemon.clients.has('raw-client'))
+
+      expect(subprocess.setDataFlowPaused).toHaveBeenLastCalledWith(false)
+    })
+
+    it('transfers client-requested data-flow pauses when the same client id reconnects', async () => {
+      const subprocesses: ReturnType<typeof createMockSubprocess>[] = []
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        spawnSubprocess: () => {
+          const subprocess = createMockSubprocess()
+          subprocesses.push(subprocess)
+          return subprocess
+        }
+      })
+      await server.start()
+      const daemon = server as unknown as DaemonServerPrivate
+      const firstControl = await connectRawHello('control', 'raw-client')
+
+      await daemon.routeRequest('raw-client', {
+        id: 'req-1',
+        type: 'createOrAttach',
+        payload: { sessionId: 'paused-session', cols: 80, rows: 24 }
+      })
+      await daemon.routeRequest('raw-client', {
+        id: 'req-2',
+        type: 'setDataFlowPaused',
+        payload: { sessionId: 'paused-session', paused: true }
+      })
+      const subprocess = subprocesses[0]
+      if (!subprocess) {
+        throw new Error('subprocess was not created')
+      }
+
+      expect(subprocess.setDataFlowPaused).toHaveBeenLastCalledWith(true)
+
+      const secondControl = await connectRawHello('control', 'raw-client')
+
+      expect(subprocess.setDataFlowPaused).toHaveBeenLastCalledWith(true)
+      firstControl.destroy()
+      secondControl.destroy()
+      await waitFor(() => !daemon.clients.has('raw-client'))
+      expect(subprocess.setDataFlowPaused).toHaveBeenLastCalledWith(false)
     })
 
     it('destroys orphan stream sockets without a control client', async () => {

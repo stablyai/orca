@@ -102,6 +102,10 @@ describe('getDefaultSettings', () => {
     })
     expect(settings.agentYoloDefaultsMigrated).toBe(true)
   })
+
+  it('keeps multi-window support experimental and disabled by default', () => {
+    expect(getDefaultSettings('/tmp').experimentalMultiWindow).toBe(false)
+  })
 })
 
 describe('getDefaultPrimarySelectionMiddleClickPaste', () => {

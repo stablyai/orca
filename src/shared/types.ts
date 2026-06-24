@@ -2736,7 +2736,12 @@ export type GlobalSettings = {
    *  configuration surface and edge cases (conflicts with existing paths,
    *  cleanup on worktree delete) are still being worked out. */
   experimentalWorktreeSymlinks: boolean
-
+  /** Experimental: replaces the New Tab menu's static preview row with a
+   *  command-style launcher for terminals, detected agents, URLs, and files. */
+  experimentalUnifiedNewTabLauncher: boolean
+  /** Experimental: enables File > New Window for multi-monitor workflows.
+   *  Read at app startup so enabling or disabling it requires an Orca restart. */
+  experimentalMultiWindow: boolean
   /** Active non-local runtime environment for client-routed RPC. `null`
    *  preserves the current local desktop behavior. */
   activeRuntimeEnvironmentId?: string | null

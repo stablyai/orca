@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 
-const { handleMock, onMock, removeHandlerMock, removeAllListenersMock } = vi.hoisted(() => ({
+const {
+  browserWindowFromWebContentsMock,
+  handleMock,
+  onMock,
+  removeHandlerMock,
+  removeAllListenersMock
+} = vi.hoisted(() => ({
+  browserWindowFromWebContentsMock: vi.fn(),
   handleMock: vi.fn(),
   onMock: vi.fn(),
   removeHandlerMock: vi.fn(),
@@ -11,6 +18,9 @@ vi.mock('electron', () => ({
   app: {
     isPackaged: true,
     getPath: vi.fn().mockReturnValue('/tmp/orca-test-userdata')
+  },
+  BrowserWindow: {
+    fromWebContents: browserWindowFromWebContentsMock
   },
   ipcMain: {
     handle: handleMock,
@@ -58,12 +68,17 @@ import {
   setPtyOwnership,
   unregisterSshPtyProvider
 } from '../ipc/pty'
+import { registerMainWindow } from '../window/main-window-registry'
 import type { IPtyProvider } from './types'
 
 describe('PTY provider dispatch', () => {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
   const mainWindow = {
+    id: 1,
     isDestroyed: () => false,
+    on: vi.fn(),
+    once: vi.fn(),
+    removeListener: vi.fn(),
     webContents: { on: vi.fn(), send: vi.fn(), removeListener: vi.fn() }
   }
   const mainWindowIpcEvent = { sender: mainWindow.webContents }
@@ -78,6 +93,11 @@ describe('PTY provider dispatch', () => {
     onMock.mockImplementation((channel: string, handler: (...a: unknown[]) => unknown) => {
       handlers.set(channel, handler)
     })
+    browserWindowFromWebContentsMock.mockReset()
+    browserWindowFromWebContentsMock.mockImplementation((webContents: unknown) =>
+      webContents === mainWindow.webContents ? mainWindow : null
+    )
+    registerMainWindow(mainWindow as never)
     registerPtyHandlers(mainWindow as never)
   }
 

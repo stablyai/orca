@@ -1,10 +1,11 @@
 /* eslint-disable max-lines -- Why: this file is the central main-window IPC wiring point; splitting it during the mobile release compatibility rebase would increase release risk. */
 import { randomUUID } from 'node:crypto'
 
-import { app, ipcMain } from 'electron'
-import type { BrowserWindow } from 'electron'
+import { app, ipcMain, session } from 'electron'
+import type { BrowserWindow, Session } from 'electron'
 import type { Store } from '../persistence'
 import type { CreateWorktreeResult, WorktreeStartupLaunch } from '../../shared/types'
+import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 import { registerRepoHandlers } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
@@ -14,6 +15,10 @@ import { registerSshHandlers } from '../ipc/ssh'
 import { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
 import { browserManager } from '../browser/browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
+import {
+  allowsBrowserWebAuthnPermission,
+  installBrowserWebAuthnAccessHandlers
+} from '../browser/browser-webauthn-access'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   checkForUpdatesFromMenu,
@@ -36,12 +41,19 @@ import { isNativeFileDropPayload, type NativeFileDropPayload } from '../../share
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
+import {
+  broadcastToMainWindows,
+  getFocusedOrLastActiveMainWindow,
+  getMainWindowById,
+  getMainWindowForWebContents,
+  sendToWindow
+} from './main-window-registry'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 
-let appReloadHandlerTokenCounter = 0
-let activeAppReloadHandlerToken: number | null = null
-let runtimeNotifierTokenCounter = 0
-let activeRuntimeNotifierToken: number | null = null
+let onBeforeAppRendererReload:
+  | ((args: { webContentsId: number; ignoreCache: boolean }) => void)
+  | undefined
+const runtimeNotifierWindowIds = new Set<number>()
 
 export function attachMainWindowServices(
   mainWindow: BrowserWindow,
@@ -106,8 +118,8 @@ export function attachMainWindowServices(
         )
       })
   }
-  registerSshHandlers(store, () => mainWindow, runtime)
-  registerRemoteWorkspaceHandlers(store, () => mainWindow)
+  registerSshHandlers(store, getFocusedOrLastActiveMainWindow, runtime)
+  registerRemoteWorkspaceHandlers(store, getFocusedOrLastActiveMainWindow)
   registerFileDropRelay(mainWindow)
   setupAutoUpdater(mainWindow, {
     getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
@@ -131,7 +143,10 @@ export function attachMainWindowServices(
       // only touch pendingUpdateNudgeId — clearing dismissedUpdateVersion here
       // would silently un-dismiss an update if the flow ever changes.
       if (id) {
-        store.updateUI({ pendingUpdateNudgeId: id, dismissedUpdateVersion: null })
+        store.updateUI({
+          pendingUpdateNudgeId: id,
+          dismissedUpdateVersion: null
+        })
       } else {
         store.updateUI({ pendingUpdateNudgeId: null })
       }
@@ -164,43 +179,124 @@ export function attachMainWindowServices(
     }
   )
 
+  const browserSession = session.fromPartition(ORCA_BROWSER_PARTITION)
+  browserSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    // Why: the in-app browser is for dev previews and lightweight browsing, not
+    // trusted desktop-app privileges. Denying by default keeps arbitrary sites
+    // from silently escalating into camera/mic/notification prompts inside Orca.
+    // Why `media` is allowed through: camera/mic are still gated by macOS TCC
+    // at the app-process level, so granting here only *permits* Chromium to
+    // use whatever the OS has already authorized for Orca. Denying at this
+    // layer would make pages inside the in-app browser throw NotAllowedError
+    // even after the user granted Camera/Microphone via Settings → Permissions
+    // or System Settings — the bug #1273 partially addressed.
+    if (permission === 'media') {
+      void requestSystemMediaAccess(
+        details as Electron.MediaAccessPermissionRequest | undefined
+      ).then(
+        (granted) => {
+          if (!granted) {
+            browserManager.notifyPermissionDenied({
+              guestWebContentsId: webContents.id,
+              permission,
+              rawUrl: webContents.getURL()
+            })
+          }
+          callback(granted)
+        },
+        (error: unknown) => {
+          console.error('[permissions] Browser media access failed:', error)
+          browserManager.notifyPermissionDenied({
+            guestWebContentsId: webContents.id,
+            permission,
+            rawUrl: webContents.getURL()
+          })
+          callback(false)
+        }
+      )
+      return
+    }
+    const allowed = permission === 'fullscreen'
+    if (!allowed) {
+      browserManager.notifyPermissionDenied({
+        guestWebContentsId: webContents.id,
+        permission,
+        rawUrl: webContents.getURL()
+      })
+    }
+    callback(allowed)
+  })
+  browserSession.setPermissionCheckHandler((_webContents, permission, _origin, details) => {
+    if (permission === 'fullscreen') {
+      return true
+    }
+    if (permission === 'media') {
+      return hasSystemMediaAccess(details?.mediaType)
+    }
+    if (allowsBrowserWebAuthnPermission(permission, details)) {
+      return true
+    }
+    return false
+  })
+  installBrowserWebAuthnAccessHandlers(browserSession)
+  browserSession.setDisplayMediaRequestHandler((_request, callback) => {
+    // Why: arbitrary sites inside Orca should never be able to capture the
+    // desktop or application windows until there is explicit product UX for
+    // selecting a source and surfacing that choice to the user.
+    // Why: pass undefined (not null) to satisfy Electron's typed callback
+    // signature while still denying the request.
+    callback({ video: undefined, audio: undefined })
+  })
+  registerBrowserDownloadHandler(browserSession)
+
+  const rendererWebContentsId = mainWindow.webContents.id
   mainWindow.on('closed', () => {
     // Why: browser webviews are renderer-owned guest surfaces. Clearing
-    // main-owned guest registrations on window close prevents stale
-    // tab→webContents ids from leaking across app relaunch or hot-reload cycles.
-    browserManager.unregisterAll()
+    // only this renderer's registrations prevents one closed window from
+    // tearing down browser tabs that still belong to another desktop window.
+    // Capture the id while the window is live; Electron may destroy
+    // webContents before BrowserWindow emits `closed`.
+    browserManager.unregisterGuestsForRenderer(rendererWebContentsId)
   })
 }
 
+function handleBrowserWillDownload(
+  _event: Electron.Event,
+  item: Electron.DownloadItem,
+  webContents: Electron.WebContents
+): void {
+  // Why: browser-tab downloads need explicit product UX before arbitrary sites
+  // can write files through Orca. Pause the item and route it through
+  // BrowserManager so the user must explicitly accept the save path first.
+  browserManager.handleGuestWillDownload({
+    guestWebContentsId: webContents.id,
+    item
+  })
+}
+
+function registerBrowserDownloadHandler(browserSession: Session): void {
+  // Why: browser sessions are process-persistent while main windows can be
+  // recreated; replace the named handler so re-attach does not stack listeners.
+  browserSession.removeListener('will-download', handleBrowserWillDownload)
+  browserSession.on('will-download', handleBrowserWillDownload)
+}
+
 function registerAppReloadHandler(
-  mainWindow: BrowserWindow,
+  _mainWindow: BrowserWindow,
   onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
 ): void {
-  // Why: the process-global IPC handler can outlive the BrowserWindow, so keep
-  // the registered WebContents and guard both lifetimes before using it.
-  const handlerToken = ++appReloadHandlerTokenCounter
-  activeAppReloadHandlerToken = handlerToken
-  const mainWebContents = mainWindow.webContents
+  onBeforeAppRendererReload = onBeforeRendererReload
   ipcMain.removeHandler('app:reload')
   ipcMain.handle('app:reload', (event) => {
-    if (
-      mainWindow.isDestroyed() ||
-      mainWebContents.isDestroyed() ||
-      event.sender !== mainWebContents
-    ) {
+    const window = getMainWindowForWebContents(event.sender)
+    if (!window || window.isDestroyed() || window.webContents.isDestroyed()) {
       return
     }
-    onBeforeRendererReload?.({ webContentsId: mainWebContents.id, ignoreCache: false })
-    mainWebContents.reload()
-  })
-  mainWindow.on('closed', () => {
-    if (activeAppReloadHandlerToken !== handlerToken) {
-      return
-    }
-    // Why: macOS can keep the process alive with no window, and this global
-    // handler otherwise keeps the closed BrowserWindow reachable until reopen.
-    ipcMain.removeHandler('app:reload')
-    activeAppReloadHandlerToken = null
+    onBeforeAppRendererReload?.({
+      webContentsId: window.webContents.id,
+      ignoreCache: false
+    })
+    window.webContents.reload()
   })
 }
 
@@ -208,24 +304,47 @@ function registerRuntimeWindowLifecycle(
   mainWindow: BrowserWindow,
   runtime: OrcaRuntimeService
 ): void {
-  const notifierToken = ++runtimeNotifierTokenCounter
-  activeRuntimeNotifierToken = notifierToken
+  runtimeNotifierWindowIds.add(mainWindow.id)
   runtime.attachWindow(mainWindow.id)
-  const send = (channel: string, ...args: unknown[]): void => {
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(channel, ...args)
+  const getWindowByOwnerId = (windowId: number | null): BrowserWindow | null =>
+    windowId === null ? null : getMainWindowById(windowId)
+  const sendToTarget = (channel: string, ...args: unknown[]): void => {
+    const target = getFocusedOrLastActiveMainWindow()
+    if (target) {
+      sendToWindow(target, channel, ...args)
     }
   }
+  const sendToOwner = (ownerWindowId: number | null, channel: string, ...args: unknown[]): void => {
+    const target = getWindowByOwnerId(ownerWindowId)
+    if (target) {
+      sendToWindow(target, channel, ...args)
+    }
+  }
+  const sendToOwnerOrTarget = (
+    ownerWindowId: number | null,
+    channel: string,
+    ...args: unknown[]
+  ): void => {
+    const target =
+      ownerWindowId === null
+        ? getFocusedOrLastActiveMainWindow()
+        : getWindowByOwnerId(ownerWindowId)
+    if (target) {
+      sendToWindow(target, channel, ...args)
+    }
+  }
+  const broadcast = (channel: string, ...args: unknown[]): void =>
+    broadcastToMainWindows(channel, ...args)
   runtime.setNotifier({
     worktreesChanged: (repoId, renamed) => {
       // Why: clear detected-worktree scan caches before renderer listeners
       // handle this event, preventing stale TTL reads after mutations.
       runWorktreeChangeInvalidators(repoId)
-      send('worktrees:changed', renamed ? { repoId, renamed } : { repoId })
+      broadcast('worktrees:changed', renamed ? { repoId, renamed } : { repoId })
     },
-    worktreeBaseStatus: (event) => send('worktree:baseStatus', event),
-    worktreeRemoteBranchConflict: (event) => send('worktree:remoteBranchConflict', event),
-    reposChanged: () => send('repos:changed'),
+    worktreeBaseStatus: (event) => broadcast('worktree:baseStatus', event),
+    worktreeRemoteBranchConflict: (event) => broadcast('worktree:remoteBranchConflict', event),
+    reposChanged: () => broadcast('repos:changed'),
     activateWorktree: (
       repoId,
       worktreeId,
@@ -233,7 +352,7 @@ function registerRuntimeWindowLifecycle(
       startup?: WorktreeStartupLaunch,
       defaultTabs?: CreateWorktreeResult['defaultTabs']
     ) => {
-      send('ui:activateWorktree', {
+      sendToTarget('ui:activateWorktree', {
         repoId,
         worktreeId,
         ...(setup ? { setup } : {}),
@@ -242,7 +361,7 @@ function registerRuntimeWindowLifecycle(
       })
     },
     createTerminal: (worktreeId, opts) =>
-      send('ui:createTerminal', {
+      sendToTarget('ui:createTerminal', {
         worktreeId,
         command: opts.command,
         ...(opts.env ? { env: opts.env } : {}),
@@ -250,28 +369,61 @@ function registerRuntimeWindowLifecycle(
       }),
     revealTerminalSession: (worktreeId, opts) =>
       new Promise((resolve, reject) => {
+        const ownerWindowId =
+          opts.tabId && opts.splitFromLeafId
+            ? runtime.resolveOwnerWindowIdForLeaf(opts.tabId, opts.splitFromLeafId)
+            : opts.tabId
+              ? (runtime.resolveOwnerWindowIdForWorktreeTab(worktreeId, opts.tabId) ??
+                runtime.resolveOwnerWindowIdForTabId(opts.tabId))
+              : runtime.resolveOwnerWindowIdForPtyId(opts.ptyId)
+        const ownerTarget = getWindowByOwnerId(ownerWindowId)
+        if (ownerWindowId !== null && !ownerTarget) {
+          reject(new Error('runtime_unavailable'))
+          return
+        }
+        const target = ownerTarget ?? getFocusedOrLastActiveMainWindow()
+        if (!target) {
+          reject(new Error('runtime_unavailable'))
+          return
+        }
         const requestId = randomUUID()
         const timer = setTimeout(() => {
           ipcMain.removeListener('terminal:tabCreateReply', handler)
+          target.removeListener('closed', onTargetClosed)
           reject(new Error('Terminal reveal timed out'))
         }, 10_000)
         const handler = (
-          _event: Electron.IpcMainEvent,
-          reply: { requestId: string; tabId?: string; title?: string; error?: string }
+          event: Electron.IpcMainEvent,
+          reply: {
+            requestId: string
+            tabId?: string
+            title?: string
+            error?: string
+          }
         ): void => {
-          if (reply.requestId !== requestId) {
+          if (event.sender !== target.webContents || reply.requestId !== requestId) {
             return
           }
           clearTimeout(timer)
           ipcMain.removeListener('terminal:tabCreateReply', handler)
+          target.removeListener('closed', onTargetClosed)
           if (reply.error) {
             reject(new Error(reply.error))
             return
           }
           resolve({ tabId: reply.tabId!, title: reply.title })
         }
+        const onTargetClosed = (): void => {
+          clearTimeout(timer)
+          ipcMain.removeListener('terminal:tabCreateReply', handler)
+          reject(new Error('runtime_unavailable'))
+        }
         ipcMain.on('terminal:tabCreateReply', handler)
-        send('ui:createTerminal', {
+        target.once('closed', onTargetClosed)
+        // Why: runtime-created PTYs can emit daemon output before the renderer
+        // publishes its graph, so stamp the chosen window before adoption.
+        runtime.registerPtyOwnerWindow(opts.ptyId, target.id)
+        sendToWindow(target, 'ui:createTerminal', {
           requestId,
           worktreeId,
           ptyId: opts.ptyId,
@@ -293,7 +445,7 @@ function registerRuntimeWindowLifecycle(
         })
       }),
     splitTerminal: (tabId, paneRuntimeId, opts) => {
-      send('ui:splitTerminal', {
+      sendToOwner(runtime.resolveOwnerWindowIdForTabId(tabId), 'ui:splitTerminal', {
         tabId,
         paneRuntimeId,
         direction: opts.direction,
@@ -301,50 +453,104 @@ function registerRuntimeWindowLifecycle(
         telemetrySource: opts.telemetrySource
       })
     },
-    renameTerminal: (tabId, title) => send('ui:renameTerminal', { tabId, title }),
+    renameTerminal: (tabId, title) =>
+      sendToOwner(runtime.resolveOwnerWindowIdForTabId(tabId), 'ui:renameTerminal', {
+        tabId,
+        title
+      }),
     focusTerminal: (tabId, worktreeId, leafId) =>
-      send('ui:focusTerminal', { tabId, worktreeId, leafId }),
-    focusEditorTab: (tabId, worktreeId) => send('ui:focusEditorTab', { tabId, worktreeId }),
-    closeSessionTab: (tabId, worktreeId) => send('ui:closeSessionTab', { tabId, worktreeId }),
+      sendToOwner(
+        leafId
+          ? runtime.resolveOwnerWindowIdForLeaf(tabId, leafId)
+          : runtime.resolveOwnerWindowIdForWorktreeTab(worktreeId, tabId),
+        'ui:focusTerminal',
+        { tabId, worktreeId, leafId }
+      ),
+    focusEditorTab: (tabId, worktreeId) =>
+      sendToOwner(
+        runtime.resolveOwnerWindowIdForWorktreeTab(worktreeId, tabId),
+        'ui:focusEditorTab',
+        { tabId, worktreeId }
+      ),
+    closeSessionTab: (tabId, worktreeId) =>
+      sendToOwner(
+        runtime.resolveOwnerWindowIdForWorktreeTab(worktreeId, tabId),
+        'ui:closeSessionTab',
+        { tabId, worktreeId }
+      ),
     moveSessionTab: (worktreeId: string, move: RuntimeMobileSessionTabMove) =>
-      send('ui:moveSessionTab', { worktreeId, ...move }),
+      sendToOwner(
+        runtime.resolveOwnerWindowIdForWorktreeTab(worktreeId, move.tabId),
+        'ui:moveSessionTab',
+        { worktreeId, ...move }
+      ),
     openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId?) =>
-      send('ui:openFileFromMobile', {
+      sendToTarget('ui:openFileFromMobile', {
         worktreeId,
         filePath,
         relativePath,
         runtimeEnvironmentId
       }),
     openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId?) =>
-      send('ui:openDiffFromMobile', {
+      sendToTarget('ui:openDiffFromMobile', {
         worktreeId,
         filePath,
         relativePath,
         staged,
         runtimeEnvironmentId
       }),
-    readMobileMarkdownTab: (worktreeId, tabId) =>
-      requestMobileMarkdownFromRenderer(mainWindow, {
+    readMobileMarkdownTab: (worktreeId, tabId) => {
+      const target = getWindowByOwnerId(
+        runtime.resolveOwnerWindowIdForWorktreeTab(worktreeId, tabId)
+      )
+      if (!target) {
+        return Promise.reject(new Error('runtime_unavailable'))
+      }
+      return requestMobileMarkdownFromRenderer(target, {
         operation: 'read',
         worktreeId,
         tabId
-      }) as Promise<RuntimeMarkdownReadTabResult>,
-    saveMobileMarkdownTab: (worktreeId, tabId, baseVersion, content) =>
-      requestMobileMarkdownFromRenderer(mainWindow, {
+      }) as Promise<RuntimeMarkdownReadTabResult>
+    },
+    saveMobileMarkdownTab: (worktreeId, tabId, baseVersion, content) => {
+      const target = getWindowByOwnerId(
+        runtime.resolveOwnerWindowIdForWorktreeTab(worktreeId, tabId)
+      )
+      if (!target) {
+        return Promise.reject(new Error('runtime_unavailable'))
+      }
+      return requestMobileMarkdownFromRenderer(target, {
         operation: 'save',
         worktreeId,
         tabId,
         baseVersion,
         content
-      }) as Promise<RuntimeMarkdownSaveTabResult>,
-    closeTerminal: (tabId, paneRuntimeId) => send('ui:closeTerminal', { tabId, paneRuntimeId }),
-    sleepWorktree: (worktreeId) => send('ui:sleepWorktree', { worktreeId }),
+      }) as Promise<RuntimeMarkdownSaveTabResult>
+    },
+    closeTerminal: (tabId, paneRuntimeId) =>
+      sendToOwner(runtime.resolveOwnerWindowIdForTabId(tabId), 'ui:closeTerminal', {
+        tabId,
+        paneRuntimeId
+      }),
+    sleepWorktree: (worktreeId) => sendToTarget('ui:sleepWorktree', { worktreeId }),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>
-      send('runtime:terminalFitOverrideChanged', { ptyId, mode, cols, rows }),
+      sendToOwnerOrTarget(
+        runtime.resolveOwnerWindowIdForPtyId(ptyId),
+        'runtime:terminalFitOverrideChanged',
+        { ptyId, mode, cols, rows }
+      ),
     terminalDriverChanged: (ptyId, driver) =>
-      send('runtime:terminalDriverChanged', { ptyId, driver }),
+      sendToOwnerOrTarget(
+        runtime.resolveOwnerWindowIdForPtyId(ptyId),
+        'runtime:terminalDriverChanged',
+        { ptyId, driver }
+      ),
     browserDriverChanged: (browserPageId, driver) =>
-      send('runtime:browserDriverChanged', { browserPageId, driver })
+      sendToOwnerOrTarget(
+        runtime.resolveOwnerWindowIdForBrowserPageId(browserPageId),
+        'runtime:browserDriverChanged',
+        { browserPageId, driver }
+      )
   })
   // Why: the runtime must fail closed while the renderer graph is being torn
   // down or rebuilt, otherwise future CLI calls could act on stale terminal
@@ -354,41 +560,32 @@ function registerRuntimeWindowLifecycle(
   })
   mainWindow.on('closed', () => {
     runtime.markGraphUnavailable(mainWindow.id)
-    if (activeRuntimeNotifierToken === notifierToken) {
-      // Why: the notifier closes over the BrowserWindow for mobile/CLI UI
-      // relays; clear it during the no-window gap so the runtime does not
-      // retain destroyed window graphs.
+    runtimeNotifierWindowIds.delete(mainWindow.id)
+    if (runtimeNotifierWindowIds.size === 0) {
+      // Why: the notifier routes through the live window registry. Keep it
+      // installed while any window remains, and clear it during no-window gaps.
       runtime.setNotifier(null)
-      activeRuntimeNotifierToken = null
     }
   })
 }
 
-function registerFileDropRelay(mainWindow: BrowserWindow): void {
+function registerFileDropRelay(_mainWindow: BrowserWindow): void {
   const channel = 'terminal:file-dropped-from-preload'
-  const mainWebContents = mainWindow.webContents
   ipcMain.removeAllListeners(channel)
-  const relayFileDrop = (event: Electron.IpcMainEvent, args: NativeFileDropPayload): void => {
+  ipcMain.on(channel, (event: Electron.IpcMainEvent, args: NativeFileDropPayload) => {
+    const window = getMainWindowForWebContents(event.sender)
     if (
-      mainWindow.isDestroyed() ||
-      mainWebContents.isDestroyed() ||
-      event.sender !== mainWebContents
+      !window ||
+      window.isDestroyed() ||
+      window.webContents.isDestroyed() ||
+      !isNativeFileDropPayload(args)
     ) {
       return
     }
-    if (!isNativeFileDropPayload(args)) {
-      return
-    }
 
-    // Why: relay exactly one IPC event per drop gesture so the renderer
-    // receives the full batch of paths without timer-based reconstruction.
-    mainWindow.webContents.send('terminal:file-drop', args)
-  }
-  ipcMain.on(channel, relayFileDrop)
-  mainWindow.on('closed', () => {
-    // Why: macOS can keep the app process alive after the window closes; drop
-    // the relay closure so a destroyed BrowserWindow is not retained.
-    ipcMain.removeListener(channel, relayFileDrop)
+    // Why: relay exactly one IPC event per drop gesture back to the sender's
+    // window so concurrent windows do not receive each other's dropped paths.
+    window.webContents.send('terminal:file-drop', args)
   })
 }
 

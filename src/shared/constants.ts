@@ -346,6 +346,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     experimentalNewWorktreeCardStyle: false,
     compactWorktreeCards: false,
     experimentalWorktreeSymlinks: false,
+    experimentalUnifiedNewTabLauncher: false,
+    experimentalMultiWindow: false,
     // Why: local desktop remains the default server until the user explicitly
     // selects a saved runtime environment.
     activeRuntimeEnvironmentId: null,

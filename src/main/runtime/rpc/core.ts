@@ -59,6 +59,10 @@ export type RpcContext = {
   // Why: WebSocket RPCs authenticate by mobile device token. State-owning
   // handlers use this to clean up when that paired device disconnects.
   clientId?: string
+  // Why: one-shot desktop IPC originates from a specific renderer window.
+  // Terminal/browser mutators use this to enforce the same owner checks as
+  // direct IPC without affecting authenticated socket/mobile clients.
+  senderWindowId?: number
   // Why: mobile terminal traffic is byte-oriented and bypasses JSON streaming
   // responses after the binary terminal cutover. Undefined on Unix/socket
   // transports and non-E2EE WebSocket paths.

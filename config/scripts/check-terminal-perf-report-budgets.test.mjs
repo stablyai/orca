@@ -104,6 +104,78 @@ describe('check-terminal-perf-report-budgets', () => {
     expect(result.stderr).toContain('renderer dropped backlogs 1 exceeded budget 0')
   })
 
+  it('keeps hidden real PTY pressure headroom scoped to that scenario', () => {
+    const reportPath = writeReport(
+      [
+        'panes=101',
+        'median=74.0ms',
+        'worst=499.0ms',
+        'maxTimerDrift=249.0ms',
+        'restore=7999.0ms',
+        'rendererQueuedChars=5242880',
+        'rendererPeakQueuedChars=5242880',
+        'rendererDroppedBacklogs=0'
+      ].join(' '),
+      'opencode-hidden-real-pty-pressure-typing'
+    )
+
+    const output = execFileSync(process.execPath, [scriptPath, reportPath], {
+      cwd: process.cwd(),
+      encoding: 'utf8'
+    })
+
+    expect(output).toContain('Terminal perf budget check passed for 1 annotation row(s).')
+  })
+
+  it('keeps ACK pressure headroom scoped to that scenario family', () => {
+    const reportPath = writeReport(
+      [
+        'panes=51',
+        'median=749.0ms',
+        'worst=4999.0ms',
+        'maxTimerDrift=249.0ms',
+        'scroll=299.0ms',
+        'rendererQueuedChars=5242880',
+        'rendererPeakQueuedChars=5242880',
+        'rendererDroppedBacklogs=0'
+      ].join(' '),
+      'opencode-main-pressure-active-scroll-25'
+    )
+
+    const output = execFileSync(process.execPath, [scriptPath, reportPath], {
+      cwd: process.cwd(),
+      encoding: 'utf8'
+    })
+
+    expect(output).toContain('Terminal perf budget check passed for 1 annotation row(s).')
+  })
+
+  it('does not widen baseline typing rows', () => {
+    const reportPath = writeReport(
+      ['panes=26', 'median=74.0ms', 'worst=301.0ms'].join(' '),
+      'opencode-baseline-typing'
+    )
+
+    const result = runChecker(reportPath)
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('worst typing latency 301ms exceeded budget 300ms')
+  })
+
+  it('keeps synthetic redraw worst-key headroom scoped to redraw scenarios', () => {
+    const reportPath = writeReport(
+      ['panes=5', 'median=149.0ms', 'worst=999.0ms', 'maxTimerDrift=149.0ms'].join(' '),
+      'opencode-same-workspace-typing'
+    )
+
+    const output = execFileSync(process.execPath, [scriptPath, reportPath], {
+      cwd: process.cwd(),
+      encoding: 'utf8'
+    })
+
+    expect(output).toContain('Terminal perf budget check passed for 1 annotation row(s).')
+  })
+
   it('fails malformed metric values instead of treating them as absent', () => {
     const reportPath = writeReport('panes=1 median=999 worst=abcms rendererQueuedChars=wat')
 

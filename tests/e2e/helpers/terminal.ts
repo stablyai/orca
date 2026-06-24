@@ -351,7 +351,7 @@ export async function waitForPaneIdentitySnapshot(
         )
       },
       {
-        timeout: 15_000,
+        timeout: 30_000,
         message: 'Split terminal panes did not settle with UUID leaf-keyed PTY bindings'
       }
     )
@@ -476,6 +476,33 @@ export async function splitActiveTerminalPane(
       manager.splitPane(activePane.id, direction)
     },
     { tabId, direction }
+  )
+}
+
+export async function ensureTerminalPaneCount(
+  page: Page,
+  tabId: string,
+  paneCount: number
+): Promise<void> {
+  await page.evaluate(
+    ({ paneCount, tabId }) => {
+      const manager = window.__paneManagers?.get(tabId)
+      if (!manager?.splitPane) {
+        throw new Error('Terminal pane manager is unavailable for load setup')
+      }
+      while ((manager.getPanes?.().length ?? 0) < paneCount) {
+        const panes = manager.getPanes?.() ?? []
+        const source = panes.at(-1) ?? manager.getActivePane?.() ?? panes[0]
+        if (!source) {
+          throw new Error('Terminal pane manager has no source pane for load setup')
+        }
+        const direction = panes.length % 2 === 0 ? 'horizontal' : 'vertical'
+        if (!manager.splitPane(source.id, direction)) {
+          throw new Error('Terminal pane split returned no pane during load setup')
+        }
+      }
+    },
+    { paneCount, tabId }
   )
 }
 

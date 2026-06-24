@@ -2,6 +2,8 @@ import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 
 export class DaemonPtyRouter implements IPtyProvider {
+  readonly supportsLosslessDataFlowPause: boolean
+
   private current: DaemonPtyAdapter
   private legacy: DaemonPtyAdapter[]
   private sessionAdapters = new Map<string, DaemonPtyAdapter>()
@@ -12,6 +14,11 @@ export class DaemonPtyRouter implements IPtyProvider {
   constructor(opts: { current: DaemonPtyAdapter; legacy: DaemonPtyAdapter[] }) {
     this.current = opts.current
     this.legacy = opts.legacy
+    // Why: a mixed current/legacy daemon route cannot promise lossless pause for
+    // arbitrary sessions unless every adapter behind the router supports it.
+    this.supportsLosslessDataFlowPause = this.allAdapters().every(
+      (adapter) => adapter.supportsLosslessDataFlowPause === true
+    )
 
     for (const adapter of this.allAdapters()) {
       this.unsubscribers.push(
@@ -102,6 +109,14 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   acknowledgeDataEvent(id: string, charCount: number): void {
     this.adapterFor(id).acknowledgeDataEvent(id, charCount)
+  }
+
+  setDataFlowPaused(id: string, paused: boolean): boolean {
+    const adapter = this.adapterFor(id)
+    if (adapter.supportsLosslessDataFlowPause !== true) {
+      return false
+    }
+    return adapter.setDataFlowPaused?.(id, paused) ?? false
   }
 
   async hasChildProcesses(id: string): Promise<boolean> {

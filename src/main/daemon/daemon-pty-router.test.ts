@@ -21,7 +21,8 @@ function buildSessionIds(prefix: string, count: number): string[] {
 function createAdapter(
   label: string,
   sessions: string[] = [],
-  reconcileResult?: { alive: string[]; killed: string[] }
+  reconcileResult?: { alive: string[]; killed: string[] },
+  supportsLosslessDataFlowPause = true
 ): AdapterMock {
   const writes: { id: string; data: string }[] = []
   const dataListeners: ((payload: { id: string; data: string }) => void)[] = []
@@ -56,6 +57,8 @@ function createAdapter(
     getInitialCwd: vi.fn(async () => ''),
     clearBuffer: vi.fn(async () => {}),
     acknowledgeDataEvent: vi.fn(),
+    supportsLosslessDataFlowPause,
+    setDataFlowPaused: vi.fn(() => supportsLosslessDataFlowPause),
     hasChildProcesses: vi.fn(async () => false),
     getForegroundProcess: vi.fn(async () => null),
     serialize: vi.fn(async () => '{}'),
@@ -100,6 +103,42 @@ function createAdapter(
 }
 
 describe('DaemonPtyRouter', () => {
+  it('advertises lossless data-flow pause only when every routed adapter supports it', () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy', [], undefined, false)
+    const mixedRouter = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    expect(mixedRouter.supportsLosslessDataFlowPause).toBe(false)
+
+    const supportedRouter = new DaemonPtyRouter({
+      current: createAdapter('current-supported'),
+      legacy: [createAdapter('legacy-supported')]
+    })
+
+    expect(supportedRouter.supportsLosslessDataFlowPause).toBe(true)
+
+    const unsupportedRouter = new DaemonPtyRouter({
+      current: createAdapter('current-unsupported', [], undefined, false),
+      legacy: [createAdapter('legacy-unsupported', [], undefined, false)]
+    })
+
+    expect(unsupportedRouter.supportsLosslessDataFlowPause).toBe(false)
+  })
+
+  it('routes lossless data-flow pause only to adapters that support it', async () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy', ['legacy-session'], undefined, false)
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    await router.discoverLegacySessions()
+    const fresh = await router.spawn({ cols: 80, rows: 24 })
+
+    expect(router.setDataFlowPaused(fresh.id, true)).toBe(true)
+    expect(current.setDataFlowPaused).toHaveBeenCalledWith(fresh.id, true)
+    expect(router.setDataFlowPaused('legacy-session', true)).toBe(false)
+    expect(legacy.setDataFlowPaused).not.toHaveBeenCalled()
+  })
+
   it('routes existing legacy sessions to their old daemon and new sessions to current daemon', async () => {
     const current = createAdapter('current')
     const legacy = createAdapter('legacy', ['legacy-session'])
