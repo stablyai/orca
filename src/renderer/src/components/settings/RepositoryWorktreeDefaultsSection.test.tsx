@@ -75,8 +75,10 @@ function typeText(input: HTMLInputElement, text: string): void {
 }
 
 function blurInput(input: HTMLInputElement): void {
+  // Why: React delegates onBlur via focusout (which bubbles) not blur (which
+  // doesn't), so dispatching focusout is required to trigger the React handler.
   act(() => {
-    input.dispatchEvent(new FocusEvent('blur', { bubbles: true }))
+    input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
   })
 }
 
