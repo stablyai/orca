@@ -19,7 +19,8 @@ type UseEditorPanelExternalContentEventsParams = {
     filePath: string,
     id: string,
     worktreeId?: string,
-    relativePath?: string
+    relativePath?: string,
+    options?: { force?: boolean }
   ) => Promise<void>
   openFilesRef: MutableRefObject<OpenFile[]>
   editorViewModeRef: MutableRefObject<EditorViewModeByFile>
@@ -43,7 +44,11 @@ export function useEditorPanelExternalContentEvents({
       }
       for (const file of getOpenFilesForExternalFileChange(openFilesRef.current, detail)) {
         if (file.mode === 'edit' || file.mode === 'markdown-preview') {
-          void loadFileContent(file.filePath, file.id, file.worktreeId, file.relativePath)
+          // Why: external writes must replace any in-flight pre-change read so
+          // the tab shows the new on-disk content, not a stale dedupe result.
+          void loadFileContent(file.filePath, file.id, file.worktreeId, file.relativePath, {
+            force: true
+          })
           if (editorViewModeRef.current[file.id] === 'changes') {
             void loadDiffContent(file, { force: true })
           }
@@ -114,6 +119,8 @@ function updateSavedPreviewTabs(
 export function usePruneClosedEditorContent(
   openFiles: OpenFile[],
   fileLoadRetryAttemptsRef: MutableRefObject<Record<string, number>>,
+  fileReadGenerationRef: MutableRefObject<Record<string, number>>,
+  diffReadGenerationRef: MutableRefObject<Record<string, number>>,
   setFileContents: Dispatch<SetStateAction<Record<string, FileContent>>>,
   setDiffContents: Dispatch<SetStateAction<Record<string, DiffContent>>>
 ): void {
@@ -124,11 +131,30 @@ export function usePruneClosedEditorContent(
         delete fileLoadRetryAttemptsRef.current[fileId]
       }
     }
+    // Why: read generations are per-open-tab race guards; closed tab ids should
+    // not accumulate across long editor sessions.
+    for (const fileId of Object.keys(fileReadGenerationRef.current)) {
+      if (!openIds.has(fileId)) {
+        delete fileReadGenerationRef.current[fileId]
+      }
+    }
+    for (const fileId of Object.keys(diffReadGenerationRef.current)) {
+      if (!openIds.has(fileId)) {
+        delete diffReadGenerationRef.current[fileId]
+      }
+    }
     setFileContents((prev) =>
       Object.fromEntries(Object.entries(prev).filter(([key]) => openIds.has(key)))
     )
     setDiffContents((prev) =>
       Object.fromEntries(Object.entries(prev).filter(([key]) => openIds.has(key)))
     )
-  }, [fileLoadRetryAttemptsRef, openFiles, setDiffContents, setFileContents])
+  }, [
+    diffReadGenerationRef,
+    fileLoadRetryAttemptsRef,
+    fileReadGenerationRef,
+    openFiles,
+    setDiffContents,
+    setFileContents
+  ])
 }
