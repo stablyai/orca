@@ -43,7 +43,7 @@ type RepositoryHostSetupActionsProps = {
     setupState: 'not-set-up'
     setupMethod: 'provisioned'
   }) => Promise<ProjectHostSetupCreateResult | null>
-  onOpenSetup: (repoId: string) => void
+  onOpenSetup: (setup: Pick<ProjectHostSetup, 'repoId' | 'hostId'>) => void
 }
 
 type SetupStep = 'choose' | 'existing' | 'clone' | 'planned'
@@ -102,7 +102,7 @@ export function RepositoryHostSetupActions({
       })
       if (result) {
         resetFlow()
-        onOpenSetup(result.repo.id)
+        onOpenSetup(result.setup)
       }
     } finally {
       setIsSettingUp(false)
@@ -129,7 +129,7 @@ export function RepositoryHostSetupActions({
       })
       if (result) {
         resetFlow()
-        onOpenSetup(result.repo.id)
+        onOpenSetup(result.setup)
       }
     } finally {
       setIsCloning(false)

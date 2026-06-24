@@ -4,9 +4,9 @@
 // the multi-fork cleanup matrix is unit-testable without a real repo.
 
 import type { Store } from '../persistence'
-import type { GitPushTarget } from '../../shared/types'
+import type { GitPushTarget, WorktreeMeta } from '../../shared/types'
 import { parseGitHubOwnerRepo } from '../github/gh-utils'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
+import { getRepoIdFromWorktreeId, parseAnyWorktreeId } from '../../shared/worktree-id'
 import { iterateProcessOutputLines } from '../../shared/process-output-field-scanner'
 
 export type GitRemoteExec = (
@@ -14,6 +14,11 @@ export type GitRemoteExec = (
   cwd: string
 ) => Promise<{ stdout: string; stderr?: string }>
 export type WorktreePushTargetStore = Pick<Store, 'getAllWorktreeMeta'>
+
+function getWorktreeHostId(worktreeId: string, meta?: WorktreeMeta): string | undefined {
+  const parsed = parseAnyWorktreeId(worktreeId)
+  return parsed?.format === 'canonical' ? parsed.hostId : meta?.hostId
+}
 
 export function sameGitHubRemoteUrl(left: string, right: string): boolean {
   if (left === right) {
@@ -31,15 +36,27 @@ export function sameGitHubRemoteUrl(left: string, right: string): boolean {
 
 function isPushTargetUsedByAnotherWorktree(
   store: WorktreePushTargetStore,
-  removedWorktreeId: string,
+  removedWorktreeIds: readonly string[],
   target: GitPushTarget
 ): boolean {
-  const removedRepoId = getRepoIdFromWorktreeId(removedWorktreeId)
+  const removedWorktreeIdSet = new Set(removedWorktreeIds)
+  const removedRepoIds = new Set(
+    removedWorktreeIds.map((worktreeId) => getRepoIdFromWorktreeId(worktreeId))
+  )
+  const removedHostIds = new Set(
+    removedWorktreeIds
+      .map((worktreeId) => getWorktreeHostId(worktreeId))
+      .filter((hostId): hostId is string => Boolean(hostId))
+  )
   return Object.entries(store.getAllWorktreeMeta()).some(([worktreeId, meta]) => {
     // Why: git remotes are repo-local; matching metadata from another repo
     // must not pin this repo's fork remote forever.
-    const belongsToSameRepo = getRepoIdFromWorktreeId(worktreeId) === removedRepoId
-    if (worktreeId === removedWorktreeId || !belongsToSameRepo || !meta.pushTarget) {
+    const belongsToSameRepo = removedRepoIds.has(getRepoIdFromWorktreeId(worktreeId))
+    if (removedWorktreeIdSet.has(worktreeId) || !belongsToSameRepo || !meta.pushTarget) {
+      return false
+    }
+    const candidateHostId = getWorktreeHostId(worktreeId, meta)
+    if (removedHostIds.size > 0 && candidateHostId && !removedHostIds.has(candidateHostId)) {
       return false
     }
     const otherRemoteUrl = meta.pushTarget.remoteUrl
@@ -107,7 +124,7 @@ function isBranchConfigSeparator(code: number): boolean {
 // cleanup matrix without touching a real repo.
 export async function cleanupUnusedWorktreePushTargetRemoteWithExec(
   repoPath: string,
-  removedWorktreeId: string,
+  removedWorktreeId: string | readonly string[],
   target: GitPushTarget | undefined,
   store: WorktreePushTargetStore,
   execGit: GitRemoteExec
@@ -120,7 +137,9 @@ export async function cleanupUnusedWorktreePushTargetRemoteWithExec(
   ) {
     return
   }
-  if (isPushTargetUsedByAnotherWorktree(store, removedWorktreeId, target)) {
+  const removedWorktreeIds =
+    typeof removedWorktreeId === 'string' ? [removedWorktreeId] : removedWorktreeId
+  if (isPushTargetUsedByAnotherWorktree(store, removedWorktreeIds, target)) {
     return
   }
   if (await hasBranchConfigUsingRemote(execGit, repoPath, target)) {

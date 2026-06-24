@@ -184,6 +184,7 @@ export type ProjectHostSetupCloneArgs = {
 
 export type ProjectHostSetupUpdateArgs = {
   setupId: string
+  hostId?: ExecutionHostId
   updates: Partial<
     Pick<
       ProjectHostSetup,
@@ -200,6 +201,7 @@ export type ProjectHostSetupUpdateArgs = {
 
 export type ProjectHostSetupDeleteArgs = {
   setupId: string
+  hostId?: ExecutionHostId
 }
 
 export type ProjectHostSetupResult = {
@@ -1945,6 +1947,8 @@ export type SparsePreset = {
 
 export type CreateWorktreeArgs = {
   repoId: string
+  /** Disambiguates same-id repos across local/SSH/runtime hosts. */
+  hostId?: ExecutionHostId
   name: string
   /** Optional user-facing label to persist separately from the git-safe
    *  branch/path seed. Used when a workspace is created from a GitHub or

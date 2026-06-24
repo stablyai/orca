@@ -61,6 +61,7 @@ import {
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { getRepoOwnerRoutedSettings } from '@/lib/repo-runtime-owner'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import {
@@ -83,11 +84,11 @@ import {
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import {
-  deriveNeededRepoIds,
   deriveNeededSectionIds,
   getInitialMountedSectionIds,
   getRuntimeTargetIdentity
 } from './settings-load-performance'
+import { getRepoSettingsSectionId } from '@/lib/repo-settings-section-id'
 import { translate } from '@/i18n/i18n'
 import { getProjectHostSetupProjectionFromState } from '../../store/selectors'
 
@@ -562,10 +563,19 @@ function Settings(): React.JSX.Element {
       return
     }
 
-    const paneSectionId = getSettingsSectionId(
-      settingsNavigationTarget.pane as SettingsNavTarget,
-      settingsNavigationTarget.repoId
-    )
+    const pane = settingsNavigationTarget.pane as SettingsNavTarget
+    const targetRepo =
+      pane === 'repo' && settingsNavigationTarget.repoId
+        ? repos.find(
+            (repo) =>
+              repo.id === settingsNavigationTarget.repoId &&
+              (settingsNavigationTarget.repoHostId === undefined ||
+                getRepoExecutionHostId(repo) === settingsNavigationTarget.repoHostId)
+          )
+        : undefined
+    const paneSectionId = targetRepo
+      ? getRepoSettingsSectionId(targetRepo)
+      : getSettingsSectionId(pane, settingsNavigationTarget.repoId)
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
     if (settingsNavigationTarget.intent === 'add-quick-command') {
@@ -581,7 +591,7 @@ function Settings(): React.JSX.Element {
     // scroll effect runs even when the visible section set is otherwise stable.
     setPendingNavRequestTick((tick) => tick + 1)
     clearSettingsTarget()
-  }, [clearSettingsTarget, settings, settingsNavigationTarget])
+  }, [clearSettingsTarget, repos, settings, settingsNavigationTarget])
 
   // Why: only recompute scrollback mode when the byte value actually changes,
   // not on every unrelated settings mutation.
@@ -699,6 +709,10 @@ function Settings(): React.JSX.Element {
     }
     return nextProjectByRepoId
   }, [projectHostSetups, projects, repos])
+  const repoBySettingsSectionId = useMemo(
+    () => new Map(repos.map((repo) => [getRepoSettingsSectionId(repo), repo] as const)),
+    [repos]
+  )
   const neededSectionIds = useMemo(
     () =>
       deriveNeededSectionIds({
@@ -774,16 +788,17 @@ function Settings(): React.JSX.Element {
     }
   }, [neededSectionIds])
 
-  const neededRepoIds = useMemo(
-    () => deriveNeededRepoIds(repos, neededSectionIds),
+  const neededRepoSectionIds = useMemo(
+    () =>
+      repos.map(getRepoSettingsSectionId).filter((sectionId) => neededSectionIds.has(sectionId)),
     [neededSectionIds, repos]
   )
 
   useEffect(() => {
-    const repoIdSet = new Set(repos.map((repo) => repo.id))
+    const repoSectionIdSet = new Set(repos.map(getRepoSettingsSectionId))
     setRepoHooksMap((previous) => {
       const next = Object.fromEntries(
-        Object.entries(previous).filter(([repoId]) => repoIdSet.has(repoId))
+        Object.entries(previous).filter(([repoSectionId]) => repoSectionIdSet.has(repoSectionId))
       ) as Record<string, { hasHooks: boolean; hooks: OrcaHooks | null; mayNeedUpdate: boolean }>
       return Object.keys(next).length === Object.keys(previous).length ? previous : next
     })
@@ -797,48 +812,53 @@ function Settings(): React.JSX.Element {
     }
   }, [runtimeTargetIdentity])
 
+  const repoHookRuntimeSettings = useMemo(
+    () =>
+      ({
+        activeRuntimeEnvironmentId: settings?.activeRuntimeEnvironmentId ?? null
+      }) as typeof settings,
+    [settings?.activeRuntimeEnvironmentId]
+  )
+
   useEffect(() => {
-    if (neededRepoIds.length === 0) {
+    if (neededRepoSectionIds.length === 0) {
       return
     }
 
     let stale = false
     const requestSeq = ++repoHooksRequestSeqRef.current
-    const repoById = new Map(repos.map((repo) => [repo.id, repo] as const))
 
     void Promise.all(
-      neededRepoIds.map(async (repoId) => {
-        const repo = repoById.get(repoId)
+      neededRepoSectionIds.map(async (repoSectionId) => {
+        const repo = repoBySettingsSectionId.get(repoSectionId)
         if (!repo) {
           return
         }
         if (isFolderRepo(repo)) {
           setRepoHooksMap((previous) => {
-            if (previous[repoId]) {
+            if (previous[repoSectionId]) {
               return previous
             }
             return {
               ...previous,
-              [repoId]: { hasHooks: false, hooks: null, mayNeedUpdate: false }
+              [repoSectionId]: { hasHooks: false, hooks: null, mayNeedUpdate: false }
             }
           })
           return
         }
         try {
           const result = await checkRuntimeHooks(
-            runtimeTargetIdentity === 'local'
-              ? { activeRuntimeEnvironmentId: null }
-              : { activeRuntimeEnvironmentId: runtimeTargetIdentity },
-            repoId
+            getRepoOwnerRoutedSettings(repoHookRuntimeSettings, repo),
+            repo.id
           )
           if (stale || requestSeq !== repoHooksRequestSeqRef.current) {
             return
           }
           setRepoHooksMap((previous) => {
-            if (!repos.some((entry) => entry.id === repoId)) {
+            if (!repos.some((entry) => getRepoSettingsSectionId(entry) === repoSectionId)) {
               return previous
             }
-            return { ...previous, [repoId]: result }
+            return { ...previous, [repoSectionId]: result }
           })
         } catch {
           // Keep last known value on transient failures.
@@ -846,15 +866,15 @@ function Settings(): React.JSX.Element {
             return
           }
           setRepoHooksMap((previous) => {
-            if (!repos.some((entry) => entry.id === repoId)) {
+            if (!repos.some((entry) => getRepoSettingsSectionId(entry) === repoSectionId)) {
               return previous
             }
-            if (previous[repoId]) {
+            if (previous[repoSectionId]) {
               return previous
             }
             return {
               ...previous,
-              [repoId]: { hasHooks: false, hooks: null, mayNeedUpdate: false }
+              [repoSectionId]: { hasHooks: false, hooks: null, mayNeedUpdate: false }
             }
           })
         }
@@ -864,7 +884,7 @@ function Settings(): React.JSX.Element {
     return () => {
       stale = true
     }
-  }, [neededRepoIds, repos, runtimeTargetIdentity])
+  }, [neededRepoSectionIds, repoBySettingsSectionId, repoHookRuntimeSettings, repos])
 
   useEffect(() => {
     const scrollTargetId = pendingScrollTargetRef.current
@@ -1010,7 +1030,7 @@ function Settings(): React.JSX.Element {
   const repoNavSections = visibleNavSections
     .filter((section) => section.id.startsWith('repo-'))
     .map((section) => {
-      const repo = repos.find((entry) => entry.id === section.id.replace('repo-', ''))
+      const repo = repoBySettingsSectionId.get(section.id)
       return {
         ...section,
         badgeColor: repo?.badgeColor,
@@ -1587,13 +1607,14 @@ function Settings(): React.JSX.Element {
                 </SettingsSection>
 
                 {repos.map((repo) => {
-                  const repoSectionId = `repo-${repo.id}`
-                  const repoHooksState = repoHooksMap[repo.id]
+                  const repoSectionId = getRepoSettingsSectionId(repo)
+                  const repoHostId = getRepoExecutionHostId(repo)
+                  const repoHooksState = repoHooksMap[repoSectionId]
                   const project = projectByRepoId.get(repo.id) ?? null
 
                   return (
                     <SettingsSection
-                      key={repo.id}
+                      key={repoSectionId}
                       id={repoSectionId}
                       title={translate(
                         'auto.components.settings.Settings.3bf149e873',
@@ -1610,12 +1631,15 @@ function Settings(): React.JSX.Element {
                           hasHooksFile={repoHooksState?.hasHooks ?? false}
                           hooksInspectionReady={Boolean(repoHooksState)}
                           mayNeedUpdate={repoHooksState?.mayNeedUpdate ?? false}
-                          updateRepo={updateRepo}
-                          removeProject={removeProject}
+                          updateRepo={(repoId, updates) =>
+                            updateRepo(repoId, updates, { ownerHostId: repoHostId })
+                          }
+                          removeProject={(repoId) =>
+                            removeProject(repoId, { ownerHostId: repoHostId })
+                          }
                           project={project}
                           isLocalWindowsProject={
-                            getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
-                            isWindowsTerminalHost
+                            repoHostId === LOCAL_EXECUTION_HOST_ID && isWindowsTerminalHost
                           }
                           wslAvailable={windowsTerminalCapabilities.wslAvailable}
                           wslDistros={windowsTerminalCapabilities.wslDistros}

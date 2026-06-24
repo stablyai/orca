@@ -118,7 +118,11 @@ import {
 import { agentHookServer } from './agent-hooks/server'
 import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session-browser-history'
-import { getRepoIdFromWorktreeId, getWorktreePathBasenameFromId } from '../shared/worktree-id'
+import {
+  getRepoIdFromWorktreeId,
+  getWorktreePathBasenameFromId,
+  parseAnyWorktreeId
+} from '../shared/worktree-id'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
@@ -740,8 +744,11 @@ function getAutomationContextsForRepo(
   const projection = projectHostSetupProjectionFromRepos([repo])
   const projectedProject = projection.projects[0]
   const projectedSetup = projection.setups[0]
+  const repoHostId = getRepoExecutionHostId(repo)
   const setup =
-    projectHostSetups.find((candidate) => candidate.repoId === repo.id) ?? projectedSetup
+    projectHostSetups.find(
+      (candidate) => candidate.repoId === repo.id && candidate.hostId === repoHostId
+    ) ?? projectedSetup
   const runContext = setup
     ? buildWorkspaceRunContext({
         projectId: setup.projectId,
@@ -3326,7 +3333,7 @@ export class Store {
   }
 
   updateProjectHostSetup(args: ProjectHostSetupUpdateArgs): ProjectHostSetupUpdateResult | null {
-    const setup = this.state.projectHostSetups.find((entry) => entry.id === args.setupId)
+    const setup = this.findProjectHostSetup(args)
     if (!setup) {
       return null
     }
@@ -3334,9 +3341,7 @@ export class Store {
     if (!project) {
       return null
     }
-    const repo = setup.repoId
-      ? this.state.repos.find((entry) => entry.id === setup.repoId)
-      : undefined
+    const repo = this.findRepoBackedProjectHostSetupRepo(setup)
     if (repo) {
       const updated = this.updateRepoBackedProjectHostSetup(setup, repo, args.updates)
       const updatedProject = updated
@@ -3351,7 +3356,7 @@ export class Store {
   }
 
   deleteProjectHostSetup(args: ProjectHostSetupDeleteArgs): ProjectHostSetupDeleteResult | null {
-    const setup = this.state.projectHostSetups.find((entry) => entry.id === args.setupId)
+    const setup = this.findProjectHostSetup(args)
     if (!setup) {
       return null
     }
@@ -3359,16 +3364,12 @@ export class Store {
     if (!project) {
       return null
     }
-    const repo = setup.repoId
-      ? this.state.repos.find((entry) => entry.id === setup.repoId)
-      : undefined
+    const repo = this.findRepoBackedProjectHostSetupRepo(setup)
     if (repo) {
-      this.removeProject(repo.id)
+      this.removeRepoBackedProjectHostSetupRepo(repo)
       return { project, setup, repo: this.hydrateRepo(repo) }
     }
-    this.state.projectHostSetups = this.state.projectHostSetups.filter(
-      (entry) => entry.id !== setup.id
-    )
+    this.state.projectHostSetups = this.state.projectHostSetups.filter((entry) => entry !== setup)
     this.scheduleSave()
     return { project, setup }
   }
@@ -3679,36 +3680,96 @@ export class Store {
     return true
   }
 
-  removeProject(id: string): void {
-    this.state.repos = this.state.repos.filter((r) => r.id !== id)
+  removeProject(id: string, hostId?: string): void {
+    const normalizedHostId = hostId ? normalizeExecutionHostId(hostId) : null
+    if (hostId && !normalizedHostId) {
+      throw new Error(`Invalid host ID: ${hostId}`)
+    }
+    this.state.repos = this.state.repos.filter((repo) => {
+      if (repo.id !== id) {
+        return true
+      }
+      return normalizedHostId !== null && getRepoExecutionHostId(repo) !== normalizedHostId
+    })
     this.syncProjectHostSetupCompatibilityState()
+    this.cleanupRemovedProjectState(id, normalizedHostId ?? undefined)
+    if (normalizedHostId !== null && !this.state.repos.some((entry) => entry.id === id)) {
+      this.cleanupRemovedProjectState(id)
+    }
+    this.scheduleSave()
+  }
+
+  private removeRepoBackedProjectHostSetupRepo(repo: Repo): void {
+    const hostId = getRepoExecutionHostId(repo)
+    this.state.repos = this.state.repos.filter(
+      (entry) => entry.id !== repo.id || getRepoExecutionHostId(entry) !== hostId
+    )
+    this.syncProjectHostSetupCompatibilityState()
+    this.cleanupRemovedProjectState(repo.id, hostId)
+    if (!this.state.repos.some((entry) => entry.id === repo.id)) {
+      this.cleanupRemovedProjectState(repo.id)
+    }
+    this.scheduleSave()
+  }
+
+  private cleanupRemovedProjectState(id: string, hostId?: string): void {
     // Why: presets are repo-scoped, so removing the repo means the presets
     // can never be referenced again — drop them with the parent.
-    delete this.state.sparsePresetsByRepo[id]
+    if (hostId === undefined) {
+      delete this.state.sparsePresetsByRepo[id]
+    }
     // Clean up worktree meta for this repo
-    const prefix = `${id}::`
     for (const key of Object.keys(this.state.worktreeMeta)) {
-      if (key.startsWith(prefix)) {
+      if (this.isRemovedProjectWorktreeId(key, id, hostId, this.state.worktreeMeta[key])) {
         delete this.state.worktreeMeta[key]
       }
     }
     for (const [childId, lineage] of Object.entries(this.state.worktreeLineageById)) {
-      if (childId.startsWith(prefix) || lineage.parentWorktreeId.startsWith(prefix)) {
+      if (
+        this.isRemovedProjectWorktreeId(childId, id, hostId) ||
+        this.isRemovedProjectWorktreeId(lineage.parentWorktreeId, id, hostId)
+      ) {
         delete this.state.worktreeLineageById[childId]
       }
     }
     for (const [childKey, lineage] of Object.entries(this.state.workspaceLineageByChildKey)) {
       const childScope = parseWorkspaceKey(childKey)
       const parentScope = parseWorkspaceKey(lineage.parentWorkspaceKey)
-      if (childScope?.type === 'worktree' && childScope.worktreeId.startsWith(prefix)) {
+      if (
+        childScope?.type === 'worktree' &&
+        this.isRemovedProjectWorktreeId(childScope.worktreeId, id, hostId)
+      ) {
         delete this.state.workspaceLineageByChildKey[childKey as WorkspaceKey]
         continue
       }
-      if (parentScope?.type === 'worktree' && parentScope.worktreeId.startsWith(prefix)) {
+      if (
+        parentScope?.type === 'worktree' &&
+        this.isRemovedProjectWorktreeId(parentScope.worktreeId, id, hostId)
+      ) {
         delete this.state.workspaceLineageByChildKey[childKey as WorkspaceKey]
       }
     }
-    this.scheduleSave()
+  }
+
+  private isRemovedProjectWorktreeId(
+    worktreeId: string,
+    repoId: string,
+    hostId?: string,
+    meta?: WorktreeMeta
+  ): boolean {
+    const parsed = parseAnyWorktreeId(worktreeId)
+    if (!parsed || parsed.repoId !== repoId) {
+      return false
+    }
+    if (hostId === undefined) {
+      return true
+    }
+    if (parsed.format === 'canonical') {
+      return parsed.hostId === hostId
+    }
+    // Why: host-specific setup deletion must not guess ownership for hostless
+    // legacy rows when another same-id repo remains.
+    return meta?.hostId === hostId
   }
 
   updateRepo(
@@ -3733,9 +3794,17 @@ export class Store {
         | 'projectGroupOrder'
         | 'projectHostSetupMethod'
       >
-    > & { sourceControlAi?: Repo['sourceControlAi'] | null }
+    > & { sourceControlAi?: Repo['sourceControlAi'] | null },
+    hostId?: string
   ): Repo | null {
-    const repo = this.state.repos.find((r) => r.id === id)
+    const normalizedHostId = hostId ? normalizeExecutionHostId(hostId) : null
+    if (hostId && !normalizedHostId) {
+      throw new Error(`Invalid host ID: ${hostId}`)
+    }
+    const repo = this.state.repos.find(
+      (r) =>
+        r.id === id && (normalizedHostId === null || getRepoExecutionHostId(r) === normalizedHostId)
+    )
     if (!repo) {
       return null
     }
@@ -3840,15 +3909,51 @@ export class Store {
     if (updates.setupMethod !== undefined && updates.setupMethod !== 'legacy-repo') {
       repoUpdates.projectHostSetupMethod = updates.setupMethod
     }
-    const updatedRepo =
-      Object.keys(repoUpdates).length > 0 ? this.updateRepo(repo.id, repoUpdates) : repo
-    if (!updatedRepo) {
-      return null
+    if (Object.keys(repoUpdates).length > 0) {
+      const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(repoUpdates)
+      if (
+        'worktreeBasePath' in sanitizedUpdates &&
+        sanitizedUpdates.worktreeBasePath === undefined
+      ) {
+        delete repo.worktreeBasePath
+        delete sanitizedUpdates.worktreeBasePath
+      }
+      Object.assign(repo, sanitizedUpdates)
+      this.syncProjectHostSetupCompatibilityState()
+      this.scheduleSave()
     }
     return {
-      setup: this.state.projectHostSetups.find((entry) => entry.id === setup.id) ?? setup,
-      repo: updatedRepo
+      setup:
+        this.state.projectHostSetups.find(
+          (entry) => entry.id === setup.id && entry.hostId === setup.hostId
+        ) ?? setup,
+      repo: this.hydrateRepo(repo)
     }
+  }
+
+  private findRepoBackedProjectHostSetupRepo(setup: ProjectHostSetup): Repo | undefined {
+    if (!setup.repoId) {
+      return undefined
+    }
+    return this.state.repos.find(
+      (entry) => entry.id === setup.repoId && getRepoExecutionHostId(entry) === setup.hostId
+    )
+  }
+
+  private findProjectHostSetup(
+    args: Pick<ProjectHostSetupUpdateArgs, 'setupId' | 'hostId'>
+  ): ProjectHostSetup | undefined {
+    if (args.hostId === undefined) {
+      const matches = this.state.projectHostSetups.filter((entry) => entry.id === args.setupId)
+      return matches.length === 1 ? matches[0] : undefined
+    }
+    const hostId = normalizeExecutionHostId(args.hostId)
+    if (!hostId) {
+      throw new Error(`Invalid host ID: ${args.hostId}`)
+    }
+    return this.state.projectHostSetups.find(
+      (entry) => entry.id === args.setupId && entry.hostId === hostId
+    )
   }
 
   private updateIndependentProjectHostSetup(

@@ -68,9 +68,11 @@ import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostId,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
-  toSshExecutionHostId
+  toSshExecutionHostId,
+  type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { formatFolderWorkspaceCreateError } from '../../lib/folder-workspace-path-status'
@@ -228,6 +230,25 @@ function getProjectSetupRuntimeTarget(
     : { kind: 'local' }
 }
 
+function findProjectHostSetupByMutationArgs(
+  setups: readonly ProjectHostSetup[],
+  args: Pick<ProjectHostSetupUpdateArgs, 'setupId' | 'hostId'>
+): ProjectHostSetup | undefined {
+  if (args.hostId === undefined) {
+    const matches = setups.filter((setup) => setup.id === args.setupId)
+    return matches.length === 1 ? matches[0] : undefined
+  }
+  const hostId = normalizeExecutionHostId(args.hostId)
+  if (!hostId) {
+    throw new Error(`Invalid host ID: ${args.hostId}`)
+  }
+  return setups.find((setup) => setup.id === args.setupId && setup.hostId === hostId)
+}
+
+function isSameProjectHostSetup(a: ProjectHostSetup, b: ProjectHostSetup): boolean {
+  return a.id === b.id && a.hostId === b.hostId
+}
+
 function getProjectUpdateRuntimeTarget(
   state: AppState,
   projectId: string
@@ -264,7 +285,7 @@ function scheduleSafeAutoForkSync(get: () => AppState, repos: readonly Repo[]): 
     }
     const promise = syncRuntimeGitForkDefaultBranch(
       {
-        settings: settingsForRepoOwner(get(), repo.id),
+        settings: settingsForRepoOwner(get(), repo.id, getRepoExecutionHostId(repo)),
         worktreeId: repo.id,
         worktreePath: repo.path,
         connectionId: repo.connectionId ?? undefined
@@ -881,8 +902,15 @@ async function listRuntimeEnvironmentsForAllHostLoad(): Promise<{ id: string }[]
   }
 }
 
-function settingsForRepoOwner(state: Pick<AppState, 'repos' | 'settings'>, repoId: string) {
-  const repo = findRepoForHost(state.repos, repoId, { settings: state.settings })
+function settingsForRepoOwner(
+  state: Pick<AppState, 'repos' | 'settings'>,
+  repoId: string,
+  hostId?: ExecutionHostId | null
+) {
+  const repo = findRepoForHost(state.repos, repoId, {
+    ...(hostId ? { hostId } : {}),
+    settings: state.settings
+  })
   if (!repo) {
     return state.settings
   }
@@ -1131,9 +1159,13 @@ export type RepoSlice = {
     groupId: string | null,
     order?: number
   ) => Promise<boolean>
-  removeProject: (projectId: string) => Promise<void>
+  removeProject: (projectId: string, options?: { ownerHostId?: ExecutionHostId }) => Promise<void>
   updateProject: (projectId: string, updates: ProjectUpdate) => Promise<boolean>
-  updateRepo: (projectId: string, updates: RepoUpdate) => Promise<boolean>
+  updateRepo: (
+    projectId: string,
+    updates: RepoUpdate,
+    options?: { ownerHostId?: ExecutionHostId }
+  ) => Promise<boolean>
   setActiveRepo: (projectId: string | null) => void
   reorderRepos: (orderedIds: string[]) => Promise<void>
 }
@@ -1949,8 +1981,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         const nextProjects = s.projects.some((entry) => entry.id === result.project.id)
           ? s.projects.map((entry) => (entry.id === result.project.id ? result.project : entry))
           : [...s.projects, result.project]
-        const nextSetups = s.projectHostSetups.some((entry) => entry.id === setup.id)
-          ? s.projectHostSetups.map((entry) => (entry.id === setup.id ? setup : entry))
+        const nextSetups = s.projectHostSetups.some((entry) => isSameProjectHostSetup(entry, setup))
+          ? s.projectHostSetups.map((entry) =>
+              isSameProjectHostSetup(entry, setup) ? setup : entry
+            )
           : [...s.projectHostSetups, setup]
         return {
           repos: nextRepos,
@@ -1993,8 +2027,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         projects: s.projects.some((entry) => entry.id === result.project.id)
           ? s.projects.map((entry) => (entry.id === result.project.id ? result.project : entry))
           : [...s.projects, result.project],
-        projectHostSetups: s.projectHostSetups.some((entry) => entry.id === setup.id)
-          ? s.projectHostSetups.map((entry) => (entry.id === setup.id ? setup : entry))
+        projectHostSetups: s.projectHostSetups.some((entry) => isSameProjectHostSetup(entry, setup))
+          ? s.projectHostSetups.map((entry) =>
+              isSameProjectHostSetup(entry, setup) ? setup : entry
+            )
           : [...s.projectHostSetups, setup]
       }))
       return { project: result.project, setup }
@@ -2011,7 +2047,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   updateProjectHostSetup: async (args) => {
     try {
-      const currentSetup = get().projectHostSetups.find((setup) => setup.id === args.setupId)
+      const currentSetup = findProjectHostSetupByMutationArgs(get().projectHostSetups, args)
       const target = currentSetup
         ? getProjectSetupRuntimeTarget(currentSetup.hostId)
         : { kind: 'local' as const }
@@ -2041,8 +2077,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         projects: s.projects.some((entry) => entry.id === result.project.id)
           ? s.projects.map((entry) => (entry.id === result.project.id ? result.project : entry))
           : [...s.projects, result.project],
-        projectHostSetups: s.projectHostSetups.some((entry) => entry.id === setup.id)
-          ? s.projectHostSetups.map((entry) => (entry.id === setup.id ? setup : entry))
+        projectHostSetups: s.projectHostSetups.some((entry) => isSameProjectHostSetup(entry, setup))
+          ? s.projectHostSetups.map((entry) =>
+              isSameProjectHostSetup(entry, setup) ? setup : entry
+            )
           : [...s.projectHostSetups, setup]
       }))
       return { ...result, repo, setup }
@@ -2059,7 +2097,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   deleteProjectHostSetup: async (args) => {
     try {
-      const currentSetup = get().projectHostSetups.find((setup) => setup.id === args.setupId)
+      const currentSetup = findProjectHostSetupByMutationArgs(get().projectHostSetups, args)
       const target = currentSetup
         ? getProjectSetupRuntimeTarget(currentSetup.hostId)
         : { kind: 'local' as const }
@@ -2079,7 +2117,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const repoHostId = repo ? getRepoExecutionHostId(repo) : null
       set((s) => {
         const projectHostSetups = s.projectHostSetups.filter(
-          (setup) => setup.id !== result.setup.id
+          (setup) => !isSameProjectHostSetup(setup, result.setup)
         )
         const repos =
           repo && repoHostId
@@ -2216,16 +2254,21 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  removeProject: async (projectId) => {
+  removeProject: async (projectId, options) => {
     try {
-      const ownerRepo = findRepoForHost(get().repos, projectId, { settings: get().settings })
+      const ownerRepo = findRepoForHost(get().repos, projectId, {
+        hostId: options?.ownerHostId,
+        settings: get().settings
+      })
       if (!ownerRepo) {
         return
       }
       const ownerHostId = getRepoExecutionHostId(ownerRepo)
-      const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId))
+      const target = options?.ownerHostId
+        ? getProjectSetupRuntimeTarget(ownerHostId)
+        : getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId))
       await (target.kind === 'local'
-        ? window.api.repos.remove({ repoId: projectId })
+        ? window.api.repos.remove({ repoId: projectId, hostId: ownerHostId })
         : callRuntimeRpc(target, 'repo.rm', { repo: projectId }, { timeoutMs: 15_000 }))
 
       get().clearOrcaHookTrustForRepo(projectId)
@@ -2352,7 +2395,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             hostId: ownerHostId
           }),
           activeRepoId: s.activeRepoId === projectId ? null : s.activeRepoId,
-          filterRepoIds: s.filterRepoIds.filter((id) => id !== projectId),
+          filterRepoIds: nextRepos.some((repo) => repo.id === projectId)
+            ? s.filterRepoIds
+            : s.filterRepoIds.filter((id) => id !== projectId),
           worktreesByRepo: nextWorktrees,
           detectedWorktreesByRepo: nextDetectedWorktrees,
           tabsByWorktree: nextTabs,
@@ -2425,9 +2470,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  updateRepo: async (projectId, updates) => {
+  updateRepo: async (projectId, updates, options) => {
     const updateRepoChains = getRepoUpdateChains(get)
-    const ownerRepo = findRepoForHost(get().repos, projectId, { settings: get().settings })
+    const ownerRepo = findRepoForHost(get().repos, projectId, {
+      hostId: options?.ownerHostId,
+      settings: get().settings
+    })
     if (!ownerRepo) {
       return false
     }
@@ -2448,7 +2496,11 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         const target = ownerTarget
         const updatedRepo =
           target.kind === 'local'
-            ? await window.api.repos.update({ repoId: projectId, updates: sanitizedUpdates })
+            ? await window.api.repos.update({
+                repoId: projectId,
+                hostId: ownerHostId,
+                updates: sanitizedUpdates
+              })
             : (
                 await callRuntimeRpc<{ repo: Repo }>(
                   target,

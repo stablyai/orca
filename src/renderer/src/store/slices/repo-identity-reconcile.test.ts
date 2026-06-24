@@ -40,6 +40,22 @@ describe('reconcileFetchedRepos', () => {
     expect(result[0]).toBe(next[0])
   })
 
+  it('keys object reuse by repo id and execution host', () => {
+    const previous = [
+      makeRepo('same-id', { executionHostId: 'local', path: '/local/orca' }),
+      makeRepo('same-id', { executionHostId: 'runtime:env-a', path: '/srv/orca' })
+    ]
+    const next = [
+      makeRepo('same-id', { executionHostId: 'runtime:env-a', path: '/srv/orca' }),
+      makeRepo('same-id', { executionHostId: 'local', path: '/local/orca' })
+    ]
+
+    const result = reconcileFetchedRepos(previous, next)
+
+    expect(result[0]).toBe(previous[1])
+    expect(result[1]).toBe(previous[0])
+  })
+
   it('returns a rebuilt array when repos are added or removed', () => {
     const previous = [makeRepo('a')]
     const next = [makeRepo('a'), makeRepo('b')]

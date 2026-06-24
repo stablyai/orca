@@ -1,3 +1,5 @@
+import type { ExecutionHostId } from '../../../shared/execution-host'
+
 type WorktreeRename = {
   oldWorktreeId: string
   newWorktreeId: string
@@ -5,16 +7,23 @@ type WorktreeRename = {
 
 type WorktreeChangeEvent = {
   repoId: string
+  ownerHostId?: ExecutionHostId
   renamed?: WorktreeRename
 }
 
-type WorktreeChangeRefreshHandler = (repoId: string, renamed?: WorktreeRename) => Promise<void>
+type WorktreeChangeRefreshHandler = (
+  repoId: string,
+  ownerHostId?: ExecutionHostId,
+  renamed?: WorktreeRename
+) => Promise<void>
 
 type QueuedWorktreeChange = {
   renamed?: WorktreeRename
 }
 
 type RepoRefreshState = {
+  repoId: string
+  ownerHostId?: ExecutionHostId
   running: boolean
   queue: QueuedWorktreeChange[]
 }
@@ -30,13 +39,16 @@ export function createWorktreeChangeRefreshQueue(
   const states = new Map<string, RepoRefreshState>()
   let disposed = false
 
-  const drain = async (repoId: string, state: RepoRefreshState): Promise<void> => {
+  const getRefreshKey = (event: Pick<WorktreeChangeEvent, 'repoId' | 'ownerHostId'>) =>
+    `${event.ownerHostId ?? 'focused'}\0${event.repoId}`
+
+  const drain = async (key: string, state: RepoRefreshState): Promise<void> => {
     state.running = true
     try {
       while (!disposed && state.queue.length > 0) {
         const next = state.queue.shift()
         try {
-          await handler(repoId, next?.renamed)
+          await handler(state.repoId, state.ownerHostId, next?.renamed)
         } catch (error) {
           console.error('Failed to refresh changed worktrees:', error)
         }
@@ -44,9 +56,9 @@ export function createWorktreeChangeRefreshQueue(
     } finally {
       state.running = false
       if (disposed || state.queue.length === 0) {
-        states.delete(repoId)
+        states.delete(key)
       } else {
-        void drain(repoId, state)
+        void drain(key, state)
       }
     }
   }
@@ -61,10 +73,11 @@ export function createWorktreeChangeRefreshQueue(
       if (disposed) {
         return
       }
-      let state = states.get(event.repoId)
+      const key = getRefreshKey(event)
+      let state = states.get(key)
       if (!state) {
-        state = { running: false, queue: [] }
-        states.set(event.repoId, state)
+        state = { repoId: event.repoId, ownerHostId: event.ownerHostId, running: false, queue: [] }
+        states.set(key, state)
       }
 
       if (event.renamed) {
@@ -79,7 +92,7 @@ export function createWorktreeChangeRefreshQueue(
       }
 
       if (!state.running) {
-        void drain(event.repoId, state)
+        void drain(key, state)
       }
     }
   }

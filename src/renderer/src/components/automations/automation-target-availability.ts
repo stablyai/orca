@@ -67,8 +67,9 @@ export function getAutomationTargetAvailability({
   if (!repo) {
     return unavailable('missing-project', 'The target project is no longer available.')
   }
-  if (automation.runContext) {
-    const parsedHost = parseExecutionHostId(automation.runContext.hostId)
+  const runContext = automation.runContext
+  if (runContext) {
+    const parsedHost = parseExecutionHostId(runContext.hostId)
     if (parsedHost?.kind === 'runtime') {
       const runtimeAvailability = getRuntimeAutomationAvailability(
         parsedHost.environmentId,
@@ -79,9 +80,19 @@ export function getAutomationTargetAvailability({
       }
     }
     const setup = projectHostSetups.find(
-      (candidate) => candidate.id === automation.runContext?.projectHostSetupId
+      (candidate) =>
+        candidate.id === runContext.projectHostSetupId &&
+        candidate.projectId === runContext.projectId &&
+        candidate.hostId === runContext.hostId &&
+        candidate.repoId === runContext.repoId
     )
     if (!setup) {
+      if (projectHostSetups.some((candidate) => candidate.id === runContext.projectHostSetupId)) {
+        return unavailable(
+          'host-mismatch',
+          'The saved run host no longer matches this project setup.'
+        )
+      }
       return unavailable(
         'missing-project-host-setup',
         'Project is not set up on the selected automation host anymore.'
@@ -94,13 +105,13 @@ export function getAutomationTargetAvailability({
       )
     }
     if (
-      setup.projectId !== automation.runContext.projectId ||
-      setup.hostId !== automation.runContext.hostId ||
-      setup.repoId !== automation.runContext.repoId ||
-      setup.path !== automation.runContext.path ||
-      automation.runContext.repoId !== repo.id ||
-      automation.runContext.path !== repo.path ||
-      automation.runContext.hostId !== getRepoExecutionHostId(repo)
+      setup.projectId !== runContext.projectId ||
+      setup.hostId !== runContext.hostId ||
+      setup.repoId !== runContext.repoId ||
+      setup.path !== runContext.path ||
+      runContext.repoId !== repo.id ||
+      runContext.path !== repo.path ||
+      runContext.hostId !== getRepoExecutionHostId(repo)
     ) {
       return unavailable(
         'host-mismatch',

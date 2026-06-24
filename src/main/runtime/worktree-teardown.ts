@@ -1,6 +1,7 @@
 import type { IPtyProvider } from '../providers/types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { listRegisteredPtys } from '../memory/pty-registry'
+import { makeLegacyWorktreeId, splitWorktreeId } from '../../shared/worktree-id'
 
 export type WorktreeTeardownDeps = {
   runtime?: OrcaRuntimeService
@@ -51,13 +52,15 @@ export async function killAllProcessesForWorktree(
     result.runtimeStopped = r.stopped
   }
 
+  const worktreeIds = getTeardownWorktreeIds(worktreeId)
+
   result.providerStopped = await sweepProviderByPrefix(
-    worktreeId,
+    worktreeIds,
     deps.localProvider,
     deps.onPtyStopped
   )
   result.registryStopped = await sweepRegistryForWorktree(
-    worktreeId,
+    worktreeIds,
     deps.localProvider,
     deps.onPtyStopped
   )
@@ -66,15 +69,15 @@ export async function killAllProcessesForWorktree(
 }
 
 async function sweepProviderByPrefix(
-  worktreeId: string,
+  worktreeIds: ReadonlySet<string>,
   provider: IPtyProvider,
   onPtyStopped?: (ptyId: string) => void
 ): Promise<number> {
-  const prefix = `${worktreeId}@@`
+  const prefixes = [...worktreeIds].map((worktreeId) => `${worktreeId}@@`)
   const sessions = await provider.listProcesses().catch(() => [])
   let killed = 0
   for (const s of sessions) {
-    if (!s.id.startsWith(prefix)) {
+    if (!prefixes.some((prefix) => s.id.startsWith(prefix))) {
       continue
     }
     try {
@@ -90,11 +93,13 @@ async function sweepProviderByPrefix(
 }
 
 async function sweepRegistryForWorktree(
-  worktreeId: string,
+  worktreeIds: ReadonlySet<string>,
   localProvider: IPtyProvider,
   onPtyStopped?: (ptyId: string) => void
 ): Promise<number> {
-  const entries = listRegisteredPtys().filter((r) => r.worktreeId === worktreeId)
+  const entries = listRegisteredPtys().filter(
+    (r) => r.worktreeId !== null && worktreeIds.has(r.worktreeId)
+  )
   let killed = 0
   for (const entry of entries) {
     try {
@@ -106,6 +111,15 @@ async function sweepRegistryForWorktree(
     }
   }
   return killed
+}
+
+function getTeardownWorktreeIds(worktreeId: string): Set<string> {
+  const ids = new Set([worktreeId])
+  const parsed = splitWorktreeId(worktreeId)
+  if (parsed) {
+    ids.add(makeLegacyWorktreeId(parsed.repoId, parsed.worktreePath))
+  }
+  return ids
 }
 
 function clearStoppedPtyState(ptyId: string, onPtyStopped?: (ptyId: string) => void): void {

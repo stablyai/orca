@@ -200,4 +200,143 @@ describe('project-host workspace target resolution', () => {
       reason: 'setup-not-ready'
     })
   })
+
+  it('resolves an explicit same-id setup on the requested host', () => {
+    const repos = [
+      makeRepo('orca-local'),
+      makeRepo('orca-runtime', { executionHostId: 'runtime:gpu' })
+    ]
+    const projects = [makeProject('github:stablyai/orca', ['orca-local', 'orca-runtime'])]
+    const projectHostSetups = [
+      makeSetup('shared-setup', 'github:stablyai/orca', 'local', 'orca-local'),
+      makeSetup('shared-setup', 'github:stablyai/orca', 'runtime:gpu', 'orca-runtime')
+    ]
+
+    expect(
+      resolveWorkspaceCreationTarget({
+        eligibleRepos: repos,
+        projects,
+        projectHostSetups,
+        projectHostSetupId: 'shared-setup',
+        hostId: 'runtime:gpu'
+      })
+    ).toMatchObject({
+      status: 'ready',
+      target: {
+        hostId: 'runtime:gpu',
+        repoId: 'orca-runtime'
+      }
+    })
+  })
+
+  it('uses focused host when resolving an explicit same-id setup without hostId', () => {
+    const repos = [
+      makeRepo('orca-local'),
+      makeRepo('orca-runtime', { executionHostId: 'runtime:gpu' })
+    ]
+    const projects = [makeProject('github:stablyai/orca', ['orca-local', 'orca-runtime'])]
+    const projectHostSetups = [
+      makeSetup('shared-setup', 'github:stablyai/orca', 'local', 'orca-local'),
+      makeSetup('shared-setup', 'github:stablyai/orca', 'runtime:gpu', 'orca-runtime')
+    ]
+
+    expect(
+      resolveWorkspaceCreationTarget({
+        eligibleRepos: repos,
+        projects,
+        projectHostSetups,
+        projectHostSetupId: 'shared-setup',
+        focusedHostScope: 'runtime:gpu'
+      })
+    ).toMatchObject({
+      status: 'ready',
+      target: {
+        hostId: 'runtime:gpu',
+        repoId: 'orca-runtime'
+      }
+    })
+  })
+
+  it('does not guess an explicit same-id setup when host focus is ambiguous', () => {
+    const repos = [
+      makeRepo('orca-local'),
+      makeRepo('orca-runtime', { executionHostId: 'runtime:gpu' })
+    ]
+    const projects = [makeProject('github:stablyai/orca', ['orca-local', 'orca-runtime'])]
+    const projectHostSetups = [
+      makeSetup('shared-setup', 'github:stablyai/orca', 'local', 'orca-local'),
+      makeSetup('shared-setup', 'github:stablyai/orca', 'runtime:gpu', 'orca-runtime')
+    ]
+
+    expect(
+      resolveWorkspaceCreationTarget({
+        eligibleRepos: repos,
+        projects,
+        projectHostSetups,
+        projectHostSetupId: 'shared-setup'
+      })
+    ).toEqual({ status: 'unavailable', reason: 'setup-not-found' })
+  })
+
+  it('resolves same-id repos by setup host instead of repo id alone', () => {
+    const repos = [
+      makeRepo('orca', { path: '/repos/local-orca' }),
+      makeRepo('orca', { executionHostId: 'runtime:gpu', path: '/repos/runtime-orca' })
+    ]
+    const projects = [makeProject('github:stablyai/orca', ['orca'])]
+    const projectHostSetups = [
+      makeSetup('shared-setup', 'github:stablyai/orca', 'local', 'orca'),
+      makeSetup('shared-setup', 'github:stablyai/orca', 'runtime:gpu', 'orca')
+    ]
+
+    expect(
+      resolveWorkspaceCreationTarget({
+        eligibleRepos: repos,
+        projects,
+        projectHostSetups,
+        projectHostSetupId: 'shared-setup',
+        hostId: 'local'
+      })
+    ).toMatchObject({
+      status: 'ready',
+      target: {
+        hostId: 'local',
+        repoId: 'orca',
+        repo: {
+          path: '/repos/local-orca'
+        }
+      }
+    })
+  })
+
+  it('keeps legacy fallback setup on the selected repo host for same-id repos', () => {
+    const repos = [
+      makeRepo('orca', { path: '/repos/local-orca' }),
+      makeRepo('orca', { executionHostId: 'runtime:gpu', path: '/repos/runtime-orca' })
+    ]
+    const projects = [makeProject('github:stablyai/orca', ['orca'])]
+    const projectHostSetups = [
+      makeSetup('runtime-setup', 'github:stablyai/orca', 'runtime:gpu', 'orca'),
+      makeSetup('local-setup', 'github:stablyai/orca', 'local', 'orca')
+    ]
+
+    expect(
+      resolveWorkspaceCreationTarget({
+        eligibleRepos: repos,
+        projects,
+        projectHostSetups,
+        activeRepoId: 'orca',
+        focusedHostScope: 'local'
+      })
+    ).toMatchObject({
+      status: 'ready',
+      target: {
+        hostId: 'local',
+        projectHostSetupId: 'local-setup',
+        repo: {
+          path: '/repos/local-orca'
+        }
+      }
+    })
+  })
 })

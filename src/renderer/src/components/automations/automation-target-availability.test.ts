@@ -176,6 +176,43 @@ describe('automation target availability', () => {
     })
   })
 
+  it('matches saved run context setup by id and host when setup ids repeat', () => {
+    const automation = makeAutomation({
+      runContext: {
+        kind: 'workspace-run',
+        projectId: 'project-1',
+        hostId: 'runtime:gpu',
+        projectHostSetupId: 'shared-setup',
+        repoId: 'repo-1',
+        path: '/runtime/repo'
+      }
+    })
+
+    expect(
+      getAutomationTargetAvailability({
+        automation,
+        repo: makeRepo({ path: '/runtime/repo', executionHostId: 'runtime:gpu' }),
+        workspace: makeWorkspace(),
+        projectHostSetups: [
+          makeProjectHostSetup({
+            id: 'shared-setup',
+            hostId: 'local',
+            path: '/local/repo'
+          }),
+          makeProjectHostSetup({
+            id: 'shared-setup',
+            hostId: 'runtime:gpu',
+            path: '/runtime/repo'
+          })
+        ],
+        sshConnectionStates: new Map(),
+        runtimeStatusByEnvironmentId: new Map([
+          ['gpu', { status: makeRuntimeStatus(), checkedAt: 1 }]
+        ])
+      }).reason
+    ).toBe('available')
+  })
+
   it('requires SSH hosts to be connected before manual runs', () => {
     const automation = makeAutomation({
       executionTargetType: 'ssh',

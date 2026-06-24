@@ -24,6 +24,8 @@ import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
 import { getSshGitProvider } from './providers/ssh-git-dispatch'
 import { createFolderWorktree, listRepoWorktrees } from './repo-worktrees'
 import { mergeWorktree } from './ipc/worktree-logic'
+import { getRepoExecutionHostId } from '../shared/execution-host'
+import { makeLegacyWorktreeId, makeRepoWorktreeKey } from '../shared/worktree-id'
 
 const WORKTREE_SCAN_CONCURRENCY = 3
 const LOCAL_FS_CONCURRENCY = 48
@@ -796,9 +798,58 @@ async function listWorktreesForSpaceScan(
   }
 }
 
-function mergeForSpaceScan(repo: Repo, gitWorktree: GitWorktreeInfo, store: Store): Worktree {
-  const worktreeId = `${repo.id}::${gitWorktree.path}`
-  return mergeWorktree(repo.id, gitWorktree, store.getWorktreeMeta(worktreeId), repo.displayName)
+function mergeForSpaceScan(
+  repo: Repo,
+  repos: Repo[],
+  gitWorktree: GitWorktreeInfo,
+  store: Store
+): Worktree {
+  const worktreeId = makeRepoWorktreeKey(repo, gitWorktree.path)
+  const meta = getWorktreeMetaForSpaceScan(repo, repos, gitWorktree.path, store, worktreeId)
+  return mergeWorktree(repo.id, gitWorktree, meta, repo.displayName, {
+    hostId: getRepoExecutionHostId(repo)
+  })
+}
+
+function getWorktreeMetaForSpaceScan(
+  repo: Repo,
+  repos: Repo[],
+  worktreePath: string,
+  store: Store,
+  canonicalId: string
+): ReturnType<Store['getWorktreeMeta']> {
+  const canonicalMeta = store.getWorktreeMeta(canonicalId)
+  if (canonicalMeta) {
+    return canonicalMeta
+  }
+
+  const legacyId = makeLegacyWorktreeId(repo.id, worktreePath)
+  const legacyMeta = store.getWorktreeMeta(legacyId)
+  if (!legacyMeta) {
+    return undefined
+  }
+
+  const repoHostId = getRepoExecutionHostId(repo)
+  if (legacyMeta.hostId !== undefined && legacyMeta.hostId !== repoHostId) {
+    return undefined
+  }
+  if (legacyMeta.hostId === undefined && hasAmbiguousRepoHostForSpaceScan(repos, repo)) {
+    return undefined
+  }
+
+  // Why: space scans are read-heavy, but a safe legacy hit should be upgraded
+  // so future scans do not depend on the unqualified repoId::path key.
+  store.migrateWorktreeIdentity(legacyId, canonicalId)
+  return store.getWorktreeMeta(canonicalId) ?? legacyMeta
+}
+
+function hasAmbiguousRepoHostForSpaceScan(repos: Repo[], repo: Repo): boolean {
+  const hostIds = new Set(
+    repos
+      .filter((candidateRepo) => candidateRepo.id === repo.id)
+      .map((candidateRepo) => getRepoExecutionHostId(candidateRepo))
+  )
+  return hostIds.size > 1
 }
 
 function reportProgress(
@@ -812,6 +863,7 @@ function reportProgress(
 
 async function scanRepo(
   repo: Repo,
+  repos: Repo[],
   scannedAt: number,
   store: Store,
   progress: WorkspaceSpaceProgressState,
@@ -851,7 +903,7 @@ async function scanRepo(
   }
 
   const worktrees = listed.worktrees.map((gitWorktree) =>
-    mergeForSpaceScan(repo, gitWorktree, store)
+    mergeForSpaceScan(repo, repos, gitWorktree, store)
   )
   reportProgress(
     progress,
@@ -935,7 +987,7 @@ export async function analyzeWorkspaceSpace(
   }
   options.onProgress?.({ ...progress })
   const repoResults = await mapLimit(reposToScan, 2, (repo) =>
-    scanRepo(repo, scannedAt, store, progress, options)
+    scanRepo(repo, reposToScan, scannedAt, store, progress, options)
   )
   throwIfAborted(options.signal)
   const repos = repoResults.map((result) => result.summary)

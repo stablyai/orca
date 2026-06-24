@@ -4,6 +4,7 @@ import {
   deriveNeededSectionIds,
   getRuntimeTargetIdentity
 } from './settings-load-performance'
+import { getRepoSettingsSectionId } from '@/lib/repo-settings-section-id'
 
 describe('Settings load-performance helpers', () => {
   it('keeps only eager and active sections mounted for empty search on first paint', () => {
@@ -68,12 +69,23 @@ describe('Settings load-performance helpers', () => {
   })
 
   it('scopes repo hook checks to needed repo sections only', () => {
+    const targetRepo = { id: 'b' }
     const neededRepoIds = deriveNeededRepoIds(
-      [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
-      new Set(['general', 'repo-b'])
+      [{ id: 'a' }, targetRepo, { id: 'c' }],
+      new Set(['general', getRepoSettingsSectionId(targetRepo)])
     )
 
     expect(neededRepoIds).toEqual(['b'])
+  })
+
+  it('distinguishes same-id repo sections by host', () => {
+    const localRepo = { id: 'same-repo' }
+    const remoteRepo = { id: 'same-repo', connectionId: 'gpu-vm' }
+
+    expect(
+      deriveNeededRepoIds([localRepo, remoteRepo], new Set([getRepoSettingsSectionId(remoteRepo)]))
+    ).toEqual(['same-repo'])
+    expect(getRepoSettingsSectionId(localRepo)).not.toBe(getRepoSettingsSectionId(remoteRepo))
   })
 
   it('normalizes runtime target identity for cache invalidation keys', () => {

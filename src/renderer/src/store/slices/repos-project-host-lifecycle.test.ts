@@ -10,6 +10,7 @@ import { createTestStore } from './store-test-helpers'
 const projectsCreateHostSetup = vi.fn()
 const projectsUpdateHostSetup = vi.fn()
 const projectsDeleteHostSetup = vi.fn()
+const projectsSetupExistingFolder = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
 
@@ -49,6 +50,7 @@ beforeEach(() => {
   projectsCreateHostSetup.mockReset()
   projectsUpdateHostSetup.mockReset()
   projectsDeleteHostSetup.mockReset()
+  projectsSetupExistingFolder.mockReset()
   runtimeEnvironmentCall.mockReset()
   runtimeEnvironmentTransportCall.mockReset()
   runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
@@ -62,7 +64,8 @@ beforeEach(() => {
       projects: {
         createHostSetup: projectsCreateHostSetup,
         updateHostSetup: projectsUpdateHostSetup,
-        deleteHostSetup: projectsDeleteHostSetup
+        deleteHostSetup: projectsDeleteHostSetup,
+        setupExistingFolder: projectsSetupExistingFolder
       },
       runtimeEnvironments: { call: runtimeEnvironmentTransportCall }
     }
@@ -141,6 +144,58 @@ describe('repo slice project host setup lifecycle', () => {
     })
   })
 
+  it('updates same-id project host setup through the requested host', async () => {
+    const localSetup: ProjectHostSetup = {
+      ...runtimeSetup,
+      hostId: 'local',
+      displayName: 'Local'
+    }
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-update-setup',
+      ok: true,
+      result: {
+        result: {
+          project,
+          setup: { ...runtimeSetup, displayName: 'GPU VM renamed' }
+        }
+      },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const store = createTestStore()
+    store.setState({
+      projectHostSetups: [localSetup, runtimeSetup],
+      settings: { activeRuntimeEnvironmentId: null } as never
+    })
+
+    await expect(
+      store.getState().updateProjectHostSetup({
+        setupId: runtimeSetup.id,
+        hostId: runtimeSetup.hostId,
+        updates: { displayName: 'GPU VM renamed' }
+      })
+    ).resolves.toEqual({
+      project,
+      setup: { ...runtimeSetup, displayName: 'GPU VM renamed' },
+      repo: undefined
+    })
+
+    expect(projectsUpdateHostSetup).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'projectHostSetup.update',
+      params: {
+        setupId: runtimeSetup.id,
+        hostId: runtimeSetup.hostId,
+        updates: { displayName: 'GPU VM renamed' }
+      },
+      timeoutMs: 15_000
+    })
+    expect(store.getState().projectHostSetups).toEqual([
+      localSetup,
+      { ...runtimeSetup, displayName: 'GPU VM renamed' }
+    ])
+  })
+
   it('deletes runtime-owned project host setups through their owning runtime', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-delete-setup',
@@ -169,6 +224,106 @@ describe('repo slice project host setup lifecycle', () => {
       selector: 'env-1',
       method: 'projectHostSetup.delete',
       params: { setupId: runtimeSetup.id },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('deletes same-id project host setup through the requested host', async () => {
+    const localSetup: ProjectHostSetup = {
+      ...runtimeSetup,
+      hostId: 'local',
+      displayName: 'Local'
+    }
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-delete-setup',
+      ok: true,
+      result: { result: { project, setup: runtimeSetup } },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const store = createTestStore()
+    store.setState({
+      projects: [project],
+      projectHostSetups: [localSetup, runtimeSetup],
+      settings: { activeRuntimeEnvironmentId: null } as never
+    })
+
+    await expect(
+      store.getState().deleteProjectHostSetup({
+        setupId: runtimeSetup.id,
+        hostId: runtimeSetup.hostId
+      })
+    ).resolves.toEqual({
+      project,
+      setup: runtimeSetup,
+      repo: undefined
+    })
+
+    expect(projectsDeleteHostSetup).not.toHaveBeenCalled()
+    expect(store.getState().projectHostSetups).toEqual([localSetup])
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'projectHostSetup.delete',
+      params: {
+        setupId: runtimeSetup.id,
+        hostId: runtimeSetup.hostId
+      },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('keeps same-id setup metadata on other hosts when setting up an existing folder', async () => {
+    const localSetup: ProjectHostSetup = {
+      ...runtimeSetup,
+      hostId: 'local',
+      displayName: 'Local'
+    }
+    const completedRuntimeSetup: ProjectHostSetup = {
+      ...runtimeSetup,
+      displayName: 'GPU VM connected',
+      repoId: runtimeRepo.id
+    }
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-setup-existing-folder',
+      ok: true,
+      result: {
+        result: {
+          project,
+          repo: runtimeRepo,
+          setup: completedRuntimeSetup
+        }
+      },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const store = createTestStore()
+    store.setState({
+      projects: [project],
+      repos: [],
+      projectHostSetups: [localSetup, runtimeSetup],
+      settings: { activeRuntimeEnvironmentId: null } as never
+    })
+
+    await expect(
+      store.getState().setupProjectExistingFolder({
+        projectId: project.id,
+        hostId: runtimeSetup.hostId,
+        path: runtimeRepo.path
+      })
+    ).resolves.toEqual({
+      project,
+      repo: runtimeRepo,
+      setup: completedRuntimeSetup
+    })
+
+    expect(store.getState().projectHostSetups).toEqual([localSetup, completedRuntimeSetup])
+    expect(projectsSetupExistingFolder).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'projectHostSetup.setupExistingFolder',
+      params: {
+        projectId: project.id,
+        hostId: runtimeSetup.hostId,
+        path: runtimeRepo.path
+      },
       timeoutMs: 15_000
     })
   })

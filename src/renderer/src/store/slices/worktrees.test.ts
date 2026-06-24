@@ -83,7 +83,7 @@ const mockApi = {
 // @ts-expect-error -- test shim
 globalThis.window = { api: mockApi }
 
-import { createWorktreeSlice } from './worktrees'
+import { createWorktreeSlice, WORKTREE_ID_KEYED_MAP_KEYS } from './worktrees'
 import type { PendingWorktreeCreation } from '@/lib/pending-worktree-creation'
 import { getHostedReviewCacheKey } from './hosted-review'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
@@ -93,6 +93,7 @@ import {
 } from '../../components/browser-pane/webview-registry'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { makeWorktreeKey } from '../../../../shared/worktree-id'
 
 function resetRemoteRuntimeMocks() {
   clearRuntimeCompatibilityCacheForTests()
@@ -132,6 +133,7 @@ function createTestStore() {
         expandedDirs: {},
         gitStatusByWorktree: {},
         gitStatusHeadByWorktree: {},
+        gitStatusHugeByWorktree: {},
         gitIgnoredPathsByWorktree: {},
         gitConflictOperationByWorktree: {},
         trackedConflictPathsByWorktree: {},
@@ -143,6 +145,8 @@ function createTestStore() {
         activeBrowserTabIdByWorktree: {},
         browserTabsByWorktree: {},
         recentlyClosedBrowserTabsByWorktree: {},
+        recentlyClosedEditorTabsByWorktree: {},
+        remoteStatusesByWorktree: {},
         activeTabTypeByWorktree: {},
         rightSidebarTab: 'explorer' as const,
         rightSidebarTabByWorktree: {},
@@ -421,6 +425,7 @@ describe('fetchWorktrees', () => {
   it('keeps the last known worktree list when a refresh transiently returns empty', async () => {
     const store = createTestStore()
     const existing = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    const previousDetected = makeDetectedResult('repo1', [existing])
 
     mockApi.worktrees.listDetected.mockResolvedValueOnce(
       makeDetectedResult('repo1', [], {
@@ -428,11 +433,18 @@ describe('fetchWorktrees', () => {
         source: 'metadata-fallback'
       })
     )
-    store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
+    store.setState({
+      worktreesByRepo: { repo1: [existing] },
+      detectedWorktreesByRepo: { repo1: previousDetected },
+      sortEpoch: 7
+    } as Partial<AppState>)
 
     const result = await store.getState().fetchWorktrees('repo1')
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([existing])
+    expect(store.getState().detectedWorktreesByRepo.repo1.worktrees).toEqual(
+      previousDetected.worktrees
+    )
     expect(store.getState().sortEpoch).toBe(7)
     expect(result).toBe(false)
   })
@@ -752,7 +764,10 @@ describe('fetchWorktrees', () => {
 
     await store.getState().fetchWorktrees('repo-ssh')
 
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({ repoId: 'repo-ssh' })
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({
+      repoId: 'repo-ssh',
+      hostId: 'ssh:ssh-1'
+    })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     // Why: SSH worktrees are fetched via local IPC but belong to the SSH host;
     // they must carry the repo's ssh host id, not the local default.
@@ -1724,6 +1739,66 @@ describe('createWorktree base status merge', () => {
     })
   })
 
+  it('passes the owner host through local create IPC payloads', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1'
+    })
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/path/repo1',
+          displayName: 'repo1',
+          badgeColor: '#000',
+          addedAt: 0
+        }
+      ]
+    } as Partial<AppState>)
+    mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
+
+    await store
+      .getState()
+      .createWorktree(
+        'repo1',
+        'feature',
+        'origin/main',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { ownerHostId: 'local' }
+      )
+
+    expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoId: 'repo1',
+        name: 'feature',
+        hostId: 'local'
+      })
+    )
+  })
+
   it('stamps the owning runtime host onto worktrees created on a remote runtime', async () => {
     const store = createTestStore()
     const created = makeWorktree({
@@ -1761,6 +1836,29 @@ describe('createWorktree base status merge', () => {
     expect(store.getState().worktreesByRepo['repo-remote']?.[0]).toEqual({
       ...created,
       hostId: 'runtime:env-1'
+    })
+  })
+
+  it('passes the owner host through local detected-list refreshes', async () => {
+    const store = createTestStore()
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/path/repo1',
+          displayName: 'repo1',
+          badgeColor: '#000',
+          addedAt: 0
+        }
+      ]
+    } as Partial<AppState>)
+    mockApi.worktrees.listDetected.mockResolvedValueOnce(makeDetectedResult('repo1', []))
+
+    await store.getState().fetchWorktrees('repo1', { ownerHostId: 'local' })
+
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({
+      repoId: 'repo1',
+      hostId: 'local'
     })
   })
 
@@ -2881,6 +2979,57 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo.repo1[0]?.comment).toBe('remote note')
+  })
+
+  it('refreshes the owner host when remote metadata persistence loses the selector', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      hostId: 'runtime:env-1'
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: null } as never,
+      repos: [
+        {
+          id: 'repo1',
+          path: '/local/repo1',
+          displayName: 'repo1',
+          badgeColor: '#000',
+          addedAt: 0
+        },
+        {
+          id: 'repo1',
+          path: '/remote/repo1',
+          displayName: 'repo1',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'runtime:env-1'
+        }
+      ],
+      worktreesByRepo: { repo1: [wt] }
+    } as Partial<AppState>)
+    runtimeEnvironmentCall
+      .mockRejectedValueOnce(new Error('runtime_selector_not_found'))
+      .mockResolvedValueOnce({
+        id: 'rpc-refresh',
+        ok: true,
+        result: makeDetectedResult('repo1', [wt]),
+        _meta: { runtimeId: 'runtime-remote' }
+      })
+
+    await store.getState().updateWorktreeMeta(wt.id, { comment: 'remote note' })
+    await Promise.resolve()
+
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'worktree.detectedList'
+      })
+    )
+    expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
   })
 
   it('persists SSH-owned worktree metadata through local IPC even when a runtime is focused', async () => {
@@ -4359,7 +4508,10 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
         expect.objectContaining({ id: refreshedRemoteWorktree.id, hostId: 'runtime:env-1' })
       ])
     )
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({ repoId: 'same-repo' })
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({
+      repoId: 'same-repo',
+      hostId: 'local'
+    })
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'worktree.detectedList',
@@ -5001,6 +5153,80 @@ describe('setWorktreesPinnedAndReveal', () => {
 describe('migrateWorktreeIdentity', () => {
   const OLD = 'repo1::/ws/cunner'
   const NEW = 'repo1::/ws/worktree-creation-spinner'
+  const CANONICAL = makeWorktreeKey({ hostId: 'local', repoId: 'repo1', path: '/ws/cunner' })
+  const WORKTREE_ID_VALUE_MIGRATED_KEYS = new Set([
+    'browserPagesByWorkspace',
+    'recentlyClosedBrowserPagesByWorkspace',
+    'sleepingAgentSessionsByPaneKey'
+  ])
+
+  function makeMigrationMapValue(
+    key: (typeof WORKTREE_ID_KEYED_MAP_KEYS)[number],
+    worktreeId: string
+  ): unknown {
+    switch (key) {
+      case 'worktreeLineageById':
+        return makeLineage({ worktreeId, parentWorktreeId: 'repo1::/ws/parent' })
+      case 'tabsByWorktree':
+        return [{ id: 'tab1', worktreeId }]
+      case 'browserTabsByWorktree':
+        return [{ id: 'browser1', worktreeId }]
+      case 'recentlyClosedBrowserTabsByWorktree':
+        return [
+          {
+            workspace: { id: 'closed-browser', worktreeId },
+            pages: [{ id: 'closed-page', worktreeId }]
+          }
+        ]
+      case 'unifiedTabsByWorktree':
+        return [{ id: 'unified1', worktreeId }]
+      case 'groupsByWorktree':
+        return [{ id: 'group1', worktreeId }]
+      case 'recentlyClosedEditorTabsByWorktree':
+        return [{ id: 'file1', worktreeId }]
+      case 'deleteStateByWorktreeId':
+      case 'baseStatusByWorktreeId':
+      case 'remoteBranchConflictByWorktreeId':
+      case 'fileSearchStateByWorktree':
+      case 'activeBrowserTabIdByWorktree':
+      case 'activeFileIdByWorktree':
+      case 'activeTabTypeByWorktree':
+      case 'activeTabIdByWorktree':
+      case 'tabBarOrderByWorktree':
+      case 'pendingReconnectTabByWorktree':
+      case 'rightSidebarTabByWorktree':
+      case 'rightSidebarExplorerViewByWorktree':
+      case 'layoutByWorktree':
+      case 'activeGroupIdByWorktree':
+      case 'gitStatusByWorktree':
+      case 'gitStatusHeadByWorktree':
+      case 'gitStatusHugeByWorktree':
+      case 'gitIgnoredPathsByWorktree':
+      case 'gitConflictOperationByWorktree':
+      case 'trackedConflictPathsByWorktree':
+      case 'gitBranchChangesByWorktree':
+      case 'gitBranchCompareSummaryByWorktree':
+      case 'gitBranchCompareRequestKeyByWorktree':
+      case 'gitBranchCompareRequestStatusHeadByWorktree':
+      case 'remoteStatusesByWorktree':
+      case 'showDotfilesByWorktree':
+      case 'expandedDirs':
+      case 'lastVisitedAtByWorktreeId':
+      case 'defaultTerminalTabsAppliedByWorktreeId':
+        return { marker: key }
+    }
+  }
+
+  it('keeps the worktree-id keyed map list in sync with store fields', () => {
+    const declared = new Set<keyof AppState>(WORKTREE_ID_KEYED_MAP_KEYS)
+    const state = createTestStore().getState()
+    const uncovered = Object.keys(state)
+      .filter((key) => key.includes('ByWorktree'))
+      .filter((key) => !declared.has(key as keyof AppState))
+      .filter((key) => !WORKTREE_ID_VALUE_MIGRATED_KEYS.has(key))
+
+    expect(uncovered).toEqual([])
+  })
 
   it('re-keys worktree-scoped maps, pointers, the Set, and openFiles old->new', () => {
     const store = createTestStore()
@@ -5023,6 +5249,7 @@ describe('migrateWorktreeIdentity', () => {
       groupsByWorktree: { [OLD]: [{ id: 'group1', worktreeId: OLD }] },
       gitStatusByWorktree: { [OLD]: [{ path: 'a.ts' }] },
       gitStatusHeadByWorktree: { [OLD]: 'head-old' },
+      gitStatusHugeByWorktree: { [OLD]: { limit: 10_000 } },
       gitBranchCompareRequestStatusHeadByWorktree: { [OLD]: 'head-old' },
       lastVisitedAtByWorktreeId: { [OLD]: 123 },
       defaultTerminalTabsAppliedByWorktreeId: { [OLD]: true },
@@ -5066,12 +5293,12 @@ describe('migrateWorktreeIdentity', () => {
     expect(s.groupsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
     expect(s.gitStatusByWorktree[NEW]).toEqual([{ path: 'a.ts' }])
     expect(s.gitStatusHeadByWorktree[NEW]).toBe('head-old')
+    expect(s.gitStatusHugeByWorktree[NEW]).toEqual({ limit: 10_000 })
     expect(s.gitBranchCompareRequestStatusHeadByWorktree[NEW]).toBe('head-old')
     expect(s.rightSidebarExplorerViewByWorktree[OLD]).toBeUndefined()
     expect(s.rightSidebarExplorerViewByWorktree[NEW]).toBe('search')
     expect(s.lastVisitedAtByWorktreeId[NEW]).toBe(123)
     expect(s.defaultTerminalTabsAppliedByWorktreeId[NEW]).toBe(true)
-    // The two maps absent from the purge list are still re-keyed.
     expect(s.recentlyClosedEditorTabsByWorktree[NEW]).toEqual([{ id: 'f1', worktreeId: NEW }])
     expect(s.remoteStatusesByWorktree[NEW]).toEqual({ ahead: 1 })
     expect(s.everActivatedWorktreeIds.has(NEW)).toBe(true)
@@ -5081,6 +5308,50 @@ describe('migrateWorktreeIdentity', () => {
     expect(s.sleepingAgentSessionsByPaneKey['tab1:leaf']?.worktreeId).toBe(NEW)
     // Tab-id-keyed state is untouched — the tab survives with the same id.
     expect(s.terminalLayoutsByTabId.tab1).toBeDefined()
+  })
+
+  it('moves every declared worktree-id keyed map and lineage relationship to the canonical id', () => {
+    const store = createTestStore()
+    const childId = 'repo1::/ws/child'
+    const mapState = Object.fromEntries(
+      WORKTREE_ID_KEYED_MAP_KEYS.map((key) => [key, { [OLD]: makeMigrationMapValue(key, OLD) }])
+    ) as Partial<AppState>
+
+    store.setState({
+      ...mapState,
+      worktreeLineageById: {
+        [OLD]: makeLineage({ worktreeId: OLD, parentWorktreeId: 'repo1::/ws/parent' }),
+        [childId]: makeLineage({ worktreeId: childId, parentWorktreeId: OLD })
+      },
+      workspaceLineageByChildKey: {
+        [worktreeWorkspaceKey(OLD)]: makeWorkspaceLineage({
+          childWorkspaceKey: worktreeWorkspaceKey(OLD),
+          parentWorkspaceKey: folderWorkspaceKey('folder-parent')
+        }),
+        [worktreeWorkspaceKey(childId)]: makeWorkspaceLineage({
+          childWorkspaceKey: worktreeWorkspaceKey(childId),
+          parentWorkspaceKey: worktreeWorkspaceKey(OLD)
+        })
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().migrateWorktreeIdentity(OLD, CANONICAL)
+    const s = store.getState()
+
+    for (const key of WORKTREE_ID_KEYED_MAP_KEYS) {
+      const map = s[key] as Record<string, unknown>
+      expect(map[OLD], `${key} retained the legacy key`).toBeUndefined()
+      expect(map[CANONICAL], `${key} did not receive the canonical key`).toBeDefined()
+    }
+    expect(s.worktreeLineageById[CANONICAL]).toMatchObject({ worktreeId: CANONICAL })
+    expect(s.worktreeLineageById[childId]).toMatchObject({ parentWorktreeId: CANONICAL })
+    expect(s.workspaceLineageByChildKey[worktreeWorkspaceKey(OLD)]).toBeUndefined()
+    expect(s.workspaceLineageByChildKey[worktreeWorkspaceKey(CANONICAL)]).toMatchObject({
+      childWorkspaceKey: worktreeWorkspaceKey(CANONICAL)
+    })
+    expect(s.workspaceLineageByChildKey[worktreeWorkspaceKey(childId)]).toMatchObject({
+      parentWorkspaceKey: worktreeWorkspaceKey(CANONICAL)
+    })
   })
 
   it('is a no-op when the ids match', () => {

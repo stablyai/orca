@@ -5,6 +5,7 @@ import { homedir } from 'os'
 import { isAbsolute, join, posix, win32 } from 'path'
 import type { Repo } from '../../shared/types'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
+import { getUsageRepoKey } from '../usage-worktree-metadata'
 import Database from '../sqlite/sync-database'
 import { columnExists, tableExists } from './schema-helpers'
 import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
@@ -909,7 +910,7 @@ export function createWorktreeRefs(
 ): OpenCodeUsageWorktreeRef[] {
   const refs: OpenCodeUsageWorktreeRef[] = []
   for (const repo of repos) {
-    for (const worktree of worktreesByRepo.get(repo.id) ?? []) {
+    for (const worktree of worktreesByRepo.get(getUsageRepoKey(repo)) ?? []) {
       refs.push({
         repoId: repo.id,
         worktreeId: worktree.worktreeId,

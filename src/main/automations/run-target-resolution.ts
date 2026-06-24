@@ -51,8 +51,22 @@ export function resolveAutomationRunTarget(
 
   const setup = store
     .getProjectHostSetups()
-    .find((candidate) => candidate.id === context.projectHostSetupId)
+    .find(
+      (candidate) =>
+        candidate.id === context.projectHostSetupId &&
+        candidate.projectId === context.projectId &&
+        candidate.hostId === context.hostId &&
+        candidate.repoId === context.repoId
+    )
   if (!setup) {
+    if (
+      store.getProjectHostSetups().some((candidate) => candidate.id === context.projectHostSetupId)
+    ) {
+      return {
+        ok: false,
+        error: 'Automation run target no longer matches the selected project host setup.'
+      }
+    }
     return {
       ok: false,
       error: 'Project is not set up on the selected automation host anymore.'
@@ -75,7 +89,12 @@ export function resolveAutomationRunTarget(
     }
   }
 
-  const repo = store.getRepo(context.repoId)
+  const repo = store
+    .getRepos()
+    .find(
+      (candidate) =>
+        candidate.id === context.repoId && getRepoExecutionHostId(candidate) === context.hostId
+    )
   if (!repo) {
     return {
       ok: false,

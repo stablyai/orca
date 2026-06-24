@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { makeWorktreeKey } from '../../shared/worktree-id'
 
 const {
   handleMock,
@@ -147,7 +148,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     getSettings: vi.fn(),
     getWorktreeMeta: vi.fn(),
     setWorktreeMeta: vi.fn(),
-    removeWorktreeMeta: vi.fn()
+    removeWorktreeMeta: vi.fn(),
+    migrateWorktreeIdentity: vi.fn()
   }
 
   beforeEach(() => {
@@ -187,6 +189,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     store.getWorktreeMeta.mockReset()
     store.setWorktreeMeta.mockReset()
     store.removeWorktreeMeta.mockReset()
+    store.migrateWorktreeIdentity.mockReset()
 
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
@@ -260,6 +263,11 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
   })
 
   it('accepts a newly created Windows worktree when git lists the same path with different separators', async () => {
+    const worktreeId = makeWorktreeKey({
+      hostId: 'local',
+      repoId: 'repo-1',
+      path: 'C:/workspaces/improve-dashboard'
+    })
     listWorktreesMock.mockResolvedValue([
       {
         path: 'C:/workspaces/improve-dashboard',
@@ -283,14 +291,14 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       false
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::C:/workspaces/improve-dashboard',
+      worktreeId,
       expect.objectContaining({
         lastActivityAt: expect.any(Number)
       })
     )
     expect(result).toMatchObject({
       worktree: expect.objectContaining({
-        id: 'repo-1::C:/workspaces/improve-dashboard',
+        id: worktreeId,
         path: 'C:/workspaces/improve-dashboard',
         branch: 'refs/heads/improve-dashboard'
       })
@@ -298,6 +306,11 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
   })
 
   it('preserves create-time metadata on the next list when Windows path formatting differs', async () => {
+    const worktreeId = makeWorktreeKey({
+      hostId: 'local',
+      repoId: 'repo-1',
+      path: 'C:/workspaces/improve-dashboard'
+    })
     const worktreeEntry = {
       path: 'C:/workspaces/improve-dashboard',
       head: 'abc123',
@@ -314,8 +327,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       linkedIssue: 123,
       linkedPR: 456
     })
-    store.getWorktreeMeta.mockImplementation((worktreeId: string) =>
-      worktreeId === 'repo-1::C:/workspaces/improve-dashboard'
+    store.getWorktreeMeta.mockImplementation((id: string) =>
+      id === worktreeId
         ? {
             lastActivityAt: 123,
             displayName: 'Improve Dashboard',
@@ -337,7 +350,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
 
     expect(listed).toMatchObject([
       {
-        id: 'repo-1::C:/workspaces/improve-dashboard',
+        id: worktreeId,
         displayName: 'Improve Dashboard',
         linkedIssue: 123,
         linkedPR: 456,

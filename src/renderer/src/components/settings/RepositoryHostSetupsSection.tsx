@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { getExecutionHostLabel } from '../../../../shared/execution-host'
+import { getExecutionHostLabel, getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
-import type { Repo } from '../../../../shared/types'
+import type { ProjectHostSetup, Repo } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { getProjectHostSetupProjectionFromState } from '../../store/selectors'
 import { cn } from '../../lib/utils'
@@ -22,6 +22,11 @@ type RepositoryHostSetupsSectionProps = {
   forceVisible: boolean
   searchQuery: string
   searchEntries: SettingsSearchEntry[]
+}
+
+function getProjectHostSetupKey(setup: Pick<ProjectHostSetup, 'hostId' | 'id'>): string {
+  // Why: setup IDs can repeat across hosts after compatibility merges.
+  return `${setup.hostId}\0${setup.id}`
 }
 
 export function RepositoryHostSetupsSection({
@@ -67,8 +72,9 @@ export function RepositoryHostSetupsSection({
   const projectHostSetupProjection = useAppStore((state) =>
     getProjectHostSetupProjectionFromState(state)
   )
+  const repoHostId = getRepoExecutionHostId(repo)
   const selectedProjectHostSetup = projectHostSetupProjection.setups.find(
-    (setup) => setup.repoId === repo.id
+    (setup) => setup.repoId === repo.id && setup.hostId === repoHostId
   )
   const projectHostSetups = selectedProjectHostSetup
     ? projectHostSetupProjection.setups.filter(
@@ -80,11 +86,14 @@ export function RepositoryHostSetupsSection({
     projectHostSetups,
     hostOptions
   })
+  const selectedProjectHostSetupKey = selectedProjectHostSetup
+    ? getProjectHostSetupKey(selectedProjectHostSetup)
+    : ''
   const hostOptionById = new Map(hostOptions.map((option) => [option.id, option]))
-  const [deletingSetupId, setDeletingSetupId] = useState<string | null>(null)
-  const openSetup = (repoId: string) => {
+  const [deletingSetupKey, setDeletingSetupKey] = useState<string | null>(null)
+  const openSetup = (setup: Pick<ProjectHostSetup, 'repoId' | 'hostId'>) => {
     openSettingsPage()
-    openSettingsTarget({ pane: 'repo', repoId })
+    openSettingsTarget({ pane: 'repo', repoId: setup.repoId, repoHostId: setup.hostId })
   }
 
   if (
@@ -116,26 +125,34 @@ export function RepositoryHostSetupsSection({
                 {translate('auto.components.settings.RepositoryPane.viewingHost', 'Viewing host')}
               </span>
               <Select
-                value={repo.id}
-                onValueChange={(repoId) => {
-                  if (repoId === repo.id) {
+                value={selectedProjectHostSetupKey}
+                onValueChange={(setupKey) => {
+                  if (setupKey === selectedProjectHostSetupKey) {
                     return
                   }
-                  openSetup(repoId)
+                  const nextSetup = openableProjectHostSetups.find(
+                    (setup) => getProjectHostSetupKey(setup) === setupKey
+                  )
+                  if (nextSetup) {
+                    openSetup(nextSetup)
+                  }
                 }}
               >
                 <SelectTrigger className="h-8 w-44 min-w-0 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {openableProjectHostSetups.map((setup) => (
-                    <SelectItem key={setup.id} value={setup.repoId}>
-                      <span className="block min-w-0 truncate">
-                        {hostOptionById.get(setup.hostId)?.label ??
-                          getExecutionHostLabel(setup.hostId)}
-                      </span>
-                    </SelectItem>
-                  ))}
+                  {openableProjectHostSetups.map((setup) => {
+                    const setupKey = getProjectHostSetupKey(setup)
+                    return (
+                      <SelectItem key={setupKey} value={setupKey}>
+                        <span className="block min-w-0 truncate">
+                          {hostOptionById.get(setup.hostId)?.label ??
+                            getExecutionHostLabel(setup.hostId)}
+                        </span>
+                      </SelectItem>
+                    )
+                  })}
                 </SelectContent>
               </Select>
             </div>
@@ -150,12 +167,13 @@ export function RepositoryHostSetupsSection({
       </div>
       <div className="divide-y divide-border rounded-md border border-border">
         {projectHostSetups.map((setup) => {
-          const isCurrentSetup = setup.repoId === repo.id
+          const setupKey = getProjectHostSetupKey(setup)
+          const isCurrentSetup = setup.repoId === repo.id && setup.hostId === repoHostId
           const canOpenSetup = setup.repoId.trim().length > 0
-          const canRemoveSetup = !canOpenSetup && deletingSetupId !== setup.id
+          const canRemoveSetup = !canOpenSetup && deletingSetupKey !== setupKey
           return (
             <div
-              key={setup.id}
+              key={setupKey}
               className={cn(
                 'flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors',
                 isCurrentSetup ? 'bg-muted/30' : ''
@@ -189,7 +207,7 @@ export function RepositoryHostSetupsSection({
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    openSetup(setup.repoId)
+                    openSetup(setup)
                   }}
                 >
                   {translate('auto.components.settings.RepositoryPane.openSetup', 'Open')}
@@ -201,9 +219,12 @@ export function RepositoryHostSetupsSection({
                   variant="outline"
                   size="sm"
                   onClick={async () => {
-                    setDeletingSetupId(setup.id)
-                    await deleteProjectHostSetup({ setupId: setup.id })
-                    setDeletingSetupId(null)
+                    setDeletingSetupKey(setupKey)
+                    try {
+                      await deleteProjectHostSetup({ setupId: setup.id, hostId: setup.hostId })
+                    } finally {
+                      setDeletingSetupKey(null)
+                    }
                   }}
                 >
                   {translate('auto.components.settings.RepositoryPane.removeSetup', 'Remove')}

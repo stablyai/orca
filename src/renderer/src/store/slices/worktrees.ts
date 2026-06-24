@@ -15,6 +15,7 @@ import type {
   RemoveWorktreeResult,
   WorktreeLineage,
   WorkspaceLineage,
+  WorkspaceKey,
   WorktreeMeta
 } from '../../../../shared/types'
 import type { RuntimeWorktreeListResult } from '../../../../shared/runtime-types'
@@ -448,6 +449,11 @@ function mergeDetectedWorktreesForHost(
   hostId: ExecutionHostId,
   options?: WorktreeHostMatchOptions
 ): DetectedWorktreeListResult {
+  if (!refreshed.authoritative && refreshed.worktrees.length === 0 && current) {
+    // Why: a non-authoritative empty scan means the backend could not prove the
+    // host is empty. Preserve cached rows instead of deleting display metadata.
+    return { ...refreshed, worktrees: current.worktrees }
+  }
   const refreshedForHost = refreshed.worktrees.map((worktree) => withRepoHostId(worktree, hostId))
   return {
     ...refreshed,
@@ -791,7 +797,8 @@ function settingsForWorktreeOwner(
 
 async function listDetectedWorktreesForRepo(
   settings: AppState['settings'],
-  repoId: string
+  repoId: string,
+  ownerHostId?: ExecutionHostId
 ): Promise<DetectedWorktreeListResult> {
   const target = getActiveRuntimeTarget(settings)
   if (target.kind === 'local') {
@@ -799,9 +806,12 @@ async function listDetectedWorktreesForRepo(
       listDetected?: typeof window.api.worktrees.listDetected
     }
     if (typeof worktreesApi.listDetected === 'function') {
-      return worktreesApi.listDetected({ repoId })
+      return worktreesApi.listDetected({ repoId, ...(ownerHostId ? { hostId: ownerHostId } : {}) })
     }
-    const legacyWorktrees = await worktreesApi.list({ repoId })
+    const legacyWorktrees = await worktreesApi.list({
+      repoId,
+      ...(ownerHostId ? { hostId: ownerHostId } : {})
+    })
     return toLegacyDetectedWorktreeResult(repoId, { worktrees: legacyWorktrees })
   }
   try {
@@ -1014,6 +1024,18 @@ function getWorktreeHostId(
   }
   const repo = findRepoForHost(state.repos, repoId, { settings: state.settings })
   return repo ? getRepoExecutionHostId(repo) : null
+}
+
+function refreshWorktreeOwner(
+  state: Pick<
+    AppState,
+    'repos' | 'settings' | 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'fetchWorktrees'
+  >,
+  worktreeId: string
+): void {
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  const ownerHostId = getWorktreeHostId(state, worktreeId)
+  void state.fetchWorktrees(repoId, ownerHostId ? { ownerHostId } : undefined)
 }
 
 function mergeLineageForHost(
@@ -1247,7 +1269,7 @@ function encodePushTargetClearForRuntimeRpc(
 // new `*ByWorktree` map is not silently missed when a worktree id changes. Maps keyed
 // by tab id or file id are deliberately NOT here — tabs and files keep their ids across
 // a worktree rename.
-const WORKTREE_ID_KEYED_MAP_KEYS = [
+export const WORKTREE_ID_KEYED_MAP_KEYS = [
   'worktreeLineageById',
   'tabsByWorktree',
   'deleteStateByWorktreeId',
@@ -1270,6 +1292,7 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
   'activeGroupIdByWorktree',
   'gitStatusByWorktree',
   'gitStatusHeadByWorktree',
+  'gitStatusHugeByWorktree',
   'gitIgnoredPathsByWorktree',
   'gitConflictOperationByWorktree',
   'trackedConflictPathsByWorktree',
@@ -1277,11 +1300,43 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
   'gitBranchCompareSummaryByWorktree',
   'gitBranchCompareRequestKeyByWorktree',
   'gitBranchCompareRequestStatusHeadByWorktree',
+  'recentlyClosedEditorTabsByWorktree',
+  'remoteStatusesByWorktree',
   'showDotfilesByWorktree',
   'expandedDirs',
   'lastVisitedAtByWorktreeId',
   'defaultTerminalTabsAppliedByWorktreeId'
 ] as const satisfies readonly (keyof AppState)[]
+
+function migrateWorkspaceLineageForWorktreeIdentity(
+  lineageByChildKey: Record<string, WorkspaceLineage>,
+  oldWorkspaceKey: WorkspaceKey,
+  newWorkspaceKey: WorkspaceKey
+): Record<string, WorkspaceLineage> {
+  let changed = false
+  const next: Record<string, WorkspaceLineage> = {}
+  for (const [childKey, lineage] of Object.entries(lineageByChildKey)) {
+    const nextChildKey = childKey === oldWorkspaceKey ? newWorkspaceKey : childKey
+    const nextLineage =
+      lineage.childWorkspaceKey === oldWorkspaceKey ||
+      lineage.parentWorkspaceKey === oldWorkspaceKey
+        ? {
+            ...lineage,
+            childWorkspaceKey:
+              lineage.childWorkspaceKey === oldWorkspaceKey
+                ? newWorkspaceKey
+                : lineage.childWorkspaceKey,
+            parentWorkspaceKey:
+              lineage.parentWorkspaceKey === oldWorkspaceKey
+                ? newWorkspaceKey
+                : lineage.parentWorkspaceKey
+          }
+        : lineage
+    changed = changed || nextChildKey !== childKey || nextLineage !== lineage
+    next[nextChildKey] = nextLineage
+  }
+  return changed ? next : lineageByChildKey
+}
 
 /**
  * Re-key every worktree-id-keyed map (plus the Set, openFiles[].worktreeId, and
@@ -1301,6 +1356,8 @@ function buildWorktreeRenameState(
   if (oldWorktreeId === newWorktreeId) {
     return {}
   }
+  const oldWorkspaceKey = worktreeWorkspaceKey(oldWorktreeId)
+  const newWorkspaceKey = worktreeWorkspaceKey(newWorktreeId)
   const renamed: Record<string, unknown> = {}
   const renameKey = <T>(
     key: keyof AppState,
@@ -1317,7 +1374,14 @@ function buildWorktreeRenameState(
   }
   const withNewWorktreeId = <T extends { worktreeId: string }>(value: T): T =>
     value.worktreeId === oldWorktreeId ? { ...value, worktreeId: newWorktreeId } : value
+  const withNewLineageWorktreeIds = (lineage: WorktreeLineage): WorktreeLineage => ({
+    ...lineage,
+    worktreeId: lineage.worktreeId === oldWorktreeId ? newWorktreeId : lineage.worktreeId,
+    parentWorktreeId:
+      lineage.parentWorktreeId === oldWorktreeId ? newWorktreeId : lineage.parentWorktreeId
+  })
   const renameValueByKey: Partial<Record<(typeof WORKTREE_ID_KEYED_MAP_KEYS)[number], unknown>> = {
+    worktreeLineageById: withNewLineageWorktreeIds,
     tabsByWorktree: (tabs: { worktreeId: string }[]) => tabs.map(withNewWorktreeId),
     browserTabsByWorktree: (workspaces: { worktreeId: string }[]) =>
       workspaces.map(withNewWorktreeId),
@@ -1330,19 +1394,35 @@ function buildWorktreeRenameState(
         pages: snapshot.pages.map(withNewWorktreeId)
       })),
     unifiedTabsByWorktree: (tabs: { worktreeId: string }[]) => tabs.map(withNewWorktreeId),
-    groupsByWorktree: (groups: { worktreeId: string }[]) => groups.map(withNewWorktreeId)
+    groupsByWorktree: (groups: { worktreeId: string }[]) => groups.map(withNewWorktreeId),
+    recentlyClosedEditorTabsByWorktree: (files: { worktreeId: string }[]) =>
+      files.map(withNewWorktreeId)
   }
   for (const key of WORKTREE_ID_KEYED_MAP_KEYS) {
     renameKey(key, renameValueByKey[key] as ((value: unknown) => unknown) | undefined)
   }
-  // Re-key these on rename so a renamed worktree keeps its editor-undo + push/pull
-  // state. (Both removal paths — buildWorktreePurgeState and the single
-  // removeWorktree reducer — now also purge them on removal.)
-  renameKey('recentlyClosedEditorTabsByWorktree', (files: { worktreeId: string }[]) =>
-    files.map(withNewWorktreeId)
+  const currentLineage =
+    (renamed.worktreeLineageById as Record<string, WorktreeLineage> | undefined) ??
+    s.worktreeLineageById
+  const lineageWithUpdatedParents = Object.values(currentLineage).some(
+    (lineage) => lineage.worktreeId === oldWorktreeId || lineage.parentWorktreeId === oldWorktreeId
   )
-  renameKey('remoteStatusesByWorktree')
-
+    ? Object.fromEntries(
+        Object.entries(currentLineage).map(([worktreeId, lineage]) => [
+          worktreeId,
+          withNewLineageWorktreeIds(lineage)
+        ])
+      )
+    : currentLineage
+  if (lineageWithUpdatedParents !== s.worktreeLineageById) {
+    renamed.worktreeLineageById = lineageWithUpdatedParents
+  }
+  const currentWorkspaceLineage = s.workspaceLineageByChildKey ?? {}
+  const workspaceLineageByChildKey = migrateWorkspaceLineageForWorktreeIdentity(
+    currentWorkspaceLineage,
+    oldWorkspaceKey,
+    newWorkspaceKey
+  )
   const openFiles = s.openFiles?.some((f) => f.worktreeId === oldWorktreeId)
     ? s.openFiles.map((f) =>
         f.worktreeId === oldWorktreeId ? { ...f, worktreeId: newWorktreeId } : f
@@ -1406,6 +1486,9 @@ function buildWorktreeRenameState(
       : {}),
     ...(sleepingAgentSessionsByPaneKey !== s.sleepingAgentSessionsByPaneKey
       ? { sleepingAgentSessionsByPaneKey }
+      : {}),
+    ...(workspaceLineageByChildKey !== currentWorkspaceLineage
+      ? { workspaceLineageByChildKey }
       : {}),
     ...(s.activeWorktreeId === oldWorktreeId ? { activeWorktreeId: newWorktreeId } : {}),
     // The active workspace key derives from the worktree id, so keep it in sync when the active worktree is renamed.
@@ -1691,7 +1774,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
   fetchDetectedWorktrees: async (repoId) => {
     try {
-      const result = await listDetectedWorktreesForRepo(settingsForRepoOwner(get(), repoId), repoId)
+      const hostId = repoHostId(get(), repoId)
+      const result = await listDetectedWorktreesForRepo(
+        settingsForRepoOwner(get(), repoId, hostId),
+        repoId,
+        hostId
+      )
       set((s) =>
         areDetectedWorktreeResultsEqual(s.detectedWorktreesByRepo[repoId], result)
           ? s
@@ -1707,9 +1795,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   fetchWorktrees: async (repoId, options) => {
     try {
       const ownerState = get()
-      const hostId = repoHostId(ownerState, repoId)
+      const hostId = repoHostId(ownerState, repoId, options?.ownerHostId)
       const settings = settingsForRepoOwner(ownerState, repoId, hostId)
-      const detected = await listDetectedWorktreesForRepo(settings, repoId)
+      const detected = await listDetectedWorktreesForRepo(settings, repoId, hostId)
       if (options?.requireAuthoritative && !detected.authoritative) {
         return false
       }
@@ -1834,7 +1922,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       await mapReposForWorktreeRefresh(repos, async (r) => {
         const hostId = getRepoExecutionHostId(r)
         const settings = settingsForKnownRepoOwner(get().settings, r)
-        const detected = await listDetectedWorktreesForRepo(settings, r.id)
+        const detected = await listDetectedWorktreesForRepo(settings, r.id, hostId)
         const worktrees = toVisibleWorktrees(detected, hostId)
         set((s) => {
           const matchOptions = worktreeHostMatchOptions(s, r.id, hostId)
@@ -1892,7 +1980,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           const hostId = getRepoExecutionHostId(r)
           const detected = await listDetectedWorktreesForRepo(
             settingsForKnownRepoOwner(get().settings, r),
-            r.id
+            r.id,
+            hostId
           )
           const list = toVisibleWorktrees(detected, hostId)
           const current = get().worktreesByRepo[r.id]
@@ -2194,9 +2283,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(linkedGiteaPR !== undefined ? { linkedGiteaPR } : {}),
             ...(startup ? { startup } : {}),
             ...(creationId ? { creationId } : {}),
+            ...(options?.ownerHostId ? { hostId: options.ownerHostId } : {}),
             ...(automationProvenanceRequest ? { automationProvenanceRequest } : {})
           }
-          const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId))
+          const ownerHostId = options?.ownerHostId
+          const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId, ownerHostId))
           const result =
             target.kind === 'local'
               ? await window.api.worktrees.create(createArgs)
@@ -2258,7 +2349,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           // then produces a duplicate entry in worktreesByRepo, which gives
           // React duplicate keys and can corrupt terminal DOM containers.
           set((s) => {
-            const createdWorktree = withRepoHostId(result.worktree, repoHostId(s, repoId))
+            const createdWorktree = withRepoHostId(
+              result.worktree,
+              repoHostId(s, repoId, ownerHostId)
+            )
             const current = s.worktreesByRepo[repoId] ?? []
             const alreadyPresent = current.some((w) => w.id === createdWorktree.id)
             const nextWorktrees = alreadyPresent
@@ -3002,11 +3096,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       }
     } catch (err) {
       if (isRuntimeSelectorNotFoundError(err)) {
-        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+        refreshWorktreeOwner(get(), worktreeId)
         return
       }
       console.error('Failed to update worktree meta:', err)
-      void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+      refreshWorktreeOwner(get(), worktreeId)
     }
   },
 
@@ -3080,11 +3174,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           )
         } catch (err) {
           if (isRuntimeSelectorNotFoundError(err)) {
-            void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+            refreshWorktreeOwner(get(), worktreeId)
             return
           }
           console.error('Failed to update worktree meta:', err)
-          void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+          refreshWorktreeOwner(get(), worktreeId)
         }
       })
     )
@@ -3165,11 +3259,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       lastActivityAt: now
     }).catch((err) => {
       if (isRuntimeSelectorNotFoundError(err)) {
-        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+        refreshWorktreeOwner(get(), worktreeId)
         return
       }
       console.error('Failed to persist unread worktree state:', err)
-      void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+      refreshWorktreeOwner(get(), worktreeId)
     })
   },
 
@@ -3275,11 +3369,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       isUnread: false
     }).catch((err) => {
       if (isRuntimeSelectorNotFoundError(err)) {
-        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+        refreshWorktreeOwner(get(), worktreeId)
         return
       }
       console.error('Failed to persist cleared unread worktree state:', err)
-      void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+      refreshWorktreeOwner(get(), worktreeId)
     })
   },
 
@@ -3336,7 +3430,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         return
       }
       console.error('Failed to persist worktree activity timestamp:', err)
-      void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+      refreshWorktreeOwner(get(), worktreeId)
     })
   },
 
@@ -3758,11 +3852,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         updates
       ).catch((err) => {
         if (isRuntimeSelectorNotFoundError(err)) {
-          void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+          refreshWorktreeOwner(get(), worktreeId)
           return
         }
         console.error('Failed to persist worktree activation state:', err)
-        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+        refreshWorktreeOwner(get(), worktreeId)
       })
     }
   },

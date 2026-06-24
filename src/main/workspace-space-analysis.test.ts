@@ -3,7 +3,8 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../shared/types'
+import type { Repo, WorktreeMeta } from '../shared/types'
+import { makeLegacyWorktreeId, makeRepoWorktreeKey } from '../shared/worktree-id'
 import type { Store } from './persistence'
 
 const { listRepoWorktreesMock, getSshFilesystemProviderMock, getSshGitProviderMock } = vi.hoisted(
@@ -122,6 +123,163 @@ describe('analyzeWorkspaceSpace', () => {
     expect(feature?.reclaimableBytes).toBe(feature?.sizeBytes)
     expect(feature?.topLevelItems[0]?.name).toBe('node_modules')
     expect(result.reclaimableBytes).toBe(feature?.sizeBytes)
+  })
+
+  it('migrates safe legacy worktree metadata during space scans', async () => {
+    const root = tempDir!
+    const repoPath = join(root, 'repo')
+    const featurePath = join(root, 'feature')
+    await mkdir(featurePath, { recursive: true })
+    await writeSizedFile(join(featurePath, 'feature.ts'), 512)
+
+    const repo: Repo = {
+      id: 'repo-1',
+      path: repoPath,
+      displayName: 'orca',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const legacyId = makeLegacyWorktreeId(repo.id, featurePath)
+    const canonicalId = makeRepoWorktreeKey(repo, featurePath)
+    const metaById: Record<string, WorktreeMeta> = {
+      [legacyId]: {
+        displayName: 'Legacy Feature',
+        comment: '',
+        linkedIssue: null,
+        linkedPR: null,
+        linkedLinearIssue: null,
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 0,
+        lastActivityAt: 200
+      }
+    }
+    const migrateWorktreeIdentity = vi.fn((oldId: string, newId: string) => {
+      metaById[newId] = metaById[oldId]!
+      delete metaById[oldId]
+    })
+    const store = {
+      getRepos: () => [repo],
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      migrateWorktreeIdentity
+    } as unknown as Store
+    listRepoWorktreesMock.mockResolvedValue([
+      {
+        path: featurePath,
+        head: 'b',
+        branch: 'refs/heads/feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await analyzeWorkspaceSpace(store)
+
+    expect(migrateWorktreeIdentity).toHaveBeenCalledWith(legacyId, canonicalId)
+    expect(metaById[legacyId]).toBeUndefined()
+    expect(result.worktrees[0]).toMatchObject({
+      displayName: 'Legacy Feature',
+      status: 'ok'
+    })
+  })
+
+  it('ignores legacy worktree metadata from a different host during space scans', async () => {
+    const root = tempDir!
+    const repoPath = join(root, 'repo')
+    const featurePath = join(root, 'feature')
+    await mkdir(featurePath, { recursive: true })
+    await writeSizedFile(join(featurePath, 'feature.ts'), 512)
+
+    const repo: Repo = {
+      id: 'repo-1',
+      path: repoPath,
+      displayName: 'orca',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const legacyId = makeLegacyWorktreeId(repo.id, featurePath)
+    const migrateWorktreeIdentity = vi.fn()
+    const store = {
+      getRepos: () => [repo],
+      getWorktreeMeta: (worktreeId: string) =>
+        worktreeId === legacyId
+          ? {
+              displayName: 'Wrong Host',
+              hostId: 'ssh:other',
+              lastActivityAt: 200
+            }
+          : undefined,
+      migrateWorktreeIdentity
+    } as unknown as Store
+    listRepoWorktreesMock.mockResolvedValue([
+      {
+        path: featurePath,
+        head: 'b',
+        branch: 'refs/heads/feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await analyzeWorkspaceSpace(store)
+
+    expect(migrateWorktreeIdentity).not.toHaveBeenCalled()
+    expect(result.worktrees[0]).toMatchObject({
+      displayName: 'feature',
+      status: 'ok'
+    })
+  })
+
+  it('ignores hostless legacy worktree metadata when repo hosts are ambiguous during space scans', async () => {
+    const root = tempDir!
+    const repoPath = join(root, 'repo')
+    const featurePath = join(root, 'feature')
+    await mkdir(featurePath, { recursive: true })
+    await writeSizedFile(join(featurePath, 'feature.ts'), 512)
+
+    const localRepo: Repo = {
+      id: 'repo-1',
+      path: repoPath,
+      displayName: 'orca',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const remoteRepo: Repo = {
+      ...localRepo,
+      path: '/remote/repo',
+      connectionId: 'gpu-vm'
+    }
+    const legacyId = makeLegacyWorktreeId(localRepo.id, featurePath)
+    const migrateWorktreeIdentity = vi.fn()
+    const store = {
+      getRepos: () => [localRepo, remoteRepo],
+      getWorktreeMeta: (worktreeId: string) =>
+        worktreeId === legacyId
+          ? {
+              displayName: 'Ambiguous Legacy',
+              lastActivityAt: 200
+            }
+          : undefined,
+      migrateWorktreeIdentity
+    } as unknown as Store
+    listRepoWorktreesMock.mockResolvedValue([
+      {
+        path: featurePath,
+        head: 'b',
+        branch: 'refs/heads/feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await analyzeWorkspaceSpace(store)
+
+    expect(migrateWorktreeIdentity).not.toHaveBeenCalled()
+    expect(result.worktrees[0]).toMatchObject({
+      displayName: 'feature',
+      status: 'ok'
+    })
   })
 
   it('reports scan progress as repos and worktrees are scanned', async () => {

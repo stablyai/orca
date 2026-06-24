@@ -1,4 +1,6 @@
 import type { GlobalSettings } from '../../../../shared/types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoSettingsSectionId } from '@/lib/repo-settings-section-id'
 
 const EAGER_SECTION_IDS = new Set(['general'])
 
@@ -38,10 +40,16 @@ export function deriveNeededSectionIds(args: {
 }
 
 export function deriveNeededRepoIds(
-  repos: readonly { id: string }[],
+  repos: readonly {
+    id: string
+    connectionId?: string | null
+    executionHostId?: ExecutionHostId | null
+  }[],
   neededSectionIds: Set<string>
 ): string[] {
-  return repos.map((repo) => repo.id).filter((repoId) => neededSectionIds.has(`repo-${repoId}`))
+  return repos
+    .filter((repo) => neededSectionIds.has(getRepoSettingsSectionId(repo)))
+    .map((repo) => repo.id)
 }
 
 export function getInitialMountedSectionIds(): Set<string> {

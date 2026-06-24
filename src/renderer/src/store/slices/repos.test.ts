@@ -209,6 +209,7 @@ describe('repo slice runtime routing', () => {
     expect(store.getState().repos[0]?.displayName).toBe('SSH Renamed')
     expect(reposUpdate).toHaveBeenCalledWith({
       repoId: sshRepo.id,
+      hostId: 'ssh:ssh-1',
       updates: { displayName: 'SSH Renamed' }
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
@@ -664,7 +665,7 @@ describe('repo slice runtime routing', () => {
 
     expect(store.getState().repos).toEqual([])
     expect(store.getState().activeRepoId).toBeNull()
-    expect(reposRemove).toHaveBeenCalledWith({ repoId: sshRepo.id })
+    expect(reposRemove).toHaveBeenCalledWith({ repoId: sshRepo.id, hostId: 'ssh:ssh-1' })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
@@ -685,7 +686,7 @@ describe('repo slice runtime routing', () => {
 
     expect(store.getState().repos).toEqual([localRepo])
     expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ [localWorktreeId]: 200 })
-    expect(reposRemove).toHaveBeenCalledWith({ repoId: sshRepo.id })
+    expect(reposRemove).toHaveBeenCalledWith({ repoId: sshRepo.id, hostId: 'ssh:ssh-1' })
   })
 
   it('drops persisted visit timestamps for removed unhydrated runtime repos', async () => {

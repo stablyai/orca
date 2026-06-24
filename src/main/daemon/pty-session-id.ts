@@ -2,6 +2,8 @@ import { randomUUID } from 'crypto'
 import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { PTY_SESSION_ID_SEPARATOR } from '../../shared/pty-session-id-format'
 
+const MAX_PTY_SESSION_ID_LENGTH = 4096
+
 // Why: re-exported here so main-side callers can keep importing
 // `parsePtySessionId` from this module (next to `mintPtySessionId`). The
 // implementation lives in `src/shared/` because the renderer-side merge
@@ -46,7 +48,9 @@ export function mintPtySessionId(worktreeId?: string): string {
  * without false positives on legitimate path-shaped ids.
  */
 export function isSafePtySessionId(id: string, userDataPath: string): boolean {
-  if (id.length === 0 || id.length > 512) {
+  // Why: canonical worktree IDs URL-encode absolute paths before being embedded
+  // in PTY session IDs. Keep a finite cap, but allow realistic deep paths.
+  if (id.length === 0 || id.length > MAX_PTY_SESSION_ID_LENGTH) {
     return false
   }
   if (id.includes('\0')) {

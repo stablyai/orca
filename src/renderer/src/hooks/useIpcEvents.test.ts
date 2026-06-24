@@ -499,7 +499,10 @@ describe('useIpcEvents browser tab create routing', () => {
       activeModal: null,
       closeModal: vi.fn(),
       openModal: vi.fn(),
+      activeRepoId: null,
+      activeWorkspaceKey: null,
       activeWorktreeId: 'wt-1',
+      activeTabId: null,
       activeView: 'terminal',
       setActiveRepo: vi.fn(),
       setActiveWorktree: vi.fn(),
@@ -993,7 +996,7 @@ describe('useIpcEvents updater integration', () => {
       clearTabPtyId,
       repos: [{ id: 'repo-1', connectionId: 'conn-1' }],
       worktreesByRepo: {
-        'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }]
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', hostId: 'ssh:conn-1' }]
       },
       tabsByWorktree: {
         'wt-1': [
@@ -3451,8 +3454,65 @@ describe('useIpcEvents CLI-created worktree activation', () => {
   })
 
   it('refreshes active runtime worktrees from remote client events', async () => {
-    const fetchWorktrees = vi.fn()
-    const fetchWorktreeLineage = vi.fn()
+    const purgeWorktreeTerminalState = vi.fn()
+    const removeWorkspaceSpaceWorktrees = vi.fn()
+    const storeState = {
+      fetchRepos: vi.fn(),
+      fetchRuntimeEnvironmentRepos: vi.fn(),
+      fetchProjectGroups: vi.fn(),
+      fetchWorktrees: vi.fn().mockImplementation(async () => {
+        storeState.detectedWorktreesByRepo = {
+          'repo-1': {
+            repoId: 'repo-1',
+            authoritative: true,
+            source: 'git',
+            worktrees: [{ id: 'runtime-wt', hostId: 'runtime:env-1' }]
+          }
+        }
+      }),
+      fetchWorktreeLineage: vi.fn(),
+      repos: [
+        { id: 'repo-1', executionHostId: 'local' },
+        { id: 'repo-1', executionHostId: 'runtime:env-1' }
+      ],
+      detectedWorktreesByRepo: {},
+      worktreesByRepo: {
+        'repo-1': [
+          { id: 'local-wt', repoId: 'repo-1', path: '/local', hostId: 'local' },
+          { id: 'runtime-wt', repoId: 'repo-1', path: '/runtime', hostId: 'runtime:env-1' }
+        ]
+      },
+      purgeWorktreeTerminalState,
+      removeWorkspaceSpaceWorktrees,
+      setUpdateStatus: vi.fn(),
+      activeModal: null,
+      closeModal: vi.fn(),
+      openModal: vi.fn(),
+      getKnownWorktreeById: vi.fn(),
+      activeWorktreeId: 'runtime-wt',
+      activeView: 'terminal',
+      setActiveView: vi.fn(),
+      setActiveRepo: vi.fn(),
+      setActiveWorktree: vi.fn(),
+      revealWorktreeInSidebar: vi.fn(),
+      setIsFullScreen: vi.fn(),
+      updateBrowserPageState: vi.fn(),
+      activeTabType: 'terminal',
+      editorFontZoomLevel: 0,
+      setEditorFontZoomLevel: vi.fn(),
+      setRateLimitsFromPush: vi.fn(),
+      setSshConnectionState: vi.fn(),
+      setSshTargetLabels: vi.fn(),
+      setPortForwards: vi.fn(),
+      clearPortForwards: vi.fn(),
+      setDetectedPorts: vi.fn(),
+      enqueueSshCredentialRequest: vi.fn(),
+      removeSshCredentialRequest: vi.fn(),
+      clearTabPtyId: vi.fn(),
+      settings: { activeRuntimeEnvironmentId: 'env-1', terminalFontSize: 13 }
+    }
+    const fetchWorktrees = storeState.fetchWorktrees
+    const fetchWorktreeLineage = storeState.fetchWorktreeLineage
     let runtimeOnResponse: ((response: unknown) => void) | undefined
     const runtimeSubscribe = vi.fn(async (_args, callbacks) => {
       runtimeOnResponse = (callbacks as { onResponse: (response: unknown) => void }).onResponse
@@ -3472,51 +3532,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     vi.doMock('../store', () => ({
       useAppStore: {
         subscribe: vi.fn(() => () => {}),
-        getState: () => ({
-          fetchRepos: vi.fn(),
-          fetchRuntimeEnvironmentRepos: vi.fn(),
-          fetchProjectGroups: vi.fn(),
-          fetchWorktrees,
-          fetchWorktreeLineage,
-          repos: [{ id: 'repo-1' }],
-          detectedWorktreesByRepo: {
-            'repo-1': {
-              repoId: 'repo-1',
-              authoritative: true,
-              source: 'git',
-              worktrees: [{ id: 'wt-old' }]
-            }
-          },
-          worktreesByRepo: {},
-          purgeWorktreeTerminalState: vi.fn(),
-          removeWorkspaceSpaceWorktrees: vi.fn(),
-          setUpdateStatus: vi.fn(),
-          activeModal: null,
-          closeModal: vi.fn(),
-          openModal: vi.fn(),
-          getKnownWorktreeById: vi.fn(),
-          activeWorktreeId: 'wt-old',
-          activeView: 'terminal',
-          setActiveView: vi.fn(),
-          setActiveRepo: vi.fn(),
-          setActiveWorktree: vi.fn(),
-          revealWorktreeInSidebar: vi.fn(),
-          setIsFullScreen: vi.fn(),
-          updateBrowserPageState: vi.fn(),
-          activeTabType: 'terminal',
-          editorFontZoomLevel: 0,
-          setEditorFontZoomLevel: vi.fn(),
-          setRateLimitsFromPush: vi.fn(),
-          setSshConnectionState: vi.fn(),
-          setSshTargetLabels: vi.fn(),
-          setPortForwards: vi.fn(),
-          clearPortForwards: vi.fn(),
-          setDetectedPorts: vi.fn(),
-          enqueueSshCredentialRequest: vi.fn(),
-          removeSshCredentialRequest: vi.fn(),
-          clearTabPtyId: vi.fn(),
-          settings: { activeRuntimeEnvironmentId: 'env-1', terminalFontSize: 13 }
-        })
+        getState: () => storeState
       }
     }))
 
@@ -3664,8 +3680,10 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(fetchWorktrees).toHaveBeenCalledWith('repo-1')
+    expect(fetchWorktrees).toHaveBeenCalledWith('repo-1', { ownerHostId: 'runtime:env-1' })
     expect(fetchWorktreeLineage).toHaveBeenCalledTimes(1)
+    expect(purgeWorktreeTerminalState).not.toHaveBeenCalledWith(['local-wt'])
+    expect(removeWorkspaceSpaceWorktrees).not.toHaveBeenCalledWith(['local-wt'])
   })
 })
 
@@ -3751,13 +3769,32 @@ describe('useIpcEvents agent status snapshot integration', () => {
       clearTabPtyId: vi.fn(),
       updateTabTitle: vi.fn(),
       runtimePaneTitlesByTabId: {},
+      ptyIdsByTabId: {},
       terminalLayoutsByTabId: {},
+      activeTabIdByWorktree: {},
       agentStatusByPaneKey: {},
       recentlyClosedAgentStatusTabIds: {},
       repos: [],
       worktreesByRepo: {},
       tabsByWorktree: {},
       unifiedTabsByWorktree: {},
+      groupsByWorktree: {},
+      layoutByWorktree: {},
+      activeGroupIdByWorktree: {},
+      openFiles: [],
+      editorDrafts: {},
+      markdownFrontmatterVisible: {},
+      activeFileIdByWorktree: {},
+      activeTabTypeByWorktree: {},
+      browserTabsByWorktree: {},
+      browserPagesByWorkspace: {},
+      activeBrowserTabId: null,
+      activeBrowserTabIdByWorktree: {},
+      browserUrlHistory: [],
+      sshConnectionStates: new Map(),
+      lastKnownRelayPtyIdByTabId: {},
+      lastVisitedAtByWorktreeId: {},
+      defaultTerminalTabsAppliedByWorktreeId: {},
       workspaceSessionReady: false,
       settings: { terminalFontSize: 13 },
       ...overrides
@@ -5416,6 +5453,121 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(hydrateTabsSession).not.toHaveBeenCalled()
     expect(hydrateEditorSession).not.toHaveBeenCalled()
     expect(hydrateBrowserSession).not.toHaveBeenCalled()
+  })
+
+  it('applies SSH remote workspace snapshots only to the matching host worktrees', async () => {
+    const hydrateWorkspaceSession = vi.fn()
+    const hydrateTabsSession = vi.fn()
+    const hydrateEditorSession = vi.fn()
+    const hydrateBrowserSession = vi.fn()
+    const onChangedListenerRef: {
+      current:
+        | ((event: {
+            targetId: string
+            sourceClientId?: string
+            snapshot: Record<string, unknown>
+          }) => void)
+        | null
+    } = { current: null }
+    const storeState: StoreLike = buildStoreState({
+      workspaceSessionReady: true,
+      repos: [
+        { id: 'same-repo', executionHostId: 'local' },
+        { id: 'same-repo', connectionId: 'conn-1', executionHostId: 'ssh:conn-1' }
+      ],
+      worktreesByRepo: {
+        'same-repo': [
+          { id: 'same-repo::/local', repoId: 'same-repo', hostId: 'local' },
+          { id: 'same-repo::/remote', repoId: 'same-repo', hostId: 'ssh:conn-1' }
+        ]
+      },
+      tabsByWorktree: {
+        'same-repo::/local': [
+          { id: 'local-tab', ptyId: 'local-pty', worktreeId: 'same-repo::/local', title: 'Local' }
+        ],
+        'same-repo::/remote': [
+          { id: 'old-remote-tab', ptyId: null, worktreeId: 'same-repo::/remote', title: 'Old' }
+        ]
+      },
+      fetchWorktrees: vi.fn(() => Promise.resolve(true)),
+      fetchWorktreeLineage: vi.fn(() => Promise.resolve()),
+      hydrateWorkspaceSession,
+      hydrateTabsSession,
+      hydrateEditorSession,
+      hydrateBrowserSession,
+      markRemoteWorkspaceHydrated: vi.fn(),
+      setRemoteWorkspaceSyncStatus: vi.fn(),
+      reconnectPersistedTerminals: vi.fn(() => Promise.resolve())
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: () => () => {},
+        remoteWorkspace: {
+          clientId: () => Promise.resolve('client-local'),
+          onChanged: (cb: typeof onChangedListenerRef.current) => {
+            onChangedListenerRef.current = cb
+            return () => {}
+          }
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+
+    onChangedListenerRef.current?.({
+      targetId: 'conn-1',
+      sourceClientId: 'client-remote',
+      snapshot: {
+        revision: 2,
+        updatedAt: Date.now(),
+        session: {
+          activeWorktreePath: '/remote',
+          activeTabId: 'remote-tab',
+          tabsByWorktreePath: {
+            '/remote': [
+              {
+                id: 'remote-tab',
+                ptyId: null,
+                worktreePath: '/remote',
+                title: 'Remote',
+                customTitle: null,
+                color: null,
+                sortOrder: 1,
+                createdAt: 1
+              }
+            ]
+          },
+          terminalLayoutsByTabId: {}
+        }
+      }
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(storeState.fetchWorktrees).toHaveBeenCalledWith('same-repo', {
+      ownerHostId: 'ssh:conn-1'
+    })
+    const hydrated = hydrateTabsSession.mock.calls[0]?.[0] as {
+      tabsByWorktree: Record<string, { id: string }[]>
+    }
+    expect(hydrated.tabsByWorktree['same-repo::/local']).toEqual([
+      expect.objectContaining({ id: 'local-tab' })
+    ])
+    expect(hydrated.tabsByWorktree['same-repo::/remote']).toEqual([
+      expect.objectContaining({ id: 'remote-tab' })
+    ])
   })
 
   it('silently discards snapshot entries whose tabs are still unknown', async () => {

@@ -24,7 +24,7 @@ async function renderProbe(visible: boolean, dismiss = vi.fn()): Promise<HTMLDiv
     root.render(<Probe visible={visible} dismiss={dismiss} />)
   })
 
-  return container.querySelector('[data-testid="pane"]')!
+  return container.querySelector<HTMLDivElement>('[data-testid="pane"]')!
 }
 
 describe('useSessionRestoredBannerDismiss', () => {

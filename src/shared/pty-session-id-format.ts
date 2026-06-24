@@ -11,8 +11,14 @@
  * can import.
  */
 
+import { parseStrictWorktreeKey, WORKTREE_KEY_SCHEME } from './worktree-key-format'
+
 export const PTY_SESSION_ID_SEPARATOR = '@@'
 export const WORKTREE_ID_SEPARATOR = '::'
+
+function isCanonicalWorktreeKey(candidate: string): boolean {
+  return parseStrictWorktreeKey(candidate) !== null
+}
 
 /**
  * Recover the owning worktreeId from a minted session id.
@@ -30,6 +36,12 @@ export function parsePtySessionId(sessionId: string): { worktreeId: string | nul
     return { worktreeId: null }
   }
   const candidate = sessionId.slice(0, idx)
+  if (isCanonicalWorktreeKey(candidate)) {
+    return { worktreeId: candidate }
+  }
+  if (candidate.startsWith(WORKTREE_KEY_SCHEME)) {
+    return { worktreeId: null }
+  }
   // Why: require non-empty halves on both sides of `::` so degenerate
   // ids like `::@@…`, `repo::@@…`, or `::path@@…` don't synthesize a
   // phantom worktreeId for memory attribution.

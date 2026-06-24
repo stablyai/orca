@@ -141,7 +141,7 @@ describe('repo update serialization', () => {
       } as never
     })
 
-    expect(reposUpdate).toHaveBeenCalledWith({ repoId: localRepo.id, updates: {} })
+    expect(reposUpdate).toHaveBeenCalledWith({ repoId: localRepo.id, hostId: 'local', updates: {} })
     expect(store.getState().repos[0]?.repoIcon).toBeUndefined()
   })
 })

@@ -28,13 +28,13 @@ describe('createWorktreeChangeRefreshQueue', () => {
     queue.enqueue({ repoId: 'repo-1' })
 
     expect(handler).toHaveBeenCalledTimes(1)
-    expect(handler).toHaveBeenCalledWith('repo-1', undefined)
+    expect(handler).toHaveBeenCalledWith('repo-1', undefined, undefined)
 
     firstRefresh.resolve()
     await flushPromises()
 
     expect(handler).toHaveBeenCalledTimes(2)
-    expect(handler).toHaveBeenNthCalledWith(2, 'repo-1', undefined)
+    expect(handler).toHaveBeenNthCalledWith(2, 'repo-1', undefined, undefined)
   })
 
   it('does not overlap refreshes for the same repo', async () => {
@@ -73,8 +73,8 @@ describe('createWorktreeChangeRefreshQueue', () => {
     queue.enqueue({ repoId: 'repo-2' })
 
     expect(handler).toHaveBeenCalledTimes(2)
-    expect(handler).toHaveBeenNthCalledWith(1, 'repo-1', undefined)
-    expect(handler).toHaveBeenNthCalledWith(2, 'repo-2', undefined)
+    expect(handler).toHaveBeenNthCalledWith(1, 'repo-1', undefined, undefined)
+    expect(handler).toHaveBeenNthCalledWith(2, 'repo-2', undefined, undefined)
 
     repoOneRefresh.resolve()
     await flushPromises()
@@ -100,8 +100,8 @@ describe('createWorktreeChangeRefreshQueue', () => {
       await flushPromises()
 
       expect(handler).toHaveBeenCalledTimes(3)
-      expect(handler).toHaveBeenNthCalledWith(2, 'repo-1', renamed)
-      expect(handler).toHaveBeenNthCalledWith(3, 'repo-1', undefined)
+      expect(handler).toHaveBeenNthCalledWith(2, 'repo-1', undefined, renamed)
+      expect(handler).toHaveBeenNthCalledWith(3, 'repo-1', undefined, undefined)
     } finally {
       consoleError.mockRestore()
     }
@@ -116,8 +116,8 @@ describe('createWorktreeChangeRefreshQueue', () => {
     queue.enqueue({ repoId: 'repo-1', renamed })
     await flushPromises()
 
-    expect(handler).toHaveBeenNthCalledWith(1, 'repo-1', undefined)
-    expect(handler).toHaveBeenNthCalledWith(2, 'repo-1', renamed)
+    expect(handler).toHaveBeenNthCalledWith(1, 'repo-1', undefined, undefined)
+    expect(handler).toHaveBeenNthCalledWith(2, 'repo-1', undefined, renamed)
   })
 
   it('keeps a plain refresh queued after a rename', async () => {
@@ -136,8 +136,8 @@ describe('createWorktreeChangeRefreshQueue', () => {
     await flushPromises()
 
     expect(handler).toHaveBeenCalledTimes(3)
-    expect(handler).toHaveBeenNthCalledWith(2, 'repo-1', renamed)
-    expect(handler).toHaveBeenNthCalledWith(3, 'repo-1', undefined)
+    expect(handler).toHaveBeenNthCalledWith(2, 'repo-1', undefined, renamed)
+    expect(handler).toHaveBeenNthCalledWith(3, 'repo-1', undefined, undefined)
   })
 
   it('drops queued trailing refreshes after disposal', async () => {

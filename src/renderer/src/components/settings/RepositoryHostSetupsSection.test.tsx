@@ -197,7 +197,11 @@ describe('RepositoryHostSetupsSection', () => {
     })
 
     expect(openSettingsPage).toHaveBeenCalledTimes(1)
-    expect(openSettingsTarget).toHaveBeenCalledWith({ pane: 'repo', repoId: 'remote-repo' })
+    expect(openSettingsTarget).toHaveBeenCalledWith({
+      pane: 'repo',
+      repoId: 'remote-repo',
+      repoHostId: 'ssh:openclaw%202'
+    })
   })
 
   it('removes independent setup metadata instead of opening an empty repo target', async () => {
@@ -256,9 +260,78 @@ describe('RepositoryHostSetupsSection', () => {
       removeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(deleteProjectHostSetup).toHaveBeenCalledWith({ setupId: 'gpu-setup' })
+    expect(deleteProjectHostSetup).toHaveBeenCalledWith({
+      setupId: 'gpu-setup',
+      hostId: 'runtime:gpu'
+    })
     expect(openSettingsPage).not.toHaveBeenCalled()
     expect(openSettingsTarget).not.toHaveBeenCalled()
+  })
+
+  it('removes the selected same-id setup from its host', async () => {
+    const deleteProjectHostSetup = vi.fn().mockResolvedValue({
+      project: makeProject({ id: 'github:stablyai/orca' }),
+      setup: makeSetup({
+        id: 'shared-setup',
+        projectId: 'github:stablyai/orca',
+        repoId: '',
+        hostId: 'runtime:cpu',
+        path: ''
+      })
+    })
+    const localRepo = makeRepo({
+      id: 'local-repo',
+      displayName: 'Orca',
+      path: '/Users/alice/orca'
+    })
+    useAppStore.setState({
+      repos: [localRepo],
+      projects: [makeProject({ id: 'github:stablyai/orca' })],
+      projectHostSetups: [
+        makeSetup({
+          id: 'local-repo',
+          projectId: 'github:stablyai/orca',
+          repoId: 'local-repo',
+          hostId: 'local',
+          path: '/Users/alice/orca'
+        }),
+        makeSetup({
+          id: 'shared-setup',
+          projectId: 'github:stablyai/orca',
+          repoId: '',
+          hostId: 'runtime:gpu',
+          path: '',
+          setupState: 'setting-up',
+          setupMethod: 'provisioned'
+        }),
+        makeSetup({
+          id: 'shared-setup',
+          projectId: 'github:stablyai/orca',
+          repoId: '',
+          hostId: 'runtime:cpu',
+          path: '',
+          setupState: 'setting-up',
+          setupMethod: 'provisioned'
+        })
+      ],
+      deleteProjectHostSetup
+    })
+
+    renderSection(localRepo)
+
+    const removeButtons = Array.from(container.querySelectorAll('button')).filter(
+      (button) => button.textContent === 'Remove'
+    )
+    expect(removeButtons).toHaveLength(2)
+
+    await act(async () => {
+      removeButtons[1]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(deleteProjectHostSetup).toHaveBeenCalledWith({
+      setupId: 'shared-setup',
+      hostId: 'runtime:cpu'
+    })
   })
 
   it('sets up the project on another known host from an existing folder path', async () => {
@@ -328,7 +401,11 @@ describe('RepositoryHostSetupsSection', () => {
       displayName: 'Orca'
     })
     expect(openSettingsPage).toHaveBeenCalledTimes(1)
-    expect(openSettingsTarget).toHaveBeenCalledWith({ pane: 'repo', repoId: 'remote-repo' })
+    expect(openSettingsTarget).toHaveBeenCalledWith({
+      pane: 'repo',
+      repoId: 'remote-repo',
+      repoHostId: 'ssh:openclaw%202'
+    })
   })
 
   it('clones the project onto another known host from settings', async () => {
@@ -403,7 +480,11 @@ describe('RepositoryHostSetupsSection', () => {
       displayName: 'Orca'
     })
     expect(openSettingsPage).toHaveBeenCalledTimes(1)
-    expect(openSettingsTarget).toHaveBeenCalledWith({ pane: 'repo', repoId: 'remote-repo' })
+    expect(openSettingsTarget).toHaveBeenCalledWith({
+      pane: 'repo',
+      repoId: 'remote-repo',
+      repoHostId: 'ssh:openclaw%202'
+    })
   })
 
   it('creates pending setup metadata for a known host without requiring a path', async () => {

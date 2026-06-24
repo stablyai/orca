@@ -19,6 +19,21 @@ describe('getRuntimeEnvironmentIdForRepo', () => {
     ).toBe('owner-runtime')
   })
 
+  it('matches duplicate repos against encoded focused runtime host ids', () => {
+    expect(
+      getRuntimeEnvironmentIdForRepo(
+        {
+          settings: { activeRuntimeEnvironmentId: 'prod/server' },
+          repos: [
+            { id: 'repo-1', connectionId: null, executionHostId: 'local' },
+            { id: 'repo-1', connectionId: null, executionHostId: 'runtime:prod%2Fserver' }
+          ]
+        },
+        'repo-1'
+      )
+    ).toBe('prod/server')
+  })
+
   it('keeps explicit local repos local while a runtime is focused', () => {
     expect(
       getRuntimeEnvironmentIdForRepo(

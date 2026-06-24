@@ -47,6 +47,48 @@ describe('getSettingsForWorktreeRuntimeOwner', () => {
     })
   })
 
+  it('uses the worktree host when duplicate repo ids exist on local and runtime hosts', () => {
+    const duplicateState: WorktreeRuntimeOwnerState = {
+      settings: { activeRuntimeEnvironmentId: null },
+      repos: [
+        { id: 'same-repo', connectionId: null, executionHostId: 'local' },
+        { id: 'same-repo', connectionId: null, executionHostId: 'runtime:env-1' }
+      ],
+      worktreesByRepo: {
+        'same-repo': [
+          { id: 'same-repo::/local/wt', repoId: 'same-repo', hostId: 'local' },
+          { id: 'same-repo::/runtime/wt', repoId: 'same-repo', hostId: 'runtime:env-1' }
+        ]
+      }
+    }
+
+    expect(getSettingsForWorktreeRuntimeOwner(duplicateState, 'same-repo::/runtime/wt')).toEqual({
+      activeRuntimeEnvironmentId: 'env-1'
+    })
+    expect(getExecutionHostIdForWorktree(duplicateState, 'same-repo::/runtime/wt')).toBe(
+      'runtime:env-1'
+    )
+  })
+
+  it('uses a stamped worktree host even before the matching repo row is loaded', () => {
+    const partialState: WorktreeRuntimeOwnerState = {
+      settings: { activeRuntimeEnvironmentId: 'focused-env' },
+      repos: [],
+      worktreesByRepo: {
+        'same-repo': [
+          { id: 'same-repo::/runtime/wt', repoId: 'same-repo', hostId: 'runtime:env-1' }
+        ]
+      }
+    }
+
+    expect(getSettingsForWorktreeRuntimeOwner(partialState, 'same-repo::/runtime/wt')).toEqual({
+      activeRuntimeEnvironmentId: 'env-1'
+    })
+    expect(getExecutionHostIdForWorktree(partialState, 'same-repo::/runtime/wt')).toBe(
+      'runtime:env-1'
+    )
+  })
+
   it('routes folder workspaces to their project group runtime owner', () => {
     expect(getSettingsForWorktreeRuntimeOwner(state, 'folder:runtime-folder')).toEqual({
       activeRuntimeEnvironmentId: 'folder-env'

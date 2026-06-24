@@ -71,6 +71,7 @@ import { getStatsPaneSearchEntries } from '@/components/stats/stats-search'
 import { getExperimentalPaneSearchEntries } from '@/components/settings/experimental-search'
 import { getRepositoryPaneSearchEntries } from '@/components/settings/repository-search'
 import { isWebClientLocation } from '@/lib/web-client-location'
+import { getRepoSettingsSectionId } from '@/lib/repo-settings-section-id'
 import {
   getCachedWindowsTerminalCapabilities,
   getWindowsTerminalCapabilityOwnerKey
@@ -485,7 +486,7 @@ export function buildSettingsNavigationMetadata({
       group: 'experimental'
     },
     ...repos.map((repo) => ({
-      id: `repo-${repo.id}`,
+      id: getRepoSettingsSectionId(repo),
       title: repo.displayName,
       description: `${getRepoKindLabel(repo)} • ${repo.path}`,
       icon: SlidersHorizontal,

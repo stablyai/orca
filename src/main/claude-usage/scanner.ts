@@ -5,6 +5,7 @@ import { realpath, readdir, stat } from 'fs/promises'
 import { createReadStream } from 'fs'
 import { createInterface } from 'readline'
 import type { Repo } from '../../shared/types'
+import { getUsageRepoKey } from '../usage-worktree-metadata'
 import type {
   ClaudeUsageAttributedTurn,
   ClaudeUsageDailyAggregate,
@@ -671,7 +672,7 @@ export function createWorktreeRefs(
 ): ClaudeUsageWorktreeRef[] {
   const refs: ClaudeUsageWorktreeRef[] = []
   for (const repo of repos) {
-    for (const worktree of worktreesByRepo.get(repo.id) ?? []) {
+    for (const worktree of worktreesByRepo.get(getUsageRepoKey(repo)) ?? []) {
       refs.push({
         repoId: repo.id,
         worktreeId: worktree.worktreeId,

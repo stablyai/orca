@@ -770,10 +770,11 @@ export type PreloadApi = {
       path: string
       kind?: 'git' | 'folder'
     }) => Promise<{ repo: Repo } | { error: string }>
-    remove: (args: { repoId: string }) => Promise<void>
+    remove: (args: { repoId: string; hostId?: string }) => Promise<void>
     reorder: (args: { orderedIds: string[] }) => Promise<{ status: 'applied' | 'rejected' }>
     update: (args: {
       repoId: string
+      hostId?: string
       updates: Partial<
         Pick<
           Repo,
@@ -929,8 +930,11 @@ export type PreloadApi = {
     onChanged: (callback: (data: { repoId: string }) => void) => () => void
   }
   worktrees: {
-    list: (args: { repoId: string }) => Promise<Worktree[]>
-    listDetected: (args: { repoId: string }) => Promise<DetectedWorktreeListResult>
+    list: (args: { repoId: string; hostId?: ExecutionHostId }) => Promise<Worktree[]>
+    listDetected: (args: {
+      repoId: string
+      hostId?: ExecutionHostId
+    }) => Promise<DetectedWorktreeListResult>
     listAll: () => Promise<Worktree[]>
     create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
     /** Two-phase progress for a background `create`, correlated by

@@ -111,6 +111,7 @@ import {
   lookupGitHubWorkItemForSource
 } from '@/lib/github-work-item-source-lookup'
 import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
+import { parseRepoSettingsSectionId } from '@/lib/repo-settings-section-id'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
 import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -309,10 +310,12 @@ function findBrowserSelection(
 function getSettingsTargetFromSectionId(sectionId: string): {
   pane: SettingsNavTarget
   repoId: string | null
+  repoHostId?: string
   sectionId?: string
 } {
-  if (sectionId.startsWith('repo-')) {
-    return { pane: 'repo', repoId: sectionId.slice('repo-'.length) }
+  const repoSection = parseRepoSettingsSectionId(sectionId)
+  if (repoSection) {
+    return { pane: 'repo', repoId: repoSection.repoId, repoHostId: repoSection.repoHostId }
   }
   return { pane: sectionId as SettingsNavTarget, repoId: null }
 }

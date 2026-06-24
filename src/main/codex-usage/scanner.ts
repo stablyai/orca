@@ -5,6 +5,7 @@ import { realpath, readdir, stat } from 'fs/promises'
 import { createInterface } from 'readline'
 import type { Repo } from '../../shared/types'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
+import { getUsageRepoKey } from '../usage-worktree-metadata'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { getLegacyCopiedCodexSessionBridgeScanPreference } from '../codex/codex-session-bridge'
 import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
@@ -1070,7 +1071,7 @@ export function createWorktreeRefs(
 ): CodexUsageWorktreeRef[] {
   const refs: CodexUsageWorktreeRef[] = []
   for (const repo of repos) {
-    for (const worktree of worktreesByRepo.get(repo.id) ?? []) {
+    for (const worktree of worktreesByRepo.get(getUsageRepoKey(repo)) ?? []) {
       refs.push({
         repoId: repo.id,
         worktreeId: worktree.worktreeId,

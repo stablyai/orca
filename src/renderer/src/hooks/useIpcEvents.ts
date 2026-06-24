@@ -21,6 +21,7 @@ import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-fon
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
+  Repo,
   UpdateStatus,
   WorkspaceSessionState
 } from '../../../shared/types'
@@ -118,6 +119,12 @@ import { titleHasAgentName } from '../../../shared/agent-detection'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { translate } from '@/i18n/i18n'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 
 function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
@@ -241,16 +248,38 @@ function isAgentStatusForRecentlyClosedTab(
   return store.recentlyClosedAgentStatusTabIds[tabId] === true
 }
 
-function getAuthoritativeDetectedWorktreeIds(state: AppState, repoId: string): Set<string> | null {
+function getAuthoritativeDetectedWorktreeIds(
+  state: AppState,
+  repoId: string,
+  ownerHostId?: ExecutionHostId
+): Set<string> | null {
   const detected = state.detectedWorktreesByRepo[repoId]
   if (detected?.authoritative !== true) {
     return null
   }
-  return new Set(detected.worktrees.map((worktree) => worktree.id))
+  return new Set(
+    detected.worktrees
+      .filter(
+        (worktree) =>
+          ownerHostId === undefined || (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID) === ownerHostId
+      )
+      .map((worktree) => worktree.id)
+  )
 }
 
-function getVisibleWorktreeIdsForRepo(state: AppState, repoId: string): Set<string> {
-  return new Set((state.worktreesByRepo[repoId] ?? []).map((worktree) => worktree.id))
+function getVisibleWorktreeIdsForRepo(
+  state: AppState,
+  repoId: string,
+  ownerHostId?: ExecutionHostId
+): Set<string> {
+  return new Set(
+    (state.worktreesByRepo[repoId] ?? [])
+      .filter(
+        (worktree) =>
+          ownerHostId === undefined || (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID) === ownerHostId
+      )
+      .map((worktree) => worktree.id)
+  )
 }
 
 function resolveActiveBrowserPageId(state: AppState): string | null {
@@ -420,26 +449,33 @@ async function prepareRemoteWorkspaceTarget(targetId: string): Promise<boolean> 
     await store.fetchRepos()
     repos = useAppStore.getState().repos.filter((repo) => repo.connectionId === targetId)
   }
-  await Promise.all(repos.map((repo) => useAppStore.getState().fetchWorktrees(repo.id)))
+  await Promise.all(
+    repos.map((repo) =>
+      useAppStore.getState().fetchWorktrees(repo.id, { ownerHostId: getRepoExecutionHostId(repo) })
+    )
+  )
   await useAppStore.getState().fetchWorktreeLineage()
   return true
 }
 
-function targetRepoIds(targetId: string): Set<string> {
-  return new Set(
-    useAppStore
-      .getState()
-      .repos.filter((repo) => repo.connectionId === targetId)
-      .map((repo) => repo.id)
-  )
-}
-
 function targetWorktreeIds(targetId: string): Set<string> {
-  const repoIds = targetRepoIds(targetId)
+  const repoHosts = useAppStore
+    .getState()
+    .repos.filter((repo) => repo.connectionId === targetId)
+    .map((repo) => ({
+      repoId: repo.id,
+      hostId: getRepoExecutionHostId(repo)
+    }))
   return new Set(
     Object.values(useAppStore.getState().worktreesByRepo)
       .flat()
-      .filter((worktree) => repoIds.has(worktree.repoId))
+      .filter((worktree) =>
+        repoHosts.some(
+          (repo) =>
+            repo.repoId === worktree.repoId &&
+            repo.hostId === (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID)
+        )
+      )
       .map((worktree) => worktree.id)
   )
 }
@@ -777,7 +813,19 @@ export function getRuntimeProjectRefreshEnvironmentIds(args: {
   ]
 }
 
-async function refreshRuntimeProjectWorktrees(repos: readonly { id: string }[]): Promise<void> {
+type RepoHostIdentity = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
+
+function worktreeBelongsToRepoHost(
+  worktree: { repoId: string; hostId?: ExecutionHostId },
+  repo: RepoHostIdentity
+): boolean {
+  return (
+    worktree.repoId === repo.id &&
+    (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID) === getRepoExecutionHostId(repo)
+  )
+}
+
+async function refreshRuntimeProjectWorktrees(repos: readonly RepoHostIdentity[]): Promise<void> {
   let nextIndex = 0
   const failures: { repoId: string; error: unknown }[] = []
   const workerCount = Math.min(RUNTIME_PROJECT_REFRESH_CONCURRENCY, repos.length)
@@ -789,9 +837,12 @@ async function refreshRuntimeProjectWorktrees(repos: readonly { id: string }[]):
       while (nextIndex < repos.length) {
         const index = nextIndex
         nextIndex += 1
-        const repoId = repos[index].id
+        const repo = repos[index]
+        const repoId = repo.id
         try {
-          await useAppStore.getState().fetchWorktrees(repoId)
+          await useAppStore.getState().fetchWorktrees(repoId, {
+            ownerHostId: getRepoExecutionHostId(repo)
+          })
         } catch (error) {
           failures.push({ repoId, error })
         }
@@ -827,6 +878,7 @@ export function useIpcEvents(): void {
 
     const handleWorktreesChanged = async (
       repoId: string,
+      ownerHostId?: ExecutionHostId,
       renamed?: { oldWorktreeId: string; newWorktreeId: string }
     ): Promise<void> => {
       // Why: a folder rename changes the worktree's path-derived id. Re-key every
@@ -851,9 +903,9 @@ export function useIpcEvents(): void {
       // misclassifying the zombie as bound (design §2c, §4.4).
       const state = useAppStore.getState()
       const before =
-        getAuthoritativeDetectedWorktreeIds(state, repoId) ??
-        getVisibleWorktreeIdsForRepo(state, repoId)
-      await state.fetchWorktrees(repoId)
+        getAuthoritativeDetectedWorktreeIds(state, repoId, ownerHostId) ??
+        getVisibleWorktreeIdsForRepo(state, repoId, ownerHostId)
+      await state.fetchWorktrees(repoId, { ownerHostId })
       await useAppStore.getState().fetchWorktreeLineage()
       // Why: changing the worktree's id unmounts the active pane without
       // re-rendering it under the new id. Now that the list has refreshed,
@@ -863,7 +915,7 @@ export function useIpcEvents(): void {
         useAppStore.getState().setActiveWorktree(renamed.newWorktreeId)
       }
       const afterState = useAppStore.getState()
-      const after = getAuthoritativeDetectedWorktreeIds(afterState, repoId)
+      const after = getAuthoritativeDetectedWorktreeIds(afterState, repoId, ownerHostId)
       if (!after) {
         return
       }
@@ -964,7 +1016,10 @@ export function useIpcEvents(): void {
       }
       if (event.type === 'worktreesChanged') {
         void ensureRuntimeEventRepoKnown(environmentId, event.repoId).then(() =>
-          worktreeChangeRefreshQueue.enqueue({ repoId: event.repoId })
+          worktreeChangeRefreshQueue.enqueue({
+            repoId: event.repoId,
+            ownerHostId: toRuntimeExecutionHostId(environmentId)
+          })
         )
         return
       }
@@ -2516,7 +2571,9 @@ export function useIpcEvents(): void {
         const remoteWorktreeIds = new Set(
           Object.values(store.worktreesByRepo)
             .flat()
-            .filter((w) => remoteRepos.some((r) => r.id === w.repoId))
+            .filter((worktree) =>
+              remoteRepos.some((repo) => worktreeBelongsToRepoHost(worktree, repo))
+            )
             .map((w) => w.id)
         )
         for (const worktreeId of remoteWorktreeIds) {
@@ -2530,16 +2587,21 @@ export function useIpcEvents(): void {
       }
 
       if (state.status === 'connected') {
-        void Promise.all(remoteRepos.map((r) => store.fetchWorktrees(r.id))).then(async () => {
+        void Promise.all(
+          remoteRepos.map((repo) =>
+            store.fetchWorktrees(repo.id, { ownerHostId: getRepoExecutionHostId(repo) })
+          )
+        ).then(async () => {
           await useAppStore.getState().fetchWorktreeLineage()
           // Why: terminal panes that failed to spawn (no PTY provider on cold
           // start) sit inert. Bumping generation forces TerminalPane to remount
           // and retry pty:spawn. Only bump tabs with no live ptyId.
           const freshStore = useAppStore.getState()
-          const remoteRepoIds = new Set(remoteRepos.map((r) => r.id))
           const worktreeIds = Object.values(freshStore.worktreesByRepo)
             .flat()
-            .filter((w) => remoteRepoIds.has(w.repoId))
+            .filter((worktree) =>
+              remoteRepos.some((repo) => worktreeBelongsToRepoHost(worktree, repo))
+            )
             .map((w) => w.id)
 
           for (const worktreeId of worktreeIds) {

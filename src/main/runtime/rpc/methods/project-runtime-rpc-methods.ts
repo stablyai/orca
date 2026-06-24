@@ -69,6 +69,16 @@ const ProjectHostSetupCreate = z.object({
 
 const ProjectHostSetupUpdate = z.object({
   setupId: requiredString('Missing setup ID'),
+  hostId: requiredString('Missing host ID')
+    .transform((value, ctx) => {
+      const hostId = normalizeExecutionHostId(value)
+      if (!hostId) {
+        ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
+        return z.NEVER
+      }
+      return hostId
+    })
+    .optional(),
   updates: z.object({
     displayName: OptionalString,
     path: OptionalString,
@@ -83,7 +93,17 @@ const ProjectHostSetupUpdate = z.object({
 })
 
 const ProjectHostSetupDelete = z.object({
-  setupId: requiredString('Missing setup ID')
+  setupId: requiredString('Missing setup ID'),
+  hostId: requiredString('Missing host ID')
+    .transform((value, ctx) => {
+      const hostId = normalizeExecutionHostId(value)
+      if (!hostId) {
+        ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
+        return z.NEVER
+      }
+      return hostId
+    })
+    .optional()
 })
 
 export const PROJECT_RUNTIME_METHODS: RpcMethod[] = [

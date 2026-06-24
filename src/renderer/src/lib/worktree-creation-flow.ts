@@ -17,6 +17,7 @@ import {
 import type { CreateWorktreeResult } from '../../../shared/types'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
 
 // Why: mirrors the startup-opt the composer used to build inline. The renderer
 // only seeds the first terminal when the backend did not already spawn it.
@@ -111,7 +112,10 @@ async function executeWorktreeCreation(
         request.linkedBitbucketPR,
         request.linkedAzureDevOpsPR,
         request.linkedGiteaPR,
-        request.compareBaseRef
+        request.compareBaseRef,
+        request.workspaceRunContext?.hostId
+          ? { ownerHostId: request.workspaceRunContext.hostId }
+          : undefined
       )
   } catch (error) {
     // Why: a missing entry means the user cancelled mid-flight — abandon
@@ -153,8 +157,16 @@ async function executeWorktreeCreation(
   const startupOpt = buildStartupOpt(request, backendSpawned)
 
   if (worktree.path) {
-    const repoConnectionId =
-      useAppStore.getState().repos.find((repo) => repo.id === worktree.repoId)?.connectionId ?? null
+    const repoHostId = request.workspaceRunContext?.hostId ?? worktree.hostId
+    const repos = useAppStore.getState().repos
+    const repo =
+      repoHostId !== undefined
+        ? repos.find(
+            (candidate) =>
+              candidate.id === worktree.repoId && getRepoExecutionHostId(candidate) === repoHostId
+          )
+        : repos.find((candidate) => candidate.id === worktree.repoId)
+    const repoConnectionId = repo?.connectionId ?? null
     await preflightAgentTrust(request, worktree.path, repoConnectionId)
   }
 

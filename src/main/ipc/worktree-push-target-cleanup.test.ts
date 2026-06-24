@@ -24,14 +24,22 @@ function forkTarget(overrides: Partial<GitPushTarget> = {}): GitPushTarget {
 }
 
 // Why: cleanup only reads meta.pushTarget, so the rest of WorktreeMeta is irrelevant.
-function metaWith(pushTarget: GitPushTarget | undefined): WorktreeMeta {
-  return { pushTarget } as unknown as WorktreeMeta
+function metaWith(pushTarget: GitPushTarget | undefined, hostId?: string): WorktreeMeta {
+  return { pushTarget, ...(hostId ? { hostId } : {}) } as unknown as WorktreeMeta
 }
 
-function storeOf(entries: Record<string, GitPushTarget | undefined>): WorktreePushTargetStore {
+function storeOf(
+  entries: Record<
+    string,
+    GitPushTarget | undefined | { pushTarget?: GitPushTarget; hostId?: string }
+  >
+): WorktreePushTargetStore {
   const meta: Record<string, WorktreeMeta> = {}
-  for (const [id, pushTarget] of Object.entries(entries)) {
-    meta[id] = metaWith(pushTarget)
+  for (const [id, entry] of Object.entries(entries)) {
+    meta[id] =
+      entry && typeof entry === 'object' && 'hostId' in entry
+        ? metaWith(entry.pushTarget, entry.hostId)
+        : metaWith(entry as GitPushTarget | undefined)
   }
   return { getAllWorktreeMeta: () => meta }
 }
@@ -133,6 +141,24 @@ describe('cleanupUnusedWorktreePushTargetRemoteWithExec', () => {
       exec
     )
     expect(removeCalls(exec)).toEqual([])
+  })
+
+  it('ignores matching push target metadata from a different execution host', async () => {
+    const exec = makeExec()
+    await cleanupUnusedWorktreePushTargetRemoteWithExec(
+      REPO_PATH,
+      'orca-worktree://v1?hostId=local&repoId=repo-1&path=%2Fwt%2Fa',
+      forkTarget(),
+      storeOf({
+        'orca-worktree://v1?hostId=local&repoId=repo-1&path=%2Fwt%2Fa': forkTarget(),
+        'orca-worktree://v1?hostId=runtime%3Agpu&repoId=repo-1&path=%2Fwt%2Fgpu': {
+          pushTarget: forkTarget(),
+          hostId: 'runtime:gpu'
+        }
+      }),
+      exec
+    )
+    expect(removeCalls(exec)).toEqual([['remote', 'remove', FORK_REMOTE]])
   })
 
   it('keeps the remote when another worktree points at the same fork via a differently-named remote', async () => {

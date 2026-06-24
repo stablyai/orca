@@ -3,7 +3,8 @@ import { AlertCircle, FileCode2, LoaderCircle, Plus, RefreshCw } from 'lucide-re
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { Repo, Worktree } from '../../../../shared/types'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId, makeRepoWorktreeKey } from '../../../../shared/worktree-id'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import {
   canInspectLocalMcpConfigRoot,
   inspectMcpConfigContent,
@@ -36,7 +37,9 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
   const setActiveWorktree = useAppStore((state) => state.setActiveWorktree)
   const ensureWorktreeRootGroup = useAppStore((state) => state.ensureWorktreeRootGroup)
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
-  const worktreesForRepo = useAppStore((state) => state.worktreesByRepo[repo.id] ?? EMPTY_WORKTREES)
+  const allWorktreesForRepo = useAppStore(
+    (state) => state.worktreesByRepo[repo.id] ?? EMPTY_WORKTREES
+  )
   const sshConnectionStatus = useAppStore((state) =>
     repo.connectionId ? state.sshConnectionStates.get(repo.connectionId)?.status : null
   )
@@ -51,21 +54,44 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
 
   const connectionId = repo.connectionId ?? undefined
   const isWindows = isWindowsUserAgent()
+  const repoHostId = getRepoExecutionHostId(repo)
+  const worktreesForRepo = useMemo(
+    () =>
+      allWorktreesForRepo.filter(
+        (worktree) => (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID) === repoHostId
+      ),
+    [allWorktreesForRepo, repoHostId]
+  )
   const targetWorktree = useMemo(() => {
-    if (activeWorktreeId && getRepoIdFromWorktreeId(activeWorktreeId) === repo.id) {
-      return (
-        worktreesForRepo.find((worktree) => worktree.id === activeWorktreeId) ?? {
-          id: activeWorktreeId,
-          path: repo.path
-        }
-      )
+    const activeWorktree = activeWorktreeId
+      ? worktreesForRepo.find((worktree) => worktree.id === activeWorktreeId)
+      : undefined
+    if (activeWorktree && getRepoIdFromWorktreeId(activeWorktree.id) === repo.id) {
+      return activeWorktree
     }
     return (
       worktreesForRepo.find((worktree) => worktree.isMainWorktree) ??
       worktreesForRepo.find((worktree) => worktree.path === repo.path) ??
-      worktreesForRepo[0] ?? { id: `${repo.id}::${repo.path}`, path: repo.path }
+      worktreesForRepo[0] ?? {
+        id: makeRepoWorktreeKey(
+          {
+            id: repo.id,
+            connectionId: repo.connectionId,
+            executionHostId: repo.executionHostId
+          },
+          repo.path
+        ),
+        path: repo.path
+      }
     )
-  }, [activeWorktreeId, repo.id, repo.path, worktreesForRepo])
+  }, [
+    activeWorktreeId,
+    repo.connectionId,
+    repo.executionHostId,
+    repo.id,
+    repo.path,
+    worktreesForRepo
+  ])
   const targetWorktreeId = targetWorktree.id
   const targetRootPath = targetWorktree.path
   const detectedCount = useMemo(() => configs.filter((config) => config.exists).length, [configs])

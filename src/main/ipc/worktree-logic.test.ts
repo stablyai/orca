@@ -3,6 +3,7 @@ single setup-free pure-logic module, and splitting them would make the related
 edge cases harder to audit together. */
 import { posix, resolve } from 'path'
 import { describe, expect, it } from 'vitest'
+import { makeWorktreeKey } from '../../shared/worktree-id'
 import {
   sanitizeWorktreeName,
   sanitizeWorktreeDisplayName,
@@ -372,7 +373,11 @@ describe('mergeWorktree', () => {
     }
     const result = mergeWorktree('repo1', baseGit, meta)
     expect(result).toEqual({
-      id: 'repo1::/workspaces/feature',
+      id: makeWorktreeKey({
+        hostId: 'ssh:openclaw-2',
+        repoId: 'repo1',
+        path: '/workspaces/feature'
+      }),
       repoId: 'repo1',
       path: '/workspaces/feature',
       head: 'abc123',

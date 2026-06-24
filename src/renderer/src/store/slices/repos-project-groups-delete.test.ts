@@ -186,8 +186,8 @@ describe('project group deletion store routing', () => {
       failedProjectRemovals: []
     })
 
-    expect(reposRemove).toHaveBeenCalledWith({ repoId: 'direct' })
-    expect(reposRemove).toHaveBeenCalledWith({ repoId: 'nested' })
+    expect(reposRemove).toHaveBeenCalledWith({ repoId: 'direct', hostId: 'local' })
+    expect(reposRemove).toHaveBeenCalledWith({ repoId: 'nested', hostId: 'local' })
     expect(store.getState().repos).toEqual([siblingRepo])
   })
 

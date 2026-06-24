@@ -4,6 +4,10 @@ import { dirname, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildSettingsNavigationMetadata } from './useSettingsNavigationMetadata'
 import type { Repo } from '../../../shared/types'
+import {
+  getRepoSettingsSectionId,
+  parseRepoSettingsSectionId
+} from '@/lib/repo-settings-section-id'
 
 const repo = {
   id: 'repo-1',
@@ -59,7 +63,7 @@ describe('settings navigation metadata', () => {
     expect(webIds).not.toContain('voice')
     expect(webIds).not.toContain('advanced')
     expect(webIds).toContain('servers')
-    expect(webIds).toContain('repo-repo-1')
+    expect(webIds).toContain(getRepoSettingsSectionId(repo))
   })
 
   it('does not mark installable AI capabilities as beta in the sidebar metadata', () => {
@@ -84,7 +88,7 @@ describe('settings navigation metadata', () => {
     })
 
     const general = sections.find((section) => section.id === 'general')
-    const repoSection = sections.find((section) => section.id === 'repo-repo-1')
+    const repoSection = sections.find((section) => section.id === getRepoSettingsSectionId(repo))
 
     expect(general?.searchEntries.some((entry) => entry.title === 'Default Project Runtime')).toBe(
       false
@@ -103,12 +107,53 @@ describe('settings navigation metadata', () => {
     })
 
     const general = sections.find((section) => section.id === 'general')
-    const repoSection = sections.find((section) => section.id === 'repo-repo-1')
+    const repoSection = sections.find((section) => section.id === getRepoSettingsSectionId(repo))
 
     expect(general?.searchEntries.some((entry) => entry.title === 'Default Project Runtime')).toBe(
       true
     )
     expect(repoSection?.searchEntries.some((entry) => entry.title === 'Project Runtime')).toBe(true)
+  })
+
+  it('distinguishes same-id project settings sections by execution host', () => {
+    const remoteRepo = { ...repo, connectionId: 'openclaw 2' } satisfies Repo
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo, remoteRepo]
+    })
+
+    expect(sections.map((section) => section.id)).toEqual(
+      expect.arrayContaining([getRepoSettingsSectionId(repo), getRepoSettingsSectionId(remoteRepo)])
+    )
+    expect(getRepoSettingsSectionId(repo)).not.toBe(getRepoSettingsSectionId(remoteRepo))
+  })
+
+  it('does not collide when encoded host and repo ids contain delimiter-like dashes', () => {
+    const left = {
+      ...repo,
+      id: 'bar-baz',
+      connectionId: 'foo'
+    } satisfies Repo
+    const right = {
+      ...repo,
+      id: 'baz',
+      connectionId: 'foo-bar'
+    } satisfies Repo
+
+    expect(getRepoSettingsSectionId(left)).not.toBe(getRepoSettingsSectionId(right))
+  })
+
+  it('parses repo settings section ids for Cmd+J settings navigation', () => {
+    const remoteRepo = { ...repo, connectionId: 'openclaw 2' } satisfies Repo
+
+    expect(parseRepoSettingsSectionId(getRepoSettingsSectionId(remoteRepo))).toEqual({
+      repoId: remoteRepo.id,
+      repoHostId: 'ssh:openclaw%202'
+    })
+    expect(parseRepoSettingsSectionId('repo-repo-1')).toBeNull()
+    expect(parseRepoSettingsSectionId('repo-local:%ZZ')).toBeNull()
   })
 
   it('keeps Windows client-only terminal settings out of Windows-host metadata', () => {

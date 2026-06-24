@@ -65,7 +65,7 @@ import {
 } from '../../shared/constants'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { makePaneKey } from '../../shared/stable-pane-id'
-import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree-id'
+import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, makeWorktreeKey } from '../../shared/worktree-id'
 import { RpcDispatcher } from './rpc/dispatcher'
 import type { RpcRequest } from './rpc/core'
 import { TERMINAL_METHODS } from './rpc/methods/terminal'
@@ -712,7 +712,16 @@ const TEST_WINDOW_ID = 1
 const TEST_REPO_ID = 'repo-1'
 const TEST_REPO_PATH = '/tmp/repo'
 const TEST_WORKTREE_PATH = '/tmp/worktree-a'
-const TEST_WORKTREE_ID = `${TEST_REPO_ID}::${TEST_WORKTREE_PATH}`
+const TEST_CANONICAL_WORKTREE_ID = makeWorktreeKey({
+  hostId: 'local',
+  repoId: TEST_REPO_ID,
+  path: TEST_WORKTREE_PATH
+})
+const TEST_WORKTREE_ID = TEST_CANONICAL_WORKTREE_ID
+const makeLocalTestWorktreeId = (path: string): string =>
+  makeWorktreeKey({ hostId: 'local', repoId: TEST_REPO_ID, path })
+const makeSshTestWorktreeId = (repoId: string, connectionId: string, path: string): string =>
+  makeWorktreeKey({ hostId: `ssh:${connectionId}`, repoId, path })
 const TEST_FOLDER_PROJECT_GROUP_ID = 'folder-project-group-1'
 const TEST_FOLDER_WORKSPACE_ID = 'folder-workspace-1'
 const TEST_FOLDER_WORKSPACE_KEY = `folder:${TEST_FOLDER_WORKSPACE_ID}`
@@ -1345,7 +1354,7 @@ describe('OrcaRuntimeService', () => {
       tabs: [
         {
           tabId: 'tab-1',
-          worktreeId: 'repo-1::/tmp/worktree-a',
+          worktreeId: TEST_WORKTREE_ID,
           title: 'Claude',
           activeLeafId: 'pane:1',
           layout: null
@@ -1354,7 +1363,7 @@ describe('OrcaRuntimeService', () => {
       leaves: [
         {
           tabId: 'tab-1',
-          worktreeId: 'repo-1::/tmp/worktree-a',
+          worktreeId: TEST_WORKTREE_ID,
           leafId: 'pane:1',
           paneRuntimeId: 1,
           ptyId: 'pty-1'
@@ -1366,7 +1375,7 @@ describe('OrcaRuntimeService', () => {
     const terminals = await runtime.listTerminals('branch:feature/foo')
     expect(terminals.terminals).toHaveLength(1)
     expect(terminals.terminals[0]).toMatchObject({
-      worktreeId: 'repo-1::/tmp/worktree-a',
+      worktreeId: TEST_WORKTREE_ID,
       branch: 'feature/foo',
       ptyId: 'pty-1',
       title: 'Claude',
@@ -1419,7 +1428,7 @@ describe('OrcaRuntimeService', () => {
 
     expect(terminals.terminals).toHaveLength(1)
     expect(terminals.terminals[0]).toMatchObject({
-      worktreeId: TEST_WORKTREE_ID,
+      worktreeId: TEST_CANONICAL_WORKTREE_ID,
       worktreePath: TEST_WORKTREE_PATH
     })
     const internals = runtime as unknown as { ptysById: Map<string, unknown> }
@@ -1450,8 +1459,8 @@ describe('OrcaRuntimeService', () => {
 
     expect(listWorktrees).not.toHaveBeenCalled()
     expect(terminals.terminals.map((terminal) => terminal.worktreeId)).toEqual([
-      TEST_WORKTREE_ID,
-      TEST_WORKTREE_ID
+      TEST_CANONICAL_WORKTREE_ID,
+      TEST_CANONICAL_WORKTREE_ID
     ])
     const internals = runtime as unknown as { ptysById: Map<string, unknown> }
     expect(internals.ptysById.has(ptyId)).toBe(true)
@@ -1487,7 +1496,9 @@ describe('OrcaRuntimeService', () => {
     const terminals = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
 
     expect(listWorktrees).not.toHaveBeenCalled()
-    expect(terminals.terminals.map((terminal) => terminal.worktreeId)).toEqual([TEST_WORKTREE_ID])
+    expect(terminals.terminals.map((terminal) => terminal.worktreeId)).toEqual([
+      TEST_CANONICAL_WORKTREE_ID
+    ])
     const internals = runtime as unknown as { ptysById: Map<string, unknown> }
     expect(internals.ptysById.has('cwd-only-pty')).toBe(true)
     expect(internals.ptysById.has('nested-controller-pty')).toBe(false)
@@ -1524,7 +1535,9 @@ describe('OrcaRuntimeService', () => {
     const terminals = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
 
     expect(listWorktrees).not.toHaveBeenCalled()
-    expect(terminals.terminals.map((terminal) => terminal.worktreeId)).toEqual([TEST_WORKTREE_ID])
+    expect(terminals.terminals.map((terminal) => terminal.worktreeId)).toEqual([
+      TEST_CANONICAL_WORKTREE_ID
+    ])
     const internals = runtime as unknown as { ptysById: Map<string, unknown> }
     expect(internals.ptysById.has('cwd-only-pty')).toBe(true)
     expect(internals.ptysById.has('nested-controller-pty')).toBe(false)
@@ -1562,7 +1575,9 @@ describe('OrcaRuntimeService', () => {
     const terminals = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
 
     expect(listWorktrees).not.toHaveBeenCalled()
-    expect(terminals.terminals.map((terminal) => terminal.worktreeId)).toEqual([TEST_WORKTREE_ID])
+    expect(terminals.terminals.map((terminal) => terminal.worktreeId)).toEqual([
+      TEST_CANONICAL_WORKTREE_ID
+    ])
     const internals = runtime as unknown as { ptysById: Map<string, unknown> }
     expect(internals.ptysById.has('target-cwd-pty')).toBe(true)
     expect(internals.ptysById.has('sibling-cwd-pty')).toBe(false)
@@ -1592,7 +1607,10 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('matches explicit-id cwd PTYs for folder workspace instance IDs', async () => {
-    const folderWorktreeId = `${TEST_REPO_ID}::${TEST_FOLDER_WORKSPACE_PATH}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}11111111-1111-4111-8111-111111111111`
+    const folderWorktreeRootId = makeLocalTestWorktreeId(TEST_FOLDER_WORKSPACE_PATH)
+    const folderWorktreeId = makeLocalTestWorktreeId(
+      `${TEST_FOLDER_WORKSPACE_PATH}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}11111111-1111-4111-8111-111111111111`
+    )
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(listWorktrees).mockRejectedValue(
       new Error('folder explicit-id fallback should not rescan worktrees')
@@ -1610,7 +1628,9 @@ describe('OrcaRuntimeService', () => {
     const terminals = await runtime.listTerminals(`id:${folderWorktreeId}`)
 
     expect(listWorktrees).not.toHaveBeenCalled()
-    expect(terminals.terminals.map((terminal) => terminal.worktreeId)).toEqual([folderWorktreeId])
+    expect(terminals.terminals.map((terminal) => terminal.worktreeId)).toEqual([
+      folderWorktreeRootId
+    ])
     expect(terminals.terminals[0]?.worktreePath).toBe(TEST_FOLDER_WORKSPACE_PATH)
   })
 
@@ -1784,6 +1804,16 @@ describe('OrcaRuntimeService', () => {
     }
     const mainId = `${remoteRepo.id}::/home/user/repo`
     const childId = `${remoteRepo.id}::/home/user/repo-child`
+    const canonicalMainId = makeWorktreeKey({
+      hostId: 'ssh:ssh-missing',
+      repoId: remoteRepo.id,
+      path: '/home/user/repo'
+    })
+    const canonicalChildId = makeWorktreeKey({
+      hostId: 'ssh:ssh-missing',
+      repoId: remoteRepo.id,
+      path: '/home/user/repo-child'
+    })
     const metaById: Record<string, WorktreeMeta> = {
       [mainId]: makeWorktreeMeta({ displayName: 'Remote main' }),
       [childId]: makeWorktreeMeta({ displayName: 'Remote child', linkedPR: 42 })
@@ -1810,14 +1840,14 @@ describe('OrcaRuntimeService', () => {
       truncated: false,
       worktrees: [
         {
-          id: mainId,
+          id: canonicalMainId,
           path: '/home/user/repo',
           branch: '',
           isMainWorktree: true,
           displayName: 'Remote main'
         },
         {
-          id: childId,
+          id: canonicalChildId,
           path: '/home/user/repo-child',
           branch: '',
           isMainWorktree: false,
@@ -1826,6 +1856,200 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+  })
+
+  it('does not include stored SSH worktrees from another host during metadata fallback', async () => {
+    const conn1Repo = {
+      id: 'remote-repo',
+      path: '/home/conn-1/repo',
+      displayName: 'remote 1',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-1'
+    }
+    const conn2Repo = {
+      ...conn1Repo,
+      path: '/home/conn-2/repo',
+      displayName: 'remote 2',
+      connectionId: 'ssh-2'
+    }
+    const conn1Id = makeSshTestWorktreeId(conn1Repo.id, conn1Repo.connectionId, '/home/conn-1/wt')
+    const conn2Id = makeSshTestWorktreeId(conn2Repo.id, conn2Repo.connectionId, '/home/conn-2/wt')
+    const legacyConn2Id = `${conn2Repo.id}::/home/conn-2/legacy-wt`
+    const ambiguousLegacyId = `${conn2Repo.id}::/home/conn-2/ambiguous-legacy-wt`
+    const metaById: Record<string, WorktreeMeta> = {
+      [conn1Id]: makeWorktreeMeta({ displayName: 'Conn 1' }),
+      [conn2Id]: makeWorktreeMeta({ displayName: 'Conn 2' }),
+      [legacyConn2Id]: makeWorktreeMeta({ hostId: 'ssh:ssh-2', displayName: 'Conn 2 legacy' }),
+      [ambiguousLegacyId]: makeWorktreeMeta({ displayName: 'Ambiguous legacy' })
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [conn1Repo, conn2Repo],
+      getRepo: (repoId: string) => [conn1Repo, conn2Repo].find((repo) => repo.id === repoId),
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+        return metaById[worktreeId]
+      }
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const listed = await runtime.listDetectedManagedWorktrees('path:/home/conn-1/repo')
+
+    expect(listed).toMatchObject({
+      repoId: conn1Repo.id,
+      authoritative: false,
+      source: 'metadata-fallback',
+      worktrees: [
+        {
+          id: conn1Id,
+          path: '/home/conn-1/wt',
+          displayName: 'Conn 1'
+        }
+      ]
+    })
+  })
+
+  it('resolves explicit canonical worktree ids against the parsed host', async () => {
+    const conn1Repo = {
+      id: 'remote-repo',
+      path: '/home/conn-1/repo',
+      displayName: 'remote 1',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-1'
+    }
+    const conn2Repo = {
+      ...conn1Repo,
+      path: '/home/conn-2/repo',
+      displayName: 'remote 2',
+      connectionId: 'ssh-2'
+    }
+    const conn1Id = makeSshTestWorktreeId(conn1Repo.id, conn1Repo.connectionId, '/home/conn-1/wt')
+    const conn2Id = makeSshTestWorktreeId(conn2Repo.id, conn2Repo.connectionId, '/home/conn-2/wt')
+    const metaById: Record<string, WorktreeMeta> = {
+      [conn1Id]: makeWorktreeMeta({ displayName: 'Conn 1' }),
+      [conn2Id]: makeWorktreeMeta({ displayName: 'Conn 2' })
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [conn1Repo, conn2Repo],
+      getRepo: (repoId: string) => [conn1Repo, conn2Repo].find((repo) => repo.id === repoId),
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+        return metaById[worktreeId]
+      }
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const conn1Provider = { listWorktrees: vi.fn().mockResolvedValue([]) }
+    const conn2Provider = { listWorktrees: vi.fn().mockResolvedValue([]) }
+    registerSshGitProvider(conn1Repo.connectionId, conn1Provider as never)
+    registerSshGitProvider(conn2Repo.connectionId, conn2Provider as never)
+
+    try {
+      const resolved = await runtime.showManagedWorktree(`id:${conn2Id}`)
+
+      expect(resolved).toMatchObject({
+        id: conn2Id,
+        path: '/home/conn-2/wt',
+        displayName: 'Conn 2',
+        hostId: 'ssh:ssh-2'
+      })
+    } finally {
+      unregisterSshGitProvider(conn1Repo.connectionId)
+      unregisterSshGitProvider(conn2Repo.connectionId)
+    }
+  })
+
+  it('does not migrate hostless legacy metadata for canonical ids when the repo id spans hosts', async () => {
+    const conn1Repo = {
+      id: 'remote-repo',
+      path: '/home/conn-1/repo',
+      displayName: 'remote 1',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-1'
+    }
+    const conn2Repo = {
+      ...conn1Repo,
+      path: '/home/conn-2/repo',
+      displayName: 'remote 2',
+      connectionId: 'ssh-2'
+    }
+    const worktreePath = '/home/shared/wt'
+    const conn2Id = makeSshTestWorktreeId(conn2Repo.id, conn2Repo.connectionId, worktreePath)
+    const legacyId = `${conn2Repo.id}::${worktreePath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [legacyId]: makeWorktreeMeta({ displayName: 'Ambiguous legacy' })
+    }
+    const migrateWorktreeIdentity = vi.fn()
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [conn1Repo, conn2Repo],
+      getRepo: (repoId: string) => [conn1Repo, conn2Repo].find((repo) => repo.id === repoId),
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      migrateWorktreeIdentity,
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+        return metaById[worktreeId]
+      }
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const resolved = await runtime.showManagedWorktree(`id:${conn2Id}`)
+
+    expect(resolved).toMatchObject({
+      id: conn2Id,
+      path: worktreePath,
+      hostId: 'ssh:ssh-2'
+    })
+    expect(resolved.displayName).not.toBe('Ambiguous legacy')
+    expect(migrateWorktreeIdentity).not.toHaveBeenCalled()
+  })
+
+  it('does not resolve hostless legacy worktree ids when the repo id spans hosts', async () => {
+    const conn1Repo = {
+      id: 'remote-repo',
+      path: '/home/conn-1/repo',
+      displayName: 'remote 1',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-1'
+    }
+    const conn2Repo = {
+      ...conn1Repo,
+      path: '/home/conn-2/repo',
+      displayName: 'remote 2',
+      connectionId: 'ssh-2'
+    }
+    const legacyId = `${conn1Repo.id}::/home/conn-2/wt`
+    const metaById: Record<string, WorktreeMeta> = {
+      [legacyId]: makeWorktreeMeta({ displayName: 'Ambiguous legacy' })
+    }
+    const migrateWorktreeIdentity = vi.fn()
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [conn1Repo, conn2Repo],
+      getRepo: (repoId: string) => [conn1Repo, conn2Repo].find((repo) => repo.id === repoId),
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      migrateWorktreeIdentity,
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+        return metaById[worktreeId]
+      }
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    await expect(runtime.showManagedWorktree(`id:${legacyId}`)).rejects.toThrow(
+      'selector_not_found'
+    )
+    expect(migrateWorktreeIdentity).not.toHaveBeenCalled()
   })
 
   it('does not interpret active as a runtime-global worktree selector', async () => {
@@ -1879,7 +2103,7 @@ describe('OrcaRuntimeService', () => {
 
     staleScan.resolve(MOCK_GIT_WORKTREES)
 
-    await expect(staleLookup).resolves.toMatchObject({ id: TEST_WORKTREE_ID })
+    await expect(staleLookup).resolves.toMatchObject({ id: TEST_CANONICAL_WORKTREE_ID })
     await expect(freshLookup).resolves.toMatchObject({
       id: result.worktree.id,
       path: createdWorktree.path
@@ -1895,8 +2119,18 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       kind: 'folder' as const
     }
-    const rootWorktreeId = 'folder-repo::/workspace/folder'
-    const rootPriorWorktreeIds = ['folder-repo::/workspace/old-folder']
+    const rootWorktreeId = makeWorktreeKey({
+      hostId: 'local',
+      repoId: 'folder-repo',
+      path: '/workspace/folder'
+    })
+    const rootPriorWorktreeIds = [
+      makeWorktreeKey({
+        hostId: 'local',
+        repoId: 'folder-repo',
+        path: '/workspace/old-folder'
+      })
+    ]
     const metaById: Record<string, WorktreeMeta> = {
       [rootWorktreeId]: makeWorktreeMeta({
         instanceId: 'root-instance',
@@ -1937,7 +2171,9 @@ describe('OrcaRuntimeService', () => {
     expect(addWorktreeMock).not.toHaveBeenCalled()
     expect(result.worktree).toEqual(
       expect.objectContaining({
-        id: expect.stringMatching(/^folder-repo::\/workspace\/folder::workspace:[0-9a-f-]{36}$/),
+        id: expect.stringMatching(
+          /^orca-worktree:\/\/v1\?hostId=local&repoId=folder-repo&path=%2Fworkspace%2Ffolder::workspace:[0-9a-f-]{36}$/
+        ),
         repoId: 'folder-repo',
         path: '/workspace/folder',
         displayName: 'folder-session',
@@ -1977,9 +2213,9 @@ describe('OrcaRuntimeService', () => {
       id: result.worktree.id,
       comment: 'note'
     })
-    await expect(
-      runtime.removeManagedWorktree('id:folder-repo::/workspace/folder')
-    ).rejects.toThrow('Cannot delete the project root workspace')
+    await expect(runtime.removeManagedWorktree(`id:${rootWorktreeId}`)).rejects.toThrow(
+      'Cannot delete the project root workspace'
+    )
     deletedWorktreeId = result.worktree.id
     await expect(runtime.removeManagedWorktree(`id:${result.worktree.id}`)).resolves.toEqual({})
     expect(localProvider.shutdown).toHaveBeenCalledWith(`${result.worktree.id}@@pty-1`, {
@@ -2790,8 +3026,13 @@ describe('OrcaRuntimeService', () => {
       '/remote/mobile-feature',
       { base: 'origin/main' }
     )
+    const canonicalCreatedId = makeWorktreeKey({
+      hostId: 'ssh:ssh-1',
+      repoId: TEST_REPO_ID,
+      path: created.path
+    })
     expect(result.worktree).toMatchObject({
-      id: `${TEST_REPO_ID}::${created.path}`,
+      id: canonicalCreatedId,
       path: created.path,
       linkedGitLabIssue: 321,
       linkedGitLabMR: 654
@@ -2830,7 +3071,16 @@ describe('OrcaRuntimeService', () => {
       isMainWorktree: false
     }
     const parentId = `${TEST_REPO_ID}::${parent.path}`
-    const childId = `${TEST_REPO_ID}::${created.path}`
+    const canonicalParentId = makeWorktreeKey({
+      hostId: 'ssh:ssh-1',
+      repoId: TEST_REPO_ID,
+      path: parent.path
+    })
+    const canonicalChildId = makeWorktreeKey({
+      hostId: 'ssh:ssh-1',
+      repoId: TEST_REPO_ID,
+      path: created.path
+    })
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' })
     }
@@ -2882,19 +3132,22 @@ describe('OrcaRuntimeService', () => {
       })
 
       expect(result.worktree).toMatchObject({
-        id: childId,
-        parentWorktreeId: parentId,
+        id: canonicalChildId,
+        parentWorktreeId: canonicalParentId,
         lineage: expect.objectContaining({
-          worktreeId: childId,
-          parentWorktreeId: parentId,
-          worktreeInstanceId: metaById[childId].instanceId,
+          worktreeId: canonicalChildId,
+          parentWorktreeId: canonicalParentId,
+          worktreeInstanceId: metaById[canonicalChildId].instanceId,
           parentWorktreeInstanceId: 'parent-instance',
           origin: 'cli'
         })
       })
       expect(result.lineage).toBe(result.worktree.lineage)
       expect(result.warnings).toEqual([])
-      expect(remoteStore.setWorktreeLineage).toHaveBeenCalledWith(childId, expect.any(Object))
+      expect(remoteStore.setWorktreeLineage).toHaveBeenCalledWith(
+        canonicalChildId,
+        expect.any(Object)
+      )
       expect(addWorktree).not.toHaveBeenCalled()
       expect(listWorktrees).not.toHaveBeenCalled()
     } finally {
@@ -2911,7 +3164,7 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
-    const childId = `${TEST_REPO_ID}::${created.path}`
+    const childId = makeLocalTestWorktreeId(created.path)
     const metaById: Record<string, WorktreeMeta> = {}
     const workspaceLineageByChildKey: Record<string, WorkspaceLineage> = {}
     const runtimeStore = {
@@ -3491,7 +3744,13 @@ describe('OrcaRuntimeService', () => {
     expect(gitProvider.removeWorktree).toHaveBeenCalledWith('/remote/feature', true)
     expect(removeWorktree).not.toHaveBeenCalled()
     expect(listWorktrees).not.toHaveBeenCalled()
-    expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(`${TEST_REPO_ID}::/remote/feature`)
+    expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(
+      makeWorktreeKey({
+        hostId: 'ssh:ssh-1',
+        repoId: TEST_REPO_ID,
+        path: '/remote/feature'
+      })
+    )
   })
 
   it('rejects SSH-backed runtime removal of the main worktree before provider deletion', async () => {
@@ -4993,11 +5252,11 @@ describe('OrcaRuntimeService', () => {
     expect(terminals.terminals).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          worktreeId: `${TEST_REPO_ID}::C:\\Repo`,
+          worktreeId: makeLocalTestWorktreeId('C:\\Repo'),
           worktreePath: 'C:\\Repo'
         }),
         expect.objectContaining({
-          worktreeId: `${TEST_REPO_ID}:://Server/Share/Repo`,
+          worktreeId: makeLocalTestWorktreeId('//Server/Share/Repo'),
           worktreePath: '//Server/Share/Repo'
         })
       ])
@@ -11730,6 +11989,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('spawns fresh headless SSH mobile session terminals instead of reattaching synthetic local ids', async () => {
+    const sshWorktreeId = makeSshTestWorktreeId(TEST_REPO_ID, 'ssh-1', TEST_WORKTREE_PATH)
     const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-1' }
     const remoteStore = {
       ...store,
@@ -11746,12 +12006,12 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
 
-    await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`)
+    await runtime.createMobileSessionTerminal(`id:${sshWorktreeId}`)
 
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         connectionId: 'ssh-1',
-        worktreeId: TEST_WORKTREE_ID,
+        worktreeId: sshWorktreeId,
         persistHostSessionBinding: true
       })
     )
@@ -13148,14 +13408,15 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('reattaches hydrated SSH headless terminals with the persisted relay identity', async () => {
+    const sshWorktreeId = makeSshTestWorktreeId(TEST_REPO_ID, 'ssh-1', TEST_WORKTREE_PATH)
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         tabsByWorktree: {
-          [TEST_WORKTREE_ID]: [
+          [sshWorktreeId]: [
             {
               id: 'host-tab',
               ptyId: 'ssh:ssh-1@@relay-pty',
-              worktreeId: TEST_WORKTREE_ID,
+              worktreeId: sshWorktreeId,
               title: 'Remote Terminal',
               customTitle: null,
               color: null,
@@ -13188,7 +13449,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
 
-    await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
+    await runtime.activateMobileSessionTab(`id:${sshWorktreeId}`, 'host-tab')
 
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -13202,15 +13463,16 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('spawns fresh after an expired hydrated SSH headless reattach clears persistence', async () => {
+    const sshWorktreeId = makeSshTestWorktreeId(TEST_REPO_ID, 'ssh-1', TEST_WORKTREE_PATH)
     const stalePtyId = 'ssh:ssh-1@@relay-pty'
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         tabsByWorktree: {
-          [TEST_WORKTREE_ID]: [
+          [sshWorktreeId]: [
             {
               id: 'host-tab',
               ptyId: stalePtyId,
-              worktreeId: TEST_WORKTREE_ID,
+              worktreeId: sshWorktreeId,
               title: 'Remote Terminal',
               customTitle: null,
               color: null,
@@ -13238,7 +13500,7 @@ describe('OrcaRuntimeService', () => {
           ...session,
           tabsByWorktree: {
             ...session.tabsByWorktree,
-            [TEST_WORKTREE_ID]: session.tabsByWorktree[TEST_WORKTREE_ID].map((tab) =>
+            [sshWorktreeId]: session.tabsByWorktree[sshWorktreeId].map((tab) =>
               tab.id === 'host-tab' ? { ...tab, ptyId: null } : tab
             )
           },
@@ -13264,9 +13526,9 @@ describe('OrcaRuntimeService', () => {
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
 
     await expect(
-      runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
+      runtime.activateMobileSessionTab(`id:${sshWorktreeId}`, 'host-tab')
     ).rejects.toThrow('SSH session expired')
-    await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
+    await runtime.activateMobileSessionTab(`id:${sshWorktreeId}`, 'host-tab')
 
     expect(spawn).toHaveBeenNthCalledWith(
       1,
@@ -13432,14 +13694,15 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('spawns fresh SSH terminals when hydrated persistence has no relay identity', async () => {
+    const sshWorktreeId = makeSshTestWorktreeId(TEST_REPO_ID, 'ssh-1', TEST_WORKTREE_PATH)
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         tabsByWorktree: {
-          [TEST_WORKTREE_ID]: [
+          [sshWorktreeId]: [
             {
               id: 'host-tab',
               ptyId: null,
-              worktreeId: TEST_WORKTREE_ID,
+              worktreeId: sshWorktreeId,
               title: 'Remote Terminal',
               customTitle: null,
               color: null,
@@ -13470,7 +13733,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
 
-    await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
+    await runtime.activateMobileSessionTab(`id:${sshWorktreeId}`, 'host-tab')
 
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -14031,7 +14294,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('does not dedupe mobile terminal creates across worktrees with the same clientMutationId', async () => {
-    const otherWorktreeId = `${TEST_REPO_ID}::/tmp/worktree-b`
+    const otherWorktreeId = makeLocalTestWorktreeId('/tmp/worktree-b')
     vi.mocked(listWorktrees).mockResolvedValue([
       ...MOCK_GIT_WORKTREES,
       {
@@ -14705,7 +14968,7 @@ describe('OrcaRuntimeService', () => {
       worktrees: [
         {
           workspaceKind: 'git',
-          worktreeId: 'repo-1::/tmp/worktree-a',
+          worktreeId: TEST_CANONICAL_WORKTREE_ID,
           repoId: 'repo-1',
           repo: 'repo',
           path: '/tmp/worktree-a',
@@ -14758,7 +15021,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     const { worktrees } = await runtime.getWorktreePs()
-    const summary = worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)
+    const summary = worktrees.find((w) => w.worktreeId === TEST_CANONICAL_WORKTREE_ID)
     expect(summary?.linkedPR).toEqual({ number: 42, state: 'merged' })
   })
 
@@ -14993,7 +15256,7 @@ describe('OrcaRuntimeService', () => {
     const { worktrees } = await runtime.getWorktreePs()
     const active = worktrees.filter((w) => w.isActive)
     expect(active).toHaveLength(1)
-    expect(active[0]?.worktreeId).toBe(TEST_WORKTREE_ID)
+    expect(active[0]?.worktreeId).toBe(TEST_CANONICAL_WORKTREE_ID)
   })
 
   it('includes SSH-backed worktrees in the mobile worktree summary', async () => {
@@ -15012,6 +15275,11 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+    const canonicalRemoteWorktreeId = makeWorktreeKey({
+      hostId: 'ssh:ssh-1',
+      repoId: remoteRepo.id,
+      path: remoteWorktree.path
+    })
     const metaById: Record<string, WorktreeMeta> = {
       [`${remoteRepo.id}::${remoteWorktree.path}`]: makeWorktreeMeta({
         displayName: 'Remote mobile'
@@ -15037,7 +15305,7 @@ describe('OrcaRuntimeService', () => {
 
     expect(summaries.worktrees).toEqual([
       expect.objectContaining({
-        worktreeId: `${remoteRepo.id}::${remoteWorktree.path}`,
+        worktreeId: canonicalRemoteWorktreeId,
         repoId: remoteRepo.id,
         repo: 'remote-vm',
         path: remoteWorktree.path,
@@ -15822,8 +16090,26 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       connectionId: 'ssh-1'
     }
-    const childId = `${remoteRepo.id}::/home/user/repo-child`
-    const parentId = `${remoteRepo.id}::/home/user/repo-parent`
+    const childId = makeSshTestWorktreeId(
+      remoteRepo.id,
+      remoteRepo.connectionId,
+      '/home/user/repo-child'
+    )
+    const parentId = makeSshTestWorktreeId(
+      remoteRepo.id,
+      remoteRepo.connectionId,
+      '/home/user/repo-parent'
+    )
+    const canonicalChildId = makeWorktreeKey({
+      hostId: 'ssh:ssh-1',
+      repoId: remoteRepo.id,
+      path: '/home/user/repo-child'
+    })
+    const canonicalParentId = makeWorktreeKey({
+      hostId: 'ssh:ssh-1',
+      repoId: remoteRepo.id,
+      path: '/home/user/repo-parent'
+    })
     const metaById: Record<string, WorktreeMeta> = {
       [childId]: makeWorktreeMeta({ instanceId: 'child-instance' }),
       [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' })
@@ -15867,11 +16153,11 @@ describe('OrcaRuntimeService', () => {
 
     expect(listSshWorktrees).toHaveBeenCalledWith(remoteRepo.path)
     expect(setWorktreeLineage).toHaveBeenCalledWith(
-      childId,
+      canonicalChildId,
       expect.objectContaining({
-        worktreeId: childId,
+        worktreeId: canonicalChildId,
         worktreeInstanceId: 'child-instance',
-        parentWorktreeId: parentId,
+        parentWorktreeId: canonicalParentId,
         parentWorktreeInstanceId: 'parent-instance',
         origin: 'manual'
       })
@@ -15887,8 +16173,16 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       connectionId: 'ssh-1'
     }
-    const childId = `${remoteRepo.id}::/home/user/repo-child`
-    const parentId = `${remoteRepo.id}::/home/user/repo-parent`
+    const childId = makeSshTestWorktreeId(
+      remoteRepo.id,
+      remoteRepo.connectionId,
+      '/home/user/repo-child'
+    )
+    const parentId = makeSshTestWorktreeId(
+      remoteRepo.id,
+      remoteRepo.connectionId,
+      '/home/user/repo-parent'
+    )
     const metaById: Record<string, WorktreeMeta> = {
       [childId]: makeWorktreeMeta({ instanceId: 'child-instance' }),
       [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' })
@@ -16126,8 +16420,18 @@ describe('OrcaRuntimeService', () => {
   it('keeps workspace lineage in sync when manually reparenting a worktree', async () => {
     const parentPath = '/tmp/worktree-parent'
     const childPath = '/tmp/worktree-child'
-    const parentId = `${TEST_REPO_ID}::${parentPath}`
-    const childId = `${TEST_REPO_ID}::${childPath}`
+    const parentId = makeLocalTestWorktreeId(parentPath)
+    const childId = makeLocalTestWorktreeId(childPath)
+    const canonicalParentId = makeWorktreeKey({
+      hostId: 'local',
+      repoId: TEST_REPO_ID,
+      path: parentPath
+    })
+    const canonicalChildId = makeWorktreeKey({
+      hostId: 'local',
+      repoId: TEST_REPO_ID,
+      path: childPath
+    })
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' }),
       [childId]: makeWorktreeMeta({ instanceId: 'child-instance' })
@@ -16169,18 +16473,18 @@ describe('OrcaRuntimeService', () => {
     })
 
     expect(setWorktreeLineage).toHaveBeenCalledWith(
-      childId,
+      canonicalChildId,
       expect.objectContaining({
-        parentWorktreeId: parentId,
+        parentWorktreeId: canonicalParentId,
         parentWorktreeInstanceId: 'parent-instance',
         capture: { source: 'manual-action', confidence: 'explicit' }
       })
     )
     expect(setWorkspaceLineage).toHaveBeenCalledWith(
       expect.objectContaining({
-        childWorkspaceKey: `worktree:${childId}`,
+        childWorkspaceKey: `worktree:${canonicalChildId}`,
         childInstanceId: 'child-instance',
-        parentWorkspaceKey: `worktree:${parentId}`,
+        parentWorkspaceKey: `worktree:${canonicalParentId}`,
         parentInstanceId: 'parent-instance',
         capture: { source: 'manual-action', confidence: 'explicit' }
       })
@@ -16189,7 +16493,7 @@ describe('OrcaRuntimeService', () => {
 
   it('clears workspace lineage when manually removing a parent', async () => {
     const childPath = '/tmp/worktree-child'
-    const childId = `${TEST_REPO_ID}::${childPath}`
+    const childId = makeLocalTestWorktreeId(childPath)
     const metaById: Record<string, WorktreeMeta> = {
       [childId]: makeWorktreeMeta({ instanceId: 'child-instance' })
     }
@@ -16254,8 +16558,8 @@ describe('OrcaRuntimeService', () => {
   it('ignores stale instance-mismatched lineage when validating manual cycle repairs', async () => {
     const parentPath = '/tmp/worktree-a'
     const childPath = '/tmp/worktree-b'
-    const parentId = `${TEST_REPO_ID}::${parentPath}`
-    const childId = `${TEST_REPO_ID}::${childPath}`
+    const parentId = makeLocalTestWorktreeId(parentPath)
+    const childId = makeLocalTestWorktreeId(childPath)
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta({ instanceId: 'new-parent-instance' }),
       [childId]: makeWorktreeMeta({ instanceId: 'child-instance' })
@@ -16319,8 +16623,8 @@ describe('OrcaRuntimeService', () => {
   it('rejects lineage updates when upgraded metadata is missing a parent instance id', async () => {
     const parentPath = '/tmp/worktree-parent'
     const childPath = '/tmp/worktree-child'
-    const parentId = `${TEST_REPO_ID}::${parentPath}`
-    const childId = `${TEST_REPO_ID}::${childPath}`
+    const parentId = makeLocalTestWorktreeId(parentPath)
+    const childId = makeLocalTestWorktreeId(childPath)
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta(),
       [childId]: makeWorktreeMeta({ instanceId: 'child-instance' })
@@ -16366,8 +16670,8 @@ describe('OrcaRuntimeService', () => {
   it('rotates a missing parent instance during runtime selector scans before same-path reuse', async () => {
     const parentPath = '/tmp/worktree-parent'
     const childPath = '/tmp/worktree-child'
-    const parentId = `${TEST_REPO_ID}::${parentPath}`
-    const childId = `${TEST_REPO_ID}::${childPath}`
+    const parentId = makeLocalTestWorktreeId(parentPath)
+    const childId = makeLocalTestWorktreeId(childPath)
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta({ instanceId: 'old-parent-instance' }),
       [childId]: makeWorktreeMeta({ instanceId: 'child-instance' })
@@ -16451,8 +16755,8 @@ describe('OrcaRuntimeService', () => {
   it('does not prune lineage when a runtime local worktree scan fails', async () => {
     const parentPath = '/tmp/worktree-parent'
     const childPath = '/tmp/worktree-child'
-    const parentId = `${TEST_REPO_ID}::${parentPath}`
-    const childId = `${TEST_REPO_ID}::${childPath}`
+    const parentId = makeLocalTestWorktreeId(parentPath)
+    const childId = makeLocalTestWorktreeId(childPath)
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' }),
       [childId]: makeWorktreeMeta({ instanceId: 'child-instance' })
@@ -16522,8 +16826,16 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       connectionId: 'ssh-1'
     }
-    const parentId = `${remoteRepo.id}::/home/user/repo-parent`
-    const childId = `${remoteRepo.id}::/home/user/repo-child`
+    const parentId = makeSshTestWorktreeId(
+      remoteRepo.id,
+      remoteRepo.connectionId,
+      '/home/user/repo-parent'
+    )
+    const childId = makeSshTestWorktreeId(
+      remoteRepo.id,
+      remoteRepo.connectionId,
+      '/home/user/repo-child'
+    )
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' }),
       [childId]: makeWorktreeMeta({ instanceId: 'child-instance' })
@@ -16574,6 +16886,16 @@ describe('OrcaRuntimeService', () => {
     const childPath = '/tmp/worktree-child'
     const parentId = `${TEST_REPO_ID}::${parentPath}`
     const childId = `${TEST_REPO_ID}::${childPath}`
+    const canonicalParentId = makeWorktreeKey({
+      hostId: 'local',
+      repoId: TEST_REPO_ID,
+      path: parentPath
+    })
+    const canonicalChildId = makeWorktreeKey({
+      hostId: 'local',
+      repoId: TEST_REPO_ID,
+      path: childPath
+    })
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta({
         instanceId: 'parent-instance',
@@ -16624,32 +16946,40 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     const listed = await runtime.listManagedWorktrees('id:repo-1')
-    const parent = listed.worktrees.find((worktree) => worktree.id === parentId)
-    const child = listed.worktrees.find((worktree) => worktree.id === childId)
+    const parent = listed.worktrees.find((worktree) => worktree.id === canonicalParentId)
+    const child = listed.worktrees.find((worktree) => worktree.id === canonicalChildId)
 
     expect(parent).toMatchObject({
       parentWorktreeId: null,
-      childWorktreeIds: [childId],
+      childWorktreeIds: [canonicalChildId],
       lineage: null
     })
     expect(child).toMatchObject({
-      parentWorktreeId: parentId,
+      parentWorktreeId: canonicalParentId,
       childWorktreeIds: [],
-      lineage: lineageById[childId]
+      lineage: {
+        ...lineageById[childId],
+        worktreeId: canonicalChildId,
+        parentWorktreeId: canonicalParentId
+      }
     })
     await expect(runtime.showManagedWorktree(`id:${childId}`)).resolves.toMatchObject({
-      id: childId,
-      parentWorktreeId: parentId,
+      id: canonicalChildId,
+      parentWorktreeId: canonicalParentId,
       childWorktreeIds: [],
-      lineage: lineageById[childId]
+      lineage: {
+        ...lineageById[childId],
+        worktreeId: canonicalChildId,
+        parentWorktreeId: canonicalParentId
+      }
     })
   })
 
   it('keeps valid orchestration lineage when caller terminal context is stale', async () => {
     const parentPath = '/tmp/worktree-parent'
     const childPath = '/tmp/workspaces/worker-child'
-    const parentId = `${TEST_REPO_ID}::${parentPath}`
-    const childId = `${TEST_REPO_ID}::${childPath}`
+    const parentId = makeLocalTestWorktreeId(parentPath)
+    const childId = makeLocalTestWorktreeId(childPath)
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta({
         instanceId: 'parent-instance',
@@ -16726,8 +17056,8 @@ describe('OrcaRuntimeService', () => {
   it('enriches caller-terminal lineage with active orchestration dispatch context', async () => {
     const workerPath = '/tmp/worktree-worker'
     const childPath = '/tmp/workspaces/worker-child'
-    const childId = `${TEST_REPO_ID}::${childPath}`
-    const workerId = `${TEST_REPO_ID}::${workerPath}`
+    const childId = makeLocalTestWorktreeId(childPath)
+    const workerId = makeLocalTestWorktreeId(workerPath)
     const metaById: Record<string, WorktreeMeta> = {
       [TEST_WORKTREE_ID]: makeWorktreeMeta({
         instanceId: 'parent-instance',
@@ -17118,8 +17448,8 @@ describe('OrcaRuntimeService', () => {
   it('falls back to cwd lineage when the caller terminal handle is stale', async () => {
     const parentPath = '/tmp/worktree-parent'
     const childPath = '/tmp/workspaces/cwd-child'
-    const parentId = `${TEST_REPO_ID}::${parentPath}`
-    const childId = `${TEST_REPO_ID}::${childPath}`
+    const parentId = makeLocalTestWorktreeId(parentPath)
+    const childId = makeLocalTestWorktreeId(childPath)
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' })
     }
@@ -17225,8 +17555,8 @@ describe('OrcaRuntimeService', () => {
   it('infers orchestration lineage from task-id comments when dispatch is completed', async () => {
     const workerPath = '/tmp/worktree-worker'
     const childPath = '/tmp/workspaces/worker-child'
-    const childId = `${TEST_REPO_ID}::${childPath}`
-    const workerId = `${TEST_REPO_ID}::${workerPath}`
+    const childId = makeLocalTestWorktreeId(childPath)
+    const workerId = makeLocalTestWorktreeId(workerPath)
     const metaById: Record<string, WorktreeMeta> = {
       [workerId]: makeWorktreeMeta({
         instanceId: 'worker-instance',
@@ -17323,8 +17653,8 @@ describe('OrcaRuntimeService', () => {
   it('infers orchestration lineage from task creator when no dispatch context exists', async () => {
     const parentPath = '/tmp/worktree-parent'
     const childPath = '/tmp/workspaces/parent-child'
-    const childId = `${TEST_REPO_ID}::${childPath}`
-    const parentId = `${TEST_REPO_ID}::${parentPath}`
+    const childId = makeLocalTestWorktreeId(childPath)
+    const parentId = makeLocalTestWorktreeId(parentPath)
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta({
         instanceId: 'parent-instance',
@@ -19904,7 +20234,7 @@ describe('OrcaRuntimeService', () => {
     try {
       const worktree = await runtime.showManagedWorktree(`path:${duplicatePath}`)
 
-      expect(worktree.id).toBe(`${TEST_REPO_ID}::${duplicatePath}`)
+      expect(worktree.id).toBe(makeLocalTestWorktreeId(duplicatePath))
       expect(worktree.path).toBe(duplicatePath)
     } finally {
       getRepos.mockRestore()
@@ -20391,6 +20721,48 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('cleans canonical and safe legacy runtime aliases when removing a worktree', async () => {
+    const legacyWorktreeId = `${TEST_REPO_ID}::${TEST_WORKTREE_PATH}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [TEST_WORKTREE_ID]: makeWorktreeMeta({ hostId: 'local' }),
+      [legacyWorktreeId]: makeWorktreeMeta({ hostId: 'local' })
+    }
+    const removeWorktreeMeta = vi.fn((worktreeId: string) => {
+      delete metaById[worktreeId]
+    })
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      removeWorktreeMeta
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+
+    expect(removeWorktreeMeta).toHaveBeenCalledWith(TEST_WORKTREE_ID)
+    expect(removeWorktreeMeta).toHaveBeenCalledWith(legacyWorktreeId)
+    expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(TEST_WORKTREE_ID)
+    expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(legacyWorktreeId)
+  })
+
+  it('force-deletes a preserved branch through a legacy runtime alias', async () => {
+    const legacyWorktreeId = `${TEST_REPO_ID}::${TEST_WORKTREE_PATH}`
+    const runtime = new OrcaRuntimeService(store)
+    vi.mocked(removeWorktree).mockResolvedValue({
+      preservedBranch: { branchName: 'feature/test', head: 'def456' }
+    })
+
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+    await runtime.forceDeletePreservedBranch(legacyWorktreeId, 'feature/test', 'def456')
+
+    expect(forceDeleteLocalBranchMock).toHaveBeenCalledWith(
+      TEST_REPO_PATH,
+      'feature/test',
+      'def456'
+    )
+  })
+
   it('routes runtime preserved-branch force-delete through the selected WSL project runtime', async () => {
     setPlatform('win32')
     const runtimeStore = {
@@ -20603,7 +20975,7 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       connectionId: 'ssh-missing-fs'
     }
-    const worktreeId = `${repo.id}::${localPath}`
+    const worktreeId = makeSshTestWorktreeId(repo.id, repo.connectionId, localPath)
     const metaById: Record<string, WorktreeMeta> = {
       [worktreeId]: makeWorktreeMeta({
         orcaCreatedAt: Date.now(),
@@ -21183,7 +21555,7 @@ describe('OrcaRuntimeService', () => {
 
     expect(listed.worktrees).toMatchObject([
       {
-        id: 'repo-1::C:/workspaces/improve-dashboard',
+        id: makeLocalTestWorktreeId('C:/workspaces/improve-dashboard'),
         displayName: 'Improve Dashboard'
       }
     ])
@@ -21242,7 +21614,7 @@ describe('OrcaRuntimeService', () => {
         page: 'page-1'
       })
 
-      expect(snapshotMock).toHaveBeenCalledWith(TEST_WORKTREE_ID, 'page-1')
+      expect(snapshotMock).toHaveBeenCalledWith(TEST_CANONICAL_WORKTREE_ID, 'page-1')
     })
 
     it('routes tab switch and capture start by explicit page id', async () => {
@@ -21361,8 +21733,13 @@ describe('OrcaRuntimeService', () => {
         }
       ])
       const runtime = createRuntime()
+      const worktreeBId = makeWorktreeKey({
+        hostId: 'local',
+        repoId: TEST_REPO_ID,
+        path: '/tmp/worktree-b'
+      })
       const getRegisteredTabsMock = vi.fn((worktreeId?: string) =>
-        worktreeId === `${TEST_REPO_ID}::/tmp/worktree-b` ? new Map() : new Map([['page-1', 1]])
+        worktreeId === worktreeBId ? new Map() : new Map([['page-1', 1]])
       )
 
       runtime.setAgentBrowserBridge({
@@ -21375,7 +21752,7 @@ describe('OrcaRuntimeService', () => {
           worktree: 'path:/tmp/worktree-b'
         })
       ).rejects.toThrow('Browser page page-1 was not found in this worktree')
-      expect(getRegisteredTabsMock).toHaveBeenCalledWith(`${TEST_REPO_ID}::/tmp/worktree-b`)
+      expect(getRegisteredTabsMock).toHaveBeenCalledWith(worktreeBId)
     })
   })
 

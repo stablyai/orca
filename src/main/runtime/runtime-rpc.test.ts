@@ -15,6 +15,7 @@ import { createRuntimeTransportMetadata, OrcaRuntimeRpcServer } from './runtime-
 import { parsePairingCode } from '../../shared/pairing'
 import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from './rpc/e2ee-crypto'
 import { DeviceRegistry } from './device-registry'
+import { makeWorktreeKey } from '../../shared/worktree-id'
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([
@@ -259,6 +260,25 @@ class FakeWebSocket extends EventEmitter {
 }
 
 describe('OrcaRuntimeRpcServer', () => {
+  const LEGACY_WORKTREE_A_ID = 'repo-1::/tmp/worktree-a'
+  const WORKTREE_A_ID = makeWorktreeKey({
+    hostId: 'local',
+    repoId: 'repo-1',
+    path: '/tmp/worktree-a'
+  })
+  const makeWorktreeMeta = (overrides?: { isUnread?: boolean }) => ({
+    displayName: 'foo',
+    comment: '',
+    linkedIssue: 123,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: overrides?.isUnread ?? false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0
+  })
+
   const makeStore = (overrides?: { isUnread?: boolean }) => ({
     getRepo: (id: string) =>
       makeStore(overrides)
@@ -279,27 +299,20 @@ describe('OrcaRuntimeRpcServer', () => {
         ...makeStore(overrides).getRepo(id),
         ...updates
       }) as never,
-    getAllWorktreeMeta: () => ({
-      'repo-1::/tmp/worktree-a': {
-        displayName: 'foo',
-        comment: '',
-        linkedIssue: 123,
-        linkedPR: null,
-        linkedLinearIssue: null,
-        isArchived: false,
-        isUnread: overrides?.isUnread ?? false,
-        isPinned: false,
-        sortOrder: 0,
-        lastActivityAt: 0
+    getAllWorktreeMeta: () => {
+      const meta = makeWorktreeMeta(overrides)
+      return {
+        [LEGACY_WORKTREE_A_ID]: meta,
+        [WORKTREE_A_ID]: meta
       }
-    }),
+    },
     getWorktreeMeta: (worktreeId: string) =>
-      worktreeId === 'repo-1::/tmp/worktree-a'
+      worktreeId === LEGACY_WORKTREE_A_ID || worktreeId === WORKTREE_A_ID
         ? (makeStore(overrides).getAllWorktreeMeta()[worktreeId] as never)
         : undefined,
     setWorktreeMeta: (_worktreeId: string, meta: Record<string, unknown>) =>
       ({
-        ...makeStore(overrides).getAllWorktreeMeta()['repo-1::/tmp/worktree-a'],
+        ...makeStore(overrides).getAllWorktreeMeta()[WORKTREE_A_ID],
         ...meta
       }) as never,
     removeWorktreeMeta: () => {},
@@ -2240,7 +2253,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService(makeStore() as never)
     const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
-    const worktreeId = 'repo-1::/tmp/worktree-a'
+    const worktreeId = WORKTREE_A_ID
     const leftLeaf = '11111111-1111-4111-8111-111111111111'
     const topLeaf = '22222222-2222-4222-8222-222222222222'
     const bottomLeaf = '33333333-3333-4333-8333-333333333333'
@@ -2507,7 +2520,7 @@ describe('OrcaRuntimeRpcServer', () => {
       ok: true,
       result: {
         terminal: {
-          worktreeId: 'repo-1::/tmp/worktree-a',
+          worktreeId: WORKTREE_A_ID,
           surface: 'background'
         }
       }
@@ -2520,7 +2533,7 @@ describe('OrcaRuntimeRpcServer', () => {
       authToken,
       method: 'session.tabs.list',
       params: {
-        worktree: 'id:repo-1::/tmp/worktree-a'
+        worktree: `id:${WORKTREE_A_ID}`
       }
     })
 
@@ -2609,7 +2622,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const metadata = readRuntimeMetadata(userDataPath)
     const laptopEndpoint = metadata!.transports[0]!.endpoint
     const laptopAuthToken = metadata!.authToken
-    const worktree = 'id:repo-1::/tmp/worktree-a'
+    const worktree = `id:${WORKTREE_A_ID}`
     const leafId = '11111111-1111-4111-8111-111111111111'
 
     try {
@@ -2757,7 +2770,7 @@ describe('OrcaRuntimeRpcServer', () => {
       result: {
         worktrees: [
           {
-            worktreeId: 'repo-1::/tmp/worktree-a',
+            worktreeId: WORKTREE_A_ID,
             repoId: 'repo-1',
             repo: 'repo',
             path: '/tmp/worktree-a',
@@ -2903,7 +2916,7 @@ describe('OrcaRuntimeRpcServer', () => {
         tabs: [
           {
             tabId: 'tab-1',
-            worktreeId: 'repo-1::/tmp/worktree-a',
+            worktreeId: WORKTREE_A_ID,
             title: 'Terminal 1',
             activeLeafId: 'pane:1',
             layout: null

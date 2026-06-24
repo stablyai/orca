@@ -720,6 +720,18 @@ const ProjectHostSetupCreateIpcArgs = z.object({
 
 const ProjectHostSetupUpdateIpcArgs = z.object({
   setupId: z.string().min(1),
+  hostId: z
+    .string()
+    .min(1)
+    .transform((value, ctx) => {
+      const hostId = normalizeExecutionHostId(value)
+      if (!hostId) {
+        ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
+        return z.NEVER
+      }
+      return hostId
+    })
+    .optional(),
   updates: z.object({
     displayName: z.string().optional(),
     path: z.string().optional(),
@@ -734,7 +746,19 @@ const ProjectHostSetupUpdateIpcArgs = z.object({
 })
 
 const ProjectHostSetupDeleteIpcArgs = z.object({
-  setupId: z.string().min(1)
+  setupId: z.string().min(1),
+  hostId: z
+    .string()
+    .min(1)
+    .transform((value, ctx) => {
+      const hostId = normalizeExecutionHostId(value)
+      if (!hostId) {
+        ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
+        return z.NEVER
+      }
+      return hostId
+    })
+    .optional()
 })
 
 const FolderWorkspaceLinkedTaskArgs = z
@@ -1859,8 +1883,12 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     }
   )
 
-  ipcMain.handle('repos:remove', async (_event, args: { repoId: string }) => {
-    store.removeProject(args.repoId)
+  ipcMain.handle('repos:remove', async (_event, args: { repoId: string; hostId?: string }) => {
+    const hostId = args.hostId ? normalizeExecutionHostId(args.hostId) : undefined
+    if (args.hostId && !hostId) {
+      throw new Error(`Invalid host ID: ${args.hostId}`)
+    }
+    store.removeProject(args.repoId, hostId ?? undefined)
     invalidateAuthorizedRootsCache()
     notifyReposChanged(mainWindow)
   })
@@ -1871,6 +1899,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       _event,
       args: {
         repoId: string
+        hostId?: string
         updates: Partial<
           Pick<
             Repo,
@@ -1984,7 +2013,11 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           updates.sourceControlAi = normalizedSourceControlAi
         }
       }
-      const updated = store.updateRepo(args.repoId, updates)
+      const hostId = args.hostId ? normalizeExecutionHostId(args.hostId) : undefined
+      if (args.hostId && !hostId) {
+        throw new Error(`Invalid host ID: ${args.hostId}`)
+      }
+      const updated = store.updateRepo(args.repoId, updates, hostId ?? undefined)
       if (updated) {
         if ('worktreeBasePath' in updates) {
           void prepareLocalWorktreeRootForRepo(store, updated)

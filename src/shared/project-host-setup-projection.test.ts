@@ -198,6 +198,27 @@ describe('project host setup projection', () => {
       projectHostSetupId: 'remote-repo'
     })
   })
+
+  it('derives workspace ownership metadata from the matching repo host setup', () => {
+    const localRepo = repo({
+      id: 'same-repo',
+      path: '/Users/alice/orca',
+      displayName: 'orca'
+    })
+    const remoteRepo = repo({
+      id: 'same-repo',
+      path: '/home/alice/orca',
+      displayName: 'orca remote',
+      connectionId: 'openclaw 2'
+    })
+    const projection = projectHostSetupProjectionFromRepos([localRepo, remoteRepo])
+
+    expect(getProjectHostSetupWorktreeMeta(projection.setups, remoteRepo)).toEqual({
+      projectId: 'repo:same-repo',
+      hostId: 'ssh:openclaw%202',
+      projectHostSetupId: 'same-repo'
+    })
+  })
 })
 
 describe('isGitHubBackedRepo', () => {

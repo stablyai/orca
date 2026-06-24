@@ -109,6 +109,32 @@ describe('repo slice host identity routing', () => {
     })
   })
 
+  it('updates the requested owner host even when settings focus points elsewhere', async () => {
+    reposUpdate.mockResolvedValue(undefined)
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [localDuplicate, remoteDuplicate]
+    })
+
+    await store
+      .getState()
+      .updateRepo('same-repo', { displayName: 'Local Renamed' }, { ownerHostId: 'local' })
+
+    expect(store.getState().repos).toEqual([
+      { ...localDuplicate, displayName: 'Local Renamed' },
+      remoteDuplicate
+    ])
+    expect(reposUpdate).toHaveBeenCalledWith({
+      repoId: 'same-repo',
+      hostId: 'local',
+      updates: { displayName: 'Local Renamed' }
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'repo.update' })
+    )
+  })
+
   it('updates a legacy local duplicate without overwriting an explicit remote sibling', async () => {
     const { executionHostId: _executionHostId, ...legacyLocalDuplicate } = localDuplicate
     reposUpdate.mockResolvedValue(undefined)
@@ -123,6 +149,7 @@ describe('repo slice host identity routing', () => {
     ])
     expect(reposUpdate).toHaveBeenCalledWith({
       repoId: 'same-repo',
+      hostId: 'local',
       updates: { displayName: 'Local Renamed' }
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
@@ -260,7 +287,44 @@ describe('repo slice host identity routing', () => {
     expect(store.getState().projects).toEqual([
       expect.objectContaining({ id: 'repo:same-repo', sourceRepoIds: ['same-repo'] })
     ])
-    expect(reposRemove).toHaveBeenCalledWith({ repoId: 'same-repo' })
+    expect(reposRemove).toHaveBeenCalledWith({ repoId: 'same-repo', hostId: 'local' })
+    expect(ptyKill).toHaveBeenCalledWith('local-pty')
+    expect(ptyKill).not.toHaveBeenCalledWith('remote-pty')
+  })
+
+  it('removes the requested owner host even when settings focus points elsewhere', async () => {
+    const localWorktree = makeWorktree({
+      id: 'same-repo::/local/wt',
+      repoId: 'same-repo'
+    })
+    const remoteWorktree = makeWorktree({
+      id: 'same-repo::/remote/wt',
+      repoId: 'same-repo',
+      hostId: 'runtime:env-1'
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [localDuplicate, remoteDuplicate],
+      worktreesByRepo: { 'same-repo': [localWorktree, remoteWorktree] },
+      tabsByWorktree: {
+        [localWorktree.id]: [{ id: 'local-tab', worktreeId: localWorktree.id }] as never,
+        [remoteWorktree.id]: [{ id: 'remote-tab', worktreeId: remoteWorktree.id }] as never
+      },
+      ptyIdsByTabId: {
+        'local-tab': ['local-pty'],
+        'remote-tab': ['remote-pty']
+      }
+    })
+
+    await store.getState().removeProject('same-repo', { ownerHostId: 'local' })
+
+    expect(store.getState().repos).toEqual([remoteDuplicate])
+    expect(store.getState().worktreesByRepo['same-repo']).toEqual([remoteWorktree])
+    expect(reposRemove).toHaveBeenCalledWith({ repoId: 'same-repo', hostId: 'local' })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'repo.rm' })
+    )
     expect(ptyKill).toHaveBeenCalledWith('local-pty')
     expect(ptyKill).not.toHaveBeenCalledWith('remote-pty')
   })

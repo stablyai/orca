@@ -10,6 +10,7 @@ import type {
   Repo,
   WorktreeMeta
 } from '../../shared/types'
+import { makeRepoWorktreeKey } from '../../shared/worktree-id'
 
 const {
   listRepoWorktreesMock,
@@ -198,6 +199,10 @@ describe('workspace cleanup scan', () => {
 
   it('uses direct metadata lookup for focused disconnected remote preflight', async () => {
     const targetWorktreeId = 'repo-1::/remote/repo-feature'
+    const canonicalTargetWorktreeId = makeRepoWorktreeKey(
+      { ...REPO, connectionId: 'ssh-1' },
+      '/remote/repo-feature'
+    )
     const targetMeta: WorktreeMeta = {
       displayName: 'Remote Feature',
       comment: '',
@@ -228,7 +233,7 @@ describe('workspace cleanup scan', () => {
     expect(getAllWorktreeMeta).not.toHaveBeenCalled()
     expect(result.errors).toEqual([])
     expect(result.candidates[0]).toMatchObject({
-      worktreeId: targetWorktreeId,
+      worktreeId: canonicalTargetWorktreeId,
       path: '/remote/repo-feature',
       blockers: ['ssh-disconnected'],
       git: {
@@ -236,6 +241,114 @@ describe('workspace cleanup scan', () => {
         checkedAt: null
       }
     })
+  })
+
+  it('does not resolve ambiguous legacy focused targets across SSH hosts', async () => {
+    const targetMeta: WorktreeMeta = {
+      displayName: 'Remote Feature',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: NOW - 2 * 24 * 60 * 60 * 1000
+    }
+    const getWorktreeMeta = vi.fn(() => targetMeta)
+    const repos = [
+      { ...REPO, connectionId: 'ssh-1' },
+      { ...REPO, connectionId: 'ssh-2' }
+    ]
+    const store = {
+      getRepos: () => repos,
+      getWorktreeMeta,
+      getAllWorktreeMeta: () => ({})
+    } as unknown as Store
+
+    const result = await scanWorkspaceCleanup(store, {
+      worktreeId: 'repo-1::/remote/repo-feature'
+    })
+
+    expect(getWorktreeMeta).not.toHaveBeenCalled()
+    expect(result.errors).toEqual([])
+    expect(result.candidates).toEqual([])
+  })
+
+  it('uses canonical focused targets to select the exact SSH host', async () => {
+    const repos = [
+      { ...REPO, connectionId: 'ssh-1' },
+      { ...REPO, connectionId: 'ssh-2' }
+    ]
+    const targetWorktreeId = makeRepoWorktreeKey(repos[1], '/remote/repo-feature')
+    const targetMeta: WorktreeMeta = {
+      displayName: 'Remote Feature',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: NOW - 2 * 24 * 60 * 60 * 1000
+    }
+    const getWorktreeMeta = vi.fn((worktreeId: string) =>
+      worktreeId === targetWorktreeId ? targetMeta : undefined
+    )
+    const store = {
+      getRepos: () => repos,
+      getWorktreeMeta,
+      getAllWorktreeMeta: () => ({})
+    } as unknown as Store
+
+    const result = await scanWorkspaceCleanup(store, { worktreeId: targetWorktreeId })
+
+    expect(result.errors).toEqual([])
+    expect(result.candidates).toHaveLength(1)
+    expect(result.candidates[0]).toMatchObject({
+      worktreeId: targetWorktreeId,
+      connectionId: 'ssh-2',
+      path: '/remote/repo-feature',
+      blockers: ['ssh-disconnected']
+    })
+  })
+
+  it('does not use ambiguous legacy metadata for canonical focused SSH targets', async () => {
+    const repos = [
+      { ...REPO, connectionId: 'ssh-1' },
+      { ...REPO, connectionId: 'ssh-2' }
+    ]
+    const worktreePath = '/remote/repo-feature'
+    const targetWorktreeId = makeRepoWorktreeKey(repos[1], worktreePath)
+    const legacyWorktreeId = `${REPO.id}::${worktreePath}`
+    const targetMeta: WorktreeMeta = {
+      displayName: 'Ambiguous Legacy Remote Feature',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: NOW - 2 * 24 * 60 * 60 * 1000
+    }
+    const getWorktreeMeta = vi.fn((worktreeId: string) =>
+      worktreeId === legacyWorktreeId ? targetMeta : undefined
+    )
+    const store = {
+      getRepos: () => repos,
+      getWorktreeMeta,
+      getAllWorktreeMeta: () => ({})
+    } as unknown as Store
+
+    const result = await scanWorkspaceCleanup(store, { worktreeId: targetWorktreeId })
+
+    expect(getWorktreeMeta).toHaveBeenCalledWith(legacyWorktreeId)
+    expect(result.errors).toEqual([])
+    expect(result.candidates).toEqual([])
   })
 
   it('scans connected remote workspaces through the SSH git provider', async () => {
@@ -272,6 +385,112 @@ describe('workspace cleanup scan', () => {
       selectedByDefault: true,
       reasons: ['idle-clean']
     })
+  })
+
+  it('uses matching host-stamped legacy metadata during connected remote scans', async () => {
+    const repos = [
+      { ...REPO, connectionId: 'ssh-1' },
+      { ...REPO, connectionId: 'ssh-2' }
+    ]
+    const provider = {
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo-feature',
+          head: 'abc123',
+          branch: 'refs/heads/feature',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      getStatus: vi.fn().mockResolvedValue({
+        entries: [],
+        conflictOperation: 'unknown',
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+      } satisfies GitStatusResult)
+    }
+    getSshGitProviderMock.mockReturnValue(provider)
+    const legacyMeta = {
+      displayName: 'Remote Legacy',
+      linkedPR: null,
+      linkedIssue: null,
+      lastActivityAt: NOW - 40 * 24 * 60 * 60 * 1000,
+      hostId: 'ssh:ssh-1'
+    }
+    const store = {
+      getRepos: () => repos,
+      getWorktreeMeta: (worktreeId: string) =>
+        worktreeId === 'repo-1::/remote/repo-feature' ? legacyMeta : undefined,
+      getAllWorktreeMeta: () => ({})
+    } as unknown as Store
+
+    const result = await scanWorkspaceCleanup(store)
+
+    expect(result.candidates[0]).toMatchObject({
+      worktreeId: makeRepoWorktreeKey(repos[0], '/remote/repo-feature'),
+      displayName: 'Remote Legacy',
+      connectionId: 'ssh-1'
+    })
+    expect(result.candidates[1]).toMatchObject({
+      worktreeId: makeRepoWorktreeKey(repos[1], '/remote/repo-feature'),
+      displayName: 'feature',
+      connectionId: 'ssh-2'
+    })
+  })
+
+  it('ignores hostless legacy metadata during ambiguous connected remote scans', async () => {
+    const repos = [
+      { ...REPO, connectionId: 'ssh-1' },
+      { ...REPO, connectionId: 'ssh-2' }
+    ]
+    const provider = {
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo-feature',
+          head: 'abc123',
+          branch: 'refs/heads/feature',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      getStatus: vi.fn().mockResolvedValue({
+        entries: [],
+        conflictOperation: 'unknown',
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+      } satisfies GitStatusResult)
+    }
+    getSshGitProviderMock.mockReturnValue(provider)
+    const store = {
+      getRepos: () => repos,
+      getWorktreeMeta: (worktreeId: string) =>
+        worktreeId === 'repo-1::/remote/repo-feature'
+          ? {
+              displayName: 'Ambiguous Legacy',
+              linkedPR: null,
+              linkedIssue: null,
+              isPinned: true,
+              lastActivityAt: NOW - 40 * 24 * 60 * 60 * 1000
+            }
+          : undefined,
+      getAllWorktreeMeta: () => ({})
+    } as unknown as Store
+
+    const result = await scanWorkspaceCleanup(store)
+
+    expect(result.candidates).toHaveLength(2)
+    expect(result.candidates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          worktreeId: makeRepoWorktreeKey(repos[0], '/remote/repo-feature'),
+          displayName: 'feature',
+          blockers: []
+        }),
+        expect.objectContaining({
+          worktreeId: makeRepoWorktreeKey(repos[1], '/remote/repo-feature'),
+          displayName: 'feature',
+          blockers: []
+        })
+      ])
+    )
   })
 
   it('skips connected remote workspaces that fail during broad scans', async () => {
@@ -339,6 +558,60 @@ describe('workspace cleanup scan', () => {
         checkedAt: null
       }
     })
+  })
+
+  it('ignores ambiguous legacy renderer git deferrals across SSH hosts', async () => {
+    const firstProvider = {
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo-feature',
+          head: 'abc123',
+          branch: 'refs/heads/feature',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      getStatus: vi.fn().mockResolvedValue({
+        entries: [],
+        conflictOperation: 'unknown',
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+      } satisfies GitStatusResult)
+    }
+    const secondProvider = {
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo-feature',
+          head: 'def456',
+          branch: 'refs/heads/feature',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      getStatus: vi.fn().mockResolvedValue({
+        entries: [],
+        conflictOperation: 'unknown',
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+      } satisfies GitStatusResult)
+    }
+    getSshGitProviderMock.mockImplementation((connectionId: string) =>
+      connectionId === 'ssh-1' ? firstProvider : secondProvider
+    )
+
+    const result = await scanWorkspaceCleanup(
+      makeStore({
+        repos: [
+          { ...REPO, connectionId: 'ssh-1' },
+          { ...REPO, connectionId: 'ssh-2' }
+        ]
+      }),
+      { skipGitWorktreeIds: ['repo-1::/remote/repo-feature'] }
+    )
+
+    expect(firstProvider.getStatus).toHaveBeenCalledWith('/remote/repo-feature')
+    expect(secondProvider.getStatus).toHaveBeenCalledWith('/remote/repo-feature')
+    expect(result.candidates).toHaveLength(2)
+    expect(result.candidates[0]?.git.clean).toBe(true)
+    expect(result.candidates[1]?.git.clean).toBe(true)
   })
 
   it('uses remote commit presence when a clean inactive workspace has no upstream', async () => {
@@ -453,7 +726,7 @@ describe('workspace cleanup scan', () => {
     expect(result.errors).toEqual([])
     expect(result.candidates).toHaveLength(LARGE_WORKTREE_COUNT)
     expect(result.candidates[0]).toMatchObject({
-      worktreeId: 'repo-1::/repo-feature-0',
+      worktreeId: makeRepoWorktreeKey(REPO, '/repo-feature-0'),
       path: '/repo-feature-0',
       branch: 'feature-0',
       tier: 'review',
@@ -463,7 +736,7 @@ describe('workspace cleanup scan', () => {
       }
     })
     expect(result.candidates[LARGE_WORKTREE_COUNT - 1]).toMatchObject({
-      worktreeId: `repo-1::/repo-feature-${LARGE_WORKTREE_COUNT - 1}`,
+      worktreeId: makeRepoWorktreeKey(REPO, `/repo-feature-${LARGE_WORKTREE_COUNT - 1}`),
       path: `/repo-feature-${LARGE_WORKTREE_COUNT - 1}`,
       branch: `feature-${LARGE_WORKTREE_COUNT - 1}`
     })
