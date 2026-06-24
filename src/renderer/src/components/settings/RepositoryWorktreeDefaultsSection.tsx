@@ -83,9 +83,11 @@ export function RepositoryWorktreeDefaultsSection({
           repoId={repo.id}
           storeValue={repo.worktreeBasePath ?? ''}
           placeholder={settings?.workspaceDir ?? ''}
-          onTextChange={(text) =>
+          onTextChange={() => {}}
+          onBlur={(e) => {
+            const text = e.currentTarget.value
             updateRepo(repo.id, { worktreeBasePath: text.trim() ? text : undefined })
-          }
+          }}
           className="h-9 text-sm"
         />
         <p className="text-xs text-muted-foreground">
