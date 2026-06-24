@@ -133,6 +133,32 @@ describe('CodexHookService', () => {
     expect(trustConfig).toContain(':permission_request:0:0')
   })
 
+  it('drops plugin manager metadata from runtime hooks.json during install', () => {
+    const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
+    mkdirSync(managedCodexHome, { recursive: true })
+    writeFileSync(
+      join(managedCodexHome, 'hooks.json'),
+      `${JSON.stringify({
+        hooks: {},
+        _managed: {
+          'compound-engineering': {
+            Stop: [0]
+          }
+        }
+      })}\n`,
+      'utf-8'
+    )
+
+    expect(new CodexHookService().install().state).toBe('installed')
+
+    const hooksConfig = JSON.parse(readFileSync(join(managedCodexHome, 'hooks.json'), 'utf-8')) as {
+      hooks: Record<string, unknown>
+      _managed?: unknown
+    }
+    expect(hooksConfig._managed).toBeUndefined()
+    expect(Object.keys(hooksConfig)).toEqual(['hooks'])
+  })
+
   // Why: #6078 — a Windows user profile path like `C:\Users\Jane Doe` used to
   // be written verbatim as the hook command, so Codex split it at the space and
   // the hook exited with code 1. The managed command uses an encoded launcher
@@ -911,6 +937,41 @@ describe('CodexHookService', () => {
     expect(systemHooks.hooks.Stop).toEqual([{ hooks: [{ type: 'command', command: 'user-hook' }] }])
     expect(systemHooks.hooks.SessionStart).toBeUndefined()
     expect(existsSync(profilePath)).toBe(false)
+  })
+
+  it('sanitizes runtime hooks.json metadata during remove even without managed hooks', () => {
+    const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
+    const managedHooksPath = join(managedCodexHome, 'hooks.json')
+    mkdirSync(managedCodexHome, { recursive: true })
+    writeFileSync(
+      managedHooksPath,
+      `${JSON.stringify(
+        {
+          hooks: {
+            Stop: [{ hooks: [{ type: 'command', command: 'user-hook' }] }]
+          },
+          _managed: {
+            'compound-engineering': {
+              Stop: [0]
+            }
+          }
+        },
+        null,
+        2
+      )}\n`,
+      'utf-8'
+    )
+
+    const status = new CodexHookService().remove()
+
+    expect(status.state).toBe('not_installed')
+    const hooksConfig = JSON.parse(readFileSync(managedHooksPath, 'utf-8')) as {
+      hooks: Record<string, unknown>
+      _managed?: unknown
+    }
+    expect(hooksConfig._managed).toBeUndefined()
+    expect(Object.keys(hooksConfig)).toEqual(['hooks'])
+    expect(hooksConfig.hooks.Stop).toEqual([{ hooks: [{ type: 'command', command: 'user-hook' }] }])
   })
 
   it('cleans duplicate Codex hook representations while keeping status hooks in runtime CODEX_HOME', () => {
