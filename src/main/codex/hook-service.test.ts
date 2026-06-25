@@ -746,6 +746,11 @@ describe('CodexHookService', () => {
               { hooks: [{ type: 'command', command: legacyCommand }] }
             ],
             SessionStart: [{ hooks: [{ type: 'command', command: legacyCommand }] }]
+          },
+          _managed: {
+            'external-manager': {
+              Stop: [0]
+            }
           }
         },
         null,
@@ -778,9 +783,11 @@ describe('CodexHookService', () => {
 
     const systemHooks = JSON.parse(readFileSync(systemHooksPath, 'utf-8')) as {
       hooks: Record<string, { hooks?: { command?: string }[] }[]>
+      _managed?: unknown
     }
     expect(systemHooks.hooks.Stop).toEqual([{ hooks: [{ type: 'command', command: 'user-hook' }] }])
     expect(systemHooks.hooks.SessionStart).toBeUndefined()
+    expect(systemHooks._managed).toEqual({ 'external-manager': { Stop: [0] } })
     const systemToml = readFileSync(join(systemCodexHome, 'config.toml'), 'utf-8')
     expect(systemToml).toContain('model = "system-model"')
     expect(systemToml).not.toContain(':stop:1:0')

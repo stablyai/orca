@@ -547,7 +547,9 @@ function cleanupLegacySystemManagedHooks(): void {
   // Why: Codex hooks moved to Orca's managed CODEX_HOME; old entries in
   // ~/.codex would keep external Codex sessions reporting into Orca.
   if (removedManagedHook) {
-    writeCodexHooksJson(legacyConfigPath, nextHooks)
+    // Why: this is the user's system hooks file, not Orca's runtime copy.
+    // Remove only stale Orca hook entries and preserve other managers' metadata.
+    writeHooksJson(legacyConfigPath, { ...config, hooks: nextHooks })
   }
   removeMatchingTrustEntries(getSystemCodexConfigTomlPath(), trustEntries)
 }
