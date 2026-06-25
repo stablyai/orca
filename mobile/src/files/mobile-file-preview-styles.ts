@@ -91,6 +91,37 @@ export const filePreviewStyles = StyleSheet.create({
     padding: spacing.md,
     paddingBottom: spacing.xl
   },
+  modeContainer: {
+    flex: 1,
+    backgroundColor: colors.editorSurface
+  },
+  modeToolbar: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle,
+    backgroundColor: colors.bgBase
+  },
+  modeToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: colors.bgRaised
+  },
+  modeToggleActive: {
+    backgroundColor: colors.bgPanel,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle
+  },
+  modeToggleText: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize
+  },
   truncatedNote: {
     marginBottom: spacing.md,
     color: colors.textSecondary,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   ActivityIndicator,
   Image,
@@ -11,22 +11,20 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
-import { MobileMarkdown } from '../components/MobileMarkdown'
-import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
 import { getWorktreeLabel } from '../session/worktree-label'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useForceReconnect, useHostClient } from '../transport/client-context'
 import {
-  formatPreviewByteLength,
   loadMobileFilePreview,
   previewError,
   type MobileFilePreviewResult
 } from './mobile-file-preview-request'
+import { MobileFileMarkdownPreview } from './MobileFileMarkdownPreview'
+import { MobileFilePreviewSourceText } from './MobileFilePreviewSourceText'
 import {
   displayNameFromPreviewPath,
   type MobileFilePreviewRouteState
 } from './mobile-file-preview-route'
-import { buildMobileFilePreviewSyntax } from './mobile-file-preview-syntax'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 
 type Props = {
@@ -191,16 +189,18 @@ function renderPreviewBody(
 
   if (preview.kind === 'markdown') {
     return (
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.markdownContent}>
-        {preview.truncated ? <TruncatedNote byteLength={preview.byteLength} /> : null}
-        <MobileMarkdown content={preview.content} />
-      </ScrollView>
+      <MobileFileMarkdownPreview
+        relativePath={options.relativePath}
+        content={preview.content}
+        truncated={preview.truncated}
+        byteLength={preview.byteLength}
+      />
     )
   }
 
   if (preview.kind === 'html') {
     return (
-      <SourceText
+      <MobileFilePreviewSourceText
         relativePath={options.relativePath}
         content={preview.content}
         truncated={preview.truncated}
@@ -210,44 +210,11 @@ function renderPreviewBody(
   }
 
   return (
-    <SourceText
+    <MobileFilePreviewSourceText
       relativePath={options.relativePath}
       content={preview.content}
       truncated={preview.truncated}
       byteLength={preview.byteLength}
     />
-  )
-}
-
-function SourceText({
-  relativePath,
-  content,
-  truncated,
-  byteLength
-}: {
-  relativePath: string
-  content: string
-  truncated?: boolean
-  byteLength?: number
-}) {
-  const syntax = useMemo(
-    () => buildMobileFilePreviewSyntax(relativePath, content),
-    [content, relativePath]
-  )
-  return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.textContent}>
-      {truncated ? <TruncatedNote byteLength={byteLength ?? content.length} /> : null}
-      <Text selectable style={styles.textPreview} accessibilityLabel="File preview">
-        <MobileSyntaxSegments segments={syntax.segments} />
-      </Text>
-    </ScrollView>
-  )
-}
-
-function TruncatedNote({ byteLength }: { byteLength: number }) {
-  return (
-    <Text style={styles.truncatedNote}>
-      Preview truncated. File size: {formatPreviewByteLength(byteLength)}.
-    </Text>
   )
 }
