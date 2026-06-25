@@ -2279,8 +2279,18 @@ type TrackedUpstreamNullCacheEntry = {
   expiresAt: number
 }
 
+// Why: a probe can miss because the branch genuinely has no upstream (a stable
+// result worth caching) or because the read-only git probe hit a transient
+// failure (spawn EAGAIN, momentary lock/IO error). Only the former is safe to
+// cache; caching a transient null suppresses the upstream PR fallback for the
+// whole TTL even though the next poll's probe would succeed.
+type TrackedUpstreamProbeResult = {
+  branch: TrackedUpstreamBranch | null
+  transient: boolean
+}
+
 const trackedUpstreamNullCache = new Map<string, TrackedUpstreamNullCacheEntry>()
-const trackedUpstreamInFlight = new Map<string, Promise<TrackedUpstreamBranch | null>>()
+const trackedUpstreamInFlight = new Map<string, Promise<TrackedUpstreamProbeResult>>()
 
 export function __resetTrackedUpstreamBranchCacheForTests(): void {
   trackedUpstreamNullCache.clear()
@@ -2323,21 +2333,24 @@ async function getTrackedUpstreamBranch(
 
   const inFlight = trackedUpstreamInFlight.get(cacheKey)
   if (inFlight) {
-    return inFlight
+    return (await inFlight).branch
   }
 
   const probe = probeTrackedUpstreamBranch(repoPath, branchName, connectionId, localGitOptions)
   trackedUpstreamInFlight.set(cacheKey, probe)
   try {
     const result = await probe
-    if (result) {
+    if (result.branch) {
       trackedUpstreamNullCache.delete(cacheKey)
-    } else {
+    } else if (!result.transient) {
+      // Why: only cache a stable "no upstream configured" miss. A transient
+      // probe failure must stay re-probable on the next poll so the real PR
+      // surfaces as soon as git recovers, instead of being hidden for the TTL.
       trackedUpstreamNullCache.set(cacheKey, {
         expiresAt: now + TRACKED_UPSTREAM_NULL_CACHE_TTL_MS
       })
     }
-    return result
+    return result.branch
   } finally {
     if (trackedUpstreamInFlight.get(cacheKey) === probe) {
       trackedUpstreamInFlight.delete(cacheKey)
@@ -2357,12 +2370,27 @@ function getTrackedUpstreamBranchCacheKey(
   return [runtimeKey, repoPath, branchName].join('\0')
 }
 
+// Why: `git rev-parse @{upstream}` fails with a deterministic message when the
+// branch simply has no configured upstream (or the ref is unknown). Those are
+// stable misses safe to cache. Any other failure (spawn EAGAIN, lock/IO error)
+// is transient and must not be cached, or the PR fallback stays suppressed for
+// the whole TTL after a one-off blip.
+function isNoUpstreamConfiguredError(err: unknown): boolean {
+  const message = (err instanceof Error ? err.message : String(err)).toLowerCase()
+  return (
+    message.includes('no upstream configured') ||
+    message.includes('no such branch') ||
+    message.includes('unknown revision') ||
+    message.includes('ambiguous argument')
+  )
+}
+
 async function probeTrackedUpstreamBranch(
   repoPath: string,
   branchName: string,
   connectionId?: string | null,
   localGitOptions: { wslDistro?: string } = {}
-): Promise<TrackedUpstreamBranch | null> {
+): Promise<TrackedUpstreamProbeResult> {
   const args = ['rev-parse', '--abbrev-ref', '--symbolic-full-name', `${branchName}@{upstream}`]
   try {
     const provider = connectionId ? getSshGitProvider(connectionId) : null
@@ -2372,9 +2400,9 @@ async function probeTrackedUpstreamBranch(
           cwd: repoPath,
           ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
         })
-    return parseTrackedUpstreamBranch(result.stdout, branchName)
-  } catch {
-    return null
+    return { branch: parseTrackedUpstreamBranch(result.stdout, branchName), transient: false }
+  } catch (err) {
+    return { branch: null, transient: !isNoUpstreamConfiguredError(err) }
   }
 }
 

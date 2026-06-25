@@ -1260,6 +1260,28 @@ describe('getPRForBranch', () => {
     }
   })
 
+  it('re-probes the tracked upstream after a transient probe failure instead of caching the null', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValue({
+      candidates: [{ owner: 'acme', repo: 'widgets' }],
+      headRepo: { owner: 'acme', repo: 'widgets' }
+    })
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: JSON.stringify([]) })
+    // First probe hits a transient spawn error (EAGAIN); the next poll's probe
+    // succeeds. The transient null must not be cached, so the second call must
+    // re-probe rather than short-circuiting on the cached null.
+    gitExecFileAsyncMock
+      .mockRejectedValueOnce(Object.assign(new Error('spawn git EAGAIN'), { code: 'EAGAIN' }))
+      .mockResolvedValueOnce({ stdout: 'origin/contributor/original\n', stderr: '' })
+
+    await getPRForBranch('/repo-root', 'no-pr-branch')
+    await getPRForBranch('/repo-root', 'no-pr-branch')
+
+    const trackedUpstreamCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) =>
+      (args as string[]).includes('no-pr-branch@{upstream}')
+    )
+    expect(trackedUpstreamCalls).toHaveLength(2)
+  })
+
   it('uses the tracked upstream remote owner for fork branch lookup', async () => {
     resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
       candidates: [
