@@ -9,8 +9,10 @@ afterEach(() => {
 })
 
 describe('markdown table of contents', () => {
-  it('builds a nested h1-h3 outline', () => {
-    const toc = buildMarkdownTableOfContents('# Intro\n\n## Setup\n\n### Install\n\n## Usage')
+  it('builds a nested h1-h5 outline', () => {
+    const toc = buildMarkdownTableOfContents(
+      '# Intro\n\n## Setup\n\n### Install\n\n#### Configure\n\n##### Options\n\n## Usage'
+    )
 
     expect(toc).toEqual([
       {
@@ -27,7 +29,21 @@ describe('markdown table of contents', () => {
                 id: 'install',
                 level: 3,
                 title: 'Install',
-                children: []
+                children: [
+                  {
+                    id: 'configure',
+                    level: 4,
+                    title: 'Configure',
+                    children: [
+                      {
+                        id: 'options',
+                        level: 5,
+                        title: 'Options',
+                        children: []
+                      }
+                    ]
+                  }
+                ]
               }
             ]
           },
@@ -43,7 +59,7 @@ describe('markdown table of contents', () => {
   })
 
   it('skips front matter and unsupported heading depths', () => {
-    const toc = buildMarkdownTableOfContents('---\ntitle: Doc\n---\n# Visible\n#### Hidden')
+    const toc = buildMarkdownTableOfContents('---\ntitle: Doc\n---\n# Visible\n###### Hidden')
 
     expect(toc.map((item) => item.title)).toEqual(['Visible'])
   })

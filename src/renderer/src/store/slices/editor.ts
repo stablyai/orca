@@ -978,6 +978,12 @@ function matchesEditorMode(
   return !modes || modes.includes(file.mode)
 }
 
+function getReusableOpenFileModes(mode: OpenFile['mode']): readonly OpenFile['mode'][] {
+  // Why: the same path can be open as both a diff and an editable file; matching
+  // by path alone collapses those distinct visible tabs onto one OpenFile.
+  return [mode]
+}
+
 function resolveEditorFileIdForOwner(
   state: Pick<EditorSlice, 'openFiles'>,
   filePath: string,
@@ -1507,11 +1513,20 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             (options?.suppressActiveRuntimeFallback
               ? null
               : (s.settings?.activeRuntimeEnvironmentId?.trim() ?? undefined)))
+      const reusableOpenFileModes = getReusableOpenFileModes(file.mode)
       const existing = s.openFiles.find(
         (f) =>
-          f.filePath === file.filePath && isSameEditorOwner(f, worktreeId, runtimeEnvironmentId)
+          f.filePath === file.filePath &&
+          matchesEditorMode(f, reusableOpenFileModes) &&
+          isSameEditorOwner(f, worktreeId, runtimeEnvironmentId)
       )
-      const id = resolveEditorFileIdForOwner(s, file.filePath, worktreeId, runtimeEnvironmentId)
+      const id = resolveEditorFileIdForOwner(
+        s,
+        file.filePath,
+        worktreeId,
+        runtimeEnvironmentId,
+        reusableOpenFileModes
+      )
       editorItemFileId = id
       const isPreview = options?.preview ?? false
       const recordReplacedPreview = options?.recordReplacedPreview ?? false

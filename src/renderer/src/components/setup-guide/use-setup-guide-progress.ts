@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { hasFeatureInteraction } from '../../../../shared/feature-interactions'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { hasEffectiveSetupCommand } from '@/lib/setup-script-status'
@@ -44,8 +45,6 @@ export function useSetupGuideProgress(
   const settings = useAppStore((s) => s.settings)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
   const preflightStatusContextKey = useAppStore((s) => s.preflightStatusContextKey)
@@ -294,8 +293,6 @@ export function useSetupGuideProgress(
           orchestrationSkillInstalled || detectedOrchestrationSkillInstalled,
         gitRepoCount,
         worktreesByRepo,
-        tabsByWorktree,
-        terminalLayoutsByTabId,
         hasSetupScript: currentSetupScriptProbe.hasSetupScript
       }),
     [
@@ -307,15 +304,17 @@ export function useSetupGuideProgress(
       detectedBrowserUseSkillInstalled,
       detectedOrchestrationSkillInstalled,
       featureInteractions,
-      terminalLayoutsByTabId,
       gitRepoCount,
       hasConnectedTaskSource,
       currentSetupScriptProbe.hasSetupScript,
       orchestrationSkillInstalled,
       settings,
-      tabsByWorktree,
       worktreesByRepo
     ]
   )
-  return useSetupGuideBrowserMilestoneProgress(rawProgress)
+  const historicalSplitTerminalDone = hasFeatureInteraction(
+    featureInteractions,
+    'terminal-pane-split'
+  )
+  return useSetupGuideBrowserMilestoneProgress(rawProgress, historicalSplitTerminalDone)
 }

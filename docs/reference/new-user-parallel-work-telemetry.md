@@ -112,7 +112,7 @@ Emit once per setup step when that step first transitions from incomplete to com
 
 Payload:
 
-- `step_id`: one of `split-terminal`, `two-worktrees`, `notifications`, `default-agent`, `task-sources`, `setup-script`, `add-two-repos`, `agent-capabilities`
+- `step_id`: one of `two-worktrees`, `browser`, `notifications`, `default-agent`, `task-sources`, `setup-script`, `add-two-repos`, `agent-capabilities`
 - `section_id`: `parallel-work` or `setup`
 - `completed_count`: integer `1..8`
 - `total_steps`: integer `8`

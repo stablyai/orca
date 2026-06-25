@@ -207,10 +207,7 @@ describe('project-host workspace target resolution', () => {
   // current host is given only as a preference must resolve to that project's
   // own host instead of returning '' (the silent no-op the dropdown showed).
   describe('cross-host project selection', () => {
-    const repos = [
-      makeRepo('local-repo'),
-      makeRepo('remote-repo', { connectionId: 'remote-1' })
-    ]
+    const repos = [makeRepo('local-repo'), makeRepo('remote-repo', { connectionId: 'remote-1' })]
     const projects = [
       makeProject('repo:local-repo', ['local-repo']),
       makeProject('repo:remote-repo', ['remote-repo'])
