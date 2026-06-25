@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   callRuntimeRpc,
   assertRuntimeEnvironmentCapability,
   clearRuntimeCompatibilityCacheForTests,
   getActiveRuntimeTarget,
+  markRuntimeEnvironmentCompatible,
   RuntimeRpcCallError,
   unwrapRuntimeRpcResult
 } from './runtime-rpc-client'
@@ -301,5 +302,60 @@ describe('runtime RPC client routing', () => {
       expect((error as RuntimeRpcCallError).code).toBe('method_not_found')
       expect((error as RuntimeRpcCallError).response).toBe(failure)
     }
+  })
+})
+
+describe('callRuntimeRpc background flag', () => {
+  const callMock = vi.fn()
+
+  beforeEach(() => {
+    clearRuntimeCompatibilityCacheForTests()
+    callMock.mockReset()
+    callMock.mockResolvedValue({
+      id: 'rpc',
+      ok: true,
+      result: { repos: [] },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    ;(globalThis as { window?: unknown }).window = {
+      api: {
+        runtimeEnvironments: { call: callMock },
+        runtime: { call: vi.fn() }
+      }
+    }
+  })
+
+  afterEach(() => {
+    delete (globalThis as { window?: unknown }).window
+  })
+
+  it('forwards background to runtimeEnvironments.call for an environment target', async () => {
+    // Cache compatibility so the status.get probe does not run for this test.
+    markRuntimeEnvironmentCompatible('env-1')
+    await callRuntimeRpc({ kind: 'environment', environmentId: 'env-1' }, 'repo.list', undefined, {
+      background: true,
+      timeoutMs: 15_000
+    })
+    expect(callMock).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'repo.list',
+      params: undefined,
+      timeoutMs: 15_000,
+      background: true
+    })
+  })
+
+  it('omits background when not provided (undefined)', async () => {
+    markRuntimeEnvironmentCompatible('env-1')
+    await callRuntimeRpc({ kind: 'environment', environmentId: 'env-1' }, 'repo.list', undefined, {
+      timeoutMs: 15_000
+    })
+    expect(callMock).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'repo.list',
+      params: undefined,
+      timeoutMs: 15_000,
+      background: undefined
+    })
   })
 })

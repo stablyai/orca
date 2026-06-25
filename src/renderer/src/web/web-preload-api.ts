@@ -1027,8 +1027,8 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
     },
     getStatus: ({ selector, timeoutMs }) =>
       callEnvironmentEnvelope<RuntimeStatus>(selector, 'status.get', undefined, timeoutMs),
-    call: ({ selector, method, params, timeoutMs }) =>
-      callEnvironmentEnvelope(selector, method, params, timeoutMs),
+    call: ({ selector, method, params, timeoutMs, background }) =>
+      callEnvironmentEnvelope(selector, method, params, timeoutMs, background),
     subscribe: async ({ selector, method, params, timeoutMs }, callbacks) => {
       const environment = resolveEnvironment(selector)
       const client = getClientForEnvironment(environment)
@@ -2508,11 +2508,17 @@ async function callEnvironmentEnvelope<TResult = unknown>(
   selector: string,
   method: string,
   params?: unknown,
-  timeoutMs?: number
+  timeoutMs?: number,
+  background?: boolean
 ): Promise<RuntimeRpcResponse<TResult>> {
   const environment = resolveEnvironment(selector)
-  const response = await runtimeCallQueuePool.enqueue(environment.id, method, () =>
-    getClientForEnvironment(environment).call(method, params, { timeoutMs })
+  // Why: web shares the same RuntimeRpcCallQueuePool, so forwarding the flag keeps
+  // background-lane behavior identical to desktop for cross-env refresh calls.
+  const response = await runtimeCallQueuePool.enqueue(
+    environment.id,
+    method,
+    () => getClientForEnvironment(environment).call(method, params, { timeoutMs }),
+    { background }
   )
   updateEnvironmentFromResponse(environment, response)
   return response as RuntimeRpcResponse<TResult>
