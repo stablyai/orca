@@ -23,8 +23,25 @@ const REPO_ID = 'repo1'
 const WORKTREE_PATH = '/repo1'
 const WORKTREE_ID = `${REPO_ID}::${WORKTREE_PATH}`
 
+const REPO_ID2 = 'repo2'
+const WORKTREE_PATH2 = '/repo2'
+const WORKTREE_ID2 = `${REPO_ID2}::${WORKTREE_PATH2}`
+
 const repo: Repo = { ...TEST_REPO, kind: 'git', connectionId: null }
 const worktree: Worktree = makeWorktree({ id: WORKTREE_ID, repoId: REPO_ID, path: WORKTREE_PATH })
+
+const repo2: Repo = {
+  ...TEST_REPO,
+  id: REPO_ID2,
+  path: WORKTREE_PATH2,
+  kind: 'git',
+  connectionId: null
+}
+const worktree2: Worktree = makeWorktree({
+  id: WORKTREE_ID2,
+  repoId: REPO_ID2,
+  path: WORKTREE_PATH2
+})
 
 const roots: Root[] = []
 
@@ -58,8 +75,11 @@ describe('useGitStatusPolling rerender stability', () => {
     useAppStore.setState(initialAppState, true)
     useAppStore.setState({
       activeWorktreeId: WORKTREE_ID,
-      worktreesByRepo: { [REPO_ID]: [worktree] },
-      repos: [repo],
+      worktreesByRepo: {
+        [REPO_ID]: [worktree],
+        [REPO_ID2]: [worktree2]
+      },
+      repos: [repo, repo2],
       rightSidebarOpen: true,
       rightSidebarTab: 'source-control',
       rightSidebarExplorerView: 'files',
@@ -135,5 +155,24 @@ describe('useGitStatusPolling rerender stability', () => {
     expect(refreshMock).toHaveBeenCalledTimes(2)
 
     addSpy.mockRestore()
+  })
+  it('triggers an immediate poll when the active worktree changes (no delay)', async () => {
+    await renderHook()
+    await flushMicrotasks()
+
+    // First poll on mount (worktree 1)
+    expect(refreshMock).toHaveBeenCalledTimes(1)
+
+    // Switch active worktree to worktree 2
+    await act(async () => {
+      useAppStore.setState({
+        activeWorktreeId: WORKTREE_ID2
+      })
+    })
+    await flushMicrotasks()
+
+    // Should trigger an immediate poll on the new worktree (total 2 calls)
+    // without having to wait for the 3000ms timer.
+    expect(refreshMock).toHaveBeenCalledTimes(2)
   })
 })

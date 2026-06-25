@@ -158,7 +158,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
 
   const fetchStatus = useCallback(() => {
     statusPollRunnerRef.current?.run()
-  }, [])
+  }, [activeWorktreeId])
 
   useEffect(() => {
     if (!enabled) {
