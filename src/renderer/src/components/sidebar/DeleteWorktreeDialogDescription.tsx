@@ -16,7 +16,7 @@ export function DeleteWorktreeDialogDescription({
 }): React.JSX.Element {
   return (
     <DialogDescription className="text-xs">
-      {translate('auto.components.sidebar.DeleteWorktreeDialog.91492c9ad6', 'Remove')}
+      {translate('auto.components.sidebar.DeleteWorktreeDialog.91492c9ad6', 'Remove')}{' '}
       <span className={targetClassName}>{targetLabel}</span>
       {canDeleteAllLineage ? (
         <>

@@ -289,7 +289,8 @@
           "bf53f09bf8": "Claude Agent Teams",
           "0708ed89f1": "Claude",
           "fc80296033": "Devin",
-          "da41abbdd4": "Ante"
+          "da41abbdd4": "Ante",
+          "mimo_code_label": "MiMo Code"
         },
         "skill": {
           "cli": {

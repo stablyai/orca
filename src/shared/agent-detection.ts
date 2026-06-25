@@ -350,6 +350,9 @@ export function getAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'opencode')) {
     return 'OpenCode'
   }
+  if (titleHasAgentName(title, 'mimo')) {
+    return 'MiMo Code'
+  }
   if (titleHasAgentName(title, 'aider')) {
     return 'Aider'
   }

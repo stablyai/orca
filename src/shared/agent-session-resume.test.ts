@@ -21,6 +21,7 @@ describe('agent session resume metadata', () => {
       { key: 'conversation_id', id: 'agy-conversation' }
     ],
     ['opencode', { sessionID: 'opencode-session' }, { key: 'session_id', id: 'opencode-session' }],
+    ['mimo-code', { sessionID: 'mimo-session' }, { key: 'session_id', id: 'mimo-session' }],
     ['droid', { session_id: 'droid-session' }, { key: 'session_id', id: 'droid-session' }],
     ['grok', { sessionId: 'grok-session' }, { key: 'session_id', id: 'grok-session' }],
     ['devin', { session_id: 'devin-session' }, { key: 'session_id', id: 'devin-session' }]
@@ -34,6 +35,7 @@ describe('agent session resume metadata', () => {
     ['gemini', { key: 'session_id', id: 's1' }, ['gemini', '--resume', 's1']],
     ['antigravity', { key: 'conversation_id', id: 's1' }, ['agy', '--conversation', 's1']],
     ['opencode', { key: 'session_id', id: 's1' }, ['opencode', '--session', 's1']],
+    ['mimo-code', { key: 'session_id', id: 's1' }, ['mimo', '--session', 's1']],
     ['droid', { key: 'session_id', id: 's1' }, ['droid', '--resume', 's1']],
     ['grok', { key: 'session_id', id: 's1' }, ['grok', '--resume', 's1']],
     ['devin', { key: 'session_id', id: 'abc12345' }, ['devin', '--resume', 'abc12345']]

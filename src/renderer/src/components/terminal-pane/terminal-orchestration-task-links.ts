@@ -8,7 +8,7 @@ export type ParsedOrchestrationTaskLink = {
 
 export const ORCHESTRATION_TASK_PREFIX = 'task_'
 
-const MAX_ORCHESTRATION_TASK_BODY_LENGTH = 128
+const MAX_ORCHESTRATION_TASK_TOKEN_LENGTH = 128
 const ORCHESTRATION_TASK_BOUNDARY_CHAR = /[A-Za-z0-9_-]/
 
 export function extractOrchestrationTaskLinks(lineText: string): ParsedOrchestrationTaskLink[] {
@@ -28,11 +28,14 @@ export function extractOrchestrationTaskLinks(lineText: string): ParsedOrchestra
     const tokenEnd = findOrchestrationTaskTokenEnd(lineText, bodyStart)
     searchStart = Math.max(tokenEnd, bodyStart + 1)
     const bodyLength = tokenEnd - bodyStart
-    if (bodyLength === 0 || bodyLength > MAX_ORCHESTRATION_TASK_BODY_LENGTH) {
+    if (bodyLength === 0) {
       continue
     }
 
     const taskId = lineText.slice(startIndex, tokenEnd)
+    if (taskId.length > MAX_ORCHESTRATION_TASK_TOKEN_LENGTH) {
+      continue
+    }
     if (
       ORCHESTRATION_TASK_BOUNDARY_CHAR.test(lineText[startIndex - 1] ?? '') ||
       ORCHESTRATION_TASK_BOUNDARY_CHAR.test(lineText[tokenEnd] ?? '')

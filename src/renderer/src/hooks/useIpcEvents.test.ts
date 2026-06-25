@@ -98,7 +98,7 @@ function makeTarget(args: { hasXtermClass?: boolean; editorClosest?: boolean }):
 }
 
 describe('resolveZoomTarget', () => {
-  it('routes to terminal zoom when terminal tab is active', () => {
+  it('routes to terminal zoom when terminal input is focused', () => {
     expect(
       resolveZoomTarget({
         activeView: 'terminal',
@@ -106,6 +106,16 @@ describe('resolveZoomTarget', () => {
         activeElement: makeTarget({ hasXtermClass: true })
       })
     ).toBe('terminal')
+  })
+
+  it('routes to ui zoom for an active terminal tab after terminal focus is released', () => {
+    expect(
+      resolveZoomTarget({
+        activeView: 'terminal',
+        activeTabType: 'terminal',
+        activeElement: makeTarget({})
+      })
+    ).toBe('ui')
   })
 
   it('routes to editor zoom for editor tabs', () => {
@@ -138,23 +148,21 @@ describe('resolveZoomTarget', () => {
     ).toBe('ui')
   })
 
-  it('routes to browser zoom for active browser tabs before stale DOM focus', () => {
+  it('routes to ui zoom for active browser tabs before stale DOM focus', () => {
     expect(
       resolveZoomTarget({
         activeView: 'terminal',
         activeTabType: 'browser',
-        activeBrowserPageId: 'page-1',
         activeElement: makeTarget({ editorClosest: true, hasXtermClass: true })
       })
-    ).toBe('browser')
+    ).toBe('ui')
   })
 
-  it('does not route to browser zoom without an active browser page', () => {
+  it('routes to ui zoom for browser tabs without an active browser page', () => {
     expect(
       resolveZoomTarget({
         activeView: 'terminal',
         activeTabType: 'browser',
-        activeBrowserPageId: null,
         activeElement: makeTarget({})
       })
     ).toBe('ui')
@@ -167,11 +175,10 @@ describe('useIpcEvents zoom routing', () => {
     vi.unstubAllGlobals()
   })
 
-  it('dispatches browser page zoom without applying or persisting UI zoom', async () => {
+  it('applies app zoom for an active browser tab', async () => {
     const terminalZoomListenerRef: {
       current: ((direction: 'in' | 'out' | 'reset') => void) | null
     } = { current: null }
-    const dispatchEvent = vi.fn()
     const setUI = vi.fn()
 
     vi.doMock('react', async () => {
@@ -235,7 +242,8 @@ describe('useIpcEvents zoom routing', () => {
       computeEditorFontSize: vi.fn(() => 13)
     }))
     vi.doMock('@/components/settings/SettingsConstants', () => ({
-      zoomLevelToPercent: vi.fn(() => 100),
+      zoomLevelToPercent: vi.fn(() => 120),
+      ZOOM_STEP: 0.5,
       ZOOM_MIN: -3,
       ZOOM_MAX: 3
     }))
@@ -255,7 +263,7 @@ describe('useIpcEvents zoom routing', () => {
     })
 
     vi.stubGlobal('window', {
-      dispatchEvent,
+      dispatchEvent: vi.fn(),
       setTimeout: vi.fn(() => 1),
       clearTimeout: vi.fn(),
       api: {
@@ -313,19 +321,153 @@ describe('useIpcEvents zoom routing', () => {
     if (!listener) {
       throw new Error('Expected terminal zoom listener to be registered')
     }
-    listener('reset')
+    listener('in')
 
-    expect(dispatchEvent).toHaveBeenCalledTimes(1)
-    const event = dispatchEvent.mock.calls[0]?.[0] as CustomEvent<{
-      browserPageId: string
-      direction: string
-    }>
-    expect(event.type).toBe('orca:browser-page-zoom')
-    expect(event.detail).toEqual({ browserPageId: 'page-1', direction: 'reset' })
-    expect(applyUIZoom).not.toHaveBeenCalled()
-    expect(setUI).not.toHaveBeenCalledWith(
-      expect.objectContaining({ uiZoomLevel: expect.anything() })
-    )
+    expect(applyUIZoom).toHaveBeenCalledWith(0.5)
+    expect(setUI).toHaveBeenCalledWith({ uiZoomLevel: 0.5 })
+  })
+
+  it('applies app zoom for an active terminal tab after terminal focus is released', async () => {
+    const terminalZoomListenerRef: {
+      current: ((direction: 'in' | 'out' | 'reset') => void) | null
+    } = { current: null }
+    const setUI = vi.fn()
+
+    vi.doMock('react', async () => {
+      const actual = await vi.importActual<typeof ReactModule>('react')
+      return {
+        ...actual,
+        useEffect: (effect: () => void | (() => void)) => {
+          effect()
+        }
+      }
+    })
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => ({
+          activeView: 'terminal',
+          activeTabType: 'terminal',
+          activeWorktreeId: 'wt-1',
+          activeBrowserTabId: null,
+          activeBrowserTabIdByWorktree: {},
+          browserTabsByWorktree: {},
+          browserPagesByWorkspace: {},
+          editorFontZoomLevel: 0,
+          setEditorFontZoomLevel: vi.fn(),
+          settings: { terminalFontSize: 13 },
+          setUpdateStatus: vi.fn(),
+          fetchRepos: vi.fn(),
+          fetchWorktrees: vi.fn(),
+          setActiveView: vi.fn(),
+          activeModal: null,
+          closeModal: vi.fn(),
+          openModal: vi.fn(),
+          setActiveRepo: vi.fn(),
+          setActiveWorktree: vi.fn(),
+          revealWorktreeInSidebar: vi.fn(),
+          setIsFullScreen: vi.fn(),
+          setRateLimitsFromPush: vi.fn()
+        })
+      }
+    }))
+    vi.doMock('@/lib/ui-zoom', () => ({ applyUIZoom: vi.fn() }))
+    vi.doMock('@/lib/worktree-activation', () => ({
+      activateAndRevealWorktree: vi.fn(),
+      ensureWorktreeHasInitialTerminal: vi.fn()
+    }))
+    vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+      getVisibleWorktreeIds: () => []
+    }))
+    vi.doMock('@/lib/editor-font-zoom', () => ({
+      nextEditorFontZoomLevel: vi.fn(() => 0),
+      computeEditorFontSize: vi.fn(() => 13)
+    }))
+    vi.doMock('@/components/settings/SettingsConstants', () => ({
+      zoomLevelToPercent: vi.fn(() => 120),
+      ZOOM_STEP: 0.5,
+      ZOOM_MIN: -3,
+      ZOOM_MAX: 3
+    }))
+    vi.doMock('@/lib/zoom-events', () => ({ dispatchZoomLevelChanged: vi.fn() }))
+
+    const makeEvents = (target: Record<string, unknown> = {}): Record<string, unknown> =>
+      new Proxy(target, {
+        get: (namespace, prop) => {
+          if (prop in namespace) {
+            return Reflect.get(namespace, prop)
+          }
+          return () => () => {}
+        }
+      })
+    vi.stubGlobal('document', {
+      activeElement: makeTarget({})
+    })
+
+    vi.stubGlobal('window', {
+      dispatchEvent: vi.fn(),
+      setTimeout: vi.fn(() => 1),
+      clearTimeout: vi.fn(),
+      api: {
+        repos: makeEvents(),
+        worktrees: makeEvents(),
+        keybindings: makeEvents(),
+        settings: makeEvents(),
+        updater: {
+          getStatus: () => Promise.resolve({ state: 'idle' }),
+          onStatus: () => () => {},
+          onClearDismissal: () => () => {}
+        },
+        browser: makeEvents(),
+        rateLimits: {
+          get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),
+          onUpdate: () => () => {}
+        },
+        ssh: {
+          listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
+          getState: () => Promise.resolve(null),
+          onStateChanged: () => () => {},
+          onCredentialRequest: () => () => {},
+          onCredentialResolved: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {}
+        },
+        runtime: {
+          getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
+          getBrowserDrivers: () => Promise.resolve([]),
+          onTerminalFitOverrideChanged: () => () => {},
+          onTerminalDriverChanged: () => () => {},
+          onBrowserDriverChanged: () => () => {}
+        },
+        agentStatus: { onSet: () => () => {} },
+        ui: makeEvents({
+          onTerminalZoom: (listener: (direction: 'in' | 'out' | 'reset') => void) => {
+            terminalZoomListenerRef.current = listener
+            return () => {}
+          },
+          getZoomLevel: vi.fn(() => 0),
+          set: setUI
+        })
+      }
+    })
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    const { applyUIZoom } = await import('@/lib/ui-zoom')
+    const { dispatchZoomLevelChanged } = await import('@/lib/zoom-events')
+
+    useIpcEvents()
+    const listener = terminalZoomListenerRef.current
+    if (!listener) {
+      throw new Error('Expected terminal zoom listener to be registered')
+    }
+    listener('in')
+
+    expect(applyUIZoom).toHaveBeenCalledWith(0.5)
+    expect(setUI).toHaveBeenCalledWith({ uiZoomLevel: 0.5 })
+    expect(dispatchZoomLevelChanged).toHaveBeenCalledWith('ui', 120)
   })
 })
 

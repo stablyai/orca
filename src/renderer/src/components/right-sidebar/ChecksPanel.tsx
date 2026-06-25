@@ -145,6 +145,7 @@ import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { translate } from '@/i18n/i18n'
 import { groupPRComments, type PRCommentGroup } from '@/lib/pr-comment-groups'
 import { openChecksPanelHostedReviewUrl } from './checks-panel-hosted-review-click-routing'
+import { ChecksPanelUpdatedAtMetadata } from './checks-panel-updated-at-metadata'
 import {
   clearPullRequestGenerationRequiresPushBeforeCreate,
   createRunningPullRequestGenerationRecord,
@@ -3469,11 +3470,10 @@ export default function ChecksPanel(): React.JSX.Element {
 
         {/* Updated at */}
         {activeReview.updatedAt && (
-          <div className="text-[10px] text-muted-foreground/60">
-            {reviewShortLabel}{' '}
-            {translate('auto.components.right.sidebar.ChecksPanel.34464d00b9', 'updated')}
-            {new Date(activeReview.updatedAt).toLocaleString()}
-          </div>
+          <ChecksPanelUpdatedAtMetadata
+            reviewShortLabel={reviewShortLabel}
+            updatedAt={activeReview.updatedAt}
+          />
         )}
         {/* Merge / Delete Workspace actions */}
         {activeReview && activeWorktree && repo && (

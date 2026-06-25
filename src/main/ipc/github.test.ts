@@ -384,38 +384,40 @@ describe('registerGitHubHandlers', () => {
     expect(refreshPRNowMock).not.toHaveBeenCalled()
   })
 
-  it('filters invalid visible PR refresh candidates while keeping valid candidates', async () => {
+  it('skips stale visible PR refresh candidates without rejecting the batch', async () => {
     registerGitHubHandlers(store as never, stats as never)
 
-    await handlers['gh:reportVisiblePRRefreshCandidates'](
-      { sender: { id: 7, once: vi.fn() } },
-      {
-        generation: 1,
-        candidates: [
-          {
-            cacheKey: 'valid::feature/test',
-            repoPath: '/workspace/repo',
-            repoId: 'repo-1',
-            branch: 'feature/test',
-            repoKind: 'git'
-          },
-          {
-            cacheKey: 'missing::feature/old',
-            repoPath: '/workspace/missing',
-            repoId: 'missing-repo',
-            branch: 'feature/old',
-            repoKind: 'git'
-          }
-        ]
-      }
-    )
+    expect(
+      handlers['gh:reportVisiblePRRefreshCandidates'](
+        { sender: { id: 7, once: vi.fn() } },
+        {
+          generation: 1,
+          candidates: [
+            {
+              cacheKey: '/workspace/repo::feature/live',
+              repoPath: '/workspace/repo',
+              branch: 'feature/live',
+              repoKind: 'git',
+              repoId: 'repo-1'
+            },
+            {
+              cacheKey: '/workspace/missing::feature/stale',
+              repoPath: '/workspace/missing',
+              branch: 'feature/stale',
+              repoKind: 'git',
+              repoId: 'repo-missing'
+            }
+          ]
+        }
+      )
+    ).toBe(true)
 
     expect(reportVisiblePRRefreshCandidatesMock).toHaveBeenCalledWith(
       [
         expect.objectContaining({
-          cacheKey: 'valid::feature/test',
           repoPath: '/workspace/repo',
-          repoId: 'repo-1'
+          repoId: 'repo-1',
+          branch: 'feature/live'
         })
       ],
       1,

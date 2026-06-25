@@ -399,4 +399,41 @@ describe('useComposerState host-context boundaries', () => {
     expect(quickSubmit).not.toContain('shouldPrepareQuickLinkedWorkItemAgentPrompt')
     expect(HOOK_SOURCE).not.toContain('resolveQuickWorkspaceSubmitAgent')
   })
+
+  it('keeps Linear starts out of issue-command templates without special draft routing', () => {
+    expect(HOOK_SOURCE).not.toContain('isOrcaCliAvailableForLaunch')
+    expect(HOOK_SOURCE).not.toContain('hasGeneratedLinearSourceContext')
+    expect(HOOK_SOURCE).not.toContain('shouldDraftGeneratedLinearContext')
+    expect(HOOK_SOURCE).toMatch(
+      /willApplyIssueCommandAsPrompt[\s\S]*linkedWorkItemProvider !== 'linear'/
+    )
+
+    const previewSection = sourceBetween(
+      HOOK_SOURCE,
+      'const shouldApplyLinkedOnlyTemplate =',
+      'const linkedOnlyTemplatePrompt'
+    )
+    expect(previewSection).toContain("linkedWorkItemProvider !== 'linear'")
+
+    const fullSubmit = sourceBetween(
+      HOOK_SOURCE,
+      'const submit = useCallback',
+      'const submitQuick = useCallback'
+    )
+    expect(fullSubmit).toContain("submitLinkedWorkItemProvider !== 'linear'")
+    expect(fullSubmit).toMatch(
+      /submitShouldRunIssueAutomation[\s\S]*submitLinkedWorkItemProvider !== 'linear'/
+    )
+    expect(fullSubmit).toContain('prompt: submitStartupPrompt')
+    expect(fullSubmit).toContain('const shouldSeedInitialAgentStatus =')
+    expect(fullSubmit).toContain('...(shouldSeedInitialAgentStatus')
+
+    const quickSubmit = sourceBetween(
+      HOOK_SOURCE,
+      'const submitQuick = useCallback',
+      'const createGateInput'
+    )
+    expect(quickSubmit).toContain('agent === null || !quickDraftPrompt')
+    expect(quickSubmit).toContain('startupPlan.draftPrompt = quickDraftPrompt')
+  })
 })

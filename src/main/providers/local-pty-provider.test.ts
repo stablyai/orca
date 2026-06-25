@@ -307,6 +307,23 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
     })
 
+    it('uses shell wrapper when MiMo home must survive shell startup', async () => {
+      provider.configure({
+        buildSpawnEnv: (_id, env) => {
+          env.MIMOCODE_HOME = '/tmp/orca-mimocode-overlay'
+          env.ORCA_MIMOCODE_HOME = '/tmp/orca-mimocode-overlay'
+          return env
+        }
+      })
+
+      await provider.spawn({ cols: 80, rows: 24 })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[1]).toEqual(['-l'])
+      expect(spawnCall[2].env.ZDOTDIR).toMatch(/shell-ready[\\/]zsh/)
+      expect(spawnCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
+    })
+
     it('does not pass a Windows Codex home into WSL terminals', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       provider.configure({

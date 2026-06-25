@@ -71,7 +71,6 @@ import {
   resolveQuickCreateLinkedWorkItemPrompt
 } from '@/lib/linked-work-item-context'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { isOrcaCliAvailableForLaunch } from '@/lib/orca-cli-launch-availability'
 import {
   buildLinearIssueLinkedWorkItem,
   isLinearLinkedWorkItem
@@ -1139,11 +1138,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [selectedRepo, selectedRepoIsGit, yamlHooks]
   )
   const setupPolicy: SetupRunPolicy = selectedRepo?.hookSettings?.setupRunPolicy ?? 'run-by-default'
+  const linkedWorkItemProvider = linkedWorkItem ? getLinkedWorkItemProvider(linkedWorkItem) : null
   // Why: the "no prompt + linked item" path below rehydrates the issueCommand
-  // template into the main startup prompt. When that happens we suppress the
-  // separate split pane that would otherwise run the same command twice.
+  // template into the main startup prompt. Linear starts never use that
+  // product-authored workflow text, so they should not wait for it either.
   const willApplyIssueCommandAsPrompt =
-    enableIssueAutomation && !agentPrompt.trim() && Boolean(linkedWorkItem)
+    enableIssueAutomation &&
+    !agentPrompt.trim() &&
+    Boolean(linkedWorkItem) &&
+    linkedWorkItemProvider !== 'linear'
   const shouldWaitForIssueAutomationCheck =
     enableIssueAutomation &&
     (parsedLinkedIssueNumber !== null || willApplyIssueCommandAsPrompt) &&
@@ -1179,14 +1182,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }),
     [agentPrompt, fallbackCreatureName, linkedPR, name, parsedLinkedIssueNumber]
   )
-  // Why: when the user links an issue/PR but has not typed any prompt text
-  // (attachments don't count), swap the generic "Linked work items:" context
-  // block for the repo's issueCommand template — or the built-in
-  // "Complete {{artifact_url}}" default when none is configured. This makes
-  // the common "paste a link and hit enter" flow produce a useful agent task
-  // instead of a bare URL bullet.
+  // Why: Linear starts may include only the neutral issue reference; repo
+  // issue-command templates are product-authored workflow direction.
   const shouldApplyLinkedOnlyTemplate =
-    enableIssueAutomation && !agentPrompt.trim() && Boolean(linkedWorkItem) && hasLoadedIssueCommand
+    enableIssueAutomation &&
+    !agentPrompt.trim() &&
+    Boolean(linkedWorkItem) &&
+    hasLoadedIssueCommand &&
+    linkedWorkItemProvider !== 'linear'
   const linkedOnlyTemplatePrompt = useMemo(() => {
     if (!shouldApplyLinkedOnlyTemplate || !linkedWorkItem) {
       return ''
@@ -2959,11 +2962,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           : smartGitHubResolution.kind === 'none'
             ? branchNameOverride
             : undefined
+      const submitLinkedWorkItemProvider = submitLinkedWorkItem
+        ? getLinkedWorkItemProvider(submitLinkedWorkItem)
+        : null
       const submitShouldApplyLinkedOnlyTemplate =
         enableIssueAutomation &&
         !agentPrompt.trim() &&
         Boolean(submitLinkedWorkItem) &&
-        hasLoadedIssueCommand
+        hasLoadedIssueCommand &&
+        submitLinkedWorkItemProvider !== 'linear'
       const submitLinkedOnlyTemplatePrompt =
         submitShouldApplyLinkedOnlyTemplate && submitLinkedWorkItem
           ? renderIssueCommandTemplate(
@@ -2975,15 +2982,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               }
             )
           : ''
-      // Why: the hint must never point agents at a command that cannot run;
-      // SSH worktrees always have the relay shim, local launches need the
-      // installed CLI on PATH.
-      const linearCliAvailable = submitLinkedWorkItem?.linearIdentifier
-        ? await isOrcaCliAvailableForLaunch({ remote: isRemote })
-        : false
-      const linkedPromptContext = getLinkedWorkItemPromptContext(submitLinkedWorkItem, {
-        cliAvailable: linearCliAvailable
-      })
+      const linkedPromptContext = getLinkedWorkItemPromptContext(submitLinkedWorkItem)
       const submitStartupPrompt = submitShouldApplyLinkedOnlyTemplate
         ? buildAgentPromptWithContext(
             submitLinkedOnlyTemplatePrompt,
@@ -2999,6 +2998,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           )
       const submitShouldRunIssueAutomation =
         enableIssueAutomation &&
+        submitLinkedWorkItemProvider !== 'linear' &&
         submitLinkedIssueNumber !== null &&
         issueCommandTemplate.length > 0 &&
         !submitShouldApplyLinkedOnlyTemplate
@@ -3020,15 +3020,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
 
       const linkedLinearIssue =
-        submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
+        submitLinkedWorkItem && submitLinkedWorkItemProvider === 'linear'
           ? submitLinkedWorkItem.linearIdentifier
           : undefined
       const linkedLinearIssueWorkspaceId =
-        submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
+        submitLinkedWorkItem && submitLinkedWorkItemProvider === 'linear'
           ? submitLinkedWorkItem.linearWorkspaceId
           : undefined
       const linkedLinearIssueOrganizationUrlKey =
-        submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
+        submitLinkedWorkItem && submitLinkedWorkItemProvider === 'linear'
           ? submitLinkedWorkItem.linearOrganizationUrlKey
           : undefined
       const effectiveBranchNameOverride = resolveComposerBranchNameOverrideForCreate({
@@ -3061,6 +3061,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         agentEnv: resolveTuiAgentLaunchEnv(tuiAgent, settings?.agentDefaultEnv),
         platform: selectedRepoAgentLaunchPlatform
       })
+      const shouldSeedInitialAgentStatus =
+        tuiAgent === 'command-code' && submitStartupPrompt.trim().length > 0
 
       // Why: backend startup is safe only when the launch command is
       // self-contained. Agents that need post-ready paste/follow-up stay on
@@ -3153,7 +3155,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 ...(startupPlan.startupCommandDelivery
                   ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
                   : {}),
-                ...(tuiAgent === 'command-code' && submitStartupPrompt.trim().length > 0
+                ...(shouldSeedInitialAgentStatus
                   ? {
                       initialAgentStatus: {
                         agent: tuiAgent,
@@ -3200,7 +3202,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     issueCommandTemplate,
     effectiveLinkedPR,
     hasLoadedIssueCommand,
-    isRemote,
     linkedGitLabIssue,
     linkedGitLabMR,
     linkedWorkItem,
@@ -3390,16 +3391,19 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             ? 'skip'
             : ((submitResolvedSetupDecision ?? 'inherit') as SetupDecision)
 
+        const submitLinkedWorkItemProvider = submitLinkedWorkItem
+          ? getLinkedWorkItemProvider(submitLinkedWorkItem)
+          : null
         const linkedLinearIssue =
-          submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
+          submitLinkedWorkItem && submitLinkedWorkItemProvider === 'linear'
             ? submitLinkedWorkItem.linearIdentifier
             : undefined
         const linkedLinearIssueWorkspaceId =
-          submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
+          submitLinkedWorkItem && submitLinkedWorkItemProvider === 'linear'
             ? submitLinkedWorkItem.linearWorkspaceId
             : undefined
         const linkedLinearIssueOrganizationUrlKey =
-          submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
+          submitLinkedWorkItem && submitLinkedWorkItemProvider === 'linear'
             ? submitLinkedWorkItem.linearOrganizationUrlKey
             : undefined
         const effectiveBranchNameOverride = resolveComposerBranchNameOverrideForCreate({
@@ -3438,13 +3442,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         // self-contained. Agents that need post-ready paste/follow-up stay on
         // the renderer path so prompt delivery is not skipped.
         const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem
-        const quickLinearCliAvailable = promptLinkedWorkItem?.linearIdentifier
-          ? await isOrcaCliAvailableForLaunch({ remote: isRemote })
-          : false
         const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
-          resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote, {
-            cliAvailable: quickLinearCliAvailable
-          })
+          resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote)
         const draftLaunchPlan =
           agent === null || !quickDraftPrompt
             ? null
@@ -3602,7 +3601,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       clearNewWorkspaceDraft,
       fallbackCreatureName,
       effectiveLinkedPR,
-      isRemote,
       linkedGitLabIssue,
       linkedGitLabMR,
       linkedPR,

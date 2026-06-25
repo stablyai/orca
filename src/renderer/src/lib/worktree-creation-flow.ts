@@ -51,6 +51,29 @@ function getWorktreeCreationIndeterminate(request: WorktreeCreationRequest): boo
   return getActiveRuntimeTarget(useAppStore.getState().settings).kind !== 'local'
 }
 
+function revealPendingCreation(
+  creationId: string,
+  request: WorktreeCreationRequest,
+  phase: 'preparing' | 'fetching'
+): void {
+  const store = useAppStore.getState()
+  const indeterminate = getWorktreeCreationIndeterminate(request)
+  store.beginPendingWorktreeCreation({
+    creationId,
+    phase,
+    status: 'creating',
+    indeterminate,
+    // Why: the creation surface owns the tab strip immediately. Delaying this
+    // caused the real workspace tab bar to flash out when the debounce elapsed.
+    loaderVisible: true,
+    request
+  })
+  // Why: the creation panel only renders under the terminal view (App content
+  // router), so force it active so the panel is what fills the content area.
+  store.setActiveView('terminal')
+  store.setSidebarOpen(true)
+}
+
 async function preflightAgentTrust(
   request: WorktreeCreationRequest,
   path: string,
@@ -221,26 +244,37 @@ export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest):
   // Why: crypto.randomUUID is undefined in non-secure browser contexts (LAN web
   // client over plain HTTP). createBrowserUuid falls back to getRandomValues.
   const creationId = createBrowserUuid()
+  revealPendingCreation(creationId, request, 'fetching')
+  void executeWorktreeCreation(creationId, request)
+}
+
+/** Stage a pending entry before async preflight so the UI shows immediate progress. */
+export function beginBackgroundWorktreePreparation(request: WorktreeCreationRequest): string {
+  const creationId = createBrowserUuid()
+  revealPendingCreation(creationId, request, 'preparing')
+  return creationId
+}
+
+/** Continue a staged pending entry once async preflight has produced a final request. */
+export function continueBackgroundWorktreeCreation(
+  creationId: string,
+  request: WorktreeCreationRequest
+): boolean {
   const store = useAppStore.getState()
-  // Why: the remote/runtime create path emits no progress events, so the stepped
-  // checklist would freeze on step 1. Use the request's captured repo owner so
-  // Retry does not change shape when focus moves to another runtime.
-  const indeterminate = getWorktreeCreationIndeterminate(request)
-  store.beginPendingWorktreeCreation({
-    creationId,
+  if (!store.pendingWorktreeCreations[creationId]) {
+    return false
+  }
+  store.updatePendingWorktreeCreation(creationId, {
     phase: 'fetching',
     status: 'creating',
-    indeterminate,
-    // Why: the creation surface owns the tab strip immediately. Delaying this
-    // caused the real workspace tab bar to flash out when the debounce elapsed.
-    loaderVisible: true,
+    error: undefined,
     request
   })
-  // Why: the creation panel only renders under the terminal view (App content
-  // router), so force it active so the panel is what fills the content area.
+  store.setActivePendingWorktreeCreation(creationId)
   store.setActiveView('terminal')
   store.setSidebarOpen(true)
   void executeWorktreeCreation(creationId, request)
+  return true
 }
 
 /** Re-run a failed creation from its panel, reusing the captured request. */
