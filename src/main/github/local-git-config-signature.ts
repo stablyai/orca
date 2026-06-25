@@ -90,9 +90,8 @@ function parseIncludedConfigPaths(configText: string, baseDir: string): string[]
     if (!line || line.startsWith('#') || line.startsWith(';')) {
       continue
     }
-    const section = stripInlineConfigComment(line).match(/^\[([^\]]+)\]$/)
-    if (section) {
-      const sectionName = section[1].trim().toLowerCase()
+    const sectionName = parseConfigSectionName(line)
+    if (sectionName) {
       inIncludeSection = sectionName === 'include' || sectionName.startsWith('includeif ')
       continue
     }
@@ -105,6 +104,35 @@ function parseIncludedConfigPaths(configText: string, baseDir: string): string[]
     }
   }
   return includedPaths
+}
+
+function parseConfigSectionName(line: string): string | null {
+  if (!line.startsWith('[')) {
+    return null
+  }
+  let quote: string | null = null
+  for (let index = 1; index < line.length; index += 1) {
+    const char = line[index]
+    if (quote) {
+      if (char === quote) {
+        quote = null
+      }
+      continue
+    }
+    if (char === '"' || char === "'") {
+      quote = char
+      continue
+    }
+    if (char !== ']') {
+      continue
+    }
+    const trailing = line.slice(index + 1).trim()
+    if (trailing && !trailing.startsWith('#') && !trailing.startsWith(';')) {
+      return null
+    }
+    return line.slice(1, index).trim().toLowerCase()
+  }
+  return null
 }
 
 function parseIncludedConfigPath(line: string): string | null {

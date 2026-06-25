@@ -143,8 +143,9 @@ export async function getOwnerRepoForRemote(
   }
 
   const nextConfigSignature = await readLocalGitConfigSignature(context)
+  const refreshedNow = Date.now()
   const refreshedCached = ownerRepoCache.get(cacheKey)
-  if (refreshedCached && refreshedCached.expiresAt > now) {
+  if (refreshedCached && refreshedCached.expiresAt > refreshedNow) {
     return refreshedCached.value
   }
 

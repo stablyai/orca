@@ -619,6 +619,42 @@ describe('github owner/repo resolution', () => {
       await rm(repoPath, { recursive: true, force: true })
     }
   })
+
+  it('tracks includeIf paths with comment markers inside quoted section headers', async () => {
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-gh-utils-'))
+    const gitDir = join(repoPath, '.git')
+    const includedDir = join(repoPath, 'Work #1')
+    const includedConfigPath = join(includedDir, 'included.gitconfig')
+    await mkdir(gitDir)
+    await mkdir(includedDir)
+    await writeFile(
+      includedConfigPath,
+      '[remote "origin"]\n\turl = git@github.com:acme/widgets.git\n'
+    )
+    await writeFile(
+      join(gitDir, 'config'),
+      `[includeIf "gitdir:${includedDir}/"]\n\tpath = "${includedConfigPath}"\n`
+    )
+    try {
+      const firstSignature = await readLocalGitConfigSignature({
+        repoPath,
+        connectionId: null
+      })
+
+      await writeFile(
+        includedConfigPath,
+        '[remote "origin"]\n\turl = git@github.com:acme/renamed-widgets.git\n'
+      )
+      const secondSignature = await readLocalGitConfigSignature({
+        repoPath,
+        connectionId: null
+      })
+
+      expect(secondSignature).not.toEqual(firstSignature)
+    } finally {
+      await rm(repoPath, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('resolveIssueSource', () => {

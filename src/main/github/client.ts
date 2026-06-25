@@ -2375,7 +2375,7 @@ async function getTrackedUpstreamBranch(
       trackedUpstreamSnapshotCache.set(cacheKey, {
         ...(result.gitConfigSignature ? { gitConfigSignature: result.gitConfigSignature } : {}),
         upstreamsByBranchName: getCacheableTrackedUpstreamSnapshot(result.upstreamsByBranchName),
-        expiresAt: now + TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS
+        expiresAt: Date.now() + TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS
       })
     }
     if (trackedUpstreamSnapshotGenerations.get(cacheKey) !== probeGeneration) {
