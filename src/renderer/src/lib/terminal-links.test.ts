@@ -128,6 +128,11 @@ describe('terminal path helpers', () => {
       })
     })
 
+    it('does not treat mid-line command arguments as line-ending spaced paths', () => {
+      const links = extractTerminalFileLinks('run /usr/bin/env node, then continue')
+      expect(links.map((link) => link.pathText)).not.toContain('/usr/bin/env node')
+    })
+
     it('keeps trailing separators on directory-like absolute paths', () => {
       const links = extractTerminalFileLinks('/Users/alice/worktree/')
       expect(links).toHaveLength(1)
