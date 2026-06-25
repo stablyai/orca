@@ -7,7 +7,6 @@ import {
 describe('mobile-file-preview-navigation', () => {
   it('navigates preview interactions to the encoded Expo target without files.open', () => {
     const push = vi.fn()
-    const filesOpen = vi.fn()
     const relativePath = 'assets/a #b?c%25 d\\logo.png'
 
     navigateToMobileFilePreview(
@@ -31,7 +30,7 @@ describe('mobile-file-preview-navigation', () => {
         worktreeName: 'Orca'
       }
     })
-    expect(filesOpen).not.toHaveBeenCalled()
+    expect(push).toHaveBeenCalledTimes(1)
   })
 
   it('defers embedded close until after route push', () => {

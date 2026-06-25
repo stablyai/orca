@@ -17,6 +17,15 @@ export type MobileFilePreviewTextKind = 'html' | 'markdown' | 'text'
 
 export type MobileFilePreviewResult =
   | {
+      status: 'loading'
+      message: string
+    }
+  | {
+      status: 'waiting'
+      message: string
+      reconnect: true
+    }
+  | {
       status: 'ready'
       kind: 'image'
       dataUri: string

@@ -39,9 +39,7 @@ export function MobileFilePreviewScreen({ route }: Props) {
   const { client, state: connState } = useHostClient(previewParams?.hostId)
   const forceReconnect = useForceReconnect()
   const [preview, setPreview] = useState<MobileFilePreviewResult>(() =>
-    route.ok
-      ? { status: 'error', message: 'Unable to load preview', reconnect: false }
-      : previewError(route.message)
+    route.ok ? { status: 'loading', message: 'Loading preview...' } : previewError(route.message)
   )
   const { width, height } = useWindowDimensions()
 
@@ -51,10 +49,10 @@ export function MobileFilePreviewScreen({ route }: Props) {
       return
     }
     if (!client || connState !== 'connected') {
-      setPreview({ status: 'error', message: 'Waiting for desktop...', reconnect: true })
+      setPreview({ status: 'waiting', message: 'Waiting for desktop...', reconnect: true })
       return
     }
-    setPreview({ status: 'error', message: 'Loading preview...', reconnect: false })
+    setPreview({ status: 'loading', message: 'Loading preview...' })
     try {
       const result = await loadMobileFilePreview(
         client,
@@ -77,7 +75,11 @@ export function MobileFilePreviewScreen({ route }: Props) {
       void loadPreview()
       return
     }
-    if (preview.status === 'error' && (preview.reconnect || connState !== 'connected')) {
+    if (
+      preview.status === 'waiting' ||
+      (preview.status === 'error' && preview.reconnect) ||
+      connState !== 'connected'
+    ) {
       await forceReconnect(previewParams.hostId)
       return
     }
@@ -137,16 +139,16 @@ function renderPreviewBody(
     onRetry: () => void
   }
 ) {
-  if (preview.status === 'error' && preview.message === 'Loading preview...') {
+  if (preview.status === 'loading') {
     return (
       <View style={styles.state}>
         <ActivityIndicator size="small" color={colors.textSecondary} />
-        <Text style={styles.stateText}>Loading preview...</Text>
+        <Text style={styles.stateText}>{preview.message}</Text>
       </View>
     )
   }
 
-  if (preview.status === 'error') {
+  if (preview.status === 'error' || preview.status === 'waiting') {
     return (
       <View style={styles.state}>
         <Text style={styles.errorText}>{preview.message}</Text>
