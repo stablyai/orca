@@ -53,7 +53,13 @@ import {
   setActivityTerminalPortals,
   type ActivityTerminalPortalTarget
 } from './activity-terminal-portal'
-import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
+import type {
+  Repo,
+  TerminalTab,
+  WorkspaceStatus,
+  WorkspaceStatusDefinition,
+  Worktree
+} from '../../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -70,6 +76,7 @@ import { translate } from '@/i18n/i18n'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { ActivityThreadRowContextMenu } from './ActivityThreadRowContextMenu'
+import { getWorkspaceStatus } from '../sidebar/workspace-status'
 
 type ThreadReadFilter = 'all' | 'unread'
 type ActivityGroupBy = 'status' | 'project' | 'worktree' | 'agent'
@@ -1155,9 +1162,13 @@ function ThreadRow({
   canJump,
   compactMode,
   liveTab,
+  canMoveWorkspaceStatus,
+  workspaceStatuses,
+  currentWorkspaceStatus,
   onCloseTab,
   onRenameCommit,
   onSetTabColor,
+  onMoveToStatus,
   onMarkRead
 }: {
   thread: AgentPaneThread
@@ -1168,9 +1179,13 @@ function ThreadRow({
   canJump: boolean
   compactMode: boolean
   liveTab: boolean
+  canMoveWorkspaceStatus: boolean
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  currentWorkspaceStatus: WorkspaceStatus | ''
   onCloseTab: (tabId: string) => void
   onRenameCommit: (tabId: string, value: string) => void
   onSetTabColor: (tabId: string, color: string | null) => void
+  onMoveToStatus: (worktreeId: string, status: WorkspaceStatus) => void
   onMarkRead: () => void
 }): React.JSX.Element {
   const renderedResponsePreview = activityThreadResponseRenderPreview({
@@ -1442,11 +1457,16 @@ function ThreadRow({
   return (
     <ActivityThreadRowContextMenu
       tab={thread.tab}
+      worktree={thread.worktree}
       unread={thread.unread}
       liveTab={liveTab}
+      canMoveWorkspaceStatus={canMoveWorkspaceStatus}
+      workspaceStatuses={workspaceStatuses}
+      currentWorkspaceStatus={currentWorkspaceStatus}
       onCloseTab={onCloseTab}
       onRenameOpen={openRename}
       onSetTabColor={onSetTabColor}
+      onMoveToStatus={onMoveToStatus}
       onMarkRead={onMarkRead}
       onMarkUnread={onMarkUnread}
     >
@@ -1505,6 +1525,8 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   const setTabCustomTitle = useAppStore((s) => s.setTabCustomTitle)
   const setTabColor = useAppStore((s) => s.setTabColor)
+  const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
+  const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
 
   const { events: allEvents, liveAgentByPaneKey } = useMemo(
     () =>
@@ -1759,7 +1781,19 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   const isThreadTabLive = (thread: AgentPaneThread): boolean =>
     (storeData.tabsByWorktree[thread.worktree.id] ?? []).some((tab) => tab.id === thread.tab.id)
 
-  // Status helpers removed for Commit 1; will be added in Commit 2
+  const getThreadWorkspaceStatus = (thread: AgentPaneThread): WorkspaceStatus | '' => {
+    const worktree = storeData.worktreeMap.get(thread.worktree.id)
+    return worktree ? getWorkspaceStatus(worktree, workspaceStatuses) : ''
+  }
+
+  const moveThreadWorkspaceToStatus = (worktreeId: string, status: WorkspaceStatus): void => {
+    const worktree = storeData.worktreeMap.get(worktreeId)
+    if (!worktree || getWorkspaceStatus(worktree, workspaceStatuses) === status) {
+      return
+    }
+    useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
+    void updateWorktreeMeta(worktreeId, { workspaceStatus: status })
+  }
 
   const commitThreadRename = (tabId: string, value: string): void => {
     const trimmed = value.trim()
@@ -2019,9 +2053,13 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                     canJump={storeData.worktreeMap.has(thread.worktree.id)}
                     compactMode={compactMode}
                     liveTab={isThreadTabLive(thread)}
+                    canMoveWorkspaceStatus={storeData.worktreeMap.has(thread.worktree.id)}
+                    workspaceStatuses={workspaceStatuses}
+                    currentWorkspaceStatus={getThreadWorkspaceStatus(thread)}
                     onCloseTab={(tabId) => closeTerminalTab(tabId)}
                     onRenameCommit={commitThreadRename}
                     onSetTabColor={setTabColor}
+                    onMoveToStatus={moveThreadWorkspaceToStatus}
                     onMarkRead={() => markThreadRead(thread)}
                   />
                 ))}

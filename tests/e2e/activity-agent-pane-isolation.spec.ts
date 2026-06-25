@@ -445,9 +445,9 @@ test.describe('Activity Agent Pane Isolation', () => {
       })
   })
 
-  test('agent row context menu updates tab title, color, and close state', async ({
+  test('agent row context menu updates tab title, color, workspace status, and close state', async ({
     orcaPage
-  }): Promise<void> => {
+  }) => {
     await splitActiveTerminalPane(orcaPage, 'vertical')
     await waitForPaneCount(orcaPage, 2)
     const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
@@ -515,7 +515,20 @@ test.describe('Activity Agent Pane Isolation', () => {
     const colorDot = selectedRow.locator('[data-activity-thread-color-dot="true"]')
     await expect(colorDot).toBeVisible()
 
-    // 4. Close Tab
+    // 4. Move Workspace status
+    await selectedRow.click({ button: 'right' })
+    await orcaPage.getByRole('menuitem', { name: 'Move to Status' }).hover()
+    await orcaPage.getByRole('menuitemradio', { name: 'Done' }).click()
+    await expect
+      .poll(async () => {
+        return orcaPage.evaluate((wId) => {
+          const wt = window.__store.getState().getKnownWorktreeById(wId)
+          return wt?.workspaceStatus
+        }, worktreeId)
+      })
+      .toBe('completed')
+
+    // 5. Close Tab
     await selectedRow.click({ button: 'right' })
     await orcaPage.getByRole('menuitem', { name: 'Close' }).click()
     await expect

@@ -8,7 +8,7 @@ import {
   ActivityThreadRowContextMenu,
   type ActivityThreadRowContextMenuProps
 } from './ActivityThreadRowContextMenu'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab, Worktree, WorkspaceStatusDefinition } from '../../../../shared/types'
 
 vi.mock('@/components/ui/context-menu', () => ({
   ContextMenu: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
@@ -77,6 +77,19 @@ const mockTab = {
   isPinned: false
 } as unknown as TerminalTab // Why: mock tab only exercises context menu fields
 
+const mockWorktree = {
+  id: 'wt-1',
+  repoId: 'repo-1',
+  displayName: 'Workspace 1',
+  comment: '',
+  linkedIssue: null,
+  linkedPR: null,
+  linkedLinearIssue: null,
+  path: '/path/to/wt-1',
+  head: 'main',
+  branch: 'main'
+} as unknown as Worktree // Why: mock worktree only exercises context menu fields
+
 const mounted: { container: HTMLDivElement; root: Root }[] = []
 
 function renderMenu(overrides: Partial<ActivityThreadRowContextMenuProps> = {}): {
@@ -85,6 +98,7 @@ function renderMenu(overrides: Partial<ActivityThreadRowContextMenuProps> = {}):
   onCloseTab: Mock<(tabId: string) => void>
   onRenameOpen: Mock<() => void>
   onSetTabColor: Mock<(tabId: string, color: string | null) => void>
+  onMoveToStatus: Mock<(worktreeId: string, status: string) => void>
   onMarkRead: Mock<() => void>
   onMarkUnread: Mock<() => void>
 } {
@@ -95,17 +109,26 @@ function renderMenu(overrides: Partial<ActivityThreadRowContextMenuProps> = {}):
   const onCloseTab = vi.fn()
   const onRenameOpen = vi.fn()
   const onSetTabColor = vi.fn()
+  const onMoveToStatus = vi.fn()
   const onMarkRead = vi.fn()
   const onMarkUnread = vi.fn()
 
   const defaultProps: ActivityThreadRowContextMenuProps = {
     children: <div>Row Child</div>,
     tab: mockTab,
+    worktree: mockWorktree,
     unread: false,
     liveTab: true,
+    canMoveWorkspaceStatus: true,
+    workspaceStatuses: [
+      { id: 'todo', label: 'Todo' },
+      { id: 'completed', label: 'Done' }
+    ] as WorkspaceStatusDefinition[],
+    currentWorkspaceStatus: 'todo',
     onCloseTab,
     onRenameOpen,
     onSetTabColor,
+    onMoveToStatus,
     onMarkRead,
     onMarkUnread
   }
@@ -121,6 +144,7 @@ function renderMenu(overrides: Partial<ActivityThreadRowContextMenuProps> = {}):
     onCloseTab,
     onRenameOpen,
     onSetTabColor,
+    onMoveToStatus,
     onMarkRead,
     onMarkUnread
   }
@@ -203,6 +227,21 @@ describe('ActivityThreadRowContextMenu', () => {
       orangeSwatch.click()
     })
     expect(onSetTabColor).toHaveBeenCalledWith('tab-1', '#f97316')
+  })
+
+  it('calls onMoveToStatus when a status is clicked', () => {
+    const { container, onMoveToStatus } = renderMenu()
+    const todoBtn = getButton(container, 'Todo')
+    act(() => {
+      todoBtn.click()
+    })
+    expect(onMoveToStatus).toHaveBeenCalledWith('wt-1', 'todo')
+  })
+
+  it('disables status submenu when canMoveWorkspaceStatus is false', () => {
+    const { container } = renderMenu({ canMoveWorkspaceStatus: false })
+    const subTrigger = getButton(container, 'Move to Status')
+    expect(subTrigger.disabled).toBe(true)
   })
 
   it('calls onMarkRead when unread and Mark Read is clicked', () => {

@@ -4,23 +4,38 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuLabel,
+  ContextMenuRadioGroup,
+  ContextMenuRadioItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
 import { TabColorSwatchGrid } from '../tab-bar/tab-color-swatch'
-import type { TerminalTab } from '../../../../shared/types'
+import { getWorkspaceStatusVisualMeta } from '../sidebar/workspace-status'
+import type {
+  TerminalTab,
+  WorkspaceStatus,
+  WorkspaceStatusDefinition,
+  Worktree
+} from '../../../../shared/types'
 
 export type ActivityThreadRowContextMenuProps = {
   children: React.ReactNode
   tab: TerminalTab
-  // worktree removed for Commit 1
+  worktree: Worktree
   unread: boolean
   liveTab: boolean
-  // workspaceStatuses removed for Commit 1
+  canMoveWorkspaceStatus: boolean
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  currentWorkspaceStatus: WorkspaceStatus | ''
   onCloseTab: (tabId: string) => void
   onRenameOpen: () => void
   onSetTabColor: (tabId: string, color: string | null) => void
+  onMoveToStatus: (worktreeId: string, status: WorkspaceStatus) => void
   onMarkRead: () => void
   onMarkUnread: () => void
 }
@@ -28,17 +43,21 @@ export type ActivityThreadRowContextMenuProps = {
 export function ActivityThreadRowContextMenu({
   children,
   tab,
-  // worktree parameter removed for Commit 1
+  worktree,
   unread,
   liveTab,
-  // workspaceStatuses parameter removed for Commit 1
+  canMoveWorkspaceStatus,
+  workspaceStatuses,
+  currentWorkspaceStatus,
   onCloseTab,
   onRenameOpen,
   onSetTabColor,
+  onMoveToStatus,
   onMarkRead,
   onMarkUnread
 }: ActivityThreadRowContextMenuProps): React.JSX.Element {
   const closeDisabled = !liveTab || tab.isPinned === true
+  const statusDisabled = !canMoveWorkspaceStatus || workspaceStatuses.length === 0
 
   return (
     <ContextMenu>
@@ -70,6 +89,29 @@ export function ActivityThreadRowContextMenu({
             </ContextMenuItem>
           )}
         />
+        <ContextMenuSeparator />
+        <ContextMenuSub>
+          <ContextMenuSubTrigger disabled={statusDisabled}>
+            {translate('auto.components.sidebar.WorktreeContextMenu.84cdbb7e30', 'Move to Status')}
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent className="w-44">
+            <ContextMenuRadioGroup value={currentWorkspaceStatus}>
+              {workspaceStatuses.map((status) => {
+                const meta = getWorkspaceStatusVisualMeta(status)
+                return (
+                  <ContextMenuRadioItem
+                    key={status.id}
+                    value={status.id}
+                    onSelect={() => onMoveToStatus(worktree.id, status.id)}
+                  >
+                    <meta.icon className={cn('size-3.5', meta.tone)} />
+                    {status.label}
+                  </ContextMenuRadioItem>
+                )
+              })}
+            </ContextMenuRadioGroup>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
         <ContextMenuSeparator />
         {unread ? (
           <ContextMenuItem onSelect={() => onMarkRead()}>
