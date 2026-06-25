@@ -15,6 +15,7 @@ import {
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import { resolveRegisteredWorktreePath } from './filesystem-auth'
 import { listRepoWorktrees } from '../repo-worktrees'
+import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 
 function assertRegisteredRepo(repoPath: string, store: Store, repoId?: string): Repo {
   if (repoId) {
@@ -53,7 +54,11 @@ async function resolveHostedReviewWorktreePath(
     return remoteWorktreePath
   }
   const resolvedWorktreePath = await resolveRegisteredWorktreePath(worktreePath, store)
-  const repoWorktrees = await listRepoWorktrees(repo)
+  const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
+  const repoWorktrees =
+    Object.keys(localGitOptions).length > 0
+      ? await listRepoWorktrees(repo, localGitOptions)
+      : await listRepoWorktrees(repo)
   if (!repoWorktrees.some((worktree) => resolve(worktree.path) === resolvedWorktreePath)) {
     throw new Error('Access denied: worktree does not belong to repository')
   }
@@ -73,6 +78,7 @@ function normalizeRemoteHostedReviewPath(remotePath: string): string {
 export function registerHostedReviewHandlers(store: Store, stats: StatsCollector): void {
   ipcMain.handle('hostedReview:forBranch', async (_event, args: HostedReviewForBranchArgs) => {
     const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
+    const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
     const review = await getHostedReviewForBranch({
       repoPath: repo.path,
       connectionId: repo.connectionId,
@@ -82,7 +88,8 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       linkedGitLabMR: args.linkedGitLabMR ?? null,
       linkedBitbucketPR: args.linkedBitbucketPR ?? null,
       linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
-      linkedGiteaPR: args.linkedGiteaPR ?? null
+      linkedGiteaPR: args.linkedGiteaPR ?? null,
+      ...(Object.keys(localGitOptions).length > 0 ? { localGitExecOptions: localGitOptions } : {})
     })
     if (review?.provider === 'github' && !stats.hasCountedPR(review.url)) {
       stats.record({
@@ -98,32 +105,36 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
   ipcMain.handle(
     'hostedReview:getCreationEligibility',
     async (_event, args: HostedReviewCreationEligibilityArgs) => {
-      const repo = assertRegisteredRepo(args.repoPath, store)
+      const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
       const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
+      const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
       return getHostedReviewCreationEligibility({
         ...args,
         repoPath: worktreePath,
-        connectionId: repo.connectionId ?? null
+        connectionId: repo.connectionId ?? null,
+        ...(Object.keys(localGitOptions).length > 0 ? { localGitExecOptions: localGitOptions } : {})
       })
     }
   )
 
   ipcMain.handle('hostedReview:create', async (_event, args: CreateHostedReviewArgs) => {
-    const repo = assertRegisteredRepo(args.repoPath, store)
+    const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
     const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
-    const result = await createHostedReview(
-      worktreePath,
-      {
-        provider: args.provider,
-        base: args.base,
-        head: args.head,
-        title: args.title,
-        body: args.body,
-        draft: args.draft,
-        useTemplate: args.useTemplate
-      },
-      repo.connectionId ?? null
-    )
+    const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
+    const executionOptions =
+      Object.keys(localGitOptions).length > 0 ? { localGitExecOptions: localGitOptions } : undefined
+    const input = {
+      provider: args.provider,
+      base: args.base,
+      head: args.head,
+      title: args.title,
+      body: args.body,
+      draft: args.draft,
+      ...(args.useTemplate !== undefined ? { useTemplate: args.useTemplate } : {})
+    }
+    const result = executionOptions
+      ? await createHostedReview(worktreePath, input, repo.connectionId ?? null, executionOptions)
+      : await createHostedReview(worktreePath, input, repo.connectionId ?? null)
     if (result.ok && !stats.hasCountedPR(result.url)) {
       stats.record({
         type: 'pr_created',

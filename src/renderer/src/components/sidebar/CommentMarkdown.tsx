@@ -6,6 +6,7 @@ import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import type { Components } from 'react-markdown'
 import { cn } from '@/lib/utils'
+import { isMermaidFence, isMermaidPre, renderMermaidFence } from './comment-mermaid-fence'
 
 type MarkdownPlugins = NonNullable<React.ComponentProps<typeof Markdown>['rehypePlugins']>
 type UrlTransform = NonNullable<React.ComponentProps<typeof Markdown>['urlTransform']>
@@ -40,6 +41,67 @@ function isTrustedCompactImageSrc(src: string | undefined): src is string {
   const normalized = src.trim().toLowerCase()
   return (
     normalized.startsWith('blob:') || /^data:image\/(?:png|jpe?g|gif|webp);base64,/.test(normalized)
+  )
+}
+
+function isGitHubUserAttachmentUrl(href: string | undefined): href is string {
+  if (!href) {
+    return false
+  }
+  try {
+    const url = new URL(href)
+    return (
+      url.protocol === 'https:' &&
+      url.hostname === 'github.com' &&
+      url.pathname.startsWith('/user-attachments/assets/')
+    )
+  } catch {
+    return false
+  }
+}
+
+function isBareAutolink(children: React.ReactNode, href: string): boolean {
+  const text = React.Children.toArray(children).join('').trim()
+  return text === href
+}
+
+function GitHubUserAttachmentVideo({
+  href,
+  children
+}: {
+  href: string
+  children: React.ReactNode
+}): React.ReactElement {
+  const [failed, setFailed] = React.useState(false)
+
+  if (failed) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="break-all text-primary underline underline-offset-2 hover:text-primary/80"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </a>
+    )
+  }
+
+  return (
+    <video
+      src={href}
+      controls
+      preload="metadata"
+      playsInline
+      className="my-3 max-h-[28rem] max-w-full rounded-md bg-black/80 outline outline-1 outline-black/10 dark:outline-white/10"
+      onClick={(e) => e.stopPropagation()}
+      onError={() => setFailed(true)}
+    >
+      <a href={href} target="_blank" rel="noreferrer">
+        {children}
+      </a>
+    </video>
   )
 }
 
@@ -78,12 +140,14 @@ const compactComponents: Components = {
   // the pill background/padding when code is inside a <pre>. This is
   // more reliable than checking `className` — which is only set when
   // the fenced block specifies a language (```js), not for bare ```.
+  // Why: compact comment previews live in dense cards; keep diagram fences as
+  // bounded source blocks so async SVG renders do not reshape sidebar lists.
   code: ({ children }) => (
     <code className="rounded bg-accent px-1 py-px text-[10px] font-mono [overflow-wrap:anywhere]">
       {children}
     </code>
   ),
-  // Compact pre blocks — no syntax highlighting needed for short comments
+  // Compact pre blocks — no syntax highlighting needed for short comments.
   pre: ({ children }) => (
     <pre className="my-1 max-h-32 max-w-full overflow-x-auto rounded bg-accent p-1.5 text-[10px] font-mono">
       {children}
@@ -165,27 +229,42 @@ const compactComponents: Components = {
 
 const documentComponents: Components = {
   p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
-  a: ({ href, children }) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      className="break-all text-primary underline underline-offset-2 hover:text-primary/80"
-      onClick={(e) => e.stopPropagation()}
-    >
-      {children}
-    </a>
-  ),
-  code: ({ children }) => (
-    <code className="rounded bg-accent px-1.5 py-0.5 font-mono text-[0.92em] [overflow-wrap:anywhere]">
-      {children}
-    </code>
-  ),
-  pre: ({ children }) => (
-    <pre className="my-3 max-h-80 max-w-full overflow-x-auto rounded-md bg-accent p-3 font-mono text-[12px]">
-      {children}
-    </pre>
-  ),
+  a: ({ href, children }) =>
+    isGitHubUserAttachmentUrl(href) && isBareAutolink(children, href) ? (
+      // Why: GitHub's API returns uploaded videos as bare attachment links;
+      // GitHub.com upgrades them to media embeds in its own renderer.
+      <GitHubUserAttachmentVideo href={href}>{children}</GitHubUserAttachmentVideo>
+    ) : (
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="break-all text-primary underline underline-offset-2 hover:text-primary/80"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </a>
+    ),
+  code: ({ className, children }) =>
+    isMermaidFence(className) ? (
+      renderMermaidFence(
+        children,
+        'my-3 min-w-0 max-w-full overflow-x-auto rounded-md border border-border/60 p-3 [&_.mermaid-block]:min-w-0 [&_.mermaid-block_pre]:my-0 [&_.mermaid-block_pre]:max-h-80 [&_.mermaid-block_pre]:max-w-full [&_.mermaid-block_pre]:overflow-x-auto [&_.mermaid-block_pre]:rounded-md [&_.mermaid-block_pre]:bg-accent [&_.mermaid-block_pre]:p-3 [&_.mermaid-block_pre]:font-mono [&_.mermaid-block_pre]:text-[12px]'
+      )
+    ) : (
+      <code className="rounded bg-accent px-1.5 py-0.5 font-mono text-[0.92em] [overflow-wrap:anywhere]">
+        {children}
+      </code>
+    ),
+  // Mermaid fences render a <div>, which is invalid inside <pre>, so unwrap them.
+  pre: ({ children }) =>
+    isMermaidPre(children) ? (
+      <>{children}</>
+    ) : (
+      <pre className="my-3 max-h-80 max-w-full overflow-x-auto rounded-md bg-accent p-3 font-mono text-[12px]">
+        {children}
+      </pre>
+    ),
   ul: ({ children }) => <ul className="my-2 ml-5 list-disc space-y-1">{children}</ul>,
   ol: ({ children }) => <ol className="my-2 ml-5 list-decimal space-y-1">{children}</ol>,
   li: ({ children }) => (

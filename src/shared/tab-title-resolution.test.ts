@@ -26,6 +26,31 @@ describe('tab title resolution', () => {
     ).toBe('Payments')
   })
 
+  it('places quick command labels between manual and generated titles', () => {
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: null,
+          quickCommandLabel: 'Run tests',
+          generatedTitle: 'Refactor auth',
+          title: 'pnpm test'
+        },
+        true
+      )
+    ).toBe('Run tests')
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: 'Manual label',
+          quickCommandLabel: 'Run tests',
+          generatedTitle: 'Refactor auth',
+          title: 'pnpm test'
+        },
+        true
+      )
+    ).toBe('Manual label')
+  })
+
   it('uses the same priority for unified tab labels', () => {
     expect(
       resolveUnifiedTabLabel(
@@ -33,5 +58,19 @@ describe('tab title resolution', () => {
         true
       )
     ).toBe('Fix flaky tests')
+  })
+
+  it('uses quick command labels before generated unified labels', () => {
+    expect(
+      resolveUnifiedTabLabel(
+        {
+          customLabel: null,
+          quickCommandLabel: 'Run build',
+          generatedLabel: 'Fix flaky tests',
+          label: 'Codex working'
+        },
+        true
+      )
+    ).toBe('Run build')
   })
 })

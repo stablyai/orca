@@ -1,0 +1,157 @@
+# Orca Mobile iOS release lane.
+#
+# Builds the prebuilt iOS workspace, signs it with the distribution identity
+# imported into the CI keychain plus an explicit App Store provisioning profile
+# fetched via the App Store Connect API key, then uploads the .ipa to
+# TestFlight. All Apple credentials come from CI env vars
+# (see .github/workflows/mobile-ios-release.yml) so nothing secret lives in the
+# repo.
+#
+# Why manual signing (not -allowProvisioningUpdates / automatic cloud signing):
+# mixing a pre-imported distribution .p12 with xcodebuild's cloud-managed
+# automatic signing produced "Cloud signing permission error / No profiles
+# found" at exportArchive (cloud signing also needs an Admin-role API key).
+# Instead we fetch an explicit profile with the API key (sigh) and sign
+# manually against the imported cert — works with any team API key.
+
+require "base64"
+require "json"
+
+default_platform(:ios)
+
+MOBILE_ROOT = File.expand_path("..", __dir__)
+# Why: fastlane executes lanes from mobile/fastlane even when GitHub Actions
+# starts in mobile/, so release file paths must be rooted at the mobile app.
+APP_CONFIG_PATH = File.join(MOBILE_ROOT, "app.json")
+WORKSPACE = File.join(MOBILE_ROOT, "ios", "Orca.xcworkspace")
+BUILD_OUTPUT_DIRECTORY = File.join(MOBILE_ROOT, "build")
+SCHEME = "Orca"
+BUNDLE_ID = "com.stably.orca.mobile"
+TESTFLIGHT_GROUPS = ["peeps"].freeze
+DEFAULT_TESTFLIGHT_CHANGELOG = "Latest Orca Mobile updates and fixes.".freeze
+
+def app_store_connect_api_key_from_env
+  app_store_connect_api_key(
+    key_id: ENV.fetch("ASC_KEY_ID"),
+    issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+    key_content: ENV.fetch("ASC_API_KEY_P8"),
+    is_key_content_base64: true,
+    in_house: false,
+  )
+end
+
+def load_mobile_app_config
+  JSON.parse(File.read(APP_CONFIG_PATH))
+end
+
+def write_mobile_app_config(config)
+  File.write(APP_CONFIG_PATH, "#{JSON.pretty_generate(config)}\n")
+end
+
+def current_mobile_version(config)
+  config.fetch("expo").fetch("version")
+end
+
+def truthy_option?(value)
+  %w[1 true yes on].include?(value.to_s.strip.downcase)
+end
+
+def bump_patch_version(version)
+  match = version.match(/\A(\d+)\.(\d+)\.(\d+)\z/)
+  UI.user_error!("Cannot bump non-semver mobile version '#{version}'") unless match
+
+  "#{match[1]}.#{match[2]}.#{match[3].to_i + 1}"
+end
+
+def resolve_requested_version(options, config)
+  requested = options[:version].to_s.strip
+  return requested unless requested.empty?
+
+  current_version = current_mobile_version(config)
+  truthy_option?(options[:bump_patch]) ? bump_patch_version(current_version) : current_version
+end
+
+def testflight_changelog
+  changelog = ENV.fetch("TESTFLIGHT_CHANGELOG", "").strip
+  changelog.empty? ? DEFAULT_TESTFLIGHT_CHANGELOG : changelog
+end
+
+platform :ios do
+  desc "Resolve the iOS release version and next TestFlight build number"
+  lane :prepare_release_version do |options|
+    api_key = app_store_connect_api_key_from_env
+    config = load_mobile_app_config
+    version = resolve_requested_version(options, config)
+
+    latest_build_number = latest_testflight_build_number(
+      api_key: api_key,
+      app_identifier: BUNDLE_ID,
+      version: version,
+      initial_build_number: 0,
+    )
+    build_number = latest_build_number.to_i + 1
+
+    # Keep app.json authoritative because Expo prebuild copies these values into
+    # the native project and runtime manifest used by the About screen.
+    config.fetch("expo")["version"] = version
+    config.fetch("expo").fetch("ios")["buildNumber"] = build_number.to_s
+    write_mobile_app_config(config)
+
+    UI.message("Prepared Orca Mobile iOS #{version} (#{build_number})")
+  end
+
+  desc "Build, sign, upload, and share Orca Mobile on TestFlight"
+  lane :release do
+    api_key = app_store_connect_api_key_from_env
+
+    team_id = ENV.fetch("APPLE_TEAM_ID")
+
+    # Fetch (or create) the App Store distribution profile via the API key and
+    # install it locally, then feed its name to the manual archive + export.
+    get_provisioning_profile(
+      api_key: api_key,
+      app_identifier: BUNDLE_ID,
+      force: true,
+    )
+    # sigh exposes the chosen profile's name in SIGH_NAME (SIGH_PROFILE_MAPPING
+    # doesn't exist in this fastlane version).
+    profile_name = lane_context[SharedValues::SIGH_NAME]
+
+    # Manual signing: the archive needs the team, profile, and signing style set
+    # explicitly (no -allowProvisioningUpdates). Without DEVELOPMENT_TEAM the
+    # archive fails: "Signing for Orca requires a development team".
+    build_app(
+      workspace: WORKSPACE,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      xcargs: "DEVELOPMENT_TEAM=#{team_id} " \
+        "CODE_SIGN_STYLE=Manual " \
+        "CODE_SIGN_IDENTITY='Apple Distribution' " \
+        "PROVISIONING_PROFILE_SPECIFIER='#{profile_name}'",
+      export_options: {
+        teamID: team_id,
+        signingStyle: "manual",
+        provisioningProfiles: {
+          BUNDLE_ID => profile_name,
+        },
+      },
+      output_directory: BUILD_OUTPUT_DIRECTORY,
+      output_name: "Orca.ipa",
+      clean: true,
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      # Why: fastlane can only assign external TestFlight groups after Apple
+      # finishes processing the uploaded build.
+      skip_waiting_for_build_processing: false,
+      distribute_external: true,
+      groups: TESTFLIGHT_GROUPS,
+      notify_external_testers: true,
+      # Why: fastlane requires release notes when distributing to external
+      # TestFlight testers, even for CI-triggered smoke releases.
+      changelog: testflight_changelog,
+    )
+  end
+end

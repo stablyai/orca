@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
 import {
   parseAgentStatusPayload,
+  normalizeAgentStatusPayload,
   AGENT_STATUS_MAX_FIELD_LENGTH,
   AGENT_STATUS_TOOL_NAME_MAX_LENGTH,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
@@ -8,6 +9,10 @@ import {
   AGENT_STATUS_STATES,
   AGENT_TYPE_MAX_LENGTH
 } from './agent-status-types'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('parseAgentStatusPayload', () => {
   it('parses a valid working payload', () => {
@@ -185,6 +190,34 @@ describe('parseAgentStatusPayload', () => {
     expect(result!.toolInput).toBe('line one line two')
   })
 
+  it('normalizes large single-line preview fields without full-string replacement passes', () => {
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+    const prompt = `Summary\r\nDetails ${'x'.repeat(20_000)}`
+    const toolInput = `src/index.ts${String.fromCharCode(0x2028)}${'line\n'.repeat(10_000)}`
+
+    const result = normalizeAgentStatusPayload({
+      state: 'working',
+      prompt,
+      toolInput
+    })
+
+    expect(result!.prompt.startsWith('Summary Details ')).toBe(true)
+    expect(result!.prompt).toHaveLength(AGENT_STATUS_MAX_FIELD_LENGTH)
+    expect(result!.toolInput?.startsWith('src/index.ts ')).toBe(true)
+    expect(result!.toolInput!.length).toBeLessThanOrEqual(AGENT_STATUS_TOOL_INPUT_MAX_LENGTH)
+    expect(replaceSpy).not.toHaveBeenCalled()
+  })
+
+  it('bounds scanning when oversized single-line previews are mostly line breaks', () => {
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+    const prompt = `Summary${'\n'.repeat(10_000)}Details`
+
+    const result = normalizeAgentStatusPayload({ state: 'working', prompt })
+
+    expect(result!.prompt).toBe('Summary')
+    expect(replaceSpy).not.toHaveBeenCalled()
+  })
+
   it('preserves paragraph breaks in lastAssistantMessage', () => {
     // Why: the assistant message is rendered with `whitespace-pre-wrap` in the
     // dashboard row so the user sees the same paragraph structure the agent
@@ -200,6 +233,26 @@ describe('parseAgentStatusPayload', () => {
       '{"state":"done","lastAssistantMessage":"a\\r\\nb\\n\\n\\n\\nc"}'
     )
     expect(result!.lastAssistantMessage).toBe('a\nb\n\nc')
+  })
+
+  it('normalizes large assistant messages without full-string replacement passes', () => {
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+    const lastAssistantMessage = `Summary\r\n${'\r\n'.repeat(10_000)}Details ${'x'.repeat(
+      AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH
+    )}`
+
+    const result = parseAgentStatusPayload(JSON.stringify({ state: 'done', lastAssistantMessage }))
+
+    expect(result!.lastAssistantMessage?.startsWith('Summary\n\nDetails ')).toBe(true)
+    expect(result!.lastAssistantMessage!.length).toBeLessThanOrEqual(
+      AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH
+    )
+    const usedMultilineReplace = replaceSpy.mock.calls.some(
+      ([pattern]) =>
+        pattern instanceof RegExp &&
+        ['\\r\\n', '\\r', '[\\u2028\\u2029]', '\\n{3,}'].includes(pattern.source)
+    )
+    expect(usedMultilineReplace).toBe(false)
   })
 
   it('folds Unicode line/paragraph separators into \\n and caps blank-line runs in lastAssistantMessage', () => {

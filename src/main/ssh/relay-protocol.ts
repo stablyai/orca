@@ -192,7 +192,13 @@ export function parseJsonRpcMessage(payload: Buffer): JsonRpcMessage {
 
 // ── Supported platforms ─────────────────────────────────────────────
 
-export type RelayPlatform = 'linux-x64' | 'linux-arm64' | 'darwin-x64' | 'darwin-arm64'
+export type RelayPlatform =
+  | 'linux-x64'
+  | 'linux-arm64'
+  | 'darwin-x64'
+  | 'darwin-arm64'
+  | 'win32-x64'
+  | 'win32-arm64'
 
 export function parseUnameToRelayPlatform(os: string, arch: string): RelayPlatform | null {
   const normalizedOs = os.toLowerCase().trim()
@@ -203,10 +209,17 @@ export function parseUnameToRelayPlatform(os: string, arch: string): RelayPlatfo
     relayOs = 'linux'
   } else if (normalizedOs === 'darwin') {
     relayOs = 'darwin'
+  } else if (
+    normalizedOs === 'windows' ||
+    normalizedOs === 'win32' ||
+    normalizedOs.startsWith('mingw') ||
+    normalizedOs.startsWith('msys')
+  ) {
+    relayOs = 'win32'
   }
 
   let relayArch: string | null = null
-  if (normalizedArch === 'x86_64' || normalizedArch === 'amd64') {
+  if (normalizedArch === 'x86_64' || normalizedArch === 'amd64' || normalizedArch === 'x64') {
     relayArch = 'x64'
   } else if (normalizedArch === 'aarch64' || normalizedArch === 'arm64') {
     relayArch = 'arm64'

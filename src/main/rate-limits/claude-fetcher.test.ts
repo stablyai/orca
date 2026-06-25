@@ -1,11 +1,12 @@
 /* eslint-disable max-lines -- Why: Claude rate-limit fallback tests share account/keychain/PTY mocks that would be noisier split apart. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
 import { fetchViaPty } from './claude-pty'
 import {
+  readActiveClaudeKeychainCredentials,
   readActiveClaudeKeychainCredentialsStrict,
   readManagedClaudeKeychainCredentials
 } from '../claude-accounts/keychain'
@@ -67,6 +68,7 @@ describe('fetchClaudeRateLimits', () => {
     tempDir = null
     vi.clearAllMocks()
     readFileMock.mockRejectedValue(new Error('missing file'))
+    vi.mocked(readActiveClaudeKeychainCredentials).mockResolvedValue(null)
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValue(null)
     vi.mocked(readManagedClaudeKeychainCredentials).mockResolvedValue(null)
     appGetPathMock.mockReturnValue('/tmp/orca-claude-fetcher-test')
@@ -123,11 +125,11 @@ describe('fetchClaudeRateLimits', () => {
     expect(fetchViaPty).not.toHaveBeenCalled()
   })
 
-  it('reads scoped default-config Keychain credentials for OAuth usage fetches', async () => {
+  it('reads scoped Keychain credentials when the Claude config dir is explicit', async () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
-      envPatch: {},
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
@@ -167,11 +169,91 @@ describe('fetchClaudeRateLimits', () => {
     )
   })
 
+  it('falls back to legacy Keychain credentials for host system default without an explicit config dir', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      runtime: 'host',
+      envPatch: {},
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          claudeAiOauth: {
+            accessToken: 'legacy-oauth-token',
+            expiresAt: Date.now() + 60_000
+          }
+        })
+      )
+
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: { usedPercent: 12 },
+      weekly: { usedPercent: 34 }
+    })
+
+    expect(readActiveClaudeKeychainCredentialsStrict).toHaveBeenNthCalledWith(1, configDir)
+    expect(readActiveClaudeKeychainCredentialsStrict).toHaveBeenNthCalledWith(2, undefined)
+    expect(readActiveClaudeKeychainCredentials).not.toHaveBeenCalled()
+    expect(netFetchMock).toHaveBeenCalledWith(
+      'https://api.anthropic.com/api/oauth/usage',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer legacy-oauth-token'
+        })
+      })
+    )
+  })
+
+  it('reads scoped Keychain credentials for host system default without an explicit config dir', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      runtime: 'host',
+      envPatch: {},
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'scoped-oauth-token',
+          expiresAt: Date.now() + 60_000
+        }
+      })
+    )
+
+    await expect(
+      fetchClaudeRateLimits({ authPreparation, allowPtyFallback: false })
+    ).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: { usedPercent: 12 },
+      weekly: { usedPercent: 34 }
+    })
+
+    expect(readActiveClaudeKeychainCredentialsStrict).toHaveBeenCalledWith(configDir)
+    expect(readActiveClaudeKeychainCredentials).not.toHaveBeenCalled()
+    expect(fetchViaPty).not.toHaveBeenCalled()
+    expect(netFetchMock).toHaveBeenCalledWith(
+      'https://api.anthropic.com/api/oauth/usage',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer scoped-oauth-token'
+        })
+      })
+    )
+  })
+
   it('falls back to the credentials file when Keychain access fails', async () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
-      envPatch: {},
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
@@ -210,7 +292,7 @@ describe('fetchClaudeRateLimits', () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
-      envPatch: {},
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
@@ -246,7 +328,7 @@ describe('fetchClaudeRateLimits', () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
-      envPatch: {},
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
@@ -283,7 +365,7 @@ describe('fetchClaudeRateLimits', () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
-      envPatch: {},
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
@@ -325,11 +407,11 @@ describe('fetchClaudeRateLimits', () => {
     expect(fetchViaPty).not.toHaveBeenCalled()
   })
 
-  it('does not mask OAuth auth failures with the PTY fallback', async () => {
+  it('uses CLI fallback for OAuth auth failures when automatic repair is safe', async () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
-      envPatch: {},
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
@@ -356,8 +438,152 @@ describe('fetchClaudeRateLimits', () => {
 
     await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
       provider: 'claude',
+      status: 'ok',
+      session: { usedPercent: 56 },
+      usageMetadata: {
+        source: 'cli',
+        attemptedSources: ['oauth', 'cli']
+      }
+    })
+
+    expect(fetchViaPty).toHaveBeenCalledWith({ authPreparation })
+  })
+
+  it('re-reads credentials and retries OAuth once after CLI repair', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict)
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          claudeAiOauth: {
+            accessToken: 'stale-oauth-token',
+            refreshToken: 'refresh-token',
+            expiresAt: Date.now() - 60_000
+          }
+        })
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          claudeAiOauth: {
+            accessToken: 'repaired-oauth-token',
+            refreshToken: 'refresh-token-2',
+            expiresAt: Date.now() + 60_000
+          }
+        })
+      )
+    netFetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: {
+              type: 'authentication_error',
+              message: 'Invalid OAuth token.'
+            }
+          }),
+          { status: 401 }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            five_hour: { utilization: 14 },
+            seven_day: { utilization: 27 }
+          }),
+          { status: 200 }
+        )
+      )
+
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: { usedPercent: 14 },
+      weekly: { usedPercent: 27 },
+      usageMetadata: {
+        source: 'oauth',
+        attemptedSources: ['oauth', 'cli'],
+        credentialSource: 'scoped-keychain'
+      }
+    })
+
+    expect(fetchViaPty).toHaveBeenCalledWith({ authPreparation })
+    expect(netFetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://api.anthropic.com/api/oauth/usage',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer repaired-oauth-token'
+        })
+      })
+    )
+  })
+
+  it('explains auth failures when a live Claude terminal owns managed refresh', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: false,
+      managedRefreshDeferredByLivePty: true,
+      provenance: 'managed:account-1'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'stale-oauth-token',
+          refreshToken: 'refresh-token',
+          expiresAt: Date.now() - 60_000
+        }
+      })
+    )
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            type: 'authentication_error',
+            message: 'Invalid OAuth token.'
+          }
+        }),
+        { status: 401 }
+      )
+    )
+
+    await expect(
+      fetchClaudeRateLimits({ authPreparation, allowPtyFallback: false })
+    ).resolves.toMatchObject({
+      provider: 'claude',
       status: 'error',
-      error: 'Invalid OAuth token.'
+      error:
+        'Claude usage refresh is waiting for the live Claude terminal to rotate its credentials.'
+    })
+
+    expect(fetchViaPty).not.toHaveBeenCalled()
+  })
+
+  it('does not start CLI fallback when live Claude owns managed refresh and no token is readable', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: false,
+      managedRefreshDeferredByLivePty: true,
+      provenance: 'managed:account-1'
+    }
+
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'error',
+      error:
+        'Claude usage refresh is waiting for the live Claude terminal to rotate its credentials.',
+      usageMetadata: {
+        failureKind: 'deferred-by-live-session',
+        deferredByLiveClaudeSession: true,
+        attemptedSources: []
+      }
     })
 
     expect(fetchViaPty).not.toHaveBeenCalled()
@@ -367,7 +593,7 @@ describe('fetchClaudeRateLimits', () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
-      envPatch: {},
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
@@ -397,7 +623,7 @@ describe('fetchClaudeRateLimits', () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
-      envPatch: {},
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
@@ -419,6 +645,100 @@ describe('fetchClaudeRateLimits', () => {
     })
 
     expect(fetchViaPty).not.toHaveBeenCalled()
+  })
+
+  it('falls back to CLI when OAuth credentials are missing in automatic mode', async () => {
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir: '/Users/test/.claude',
+      envPatch: {},
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: { usedPercent: 56 },
+      usageMetadata: {
+        source: 'cli',
+        attemptedSources: ['cli'],
+        credentialSource: 'none'
+      }
+    })
+
+    expect(fetchViaPty).toHaveBeenCalledWith({ authPreparation })
+  })
+
+  it('marks CLI plan usage shell results as usage unavailable', async () => {
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir: '/Users/test/.claude',
+      envPatch: {},
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(fetchViaPty).mockResolvedValueOnce({
+      provider: 'claude',
+      session: null,
+      weekly: null,
+      updatedAt: 1,
+      error: 'Claude plan usage is unavailable for this Claude CLI session.',
+      status: 'error'
+    })
+
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'error',
+      error: 'Claude plan usage is unavailable for this Claude CLI session.',
+      usageMetadata: {
+        source: 'cli',
+        attemptedSources: ['cli'],
+        failureKind: 'usage-unavailable'
+      }
+    })
+  })
+
+  it('surfaces Keychain read failures as structured usage metadata when CLI fallback is disabled', async () => {
+    vi.mocked(readActiveClaudeKeychainCredentials).mockRejectedValueOnce(
+      new Error('security timed out after 3000ms')
+    )
+
+    await expect(fetchClaudeRateLimits({ allowPtyFallback: false })).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'error',
+      error: 'Claude Keychain credentials unavailable',
+      usageMetadata: {
+        failureKind: 'keychain-unavailable',
+        attemptedSources: [],
+        credentialSource: 'none'
+      }
+    })
+
+    expect(fetchViaPty).not.toHaveBeenCalled()
+  })
+
+  it('uses CLI fallback when Keychain is unavailable in automatic mode', async () => {
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir: '/Users/test/.claude',
+      envPatch: {},
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentials).mockRejectedValueOnce(
+      new Error('security timed out after 3000ms')
+    )
+
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: { usedPercent: 56 },
+      usageMetadata: {
+        source: 'cli',
+        attemptedSources: ['cli'],
+        credentialSource: 'none'
+      }
+    })
+
+    expect(fetchViaPty).toHaveBeenCalledWith({ authPreparation })
   })
 
   it('does not read inactive managed credentials from unowned auth paths', async () => {
@@ -449,5 +769,57 @@ describe('fetchClaudeRateLimits', () => {
 
     expect(netFetchMock).not.toHaveBeenCalled()
     expect(readFileMock).not.toHaveBeenCalled()
+  })
+
+  it('refreshes and persists an expiring inactive account before fetching usage', async () => {
+    setPlatform('linux')
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-claude-fetcher-'))
+    appGetPathMock.mockReturnValue(tempDir)
+    const ownedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
+    mkdirSync(ownedAuthPath, { recursive: true })
+    writeFileSync(join(ownedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
+    const credentialsPath = join(ownedAuthPath, '.credentials.json')
+    writeFileSync(
+      credentialsPath,
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'stale-access',
+          refreshToken: 'stale-refresh',
+          expiresAt: Date.now() - 60_000
+        }
+      }),
+      'utf-8'
+    )
+
+    // First net.fetch call is the OAuth refresh (token endpoint); second is the
+    // usage fetch with the refreshed access token.
+    netFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        access_token: 'fresh-access',
+        expires_in: 3600,
+        refresh_token: 'fresh-refresh'
+      })
+    })
+    netFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ five_hour: { utilization: 12 }, seven_day: { utilization: 34 } })
+    })
+
+    const result = await fetchManagedAccountUsage({
+      id: 'account-1',
+      managedAuthPath: ownedAuthPath
+    })
+
+    expect(result.status).toBe('ok')
+    // Rotated token persisted back to managed storage.
+    const persisted = JSON.parse(readFileSync(credentialsPath, 'utf-8'))
+    expect(persisted.claudeAiOauth.accessToken).toBe('fresh-access')
+    expect(persisted.claudeAiOauth.refreshToken).toBe('fresh-refresh')
+    // Usage fetch used the fresh access token.
+    const usageCall = netFetchMock.mock.calls.find(([url]) =>
+      String(url).includes('/api/oauth/usage')
+    )
+    expect(usageCall?.[1]?.headers?.Authorization).toBe('Bearer fresh-access')
   })
 })

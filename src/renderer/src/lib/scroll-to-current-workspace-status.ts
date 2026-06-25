@@ -1,9 +1,15 @@
 export const SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT =
   'orca-scroll-to-current-workspace-reveal-request'
 
-export type ScrollToCurrentWorkspaceRevealRequestDetail = {
-  beginRename?: boolean
-}
+export type ScrollToCurrentWorkspaceRevealRequestDetail =
+  | {
+      target?: { type: 'active-workspace' }
+      beginRename?: boolean
+    }
+  | {
+      target: { type: 'sidebar-row'; rowKey: string }
+      highlight?: boolean
+    }
 
 function dispatchScrollToCurrentWorkspaceReveal(
   detail?: ScrollToCurrentWorkspaceRevealRequestDetail
@@ -21,5 +27,8 @@ export function requestScrollToCurrentWorkspaceReveal(): void {
 }
 
 export function requestScrollToCurrentWorkspaceRevealAndRename(): void {
-  dispatchScrollToCurrentWorkspaceReveal({ beginRename: true })
+  dispatchScrollToCurrentWorkspaceReveal({
+    target: { type: 'active-workspace' },
+    beginRename: true
+  })
 }

@@ -1,6 +1,10 @@
+// @vitest-environment happy-dom
+
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FeatureWallSetupProgress } from '../feature-wall/feature-wall-setup-progress'
 import { SetupGuideSidebarEntry } from './SetupGuideSidebarEntry'
 
@@ -49,12 +53,13 @@ function makeProgress(overrides: Partial<FeatureWallSetupProgress> = {}): Featur
       notifications: false,
       'split-terminal': false,
       'two-worktrees': false,
+      browser: false,
       'task-sources': false,
       'agent-capabilities': false,
       'setup-script': false
     },
     coreDoneCount: 0,
-    coreTotal: 8,
+    coreTotal: 9,
     ...overrides
   }
 }
@@ -69,17 +74,57 @@ function makeAllDoneProgress(
       notifications: true,
       'split-terminal': true,
       'two-worktrees': true,
+      browser: true,
       'task-sources': true,
       'agent-capabilities': true,
       'setup-script': true
     },
-    coreDoneCount: 8,
-    coreTotal: 8,
+    coreDoneCount: 9,
+    coreTotal: 9,
     ...overrides
   })
 }
 
+function makeOnlyBrowserIncompleteProgress(): FeatureWallSetupProgress {
+  return makeAllDoneProgress({
+    stepDone: {
+      ...makeAllDoneProgress().stepDone,
+      browser: false
+    },
+    coreDoneCount: 8,
+    coreTotal: 9
+  })
+}
+
+const mountedRoots: Root[] = []
+
+async function renderSetupGuideSidebarEntry(): Promise<{
+  container: HTMLDivElement
+  rerender: () => Promise<void>
+}> {
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  const root = createRoot(container)
+  mountedRoots.push(root)
+  const rerender = async (): Promise<void> => {
+    await act(async () => {
+      root.render(<SetupGuideSidebarEntry />)
+    })
+  }
+  await rerender()
+  return { container, rerender }
+}
+
 describe('SetupGuideSidebarEntry', () => {
+  afterEach(async () => {
+    await act(async () => {
+      for (const root of mountedRoots.splice(0)) {
+        root.unmount()
+      }
+    })
+    document.body.innerHTML = ''
+  })
+
   beforeEach(() => {
     persistedUIReady = true
     activeModal = 'none'
@@ -122,7 +167,14 @@ describe('SetupGuideSidebarEntry', () => {
     expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).not.toContain('Onboarding checklist')
   })
 
-  it('does not render when the sidebar entry was dismissed', () => {
+  it('renders for fresh active users when only the browser step is incomplete', () => {
+    mocks.useSetupGuideProgress.mockReturnValue(makeOnlyBrowserIncompleteProgress())
+
+    expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).toContain('Onboarding checklist')
+  })
+
+  it('does not render when the sidebar entry was dismissed with only browser incomplete', () => {
+    mocks.useSetupGuideProgress.mockReturnValue(makeOnlyBrowserIncompleteProgress())
     setupGuideSidebarDismissed = true
 
     expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).not.toContain('Onboarding checklist')
@@ -130,5 +182,21 @@ describe('SetupGuideSidebarEntry', () => {
 
   it('renders after persisted UI and setup progress are ready when setup is incomplete', () => {
     expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).toContain('Onboarding checklist')
+  })
+
+  it('keeps the visible entry mounted during transient setup progress refreshes', async () => {
+    const { container, rerender } = await renderSetupGuideSidebarEntry()
+
+    expect(container.textContent).toContain('Onboarding checklist')
+
+    mocks.useSetupGuideProgress.mockReturnValue(makeProgress({ ready: false }))
+    await rerender()
+
+    expect(container.textContent).toContain('Onboarding checklist')
+
+    mocks.useSetupGuideProgress.mockReturnValue(makeAllDoneProgress())
+    await rerender()
+
+    expect(container.textContent).not.toContain('Onboarding checklist')
   })
 })

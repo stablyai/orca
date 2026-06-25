@@ -5,6 +5,7 @@ import {
   clearWorkspaceKanbanSidebarDropTargetVisual,
   getWorkspaceKanbanSidebarDropGroups,
   getWorkspaceKanbanSidebarDropTarget,
+  isWorkspaceKanbanSidebarDropPointInBoard,
   updateWorkspaceKanbanSidebarDropTargetVisual
 } from './workspace-kanban-sidebar-drop'
 
@@ -263,6 +264,21 @@ describe('workspace kanban sidebar drop DOM bridge', () => {
 
     expect(lane.hasAttribute('data-workspace-board-external-drag-target')).toBe(false)
     expect(document.querySelector('[data-workspace-board-card-drop-indicator]')).toBeNull()
+  })
+
+  it('detects pointer entry across the whole board sheet', () => {
+    const sheet = document.createElement('div')
+    sheet.setAttribute('data-workspace-board-sheet', '')
+    setRect(sheet, { left: 300, top: 36, right: 900, bottom: 700, width: 600, height: 664 })
+
+    const { board } = appendBoard()
+    board.remove()
+    sheet.append(board)
+    document.body.append(sheet)
+
+    expect(isWorkspaceKanbanSidebarDropPointInBoard(320, 60)).toBe(true)
+    expect(isWorkspaceKanbanSidebarDropPointInBoard(280, 60)).toBe(false)
+    expect(isWorkspaceKanbanSidebarDropPointInBoard(320, 720)).toBe(false)
   })
 })
 

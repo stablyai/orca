@@ -35,6 +35,11 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     workingLabel: 'Hermes',
     permissionLabel: 'Hermes - action required',
     idleLabel: 'Hermes ready'
+  },
+  devin: {
+    workingLabel: 'Devin',
+    permissionLabel: 'Devin - action required',
+    idleLabel: 'Devin ready'
   }
 }
 

@@ -3,13 +3,15 @@ import type {
   DropZone,
   ManagedPane,
   ManagedPaneInternal,
-  PaneStyleOptions,
-  ScrollState
+  PaneStyleOptions
 } from './pane-manager-types'
 import { createDivider, disposeDivider } from './pane-divider'
 import { getFitOverrideForPty } from './mobile-fit-overrides'
 import { disposeWebgl, attachWebgl } from './pane-webgl-renderer'
-import { captureScrollState, restoreScrollStateAfterLayout } from './pane-scroll'
+import {
+  captureTerminalWriteScrollIntent,
+  enforceTerminalWriteScrollIntent
+} from './terminal-scroll-intent'
 
 export { captureScrollState, restoreScrollState } from './pane-scroll'
 
@@ -27,34 +29,10 @@ type TreeOpsCallbacks = {
   requestPaneReparentFrame?: (callback: FrameRequestCallback) => void
 }
 
-type TerminalSplitEdges = {
-  blockStart: boolean
-  blockEnd: boolean
-  inlineStart: boolean
-  inlineEnd: boolean
-}
-
-const TERMINAL_EDGE_ATTRIBUTES = [
-  'data-terminal-edge-block-start',
-  'data-terminal-edge-block-end',
-  'data-terminal-edge-inline-start',
-  'data-terminal-edge-inline-end'
-] as const
-
-function isPaneTreeHTMLElement(value: unknown): value is HTMLElement {
-  if (typeof HTMLElement !== 'undefined') {
-    return value instanceof HTMLElement
-  }
-  // Why: pane-manager unit tests run split-tree logic with small DOM doubles
-  // under node, where the browser HTMLElement constructor is unavailable.
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'classList' in value &&
-    'children' in value &&
-    'style' in value
-  )
-}
+const MIN_PANE_FIT_WIDTH_PX = 48
+const MIN_PANE_FIT_HEIGHT_PX = 24
+const MIN_PANE_FIT_COLS = 8
+const MIN_PANE_FIT_ROWS = 4
 
 function getProposedDimensions(pane: ManagedPane): { cols: number; rows: number } | null {
   try {
@@ -64,15 +42,36 @@ function getProposedDimensions(pane: ManagedPane): { cols: number; rows: number 
   }
 }
 
-function captureScrollStateForFit(pane: ManagedPane): ScrollState | null {
+function canMeasurePaneForFit(pane: ManagedPane): boolean {
+  const measure = pane.container.getBoundingClientRect
+  if (typeof measure === 'function') {
+    const rect = measure.call(pane.container)
+    if (rect.width < MIN_PANE_FIT_WIDTH_PX || rect.height < MIN_PANE_FIT_HEIGHT_PX) {
+      return false
+    }
+  }
+  const dims = getProposedDimensions(pane)
+  if (!dims) {
+    return false
+  }
+  // Why: worktree switches can briefly measure a near-zero overlay before
+  // fallback positioning lands. Fitting there pins the PTY at ~2 cols until
+  // the next user-driven resize.
+  return dims.cols >= MIN_PANE_FIT_COLS && dims.rows >= MIN_PANE_FIT_ROWS
+}
+
+function canPreserveScrollIntentForFit(pane: ManagedPane): boolean {
   // Why: split reparent has its own delayed restore; restoring here can fight that timer.
-  return 'pendingSplitScrollState' in pane && (pane as ManagedPaneInternal).pendingSplitScrollState
-    ? null
-    : captureScrollState(pane.terminal)
+  return !(
+    'pendingSplitScrollState' in pane && (pane as ManagedPaneInternal).pendingSplitScrollState
+  )
 }
 
 export function safeFit(pane: ManagedPane): void {
-  let scrollState: ScrollState | null = null
+  if (!canMeasurePaneForFit(pane)) {
+    return
+  }
+  let scrollIntent = null as ReturnType<typeof captureTerminalWriteScrollIntent>
   let shouldRestoreScroll = false
   try {
     // Why: when a mobile client has resized this PTY to phone dimensions,
@@ -84,8 +83,10 @@ export function safeFit(pane: ManagedPane): void {
     const override = ptyId ? getFitOverrideForPty(ptyId) : null
     if (override) {
       if (pane.terminal.cols !== override.cols || pane.terminal.rows !== override.rows) {
-        scrollState = captureScrollStateForFit(pane)
-        shouldRestoreScroll = true
+        if (canPreserveScrollIntentForFit(pane)) {
+          scrollIntent = captureTerminalWriteScrollIntent(pane.terminal)
+          shouldRestoreScroll = true
+        }
         pane.terminal.resize(override.cols, override.rows)
       }
       return
@@ -98,15 +99,17 @@ export function safeFit(pane: ManagedPane): void {
       // churn, which was causing visible terminal blinking while resizing.
       return
     }
-    scrollState = captureScrollStateForFit(pane)
-    shouldRestoreScroll = true
+    if (canPreserveScrollIntentForFit(pane)) {
+      scrollIntent = captureTerminalWriteScrollIntent(pane.terminal)
+      shouldRestoreScroll = true
+    }
     pane.fitAddon.fit()
   } catch {
     // Container may not have dimensions yet
   } finally {
-    if (shouldRestoreScroll && scrollState) {
+    if (shouldRestoreScroll) {
       try {
-        restoreScrollStateAfterLayout(pane.terminal, scrollState)
+        enforceTerminalWriteScrollIntent(pane.terminal, scrollIntent)
       } catch {
         // Why: xterm can temporarily expose a terminal whose renderer has not
         // initialized dimensions yet during SSH reattach/layout. Fit is best-effort.
@@ -152,7 +155,6 @@ export function refitPanesUnder(el: HTMLElement, panes: Map<number, ManagedPaneI
 export function detachPaneFromTree(pane: ManagedPaneInternal, callbacks: TreeOpsCallbacks): void {
   const container = pane.container
   const parent = container.parentElement
-  const root = callbacks.getRoot()
   if (!parent) {
     return
   }
@@ -160,14 +162,13 @@ export function detachPaneFromTree(pane: ManagedPaneInternal, callbacks: TreeOps
   if (!parent.classList.contains('pane-split')) {
     // Direct child of root — just remove it
     container.remove()
-    updateTerminalSplitEdgeState(root)
     return
   }
 
   // Find sibling (skip dividers)
   const children = Array.from(parent.children).filter(
     (child): child is HTMLElement =>
-      isPaneTreeHTMLElement(child) &&
+      child instanceof HTMLElement &&
       (child.classList.contains('pane') || child.classList.contains('pane-split'))
   )
   const sibling = children.find((c) => c !== container) ?? null
@@ -177,8 +178,7 @@ export function detachPaneFromTree(pane: ManagedPaneInternal, callbacks: TreeOps
   removeDividers(parent)
 
   // Promote sibling to replace the split container
-  promoteSibling(sibling, parent, root)
-  updateTerminalSplitEdgeState(root)
+  promoteSibling(sibling, parent, callbacks.getRoot())
 }
 
 /** Insert source pane next to target pane by wrapping target in a new split. */
@@ -250,7 +250,6 @@ export function insertPaneNextTo(
     split.appendChild(divider)
     split.appendChild(source.container)
   }
-  updateTerminalSplitEdgeState(callbacks.getRoot())
 
   const requestReparentFrame =
     callbacks.requestPaneReparentFrame ??
@@ -303,88 +302,6 @@ export function promoteSibling(
   }
 }
 
-export function updateTerminalSplitEdgeState(root: HTMLElement): void {
-  clearTerminalSplitEdgeState(root)
-  const child = root.firstElementChild
-  if (!isPaneTreeHTMLElement(child)) {
-    return
-  }
-  markTerminalSplitEdges(child, {
-    blockStart: true,
-    blockEnd: true,
-    inlineStart: true,
-    inlineEnd: true
-  })
-}
-
-function clearTerminalSplitEdgeState(root: HTMLElement): void {
-  visitPaneTree(root, (element) => {
-    if (!element.classList.contains('pane-split')) {
-      return
-    }
-    for (const attr of TERMINAL_EDGE_ATTRIBUTES) {
-      element.removeAttribute(attr)
-    }
-  })
-}
-
-function markTerminalSplitEdges(element: HTMLElement, edges: TerminalSplitEdges): void {
-  if (!element.classList.contains('pane-split')) {
-    return
-  }
-
-  applyTerminalSplitEdgeAttributes(element, edges)
-
-  const children = findPaneChildren(element)
-  if (children.length === 0) {
-    return
-  }
-
-  const isHorizontal = element.classList.contains('is-horizontal')
-  for (const [index, child] of children.entries()) {
-    if (isHorizontal) {
-      markTerminalSplitEdges(child, {
-        blockStart: edges.blockStart && index === 0,
-        blockEnd: edges.blockEnd && index === children.length - 1,
-        inlineStart: edges.inlineStart,
-        inlineEnd: edges.inlineEnd
-      })
-      continue
-    }
-
-    markTerminalSplitEdges(child, {
-      blockStart: edges.blockStart,
-      blockEnd: edges.blockEnd,
-      inlineStart: edges.inlineStart && index === 0,
-      inlineEnd: edges.inlineEnd && index === children.length - 1
-    })
-  }
-}
-
-function applyTerminalSplitEdgeAttributes(split: HTMLElement, edges: TerminalSplitEdges): void {
-  if (edges.blockStart) {
-    split.setAttribute('data-terminal-edge-block-start', '')
-  }
-  if (edges.blockEnd) {
-    split.setAttribute('data-terminal-edge-block-end', '')
-  }
-  if (edges.inlineStart) {
-    split.setAttribute('data-terminal-edge-inline-start', '')
-  }
-  if (edges.inlineEnd) {
-    split.setAttribute('data-terminal-edge-inline-end', '')
-  }
-}
-
-function visitPaneTree(element: HTMLElement, visit: (element: HTMLElement) => void): void {
-  visit(element)
-  for (const child of Array.from(element.children)) {
-    if (isPaneTreeHTMLElement(child)) {
-      visitPaneTree(child, visit)
-    }
-  }
-}
-
 /** Apply standard flex styles to a pane container inside a split. */
 export function applyPaneFlexStyle(el: HTMLElement): void {
   el.style.flex = '1 1 0%'
@@ -402,7 +319,7 @@ export function applyPaneFlexStyle(el: HTMLElement): void {
 export function removeDividers(parent: HTMLElement): void {
   const dividers = Array.from(parent.children).filter(
     (child): child is HTMLElement =>
-      isPaneTreeHTMLElement(child) && child.classList.contains('pane-divider')
+      child instanceof HTMLElement && child.classList.contains('pane-divider')
   )
   for (const d of dividers) {
     disposeDivider(d)
@@ -414,7 +331,7 @@ export function removeDividers(parent: HTMLElement): void {
 export function findPaneChildren(parent: HTMLElement): HTMLElement[] {
   return Array.from(parent.children).filter(
     (child): child is HTMLElement =>
-      isPaneTreeHTMLElement(child) &&
+      child instanceof HTMLElement &&
       (child.classList.contains('pane') || child.classList.contains('pane-split'))
   )
 }

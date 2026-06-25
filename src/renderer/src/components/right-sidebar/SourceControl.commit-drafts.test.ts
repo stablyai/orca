@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildResolveConflictsPrompt,
   normalizeSourceControlViewMode,
@@ -8,8 +8,17 @@ import {
   shouldRenderCommitArea,
   writeCommitDraftForWorktree
 } from './SourceControl'
+import { getNextSourceControlViewMode } from './source-control-header-toolbar'
+import {
+  loadSessionCommitDrafts,
+  saveSessionCommitDrafts
+} from '@/lib/source-control-commit-draft-session'
 
 describe('SourceControl commit drafts by worktree', () => {
+  afterEach(() => {
+    saveSessionCommitDrafts({})
+  })
+
   it('returns an empty draft when the selected worktree has no message', () => {
     expect(readCommitDraftForWorktree({}, 'wt-a')).toBe('')
   })
@@ -27,17 +36,24 @@ describe('SourceControl commit drafts by worktree', () => {
     // than leaking the active worktree's text into all worktree views.
     expect(readCommitDraftForWorktree(drafts, 'wt-a')).toBe('feat: message for A')
   })
+
+  it('restores commit drafts after Source Control remounts in the same session', () => {
+    let drafts = loadSessionCommitDrafts()
+
+    drafts = writeCommitDraftForWorktree(drafts, 'wt-a', 'feat: keep draft')
+    saveSessionCommitDrafts(drafts)
+
+    expect(readCommitDraftForWorktree(loadSessionCommitDrafts(), 'wt-a')).toBe('feat: keep draft')
+  })
 })
 
 describe('SourceControl conflict resolution state', () => {
   it('hides commit controls while unresolved conflicts or git operations are live', () => {
-    expect(shouldRenderCommitArea('all', 1, 'unknown')).toBe(false)
-    expect(shouldRenderCommitArea('uncommitted', 1, 'unknown')).toBe(false)
-    expect(shouldRenderCommitArea('all', 0, 'rebase')).toBe(false)
-    expect(shouldRenderCommitArea('uncommitted', 0, 'merge')).toBe(false)
-    expect(shouldRenderCommitArea('all', 0, 'cherry-pick')).toBe(false)
-    expect(shouldRenderCommitArea('all', 0, 'unknown')).toBe(true)
-    expect(shouldRenderCommitArea('uncommitted', 0, 'unknown')).toBe(true)
+    expect(shouldRenderCommitArea(1, 'unknown')).toBe(false)
+    expect(shouldRenderCommitArea(0, 'rebase')).toBe(false)
+    expect(shouldRenderCommitArea(0, 'merge')).toBe(false)
+    expect(shouldRenderCommitArea(0, 'cherry-pick')).toBe(false)
+    expect(shouldRenderCommitArea(0, 'unknown')).toBe(true)
   })
 
   it('builds an end-to-end AI prompt that resolves or skips before continuing conflicts', () => {
@@ -141,5 +157,10 @@ describe('SourceControl view mode preference', () => {
   it('preserves valid persisted view modes', () => {
     expect(normalizeSourceControlViewMode('list')).toBe('list')
     expect(normalizeSourceControlViewMode('tree')).toBe('tree')
+  })
+
+  it('derives the next persisted view mode from the current mode', () => {
+    expect(getNextSourceControlViewMode('list')).toBe('tree')
+    expect(getNextSourceControlViewMode('tree')).toBe('list')
   })
 })

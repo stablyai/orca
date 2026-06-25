@@ -1,15 +1,11 @@
-import { Loader2, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { RuntimeAccessGrant } from '../../../../shared/runtime-access-grants'
-import { Button } from '../ui/button'
-import { Input } from '../ui/input'
 import { Label } from '../ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
-import { GeneratedUrlRow, UnavailableUrlRow } from './RuntimePairingGeneratedUrlRows'
 import { RuntimeAccessGrantList } from './RuntimeAccessGrantList'
+import { translate } from '@/i18n/i18n'
+import { RuntimePairingGeneratorForm } from './RuntimePairingGeneratorForm'
 
 const LOOPBACK_ADDRESS = '127.0.0.1'
 
@@ -103,7 +99,12 @@ export function RuntimePairingUrlGenerator({
           options.showToastOnError
         ) {
           toast.error(
-            error instanceof Error ? error.message : 'Failed to load shared access grants.'
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.settings.RuntimePairingUrlGenerator.1b4e0bbcc5',
+                  'Failed to load shared access grants.'
+                )
           )
         }
       } finally {
@@ -133,7 +134,12 @@ export function RuntimePairingUrlGenerator({
           loadId === networkInterfaceLoadIdRef.current &&
           options.showToastOnError
         ) {
-          toast.error('Failed to refresh network interfaces.')
+          toast.error(
+            translate(
+              'auto.components.settings.RuntimePairingUrlGenerator.95b8be4cea',
+              'Failed to refresh network interfaces.'
+            )
+          )
         }
       } finally {
         if (mountedRef.current && loadId === networkInterfaceLoadIdRef.current) {
@@ -180,7 +186,12 @@ export function RuntimePairingUrlGenerator({
       if (!result.available) {
         clearGeneratedUrls()
         if (mountedRef.current) {
-          toast.error('Runtime pairing is unavailable.')
+          toast.error(
+            translate(
+              'auto.components.settings.RuntimePairingUrlGenerator.2752126f3e',
+              'Runtime pairing is unavailable.'
+            )
+          )
         }
         return
       }
@@ -194,11 +205,28 @@ export function RuntimePairingUrlGenerator({
       }
       await loadRuntimeAccessGrants()
       if (mountedRef.current) {
-        toast.success(result.webClientUrl ? 'Generated web client URL.' : 'Generated pairing URL.')
+        toast.success(
+          result.webClientUrl
+            ? translate(
+                'auto.components.settings.RuntimePairingUrlGenerator.6dd594a507',
+                'Generated web client URL.'
+              )
+            : translate(
+                'auto.components.settings.RuntimePairingUrlGenerator.11d5248e62',
+                'Generated pairing URL.'
+              )
+        )
       }
     } catch (error) {
       if (mountedRef.current) {
-        toast.error(error instanceof Error ? error.message : 'Failed to generate pairing URL.')
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.settings.RuntimePairingUrlGenerator.2ed55c841a',
+                'Failed to generate pairing URL.'
+              )
+        )
       }
     } finally {
       if (mountedRef.current) {
@@ -213,7 +241,12 @@ export function RuntimePairingUrlGenerator({
       const result = await window.api.mobile.revokeRuntimeAccess({ deviceId: grant.deviceId })
       if (!result.revoked) {
         if (mountedRef.current) {
-          toast.error('Shared access was already revoked.')
+          toast.error(
+            translate(
+              'auto.components.settings.RuntimePairingUrlGenerator.d797f516b1',
+              'Shared access was already revoked.'
+            )
+          )
         }
         await loadRuntimeAccessGrants()
         return
@@ -227,11 +260,23 @@ export function RuntimePairingUrlGenerator({
         clearGeneratedUrls()
       }
       if (mountedRef.current) {
-        toast.success('Shared access revoked.')
+        toast.success(
+          translate(
+            'auto.components.settings.RuntimePairingUrlGenerator.9f8e037c4a',
+            'Shared access revoked.'
+          )
+        )
       }
     } catch (error) {
       if (mountedRef.current) {
-        toast.error(error instanceof Error ? error.message : 'Failed to revoke shared access.')
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.settings.RuntimePairingUrlGenerator.e8d83f2b0f',
+                'Failed to revoke shared access.'
+              )
+        )
       }
     } finally {
       if (mountedRef.current) {
@@ -252,11 +297,28 @@ export function RuntimePairingUrlGenerator({
             setCopiedTarget((current) => (current === target ? null : current))
           }
         }, 1400)
-        toast.success(target === 'web' ? 'Copied web client URL.' : 'Copied pairing URL.')
+        toast.success(
+          target === 'web'
+            ? translate(
+                'auto.components.settings.RuntimePairingUrlGenerator.13704d635e',
+                'Copied web client URL.'
+              )
+            : translate(
+                'auto.components.settings.RuntimePairingUrlGenerator.df0aa45a86',
+                'Copied pairing URL.'
+              )
+        )
       }
     } catch (error) {
       if (mountedRef.current) {
-        toast.error(error instanceof Error ? error.message : 'Failed to copy URL.')
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.settings.RuntimePairingUrlGenerator.d6c081adf4',
+                'Failed to copy URL.'
+              )
+        )
       }
     }
   }
@@ -280,121 +342,37 @@ export function RuntimePairingUrlGenerator({
     <div ref={setContainerNode} className={containerClassName}>
       {showHeader ? (
         <div className="space-y-1">
-          <Label id="runtime-share-server-label">Share this Orca server</Label>
+          <Label id="runtime-share-server-label">
+            {translate(
+              'auto.components.settings.RuntimePairingUrlGenerator.f8500e134a',
+              'Share this Orca server'
+            )}
+          </Label>
           <p className="text-xs text-muted-foreground">
-            Create a revocable access grant for browser or desktop clients.
+            {translate(
+              'auto.components.settings.RuntimePairingUrlGenerator.ff80904fc4',
+              'Create a revocable access grant for browser or desktop clients.'
+            )}
           </p>
         </div>
       ) : null}
       {showGeneratorForm ? (
-        <>
-          <div className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
-              <div className="space-y-1">
-                <Label id="runtime-pairing-address-label" htmlFor="runtime-pairing-address">
-                  Connection address
-                </Label>
-                <div className="flex min-w-0 items-center gap-2">
-                  <Select value={selectedAddress} onValueChange={updateSelectedAddress}>
-                    <SelectTrigger
-                      id="runtime-pairing-address"
-                      size="sm"
-                      className="min-w-0 flex-1"
-                      aria-labelledby="runtime-pairing-address-label"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={LOOPBACK_ADDRESS}>
-                        This computer ({LOOPBACK_ADDRESS})
-                      </SelectItem>
-                      {networkInterfaces.map((networkInterface, index) => (
-                        <SelectItem
-                          key={`${networkInterface.name}:${networkInterface.address}:${index}`}
-                          value={networkInterface.address}
-                        >
-                          {networkInterface.name} ({networkInterface.address})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {/* Why: server sharing uses the same interface list as Mobile,
-                      and VPN/tailnet addresses can appear after Settings opens. */}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => void loadNetworkInterfaces({ showToastOnError: true })}
-                        disabled={refreshingNetworkInterfaces}
-                        aria-label="Refresh connection addresses"
-                        className="text-muted-foreground"
-                      >
-                        <RefreshCw className={refreshingNetworkInterfaces ? 'animate-spin' : ''} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" sideOffset={6}>
-                      Refresh connection addresses
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-              </div>
-              <div className="min-w-0 space-y-1">
-                <Label htmlFor="runtime-pairing-custom-address">Custom address</Label>
-                <Input
-                  id="runtime-pairing-custom-address"
-                  value={customAddress}
-                  onChange={(event) => updateCustomAddress(event.target.value)}
-                  placeholder="host, host:port, or wss://host/path"
-                  className="h-8 font-mono text-xs"
-                />
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              127.0.0.1 only works on this computer. Use a LAN, Tailscale, or custom address for
-              another device.
-            </p>
-            <div className="flex justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                onClick={() => void generateRuntimePairingUrl()}
-                disabled={isGeneratingPairing}
-              >
-                {isGeneratingPairing ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-                Generate Access Link
-              </Button>
-            </div>
-          </div>
-
-          {webClientUrl ? (
-            <GeneratedUrlRow
-              label="Open in browser"
-              description="Use this URL from a browser that can reach the selected address."
-              value={webClientUrl}
-              copied={copiedTarget === 'web'}
-              onCopy={() => void copyGeneratedUrl('web', webClientUrl)}
-            />
-          ) : runtimePairingUrl ? (
-            <UnavailableUrlRow
-              label="Open in browser"
-              description="Browser link unavailable in this build. The pairing URL still works for Orca clients."
-            />
-          ) : null}
-
-          {runtimePairingUrl ? (
-            <GeneratedUrlRow
-              label="Pair another Orca client"
-              description="Paste this pairing URL into another Orca client."
-              value={runtimePairingUrl}
-              copied={copiedTarget === 'pairing'}
-              onCopy={() => void copyGeneratedUrl('pairing', runtimePairingUrl)}
-            />
-          ) : null}
-        </>
+        <RuntimePairingGeneratorForm
+          loopbackAddress={LOOPBACK_ADDRESS}
+          networkInterfaces={networkInterfaces}
+          selectedAddress={selectedAddress}
+          customAddress={customAddress}
+          refreshingNetworkInterfaces={refreshingNetworkInterfaces}
+          isGeneratingPairing={isGeneratingPairing}
+          webClientUrl={webClientUrl}
+          runtimePairingUrl={runtimePairingUrl}
+          copiedTarget={copiedTarget}
+          onSelectedAddressChange={updateSelectedAddress}
+          onCustomAddressChange={updateCustomAddress}
+          onRefreshNetworkInterfaces={() => void loadNetworkInterfaces({ showToastOnError: true })}
+          onGenerate={() => void generateRuntimePairingUrl()}
+          onCopy={(target, value) => void copyGeneratedUrl(target, value)}
+        />
       ) : null}
 
       <RuntimeAccessGrantList

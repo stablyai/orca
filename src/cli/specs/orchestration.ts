@@ -25,6 +25,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     ],
     notes: [
       'On Windows PowerShell, quote group addresses such as --to "@all" or --to "@worktree:<id>".',
+      'worker_done and heartbeat must target a concrete coordinator terminal handle; use status for broadcast updates.',
       'Prefer --task-id/--dispatch-id/etc. over raw --payload JSON in worker commands; PowerShell strips JSON quotes easily.'
     ]
   },
@@ -69,8 +70,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'task-create'],
     summary: 'Create an orchestration task',
     usage:
-      'orca orchestration task-create --spec <text> [--deps <json_array>] [--parent <task_id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'spec', 'deps', 'parent']
+      'orca orchestration task-create --spec <text> [--task-title <text>] [--display-name <text>] [--deps <json_array>] [--parent <task_id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'spec', 'task-title', 'display-name', 'deps', 'parent']
   },
   {
     path: ['orchestration', 'task-list'],

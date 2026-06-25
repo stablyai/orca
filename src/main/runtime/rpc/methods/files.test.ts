@@ -83,6 +83,25 @@ describe('file RPC methods', () => {
     })
   })
 
+  it('browses server directories before a project is added', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      browseServerDir: vi.fn().mockResolvedValue({
+        resolvedPath: '/home/me',
+        entries: [{ name: 'project', isDirectory: true, isSymlink: false }]
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('files.browseServerDir', { path: '~' }))
+
+    expect(runtime.browseServerDir).toHaveBeenCalledWith('~')
+    expect(response).toMatchObject({
+      ok: true,
+      result: { resolvedPath: '/home/me', entries: [{ name: 'project', isDirectory: true }] }
+    })
+  })
+
   it('streams file watch changes until the subscription is cleaned up', async () => {
     vi.useFakeTimers()
     try {
@@ -262,6 +281,37 @@ describe('file RPC methods', () => {
     expect(response).toMatchObject({
       ok: true,
       result: { content: 'export {}\\n', truncated: false }
+    })
+  })
+
+  it('resolves a tapped terminal path for a selected worktree', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      resolveTerminalPath: vi.fn().mockResolvedValue({
+        worktree: 'wt-1',
+        relativePath: 'src/index.ts',
+        exists: true,
+        isDirectory: false
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('files.resolveTerminalPath', {
+        worktree: 'id:wt-1',
+        pathText: '/repo/src/index.ts',
+        cwd: '/repo'
+      })
+    )
+
+    expect(runtime.resolveTerminalPath).toHaveBeenCalledWith(
+      'id:wt-1',
+      '/repo/src/index.ts',
+      '/repo'
+    )
+    expect(response).toMatchObject({
+      ok: true,
+      result: { relativePath: 'src/index.ts', exists: true, isDirectory: false }
     })
   })
 

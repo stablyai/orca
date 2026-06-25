@@ -6,6 +6,7 @@ import type { CustomPet } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
 import { selectPetAnimationName, type PetAnimationName } from './pet-agent-state'
+import { translate } from '@/i18n/i18n'
 
 type Sprite = NonNullable<CustomPet['sprite']>
 
@@ -67,7 +68,13 @@ function SpriteFrame({
   const duration = Math.max(0.1, frames / Math.max(0.1, sprite.fps))
   return (
     <>
-      <style>{`@keyframes pet-${animKeyframesId} { from { background-position: ${startX}px ${startY}px; } to { background-position: ${endX}px ${startY}px; } }`}</style>
+      <style>
+        {translate(
+          'auto.components.pet.PetOverlay.4712d196c6',
+          '@keyframes pet-{{value0}} { from { background-position: {{value1}}px {{value2}}px; } to { background-position: {{value3}}px {{value4}}px; } }',
+          { value0: animKeyframesId, value1: startX, value2: startY, value3: endX, value4: startY }
+        )}
+      </style>
       <div
         style={{
           width: renderedW,
@@ -383,9 +390,10 @@ export function PetOverlay(): React.JSX.Element {
         }}
       >
         <style>
-          {
+          {translate(
+            'auto.components.pet.PetOverlay.de932b0e8f',
             '@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }'
-          }
+          )}
         </style>
         {sprite ? (
           <SpriteFrame

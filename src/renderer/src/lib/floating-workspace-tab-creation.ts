@@ -9,6 +9,7 @@ import {
   createWebRuntimeSessionTerminal
 } from '@/runtime/web-runtime-session'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
+import { translate } from '@/i18n/i18n'
 
 type FloatingWorkspaceTerminalStore = Pick<
   AppState,
@@ -68,7 +69,7 @@ export async function createFloatingWorkspaceBrowserTab(
   }
 
   return store.createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, url, {
-    title: 'New Browser Tab',
+    title: translate('auto.lib.floating.workspace.tab.creation.f3785eddc2', 'New Browser Tab'),
     focusAddressBar: true,
     targetGroupId
   })

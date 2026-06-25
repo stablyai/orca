@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 
 export type WorktreeTitleRenameCommit = { kind: 'cancel' } | { kind: 'save'; displayName: string }
 
@@ -28,6 +29,7 @@ type WorktreeTitleInlineRenameProps = {
   displayName: string
   disabled?: boolean
   showUnreadEmphasis?: boolean
+  dimReadTitle?: boolean
   className?: string
   editingClassName?: string
   inputClassName?: string
@@ -45,6 +47,7 @@ export function WorktreeTitleInlineRename({
   displayName,
   disabled = false,
   showUnreadEmphasis = false,
+  dimReadTitle = false,
   className,
   editingClassName,
   inputClassName,
@@ -188,7 +191,14 @@ export function WorktreeTitleInlineRename({
       }
     } catch (err) {
       if (mountedRef.current) {
-        toast.error(err instanceof Error ? err.message : 'Failed to rename workspace.')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate(
+                'auto.components.sidebar.WorktreeTitleInlineRename.8df295a78d',
+                'Failed to rename workspace.'
+              )
+        )
       }
     } finally {
       savingRef.current = false
@@ -236,7 +246,10 @@ export function WorktreeTitleInlineRename({
           value={value}
           style={{ font: 'inherit' }}
           disabled={saving}
-          aria-label="Rename workspace"
+          aria-label={translate(
+            'auto.components.sidebar.WorktreeTitleInlineRename.bff3bdd00c',
+            'Rename workspace'
+          )}
           data-worktree-title-rename-input="true"
           onChange={(event) => setValue(event.target.value)}
           onBlur={() => void commitRename()}
@@ -258,13 +271,19 @@ export function WorktreeTitleInlineRename({
     )
   }
 
+  const titleEmphasisClassName = showUnreadEmphasis
+    ? 'font-semibold text-foreground'
+    : dimReadTitle
+      ? 'font-normal text-foreground/80'
+      : 'font-normal text-foreground'
+
   const title = (
     <span
       key={`title:${titleElementKey}`}
       ref={handleRootRef}
       className={cn(
-        'block min-w-0 truncate leading-tight text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring',
-        showUnreadEmphasis ? 'font-semibold' : 'font-normal',
+        'block min-w-0 truncate leading-tight focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
+        titleEmphasisClassName,
         className
       )}
       data-worktree-title-inline-rename=""
@@ -272,7 +291,11 @@ export function WorktreeTitleInlineRename({
       tabIndex={disabled ? undefined : 0}
     >
       {/* Why: visible text alone misses the unread state for assistive tech. */}
-      {showUnreadEmphasis && <span className="sr-only">Unread: </span>}
+      {showUnreadEmphasis && (
+        <span className="sr-only">
+          {translate('auto.components.sidebar.WorktreeTitleInlineRename.2f42ae024f', 'Unread:')}
+        </span>
+      )}
       {displayName}
     </span>
   )

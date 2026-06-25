@@ -3,14 +3,20 @@ import { ExternalLink, FolderOpen } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
+import { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
+import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
 import type { ShellOpenLocalPathFailureReason } from '../../../../shared/shell-open-types'
 import type { OpenInApplication } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
+
+export { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
 
 type WorktreeOpenInMenuItemsProps = {
   worktreePath: string
@@ -26,24 +32,11 @@ type OpenInMenuEntry = {
   command?: string
 }
 
-export function getLocalFileManagerLabel(userAgent?: string): string {
-  const resolvedUserAgent =
-    userAgent ?? (typeof navigator === 'undefined' ? '' : navigator.userAgent)
-  if (resolvedUserAgent.includes('Mac')) {
-    return 'Finder'
-  }
-  if (resolvedUserAgent.includes('Windows')) {
-    return 'File Explorer'
-  }
-  return 'File Manager'
-}
-
 export function getWorktreeOpenInEntries(
   openInApplications: OpenInApplication[],
   fileManagerLabel: string
 ): OpenInMenuEntry[] {
   return [
-    { id: 'vscode', label: 'VS Code', target: 'external-editor' },
     ...openInApplications.map((application) => ({
       id: application.id,
       label: application.label,
@@ -56,22 +49,55 @@ export function getWorktreeOpenInEntries(
 
 function showOpenFailureToast(reason: ShellOpenLocalPathFailureReason): void {
   if (reason === 'not-absolute') {
-    toast.error('Workspace path is not a valid local path.')
+    toast.error(
+      translate(
+        'auto.components.sidebar.WorktreeOpenInMenu.f387af445b',
+        'Workspace path is not a valid local path.'
+      )
+    )
     return
   }
   if (reason === 'not-found') {
-    toast.error('Workspace folder was not found.', {
-      description: 'It may have been moved or deleted. Refresh workspaces or remove it from Orca.'
-    })
+    toast.error(
+      translate(
+        'auto.components.sidebar.WorktreeOpenInMenu.3921d3d9a5',
+        'Workspace folder was not found.'
+      ),
+      {
+        description: translate(
+          'auto.components.sidebar.WorktreeOpenInMenu.0bed8727db',
+          'It may have been moved or deleted. Refresh workspaces or remove it from Orca.'
+        )
+      }
+    )
     return
   }
-  toast.error('Could not open workspace folder.', {
-    description: 'Check the editor command or file manager configuration on this machine.'
-  })
+  toast.error(
+    translate(
+      'auto.components.sidebar.WorktreeOpenInMenu.9a5381eb09',
+      'Could not open workspace folder.'
+    ),
+    {
+      description: translate(
+        'auto.components.sidebar.WorktreeOpenInMenu.bd0e8159f8',
+        'Check the editor command or file manager configuration on this machine.'
+      )
+    }
+  )
 }
 
 function stopMenuPropagation(event: React.SyntheticEvent): void {
   event.stopPropagation()
+}
+
+export function openOpenInAppsSettings(): void {
+  const store = useAppStore.getState()
+  store.openSettingsTarget({
+    pane: 'general',
+    repoId: null,
+    sectionId: 'general-open-in-apps'
+  })
+  store.openSettingsPage()
 }
 
 export async function openWorktreePath(args: {
@@ -137,6 +163,8 @@ export function WorktreeOpenInMenuItems({
         >
           {entry.target === 'file-manager' ? (
             <FolderOpen className="size-3.5" />
+          ) : entry.command ? (
+            <OpenInApplicationIcon application={{ command: entry.command }} size={14} />
           ) : (
             <ExternalLink className="size-3.5" />
           )}
@@ -157,7 +185,7 @@ export function WorktreeOpenInSubMenu({
     <DropdownMenuSub>
       <DropdownMenuSubTrigger disabled={disabled}>
         <FolderOpen className="size-3.5" />
-        Open in
+        {translate('auto.components.sidebar.WorktreeOpenInMenu.8009ab69a6', 'Open in')}
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent
         className="w-52"
@@ -169,6 +197,14 @@ export function WorktreeOpenInSubMenu({
           connectionId={connectionId}
           disabled={disabled}
         />
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={stopMenuPropagation}
+          onSelect={openOpenInAppsSettings}
+          disabled={disabled}
+        >
+          {translate('auto.components.sidebar.WorktreeOpenInMenu.1417fd8380', 'Customize apps...')}
+        </DropdownMenuItem>
       </DropdownMenuSubContent>
     </DropdownMenuSub>
   )

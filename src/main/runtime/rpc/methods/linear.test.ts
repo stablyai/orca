@@ -163,6 +163,7 @@ describe('linear RPC methods', () => {
       linearListProjectIssues: vi.fn().mockResolvedValue({ items: [{ id: 'issue-2' }] }),
       linearListTeams: vi.fn().mockResolvedValue([{ id: 'team-1' }]),
       linearListProjects: vi.fn().mockResolvedValue({ items: [{ id: 'project-1' }] }),
+      linearCreateProject: vi.fn().mockResolvedValue({ ok: true, project: { id: 'project-3' } }),
       linearTeamStates: vi.fn().mockResolvedValue([{ id: 'state-1' }]),
       linearTeamLabels: vi.fn().mockResolvedValue([{ id: 'label-1' }]),
       linearTeamMembers: vi.fn().mockResolvedValue([{ id: 'member-1' }])
@@ -172,6 +173,21 @@ describe('linear RPC methods', () => {
     await dispatcher.dispatch(makeRequest('linear.listTeams', { workspaceId: 'all' }))
     await dispatcher.dispatch(
       makeRequest('linear.listProjects', { query: 'roadmap', limit: 5, force: true })
+    )
+    await dispatcher.dispatch(
+      makeRequest('linear.createProject', {
+        name: 'Roadmap',
+        description: 'Summary',
+        content: 'Brief',
+        teamIds: ['team-1'],
+        workspaceId: 'workspace-1',
+        leadId: 'user-1',
+        memberIds: ['user-1', 'user-2'],
+        labelIds: ['label-1'],
+        priority: 2,
+        startDate: '2026-07-01',
+        targetDate: '2026-08-01'
+      })
     )
     await dispatcher.dispatch(
       makeRequest('linear.getProject', {
@@ -232,6 +248,21 @@ describe('linear RPC methods', () => {
 
     expect(runtime.linearListTeams).toHaveBeenCalledWith('all')
     expect(runtime.linearListProjects).toHaveBeenCalledWith('roadmap', 5, undefined, true)
+    expect(runtime.linearCreateProject).toHaveBeenCalledWith(
+      {
+        name: 'Roadmap',
+        description: 'Summary',
+        content: 'Brief',
+        teamIds: ['team-1'],
+        leadId: 'user-1',
+        memberIds: ['user-1', 'user-2'],
+        labelIds: ['label-1'],
+        priority: 2,
+        startDate: '2026-07-01',
+        targetDate: '2026-08-01'
+      },
+      'workspace-1'
+    )
     expect(runtime.linearGetProject).toHaveBeenCalledWith('project-1', 'workspace-1', true)
     expect(runtime.linearListProjectIssues).toHaveBeenCalledWith(
       'project-1',

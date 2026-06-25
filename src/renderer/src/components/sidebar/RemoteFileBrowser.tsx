@@ -8,16 +8,22 @@ import {
   decideEnterAction,
   decideEscAction,
   filterEntries,
+  isRemoteFileBrowserPathResolveTextTooLarge,
   isPathMode,
   joinPath,
   parentPath,
   parsePathInput,
   resolveSegmentStep,
+  shouldDeferRemoteFileBrowserPasteResolve,
   type DirEntry
 } from './remote-file-browser-helpers'
+import { browseRuntimeServerDirectory } from '@/runtime/runtime-server-directory-browser'
+import { translate } from '@/i18n/i18n'
 
-type RemoteFileBrowserProps = {
-  targetId: string
+type RemoteFileBrowserProps = (
+  | { targetId: string; runtimeEnvironmentId?: never }
+  | { runtimeEnvironmentId: string; targetId?: never }
+) & {
   initialPath?: string
   onSelect: (path: string) => void
   onCancel: () => void
@@ -39,6 +45,7 @@ type PreviewState = {
 
 export function RemoteFileBrowser({
   targetId,
+  runtimeEnvironmentId,
   initialPath = '~',
   onSelect,
   onCancel
@@ -116,7 +123,12 @@ export function RemoteFileBrowser({
       if (cached) {
         return cached
       }
-      const result = await window.api.ssh.browseDir({ targetId, dirPath })
+      const result = targetId
+        ? await window.api.ssh.browseDir({ targetId, dirPath })
+        : await browseRuntimeServerDirectory(
+            requireRuntimeEnvironmentId(runtimeEnvironmentId),
+            dirPath
+          )
       listingCacheRef.current.set(result.resolvedPath, result)
       // Also cache under the requested dirPath when it differs from the
       // server-resolved canonical path (e.g. `~`, `~/foo`, or a relative
@@ -127,7 +139,7 @@ export function RemoteFileBrowser({
       }
       return result
     },
-    [targetId]
+    [runtimeEnvironmentId, targetId]
   )
 
   const loadDir = useCallback(
@@ -352,6 +364,22 @@ export function RemoteFileBrowser({
       clearFileHint()
       setFilter(raw)
 
+      if (isRemoteFileBrowserPathResolveTextTooLarge(raw)) {
+        if (preview) {
+          setPreview(null)
+          previewGenRef.current++
+        }
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current)
+          debounceTimerRef.current = null
+        }
+        if (pasteResolveTimerRef.current) {
+          clearTimeout(pasteResolveTimerRef.current)
+          pasteResolveTimerRef.current = null
+        }
+        return
+      }
+
       if (!isPathMode(raw)) {
         // Leaving path mode: drop preview immediately so the committed
         // directory re-appears without a flicker.
@@ -399,7 +427,13 @@ export function RemoteFileBrowser({
   )
 
   const handleInputPaste = useCallback(
-    (_e: React.ClipboardEvent<HTMLInputElement>) => {
+    (e: React.ClipboardEvent<HTMLInputElement>) => {
+      if (e.defaultPrevented) {
+        return
+      }
+      if (shouldDeferRemoteFileBrowserPasteResolve(e.clipboardData.getData('text/plain'))) {
+        return
+      }
       // Paste resolves immediately; no debounce. React's onChange still fires
       // after the paste is applied to the input value, so we defer to the
       // next tick so `filter` reflects the pasted value.
@@ -413,7 +447,7 @@ export function RemoteFileBrowser({
           debounceTimerRef.current = null
         }
         const value = inputRef.current?.value ?? ''
-        if (isPathMode(value)) {
+        if (!isRemoteFileBrowserPathResolveTextTooLarge(value) && isPathMode(value)) {
           resolvePathInput(value)
         }
       }, 0)
@@ -566,6 +600,17 @@ export function RemoteFileBrowser({
   const displayEmptyDirCopy = isPreviewActive
     ? `${preview!.resolvedPath} is empty`
     : 'Empty directory'
+  const noMatchesFilter = isPreviewActive ? preview!.filter : filter
+  const displayNoMatchesCopy = isRemoteFileBrowserPathResolveTextTooLarge(noMatchesFilter)
+    ? translate(
+        'auto.components.sidebar.RemoteFileBrowser.largeInputNoMatches',
+        'No matches for this long input'
+      )
+    : translate(
+        'auto.components.sidebar.RemoteFileBrowser.00c4235c10',
+        "No matches for '{{value0}}'",
+        { value0: noMatchesFilter }
+      )
 
   // Disable Select folder while a non-empty path-mode preview is visible so
   // the committed directory isn't silently selected while the list shows a
@@ -629,7 +674,10 @@ export function RemoteFileBrowser({
           onChange={(e) => handleInputChange(e.target.value)}
           onPaste={handleInputPaste}
           onKeyDown={handleFilterKeyDown}
-          placeholder="Type to filter or enter a path…"
+          placeholder={translate(
+            'auto.components.sidebar.RemoteFileBrowser.2300612806',
+            'Type to filter or enter a path…'
+          )}
           aria-invalid={!!preview?.error}
           aria-describedby={preview?.error ? 'remote-file-browser-path-error' : undefined}
           className={cn(
@@ -673,15 +721,19 @@ export function RemoteFileBrowser({
             </div>
           ) : !isPreviewActive && entries.length === 0 ? (
             <div className="flex items-center justify-center h-full">
-              <p className="text-xs text-muted-foreground">Empty directory</p>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.sidebar.RemoteFileBrowser.51001182e3',
+                  'Empty directory'
+                )}
+              </p>
             </div>
           ) : displayEntries.length === 0 && !preview?.error ? (
             // Directory has contents; filter hides them all. Distinguishing
             // filter emptiness from directory emptiness keeps copy accurate.
             <div className="flex items-center justify-center h-full">
-              <p className="text-xs text-muted-foreground">{`No matches for '${
-                isPreviewActive ? preview!.filter : filter
-              }'`}</p>
+              <p className="text-xs text-muted-foreground">{displayNoMatchesCopy}</p>
+              <p className="text-xs text-muted-foreground">{displayNoMatchesCopy}</p>
             </div>
           ) : (
             displayEntries.map((entry) => {
@@ -722,11 +774,17 @@ export function RemoteFileBrowser({
         className="block text-[10px] text-muted-foreground truncate w-full"
         title={fileHint ? undefined : resolvedPath}
       >
-        {fileHint ? FILE_HINT_TEXT : `Opens as a remote project · ${resolvedPath}`}
+        {fileHint
+          ? FILE_HINT_TEXT
+          : translate(
+              'auto.components.sidebar.RemoteFileBrowser.971d85cc84',
+              'Opens as a project on this host · {{value0}}',
+              { value0: resolvedPath }
+            )}
       </p>
       <div className="flex items-center justify-end gap-2">
         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onCancel}>
-          Cancel
+          {translate('auto.components.sidebar.RemoteFileBrowser.f8b1deb1a4', 'Cancel')}
         </Button>
         <Button
           size="sm"
@@ -735,7 +793,7 @@ export function RemoteFileBrowser({
           disabled={selectDisabled}
           title={resolvedPath}
         >
-          Select folder
+          {translate('auto.components.sidebar.RemoteFileBrowser.9e060f5815', 'Select folder')}
         </Button>
       </div>
     </div>
@@ -748,4 +806,11 @@ export function RemoteFileBrowser({
 function committedPrefix(raw: string): string {
   const i = raw.lastIndexOf('/')
   return i === -1 ? '' : raw.slice(0, i + 1)
+}
+
+function requireRuntimeEnvironmentId(runtimeEnvironmentId: string | undefined): string {
+  if (!runtimeEnvironmentId) {
+    throw new Error('Runtime environment is required')
+  }
+  return runtimeEnvironmentId
 }

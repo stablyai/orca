@@ -31,6 +31,7 @@ vi.mock('fs', () => ({
 
 import {
   isTransientError,
+  isSystemSshFallbackError,
   isAuthError,
   isAgentFallbackError,
   sleep,
@@ -141,6 +142,28 @@ describe('isTransientError', () => {
 
   it('returns false for generic errors', () => {
     expect(isTransientError(new Error('something went wrong'))).toBe(false)
+  })
+})
+
+// ── isSystemSshFallbackError ─────────────────────────────────────────
+
+describe('isSystemSshFallbackError', () => {
+  it('returns true for local reachability errors that system ssh may bypass', () => {
+    const hostErr = new Error('host unreachable') as NodeJS.ErrnoException
+    hostErr.code = 'EHOSTUNREACH'
+    const netErr = new Error('net unreachable') as NodeJS.ErrnoException
+    netErr.code = 'ENETUNREACH'
+
+    expect(isSystemSshFallbackError(hostErr)).toBe(true)
+    expect(isSystemSshFallbackError(netErr)).toBe(true)
+  })
+
+  it('returns false for transient errors that should keep the normal retry path', () => {
+    const refused = new Error('refused') as NodeJS.ErrnoException
+    refused.code = 'ECONNREFUSED'
+
+    expect(isSystemSshFallbackError(refused)).toBe(false)
+    expect(isSystemSshFallbackError(new Error('connect ETIMEDOUT 1.2.3.4:22'))).toBe(false)
   })
 })
 

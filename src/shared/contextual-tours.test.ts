@@ -14,6 +14,7 @@ describe('contextual tour definitions', () => {
       'browser',
       'tasks',
       'automations',
+      'floating-workspace',
       'workspace-creation'
     ]
 
@@ -70,15 +71,14 @@ describe('contextual tour definitions', () => {
     expect(tour?.steps[1]?.secondaryAction).toBeUndefined()
   })
 
-  it('points the workspace board tour at the board center, done lane, and settings', () => {
+  it('points the workspace board tour at the board center and done lane', () => {
     const tour = CONTEXTUAL_TOURS.find((entry) => entry.id === 'workspace-board') as
       | ContextualTour
       | undefined
 
     expect(tour?.steps.map((step) => step.title)).toEqual([
       'Plan work on the board',
-      'Move work through lanes',
-      'Tune density'
+      'Move work through lanes'
     ])
     expect(tour?.steps[0]).toMatchObject({
       targetSelector: '[data-contextual-tour-target="workspace-board-center"]',
@@ -90,10 +90,33 @@ describe('contextual tour definitions', () => {
       targetSelector:
         '[data-contextual-tour-target="workspace-board-done-lane"], [data-contextual-tour-target="workspace-board-lanes"]'
     })
+  })
+
+  it('orders the browser tour as grab, annotate, then import cookies', () => {
+    const tour = CONTEXTUAL_TOURS.find((entry) => entry.id === 'browser') as
+      | ContextualTour
+      | undefined
+
+    expect(tour?.steps.map((step) => step.title)).toEqual([
+      'Grab page context for agents',
+      'Mark design feedback in place',
+      'Stay logged in'
+    ])
+    expect(tour?.steps[0]).toMatchObject({
+      targetSelector: '[data-contextual-tour-target="browser-grab-control"]',
+      preferredPlacement: 'bottom'
+    })
+    expect(tour?.steps[1]).toMatchObject({
+      targetSelector: '[data-contextual-tour-target="browser-annotation-control"]',
+      preferredPlacement: 'bottom'
+    })
     expect(tour?.steps[2]).toMatchObject({
-      body: 'Use board settings to switch between detailed and compact cards.',
+      body: 'Bring your existing logins into Orca to stay signed in immediately.',
+      // Prefers the always-visible Import button, falling back to the overflow
+      // menu's Import Cookies row once the hint button is dismissed.
       targetSelector:
-        '[data-contextual-tour-target="workspace-board-settings"], [data-contextual-tour-target="workspace-board-lanes"]'
+        '[data-contextual-tour-target="browser-import-hint"], [data-contextual-tour-target="browser-import-cookies-control"]',
+      preferredPlacement: 'bottom'
     })
   })
 
@@ -130,6 +153,30 @@ describe('contextual tour definitions', () => {
     expect(tour?.steps.map((step) => step.targetSelector)).toEqual([
       '[data-contextual-tour-target="automations-create"]',
       '[data-contextual-tour-target="automations-runs"]'
+    ])
+  })
+
+  it('defines the floating workspace tour on the action list with a surface fallback', () => {
+    const tour = CONTEXTUAL_TOURS.find((entry) => entry.id === 'floating-workspace') as
+      | ContextualTour
+      | undefined
+
+    expect(tour?.steps.map((step) => step.title)).toEqual([
+      'Run an agent across every repo',
+      'Or use it as a scratchpad'
+    ])
+    expect(tour?.steps.map((step) => step.body)).toEqual([
+      'Agents here run in any folder you choose. Point one at the directory above your services to work across all your repos at once.',
+      'Open agents, scratch terminals, notes, and browser tabs without cluttering the worktree you’re focused on.'
+    ])
+    expect(tour?.steps[0]).toMatchObject({
+      requiredForStart: true,
+      preferredPlacement: 'left'
+    })
+    expect(tour?.steps[1]?.preferredPlacement).toBe('left')
+    expect(tour?.steps.map((step) => step.targetSelector)).toEqual([
+      '[data-contextual-tour-target="floating-workspace-new-terminal"], [data-contextual-tour-target="floating-workspace-surface"]',
+      '[data-contextual-tour-target="floating-workspace-new-markdown"], [data-contextual-tour-target="floating-workspace-surface"]'
     ])
   })
 

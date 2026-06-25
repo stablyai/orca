@@ -1,6 +1,7 @@
 import type { JSX, Ref } from 'react'
 import { LoaderCircle, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { translate } from '@/i18n/i18n'
 
 export function DeleteWorktreeDialogFooter({
   isMainWorktree,
@@ -42,7 +43,9 @@ export function DeleteWorktreeDialogFooter({
   return (
     <>
       <Button variant="outline" onClick={onCancel} disabled={isDeleting}>
-        {isMainWorktree ? 'Close' : 'Cancel'}
+        {isMainWorktree
+          ? translate('auto.components.sidebar.DeleteWorktreeDialogFooter.cf95e3b5bb', 'Close')
+          : translate('auto.components.sidebar.DeleteWorktreeDialogFooter.c0e972d726', 'Cancel')}
       </Button>
       {!isMainWorktree && (
         <Button

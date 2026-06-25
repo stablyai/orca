@@ -1,61 +1,84 @@
 import { describe, expect, it } from 'vitest'
-import type { FeatureWallSetupStepId } from '../../../../shared/feature-wall-setup-steps'
 import {
-  getSettingsSetupGuideProgress,
-  SETTINGS_SETUP_GUIDE_STEP_IDS
-} from './settings-setup-guide-progress'
+  FEATURE_WALL_SETUP_STEPS,
+  type FeatureWallSetupStepId
+} from '../../../../shared/feature-wall-setup-steps'
+import { getSettingsSetupGuideProgress } from './settings-setup-guide-progress'
 
 describe('settings setup guide progress', () => {
-  it('tracks the five-step settings checklist', () => {
-    expect(SETTINGS_SETUP_GUIDE_STEP_IDS).toEqual([
-      'split-terminal',
-      'two-worktrees',
-      'notifications',
-      'default-agent',
-      'task-sources'
-    ])
-  })
+  function makePreBrowserDoneStepState(): Partial<Record<FeatureWallSetupStepId, boolean>> {
+    return Object.fromEntries(
+      FEATURE_WALL_SETUP_STEPS.map((step) => [step.id, step.id !== 'browser'])
+    ) as Partial<Record<FeatureWallSetupStepId, boolean>>
+  }
 
-  it('returns a 3/5 progress label source and first incomplete step', () => {
-    const stepDone = {
-      'split-terminal': true,
-      'two-worktrees': true,
-      notifications: true
-    } satisfies Partial<Record<FeatureWallSetupStepId, boolean>>
+  it('tracks the full setup checklist total', () => {
+    const progress = getSettingsSetupGuideProgress({
+      ready: true,
+      stepDone: {}
+    })
 
-    expect(getSettingsSetupGuideProgress(stepDone)).toEqual({
-      doneCount: 3,
-      total: 5,
-      firstIncompleteStepId: 'default-agent'
+    expect(progress).toEqual({
+      ready: true,
+      doneCount: 0,
+      total: FEATURE_WALL_SETUP_STEPS.length,
+      firstIncompleteStepId: 'notifications'
     })
   })
 
-  it('ignores setup-guide tasks that are not part of the settings checklist', () => {
+  it('does not mark Settings complete when only the old five-step subset is done', () => {
     const stepDone = {
       'split-terminal': true,
       'two-worktrees': true,
       notifications: true,
-      'setup-script': true,
-      'add-two-repos': true,
-      'agent-capabilities': true
+      'default-agent': true,
+      'task-sources': true
     } satisfies Partial<Record<FeatureWallSetupStepId, boolean>>
 
-    expect(getSettingsSetupGuideProgress(stepDone)).toEqual({
-      doneCount: 3,
-      total: 5,
-      firstIncompleteStepId: 'default-agent'
+    expect(getSettingsSetupGuideProgress({ ready: true, stepDone })).toEqual({
+      ready: true,
+      doneCount: 5,
+      total: FEATURE_WALL_SETUP_STEPS.length,
+      firstIncompleteStepId: 'agent-capabilities'
     })
   })
 
-  it('marks the settings checklist complete when all five settings steps are done', () => {
+  it('does not mark Settings complete for fresh users when only the browser step is incomplete', () => {
+    expect(
+      getSettingsSetupGuideProgress({
+        ready: true,
+        stepDone: makePreBrowserDoneStepState()
+      })
+    ).toEqual({
+      ready: true,
+      doneCount: FEATURE_WALL_SETUP_STEPS.length - 1,
+      total: FEATURE_WALL_SETUP_STEPS.length,
+      firstIncompleteStepId: 'browser'
+    })
+  })
+
+  it('marks Settings complete when every setup guide step is done', () => {
     const stepDone = Object.fromEntries(
-      SETTINGS_SETUP_GUIDE_STEP_IDS.map((stepId) => [stepId, true])
+      FEATURE_WALL_SETUP_STEPS.map((step) => [step.id, true])
     ) as Record<FeatureWallSetupStepId, boolean>
 
-    expect(getSettingsSetupGuideProgress(stepDone)).toEqual({
-      doneCount: 5,
-      total: 5,
+    expect(getSettingsSetupGuideProgress({ ready: true, stepDone })).toEqual({
+      ready: true,
+      doneCount: FEATURE_WALL_SETUP_STEPS.length,
+      total: FEATURE_WALL_SETUP_STEPS.length,
       firstIncompleteStepId: null
     })
+  })
+
+  it('preserves progress readiness for the sidebar row gate', () => {
+    const progress = getSettingsSetupGuideProgress({
+      ready: false,
+      stepDone: {
+        'split-terminal': true
+      }
+    })
+
+    expect(progress.ready).toBe(false)
+    expect(progress.doneCount).toBe(1)
   })
 })

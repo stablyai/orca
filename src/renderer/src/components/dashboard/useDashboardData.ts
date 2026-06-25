@@ -19,6 +19,7 @@ export type DashboardAgentRow = {
   entry: AgentStatusEntry
   tab: TerminalTab
   agentType: AgentType
+  rowSource?: 'live' | 'retained'
   state: AgentStatusState | 'idle'
   /** When this agent first began reporting status. Derived from the oldest
    *  stateHistory entry, falling back to updatedAt when no history exists yet.
@@ -83,6 +84,7 @@ function buildAgentRowsForWorktree(
         entry,
         tab,
         agentType: entry.agentType ?? 'unknown',
+        rowSource: 'live',
         state: shouldDecay ? 'idle' : entry.state,
         // Why: the oldest stateHistory entry's startedAt is the agent's original
         // "first seen" timestamp. When history is empty the entry has never

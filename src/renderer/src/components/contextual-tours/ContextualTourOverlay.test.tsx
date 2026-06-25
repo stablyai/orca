@@ -1,6 +1,9 @@
-import { Children, isValidElement, type ReactElement, type ReactNode, type RefObject } from 'react'
+// @vitest-environment happy-dom
+
+import { act, type ReactElement, type RefObject } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ContextualTourId } from '../../../../shared/contextual-tours'
 import { getContextualTourCleanupOutcome } from './ContextualTourOverlay'
 import {
@@ -12,12 +15,6 @@ import {
 import { getContextualTourPanelHost } from './contextual-tour-gate'
 import { useAppStore } from '@/store'
 
-type ClickableElementProps = {
-  children?: ReactNode
-  onClick?: () => void
-  'aria-label'?: string
-}
-
 const baseRenderState: ActiveTourRenderState = {
   rect: {
     left: 10,
@@ -27,9 +24,9 @@ const baseRenderState: ActiveTourRenderState = {
     width: 100,
     height: 60
   } as DOMRect,
-  targetElement: {
-    closest: () => null
-  } as unknown as Element,
+  // Why: autoUpdate reads real element geometry, so the fixture must be a DOM
+  // node rather than a closest() stub.
+  targetElement: document.createElement('div'),
   progress: { current: 1, total: 3 },
   title: 'Choose the work source',
   body: 'Switch between connected providers and project filters without changing pages.',
@@ -38,7 +35,20 @@ const baseRenderState: ActiveTourRenderState = {
   panelHost: null
 }
 
+let container: HTMLDivElement
+let root: Root
+
+beforeEach(() => {
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+})
+
 afterEach(() => {
+  act(() => {
+    root.unmount()
+  })
+  container.remove()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
@@ -53,84 +63,46 @@ function renderSurface(
   } = {}
 ): ReactElement {
   const renderState = { ...baseRenderState, ...overrides }
-  return ContextualTourOverlaySurface({
-    activeTourId: 'tasks',
-    renderState,
-    panelRef: { current: null } as RefObject<HTMLElement | null>,
-    panelPosition: { left: 130, top: 20, '--contextual-tour-arrow-offset': '40px' },
-    panelPlacement: 'right',
-    panelHost: renderState.panelHost,
-    onSkip: callbacks.onSkip ?? vi.fn(),
-    onBack: callbacks.onBack ?? vi.fn(),
-    onNext: callbacks.onNext ?? vi.fn(),
-    onStepAction: callbacks.onStepAction ?? vi.fn(),
-    onOverlayKeyDownCapture: handleContextualTourOverlayKeyDown
+  return (
+    <ContextualTourOverlaySurface
+      activeTourId="tasks"
+      renderState={renderState}
+      panelRef={{ current: null } as RefObject<HTMLElement | null>}
+      panelHost={renderState.panelHost}
+      onSkip={callbacks.onSkip ?? vi.fn()}
+      onBack={callbacks.onBack ?? vi.fn()}
+      onNext={callbacks.onNext ?? vi.fn()}
+      onStepAction={callbacks.onStepAction ?? vi.fn()}
+      onOverlayKeyDownCapture={handleContextualTourOverlayKeyDown}
+    />
+  )
+}
+
+function renderSurfaceInDom(
+  overrides: Partial<ActiveTourRenderState> = {},
+  callbacks: Parameters<typeof renderSurface>[1] = {}
+): void {
+  act(() => {
+    root.render(renderSurface(overrides, callbacks))
   })
 }
 
-function findElementByText(
-  node: ReactNode,
-  text: string
-): ReactElement<ClickableElementProps> | null {
-  if (Array.isArray(node)) {
-    for (const child of node) {
-      const match = findElementByText(child, text)
-      if (match) {
-        return match
-      }
-    }
-    return null
+function getButtonByText(text: string): HTMLButtonElement {
+  const button = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
+    (element) => element.textContent?.includes(text)
+  )
+  if (!button) {
+    throw new Error(`button not rendered: ${text}`)
   }
-
-  if (!isValidElement(node)) {
-    return null
-  }
-
-  const props = node.props as ClickableElementProps
-  const childrenArray = Children.toArray(props.children)
-  if (childrenArray.some((child) => child === text)) {
-    return node as ReactElement<ClickableElementProps>
-  }
-
-  for (const child of childrenArray) {
-    const match = findElementByText(child, text)
-    if (match) {
-      return match
-    }
-  }
-  return null
+  return button
 }
 
-function findElementByAriaLabel(
-  node: ReactNode,
-  label: string
-): ReactElement<ClickableElementProps> | null {
-  if (Array.isArray(node)) {
-    for (const child of node) {
-      const match = findElementByAriaLabel(child, label)
-      if (match) {
-        return match
-      }
-    }
-    return null
+function getButtonByAriaLabel(label: string): HTMLButtonElement {
+  const button = container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)
+  if (!button) {
+    throw new Error(`button not rendered: ${label}`)
   }
-
-  if (!isValidElement(node)) {
-    return null
-  }
-
-  const props = node.props as ClickableElementProps
-  if (props['aria-label'] === label) {
-    return node as ReactElement<ClickableElementProps>
-  }
-
-  for (const child of Children.toArray(props.children)) {
-    const match = findElementByAriaLabel(child, label)
-    if (match) {
-      return match
-    }
-  }
-  return null
+  return button
 }
 
 describe('ContextualTourOverlaySurface', () => {
@@ -206,23 +178,20 @@ describe('ContextualTourOverlaySurface', () => {
 
   it('shows the Back button on later steps and wires the callback', () => {
     const onBack = vi.fn()
-    const element = renderSurface(
-      { progress: { current: 2, total: 3 }, isFirstStep: false },
-      { onBack }
-    )
-    const backNode = findElementByText(element, 'Back')
-    expect(backNode).not.toBeNull()
-    backNode?.props.onClick?.()
+    renderSurfaceInDom({ progress: { current: 2, total: 3 }, isFirstStep: false }, { onBack })
+
+    getButtonByText('Back').click()
+
     expect(onBack).toHaveBeenCalledTimes(1)
   })
 
   it('wires Skip and Next callbacks', () => {
     const onSkip = vi.fn()
     const onNext = vi.fn()
-    const element = renderSurface({}, { onSkip, onNext })
+    renderSurfaceInDom({}, { onSkip, onNext })
 
-    findElementByAriaLabel(element, 'Skip tour')?.props.onClick?.()
-    findElementByText(element, 'Next')?.props.onClick?.()
+    getButtonByAriaLabel('Skip tour').click()
+    getButtonByText('Next').click()
 
     expect(onSkip).toHaveBeenCalledWith('tasks')
     expect(onNext).toHaveBeenCalledTimes(1)
@@ -232,7 +201,7 @@ describe('ContextualTourOverlaySurface', () => {
     const onStepAction = vi.fn()
     const primaryAction = { kind: 'split-terminal-pane' as const, label: 'Split terminal' }
     const secondaryAction = { kind: 'next' as const, label: 'Skip' }
-    const element = renderSurface(
+    renderSurfaceInDom(
       {
         primaryAction,
         secondaryAction
@@ -240,8 +209,8 @@ describe('ContextualTourOverlaySurface', () => {
       { onStepAction }
     )
 
-    findElementByText(element, 'Split terminal')?.props.onClick?.()
-    findElementByText(element, 'Skip')?.props.onClick?.()
+    getButtonByText('Split terminal').click()
+    getButtonByText('Skip').click()
 
     expect(onStepAction).toHaveBeenCalledWith(primaryAction)
     expect(onStepAction).toHaveBeenCalledWith(secondaryAction)

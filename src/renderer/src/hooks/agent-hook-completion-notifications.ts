@@ -1,8 +1,10 @@
 import { useAppStore } from '@/store'
-import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { createAgentCompletionCoordinator } from '@/components/terminal-pane/agent-completion-coordinator'
-import type { AgentCompletionCoordinator } from '@/components/terminal-pane/agent-completion-coordinator-types'
+import type {
+  AgentCompletionCoordinator,
+  AgentCompletionStatusSnapshot
+} from '@/components/terminal-pane/agent-completion-coordinator-types'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 import { dispatchTerminalNotification } from '@/components/terminal-pane/use-notification-dispatch'
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
@@ -16,8 +18,8 @@ type StoreSnapshot = ReturnType<typeof useAppStore.getState>
 
 const coordinatorsByPaneKey = new Map<string, CoordinatorEntry>()
 const paneKeysRequiringFreshWorking = new Set<string>()
-let wasAgentTaskCompleteNotificationEnabled = isAgentTaskCompleteNotificationEnabled()
-let requireFreshWorkingForNewCoordinators = !wasAgentTaskCompleteNotificationEnabled
+let wasAgentTaskCompleteTrackingEnabled = isAgentTaskCompleteTrackingEnabled()
+let requireFreshWorkingForNewTrackingCoordinators = !wasAgentTaskCompleteTrackingEnabled
 
 function disposeCoordinatorForPaneKey(paneKey: string): void {
   coordinatorsByPaneKey.get(paneKey)?.coordinator.dispose()
@@ -45,17 +47,25 @@ function isAgentTaskCompleteNotificationEnabled(): boolean {
   return notifications?.enabled !== false && notifications?.agentTaskComplete !== false
 }
 
+function isTerminalAttentionEnabled(): boolean {
+  return useAppStore.getState().settings?.experimentalTerminalAttention === true
+}
+
+function isAgentTaskCompleteTrackingEnabled(): boolean {
+  return isAgentTaskCompleteNotificationEnabled() || isTerminalAttentionEnabled()
+}
+
 export function syncAgentHookCompletionNotificationSettings(): boolean {
   pruneClosedPaneCoordinators()
-  const enabled = isAgentTaskCompleteNotificationEnabled()
-  if (!enabled || (!wasAgentTaskCompleteNotificationEnabled && enabled)) {
-    requireFreshWorkingForNewCoordinators = true
+  const enabled = isAgentTaskCompleteTrackingEnabled()
+  if (!enabled || (!wasAgentTaskCompleteTrackingEnabled && enabled)) {
+    requireFreshWorkingForNewTrackingCoordinators = true
     for (const [paneKey, entry] of coordinatorsByPaneKey) {
       paneKeysRequiringFreshWorking.add(paneKey)
       entry.coordinator.resetCompletionState({ requireFreshWorking: true })
     }
   }
-  wasAgentTaskCompleteNotificationEnabled = enabled
+  wasAgentTaskCompleteTrackingEnabled = enabled
   return enabled
 }
 
@@ -145,6 +155,7 @@ function createCoordinator(paneKey: string, worktreeId: string): AgentCompletion
         source: 'agent-task-complete',
         terminalTitle: title,
         paneKey,
+        suppressOsNotification: !isAgentTaskCompleteNotificationEnabled(),
         ...(meta?.agentStatus ? { agentStatusSnapshot: meta.agentStatus } : {})
       })
     },
@@ -159,7 +170,7 @@ export function observeAgentHookCompletionForNotification({
 }: {
   paneKey: string
   worktreeId: string
-  payload: ParsedAgentStatusPayload
+  payload: AgentCompletionStatusSnapshot
 }): void {
   pruneClosedPaneCoordinators()
   if (!paneCanReceiveHookCompletion(paneKey)) {
@@ -182,7 +193,7 @@ export function observeAgentHookCompletionForNotification({
       coordinator: createCoordinator(paneKey, worktreeId)
     }
     coordinatorsByPaneKey.set(paneKey, entry)
-    if (requireFreshWorkingForNewCoordinators) {
+    if (requireFreshWorkingForNewTrackingCoordinators) {
       paneKeysRequiringFreshWorking.add(paneKey)
     }
   }
@@ -202,8 +213,8 @@ export function resetAgentHookCompletionNotificationCoordinators(): void {
   }
   coordinatorsByPaneKey.clear()
   paneKeysRequiringFreshWorking.clear()
-  wasAgentTaskCompleteNotificationEnabled = isAgentTaskCompleteNotificationEnabled()
-  requireFreshWorkingForNewCoordinators = !wasAgentTaskCompleteNotificationEnabled
+  wasAgentTaskCompleteTrackingEnabled = isAgentTaskCompleteTrackingEnabled()
+  requireFreshWorkingForNewTrackingCoordinators = !wasAgentTaskCompleteTrackingEnabled
 }
 
 export function _getAgentHookCompletionNotificationCoordinatorCountForTest(): number {

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { GENERATED_TAB_TITLE_SOURCE_SCAN_LIMIT } from '../../../../shared/agent-tab-title'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
@@ -64,6 +65,28 @@ describe('generated agent tab titles', () => {
     )
   })
 
+  it('does not trim the full paste-sized prompt before generating an optional title', () => {
+    vi.useFakeTimers()
+    const trimSpy = vi.spyOn(String.prototype, 'trim')
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const prompt = `Fix the flaky status tests ${'large pasted text '.repeat(5000)}`
+
+    store.getState().setAgentStatus(makePaneKey(tabId, LEAF_ID), {
+      state: 'working',
+      prompt,
+      agentType: 'codex'
+    })
+
+    const tab = store.getState().tabsByWorktree[WORKTREE_ID][0]
+    expect(tab.generatedTitle).toBe('Fix the flaky status tests large pasted')
+    expect(
+      trimSpy.mock.contexts.some(
+        (context) => String(context).length > GENERATED_TAB_TITLE_SOURCE_SCAN_LIMIT
+      )
+    ).toBe(false)
+  })
+
   it('keeps manual rename precedence over generated and live titles', () => {
     vi.useFakeTimers()
     const store = createTestStore()
@@ -80,5 +103,32 @@ describe('generated agent tab titles', () => {
     const tab = store.getState().tabsByWorktree[WORKTREE_ID][0]
     expect(resolveTerminalTabTitle(tab, true)).toBe('Status tests')
     expect(tab.generatedTitle).toBe('Fix the flaky status tests')
+  })
+
+  it('does not generate a title for quick command labeled tabs', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    seedStore(store, {
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        tabAutoGenerateTitle: true
+      },
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: WORKTREE_ID, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+    const tabId = store
+      .getState()
+      .createTab(WORKTREE_ID, undefined, undefined, { quickCommandLabel: 'Run tests' }).id
+
+    store.getState().setAgentStatus(makePaneKey(tabId, LEAF_ID), {
+      state: 'working',
+      prompt: 'Fix the flaky status tests',
+      agentType: 'claude'
+    })
+
+    const tab = store.getState().tabsByWorktree[WORKTREE_ID][0]
+    expect(tab.generatedTitle).toBeUndefined()
+    expect(resolveTerminalTabTitle(tab, true)).toBe('Run tests')
   })
 })

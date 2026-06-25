@@ -8,9 +8,9 @@ import { normalizeAbsolutePathForComparison } from '@/components/right-sidebar/f
 // getMarkdown() round-trip) can drift by a trailing newline or soft-break,
 // the reload can silently drop unsaved keystrokes as well. Stamping a path
 // right before writeFile lets the watch hook ignore the echo event without
-// touching the editor at all. Keyed by normalized absolute path, bounded by
-// a short TTL so a genuinely external edit that lands after the window still
-// gets picked up.
+// touching the editor at all. Keyed by runtime owner + normalized absolute
+// path, bounded by a short TTL so a genuinely external edit that lands after
+// the window still gets picked up.
 const SELF_WRITE_TTL_MS = 750
 const SELF_WRITE_MAX_STAMPS = 256
 
@@ -23,6 +23,10 @@ type SelfWriteStamp = RecentSelfWrite & {
 }
 
 const stamps = new Map<string, SelfWriteStamp>()
+
+function selfWriteKey(absolutePath: string, runtimeEnvironmentId?: string | null): string {
+  return `${runtimeEnvironmentId?.trim() || 'client'}::${normalizeAbsolutePathForComparison(absolutePath)}`
+}
 
 function pruneExpiredSelfWrites(now = Date.now()): void {
   for (const [key, stamp] of stamps) {
@@ -42,10 +46,14 @@ function enforceSelfWriteStampLimit(): void {
   }
 }
 
-export function recordSelfWrite(absolutePath: string, content?: string): void {
+export function recordSelfWrite(
+  absolutePath: string,
+  content?: string,
+  runtimeEnvironmentId?: string | null
+): void {
   const now = Date.now()
   pruneExpiredSelfWrites(now)
-  const key = normalizeAbsolutePathForComparison(absolutePath)
+  const key = selfWriteKey(absolutePath, runtimeEnvironmentId)
   // Why: a missing watcher echo should not leave stale path/content stamps in
   // memory for the whole renderer session.
   stamps.delete(key)
@@ -56,12 +64,15 @@ export function recordSelfWrite(absolutePath: string, content?: string): void {
   enforceSelfWriteStampLimit()
 }
 
-export function clearSelfWrite(absolutePath: string): void {
-  stamps.delete(normalizeAbsolutePathForComparison(absolutePath))
+export function clearSelfWrite(absolutePath: string, runtimeEnvironmentId?: string | null): void {
+  stamps.delete(selfWriteKey(absolutePath, runtimeEnvironmentId))
 }
 
-export function getRecentSelfWrite(absolutePath: string): RecentSelfWrite | null {
-  const key = normalizeAbsolutePathForComparison(absolutePath)
+export function getRecentSelfWrite(
+  absolutePath: string,
+  runtimeEnvironmentId?: string | null
+): RecentSelfWrite | null {
+  const key = selfWriteKey(absolutePath, runtimeEnvironmentId)
   const stamp = stamps.get(key)
   if (!stamp) {
     return null
@@ -73,8 +84,11 @@ export function getRecentSelfWrite(absolutePath: string): RecentSelfWrite | null
   return { content: stamp.content }
 }
 
-export function hasRecentSelfWrite(absolutePath: string): boolean {
-  return getRecentSelfWrite(absolutePath) !== null
+export function hasRecentSelfWrite(
+  absolutePath: string,
+  runtimeEnvironmentId?: string | null
+): boolean {
+  return getRecentSelfWrite(absolutePath, runtimeEnvironmentId) !== null
 }
 
 export function __clearSelfWriteRegistryForTests(): void {

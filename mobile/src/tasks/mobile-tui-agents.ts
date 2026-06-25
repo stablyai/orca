@@ -5,11 +5,14 @@ import type { TuiAgent } from '../../../src/shared/types'
 // mirrored with src/shared/tui-agent-selection.ts and assert parity in tests.
 export const MOBILE_TUI_AGENT_AUTO_PICK_ORDER = [
   'claude',
+  'claude-agent-teams',
   'openclaude',
   'codex',
   'grok',
   'copilot',
   'opencode',
+  'mimo-code',
+  'ante',
   'pi',
   'omp',
   'gemini',
@@ -33,16 +36,20 @@ export const MOBILE_TUI_AGENT_AUTO_PICK_ORDER = [
   'qwen-code',
   'rovo',
   'hermes',
+  'devin',
   'openclaw'
 ] as const satisfies readonly TuiAgent[]
 
 export const MOBILE_TUI_AGENT_LABELS: Record<TuiAgent, string> = {
   claude: 'Claude',
+  'claude-agent-teams': 'Claude Agent Teams',
   openclaude: 'OpenClaude',
   codex: 'Codex',
   grok: 'Grok',
   copilot: 'GitHub Copilot',
   opencode: 'OpenCode',
+  'mimo-code': 'MiMo Code',
+  ante: 'Ante',
   pi: 'Pi',
   omp: 'OMP',
   gemini: 'Gemini',
@@ -66,6 +73,7 @@ export const MOBILE_TUI_AGENT_LABELS: Record<TuiAgent, string> = {
   'qwen-code': 'Qwen Code',
   rovo: 'Rovo Dev',
   hermes: 'Hermes',
+  devin: 'Devin',
   openclaw: 'OpenClaw'
 }
 
@@ -74,6 +82,8 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
   grok: 'x.ai',
   copilot: 'github.com',
   opencode: 'opencode.ai',
+  'mimo-code': 'mimo.xiaomi.com',
+  ante: 'antigma.ai',
   omp: 'omp.sh',
   gemini: 'gemini.google.com',
   antigravity: 'antigravity.google',
@@ -95,16 +105,20 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
   'qwen-code': 'qwenlm.github.io',
   rovo: 'atlassian.com',
   hermes: 'nousresearch.com',
+  devin: 'devin.ai',
   openclaw: 'openclaw.ai'
 }
 
 export const MOBILE_TUI_AGENT_LAUNCH_COMMANDS: Record<TuiAgent, string> = {
   claude: 'claude',
+  'claude-agent-teams': 'orca claude-teams',
   openclaude: 'openclaude',
   codex: 'codex',
   grok: 'grok',
   copilot: 'copilot',
   opencode: 'opencode',
+  'mimo-code': 'mimo',
+  ante: 'ante',
   pi: 'pi',
   omp: 'omp',
   gemini: 'gemini',
@@ -128,6 +142,7 @@ export const MOBILE_TUI_AGENT_LAUNCH_COMMANDS: Record<TuiAgent, string> = {
   'qwen-code': 'qwen-code',
   rovo: 'rovo',
   hermes: 'hermes',
+  devin: 'devin',
   openclaw: 'openclaw'
 }
 

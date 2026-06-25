@@ -54,6 +54,13 @@ type Body = {
   payload: Record<string, unknown>
 }
 
+type AgentHookServerCacheInternals = {
+  assistantMessageRetryTimers: Map<string, number | ReturnType<typeof globalThis.setTimeout>>
+  promptSentDedupeByPaneKey: Map<string, unknown>
+  runtimeObservedStatusPaneKeys: Set<string>
+  scheduleStatusPersist: () => void
+}
+
 function buildBody(payload: Record<string, unknown>, overrides: Partial<Body> = {}): Body {
   return {
     paneKey: PANE,
@@ -89,6 +96,7 @@ describe('AgentHookServer listener replay', () => {
           paneKey: PANE,
           tabId: 'tab-1',
           worktreeId: 'wt-1',
+          providerSession: { key: 'session_id', id: 'codex-interrupt-session-1' },
           payload: { state: 'working', prompt: 'long task', agentType: 'codex' }
         },
         'conn-1'
@@ -112,6 +120,7 @@ describe('AgentHookServer listener replay', () => {
           state: 'done',
           prompt: 'long task',
           agentType: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-interrupt-session-1' },
           interrupted: true,
           receivedAt: 1_500,
           stateStartedAt: 1_500
@@ -120,6 +129,7 @@ describe('AgentHookServer listener replay', () => {
       expect(listener).toHaveBeenLastCalledWith(
         expect.objectContaining({
           paneKey: PANE,
+          providerSession: { key: 'session_id', id: 'codex-interrupt-session-1' },
           payload: expect.objectContaining({ state: 'done', interrupted: true })
         })
       )
@@ -1081,6 +1091,199 @@ describe('AgentHookServer listener replay', () => {
 
     expect(listener).toHaveBeenCalledTimes(1)
     expect(listener).toHaveBeenCalledWith(PANE)
+  })
+
+  it('drops cached statuses and pane-scoped listener caches under one tab prefix', () => {
+    vi.useFakeTimers()
+    try {
+      const server = new AgentHookServer()
+      const internals = server as unknown as AgentHookServerCacheInternals
+      const sameTabPane = makePaneKey('tab-1', LEAF_2)
+      const siblingPrefixPane = makePaneKey('tab-10', LEAF_3)
+      const statusListener = vi.fn()
+      const aliasPersist = vi.fn()
+      const sameTabRetry = vi.fn()
+      const siblingRetry = vi.fn()
+      server.subscribeStatusChanges(statusListener)
+      server.setPaneKeyAliasPersistenceListener(aliasPersist)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'working', prompt: 'first', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+      server.ingestRemote(
+        {
+          paneKey: sameTabPane,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'done', prompt: 'second', agentType: 'codex' }
+        },
+        'conn-1'
+      )
+      server.ingestRemote(
+        {
+          paneKey: siblingPrefixPane,
+          tabId: 'tab-10',
+          worktreeId: 'wt-2',
+          payload: { state: 'working', prompt: 'sibling', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+      server.registerPaneKeyAlias('tab-1:0', sameTabPane, 'pty-1')
+      const state = server._getStateForTests()
+      state.lastPromptByPaneKey.set(PANE, 'cached prompt')
+      state.lastToolByPaneKey.set(`${sameTabPane}\0tool`, {} as never)
+      state.antigravityCompletedTranscriptByPaneKey.set(`${sameTabPane}\0done`, 'cached')
+      state.ampCompletedCacheKeys.add(`${sameTabPane}\0amp`)
+      state.lastPromptByPaneKey.set(siblingPrefixPane, 'sibling prompt')
+      internals.assistantMessageRetryTimers.set(PANE, setTimeout(sameTabRetry, 1_000))
+      internals.assistantMessageRetryTimers.set(siblingPrefixPane, setTimeout(siblingRetry, 1_000))
+      internals.promptSentDedupeByPaneKey.set(PANE, { promptHash: 'same-tab' })
+      internals.promptSentDedupeByPaneKey.set(siblingPrefixPane, { promptHash: 'sibling' })
+      const scheduleStatusPersist = vi.spyOn(internals, 'scheduleStatusPersist')
+      statusListener.mockClear()
+      aliasPersist.mockClear()
+      scheduleStatusPersist.mockClear()
+
+      server.dropStatusEntriesByTabPrefix('tab-1')
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ paneKey: siblingPrefixPane, prompt: 'sibling' })
+      ])
+      expect(state.lastPromptByPaneKey.has(PANE)).toBe(false)
+      expect(state.lastToolByPaneKey.has(`${sameTabPane}\0tool`)).toBe(false)
+      expect(state.antigravityCompletedTranscriptByPaneKey.has(`${sameTabPane}\0done`)).toBe(false)
+      expect(state.ampCompletedCacheKeys.has(`${sameTabPane}\0amp`)).toBe(false)
+      expect(state.lastPromptByPaneKey.get(siblingPrefixPane)).toBe('sibling prompt')
+      expect(internals.assistantMessageRetryTimers.has(PANE)).toBe(false)
+      expect(internals.assistantMessageRetryTimers.has(siblingPrefixPane)).toBe(true)
+      expect(internals.promptSentDedupeByPaneKey.has(PANE)).toBe(false)
+      expect(internals.promptSentDedupeByPaneKey.get(siblingPrefixPane)).toEqual({
+        promptHash: 'sibling'
+      })
+      expect(internals.runtimeObservedStatusPaneKeys.has(PANE)).toBe(false)
+      expect(internals.runtimeObservedStatusPaneKeys.has(sameTabPane)).toBe(false)
+      expect(internals.runtimeObservedStatusPaneKeys.has(siblingPrefixPane)).toBe(true)
+      expect(statusListener).toHaveBeenCalledTimes(1)
+      expect(statusListener).toHaveBeenCalledWith([
+        expect.objectContaining({ state: 'working', observedInCurrentRuntime: true })
+      ])
+      expect(aliasPersist).toHaveBeenCalledTimes(1)
+      expect(aliasPersist).toHaveBeenCalledWith([])
+      expect(scheduleStatusPersist).toHaveBeenCalledTimes(1)
+
+      vi.advanceTimersByTime(1_000)
+      expect(sameTabRetry).not.toHaveBeenCalled()
+      expect(siblingRetry).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
+  })
+
+  it('suppresses late writes for a closed tab for the rest of the server session', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      const listener = vi.fn()
+      server.setListener(listener)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'working', prompt: 'before close', agentType: 'codex' }
+        },
+        'conn-1'
+      )
+
+      server.dropStatusEntriesByTabPrefix('tab-1')
+      listener.mockClear()
+
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'done', prompt: 'late remote', agentType: 'codex' }
+        },
+        'conn-1'
+      )
+      server.ingestTerminalStatus({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'done', prompt: 'late terminal', agentType: 'codex' }
+      })
+
+      vi.setSystemTime(16_001)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'working', prompt: 'future reuse', agentType: 'codex' }
+        },
+        'conn-1'
+      )
+
+      expect(listener).not.toHaveBeenCalled()
+      expect(server.getStatusSnapshot()).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('accepts statuses for unrelated tabs while another tab is recently closed', () => {
+    const server = new AgentHookServer()
+    server.dropStatusEntriesByTabPrefix('tab-1')
+    server.ingestRemote(
+      {
+        paneKey: GOOD_PANE,
+        tabId: 'tab-good',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', prompt: 'unrelated', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({ paneKey: GOOD_PANE, state: 'working', prompt: 'unrelated' })
+    ])
+  })
+
+  it('suppresses local HTTP hook writes for a recently closed tab', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postHook = (prompt: string): Promise<Response> =>
+        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody({ hook_event_name: 'UserPromptSubmit', prompt }))
+        })
+
+      await expect(postHook('before close')).resolves.toMatchObject({ status: 204 })
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ paneKey: PANE, prompt: 'before close' })
+      ])
+
+      server.dropStatusEntriesByTabPrefix('tab-1')
+      await expect(postHook('late local')).resolves.toMatchObject({ status: 204 })
+
+      expect(server.getStatusSnapshot()).toEqual([])
+    } finally {
+      server.stop()
+    }
   })
 
   it('hydrates cached statuses as not observed in the current runtime', async () => {
@@ -3839,6 +4042,38 @@ describe('OpenCode hook normalization', () => {
     expect(result?.payload.lastAssistantMessage).toBe('Hello! How can I help?')
   })
 
+  it('caps oversized MessagePart text from stale (pre-throttle) plugin builds', () => {
+    // Why: plugin builds installed before the throttle/cap fix re-post the
+    // full accumulated reply on every streamed part update. The listener must
+    // bound the text so each event's status compare, IPC fanout, and renderer
+    // store update stay O(cap) instead of O(reply length).
+    const assistant = _internals.normalizeHookPayload(
+      'opencode',
+      buildBody({
+        hook_event_name: 'MessagePart',
+        role: 'assistant',
+        text: 'a'.repeat(500_000)
+      }),
+      'production'
+    )
+    expect(assistant?.payload.lastAssistantMessage?.length).toBe(8_000)
+
+    // Why: prompt has always been single-line-capped at 200 by
+    // normalizeAgentStatusObject; this asserts the oversized input still
+    // flows through without blowing past that bound.
+    const user = _internals.normalizeHookPayload(
+      'opencode',
+      buildBody({
+        hook_event_name: 'MessagePart',
+        role: 'user',
+        text: 'u'.repeat(500_000),
+        messageID: 'msg-cap'
+      }),
+      'production'
+    )
+    expect(user?.payload.prompt?.length).toBe(200)
+  })
+
   it('subsequent SessionIdle preserves cached prompt + assistant message', () => {
     _internals.normalizeHookPayload(
       'opencode',
@@ -3894,24 +4129,24 @@ describe('Cursor hook normalization', () => {
     expect(result?.payload.interrupted).toBe(true)
   })
 
-  it('beforeShellExecution maps to waiting with the pending command as toolInput', () => {
+  it('beforeShellExecution maps to working with the pending command as toolInput', () => {
     const result = _internals.normalizeHookPayload(
       'cursor',
       buildBody({ hook_event_name: 'beforeShellExecution', command: 'rm -rf /tmp/foo' }),
       'production'
     )
-    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBe('Shell')
     expect(result?.payload.toolInput).toBe('rm -rf /tmp/foo')
   })
 
-  it('beforeMCPExecution maps to waiting', () => {
+  it('beforeMCPExecution maps to working', () => {
     const result = _internals.normalizeHookPayload(
       'cursor',
       buildBody({ hook_event_name: 'beforeMCPExecution', tool_name: 'fetch', url: 'https://x' }),
       'production'
     )
-    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBe('fetch')
   })
 
@@ -4008,6 +4243,37 @@ describe('Cursor hook normalization', () => {
         lastAssistantMessage: 'All set.'
       })
     ])
+  })
+
+  it('tool-heavy turn keeps working across shell and generic tool hooks until stop', () => {
+    _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({ hook_event_name: 'beforeSubmitPrompt', prompt: 'run checks' }),
+      'production'
+    )
+    const shell = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({ hook_event_name: 'beforeShellExecution', command: 'pnpm test' }),
+      'production'
+    )
+    expect(shell?.payload.state).toBe('working')
+    const tool = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({
+        hook_event_name: 'preToolUse',
+        tool_name: 'Read',
+        tool_input: { file_path: '/repo/src/app.ts' }
+      }),
+      'production'
+    )
+    expect(tool?.payload.state).toBe('working')
+    const stop = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({ hook_event_name: 'stop', status: 'completed' }),
+      'production'
+    )
+    expect(stop?.payload.state).toBe('done')
+    expect(stop?.payload.prompt).toBe('run checks')
   })
 
   it('beforeSubmitPrompt clears the cached tool state from a prior turn', () => {
@@ -6174,5 +6440,164 @@ describe('AgentHookServer ingestRemote', () => {
     expect(listener).toHaveBeenCalledTimes(1)
     const event = listener.mock.calls[0][0] as { payload: { prompt: string } }
     expect(event.payload.prompt.length).toBe(200)
+  })
+})
+
+describe('AgentHookServer ingestTerminalStatus', () => {
+  it('forwards runtime terminal status through the normal listener and snapshot path', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      server.ingestTerminalStatus({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: {
+          state: 'working',
+          prompt: 'ship it',
+          agentType: 'codex'
+        }
+      })
+
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          connectionId: null,
+          receivedAt: 1_000,
+          stateStartedAt: 1_000,
+          payload: {
+            state: 'working',
+            prompt: 'ship it',
+            agentType: 'codex'
+          }
+        })
+      )
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          connectionId: null,
+          receivedAt: 1_000,
+          stateStartedAt: 1_000,
+          state: 'working',
+          prompt: 'ship it',
+          agentType: 'codex'
+        })
+      ])
+      expect(trackMock).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('suppresses exact duplicate runtime terminal status observations', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      const listener = vi.fn()
+      server.setListener(listener)
+      const event = {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: {
+          state: 'working' as const,
+          prompt: 'same turn',
+          agentType: 'codex' as const
+        }
+      }
+
+      server.ingestTerminalStatus(event)
+      vi.setSystemTime(1_250)
+      server.ingestTerminalStatus(event)
+
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          receivedAt: 1_000,
+          stateStartedAt: 1_000,
+          state: 'working',
+          prompt: 'same turn'
+        })
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves runtime terminal status connection identity', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      server.ingestTerminalStatus({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        connectionId: 'ssh-conn-1',
+        payload: {
+          state: 'working',
+          prompt: 'ship it',
+          agentType: 'codex'
+        }
+      })
+
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          connectionId: 'ssh-conn-1',
+          payload: {
+            state: 'working',
+            prompt: 'ship it',
+            agentType: 'codex'
+          }
+        })
+      )
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          connectionId: 'ssh-conn-1',
+          state: 'working',
+          prompt: 'ship it'
+        })
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rejects runtime terminal status with mismatched tab identity', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setListener(listener)
+
+    server.ingestTerminalStatus({
+      paneKey: PANE,
+      tabId: 'other-tab',
+      worktreeId: 'wt-1',
+      payload: {
+        state: 'working',
+        prompt: 'bad tab',
+        agentType: 'codex'
+      }
+    })
+
+    expect(listener).not.toHaveBeenCalled()
+    expect(server.getStatusSnapshot()).toEqual([])
   })
 })

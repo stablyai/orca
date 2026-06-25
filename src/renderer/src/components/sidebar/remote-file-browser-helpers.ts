@@ -1,13 +1,29 @@
+import { translate } from '@/i18n/i18n'
+import { shouldHandleTextControlPaste } from '@/lib/text-control-paste'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 export type DirEntry = {
   name: string
   isDirectory: boolean
 }
 
+export const REMOTE_FILE_BROWSER_FILTER_QUERY_MAX_BYTES = 2 * 1024
+
+export function isRemoteFileBrowserFilterQueryTooLarge(
+  query: string,
+  maxBytes = REMOTE_FILE_BROWSER_FILTER_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
+
 export function filterEntries(entries: DirEntry[], filter: string): DirEntry[] {
-  const q = filter.trim().toLowerCase()
-  if (!q) {
+  if (isRemoteFileBrowserFilterQueryTooLarge(filter)) {
+    return []
+  }
+  const trimmedFilter = filter.trim()
+  if (!trimmedFilter) {
     return entries
   }
+  const q = trimmedFilter.toLowerCase()
   return entries.filter((e) => e.name.toLowerCase().includes(q))
 }
 
@@ -78,6 +94,14 @@ export function isPathMode(raw: string): boolean {
     return true
   }
   return raw === '~' || raw === '.' || raw === '..'
+}
+
+export function isRemoteFileBrowserPathResolveTextTooLarge(text: string): boolean {
+  return shouldHandleTextControlPaste(text)
+}
+
+export function shouldDeferRemoteFileBrowserPasteResolve(text: string): boolean {
+  return isRemoteFileBrowserPathResolveTextTooLarge(text)
 }
 
 export function parsePathInput(raw: string): ParsedInput {
@@ -178,7 +202,14 @@ export function resolveSegmentStep(
     }
     // Stop resolution: prefix-matching to a similarly-named folder here would
     // silently bypass a real file the user pointed at.
-    return { type: 'error', message: `${segment} isn't a directory in ${basePath}` }
+    return {
+      type: 'error',
+      message: translate(
+        'auto.components.sidebar.remote.file.browser.helpers.4dbd72a7d7',
+        "{{value0}} isn't a directory in {{value1}}",
+        { value0: segment, value1: basePath }
+      )
+    }
   }
   // Fall back to case-insensitive matching so segment resolution agrees with
   // the case-insensitive filter input. Without this, typing `documents/`
@@ -191,7 +222,14 @@ export function resolveSegmentStep(
     if (ciExact.isDirectory) {
       return { type: 'descend', name: ciExact.name }
     }
-    return { type: 'error', message: `${segment} isn't a directory in ${basePath}` }
+    return {
+      type: 'error',
+      message: translate(
+        'auto.components.sidebar.remote.file.browser.helpers.4dbd72a7d7',
+        "{{value0}} isn't a directory in {{value1}}",
+        { value0: segment, value1: basePath }
+      )
+    }
   }
   const dirMatches = baseEntries.filter(
     (e) => e.isDirectory && e.name.toLowerCase().startsWith(segLower)
@@ -200,7 +238,21 @@ export function resolveSegmentStep(
     return { type: 'descend', name: dirMatches[0].name }
   }
   if (dirMatches.length > 1) {
-    return { type: 'error', message: `${segment} matches multiple directories in ${basePath}` }
+    return {
+      type: 'error',
+      message: translate(
+        'auto.components.sidebar.remote.file.browser.helpers.be266af66c',
+        '{{value0}} matches multiple directories in {{value1}}',
+        { value0: segment, value1: basePath }
+      )
+    }
   }
-  return { type: 'error', message: `${segment} isn't a directory in ${basePath}` }
+  return {
+    type: 'error',
+    message: translate(
+      'auto.components.sidebar.remote.file.browser.helpers.4dbd72a7d7',
+      "{{value0}} isn't a directory in {{value1}}",
+      { value0: segment, value1: basePath }
+    )
+  }
 }

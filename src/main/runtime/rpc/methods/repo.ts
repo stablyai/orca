@@ -4,6 +4,8 @@ import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas
 import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../shared/source-control-ai'
+import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
+import { FOLDER_WORKSPACE_METHODS } from './folder-workspace'
 
 const RepoSelector = z.object({
   repo: requiredString('Missing repo selector')
@@ -34,7 +36,11 @@ const RepoSourceControlAiOverrides = z
   .unknown()
   .optional()
   .transform((value) =>
-    value === undefined ? undefined : normalizeRepoSourceControlAiOverrides(value)
+    value === undefined
+      ? undefined
+      : value === null
+        ? null
+        : normalizeRepoSourceControlAiOverrides(value)
   )
 
 const RepoBadgeColor = z
@@ -67,6 +73,7 @@ const RepoUpdate = RepoSelector.extend({
     kind: z.enum(['git', 'folder']).optional(),
     symlinkPaths: z.array(z.string()).optional(),
     issueSourcePreference: z.enum(['auto', 'upstream', 'origin']).optional(),
+    forkSyncMode: z.enum(['ask', 'safe-auto', 'off']).optional(),
     externalWorktreeVisibility: z.enum(['hide', 'show']).optional(),
     externalWorktreeVisibilityPromptDismissedAt: z.number().finite().optional(),
     projectGroupId: OptionalString.nullable().optional(),
@@ -91,6 +98,7 @@ const RepoReorder = z.object({
 const ProjectGroupCreate = z.object({
   name: requiredString('Missing group name'),
   parentPath: OptionalString,
+  connectionId: OptionalString.nullable().optional(),
   parentGroupId: OptionalString.nullable().optional(),
   createdFrom: z.enum(['manual', 'folder-scan', 'migration']).optional()
 })
@@ -122,14 +130,14 @@ const ProjectGroupScanNested = z.object({
 const ProjectGroupImportNested = z.discriminatedUnion('mode', [
   z.object({
     parentPath: requiredString('Missing parent path'),
-    groupName: requiredString('Missing group name'),
+    groupName: z.string().optional().default(''),
     projectPaths: z.array(z.string()),
     mode: z.literal('group')
   }),
   z.object({
     parentPath: requiredString('Missing parent path'),
-    // Why: "Import separately" does not create a group, so SSH must accept the
-    // same empty group-name state that the local dialog allows.
+    // Why: blank group names fall back to the scanned folder basename; separate
+    // imports do not create a group but share the same renderer payload shape.
     groupName: z.string().optional().default(''),
     projectPaths: z.array(z.string()),
     mode: z.literal('separate')
@@ -150,8 +158,12 @@ export const REPO_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'repo.list',
     params: null,
-    handler: (_params, { runtime }) => ({ repos: runtime.listRepos() })
+    handler: (_params, { runtime }) => {
+      runtime.enrichMissingRepoGitRemoteIdentities?.()
+      return { repos: runtime.listRepos() }
+    }
   }),
+  ...PROJECT_RUNTIME_METHODS,
   defineMethod({
     name: 'projectGroup.list',
     params: null,
@@ -183,6 +195,7 @@ export const REPO_METHODS: RpcMethod[] = [
       repo: await runtime.moveProjectToGroup(params.repo, params.groupId ?? null, params.order)
     })
   }),
+  ...FOLDER_WORKSPACE_METHODS,
   defineMethod({
     name: 'projectGroup.scanNested',
     params: ProjectGroupScanNested,
@@ -223,6 +236,11 @@ export const REPO_METHODS: RpcMethod[] = [
     params: RepoCreate,
     handler: async (params, { runtime }) =>
       runtime.createRepo(params.parentPath, params.name, params.kind)
+  }),
+  defineMethod({
+    name: 'repo.gitAvailable',
+    params: null,
+    handler: async (_params, { runtime }) => ({ available: await runtime.isGitAvailable() })
   }),
   defineMethod({
     name: 'repo.clone',

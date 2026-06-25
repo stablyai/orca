@@ -156,6 +156,8 @@ describe('agent status runtime orchestration metadata', () => {
       [childPaneKey]: {
         taskId: 'task-1',
         dispatchId: 'ctx-1',
+        taskTitle: 'Checkout race',
+        displayName: 'Fix checkout race',
         parentPaneKey
       }
     })
@@ -163,6 +165,8 @@ describe('agent status runtime orchestration metadata', () => {
     expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toMatchObject({
       taskId: 'task-1',
       dispatchId: 'ctx-1',
+      taskTitle: 'Checkout race',
+      displayName: 'Fix checkout race',
       parentPaneKey
     })
     expect(store.getState().agentStatusEpoch).toBe(epochBeforeRuntime + 1)
@@ -736,7 +740,7 @@ describe('agent status PR refresh handoff', () => {
     })
   })
 
-  it('does not spend a PR refresh when no PR surface is visible', async () => {
+  it('does not spend a PR refresh when no status lane or PR surface is visible', async () => {
     vi.useFakeTimers()
     const enqueuePRRefresh = stubGitHubPRRefreshApi()
     const store = createTestStore()

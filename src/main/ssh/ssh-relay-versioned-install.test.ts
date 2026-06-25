@@ -24,12 +24,18 @@ import {
   gcOldRelayVersions
 } from './ssh-relay-versioned-install'
 import { execCommand } from './ssh-relay-deploy-helpers'
+import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { SshConnection } from './ssh-connection'
 
 const conn = {} as SshConnection
 const mockExec = vi.mocked(execCommand)
 const mockExists = vi.mocked(existsSync)
 const mockRead = vi.mocked(readFileSync)
+
+function decodePowerShellCommand(command: string): string {
+  const match = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)
+  return match ? Buffer.from(match[1], 'base64').toString('utf16le') : ''
+}
 
 describe('readLocalFullVersion', () => {
   beforeEach(() => {
@@ -298,6 +304,34 @@ describe('gcOldRelayVersions', () => {
     await gcOldRelayVersions(conn, '/home/u', '/home/u/.orca-remote/relay-0.1.0+bbb')
     const cmds = mockExec.mock.calls.map(([, c]) => c)
     expect(cmds.some((c) => c.includes('rm -rf'))).toBe(false)
+  })
+
+  it('probes Windows GC liveness by connecting to named pipes, not process command lines', async () => {
+    const windows = getRemoteHostPlatform('win32-x64')
+    mockExec.mockResolvedValueOnce('relay-0.1.0+aaa\n')
+    mockExec
+      .mockResolvedValueOnce('OPEN')
+      .mockResolvedValueOnce('COMPLETE')
+      .mockResolvedValueOnce('WAITING')
+      .mockResolvedValueOnce('')
+
+    await gcOldRelayVersions(
+      conn,
+      'C:/Users/u',
+      'C:/Users/u/.orca-remote/relay-0.1.0+bbb',
+      windows,
+      {
+        windowsNodePath: 'C:/Program Files/nodejs/node.exe',
+        windowsSockNames: ['relay-target.sock']
+      }
+    )
+
+    const livenessCommand = mockExec.mock.calls[3]?.[1] ?? ''
+    const script = decodePowerShellCommand(livenessCommand ?? '')
+    expect(script).toContain('net.connect(pipe)')
+    expect(script).toContain('.windows-active-pipe-')
+    expect(script).toContain('\\\\.\\pipe\\orca-relay-')
+    expect(script).not.toContain('Win32_Process')
   })
 
   it('does not consider the current dir as a GC candidate', async () => {

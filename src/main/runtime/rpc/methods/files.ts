@@ -26,12 +26,31 @@ const FileOpen = WorktreeSelector.extend({
     .pipe(z.string().min(1, 'Missing relative path'))
 })
 
+const ResolveTerminalPath = WorktreeSelector.extend({
+  pathText: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string().min(1, 'Missing path text')),
+  cwd: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' && v.length > 0 ? v : null))
+    .nullable()
+    .optional()
+})
+
 const FileOpenDiff = FileOpen.extend({
   staged: z.boolean().optional()
 })
 
 const FileTreePath = WorktreeSelector.extend({
   relativePath: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string())
+})
+
+const ServerDirectoryBrowse = z.object({
+  path: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string())
@@ -145,6 +164,12 @@ export const FILE_METHODS: RpcAnyMethod[] = [
       runtime.readMobileFile(params.worktree, params.relativePath)
   }),
   defineMethod({
+    name: 'files.resolveTerminalPath',
+    params: ResolveTerminalPath,
+    handler: async (params, { runtime }) =>
+      runtime.resolveTerminalPath(params.worktree, params.pathText, params.cwd ?? null)
+  }),
+  defineMethod({
     name: 'files.readPreview',
     params: FileOpen,
     handler: async (params, { runtime }) =>
@@ -155,6 +180,11 @@ export const FILE_METHODS: RpcAnyMethod[] = [
     params: FileTreePath,
     handler: async (params, { runtime }) =>
       runtime.readFileExplorerDir(params.worktree, params.relativePath)
+  }),
+  defineMethod({
+    name: 'files.browseServerDir',
+    params: ServerDirectoryBrowse,
+    handler: async (params, { runtime }) => runtime.browseServerDir(params.path)
   }),
   defineMethod({
     name: 'files.write',

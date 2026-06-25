@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { getWorktreePaletteSearchScope, searchWorktrees } from './worktree-palette-search'
+import {
+  WORKTREE_PALETTE_QUERY_MAX_BYTES,
+  isWorktreePaletteQueryTooLarge
+} from './worktree-palette-query-bounds'
 import type { Repo, Worktree } from '../../../shared/types'
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
@@ -81,6 +85,44 @@ describe('worktree-palette-search', () => {
     ])
   })
 
+  it('rejects oversized pasted queries before reading worktree metadata', () => {
+    const oversizedQuery = 'secret-worktree-palette-search'.repeat(WORKTREE_PALETTE_QUERY_MAX_BYTES)
+    const worktree = {
+      get id(): string {
+        throw new Error('oversized worktree palette searches must not read ids')
+      },
+      get displayName(): string {
+        throw new Error('oversized worktree palette searches must not scan names')
+      },
+      get branch(): string {
+        throw new Error('oversized worktree palette searches must not scan branches')
+      }
+    } as Worktree
+
+    expect(isWorktreePaletteQueryTooLarge(oversizedQuery)).toBe(true)
+    expect(searchWorktrees([worktree], oversizedQuery, repoMap, null, null)).toEqual([])
+  })
+
+  it('rejects oversized whitespace before trimming worktree palette queries', () => {
+    expect(
+      searchWorktrees(
+        [makeWorktree()],
+        ' '.repeat(WORKTREE_PALETTE_QUERY_MAX_BYTES + 1),
+        repoMap,
+        null,
+        null
+      )
+    ).toEqual([])
+  })
+
+  it('enforces the query budget by UTF-8 byte length', () => {
+    const query = 'é'.repeat(WORKTREE_PALETTE_QUERY_MAX_BYTES)
+
+    expect(query.length).toBe(WORKTREE_PALETTE_QUERY_MAX_BYTES)
+    expect(isWorktreePaletteQueryTooLarge(query)).toBe(true)
+    expect(searchWorktrees([makeWorktree()], query, repoMap, null, null)).toEqual([])
+  })
+
   it('returns a truncated comment snippet with the highlighted match range', () => {
     const results = searchWorktrees(
       [
@@ -96,7 +138,7 @@ describe('worktree-palette-search', () => {
     )
 
     expect(results).toHaveLength(1)
-    expect(results[0].supportingText?.label).toBe('Comment')
+    expect(results[0].supportingText?.labelKind).toBe('comment')
     expect(results[0].supportingText?.text).toContain('implementation')
     expect(
       results[0].supportingText?.text.slice(
@@ -124,7 +166,7 @@ describe('worktree-palette-search', () => {
 
     expect(results).toHaveLength(1)
     expect(results[0].supportingText).toEqual({
-      label: 'PR',
+      labelKind: 'pr',
       text: 'Refresh the worktree quick jump palette',
       matchRange: { start: 21, end: 31 }
     })
@@ -209,7 +251,7 @@ describe('worktree-palette-search', () => {
 
     expect(results).toHaveLength(1)
     expect(results[0].supportingText).toEqual({
-      label: 'Issue',
+      labelKind: 'issue',
       text: 'Issue #304',
       matchRange: { start: 7, end: 10 }
     })
@@ -238,7 +280,7 @@ describe('worktree-palette-search', () => {
     expect(results).toHaveLength(1)
     expect(results[0].matchedField).toBe('port')
     expect(results[0].supportingText).toEqual({
-      label: 'Port',
+      labelKind: 'port',
       text: '3000 · vite',
       matchRange: { start: 0, end: 4 }
     })

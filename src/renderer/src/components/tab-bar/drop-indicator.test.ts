@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getDropIndicatorClasses,
-  getTabRootStateClasses
+  getTabRootStateClasses,
+  getTabStripBorderClasses
 } from './drop-indicator'
 
 describe('getDropIndicatorClasses', () => {
@@ -55,6 +56,20 @@ describe('ACTIVE_TAB_INDICATOR_CLASSES', () => {
   })
 })
 
+describe('getTabStripBorderClasses', () => {
+  it('includes top and right borders by default', () => {
+    expect(getTabStripBorderClasses(true)).toBe('border-t border-r border-border')
+    expect(getTabStripBorderClasses(false)).toBe('border-t border-border')
+  })
+
+  it('can omit the top border for rounded floating panel titlebars', () => {
+    expect(getTabStripBorderClasses(true, { includeTopBorder: false })).toBe(
+      'border-r border-border'
+    )
+    expect(getTabStripBorderClasses(false, { includeTopBorder: false })).toBe('border-border')
+  })
+})
+
 describe('getTabRootStateClasses', () => {
   it('returns the shared selected-tab surface treatment', () => {
     const classes = getTabRootStateClasses(true)
@@ -68,5 +83,12 @@ describe('getTabRootStateClasses', () => {
     expect(classes).toContain('bg-card')
     expect(classes).toContain('text-muted-foreground')
     expect(classes).toContain('hover:text-foreground')
+  })
+
+  it('returns the selected-tab surface treatment while pressed before activation', () => {
+    const classes = getTabRootStateClasses(false, true)
+    expect(classes).toContain('bg-[color-mix(in_srgb,var(--foreground)_6%,var(--card))]')
+    expect(classes).toContain('text-foreground')
+    expect(classes).not.toContain('hover:text-foreground')
   })
 })

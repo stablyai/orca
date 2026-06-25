@@ -4,7 +4,6 @@ import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
@@ -15,62 +14,22 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { AgentActivityDisplayMode, WorktreeCardProperty } from '../../../../shared/types'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
 import SidebarRepositoryFilterSection from './SidebarRepositoryFilterSection'
 import SidebarWorkspaceFilterSection from './SidebarWorkspaceFilterSection'
+import { getSidebarHostVisibilityLabel, shouldShowHostScopeControls } from './sidebar-host-options'
+import { useSidebarHostScopeOptions } from './use-sidebar-host-scope-options'
+import { SidebarHostScopeMenuSection } from './SidebarHostScopeMenuSection'
+import { PROJECT_ORDER_OPTIONS, SORT_OPTIONS } from './sidebar-workspace-option-items'
+import { WorktreeCardDisplayMenuSection } from './WorktreeCardDisplayMenuSection'
+import { translate } from '@/i18n/i18n'
+import { SidebarGroupByToggle } from './SidebarGroupByToggle'
 
 type SidebarWorkspaceOptionsMenuProps = {
   preserveWorkspaceBoardOpen?: boolean
   onMenuOpenChange?: (open: boolean) => void
 }
-
-const GROUP_BY_OPTIONS = [
-  { id: 'none', label: 'None' },
-  { id: 'workspace-status', label: 'Status' },
-  { id: 'pr-status', label: 'PR' },
-  { id: 'repo', label: 'Project' }
-] as const
-
-const CARD_LAYOUT_OPTIONS = [
-  { id: 'detailed', label: 'Detailed' },
-  { id: 'compact', label: 'Compact' }
-] as const
-
-const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
-  { id: 'issue', label: 'GitHub ticket' },
-  { id: 'linear-issue', label: 'Linear issue' },
-  { id: 'pr', label: 'PR/MR link' },
-  { id: 'comment', label: 'Notes' },
-  { id: 'ports', label: 'Ports' },
-  // Why: toggles the inline "Agent activity" list rendered below each
-  // workspace card body (see WorktreeCard -> WorktreeCardAgents). Off hides
-  // the list; there is no alternate surface.
-  { id: 'inline-agents', label: 'Agent activity' }
-]
-
-const AGENT_ACTIVITY_DISPLAY_OPTIONS: { id: AgentActivityDisplayMode; label: string }[] = [
-  { id: 'compact', label: 'Compact' },
-  { id: 'full', label: 'Full list' }
-]
-
-const SORT_OPTIONS = [
-  { id: 'name', label: 'Name', description: null },
-  {
-    id: 'smart',
-    label: 'Agent Activity',
-    description: 'Agents that need attention, then most recent activity.'
-  },
-  { id: 'recent', label: 'Recent', description: null },
-  { id: 'repo', label: 'Project', description: null },
-  {
-    id: 'manual',
-    label: 'Manual',
-    description: 'Drag workspaces to arrange them within each group.'
-  }
-] as const
 
 const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsMenu({
   preserveWorkspaceBoardOpen = false,
@@ -78,20 +37,22 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
 }: SidebarWorkspaceOptionsMenuProps) {
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
+  const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const repos = useAppStore((s) => s.repos)
-  const worktreeCardProperties = useAppStore((s) => s.worktreeCardProperties)
-  const toggleWorktreeCardProperty = useAppStore((s) => s.toggleWorktreeCardProperty)
-  const settings = useAppStore((s) => s.settings)
-  const updateSettings = useAppStore((s) => s.updateSettings)
-  const agentActivityDisplayMode = useAppStore((s) => s.agentActivityDisplayMode)
-  const setAgentActivityDisplayMode = useAppStore((s) => s.setAgentActivityDisplayMode)
+  const setWorkspaceHostScope = useAppStore((s) => s.setWorkspaceHostScope)
+  const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
+  const setVisibleWorkspaceHostIds = useAppStore((s) => s.setVisibleWorkspaceHostIds)
   const sortBy = useAppStore((s) => s.sortBy)
   const setSortBy = useAppStore((s) => s.setSortBy)
   const groupBy = useAppStore((s) => s.groupBy)
   const setGroupBy = useAppStore((s) => s.setGroupBy)
+  const projectOrderBy = useAppStore((s) => s.projectOrderBy)
+  const setProjectOrderBy = useAppStore((s) => s.setProjectOrderBy)
 
   const [open, setOpen] = useState(false)
+  const { hostOptions } = useSidebarHostScopeOptions()
+  const showHostScopeControls = shouldShowHostScopeControls(hostOptions)
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -114,17 +75,24 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   }, [repos, filterRepoIds])
   const hasRepoFilter = selectedCount > 0
   const hasSleepingFilter = showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES
-  const hasAnyFilter = hasSleepingFilter || hideDefaultBranchWorkspace || hasRepoFilter
+  const hasHostVisibilityFilter = visibleWorkspaceHostIds !== null
+  const hasAnyFilter =
+    hasSleepingFilter ||
+    hideDefaultBranchWorkspace ||
+    hideAutomationGeneratedWorkspaces ||
+    hasRepoFilter ||
+    hasHostVisibilityFilter
   const activeFilterCount =
-    (hasSleepingFilter ? 1 : 0) + (hideDefaultBranchWorkspace ? 1 : 0) + selectedCount
+    (hasSleepingFilter ? 1 : 0) +
+    (hideDefaultBranchWorkspace ? 1 : 0) +
+    (hideAutomationGeneratedWorkspaces ? 1 : 0) +
+    (hasHostVisibilityFilter ? 1 : 0) +
+    selectedCount
   const activeFilterLabel = `${activeFilterCount} ${activeFilterCount === 1 ? 'filter' : 'filters'}`
   const sortLabel = SORT_OPTIONS.find((opt) => opt.id === sortBy)?.label ?? 'Sort'
-  const cardLayout = settings?.experimentalCompactWorktreeCards ? 'compact' : 'detailed'
-  const cardLayoutLabel =
-    CARD_LAYOUT_OPTIONS.find((opt) => opt.id === cardLayout)?.label ?? 'Detailed'
-  const visiblePropertyCount = PROPERTY_OPTIONS.filter((opt) =>
-    worktreeCardProperties.includes(opt.id)
-  ).length
+  const projectOrderLabel =
+    PROJECT_ORDER_OPTIONS.find((opt) => opt.id === projectOrderBy)?.label ?? 'Manual'
+  const hostVisibilityLabel = getSidebarHostVisibilityLabel(visibleWorkspaceHostIds, hostOptions)
 
   return (
     <DropdownMenu modal={false} open={open} onOpenChange={handleOpenChange}>
@@ -138,8 +106,15 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
               className="relative text-muted-foreground"
               aria-label={
                 hasAnyFilter
-                  ? `Workspace options (${activeFilterLabel} active)`
-                  : 'Workspace options'
+                  ? translate(
+                      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.bc96dbd041',
+                      'Workspace options ({{value0}} active)',
+                      { value0: activeFilterLabel }
+                    )
+                  : translate(
+                      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.9919ae1082',
+                      'Workspace options'
+                    )
               }
               data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
             >
@@ -158,7 +133,16 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          {hasAnyFilter ? `Workspace options (${activeFilterLabel})` : 'Workspace options'}
+          {hasAnyFilter
+            ? translate(
+                'auto.components.sidebar.SidebarWorkspaceOptionsMenu.bc96dbd041',
+                'Workspace options ({{value0}})',
+                { value0: activeFilterLabel }
+              )
+            : translate(
+                'auto.components.sidebar.SidebarWorkspaceOptionsMenu.9919ae1082',
+                'Workspace options'
+              )}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent
@@ -168,37 +152,35 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
         className="w-72 pb-2"
         data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
       >
-        <DropdownMenuLabel>Group by</DropdownMenuLabel>
+        {showHostScopeControls && (
+          <SidebarHostScopeMenuSection
+            hostOptionsCount={hostOptions.length}
+            hostVisibilityLabel={hostVisibilityLabel}
+            hostOptions={hostOptions}
+            preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
+            setWorkspaceHostScope={setWorkspaceHostScope}
+            visibleWorkspaceHostIds={visibleWorkspaceHostIds}
+            setVisibleWorkspaceHostIds={setVisibleWorkspaceHostIds}
+          />
+        )}
+
+        <DropdownMenuLabel>
+          {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.dc0bb670bc', 'Group by')}
+        </DropdownMenuLabel>
         <div className="px-2 pt-0.5 pb-1">
-          <ToggleGroup
-            type="single"
-            value={groupBy}
-            onValueChange={(v) => {
-              if (v) {
-                setGroupBy(v as typeof groupBy)
-              }
-            }}
-            variant="outline"
-            size="sm"
-            className="h-6 w-full justify-stretch"
-          >
-            {GROUP_BY_OPTIONS.map((opt) => (
-              <ToggleGroupItem
-                key={opt.id}
-                value={opt.id}
-                className="h-6 grow basis-0 px-1 text-[10px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
-              >
-                {opt.label}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
+          <SidebarGroupByToggle groupBy={groupBy} setGroupBy={setGroupBy} />
         </div>
 
         <DropdownMenuSeparator />
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <span className="flex flex-1 items-center justify-between">
-              <span>Sort by</span>
+              <span>
+                {translate(
+                  'auto.components.sidebar.SidebarWorkspaceOptionsMenu.7bada3b1ab',
+                  'Sort by'
+                )}
+              </span>
               <span className="text-[11px] font-medium text-muted-foreground">{sortLabel}</span>
             </span>
           </DropdownMenuSubTrigger>
@@ -238,89 +220,53 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <span className="flex flex-1 items-center justify-between">
-              <span>Card layout</span>
-              <span className="text-[11px] font-medium text-muted-foreground">
-                {cardLayoutLabel}
-              </span>
-            </span>
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent
-            className="w-44"
-            data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
-          >
-            <DropdownMenuRadioGroup
-              value={cardLayout}
-              onValueChange={(value) => {
-                void updateSettings({
-                  experimentalCompactWorktreeCards: value === 'compact'
-                })
-              }}
-            >
-              {CARD_LAYOUT_OPTIONS.map((opt) => (
-                <DropdownMenuRadioItem
-                  key={opt.id}
-                  value={opt.id}
-                  onSelect={(e) => e.preventDefault()}
-                >
-                  {opt.label}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <span className="flex flex-1 items-center justify-between">
-              <span>Show properties</span>
-              {cardLayout === 'compact' ? (
-                <span className="text-[11px] font-medium text-muted-foreground">Hover</span>
-              ) : visiblePropertyCount > 0 ? (
-                <span className="text-[11px] font-medium text-muted-foreground">
-                  {visiblePropertyCount}
+        {/* Why: project order only has a visible effect when grouping by
+            project; hide it in none/status/PR modes to avoid a dead control. */}
+        {groupBy === 'repo' && (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <span className="flex flex-1 items-center justify-between">
+                <span>
+                  {translate(
+                    'auto.components.sidebar.SidebarWorkspaceOptionsMenu.09faabd875',
+                    'Project order'
+                  )}
                 </span>
-              ) : null}
-            </span>
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent
-            className="w-48"
-            data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
-          >
-            {PROPERTY_OPTIONS.map((opt) => (
-              <DropdownMenuCheckboxItem
-                key={opt.id}
-                checked={worktreeCardProperties.includes(opt.id)}
-                onCheckedChange={() => toggleWorktreeCardProperty(opt.id)}
-                onSelect={(e) => e.preventDefault()}
-              >
-                {opt.label}
-              </DropdownMenuCheckboxItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
-              Agent activity layout
-            </DropdownMenuLabel>
-            <DropdownMenuRadioGroup
-              value={agentActivityDisplayMode}
-              onValueChange={(value) =>
-                setAgentActivityDisplayMode(value as AgentActivityDisplayMode)
-              }
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  {projectOrderLabel}
+                </span>
+              </span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent
+              className="w-44"
+              data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
             >
-              {AGENT_ACTIVITY_DISPLAY_OPTIONS.map((opt) => (
-                <DropdownMenuRadioItem
-                  key={opt.id}
-                  value={opt.id}
-                  onSelect={(e) => e.preventDefault()}
-                >
-                  {opt.label}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
+              <DropdownMenuRadioGroup
+                value={projectOrderBy}
+                onValueChange={(v) => setProjectOrderBy(v as typeof projectOrderBy)}
+              >
+                {PROJECT_ORDER_OPTIONS.map((opt) => (
+                  <Tooltip key={opt.id}>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuRadioItem
+                        value={opt.id}
+                        // Keep the menu open so people can compare order modes.
+                        onSelect={(e) => e.preventDefault()}
+                      >
+                        {opt.label}
+                      </DropdownMenuRadioItem>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" sideOffset={6}>
+                      {opt.description}
+                    </TooltipContent>
+                  </Tooltip>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        )}
+
+        <WorktreeCardDisplayMenuSection preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen} />
 
         <DropdownMenuSeparator />
         <SidebarWorkspaceFilterSection />

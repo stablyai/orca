@@ -1,14 +1,16 @@
 import React, { useCallback } from 'react'
 import { Settings as SettingsIcon } from 'lucide-react'
 import { toast } from 'sonner'
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
+import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
+import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import type { TuiAgent } from '../../../../shared/types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
+import { translate } from '@/i18n/i18n'
 
 export type QuickLaunchAgentMenuItemsProps = {
   worktreeId: string
@@ -32,16 +34,16 @@ export type QuickLaunchAgentMenuItemsProps = {
 }
 
 function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string } | null {
-  return AGENT_CATALOG.find((a) => a.id === agent) ?? null
+  return getAgentCatalog().find((a) => a.id === agent) ?? null
 }
 
 function orderAgents(
   defaultAgent: TuiAgent | 'blank' | null | undefined,
   detected: TuiAgent[]
 ): TuiAgent[] {
-  const inCatalogOrder = AGENT_CATALOG.filter((entry) => detected.includes(entry.id)).map(
-    (entry) => entry.id
-  )
+  const inCatalogOrder = getAgentCatalog()
+    .filter((entry) => detected.includes(entry.id))
+    .map((entry) => entry.id)
   if (!defaultAgent || defaultAgent === 'blank' || !inCatalogOrder.includes(defaultAgent)) {
     return inCatalogOrder
   }
@@ -115,6 +117,7 @@ function QuickLaunchAgentMenuItemsInner({
   const disabledAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
 
   const openAgentSettings = useCallback(() => {
     openSettingsTarget({ pane: 'agents', repoId: null })
@@ -135,7 +138,18 @@ function QuickLaunchAgentMenuItemsInner({
         ...(onPromptDelivered !== undefined ? { onPromptDelivered } : {})
       })
       if (!result) {
-        toast.error(`Could not build launch command for ${label}.`)
+        toast.error(
+          translate(
+            'auto.components.tab.bar.QuickLaunchButton.465e432ef1',
+            'Could not build launch command for {{value0}}.',
+            { value0: label }
+          )
+        )
+        return
+      }
+      if (!result.tabId) {
+        // Why: paired web clients create the tab on the host; focus follows the
+        // next session-tabs snapshot instead of a local tab id.
         return
       }
       onFocusTerminal(result.tabId)
@@ -143,11 +157,12 @@ function QuickLaunchAgentMenuItemsInner({
       // Why: launch success means the terminal session exists. Agent readiness
       // can lag behind on slow machines, and prompt paste flows already own
       // their own readiness timeout once a PTY exists.
-      void waitForTerminalPty(result.tabId, 5000).then((hasPty) => {
+      const launchedTabId = result.tabId
+      void waitForTerminalPty(launchedTabId, 5000).then((hasPty) => {
         if (hasPty) {
           return
         }
-        const launchState = getTerminalLaunchState(result.tabId)
+        const launchState = getTerminalLaunchState(launchedTabId)
         if (!launchState.stillOpen) {
           return
         }
@@ -173,21 +188,35 @@ function QuickLaunchAgentMenuItemsInner({
           disabled
           className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 text-muted-foreground"
         >
-          {detectedIds && detectedIds.length > 0 ? 'No enabled agents' : 'No agents detected'}
+          {detectedIds && detectedIds.length > 0
+            ? translate('auto.components.tab.bar.QuickLaunchButton.8dea9b5cdf', 'No enabled agents')
+            : translate(
+                'auto.components.tab.bar.QuickLaunchButton.e518f544b1',
+                'No agents detected'
+              )}
         </DropdownMenuItem>
       ) : null}
       {agents.map((agent) => {
         const entry = getCatalogEntry(agent)
         const label = entry?.label ?? agent
+        const showsDefaultAgentShortcut =
+          newAgentShortcut !== null && defaultAgent !== 'blank' && agent === defaultAgent
         return (
           <DropdownMenuItem
             key={agent}
             onSelect={() => runLaunch(agent)}
             className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-            title={`Launch ${label} in a new terminal`}
+            title={translate(
+              'auto.components.tab.bar.QuickLaunchButton.ec2adf093e',
+              'Launch {{value0}} in a new terminal',
+              { value0: label }
+            )}
           >
             <AgentIcon agent={agent} size={14} />
-            {label}
+            <span className="flex-1">{label}</span>
+            {showsDefaultAgentShortcut ? (
+              <DropdownMenuShortcut>{newAgentShortcut}</DropdownMenuShortcut>
+            ) : null}
           </DropdownMenuItem>
         )
       })}
@@ -196,7 +225,7 @@ function QuickLaunchAgentMenuItemsInner({
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium text-muted-foreground"
       >
         <SettingsIcon className="size-4" />
-        Agent settings…
+        {translate('auto.components.tab.bar.QuickLaunchButton.348a04c1ad', 'Agent settings…')}
       </DropdownMenuItem>
     </>
   )

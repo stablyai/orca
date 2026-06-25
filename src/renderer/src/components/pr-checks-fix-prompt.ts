@@ -1,6 +1,7 @@
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/types'
 
-const PROMPT_LOG_TAIL_LINES = 150
+export const PROMPT_LOG_TAIL_LINES = 150
+export const PROMPT_LOG_TAIL_SCAN_CODE_UNITS = 256 * 1024
 
 function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDetail['conclusion']> {
   return check.conclusion ?? 'pending'
@@ -41,8 +42,26 @@ export function getBrokenChecks(checks: PRCheckDetail[]): PRCheckDetail[] {
   )
 }
 
-function truncateLogTailForPrompt(logTail: string): string {
-  return logTail.split(/\r?\n/).slice(-PROMPT_LOG_TAIL_LINES).join('\n')
+export function truncateLogTailForPrompt(logTail: string): string {
+  const start = findPromptLogTailStart(logTail)
+  return logTail.slice(start).replace(/\r\n/g, '\n')
+}
+
+function findPromptLogTailStart(logTail: string): number {
+  // Why: CI logs may be pasted/generated as huge newline-heavy tails; keeping
+  // only the prompt suffix should not allocate one array entry per log line.
+  const scanStart = Math.max(0, logTail.length - PROMPT_LOG_TAIL_SCAN_CODE_UNITS)
+  let lineBreakCount = 0
+  for (let index = logTail.length - 1; index >= scanStart; index -= 1) {
+    if (logTail.charCodeAt(index) !== 10) {
+      continue
+    }
+    lineBreakCount += 1
+    if (lineBreakCount >= PROMPT_LOG_TAIL_LINES) {
+      return index + 1
+    }
+  }
+  return scanStart
 }
 
 function getLogTailForCheck(details: PRCheckRunDetails | undefined): string | undefined {

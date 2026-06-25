@@ -1,27 +1,41 @@
 import { resolveTerminalFileLinkText } from '@/lib/terminal-links'
-import { openHttpLink } from '@/lib/http-link-routing'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
-import { isTerminalLinkActivation } from './terminal-link-handlers'
 import { resolveTerminalFileUrlTarget } from './terminal-file-url-target'
 import { openDetectedFilePath } from './terminal-file-open-routing'
+import {
+  openTerminalHttpLink,
+  type TerminalLinkRoutingPreferenceRequester
+} from './terminal-url-link-hit-testing'
 
 type TerminalLinkEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey'> &
-  Partial<Pick<MouseEvent, 'shiftKey' | 'preventDefault' | 'stopPropagation'>>
+  Partial<Pick<MouseEvent, 'button' | 'shiftKey' | 'preventDefault' | 'stopPropagation'>>
+
+function isPrimaryOscLinkActivation(event: TerminalLinkEvent | undefined): boolean {
+  if (!event) {
+    return false
+  }
+  if ('button' in event && event.button !== undefined && event.button !== 0) {
+    return false
+  }
+  // Why: macOS Ctrl-click is a context-menu gesture even when Chromium reports
+  // it as button 0; ordinary OSC links should not steal that secondary action.
+  return !(navigator.userAgent.includes('Mac') && event.ctrlKey && !event.metaKey)
+}
 
 export function handleOscLink(
   rawText: string,
   event: TerminalLinkEvent | undefined,
   deps: Pick<LinkHandlerDeps, 'worktreeId' | 'worktreePath'> &
-    Partial<Pick<LinkHandlerDeps, 'runtimeEnvironmentId' | 'startupCwd' | 'terminalHomePath'>>
+    Partial<Pick<LinkHandlerDeps, 'runtimeEnvironmentId' | 'startupCwd' | 'terminalHomePath'>> & {
+      requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
+    }
 ): void {
-  if (!isTerminalLinkActivation(event)) {
+  if (!isPrimaryOscLinkActivation(event)) {
     return
   }
-
-  // Why: xterm renders URL links as clickable anchors. Once Orca decides to
-  // handle a modified click itself, we must suppress the browser's default
-  // anchor navigation or Electron will still launch the system browser.
+  // Why: xterm renders OSC 8 links as clickable anchors. Orca must suppress
+  // default anchor navigation so link-routing settings can choose the target.
   // Note: we intentionally do NOT stopPropagation here — xterm's
   // SelectionService listens for mouseup on ownerDocument to clear the
   // pending drag-select state initiated by the mousedown of the same click.
@@ -65,9 +79,10 @@ export function handleOscLink(
   }
 
   if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-    openHttpLink(parsed.toString(), {
+    openTerminalHttpLink(parsed.toString(), {
       worktreeId: deps.worktreeId,
-      forceSystemBrowser: Boolean(event?.shiftKey)
+      forceSystemBrowser: Boolean(event?.shiftKey),
+      requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference
     })
     return
   }

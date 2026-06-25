@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { MockWorker, getCreatedWorkerCount, getLastWorker, resetWorkers } = vi.hoisted(() => {
+const {
+  MockOpenAiTranscriptionSession,
+  MockWorker,
+  getCloudSessions,
+  getCreatedWorkerCount,
+  getLastWorker,
+  readOpenAiSpeechApiKeyMock,
+  resetCloudSessions,
+  resetWorkers
+} = vi.hoisted(() => {
   class HoistedMockWorker extends EventTarget {
     static created = 0
     static instances: HoistedMockWorker[] = []
@@ -64,10 +73,36 @@ const { MockWorker, getCreatedWorkerCount, getLastWorker, resetWorkers } = vi.ho
     }
   }
 
+  class HoistedMockOpenAiTranscriptionSession {
+    static instances: HoistedMockOpenAiTranscriptionSession[] = []
+    feedCalls: { samples: Float32Array; sampleRate: number }[] = []
+
+    constructor(
+      readonly modelId: string,
+      readonly readApiKey: () => string
+    ) {
+      HoistedMockOpenAiTranscriptionSession.instances.push(this)
+    }
+
+    feedAudio(samples: Float32Array, sampleRate: number): void {
+      this.feedCalls.push({ samples, sampleRate })
+    }
+
+    finish(): Promise<string> {
+      return Promise.resolve(`${this.modelId}:${this.readApiKey()}`)
+    }
+  }
+
   return {
+    MockOpenAiTranscriptionSession: HoistedMockOpenAiTranscriptionSession,
     MockWorker: HoistedMockWorker,
+    getCloudSessions: () => HoistedMockOpenAiTranscriptionSession.instances,
     getCreatedWorkerCount: () => HoistedMockWorker.created,
     getLastWorker: () => HoistedMockWorker.instances.at(-1),
+    readOpenAiSpeechApiKeyMock: vi.fn(() => 'test-openai-key'),
+    resetCloudSessions: () => {
+      HoistedMockOpenAiTranscriptionSession.instances = []
+    },
     resetWorkers: () => {
       HoistedMockWorker.created = 0
       HoistedMockWorker.instances = []
@@ -89,20 +124,40 @@ vi.mock('worker_threads', () => ({
 }))
 
 vi.mock('./model-catalog', () => ({
-  getCatalogModel: () => ({
-    id: 'model-a',
-    type: 'transducer',
-    streaming: true,
-    sampleRate: 16000,
-    files: ['encoder.onnx', 'decoder.onnx', 'joiner.onnx', 'tokens.txt']
-  })
+  getCatalogModel: (id: string) =>
+    id === 'openai-model'
+      ? {
+          id,
+          type: 'openai',
+          provider: 'openai',
+          streaming: false,
+          sampleRate: 16000
+        }
+      : {
+          id: 'model-a',
+          type: 'transducer',
+          provider: 'local',
+          streaming: true,
+          sampleRate: 16000,
+          files: ['encoder.onnx', 'decoder.onnx', 'joiner.onnx', 'tokens.txt']
+        }
+}))
+
+vi.mock('./openai-api-key-store', () => ({
+  readOpenAiSpeechApiKey: readOpenAiSpeechApiKeyMock
+}))
+
+vi.mock('./openai-transcription-client', () => ({
+  OpenAiTranscriptionSession: MockOpenAiTranscriptionSession
 }))
 
 import { IDLE_WORKER_TEARDOWN_MS, START_DICTATION_TIMEOUT_MS, SttService } from './stt-service'
 
 describe('SttService', () => {
   beforeEach(() => {
+    resetCloudSessions()
     resetWorkers()
+    readOpenAiSpeechApiKeyMock.mockClear()
   })
 
   it('reuses an idle warm worker for a second dictation with the same owner', async () => {
@@ -182,6 +237,108 @@ describe('SttService', () => {
     service.feedAudio(new Float32Array([1]), 16000, 'desktop:1')
 
     expect(worker!.messages.filter((message) => message.type === 'feed')).toHaveLength(0)
+  })
+
+  it('rejects deletion prep while the target model is starting', async () => {
+    let resolveModelState: (state: { id: string; status: string }) => void = () => {}
+    const modelStatePromise = new Promise<{ id: string; status: string }>((resolve) => {
+      resolveModelState = resolve
+    })
+    const service = new SttService({
+      getModelState: vi.fn(() => modelStatePromise),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    const startPromise = service.startDictation('model-a', vi.fn(), undefined, 'desktop')
+    await Promise.resolve()
+
+    await expect(service.prepareModelForDeletion('model-a')).rejects.toThrow('voice_model_in_use')
+
+    resolveModelState({ id: 'model-a', status: 'ready' })
+    await startPromise
+    await service.stopDictation('desktop')
+  })
+
+  it('tears down an idle warm worker before deleting the target model', async () => {
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
+    const worker = getLastWorker()
+    expect(worker).toBeDefined()
+    await service.stopDictation('desktop')
+
+    await service.prepareModelForDeletion('model-a')
+
+    expect(worker!.messages.some((message) => message.type === 'teardown')).toBe(true)
+    expect(worker!.terminated).toBe(true)
+    expect(service.isActive()).toBe(false)
+  })
+
+  it('rejects deletion prep when a target warm worker cannot be torn down during another start', async () => {
+    let resolveModelState: (state: { id: string; status: string }) => void = () => {}
+    const secondModelState = new Promise<{ id: string; status: string }>((resolve) => {
+      resolveModelState = resolve
+    })
+    const getModelState = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'model-a', status: 'ready' })
+      .mockReturnValue(secondModelState)
+    const service = new SttService({
+      getModelState,
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
+    await service.stopDictation('desktop')
+    const startOtherModel = service.startDictation('model-b', vi.fn(), undefined, 'desktop')
+    await Promise.resolve()
+
+    await expect(service.prepareModelForDeletion('model-a')).rejects.toThrow('voice_model_in_use')
+
+    resolveModelState({ id: 'model-b', status: 'ready' })
+    await startOtherModel
+    await service.stopDictation('desktop')
+  })
+
+  it('uses the OpenAI transcription session without creating a worker', async () => {
+    const sink = vi.fn()
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'openai-model', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('openai-model', sink, undefined, 'desktop')
+    service.feedAudio(new Float32Array([0.25, -0.25]), 48000, 'desktop')
+    await service.stopDictation('desktop')
+
+    expect(getCreatedWorkerCount()).toBe(0)
+    expect(getCloudSessions()).toHaveLength(1)
+    expect(getCloudSessions()[0].feedCalls).toHaveLength(1)
+    expect(sink).toHaveBeenCalledWith({ type: 'ready' })
+    expect(sink).toHaveBeenCalledWith({
+      type: 'final',
+      text: 'openai-model:test-openai-key'
+    })
+    expect(sink).toHaveBeenCalledWith({ type: 'stopped' })
+  })
+
+  it('reads the OpenAI key only when finishing cloud dictation', async () => {
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'openai-model', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('openai-model', vi.fn(), undefined, 'desktop')
+    service.feedAudio(new Float32Array([0.25]), 16000, 'desktop')
+
+    expect(readOpenAiSpeechApiKeyMock).not.toHaveBeenCalled()
+
+    await service.stopDictation('desktop')
+
+    expect(readOpenAiSpeechApiKeyMock).toHaveBeenCalledOnce()
   })
 
   it('keeps startup cancellation tombstoned after the worker has been created', async () => {

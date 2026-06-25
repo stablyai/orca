@@ -1,9 +1,8 @@
-// Why: relay-side equivalent of Orca's userData-backed plugin overlay system.
-// Orca's local OpenCodeHookService and PiTitlebarExtensionService each
-// materialize a per-PTY overlay and inject OPENCODE_CONFIG_DIR /
-// PI_CODING_AGENT_DIR pointing at it. Those paths describe the local
-// filesystem and would resolve to nothing on a remote box, so when a PTY runs
-// on the relay, the relay must do the same materialization on its own disk.
+// Why: relay-side equivalent of Orca's local agent integration installers.
+// OpenCode still needs a config overlay, while Pi/OMP now get Orca-managed
+// extension files installed into the remote agent homes. Host paths from the
+// renderer are meaningless on SSH targets, so the relay performs the remote
+// filesystem work itself.
 //
 // Plugin source strings ship over the JSON-RPC channel at session-ready
 // (commit #7) — they are NOT bundled with the relay binary because the
@@ -14,7 +13,8 @@
 // We deliberately do not reuse OpenCodeHookService / PiTitlebarExtensionService
 // directly: those modules import `electron` and ride on Orca's userData
 // path. The relay's electron-free constraint forces a thin parallel
-// implementation rooted at $HOME/.orca-relay/.
+// implementation rooted at $HOME/.orca-relay/ for OpenCode and at the remote
+// Pi/OMP homes for those agents.
 
 import { createHash } from 'crypto'
 import {
@@ -28,9 +28,8 @@ import {
   writeFileSync
 } from 'fs'
 import { homedir } from 'os'
-import { basename, join } from 'path'
+import { join } from 'path'
 import { mirrorEntry, safeRemoveOverlay } from '../main/pty/overlay-mirror'
-import { mergePiOverlayUiSettings } from '../shared/pi-overlay-ui-settings'
 import type { PiAgentKind } from '../shared/pi-agent-kind'
 
 const RELAY_HOOKS_DIR = '.orca-relay'
@@ -42,7 +41,13 @@ const PI_OVERLAY_SUBDIR_BY_KIND: Record<PiAgentKind, string> = {
 const OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
 const PI_EXTENSION_FILE = 'orca-agent-status.ts'
 const PI_AGENT_SUBDIR = 'agent'
-const PI_AGENT_SETTINGS_FILE = 'settings.json'
+const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
+
+function withOrcaManagedPiExtensionMarker(source: string): string {
+  return source.includes(ORCA_MANAGED_EXTENSION_MARKER)
+    ? source
+    : `// ${ORCA_MANAGED_EXTENSION_MARKER}\n${source}`
+}
 // Why: source-dir resolution is keyed off the launching agent (Pi or OMP).
 // Both consume `PI_CODING_AGENT_DIR` but default to different `~/.<kind>/agent`
 // paths on the remote disk. The renderer-chosen launch command flows in via
@@ -102,19 +107,18 @@ export class PluginOverlayManager {
    *  `agent_hook.installPlugins`. The first install enables the augmenter
    *  output; subsequent installs (e.g. Orca version upgrade in flight) refresh
    *  the cached source so future spawns see the new strings.
-   *  Note: existing per-PTY overlays already on disk keep the previous source
-   *  until that PTY exits — a long-running PTY does NOT pick up the new
-   *  source, matching the local-Orca behavior where the plugin file is
-   *  written once at spawn time. */
+   *  Note: existing running agents keep whatever source they loaded at
+   *  process start. Future PTYs pick up the refreshed source when the relay
+   *  writes plugin/extension files before spawn. */
   setSources(sources: PluginSources): void {
     if (typeof sources.opencodePluginSource === 'string') {
       this.opencodePluginSource = sources.opencodePluginSource
     }
     if (typeof sources.piExtensionSource === 'string') {
-      this.piExtensionSources.pi = sources.piExtensionSource
+      this.piExtensionSources.pi = withOrcaManagedPiExtensionMarker(sources.piExtensionSource)
     }
     if (typeof sources.ompExtensionSource === 'string') {
-      this.piExtensionSources.omp = sources.ompExtensionSource
+      this.piExtensionSources.omp = withOrcaManagedPiExtensionMarker(sources.ompExtensionSource)
     }
   }
 
@@ -218,107 +222,38 @@ export class PluginOverlayManager {
     return join(this.homeDir, PI_AGENT_HOME_DIR_NAME[kind], PI_AGENT_SUBDIR)
   }
 
-  private mirrorPiAgentDir(sourceAgentDir: string, overlayDir: string): void {
-    if (!existsSync(sourceAgentDir)) {
-      return
-    }
-
-    for (const entry of readdirSync(sourceAgentDir, { withFileTypes: true })) {
-      const sourcePath = join(sourceAgentDir, entry.name)
-
-      if (entry.name === PI_AGENT_SETTINGS_FILE) {
-        continue
-      }
-
-      if (entry.name === 'extensions') {
-        const isSymlink = entry.isSymbolicLink()
-        let isLinkPointingToDir = false
-        if (isSymlink) {
-          try {
-            isLinkPointingToDir = statSync(sourcePath).isDirectory()
-          } catch {
-            isLinkPointingToDir = false
-          }
-        }
-
-        if ((!isSymlink && entry.isDirectory()) || isLinkPointingToDir) {
-          const resolvedSource = isLinkPointingToDir ? realpathSync(sourcePath) : sourcePath
-          const overlayExtensionsDir = join(overlayDir, 'extensions')
-          mkdirSync(overlayExtensionsDir, { recursive: true })
-          for (const extensionEntry of readdirSync(resolvedSource, { withFileTypes: true })) {
-            if (extensionEntry.name === PI_EXTENSION_FILE) {
-              continue
-            }
-            mirrorEntry(
-              join(resolvedSource, extensionEntry.name),
-              join(overlayExtensionsDir, extensionEntry.name)
-            )
-          }
-          continue
-        }
-      }
-
-      mirrorEntry(sourcePath, join(overlayDir, basename(sourcePath)))
-    }
-  }
-
-  private readPiSettings(sourceAgentDir: string): unknown {
-    const settingsPath = join(sourceAgentDir, PI_AGENT_SETTINGS_FILE)
-    if (!existsSync(settingsPath)) {
-      return {}
-    }
-
+  private canOverwritePiExtension(path: string): boolean {
     try {
-      return JSON.parse(readFileSync(settingsPath, 'utf8'))
+      return readFileSync(path, 'utf8').includes(ORCA_MANAGED_EXTENSION_MARKER)
     } catch {
-      return {}
+      return true
     }
   }
 
-  private writePiOverlaySettings(sourceAgentDir: string, overlayDir: string): void {
-    // Why: relay overlays run on the remote disk, but the same Pi UI guardrails
-    // need to stay overlay-local so SSH sessions do not mutate user config.
-    const settings = mergePiOverlayUiSettings(this.readPiSettings(sourceAgentDir))
-    writeFileSync(
-      join(overlayDir, PI_AGENT_SETTINGS_FILE),
-      `${JSON.stringify(settings, null, 2)}\n`
-    )
-  }
-
-  /** Materialize the Pi extension overlay for `id` and return the directory
-   *  path that should be assigned to PI_CODING_AGENT_DIR. `kind` selects which
-   *  Pi-compatible agent's source dir to mirror when `existingAgentDir` is
-   *  not supplied - defaults to 'pi' for back-compat with pre-OMP callers.
-   *  NEVER fall back across kinds: a missing source dir for the chosen kind
-   *  materializes the overlay from empty (Orca extensions only) rather than
-   *  silently mirroring the other agent's state. */
+  /** Install the Pi/OMP status extension into the remote real agent dir and
+   *  return that directory. `kind` selects which Pi-compatible agent's default
+   *  dir to use when `existingAgentDir` is not supplied. */
   materializePi(id: string, existingAgentDir?: string, kind: PiAgentKind = 'pi'): string | null {
     const extensionSource = this.getPiExtensionSource(kind)
     if (!extensionSource || !isUsableId(id)) {
       return null
     }
-    const root = this.piRoots[kind]
-    const dir = join(root, safeDirName(id))
     try {
-      // Why: PI_CODING_AGENT_DIR is the whole state root for both Pi and OMP
-      // (OMP inherits the env-var name from Pi by design). Mirror the remote
-      // user's default agent dir so Orca's status extension does not hide auth,
-      // sessions, skills, prompts, themes, or user extensions inside SSH panes.
-      safeRemoveOverlay(dir, root)
-      mkdirSync(dir, { recursive: true })
       const sourceAgentDir = existingAgentDir ?? this.getDefaultPiAgentDir(kind)
       if (existingAgentDir && !existsSync(existingAgentDir)) {
         return null
       }
-      this.mirrorPiAgentDir(sourceAgentDir, dir)
-      this.writePiOverlaySettings(sourceAgentDir, dir)
-      const extensionsDir = join(dir, 'extensions')
+      const extensionsDir = join(sourceAgentDir, 'extensions')
       mkdirSync(extensionsDir, { recursive: true })
-      writeFileSync(join(extensionsDir, PI_EXTENSION_FILE), extensionSource)
-      return dir
+      const extensionPath = join(extensionsDir, PI_EXTENSION_FILE)
+      if (!this.canOverwritePiExtension(extensionPath)) {
+        return null
+      }
+      writeFileSync(extensionPath, extensionSource)
+      return sourceAgentDir
     } catch (err) {
       process.stderr.write(
-        `[plugin-overlay] failed to materialize ${kind} overlay: ${err instanceof Error ? err.message : String(err)}\n`
+        `[plugin-overlay] failed to install ${kind} extension: ${err instanceof Error ? err.message : String(err)}\n`
       )
       return null
     }

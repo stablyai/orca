@@ -10,6 +10,9 @@ import { slugifyForWorkspaceName } from '../../../../shared/workspace-name'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { TuiAgent } from '../../../../shared/types'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { translate } from '@/i18n/i18n'
 
 type ForkAgentSessionFromPaneArgs = {
   pane: ManagedPane
@@ -60,11 +63,23 @@ function getUsableForkBase(
 async function copyForkContext(prompt: string, pane: ManagedPane): Promise<boolean> {
   try {
     await window.api.ui.writeClipboardText(prompt)
-    toast.message('Fork context copied. Launch an agent and paste it to start the fork.')
+    toast.message(
+      translate(
+        'auto.components.terminal.pane.terminal.agent.session.fork.c00421d320',
+        'Fork context copied. Launch an agent and paste it to start the fork.'
+      )
+    )
     pane.terminal.focus()
     return true
   } catch (error) {
-    toast.error(error instanceof Error ? error.message : 'Failed to copy fork context.')
+    toast.error(
+      error instanceof Error
+        ? error.message
+        : translate(
+            'auto.components.terminal.pane.terminal.agent.session.fork.2317900211',
+            'Failed to copy fork context.'
+          )
+    )
     pane.terminal.focus()
     return false
   }
@@ -73,7 +88,14 @@ async function copyForkContext(prompt: string, pane: ManagedPane): Promise<boole
 function getForkAgentLaunchPlatform(args: {
   repo: { connectionId?: string | null } | null | undefined
   worktreePath?: string | null
+  projectRuntime?: ProjectExecutionRuntimeResolution
 }): NodeJS.Platform | undefined {
+  if (args.projectRuntime?.status === 'repair-required') {
+    return args.projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : undefined
+  }
+  if (args.projectRuntime?.status === 'resolved' && args.projectRuntime.runtime.kind === 'wsl') {
+    return 'linux'
+  }
   if (args.repo?.connectionId || (args.worktreePath && isWslUncPath(args.worktreePath))) {
     return 'linux'
   }
@@ -122,7 +144,12 @@ export function prepareAgentSessionForkFromPane({
   })
 
   if (!prompt) {
-    toast.error('No terminal context to fork')
+    toast.error(
+      translate(
+        'auto.components.terminal.pane.terminal.agent.session.fork.046e8d853c',
+        'No terminal context to fork'
+      )
+    )
     pane.terminal.focus()
     return null
   }
@@ -145,13 +172,24 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
   const store = useAppStore.getState()
   const sourceWorktree = store.getKnownWorktreeById(fork.worktreeId)
   if (!sourceWorktree) {
-    toast.error('Could not find the source workspace for this fork.')
+    toast.error(
+      translate(
+        'auto.components.terminal.pane.terminal.agent.session.fork.f867385bb5',
+        'Could not find the source workspace for this fork.'
+      )
+    )
     return false
   }
   const sourceRepo = store.repos.find((repo) => repo.id === sourceWorktree.repoId)
+  const sourceProjectRuntime = getLocalProjectExecutionRuntimeContext(store, fork.worktreeId)
   const sourceBranch = getUsableForkBase(sourceWorktree, sourceRepo, fork.worktreeId)
   if (!sourceBranch) {
-    toast.error('This workspace cannot be forked into a git worktree.')
+    toast.error(
+      translate(
+        'auto.components.terminal.pane.terminal.agent.session.fork.38e41edc6e',
+        'This workspace cannot be forked into a git worktree.'
+      )
+    )
     return false
   }
   const forkName = buildForkWorkspaceName(sourceWorktree.displayName || sourceBranch)
@@ -171,7 +209,14 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
       fork.agent ?? undefined
     )
   } catch (error) {
-    toast.error(error instanceof Error ? error.message : 'Failed to create fork workspace.')
+    toast.error(
+      error instanceof Error
+        ? error.message
+        : translate(
+            'auto.components.terminal.pane.terminal.agent.session.fork.fd3d12a1e1',
+            'Failed to create fork workspace.'
+          )
+    )
     return false
   }
   const forkWorktreeId = created.worktree.id
@@ -187,7 +232,8 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
   })
   const launchPlatform = getForkAgentLaunchPlatform({
     repo: sourceRepo,
-    worktreePath: created.worktree.path
+    worktreePath: created.worktree.path,
+    projectRuntime: sourceProjectRuntime
   })
   const result = launchAgentInNewTab({
     agent: fork.agent,
@@ -203,7 +249,12 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     return copyAgentSessionForkContext(fork)
   }
 
-  toast.success('Top-level session fork opened in a new workspace')
+  toast.success(
+    translate(
+      'auto.components.terminal.pane.terminal.agent.session.fork.88e34d00eb',
+      'Top-level session fork opened in a new workspace'
+    )
+  )
   return true
 }
 

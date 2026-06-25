@@ -49,10 +49,12 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     workspaceDir: testState.fakeHomeDir,
     nestWorkspaces: false,
     refreshLocalBaseRefOnWorktreeCreate: false,
+    localBaseRefSuggestionDismissed: false,
     autoRenameBranchFromWork: false,
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
     theme: 'system',
+    uiLanguage: 'system',
     appIcon: overrides.appIcon ?? 'classic',
     editorAutoSave: false,
     editorAutoSaveDelayMs: 1000,
@@ -62,6 +64,9 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalFontFamily: 'JetBrains Mono',
     terminalFontWeight: 500,
     terminalLineHeight: 1,
+    terminalScrollSensitivity: 1.15,
+    terminalFastScrollSensitivity: 5,
+    terminalTuiScrollSensitivity: 3,
     terminalGpuAcceleration: 'auto',
     terminalLigatures: 'auto',
     terminalCursorStyle: 'block',
@@ -84,8 +89,10 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     localAccountRuntime: 'host',
     localAccountWslDistro: null,
     openLinksInApp: false,
+    openLinksInAppPreferencePrompted: false,
     rightSidebarOpenByDefault: true,
     sourceControlViewMode: 'list',
+    sourceControlGroupOrder: 'changes-first',
     showTitlebarAppName: true,
     showTasksButton: true,
     floatingTerminalEnabled: false,
@@ -112,7 +119,9 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     defaultTuiAgent: null,
     disabledTuiAgents: [],
     skipDeleteWorktreeConfirm: false,
+    skipCloseTerminalWithRunningProcessConfirm: false,
     skipDeleteAutomationConfirm: false,
+    skipCodexRateLimitResetConfirm: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
     visibleTaskProviders: ['github', 'gitlab', 'linear', 'jira'],
@@ -124,6 +133,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     keepComputerAwakeWhileAgentsRun: false,
+    confirmClosePinnedTab: true,
     terminalMacOptionAsAlt: 'false',
     terminalMacOptionAsAltMigrated: true,
     terminalJISYenToBackslash: false,
@@ -132,13 +142,15 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     experimentalPet: false,
     experimentalActivity: true,
     experimentalTerminalAttention: false,
-    experimentalCompactWorktreeCards: false,
+    compactWorktreeCards: false,
     experimentalWorktreeSymlinks: false,
-    experimentalUnifiedNewTabLauncher: false,
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsPowerShellImplementation: 'powershell.exe',
     enableGitHubAttribution: true,
     ...overrides,
+    diffWordWrap: overrides.diffWordWrap ?? false,
+    localWindowsRuntimeDefault: overrides.localWindowsRuntimeDefault ?? { kind: 'windows-host' },
+    leftSidebarAppearanceMode: overrides.leftSidebarAppearanceMode ?? 'default',
     appFontFamily,
     agentStatusHooksEnabled,
     tabAutoGenerateTitle
@@ -713,9 +725,9 @@ describe('CodexAccountService config sync', () => {
       expect(args).toEqual([
         '-d',
         'Debian',
-        '--',
+        '--exec',
         'bash',
-        '-lc',
+        '-ic',
         `export CODEX_HOME='${wslLinuxHomePath}'; exec codex login`
       ])
       expect(readFileSync(join(wslManagedHomePath, 'config.toml'), 'utf-8')).toBe(
@@ -812,6 +824,7 @@ describe('CodexAccountService config sync', () => {
         return `${wslLinuxHomePath}\n`
       }
       if (script.includes('command -v codex')) {
+        expect(args.slice(0, 5)).toEqual(['-d', 'Debian', '--exec', 'bash', '-ic'])
         throw new Error('codex missing')
       }
       mkdirSync(wslManagedHomePath, { recursive: true })
@@ -897,9 +910,9 @@ describe('CodexAccountService config sync', () => {
       expect(args).toEqual([
         '-d',
         'Ubuntu',
-        '--',
+        '--exec',
         'bash',
-        '-lc',
+        '-ic',
         `export CODEX_HOME='${wslLinuxHomePath}'; exec codex login`
       ])
       const child = new EventEmitter() as EventEmitter & {
@@ -1012,9 +1025,9 @@ describe('CodexAccountService config sync', () => {
       expect(args).toEqual([
         '-d',
         'Ubuntu',
-        '--',
+        '--exec',
         'bash',
-        '-lc',
+        '-ic',
         `export CODEX_HOME='${wslLinuxHomePath}'; exec codex login`
       ])
       expect(readFileSync(join(wslManagedHomePath, '.orca-managed-home'), 'utf-8')).toBe(

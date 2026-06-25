@@ -1,4 +1,4 @@
-export type AddRepoDialogStep = 'add' | 'clone' | 'remote' | 'create' | 'nested'
+export type AddRepoDialogStep = 'add' | 'clone' | 'remote' | 'server-path' | 'create' | 'nested'
 
 export function defaultProjectGroupNameForPath(path: string): string {
   return (

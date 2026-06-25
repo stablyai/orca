@@ -1,10 +1,16 @@
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
-import { basename, dirname, join } from 'path'
+import { dirname, join } from 'path'
 import { getPosixOmpShellWrapper } from '../main/pty/omp-shell-wrapper'
+import {
+  getZshFinalZdotdirRestoreBlock,
+  getZshShellReadyMarkerRegistrationBlock,
+  getZshStartupFileSourceBlock
+} from '../main/shell-templates'
 
 const RELAY_SHELL_READY_DIR = '.orca-relay/shell-ready'
 const POSIX_LOGIN_ARGS = ['-l']
+const SHELL_READY_MARKER_ESCAPED = '\\033]777;orca-shell-ready\\007'
 
 export type RelayShellLaunchConfig = {
   args: string[]
@@ -15,12 +21,29 @@ function quotePosixSingle(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
+function shellBasename(shellPath: string): string {
+  return shellPath.replace(/\\/g, '/').split('/').pop()?.toLowerCase() ?? ''
+}
+
+function windowsShellArgs(shellName: string): string[] | null {
+  if (shellName === 'powershell.exe' || shellName === 'powershell') {
+    return ['-NoLogo']
+  }
+  if (shellName === 'pwsh.exe' || shellName === 'pwsh') {
+    return ['-NoLogo']
+  }
+  if (shellName === 'cmd.exe' || shellName === 'cmd') {
+    return []
+  }
+  return null
+}
+
 function hasOverlayRestoreEnv(env: Record<string, string>): boolean {
   return Boolean(
     env.ORCA_OPENCODE_CONFIG_DIR ||
-    env.ORCA_PI_CODING_AGENT_DIR ||
-    env.ORCA_OMP_CODING_AGENT_DIR ||
-    env.ORCA_REMOTE_CLI_BIN_DIR
+    env.ORCA_MIMOCODE_HOME ||
+    env.ORCA_REMOTE_CLI_BIN_DIR ||
+    env.ORCA_OMP_STATUS_EXTENSION
   )
 }
 
@@ -66,47 +89,41 @@ esac
 export ZDOTDIR=${quotePosixSingle(zshDir)}
 `
   const zshProfile = `# Orca relay zsh overlay wrapper
-_orca_home="\${ORCA_USER_ZDOTDIR:-\${ORCA_ORIG_ZDOTDIR:-$HOME}}"
-case "\${_orca_home%/}" in
-  */shell-ready/zsh) _orca_home="$HOME" ;;
-esac
-[[ -f "$_orca_home/.zprofile" ]] && source "$_orca_home/.zprofile"
+${getZshStartupFileSourceBlock({
+  fileName: '.zprofile',
+  homeExpression: '"${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"'
+})}
 `
   const zshRc = `# Orca relay zsh overlay wrapper
-_orca_home="\${ORCA_USER_ZDOTDIR:-\${ORCA_ORIG_ZDOTDIR:-$HOME}}"
-case "\${_orca_home%/}" in
-  */shell-ready/zsh) _orca_home="$HOME" ;;
-esac
-if [[ -o interactive && -f "$_orca_home/.zshrc" ]]; then
-  source "$_orca_home/.zshrc"
-fi
+${getZshStartupFileSourceBlock({
+  fileName: '.zshrc',
+  homeExpression: '"${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"',
+  interactiveOnly: true
+})}
 if [[ ! -o login ]]; then
   # Why: remote startup files can re-export user defaults after relay spawn.
   [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-  [[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
-  if [[ -z "\${ORCA_PI_CODING_AGENT_DIR:-}" && -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then
-    export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
-  fi
+  [[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
   [[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
   ${getPosixOmpShellWrapper()}
 fi
+if [[ ! -o login ]]; then
+${getZshFinalZdotdirRestoreBlock('"${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"')}
+fi
 `
   const zshLogin = `# Orca relay zsh overlay wrapper
-_orca_home="\${ORCA_USER_ZDOTDIR:-\${ORCA_ORIG_ZDOTDIR:-$HOME}}"
-case "\${_orca_home%/}" in
-  */shell-ready/zsh) _orca_home="$HOME" ;;
-esac
-if [[ -o interactive && -f "$_orca_home/.zlogin" ]]; then
-  source "$_orca_home/.zlogin"
-fi
+${getZshStartupFileSourceBlock({
+  fileName: '.zlogin',
+  homeExpression: '"${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"',
+  interactiveOnly: true
+})}
 # Why: .zlogin is the final zsh login startup file before the prompt.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-[[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
-if [[ -z "\${ORCA_PI_CODING_AGENT_DIR:-}" && -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then
-  export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
-fi
+[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
 [[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
 ${getPosixOmpShellWrapper()}
+${getZshFinalZdotdirRestoreBlock('"${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"')}
+${getZshShellReadyMarkerRegistrationBlock(SHELL_READY_MARKER_ESCAPED)}
 `
   const bashRc = `# Orca relay bash overlay wrapper
 [[ -f /etc/profile ]] && source /etc/profile
@@ -119,10 +136,7 @@ elif [[ -f "$HOME/.profile" ]]; then
 fi
 # Why: remote startup files can re-export user defaults after relay spawn.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-[[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
-if [[ -z "\${ORCA_PI_CODING_AGENT_DIR:-}" && -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then
-  export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
-fi
+[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
 [[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
 ${getPosixOmpShellWrapper()}
 # Why: SSH bash sessions need the same command lifecycle markers as local
@@ -181,6 +195,14 @@ __orca_append_prompt_command() {
   fi
 }
 __orca_prepend_prompt_command
+# Why: SSH startup commands are renderer-delivered; emit the same internal
+# readiness marker as local shells only when that delivery mode asks for it.
+if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
+  __orca_prompt_mark() {
+    printf "${SHELL_READY_MARKER_ESCAPED}"
+  }
+  __orca_append_prompt_command "__orca_prompt_mark"
+fi
 __orca_append_prompt_command "__orca_osc133_prompt_done"
 __orca_debug_trap_spec="$(trap -p DEBUG)"
 if [[ -n "$__orca_debug_trap_spec" ]]; then
@@ -223,17 +245,24 @@ trap '__orca_osc133_preexec' DEBUG
 
 export function getRelayShellLaunchConfig(
   shellPath: string,
-  env: Record<string, string>
+  env: Record<string, string>,
+  platform: NodeJS.Platform = process.platform,
+  options: { emitReadyMarker?: boolean } = {}
 ): RelayShellLaunchConfig {
-  if (process.platform === 'win32') {
-    return { args: POSIX_LOGIN_ARGS, env: {} }
+  const shellName = shellBasename(shellPath)
+  const emitReadyMarker = options.emitReadyMarker === true
+  if (platform === 'win32') {
+    // Why: pwsh also exists on POSIX remotes; Windows-specific shell args must
+    // only apply when the relay itself is running on native Windows.
+    return { args: windowsShellArgs(shellName) ?? [], env: {} }
   }
 
-  const shellName = basename(shellPath).toLowerCase()
   if (shellName !== 'zsh' && shellName !== 'bash') {
     return { args: POSIX_LOGIN_ARGS, env: {} }
   }
-  if (shellName === 'zsh' && !hasOverlayRestoreEnv(env)) {
+  // Why: preserve plain zsh startup fast path; only force wrappers when
+  // shell-ready or overlay env restoration is requested.
+  if (shellName === 'zsh' && !hasOverlayRestoreEnv(env) && !emitReadyMarker) {
     return { args: POSIX_LOGIN_ARGS, env: {} }
   }
 
@@ -245,13 +274,14 @@ export function getRelayShellLaunchConfig(
       args: POSIX_LOGIN_ARGS,
       env: {
         ORCA_ORIG_ZDOTDIR: resolveOriginalZdotdir(env),
-        ZDOTDIR: join(root, 'zsh')
+        ZDOTDIR: join(root, 'zsh'),
+        ...(emitReadyMarker ? { ORCA_SHELL_READY_MARKER: '1' } : {})
       }
     }
   }
 
   return {
     args: ['--rcfile', join(root, 'bash', 'rcfile')],
-    env: {}
+    env: emitReadyMarker ? { ORCA_SHELL_READY_MARKER: '1' } : {}
   }
 }

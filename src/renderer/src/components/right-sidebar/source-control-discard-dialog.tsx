@@ -16,6 +16,7 @@ import {
   getDiscardAreaConfirmationCopy,
   getDiscardEntryConfirmationCopy
 } from './source-control-discard-confirmation'
+import { translate } from '@/i18n/i18n'
 
 export type PendingDiscardConfirmation =
   | { kind: 'entry'; entry: GitStatusEntry }
@@ -71,15 +72,32 @@ export function SourceControlDiscardDialog({
       >
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {pendingDiscardCopy?.title ?? 'Discard changes?'}
+            {pendingDiscardCopy?.title ??
+              translate(
+                'auto.components.right.sidebar.source.control.discard.dialog.1551c14668',
+                'Discard changes?'
+              )}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {pendingDiscardCopy?.description ?? 'This cannot be undone.'}
+            {pendingDiscardCopy?.description ??
+              translate(
+                'auto.components.right.sidebar.source.control.discard.dialog.0d2d88cba5',
+                'This cannot be undone.'
+              )}
           </DialogDescription>
         </DialogHeader>
         {pendingDiscard?.kind === 'area' ? (
           <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs text-muted-foreground">
-            {pendingDiscard.paths.length} {pendingDiscard.paths.length === 1 ? 'file' : 'files'}
+            {pendingDiscard.paths.length}{' '}
+            {pendingDiscard.paths.length === 1
+              ? translate(
+                  'auto.components.right.sidebar.source.control.discard.dialog.e7611dca35',
+                  'file'
+                )
+              : translate(
+                  'auto.components.right.sidebar.source.control.discard.dialog.42f89dd030',
+                  'files'
+                )}
           </div>
         ) : pendingDiscard?.kind === 'entry' ? (
           <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs">
@@ -88,7 +106,10 @@ export function SourceControlDiscardDialog({
         ) : null}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onCancel}>
-            Cancel
+            {translate(
+              'auto.components.right.sidebar.source.control.discard.dialog.3bc61dc989',
+              'Cancel'
+            )}
           </Button>
           <Button
             ref={confirmButtonRef}
@@ -98,7 +119,11 @@ export function SourceControlDiscardDialog({
             onClick={onConfirm}
           >
             <PendingDiscardIcon className="size-4" />
-            {pendingDiscardCopy?.confirmLabel ?? 'Discard'}
+            {pendingDiscardCopy?.confirmLabel ??
+              translate(
+                'auto.components.right.sidebar.source.control.discard.dialog.15efa778e3',
+                'Discard'
+              )}
           </Button>
         </DialogFooter>
       </DialogContent>

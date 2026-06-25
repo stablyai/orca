@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const appStoreSnapshot: {
   activeTabId: string | null
-  activeTabType: 'terminal' | 'editor' | 'browser' | null
+  activeTabType: 'terminal' | 'editor' | 'browser' | 'simulator' | null
   unifiedTabsByWorktree: Record<string, unknown[]>
   activeGroupIdByWorktree: Record<string, string>
 } = {
@@ -20,7 +20,7 @@ const useAppStoreMock = vi.fn(
   (
     selector: (state: {
       activeTabId: string | null
-      activeTabType: 'terminal' | 'editor' | 'browser' | null
+      activeTabType: 'terminal' | 'editor' | 'browser' | 'simulator' | null
       gitStatusByWorktree: Record<string, never[]>
       unifiedTabsByWorktree: Record<string, unknown[]>
       activeGroupIdByWorktree: Record<string, string>
@@ -54,6 +54,7 @@ vi.mock('react', async () => {
     memo: <T>(component: T) => component,
     useEffect: () => {},
     useLayoutEffect: () => {},
+    useCallback: <T>(callback: T) => callback,
     useMemo: <T>(factory: () => T) => factory(),
     useRef: <T>(current: T) => ({ current }),
     useState: <T>(initial: T) => [initial, vi.fn()] as const
@@ -73,6 +74,9 @@ vi.mock('lucide-react', () => ({
   Plus: function Plus() {
     return null
   },
+  Smartphone: function Smartphone() {
+    return null
+  },
   TerminalSquare: function TerminalSquare() {
     return null
   }
@@ -82,6 +86,15 @@ vi.mock('@dnd-kit/sortable', () => ({
   SortableContext: function SortableContext(props: { children?: unknown }) {
     return props.children
   }
+}))
+
+vi.mock('./tab-strip-drag-scroll', () => ({
+  useTabStripDragScrollHandlers: () => ({
+    isTabDragActive: false,
+    onDragScrollStartEnter: vi.fn(),
+    onDragScrollEndEnter: vi.fn(),
+    onDragScrollLeave: vi.fn()
+  })
 }))
 
 const useAppStoreExport = (selector: Parameters<typeof useAppStoreMock>[0]): unknown =>
@@ -169,6 +182,18 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   },
   DropdownMenuShortcut: function DropdownMenuShortcut(props: { children?: unknown }) {
     return { type: 'DropdownMenuShortcut', props }
+  },
+  DropdownMenuLabel: function DropdownMenuLabel(props: { children?: unknown }) {
+    return { type: 'DropdownMenuLabel', props }
+  },
+  DropdownMenuSub: function DropdownMenuSub(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSub', props }
+  },
+  DropdownMenuSubContent: function DropdownMenuSubContent(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubContent', props }
+  },
+  DropdownMenuSubTrigger: function DropdownMenuSubTrigger(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubTrigger', props }
   },
   DropdownMenuTrigger: function DropdownMenuTrigger(props: { children?: unknown }) {
     return { type: 'DropdownMenuTrigger', props }
@@ -311,6 +336,31 @@ describe('TabBar context menu wiring', () => {
     expect(sortable[0].props.tabCount).toBe(2)
   })
 
+  it('keeps the tab strip content-sized until horizontal scrolling is needed', async () => {
+    const element = await renderTabBar({
+      tabs: [TERMINAL_TAB],
+      editorFiles: [EDITOR_FILE],
+      browserTabs: [],
+      tabBarOrder: ['term-1', 'unified-editor-1']
+    })
+    const divs = findChildrenByType(element, 'div')
+    const stripWrapper = divs.find((candidate) =>
+      String(candidate.props.className ?? '').includes('flex-[0_1_auto]')
+    )
+    const strip = divs.find((candidate) =>
+      String(candidate.props.className ?? '').includes('terminal-tab-strip')
+    )
+
+    expect(stripWrapper).toBeTruthy()
+    expect(stripWrapper?.props.className).toContain('min-w-0')
+    expect(stripWrapper?.props.className).toContain('max-w-full')
+    expect(strip).toBeTruthy()
+    expect(strip?.props.className).toContain('min-w-0')
+    expect(strip?.props.className).toContain('flex-1')
+    expect(strip?.props.className).toContain('overflow-x-auto')
+    expect(strip?.props.className).not.toContain('scrollbar-sleek')
+  })
+
   it('passes the editor unifiedTabId when EditorFileTab triggers onCloseToRight', async () => {
     // Why: TabBar wires the editor tab as () => onCloseToRight(item.id). The
     // emitted id is the editor's unifiedTabId (item.id for editors), not the
@@ -415,9 +465,52 @@ describe('TabBar context menu wiring', () => {
     )
 
     expect(menuLabels[0]).toContain('New Markdown')
-    expect(menuLabels[1]).toBe('Open Markdown...')
+    expect(menuLabels[1]).toContain('Open Markdown...')
     expect(menuLabels[2]).toContain('New Terminal')
     expect(menuLabels[3]).toContain('New Browser Tab')
+  })
+
+  it('turns New Mobile Emulator into a go-to action when the workspace already has one', async () => {
+    const onNewSimulatorTab = vi.fn()
+    appStoreSnapshot.unifiedTabsByWorktree = {
+      'wt-1': [
+        {
+          id: 'sim-1',
+          entityId: 'sim-1',
+          groupId: 'group-2',
+          worktreeId: 'wt-1',
+          contentType: 'simulator',
+          label: 'Mobile Emulator',
+          customLabel: null,
+          color: null,
+          sortOrder: 1,
+          createdAt: 0
+        }
+      ]
+    }
+
+    const element = await renderTabBar({
+      tabs: [TERMINAL_TAB],
+      groupId: 'group-1',
+      onNewSimulatorTab
+    })
+
+    const emulatorItem = findChildrenByType(element, 'DropdownMenuItem').find((item) =>
+      extractText(item.props.children).includes('Go to Mobile Emulator')
+    )
+    expect(emulatorItem).toBeTruthy()
+    if (!emulatorItem) {
+      throw new Error('Go to Mobile Emulator menu item not rendered')
+    }
+    expect(emulatorItem.props.disabled).toBeUndefined()
+    expect(emulatorItem.props.onSelect).toBeTypeOf('function')
+    ;(emulatorItem.props.onSelect as () => void)()
+    expect(onNewSimulatorTab).toHaveBeenCalledTimes(1)
+
+    const tooltip = findChildrenByType(element, 'TooltipContent').find((item) =>
+      extractText(item.props.children).includes('Open the existing emulator tab.')
+    )
+    expect(tooltip).toBeTruthy()
   })
 
   it('cancels delayed menu focus when the tab bar root unmounts', async () => {

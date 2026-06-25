@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import { ClaudeIcon, OpenAIIcon } from '../../status-bar/icons'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 
 type Phase = 'reset' | 'expanded' | 'targeted' | 'swapped'
 
@@ -97,13 +98,26 @@ function Popover(props: {
           </span>
         </span>
         <div>
-          <div className="text-[13.5px] font-bold leading-[1.1]">Codex</div>
-          <div className="text-[11px] text-muted-foreground">Updated 1m ago</div>
+          <div className="text-[13.5px] font-bold leading-[1.1]">
+            {translate(
+              'auto.components.feature.wall.agents.orchestration.UsagePage.6a4b1d3c38',
+              'Codex'
+            )}
+          </div>
+          <div className="text-[11px] text-muted-foreground">
+            {translate(
+              'auto.components.feature.wall.agents.orchestration.UsagePage.5e45fb1238',
+              'Updated 1m ago'
+            )}
+          </div>
         </div>
       </div>
 
       <UsageBar
-        title="Session"
+        title={translate(
+          'auto.components.feature.wall.agents.orchestration.UsagePage.f421abf962',
+          'Session'
+        )}
         fillWidth={sessionFillWidth}
         warn={!swapped}
         metaLeft={
@@ -120,14 +134,36 @@ function Popover(props: {
         metaRight={<span>{sessionResetText}</span>}
       />
       <UsageBar
-        title="Weekly"
+        title={translate(
+          'auto.components.feature.wall.agents.orchestration.UsagePage.0470aaed99',
+          'Weekly'
+        )}
         fillWidth={weeklyFillWidth}
         warn={false}
-        metaLeft={<span>62% left</span>}
-        metaRight={<span>Resets in 4d 3h</span>}
+        metaLeft={
+          <span>
+            {translate(
+              'auto.components.feature.wall.agents.orchestration.UsagePage.05ce4ecdd3',
+              '62% left'
+            )}
+          </span>
+        }
+        metaRight={
+          <span>
+            {translate(
+              'auto.components.feature.wall.agents.orchestration.UsagePage.4dce5ca3aa',
+              'Resets in 4d 3h'
+            )}
+          </span>
+        }
       />
       <div className="h-px bg-border" />
-      <div className="text-[11px] font-semibold">Codex Account</div>
+      <div className="text-[11px] font-semibold">
+        {translate(
+          'auto.components.feature.wall.agents.orchestration.UsagePage.277a9c65a9',
+          'Codex Account'
+        )}
+      </div>
       <div className="flex items-center justify-between text-[11px]">
         <AccountNameSkeleton widthClassName={swapped ? 'w-24' : 'w-28'} />
         <span
@@ -156,7 +192,10 @@ function Popover(props: {
       >
         <div className="overflow-hidden min-h-0">
           <div className="pb-1 pt-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-            Switch to
+            {translate(
+              'auto.components.feature.wall.agents.orchestration.UsagePage.be5a165875',
+              'Switch to'
+            )}
           </div>
           <div className="flex flex-col gap-0.5 rounded-lg border border-border bg-foreground/[0.025] p-[3px]">
             <SwitchAccount
@@ -271,7 +310,12 @@ function BottomBar(props: { swapped: boolean }): JSX.Element {
         <span className="block h-1 w-9 overflow-hidden rounded-full bg-foreground/[0.12]">
           <span className="block h-full rounded-full bg-emerald-500" style={{ width: '71%' }} />
         </span>
-        <span>71% 5h</span>
+        <span>
+          {translate(
+            'auto.components.feature.wall.agents.orchestration.UsagePage.64265cb295',
+            '71% 5h'
+          )}
+        </span>
       </div>
       <div className="-my-0.5 inline-flex items-center gap-1.5 rounded-md bg-foreground/[0.06] px-1.5 py-0.5 font-mono text-[10.5px] text-foreground">
         <span style={{ color: '#111' }}>

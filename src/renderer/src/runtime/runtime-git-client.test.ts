@@ -132,6 +132,37 @@ describe('runtime git client', () => {
     })
   })
 
+  it('forwards upstream-negative-cache bypass to local git status only when enabled', async () => {
+    gitStatus.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+
+    await getRuntimeGitStatus(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      { bypassEffectiveUpstreamNegativeCache: true }
+    )
+    await getRuntimeGitStatus(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      { bypassEffectiveUpstreamNegativeCache: false }
+    )
+
+    expect(gitStatus).toHaveBeenNthCalledWith(1, {
+      worktreePath: '/repo',
+      connectionId: undefined,
+      bypassEffectiveUpstreamNegativeCache: true
+    })
+    expect(gitStatus).toHaveBeenNthCalledWith(2, {
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+  })
+
   it('checks ignored paths through local git IPC', async () => {
     gitCheckIgnored.mockResolvedValue(['dist/bundle.js'])
 
@@ -258,6 +289,31 @@ describe('runtime git client', () => {
       selector: 'env-1',
       method: 'git.status',
       params: { worktree: 'id:wt-1', includeIgnored: true },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('forwards upstream-negative-cache bypass through the active runtime environment', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { entries: [], conflictOperation: 'unknown' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await getRuntimeGitStatus(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      { bypassEffectiveUpstreamNegativeCache: true }
+    )
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'git.status',
+      params: { worktree: 'id:wt-1', bypassEffectiveUpstreamNegativeCache: true },
       timeoutMs: 15_000
     })
   })
@@ -417,6 +473,55 @@ describe('runtime git client', () => {
         agentCmdOverrides,
         enableGitHubAttribution: true,
         commitMessageDiscoveryHostKey: 'runtime:env-1'
+      },
+      timeoutMs: 75_000
+    })
+  })
+
+  it('passes one-shot commit-message params to local and runtime generation', async () => {
+    const sourceControlAiResolvedParams = {
+      agentId: 'codex' as const,
+      model: 'gpt-5.5',
+      thinkingLevel: 'high',
+      customPrompt: 'Use Conventional Commits.'
+    }
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { success: true, message: 'feat: test' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await generateRuntimeCommitMessage(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'repo-1::/repo',
+        worktreePath: '/repo'
+      },
+      { sourceControlAiResolvedParams }
+    )
+    await generateRuntimeCommitMessage(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      { sourceControlAiResolvedParams }
+    )
+
+    expect(gitGenerateCommitMessage).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      repoId: 'repo-1',
+      connectionId: undefined,
+      sourceControlAiResolvedParams
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'git.generateCommitMessage',
+      params: {
+        worktree: 'id:wt-1',
+        commitMessageDiscoveryHostKey: 'runtime:env-1',
+        sourceControlAiResolvedParams
       },
       timeoutMs: 75_000
     })

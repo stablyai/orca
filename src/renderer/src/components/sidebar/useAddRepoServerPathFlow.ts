@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { track } from '@/lib/telemetry'
+import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import {
   buildNestedRepoScanTelemetry,
@@ -34,10 +35,7 @@ export function useAddRepoServerPathFlow({
 }: {
   addRepoPath: (path: string, kind?: 'git' | 'folder') => Promise<Repo | null>
   closeModal: () => void
-  fetchWorktrees: (
-    repoId: string,
-    options?: { requireAuthoritative?: boolean }
-  ) => Promise<unknown>
+  fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<unknown>
   getNestedRepoRuntimeKind: (connectionId: string | null) => NestedRepoTelemetryRuntimeKind
   scanNestedRepos: (
     path: string,
@@ -155,6 +153,7 @@ export function useAddRepoServerPathFlow({
         } else if (repo) {
           // Why: folder repos skip the Git default-checkout handoff; their synthetic
           // root workspace is opened by the folder add flow.
+          await markOnboardingProjectAdded('addedFolder')
           closeModal()
         }
       } finally {

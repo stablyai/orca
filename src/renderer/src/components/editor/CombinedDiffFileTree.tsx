@@ -20,6 +20,7 @@ import {
   type CombinedDiffFileTreeMode
 } from './combined-diff-file-tree-model'
 import { CombinedDiffFileTreeRow, type CombinedDiffTreeNode } from './combined-diff-file-tree-row'
+import { translate } from '@/i18n/i18n'
 
 export {
   createCombinedDiffSectionIndexMap,
@@ -60,14 +61,14 @@ function buildUncommittedRows(
 }
 
 function buildBranchRows(
-  mode: Extract<CombinedDiffFileTreeMode, 'branch' | 'commit'>,
+  mode: Extract<CombinedDiffFileTreeMode, 'all' | 'branch' | 'commit'>,
   entries: readonly CombinedDiffFileTreeEntry[],
   collapsedDirectoryKeys: ReadonlySet<string>
 ): CombinedDiffTreeNode[] {
   const branchEntries = entries.filter(
     (entry): entry is GitBranchChangeEntry => !isGitStatusEntry(entry)
   )
-  const area: CombinedDiffBranchTreeArea = mode === 'branch' ? 'combined-branch' : 'combined-commit'
+  const area: CombinedDiffBranchTreeArea = mode === 'commit' ? 'combined-commit' : 'combined-branch'
   const roots = compactSourceControlTree(buildSourceControlTree(area, branchEntries))
   return flattenSourceControlTree(roots, collapsedDirectoryKeys) as CombinedDiffTreeNode[]
 }
@@ -148,12 +149,14 @@ export function CombinedDiffFileTree({
 
   const uncommittedGroups = React.useMemo(
     () =>
-      mode === 'uncommitted' ? buildUncommittedRows(filteredEntries, collapsedDirectoryKeys) : [],
+      mode === 'all' || mode === 'uncommitted'
+        ? buildUncommittedRows(filteredEntries, collapsedDirectoryKeys)
+        : [],
     [collapsedDirectoryKeys, filteredEntries, mode]
   )
   const branchRows = React.useMemo(
     () =>
-      mode === 'branch' || mode === 'commit'
+      mode === 'all' || mode === 'branch' || mode === 'commit'
         ? buildBranchRows(mode, filteredEntries, collapsedDirectoryKeys)
         : [],
     [collapsedDirectoryKeys, filteredEntries, mode]
@@ -170,13 +173,16 @@ export function CombinedDiffFileTree({
       <div className="sticky top-0 z-20 shrink-0 bg-background">
         <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
           <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            Files
+            {translate('auto.components.editor.CombinedDiffFileTree.481e63ca52', 'Files')}
           </div>
           <Button
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label="Collapse file tree"
+            aria-label={translate(
+              'auto.components.editor.CombinedDiffFileTree.21783df79f',
+              'Collapse file tree'
+            )}
             onClick={() => onCollapsedChange(true)}
           >
             <PanelLeftClose className="size-3.5" />
@@ -188,7 +194,10 @@ export function CombinedDiffFileTree({
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Filter files..."
+              placeholder={translate(
+                'auto.components.editor.CombinedDiffFileTree.4cc7b83ffe',
+                'Filter files...'
+              )}
               className="h-8 pl-7 text-xs"
             />
           </div>
@@ -198,7 +207,10 @@ export function CombinedDiffFileTree({
                 type="button"
                 variant="outline"
                 size="icon-sm"
-                aria-label="Filter diff files"
+                aria-label={translate(
+                  'auto.components.editor.CombinedDiffFileTree.cd0e0ed79e',
+                  'Filter diff files'
+                )}
                 className={cn(activeFilterCount > 0 && 'border-foreground/30 text-foreground')}
               >
                 <Filter className="size-3.5" />
@@ -206,7 +218,10 @@ export function CombinedDiffFileTree({
             </PopoverTrigger>
             <PopoverContent align="end" side="bottom" sideOffset={6} className="w-56 p-0">
               <div className="border-b border-border px-3 py-2 text-xs font-semibold text-foreground">
-                File extensions
+                {translate(
+                  'auto.components.editor.CombinedDiffFileTree.c00020f081',
+                  'File extensions'
+                )}
               </div>
               <div className="max-h-60 overflow-auto py-1 scrollbar-sleek">
                 {availableExtensions.map((extension) => {
@@ -235,7 +250,12 @@ export function CombinedDiffFileTree({
                   <Check
                     className={cn('size-3.5 shrink-0', includeViewed ? 'opacity-100' : 'opacity-0')}
                   />
-                  <span className="min-w-0 flex-1 truncate">Viewed files</span>
+                  <span className="min-w-0 flex-1 truncate">
+                    {translate(
+                      'auto.components.editor.CombinedDiffFileTree.be119cb9d1',
+                      'Viewed files'
+                    )}
+                  </span>
                 </button>
                 {activeFilterCount > 0 && (
                   <button
@@ -243,7 +263,10 @@ export function CombinedDiffFileTree({
                     className="w-full px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                     onClick={resetFilters}
                   >
-                    Reset filters
+                    {translate(
+                      'auto.components.editor.CombinedDiffFileTree.eafe1aeb53',
+                      'Reset filters'
+                    )}
                   </button>
                 )}
               </div>
@@ -254,29 +277,57 @@ export function CombinedDiffFileTree({
       <div className="min-h-0 flex-1 overflow-auto py-1 scrollbar-sleek">
         {filteredEntries.length === 0 ? (
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-            No files match the current filters.
+            {translate(
+              'auto.components.editor.CombinedDiffFileTree.f984289373',
+              'No files match the current filters.'
+            )}
           </div>
-        ) : mode === 'uncommitted' ? (
-          uncommittedGroups.map((group) => (
-            <div key={group.area} className="py-1">
-              <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-                {group.label}
+        ) : mode === 'all' || mode === 'uncommitted' ? (
+          <>
+            {uncommittedGroups.map((group) => (
+              <div key={group.area} className="py-1">
+                <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                  {group.label}
+                </div>
+                {group.rows.map((node) => (
+                  <CombinedDiffFileTreeRow
+                    key={node.key}
+                    node={node}
+                    mode={mode}
+                    worktreePath={worktreePath}
+                    activeSectionKey={activeSectionKey}
+                    sectionIndexByKey={sectionIndexByKey}
+                    isCollapsed={collapsedDirectoryKeys.has(node.key)}
+                    onToggleDirectory={toggleDirectory}
+                    onNavigate={onNavigate}
+                  />
+                ))}
               </div>
-              {group.rows.map((node) => (
-                <CombinedDiffFileTreeRow
-                  key={node.key}
-                  node={node}
-                  mode={mode}
-                  worktreePath={worktreePath}
-                  activeSectionKey={activeSectionKey}
-                  sectionIndexByKey={sectionIndexByKey}
-                  isCollapsed={collapsedDirectoryKeys.has(node.key)}
-                  onToggleDirectory={toggleDirectory}
-                  onNavigate={onNavigate}
-                />
-              ))}
-            </div>
-          ))
+            ))}
+            {mode === 'all' && branchRows.length > 0 ? (
+              <div className="py-1">
+                <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                  {translate(
+                    'auto.components.editor.CombinedDiffFileTree.39b6b9e4e4',
+                    'Committed on Branch'
+                  )}
+                </div>
+                {branchRows.map((node) => (
+                  <CombinedDiffFileTreeRow
+                    key={node.key}
+                    node={node}
+                    mode={mode}
+                    worktreePath={worktreePath}
+                    activeSectionKey={activeSectionKey}
+                    sectionIndexByKey={sectionIndexByKey}
+                    isCollapsed={collapsedDirectoryKeys.has(node.key)}
+                    onToggleDirectory={toggleDirectory}
+                    onNavigate={onNavigate}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </>
         ) : (
           branchRows.map((node) => (
             <CombinedDiffFileTreeRow

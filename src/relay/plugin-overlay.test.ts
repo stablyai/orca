@@ -70,12 +70,24 @@ describe('PluginOverlayManager', () => {
     expect(manager.materializeOpenCode('tab-missing:0', join(homeDir, 'missing'))).toBeNull()
   })
 
-  it('materializes Pi extension into <overlay>/extensions/<file>', () => {
+  it('installs Pi extension into the real agent extensions dir', () => {
     manager.setSources({ piExtensionSource: '// pi extension' })
     const dir = manager.materializePi('tab-2:0')
     expect(dir).not.toBeNull()
     const file = join(dir!, 'extensions', 'orca-agent-status.ts')
     expect(existsSync(file)).toBe(true)
+    expect(readFileSync(file, 'utf8')).toContain('@orca-managed-pi-extension')
+  })
+
+  it("does not overwrite a user's same-named remote Pi extension file", () => {
+    const piAgentDir = join(homeDir, '.pi', 'agent')
+    const extensionFile = join(piAgentDir, 'extensions', 'orca-agent-status.ts')
+    mkdirSync(join(piAgentDir, 'extensions'), { recursive: true })
+    writeFileSync(extensionFile, 'user-owned remote status extension')
+
+    manager.setSources({ piExtensionSource: '// pi extension' })
+    expect(manager.materializePi('tab-user-owned-pi:0')).toBeNull()
+    expect(readFileSync(extensionFile, 'utf8')).toBe('user-owned remote status extension')
   })
 
   it('uses the kind-specific Pi-compatible extension source when available', () => {
@@ -89,15 +101,15 @@ describe('PluginOverlayManager', () => {
 
     expect(piDir).not.toBeNull()
     expect(ompDir).not.toBeNull()
-    expect(readFileSync(join(piDir!, 'extensions', 'orca-agent-status.ts'), 'utf8')).toBe(
+    expect(readFileSync(join(piDir!, 'extensions', 'orca-agent-status.ts'), 'utf8')).toContain(
       '// pi extension'
     )
-    expect(readFileSync(join(ompDir!, 'extensions', 'orca-agent-status.ts'), 'utf8')).toBe(
+    expect(readFileSync(join(ompDir!, 'extensions', 'orca-agent-status.ts'), 'utf8')).toContain(
       '// omp extension'
     )
   })
 
-  it('mirrors the remote default Pi agent dir before adding Orca status extension', () => {
+  it('installs Orca status extension into the remote default Pi agent dir', () => {
     const piAgentDir = join(homeDir, '.pi', 'agent')
     mkdirSync(join(piAgentDir, 'skills', 'my-skill'), { recursive: true })
     mkdirSync(join(piAgentDir, 'extensions', 'user-ext'), { recursive: true })
@@ -133,10 +145,10 @@ describe('PluginOverlayManager', () => {
     ])
     expect(JSON.parse(readFileSync(join(dir!, 'settings.json'), 'utf8'))).toEqual({
       defaultProvider: 'amazon-bedrock',
-      hideThinkingBlock: true,
+      hideThinkingBlock: false,
       terminal: {
         showImages: false,
-        clearOnShrink: true
+        clearOnShrink: false
       }
     })
     expect(JSON.parse(readFileSync(join(piAgentDir, 'settings.json'), 'utf8'))).toEqual({
@@ -164,13 +176,36 @@ describe('PluginOverlayManager', () => {
     expect(dir).not.toBeNull()
     expect(readFileSync(join(dir!, 'auth.json'), 'utf8')).toBe('custom token')
     expect(readFileSync(join(dir!, 'extensions', 'custom.ts'), 'utf8')).toBe('custom extension')
-    expect(readFileSync(join(dir!, 'extensions', 'orca-agent-status.ts'), 'utf8')).toBe(
+    expect(readFileSync(join(dir!, 'extensions', 'orca-agent-status.ts'), 'utf8')).toContain(
       '// pi extension'
     )
   })
 
-  // Why: per-agent overlay source dir. The renderer picks Pi or OMP per
-  // launch, and the relay must mirror the right `~/.<kind>/agent` source —
+  it('leaves lazy OMP agent.db in the real remote home on the relay', () => {
+    manager.setSources({ piExtensionSource: '// pi extension' })
+    const sourceDir = join(homeDir, '.omp', 'agent')
+    const firstDir = manager.materializePi('tab-relay-omp-sqlite:0', undefined, 'omp')
+
+    expect(firstDir).not.toBeNull()
+    expect(firstDir).toBe(sourceDir)
+    const sourcePath = join(sourceDir, 'agent.db')
+    const content = 'agent.db relay credentials'
+
+    expect(existsSync(sourcePath)).toBe(false)
+    expect(existsSync(join(homeDir, '.orca-relay', 'omp-overlays'))).toBe(false)
+    expect(existsSync(join(sourceDir, 'history.db'))).toBe(false)
+    writeFileSync(sourcePath, content)
+
+    expect(readFileSync(sourcePath, 'utf8')).toBe(content)
+
+    const secondDir = manager.materializePi('tab-relay-omp-sqlite:0', undefined, 'omp')
+
+    expect(secondDir).toBe(firstDir)
+    expect(readFileSync(join(secondDir!, 'agent.db'), 'utf8')).toBe(content)
+  })
+
+  // Why: per-agent source dir. The renderer picks Pi or OMP per
+  // launch, and the relay must use the right `~/.<kind>/agent` source —
   // disk-presence guessing (always-Pi or first-exists) shadows the other
   // agent's user extensions when both dirs exist on the remote disk.
   describe('per-agent default source dir (no cross-agent fallback)', () => {
@@ -182,7 +217,7 @@ describe('PluginOverlayManager', () => {
       return agentDir
     }
 
-    it('launching pi with both ~/.pi/agent and ~/.omp/agent present mirrors ~/.pi/agent into pi-overlays', () => {
+    it('launching pi with both ~/.pi/agent and ~/.omp/agent present installs into ~/.pi/agent', () => {
       seedAgentDir('.pi', 'pi')
       seedAgentDir('.omp', 'omp')
 
@@ -190,15 +225,15 @@ describe('PluginOverlayManager', () => {
       const dir = manager.materializePi('tab-relay-pi-both:0', undefined, 'pi')
 
       expect(dir).not.toBeNull()
-      // Pi overlays live under .orca-relay/pi-overlays, separate from OMP's tree.
-      expect(dir!).toMatch(/[\\/]\.orca-relay[\\/]pi-overlays[\\/]/)
+      expect(dir).toBe(join(homeDir, '.pi', 'agent'))
       expect(readFileSync(join(dir!, 'auth.json'), 'utf8')).toBe('pi token')
-      const overlayExtensions = readdirSync(join(dir!, 'extensions')).sort()
-      expect(overlayExtensions).toContain('pi-ext')
-      expect(overlayExtensions).not.toContain('omp-ext')
+      const extensions = readdirSync(join(dir!, 'extensions')).sort()
+      expect(extensions).toContain('pi-ext')
+      expect(extensions).toContain('orca-agent-status.ts')
+      expect(extensions).not.toContain('omp-ext')
     })
 
-    it('launching omp with both ~/.pi/agent and ~/.omp/agent present mirrors ~/.omp/agent into omp-overlays', () => {
+    it('launching omp with both ~/.pi/agent and ~/.omp/agent present installs into ~/.omp/agent', () => {
       seedAgentDir('.pi', 'pi')
       seedAgentDir('.omp', 'omp')
 
@@ -206,23 +241,20 @@ describe('PluginOverlayManager', () => {
       const dir = manager.materializePi('tab-relay-omp-both:0', undefined, 'omp')
 
       expect(dir).not.toBeNull()
-      // CRITICAL: OMP overlays live in a distinct subtree (.orca-relay/omp-overlays)
-      // so the remote box never mixes Pi and OMP overlay state for the same paneKey.
-      expect(dir!).toMatch(/[\\/]\.orca-relay[\\/]omp-overlays[\\/]/)
-      expect(dir!).not.toMatch(/[\\/]pi-overlays[\\/]/)
+      expect(dir).toBe(join(homeDir, '.omp', 'agent'))
       // Even though ~/.pi/agent exists, the OMP launch MUST mirror OMP's
       // source dir. Cross-agent fallback would silently shadow the user's
       // OMP extensions on the remote.
       expect(readFileSync(join(dir!, 'auth.json'), 'utf8')).toBe('omp token')
-      const overlayExtensions = readdirSync(join(dir!, 'extensions')).sort()
-      expect(overlayExtensions).toContain('omp-ext')
-      expect(overlayExtensions).not.toContain('pi-ext')
+      const extensions = readdirSync(join(dir!, 'extensions')).sort()
+      expect(extensions).toContain('omp-ext')
+      expect(extensions).toContain('orca-agent-status.ts')
+      expect(extensions).not.toContain('pi-ext')
     })
 
     it('launching omp when only ~/.pi/agent exists does NOT mirror Pi state', () => {
-      // Why: missing OMP source dir on the remote must materialize the
-      // overlay from empty — Orca's status extension only, no Pi state
-      // cross-pollinated in.
+      // Why: missing OMP source dir on the remote must create only OMP's
+      // own extension dir. Pi state must never cross-pollinate in.
       seedAgentDir('.pi', 'pi')
       expect(existsSync(join(homeDir, '.omp'))).toBe(false)
 
@@ -230,15 +262,11 @@ describe('PluginOverlayManager', () => {
       const dir = manager.materializePi('tab-relay-omp-empty:0', undefined, 'omp')
 
       expect(dir).not.toBeNull()
-      expect(dir!).toMatch(/[\\/]\.orca-relay[\\/]omp-overlays[\\/]/)
-      // Pi-only home must NOT leak into the OMP overlay.
+      expect(dir).toBe(join(homeDir, '.omp', 'agent'))
+      // Pi-only home must NOT leak into the OMP home.
       expect(existsSync(join(dir!, 'auth.json'))).toBe(false)
-      const overlayExtensions = readdirSync(join(dir!, 'extensions')).sort()
-      expect(overlayExtensions).toEqual(['orca-agent-status.ts'])
-      expect(JSON.parse(readFileSync(join(dir!, 'settings.json'), 'utf8'))).toEqual({
-        hideThinkingBlock: true,
-        terminal: { clearOnShrink: true }
-      })
+      const extensions = readdirSync(join(dir!, 'extensions')).sort()
+      expect(extensions).toEqual(['orca-agent-status.ts'])
     })
   })
 
@@ -248,7 +276,7 @@ describe('PluginOverlayManager', () => {
     expect(manager.materializePi('tab-missing-pi:0', join(homeDir, 'missing-pi'))).toBeNull()
   })
 
-  it('clearOverlay removes opencode + every Pi-kind overlay root for an id', () => {
+  it('clearOverlay removes OpenCode overlays without deleting real Pi/OMP homes', () => {
     manager.setSources({
       opencodePluginSource: 'opencode',
       piExtensionSource: 'pi',
@@ -257,7 +285,6 @@ describe('PluginOverlayManager', () => {
     const opencodeDir = manager.materializeOpenCode('tab-3:0')!
     const piDir = manager.materializePi('tab-3:0', undefined, 'pi')!
     const ompDir = manager.materializePi('tab-3:0', undefined, 'omp')!
-    // Sanity: each kind got its own subtree, not a shared one.
     expect(piDir).not.toBe(ompDir)
     expect(existsSync(opencodeDir)).toBe(true)
     expect(existsSync(piDir)).toBe(true)
@@ -266,8 +293,8 @@ describe('PluginOverlayManager', () => {
     manager.clearOverlay('tab-3:0')
 
     expect(existsSync(opencodeDir)).toBe(false)
-    expect(existsSync(piDir)).toBe(false)
-    expect(existsSync(ompDir)).toBe(false)
+    expect(existsSync(piDir)).toBe(true)
+    expect(existsSync(ompDir)).toBe(true)
   })
 
   it.skipIf(process.platform === 'win32')(

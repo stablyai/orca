@@ -15,6 +15,8 @@ import {
 } from '@/components/ui/command'
 import { prepareQuickOpenFiles, rankQuickOpenFiles } from '@/components/quick-open-search'
 import { useRuntimeFileListForWorktree } from '@/components/quick-open-file-list'
+import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
+import { translate } from '@/i18n/i18n'
 
 /**
  * Parses the install-ripgrep guidance message produced by the relay's
@@ -121,12 +123,20 @@ function InstallRgGuidance({
         className="flex items-start gap-2.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-amber-700 dark:text-amber-300"
       >
         <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
-        <p className="text-[13px] leading-5">Quick Open scan too large ({reason}).</p>
+        <p className="text-[13px] leading-5">
+          {translate('auto.components.QuickOpen.4725b0e931', 'Quick Open scan too large (')}
+          {reason}).
+        </p>
       </div>
       <p>
-        Install{' '}
-        <code className="rounded bg-muted px-1 py-0.5 font-mono text-foreground">ripgrep</code> on
-        the remote to enable fast, gitignore-aware listing:
+        {translate('auto.components.QuickOpen.2ca749c15d', 'Install')}{' '}
+        <code className="rounded bg-muted px-1 py-0.5 font-mono text-foreground">
+          {translate('auto.components.QuickOpen.5d80dc39bb', 'ripgrep')}
+        </code>{' '}
+        {translate(
+          'auto.components.QuickOpen.1cf8561ab4',
+          'on the remote to enable fast, gitignore-aware listing:'
+        )}
       </p>
       {command ? (
         <div className="flex items-center gap-2 rounded border border-border bg-muted/50 px-3 py-2 font-mono text-xs text-foreground">
@@ -136,10 +146,12 @@ function InstallRgGuidance({
             type="button"
             onClick={handleCopy}
             className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            aria-label="Copy install command"
+            aria-label={translate('auto.components.QuickOpen.73b44e7bde', 'Copy install command')}
           >
             {copied ? <Check size={12} /> : <Copy size={12} />}
-            {copied ? 'Copied' : 'Copy'}
+            {copied
+              ? translate('auto.components.QuickOpen.cf144856dc', 'Copied')
+              : translate('auto.components.QuickOpen.995be8ea22', 'Copy')}
           </button>
         </div>
       ) : guidance ? (
@@ -165,6 +177,11 @@ export default function QuickOpen(): React.JSX.Element | null {
 
   const worktreePath = activeWorktree?.path ?? null
 
+  // Why: Radix's onCloseAutoFocus restore is suppressed below, so dismissing
+  // the dialog (Esc / click-away) would otherwise leave the active panel
+  // unfocused. This returns focus to the surface that was active on open.
+  const { captureReturnFocus, skipReturnFocus } = useModalReturnFocus(visible)
+
   // Why: reset input only on open. Keeping this out of the file-load effect
   // prevents unrelated store updates (which can produce a new excludePaths
   // array reference) from wiping a query the user is currently typing.
@@ -187,6 +204,9 @@ export default function QuickOpen(): React.JSX.Element | null {
       if (!activeWorktreeId || !worktreePath) {
         return
       }
+      // Why: opening a file moves focus into the editor; don't restore focus to
+      // the surface that was active before QuickOpen opened.
+      skipReturnFocus()
       closeModal()
       openFile({
         filePath: joinPath(worktreePath, relativePath),
@@ -196,7 +216,7 @@ export default function QuickOpen(): React.JSX.Element | null {
         mode: 'edit'
       })
     },
-    [activeWorktreeId, worktreePath, openFile, closeModal]
+    [activeWorktreeId, worktreePath, openFile, closeModal, skipReturnFocus]
   )
 
   const handleOpenChange = useCallback(
@@ -213,19 +233,30 @@ export default function QuickOpen(): React.JSX.Element | null {
     e.preventDefault()
   }, [])
 
+  const handleOpenAutoFocus = useCallback(() => {
+    captureReturnFocus()
+  }, [captureReturnFocus])
+
   return (
     <CommandDialog
       open={visible}
       onOpenChange={handleOpenChange}
       shouldFilter={false}
+      onOpenAutoFocus={handleOpenAutoFocus}
       onCloseAutoFocus={handleCloseAutoFocus}
-      title="Go to file"
-      description="Search for a file to open"
+      title={translate('auto.components.QuickOpen.ec31e058f7', 'Go to file')}
+      description={translate('auto.components.QuickOpen.9e97f08d0f', 'Search for a file to open')}
     >
-      <CommandInput placeholder="Go to file..." value={query} onValueChange={setQuery} />
+      <CommandInput
+        placeholder={translate('auto.components.QuickOpen.1cb6ef47b7', 'Go to file...')}
+        value={query}
+        onValueChange={setQuery}
+      />
       <CommandList className="p-2">
         {loading ? (
-          <div className="py-6 text-center text-sm text-muted-foreground">Loading files...</div>
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            {translate('auto.components.QuickOpen.722a21e1a8', 'Loading files...')}
+          </div>
         ) : loadError ? (
           (() => {
             const guidance = parseInstallRgGuidance(loadError)
@@ -242,7 +273,9 @@ export default function QuickOpen(): React.JSX.Element | null {
             )
           })()
         ) : filtered.length === 0 ? (
-          <CommandEmpty>No matching files.</CommandEmpty>
+          <CommandEmpty>
+            {translate('auto.components.QuickOpen.74e2e1b3e4', 'No matching files.')}
+          </CommandEmpty>
         ) : (
           filtered.map((item) => {
             const lastSlash = item.path.lastIndexOf('/')
@@ -267,17 +300,21 @@ export default function QuickOpen(): React.JSX.Element | null {
       </CommandList>
       <div className="flex items-center justify-end border-t border-border/60 px-3.5 py-2.5 text-[11px] text-muted-foreground/82">
         <div className="flex items-center gap-2">
-          <FooterKey>Enter</FooterKey>
-          <span>Open</span>
-          <FooterKey>Esc</FooterKey>
-          <span>Close</span>
+          <FooterKey>{translate('auto.components.QuickOpen.250e5b2dfb', 'Enter')}</FooterKey>
+          <span>{translate('auto.components.QuickOpen.61b1c871a6', 'Open')}</span>
+          <FooterKey>{translate('auto.components.QuickOpen.95fccbae88', 'Esc')}</FooterKey>
+          <span>{translate('auto.components.QuickOpen.73b2c581f1', 'Close')}</span>
           <FooterKey>↑↓</FooterKey>
-          <span>Move</span>
+          <span>{translate('auto.components.QuickOpen.1dbd3f59ff', 'Move')}</span>
         </div>
       </div>
       {/* Accessibility: announce result count changes */}
       <div aria-live="polite" className="sr-only">
-        {deferredQuery.trim() ? `${filtered.length} files found` : ''}
+        {deferredQuery.trim()
+          ? translate('auto.components.QuickOpen.b227d88520', '{{value0}} files found', {
+              value0: filtered.length
+            })
+          : ''}
       </div>
     </CommandDialog>
   )

@@ -42,7 +42,7 @@ type UploadResponse = {
 export async function uploadBundle(opts: UploadBundleOptions): Promise<UploadBundleResult> {
   const bytes = Buffer.byteLength(opts.payload)
   if (bytes > MAX_BUNDLE_BYTES) {
-    throw new Error(`bundle exceeds 10 MB cap (${bytes} bytes)`)
+    throw new Error(`bundle exceeds 4 MiB cap (${bytes} bytes)`)
   }
 
   // (1) Request a token. The token endpoint is rate-limited per IP at the
@@ -90,7 +90,9 @@ export async function uploadBundle(opts: UploadBundleOptions): Promise<UploadBun
   if (typeof uploadRes.ticket_id !== 'string' || uploadRes.ticket_id.length === 0) {
     throw new Error('malformed upload response: missing ticket_id')
   }
-  return { ticketId: uploadRes.ticket_id }
+  return {
+    ticketId: uploadRes.ticket_id
+  }
 }
 
 export async function deleteBundle(opts: DeleteBundleOptions): Promise<void> {

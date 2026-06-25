@@ -101,6 +101,39 @@ describe('createGitLabMergeRequest', () => {
     expect(releaseMock).toHaveBeenCalledOnce()
   })
 
+  it('runs local WSL project merge request creation through the selected distro', async () => {
+    glabExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: 'https://gitlab.com/acme/widgets/-/merge_requests/43\n',
+      stderr: ''
+    })
+
+    await expect(
+      createGitLabMergeRequest(
+        '/repo-root',
+        {
+          provider: 'gitlab',
+          base: 'main',
+          head: 'feature/wsl-create-mr',
+          title: 'WSL Create MR'
+        },
+        null,
+        { localGitExecOptions: { wslDistro: 'Ubuntu' } }
+      )
+    ).resolves.toEqual({
+      ok: true,
+      number: 43,
+      url: 'https://gitlab.com/acme/widgets/-/merge_requests/43'
+    })
+
+    const [, options] = glabExecFileAsyncMock.mock.calls[0]
+    expect(options).toMatchObject({
+      cwd: '/repo-root',
+      wslDistro: 'Ubuntu',
+      timeout: 60_000,
+      idempotent: false
+    })
+  })
+
   it('creates SSH-backed merge requests without using the remote path as a local cwd', async () => {
     glabExecFileAsyncMock.mockResolvedValueOnce({
       stdout: JSON.stringify({

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
 import { getDefaultRepoHookSettings } from '../../../../shared/constants'
@@ -16,15 +17,12 @@ import type {
   Worktree
 } from '../../../../shared/types'
 import { getRepositoryLocalCommandsSectionId } from '../settings/repository-settings-targets'
-import { AddReposAnimatedVisual } from './AddReposAnimatedVisual'
-import { SetupTwoAgentsVisual, SetupWorkspacesVisual } from './FeatureWallSetupStepVisuals'
-import { SetupScriptAnimatedVisual } from './SetupScriptAnimatedVisual'
-import { SetupStepPreview } from './SetupStepPreview'
 import {
   requestContextualTourWhenReady,
   type RequestContextualTourWhenReadyArgs
 } from '../contextual-tours/request-contextual-tour-when-ready'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
+import { translate } from '@/i18n/i18n'
 
 export const SETUP_GUIDE_PROJECT_PROMPT = "First add a project you'd like to work on."
 
@@ -43,25 +41,20 @@ export function getSetupGuideGitRepo(
   return activeRepo ?? repos.find((entry) => isGitRepoKind(entry)) ?? null
 }
 
-export function AddReposAction(props: { reducedMotion: boolean }): React.JSX.Element {
+export function AddReposAction(): React.JSX.Element {
   const openModal = useAppStore((s) => s.openModal)
   return (
-    <div className="space-y-4">
-      <Button type="button" size="sm" className="w-fit gap-2" onClick={() => openModal('add-repo')}>
-        <Plus className="size-3.5" />
-        Add project
-      </Button>
-      <SetupStepPreview>
-        <AddReposAnimatedVisual reducedMotion={props.reducedMotion} />
-      </SetupStepPreview>
-    </div>
+    <Button type="button" size="sm" className="w-fit gap-2" onClick={() => openModal('add-repo')}>
+      <Plus className="size-3.5" />
+      {translate(
+        'auto.components.feature.wall.FeatureWallSetupWorkflowActions.522cce9e33',
+        'Add project'
+      )}
+    </Button>
   )
 }
 
-export function TwoAgentsAction(props: {
-  reducedMotion: boolean
-  done: boolean
-}): React.JSX.Element {
+export function TwoAgentsAction(props: { done: boolean }): React.JSX.Element | null {
   const targetWorktree = useSetupTargetWorktree()
   const openModal = useAppStore((s) => s.openModal)
   const closeModal = useAppStore((s) => s.closeModal)
@@ -84,73 +77,98 @@ export function TwoAgentsAction(props: {
     })
   }, [closeModal, openModal, targetWorktree])
 
+  if (props.done || paneTarget) {
+    return null
+  }
+
   return (
-    <div className="space-y-4">
-      {!props.done && !paneTarget ? (
-        <div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" className="w-fit gap-2" onClick={handlePrimaryAction}>
-              <ArrowUpRight className="size-3.5" />
-              Try it out
-            </Button>
-          </div>
-        </div>
-      ) : null}
-      <SetupStepPreview>
-        <SetupTwoAgentsVisual reducedMotion={props.reducedMotion} />
-      </SetupStepPreview>
+    <Button type="button" size="sm" className="w-fit gap-2" onClick={handlePrimaryAction}>
+      <ArrowUpRight className="size-3.5" />
+      {translate(
+        'auto.components.feature.wall.FeatureWallSetupWorkflowActions.f0bbf7da77',
+        'Try it out'
+      )}
+    </Button>
+  )
+}
+
+const SETUP_HINT_KBD_CLASS =
+  'rounded border border-border bg-card px-1.5 py-0.5 font-mono text-[11.5px] text-foreground'
+
+// Platform-aware split/close shortcuts for the active terminal pane. The
+// labels resolve to ⌘D / Ctrl+Shift+D etc. based on the user's OS and overrides.
+export function SplitTerminalShortcutHint(): React.JSX.Element {
+  const splitRight = useShortcutLabel('terminal.splitRight')
+  const splitDown = useShortcutLabel('terminal.splitDown')
+  const closePane = useShortcutLabel('terminal.closePane')
+  return (
+    <div className="space-y-1.5 text-[13px] leading-relaxed text-muted-foreground">
+      <p>
+        {translate(
+          'auto.components.feature.wall.FeatureWallSetupWorkflowActions.971775f639',
+          'Split right with'
+        )}
+        <kbd className={SETUP_HINT_KBD_CLASS}>{splitRight}</kbd>{' '}
+        {translate(
+          'auto.components.feature.wall.FeatureWallSetupWorkflowActions.29e64f111d',
+          'or down with'
+        )}{' '}
+        <kbd className={SETUP_HINT_KBD_CLASS}>{splitDown}</kbd>
+        {translate(
+          'auto.components.feature.wall.FeatureWallSetupWorkflowActions.364430eb3d',
+          ', or right-click a pane and choose a split. Close the active pane with'
+        )}
+        <kbd className={SETUP_HINT_KBD_CLASS}>{closePane}</kbd>.
+      </p>
     </div>
   )
 }
 
-export function WorkspacesAction(props: {
-  reducedMotion: boolean
-  done: boolean
-}): React.JSX.Element {
+export function WorkspacesAction(props: { done: boolean }): React.JSX.Element | null {
   const openModal = useAppStore((s) => s.openModal)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const repos = useAppStore((s) => s.repos)
   const repo = getSetupGuideGitRepo(repos, activeRepoId)
+  if (props.done) {
+    return null
+  }
+
   return (
-    <div className="space-y-4">
-      {!props.done ? (
-        <Button
-          type="button"
-          size="sm"
-          className="w-fit gap-2"
-          onClick={() => {
-            cancelPendingSetupGuideTourRequest()
-            if (!repo) {
-              promptForSetupGuideProject(openModal)
-              return
-            }
-            const tourRequestId = createSetupGuideTourRequestId()
-            openModal('new-workspace-composer', {
-              initialRepoId: repo.id,
-              telemetrySource: 'unknown',
-              contextualTourSource: 'setup_guide_parallel_work',
-              setupGuideTourRequestId: tourRequestId
-            })
-            requestSetupGuideTourWhenReady({
-              id: 'workspace-creation',
-              source: 'setup_guide_parallel_work',
-              wasFeaturePreviouslyInteracted: false,
-              shouldContinue: () => isSetupGuideWorkspaceComposerRequestCurrent(tourRequestId)
-            })
-          }}
-        >
-          <ArrowUpRight className="size-3.5" />
-          Try it out
-        </Button>
-      ) : null}
-      <SetupStepPreview>
-        <SetupWorkspacesVisual reducedMotion={props.reducedMotion} />
-      </SetupStepPreview>
-    </div>
+    <Button
+      type="button"
+      size="sm"
+      className="w-fit gap-2"
+      onClick={() => {
+        cancelPendingSetupGuideTourRequest()
+        if (!repo) {
+          promptForSetupGuideProject(openModal)
+          return
+        }
+        const tourRequestId = createSetupGuideTourRequestId()
+        openModal('new-workspace-composer', {
+          initialRepoId: repo.id,
+          telemetrySource: 'unknown',
+          contextualTourSource: 'setup_guide_parallel_work',
+          setupGuideTourRequestId: tourRequestId
+        })
+        requestSetupGuideTourWhenReady({
+          id: 'workspace-creation',
+          source: 'setup_guide_parallel_work',
+          wasFeaturePreviouslyInteracted: false,
+          shouldContinue: () => isSetupGuideWorkspaceComposerRequestCurrent(tourRequestId)
+        })
+      }}
+    >
+      <ArrowUpRight className="size-3.5" />
+      {translate(
+        'auto.components.feature.wall.FeatureWallSetupWorkflowActions.f0bbf7da77',
+        'Try it out'
+      )}
+    </Button>
   )
 }
 
-export function SetupScriptAction(props: { reducedMotion: boolean }): React.JSX.Element {
+export function SetupScriptAction(): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const closeModal = useAppStore((s) => s.closeModal)
@@ -204,60 +222,80 @@ export function SetupScriptAction(props: { reducedMotion: boolean }): React.JSX.
     }
     const updated = await updateRepo(repo.id, { hookSettings: nextHookSettings })
     if (updated) {
-      toast.success('Setup script saved')
+      toast.success(
+        translate(
+          'auto.components.feature.wall.FeatureWallSetupWorkflowActions.6299297dac',
+          'Setup script saved'
+        )
+      )
     } else {
-      toast.error('Failed to save setup script')
+      toast.error(
+        translate(
+          'auto.components.feature.wall.FeatureWallSetupWorkflowActions.a7463915b6',
+          'Failed to save setup script'
+        )
+      )
     }
   }, [repo, setupScript, updateRepo])
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-border bg-muted/20 p-3">
-        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-          <Input
-            value={setupScript}
-            disabled={!canConfigure}
-            onChange={(event) => setSetupScript(event.target.value)}
-            placeholder="pnpm install"
-            aria-label="Setup script"
-            className="font-mono text-sm"
-          />
-          <Button
-            type="button"
-            size="sm"
-            className="gap-2"
-            disabled={!canConfigure || setupScript.trim().length === 0}
-            onClick={() => void handleSaveSetupScript()}
-          >
-            <Save className="size-3.5" />
-            Save
-          </Button>
-        </div>
+      <div className="grid max-w-2xl gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <Input
+          value={setupScript}
+          disabled={!canConfigure}
+          onChange={(event) => setSetupScript(event.target.value)}
+          placeholder={translate(
+            'auto.components.feature.wall.FeatureWallSetupWorkflowActions.5c5b65044e',
+            'pnpm install'
+          )}
+          aria-label={translate(
+            'auto.components.feature.wall.FeatureWallSetupWorkflowActions.88469e926b',
+            'Setup script'
+          )}
+          className="font-mono text-sm"
+        />
         <Button
           type="button"
-          variant="ghost"
           size="sm"
-          className="mt-2 w-fit gap-2 px-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
-          disabled={!canConfigure}
-          onClick={openLocalCommandSettings}
+          className="gap-2"
+          disabled={!canConfigure || setupScript.trim().length === 0}
+          onClick={() => void handleSaveSetupScript()}
         >
-          <Settings className="size-3.5" />
-          View in settings
+          <Save className="size-3.5" />
+          {translate(
+            'auto.components.feature.wall.FeatureWallSetupWorkflowActions.14327073cc',
+            'Save'
+          )}
         </Button>
       </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="w-fit gap-2 px-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
+        disabled={!canConfigure}
+        onClick={openLocalCommandSettings}
+      >
+        <Settings className="size-3.5" />
+        {translate(
+          'auto.components.feature.wall.FeatureWallSetupWorkflowActions.00078a6134',
+          'View in settings'
+        )}
+      </Button>
       {!canConfigure ? (
         <p className="text-xs text-muted-foreground">
-          Add a git project first, then configure the setup script for that repository.
+          {translate(
+            'auto.components.feature.wall.FeatureWallSetupWorkflowActions.486c2f4d8d',
+            'Add a git project first, then configure the setup script for that repository.'
+          )}
         </p>
       ) : null}
-      <SetupStepPreview>
-        <SetupScriptAnimatedVisual reducedMotion={props.reducedMotion} />
-      </SetupStepPreview>
     </div>
   )
 }
 
-function useSetupTargetWorktree(): Worktree | null {
+export function useSetupTargetWorktree(): Worktree | null {
   const allWorktrees = useAllWorktrees()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   return useMemo(

@@ -16,6 +16,9 @@ describe('feature education telemetry constants', () => {
     expect(normalizeFeatureEducationSource('workspace_agent_sessions_visible')).toBe(
       'workspace_agent_sessions_visible'
     )
+    expect(normalizeFeatureEducationSource('floating_workspace_visible')).toBe(
+      'floating_workspace_visible'
+    )
     expect(normalizeFeatureEducationSource('setup_guide_parallel_work')).toBe(
       'setup_guide_parallel_work'
     )

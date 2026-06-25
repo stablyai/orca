@@ -65,6 +65,9 @@ export function getFeatureWallSetupProgress(
       input.settings.notifications.agentTaskComplete === true,
     'split-terminal': hasFeatureInteraction(input.featureInteractions, 'terminal-pane-split'),
     'two-worktrees': countAvailableNonMainWorktrees(input.worktreesByRepo) >= 1,
+    // Why: the 'browser' interaction fires when a non-blank page is viewed, so
+    // opening any real page in Orca's browser durably completes this milestone.
+    browser: hasFeatureInteraction(input.featureInteractions, 'browser'),
     'task-sources': input.hasConnectedTaskSource,
     'agent-capabilities': agentCapabilitiesDone,
     'setup-script': input.hasSetupScript

@@ -10,6 +10,7 @@ import { Progress } from './ui/progress'
 import { AlertCircle, Check, Loader2, Minus, Network, RotateCw, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ChangelogData } from '../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -87,7 +88,7 @@ function CompactCardContent({
           size="icon"
           className="size-7 shrink-0"
           onClick={onClose}
-          aria-label="Dismiss"
+          aria-label={translate('auto.components.UpdateCard.a726967bd3', 'Dismiss')}
         >
           <X className="size-3.5" />
         </Button>
@@ -101,10 +102,13 @@ function CompactCardContent({
 export function UpdateCard() {
   const status = useAppStore((s) => s.updateStatus)
   const storeChangelog = useAppStore((s) => s.updateChangelog)
+  const updateUserInitiatedCycle = useAppStore((s) => s.updateUserInitiatedCycle)
   const dismissedVersion = useAppStore((s) => s.dismissedUpdateVersion)
   const dismissUpdate = useAppStore((s) => s.dismissUpdate)
   const collapsed = useAppStore((s) => s.updateCardCollapsed)
   const setCollapsed = useAppStore((s) => s.setUpdateCardCollapsed)
+  const reassuranceSeen = useAppStore((s) => s.updateReassuranceSeen)
+  const markReassuranceSeen = useAppStore((s) => s.markUpdateReassuranceSeen)
   const hasStartedDownload = useRef(false)
   const dismissAnimationTimerRef = useRef<number | null>(null)
   const collapseAnimationTimerRef = useRef<number | null>(null)
@@ -128,13 +132,6 @@ export function UpdateCard() {
   // Why: tracks whether the card is exiting so we can play the fade-out
   // animation before unmounting.
   const [exiting, setExiting] = useState(false)
-  // Why: when the user explicitly clicks "Check for Updates", the dismiss gate
-  // must be bypassed for the resulting 'available' card — otherwise the card
-  // flashes "Checking..." then vanishes because the same version was previously
-  // dismissed.  This ref tracks whether the current check cycle was user-initiated
-  // so the dismiss gate can let the result through.
-  const userInitiatedCycleRef = useRef(false)
-
   const changelog: ChangelogData | null = storeChangelog
 
   // Why: the 'error' variant of UpdateStatus does not carry a `version` field,
@@ -247,18 +244,6 @@ export function UpdateCard() {
   const shouldShowDetailedErrorCard =
     status.state === 'error' && (hasStartedDownload.current || cachedVersion !== null)
 
-  // Why: track whether the current check cycle was user-initiated so the
-  // dismiss gate doesn't hide the result of an explicit "Check for Updates"
-  // click.  Without this, clicking "Check for Updates" when a version was
-  // previously dismissed causes the "Checking..." toast to flash briefly
-  // then vanish — the 'available' card is suppressed by the dismiss gate
-  // even though the user explicitly asked to see the result.
-  if (status.state === 'checking' && isUserInitiated) {
-    userInitiatedCycleRef.current = true
-  } else if (status.state === 'idle' || (status.state === 'checking' && !isUserInitiated)) {
-    userInitiatedCycleRef.current = false
-  }
-
   // Compact transient states: only show for user-initiated checks.
   if (status.state === 'checking' && !isUserInitiated) {
     return null
@@ -295,11 +280,7 @@ export function UpdateCard() {
   // Why: bypass the gate when the current cycle was user-initiated — the user
   // explicitly asked to check, so they expect to see the result even if they
   // dismissed the same version earlier.
-  if (
-    versionRef.current &&
-    dismissedVersion === versionRef.current &&
-    !userInitiatedCycleRef.current
-  ) {
+  if (versionRef.current && dismissedVersion === versionRef.current && !updateUserInitiatedCycle) {
     if (status.state !== 'downloading' && status.state !== 'error') {
       return null
     }
@@ -324,10 +305,8 @@ export function UpdateCard() {
   // Why: the 'error' variant has no version field, so dismiss needs an
   // optional explicit version override for error/install-failure states.
   const handleClose = () => {
-    // Why: clear the user-initiated bypass so the dismiss gate re-engages
-    // immediately — otherwise the card would reappear on the next render
-    // because the bypass ref still overrides the persisted dismissal.
-    userInitiatedCycleRef.current = false
+    // Why: dismissUpdate clears the store-level manual-check bypass so the
+    // dismiss gate re-engages immediately after closing a requested result.
     if (status.state === 'error') {
       setErrorDismissed(true)
       if (cachedVersion) {
@@ -362,12 +341,12 @@ export function UpdateCard() {
       ? isHttp2UpdateError
         ? {
             variant: 'http1Compatibility',
-            title: 'HTTP/2 Download Blocked',
+            title: translate('auto.components.UpdateCard.1339b82cee', 'HTTP/2 Download Blocked'),
             summary: 'Orca can retry through HTTP/1.1 compatibility mode.',
             message: compatibilitySetupError ?? status.message,
             releaseUrl: releaseUrlForVersion(cachedVersion),
             primaryAction: {
-              label: 'Enable & Restart',
+              label: translate('auto.components.UpdateCard.933c6fdf5b', 'Enable & Restart'),
               pendingLabel: 'Restarting...',
               isPending: compatibilityRelaunching,
               onClick: handleEnableHttp1Compatibility
@@ -387,11 +366,11 @@ export function UpdateCard() {
             // of forcing the user into the manual fallback.
             primaryAction: cachedVersion
               ? {
-                  label: 'Retry Download',
+                  label: translate('auto.components.UpdateCard.48565a32bc', 'Retry Download'),
                   onClick: handleUpdate
                 }
               : {
-                  label: 'Re-check',
+                  label: translate('auto.components.UpdateCard.6b0085010d', 'Re-check'),
                   onClick: () => {
                     void window.api.updater.check({ includePrerelease: false })
                   }
@@ -399,12 +378,12 @@ export function UpdateCard() {
           }
       : installError
         ? {
-            title: 'Update Error',
+            title: translate('auto.components.UpdateCard.4cf109845a', 'Update Error'),
             summary: 'Could not restart to install the update.',
             message: installError,
             releaseUrl: releaseUrlForVersion(cachedVersion),
             primaryAction: {
-              label: 'Try Again',
+              label: translate('auto.components.UpdateCard.2c2d3e03ca', 'Try Again'),
               onClick: handleInstallRetry
             }
           }
@@ -522,11 +501,21 @@ export function UpdateCard() {
     // ── Compact transient states (user-initiated check feedback) ──────
 
     if (status.state === 'checking') {
-      return <CompactCardContent icon="spinner" text="Checking for updates..." />
+      return (
+        <CompactCardContent
+          icon="spinner"
+          text={translate('auto.components.UpdateCard.ba5ffc949c', 'Checking for updates...')}
+        />
+      )
     }
 
     if (status.state === 'not-available') {
-      return <CompactCardContent icon="check" text="You're on the latest version." />
+      return (
+        <CompactCardContent
+          icon="check"
+          text={translate('auto.components.UpdateCard.ea2a41adbe', "You're on the latest version.")}
+        />
+      )
     }
 
     // ── Error states ─────────────────────────────────────────────────
@@ -569,7 +558,9 @@ export function UpdateCard() {
       if (hasStartedDownload.current) {
         return (
           <div className="p-4">
-            <p className="text-sm">Installing...</p>
+            <p className="text-sm">
+              {translate('auto.components.UpdateCard.09a55c39b5', 'Installing...')}
+            </p>
           </div>
         )
       }
@@ -639,22 +630,51 @@ export function UpdateCard() {
     )
   })()
 
+  // Why: show a one-time reassurance tip above the card so first-time users
+  // know updating will preserve their running terminal sessions.
+  const showReassurance =
+    !reassuranceSeen && (status.state === 'available' || status.state === 'downloading')
+
   return (
-    <Card
+    <div
       ref={cardRootRef}
-      role="complementary"
-      aria-label={ariaLabel}
-      aria-live="polite"
-      tabIndex={-1}
-      onKeyDown={handleKeyDown}
-      className={cn(
-        'fixed bottom-10 right-4 z-40 w-[360px] max-w-[calc(100vw-32px)] py-0 gap-0',
-        'max-[480px]:left-4 max-[480px]:right-4 max-[480px]:w-auto',
-        animationClass
-      )}
+      className="fixed bottom-10 right-4 z-40 w-[360px] max-w-[calc(100vw-32px)] flex flex-col gap-2
+      max-[480px]:left-4 max-[480px]:right-4 max-[480px]:w-auto"
     >
-      {cardContent}
-    </Card>
+      {showReassurance && (
+        <Card className={`py-0 gap-0 ${animationClass}`}>
+          <div className="flex items-center gap-3 p-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.UpdateCard.b1d867f4fb',
+                  "Your terminal sessions won't be interrupted during the update."
+                )}
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7 shrink-0"
+              onClick={markReassuranceSeen}
+              aria-label={translate('auto.components.UpdateCard.7274ef6e59', 'Dismiss tip')}
+            >
+              <X className="size-3.5" />
+            </Button>
+          </div>
+        </Card>
+      )}
+      <Card
+        role="complementary"
+        aria-label={ariaLabel}
+        aria-live="polite"
+        tabIndex={-1}
+        onKeyDown={handleKeyDown}
+        className={cn('py-0 gap-0', animationClass)}
+      >
+        {cardContent}
+      </Card>
+    </div>
   )
 }
 
@@ -694,13 +714,15 @@ function RichCardContent({
   return (
     <div className="flex flex-col gap-3 p-4">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-semibold">New: {release.title}</h3>
+        <h3 className="text-sm font-semibold">
+          {translate('auto.components.UpdateCard.f58b5c57a6', 'New:')} {release.title}
+        </h3>
         <Button
           variant="ghost"
           size="icon"
           className="size-7 shrink-0 min-w-[44px] min-h-[44px] -m-2"
           onClick={onClose}
-          aria-label="Dismiss update"
+          aria-label={translate('auto.components.UpdateCard.318d3b4bc7', 'Dismiss update')}
         >
           <X className="size-3.5" />
         </Button>
@@ -735,7 +757,8 @@ function RichCardContent({
               className="text-xs text-muted-foreground/70 underline hover:text-foreground inline"
               onClick={() => void window.api.shell.openUrl(release.releaseNotesUrl)}
             >
-              +{releasesBehind - 1} more since your last update
+              +{releasesBehind - 1}{' '}
+              {translate('auto.components.UpdateCard.ccd8b0a793', 'more since your last update')}
             </button>
           </>
         )}
@@ -745,7 +768,7 @@ function RichCardContent({
         className="text-xs text-muted-foreground underline hover:text-foreground self-start"
         onClick={() => void window.api.shell.openUrl(release.releaseNotesUrl)}
       >
-        Read the full release notes
+        {translate('auto.components.UpdateCard.aad383aecc', 'Read the full release notes')}
       </button>
 
       <UpdateActionButtons onUpdateWhenIdle={onUpdateWhenIdle} onUpdateNow={onUpdateNow} />
@@ -771,29 +794,38 @@ function SimpleCardContent({
   return (
     <div className="flex flex-col gap-2.5 p-3.5">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-semibold">Update Available</h3>
+        <h3 className="text-sm font-semibold">
+          {translate('auto.components.UpdateCard.9abc59f814', 'Update Available')}
+        </h3>
         <Button
           variant="ghost"
           size="icon"
           className="size-7 shrink-0 min-w-[44px] min-h-[44px] -m-2"
           onClick={onClose}
-          aria-label="Dismiss update"
+          aria-label={translate('auto.components.UpdateCard.318d3b4bc7', 'Dismiss update')}
         >
           <X className="size-3.5" />
         </Button>
       </div>
 
-      <p className="text-sm text-muted-foreground">Orca v{version} is ready.</p>
+      <p className="text-sm text-muted-foreground">
+        {translate('auto.components.UpdateCard.05ad78a6d1', 'Orca v{{value0}} is ready.', {
+          value0: version
+        })}
+      </p>
 
       <p className="text-xs leading-relaxed text-muted-foreground">
-        Your sessions are saved and will be restored automatically.
+        {translate(
+          'auto.components.UpdateCard.7c8586ac71',
+          'Your sessions are saved and will be restored automatically.'
+        )}
       </p>
 
       <button
         className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground self-start"
         onClick={() => void window.api.shell.openUrl(releaseUrl)}
       >
-        Release notes
+        {translate('auto.components.UpdateCard.44324ef542', 'Release notes')}
       </button>
 
       <UpdateActionButtons
@@ -824,10 +856,10 @@ function UpdateActionButtons({
         onClick={onUpdateWhenIdle}
         className="w-full cursor-pointer"
       >
-        Update when idle
+        {translate('auto.components.UpdateCard.19aa0f36c8', 'Update when idle')}
       </Button>
       <Button variant="secondary" size="sm" onClick={onUpdateNow} className="w-full cursor-pointer">
-        Update now
+        {translate('auto.components.UpdateCard.54f6c6c1ef', 'Update now')}
       </Button>
     </div>
   )
@@ -864,16 +896,21 @@ function DownloadingContent({
     <div className="flex flex-col gap-3 p-4">
       <div className="flex items-start justify-between gap-2">
         {release ? (
-          <h3 className="text-sm font-semibold">New: {release.title}</h3>
+          <h3 className="text-sm font-semibold">
+            {translate('auto.components.UpdateCard.f58b5c57a6', 'New:')}
+            {release.title}
+          </h3>
         ) : (
-          <h3 className="text-sm font-semibold">Downloading Update</h3>
+          <h3 className="text-sm font-semibold">
+            {translate('auto.components.UpdateCard.558842597d', 'Downloading Update')}
+          </h3>
         )}
         <Button
           variant="ghost"
           size="icon"
           className="size-7 shrink-0 min-w-[44px] min-h-[44px] -m-2"
           onClick={onCollapse}
-          aria-label="Minimize to status bar"
+          aria-label={translate('auto.components.UpdateCard.8acbdd3961', 'Minimize to status bar')}
         >
           <Minus className="size-3.5" />
         </Button>
@@ -899,7 +936,11 @@ function DownloadingContent({
       )}
 
       <p className="text-sm text-muted-foreground">
-        {release ? release.description : `Orca v${version} is downloading.`}
+        {release
+          ? release.description
+          : translate('auto.components.UpdateCard.93794ea932', 'Orca v{{value0}} is downloading.', {
+              value0: version
+            })}
       </p>
 
       <button
@@ -910,12 +951,16 @@ function DownloadingContent({
           )
         }
       >
-        {release ? 'Read the full release notes' : 'Release notes'}
+        {release
+          ? translate('auto.components.UpdateCard.aad383aecc', 'Read the full release notes')
+          : translate('auto.components.UpdateCard.44324ef542', 'Release notes')}
       </button>
 
       <div className="flex flex-col gap-2 mt-1">
         <Progress value={percent} className="h-1.5" />
-        <p className="text-xs text-muted-foreground">Downloading... {percent}%</p>
+        <p className="text-xs text-muted-foreground">
+          {translate('auto.components.UpdateCard.6e45bfa2e0', 'Downloading...')} {percent}%
+        </p>
       </div>
     </div>
   )
@@ -962,7 +1007,7 @@ function ErrorCardContent({
           size="icon"
           className="size-7 shrink-0 min-w-[44px] min-h-[44px] -m-2"
           onClick={onClose}
-          aria-label="Minimize to status bar"
+          aria-label={translate('auto.components.UpdateCard.8acbdd3961', 'Minimize to status bar')}
         >
           <Minus className="size-3.5" />
         </Button>
@@ -971,14 +1016,18 @@ function ErrorCardContent({
       {isCompatibility ? (
         <div className="rounded-md border border-border/70 bg-muted/30 px-3 py-2">
           <p className="text-xs leading-relaxed text-muted-foreground">
-            This turns on a process-wide Electron networking switch after restart. Use it for
-            corporate VPNs or proxies that reject HTTP/2 update downloads.
+            {translate(
+              'auto.components.UpdateCard.90559b14e3',
+              'This turns on a process-wide Electron networking switch after restart. Use it for corporate VPNs or proxies that reject HTTP/2 update downloads.'
+            )}
           </p>
         </div>
       ) : null}
 
       <div className="rounded-md bg-muted/40 px-3 py-2">
-        <p className="mb-1 text-[11px] font-medium uppercase text-muted-foreground">Last error</p>
+        <p className="mb-1 text-[11px] font-medium uppercase text-muted-foreground">
+          {translate('auto.components.UpdateCard.3553a8672f', 'Last error')}
+        </p>
         <p className="scrollbar-sleek max-h-20 overflow-auto break-words font-mono text-xs leading-relaxed text-muted-foreground">
           {message}
         </p>
@@ -1009,7 +1058,7 @@ function ErrorCardContent({
           onClick={() => void window.api.shell.openUrl(releaseUrl)}
           className={primaryAction ? 'flex-1' : 'w-full'}
         >
-          Download Manually
+          {translate('auto.components.UpdateCard.47126bcf57', 'Download Manually')}
         </Button>
       </div>
     </div>
@@ -1030,24 +1079,30 @@ function ReadyToInstallContent({
   return (
     <div className="flex flex-col gap-3 p-4">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-semibold">Ready to Install</h3>
+        <h3 className="text-sm font-semibold">
+          {translate('auto.components.UpdateCard.17412483da', 'Ready to Install')}
+        </h3>
         <Button
           variant="ghost"
           size="icon"
           className="size-7 shrink-0 min-w-[44px] min-h-[44px] -m-2"
           onClick={onClose}
-          aria-label="Minimize to status bar"
+          aria-label={translate('auto.components.UpdateCard.8acbdd3961', 'Minimize to status bar')}
         >
           <Minus className="size-3.5" />
         </Button>
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Orca v{version} is downloaded. Restart when you&apos;re ready.
+        {translate(
+          'auto.components.UpdateCard.6714206e5a',
+          "Orca v{{value0}} is downloaded. Restart when you're ready.",
+          { value0: version }
+        )}
       </p>
 
       <Button variant="default" size="sm" onClick={onRestart} className="w-full">
-        Restart to Update
+        {translate('auto.components.UpdateCard.68b235d264', 'Restart to Update')}
       </Button>
     </div>
   )

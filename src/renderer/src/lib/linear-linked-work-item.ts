@@ -1,33 +1,28 @@
 import type { LinearIssue } from '../../../shared/types'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
-import { buildLinearIssueContextSnapshot } from '@/lib/linear-issue-context-snapshot'
+import { getLinearOrganizationUrlKeyFromIssueUrl } from '../../../shared/linear-links'
 
 export function isLinearLinkedWorkItem(
-  item: Pick<LinkedWorkItemSummary, 'linearIdentifier'> | null | undefined
+  item: Pick<LinkedWorkItemSummary, 'provider' | 'linearIdentifier'> | null | undefined
 ): boolean {
-  return Boolean(item?.linearIdentifier)
+  return item?.provider === 'linear' || Boolean(item?.linearIdentifier?.trim())
 }
 
-export function buildLinearIssueLinkedWorkItem(
-  issue: LinearIssue,
-  renderedText = buildLinearIssueContextSnapshot(issue)
-): LinkedWorkItemSummary {
+export function buildLinearIssueLinkedWorkItem(issue: LinearIssue): LinkedWorkItemSummary {
+  const organizationUrlKey = getLinearOrganizationUrlKeyFromIssueUrl(issue.url)
   return {
     type: 'issue',
     provider: 'linear',
-    // Why: Linear issue identifiers are strings; keep numeric issue metadata
-    // empty while preserving the real source through `linearIdentifier`.
+    // Why: Linear issue prose must not enter prompt metadata; keep only the
+    // string identifier/link and leave numeric issue metadata empty.
     number: 0,
     title: issue.title,
     url: issue.url,
     linearIdentifier: issue.identifier,
-    ...(renderedText.trim()
+    ...(issue.workspaceId ? { linearWorkspaceId: issue.workspaceId } : {}),
+    ...(organizationUrlKey
       ? {
-          linkedContext: {
-            provider: 'linear' as const,
-            version: 1 as const,
-            renderedText
-          }
+          linearOrganizationUrlKey: organizationUrlKey
         }
       : {})
   }

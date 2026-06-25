@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { LinearComment, LinearIssue } from '../../../shared/types'
 import {
@@ -6,6 +6,10 @@ import {
   LINEAR_ISSUE_CONTEXT_CAPS
 } from './linear-issue-context-snapshot'
 import { buildContainedLinkedContextBlock } from './linked-work-item-context'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 function makeIssue(patch: Partial<LinearIssue> = {}): LinearIssue {
   return {
@@ -170,6 +174,23 @@ describe('buildLinearIssueContextSnapshot', () => {
     expect(snapshot).not.toContain(' end')
   })
 
+  it('bounds inline metadata normalization for pasted-size Linear fields', () => {
+    const replace = vi.spyOn(String.prototype, 'replace')
+    const charCodeAt = vi.spyOn(String.prototype, 'charCodeAt')
+    const pastedTitle = `Fix\t  pasted title ${' body\n'.repeat(40_000)}`
+
+    const snapshot = buildLinearIssueContextSnapshot(makeIssue({ title: pastedTitle }))
+
+    expect(snapshot).toContain('Title: Fix pasted title body body')
+    expect(snapshot.length).toBeLessThanOrEqual(LINEAR_ISSUE_CONTEXT_CAPS.renderedTextChars)
+    expect(charCodeAt.mock.calls.length).toBeLessThan(pastedTitle.length / 2)
+    expect(
+      replace.mock.calls.filter(
+        ([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+'
+      )
+    ).toHaveLength(0)
+  })
+
   it('applies the rendered text hard cap last and reserves the final overflow marker', () => {
     const subIssues = Array.from({ length: LINEAR_ISSUE_CONTEXT_CAPS.childIssues }, (_, index) => ({
       id: `child-${index + 1}`,
@@ -185,6 +206,7 @@ describe('buildLinearIssueContextSnapshot', () => {
       })
     )
 
+    const split = vi.spyOn(String.prototype, 'split')
     const snapshot = buildLinearIssueContextSnapshot(
       makeIssue({
         description: 'x'.repeat(LINEAR_ISSUE_CONTEXT_CAPS.descriptionChars + 200),
@@ -196,6 +218,7 @@ describe('buildLinearIssueContextSnapshot', () => {
     expect(snapshot.length).toBeLessThanOrEqual(LINEAR_ISSUE_CONTEXT_CAPS.renderedTextChars)
     expect(snapshot).toMatch(/\[context truncated to 12000 chars\]$/)
     expect(snapshot).not.toContain('[truncat\n')
+    expect(split).not.toHaveBeenCalled()
   })
 
   it('keeps delimiter-like Linear fields quoted inside the contained context wrapper', () => {

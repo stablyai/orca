@@ -30,6 +30,19 @@ afterEach(async () => {
 })
 
 describe('subscribeRemoteRuntimeRequest', () => {
+  it('includes WebSocket close details when subscription admission is rejected', async () => {
+    const server = await createClosingServer(1013, 'Maximum connections reached')
+
+    await expect(
+      subscribeRemoteRuntimeRequest(server.pairing, 'terminal.subscribe', {}, 1000, {
+        onResponse: vi.fn(),
+        onError: vi.fn()
+      })
+    ).rejects.toThrow(
+      'Remote Orca runtime closed the connection (1013: Maximum connections reached).'
+    )
+  })
+
   it('sends encrypted binary frames on an established subscription socket', async () => {
     const server = await createSubscriptionServer()
     const onResponse = vi.fn()
@@ -129,6 +142,14 @@ describe('subscribeRemoteRuntimeRequest', () => {
 })
 
 describe('sendRemoteRuntimeRequest', () => {
+  it('includes WebSocket close details when one-shot admission is rejected', async () => {
+    const server = await createClosingServer(1013, 'Maximum connections reached')
+
+    await expect(sendRemoteRuntimeRequest(server.pairing, 'status.get', {}, 1000)).rejects.toThrow(
+      'Remote Orca runtime closed the connection (1013: Maximum connections reached).'
+    )
+  })
+
   it('refreshes the per-call timeout when the runtime sends keepalive frames', async () => {
     const server = await createOneShotServer()
 
@@ -142,6 +163,40 @@ describe('sendRemoteRuntimeRequest', () => {
     expect(response).toMatchObject({
       ok: true,
       result: { satisfied: true }
+    })
+  })
+
+  it('preserves structured failure data for remote computer-use recovery hints', async () => {
+    const server = await createOneShotServer({
+      response: (requestId) => ({
+        id: requestId,
+        ok: false,
+        error: {
+          code: 'app_not_found',
+          message: 'app not found: Gmail',
+          data: {
+            nextSteps: ['Target the desktop browser app/window that contains Gmail.']
+          }
+        },
+        _meta: { runtimeId: 'runtime-test' }
+      })
+    })
+
+    const response = await sendRemoteRuntimeRequest(
+      server.pairing,
+      'computer.getAppState',
+      { app: 'Gmail' },
+      1000
+    )
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'app_not_found',
+        data: {
+          nextSteps: [expect.stringContaining('desktop browser app/window')]
+        }
+      }
     })
   })
 
@@ -258,7 +313,38 @@ function sendEncrypted(ws: WebSocket, sharedKey: Uint8Array, message: unknown): 
   ws.send(encrypt(JSON.stringify(message), sharedKey))
 }
 
-async function createOneShotServer(): Promise<{ pairing: PairingOffer }> {
+async function createClosingServer(
+  code: number,
+  reason: string
+): Promise<{ pairing: PairingOffer }> {
+  const serverKeyPair = generateKeyPair()
+  const wss = new WebSocketServer({ port: 0 })
+  servers.push(wss)
+  wss.on('connection', (ws) => {
+    ws.close(code, reason)
+  })
+
+  await new Promise<void>((resolve) => wss.once('listening', resolve))
+  const address = wss.address() as AddressInfo
+  const pairing = parsePairingCode(
+    encodePairingOffer({
+      v: 2,
+      endpoint: `ws://127.0.0.1:${address.port}`,
+      deviceToken: 'device-token',
+      publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey)
+    })
+  )
+  if (!pairing) {
+    throw new Error('Failed to create test pairing')
+  }
+  return { pairing }
+}
+
+async function createOneShotServer(
+  options: {
+    response?: (requestId: string) => unknown
+  } = {}
+): Promise<{ pairing: PairingOffer }> {
   const serverKeyPair = generateKeyPair()
   const wss = new WebSocketServer({ port: 0 })
   servers.push(wss)
@@ -300,12 +386,16 @@ async function createOneShotServer(): Promise<{ pairing: PairingOffer }> {
       ws.once('close', () => clearInterval(keepalive))
       setTimeout(() => {
         clearInterval(keepalive)
-        sendEncrypted(ws, key, {
-          id: request.id,
-          ok: true,
-          result: { satisfied: true },
-          _meta: { runtimeId: 'runtime-test' }
-        })
+        sendEncrypted(
+          ws,
+          key,
+          options.response?.(request.id) ?? {
+            id: request.id,
+            ok: true,
+            result: { satisfied: true },
+            _meta: { runtimeId: 'runtime-test' }
+          }
+        )
       }, 550)
     })
   })
