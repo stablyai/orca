@@ -213,13 +213,12 @@ test.describe('Source Control create pull request', () => {
     })
     const createButton = getCreatePRComposerSubmitButton(orcaPage)
     await expect(createButton).toBeVisible({ timeout: 10_000 })
-    await expect(createButton).toBeDisabled()
-    await expect(titleInput).toHaveValue('')
+    await expect(createButton).toBeEnabled()
+    await expect(titleInput).toHaveValue('E2e secondary')
     await expect(orcaPage.getByRole('textbox', { name: 'Pull request base branch' })).toHaveValue(
       'main'
     )
     await expect(descriptionInput).toHaveValue('')
-    await titleInput.fill('Create PR from E2E')
     await descriptionInput.fill('- Initial commit for E2E')
     await expect(createButton).toBeEnabled()
     await createButton.click()
@@ -244,7 +243,7 @@ test.describe('Source Control create pull request', () => {
       provider: 'github',
       base: 'main',
       head: branch,
-      title: 'Create PR from E2E',
+      title: 'E2e secondary',
       body: '- Initial commit for E2E',
       draft: false
     })

@@ -159,6 +159,61 @@ describe('terminal quick commands', () => {
     ])
   })
 
+  it('keeps larger reusable agent prompts while bounding shell commands separately', () => {
+    const largePrompt = 'Review this diff.\n'.repeat(320)
+    const overLimitPrompt = 'x'.repeat(6001)
+    const overLimitCommand = 'y'.repeat(4001)
+
+    expect(
+      normalizeTerminalQuickCommands([
+        {
+          id: 'large-review',
+          label: 'Review',
+          action: 'agent-prompt',
+          agent: 'codex',
+          prompt: largePrompt
+        },
+        {
+          id: 'over-limit-review',
+          label: 'Review with cap',
+          action: 'agent-prompt',
+          agent: 'codex',
+          prompt: overLimitPrompt
+        },
+        {
+          id: 'over-limit-command',
+          label: 'Run long command',
+          command: overLimitCommand
+        }
+      ])
+    ).toEqual([
+      {
+        id: 'large-review',
+        label: 'Review',
+        action: 'agent-prompt',
+        agent: 'codex',
+        prompt: largePrompt.trimEnd(),
+        scope: { type: 'global' }
+      },
+      {
+        id: 'over-limit-review',
+        label: 'Review with cap',
+        action: 'agent-prompt',
+        agent: 'codex',
+        prompt: 'x'.repeat(6000),
+        scope: { type: 'global' }
+      },
+      {
+        id: 'over-limit-command',
+        label: 'Run long command',
+        action: 'terminal-command',
+        command: 'y'.repeat(4000),
+        appendEnter: true,
+        scope: { type: 'global' }
+      }
+    ])
+  })
+
   it('matches global commands everywhere and repo commands only in their repo', () => {
     expect(
       terminalQuickCommandMatchesRepo(

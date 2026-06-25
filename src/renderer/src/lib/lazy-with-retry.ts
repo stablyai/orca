@@ -18,11 +18,25 @@ type AnyComponent = ComponentType<any>
 
 type LazyFactory<T extends AnyComponent> = () => Promise<{ default: T }>
 
+type ReloadGuardState = 'not-attempted' | 'attempted' | 'unavailable'
+
 export type LazyWithRetryOptions = {
   retries?: number
   baseDelayMs?: number
   /** Label surfaced in the reload breadcrumb for triage; not used for control flow. */
   reloadKey?: string
+}
+
+export class LazyChunkLoadError extends Error {
+  constructor(cause: unknown) {
+    super('Lazy chunk load failed after reload recovery was exhausted')
+    this.name = 'LazyChunkLoadError'
+    ;(this as { cause?: unknown }).cause = cause
+  }
+}
+
+export function isLazyChunkLoadError(error: unknown): error is LazyChunkLoadError {
+  return error instanceof LazyChunkLoadError
 }
 
 // One recovery reload per session. The guard survives the reload itself (so we
@@ -35,21 +49,26 @@ const RELOAD_GUARD_KEY = 'orca:lazy-chunk-reload-attempted'
 const DEFAULT_RETRIES = 2
 const DEFAULT_BASE_DELAY_MS = 250
 
-function hasAttemptedChunkReload(): boolean {
+function readChunkReloadGuardState(): ReloadGuardState {
+  if (typeof window === 'undefined') {
+    return 'unavailable'
+  }
   try {
-    return window.sessionStorage.getItem(RELOAD_GUARD_KEY) === '1'
+    return window.sessionStorage.getItem(RELOAD_GUARD_KEY) === '1' ? 'attempted' : 'not-attempted'
   } catch {
-    // Why: when sessionStorage is unavailable (private mode / sandboxed), fail
-    // closed (treat as already-reloaded) so we never risk an infinite reload loop.
-    return true
+    // Why: when storage is blocked we cannot prove a reload happened, but still
+    // fail closed on reloads so a broken chunk never loops.
+    return 'unavailable'
   }
 }
 
-function markChunkReloadAttempted(): void {
+function markChunkReloadAttempted(): boolean {
   try {
     window.sessionStorage.setItem(RELOAD_GUARD_KEY, '1')
+    return true
   } catch {
-    // Best-effort; if writing throws, hasAttemptedChunkReload() also fails closed.
+    // A reload without a durable guard can loop, so treat write failure as unavailable.
+    return false
   }
 }
 
@@ -71,6 +90,24 @@ const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(
 // down, so the error fallback never flashes in the moment before the reload lands.
 const SUSPEND_UNTIL_RELOAD = new Promise<never>(() => undefined)
 
+function isKnownDynamicImportFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  if (error.name === 'ChunkLoadError') {
+    return true
+  }
+
+  return [
+    /failed to fetch dynamically imported module/i,
+    /error loading dynamically imported module/i,
+    /importing a module script failed/i,
+    /failed to load module script/i,
+    /loading chunk .+ failed/i
+  ].some((pattern) => pattern.test(error.message))
+}
+
 export async function loadLazyWithRetry<T extends AnyComponent>(
   factory: LazyFactory<T>,
   options: LazyWithRetryOptions = {}
@@ -91,8 +128,11 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
     }
   }
 
-  if (typeof window !== 'undefined' && !hasAttemptedChunkReload()) {
-    markChunkReloadAttempted()
+  const reloadGuardState = readChunkReloadGuardState()
+  if (typeof window !== 'undefined' && reloadGuardState === 'not-attempted') {
+    if (!markChunkReloadAttempted()) {
+      throw lastError
+    }
     recordReloadBreadcrumb(
       options.reloadKey ?? 'unknown',
       lastError instanceof Error ? lastError.message : String(lastError)
@@ -101,8 +141,12 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
     return SUSPEND_UNTIL_RELOAD
   }
 
-  // Already reloaded once this session, or no window (SSR / node): re-throw so
-  // RecoverableRenderErrorBoundary catches and reports it instead of looping.
+  if (reloadGuardState === 'attempted' && isKnownDynamicImportFailure(lastError)) {
+    throw new LazyChunkLoadError(lastError)
+  }
+
+  // No proven reload attempt (SSR / node / blocked storage) or unknown failure:
+  // re-throw the original error so normal error reporting semantics stay intact.
   throw lastError
 }
 

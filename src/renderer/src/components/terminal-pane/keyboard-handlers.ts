@@ -12,13 +12,13 @@ import {
   type KeybindingPlatform,
   type TerminalShortcutPolicy
 } from '../../../../shared/keybindings'
-import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
+import { type PaneCwdMap } from './resolve-split-cwd'
 import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
 import { normalizeSelectedTextForFileSearch } from '@/lib/file-search-selection'
 import { isFindQueryTooLarge } from '@/lib/find-query-bounds'
-import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-session'
 import { handleEmptyFloatingWorkspacePanelCloseShortcut } from '@/lib/floating-workspace-terminal-actions'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
+import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { useAppStore } from '@/store'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 
@@ -411,41 +411,16 @@ export function useTerminalKeyboardShortcuts({
         if (!pane) {
           return
         }
-        const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
-        const telemetrySource = getKeyboardSplitTelemetrySource()
-        if (splitWebRuntimeTerminal(ptyId, action.direction, telemetrySource)) {
-          return
-        }
-        // Split-pane CWD inheritance (docs/ssh-split-pane-inherit-cwd.md):
-        // if we have a confirmed live OSC 7 for the source pane, split
-        // synchronously to preserve chaining on rapid Cmd+D. Otherwise fall
-        // back to an async resolve that queries pty.getCwd.
-        const cached = paneCwdRef.current.get(pane.id)
-        if (cached?.confirmed && cached.cwd) {
-          const createdPane = manager.splitPane(pane.id, action.direction, { cwd: cached.cwd })
-          recordKeyboardCreatedTerminalPaneSplit(createdPane, {
-            source: telemetrySource,
-            direction: action.direction
-          })
-          return
-        }
-        const paneIdAtDispatch = pane.id
-        const directionAtDispatch = action.direction
-        void (async () => {
-          const cwd = await resolveSplitCwd({
-            paneCwdMap: paneCwdRef.current,
-            sourcePaneId: paneIdAtDispatch,
-            sourcePtyId: ptyId,
-            fallbackCwd
-          })
-          const createdPane = managerRef.current?.splitPane(paneIdAtDispatch, directionAtDispatch, {
-            cwd
-          })
-          recordKeyboardCreatedTerminalPaneSplit(createdPane, {
-            source: telemetrySource,
-            direction: directionAtDispatch
-          })
-        })()
+        splitTerminalPaneWithInheritedCwd({
+          manager,
+          getManager: () => managerRef.current,
+          paneTransports: paneTransportsRef.current,
+          paneCwdMap: paneCwdRef.current,
+          fallbackCwd,
+          pane,
+          direction: action.direction,
+          source: getKeyboardSplitTelemetrySource()
+        })
       }
     }
 

@@ -10,12 +10,12 @@ import {
 } from '@/lib/provider-runtime-context'
 import { useAppStore } from '@/store'
 import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
+import { useIntegrationSubordinateRowClass } from './integration-card-presentation'
 import { getProviderAccountScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'
 
 type VerificationResult = { state: 'ok' | 'error'; error?: string }
-const INTEGRATION_SUBORDINATE_ROW_CLASS = 'rounded-md border border-border/50 bg-muted/50 px-3 py-2'
 
 export function JiraIntegrationCard(): React.JSX.Element {
   const jiraStatus = useAppStore((s) => s.jiraStatus)
@@ -40,6 +40,8 @@ export function JiraIntegrationCard(): React.JSX.Element {
   const credentialCopy = hasRemoteProviderRuntime(settings)
     ? 'Connect a Jira Cloud site with your Atlassian email and an API token. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.'
     : 'Connect a Jira Cloud site with your Atlassian email and an API token. Credentials are stored locally and encrypted when local runtime storage supports it.'
+  const subordinateRowClass = useIntegrationSubordinateRowClass('flex items-center gap-3')
+  const accountScopeRowClass = useIntegrationSubordinateRowClass('text-xs')
 
   const handleDisconnect = async (siteId?: string): Promise<void> => {
     await disconnectJira(siteId)
@@ -117,7 +119,7 @@ export function JiraIntegrationCard(): React.JSX.Element {
             'Account scope'
           )}
           scope={accountScope}
-          className={`text-xs ${INTEGRATION_SUBORDINATE_ROW_CLASS}`}
+          className={accountScopeRowClass}
         />
         {connected && sites.length > 0 ? (
           <div className="space-y-2">
@@ -125,10 +127,7 @@ export function JiraIntegrationCard(): React.JSX.Element {
               const testResult = testResultBySite[site.id]
               const testing = testingSiteId === site.id
               return (
-                <div
-                  key={site.id}
-                  className={`flex items-center gap-3 ${INTEGRATION_SUBORDINATE_ROW_CLASS}`}
-                >
+                <div key={site.id} className={subordinateRowClass}>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">
                       {site.displayName}

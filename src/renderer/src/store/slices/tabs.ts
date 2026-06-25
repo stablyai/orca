@@ -26,6 +26,7 @@ import {
   sanitizeRecentTabIds,
   updateGroup
 } from './tab-group-state'
+import { isPaneColumnSplitDropNoOp } from './pane-column-split-drop-no-op'
 import { buildHydratedTabState, pruneTabGroupLayoutForGroups } from './tabs-hydration'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -531,6 +532,44 @@ function buildActiveSurfacePatch(
       [worktreeId]: derived.activeTabType
     }
   }
+}
+
+function activeSurfacePatchMatchesState(
+  state: Pick<
+    AppState,
+    | 'activeBrowserTabId'
+    | 'activeBrowserTabIdByWorktree'
+    | 'activeFileId'
+    | 'activeFileIdByWorktree'
+    | 'activeTabId'
+    | 'activeTabIdByWorktree'
+    | 'activeTabType'
+    | 'activeTabTypeByWorktree'
+  >,
+  worktreeId: string,
+  patch: Pick<
+    AppState,
+    | 'activeBrowserTabId'
+    | 'activeBrowserTabIdByWorktree'
+    | 'activeFileId'
+    | 'activeFileIdByWorktree'
+    | 'activeTabId'
+    | 'activeTabIdByWorktree'
+    | 'activeTabType'
+    | 'activeTabTypeByWorktree'
+  >
+): boolean {
+  return (
+    state.activeBrowserTabId === patch.activeBrowserTabId &&
+    state.activeBrowserTabIdByWorktree[worktreeId] ===
+      patch.activeBrowserTabIdByWorktree[worktreeId] &&
+    state.activeFileId === patch.activeFileId &&
+    state.activeFileIdByWorktree[worktreeId] === patch.activeFileIdByWorktree[worktreeId] &&
+    state.activeTabId === patch.activeTabId &&
+    state.activeTabIdByWorktree[worktreeId] === patch.activeTabIdByWorktree[worktreeId] &&
+    state.activeTabType === patch.activeTabType &&
+    state.activeTabTypeByWorktree[worktreeId] === patch.activeTabTypeByWorktree[worktreeId]
+  )
 }
 
 export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, get) => ({
@@ -1170,10 +1209,13 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
 
   focusGroup: (worktreeId, groupId) =>
     set((state) => {
-      const nextActiveGroupIdByWorktree = {
-        ...state.activeGroupIdByWorktree,
-        [worktreeId]: groupId
-      }
+      const groupAlreadyFocused = state.activeGroupIdByWorktree[worktreeId] === groupId
+      const nextActiveGroupIdByWorktree = groupAlreadyFocused
+        ? state.activeGroupIdByWorktree
+        : {
+            ...state.activeGroupIdByWorktree,
+            [worktreeId]: groupId
+          }
       // Why: focusing a split group surfaces whichever terminal tab is already
       // active in that group, so the tab-level bell is no longer needed.
       //
@@ -1184,6 +1226,9 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       // before the user ever sees the tab. All current callers only fire for
       // the active worktree, but this guard prevents future misuse.
       if (state.activeWorktreeId !== worktreeId) {
+        if (groupAlreadyFocused) {
+          return state
+        }
         return {
           activeGroupIdByWorktree: nextActiveGroupIdByWorktree
         }
@@ -1213,8 +1258,23 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
               return changed ? copy : state.unreadTerminalTabs
             })()
           : state.unreadTerminalTabs
+      const activeSurfacePatch = buildActiveSurfacePatch(
+        {
+          ...state,
+          activeGroupIdByWorktree: nextActiveGroupIdByWorktree
+        },
+        worktreeId,
+        groupId
+      )
+      if (
+        groupAlreadyFocused &&
+        nextUnreadTerminalTabs === state.unreadTerminalTabs &&
+        activeSurfacePatchMatchesState(state, worktreeId, activeSurfacePatch)
+      ) {
+        return state
+      }
       return {
-        activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
+        ...(groupAlreadyFocused ? {} : { activeGroupIdByWorktree: nextActiveGroupIdByWorktree }),
         // Why: only write unreadTerminalTabs back into state when it actually
         // changed. The IIFE above returns state.unreadTerminalTabs by reference
         // on no-op; preserving that reference via conditional spread keeps
@@ -1223,14 +1283,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         ...(nextUnreadTerminalTabs !== state.unreadTerminalTabs
           ? { unreadTerminalTabs: nextUnreadTerminalTabs }
           : {}),
-        ...buildActiveSurfacePatch(
-          {
-            ...state,
-            activeGroupIdByWorktree: nextActiveGroupIdByWorktree
-          },
-          worktreeId,
-          groupId
-        )
+        ...activeSurfacePatch
       }
     }),
 
@@ -1378,18 +1431,49 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         }
         return group
       })
+      let nextLayoutByWorktree = state.layoutByWorktree
+      let nextActiveGroupIdByWorktreeResolved = nextActiveGroupIdByWorktree
+      let filteredGroups = nextGroups
+      if (sourceOrder.length === 0) {
+        filteredGroups = nextGroups.filter((group) => group.id !== sourceGroup.id)
+        const collapsedState = collapseGroupLayout(
+          nextLayoutByWorktree,
+          nextActiveGroupIdByWorktreeResolved,
+          worktreeId,
+          sourceGroup.id,
+          targetGroupId
+        )
+        nextLayoutByWorktree = collapsedState.layoutByWorktree
+        nextActiveGroupIdByWorktreeResolved = collapsedState.activeGroupIdByWorktree
+      }
+      const nextGroupsByWorktree = {
+        ...state.groupsByWorktree,
+        [worktreeId]: filteredGroups
+      }
+      const nextUnifiedTabsByWorktree = {
+        ...state.unifiedTabsByWorktree,
+        [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
+          candidate.id === tabId ? { ...candidate, groupId: targetGroupId } : candidate
+        )
+      }
       return {
-        unifiedTabsByWorktree: {
-          ...state.unifiedTabsByWorktree,
-          [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
-            candidate.id === tabId ? { ...candidate, groupId: targetGroupId } : candidate
-          )
-        },
-        groupsByWorktree: {
-          ...state.groupsByWorktree,
-          [worktreeId]: nextGroups
-        },
-        activeGroupIdByWorktree: nextActiveGroupIdByWorktree
+        unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
+        groupsByWorktree: nextGroupsByWorktree,
+        layoutByWorktree: nextLayoutByWorktree,
+        activeGroupIdByWorktree: nextActiveGroupIdByWorktreeResolved,
+        ...(state.activeWorktreeId === worktreeId
+          ? buildActiveSurfacePatch(
+              {
+                ...state,
+                unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
+                groupsByWorktree: nextGroupsByWorktree,
+                layoutByWorktree: nextLayoutByWorktree,
+                activeGroupIdByWorktree: nextActiveGroupIdByWorktreeResolved
+              },
+              worktreeId,
+              nextActiveGroupIdByWorktreeResolved[worktreeId] ?? null
+            )
+          : {})
       }
     })
     if (moved && opts?.recordInteraction !== false) {
@@ -1418,11 +1502,20 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       if (!isSplitDrop && tab.groupId === target.groupId) {
         return {}
       }
-      if (isSplitDrop && tab.groupId === target.groupId && sourceGroup.tabOrder.length <= 1) {
-        // Why: dragging the final tab in a group onto that same group's edge
-        // would create a transient sibling only to collapse the source
-        // immediately, leaving the layout unchanged while still churning focus
-        // and group IDs. Treat that as a no-op instead of faking a split.
+      const layout = state.layoutByWorktree[worktreeId]
+      if (
+        isSplitDrop &&
+        isPaneColumnSplitDropNoOp({
+          sourceGroupId: sourceGroup.id,
+          targetGroupId: target.groupId,
+          splitDirection: target.splitDirection!,
+          sourceTabCount: sourceGroup.tabOrder.length,
+          layout
+        })
+      ) {
+        // Why: dragging the final tab in a group onto that same group's edge,
+        // or onto the adjacent sibling's matching edge, creates a transient
+        // column only to collapse the emptied source immediately.
         return {}
       }
 

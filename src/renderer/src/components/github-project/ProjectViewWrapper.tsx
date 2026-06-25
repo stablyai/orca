@@ -47,19 +47,25 @@ import type { GitHubWorkItem } from '../../../../shared/types'
 import ProjectPicker, { type ResolvedProjectSelection } from './ProjectPicker'
 import ProjectViewList from './ProjectViewList'
 import ProjectItemSlugDialog from './ProjectItemSlugDialog'
-import { filterProjectTableRowsByOpenRepos } from './project-row-filtering'
+import {
+  filterProjectTableRowsBySelectedRepos,
+  resolveSelectedProjectRowRepo
+} from './project-row-filtering'
 import {
   resolveMissingRepoProjectDialogState,
   resolveRepoBackedProjectDialogState
 } from './project-dialog-state'
 import {
+  getSelectedRepoFingerprint,
   getNextVisibleProjectTableCache,
   getVisibleProjectTable,
   type CachedVisibleProjectTable
 } from './project-visible-table-cache'
 import { translate } from '@/i18n/i18n'
 
-type Props = Record<string, never>
+type Props = {
+  selectedRepoIds: ReadonlySet<string>
+}
 
 const ORCA_FEATURE_REQUEST_URL = 'https://github.com/stablyai/orca/issues/new'
 
@@ -80,7 +86,7 @@ function getProjectViewSourceScope(settings: Parameters<typeof getActiveRuntimeT
   return target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
 }
 
-export default function ProjectViewWrapper(_props: Props = {} as Props): React.JSX.Element {
+export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const projectViewCache = useAppStore((s) => s.projectViewCache)
   const fetchProjectViewTable = useAppStore((s) => s.fetchProjectViewTable)
@@ -329,9 +335,16 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
   const table: GitHubProjectTable | null = currentCacheKey
     ? (projectViewCache[currentCacheKey]?.data ?? null)
     : null
+  const selectedRepoFingerprint = useMemo(
+    () => getSelectedRepoFingerprint(selectedRepoIds),
+    [selectedRepoIds]
+  )
   const filteredTable = useMemo(
-    () => (table && slugIndexReady ? filterProjectTableRowsByOpenRepos(table, lookupSlug) : null),
-    [table, slugIndexReady, lookupSlug]
+    () =>
+      table && slugIndexReady
+        ? filterProjectTableRowsBySelectedRepos(table, lookupSlug, slugIndexReady, selectedRepoIds)
+        : null,
+    [table, slugIndexReady, lookupSlug, selectedRepoIds]
   )
   const lastFilteredTableRef = useRef<CachedVisibleProjectTable | null>(null)
   // Why: this cache only prevents a blank table while the repo slug index
@@ -339,6 +352,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
   // a second render after every filtered-table change.
   lastFilteredTableRef.current = getNextVisibleProjectTableCache({
     currentCacheKey,
+    selectedRepoFingerprint,
     sourceTable: table,
     slugIndexReady,
     filteredTable,
@@ -346,6 +360,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
   })
   const visibleTable = getVisibleProjectTable({
     currentCacheKey,
+    selectedRepoFingerprint,
     slugIndexReady,
     filteredTable,
     cachedTable: lastFilteredTableRef.current
@@ -401,7 +416,11 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
   } | null>(null)
   const liveRepoIds = useMemo(() => new Set(repos.map((repo) => repo.id)), [repos])
 
-  const resolvedDialogRepoItem = resolveRepoBackedProjectDialogState(dialogRepoItem, liveRepoIds)
+  const resolvedDialogRepoItem = resolveRepoBackedProjectDialogState(
+    dialogRepoItem,
+    liveRepoIds,
+    selectedRepoIds
+  )
   if (resolvedDialogRepoItem !== dialogRepoItem) {
     // Why: repo-backed Project dialogs cannot edit after their repo leaves
     // Orca; clear them before the modal tree receives stale repo ids.
@@ -412,7 +431,8 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
     slugIndexReady,
     slugDialog,
     repoNotInOrca,
-    lookupSlug
+    lookupSlug,
+    selectedRepoIds
   })
   if (resolvedMissingRepoDialogs.slugDialog !== slugDialog) {
     // Why: once a previously missing repo is registered, Project rows should
@@ -483,6 +503,13 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
     []
   )
 
+  const openProjectRowUrlWithToast = useCallback((row: GitHubProjectRow, message: string) => {
+    if (row.content.url) {
+      void window.api.shell.openUrl(row.content.url)
+    }
+    toast.message(message)
+  }, [])
+
   const handleOpenDialog = useCallback(
     (row: GitHubProjectRow) => {
       if (!currentCacheKey || !table) {
@@ -496,19 +523,69 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
         }
         return
       }
-      const matches = lookupSlug(`${origin.owner}/${origin.repo}`)
-      const matched = matches.length === 1 ? matches[0] : null
-      if (matched) {
-        const workItem = buildWorkItem(row, matched.id)
+      const resolution = resolveSelectedProjectRowRepo({
+        row,
+        lookupSlug,
+        slugIndexReady,
+        selectedRepoIds
+      })
+      if (resolution.status === 'loading') {
+        openProjectRowUrlWithToast(
+          row,
+          translate(
+            'auto.components.github.project.ProjectViewWrapper.f352abf7c3',
+            'Repository list is updating.'
+          )
+        )
+        return
+      }
+      if (resolution.status === 'selected_match') {
+        const workItem = buildWorkItem(row, resolution.repo.id)
         if (workItem) {
-          setDialogRepoItem({ workItem, repoPath: matched.path, repoId: matched.id, origin })
+          setDialogRepoItem({
+            workItem,
+            repoPath: resolution.repo.path,
+            repoId: resolution.repo.id,
+            origin
+          })
           return
         }
       }
-      // Unknown repo — use the simplified slug-mode dialog.
-      setSlugDialog({ origin })
+      if (resolution.status === 'no_global_match') {
+        // Unknown repo — use the simplified slug-mode dialog.
+        setSlugDialog({ origin })
+        return
+      }
+      if (resolution.status === 'unselected_match') {
+        openProjectRowUrlWithToast(
+          row,
+          translate(
+            'auto.components.github.project.ProjectViewWrapper.1ce21b8cff',
+            'This item is outside the selected repositories.'
+          )
+        )
+        return
+      }
+      if (resolution.status === 'ambiguous_selected_match') {
+        openProjectRowUrlWithToast(
+          row,
+          translate(
+            'auto.components.github.project.ProjectViewWrapper.030de75bc5',
+            'This item matches multiple selected repositories.'
+          )
+        )
+      }
     },
-    [currentCacheKey, table, buildOrigin, lookupSlug, buildWorkItem]
+    [
+      currentCacheKey,
+      table,
+      buildOrigin,
+      lookupSlug,
+      slugIndexReady,
+      selectedRepoIds,
+      openProjectRowUrlWithToast,
+      buildWorkItem
+    ]
   )
 
   const handleStartWork = useCallback(
@@ -520,9 +597,23 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
       if (!origin) {
         return
       }
-      const matches = lookupSlug(`${origin.owner}/${origin.repo}`)
-      const matched = matches.length === 1 ? matches[0] : null
-      if (!matched) {
+      const resolution = resolveSelectedProjectRowRepo({
+        row,
+        lookupSlug,
+        slugIndexReady,
+        selectedRepoIds
+      })
+      if (resolution.status === 'loading') {
+        openProjectRowUrlWithToast(
+          row,
+          translate(
+            'auto.components.github.project.ProjectViewWrapper.f352abf7c3',
+            'Repository list is updating.'
+          )
+        )
+        return
+      }
+      if (resolution.status === 'no_global_match') {
         setRepoNotInOrca({
           owner: origin.owner,
           repo: origin.repo,
@@ -530,13 +621,38 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
         })
         return
       }
-      const workItem = buildWorkItem(row, matched.id)
+      if (resolution.status === 'unselected_match') {
+        openProjectRowUrlWithToast(
+          row,
+          translate(
+            'auto.components.github.project.ProjectViewWrapper.1ce21b8cff',
+            'This item is outside the selected repositories.'
+          )
+        )
+        return
+      }
+      if (resolution.status === 'ambiguous_selected_match') {
+        openProjectRowUrlWithToast(
+          row,
+          translate(
+            'auto.components.github.project.ProjectViewWrapper.030de75bc5',
+            'This item matches multiple selected repositories.'
+          )
+        )
+        return
+      }
+      if (resolution.status !== 'selected_match') {
+        return
+      }
+      const workItem = buildWorkItem(row, resolution.repo.id)
       if (!workItem) {
         return
       }
+      // Why: issue #4756 changes the TaskPage "Create workspace" path only.
+      // Project view still means "start work now", so it stays on direct launch.
       void launchWorkItemDirect({
         item: workItem,
-        repoId: matched.id,
+        repoId: resolution.repo.id,
         launchSource: 'task_page',
         telemetrySource: 'sidebar',
         openModalFallback: () => {
@@ -550,7 +666,16 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
         }
       })
     },
-    [currentCacheKey, table, buildOrigin, lookupSlug, buildWorkItem]
+    [
+      currentCacheKey,
+      table,
+      buildOrigin,
+      lookupSlug,
+      slugIndexReady,
+      selectedRepoIds,
+      openProjectRowUrlWithToast,
+      buildWorkItem
+    ]
   )
 
   const handleEditAssignees = useCallback(
@@ -806,6 +931,8 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
           onUse={(item) => {
             const current = resolvedDialogRepoItem
             setDialogRepoItem(null)
+            // Why: issue #4756 keeps project-view actions on the direct
+            // "start work now" path instead of the TaskPage background-create flow.
             void launchWorkItemDirect({
               item,
               repoId: current.workItem.repoId,

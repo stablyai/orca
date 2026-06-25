@@ -158,21 +158,38 @@ const ISSUE_WORKTREE_CARD_PROPERTY_OPTIONS: WorktreeCardPropertyOption[] = [
 
 type WorktreeCardPropertyOptionsInput = {
   newCardStyle?: boolean
+  hasProjectGroups?: boolean
 }
 
 export function getWorktreeCardPropertyOptions({
-  newCardStyle = false
+  newCardStyle = false,
+  hasProjectGroups = false
 }: WorktreeCardPropertyOptionsInput = {}): WorktreeCardPropertyOption[] {
   const issueOptions = newCardStyle
     ? ISSUE_WORKTREE_CARD_PROPERTY_OPTIONS
     : [TASK_WORKTREE_CARD_PROPERTY_OPTION]
+  const branchOption: WorktreeCardPropertyOption = {
+    id: 'branch',
+    properties: ['branch'],
+    get label() {
+      // Why: new-card project groups can contain folder workspaces, so the
+      // branch setting copy must describe both repo and folder identity.
+      return newCardStyle && hasProjectGroups
+        ? translate(
+            'auto.components.sidebar.SidebarWorkspaceOptionsMenu.folderPathIdentity',
+            'Branch / folder path'
+          )
+        : translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.219ebf1961', 'Branch name')
+    }
+  }
   if (newCardStyle) {
-    return [...issueOptions, ...BASE_WORKTREE_CARD_PROPERTY_OPTIONS.slice(1)]
+    return [...issueOptions, ...BASE_WORKTREE_CARD_PROPERTY_OPTIONS.slice(1, -1), branchOption]
   }
   return [
     BASE_WORKTREE_CARD_PROPERTY_OPTIONS[0],
     ...issueOptions,
-    ...BASE_WORKTREE_CARD_PROPERTY_OPTIONS.slice(1)
+    ...BASE_WORKTREE_CARD_PROPERTY_OPTIONS.slice(1, -1),
+    branchOption
   ]
 }
 

@@ -492,6 +492,17 @@ export async function listWorktrees(
   }
 }
 
+export async function listWorktreesStrict(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  const worktrees = (await readWorktreeList(repoPath, options)).map((worktree) => {
+    const translatedPath = translateWorktreePath(worktree.path, repoPath, options)
+    return translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
+  })
+  return annotateSparseCheckoutStatus(worktrees)
+}
+
 async function annotateSparseCheckoutStatus(
   worktrees: GitWorktreeInfo[]
 ): Promise<GitWorktreeInfo[]> {
@@ -933,7 +944,11 @@ async function deleteAlreadyMergedBranchAfterSafeDeleteFailure(
   branchHead: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<boolean> {
-  const runGit = (args: string[]) => gitExecFileAsync(args, gitExecOptions(repoPath, options))
+  const runGit = (args: string[], execOptions?: { stdin?: string }) =>
+    gitExecFileAsync(args, {
+      ...gitExecOptions(repoPath, options),
+      ...(execOptions?.stdin !== undefined ? { stdin: execOptions.stdin } : {})
+    })
   const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
   await refreshBranchCleanupTargetRefs(runGit, targetRefs)
   // Why: squash merges rewrite commit IDs, so `branch -d` can reject a branch

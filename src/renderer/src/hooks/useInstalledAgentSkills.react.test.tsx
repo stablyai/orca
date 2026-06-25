@@ -8,11 +8,12 @@ import type {
   SkillDiscoveryResult,
   SkillDiscoveryTarget
 } from '../../../shared/skills'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   type InstalledAgentSkillState,
   _installedAgentSkillDiscoveryInternalsForTests,
-  useInstalledAgentSkill
+  useInstalledAgentSkillNames
 } from './useInstalledAgentSkills'
 
 let root: Root | null = null
@@ -59,8 +60,22 @@ function deferred<T>(): {
   return { promise, resolve, reject }
 }
 
+const LINEAR_AGENT_SKILL_NAMES = ['orca-linear', 'linear-tickets'] as const
+
+const projectWslRuntime: ProjectExecutionRuntimeResolution = {
+  status: 'resolved',
+  runtime: {
+    kind: 'wsl',
+    hostPlatform: 'wsl',
+    projectId: 'repo-1',
+    distro: 'Ubuntu',
+    reason: 'project-override',
+    cacheKey: 'repo-1:wsl:Ubuntu'
+  }
+}
+
 function Probe({ discoveryTarget }: { discoveryTarget?: SkillDiscoveryTarget }): null {
-  latestState = useInstalledAgentSkill('linear-tickets', {
+  latestState = useInstalledAgentSkillNames(LINEAR_AGENT_SKILL_NAMES, {
     discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
@@ -159,5 +174,75 @@ describe('useInstalledAgentSkill', () => {
     expect(latestState?.installed).toBe(false)
     expect(discover).toHaveBeenNthCalledWith(1, undefined)
     expect(discover).toHaveBeenNthCalledWith(2, undefined)
+  })
+
+  it('returns installed from refresh when a legacy Linear skill is discovered', async () => {
+    const backgroundScan = deferred<SkillDiscoveryResult>()
+    const forcedScan = deferred<SkillDiscoveryResult>()
+    const discover = vi
+      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+      .mockReturnValueOnce(backgroundScan.promise)
+      .mockReturnValueOnce(forcedScan.promise)
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover } }
+    })
+
+    await renderProbe()
+
+    const forcedRefresh = latestState?.refresh() ?? Promise.resolve(false)
+    backgroundScan.resolve(discoveryResult([]))
+    await act(async () => {
+      await backgroundScan.promise
+    })
+
+    forcedScan.resolve(discoveryResult([skill({ name: 'linear-tickets' })]))
+    let installed = false
+    await act(async () => {
+      installed = await forcedRefresh
+    })
+
+    expect(installed).toBe(true)
+    expect(latestState?.installed).toBe(true)
+  })
+
+  it('detects a legacy Linear install through WSL skill discovery', async () => {
+    const discover = vi
+      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+      .mockResolvedValue(discoveryResult([skill({ name: 'linear-tickets' })]))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover } }
+    })
+
+    await renderProbe({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(latestState?.installed).toBe(true)
+    expect(discover).toHaveBeenCalledWith({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+  })
+
+  it('detects a legacy Linear install through project-runtime skill discovery', async () => {
+    const discover = vi
+      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+      .mockResolvedValue(discoveryResult([skill({ name: 'linear-tickets' })]))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover } }
+    })
+
+    await renderProbe({ projectRuntime: projectWslRuntime })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(latestState?.installed).toBe(true)
+    expect(discover).toHaveBeenCalledWith({
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      projectRuntime: projectWslRuntime
+    })
   })
 })

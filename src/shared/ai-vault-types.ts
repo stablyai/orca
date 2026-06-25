@@ -19,9 +19,9 @@ export const AI_VAULT_AGENTS = [
 ] as const satisfies readonly TuiAgent[]
 
 export type AiVaultAgent = (typeof AI_VAULT_AGENTS)[number]
-export type AiVaultScope = 'workspace' | 'all'
+export type AiVaultScope = 'workspace' | 'project' | 'all'
 export type AiVaultSort = 'updated' | 'created'
-export type AiVaultGroup = 'folder' | 'agent'
+export type AiVaultGroup = 'project' | 'folder' | 'agent'
 
 export const AI_VAULT_AGENT_LABELS = {
   claude: 'Claude',

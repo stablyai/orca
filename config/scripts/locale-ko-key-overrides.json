@@ -1007,9 +1007,6 @@
   "auto.components.feature.wall.ConnectIntegrationsList.33b650af52": {
     "ko": "팀이 작업을 추적하는 서비스를 연결하세요. Orca는 이슈 제목, 링크, 컨텍스트가 이미 첨부된 워크스페이스를 시작합니다."
   },
-  "auto.components.feature.wall.ConnectIntegrationsList.3a1fcdddad": {
-    "ko": "두 단계만 거치면 됩니다. 먼저 코드 리뷰 서비스를 연결한 다음, 팀이 작업을 계획하는 서비스를 연결하세요."
-  },
   "auto.components.feature.wall.ConnectIntegrationsList.3dddb2d565": {
     "ko": "작업용으로 연결됨"
   },

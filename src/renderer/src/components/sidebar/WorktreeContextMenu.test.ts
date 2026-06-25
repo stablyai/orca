@@ -7,6 +7,7 @@ import {
   shouldRemoveProjectFromContextMenu,
   shouldSuppressContextMenuFollowUpClick,
   shouldContinueDeleteSiblingPositionRestore,
+  shouldShowReadToggleContextMenuItem,
   getWorktreeParentPickerAnchor,
   getWorktreeParentPickerLabel,
   isWorktreeParentPickerDisabled
@@ -95,6 +96,16 @@ describe('shouldSuppressContextMenuFollowUpClick', () => {
 
   it('does not suppress clicks that predate the context menu timestamp', () => {
     expect(shouldSuppressContextMenuFollowUpClick(1_000, 999)).toBe(false)
+  })
+})
+
+describe('shouldShowReadToggleContextMenuItem', () => {
+  it('keeps the read toggle in legacy card menus', () => {
+    expect(shouldShowReadToggleContextMenuItem({ newCardStyle: false })).toBe(true)
+  })
+
+  it('hides the read toggle in experimental card menus', () => {
+    expect(shouldShowReadToggleContextMenuItem({ newCardStyle: true })).toBe(false)
   })
 })
 

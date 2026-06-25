@@ -37,7 +37,8 @@ export async function getPRConflictSummary(
       baseRef: baseRefName,
       baseCommit: latestBaseOid.slice(0, 7),
       commitsBehind,
-      files
+      files,
+      ...(files.length === 0 ? { localMergeState: 'clean' as const } : {})
     }
   } catch {
     return undefined

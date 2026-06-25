@@ -128,6 +128,7 @@ import { normalizeTaskProviderSettings } from '../shared/task-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../shared/auto-rename-branch-from-work-settings'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
+import { normalizeSourceControlGroupOrder } from '../shared/source-control-group-order'
 import { normalizeAppIconId } from '../shared/app-icon'
 import { normalizeTerminalCustomThemes } from '../shared/terminal-custom-themes'
 import {
@@ -1045,6 +1046,10 @@ function resolveSetupGuideSidebarDismissedOnLoad(
   // Why: the sidebar checklist is a new-user prompt. Once onboarding is
   // closed, persisted false is just the old default value, not a user opt-in.
   return onboarding.closedAt !== null || persistedDismissed === true
+}
+
+function shouldDefaultNewWorktreeCardStyleOn(onboarding: OnboardingState): boolean {
+  return onboarding.closedAt === null
 }
 
 // Why: read a settings field that was removed from GlobalSettings but can
@@ -2652,11 +2657,30 @@ export class Store {
         if (!parsed.onboarding) {
           this.loadNeedsSave = true
         }
+        const defaultNewWorktreeCardStyle =
+          shouldDefaultNewWorktreeCardStyleOn(normalizedOnboarding)
+        const migratedExperimentalNewWorktreeCardStyle =
+          parsed.settings?.experimentalNewWorktreeCardStyle ?? defaultNewWorktreeCardStyle
+        if (
+          parsed.settings?.experimentalNewWorktreeCardStyle === undefined &&
+          defaultNewWorktreeCardStyle
+        ) {
+          this.loadNeedsSave = true
+        }
         const normalizedProjectGroups = normalizeProjectGroups(parsed.projectGroups)
         const loadedCompactWorktreeCards =
           parsed.settings?.compactWorktreeCards ??
           parsed.settings?.experimentalCompactWorktreeCards ??
           defaults.settings.compactWorktreeCards
+        const normalizedSourceControlGroupOrder = normalizeSourceControlGroupOrder(
+          parsed.settings?.sourceControlGroupOrder
+        )
+        if (
+          parsed.settings?.sourceControlGroupOrder !== undefined &&
+          parsed.settings.sourceControlGroupOrder !== normalizedSourceControlGroupOrder
+        ) {
+          this.loadNeedsSave = true
+        }
         result = {
           ...defaults,
           ...parsed,
@@ -2695,6 +2719,9 @@ export class Store {
             ...migratedTerminalCursorStyle,
             experimentalActivity: migratedExperimentalActivity,
             experimentalActivityDefaultedOffForAllUsers: true,
+            // Why: open first-run onboarding is the local fresh-install signal;
+            // closed/backfilled onboarding identifies existing profiles.
+            experimentalNewWorktreeCardStyle: migratedExperimentalNewWorktreeCardStyle,
             // Why: compact worktree cards graduated from Experimental; preserve
             // the old opt-in for profiles written during the rollout.
             compactWorktreeCards: loadedCompactWorktreeCards,
@@ -2732,6 +2759,7 @@ export class Store {
             }),
             notifications: normalizeNotificationSettings(parsed.settings?.notifications),
             sourceControlAi: migratedSourceControlAi,
+            sourceControlGroupOrder: normalizedSourceControlGroupOrder,
             // Why: new builds read sourceControlAi, but rollback builds still
             // write commitMessageAi; after merging those writes, refresh the
             // legacy projection for continued rollback compatibility.
@@ -2966,7 +2994,18 @@ export class Store {
     }
 
     if (result === null) {
-      result = getDefaultPersistedState(homedir())
+      const defaults = getDefaultPersistedState(homedir())
+      const isFreshDefaultProfile =
+        !fileExistedOnLoad && shouldDefaultNewWorktreeCardStyleOn(defaults.onboarding)
+      result = {
+        ...defaults,
+        settings: {
+          ...defaults.settings,
+          // Why: a corrupt existing data file also falls back to defaults; only
+          // the absent-file path is a true fresh install.
+          experimentalNewWorktreeCardStyle: isFreshDefaultProfile
+        }
+      }
     }
 
     const workspaceSession = pruneWorkspaceSessionBrowserHistory(
@@ -4554,6 +4593,11 @@ export class Store {
     if ('terminalShortcutPolicy' in updates) {
       sanitizedUpdates.terminalShortcutPolicy = normalizeTerminalShortcutPolicy(
         updates.terminalShortcutPolicy
+      )
+    }
+    if ('sourceControlGroupOrder' in updates) {
+      sanitizedUpdates.sourceControlGroupOrder = normalizeSourceControlGroupOrder(
+        updates.sourceControlGroupOrder
       )
     }
     if ('appIcon' in updates) {

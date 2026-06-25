@@ -57,6 +57,7 @@ const {
     onExit: vi.fn(),
     onReplay: vi.fn(),
     attach: vi.fn(),
+    attachForReconnect: vi.fn().mockResolvedValue({}),
     shutdown: vi.fn()
   },
   mockFsProvider: {},
@@ -285,6 +286,7 @@ describe('SSH IPC handlers', () => {
     mockPtyProvider.onData.mockReset()
     mockPtyProvider.onExit.mockReset()
     mockPtyProvider.onReplay.mockReset()
+    mockPtyProvider.attachForReconnect.mockReset().mockResolvedValue({})
     mockPtyProvider.shutdown.mockReset()
     mockPortForwardManager.addForward.mockReset()
     mockPortForwardManager.updateForward.mockReset()

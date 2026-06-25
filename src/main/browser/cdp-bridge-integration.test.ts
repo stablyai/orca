@@ -19,7 +19,8 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue([])
+  listWorktrees: vi.fn().mockResolvedValue([]),
+  listWorktreesStrict: vi.fn().mockResolvedValue([])
 }))
 
 import { BrowserManager } from './browser-manager'

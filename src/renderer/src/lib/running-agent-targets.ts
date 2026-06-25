@@ -5,12 +5,18 @@ import {
 } from '../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../shared/types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
-import { isExplicitAgentStatusFresh } from './agent-status'
+import {
+  detectAgentStatusFromTitle,
+  getAgentLabel,
+  isExplicitAgentStatusFresh
+} from './agent-status'
+import { resolveRuntimePaneTitleForLeaf } from './runtime-pane-title-leaf-id'
 
 export type RunningAgentTargetState = Pick<
   AppState,
   'agentStatusByPaneKey' | 'tabsByWorktree' | 'terminalLayoutsByTabId' | 'ptyIdsByTabId'
->
+> &
+  Partial<Pick<AppState, 'runtimePaneTitlesByTabId'>>
 
 export type RunningAgentSendTarget = {
   paneKey: string
@@ -59,8 +65,10 @@ export function deriveRunningAgentSendTargets(
       disabledReason = 'Agent status is stale'
     } else if (!ptyId) {
       disabledReason = 'Terminal is no longer available'
-    } else if (entry.state === 'working') {
-      disabledReason = 'Agent is working'
+    } else if (entry.state === 'blocked' || entry.state === 'waiting') {
+      disabledReason = 'Agent needs permission'
+    } else if (hasPermissionPaneTitle(state, parsed.tabId, parsed.leafId, tab.title)) {
+      disabledReason = 'Agent needs permission'
     }
 
     targets.push({
@@ -76,6 +84,24 @@ export function deriveRunningAgentSendTargets(
   }
 
   return targets
+}
+
+function hasPermissionPaneTitle(
+  state: RunningAgentTargetState,
+  tabId: string,
+  leafId: string,
+  tabTitle: string
+): boolean {
+  const layout = state.terminalLayoutsByTabId[tabId]
+  const paneTitle = resolveRuntimePaneTitleForLeaf(
+    layout,
+    state.runtimePaneTitlesByTabId?.[tabId],
+    leafId
+  )
+  // Why: runtime pane titles are the freshest title signal for split panes; use
+  // the tab title only before the runtime has reported a pane title for the leaf.
+  const title = paneTitle ?? tabTitle
+  return detectAgentStatusFromTitle(title) === 'permission' && getAgentLabel(title) !== null
 }
 
 export function resolveRunningAgentSendTarget(

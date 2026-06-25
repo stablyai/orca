@@ -133,7 +133,11 @@ function getEligiblePane(args: {
     lastTerminalInputAtByPaneKey,
     mobileLockedPtyIds
   } = args
-  if (entry.state !== 'done' || sleepingAgentSessionsByPaneKey[entry.paneKey]) {
+  if (
+    entry.state !== 'done' ||
+    entry.interrupted === true ||
+    sleepingAgentSessionsByPaneKey[entry.paneKey]
+  ) {
     return null
   }
   if (

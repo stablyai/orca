@@ -53,6 +53,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const [showBranchPicker, setShowBranchPicker] = useState(false)
   const [localBranches, setLocalBranches] = useState<MobileGitLocalBranches | null>(null)
   const [createdPrUrl, setCreatedPrUrl] = useState<string | null>(null)
+  const [createdPrWarning, setCreatedPrWarning] = useState<string | null>(null)
   const [prPrefill, setPrPrefill] = useState<MobilePrPrefill | null>(null)
   const [discardTarget, setDiscardTarget] = useState<MobileGitStatusEntry | null>(null)
   const [showActionSheet, setShowActionSheet] = useState(false)
@@ -224,6 +225,8 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     localBranches,
     createdPrUrl,
     setCreatedPrUrl,
+    createdPrWarning,
+    setCreatedPrWarning,
     prPrefill,
     discardTarget,
     setDiscardTarget,

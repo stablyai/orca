@@ -44,9 +44,14 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
         afterTabId: params.afterTabId,
         targetGroupId: params.targetGroupId,
         command: params.command,
+        ...(params.env ? { env: params.env } : {}),
         startupCommandDelivery: params.startupCommandDelivery,
         agent: params.agent,
-        activate: params.activate
+        ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
+        ...(params.launchToken ? { launchToken: params.launchToken } : {}),
+        ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+        activate: params.activate,
+        clientMutationId: params.clientMutationId
       })
   }),
   defineMethod({

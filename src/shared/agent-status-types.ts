@@ -21,6 +21,7 @@ export type WellKnownAgentType =
   | 'antigravity'
   | 'amp'
   | 'opencode'
+  | 'mimo-code'
   | 'cursor'
   | 'copilot'
   | 'aider'
@@ -63,6 +64,8 @@ export const AGENT_STATE_HISTORY_MAX = 20
 export type AgentStatusOrchestrationContext = {
   taskId: string
   dispatchId: string
+  taskTitle?: string
+  displayName?: string
   parentTerminalHandle?: string
   parentPaneKey?: string
   coordinatorHandle?: string
@@ -166,6 +169,7 @@ export type ParsedAgentStatusPayload = Omit<AgentStatusPayload, 'prompt'> & { pr
  */
 export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   paneKey: string
+  launchToken?: string
   terminalHandle?: string
   tabId?: string
   worktreeId?: string

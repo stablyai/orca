@@ -57,6 +57,7 @@ describe('ExperimentalPane', () => {
     expect(settings.experimentalAgentHibernation).toBe(false)
     expect(settings.agentHibernationIdleMs).toBe(30 * 60 * 1000)
     expect(markup).toContain('Agent sleep')
+    expect(markup).toContain('Manually started agents may resume')
     expect(markup).not.toContain('Sleep after')
     expect(markup).toContain('aria-checked="false"')
     expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).toContain('Agent sleep')

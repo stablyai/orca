@@ -66,10 +66,11 @@ export async function insertRichMarkdownImageFromPath({
       return
     }
 
+    const imageSrc = encodeMarkdownImageBasename(imported.destPath)
     const inserted = editor
       .chain()
       .focus()
-      .insertContentAt(insertPos, { type: 'image', attrs: { src: basename(imported.destPath) } })
+      .insertContentAt(insertPos, { type: 'image', attrs: { src: imageSrc } })
       .run()
     if (!inserted) {
       toast.error(
@@ -79,6 +80,12 @@ export async function insertRichMarkdownImageFromPath({
   } catch (err) {
     toast.error(extractIpcErrorMessage(err, 'Failed to insert image.'))
   }
+}
+
+function encodeMarkdownImageBasename(destPath: string): string {
+  // Why: unescaped spaces and delimiters in markdown image destinations make
+  // screenshot filenames render as literal text or broken partial paths.
+  return encodeURIComponent(basename(destPath))
 }
 
 function getWorktreePath(worktreeId: string | null): string | null {

@@ -21,6 +21,7 @@ import {
   ensurePtyDispatcher,
   getEagerPtyBufferHandle
 } from './pty-dispatcher'
+import { drainPreHandlerPtyData, drainPreHandlerPtyExit } from './pty-pre-handler-buffer'
 import type {
   PtyTransport,
   IpcPtyTransportOptions,
@@ -435,6 +436,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     cwd,
     env,
     command,
+    launchConfig,
+    launchToken,
+    launchAgent,
     startupCommandDelivery,
     connectionId,
     worktreeId,
@@ -508,7 +512,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         storedCallbacks.onData?.(data)
       }
     })
-    ptyDataHandlers.set(id, (data, meta) => {
+    const dataHandler = (data: string, meta?: PtyDataMeta): void => {
       outputProcessor.processData(
         data,
         storedCallbacks,
@@ -518,7 +522,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         },
         meta
       )
-    })
+    }
+    ptyDataHandlers.set(id, dataHandler)
+    drainPreHandlerPtyData(id, dataHandler)
   }
 
   function clearAccumulatedState(): void {
@@ -635,7 +641,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   }
 
   function registerPtyExitHandler(id: string): void {
-    ptyExitHandlers.set(id, (code) => {
+    const exitHandler = (code: number): void => {
       clearAccumulatedState()
       connected = false
       ptyId = null
@@ -643,7 +649,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       storedCallbacks.onExit?.(code)
       storedCallbacks.onDisconnect?.()
       onPtyExit?.(id)
-    })
+    }
+    ptyExitHandlers.set(id, exitHandler)
     // Why: shutdownWorktreeTerminals bypasses the transport layer — it
     // kills PTYs directly via IPC without calling disconnect()/destroy().
     // This teardown callback lets unregisterPtyDataHandlers cancel
@@ -651,6 +658,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     // would otherwise fire stale notifications after the data handler
     // is removed but before the exit event arrives.
     ptyTeardownHandlers.set(id, clearAccumulatedState)
+    drainPreHandlerPtyExit(id, exitHandler)
   }
 
   return {
@@ -667,9 +675,20 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           cols: options.cols ?? 80,
           rows: options.rows ?? 24,
           cwd,
-          env,
-          command,
-          ...(startupCommandDelivery ? { startupCommandDelivery } : {}),
+          env: options.env ?? env,
+          command: options.command ?? command,
+          ...((options.launchConfig ?? launchConfig)
+            ? { launchConfig: options.launchConfig ?? launchConfig }
+            : {}),
+          ...((options.launchToken ?? launchToken)
+            ? { launchToken: options.launchToken ?? launchToken }
+            : {}),
+          ...((options.launchAgent ?? launchAgent)
+            ? { launchAgent: options.launchAgent ?? launchAgent }
+            : {}),
+          ...((options.startupCommandDelivery ?? startupCommandDelivery)
+            ? { startupCommandDelivery: options.startupCommandDelivery ?? startupCommandDelivery }
+            : {}),
           ...(connectionId ? { connectionId } : {}),
           ...(options.sessionId ? { sessionId: options.sessionId } : {}),
           worktreeId,
@@ -699,6 +718,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
         registerPtyDataHandler(spawnResult.id)
         registerPtyExitHandler(spawnResult.id)
+        if (!connected || ptyId !== spawnResult.id) {
+          return undefined
+        }
 
         storedCallbacks.onConnect?.()
         storedCallbacks.onStatus?.('shell')
@@ -706,6 +728,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         if (spawnResult.isReattach || spawnResult.coldRestore || spawnResult.sessionExpired) {
           return {
             id: spawnResult.id,
+            ...(spawnResult.launchConfig ? { launchConfig: spawnResult.launchConfig } : {}),
             snapshot: spawnResult.snapshot,
             snapshotCols: spawnResult.snapshotCols,
             snapshotRows: spawnResult.snapshotRows,
@@ -713,6 +736,12 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             sessionExpired: spawnResult.sessionExpired,
             coldRestore: spawnResult.coldRestore,
             replay: spawnResult.replay
+          } satisfies PtyConnectResult
+        }
+        if (spawnResult.launchConfig) {
+          return {
+            id: spawnResult.id,
+            launchConfig: spawnResult.launchConfig
           } satisfies PtyConnectResult
         }
         return spawnResult.id
@@ -769,6 +798,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       // recency sort order that reconnectPersistedTerminals preserved.
       registerPtyDataHandler(id)
       registerPtyExitHandler(id)
+      if (!connected || ptyId !== id) {
+        return
+      }
 
       // Why: hidden automation PTYs may have already rendered their TUI into
       // the eager buffer. Clear stale pane contents before replaying that

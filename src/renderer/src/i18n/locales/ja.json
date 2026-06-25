@@ -222,7 +222,12 @@
           "0216895fb5": "ブランチの削除に失敗しました",
           "19db0085fb": "ローカルブランチが削除されました",
           "2b0afc7f14": "ローカル {{value0}} を最新の状態に維持できませんでした",
-          "670864ab52": "ローカル {{value0}} を最新の状態に保つ"
+          "670864ab52": "ローカル {{value0}} を最新の状態に保つ",
+          "5366d13eec": "ワークスペースを削除しました、ブランチは保持されました",
+          "2e17f825d4": "ワークツリーを削除しました、ブランチは保持されました",
+          "78e08cd877": "Git はブランチ\"{{value0}}\"を安全に削除できなかったため、Orca はローカルコミットを失わないように保持しました。",
+          "3b57982bf6": "ワークスペース\"{{value1}}\"を削除した後、Git はブランチ\"{{value0}}\"を安全に削除できなかったため、Orca はローカルコミットを失わないように保持しました。",
+          "81f13f48d2": "ワークツリー\"{{value1}}\"を削除した後、Git はブランチ\"{{value0}}\"を安全に削除できなかったため、Orca はローカルコミットを失わないように保持しました。"
         },
         "repos": {
           "b7e14472ae": "フォルダーの追加に失敗しました",
@@ -284,7 +289,8 @@
           "bf53f09bf8": "Claude Agent Teams",
           "0708ed89f1": "Claude",
           "fc80296033": "Devin",
-          "da41abbdd4": "Ante"
+          "da41abbdd4": "Ante",
+          "mimo_code_label": "MiMo Code"
         },
         "skill": {
           "cli": {
@@ -625,7 +631,11 @@
       "CodexRestartChip": {
         "9132779820": "閉じる",
         "c72a5fb234": "再起動",
-        "9263e75f49": "Codex は前のアカウントを使用しています"
+        "9263e75f49": "Codex は前のアカウントを使用しています",
+        "a4c8e1b2f7": "Codex is still signed in as {{value0}}",
+        "d3e8a1f4b2": "Account switched",
+        "e9b2c7d1a5": "Restart this session to use {{value0}}. Collapse to keep working with the current account.",
+        "f1a6c8e3b4": "Collapse"
       },
       "FirstLaunchBanner": {
         "b9e1b966c7": "通知を閉じる",
@@ -1093,7 +1103,8 @@
         "importHostSetup": "インポート",
         "notePasteTooLarge": "Paste is too large for the note field.",
         "reuseExistingBranch": "Reuse branch",
-        "reuseExistingBranchHint": "Check out the existing branch instead of creating a new one from it."
+        "reuseExistingBranchHint": "Check out the existing branch instead of creating a new one from it.",
+        "createMultiple": "Create more"
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "ワークスペースを作成する前に、プロジェクト、ワークスペース名、および agent を選択します。"
@@ -1263,7 +1274,10 @@
         "2b4fdb880c": "閲覧済みのマークを外す",
         "56ec6eafb7": "PR の詳細を開いて、現在のレビュアーを表示します。",
         "7f964a365a": "レビュアーを削除",
-        "commentTooLarge": "Comment is too large to submit safely."
+        "commentTooLarge": "Comment is too large to submit safely.",
+        "8ff5ae8866": "Assignees",
+        "82c87eceb9": "Edit assignees",
+        "1ff5d979df": "No one assigned"
       },
       "QuickOpen": {
         "1dbd3f59ff": "移動",
@@ -1592,7 +1606,26 @@
         "ff90d0abc7": "{{value0}} からワークスペースを開始",
         "fe28c9821f": "view",
         "8d1e17a3ef": "{{value0}} を GitHub で開く",
-        "4ac8ff2275": "{{value0}} を Jira で開く"
+        "4ac8ff2275": "{{value0}} を Jira で開く",
+        "40eaf2c27c": "Details",
+        "closeAsCompleted": "Close as completed",
+        "closeAsCompletedDescription": "Done, closed, fixed, resolved",
+        "closeAsNotPlanned": "Close as not planned",
+        "closeAsNotPlannedDescription": "Won't fix, can't repro, stale",
+        "closeAsDuplicate": "Close as duplicate",
+        "closeAsDuplicateDescription": "Duplicate of another issue in this repository",
+        "duplicateIssueNumberPlaceholder": "Issue number",
+        "closeAsDuplicateSubmit": "Close duplicate",
+        "duplicateIssueMissing": "Enter an issue number in this repository.",
+        "duplicateIssueNotInteger": "Use a whole issue number.",
+        "duplicateIssueNotPositive": "Use a positive issue number.",
+        "duplicateIssueSameIssue": "Choose a different issue.",
+        "repository": "Repository",
+        "backToCloseReasons": "Back",
+        "searchIssues": "Search issues",
+        "useIssueNumber": "Use issue #{{value0}}",
+        "noMatchingIssuesLoaded": "No matching issues loaded.",
+        "editReviewersWithCurrent": "Edit reviewers: {{value0}}"
       },
       "Terminal": {
         "73768427cf": "閉じる",
@@ -1664,7 +1697,7 @@
         "f65d992a11": "入力",
         "c5081f2814": "現在のワークツリー",
         "52404f8096": "現在のタブ",
-        "739bda980c": "主要な",
+        "739bda980c": "プライマリ",
         "556e7232ca": "現在",
         "684e8d7bc2": "最近のワークツリーと開いているタブを収集します。",
         "ff908adfe9": "ジャンプターゲットをロード中",
@@ -1693,7 +1726,10 @@
         "settingsBadge": "設定",
         "actionBadge": "操作",
         "paletteHostBadge": "Host: {{value0}}",
-        "workspaceTabMissing": "タブはもう存在しません"
+        "workspaceTabMissing": "タブはもう存在しません",
+        "projectsGroupsHeader": "Projects & Groups",
+        "projectBadge": "Project",
+        "repoGroupBadge": "Repo group"
       },
       "github": {
         "pr": {
@@ -1836,7 +1872,10 @@
             "22df63c393": "トークンではサブ Issue データを利用できません。",
             "067119985c": "GitHub 検索、例:担当者:@me は:開いています",
             "1850fceac8": "{{value0}}/{{value1}} は Orca に追加されません。これを追加して作業を開始するか、GitHub で開きます。",
-            "1aa7c952b9": "Project view"
+            "1aa7c952b9": "Project view",
+            "f352abf7c3": "Repository list is updating.",
+            "1ce21b8cff": "This item is outside the selected repositories.",
+            "030de75bc5": "This item matches multiple selected repositories."
           },
           "slug": {
             "dialog": {
@@ -2303,7 +2342,7 @@
           "TerminalContextMenu": {
             "b4cdd9314e": "クリアスクリーン",
             "8c17d6786d": "ペインを閉じる",
-            "copyTerminalId": "Terminal ID をコピー",
+            "copyTerminalId": "ターミナル ID をコピー",
             "2cf85a6a55": "ペインIDのコピー",
             "39809d152f": "タイトルを設定…",
             "06c2b0f043": "ペインのサイズを均等化する",
@@ -2318,8 +2357,7 @@
             "f3eeb1de13": "コピー",
             "c2f0b72b8d": "入れる",
             "925f49f210": "ペインを展開する",
-            "df766809e0": "ペインを折りたたむ",
-            "copyTerminalId": "Copy Terminal ID"
+            "df766809e0": "ペインを折りたたむ"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "デーモンを再起動します",
@@ -2396,9 +2434,9 @@
                     "a29b9faa01": "ペイン ID がコピーされました",
                     "terminal": {
                       "id": {
-                        "copied": "Terminal ID をコピーしました",
+                        "copied": "ターミナル ID をコピーしました",
                         "copy": {
-                          "failed": "Terminal ID をコピーできません"
+                          "failed": "ターミナル ID をコピーできません"
                         }
                       }
                     }
@@ -2428,7 +2466,9 @@
             "9acaf92093": "ペインの操作",
             "1bce81dba6": "シミュレータ",
             "1ff1c77616": "ブラウザ",
-            "586d2ac445": "terminal"
+            "586d2ac445": "terminal",
+            "addSplitPane": "分割ペインを追加",
+            "closePaneColumn": "分割ペインを閉じる"
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "Drop onto a terminal pane to resume this session.",
@@ -2436,6 +2476,9 @@
             "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
             "openLocalWorkspace": "Open a local workspace before resuming a session.",
             "sessionQueued": "Session queued"
+          },
+          "TabGroupDropOverlay": {
+            "paneColumnLabel": "新しい分割"
           }
         },
         "bar": {
@@ -2483,7 +2526,8 @@
           "SortableTab": {
             "ab19f603eb": "タブ {{value0}} の名前を変更します",
             "6df69d9388": "タブ {{value0}} を閉じる",
-            "fdb2691425": "ペインを折りたたむ"
+            "fdb2691425": "ペインを折りたたむ",
+            "95db5f2f7d": "タブを閉じる"
           },
           "SortableTabContextMenu": {
             "35e8892fd0": "タブの色",
@@ -2506,7 +2550,9 @@
             "cb3eadefd2": "青",
             "20baa43c05": "なし",
             "60f958ec75": "ピンタブ",
-            "417722e9c2": "タブの固定を解除する"
+            "417722e9c2": "タブの固定を解除する",
+            "splitTerminalRight": "ターミナルを右に分割",
+            "splitTerminalDown": "ターミナルを下に分割"
           },
           "TabBar": {
             "b1a132357f": "新規タブ",
@@ -2598,6 +2644,17 @@
                 }
               }
             }
+          },
+          "TabWorkspaceLayoutMenuSection": {
+            "right": "右",
+            "left": "左",
+            "down": "下",
+            "up": "上",
+            "moveToPaneColumn": "タブを分割へ移動"
+          },
+          "EditorFileTabCloseButton": {
+            "4655cf570e": "タブを閉じる",
+            "a768f428f1": "タブを閉じる"
           }
         }
       },
@@ -2908,7 +2965,21 @@
             "e740f92596": "更新に失敗しました",
             "8418ec448d": "{{value0}} の使用状況を更新できませんでした。Agent セッションは引き続きサインイン済みの場合があります。",
             "45198c7d95": "1 rate-limit reset available",
-            "bce421cba3": "{{value0}} rate-limit resets available"
+            "bce421cba3": "{{value0}} rate-limit resets available",
+            "7ec6e030a0": "Next expires now",
+            "d1e442a9e5": "Expires now",
+            "6cf9eaed10": "Next expires in {{value0}}",
+            "20ad66aed1": "Expires in {{value0}}",
+            "0d8d7cfe15": "Waiting for Claude session",
+            "1804cd8c3f": "Refreshing sign-in",
+            "f8f0f9d8cc": "Network issue",
+            "bf2e739f18": "Sign-in unavailable",
+            "f8b8dbed85": "Usage unavailable",
+            "3d3c9c0c1f": "Claude usage will refresh after the live Claude terminal rotates its credentials.",
+            "42fdd4da1d": "Claude sign-in is being refreshed. Agent sessions may still be signed in.",
+            "c06c1d215d": "Claude usage could not be refreshed because the network request failed.",
+            "cabdc2a9e0": "Claude sign-in credentials could not be read.",
+            "a7517cccb6": "Claude usage is unavailable right now."
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -3289,26 +3360,21 @@
           "496f68cf8c": "repos をスキャンしています。クリックして停止します。",
           "a32bef9516": "スキャンを停止する",
           "2f8298f3c3": "スキャンの停止",
-          "c157f31a95": "グループとしてインポート",
-          "40199ef7b3": "グループ名",
-          "787412361a": "グループ名とは何ですか?",
           "5f857ba8e6": "で",
           "4df0d08cc5": "見つかった",
           "8db50afe1a": "フォルダーから repos をインポートする",
           "5b2e6fe3c8": "個別にインポート",
           "cf9d382ca1": "インポート",
           "220dd32d83": "スキャン中...",
-          "fb33359f69": "これはモノレポですか？",
-          "d75170194e": "モノレポ、または一緒に扱うべきプロジェクトの場合は、グループとしてインポートします。Orca がグループ化し、親フォルダーから作業できるようにします。",
+          "fb33359f69": "これらのリポジトリをグループ化しますか？",
+          "d75170194e": "これらのプロジェクトをまとめたい場合（モノレポでも、関連するリポジトリの集まりでも）に選択します。Orca がグループ化し、親フォルダーから作業できるようにします。",
           "39d51212cc": "グループ名",
           "aa0247680d": "いいえ、個別にインポート",
-          "a0bc4d1f8e": "グループとしてインポート",
+          "a0bc4d1f8e": "はい、グループとしてインポート",
           "8401a7a0d0": "1 個の repos",
           "d4f1df62ef": "{{value0}} 個の repos",
           "b4263a2ac4": "{{value1}} で {{value0}} が見つかりました。",
-          "24eda6c8b2": "スキャン中... {{value0}}",
-          "b20bb7c24f": "Keeps these repos together in one group. Best for related repos like microservices.",
-          "e907ec8935": "What is a monorepo name?"
+          "24eda6c8b2": "スキャン中... {{value0}}"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "スキャンの停止",
@@ -3681,7 +3747,8 @@
           "2d74665a56": "ポート",
           "65a9820bd1": "Agent ステータス",
           "219ebf1961": "ブランチ名",
-          "automation": "Automation"
+          "automation": "Automation",
+          "folderPathIdentity": "Branch / folder path"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "接続中...",
@@ -3741,7 +3808,7 @@
           "0777de5970": "プライマリ ワークツリー (元のクローン ディレクトリ)",
           "0f33af979b": "部分的なチェックアウト。これらのパスの外にあるファイルはディスク上にありません。",
           "4f964d5e8c": "スパース",
-          "7d517f82e2": "主要な",
+          "7d517f82e2": "プライマリ",
           "4eba2ea99e": "自動名前付けに失敗しました。クリックすると詳細が表示されます。",
           "74522ee457": "名前の変更に失敗しました",
           "02e19349f4": "名前の自動変更に失敗しました: 表示エラー",
@@ -3757,13 +3824,16 @@
           "021538e1d1": "SSH が切断されました",
           "runtimeHostDisconnected": "Server disconnected",
           "runtimeHostProject": "Project on Orca server",
-          "automationCreated": "Created by automation"
+          "automationCreated": "Created by automation",
+          "branchIdentity": "Branch",
+          "branchFolderPathIdentity": "Branch or folder path"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
         },
         "WorktreeCardReviewDetailSection": {
-          "reviewHeader": "{{value0}} #{{value1}}"
+          "reviewHeader": "{{value0}} #{{value1}}",
+          "copyLink": "Copy link"
         },
         "WorktreeCardMeta": {
           "3e65e11cc6": "ワークスペースのメタデータ",
@@ -3790,7 +3860,13 @@
           "checkingAutomationAvailability": "自動化の利用可否を確認中...",
           "automationMissing": "自動化は利用できなくなりました。",
           "automationRunMissing": "実行履歴は利用できなくなりました。",
-          "automationAvailabilityUnavailable": "自動化の利用可否を確認できませんでした。"
+          "automationAvailabilityUnavailable": "自動化の利用可否を確認できませんでした。",
+          "moreIssueActions": "More issue actions",
+          "copyLink": "Copy link",
+          "copyLinkSuccess": "{{value0}} copied",
+          "copyLinkFailure": "Failed to copy link",
+          "issueLinkLabel": "Issue link",
+          "reviewLinkLabel": "{{value0}} link"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "状態: オープン",
@@ -3837,7 +3913,8 @@
           "697d0f6e1b": "固定を解除する",
           "250de158fd": "Remove Workspace",
           "changeParentWorkspace": "親ワークツリーを変更...",
-          "setParentWorkspace": "親ワークツリーを設定..."
+          "setParentWorkspace": "親ワークツリーを設定...",
+          "workspaceSection": "ワークスペース"
         },
         "WorktreeList": {
           "d880ea0744": "グループを作成し、このプロジェクトをそのグループに移動します。",
@@ -3879,7 +3956,8 @@
           "7a8b9c0d1e": "Update required",
           "hostAuthNeeded": "Authentication needed",
           "hostDisconnected": "Disconnected",
-          "failedNestWorkspace": "ワークスペースをネストできませんでした"
+          "failedNestWorkspace": "ワークスペースをネストできませんでした",
+          "sidebarRowMissing": "Target no longer exists"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "キャンセル",
@@ -4227,6 +4305,9 @@
           "current": "現在",
           "searchPlaceholder": "ワークツリーを検索...",
           "empty": "一致する対象ワークツリーがありません。"
+        },
+        "WorktreeCardStatusSlot": {
+          "branchIdentity": "Branch"
         }
       },
       "shared": {
@@ -4783,7 +4864,7 @@
           "dd6f0a1d45": "ペット",
           "0e89a574ae": "右下隅に浮かぶアニメーションのペット。",
           "agentHibernation": {
-            "copy": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、対応しているセッションは再度開いたときに再開します。安全モデルを調整中の実験的機能です。",
+            "copy": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、対応しているセッションは再度開いたときに再開します。Agent のスリープは、Orca から起動した agent の起動オプションを保持します。手動で起動した agent は、現在の Orca のデフォルトで再開される場合があります。安全モデルを調整中の実験的機能です。",
             "description": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、対応しているセッションは再度開いたときに再開します。",
             "idleMinutesDescription": "完了したバックグラウンド agent を Orca がスリープ状態にできるまで待つアイドル時間（分）。",
             "idleMinutesLabel": "スリープまで",
@@ -5017,7 +5098,12 @@
           "f35007e6e8": "git ユーザー名",
           "3d172725cc": "なし",
           "1f32ba27a6": "カスタム",
-          "a182c5125e": "Gitのユーザー名"
+          "a182c5125e": "Gitのユーザー名",
+          "sourceControlGroupOrderTitle": "ソース管理のグループ順序",
+          "sourceControlGroupOrderDescription": "ソース管理で「変更」「ステージ済みの変更」「未追跡ファイル」のどれを先に表示するかを選択します。",
+          "changesFirst": "変更を先頭",
+          "stagedFirst": "ステージ済みを先頭",
+          "untrackedFirst": "未追跡を先頭"
         },
         "HiddenExperimentalGroup": {
           "d0f914a528": "プレースホルダーの切り替え",
@@ -5621,7 +5707,11 @@
           "bea897eec2": "オン",
           "62511a575d": "グローバルを使用する",
           "30ae6dcce8": "グローバルデフォルトは",
-          "cf5959c834": "ソース管理 AI が有効になっている"
+          "cf5959c834": "ソース管理 AI が有効になっている",
+          "show": "表示",
+          "hide": "非表示",
+          "showActionsLabel": "ソース管理 AI 操作を表示する",
+          "visibilityHelper": "このリポジトリでソース管理 AI ボタンを表示するかどうかを制御します。別機能で使用される生成は、それぞれの機能の設定に従います。グローバルデフォルトは {{value0}} です。"
         },
         "RepositorySourceControlAiHostedReviewDefaults": {
           "053ccfbf52": "オフ",
@@ -6194,7 +6284,19 @@
           "ab20575a8a": "オフ",
           "ab3a1f9068": "wsl.exe",
           "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
-          "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent."
+          "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent.",
+          "scrollSpeed": {
+            "title": "スクロール速度",
+            "description": "通常のターミナルスクロールバック、修飾キーでの高速スクロール、全画面 TUI のホイール速度を調整します。",
+            "helper": "ホイール入力の感触をスクロールバックとマウス対応のターミナルアプリで調整します。",
+            "reset": "リセット",
+            "normal": "通常",
+            "normalDescription": "スクロールバックのホイール倍率。",
+            "fast": "高速",
+            "fastDescription": "修飾キーを押しながらスクロールするときの追加倍率。",
+            "tui": "TUI",
+            "tuiDescription": "全画面ターミナルアプリ向けの離散的なホイール通知。"
+          }
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "{{value0}} テーマのプレビュー",
@@ -6885,7 +6987,7 @@
             "agentHibernation": {
               "agent": "agent",
               "agents": "agents",
-              "description": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、再度開いたときに対応セッションを再開します。",
+              "description": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、再度開いたときに対応セッションを再開します。Agent のスリープは Orca から起動した agent の起動オプションを保持します。手動で起動した agent は現在の Orca のデフォルトで再開される場合があります。",
               "minutes": "分",
               "sleep": "スリープ",
               "terminal": "terminal",
@@ -7106,7 +7208,15 @@
             "1d2fae1fa2": "git ユーザー名",
             "f83c8937c4": "ブランチの命名",
             "5ecd91c5ef": "ワークツリーの作成時にブランチ名に追加されるプレフィックス。",
-            "68bd65fdb8": "ブランチプレフィックス"
+            "68bd65fdb8": "ブランチプレフィックス",
+            "sourceControlGroupOrderTitle": "ソース管理のグループ順序",
+            "sourceControlGroupOrderDescription": "ソース管理で「変更」「ステージ済みの変更」「未追跡ファイル」のどれを先に表示するかを選択します。",
+            "groupOrder": "グループ順序",
+            "changesFirst": "変更を先頭",
+            "stagedFirst": "ステージ済みを先頭",
+            "untrackedFirst": "未追跡を先頭",
+            "sourceControl": "ソース管理",
+            "gitChanges": "git の変更"
           }
         },
         "input": {
@@ -7822,7 +7932,11 @@
             "0fe0073f0c": "新規ペインとライブ アップデートのデフォルトの terminal フォント サイズ。",
             "5930244899": "フォントサイズ",
             "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
-            "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent."
+            "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent.",
+            "scrollSpeed": {
+              "title": "スクロール速度",
+              "description": "通常のターミナルスクロールバック、修飾キーでの高速スクロール、全画面 TUI のホイール速度を調整します。"
+            }
           },
           "windows": {
             "search": {
@@ -8295,6 +8409,8 @@
             "66a29dde82": "相対パスをコピー",
             "42e10cbf57": "相対パスのコピー",
             "b5d436aa30": "パスのコピー",
+            "98a79948b3": "コピー",
+            "b234ab25b4": "ファイルをクリップボードにコピーできませんでした",
             "f9d7ca753d": "パスのコピー",
             "3161c4e425": "フォルダ"
           },
@@ -8445,6 +8561,7 @@
           },
           "SourceControl": {
             "1406954883": "すべてのメモをクリアします...",
+            "conflictsSection": "競合",
             "cc05b2d088": "ファイルエクスプローラーで開く",
             "03194cfff4": "ここで開いた競合から派生したローカル セッション状態。",
             "413a3ba113": "競合",
@@ -8769,13 +8886,28 @@
                 "066fedd446": "失敗したジョブ",
                 "ae8a04ef17": "競合ファイルの詳細は利用できません",
                 "73d0675356": "競合の詳細を更新しています…",
+                "f5bc5c4cf1": "The hosting provider reports conflicts, but local Git did not reproduce them. Refresh the review or push the branch to recalculate mergeability.",
+                "5bc9bda2af": "Run from this worktree",
+                "e87fb3d929": "Copy mergeability refresh commands",
+                "1e53e45072": "Copied",
+                "084c516efb": "Copy commands",
                 "5dc3af25c0": "コメントを選択",
                 "d7a2f9c401": "Send unresolved {{value0}} comments",
-                "d91f2a6c39": "キュー内の {{value0}} 件のコメントを送信",
+                "d91f2a6c39": "キュー内の {{value0}} 件のコメントを AI に送信",
                 "a6de3e5a20": "キュー内のコメントをクリア",
                 "49ea0937e4": "コメントを解決リストに追加",
                 "9fecebb29d": "追加",
-                "b8c4e2a1f7": "View full logs"
+                "b8c4e2a1f7": "View full logs",
+                "f8a2c91d04": "Queue for agent",
+                "b4e8a1c902": "Queued",
+                "7c1f0a2b11": "Open",
+                "e8b4c1a903": "Resolved · {{value0}}",
+                "c3a8e5d710": "Needs review · {{value0}}",
+                "a7f0c7e8d1": "Queue",
+                "8a621a2c4f": "Grouped",
+                "b13f85d75c": "Timeline",
+                "f5cf324efa": "Comment display options",
+                "5e6e5a13fa": "View"
               },
               "empty": {
                 "state": {
@@ -8903,7 +9035,8 @@
                   "9e779995dd": "{{value0}} を作成する",
                   "226b85a3a7": "フェッチ",
                   "323bb614aa": "Commit と同期",
-                  "2b8e6595fd": "Commit"
+                  "2b8e6595fd": "Commit",
+                  "04d709801d": "Fetch from remote without merging"
                 }
               },
               "primary": {
@@ -9041,7 +9174,10 @@
             "hideEmptySessions": "Hide empty sessions",
             "workspaceScope": "ワークスペース",
             "worktreeScope": "Worktree",
-            "globalScope": "Global"
+            "globalScope": "Global",
+            "projectScope": "プロジェクト",
+            "currentProjectLower": "現在のプロジェクト",
+            "project": "プロジェクト"
           },
           "AiVaultSessionDetails": {
             "updated": "Updated",
@@ -9079,7 +9215,16 @@
             "daysAgo": "{{value0}}d ago",
             "monthsAgo": "{{value0}}mo ago",
             "yearsAgo": "{{value0}}y ago",
-            "sessionId": "セッション ID"
+            "sessionId": "セッション ID",
+            "originalAsk": "最初の依頼",
+            "latestTurns": "最新のやり取り",
+            "noPreviewAvailable": "会話プレビューはありません",
+            "messageCount": "{{value0}} 件のメッセージ",
+            "userRole": "あなた",
+            "agentRole": "エージェント",
+            "toolRole": "ツール",
+            "systemRole": "システム",
+            "sessionRole": "セッション"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "Resume {{value0}} session",
@@ -9096,7 +9241,14 @@
             "hideDetails": "詳細を非表示",
             "showDetails": "詳細を表示",
             "moreSessionActions": "セッションのその他の操作",
-            "moreActions": "その他の操作"
+            "moreActions": "その他の操作",
+            "noPreviewAvailable": "会話プレビューはありません",
+            "dragToResume": "新しいタブで再開するにはドラッグ",
+            "userRole": "あなた",
+            "agentRole": "エージェント",
+            "toolRole": "ツール",
+            "systemRole": "システム",
+            "sessionRole": "セッション"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "ファイルを検索",
@@ -9140,9 +9292,6 @@
                 "copyCommand": "Copy command"
               }
             }
-          },
-          "SourceControlEntryContextMenu": {
-            "a1f2c8d901": "View"
           }
         }
       },
@@ -10060,7 +10209,6 @@
             "3dddb2d565": "connected for tasks",
             "33b650af52": "Connect where your team tracks work. Orca starts workspaces with the issue title, link, and context already attached.",
             "5b3577a492": "connected for review status",
-            "3a1fcdddad": "Two quick steps: connect where your code is reviewed, then where your team plans work.",
             "list_end": ", and ",
             "list_pair": " and ",
             "list_mid": ", ",
@@ -10284,7 +10432,8 @@
           "4cc7b83ffe": "ファイルをフィルタリング...",
           "21783df79f": "ファイルツリーを折りたたむ",
           "481e63ca52": "ファイル",
-          "d5ac717d65": "commit されていない"
+          "d5ac717d65": "commit されていない",
+          "39b6b9e4e4": "Committed on Branch"
         },
         "CombinedDiffViewer": {
           "35cc27aeb2": "ソース管理内",
@@ -10939,6 +11088,14 @@
                 "newQuickCommand": "新規クイックコマンド"
               }
             }
+          },
+          "palette": {
+            "project": {
+              "results": {
+                "repoGroup": "Repo group",
+                "project": "Project"
+              }
+            }
           }
         }
       },
@@ -11044,7 +11201,16 @@
             "ea6af700da": "{{value0}} 件の注釈",
             "c13693fe27": "{{value0}} 件の注釈",
             "074f0ed10b": "{{value0}} 件の注釈が準備できました。別の要素を選択するか、すべてのフィードバックをコピーしてください。",
-            "a2164a6e5a": "{{value0}} 件の注釈が準備できました。別の要素を選択するか、すべてのフィードバックをコピーしてください。"
+            "a2164a6e5a": "{{value0}} 件の注釈が準備できました。別の要素を選択するか、すべてのフィードバックをコピーしてください。",
+            "9f6f2e8c19": "The downloaded file path is unavailable.",
+            "0c79b7634d": "Could not open the downloaded file. It may have been moved or deleted.",
+            "397d9dc923": "Could not show the downloaded file. It may have been moved or deleted.",
+            "39c04fed61": "Downloading paused",
+            "5c3d530a68": "Downloaded",
+            "4bb7424d6b": "Canceled",
+            "6e776f9ef9": "Download failed",
+            "756bfc25c9": "Open",
+            "09a9489aa5": "Show"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "キャンセル",

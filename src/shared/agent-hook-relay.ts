@@ -38,6 +38,7 @@ export type AgentHookSource =
   | 'antigravity'
   | 'amp'
   | 'opencode'
+  | 'mimo-code'
   | 'cursor'
   | 'pi'
   | 'omp'
@@ -57,6 +58,8 @@ export const REMOTE_AGENT_HOOK_ENV = 'remote' as const
 export type AgentHookRelayEnvelope = {
   source: AgentHookSource
   paneKey: string
+  /** Ephemeral Orca launch identity stamped into the PTY env for this process. */
+  launchToken?: string
   tabId?: string
   worktreeId?: string
   /** Always `null` on the wire — relay does not know Orca's local connectionId. */

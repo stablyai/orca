@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Globe, Settings } from 'lucide-react'
 import type { CmdJQuickAction } from './quick-actions'
@@ -10,7 +11,9 @@ import {
   type CmdJActionResult,
   type CmdJSettingsResult
 } from './palette-results'
+import { hasCmdJProjectSearchCandidates, searchCmdJProjectResults } from './palette-project-results'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
+import type { Project, ProjectGroup, ProjectHostSetup, Repo } from '../../../../shared/types'
 
 const noopRun: CmdJQuickAction['run'] = async () => ({ status: 'ok' })
 const available: CmdJQuickAction['isAvailable'] = () => ({ available: true })
@@ -255,6 +258,194 @@ describe('Cmd+J palette middle-band ranking', () => {
         query: oversizedQuery,
         settingsResults: [setting],
         actionResults: [action]
+      })
+    ).toEqual([])
+  })
+})
+
+function repo(id: string, displayName: string, projectGroupId?: string | null): Repo {
+  return {
+    id,
+    path: path.join('/repos', displayName),
+    displayName,
+    badgeColor: '#999999',
+    addedAt: 1,
+    projectGroupId
+  } as Repo
+}
+
+function project(id: string, displayName: string): Project {
+  return {
+    id,
+    displayName,
+    badgeColor: '#999999',
+    sourceRepoIds: [],
+    createdAt: 1,
+    updatedAt: 1
+  }
+}
+
+function setup(id: string, projectId: string, hostId: string, repoId: string): ProjectHostSetup {
+  return {
+    id,
+    projectId,
+    hostId: hostId as ProjectHostSetup['hostId'],
+    repoId,
+    path: path.join('/repos', repoId),
+    displayName: repoId,
+    setupState: 'ready',
+    setupMethod: 'cloned',
+    createdAt: 1,
+    updatedAt: 1
+  }
+}
+
+function projectGroup(id: string, name: string, parentGroupId: string | null = null): ProjectGroup {
+  return {
+    id,
+    name,
+    parentPath: null,
+    parentGroupId,
+    createdFrom: 'manual',
+    tabOrder: 1,
+    isCollapsed: false,
+    color: null,
+    createdAt: 1,
+    updatedAt: 1
+  }
+}
+
+describe('Cmd+J project and repo-group search', () => {
+  it('finds a Project Group by name', () => {
+    const [result] = searchCmdJProjectResults({
+      query: 'infra',
+      projectGroups: [projectGroup('group-1', 'Infrastructure')],
+      repos: [],
+      projects: [],
+      projectHostSetups: []
+    })
+
+    expect(result).toMatchObject({
+      kind: 'project-group',
+      title: 'Infrastructure',
+      description: 'Repo group',
+      rowKey: 'project-group:group-1'
+    })
+  })
+
+  it('finds a Project by project name and a repo-backed fallback by repo name', () => {
+    const projectResults = searchCmdJProjectResults({
+      query: 'api',
+      projectGroups: [],
+      repos: [repo('repo-1', 'legacy-api'), repo('repo-2', 'source-folder')],
+      projects: [project('project-1', 'API Service')],
+      projectHostSetups: [setup('setup-1', 'project-1', 'local', 'repo-1')]
+    })
+    const fallbackResults = searchCmdJProjectResults({
+      query: 'source',
+      projectGroups: [],
+      repos: [repo('repo-1', 'legacy-api'), repo('repo-2', 'source-folder')],
+      projects: [project('project-1', 'API Service')],
+      projectHostSetups: [setup('setup-1', 'project-1', 'local', 'repo-1')]
+    })
+
+    expect(projectResults.map((result) => [result.title, result.rowKey])).toEqual([
+      ['API Service', 'project:project-1']
+    ])
+    expect(fallbackResults.map((result) => [result.title, result.rowKey])).toEqual([
+      ['source-folder', 'repo:repo-2']
+    ])
+  })
+
+  it('uses setup-specific project header keys for multi-setup projects on one host', () => {
+    const results = searchCmdJProjectResults({
+      query: 'platform',
+      projectGroups: [],
+      repos: [repo('repo-1', 'platform-a'), repo('repo-2', 'platform-b')],
+      projects: [project('project-1', 'Platform')],
+      projectHostSetups: [
+        setup('setup-1', 'project-1', 'local', 'repo-1'),
+        setup('setup-2', 'project-1', 'local', 'repo-2')
+      ]
+    })
+
+    expect(results.map((result) => result.rowKey)).toEqual([
+      'project:project-1::setup:repo-1',
+      'project:project-1::setup:repo-2'
+    ])
+  })
+
+  it('suppresses raw Project records without renderable repo header targets', () => {
+    const results = searchCmdJProjectResults({
+      query: 'orphan',
+      projectGroups: [],
+      repos: [],
+      projects: [project('project-1', 'Orphan Project')],
+      projectHostSetups: []
+    })
+
+    expect(results).toEqual([])
+  })
+
+  it('suppresses repo-backed projects when the sidebar cannot render their header row', () => {
+    const results = searchCmdJProjectResults({
+      query: 'archived',
+      projectGroups: [],
+      repos: [repo('repo-1', 'archived-service')],
+      projects: [project('project-1', 'Archived Service')],
+      projectHostSetups: [setup('setup-1', 'project-1', 'local', 'repo-1')],
+      renderableRepoIds: new Set()
+    })
+
+    expect(results).toEqual([])
+  })
+
+  it('reports searchable project candidates even when a query has no match', () => {
+    expect(
+      hasCmdJProjectSearchCandidates({
+        projectGroups: [projectGroup('group-1', 'Infrastructure')],
+        repos: [],
+        projects: [],
+        projectHostSetups: []
+      })
+    ).toBe(true)
+    expect(
+      searchCmdJProjectResults({
+        query: 'zzzz',
+        projectGroups: [projectGroup('group-1', 'Infrastructure')],
+        repos: [],
+        projects: [],
+        projectHostSetups: []
+      })
+    ).toEqual([])
+  })
+
+  it('rejects oversized project queries before reading names', () => {
+    const oversizedQuery = 'secret-palette-query'.repeat(CMD_J_PALETTE_QUERY_MAX_BYTES)
+    const throwingGroup = {
+      get id() {
+        throw new Error('oversized palette queries must not scan project groups')
+      },
+      get name() {
+        throw new Error('oversized palette queries must not scan project groups')
+      }
+    } as unknown as ProjectGroup
+    const throwingRepo = {
+      get id() {
+        throw new Error('oversized palette queries must not scan repos')
+      },
+      get displayName() {
+        throw new Error('oversized palette queries must not scan repos')
+      }
+    } as unknown as Repo
+
+    expect(
+      searchCmdJProjectResults({
+        query: oversizedQuery,
+        projectGroups: [throwingGroup],
+        repos: [throwingRepo],
+        projects: [],
+        projectHostSetups: []
       })
     ).toEqual([])
   })

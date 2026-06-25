@@ -6,6 +6,7 @@ import {
   getBuiltinTheme,
   getTerminalThemePreview,
   isTerminalBackgroundLight,
+  resolveOpaqueTerminalBackground,
   resolveEffectiveTerminalAppearance
 } from './terminal-theme'
 
@@ -260,6 +261,26 @@ describe('default dark terminal theme selection contrast', () => {
   })
 })
 
+describe('default light terminal theme ANSI contrast', () => {
+  it('keeps CLI body/header ANSI colors readable on the terminal background', () => {
+    const theme = getBuiltinTheme(DEFAULT_TERMINAL_THEME_LIGHT)
+
+    expect(theme, `${DEFAULT_TERMINAL_THEME_LIGHT} should exist`).not.toBeNull()
+    if (!theme?.background) {
+      throw new Error(`${DEFAULT_TERMINAL_THEME_LIGHT} is missing a background color`)
+    }
+
+    for (const key of ['cyan', 'white', 'brightCyan', 'brightWhite'] as const) {
+      const color = theme[key]
+      expect(color, `${DEFAULT_TERMINAL_THEME_LIGHT}.${key} should be defined`).toBeDefined()
+      if (!color) {
+        throw new Error(`${DEFAULT_TERMINAL_THEME_LIGHT}.${key} is missing`)
+      }
+      expect(contrastRatio(color, theme.background)).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+})
+
 describe('isTerminalBackgroundLight', () => {
   it('classifies common terminal background color formats by luminance', () => {
     const split = vi.spyOn(String.prototype, 'split')
@@ -295,5 +316,25 @@ describe('isTerminalBackgroundLight', () => {
   it('defaults unknown colors to dark-surface title styling', () => {
     expect(isTerminalBackgroundLight(undefined)).toBe(false)
     expect(isTerminalBackgroundLight('var(--background)')).toBe(false)
+  })
+})
+
+describe('resolveOpaqueTerminalBackground', () => {
+  it('returns an opaque terminal title background', () => {
+    expect(resolveOpaqueTerminalBackground('#18181b')).toBe('rgb(24 24 27)')
+    expect(
+      resolveOpaqueTerminalBackground('rgba(255, 255, 255, 0.1)', { appSurface: 'dark' })
+    ).toBe('rgb(35 35 35)')
+    expect(
+      resolveOpaqueTerminalBackground('#ffffff', {
+        backgroundOpacity: 0.1,
+        appSurface: 'dark'
+      })
+    ).toBe('rgb(35 35 35)')
+  })
+
+  it('returns null for unknown color values', () => {
+    expect(resolveOpaqueTerminalBackground(undefined)).toBe(null)
+    expect(resolveOpaqueTerminalBackground('var(--background)')).toBe(null)
   })
 })

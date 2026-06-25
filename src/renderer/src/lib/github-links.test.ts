@@ -51,6 +51,9 @@ describe('parseGitHubIssueOrPRNumber', () => {
   })
 
   it('rejects invalid GitHub item URLs', () => {
+    expect(parseGitHubIssueOrPRNumber('0')).toBeNull()
+    expect(parseGitHubIssueOrPRNumber('#0')).toBeNull()
+    expect(parseGitHubIssueOrPRNumber('https://github.com/o/r/pull/0')).toBeNull()
     expect(
       parseGitHubIssueOrPRNumber('https://github.com/o/r/pull/not-a-number/changes')
     ).toBeNull()
@@ -117,6 +120,8 @@ describe('parseGitHubIssueOrPRLink', () => {
   })
 
   it('rejects non-GitHub and malformed item URLs', () => {
+    expect(parseGitHubIssueOrPRLink('https://github.com/o/r/pull/0')).toBeNull()
+    expect(parseGitHubIssueOrPRLink('https://github.com/o/r/issues/0')).toBeNull()
     expect(parseGitHubIssueOrPRLink('https://github.com/o/r/pull/not-a-number/changes')).toBeNull()
     expect(parseGitHubIssueOrPRLink('https://github.com/o/r/pull/')).toBeNull()
     expect(parseGitHubIssueOrPRLink('https://github.com/o/r/issues/123abc')).toBeNull()

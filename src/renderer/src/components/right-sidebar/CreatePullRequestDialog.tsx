@@ -20,6 +20,7 @@ import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-r
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 import {
   DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
+  resolveSourceControlAiEnabled,
   resolveSourceControlAiForOperation,
   resolveSourceControlAiPrCreationDefaults
 } from '../../../../shared/source-control-ai'
@@ -71,6 +72,10 @@ export function CreatePullRequestDialog({
   const [error, setError] = useState<string | null>(null)
   const provider = resolveHostedReviewCreationProvider(eligibility?.provider)
   const copy = reviewCopy(provider)
+  const sourceControlAiActionsVisible = React.useMemo(
+    () => (settings ? resolveSourceControlAiEnabled({ settings, repo }) : false),
+    [repo, settings]
+  )
   const prCreationDefaults = React.useMemo(() => {
     if (!settings) {
       return DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
@@ -125,6 +130,7 @@ export function CreatePullRequestDialog({
     settings,
     submitting,
     prCreationDefaults,
+    sourceControlAiActionsVisible,
     onBranchChangedByGeneration
   })
 

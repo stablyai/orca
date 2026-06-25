@@ -165,8 +165,13 @@ export type IFilesystemProvider = {
 
 // ─── Git Provider ───────────────────────────────────────────────────
 
+export type GitProviderStatusOptions = {
+  includeIgnored?: boolean
+  bypassEffectiveUpstreamNegativeCache?: boolean
+}
+
 export type IGitProvider = {
-  getStatus(worktreePath: string, options?: { includeIgnored?: boolean }): Promise<GitStatusResult>
+  getStatus(worktreePath: string, options?: GitProviderStatusOptions): Promise<GitStatusResult>
   checkIgnoredPaths(worktreePath: string, relativePaths: string[]): Promise<string[]>
   getHistory(worktreePath: string, options?: GitHistoryOptions): Promise<GitHistoryResult>
   commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>

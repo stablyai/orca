@@ -16,13 +16,19 @@ import {
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings, TuiAgent } from '../../shared/types'
+import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import {
   isWslShellName,
   resolveLocalWindowsTerminalRuntimeOptions
 } from '../../shared/local-windows-terminal-runtime'
 import { openCodeHookService } from '../opencode/hook-service'
+import { mimoCodeHookService } from '../mimo/hook-service'
+import {
+  getCommandTokenPathBasename,
+  getFirstCommandToken
+} from '../../shared/command-token-scanner'
 import { agentHookServer } from '../agent-hooks/server'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { piTitlebarExtensionService } from '../pi/titlebar-extension-service'
@@ -182,6 +188,16 @@ function isValidPaneKey(paneKey: unknown): paneKey is string {
   return parseValidPaneKey(paneKey) !== null
 }
 
+function shouldRefreshNativeClaudeAgentTeamsEnv(args: {
+  command?: string
+  launchConfig?: SleepingAgentLaunchConfig
+}): boolean {
+  const capturedCommand = args.launchConfig?.agentCommand?.trim() || args.command?.trim() || ''
+  const capturedArgs = args.launchConfig?.agentArgs?.trim() ?? ''
+  const capturedLaunch = `${capturedCommand} ${capturedArgs}`.trim()
+  return /(^|\s)--teammate-mode(?:=|\s+)auto(?:\s|$)/.test(capturedLaunch)
+}
+
 function rememberPaneKeyForPty(ptyId: string, paneKey: unknown): string | null {
   const normalizedPaneKey = typeof paneKey === 'string' ? paneKey.trim() : ''
   if (!isValidPaneKey(normalizedPaneKey)) {
@@ -269,7 +285,10 @@ function stripRemotePaneEnvWhenHooksDisabled(
   }
   if (
     !env ||
-    (!('ORCA_PANE_KEY' in env) && !('ORCA_TAB_ID' in env) && !('ORCA_WORKTREE_ID' in env))
+    (!('ORCA_PANE_KEY' in env) &&
+      !('ORCA_TAB_ID' in env) &&
+      !('ORCA_WORKTREE_ID' in env) &&
+      !('ORCA_AGENT_LAUNCH_TOKEN' in env))
   ) {
     return env
   }
@@ -277,6 +296,7 @@ function stripRemotePaneEnvWhenHooksDisabled(
   delete stripped.ORCA_PANE_KEY
   delete stripped.ORCA_TAB_ID
   delete stripped.ORCA_WORKTREE_ID
+  delete stripped.ORCA_AGENT_LAUNCH_TOKEN
   return stripped
 }
 
@@ -618,6 +638,26 @@ function restoreOrStripLegacyPiOverlayEnv(
   delete baseEnv[keys.source]
 }
 
+function isMimoLaunchCommand(launchCommand: string | undefined): boolean {
+  const binary = getCommandTokenPathBasename(getFirstCommandToken(launchCommand ?? ''))
+    .toLowerCase()
+    .replace(/\.(?:cmd|exe|sh)$/, '')
+  return binary === 'mimo'
+}
+
+function resolveMimocodeSourceHome(baseEnv: Record<string, string>): string | undefined {
+  const sourceHome = baseEnv.ORCA_MIMOCODE_SOURCE_HOME ?? process.env.ORCA_MIMOCODE_SOURCE_HOME
+  if (sourceHome) {
+    return sourceHome
+  }
+  const configHome = baseEnv.MIMOCODE_HOME ?? process.env.MIMOCODE_HOME
+  const orcaHome = baseEnv.ORCA_MIMOCODE_HOME ?? process.env.ORCA_MIMOCODE_HOME
+  if (configHome && orcaHome && configHome === orcaHome) {
+    return undefined
+  }
+  return configHome
+}
+
 function resolveOpenCodeSourceConfigDir(baseEnv: Record<string, string>): string | undefined {
   const sourceDir =
     baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR ?? process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
@@ -704,11 +744,28 @@ export function buildPtyHostEnv(
         delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
       }
     }
+    if (isMimoLaunchCommand(opts.launchCommand)) {
+      const preexistingMimocodeHome = resolveMimocodeSourceHome(baseEnv)
+      Object.assign(baseEnv, mimoCodeHookService.buildPtyEnv(id, preexistingMimocodeHome))
+      if (baseEnv.MIMOCODE_HOME) {
+        baseEnv.ORCA_MIMOCODE_HOME = baseEnv.MIMOCODE_HOME
+        if (preexistingMimocodeHome) {
+          baseEnv.ORCA_MIMOCODE_SOURCE_HOME = preexistingMimocodeHome
+        } else {
+          delete baseEnv.ORCA_MIMOCODE_SOURCE_HOME
+        }
+      }
+    }
   } else {
     restoreOrStripOverlayEnv(baseEnv, {
       primary: 'OPENCODE_CONFIG_DIR',
       overlay: 'ORCA_OPENCODE_CONFIG_DIR',
       source: 'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
+    })
+    restoreOrStripOverlayEnv(baseEnv, {
+      primary: 'MIMOCODE_HOME',
+      overlay: 'ORCA_MIMOCODE_HOME',
+      source: 'ORCA_MIMOCODE_SOURCE_HOME'
     })
   }
 
@@ -2136,6 +2193,8 @@ export function registerPtyHandlers(
         env?: Record<string, string>
         envToDelete?: string[]
         command?: string
+        launchConfig?: SleepingAgentLaunchConfig
+        launchAgent?: TuiAgent
         startupCommandDelivery?: StartupCommandDelivery
         connectionId?: string | null
         worktreeId?: string
@@ -2268,8 +2327,46 @@ export function registerPtyHandlers(
           ? makePaneKey(args.tabId, args.leafId)
           : null
       const stablePaneKey = verifiedPaneKey ?? migrationUnsupportedPaneKey
-      const baseEnv = baseEnvWithAuth ? { ...baseEnvWithAuth } : undefined
+      let baseEnv = baseEnvWithAuth ? { ...baseEnvWithAuth } : undefined
+      const shouldRefreshAgentTeamsEnv =
+        !args.connectionId &&
+        runtime !== undefined &&
+        stablePaneKey !== null &&
+        shouldRefreshNativeClaudeAgentTeamsEnv({
+          command: args.command,
+          launchConfig: args.launchConfig
+        })
+      let effectiveLaunchConfig = args.launchConfig
+      const preAllocatedHandle =
+        runtime && (!(provider instanceof LocalPtyProvider) || shouldRefreshAgentTeamsEnv)
+          ? runtime.createPreAllocatedTerminalHandle()
+          : null
+      if (shouldRefreshAgentTeamsEnv && preAllocatedHandle) {
+        // Why: native Agent Teams team ids/tokens are process-local. A sleeping
+        // record preserves the user's native launch shape, but the team env
+        // itself must be regenerated for the new leader PTY.
+        const prepared = await runtime.prepareClaudeAgentTeamsLeaderForHandle({
+          handle: preAllocatedHandle,
+          baseEnv: baseEnv ?? {}
+        })
+        baseEnv = {
+          ...baseEnv,
+          ...prepared.env
+        }
+        if (args.launchConfig) {
+          effectiveLaunchConfig = {
+            ...args.launchConfig,
+            agentEnv: {
+              ...args.launchConfig.agentEnv,
+              ...prepared.env
+            }
+          }
+        }
+      }
       const requestedAgentTeamsPath = baseEnv?.ORCA_AGENT_TEAMS_TEAM_ID ? baseEnv.PATH : undefined
+      const agentTeamsEnvToDelete = shouldRefreshAgentTeamsEnv
+        ? ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+        : undefined
       if (baseEnv && stablePaneKey) {
         baseEnv.ORCA_PANE_KEY = stablePaneKey
         if (typeof args.tabId === 'string') {
@@ -2288,14 +2385,11 @@ export function registerPtyHandlers(
         delete baseEnv.ORCA_PANE_KEY
         delete baseEnv.ORCA_TAB_ID
         delete baseEnv.ORCA_WORKTREE_ID
+        delete baseEnv.ORCA_AGENT_LAUNCH_TOKEN
       }
       const validatedPaneKey = stablePaneKey
       const validatedLeafId = verifiedLeafId ?? metadataLeafId
       let env: Record<string, string> | undefined = baseEnv
-      const preAllocatedHandle =
-        runtime && !(provider instanceof LocalPtyProvider)
-          ? runtime.createPreAllocatedTerminalHandle()
-          : null
       const effectiveShellOverride = terminalRuntimeOptions.shellOverride
       const codexSelectionTarget = getCodexSelectionTargetForPty(
         effectiveShellOverride,
@@ -2367,7 +2461,10 @@ export function registerPtyHandlers(
         : undefined
       const combinedEnvToDelete = mergePtyEnvDeletions(
         mergePtyEnvDeletions(
-          mergePtyEnvDeletions(envToDelete, args.envToDelete ?? []),
+          mergePtyEnvDeletions(
+            mergePtyEnvDeletions(envToDelete, args.envToDelete ?? []),
+            agentTeamsEnvToDelete ?? []
+          ),
           isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(spawnEnv) : []
         ),
         skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : []
@@ -2686,7 +2783,12 @@ export function registerPtyHandlers(
           })
         }
       }
-      return result
+      return {
+        ...result,
+        ...(!result.isReattach && effectiveLaunchConfig
+          ? { launchConfig: effectiveLaunchConfig }
+          : {})
+      }
     }
   )
 

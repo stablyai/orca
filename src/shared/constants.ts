@@ -28,6 +28,7 @@ import {
   DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY
 } from './left-sidebar-appearance'
+import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
@@ -209,6 +210,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalFontFamily: defaultTerminalFontFamily(),
     terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,
     terminalLineHeight: 1,
+    terminalScrollSensitivity: 1.15,
+    terminalFastScrollSensitivity: 5,
+    terminalTuiScrollSensitivity: 3,
     // Why: "auto" should use WebGL when supported while keeping DOM fallback
     // for renderer failures and Linux software/unknown GPU renderers.
     terminalGpuAcceleration: 'auto',
@@ -265,6 +269,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     rightSidebarOpenByDefault: true,
     showGitIgnoredFiles: true,
     sourceControlViewMode: 'list',
+    sourceControlGroupOrder: DEFAULT_SOURCE_CONTROL_GROUP_ORDER,
     showTitlebarAppName: true,
     showTasksButton: true,
     showAutomationsButton: true,

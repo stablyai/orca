@@ -21,6 +21,9 @@ function isolatedScanRoots(root: string) {
     copilotSessionsDir: join(root, 'copilot-sessions'),
     cursorProjectsDir: join(root, 'cursor-projects'),
     opencodeStorageDir: join(root, 'opencode-storage'),
+    // Why: prevent the SQLite scanner from picking up the real
+    // ~/.local/share/opencode/opencode.db during tests.
+    opencodeDbPaths: [] as readonly string[],
     grokSessionsDir: join(root, 'grok-sessions'),
     devinTranscriptsDir: join(root, 'devin-transcripts'),
     hermesSessionsDir: join(root, 'hermes-sessions'),
@@ -110,7 +113,7 @@ describe('scanAiVaultSessions', () => {
             type: 'message',
             role: 'user',
             content: [
-              { type: 'text', text: '# AGENTS.md instructions for /repo/app <INSTRUCTIONS>' }
+              { type: 'text', text: '# AGENTS.md instructions\n\n<INSTRUCTIONS>repo policy' }
             ]
           }
         }),
@@ -162,6 +165,15 @@ describe('scanAiVaultSessions', () => {
         })
       ].join('\n')
     )
+    await writeFile(
+      join(root, 'session_index.jsonl'),
+      jsonLines([
+        {
+          id: '019f0000-1111-7222-8333-444444444444',
+          thread_name: 'Indexed Codex resume picker title'
+        }
+      ])
+    )
 
     const result = await scanAiVaultSessions({
       ...roots,
@@ -171,7 +183,7 @@ describe('scanAiVaultSessions', () => {
     expect(result.issues).toEqual([])
     expect(result.sessions).toHaveLength(2)
     expect(result.sessions.map((session) => session.title).sort()).toEqual([
-      'Fix the resume picker filters',
+      'Indexed Codex resume picker title',
       'Vault polish pass'
     ])
 
@@ -250,6 +262,76 @@ describe('scanAiVaultSessions', () => {
       codexHome: runtimeHome,
       resumeCommand: `cd '/Users/nwparker/orca/workspaces/orca/mem4' && CODEX_HOME='${runtimeHome}' codex resume '019e9693-64fc-7370-9c18-7e625c595d0f'`
     })
+  })
+
+  it('indexes WSL home session roots', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-wsl-'))
+    tempRoots.push(root)
+    const roots = isolatedScanRoots(root)
+    const wslHome = join(root, 'wsl', 'Ubuntu', 'home', 'ada')
+    await mkdir(join(wslHome, '.claude', 'projects', 'repo'), { recursive: true })
+    await mkdir(
+      join(wslHome, '.local', 'share', 'orca', 'codex-runtime-home', 'home', 'sessions'),
+      {
+        recursive: true
+      }
+    )
+
+    await writeFile(
+      join(wslHome, '.claude', 'projects', 'repo', 'claude-wsl.jsonl'),
+      jsonLines([
+        {
+          type: 'user',
+          sessionId: 'claude-wsl',
+          timestamp: '2026-06-10T10:00:00.000Z',
+          cwd: '/home/ada/repo',
+          message: { role: 'user', content: 'Claude WSL title' }
+        }
+      ])
+    )
+    await writeFile(
+      join(
+        wslHome,
+        '.local',
+        'share',
+        'orca',
+        'codex-runtime-home',
+        'home',
+        'sessions',
+        'codex-wsl.jsonl'
+      ),
+      jsonLines([
+        {
+          timestamp: '2026-06-10T10:01:00.000Z',
+          type: 'session_meta',
+          payload: { id: 'codex-wsl', cwd: '/home/ada/repo' }
+        },
+        {
+          timestamp: '2026-06-10T10:01:01.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'text', text: 'Codex WSL title' }]
+          }
+        }
+      ])
+    )
+
+    const result = await scanAiVaultSessions({
+      ...roots,
+      wslHomeDirs: [wslHome],
+      platform: 'win32'
+    })
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions.map((session) => session.title).sort()).toEqual([
+      'Claude WSL title',
+      'Codex WSL title'
+    ])
+    expect(result.sessions.find((session) => session.agent === 'codex')?.codexHome).toBe(
+      join(wslHome, '.local', 'share', 'orca', 'codex-runtime-home', 'home')
+    )
   })
 
   it('skips hidden Codex context blocks when choosing session titles', async () => {

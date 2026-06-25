@@ -1,11 +1,11 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
+import type { HostedReviewProvider } from '../../../src/shared/hosted-review'
 
-// Link / unlink an existing PR to the current worktree via worktree.set (the same
-// path desktop's "Link another PR" uses). GitHub-scoped: it writes the worktree's
-// `linkedPR` key, matching desktop where linking is GitHub-only (GitLab/Bitbucket
-// use separate linked* keys). linkedPR is tri-state on the host: a number sets the
-// link, null clears it. worktree.set is allowlisted for mobile.
+// Link / unlink review metadata via worktree.set (the same path desktop uses).
+// GitHub's existing manual link flow writes linkedPR; hosted-review creation maps
+// each provider to its own linked* field so mobile follow-up reads get the same
+// authoritative hint as desktop.
 
 export type MobilePrLinkOutcome = { ok: true } | { ok: false; error: string }
 
@@ -15,6 +15,33 @@ export function buildWorktreeSetLinkParams(
   linkedPR: number | null
 ): Record<string, unknown> {
   return { worktree: `id:${worktreeId}`, linkedPR }
+}
+
+export function buildWorktreeSetHostedReviewLinkParams(
+  worktreeId: string,
+  provider: HostedReviewProvider,
+  number: number | null,
+  options?: { baseRef?: string | null }
+): Record<string, unknown> {
+  const trimmedBaseRef = options?.baseRef?.trim()
+  const base = {
+    worktree: `id:${worktreeId}`,
+    ...(trimmedBaseRef ? { baseRef: trimmedBaseRef } : {})
+  }
+  switch (provider) {
+    case 'github':
+      return { ...base, linkedPR: number }
+    case 'gitlab':
+      return { ...base, linkedGitLabMR: number }
+    case 'bitbucket':
+      return { ...base, linkedBitbucketPR: number }
+    case 'azure-devops':
+      return { ...base, linkedAzureDevOpsPR: number }
+    case 'gitea':
+      return { ...base, linkedGiteaPR: number }
+    case 'unsupported':
+      return base
+  }
 }
 
 async function setLinkedPr(
@@ -47,6 +74,33 @@ export function linkMobilePr(
   prNumber: number
 ): Promise<MobilePrLinkOutcome> {
   return setLinkedPr(client, worktreeId, prNumber)
+}
+
+export async function linkMobileHostedReview(
+  client: Pick<RpcClient, 'sendRequest'>,
+  worktreeId: string,
+  provider: HostedReviewProvider,
+  number: number,
+  options?: { baseRef?: string | null }
+): Promise<MobilePrLinkOutcome> {
+  const params = buildWorktreeSetHostedReviewLinkParams(worktreeId, provider, number, options)
+  if (Object.keys(params).length === 1) {
+    return { ok: true }
+  }
+  try {
+    const response = await client.sendRequest('worktree.set', params)
+    if (!response.ok) {
+      return { ok: false, error: response.error?.message || 'Failed to update linked review' }
+    }
+    return { ok: true }
+  } catch (err) {
+    // Why: the review was already created; normalize link failures so callers can
+    // surface a non-fatal refresh problem instead of losing the created URL.
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : 'Failed to update linked review'
+    }
+  }
 }
 
 export function unlinkMobilePr(

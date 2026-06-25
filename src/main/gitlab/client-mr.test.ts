@@ -381,6 +381,26 @@ describe('gitlab client — MR operations', () => {
       )
     })
 
+    it('preserves merged state when falling back to a linked MR iid', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          iid: 10,
+          title: 'Merged linked MR',
+          state: 'merged',
+          pipeline: { status: 'success' }
+        })
+      })
+
+      const mr = await getMergeRequestForBranch('/repo', 'local-review-branch', 10)
+
+      expect(mr).toMatchObject({
+        number: 10,
+        state: 'merged',
+        pipelineStatus: 'success'
+      })
+    })
+
     it('routes local WSL merge-request branch lookup through the selected distro', async () => {
       getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
       glabExecFileAsyncMock.mockResolvedValueOnce({

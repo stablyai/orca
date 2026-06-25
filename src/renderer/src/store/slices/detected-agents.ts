@@ -185,7 +185,10 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
 
   ensureRemoteDetectedAgents: (connectionId: string) => {
     const existing = get().remoteDetectedAgentIds[connectionId]
-    if (existing) {
+    // Why: an empty result ([]) is truthy, so a prior "no agents found" detection
+    // must not be treated as cached — re-detect so a later install / PATH fix is
+    // picked up without a reconnect. Non-empty results still short-circuit.
+    if (existing?.length) {
       return Promise.resolve(existing)
     }
     const inflight = remoteDetectPromises.get(connectionId)
@@ -242,7 +245,10 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
 
   ensureRuntimeDetectedAgents: (environmentId: string) => {
     const existing = get().runtimeDetectedAgentIds[environmentId]
-    if (existing) {
+    // Why: an empty result ([]) is truthy, so a prior "no agents found" detection
+    // must not be treated as cached — re-detect so a later install / PATH fix is
+    // picked up without a reconnect. Non-empty results still short-circuit.
+    if (existing?.length) {
       return Promise.resolve(existing)
     }
     const inflight = runtimeDetectPromises.get(environmentId)

@@ -34,6 +34,10 @@ type Props = {
   onSubmit: (body: string) => Promise<void>
 }
 
+function hasDraftText(body: string): boolean {
+  return /\S/u.test(body)
+}
+
 export function DiffCommentPopover({
   lineNumber,
   startLine,
@@ -48,6 +52,12 @@ export function DiffCommentPopover({
   onSubmit
 }: Props): React.JSX.Element {
   const [body, setBody] = useState('')
+  // Why: mirror the draft into a ref so the document mousedown listener (empty
+  // dep array, see below) can read the freshest body without re-registering on
+  // every keystroke. Used to keep the popover open on outside-click when the
+  // user has typed something, so an accidental click never discards a draft.
+  const bodyRef = useRef(body)
+  bodyRef.current = body
   // Why: `submitting` prevents duplicate note rows when the user
   // double-clicks the Add note button or hits Enter twice before the
   // IPC round-trip resolves. Iteration 1 made submission async and keeps the
@@ -142,6 +152,11 @@ export function DiffCommentPopover({
         return
       }
       if (popoverRef.current.contains(ev.target as Node)) {
+        return
+      }
+      // Why: outside-click is a soft dismiss, so preserve any non-whitespace
+      // draft even when submit's bounded scanner would reject it as too large.
+      if (hasDraftText(bodyRef.current)) {
         return
       }
       // Why: read the latest onCancel from the ref rather than closing over it

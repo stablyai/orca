@@ -26,6 +26,7 @@ const harness = vi.hoisted(() => ({
   storeState: {} as Record<string, unknown>,
   sendNotesToActiveAgentSession: vi.fn(),
   track: vi.fn(),
+  toastMessage: vi.fn(),
   worktreeAgentRows: [] as DashboardAgentRowData[],
   noteTargets: [] as {
     paneKey: string
@@ -73,8 +74,12 @@ vi.mock('react', async () => {
 })
 
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector(harness.storeState)
+  useAppStore: Object.assign(
+    (selector: (state: Record<string, unknown>) => unknown) => selector(harness.storeState),
+    {
+      getState: () => harness.storeState
+    }
+  )
 }))
 
 vi.mock('zustand/react/shallow', () => ({
@@ -82,7 +87,10 @@ vi.mock('zustand/react/shallow', () => ({
 }))
 
 vi.mock('@/lib/active-agent-note-send', () => ({
-  activeAgentNotesSendFailureMessage: (status: string) => status,
+  activeAgentNotesSendFailureMessage: (
+    status: string,
+    options: { explicitTarget?: boolean } = {}
+  ) => (options.explicitTarget ? `selected:${status}` : status),
   sendNotesToActiveAgentSession: harness.sendNotesToActiveAgentSession,
   useCanSendNotesToActiveTerminal: () => true
 }))
@@ -158,7 +166,7 @@ vi.mock('sonner', () => ({
     dismiss: vi.fn(),
     error: vi.fn(),
     loading: vi.fn(() => 'toast-id'),
-    message: vi.fn(),
+    message: harness.toastMessage,
     success: vi.fn()
   }
 }))
@@ -336,6 +344,7 @@ describe('ReviewNotesSendMenuContent', () => {
     harness.sendNotesToActiveAgentSession.mockReset()
     harness.sendNotesToActiveAgentSession.mockResolvedValue({ status: 'sent' })
     harness.track.mockReset()
+    harness.toastMessage.mockReset()
     harness.worktreeAgentRows = []
     harness.noteTargets = []
     harness.now = 600_000
@@ -442,7 +451,7 @@ describe('ReviewNotesSendMenuContent', () => {
     expect(collectText(items[1])).toContain('Claude')
   })
 
-  it('can target a title-detected agent row that has not reported hook status yet', async () => {
+  it('does not target title-detected rows skipped by target derivation', async () => {
     const paneKey = makePaneKey(TAB_B, LEAF_B)
     harness.worktreeAgentRows = [
       agentRow({
@@ -461,17 +470,48 @@ describe('ReviewNotesSendMenuContent', () => {
     })
 
     const tree = render()
-    const item = findByType(tree, 'DropdownMenuItem')
-    ;(item.props.onSelect as () => void)()
-    await flushMicrotasks()
+    const items = findAllByType(tree, 'DropdownMenuItem')
 
-    expect(collectText(item)).toContain('Codex')
-    expect(collectText(item)).toContain('Idle')
-    expect(harness.sendNotesToActiveAgentSession).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      prompt: 'my notes',
-      noteTarget: { tabId: TAB_B, leafId: LEAF_B }
+    expect(items).toHaveLength(0)
+    expect(harness.sendNotesToActiveAgentSession).not.toHaveBeenCalled()
+  })
+
+  it('disables title-detected dashboard rows when target derivation reports permission', () => {
+    const paneKey = makePaneKey(TAB_B, LEAF_B)
+    harness.worktreeAgentRows = [
+      agentRow({
+        paneKey,
+        tabId: TAB_B,
+        title: 'Codex',
+        agentType: 'codex',
+        state: 'blocked',
+        startedAt: harness.now
+      })
+    ]
+    setStore({
+      tabsByWorktree: { 'wt-1': [tab(TAB_B, { title: 'Codex' })] },
+      terminalLayoutsByTabId: { [TAB_B]: leafLayout(LEAF_B, 'pty-b') },
+      ptyIdsByTabId: { [TAB_B]: ['pty-b'] }
     })
+    harness.noteTargets = [
+      {
+        paneKey,
+        tabId: TAB_B,
+        leafId: LEAF_B,
+        agentType: 'codex',
+        tabTitle: 'Codex',
+        status: 'disabled',
+        disabledReason: 'Agent needs permission'
+      }
+    ]
+
+    const tree = render()
+    const item = findByType(tree, 'DropdownMenuItem')
+
+    expect(item.props.disabled).toBe(true)
+    expect(item.props.title).toBe('Agent needs permission')
+    ;(item.props.onSelect as () => void)()
+    expect(harness.sendNotesToActiveAgentSession).not.toHaveBeenCalled()
   })
 
   it('does not offer a title-detected agent row after its live PTY has exited', () => {
@@ -589,8 +629,10 @@ describe('ReviewNotesSendMenuContent', () => {
     })
   })
 
-  it('disables a working agent and never sends to it', () => {
+  it('keeps selected-target note failures undelivered and uses selected wording', async () => {
     const statusPaneKey = makePaneKey(TAB_A, LEAF_A)
+    const onPromptDelivered = vi.fn()
+    harness.sendNotesToActiveAgentSession.mockResolvedValue({ status: 'not-ready' })
     setStore({
       tabsByWorktree: { 'wt-1': [tab(TAB_A, { title: 'Terminal 1' })] },
       terminalLayoutsByTabId: { [TAB_A]: leafLayout(LEAF_A, 'pty-a') }
@@ -602,18 +644,147 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'claude',
         tabTitle: 'Terminal 1',
-        status: 'disabled',
-        disabledReason: 'Agent is working'
+        status: 'eligible'
       }
+    ]
+
+    const tree = render({ onPromptDelivered })
+    ;(findByType(tree, 'DropdownMenuItem').props.onSelect as () => void)()
+    await flushMicrotasks()
+
+    expect(onPromptDelivered).not.toHaveBeenCalled()
+    expect(harness.track).not.toHaveBeenCalled()
+    expect(harness.toastMessage).toHaveBeenCalledWith('selected:not-ready')
+  })
+
+  it('keeps selected-target thrown send errors undelivered', async () => {
+    const statusPaneKey = makePaneKey(TAB_A, LEAF_A)
+    const onPromptDelivered = vi.fn()
+    harness.sendNotesToActiveAgentSession.mockRejectedValue(new Error('runtime unavailable'))
+    setStore({
+      tabsByWorktree: { 'wt-1': [tab(TAB_A, { title: 'Terminal 1' })] },
+      terminalLayoutsByTabId: { [TAB_A]: leafLayout(LEAF_A, 'pty-a') }
+    })
+    harness.noteTargets = [
+      {
+        paneKey: statusPaneKey,
+        tabId: TAB_A,
+        leafId: LEAF_A,
+        agentType: 'claude',
+        tabTitle: 'Terminal 1',
+        status: 'eligible'
+      }
+    ]
+
+    const tree = render({ onPromptDelivered })
+    ;(findByType(tree, 'DropdownMenuItem').props.onSelect as () => void)()
+    await flushMicrotasks()
+
+    expect(onPromptDelivered).not.toHaveBeenCalled()
+    expect(harness.track).not.toHaveBeenCalled()
+  })
+
+  it('revalidates the chosen target at click time and refuses stale rows', async () => {
+    const statusPaneKey = makePaneKey(TAB_A, LEAF_A)
+    setStore({
+      tabsByWorktree: { 'wt-1': [tab(TAB_A, { title: 'Terminal 1' })] },
+      terminalLayoutsByTabId: { [TAB_A]: leafLayout(LEAF_A, 'pty-a') },
+      ptyIdsByTabId: { [TAB_A]: ['pty-a'] }
+    })
+    harness.noteTargets = [
+      {
+        paneKey: statusPaneKey,
+        tabId: TAB_A,
+        leafId: LEAF_A,
+        agentType: 'claude',
+        tabTitle: 'Terminal 1',
+        status: 'eligible'
+      }
+    ]
+
+    const tree = render()
+    harness.noteTargets = [
+      {
+        paneKey: statusPaneKey,
+        tabId: TAB_A,
+        leafId: LEAF_A,
+        agentType: 'claude',
+        tabTitle: 'Terminal 1',
+        status: 'disabled',
+        disabledReason: 'Agent status is stale'
+      }
+    ]
+    ;(findByType(tree, 'DropdownMenuItem').props.onSelect as () => void)()
+
+    expect(harness.sendNotesToActiveAgentSession).not.toHaveBeenCalled()
+    expect(harness.toastMessage).toHaveBeenCalledWith('Agent status is stale')
+  })
+
+  it('refuses stale menu targets that disappear from target derivation before click', () => {
+    const statusPaneKey = makePaneKey(TAB_A, LEAF_A)
+    setStore({
+      tabsByWorktree: { 'wt-1': [tab(TAB_A, { title: 'Terminal 1' })] },
+      terminalLayoutsByTabId: { [TAB_A]: leafLayout(LEAF_A, 'pty-a') },
+      ptyIdsByTabId: { [TAB_A]: ['pty-a'] }
+    })
+    harness.noteTargets = [
+      {
+        paneKey: statusPaneKey,
+        tabId: TAB_A,
+        leafId: LEAF_A,
+        agentType: 'claude',
+        tabTitle: 'Terminal 1',
+        status: 'eligible'
+      }
+    ]
+
+    const tree = render()
+    harness.noteTargets = []
+    ;(findByType(tree, 'DropdownMenuItem').props.onSelect as () => void)()
+
+    expect(harness.sendNotesToActiveAgentSession).not.toHaveBeenCalled()
+    expect(harness.toastMessage).toHaveBeenCalledWith('Terminal is no longer available')
+  })
+
+  it('keeps a working agent selectable and preserves the Working state text', async () => {
+    const statusPaneKey = makePaneKey(TAB_A, LEAF_A)
+    setStore({
+      tabsByWorktree: { 'wt-1': [tab(TAB_A, { title: 'Terminal 1' })] },
+      terminalLayoutsByTabId: { [TAB_A]: leafLayout(LEAF_A, 'pty-a') },
+      ptyIdsByTabId: { [TAB_A]: ['pty-a'] }
+    })
+    harness.noteTargets = [
+      {
+        paneKey: statusPaneKey,
+        tabId: TAB_A,
+        leafId: LEAF_A,
+        agentType: 'claude',
+        tabTitle: 'Terminal 1',
+        status: 'eligible'
+      }
+    ]
+    harness.worktreeAgentRows = [
+      agentRow({
+        paneKey: statusPaneKey,
+        tabId: TAB_A,
+        title: 'Terminal 1',
+        agentType: 'claude',
+        state: 'working'
+      })
     ]
 
     const tree = render()
     const item = findByType(tree, 'DropdownMenuItem')
 
-    expect(item.props.disabled).toBe(true)
-    expect(item.props.title).toBe('Agent is working')
+    expect(item.props.disabled).toBe(false)
+    expect(collectText(item)).toContain('Working')
     ;(item.props.onSelect as () => void)()
-    expect(harness.sendNotesToActiveAgentSession).not.toHaveBeenCalled()
+    await flushMicrotasks()
+    expect(harness.sendNotesToActiveAgentSession).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      prompt: 'my notes',
+      noteTarget: { tabId: TAB_A, leafId: LEAF_A }
+    })
   })
 
   it('does not render an active agent fallback when no agents are derived', () => {

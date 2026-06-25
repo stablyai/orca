@@ -7,8 +7,10 @@ import type {
 import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { agentHookServer, isValidPaneKey } from '../agent-hooks/server'
+import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
 import { ampHookService } from '../amp/hook-service'
 import {
+  clearMigrationUnsupportedPtysByTabPrefix,
   clearMigrationUnsupportedPtysForPaneKey,
   getMigrationUnsupportedPtySnapshot
 } from '../agent-hooks/migration-unsupported-pty-state'
@@ -31,6 +33,8 @@ type AgentStatusRuntimeEnrichment = Pick<
   'getAgentStatusTerminalHandleForPaneKey' | 'getAgentStatusOrchestrationContextForPaneKey'
 >
 
+const MAX_AGENT_STATUS_DROP_TAB_ID_LENGTH = 160
+
 function enrichAgentStatusIpcPayload(
   data: AgentStatusIpcPayload,
   runtime: AgentStatusRuntimeEnrichment | undefined
@@ -45,6 +49,15 @@ function enrichAgentStatusIpcPayload(
     ...(terminalHandle ? { terminalHandle } : {}),
     ...(orchestration ? { orchestration } : {})
   }
+}
+
+function isValidAgentStatusDropTabId(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length <= MAX_AGENT_STATUS_DROP_TAB_ID_LENGTH &&
+    value.trim() === value &&
+    isValidTerminalTabId(value)
+  )
 }
 
 // Why: install/remove are intentionally not exposed to the renderer. Orca
@@ -80,6 +93,7 @@ export function registerAgentHookHandlers(runtime?: AgentStatusRuntimeEnrichment
   // round-trip a response. Removing first keeps re-registration safe even
   // though the module-level registered guard already prevents re-entry today.
   ipcMain.removeAllListeners('agentStatus:drop')
+  ipcMain.removeAllListeners('agentStatus:dropByTabPrefix')
   ipcMain.on('agentStatus:drop', (_event, paneKey: unknown) => {
     if (typeof paneKey !== 'string' || !isValidPaneKey(paneKey)) {
       return
@@ -93,6 +107,17 @@ export function registerAgentHookHandlers(runtime?: AgentStatusRuntimeEnrichment
       clearMigrationUnsupportedPtysForPaneKey(paneKey)
     } catch (err) {
       console.warn('[agent-hooks] dropStatusEntry failed:', err)
+    }
+  })
+  ipcMain.on('agentStatus:dropByTabPrefix', (_event, tabId: unknown) => {
+    if (!isValidAgentStatusDropTabId(tabId)) {
+      return
+    }
+    try {
+      agentHookServer.dropStatusEntriesByTabPrefix(tabId)
+      clearMigrationUnsupportedPtysByTabPrefix(tabId)
+    } catch (err) {
+      console.warn('[agent-hooks] dropStatusEntriesByTabPrefix failed:', err)
     }
   })
   ipcMain.handle('agentStatus:getSnapshot', (): AgentStatusIpcPayload[] => {

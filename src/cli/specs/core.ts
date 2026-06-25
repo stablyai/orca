@@ -129,6 +129,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'Use --project with --host to create on a ready project host setup without spelling the backing repo id.',
       'For related work, use the inferred parent or pass --parent-worktree active, folder:<id>, or worktree:<id> to make the relationship explicit.',
       'Use --no-parent when the new worktree should be independent of the current context.',
+      '--no-parent only affects Orca lineage; omit --base-branch to use the repo default base, or pass the default base ref explicitly for independent top-level work.',
       'By default this creates the worktree and its first terminal without switching the active Orca view.',
       'Pass --agent to launch an agent in the first terminal; --prompt sends initial work to that agent.',
       'Repo-defined setup hooks follow the repository setup policy; pass --setup run to force them.',

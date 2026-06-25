@@ -173,4 +173,7 @@ export function resolvePaneStyleOptions(
   }
 }
 
-export { isTerminalBackgroundLight } from './terminal-title-contrast'
+export {
+  isTerminalBackgroundLight,
+  resolveOpaqueTerminalBackground
+} from './terminal-title-contrast'

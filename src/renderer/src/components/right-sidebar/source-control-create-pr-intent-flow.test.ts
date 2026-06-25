@@ -6,25 +6,33 @@ import {
   createPrIntentGitStatusMatchesToken,
   createPrIntentRunTokenMatches,
   getCreatePrIntentStagePaths,
+  resolveCreatePrIntentReviewBase,
   resolveCreatePrIntentRemoteStep
 } from './source-control-create-pr-intent-flow'
 import type { GitStatusEntry } from '../../../../shared/types'
 
 describe('source-control Create PR intent flow helpers', () => {
-  it('matches async completions only to the original repo, worktree, path, and branch', () => {
+  it('matches async completions only to the original repo, worktree, path, branch, and base', () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(123)
     try {
       const token = createCreatePrIntentRunToken({
         repoId: 'repo-1',
         worktreeId: 'wt-1',
         worktreePath: '/repo',
-        branch: 'feature'
+        branch: 'feature',
+        baseRef: 'origin/main'
       })
 
       expect(token.startedAt).toBe(123)
       expect(createPrIntentRunTokenMatches(token, token)).toBe(true)
+      expect(
+        createPrIntentRunTokenMatches(token, { ...token, baseRef: 'refs/remotes/origin/main' })
+      ).toBe(true)
       expect(createPrIntentRunTokenMatches(token, { ...token, branch: 'other' })).toBe(false)
       expect(createPrIntentRunTokenMatches(token, { ...token, worktreeId: 'wt-2' })).toBe(false)
+      expect(createPrIntentRunTokenMatches(token, { ...token, baseRef: 'upstream/main' })).toBe(
+        false
+      )
     } finally {
       now.mockRestore()
     }
@@ -76,6 +84,47 @@ describe('source-control Create PR intent flow helpers', () => {
     ).toBe(true)
   })
 
+  it('treats same-worktree base changes as intent conflicts', () => {
+    const worktreePath = join(sep, 'repo', 'wt-1')
+    const token = createCreatePrIntentRunToken({
+      repoId: 'repo-1',
+      worktreeId: 'wt-1',
+      worktreePath,
+      branch: 'feature/pr',
+      baseRef: 'refs/remotes/origin/main'
+    })
+
+    expect(
+      createPrIntentCurrentTargetConflictsWithToken(token, {
+        repoId: 'repo-1',
+        worktreeId: 'wt-1',
+        worktreePath,
+        branch: 'feature/pr',
+        baseRef: 'remotes/origin/main'
+      })
+    ).toBe(false)
+
+    expect(
+      createPrIntentCurrentTargetConflictsWithToken(token, {
+        repoId: 'repo-1',
+        worktreeId: 'wt-1',
+        worktreePath,
+        branch: 'feature/pr',
+        baseRef: 'upstream/main'
+      })
+    ).toBe(true)
+
+    expect(
+      createPrIntentCurrentTargetConflictsWithToken(token, {
+        repoId: 'repo-1',
+        worktreeId: 'wt-1',
+        worktreePath,
+        branch: 'feature/pr',
+        baseRef: 'origin/release'
+      })
+    ).toBe(true)
+  })
+
   it('stages only safe unstaged and untracked paths', () => {
     const unresolved = {
       path: 'conflicted.ts',
@@ -91,6 +140,24 @@ describe('source-control Create PR intent flow helpers', () => {
         untracked: [{ path: 'new.ts', status: 'untracked', area: 'untracked' }]
       })
     ).toEqual(['safe.ts', 'new.ts'])
+  })
+
+  it('prefers the current compare base over stale eligibility defaults', () => {
+    expect(
+      resolveCreatePrIntentReviewBase({
+        currentBaseRef: 'refs/remotes/origin/release',
+        eligibilityDefaultBaseRef: 'refs/remotes/origin/main',
+        composerBaseRef: 'main'
+      })
+    ).toBe('release')
+
+    expect(
+      resolveCreatePrIntentReviewBase({
+        currentBaseRef: null,
+        eligibilityDefaultBaseRef: 'refs/remotes/upstream/develop',
+        composerBaseRef: 'main'
+      })
+    ).toBe('develop')
   })
 
   it('resolves safe remote steps for publish, push, and patch-equivalent force-push', () => {

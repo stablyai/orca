@@ -6,6 +6,12 @@ import {
 } from './tui-agent-startup'
 import { resolveTuiAgentLaunchArgs } from '../../../shared/tui-agent-launch-defaults'
 
+const emptyLaunchConfig = (agentCommand: string) => ({
+  agentCommand,
+  agentArgs: '',
+  agentEnv: {}
+})
+
 describe('buildAgentStartupPlan', () => {
   it('passes Claude prompts as a positional interactive argument', () => {
     expect(
@@ -19,7 +25,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'claude',
       launchCommand: "claude 'Fix the bug'",
       expectedProcess: 'claude',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('claude')
     })
   })
 
@@ -35,7 +42,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'gemini',
       launchCommand: "gemini --prompt-interactive 'Investigate this regression'",
       expectedProcess: 'gemini',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('gemini')
     })
   })
 
@@ -51,7 +59,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'antigravity',
       launchCommand: "agy --prompt-interactive 'Investigate this regression'",
       expectedProcess: 'agy',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('agy')
     })
   })
 
@@ -67,7 +76,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'aider',
       launchCommand: 'aider',
       expectedProcess: 'aider',
-      followupPrompt: 'Refactor the parser'
+      followupPrompt: 'Refactor the parser',
+      launchConfig: emptyLaunchConfig('aider')
     })
   })
 
@@ -83,7 +93,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'autohand',
       launchCommand: 'autohand',
       expectedProcess: 'autohand',
-      followupPrompt: 'Add tests for the parser'
+      followupPrompt: 'Add tests for the parser',
+      launchConfig: emptyLaunchConfig('autohand')
     })
   })
 
@@ -99,7 +110,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'ante',
       launchCommand: 'ante',
       expectedProcess: 'ante',
-      followupPrompt: 'Summarize the failing tests'
+      followupPrompt: 'Summarize the failing tests',
+      launchConfig: emptyLaunchConfig('ante')
     })
   })
 
@@ -115,7 +127,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'cursor',
       launchCommand: "cursor-agent 'Review this file'",
       expectedProcess: 'cursor-agent',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('cursor-agent')
     })
   })
 
@@ -131,7 +144,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'droid',
       launchCommand: "/opt/factory/bin/droid 'Ship the fix'",
       expectedProcess: 'droid',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('/opt/factory/bin/droid')
     })
   })
 
@@ -147,7 +161,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'copilot',
       launchCommand: "copilot -i 'Fix the bug'",
       expectedProcess: 'copilot',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('copilot')
     })
   })
 
@@ -163,7 +178,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'grok',
       launchCommand: 'grok',
       expectedProcess: 'grok',
-      followupPrompt: 'Trace the failing test'
+      followupPrompt: 'Trace the failing test',
+      launchConfig: emptyLaunchConfig('grok')
     })
   })
 
@@ -180,7 +196,12 @@ describe('buildAgentStartupPlan', () => {
       agent: 'devin',
       launchCommand: "devin '--permission-mode' 'bypass'",
       expectedProcess: 'devin',
-      followupPrompt: 'Trace the failing test'
+      followupPrompt: 'Trace the failing test',
+      launchConfig: {
+        agentCommand: "devin '--permission-mode' 'bypass'",
+        agentArgs: '--permission-mode bypass',
+        agentEnv: {}
+      }
     })
   })
 
@@ -196,7 +217,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'command-code',
       launchCommand: "command-code --trust 'Fix the issue'",
       expectedProcess: 'command-code',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('command-code --trust')
     })
   })
 
@@ -223,7 +245,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'copilot',
       launchCommand: "copilot -i 'Fix the bug'",
       expectedProcess: 'copilot',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('copilot')
     })
   })
 })
@@ -240,7 +263,8 @@ describe('buildAgentDraftLaunchPlan', () => {
     ).toEqual({
       agent: 'claude',
       launchCommand: "claude --prefill 'https://github.com/acme/repo/issues/42'",
-      expectedProcess: 'claude'
+      expectedProcess: 'claude',
+      launchConfig: emptyLaunchConfig('claude')
     })
   })
 
@@ -272,7 +296,8 @@ describe('buildAgentDraftLaunchPlan', () => {
       agent: 'pi',
       launchCommand: 'pi; unset ORCA_PI_PREFILL',
       expectedProcess: 'pi',
-      env: { ORCA_PI_PREFILL: 'https://github.com/acme/repo/issues/42' }
+      env: { ORCA_PI_PREFILL: 'https://github.com/acme/repo/issues/42' },
+      launchConfig: emptyLaunchConfig('pi')
     })
   })
 
@@ -298,7 +323,8 @@ describe('buildAgentDraftLaunchPlan', () => {
     ).toEqual({
       agent: 'claude',
       launchCommand: "/opt/anthropic/bin/claude --prefill 'review this'",
-      expectedProcess: 'claude'
+      expectedProcess: 'claude',
+      launchConfig: emptyLaunchConfig('/opt/anthropic/bin/claude')
     })
   })
 
@@ -313,7 +339,8 @@ describe('buildAgentDraftLaunchPlan', () => {
     ).toEqual({
       agent: 'openclaude',
       launchCommand: "openclaude --prefill 'review this'",
-      expectedProcess: 'openclaude'
+      expectedProcess: 'openclaude',
+      launchConfig: emptyLaunchConfig('openclaude')
     })
   })
 })

@@ -3,8 +3,26 @@ import { toast } from 'sonner'
 import { buildAiVaultResumeCommandForWorktree } from '@/lib/ai-vault-resume-command'
 import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
 import { useAppStore } from '@/store'
-import { useActiveWorktree, useRepoById } from '@/store/selectors'
-import { agentLabel, filterAiVaultSessions, groupAiVaultSessions } from './ai-vault-session-filters'
+import {
+  useActiveRepo,
+  useActiveWorktree,
+  useAllWorktrees,
+  useProjectHostSetupProjection,
+  useRepoById,
+  useRepos
+} from '@/store/selectors'
+import {
+  agentLabel,
+  deriveAiVaultWorkspaceScopePaths,
+  filterAiVaultSessions,
+  groupAiVaultSessions
+} from './ai-vault-session-filters'
+import {
+  DEFAULT_AI_VAULT_SCOPE,
+  getRestorableAiVaultScope,
+  normalizeAiVaultScopeForContext
+} from './ai-vault-scope-state'
+import { buildAiVaultProjectContext } from './ai-vault-session-projects'
 import {
   AI_VAULT_AGENTS,
   type AiVaultAgent,
@@ -23,12 +41,16 @@ const SESSION_LIMIT = 500
 
 export default function AiVaultPanel(): React.JSX.Element {
   const activeWorktree = useActiveWorktree()
-  const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
+  const activeRepo = useActiveRepo()
+  const activeWorktreeRepo = useRepoById(activeWorktree?.repoId ?? null)
+  const repos = useRepos()
+  const allWorktrees = useAllWorktrees()
+  const projectHostSetupProjection = useProjectHostSetupProjection()
   const agentCmdOverrides = useAppStore((s) => s.settings?.agentCmdOverrides ?? {})
   const [query, setQuery] = useState('')
-  const [scope, setScope] = useState<AiVaultScope>('workspace')
+  const [scope, setScope] = useState<AiVaultScope>(DEFAULT_AI_VAULT_SCOPE)
   const [sort, setSort] = useState<AiVaultSort>('updated')
-  const [group, setGroup] = useState<AiVaultGroup>('folder')
+  const [group, setGroup] = useState<AiVaultGroup>('project')
   const [hideEmptySessions, setHideEmptySessions] = useState(true)
   const [agents, setAgents] = useState<AiVaultAgent[]>([...AI_VAULT_AGENTS])
   const [sessions, setSessions] = useState<AiVaultSession[]>([])
@@ -39,21 +61,62 @@ export default function AiVaultPanel(): React.JSX.Element {
   const refreshIdRef = useRef(0)
   const refreshInFlightRef = useRef(false)
   const mountedRef = useRef(true)
+  const userChangedScopeRef = useRef(false)
+  const preferredScopeRef = useRef<AiVaultScope>(DEFAULT_AI_VAULT_SCOPE)
 
-  const isRemoteWorktree = Boolean(activeRepo?.connectionId)
+  const isRemoteWorktree = Boolean(activeWorktreeRepo?.connectionId)
   const activeWorktreePath = activeWorktree?.path ?? null
+  // Why: AI Vault ownership is cwd-based, so we must consider live worktrees across all repos.
+  const activeWorktreePaths = useMemo(
+    () => deriveAiVaultWorkspaceScopePaths(activeWorktree ?? null, allWorktrees),
+    [activeWorktree, allWorktrees]
+  )
+  const projectContext = useMemo(
+    () =>
+      buildAiVaultProjectContext({
+        repos,
+        worktrees: allWorktrees,
+        projectHostSetupProjection,
+        activeRepo,
+        activeWorktree,
+        sessions
+      }),
+    [activeRepo, activeWorktree, allWorktrees, projectHostSetupProjection, repos, sessions]
+  )
+  const activeProjectKey = projectContext.activeProjectKey
+  const projectLabelByKey = projectContext.projectLabelByKey
+  const sessionProjectById = projectContext.sessionProjectById
   const hasAllAgentsSelected = agents.length === AI_VAULT_AGENTS.length
   const viewAdjustmentCount =
     (hasAllAgentsSelected ? 0 : 1) +
     (sort === 'updated' ? 0 : 1) +
-    (group === 'folder' ? 0 : 1) +
+    (group === 'project' ? 0 : 1) +
     (hideEmptySessions ? 0 : 1)
 
+  // Workspace is the preferred default, but unavailable context still falls back to All.
   useEffect(() => {
-    if (!activeWorktreePath && scope === 'workspace') {
-      setScope('all')
+    const normalizedScope = normalizeAiVaultScopeForContext({
+      scope,
+      activeProjectKey,
+      activeWorktreePath
+    })
+    if (normalizedScope !== scope) {
+      setScope(normalizedScope)
     }
-  }, [activeWorktreePath, scope])
+  }, [activeProjectKey, activeWorktreePath, scope])
+
+  useEffect(() => {
+    const restorableScope = getRestorableAiVaultScope({
+      scope,
+      activeProjectKey,
+      activeWorktreePath,
+      preferredScope: preferredScopeRef.current,
+      userChangedScope: userChangedScopeRef.current
+    })
+    if (restorableScope) {
+      setScope(restorableScope)
+    }
+  }, [activeProjectKey, activeWorktreePath, scope])
 
   const refresh = useCallback(async (args: { force?: boolean } = {}): Promise<void> => {
     if (refreshInFlightRef.current) {
@@ -107,15 +170,33 @@ export default function AiVaultPanel(): React.JSX.Element {
         agents,
         scope,
         sort,
-        activeWorktreePath,
+        activeWorktreePaths,
+        activeProjectKey,
+        sessionProjectById,
+        projectLabelByKey,
         hideEmptySessions
       }),
-    [activeWorktreePath, agents, hideEmptySessions, query, scope, sessions, sort]
+    [
+      activeProjectKey,
+      activeWorktreePaths,
+      agents,
+      hideEmptySessions,
+      projectLabelByKey,
+      query,
+      scope,
+      sessionProjectById,
+      sessions,
+      sort
+    ]
   )
 
   const groups = useMemo(
-    () => groupAiVaultSessions(filteredSessions, group),
-    [filteredSessions, group]
+    () =>
+      groupAiVaultSessions(filteredSessions, group, {
+        sessionProjectById,
+        projectLabelByKey
+      }),
+    [filteredSessions, group, projectLabelByKey, sessionProjectById]
   )
 
   const buildResumeCommand = useCallback(
@@ -200,8 +281,14 @@ export default function AiVaultPanel(): React.JSX.Element {
   const resetViewOptions = useCallback(() => {
     setAgents([...AI_VAULT_AGENTS])
     setSort('updated')
-    setGroup('folder')
+    setGroup('project')
     setHideEmptySessions(true)
+  }, [])
+
+  const handleScopeChange = useCallback((nextScope: AiVaultScope) => {
+    preferredScopeRef.current = nextScope
+    userChangedScopeRef.current = nextScope !== DEFAULT_AI_VAULT_SCOPE
+    setScope(nextScope)
   }, [])
 
   const toggleGroup = useCallback((key: string) => {
@@ -225,6 +312,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         sessionCount={sessions.length}
         hasScanResult={Boolean(scanResult)}
         activeWorktreePath={activeWorktreePath}
+        activeProjectKey={activeProjectKey}
         scope={scope}
         agents={agents}
         sort={sort}
@@ -232,7 +320,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         hideEmptySessions={hideEmptySessions}
         adjustmentCount={viewAdjustmentCount}
         onQueryChange={setQuery}
-        onScopeChange={setScope}
+        onScopeChange={handleScopeChange}
         onAgentEnabledChange={setAgentEnabled}
         onSortChange={setSort}
         onGroupChange={setGroup}

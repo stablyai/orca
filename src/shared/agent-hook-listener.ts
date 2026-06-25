@@ -173,6 +173,8 @@ export function warnOnHookEnvOrVersionMismatch(
 
 export type AgentHookEventPayload = {
   paneKey: string
+  /** Ephemeral Orca launch identity stamped into the PTY env for this process. */
+  launchToken?: string
   tabId?: string
   worktreeId?: string
   /** Identifies the SSH connection the event arrived on, or null for local.
@@ -1893,6 +1895,7 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
     case 'amp':
       return eventName === 'agent.start'
     case 'opencode':
+    case 'mimo-code':
       return false
     case 'cursor':
       return eventName === 'beforeSubmitPrompt' || eventName === 'sessionStart'
@@ -1945,7 +1948,7 @@ function hasExplicitUserPrompt(
     return true
   }
   if (extractedPrompt.source === 'role_user_text') {
-    return source === 'opencode' && eventName === 'MessagePart'
+    return (source === 'opencode' || source === 'mimo-code') && eventName === 'MessagePart'
   }
   if (extractedPrompt.text.length === 0) {
     return false
@@ -1986,6 +1989,7 @@ function extractToolFields(
     case 'amp':
       return extractAmpToolFields(eventName, hookPayload)
     case 'opencode':
+    case 'mimo-code':
       return extractOpenCodeToolFields(eventName, hookPayload)
     case 'cursor':
       return extractCursorToolFields(eventName, hookPayload)
@@ -2518,7 +2522,8 @@ function normalizeCodexEvent(
   )
 }
 
-function normalizeOpenCodeEvent(
+function normalizeOpenCodeFamilyEvent(
+  source: 'opencode' | 'mimo-code',
   state: HookListenerState,
   eventName: unknown,
   promptText: string,
@@ -2541,17 +2546,17 @@ function normalizeOpenCodeEvent(
   const snapshot = resolveToolState(
     state,
     paneKey,
-    extractToolFields('opencode', eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent('opencode', eventName) }
+    extractToolFields(source, eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent(source, eventName) }
   )
 
   return parseAgentStatusPayload(
     JSON.stringify({
       state: stateName,
       prompt: resolvePrompt(state, paneKey, promptText, {
-        resetOnNewTurn: isNewTurnEvent('opencode', eventName)
+        resetOnNewTurn: isNewTurnEvent(source, eventName)
       }),
-      agentType: 'opencode',
+      agentType: source,
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
       lastAssistantMessage: snapshot.lastAssistantMessage
@@ -3012,6 +3017,7 @@ export function normalizeHookPayload(
     return null
   }
   const worktreeId = readStringField(record, 'worktreeId')
+  const launchToken = readStringField(record, 'launchToken')
 
   const hookPayloadRecord = hookPayload as Record<string, unknown>
   let promptInteractionKey: string | undefined
@@ -3051,15 +3057,24 @@ export function normalizeHookPayload(
       payload = normalizeAmpEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
     case 'opencode':
+    case 'mimo-code':
       if (extractedPrompt.source === 'role_user_text') {
         const messageId = readFirstString(hookPayloadRecord, [
           'messageID',
           'messageId',
           'message_id'
         ])
-        promptInteractionKey = messageId ? `opencode-message-${messageId}` : undefined
+        const prefix = source === 'mimo-code' ? 'mimo-code-message' : 'opencode-message'
+        promptInteractionKey = messageId ? `${prefix}-${messageId}` : undefined
       }
-      payload = normalizeOpenCodeEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      payload = normalizeOpenCodeFamilyEvent(
+        source,
+        state,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
       break
     case 'cursor':
       payload = normalizeCursorEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
@@ -3132,6 +3147,7 @@ export function normalizeHookPayload(
   return payload
     ? {
         paneKey,
+        launchToken,
         tabId,
         worktreeId,
         connectionId: null,
@@ -3167,6 +3183,7 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/antigravity': 'antigravity',
   '/hook/amp': 'amp',
   '/hook/opencode': 'opencode',
+  '/hook/mimo-code': 'mimo-code',
   '/hook/cursor': 'cursor',
   '/hook/pi': 'pi',
   '/hook/omp': 'omp',

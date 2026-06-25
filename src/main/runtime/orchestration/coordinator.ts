@@ -2,6 +2,7 @@
 import type { OrchestrationDb } from './db'
 import type { MessageRow, TaskRow, CoordinatorStatus } from './types'
 import { buildDispatchPreamble } from './preamble'
+import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
 
 export type CoordinatorRuntime = {
   sendTerminal(handle: string, action: { text?: string; enter?: boolean }): Promise<unknown>
@@ -249,7 +250,7 @@ export class Coordinator {
     for (const msg of messages) {
       switch (msg.type) {
         case 'worker_done':
-          this.handleWorkerDone(msg)
+          this.handleLifecycleMessage(msg)
           break
         case 'escalation':
           this.handleEscalation(msg)
@@ -258,7 +259,7 @@ export class Coordinator {
           this.handleDecisionGateMessage(msg)
           break
         case 'heartbeat':
-          this.handleHeartbeat(msg)
+          this.handleLifecycleMessage(msg)
           break
         case 'status':
           this.opts.onLog(`Status from ${msg.from_handle}: ${msg.subject}`)
@@ -273,108 +274,11 @@ export class Coordinator {
     this.db.markAsRead(messages.map((m) => m.id))
   }
 
-  // Why: attribute heartbeats to the specific dispatchId, not a
-  // (taskId, from_handle) lookup. A task that gets retried after a failed
-  // dispatch has multiple rows in dispatch_contexts — a late heartbeat from
-  // the previous (failed) assignee arriving while the new dispatch is active
-  // would falsely bump the new row's last_heartbeat_at if we resolved by
-  // "latest dispatch for this task" (§5.3.4). If the worker drops dispatchId
-  // from the payload, log-and-skip is the preferred failure mode: the stale
-  // detector will correctly flag the dispatch as hung because nothing
-  // refreshed last_heartbeat_at.
-  private handleHeartbeat(msg: MessageRow): void {
-    if (!msg.payload) {
-      this.opts.onLog(`Heartbeat from ${msg.from_handle} missing payload; ignored`)
-      return
+  private handleLifecycleMessage(msg: MessageRow): void {
+    const result = reconcileLifecycleMessage(this.db, msg, this.opts.onLog)
+    if (result.action === 'completed') {
+      this.state.completedTasks.push(result.taskId)
     }
-    let payload: { dispatchId?: unknown } = {}
-    try {
-      payload = JSON.parse(msg.payload)
-    } catch {
-      this.opts.onLog(`Heartbeat from ${msg.from_handle} has invalid JSON payload; ignored`)
-      return
-    }
-    const dispatchId = payload.dispatchId
-    if (typeof dispatchId !== 'string' || dispatchId.length === 0) {
-      this.opts.onLog(`Heartbeat from ${msg.from_handle} missing dispatchId; ignored`)
-      return
-    }
-    this.db.recordHeartbeat(dispatchId, msg.created_at)
-  }
-
-  private handleWorkerDone(msg: MessageRow): void {
-    this.opts.onLog(`Worker done: ${msg.from_handle} — ${msg.subject}`)
-
-    let payload: { taskId?: unknown; dispatchId?: unknown; filesModified?: unknown } = {}
-    if (msg.payload) {
-      try {
-        payload = JSON.parse(msg.payload)
-      } catch {
-        this.opts.onLog(`Warning: invalid payload in worker_done from ${msg.from_handle}`)
-      }
-    }
-
-    const taskId = payload.taskId
-    if (typeof taskId !== 'string' || taskId.length === 0) {
-      this.opts.onLog(`Warning: worker_done without taskId from ${msg.from_handle}`)
-      return
-    }
-
-    const dispatchId = payload.dispatchId
-    if (typeof dispatchId !== 'string' || dispatchId.length === 0) {
-      this.opts.onLog(`Warning: worker_done without dispatchId from ${msg.from_handle}`)
-      return
-    }
-
-    const task = this.db.getTask(taskId)
-    if (!task) {
-      this.opts.onLog(`Warning: worker_done for unknown task ${taskId}`)
-      return
-    }
-
-    // Why: taskId alone is not a completion authority; retried tasks can have
-    // stale worker_done messages racing the current active dispatch.
-    const dispatch = this.db.getDispatchContextById(dispatchId)
-    if (!dispatch) {
-      this.opts.onLog(`Warning: worker_done for unknown dispatch ${dispatchId}`)
-      return
-    }
-    if (dispatch.task_id !== taskId) {
-      this.opts.onLog(
-        `Warning: worker_done dispatch ${dispatchId} belongs to ${dispatch.task_id}, not ${taskId}`
-      )
-      return
-    }
-    if (dispatch.assignee_handle !== msg.from_handle) {
-      this.opts.onLog(
-        `Warning: worker_done for dispatch ${dispatchId} came from ${msg.from_handle}, expected ${dispatch.assignee_handle ?? '<unknown>'}`
-      )
-      return
-    }
-    if (dispatch.status !== 'dispatched') {
-      this.opts.onLog(`Warning: worker_done for inactive dispatch ${dispatchId} ignored`)
-      return
-    }
-    if (this.db.getDispatchContext(taskId)?.id !== dispatchId || task.status !== 'dispatched') {
-      this.opts.onLog(`Warning: worker_done for stale dispatch ${dispatchId} ignored`)
-      return
-    }
-
-    const filesModified =
-      Array.isArray(payload.filesModified) &&
-      payload.filesModified.every((file) => typeof file === 'string')
-        ? payload.filesModified
-        : []
-
-    const result = JSON.stringify({
-      completedBy: msg.from_handle,
-      filesModified,
-      completedAt: new Date().toISOString()
-    })
-    this.db.updateTaskStatus(taskId, 'completed', result)
-    this.state.completedTasks.push(taskId)
-
-    this.opts.onLog(`Task ${taskId} completed`)
   }
 
   private handleEscalation(msg: MessageRow): void {

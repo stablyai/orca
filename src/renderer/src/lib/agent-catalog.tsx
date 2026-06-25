@@ -90,6 +90,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://opencode.ai/docs/cli/'
   },
   {
+    id: 'mimo-code',
+    label: translate('auto.lib.agent.catalog.mimo_code_label', 'MiMo Code'),
+    cmd: 'mimo',
+    faviconDomain: 'mimo.xiaomi.com',
+    homepageUrl: 'https://mimo.xiaomi.com/coder'
+  },
+  {
     id: 'ante',
     label: translate('auto.lib.agent.catalog.da41abbdd4', 'Ante'),
     cmd: 'ante',

@@ -18,21 +18,39 @@ export function isTerminalBackgroundLight(
   background: string | undefined,
   options: { backgroundOpacity?: number; appSurface?: 'dark' | 'light' } = {}
 ): boolean {
-  const color = parseCssRgbColor(background)
-  if (!color) {
+  const composited = compositeTerminalBackground(background, options)
+  if (!composited) {
     return false
   }
-
-  // Why: transparent terminal backgrounds visually blend with the app surface,
-  // so title contrast has to classify the composited color, not just the theme.
-  const alpha = clampNumber(color.a * (options.backgroundOpacity ?? 1), 0, 1)
-  const appSurface = APP_SURFACE_COLORS[options.appSurface ?? 'dark']
-  const composited = alpha < 1 ? compositeRgb(color, appSurface, alpha) : color
 
   return (
     contrastRatio(LIGHT_SURFACE_CONTRAST_REFERENCE, composited) >=
     contrastRatio(DARK_SURFACE_CONTRAST_REFERENCE, composited)
   )
+}
+
+export function resolveOpaqueTerminalBackground(
+  background: string | undefined,
+  options: { backgroundOpacity?: number; appSurface?: 'dark' | 'light' } = {}
+): string | null {
+  const composited = compositeTerminalBackground(background, options)
+  return composited ? `rgb(${composited.r} ${composited.g} ${composited.b})` : null
+}
+
+function compositeTerminalBackground(
+  background: string | undefined,
+  options: { backgroundOpacity?: number; appSurface?: 'dark' | 'light' } = {}
+): RgbaColor | null {
+  const color = parseCssRgbColor(background)
+  if (!color) {
+    return null
+  }
+
+  // Why: transparent terminal backgrounds visually blend with the app surface,
+  // so title UI must use the composited color rather than the raw alpha color.
+  const alpha = clampNumber(color.a * (options.backgroundOpacity ?? 1), 0, 1)
+  const appSurface = APP_SURFACE_COLORS[options.appSurface ?? 'dark']
+  return alpha < 1 ? compositeRgb(color, appSurface, alpha) : { ...color, a: 1 }
 }
 
 function parseCssRgbColor(color: string | undefined): RgbaColor | null {

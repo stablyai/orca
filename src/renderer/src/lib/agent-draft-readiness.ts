@@ -1,6 +1,6 @@
 import type { DraftPasteReadySignal } from '../../../shared/tui-agent-config'
 import type { GlobalSettings } from '../../../shared/types'
-import { subscribeToPtyData } from '@/components/terminal-pane/pty-dispatcher'
+import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
 import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
 

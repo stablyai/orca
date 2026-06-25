@@ -17,7 +17,8 @@ const {
   registerPtyHandlersMock,
   hydrateLocalPtyRegistryAtBootMock,
   setupAutoUpdaterMock,
-  browserManagerUnregisterAllMock
+  browserManagerUnregisterAllMock,
+  runWorktreeChangeInvalidatorsMock
 } = vi.hoisted(() => ({
   onMock: vi.fn(),
   removeAllListenersMock: vi.fn(),
@@ -33,7 +34,8 @@ const {
   registerPtyHandlersMock: vi.fn(),
   hydrateLocalPtyRegistryAtBootMock: vi.fn(),
   setupAutoUpdaterMock: vi.fn(),
-  browserManagerUnregisterAllMock: vi.fn()
+  browserManagerUnregisterAllMock: vi.fn(),
+  runWorktreeChangeInvalidatorsMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -62,6 +64,10 @@ vi.mock('../ipc/repos', () => ({
 
 vi.mock('../ipc/worktrees', () => ({
   registerWorktreeHandlers: registerWorktreeHandlersMock
+}))
+
+vi.mock('../ipc/worktree-change-invalidators', () => ({
+  runWorktreeChangeInvalidators: runWorktreeChangeInvalidatorsMock
 }))
 
 vi.mock('../ipc/pty', () => ({
@@ -592,5 +598,9 @@ describe('attachMainWindowServices', () => {
         }
       ]
     ])
+    expect(runWorktreeChangeInvalidatorsMock).toHaveBeenCalledWith('repo-1')
+    expect(runWorktreeChangeInvalidatorsMock.mock.invocationCallOrder[0]).toBeLessThan(
+      sendMock.mock.invocationCallOrder[0]
+    )
   })
 })

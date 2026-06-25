@@ -21,6 +21,7 @@ let tabsByWorktree: Record<string, { id: string }[]> = {}
 let ptyIdsByTabId: Record<string, string[]> = {}
 let browserTabsByWorktree: Record<string, { id: string }[]> = {}
 let settings: Partial<GlobalSettings> | null = null
+let projectGroups: unknown[] = []
 let workspaceDeleteModifierPressed = false
 let gitConflictOperationByWorktree: Record<string, GitConflictOperation> = {}
 let WorktreeCard: typeof WorktreeCardComponent
@@ -35,6 +36,7 @@ vi.mock('@/store', () => ({
       hostedReviewCache: {},
       issueCache: {},
       openModal,
+      projectGroups,
       remoteBranchConflictByWorktreeId: {},
       settings,
       sshConnectionStates: new Map(),
@@ -122,6 +124,15 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   }
 }
 
+function getBranchMetadataLabelTag(markup: string): string {
+  const labelTag = markup
+    .match(/<span[^>]*>quick-action<\/span>/g)
+    ?.find((tag) => tag.includes('text-[11px]'))
+
+  expect(labelTag).toBeDefined()
+  return labelTag ?? ''
+}
+
 describe('WorktreeCard quick actions', () => {
   beforeAll(async () => {
     WorktreeCard = (await import('./WorktreeCard')).default
@@ -134,6 +145,7 @@ describe('WorktreeCard quick actions', () => {
     ptyIdsByTabId = {}
     browserTabsByWorktree = {}
     settings = null
+    projectGroups = []
     workspaceDeleteModifierPressed = false
     gitConflictOperationByWorktree = {}
   })
@@ -172,7 +184,7 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).not.toContain('bg-black/[0.08]')
   })
 
-  it('renders folder kind and directory in the detailed metadata row', () => {
+  it('renders folder directory name in the detailed metadata row without a Folder badge', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCard
         worktree={makeWorktree({ displayName: 'Docs folder', branch: '' })}
@@ -182,12 +194,12 @@ describe('WorktreeCard quick actions', () => {
     )
 
     expect(markup).toContain('Docs folder')
-    expect(markup).toContain('>Folder</span>')
+    expect(markup).not.toContain('>Folder</span>')
     expect(markup).toContain('>quick-action</span>')
     expect(markup).toContain('data-worktree-card-meta-row=""')
   })
 
-  it('renders synthetic folder workspace directory in the detailed metadata row', () => {
+  it('renders synthetic folder workspace directory name in the detailed metadata row without a Folder badge', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCard
         worktree={makeWorktree({
@@ -202,9 +214,31 @@ describe('WorktreeCard quick actions', () => {
     )
 
     expect(markup).toContain('Docs folder')
-    expect(markup).toContain('>Folder</span>')
+    expect(markup).not.toContain('>Folder</span>')
     expect(markup).toContain('>quick-action</span>')
     expect(markup).toContain('data-worktree-card-meta-row=""')
+  })
+
+  it('does not render a branch icon for synthetic folder workspace path identity', () => {
+    settings = { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: true }
+    worktreeCardProperties = ['status', 'branch']
+    projectGroups = [{ id: 'project-group-1' }]
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          id: 'folder:folder-1',
+          displayName: 'Docs folder',
+          branch: '',
+          path: '/repo/worktrees/quick-action'
+        })}
+        repo={undefined}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('/repo/worktrees/quick-action')
+    expect(markup).not.toContain('lucide-git-branch')
   })
 
   it('does not render a pending first-agent rename title badge', () => {
@@ -267,7 +301,11 @@ describe('WorktreeCard quick actions', () => {
     )
 
     expect(markup).toContain('quick-action')
-    expect(markup).toContain('text-[11px] text-muted-foreground truncate leading-none')
+    const branchLabelTag = getBranchMetadataLabelTag(markup)
+    expect(branchLabelTag).toContain('truncate')
+    expect(branchLabelTag).toContain('text-[11px]')
+    expect(branchLabelTag).toContain('text-muted-foreground')
+    expect(branchLabelTag).toContain('leading-none')
     expect(markup).toContain('data-worktree-card-meta-row=""')
     expect(markup).toContain('tabindex="0"')
   })

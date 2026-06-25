@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/types'
 import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
+import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-session-sleeping-agents'
 import {
   OptionalBoolean,
   OptionalFiniteNumber,
@@ -125,6 +126,7 @@ export const WorktreeCreate = z
     // terminal pane launches the selected agent instead of an idle shell.
     startupCommand: OptionalString,
     startupEnv: z.record(z.string(), z.string()).optional(),
+    startupLaunchConfig: sleepingAgentLaunchConfigSchema,
     startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
     // Why: CLI clients should not hardcode agent launch quoting because SSH
     // workspaces execute in a different shell than the client process.
@@ -201,6 +203,7 @@ export const WorktreeSet = WorktreeSelector.extend({
       branchName: z.string(),
       remoteUrl: OptionalString
     })
+    .nullable()
     .optional(),
   diffComments: z.array(z.unknown()).optional(),
   mobileDiffReview: z.unknown().optional(),

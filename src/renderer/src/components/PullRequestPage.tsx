@@ -40,7 +40,6 @@ import {
   RefreshCw,
   Send,
   UndoDot,
-  Users,
   Wrench,
   X
 } from 'lucide-react'
@@ -58,7 +57,7 @@ import {
 } from '@/components/ui/accordion'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -155,6 +154,7 @@ import {
   filterGitHubPRReviewerCandidates,
   getGitHubPRReviewerQueryState
 } from '@/components/github/github-pr-reviewer-candidate-filter'
+import { githubAvatarUrl } from '@/components/github/github-issue-comment-helpers'
 import { filterGitHubMentionOptions } from '@/components/github/github-mention-option-filter'
 import {
   getCommentBodySubmitState,
@@ -448,25 +448,15 @@ function ReviewerAvatar({
   login: string
   avatarUrl: string
 }): React.JSX.Element {
-  if (avatarUrl) {
-    return (
-      <img
-        src={avatarUrl}
-        alt=""
-        loading="lazy"
-        decoding="async"
-        title={login}
-        className="size-6 shrink-0 rounded-full border border-border/50 bg-muted object-cover"
-      />
-    )
-  }
   return (
-    <span
+    <img
+      src={avatarUrl || githubAvatarUrl(login)}
+      alt=""
+      loading="lazy"
+      decoding="async"
       title={login}
-      className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted text-[10px] font-medium text-muted-foreground"
-    >
-      {login.slice(0, 1).toUpperCase()}
-    </span>
+      className="size-6 shrink-0 rounded-full border border-border/50 bg-muted object-cover"
+    />
   )
 }
 
@@ -509,6 +499,222 @@ function buildRequestedReviewUsers(
   return Array.from(byLogin.values())
 }
 
+function PRAssigneesPanel({
+  item,
+  repoPath,
+  projectOrigin,
+  onMutated
+}: {
+  item: GitHubWorkItem
+  repoPath: string | null
+  projectOrigin: PullRequestPageProjectOrigin | undefined
+  onMutated: () => void
+}): React.JSX.Element {
+  const [assigneePopoverOpen, setAssigneePopoverOpen] = useState(false)
+  const [localAssignees, setLocalAssignees] = useState<GitHubAssignableUser[]>(
+    () => item.assignees ?? []
+  )
+  const [assigneesSource, setAssigneesSource] = useState(() => ({
+    itemId: item.id,
+    repoId: item.repoId,
+    assignees: item.assignees
+  }))
+  const patchWorkItem = useAppStore((s) => s.patchWorkItem)
+  const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
+  )
+  const { isPending, run } = useImmediateMutation()
+
+  // Why: PR assignees can change through background refetches; sync them
+  // before paint so the right rail never shows a stale reviewer/assignee split.
+  if (
+    assigneesSource.itemId !== item.id ||
+    assigneesSource.repoId !== item.repoId ||
+    assigneesSource.assignees !== item.assignees
+  ) {
+    setAssigneesSource({ itemId: item.id, repoId: item.repoId, assignees: item.assignees })
+    setLocalAssignees(item.assignees ?? [])
+  }
+
+  const patchProjectRowIfNeeded = useCallback(
+    (assignees: string[]) => {
+      if (!projectOrigin) {
+        return
+      }
+      patchProjectRowContent(projectOrigin.cacheKey, projectOrigin.projectItemId, { assignees })
+    },
+    [patchProjectRowContent, projectOrigin]
+  )
+  const assigneeLogins = useMemo(() => localAssignees.map((user) => user.login), [localAssignees])
+  const assigneeSlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
+  const slugOwner = projectOrigin?.owner ?? assigneeSlug?.owner ?? null
+  const slugRepo = projectOrigin?.repo ?? assigneeSlug?.repo ?? null
+  const repoAssigneesBySlug = useRepoAssigneesBySlug(
+    slugOwner,
+    slugRepo,
+    assigneeLogins,
+    repoOwnerSettings
+  )
+  const repoAssigneesByPath = useRepoAssignees(repoPath, item.repoId, repoOwnerSettings)
+  const repoAssignees = slugOwner && slugRepo ? repoAssigneesBySlug : repoAssigneesByPath
+  const canEditAssignees = Boolean(projectOrigin || repoPath)
+  const assigneesByLogin = useMemo(
+    () => new Map(repoAssignees.data.map((user) => [user.login.toLowerCase(), user])),
+    [repoAssignees.data]
+  )
+
+  const handleAssigneeToggle = useCallback(
+    (login: string) => {
+      const lowerLogin = login.toLowerCase()
+      const isAssigned = localAssignees.some((user) => user.login.toLowerCase() === lowerLogin)
+      const prevAssignees = localAssignees
+      const candidate = assigneesByLogin.get(lowerLogin) ?? { login, name: null, avatarUrl: '' }
+      const nextAssignees = isAssigned
+        ? prevAssignees.filter((user) => user.login.toLowerCase() !== lowerLogin)
+        : [...prevAssignees, candidate]
+      const nextLogins = nextAssignees.map((user) => user.login)
+      const prevLogins = prevAssignees.map((user) => user.login)
+
+      run('assignees', {
+        mutate: () =>
+          runIssueUpdate({
+            repoId: item.repoId,
+            repoPath,
+            projectOrigin,
+            number: item.number,
+            updates: isAssigned ? { removeAssignees: [login] } : { addAssignees: [login] }
+          }),
+        onOptimistic: () => {
+          setLocalAssignees(nextAssignees)
+          patchWorkItem(item.id, { assignees: nextAssignees }, item.repoId)
+          patchProjectRowIfNeeded(nextLogins)
+        },
+        onRevert: () => {
+          setLocalAssignees(prevAssignees)
+          patchWorkItem(item.id, { assignees: prevAssignees }, item.repoId)
+          patchProjectRowIfNeeded(prevLogins)
+        },
+        onSuccess: () => {
+          useAppStore.getState().recordFeatureInteraction('github-tasks')
+          onMutated()
+        },
+        onError: (err) => toast.error(err)
+      })
+    },
+    [
+      assigneesByLogin,
+      item.id,
+      item.number,
+      item.repoId,
+      localAssignees,
+      onMutated,
+      patchProjectRowIfNeeded,
+      patchWorkItem,
+      projectOrigin,
+      repoPath,
+      run
+    ]
+  )
+
+  const checkIcon = (
+    <svg className="size-2.5" viewBox="0 0 12 12" fill="none">
+      <path
+        d="M2 6l3 3 5-5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+
+  return (
+    <section>
+      <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+        <span>{translate('auto.components.PullRequestPage.8ff5ae8866', 'Assignees')}</span>
+        <Popover open={assigneePopoverOpen} onOpenChange={setAssigneePopoverOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              disabled={!canEditAssignees || isPending('assignees') || repoAssignees.loading}
+              aria-label={translate('auto.components.PullRequestPage.82c87eceb9', 'Edit assignees')}
+              className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
+            >
+              {isPending('assignees') ? (
+                <LoaderCircle className="size-3 animate-spin" />
+              ) : (
+                <Pencil className="size-3" />
+              )}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="popover-scroll-content scrollbar-sleek w-60 p-1" align="end">
+            {repoAssignees.error ? (
+              <div className="px-2 py-3 text-center text-[12px] text-destructive">
+                {repoAssignees.error}
+              </div>
+            ) : (
+              <div>
+                {repoAssignees.data.map((user) => {
+                  const selected = localAssignees.some(
+                    (assignee) => assignee.login.toLowerCase() === user.login.toLowerCase()
+                  )
+                  return (
+                    <button
+                      key={user.login}
+                      type="button"
+                      onClick={() => handleAssigneeToggle(user.login)}
+                      className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
+                    >
+                      <span
+                        className={cn(
+                          'flex size-3.5 items-center justify-center rounded-sm border',
+                          selected
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-input'
+                        )}
+                      >
+                        {selected && checkIcon}
+                      </span>
+                      {user.avatarUrl ? (
+                        <img src={user.avatarUrl} alt="" className="size-5 rounded-full" />
+                      ) : null}
+                      <span className="min-w-0 flex-1 text-left">
+                        <span className="block truncate">{user.login}</span>
+                        {user.name ? (
+                          <span className="block truncate text-[11px] text-muted-foreground">
+                            {user.name}
+                          </span>
+                        ) : null}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
+      </div>
+      {localAssignees.length === 0 ? (
+        <div className="text-[12px] text-muted-foreground">
+          {translate('auto.components.PullRequestPage.1ff5d979df', 'No one assigned')}
+        </div>
+      ) : (
+        <ul className="flex flex-col gap-1.5">
+          {localAssignees.map((assignee) => (
+            <li key={assignee.login} className="flex min-w-0 items-center gap-2">
+              <ReviewerAvatar login={assignee.login} avatarUrl={assignee.avatarUrl} />
+              <span className="min-w-0 truncate text-[13px] font-medium text-foreground">
+                {assignee.login}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 function PRReviewersPanel({
   item,
   loading,
@@ -522,8 +728,6 @@ function PRReviewersPanel({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [reviewerInput, setReviewerInput] = useState('')
-  const [reviewerPickerSide, setReviewerPickerSide] = useState<'top' | 'bottom'>('bottom')
-  const [reviewerPickerMaxHeight, setReviewerPickerMaxHeight] = useState<number | null>(null)
   const [activeReviewerCursor, setActiveReviewerCursor] = useState({
     resetKey: '',
     index: 0
@@ -713,26 +917,6 @@ function PRReviewersPanel({
   const canRequestReview =
     !!repoPath || getActiveRuntimeTarget(repoOwnerSettings).kind === 'environment'
 
-  const measureReviewerPickerPlacement = useCallback(() => {
-    const rect = reviewerInputRef.current?.getBoundingClientRect()
-    if (!rect) {
-      setReviewerPickerSide('bottom')
-      setReviewerPickerMaxHeight(null)
-      return
-    }
-
-    const gap = 8
-    const minUsefulHeight = 180
-    const availableBelow = window.innerHeight - rect.bottom - gap
-    const availableAbove = rect.top - gap
-    const nextSide =
-      availableBelow < minUsefulHeight && availableAbove > availableBelow ? 'top' : 'bottom'
-    const available = nextSide === 'top' ? availableAbove : availableBelow
-
-    setReviewerPickerSide(nextSide)
-    setReviewerPickerMaxHeight(Math.max(120, Math.min(330, available)))
-  }, [])
-
   const handleRequestReview = async (requestedLogins?: string[]): Promise<void> => {
     if (submitting) {
       return
@@ -898,9 +1082,6 @@ function PRReviewersPanel({
   }
 
   const handleReviewerPickerOpenChange = (nextOpen: boolean): void => {
-    if (nextOpen) {
-      measureReviewerPickerPlacement()
-    }
     setOpen(nextOpen)
     if (nextOpen) {
       scheduleReviewerInputFocus()
@@ -978,162 +1159,80 @@ function PRReviewersPanel({
   }
 
   return (
-    <aside className="rounded-lg border border-border/50 bg-card shadow-xs">
-      <div className="flex h-10 items-center gap-2 border-b border-border/50 px-3">
-        <Users className="size-3.5 text-muted-foreground" />
-        <span className="text-[13px] font-medium text-foreground">
-          {translate('auto.components.PullRequestPage.00d3be6bcd', 'Reviewers')}
-        </span>
-        {reviewers.length > 0 ? (
-          <span className="ml-auto rounded-full border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
-            {reviewers.length}
-          </span>
-        ) : null}
-      </div>
-      <div className="px-3 py-2.5">
-        {loading && !hasReviewerMetadata ? (
-          <div className="flex items-center gap-2 py-1 text-[12px] text-muted-foreground">
-            <LoaderCircle className="size-3.5 animate-spin" />
-            {translate('auto.components.PullRequestPage.acbd110867', 'Loading reviewers')}
-          </div>
-        ) : reviewers.length > 0 ? (
-          <div className="flex flex-col gap-2">
-            {reviewers.map((reviewer) => {
-              const canRemoveReviewer = selectedReviewerLogins.has(reviewer.login.toLowerCase())
-              return (
-                <div key={reviewer.login} className="flex min-w-0 items-center gap-2">
-                  <ReviewerAvatar login={reviewer.login} avatarUrl={reviewer.avatarUrl} />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13px] font-medium text-foreground">
-                      {reviewer.login}
-                    </div>
-                    {reviewer.name ? (
-                      <div className="truncate text-[11px] text-muted-foreground">
-                        {reviewer.name}
-                      </div>
-                    ) : null}
-                  </div>
-                  <span className="shrink-0 text-[11px] text-muted-foreground">
-                    {reviewer.stateLabel}
-                  </span>
-                  {canRemoveReviewer ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="size-6 shrink-0 text-muted-foreground hover:text-foreground"
-                          disabled={submitting || !canRequestReview}
-                          aria-label={translate(
-                            'auto.components.PullRequestPage.ae9a38fd4a',
-                            'Remove reviewer {{value0}}',
-                            { value0: reviewer.login }
-                          )}
-                          onClick={() => {
-                            void handleRemoveReviewers([reviewer.login])
-                          }}
-                        >
-                          <X className="size-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {translate('auto.components.PullRequestPage.7f964a365a', 'Remove reviewer')}
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : null}
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          <div className="py-1 text-[12px] text-muted-foreground">
-            {translate('auto.components.PullRequestPage.d10b6d5209', 'No reviewers requested.')}
-          </div>
-        )}
+    <section>
+      <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+        <span>{translate('auto.components.PullRequestPage.00d3be6bcd', 'Reviewers')}</span>
         <Popover open={open} onOpenChange={handleReviewerPickerOpenChange}>
-          <PopoverAnchor asChild>
-            <Input
-              ref={reviewerInputRef}
-              value={reviewerInput}
-              onChange={(event) => {
-                setReviewerInput(event.target.value)
-                if (!open) {
-                  handleReviewerPickerOpenChange(true)
-                }
-              }}
+          <PopoverTrigger asChild>
+            <button
+              type="button"
               disabled={submitting || !canRequestReview}
-              placeholder={translate(
-                'auto.components.PullRequestPage.3bde131f49',
-                'Type or choose a user'
-              )}
               aria-label={translate('auto.components.PullRequestPage.a04c137bb7', 'Reviewer')}
-              aria-expanded={open}
-              aria-haspopup="listbox"
-              className="mt-3 h-8 min-w-0 cursor-text rounded-md border-border/50 bg-background text-xs"
-              onFocus={() => {
-                if (canRequestReview) {
-                  handleReviewerPickerOpenChange(true)
-                }
-              }}
-              onClick={() => {
-                if (canRequestReview) {
-                  handleReviewerPickerOpenChange(true)
-                }
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'ArrowDown' && actionableReviewerRows.length > 0) {
-                  event.preventDefault()
-                  setOpen(true)
-                  setActiveReviewerIndex((current) => (current + 1) % actionableReviewerRows.length)
-                  return
-                }
-                if (event.key === 'ArrowUp' && actionableReviewerRows.length > 0) {
-                  event.preventDefault()
-                  setOpen(true)
-                  setActiveReviewerIndex(
-                    (current) =>
-                      (current - 1 + actionableReviewerRows.length) % actionableReviewerRows.length
-                  )
-                  return
-                }
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  const activeReviewer = actionableReviewerRows[activeReviewerIndex]
-                  if (activeReviewer) {
-                    void requestReviewer(activeReviewer)
-                    return
-                  }
-                  void handleRequestReview()
-                  return
-                }
-                if (event.key === 'Escape') {
-                  event.preventDefault()
-                  handleReviewerPickerOpenChange(false)
-                }
-              }}
-            />
-          </PopoverAnchor>
+              className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
+            >
+              {submitting ? (
+                <LoaderCircle className="size-3 animate-spin" />
+              ) : (
+                <Pencil className="size-3" />
+              )}
+            </button>
+          </PopoverTrigger>
           <PopoverContent
-            className="flex w-[330px] flex-col overflow-hidden rounded-md border-border/70 p-0"
-            align="start"
-            side={reviewerPickerSide}
+            className="flex max-h-[420px] w-[330px] flex-col overflow-hidden rounded-md border-border/70 p-0"
+            align="end"
+            side="bottom"
             sideOffset={6}
-            avoidCollisions={false}
-            style={{
-              maxHeight: reviewerPickerMaxHeight ? `${reviewerPickerMaxHeight}px` : undefined
-            }}
             onOpenAutoFocus={(event) => {
               event.preventDefault()
             }}
           >
-            <div className="border-b border-border/70 px-3 py-2">
-              <div className="text-[13px] font-semibold text-foreground">
-                {translate(
-                  'auto.components.PullRequestPage.805cb72cd4',
-                  'Request up to 15 reviewers'
+            <div className="border-b border-border/70 p-2">
+              <Input
+                ref={reviewerInputRef}
+                value={reviewerInput}
+                onChange={(event) => setReviewerInput(event.target.value)}
+                disabled={submitting || !canRequestReview}
+                placeholder={translate(
+                  'auto.components.PullRequestPage.3bde131f49',
+                  'Type or choose a user'
                 )}
-              </div>
+                aria-label={translate('auto.components.PullRequestPage.a04c137bb7', 'Reviewer')}
+                aria-expanded={open}
+                aria-haspopup="listbox"
+                className="h-8 min-w-0 cursor-text rounded-md border-border/50 bg-background text-xs"
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowDown' && actionableReviewerRows.length > 0) {
+                    event.preventDefault()
+                    setActiveReviewerIndex(
+                      (current) => (current + 1) % actionableReviewerRows.length
+                    )
+                    return
+                  }
+                  if (event.key === 'ArrowUp' && actionableReviewerRows.length > 0) {
+                    event.preventDefault()
+                    setActiveReviewerIndex(
+                      (current) =>
+                        (current - 1 + actionableReviewerRows.length) %
+                        actionableReviewerRows.length
+                    )
+                    return
+                  }
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    const activeReviewer = actionableReviewerRows[activeReviewerIndex]
+                    if (activeReviewer) {
+                      void requestReviewer(activeReviewer)
+                      return
+                    }
+                    void handleRequestReview()
+                    return
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault()
+                    handleReviewerPickerOpenChange(false)
+                  }
+                }}
+              />
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
               {reviewerMetadata.loading ? (
@@ -1192,7 +1291,67 @@ function PRReviewersPanel({
           </PopoverContent>
         </Popover>
       </div>
-    </aside>
+      {loading && !hasReviewerMetadata ? (
+        <div className="flex items-center gap-2 py-1 text-[12px] text-muted-foreground">
+          <LoaderCircle className="size-3.5 animate-spin" />
+          {translate('auto.components.PullRequestPage.acbd110867', 'Loading reviewers')}
+        </div>
+      ) : reviewers.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          {reviewers.map((reviewer) => {
+            const canRemoveReviewer = selectedReviewerLogins.has(reviewer.login.toLowerCase())
+            return (
+              <div key={reviewer.login} className="flex min-w-0 items-center gap-2">
+                <ReviewerAvatar login={reviewer.login} avatarUrl={reviewer.avatarUrl} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13px] font-medium text-foreground">
+                    {reviewer.login}
+                  </div>
+                  {reviewer.name ? (
+                    <div className="truncate text-[11px] text-muted-foreground">
+                      {reviewer.name}
+                    </div>
+                  ) : null}
+                </div>
+                <span className="shrink-0 text-[11px] text-muted-foreground">
+                  {reviewer.stateLabel}
+                </span>
+                {canRemoveReviewer ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        className="size-6 shrink-0 text-muted-foreground hover:text-foreground"
+                        disabled={submitting || !canRequestReview}
+                        aria-label={translate(
+                          'auto.components.PullRequestPage.ae9a38fd4a',
+                          'Remove reviewer {{value0}}',
+                          { value0: reviewer.login }
+                        )}
+                        onClick={() => {
+                          void handleRemoveReviewers([reviewer.login])
+                        }}
+                      >
+                        <X className="size-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {translate('auto.components.PullRequestPage.7f964a365a', 'Remove reviewer')}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : null}
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="py-1 text-[12px] text-muted-foreground">
+          {translate('auto.components.PullRequestPage.d10b6d5209', 'No reviewers requested.')}
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -2968,7 +3127,7 @@ function ConversationTab({
 
   const rightPanel =
     item.type === 'pr' ? (
-      <div className="flex h-fit flex-col gap-3 xl:sticky xl:top-4">
+      <div className="flex h-fit flex-col gap-5 xl:sticky xl:top-4">
         <PRActionsPanel
           item={item}
           repoPath={repoPath}
@@ -2976,6 +3135,12 @@ function ConversationTab({
           projectOrigin={projectOrigin}
           localState={localState}
           onStateChange={onStateChange}
+          onMutated={onMutated}
+        />
+        <PRAssigneesPanel
+          item={item}
+          repoPath={repoPath}
+          projectOrigin={projectOrigin}
           onMutated={onMutated}
         />
         <PRReviewersPanel
@@ -5621,7 +5786,7 @@ function GHCommentComposer({
   )
 
   return (
-    <div className={cn('flex flex-col items-start gap-2', className)}>
+    <div className={cn('relative', className)}>
       <MentionTextarea
         textareaRef={textareaRef}
         value={body}
@@ -5634,21 +5799,29 @@ function GHCommentComposer({
         rows={4}
         mentionOptions={mentionOptions}
         wrapperClassName="flex min-h-20 w-full items-stretch"
-        className="scrollbar-sleek block h-20 max-h-[240px] min-h-20 w-full resize-none overflow-y-auto rounded-md border border-input bg-card px-3 py-2 text-[13px] leading-5 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="scrollbar-sleek block h-20 max-h-[240px] min-h-20 w-full resize-none overflow-y-auto rounded-md border border-input bg-card px-3 py-2 pb-12 pr-12 text-[13px] leading-5 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       />
-      <Button
-        onClick={handleSubmit}
-        disabled={!canSubmitComment || submitting}
-        className="gap-2"
-        aria-label={translate('auto.components.PullRequestPage.161d91ef02', 'Send comment')}
-      >
-        {submitting ? (
-          <LoaderCircle className="size-3.5 animate-spin" />
-        ) : (
-          <Send className="size-3.5" />
-        )}
-        {translate('auto.components.PullRequestPage.3450247584', 'Comment')}
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            size="icon-sm"
+            onClick={handleSubmit}
+            disabled={!canSubmitComment || submitting}
+            className="absolute bottom-3 right-3 shadow-sm"
+            aria-label={translate('auto.components.PullRequestPage.161d91ef02', 'Send comment')}
+          >
+            {submitting ? (
+              <LoaderCircle className="size-4 animate-spin" />
+            ) : (
+              <Send className="size-4" />
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          {translate('auto.components.PullRequestPage.161d91ef02', 'Send comment')}
+        </TooltipContent>
+      </Tooltip>
     </div>
   )
 }

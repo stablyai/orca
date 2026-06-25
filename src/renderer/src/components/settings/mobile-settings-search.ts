@@ -4,7 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
-export const getMobileEnableSearchEntry = createLocalizedCatalog(
+export const getMobileOverviewSearchEntry = createLocalizedCatalog(
   (): SettingsSearchEntry => ({
     title: translate('auto.components.settings.mobile.settings.search.ffd52a96e4', 'Mobile'),
     description: translate(
@@ -49,14 +49,11 @@ export const getMobileEnableSearchEntry = createLocalizedCatalog(
         'auto.components.settings.mobile.settings.search.8d4ba0ef09',
         'beta'
       ),
-      ...translateSearchKeyword(
-        'auto.components.settings.mobile.settings.search.b730ff7049',
-        'experimental'
-      )
+      ...translateSearchKeyword('auto.components.settings.mobile.settings.search.b730ff7049', 'app')
     ]
   })
 )
 
 export const getMobileSettingsPaneSearchEntries = createLocalizedCatalog(
-  (): SettingsSearchEntry[] => [getMobileEnableSearchEntry(), ...getMobilePaneSearchEntries()]
+  (): SettingsSearchEntry[] => [getMobileOverviewSearchEntry(), ...getMobilePaneSearchEntries()]
 )

@@ -46,7 +46,13 @@ import type {
   RateLimitRuntimeTarget,
   RateLimitWindow
 } from '../../../../shared/rate-limit-types'
-import { ProviderIcon, ProviderPanel, barColor, getProviderUsageStatusLabel } from './tooltip'
+import {
+  ProviderIcon,
+  ProviderPanel,
+  barColor,
+  formatResetCreditExpiry,
+  getProviderUsageStatusLabel
+} from './tooltip'
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { formatWindowLabel } from '@/lib/window-label-formatter'
@@ -1365,6 +1371,10 @@ function CodexSwitcherMenu({
     switchGroups.find((group) => group.key === selectedRuntimeKey) ?? switchGroups[0]
   const activeTarget = selectedGroup?.targets.find((target) => target.active)
   const resetCreditCount = codex.rateLimitResetCredits?.availableCount ?? null
+  const resetCreditExpiry =
+    resetCreditCount !== null
+      ? formatResetCreditExpiry(codex.rateLimitResetCredits?.nextExpiresAt, resetCreditCount)
+      : null
   const canRedeemReset = resetCreditCount !== null && resetCreditCount > 0
 
   return (
@@ -1372,6 +1382,9 @@ function CodexSwitcherMenu({
       provider={codex}
       compact={compact}
       iconOnly={iconOnly}
+      // Why: Codex reset credits render beside the reset action below; showing
+      // them in the generic provider summary duplicates the same metadata.
+      hidePanelResetCredits
       ariaLabel={translate(
         'auto.components.status.bar.StatusBar.ba55303942',
         'Open Codex details and account switcher'
@@ -1431,17 +1444,24 @@ function CodexSwitcherMenu({
       </Dialog>
       {resetCreditCount !== null ? (
         <>
-          <DropdownMenuLabel>
-            {resetCreditCount === 1
-              ? translate(
-                  'auto.components.status.bar.StatusBar.5e5f9f5160',
-                  '1 rate-limit reset available'
-                )
-              : translate(
-                  'auto.components.status.bar.StatusBar.5ecae9197c',
-                  '{{value0}} rate-limit resets available',
-                  { value0: resetCreditCount }
-                )}
+          <DropdownMenuLabel className="space-y-0.5">
+            <div>
+              {resetCreditCount === 1
+                ? translate(
+                    'auto.components.status.bar.StatusBar.5e5f9f5160',
+                    '1 rate-limit reset available'
+                  )
+                : translate(
+                    'auto.components.status.bar.StatusBar.5ecae9197c',
+                    '{{value0}} rate-limit resets available',
+                    { value0: resetCreditCount }
+                  )}
+            </div>
+            {resetCreditExpiry ? (
+              <div className="text-[11px] font-normal text-muted-foreground">
+                {resetCreditExpiry}
+              </div>
+            ) : null}
           </DropdownMenuLabel>
           {canRedeemReset ? (
             <DropdownMenuItem
@@ -1586,6 +1606,7 @@ export function ProviderDetailsMenu({
   iconOnly,
   ariaLabel,
   topContent,
+  hidePanelResetCredits = false,
   open,
   onOpenChange,
   children
@@ -1595,6 +1616,7 @@ export function ProviderDetailsMenu({
   iconOnly: boolean
   ariaLabel: string
   topContent?: React.ReactNode
+  hidePanelResetCredits?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
   children?: React.ReactNode
@@ -1660,7 +1682,8 @@ export function ProviderDetailsMenu({
       >
         {topContent}
         <div className="p-2">
-          <ProviderPanel p={provider} />
+          {/* Why: provider-specific action sections may render richer reset-credit UI. */}
+          <ProviderPanel p={provider} showResetCredits={!hidePanelResetCredits} />
         </div>
         {children ? (
           <>

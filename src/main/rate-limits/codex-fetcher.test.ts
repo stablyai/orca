@@ -240,7 +240,27 @@ describe('fetchCodexRateLimits', () => {
     )
     vi.mocked(fetch).mockResolvedValue({
       ok: true,
-      json: async () => ({ rate_limit_reset_credits: { available_count: 2 } })
+      json: async () => ({
+        available_count: 2,
+        total_earned_count: 3,
+        credits: [
+          {
+            status: 'available',
+            expires_at: '2026-06-25T12:00:00Z',
+            granted_at: '2026-06-18T12:00:00Z'
+          },
+          {
+            status: 'available',
+            expires_at: '2026-06-24T12:00:00Z',
+            granted_at: '2026-06-17T12:00:00Z'
+          },
+          {
+            status: 'redeemed',
+            expires_at: '2026-06-23T12:00:00Z',
+            granted_at: '2026-06-16T12:00:00Z'
+          }
+        ]
+      })
     } as Response)
     rpcChild.stdin.write.mockImplementation((line: string) => {
       const msg = JSON.parse(line) as { id?: number; method?: string }
@@ -278,14 +298,37 @@ describe('fetchCodexRateLimits', () => {
     await vi.advanceTimersByTimeAsync(1)
     const result = await resultPromise
 
-    expect(result.rateLimitResetCredits).toEqual({ availableCount: 2 })
+    expect(result.rateLimitResetCredits).toEqual({
+      availableCount: 2,
+      totalEarnedCount: 3,
+      nextExpiresAt: Date.parse('2026-06-24T12:00:00Z'),
+      credits: [
+        {
+          status: 'available',
+          expiresAt: Date.parse('2026-06-25T12:00:00Z'),
+          grantedAt: Date.parse('2026-06-18T12:00:00Z')
+        },
+        {
+          status: 'available',
+          expiresAt: Date.parse('2026-06-24T12:00:00Z'),
+          grantedAt: Date.parse('2026-06-17T12:00:00Z')
+        },
+        {
+          status: 'redeemed',
+          expiresAt: Date.parse('2026-06-23T12:00:00Z'),
+          grantedAt: Date.parse('2026-06-16T12:00:00Z')
+        }
+      ]
+    })
     expect(readFileMock).toHaveBeenCalledWith(join('/managed/codex-home', 'auth.json'), 'utf8')
     expect(fetch).toHaveBeenCalledWith(
-      'https://chatgpt.com/backend-api/wham/usage',
+      'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits',
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer access-token',
-          'ChatGPT-Account-Id': 'account-id'
+          'ChatGPT-Account-Id': 'account-id',
+          'OpenAI-Beta': 'codex-1',
+          originator: 'Codex Desktop'
         })
       })
     )
@@ -314,7 +357,16 @@ describe('fetchCodexRateLimits', () => {
                 id: msg.id,
                 result: {
                   rateLimits: { primary: { usedPercent: 5 } },
-                  rateLimitResetCredits: { availableCount: 1 }
+                  rateLimitResetCredits: {
+                    availableCount: 1,
+                    credits: [
+                      {
+                        status: 'available',
+                        expiresAt: '1719326400',
+                        grantedAt: '1718721600000'
+                      }
+                    ]
+                  }
                 }
               })}\n`
             )
@@ -328,7 +380,17 @@ describe('fetchCodexRateLimits', () => {
     await vi.advanceTimersByTimeAsync(1)
     const result = await resultPromise
 
-    expect(result.rateLimitResetCredits).toEqual({ availableCount: 1 })
+    expect(result.rateLimitResetCredits).toEqual({
+      availableCount: 1,
+      nextExpiresAt: 1719326400 * 1000,
+      credits: [
+        {
+          status: 'available',
+          expiresAt: 1719326400 * 1000,
+          grantedAt: 1718721600000
+        }
+      ]
+    })
     expect(readFileMock).not.toHaveBeenCalled()
     expect(fetch).not.toHaveBeenCalled()
   })

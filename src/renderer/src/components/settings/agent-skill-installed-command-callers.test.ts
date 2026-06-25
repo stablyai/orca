@@ -45,7 +45,7 @@ const updateCapableCallers = new Map<string, readonly string[]>([
   ],
   [
     'src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.tsx',
-    ['LINEAR_TICKETS_SKILL_UPDATE_COMMAND', 'installedCommand={installedCommand}']
+    ['ORCA_LINEAR_SKILL_UPDATE_COMMAND', 'installedCommand={installedCommand}']
   ],
   [
     'src/renderer/src/components/sidebar/LinearAgentSkillSetupDialog.tsx',

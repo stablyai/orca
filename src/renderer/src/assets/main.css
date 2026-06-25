@@ -166,15 +166,15 @@
   --terminal-pane-title-on-dark-fg: rgb(255 255 255 / 0.52);
   --terminal-pane-title-on-dark-input-fg: rgb(255 255 255 / 0.7);
   --terminal-pane-title-on-dark-placeholder: rgb(255 255 255 / 0.38);
-  --terminal-pane-title-on-dark-button-fg: rgb(255 255 255 / 0.3);
-  --terminal-pane-title-on-dark-button-hover-fg: rgb(255 255 255 / 0.8);
+  --terminal-pane-title-on-dark-button-fg: rgb(255 255 255);
+  --terminal-pane-title-on-dark-button-hover-fg: rgb(255 255 255);
   --terminal-pane-title-on-dark-input-bg: rgb(255 255 255 / 0.04);
   --terminal-pane-title-on-dark-separator: rgb(255 255 255 / 0.06);
   --terminal-pane-title-on-light-fg: rgb(24 24 27 / 0.64);
   --terminal-pane-title-on-light-input-fg: rgb(24 24 27 / 0.82);
   --terminal-pane-title-on-light-placeholder: rgb(24 24 27 / 0.48);
-  --terminal-pane-title-on-light-button-fg: rgb(24 24 27 / 0.42);
-  --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27 / 0.82);
+  --terminal-pane-title-on-light-button-fg: rgb(24 24 27);
+  --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27);
   --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
   --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
   --git-decoration-added: #587c0c;
@@ -247,15 +247,15 @@
   --terminal-pane-title-on-dark-fg: rgb(255 255 255 / 0.52);
   --terminal-pane-title-on-dark-input-fg: rgb(255 255 255 / 0.7);
   --terminal-pane-title-on-dark-placeholder: rgb(255 255 255 / 0.38);
-  --terminal-pane-title-on-dark-button-fg: rgb(255 255 255 / 0.3);
-  --terminal-pane-title-on-dark-button-hover-fg: rgb(255 255 255 / 0.8);
+  --terminal-pane-title-on-dark-button-fg: rgb(255 255 255);
+  --terminal-pane-title-on-dark-button-hover-fg: rgb(255 255 255);
   --terminal-pane-title-on-dark-input-bg: rgb(255 255 255 / 0.04);
   --terminal-pane-title-on-dark-separator: rgb(255 255 255 / 0.06);
   --terminal-pane-title-on-light-fg: rgb(24 24 27 / 0.64);
   --terminal-pane-title-on-light-input-fg: rgb(24 24 27 / 0.82);
   --terminal-pane-title-on-light-placeholder: rgb(24 24 27 / 0.48);
-  --terminal-pane-title-on-light-button-fg: rgb(24 24 27 / 0.42);
-  --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27 / 0.82);
+  --terminal-pane-title-on-light-button-fg: rgb(24 24 27);
+  --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27);
   --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
   --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
   --git-decoration-added: #81b88b;
@@ -496,16 +496,46 @@
   height: 0;
 }
 
+/* Why: horizontal tab strips scroll via chevrons, wheel, and trackpad; a
+   native scrollbar thumb overlays tab labels and looks broken. */
+.terminal-tab-strip,
 .project-view-tab-strip {
-  /* Why: project views load after the table shell; keeping the row stable
-     prevents the list below from jumping when the tabs arrive. */
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
 
+.terminal-tab-strip::-webkit-scrollbar,
 .project-view-tab-strip::-webkit-scrollbar {
   width: 0;
   height: 0;
+}
+
+/* Why: mask fades avoid painting card-colored overlays that mismatch active tabs. */
+.terminal-tab-strip--fade-start.terminal-tab-strip--fade-end {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 1.5rem,
+    #000 calc(100% - 1.5rem),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 1.5rem,
+    #000 calc(100% - 1.5rem),
+    transparent
+  );
+}
+
+.terminal-tab-strip--fade-start:not(.terminal-tab-strip--fade-end) {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 1.5rem, #000 100%);
+  mask-image: linear-gradient(to right, transparent, #000 1.5rem, #000 100%);
+}
+
+.terminal-tab-strip--fade-end:not(.terminal-tab-strip--fade-start) {
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
 }
 
 /* Tab activity affordance (amber wash) is rendered as a React DOM child in
@@ -664,6 +694,21 @@
 .right-sidebar-header-drag {
   -webkit-app-region: drag;
   user-select: none;
+}
+
+[data-terminal-focus-release-surface='true'] {
+  -webkit-app-region: drag;
+}
+
+/* Why: Electron drag regions swallow renderer pointer events. While regular
+   xterm owns focus, make the next top-chrome click observable so it can release
+   terminal zoom ownership; after release these surfaces become draggable again. */
+:root[data-regular-terminal-input-focused] .titlebar,
+:root[data-regular-terminal-input-focused] .titlebar-left,
+:root[data-regular-terminal-input-focused] .window-controls-titlebar-spacer,
+:root[data-regular-terminal-input-focused] .right-sidebar-header-drag,
+:root[data-regular-terminal-input-focused] [data-terminal-focus-release-surface='true'] {
+  -webkit-app-region: no-drag;
 }
 
 .right-sidebar-header-no-drag {
@@ -891,6 +936,26 @@
 }
 
 /* ── Sidebar ─────────────────────────────────────────── */
+
+[data-file-explorer-row][data-selected='true'] {
+  /* Why: flat bg-accent ≈ panel background in light mode, so selection mixes
+     foreground into accent and adds an inset ring to stay legible in both themes. */
+  background: color-mix(in srgb, var(--foreground) 8%, var(--accent));
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--accent-foreground);
+}
+
+[data-file-explorer-row][data-selected='true']:hover {
+  background: color-mix(in srgb, var(--foreground) 10%, var(--accent));
+}
+
+.dark [data-file-explorer-row][data-selected='true'] {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.dark [data-file-explorer-row][data-selected='true']:hover {
+  background: color-mix(in srgb, var(--accent) 80%, transparent);
+}
 
 .sidebar {
   width: 240px;

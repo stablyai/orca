@@ -292,7 +292,14 @@ export default function TerminalContextMenu({
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={onSetTitle}>
+        <DropdownMenuItem
+          onSelect={() => {
+            // Why: Set Title moves focus into an overlay input. Force-close
+            // before opening it so the menu's focus guards are not still active.
+            onOpenChange(false)
+            onSetTitle()
+          }}
+        >
           <Pencil />
           {translate('auto.components.terminal.pane.TerminalContextMenu.39809d152f', 'Set Title…')}
         </DropdownMenuItem>
