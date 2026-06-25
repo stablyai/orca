@@ -302,6 +302,30 @@ function hydrateTerminalScrollbackRefs(layout: TerminalLayoutSnapshot): {
     : { layout, hydrated }
 }
 
+export function resolveQueuedInitialCwd(
+  queuedInitialCwd: string | null | undefined,
+  consumeTabInitialCwd: () => string | null,
+  defaultTabCwd: string
+): { queuedInitialCwd: string | null; startupCwd: string } {
+  const nextQueuedInitialCwd =
+    queuedInitialCwd === undefined ? consumeTabInitialCwd() : queuedInitialCwd
+  return {
+    queuedInitialCwd: nextQueuedInitialCwd,
+    startupCwd: nextQueuedInitialCwd ?? defaultTabCwd
+  }
+}
+
+export function clearQueuedInitialCwdAfterFirstPane(
+  queuedInitialCwd: string | null | undefined,
+  defaultTabCwd: string,
+  currentPtyCwd: string
+): { queuedInitialCwd: string | null | undefined; ptyCwd: string } {
+  if (!queuedInitialCwd) {
+    return { queuedInitialCwd, ptyCwd: currentPtyCwd }
+  }
+  return { queuedInitialCwd: null, ptyCwd: defaultTabCwd }
+}
+
 type SplitStartupPayload = { command: string; env?: Record<string, string> }
 
 type SplitWithStartupDeps = {
@@ -510,11 +534,14 @@ export function useTerminalPaneLifecycle({
         .find((candidate) => candidate.id === worktreeId)?.path ??
       cwd ??
       ''
-    if (queuedInitialCwdRef.current === undefined) {
-      queuedInitialCwdRef.current = useAppStore.getState().consumeTabInitialCwd(tabId)
-    }
     const defaultTabCwd = cwd ?? worktreePath
-    const startupCwd = queuedInitialCwdRef.current ?? defaultTabCwd
+    const initialCwdResolution = resolveQueuedInitialCwd(
+      queuedInitialCwdRef.current,
+      () => useAppStore.getState().consumeTabInitialCwd(tabId),
+      defaultTabCwd
+    )
+    queuedInitialCwdRef.current = initialCwdResolution.queuedInitialCwd
+    const startupCwd = initialCwdResolution.startupCwd
     const terminalHomePath = resolveTerminalHomePathFromEnv(startup?.env)
     // Why: existence probes can cross SSH/runtime boundaries. This cache is
     // lifecycle-scoped, so external mutations and the initial 'active' runtime
@@ -931,10 +958,13 @@ export function useTerminalPaneLifecycle({
         // sets deps.startup immediately before splitPane() and is therefore
         // unaffected by this clear.
         ptyDeps.startup = null
-        if (queuedInitialCwdRef.current) {
-          queuedInitialCwdRef.current = null
-          ptyDeps.cwd = defaultTabCwd
-        }
+        const nextInitialCwdState = clearQueuedInitialCwdAfterFirstPane(
+          queuedInitialCwdRef.current,
+          defaultTabCwd,
+          ptyDeps.cwd
+        )
+        queuedInitialCwdRef.current = nextInitialCwdState.queuedInitialCwd
+        ptyDeps.cwd = nextInitialCwdState.ptyCwd
         panePtyBindings.set(pane.id, panePtyBinding)
         syncPaneCount()
         scheduleRuntimeGraphSync()
