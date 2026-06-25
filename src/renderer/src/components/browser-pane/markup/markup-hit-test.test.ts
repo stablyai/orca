@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { findTopShape, hitTestShape, pointToSegmentDistance } from './markup-hit-test'
-import type { ArrowShape, MarkupShape, RectShape, TextShape } from './markup-drawing-model'
+import type {
+  ArrowShape,
+  HighlightShape,
+  MarkupShape,
+  PenShape,
+  RectShape,
+  TextShape
+} from './markup-drawing-model'
 
 describe('pointToSegmentDistance', () => {
   it('measures distance to the nearest point on a segment', () => {
@@ -39,6 +46,25 @@ describe('hitTestShape', () => {
     }
     expect(hitTestShape(rect, { x: 20, y: 20 }, 2)).toBe(true)
     expect(hitTestShape(rect, { x: 80, y: 80 }, 2)).toBe(false)
+  })
+
+  it('hit-tests highlights against their rendered (fat) thickness, not the raw width', () => {
+    const line = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 }
+    ]
+    const highlight: HighlightShape = {
+      id: 'h',
+      kind: 'highlight',
+      color: '#ff0',
+      width: 4,
+      points: line
+    }
+    const pen: PenShape = { id: 'p', kind: 'pen', color: '#ff0', width: 4, points: line }
+    // 6px off the line: inside the fat highlight band (4*4/2 = 8) but outside the
+    // thin pen (4/2 = 2), each with a small tolerance.
+    expect(hitTestShape(highlight, { x: 50, y: 6 }, 1)).toBe(true)
+    expect(hitTestShape(pen, { x: 50, y: 6 }, 1)).toBe(false)
   })
 
   it('hits within a text bounding box', () => {

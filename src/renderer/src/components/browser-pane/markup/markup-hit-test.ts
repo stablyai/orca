@@ -3,6 +3,7 @@
 
 import {
   boundingBox,
+  highlightWidth,
   normalizeRect,
   type MarkupPoint,
   type MarkupShape,
@@ -34,7 +35,10 @@ export function hitTestShape(shape: MarkupShape, point: MarkupPoint, tolerance: 
   switch (shape.kind) {
     case 'pen':
     case 'highlight': {
-      const tol = tolerance + shape.width / 2
+      // Why: highlights render at highlightWidth(width) (much fatter), so hit-test
+      // against the drawn thickness or large highlights miss their visible area.
+      const strokeWidth = shape.kind === 'highlight' ? highlightWidth(shape.width) : shape.width
+      const tol = tolerance + strokeWidth / 2
       if (shape.points.length === 1) {
         return Math.hypot(point.x - shape.points[0].x, point.y - shape.points[0].y) <= tol
       }

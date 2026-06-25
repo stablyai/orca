@@ -95,7 +95,19 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
 
   const undo = useCallback(() => setDoc((current) => undoShape(current)), [])
   const redo = useCallback(() => setDoc((current) => redoShape(current)), [])
-  const clear = useCallback(() => setDoc((current) => clearShapes(current)), [])
+  const clear = useCallback(() => {
+    // Why: also drop any open text input / selection / in-progress drag so a clear
+    // leaves a truly clean slate — otherwise a pending input blur can re-add text
+    // and a stale selection/edit lingers over the now-empty canvas.
+    setPendingText(null)
+    setEditingTextId(null)
+    setInProgress(null)
+    dragRef.current = null
+    dragOffsetRef.current = { dx: 0, dy: 0 }
+    setDragOffset(null)
+    select(null)
+    setDoc((current) => clearShapes(current))
+  }, [select])
 
   useMarkupKeyboardShortcuts({
     pendingText,

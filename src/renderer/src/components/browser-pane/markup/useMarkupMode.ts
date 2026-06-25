@@ -1,4 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../../shared/clipboard-image'
 import {
   captureMarkupBaseImage,
@@ -60,11 +62,22 @@ export function useMarkupMode({
     setState('idle')
   }, [])
 
+  // Why: surface failures (the controller's `error` is otherwise never rendered)
+  // and localize the message — mirroring the translated success toast.
+  const fail = useCallback((key: string, fallback: string) => {
+    const message = translate(key, fallback)
+    setError(message)
+    setState('error')
+    toast.error(message)
+  }, [])
+
   const start = useCallback(async () => {
     const context = getCaptureContext()
     if (!context) {
-      setError('Screenshot markup is not available on this page.')
-      setState('error')
+      fail(
+        'auto.components.browser-pane.markup.errorUnavailable',
+        'Screenshot markup is not available on this page.'
+      )
       return
     }
     const token = (captureTokenRef.current += 1)
@@ -82,10 +95,12 @@ export function useMarkupMode({
       if (captureTokenRef.current !== token) {
         return
       }
-      setError('Could not capture the page to draw on.')
-      setState('error')
+      fail(
+        'auto.components.browser-pane.markup.errorCapture',
+        'Could not capture the page to draw on.'
+      )
     }
-  }, [getCaptureContext])
+  }, [getCaptureContext, fail])
 
   const cancel = useCallback(() => {
     reset()
@@ -98,6 +113,9 @@ export function useMarkupMode({
         reset()
         return
       }
+      // Why: invalidate this completion if the user cancels or restarts while
+      // onDeliver is pending, so a stale callback can't reset/error the new session.
+      const token = captureTokenRef.current
       setState('composing')
       try {
         const result = composeMarkupDataUrl({
@@ -112,13 +130,21 @@ export function useMarkupMode({
           maxBytes: CLIPBOARD_IMAGE_MAX_SOURCE_BYTES
         })
         await onDeliver(result)
+        if (captureTokenRef.current !== token) {
+          return
+        }
         reset()
       } catch {
-        setError('Could not attach the markup screenshot.')
-        setState('error')
+        if (captureTokenRef.current !== token) {
+          return
+        }
+        fail(
+          'auto.components.browser-pane.markup.errorAttach',
+          'Could not attach the markup screenshot.'
+        )
       }
     },
-    [onDeliver, reset]
+    [onDeliver, reset, fail]
   )
 
   return {

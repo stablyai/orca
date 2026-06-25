@@ -12980,7 +12980,10 @@
             "select": "選択 / 移動"
           },
           "widthOption": "{{value0}} px",
-          "fontSize": "文字サイズ"
+          "fontSize": "文字サイズ",
+          "errorUnavailable": "このページではスクリーンショット注釈を利用できません。",
+          "errorCapture": "描画用にページを取得できませんでした。",
+          "errorAttach": "注釈付きスクリーンショットを添付できませんでした。"
         }
       }
     },

@@ -4212,14 +4212,19 @@ function BrowserPagePane({
       if (isEditableKeyboardTarget(e.target)) {
         return
       }
-      if (keybindingMatchesAction('browser.grabElement', e, shortcutPlatform, keybindings)) {
+      // Why: while the markup overlay is open, don't let the grab shortcut start
+      // the in-guest picker behind it — matching the disabled grab toolbar buttons.
+      if (
+        !markup.isActive &&
+        keybindingMatchesAction('browser.grabElement', e, shortcutPlatform, keybindings)
+      ) {
         e.preventDefault()
         startGrabIntent('copy')
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isActive, keybindings, startGrabIntent])
+  }, [isActive, keybindings, markup.isActive, startGrabIntent])
 
   useEffect(() => {
     if (!isActive) {

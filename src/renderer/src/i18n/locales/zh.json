@@ -12980,7 +12980,10 @@
             "select": "选择 / 移动"
           },
           "widthOption": "{{value0}} px",
-          "fontSize": "字号"
+          "fontSize": "字号",
+          "errorUnavailable": "此页面无法使用截图标注。",
+          "errorCapture": "无法捕获页面进行绘制。",
+          "errorAttach": "无法附加标注后的截图。"
         }
       }
     },

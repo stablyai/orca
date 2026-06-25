@@ -12980,7 +12980,10 @@
             "select": "선택 / 이동"
           },
           "widthOption": "{{value0}} px",
-          "fontSize": "글자 크기"
+          "fontSize": "글자 크기",
+          "errorUnavailable": "이 페이지에서는 스크린샷 마크업을 사용할 수 없습니다.",
+          "errorCapture": "그릴 페이지를 캡처하지 못했습니다.",
+          "errorAttach": "마크업 스크린샷을 첨부하지 못했습니다."
         }
       }
     },

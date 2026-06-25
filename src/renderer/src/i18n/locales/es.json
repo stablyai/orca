@@ -12980,7 +12980,10 @@
             "select": "Seleccionar / mover"
           },
           "widthOption": "{{value0}} px",
-          "fontSize": "Tamaño de letra"
+          "fontSize": "Tamaño de letra",
+          "errorUnavailable": "El marcado de captura de pantalla no está disponible en esta página.",
+          "errorCapture": "No se pudo capturar la página para dibujar.",
+          "errorAttach": "No se pudo adjuntar la captura de pantalla con marcado."
         }
       }
     },
