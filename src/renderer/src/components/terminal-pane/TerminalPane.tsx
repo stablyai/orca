@@ -775,11 +775,28 @@ export default function TerminalPane({
       pane.terminal.clear()
       // Why: also clear the host buffer for remote-server panes, or the next
       // host snapshot replays the scrollback we just cleared locally.
-      const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
+      const transport = paneTransportsRef.current.get(pane.id)
+      const ptyId = transport?.getPtyId() ?? null
       clearWebRuntimeTerminalBuffer(ptyId)
+      const isRemoteRuntimePty = typeof ptyId === 'string' && isRemoteRuntimePtyId(ptyId)
+      if (isWindowsUserAgent() && getConnectionId(worktreeId) === null && !isRemoteRuntimePty) {
+        // Why: local Windows ConPTY can keep wrapped prompt/cursor paint stale
+        // after xterm.clear(), including after a TUI exit drops the live pty id.
+        safeFit(pane)
+        transport?.resize(pane.terminal.cols, pane.terminal.rows)
+        pane.terminal.refresh(0, Math.max(0, pane.terminal.rows - 1))
+        requestAnimationFrame(() => {
+          if (!managerRef.current?.getPanes().some((livePane) => livePane.id === pane.id)) {
+            return
+          }
+          safeFit(pane)
+          transport?.resize(pane.terminal.cols, pane.terminal.rows)
+          pane.terminal.refresh(0, Math.max(0, pane.terminal.rows - 1))
+        })
+      }
       persistLayoutSnapshot()
     },
-    [paneTransportsRef, persistLayoutSnapshot]
+    [paneTransportsRef, persistLayoutSnapshot, worktreeId]
   )
 
   useEffect(() => {
