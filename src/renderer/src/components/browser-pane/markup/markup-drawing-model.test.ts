@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   arrowHeadGeometry,
   boundingBox,
+  estimateTextWidth,
   canRedo,
   canUndo,
   clearShapes,
@@ -193,6 +194,28 @@ describe('markup geometry', () => {
     }
     const restyledText = restyleShape(text, { fontSize: 32 }) as TextShape
     expect(restyledText.fontSize).toBe(32)
+  })
+
+  it('estimates full-width (CJK) glyphs at ~1em and latin at ~0.55em', () => {
+    // Why: a fixed 0.6em underestimated Japanese, clipping the selection box.
+    expect(estimateTextWidth('テスト', 18)).toBeCloseTo(54, 5)
+    expect(estimateTextWidth('abc', 18)).toBeCloseTo(18 * 0.55 * 3, 5)
+  })
+
+  it('sizes a text bounding box to its widest line', () => {
+    const box = boundingBox({
+      id: 't',
+      kind: 'text',
+      color: '#fff',
+      at: { x: 5, y: 10 },
+      text: 'あ\nabcd',
+      fontSize: 20
+    })
+    expect(box.x).toBe(5)
+    expect(box.y).toBe(10)
+    // widest line is "あ" (1 full-width = 20) vs "abcd" (4*0.55*20 = 44) -> 44
+    expect(box.width).toBeCloseTo(44, 5)
+    expect(box.height).toBeCloseTo(2 * 20 * 1.25, 5)
   })
 
   it('computes a bounding box for pen and rect shapes', () => {

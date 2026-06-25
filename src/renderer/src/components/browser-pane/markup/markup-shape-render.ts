@@ -16,7 +16,7 @@ import {
   type TextShape
 } from './markup-drawing-model'
 
-const TEXT_FONT_FAMILY =
+export const TEXT_FONT_FAMILY =
   'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
 
 export function drawShape(ctx: CanvasRenderingContext2D, shape: MarkupShape): void {

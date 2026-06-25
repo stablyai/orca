@@ -17,6 +17,9 @@ export type MarkupScene = {
   dragId: string | null
   dragOffset: { dx: number; dy: number } | null
   selectedId: string | null
+  /** Shape currently being re-edited via the text input — hidden so the live
+   *  input isn't doubled by its committed render. */
+  hiddenId: string | null
   cssWidth: number
   cssHeight: number
 }
@@ -49,17 +52,21 @@ export function renderMarkupScene(canvas: HTMLCanvasElement, scene: MarkupScene)
   ctx.clearRect(0, 0, scene.cssWidth, scene.cssHeight)
 
   const offset = scene.dragOffset
+  const visibleShapes = scene.hiddenId
+    ? scene.shapes.filter((shape) => shape.id !== scene.hiddenId)
+    : scene.shapes
   const displayShapes =
     scene.dragId && offset
-      ? scene.shapes.map((shape) =>
+      ? visibleShapes.map((shape) =>
           shape.id === scene.dragId ? translateShape(shape, offset.dx, offset.dy) : shape
         )
-      : scene.shapes
+      : visibleShapes
   drawShapes(ctx, displayShapes)
   if (scene.inProgress) {
     drawShapes(ctx, [scene.inProgress])
   }
-  if (scene.selectedId) {
+  // Why: don't outline the shape being re-edited — the text input stands in for it.
+  if (scene.selectedId && scene.selectedId !== scene.hiddenId) {
     const selected = displayShapes.find((shape) => shape.id === scene.selectedId)
     if (selected) {
       drawSelectionBox(ctx, boundingBox(selected))

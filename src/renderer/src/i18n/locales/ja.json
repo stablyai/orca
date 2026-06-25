@@ -12979,7 +12979,8 @@
             "text": "テキスト",
             "select": "選択 / 移動"
           },
-          "widthOption": "{{value0}} px"
+          "widthOption": "{{value0}} px",
+          "fontSize": "文字サイズ"
         }
       }
     },

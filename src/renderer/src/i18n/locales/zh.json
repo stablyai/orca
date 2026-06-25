@@ -12979,7 +12979,8 @@
             "text": "文字",
             "select": "选择 / 移动"
           },
-          "widthOption": "{{value0}} px"
+          "widthOption": "{{value0}} px",
+          "fontSize": "字号"
         }
       }
     },

@@ -6,6 +6,7 @@ import { translate } from '@/i18n/i18n'
 import { MarkupToolbar } from './MarkupToolbar'
 import type { MarkupBaseImage } from './markup-base-image'
 import type { MarkupShape } from './markup-drawing-model'
+import { TEXT_FONT_FAMILY } from './markup-shape-render'
 import { useMarkupEditor } from './useMarkupEditor'
 
 export type MarkupOverlayProps = {
@@ -96,15 +97,19 @@ export function MarkupOverlay({
               editor.cancelPendingText()
             }
           }}
-          // Why: transparent background + ink-colored text with a halo so the
-          // typing preview matches the committed look and doesn't show a dark
-          // theme box over the screenshot.
-          className="absolute z-30 rounded-sm border border-dashed border-ring bg-transparent px-1 py-0.5 leading-tight outline-none"
+          // Why: no padding/border and the same font as the canvas so the typing
+          // preview sits exactly where the committed text renders (otherwise it
+          // shifts). field-sizing:content makes the box hug the text.
+          className="absolute z-30 min-w-0 border-0 bg-transparent p-0 leading-none [field-sizing:content]"
           style={{
             left: pendingText.x,
             top: pendingText.y,
             color: editor.color,
             fontSize: editor.fontSize,
+            fontWeight: 600,
+            fontFamily: TEXT_FONT_FAMILY,
+            outline: '1px dashed var(--ring)',
+            outlineOffset: '1px',
             textShadow:
               editor.color.toLowerCase() === '#ffffff'
                 ? '0 0 3px rgba(0,0,0,0.7)'

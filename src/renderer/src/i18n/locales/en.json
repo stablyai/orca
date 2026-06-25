@@ -12979,7 +12979,8 @@
             "text": "Text",
             "select": "Select / move"
           },
-          "widthOption": "{{value0}} px"
+          "widthOption": "{{value0}} px",
+          "fontSize": "Font size"
         }
       }
     },

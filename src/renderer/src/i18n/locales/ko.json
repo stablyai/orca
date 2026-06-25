@@ -12979,7 +12979,8 @@
             "text": "텍스트",
             "select": "선택 / 이동"
           },
-          "widthOption": "{{value0}} px"
+          "widthOption": "{{value0}} px",
+          "fontSize": "글자 크기"
         }
       }
     },

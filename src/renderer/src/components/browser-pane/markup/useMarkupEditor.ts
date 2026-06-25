@@ -78,10 +78,11 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
       dragId: dragRef.current?.id ?? null,
       dragOffset,
       selectedId,
+      hiddenId: editingTextId,
       cssWidth: size.width,
       cssHeight: size.height
     })
-  }, [doc, inProgress, size, dragOffset, selectedId])
+  }, [doc, inProgress, size, dragOffset, selectedId, editingTextId])
 
   // Why: focus the text input on mount — a placement click can beat autoFocus.
   useEffect(() => {

@@ -179,8 +179,34 @@ export const MarkupToolbar = React.memo(function MarkupToolbar({
                 </button>
               ))}
             </div>
-            <div className="mt-2 flex items-center gap-1">
-              <Type className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+          </PopoverContent>
+        </Popover>
+
+        <Popover>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-1 px-2"
+                  aria-label={translate(
+                    'auto.components.browser-pane.markup.fontSize',
+                    'Font size'
+                  )}
+                >
+                  <Type className="size-3.5" />
+                  <span className="text-[11px] tabular-nums">{fontSize}</span>
+                </Button>
+              </PopoverTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {translate('auto.components.browser-pane.markup.fontSize', 'Font size')}
+            </TooltipContent>
+          </Tooltip>
+          <PopoverContent side="top" align="start" className="w-auto p-2">
+            <div className="flex items-center gap-1">
               {MARKUP_FONT_SIZES.map((size) => (
                 <button
                   key={size}
@@ -192,7 +218,7 @@ export const MarkupToolbar = React.memo(function MarkupToolbar({
                   )}
                   onClick={() => onFontSizeChange(size)}
                   className={cn(
-                    'flex h-6 flex-1 items-center justify-center rounded-sm border text-[11px] tabular-nums',
+                    'flex h-6 min-w-7 items-center justify-center rounded-sm border px-1 text-[11px] tabular-nums',
                     fontSize === size ? 'border-ring bg-accent' : 'border-border hover:bg-accent/50'
                   )}
                 >

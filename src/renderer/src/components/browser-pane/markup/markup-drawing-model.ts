@@ -251,6 +251,31 @@ export function restyleShape(shape: MarkupShape, patch: MarkupStylePatch): Marku
   }
 }
 
+// Approximate glyph advance: full-width (CJK / fullwidth) chars ≈ 1em, others
+// ≈ 0.55em. A heuristic (not canvas-measured) so the model stays pure/testable;
+// good enough that the selection box and hit bounds track Japanese text instead
+// of clipping it at a fixed 0.6em.
+function isWideCodePoint(code: number): boolean {
+  return (
+    (code >= 0x1100 && code <= 0x115f) ||
+    (code >= 0x2e80 && code <= 0xa4cf) ||
+    (code >= 0xac00 && code <= 0xd7a3) ||
+    (code >= 0xf900 && code <= 0xfaff) ||
+    (code >= 0xfe30 && code <= 0xfe4f) ||
+    (code >= 0xff00 && code <= 0xff60) ||
+    (code >= 0xffe0 && code <= 0xffe6) ||
+    (code >= 0x20000 && code <= 0x3fffd)
+  )
+}
+
+export function estimateTextWidth(text: string, fontSize: number): number {
+  let width = 0
+  for (const char of text) {
+    width += isWideCodePoint(char.codePointAt(0) ?? 0) ? fontSize : fontSize * 0.55
+  }
+  return width
+}
+
 export function boundingBox(shape: MarkupShape): NormalizedRect {
   switch (shape.kind) {
     case 'pen':
@@ -267,12 +292,14 @@ export function boundingBox(shape: MarkupShape): NormalizedRect {
       return normalizeRect(shape.from, shape.to)
     case 'text': {
       const lines = shape.text.split('\n')
-      const longest = lines.reduce((max, line) => Math.max(max, line.length), 0)
-      // Rough glyph-width estimate — good enough for selection/hit bounds.
+      const width = lines.reduce(
+        (max, line) => Math.max(max, estimateTextWidth(line, shape.fontSize)),
+        0
+      )
       return {
         x: shape.at.x,
         y: shape.at.y,
-        width: longest * shape.fontSize * 0.6,
+        width,
         height: lines.length * shape.fontSize * 1.25
       }
     }
