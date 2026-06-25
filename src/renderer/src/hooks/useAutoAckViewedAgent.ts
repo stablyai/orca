@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import type { TerminalLayoutSnapshot } from '../../../shared/types'
-import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 
 function resolveActiveLeafId(
   state: { terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot> },
@@ -57,17 +57,115 @@ export function computeAutoAckTargets(
   return targets
 }
 
+export function computeViewedAgentCompletionPaneKey(
+  state: {
+    unreadAgentCompletionPanes: Record<string, true>
+  },
+  activeTabId: string,
+  activeLeafId: string | null
+): string | null {
+  if (!activeLeafId || !isTerminalLeafId(activeLeafId)) {
+    return null
+  }
+
+  const targetKey = makePaneKey(activeTabId, activeLeafId)
+  return state.unreadAgentCompletionPanes[targetKey] ? targetKey : null
+}
+
+export function shouldClearViewedAgentWorktreeUnread(
+  state: {
+    tabsByWorktree: Record<string, { id: string }[]>
+    unreadAgentCompletionPanes: Record<string, true>
+    unreadTerminalTabs: Record<string, true>
+  },
+  args: {
+    activeWorktreeId: string | null
+    activeTabId: string
+    paneKeysToClear: Set<string>
+  }
+): boolean {
+  if (!args.activeWorktreeId) {
+    return false
+  }
+
+  const tabIds = new Set((state.tabsByWorktree[args.activeWorktreeId] ?? []).map((tab) => tab.id))
+  if (tabIds.size === 0) {
+    return true
+  }
+
+  // Why: worktree unread is coarse. Do not clear it for the visible pane if a
+  // hidden tab/pane in the same worktree still owns unread agent attention.
+  for (const paneKey of Object.keys(state.unreadAgentCompletionPanes)) {
+    if (args.paneKeysToClear.has(paneKey)) {
+      continue
+    }
+    const parsed = parsePaneKey(paneKey)
+    if (parsed && tabIds.has(parsed.tabId)) {
+      return false
+    }
+  }
+
+  for (const tabId of Object.keys(state.unreadTerminalTabs)) {
+    if (tabId !== args.activeTabId && tabIds.has(tabId)) {
+      return false
+    }
+  }
+
+  return true
+}
+
+type ViewedAgentAttentionActions = {
+  acknowledgeAgents: (paneKeys: string[]) => void
+  clearWorktreeUnread: (worktreeId: string) => void
+  clearTerminalTabUnread: (tabId: string) => void
+  clearTerminalPaneUnread: (paneKey: string) => void
+}
+
+export function acknowledgeViewedAgentAttention(
+  state: ViewedAgentAttentionActions,
+  args: {
+    activeWorktreeId: string | null
+    activeTabId: string
+    paneKeys: string[]
+    activePaneKey?: string | null
+  }
+): void {
+  const paneKeysToClear = new Set(args.paneKeys)
+  if (args.activePaneKey) {
+    paneKeysToClear.add(args.activePaneKey)
+  }
+
+  if (args.paneKeys.length === 0 && paneKeysToClear.size === 0) {
+    return
+  }
+
+  if (args.paneKeys.length > 0) {
+    state.acknowledgeAgents(args.paneKeys)
+  }
+  if (args.activeWorktreeId) {
+    // Why: focus-return auto-ack means the selected agent is now visible;
+    // clear the Dock-driving worktree unread state without requiring a click.
+    state.clearWorktreeUnread(args.activeWorktreeId)
+  }
+  state.clearTerminalTabUnread(args.activeTabId)
+  for (const paneKey of paneKeysToClear) {
+    state.clearTerminalPaneUnread(paneKey)
+  }
+}
+
 // Why: an agent row counts as "already seen" when the user is actually looking
 // at the tab it lives on. Without this effect, ack only fires via an explicit
 // click in the dashboard — which misses the common case where the user is
 // already on the terminal tab when the agent finishes or blocks. That leaves
-// the dashboard bolded for an event the user literally just watched happen.
+// the dashboard bolded and Dock badge raised for an event the user literally
+// just watched happen.
 //
 // The effect subscribes directly to the store (not via React selectors) so it
 // sees every state change with no re-render amplification up the component
 // tree. A reference-equality guard inside the callback bails out immediately
-// when none of the five slices we care about (activeView, activeTabId,
-// agentStatusByPaneKey, retainedAgentsByPaneKey, acknowledgedAgentsByPaneKey)
+// when none of the seven slices we care about (activeView, activeTabId,
+// agentStatusByPaneKey, retainedAgentsByPaneKey, acknowledgedAgentsByPaneKey,
+// terminalLayoutsByTabId, unreadAgentCompletionPanes)
 // have changed — so the Object.entries walk only runs for updates
 // that could legitimately affect the ack decision.
 //
@@ -75,8 +173,8 @@ export function computeAutoAckTargets(
 //   - activeView is 'terminal' (the user isn't on Settings/Tasks), AND
 //   - activeTabId identifies a live tab, AND
 //   - at least one agentStatusByPaneKey entry OR retainedAgentsByPaneKey
-//     entry has paneKey prefixed by `${activeTabId}:` AND its
-//     ackAt < stateStartedAt.
+//     entry matches the active tab+leaf AND its ackAt < stateStartedAt, OR
+//     the active pane has unread agent-completion attention.
 //
 // Why both maps: the inline-agents list renders the union of live + retained
 // rows (see useWorktreeAgentRows), so the ack scan must too. Without the
@@ -96,8 +194,8 @@ export function computeAutoAckTargets(
 // focus actually comes back.
 //
 // We ack ALL matching panes in one call (a tab can host split panes, each
-// with its own paneKey) so acknowledgeAgents' identity-preserving guard
-// collapses the no-op path.
+// with its own paneKey), then clear the active unread surfaces. Returning focus
+// to a visible agent counts as viewing it, without requiring a click/keystroke.
 export function useAutoAckViewedAgent(): void {
   useEffect(() => {
     // Why: the root zustand store is created with plain `create()` (no
@@ -112,6 +210,7 @@ export function useAutoAckViewedAgent(): void {
     let lastRetained: unknown = undefined
     let lastAcknowledged: unknown = undefined
     let lastLayouts: unknown = undefined
+    let lastUnreadAgentCompletionPanes: unknown = undefined
 
     const maybeAck = (): void => {
       const s = useAppStore.getState()
@@ -121,7 +220,8 @@ export function useAutoAckViewedAgent(): void {
         s.agentStatusByPaneKey === lastAgentStatus &&
         s.retainedAgentsByPaneKey === lastRetained &&
         s.acknowledgedAgentsByPaneKey === lastAcknowledged &&
-        s.terminalLayoutsByTabId === lastLayouts
+        s.terminalLayoutsByTabId === lastLayouts &&
+        s.unreadAgentCompletionPanes === lastUnreadAgentCompletionPanes
       ) {
         return
       }
@@ -161,9 +261,26 @@ export function useAutoAckViewedAgent(): void {
       lastRetained = s.retainedAgentsByPaneKey
       lastAcknowledged = s.acknowledgedAgentsByPaneKey
       lastLayouts = s.terminalLayoutsByTabId
+      lastUnreadAgentCompletionPanes = s.unreadAgentCompletionPanes
       const toAck = computeAutoAckTargets(s, activeTabId, activeLeafId)
-      if (toAck.length > 0) {
-        s.acknowledgeAgents(toAck)
+      const activePaneKey = computeViewedAgentCompletionPaneKey(s, activeTabId, activeLeafId)
+      if (toAck.length > 0 || activePaneKey) {
+        const paneKeysToClear = new Set(toAck)
+        if (activePaneKey) {
+          paneKeysToClear.add(activePaneKey)
+        }
+        acknowledgeViewedAgentAttention(s, {
+          activeWorktreeId: shouldClearViewedAgentWorktreeUnread(s, {
+            activeWorktreeId: s.activeWorktreeId,
+            activeTabId,
+            paneKeysToClear
+          })
+            ? s.activeWorktreeId
+            : null,
+          activeTabId,
+          paneKeys: toAck,
+          activePaneKey
+        })
       }
     }
     // Why: run once on mount to catch the case where the app restores to a

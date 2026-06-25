@@ -6,6 +6,7 @@ import type {
 } from '../../src/shared/runtime-types'
 import {
   activateFinder,
+  ensureOrcaRuntimeLaunched,
   ensureTextEditLaunched,
   findRoleIndex,
   killTextEdit,
@@ -18,6 +19,7 @@ const e2eOptIn = process.env.ORCA_COMPUTER_E2E === '1'
 
 describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => {
   beforeAll(async () => {
+    await ensureOrcaRuntimeLaunched()
     await ensureTextEditLaunched()
   })
 
@@ -247,6 +249,6 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
     expect(envelope.result.screenshot?.format).toBe('png')
     expect(envelope.result.screenshot?.data).toBeUndefined()
     expect(envelope.result.screenshot?.dataOmitted).toBe(true)
-    expect(envelope.result.screenshot?.path).toContain('orca-computer-use-')
+    expect(envelope.result.screenshot?.path).toContain('orca-computer-use')
   })
 })

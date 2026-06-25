@@ -31,29 +31,28 @@ function basenameWithoutExt(filePath: string): string {
   return dot > 0 ? base.slice(0, dot) : base
 }
 
-/**
- * Locate the active markdown document DOM subtree. v1 uses a scoped query
- * over the whole document: there is only one active markdown surface at a
- * time, and both preview and rich modes paint a uniquely-classed container.
- * If multi-pane split view ever makes multiple surfaces visible at once,
- * this contract must be revisited (see design doc §4).
- */
-function findActiveDocumentSubtree(): Element | null {
-  return document.querySelector(DOCUMENT_SUBTREE_SELECTOR)
+function findDocumentSubtree(root: ParentNode): Element | null {
+  return root.querySelector(DOCUMENT_SUBTREE_SELECTOR)
 }
 
 /**
- * Extract a clean, self-contained HTML export payload from the active
- * markdown surface. Returns null when no markdown document is active or the
+ * Extract a clean, self-contained HTML export payload from a panel-scoped
+ * markdown surface. Returns null when the requested file is stale or the
  * surface is in a mode (Monaco source) that does not render a document DOM.
  */
-export function getActiveMarkdownExportPayload(): MarkdownExportPayload | null {
-  const state = useAppStore.getState()
-  if (state.activeTabType !== 'editor') {
+export async function getActiveMarkdownExportPayload({
+  fileId,
+  root
+}: {
+  fileId: string
+  root: ParentNode | null
+}): Promise<MarkdownExportPayload | null> {
+  if (!root) {
     return null
   }
-  const activeFile = state.openFiles.find((f) => f.id === state.activeFileId)
-  if (!activeFile || activeFile.mode !== 'edit') {
+  const state = useAppStore.getState()
+  const activeFile = state.openFiles.find((f) => f.id === fileId)
+  if (!activeFile || (activeFile.mode !== 'edit' && activeFile.mode !== 'markdown-preview')) {
     return null
   }
   const language = detectLanguage(activeFile.filePath)
@@ -61,7 +60,7 @@ export function getActiveMarkdownExportPayload(): MarkdownExportPayload | null {
     return null
   }
 
-  const subtree = findActiveDocumentSubtree()
+  const subtree = findDocumentSubtree(root)
   if (!subtree) {
     return null
   }
@@ -72,6 +71,9 @@ export function getActiveMarkdownExportPayload(): MarkdownExportPayload | null {
       node.remove()
     }
   }
+  // Why: local-image previews use renderer-scoped blob URLs; the hidden PDF
+  // window cannot dereference them, so embed the bytes before export.
+  await inlineBlobImageSources(clone)
 
   const renderedHtml = clone.innerHTML.trim()
   if (!renderedHtml) {
@@ -81,4 +83,41 @@ export function getActiveMarkdownExportPayload(): MarkdownExportPayload | null {
   const title = basenameWithoutExt(activeFile.relativePath || activeFile.filePath)
   const html = buildMarkdownExportHtml({ title, renderedHtml })
   return { title, html }
+}
+
+async function inlineBlobImageSources(root: Element): Promise<void> {
+  const images = Array.from(root.querySelectorAll<HTMLImageElement>('img[src^="blob:"]'))
+  await Promise.all(
+    images.map(async (image) => {
+      const src = image.getAttribute('src')
+      if (!src) {
+        return
+      }
+      image.setAttribute('src', await readBlobImageAsDataUrl(src))
+    })
+  )
+}
+
+async function readBlobImageAsDataUrl(src: string): Promise<string> {
+  try {
+    const response = await fetch(src)
+    if (!response.ok) {
+      throw new Error('Unable to fetch blob image')
+    }
+    const blob = await response.blob()
+    const bytes = new Uint8Array(await blob.arrayBuffer())
+    return `data:${blob.type || 'application/octet-stream'};base64,${bytesToBase64(bytes)}`
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Failed to inline image for PDF export: ${message}`)
+  }
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  const chunkSize = 0x8000
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize))
+  }
+  return btoa(binary)
 }

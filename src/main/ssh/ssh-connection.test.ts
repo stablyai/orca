@@ -9,6 +9,7 @@ import { join } from 'path'
 let eventHandlers: Map<string, Set<(...args: unknown[]) => void>>
 let connectBehavior: 'ready' | 'error' = 'ready'
 let connectErrorMessage = ''
+let connectErrorCode = ''
 let destroyErrorMessage = ''
 let connectSequence: ('ready' | Error)[] = []
 let execBehavior: 'callback' | 'pending' = 'callback'
@@ -68,7 +69,11 @@ vi.mock('ssh2', () => {
           return
         }
         if (connectBehavior === 'error') {
-          emitSshEvent('error', new Error(connectErrorMessage))
+          const err = new Error(connectErrorMessage) as NodeJS.ErrnoException
+          if (connectErrorCode) {
+            err.code = connectErrorCode
+          }
+          emitSshEvent('error', err)
         } else {
           emitSshEvent('ready')
         }
@@ -140,6 +145,8 @@ import {
   type SshConnectionCallbacks
 } from './ssh-connection'
 import { resolveWithSshG } from './ssh-config-parser'
+import { uploadDirectoryViaSystemSsh, writeFileViaSystemSsh } from './ssh-system-fallback'
+import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { SshTarget } from '../../shared/ssh-types'
 
 function createTarget(overrides?: Partial<SshTarget>): SshTarget {
@@ -185,6 +192,7 @@ describe('SshConnection', () => {
     eventHandlers = new Map()
     connectBehavior = 'ready'
     connectErrorMessage = ''
+    connectErrorCode = ''
     destroyErrorMessage = ''
     connectSequence = []
     execBehavior = 'callback'
@@ -194,6 +202,10 @@ describe('SshConnection', () => {
     clientInstances = []
     spawnSystemSshCommandMock.mockReset()
     spawnSystemSshCommandMock.mockImplementation(() => createSystemCommandChannel())
+    vi.mocked(uploadDirectoryViaSystemSsh).mockReset()
+    vi.mocked(uploadDirectoryViaSystemSsh).mockResolvedValue(undefined)
+    vi.mocked(writeFileViaSystemSsh).mockReset()
+    vi.mocked(writeFileViaSystemSsh).mockResolvedValue(undefined)
     vi.mocked(resolveWithSshG).mockReset()
     vi.mocked(resolveWithSshG).mockResolvedValue(null)
     vi.unstubAllEnvs()
@@ -562,6 +574,17 @@ describe('SshConnection', () => {
     )
   })
 
+  it('can execute native remote commands without the POSIX shell wrapper', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+
+    await conn.exec('powershell.exe -NoProfile -EncodedCommand AAAA', { wrapCommand: false })
+
+    expect(clientInstances[0].lastExecCommand).toBe(
+      'powershell.exe -NoProfile -EncodedCommand AAAA'
+    )
+  })
+
   it('times out when ssh2 never opens an exec channel', async () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
@@ -668,7 +691,102 @@ describe('SshConnection', () => {
     expect(clientInstances).toHaveLength(0)
     expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
       expect.objectContaining({ configHost: 'fdpass-host' }),
-      'printf ORCA-SYSTEM-SSH-OK'
+      'echo ORCA-SYSTEM-SSH-OK',
+      { wrapCommand: false }
+    )
+  })
+
+  it('uses system SSH transport for ProxyCommand targets before ssh2 auth', async () => {
+    const conn = new SshConnection(
+      createTarget({ proxyCommand: 'ssh -W %h:%p bastion.example.com' }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(clientInstances).toHaveLength(0)
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
+      expect.objectContaining({ proxyCommand: 'ssh -W %h:%p bastion.example.com' }),
+      'echo ORCA-SYSTEM-SSH-OK',
+      { wrapCommand: false }
+    )
+  })
+
+  it('falls back to system SSH when ssh2 hits a local network policy reachability error', async () => {
+    connectBehavior = 'error'
+    connectErrorMessage = 'connect EHOSTUNREACH 192.168.0.210:22 - Local (192.168.0.2:52112)'
+    connectErrorCode = 'EHOSTUNREACH'
+    const conn = new SshConnection(
+      createTarget({ host: '192.168.0.210', label: 'LAN Linux', username: 'hydra' }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(clientInstances).toHaveLength(1)
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
+      expect.objectContaining({ host: '192.168.0.210' }),
+      'echo ORCA-SYSTEM-SSH-OK',
+      { wrapCommand: false }
+    )
+  })
+
+  it('keeps the original ssh2 reachability error when the system SSH probe fails', async () => {
+    connectBehavior = 'error'
+    connectErrorMessage = 'connect EHOSTUNREACH 192.168.0.210:22 - Local (192.168.0.2:52112)'
+    connectErrorCode = 'EHOSTUNREACH'
+    spawnSystemSshCommandMock.mockImplementation(() => {
+      throw new Error('No system ssh binary found. Install OpenSSH to use system SSH transport.')
+    })
+    const conn = new SshConnection(
+      createTarget({ host: '192.168.0.210', label: 'LAN Linux', username: 'hydra' }),
+      createCallbacks()
+    )
+    const privateConn = conn as unknown as {
+      attemptConnect: () => Promise<void>
+    }
+
+    await expect(privateConn.attemptConnect()).rejects.toThrow(
+      'connect EHOSTUNREACH 192.168.0.210:22'
+    )
+    expect(conn.usesSystemSshTransport()).toBe(false)
+  })
+
+  it('passes the detected host platform to system SSH file operations', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce({
+      hostname: 'example.com',
+      port: 22,
+      identityFile: [],
+      forwardAgent: false,
+      identitiesOnly: false,
+      proxyUseFdpass: true
+    })
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+    const hostPlatform = getRemoteHostPlatform('win32-x64')
+
+    await conn.connect()
+    await conn.uploadDirectory('/tmp/local-relay', 'C:/Users/me/.orca-remote/relay', {
+      hostPlatform
+    })
+    await conn.writeFile('C:/Users/me/.orca-remote/relay/.version', '0.1.0', {
+      hostPlatform
+    })
+
+    expect(uploadDirectoryViaSystemSsh).toHaveBeenCalledWith(
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      '/tmp/local-relay',
+      'C:/Users/me/.orca-remote/relay',
+      expect.objectContaining({ hostPlatform })
+    )
+    expect(writeFileViaSystemSsh).toHaveBeenCalledWith(
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      'C:/Users/me/.orca-remote/relay/.version',
+      '0.1.0',
+      expect.objectContaining({ hostPlatform })
     )
   })
 
@@ -709,9 +827,25 @@ describe('SshConnection', () => {
 })
 
 describe('shouldUseSystemSshTransport', () => {
-  it('uses system transport for target or resolved ProxyUseFdpass', () => {
+  it('uses system transport for target or resolved OpenSSH proxy directives', () => {
     expect(shouldUseSystemSshTransport(createTarget(), { proxyUseFdpass: true })).toBe(true)
     expect(shouldUseSystemSshTransport(createTarget(), { proxyUseFdpass: false })).toBe(false)
+    expect(
+      shouldUseSystemSshTransport(createTarget({ proxyCommand: 'ssh -W %h:%p bastion' }), null)
+    ).toBe(true)
+    expect(shouldUseSystemSshTransport(createTarget({ jumpHost: 'bastion' }), null)).toBe(true)
+    expect(
+      shouldUseSystemSshTransport(createTarget(), {
+        proxyUseFdpass: false,
+        proxyCommand: 'ssh -W %h:%p bastion'
+      })
+    ).toBe(true)
+    expect(
+      shouldUseSystemSshTransport(createTarget(), {
+        proxyUseFdpass: false,
+        proxyJump: 'bastion'
+      })
+    ).toBe(true)
   })
 
   it('allows an environment override for e2e coverage', () => {

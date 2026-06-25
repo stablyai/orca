@@ -39,6 +39,7 @@ function buildMenuOptions() {
     onToggleAppearance: vi.fn(),
     getAppearanceState: vi.fn(() => ({
       showTasksButton: true,
+      showAutomationsButton: true,
       showMobileButton: true,
       showTitlebarAppName: true,
       statusBarVisible: true
@@ -178,6 +179,19 @@ describe('registerAppMenu', () => {
     expect(paletteItem?.accelerator).toBeUndefined()
   })
 
+  it('keeps Edit > Paste on the native Electron paste role in this split', () => {
+    const send = vi.fn()
+    getFocusedWindowMock.mockReturnValue({ webContents: { send } })
+    registerAppMenu(buildMenuOptions())
+
+    const editSubmenu = getSubmenu(getTemplate(), 'Edit')
+    const pasteItem = editSubmenu.find((item) => item.role === 'paste')
+
+    expect(pasteItem).toBeDefined()
+    expect(pasteItem?.click).toBeUndefined()
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it.runIf(!isMac)('puts Settings and Exit under File on Windows/Linux', () => {
     registerAppMenu(buildMenuOptions())
 
@@ -188,12 +202,10 @@ describe('registerAppMenu', () => {
     expect(template.find((item) => item.label === 'Orca')).toBeUndefined()
 
     const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
+    expect(fileLabels).not.toContain(`Export as PDF...\t${isMac ? '⌘⇧E' : 'Ctrl+Shift+E'}`)
+    expect(fileLabels[0]).toBe(`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`)
     expect(fileLabels).toEqual(
-      expect.arrayContaining([
-        `Export as PDF...\t${isMac ? '⌘⇧E' : 'Ctrl+Shift+E'}`,
-        `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`,
-        'Exit'
-      ])
+      expect.arrayContaining([`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`, 'Exit'])
     )
 
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
@@ -217,10 +229,8 @@ describe('registerAppMenu', () => {
       expect.arrayContaining(['Check for Updates...', `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`])
     )
     // Why: on macOS File should NOT duplicate Settings/Exit — those live in
-    // the system app menu, so only Export belongs under File.
-    const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
-    expect(fileLabels).not.toContain(`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`)
-    expect(fileLabels).not.toContain('Exit')
+    // the system app menu. Without global Export, there is no File item left.
+    expect(template.find((item) => item.label === 'File')).toBeUndefined()
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
     expect(helpLabels).toEqual([
       'Report Crash...',
@@ -281,6 +291,7 @@ describe('registerAppMenu', () => {
     const options = buildMenuOptions()
     options.getAppearanceState.mockReturnValue({
       showTasksButton: false,
+      showAutomationsButton: false,
       showMobileButton: true,
       showTitlebarAppName: true,
       statusBarVisible: true
@@ -296,6 +307,12 @@ describe('registerAppMenu', () => {
     const tasksItem = appearanceSubmenu.find((item) => item.label === 'Show Tasks Button')
     expect(tasksItem?.type).toBe('checkbox')
     expect(tasksItem?.checked).toBe(false)
+
+    const automationsItem = appearanceSubmenu.find(
+      (item) => item.label === 'Show Automations Button'
+    )
+    expect(automationsItem?.type).toBe('checkbox')
+    expect(automationsItem?.checked).toBe(false)
 
     const mobileItem = appearanceSubmenu.find((item) => item.label === 'Show Orca Mobile Button')
     expect(mobileItem?.type).toBe('checkbox')
@@ -320,6 +337,9 @@ describe('registerAppMenu', () => {
       .find((item) => item.label === 'Show Tasks Button')
       ?.click?.({} as never, {} as never, {} as never)
     appearanceSubmenu
+      .find((item) => item.label === 'Show Automations Button')
+      ?.click?.({} as never, {} as never, {} as never)
+    appearanceSubmenu
       .find((item) => item.label === 'Show Orca Mobile Button')
       ?.click?.({} as never, {} as never, {} as never)
     appearanceSubmenu
@@ -327,6 +347,7 @@ describe('registerAppMenu', () => {
       ?.click?.({} as never, {} as never, {} as never)
 
     expect(options.onToggleAppearance).toHaveBeenCalledWith('showTasksButton')
+    expect(options.onToggleAppearance).toHaveBeenCalledWith('showAutomationsButton')
     expect(options.onToggleAppearance).toHaveBeenCalledWith('showMobileButton')
     expect(options.onToggleAppearance).toHaveBeenCalledWith('showTitlebarAppName')
   })

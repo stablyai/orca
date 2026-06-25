@@ -136,30 +136,58 @@ const ARM_SCRIPT = `(function() {
     }
   }
 
-  function normalizeText(text) {
-    return String(text || '').trim().replace(/\\s+/g, ' ');
+  function createTextAccumulator() {
+    return { text: '', pendingSpace: false };
+  }
+
+  function isWhitespaceCode(code) {
+    return code === 32 || (code >= 9 && code <= 13) || code === 160 ||
+      code === 5760 || (code >= 8192 && code <= 8202) || code === 8232 ||
+      code === 8233 || code === 8239 || code === 8287 || code === 12288 ||
+      code === 65279;
+  }
+
+  function appendTextSeparator(acc) {
+    if (acc.text.length > 0) acc.pendingSpace = true;
+  }
+
+  function appendNormalizedText(acc, text, max) {
+    var limit = max + 20;
+    var value = String(text || '');
+    for (var i = 0; i < value.length && acc.text.length < limit; i++) {
+      var code = value.charCodeAt(i);
+      if (isWhitespaceCode(code)) {
+        if (acc.text.length > 0) acc.pendingSpace = true;
+        continue;
+      }
+      if (acc.pendingSpace) {
+        acc.text += ' ';
+        acc.pendingSpace = false;
+        if (acc.text.length >= limit) break;
+      }
+      acc.text += value.charAt(i);
+    }
+  }
+
+  function finishAccumulatedText(acc, max) {
+    return clampStr(acc.text, max);
   }
 
   function getBoundedText(el, max) {
     try {
       var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-      var chunks = [];
-      var length = 0;
+      var acc = createTextAccumulator();
       var inspected = 0;
       var node = walker.nextNode();
-      while (node && length < max + 20 && inspected < TEXT_NODE_SCAN_LIMIT) {
+      while (node && acc.text.length < max + 20 && inspected < TEXT_NODE_SCAN_LIMIT) {
         inspected++;
-        var separatorLength = chunks.length > 0 ? 1 : 0;
-        var remaining = max + 20 - length - separatorLength;
+        appendTextSeparator(acc);
+        var remaining = max + 20 - acc.text.length - (acc.pendingSpace ? 1 : 0);
         if (remaining <= 0) break;
-        var value = normalizeText((node.nodeValue || '').slice(0, remaining));
-        if (value) {
-          chunks.push(value.slice(0, remaining));
-          length += Math.min(value.length, remaining) + separatorLength;
-        }
+        appendNormalizedText(acc, (node.nodeValue || '').slice(0, remaining), max);
         node = walker.nextNode();
       }
-      return clampStr(normalizeText(chunks.join(' ')), max);
+      return finishAccumulatedText(acc, max);
     } catch (e) {
       return '';
     }
@@ -173,10 +201,13 @@ const ARM_SCRIPT = `(function() {
     try {
       var selection = window.getSelection ? window.getSelection() : null;
       if (!selection || selection.rangeCount === 0) return '';
-      var chunks = [];
-      var length = 0;
+      var acc = createTextAccumulator();
       var inspected = 0;
-      for (var i = 0; i < selection.rangeCount && length < BUDGET.selectedTextMaxLength + 20; i++) {
+      for (
+        var i = 0;
+        i < selection.rangeCount && acc.text.length < BUDGET.selectedTextMaxLength + 20;
+        i++
+      ) {
         var range = selection.getRangeAt(i);
         var walkerRoot = range.commonAncestorContainer;
         var walker = document.createTreeWalker(
@@ -194,14 +225,15 @@ const ARM_SCRIPT = `(function() {
         var node = walkerRoot.nodeType === Node.TEXT_NODE ? walkerRoot : walker.nextNode();
         while (
           node &&
-          length < BUDGET.selectedTextMaxLength + 20 &&
+          acc.text.length < BUDGET.selectedTextMaxLength + 20 &&
           inspected < TEXT_NODE_SCAN_LIMIT
         ) {
           inspected++;
           var textNode = node;
           var value = textNode.nodeValue || '';
-          var separatorLength = chunks.length > 0 ? 1 : 0;
-          var remaining = BUDGET.selectedTextMaxLength + 20 - length - separatorLength;
+          appendTextSeparator(acc);
+          var remaining =
+            BUDGET.selectedTextMaxLength + 20 - acc.text.length - (acc.pendingSpace ? 1 : 0);
           if (remaining <= 0) break;
           if (value) {
             var start = textNode === range.startContainer ? range.startOffset : 0;
@@ -213,16 +245,12 @@ const ARM_SCRIPT = `(function() {
               start = Math.min(start, value.length);
             }
             value = value.slice(start, end);
-            value = normalizeText(value);
-          }
-          if (value) {
-            chunks.push(value.slice(0, remaining));
-            length += Math.min(value.length, remaining) + separatorLength;
+            appendNormalizedText(acc, value, BUDGET.selectedTextMaxLength);
           }
           node = walker.nextNode();
         }
       }
-      return clampStr(chunks.join(' '), BUDGET.selectedTextMaxLength);
+      return finishAccumulatedText(acc, BUDGET.selectedTextMaxLength);
     } catch (e) {
       return '';
     }
@@ -263,6 +291,40 @@ const ARM_SCRIPT = `(function() {
     return attrs;
   }
 
+  // Why: guest pages control aria-labelledby; avoid regex splitting huge
+  // attributes while extracting grab payload accessibility metadata.
+  function getAriaLabelledByIds(value) {
+    var ids = [];
+    var tokenStart = -1;
+    for (var index = 0; index <= value.length; index++) {
+      var isEnd = index === value.length;
+      if (!isEnd && !isAriaLabelledBySeparator(value.charCodeAt(index))) {
+        if (tokenStart === -1) tokenStart = index;
+        continue;
+      }
+      if (tokenStart !== -1) {
+        ids.push(value.slice(tokenStart, index));
+        tokenStart = -1;
+        if (ids.length >= 32) break;
+      }
+    }
+    return ids;
+  }
+
+  function isAriaLabelledBySeparator(code) {
+    return code === 32 ||
+      (code >= 9 && code <= 13) ||
+      code === 160 ||
+      code === 5760 ||
+      (code >= 8192 && code <= 8202) ||
+      code === 8232 ||
+      code === 8233 ||
+      code === 8239 ||
+      code === 8287 ||
+      code === 12288 ||
+      code === 65279;
+  }
+
   function getAccessibility(el) {
     var role = el.getAttribute('role') || el.tagName.toLowerCase();
     var ariaLabel = el.getAttribute('aria-label') || null;
@@ -272,7 +334,7 @@ const ARM_SCRIPT = `(function() {
     if (ariaLabel) {
       accessibleName = ariaLabel;
     } else if (ariaLabelledBy) {
-      var parts = ariaLabelledBy.split(/\\s+/);
+      var parts = getAriaLabelledByIds(ariaLabelledBy);
       var names = [];
       for (var i = 0; i < parts.length; i++) {
         var ref = document.getElementById(parts[i]);

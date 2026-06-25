@@ -1,25 +1,24 @@
-import { lazy, Suspense, useMemo } from 'react'
+import { Suspense, useMemo } from 'react'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
-import { Columns2, Ellipsis, Rows2, X } from 'lucide-react'
+import { Columns2, Ellipsis, X } from 'lucide-react'
 import { useAppStore } from '../../store'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import TabBar from '../tab-bar/TabBar'
+
 import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
 import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
-import TabGroupDropOverlay from './TabGroupDropOverlay'
+import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
-import {
-  getTabPaneBodyDroppableId,
-  type HoveredTabInsertion,
-  type TabDropZone
-} from './useTabDragSplit'
+import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDragSplit'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
+import { translate } from '@/i18n/i18n'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 
@@ -33,7 +32,6 @@ export default function TabGroupPanel({
   reserveClosedExplorerToggleSpace,
   reserveCollapsedSidebarHeaderSpace,
   isTabDragActive = false,
-  activeDropZone = null,
   hoveredTabInsertion = null
 }: {
   groupId: string
@@ -45,7 +43,6 @@ export default function TabGroupPanel({
   reserveClosedExplorerToggleSpace: boolean
   reserveCollapsedSidebarHeaderSpace: boolean
   isTabDragActive?: boolean
-  activeDropZone?: TabDropZone | null
   hoveredTabInsertion?: HoveredTabInsertion | null
 }): React.JSX.Element {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
@@ -88,12 +85,15 @@ export default function TabGroupPanel({
       expandedPaneByTabId={model.expandedPaneByTabId}
       onActivate={commands.activateTerminal}
       onClose={(terminalId) => {
-        const item = model.groupTabs.find(
-          (candidate) => candidate.entityId === terminalId && candidate.contentType === 'terminal'
-        )
-        if (item) {
+        const item = resolveGroupTabFromVisibleId(model.groupTabs, terminalId)
+        if (item?.contentType === 'terminal') {
           commands.closeItem(item.id)
+          return
         }
+        // Why: agent quick-launch can briefly desync unified/runtime tab ids
+        // before the host snapshot lands; still route close through the shared
+        // terminal close helper instead of no-op'ing.
+        closeTerminalTab(terminalId)
       }}
       onCloseOthers={(visibleId) => {
         // Why: TabBar emits this with the entityId for terminals/browsers and
@@ -113,6 +113,7 @@ export default function TabGroupPanel({
       onNewTerminalTab={commands.newTerminalTab}
       onNewTerminalWithShell={commands.newTerminalWithShell}
       onNewBrowserTab={commands.newBrowserTab}
+      onNewSimulatorTab={commands.newSimulatorTab}
       onOpenEntry={commands.openEntry}
       onNewFileTab={commands.newFileTab}
       onSetCustomTitle={commands.setTabCustomTitle}
@@ -121,17 +122,22 @@ export default function TabGroupPanel({
       editorFiles={editorItems}
       browserTabs={browserItems}
       activeFileId={
-        activeTab?.contentType === 'terminal' || activeTab?.contentType === 'browser'
+        activeTab?.contentType === 'terminal' ||
+        activeTab?.contentType === 'browser' ||
+        activeTab?.contentType === 'simulator'
           ? null
           : activeTab?.id
       }
       activeBrowserTabId={activeTab?.contentType === 'browser' ? activeTab.entityId : null}
+      activeSimulatorTabId={activeTab?.contentType === 'simulator' ? activeTab.id : null}
       activeTabType={
         activeTab?.contentType === 'terminal'
           ? 'terminal'
           : activeTab?.contentType === 'browser'
             ? 'browser'
-            : 'editor'
+            : activeTab?.contentType === 'simulator'
+              ? 'simulator'
+              : 'editor'
       }
       onActivateFile={commands.activateEditor}
       onCloseFile={commands.closeItem}
@@ -146,6 +152,16 @@ export default function TabGroupPanel({
       }}
       onDuplicateBrowserTab={commands.duplicateBrowserTab}
       onCloseAllFiles={commands.closeAllEditorTabsInGroup}
+      onMakePreviewFilePermanent={(_fileId, tabId) => {
+        if (!tabId) {
+          return
+        }
+        const item = model.groupTabs.find((candidate) => candidate.id === tabId)
+        if (!item) {
+          return
+        }
+        commands.makePreviewFilePermanent(item.entityId, item.id)
+      }}
       onPinFile={(_fileId, tabId) => {
         if (!tabId) {
           return
@@ -157,19 +173,20 @@ export default function TabGroupPanel({
         commands.pinFile(item.entityId, item.id)
       }}
       tabBarOrder={tabBarOrder}
-      onCreateSplitGroup={commands.createSplitGroup}
       hoveredTabInsertion={hoveredTabInsertion}
     />
   )
 
   const menuButtonClassName =
     'my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
-  // Why: focused-only — the QC split-button and Pane Actions ellipsis both
-  // appear together so the action cluster never reflows when focus shifts
-  // between groups. Unfocused groups collapse the cluster fully (no
-  // reserved width) since the surrounding tab strip already absorbs the
-  // freed space.
-  const actionChromeClassName = `flex shrink-0 items-center gap-0.5 overflow-hidden transition-[opacity] duration-150 ${
+  // Why: every split pane owns its own split affordance (VS Code-style). The
+  // button always splits right; up/down and left stay on tab drag.
+  const splitPaneButtonClassName = `${menuButtonClassName} ${
+    isFocused ? 'opacity-100' : 'opacity-70 hover:opacity-100'
+  }`
+  // Why: focused-only — quick commands and Close split pane stay with the
+  // active pane so unfocused strips stay compact aside from the split control.
+  const focusedActionChromeClassName = `flex shrink-0 items-center gap-0.5 overflow-hidden transition-[opacity] duration-150 ${
     isFocused ? 'ml-1.5 pointer-events-auto opacity-100' : 'pointer-events-none opacity-0 w-0'
   }`
   return (
@@ -184,7 +201,7 @@ export default function TabGroupPanel({
       // reads as "selected" without making the unfocused content look
       // washed out or hard to read. Only applied when `hasSplitGroups`
       // because a lone group has nothing to contrast against.
-      className={`group/tab-group flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
+      className={`group/tab-group relative flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
         hasSplitGroups
           ? // Why: drop the outer borders on the edge-touching groups. The
             // TabGroupSplitLayout wrapper already paints a full-height
@@ -213,7 +230,7 @@ export default function TabGroupPanel({
           user can only drag from the tiny left-sidebar header strip. */}
       <div
         className="h-[32px] shrink-0 border-b border-border bg-card"
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        data-terminal-focus-release-surface="true"
       >
         <div className="flex h-full items-stretch pr-1.5">
           {/* Why: Electron's native drag hit-test only respects no-drag on DOM
@@ -234,68 +251,63 @@ export default function TabGroupPanel({
             />
           ) : null}
           <div className="min-w-0 flex-1 h-full">{tabBar}</div>
-          {/* Why: pane-scoped layout actions belong with the active pane instead
+          {/* Why: pane-scoped layout actions belong with each split pane instead
               of the global tab-bar `+`, which should keep opening tabs exactly
-              as before. The local overflow menu holds split directions and
-              close-group without changing the existing tab-creation affordance. */}
+              as before. Split-right is one click (VS Code-style); close-group
+              stays on the focused pane only. */}
           <div
-            className={actionChromeClassName}
+            className="ml-1.5 flex shrink-0 items-center gap-0.5"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
-            {isFocused ? (
-              <TabBarQuickCommandsButton worktreeId={worktreeId} groupId={groupId} />
-            ) : null}
-            {isFocused ? (
-              <DropdownMenu modal={false}>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="Pane Actions"
-                    title="Pane Actions"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                    }}
-                    className={menuButtonClassName}
-                  >
-                    <Ellipsis className="size-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      commands.createSplitGroup('right')
-                    }}
-                  >
-                    <Columns2 className="size-4" />
-                    Split Right
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      commands.createSplitGroup('down')
-                    }}
-                  >
-                    <Rows2 className="size-4" />
-                    Split Down
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      commands.createSplitGroup('left')
-                    }}
-                  >
-                    <Columns2 className="size-4" />
-                    Split Left
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      commands.createSplitGroup('up')
-                    }}
-                  >
-                    <Rows2 className="size-4" />
-                    Split Up
-                  </DropdownMenuItem>
-                  {hasSplitGroups ? (
-                    <>
-                      <DropdownMenuSeparator />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={translate(
+                    'auto.components.tab.group.TabGroupPanel.addSplitPane',
+                    'Add split pane'
+                  )}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    commands.createSplitGroup('right')
+                  }}
+                  className={splitPaneButtonClassName}
+                >
+                  <Columns2 className="size-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                {translate(
+                  'auto.components.tab.group.TabGroupPanel.addSplitPane',
+                  'Add split pane'
+                )}
+              </TooltipContent>
+            </Tooltip>
+            <div className={focusedActionChromeClassName}>
+              {isFocused ? (
+                <TabBarQuickCommandsButton worktreeId={worktreeId} groupId={groupId} />
+              ) : null}
+              {isFocused && hasSplitGroups ? (
+                <Tooltip>
+                  <DropdownMenu modal={false}>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label={translate(
+                            'auto.components.tab.group.TabGroupPanel.9acaf92093',
+                            'Pane Actions'
+                          )}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                          }}
+                          className={menuButtonClassName}
+                        >
+                          <Ellipsis className="size-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
                       <DropdownMenuItem
                         variant="destructive"
                         onSelect={() => {
@@ -303,22 +315,31 @@ export default function TabGroupPanel({
                         }}
                       >
                         <X className="size-4" />
-                        Close Group
+                        {translate(
+                          'auto.components.tab.group.TabGroupPanel.closePaneColumn',
+                          'Close split pane'
+                        )}
                       </DropdownMenuItem>
-                    </>
-                  ) : null}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    {translate(
+                      'auto.components.tab.group.TabGroupPanel.9acaf92093',
+                      'Pane Actions'
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              ) : null}
+            </div>
           </div>
           {/* Why: Electron's native drag hit-test ignores z-index — a no-drag
               element only overrides drag when it's a DOM descendant, not a
               sibling in another branch. The floating right-sidebar toggle and
-              the fixed-position window-controls overlay on Windows both sit in
-              separate DOM trees, so we need an explicit no-drag child here to
-              punch holes in the drag surface beneath them. The sidebar toggle
-              is 40px (w-10); window controls add --window-controls-width
-              (138px on Windows, 0px elsewhere) on top. */}
+              the fixed-position window-controls overlay for custom desktop
+              chrome both sit in separate DOM trees, so we need an explicit
+              no-drag child here to punch holes in the drag surface beneath
+              them. The sidebar toggle is 40px (w-10); window controls add
+              --window-controls-width (138px when active, 0px otherwise) on top. */}
           {reserveClosedExplorerToggleSpace && !rightSidebarOpen ? (
             <div
               className="shrink-0"
@@ -335,6 +356,8 @@ export default function TabGroupPanel({
 
       <div
         ref={setBodyDropRef}
+        data-tab-group-body-id={groupId}
+        data-worktree-id={worktreeId}
         className="relative flex-1 min-h-0 overflow-hidden"
         style={bodyAnchorStyle}
       >
@@ -346,21 +369,20 @@ export default function TabGroupPanel({
             data-contextual-tour-target="workspace-agent-terminal-tip"
           />
         ) : null}
-        {activeDropZone ? <TabGroupDropOverlay zone={activeDropZone} /> : null}
         {activeTab &&
           activeTab.contentType !== 'terminal' &&
-          activeTab.contentType !== 'browser' && (
+          activeTab.contentType !== 'browser' &&
+          activeTab.contentType !== 'simulator' && (
             <div className="absolute inset-0 flex min-h-0 min-w-0">
-              {/* Why: split groups render editor/browser content inside a
-                  plain relative pane body instead of the legacy flex column in
-                  Terminal.tsx. Anchoring the surface to `absolute inset-0`
-                  recreates the bounded viewport those panes expect, so plain
-                  overflow containers like MarkdownPreview can actually scroll
-                  instead of expanding to content height. */}
+              {/* Why: split groups render editor content inside a plain relative pane body
+                  instead of the legacy flex column in Terminal.tsx. */}
               <Suspense
                 fallback={
                   <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                    Loading editor...
+                    {translate(
+                      'auto.components.tab.group.TabGroupPanel.814fb04c43',
+                      'Loading editor...'
+                    )}
                   </div>
                 }
               >
@@ -369,11 +391,11 @@ export default function TabGroupPanel({
             </div>
           )}
 
-        {/* Why: terminal/browser panes are rendered at the worktree level by
+        {/* Why: terminal/browser/simulator panes are rendered at the worktree level by
             overlay layers and absolutely positioned over this body element
             via the slot registered above. Rendering them per-group caused
-            split moves to remount xterm or reparent Electron `<webview>`,
-            losing TUI state or reloading the page. */}
+            split moves to remount xterm, reparent Electron `<webview>`, or
+            reload the simulator stream. */}
       </div>
     </div>
   )

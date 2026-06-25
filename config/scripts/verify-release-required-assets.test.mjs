@@ -45,12 +45,16 @@ describe('getRequiredReleaseAssetNames', () => {
     )
   })
 
-  it('includes the Linux RPM alongside the existing AppImage and deb names', () => {
+  it('includes x64 and arm64 Linux assets', () => {
     expect(getRequiredReleaseAssetNames('v1.4.27')).toEqual(
       expect.arrayContaining([
+        'latest-linux-arm64.yml',
         'orca-linux.AppImage',
+        'orca-linux-arm64.AppImage',
         'orca-ide_1.4.27_amd64.deb',
-        'orca-ide-1.4.27.x86_64.rpm'
+        'orca-ide_1.4.27_arm64.deb',
+        'orca-ide-1.4.27.x86_64.rpm',
+        'orca-ide-1.4.27.aarch64.rpm'
       ])
     )
   })
@@ -99,5 +103,33 @@ describe('verifyRequiredReleaseAssets', () => {
       verifyRequiredReleaseAssets({ repo: 'stablyai/orca', tag, token: 'token' })
     ).rejects.toThrow('Missing: Orca-1.4.27-arm64-mac.zip')
     expect(latestMacAsset).toBeTruthy()
+  })
+
+  it('checks assets referenced by the Linux arm64 updater manifest', async () => {
+    const tag = 'v1.4.27'
+    const required = getRequiredReleaseAssetNames(tag)
+    const release = releaseWithAssets(tag, required)
+    const arm64Manifest = release.assets.find((asset) => asset.name === 'latest-linux-arm64.yml')
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse([release]))
+      .mockResolvedValueOnce(jsonResponse('version: 1.4.27\n'))
+      .mockResolvedValueOnce(
+        jsonResponse(
+          [
+            'version: 1.4.27',
+            'files:',
+            '  - url: orca-linux-arm64.AppImage.blockmap',
+            'path: orca-linux-arm64.AppImage'
+          ].join('\n')
+        )
+      )
+      .mockResolvedValue(jsonResponse('version: 1.4.27\n'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      verifyRequiredReleaseAssets({ repo: 'stablyai/orca', tag, token: 'token' })
+    ).rejects.toThrow('Missing: orca-linux-arm64.AppImage.blockmap')
+    expect(arm64Manifest).toBeTruthy()
   })
 })

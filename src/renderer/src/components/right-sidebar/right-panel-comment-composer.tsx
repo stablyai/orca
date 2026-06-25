@@ -5,9 +5,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { cn } from '@/lib/utils'
 import {
+  getCommentBodySubmitState,
+  hasBoundedCommentBodyText
+} from '@/lib/comment-body-submit-state'
+import {
   clearRightPanelCommentFocusTimer,
   scheduleRightPanelCommentFocusTimer
 } from './right-panel-comment-focus-timers'
+import { translate } from '@/i18n/i18n'
 
 export type RightPanelCommentSubmitResult = { ok: true } | { ok: false; error: string }
 
@@ -133,14 +138,23 @@ export function RightPanelCommentComposer({
   )
 
   const submit = useCallback(async () => {
-    const trimmed = body.trim()
-    if (!trimmed || submitting || disabled) {
+    const bodyState = getCommentBodySubmitState(body)
+    if (bodyState.status === 'empty' || submitting || disabled) {
+      return
+    }
+    if (bodyState.status === 'too-large-leading-whitespace') {
+      setError(
+        translate(
+          'auto.components.right.sidebar.right.panel.comment.composer.commentTooLarge',
+          'Comment is too large to submit safely.'
+        )
+      )
       return
     }
     setSubmitting(true)
     setError(null)
     try {
-      const result = await onSubmit(trimmed)
+      const result = await onSubmit(bodyState.body)
       if (result.ok) {
         setBody('')
         onCancel?.()
@@ -153,6 +167,7 @@ export function RightPanelCommentComposer({
       setSubmitting(false)
     }
   }, [body, disabled, onCancel, onSubmit, submitting])
+  const canSubmitComment = hasBoundedCommentBodyText(body)
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -166,11 +181,46 @@ export function RightPanelCommentComposer({
   )
 
   const toolbar = [
-    { action: 'bold' as const, label: 'Bold', icon: Bold },
-    { action: 'italic' as const, label: 'Italic', icon: Italic },
-    { action: 'code' as const, label: 'Code', icon: Code2 },
-    { action: 'quote' as const, label: 'Quote', icon: Quote },
-    { action: 'list' as const, label: 'List', icon: List }
+    {
+      action: 'bold' as const,
+      label: translate(
+        'auto.components.right.sidebar.right.panel.comment.composer.256300f8ea',
+        'Bold'
+      ),
+      icon: Bold
+    },
+    {
+      action: 'italic' as const,
+      label: translate(
+        'auto.components.right.sidebar.right.panel.comment.composer.542bf6a7e2',
+        'Italic'
+      ),
+      icon: Italic
+    },
+    {
+      action: 'code' as const,
+      label: translate(
+        'auto.components.right.sidebar.right.panel.comment.composer.f49e0a21e0',
+        'Code'
+      ),
+      icon: Code2
+    },
+    {
+      action: 'quote' as const,
+      label: translate(
+        'auto.components.right.sidebar.right.panel.comment.composer.d6d9c3c947',
+        'Quote'
+      ),
+      icon: Quote
+    },
+    {
+      action: 'list' as const,
+      label: translate(
+        'auto.components.right.sidebar.right.panel.comment.composer.cf5a7aba6f',
+        'List'
+      ),
+      icon: List
+    }
   ]
 
   return (
@@ -224,7 +274,10 @@ export function RightPanelCommentComposer({
       <div className="flex min-w-0 items-center justify-end gap-1 border-t border-border px-2 py-1.5">
         {onCancel && (
           <Button type="button" variant="ghost" size="xs" disabled={submitting} onClick={onCancel}>
-            Cancel
+            {translate(
+              'auto.components.right.sidebar.right.panel.comment.composer.9bca633dee',
+              'Cancel'
+            )}
           </Button>
         )}
         <Tooltip>
@@ -233,10 +286,15 @@ export function RightPanelCommentComposer({
               type="button"
               size="xs"
               aria-label={submitLabel}
-              disabled={disabled || submitting || body.trim().length === 0}
+              disabled={disabled || submitting || !canSubmitComment}
               onClick={() => void submit()}
             >
-              {submitting ? 'Sending...' : submitLabel}
+              {submitting
+                ? translate(
+                    'auto.components.right.sidebar.right.panel.comment.composer.87aff03d63',
+                    'Sending...'
+                  )
+                : submitLabel}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>

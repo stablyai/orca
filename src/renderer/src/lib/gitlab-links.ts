@@ -1,3 +1,5 @@
+import { isWorkItemLinkQueryTooLarge } from './work-item-link-query-bounds'
+
 // Why: GitLab project paths can include nested groups, and the host may
 // be self-hosted (gitlab.example.com), so the URL pattern uses the
 // project-internal `/-/` separator as the GitLab-specific signal rather
@@ -8,6 +10,8 @@ const GL_ITEM_PATH_RE = /\/(?:issues|merge_requests)\/(\d+)(?:\/.*)?$/i
 const GL_ITEM_PATH_FULL_RE = /^\/(.+)\/-\/(issues|merge_requests)\/(\d+)(?:\/.*)?$/i
 
 export type ProjectSlug = {
+  /** GitLab hostname, preserving self-hosted instances from pasted URLs. */
+  host: string
   /** Full GitLab project path including any nested groups. */
   path: string
 }
@@ -15,6 +19,7 @@ export type ProjectSlug = {
 export type GitLabLinkQuery = {
   query: string
   directNumber: number | null
+  tooLarge?: boolean
 }
 
 /**
@@ -92,7 +97,7 @@ export function parseGitLabIssueOrMRLink(input: string): {
   }
 
   return {
-    slug: { path },
+    slug: { host: url.host, path },
     type: match[2].toLowerCase() === 'merge_requests' ? 'mr' : 'issue',
     number: Number.parseInt(match[3], 10)
   }
@@ -103,6 +108,9 @@ export function parseGitLabIssueOrMRLink(input: string): {
  * GitLab URLs resolve to a usable query + direct-number lookup.
  */
 export function normalizeGitLabLinkQuery(raw: string): GitLabLinkQuery {
+  if (isWorkItemLinkQueryTooLarge(raw)) {
+    return { query: '', directNumber: null, tooLarge: true }
+  }
   const trimmed = raw.trim()
   if (!trimmed) {
     return { query: '', directNumber: null }

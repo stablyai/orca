@@ -1,6 +1,15 @@
 /* eslint-disable max-lines */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CodexUsagePersistedState } from './types'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as Fs from 'fs'
+import type {
+  CodexUsageDailyAggregate,
+  CodexUsagePersistedFile,
+  CodexUsagePersistedState,
+  CodexUsageSession
+} from './types'
 
 const { getPathMock } = vi.hoisted(() => ({
   getPathMock: vi.fn(() => '/tmp/orca-test-userdata')
@@ -12,11 +21,54 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { CodexUsageStore, normalizePersistedState } from './store'
+vi.mock('fs', async () => {
+  const actual = await vi.importActual<typeof Fs>('fs')
+  return {
+    ...actual,
+    writeFileSync: vi.fn(actual.writeFileSync)
+  }
+})
+
+vi.mock('./scanner', () => ({
+  createWorktreeRefs: vi.fn(() => []),
+  scanCodexUsageFiles: vi.fn()
+}))
+
+import { CodexUsageStore, initCodexUsagePath, normalizePersistedState } from './store'
+import { scanCodexUsageFiles } from './scanner'
+
+type ScanResult = {
+  processedFiles: CodexUsagePersistedFile[]
+  sessions: CodexUsageSession[]
+  dailyAggregates: CodexUsageDailyAggregate[]
+}
+
+function createDeferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (reason?: unknown) => void
+} {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve
+    reject = promiseReject
+  })
+  return { promise, resolve, reject }
+}
+
+function createEmptyScanResult(): ScanResult {
+  return {
+    processedFiles: [],
+    sessions: [],
+    dailyAggregates: []
+  }
+}
 
 function createStoreWithState(state: Partial<CodexUsagePersistedState>): CodexUsageStore {
   const store = new CodexUsageStore({
     getRepos: () => [],
+    getAllWorktreeMeta: () => ({}),
     getWorktreeMeta: () => undefined
   } as never)
 
@@ -39,9 +91,77 @@ function createStoreWithState(state: Partial<CodexUsagePersistedState>): CodexUs
 }
 
 describe('CodexUsageStore', () => {
+  let tempUserData: string
+
   beforeEach(() => {
+    tempUserData = mkdtempSync(join(tmpdir(), 'orca-codex-usage-store-'))
+    getPathMock.mockReturnValue(tempUserData)
+    initCodexUsagePath()
+    vi.mocked(writeFileSync).mockClear()
+    vi.mocked(scanCodexUsageFiles).mockReset()
+    vi.mocked(scanCodexUsageFiles).mockResolvedValue(createEmptyScanResult())
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-04-10T12:00:00.000-04:00'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    rmSync(tempUserData, { recursive: true, force: true })
+  })
+
+  it('persists a successful refresh with one compact disk write', async () => {
+    const store = createStoreWithState({
+      schemaVersion: 3,
+      scanState: {
+        enabled: true,
+        lastScanStartedAt: null,
+        lastScanCompletedAt: null,
+        lastScanError: null
+      }
+    })
+
+    await store.refresh(true)
+
+    expect(writeFileSync).toHaveBeenCalledTimes(1)
+    const persistedJson = readFileSync(join(tempUserData, 'orca-codex-usage.json'), 'utf-8')
+    expect(persistedJson).toBe(JSON.stringify(JSON.parse(persistedJson)))
+    expect(persistedJson).not.toContain('\n')
+    expect(JSON.parse(persistedJson).scanState).toMatchObject({
+      enabled: true,
+      lastScanStartedAt: new Date('2026-04-10T12:00:00.000-04:00').getTime(),
+      lastScanCompletedAt: new Date('2026-04-10T12:00:00.000-04:00').getTime(),
+      lastScanError: null
+    })
+  })
+
+  it('keeps scan start visible in memory while scan-start persistence is skipped', async () => {
+    const pendingScan = createDeferred<ScanResult>()
+    vi.mocked(scanCodexUsageFiles).mockReturnValueOnce(pendingScan.promise)
+    const store = createStoreWithState({
+      schemaVersion: 3,
+      scanState: {
+        enabled: true,
+        lastScanStartedAt: null,
+        lastScanCompletedAt: null,
+        lastScanError: 'previous failure'
+      }
+    })
+
+    const refreshPromise = store.refresh(true)
+    await Promise.resolve()
+
+    expect(store.getScanState()).toMatchObject({
+      isScanning: true,
+      lastScanStartedAt: new Date('2026-04-10T12:00:00.000-04:00').getTime(),
+      lastScanError: null
+    })
+    expect(writeFileSync).not.toHaveBeenCalled()
+
+    pendingScan.resolve(createEmptyScanResult())
+    await refreshPromise
+
+    expect(store.getScanState().isScanning).toBe(false)
+    expect(writeFileSync).toHaveBeenCalledTimes(1)
   })
 
   it('reports no data for Orca scope when only non-Orca Codex usage exists', async () => {

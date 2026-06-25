@@ -45,17 +45,15 @@ describe('filesystem-list-files real git fallback', () => {
     vi.clearAllMocks()
   })
 
-  it('returns real paths for filenames Git would C-quote in newline output', async () => {
+  it('returns real paths for UTF-8 filenames from the git fallback', async () => {
     checkRgAvailableMock.mockResolvedValue(false)
     tempDir = await mkdtemp(join(tmpdir(), 'orca-quick-open-git-fallback-'))
     const repoPath = join(tempDir, 'repo')
     await execFile('git', ['init', '-q', repoPath])
-    const tabbedPath = join(repoPath, 'tab\tfile.txt')
-    await writeFile(tabbedPath, 'content')
+    const utf8FileName = '日本語-file.txt'
+    await writeFile(join(repoPath, utf8FileName), 'content')
     await execFile('git', ['add', '.'], { cwd: repoPath })
 
-    await expect(listQuickOpenFiles(repoPath, makeStore(repoPath))).resolves.toEqual([
-      'tab\tfile.txt'
-    ])
+    await expect(listQuickOpenFiles(repoPath, makeStore(repoPath))).resolves.toEqual([utf8FileName])
   })
 })

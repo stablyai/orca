@@ -46,6 +46,7 @@ describe('relay git grep fallback', () => {
       const result = await promise
       expect(result.truncated).toBe(true)
       expect(result.files).toHaveLength(1)
+      expect(result.files[0].matchCount).toBe(1)
       expect(proc.kill).toHaveBeenCalled()
       expect((proc.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
       expect((proc.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)

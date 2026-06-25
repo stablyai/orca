@@ -134,6 +134,31 @@ describe('combined diff load scheduler', () => {
     expect(started).toEqual([4, 4])
   })
 
+  it('rerequest clears an in-flight queue slot before reloading', async () => {
+    const blocker = deferred()
+    const started: number[] = []
+    const scheduler = createCombinedDiffLoadScheduler({
+      maxConcurrent: 1,
+      schedule: (callback) => callback(),
+      loadSection: async (index) => {
+        started.push(index)
+        if (index === 4) {
+          await blocker.promise
+        }
+      }
+    })
+
+    scheduler.request(4)
+    scheduler.request(4)
+    expect(started).toEqual([4])
+
+    scheduler.rerequest(4)
+    blocker.resolve()
+    await flushMicrotasks()
+
+    expect(started).toEqual([4, 4])
+  })
+
   it('drops stale pending work after reset', async () => {
     const blocker = deferred()
     const started: number[] = []

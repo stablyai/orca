@@ -31,6 +31,7 @@ export type SettingsNavTarget =
   | 'orchestration'
   | 'servers'
   | 'mobile'
+  | 'mobile-emulator'
   | 'repo'
 
 export type SettingsNavSection = {

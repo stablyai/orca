@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
+import { getSelectedNestedRepoPathsInScanOrder } from '@/lib/nested-repo-selected-paths'
 import {
   buildNestedRepoImportActionTelemetry,
   buildNestedRepoImportResultTelemetry,
@@ -10,6 +11,7 @@ import {
 } from '../../../../shared/nested-repo-telemetry'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
 import type { NestedRepoScanResult, ProjectGroupImportResult } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 export function useAddRepoNestedImportFlow({
   nestedAttemptId,
@@ -34,10 +36,7 @@ export function useAddRepoNestedImportFlow({
   nestedGroupName: string
   nestedImportScanId: string | null
   activeRuntimeEnvironmentId: string | null | undefined
-  fetchWorktrees: (
-    repoId: string,
-    options?: { requireAuthoritative?: boolean }
-  ) => Promise<unknown>
+  fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<unknown>
   importNestedRepos: (args: {
     parentPath: string
     groupName: string
@@ -99,6 +98,10 @@ export function useAddRepoNestedImportFlow({
       }
       const foundCount = nestedScan.repos.length
       const selectedCount = nestedSelectedPaths.size
+      const selectedProjectPaths = getSelectedNestedRepoPathsInScanOrder(
+        nestedScan,
+        nestedSelectedPaths
+      )
       const runtimeKind = nestedRuntimeKind ?? getNestedRepoRuntimeKind(nestedConnectionId)
       const gen = ++nestedImportGenRef.current
       setIsAdding(true)
@@ -118,7 +121,9 @@ export function useAddRepoNestedImportFlow({
         const result = await importNestedRepos({
           parentPath: nestedScan.selectedPath,
           groupName: nestedGroupName,
-          projectPaths: [...nestedSelectedPaths],
+          // Why: Set insertion order can drift after deselect/reselect; import
+          // ordering should match the visible scan order users reviewed.
+          projectPaths: selectedProjectPaths,
           ...(nestedConnectionId ? { connectionId: nestedConnectionId } : {}),
           ...(nestedImportScanId ? { scanId: nestedImportScanId } : {}),
           mode
@@ -146,9 +151,15 @@ export function useAddRepoNestedImportFlow({
         if (!firstRepoId) {
           const firstFailure = result.projects.find((entry) => entry.status === 'failed')?.error
           if (gen === nestedImportGenRef.current) {
-            toast.error('No repositories imported', {
-              description: firstFailure ?? undefined
-            })
+            toast.error(
+              translate(
+                'auto.components.sidebar.useAddRepoNestedImportFlow.1b33c5f090',
+                'No repositories imported'
+              ),
+              {
+                description: firstFailure ?? undefined
+              }
+            )
           }
           return
         }
@@ -161,9 +172,19 @@ export function useAddRepoNestedImportFlow({
           return
         }
         if (result.failedCount > 0) {
-          toast.warning('Some repositories could not be imported', {
-            description: `${result.failedCount} failed`
-          })
+          toast.warning(
+            translate(
+              'auto.components.sidebar.useAddRepoNestedImportFlow.cbfbc7a797',
+              'Some repositories could not be imported'
+            ),
+            {
+              description: translate(
+                'auto.components.sidebar.useAddRepoNestedImportFlow.680cac2c82',
+                '{{value0}} failed',
+                { value0: result.failedCount }
+              )
+            }
+          )
         }
         const repo = useAppStore.getState().repos.find((entry) => entry.id === firstRepoId)
         if (repo) {

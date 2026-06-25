@@ -42,12 +42,13 @@ vi.mock('./macos-native-provider-socket', () => ({
 class FakeSocket extends EventEmitter {
   destroyed = false
   writes: string[] = []
+  writeError: Error | null = null
 
   setEncoding(): void {}
 
   write(line: string, callback?: (error?: Error | null) => void): boolean {
     this.writes.push(line)
-    callback?.(null)
+    callback?.(this.writeError)
     return true
   }
 
@@ -198,6 +199,149 @@ describe('MacOSNativeProviderClient', () => {
     await expect(secondCall).resolves.toEqual(capabilities)
   })
 
+  it('invalidates the active socket when a helper write fails', async () => {
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+
+    const firstCall = client.capabilities()
+    await vi.waitFor(() => expect(sockets).toHaveLength(1))
+    const firstSocket = sockets[0]!
+    const firstSocketDirectory = mkdtempSyncMock.mock.results[0]?.value as string
+    firstSocket.writeError = new Error('write EPIPE')
+
+    await expect(firstCall).rejects.toThrow('write EPIPE')
+    expect(firstSocket.destroyed).toBe(true)
+    expect(firstSocket.listenerCount('data')).toBe(0)
+    expect(firstSocket.listenerCount('close')).toBe(0)
+    expect(firstSocket.listenerCount('error')).toBe(1)
+    expect(rmSyncMock).toHaveBeenCalledWith(firstSocketDirectory, {
+      recursive: true,
+      force: true
+    })
+
+    const secondCall = client.capabilities()
+    await vi.waitFor(() => expect(sockets).toHaveLength(2))
+    const secondSocket = sockets[1]!
+    await vi.waitFor(() => expect(secondSocket.writes).toHaveLength(1))
+    const secondRequest = JSON.parse(secondSocket.writes[0]!) as { id: number }
+    secondSocket.emit(
+      'data',
+      `${JSON.stringify({
+        id: secondRequest.id,
+        ok: true,
+        result: { protocolVersion: 1, supports: {} }
+      })}\n`
+    )
+
+    await expect(secondCall).resolves.toMatchObject({ protocolVersion: 1 })
+  })
+
+  it('rejects actions that the native provider does not advertise', async () => {
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+
+    const call = client.action('setValue', {
+      app: 'TextEdit',
+      elementIndex: 0,
+      value: 'draft'
+    })
+    await vi.waitFor(() => expect(sockets).toHaveLength(1))
+    const socket = sockets[0]!
+    await vi.waitFor(() => expect(socket.writes).toHaveLength(1))
+    const handshakeRequest = JSON.parse(socket.writes[0]!) as { id: number }
+
+    socket.emit(
+      'data',
+      `${JSON.stringify({
+        id: handshakeRequest.id,
+        ok: true,
+        result: macOSProviderCapabilities({ setValue: false })
+      })}\n`
+    )
+
+    await expect(call).rejects.toMatchObject({
+      code: 'unsupported_capability',
+      message: expect.stringContaining('actions.setValue')
+    })
+    expect(socket.writes).toHaveLength(1)
+  })
+
+  it('rejects malformed action payloads before starting the native helper', async () => {
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+
+    await expect(client.action('click', { elementIndex: 0 })).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: expect.stringContaining('Missing app')
+    })
+    await expect(client.action('click', { app: 'TextEdit' })).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: expect.stringContaining('Click requires')
+    })
+    await expect(client.action('typeText', { app: 'TextEdit', text: '' })).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: expect.stringContaining('Missing text')
+    })
+    await expect(
+      client.action('pressKey', { app: 'TextEdit', key: 'CmdOrCtrl+V' })
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: expect.stringContaining('Press-key accepts one key only')
+    })
+    await expect(client.action('hotkey', { app: 'TextEdit', key: 'A' })).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: expect.stringContaining('Hotkey requires')
+    })
+
+    expect(providers).toHaveLength(0)
+    expect(sockets).toHaveLength(0)
+    expect(spawnMock).not.toHaveBeenCalled()
+    expect(connectMacOSProviderSocketMock).not.toHaveBeenCalled()
+  })
+
+  it('normalizes unverified synthetic native action results', async () => {
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+
+    const call = client.action('click', {
+      app: 'TextEdit',
+      elementIndex: 0
+    })
+    await vi.waitFor(() => expect(sockets).toHaveLength(1))
+    const socket = sockets[0]!
+    await vi.waitFor(() => expect(socket.writes).toHaveLength(1))
+    const handshakeRequest = JSON.parse(socket.writes[0]!) as { id: number }
+
+    socket.emit(
+      'data',
+      `${JSON.stringify({
+        id: handshakeRequest.id,
+        ok: true,
+        result: macOSProviderCapabilities()
+      })}\n`
+    )
+    await vi.waitFor(() => expect(socket.writes).toHaveLength(2))
+    const actionRequest = JSON.parse(socket.writes[1]!) as { id: number }
+    socket.emit(
+      'data',
+      `${JSON.stringify({
+        id: actionRequest.id,
+        ok: true,
+        result: {
+          snapshot: {},
+          action: { path: 'synthetic', actionName: null, fallbackReason: null }
+        }
+      })}\n`
+    )
+
+    await expect(call).resolves.toMatchObject({
+      action: {
+        path: 'synthetic',
+        verification: { state: 'unverified', reason: 'synthetic_input' }
+      }
+    })
+  })
+
   it('removes the parent-owned token file after the helper socket connects', async () => {
     const { MacOSNativeProviderClient } = await loadClientModule()
     const client = new MacOSNativeProviderClient()
@@ -326,3 +470,41 @@ describe('MacOSNativeProviderClient', () => {
     expect(providers[0]!.kill).toHaveBeenCalledWith('SIGTERM')
   })
 })
+
+function macOSProviderCapabilities(actions: Partial<Record<string, boolean>> = {}) {
+  return {
+    platform: 'darwin',
+    provider: 'orca-computer-use-macos',
+    providerVersion: '1.0.0',
+    protocolVersion: 1,
+    supports: {
+      apps: { list: true, bundleIds: true, pids: true },
+      windows: {
+        list: true,
+        targetById: true,
+        targetByIndex: true,
+        focus: false,
+        moveResize: false
+      },
+      observation: {
+        screenshot: true,
+        annotatedScreenshot: false,
+        elementFrames: true,
+        ocr: false
+      },
+      actions: {
+        click: true,
+        typeText: true,
+        pressKey: true,
+        hotkey: true,
+        pasteText: true,
+        scroll: true,
+        drag: true,
+        setValue: true,
+        performAction: true,
+        ...actions
+      },
+      surfaces: { menus: false, dialogs: false, dock: false, menubar: false }
+    }
+  }
+}

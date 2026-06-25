@@ -19,6 +19,11 @@ describe('browser settings search copy', () => {
     expect(linkRoutingEntry?.description).toBe(description)
     expect(linkRoutingEntry?.keywords).toContain('cmd')
     expect(linkRoutingEntry?.keywords).not.toContain('ctrl')
+
+    const defaultZoomEntry = getBrowserPaneSearchEntries({ isMac: true }).find(
+      (entry) => entry.title === 'Default Zoom'
+    )
+    expect(defaultZoomEntry?.keywords).toContain('zoom')
   })
 
   it('uses Ctrl shortcut text for Link Routing copy and search metadata off macOS', () => {

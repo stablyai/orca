@@ -9,6 +9,7 @@ import type { WebglAddon } from '@xterm/addon-webgl'
 import type { SerializeAddon } from '@xterm/addon-serialize'
 import type { GlobalSettings } from '../../../../shared/types'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import type { TerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
 
 // ---------------------------------------------------------------------------
 // Public interfaces
@@ -37,6 +38,7 @@ export type PaneManagerOptions = {
    *  pane drags unless callers temporarily put them in pointer passthrough. */
   onPaneDragActiveChange?: (active: boolean) => void
   terminalOptions?: (paneId: number) => Partial<ITerminalOptions>
+  terminalTuiScrollSensitivity?: () => number | undefined
   onLinkClick?: (event: MouseEvent | undefined, url: string) => void
   initialRenderingSuspended?: boolean
   terminalGpuAcceleration?: GlobalSettings['terminalGpuAcceleration']
@@ -77,6 +79,17 @@ export type ManagedPane = {
   serializeAddon: SerializeAddon
 }
 
+export type PaneRenderingDiagnostics = {
+  paneId: number
+  terminalGpuAcceleration: GlobalSettings['terminalGpuAcceleration']
+  gpuRenderingEnabled: boolean
+  webglAttachmentDeferred: boolean
+  webglDisabledAfterContextLoss: boolean
+  hasComplexScriptOutput: boolean
+  terminalWebglAutoDecision: TerminalWebglAutoDecision
+  hasWebgl: boolean
+}
+
 // ---------------------------------------------------------------------------
 // Internal types
 // ---------------------------------------------------------------------------
@@ -92,12 +105,13 @@ export type ScrollState = {
 export type ManagedPaneInternal = {
   xtermContainer: HTMLElement
   linkTooltip: HTMLElement
+  terminalTuiScrollSensitivity?: () => number | undefined
   terminalGpuAcceleration: GlobalSettings['terminalGpuAcceleration']
   gpuRenderingEnabled: boolean
   webglAttachmentDeferred: boolean
   webglDisabledAfterContextLoss: boolean
-  // Why: complex-script shaping/RTL rendering is visibly wrong in xterm WebGL;
-  // keep auto-mode panes on DOM once their output proves they need browser text shaping.
+  // Why: expose complex-output diagnostics without changing renderer choice;
+  // auto renderer fallback is reserved for platform or WebGL failures.
   hasComplexScriptOutput: boolean
   webglAddon: WebglAddon | null
   // Why nullable: ligatures are opt-in per font and toggleable at runtime,
@@ -119,6 +133,10 @@ export type ManagedPaneInternal = {
   paneDragCleanup?: (() => void) | null
   // Stored so disposePane() can remove it and avoid a memory leak.
   compositionHandler: (() => void) | null
+  // Stored so disposePane() can remove DOM-renderer focus synchronization.
+  focusClassSyncCleanup?: (() => void) | null
+  // Stored so disposePane() can remove user-scroll intent listeners.
+  terminalScrollIntentDisposable?: IDisposable | null
   // Why: splitPane reparents DOM; its delayed restore owns scroll until the
   // browser settles, so intermediate fits must not compete with it.
   pendingSplitScrollState: ScrollState | null

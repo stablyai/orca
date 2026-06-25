@@ -6,7 +6,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'send'],
     summary: 'Send an inter-agent message',
     usage:
-      'orca orchestration send --to <handle> --subject <text> [--from <handle>] [--body <text>] [--type <type>] [--priority <level>] [--thread-id <id>] [--payload <json>] [--json]',
+      'orca orchestration send --to <handle> --subject <text> [--from <handle>] [--body <text>] [--type <type>] [--priority <level>] [--thread-id <id>] [--payload <json>] [--task-id <id>] [--dispatch-id <id>] [--files-modified <csv>] [--report-path <path>] [--phase <text>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'to',
@@ -16,7 +16,17 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'type',
       'priority',
       'thread-id',
-      'payload'
+      'payload',
+      'task-id',
+      'dispatch-id',
+      'files-modified',
+      'report-path',
+      'phase'
+    ],
+    notes: [
+      'On Windows PowerShell, quote group addresses such as --to "@all" or --to "@worktree:<id>".',
+      'worker_done and heartbeat must target a concrete coordinator terminal handle; use status for broadcast updates.',
+      'Prefer --task-id/--dispatch-id/etc. over raw --payload JSON in worker commands; PowerShell strips JSON quotes easily.'
     ]
   },
   {
@@ -39,6 +49,9 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'inject',
       'wait',
       'timeout-ms'
+    ],
+    notes: [
+      'On Windows PowerShell, quote comma-separated type filters, e.g. --types "worker_done,escalation".'
     ]
   },
   {
@@ -57,8 +70,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'task-create'],
     summary: 'Create an orchestration task',
     usage:
-      'orca orchestration task-create --spec <text> [--deps <json_array>] [--parent <task_id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'spec', 'deps', 'parent']
+      'orca orchestration task-create --spec <text> [--task-title <text>] [--display-name <text>] [--deps <json_array>] [--parent <task_id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'spec', 'task-title', 'display-name', 'deps', 'parent']
   },
   {
     path: ['orchestration', 'task-list'],

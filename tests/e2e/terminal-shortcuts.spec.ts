@@ -230,6 +230,31 @@ async function getActiveBackgroundTerminalTabId(page: Page): Promise<string | nu
   })
 }
 
+async function getActiveTerminalViewport(
+  page: Page
+): Promise<{ viewportY: number; baseY: number }> {
+  return page.evaluate(() => {
+    const state = window.__store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    const buffer = pane?.terminal.buffer.active
+    if (!buffer) {
+      throw new Error('No active terminal buffer')
+    }
+    return {
+      viewportY: buffer.viewportY,
+      baseY: buffer.baseY
+    }
+  })
+}
+
 async function enableKittyKeyboardReporting(page: Page, flags: number): Promise<void> {
   await page.evaluate(async (flags) => {
     const state = window.__store?.getState()
@@ -520,7 +545,7 @@ test.describe('Terminal Shortcuts', () => {
     await orcaPage.keyboard.press('Backspace')
   })
 
-  test('@headful Codex-like background output falls back to DOM rendering in auto mode', async ({
+  test('@headful Codex-like background output stays visible without disabling WebGL in auto mode', async ({
     orcaPage
   }) => {
     const hasPane = await orcaPage.evaluate(() => {
@@ -592,13 +617,13 @@ test.describe('Terminal Shortcuts', () => {
           }, marker),
         {
           timeout: 5_000,
-          message: 'Background SGR output did not switch auto mode to DOM rendering'
+          message: 'Background SGR output did not stay visible on the auto renderer'
         }
       )
       .toEqual({
         markerVisible: true,
-        hasComplexScriptOutput: true,
-        hasWebgl: false
+        hasComplexScriptOutput: false,
+        hasWebgl: true
       })
   })
 
@@ -780,6 +805,60 @@ test.describe('Terminal Shortcuts', () => {
     await expect(orcaPage.locator('[data-terminal-search-root]').first()).toBeHidden({
       timeout: 3_000
     })
+  })
+
+  test('Cmd+Up/Down scrolls terminal viewport without writing to the PTY on macOS', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    test.skip(!isMac, 'Cmd+Up/Down terminal scroll navigation is macOS-only')
+
+    await installMainProcessPtyWriteSpy(electronApp)
+
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const marker = `CMD_ARROW_SCROLL_${Date.now()}`
+    await execInTerminal(orcaPage, ptyId, `for i in {1..120}; do echo ${marker}_$i; done`)
+    await waitForTerminalOutput(orcaPage, `${marker}_120`)
+
+    await expect
+      .poll(
+        async () => {
+          const viewport = await getActiveTerminalViewport(orcaPage)
+          return viewport.baseY > 0 && viewport.viewportY === viewport.baseY
+        },
+        {
+          timeout: 5_000,
+          message: 'terminal did not settle at the bottom with scrollback for Cmd+Up/Down repro'
+        }
+      )
+      .toBe(true)
+
+    await clearPtyWriteLog(electronApp)
+    await focusActiveTerminal(orcaPage)
+    await orcaPage.keyboard.press('Meta+ArrowUp')
+    await expect
+      .poll(async () => getActiveTerminalViewport(orcaPage), {
+        timeout: 5_000,
+        message: 'Cmd+Up did not scroll the terminal viewport to the top'
+      })
+      .toMatchObject({ viewportY: 0 })
+    expect(await getPtyWrites(electronApp)).toEqual([])
+
+    await focusActiveTerminal(orcaPage)
+    await orcaPage.keyboard.press('Meta+ArrowDown')
+    await expect
+      .poll(
+        async () => {
+          const viewport = await getActiveTerminalViewport(orcaPage)
+          return viewport.viewportY === viewport.baseY
+        },
+        {
+          timeout: 5_000,
+          message: 'Cmd+Down did not scroll the terminal viewport to the bottom'
+        }
+      )
+      .toBe(true)
+    expect(await getPtyWrites(electronApp)).toEqual([])
   })
 
   test('Shift with Russian layout text reaches the PTY as Cyrillic under kitty keyboard reporting', async ({

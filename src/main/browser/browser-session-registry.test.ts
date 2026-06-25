@@ -206,7 +206,9 @@ describe('BrowserSessionRegistry', () => {
     await vi.waitFor(() => expect(cb).toHaveBeenCalledWith(true))
 
     expect(checkHandler(null, 'media', '', { mediaType: 'video' })).toBe(true)
-    expect(checkHandler(null, 'notifications', '', {})).toBe(false)
+    expect(checkHandler(null, 'notifications', '', {})).toBe(true)
+    expect(checkHandler(null, 'persistent-storage', '', {})).toBe(true)
+    expect(checkHandler(null, 'geolocation', '', {})).toBe(false)
   })
 
   it('wires WebAuthn device selection for isolated partitions', () => {

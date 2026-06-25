@@ -5,13 +5,19 @@ const {
   applyElectronProxySettingsMock,
   browserWindowGetAllWindowsMock,
   handleMock,
-  previewGhosttyImportMock
+  previewGhosttyImportMock,
+  previewWarpThemeImportMock,
+  prepareLocalWorktreeRootsForReposMock,
+  rebuildAppMenuMock
 } = vi.hoisted(() => ({
   applyAppIconMock: vi.fn(),
   applyElectronProxySettingsMock: vi.fn(),
   browserWindowGetAllWindowsMock: vi.fn(),
   handleMock: vi.fn(),
-  previewGhosttyImportMock: vi.fn()
+  previewGhosttyImportMock: vi.fn(),
+  previewWarpThemeImportMock: vi.fn(),
+  prepareLocalWorktreeRootsForReposMock: vi.fn(),
+  rebuildAppMenuMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -24,12 +30,24 @@ vi.mock('../ghostty/index', () => ({
   previewGhosttyImport: previewGhosttyImportMock
 }))
 
+vi.mock('../warp-themes', () => ({
+  previewWarpThemeImport: previewWarpThemeImportMock
+}))
+
 vi.mock('../network/proxy-settings', () => ({
   applyElectronProxySettings: applyElectronProxySettingsMock
 }))
 
 vi.mock('../app-icon', () => ({
   applyAppIcon: applyAppIconMock
+}))
+
+vi.mock('../worktree-root-preparation', () => ({
+  prepareLocalWorktreeRootsForRepos: prepareLocalWorktreeRootsForReposMock
+}))
+
+vi.mock('../menu/register-app-menu', () => ({
+  rebuildAppMenu: rebuildAppMenuMock
 }))
 
 import { registerSettingsHandlers } from './settings'
@@ -56,6 +74,9 @@ describe('registerSettingsHandlers', () => {
     applyElectronProxySettingsMock.mockClear()
     applyElectronProxySettingsMock.mockResolvedValue({ source: 'settings' })
     previewGhosttyImportMock.mockClear()
+    previewWarpThemeImportMock.mockClear()
+    prepareLocalWorktreeRootsForReposMock.mockReset().mockResolvedValue(undefined)
+    rebuildAppMenuMock.mockClear()
     browserWindowGetAllWindowsMock.mockReset()
     store.getSettings.mockReset()
     store.updateSettings.mockReset()
@@ -66,6 +87,12 @@ describe('registerSettingsHandlers', () => {
     registerSettingsHandlers(store as never)
     const channels = handleMock.mock.calls.map((call) => call[0])
     expect(channels).toContain('settings:previewGhosttyImport')
+  })
+
+  it('registers settings:previewWarpThemeImport handler', () => {
+    registerSettingsHandlers(store as never)
+    const channels = handleMock.mock.calls.map((call) => call[0])
+    expect(channels).toContain('settings:previewWarpThemeImport')
   })
 
   it('settings:previewGhosttyImport returns preview result', async () => {
@@ -80,6 +107,45 @@ describe('registerSettingsHandlers', () => {
     const result = await handler!(null, {})
     expect(result).toEqual(expected)
     expect(previewGhosttyImportMock).toHaveBeenCalledWith(store)
+  })
+
+  it('settings:previewWarpThemeImport returns preview result', async () => {
+    const expected = { found: false, themes: [], skippedFiles: [] }
+    previewWarpThemeImportMock.mockResolvedValue(expected)
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find(
+      (call) => call[0] === 'settings:previewWarpThemeImport'
+    )?.[1] as (event: { sender: unknown }, args: { kind: 'auto' }) => Promise<unknown>
+
+    const sender = { id: 3 }
+    const result = await handler!({ sender }, { kind: 'auto' })
+    expect(result).toEqual(expected)
+    expect(previewWarpThemeImportMock).toHaveBeenCalledWith(store, { kind: 'auto' }, sender)
+  })
+
+  it('settings:previewWarpThemeImport forwards malformed sources for main validation', async () => {
+    const expected = {
+      found: false,
+      themes: [],
+      skippedFiles: [],
+      error: 'Invalid Warp theme import source.'
+    }
+    previewWarpThemeImportMock.mockResolvedValue(expected)
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find(
+      (call) => call[0] === 'settings:previewWarpThemeImport'
+    )?.[1] as (event: { sender: unknown }, args: unknown) => Promise<unknown>
+
+    const invalidSource = { kind: 'unknown' }
+    const sender = { id: 3 }
+    const result = await handler!({ sender }, invalidSource)
+    expect(result).toEqual(expected)
+    expect(previewWarpThemeImportMock).toHaveBeenCalledWith(store, invalidSource, sender)
+
+    await handler!({ sender }, null)
+    expect(previewWarpThemeImportMock).toHaveBeenCalledWith(store, null, sender)
   })
 
   it('broadcasts store-level settings changes to open windows', () => {
@@ -156,6 +222,51 @@ describe('registerSettingsHandlers', () => {
     expect(agentAwakeService.setEnabled).not.toHaveBeenCalled()
   })
 
+  it('prepares local worktree roots when workspace directory changes', async () => {
+    store.getSettings.mockReturnValue({ workspaceDir: '/old/workspaces', nestWorkspaces: false })
+    store.updateSettings.mockReturnValue({ workspaceDir: '/new/workspaces', nestWorkspaces: false })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { workspaceDir: '/new/workspaces' })
+
+    expect(prepareLocalWorktreeRootsForReposMock).toHaveBeenCalledWith(store)
+  })
+
+  it('prepares local worktree roots when workspace nesting changes', async () => {
+    store.getSettings.mockReturnValue({ workspaceDir: '/workspaces', nestWorkspaces: false })
+    store.updateSettings.mockReturnValue({ workspaceDir: '/workspaces', nestWorkspaces: true })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { nestWorkspaces: true })
+
+    expect(prepareLocalWorktreeRootsForReposMock).toHaveBeenCalledWith(store)
+  })
+
+  it('does not prepare local worktree roots when workspace layout values do not change', async () => {
+    store.getSettings.mockReturnValue({ workspaceDir: '/workspaces', nestWorkspaces: false })
+    store.updateSettings.mockReturnValue({ workspaceDir: '/workspaces', nestWorkspaces: false })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { workspaceDir: '/workspaces', nestWorkspaces: false })
+
+    expect(prepareLocalWorktreeRootsForReposMock).not.toHaveBeenCalled()
+  })
+
   it('does not accept floating workspace trust grants from renderer settings IPC', async () => {
     store.getSettings.mockReturnValue({ floatingTerminalTrustedCwds: [] })
     store.updateSettings.mockReturnValue({ floatingTerminalTrustedCwds: [] })
@@ -170,6 +281,51 @@ describe('registerSettingsHandlers', () => {
 
     expect(store.updateSettings).toHaveBeenCalledWith(
       {},
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
+  it('normalizes custom terminal themes from renderer settings IPC', async () => {
+    store.getSettings.mockReturnValue({ terminalCustomThemes: [] })
+    store.updateSettings.mockReturnValue({ terminalCustomThemes: [] })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, {
+      terminalCustomThemes: [
+        {
+          id: 'warp:Test Theme',
+          name: 'Test Theme',
+          source: 'warp',
+          mode: 'dark',
+          terminal: {
+            background: '000',
+            foreground: 'fff',
+            black: '123',
+            red: 'nope'
+          },
+          sourcePath: '/Users/alice/.warp/themes/test.yaml'
+        }
+      ]
+    })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      {
+        terminalCustomThemes: [
+          expect.objectContaining({
+            id: 'warp:test-theme',
+            terminal: {
+              background: '#000000',
+              foreground: '#ffffff',
+              black: '#112233'
+            }
+          })
+        ]
+      },
       { notifyListeners: true, originWebContentsId: 1 }
     )
   })
@@ -260,5 +416,20 @@ describe('registerSettingsHandlers', () => {
       { notifyListeners: true, originWebContentsId: 1 }
     )
     expect(applyAppIconMock).toHaveBeenCalledWith('classic')
+  })
+
+  it('rebuilds the app menu after Automations sidebar visibility changes', async () => {
+    store.getSettings.mockReturnValue({ showAutomationsButton: true })
+    store.updateSettings.mockReturnValue({ showAutomationsButton: false })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { showAutomationsButton: false })
+
+    expect(rebuildAppMenuMock).toHaveBeenCalledTimes(1)
   })
 })

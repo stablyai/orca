@@ -17,6 +17,8 @@ vi.mock('os', async () => {
 
 import { GrokHookService } from './hook-service'
 
+const GROK_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'grok-hook.cmd' : 'grok-hook.sh'
+
 describe('GrokHookService', () => {
   let homeDir: string
 
@@ -57,13 +59,55 @@ describe('GrokHookService', () => {
     expect(config.hooks.PreToolUse[0].matcher).toBe('*')
     expect(config.hooks.PostToolUseFailure[0].matcher).toBe('*')
     expect(config.hooks.Notification[0].matcher).toBeUndefined()
-    expect(config.hooks.PreToolUse[0].hooks[0].command).toContain('grok-hook')
-    expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
+    expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(
+      process.platform === 'win32'
+        ? /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+        : /grok-hook/
+    )
+    if (process.platform !== 'win32') {
+      expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
+    }
 
-    const script = readFileSync(join(homeDir, '.orca', 'agent-hooks', 'grok-hook.sh'), 'utf8')
+    const script = readFileSync(
+      join(homeDir, '.orca', 'agent-hooks', GROK_SCRIPT_FILE_NAME),
+      'utf8'
+    )
     expect(script).toContain('/hook/grok')
-    expect(script).toContain('payload=$(cat)')
+    if (process.platform === 'win32') {
+      expect(script).toContain('powershell -NoProfile')
+    } else {
+      expect(script).toContain('payload=$(cat)')
+    }
   })
+
+  // Why: #6078 — a Windows user profile path with a space used to be written
+  // verbatim as the hook command, so the agent split it at the space. The
+  // managed command must use an encoded launcher so the path never appears raw
+  // on the cmd.exe command line.
+  it.skipIf(process.platform !== 'win32')(
+    'wraps the managed hook command to survive spaces in the profile path (#6078)',
+    () => {
+      const spaceHome = join(tmpdir(), 'orca grok home with spaces')
+      mkdirSync(spaceHome, { recursive: true })
+      homedirMock.mockReturnValue(spaceHome)
+      try {
+        expect(new GrokHookService().install().state).toBe('installed')
+
+        const config = JSON.parse(
+          readFileSync(join(spaceHome, '.grok', 'hooks', 'orca-status.json'), 'utf8')
+        ) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
+
+        for (const eventName of ['SessionStart', 'UserPromptSubmit', 'Stop']) {
+          const command = config.hooks[eventName]?.[0]?.hooks?.[0]?.command
+          expect(command).toMatch(
+            /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+          )
+        }
+      } finally {
+        rmSync(spaceHome, { recursive: true, force: true })
+      }
+    }
+  )
 
   it('preserves user-authored hook entries in the Orca Grok config file', () => {
     const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
@@ -90,6 +134,12 @@ describe('GrokHookService', () => {
       definition.hooks.map((hook) => hook.command)
     )
     expect(commands).toContain('/usr/local/bin/user-hook')
-    expect(commands.some((command) => command.includes('grok-hook.sh'))).toBe(true)
+    expect(
+      commands.some((command) =>
+        process.platform === 'win32'
+          ? command.startsWith('powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ')
+          : command.includes(GROK_SCRIPT_FILE_NAME)
+      )
+    ).toBe(true)
   })
 })

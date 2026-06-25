@@ -46,6 +46,22 @@ describe('mobile file syntax highlighting', () => {
     expect(highlighted[1]?.segments).toContainEqual({ text: '"New"', kind: 'string' })
   })
 
+  it('continues highlighting after blank diff lines', () => {
+    const lines: MobileDiffLine[] = [
+      { kind: 'context', text: "import { readFileSync } from 'node:fs'", newLineNumber: 1 },
+      { kind: 'context', text: '', newLineNumber: 2 },
+      { kind: 'context', text: 'const projectDir = dirname(import.meta.url)', newLineNumber: 3 }
+    ]
+
+    const highlighted = highlightMobileDiffLines(lines, 'typescript')
+
+    expect(highlighted[1]).toMatchObject({
+      highlighted: false,
+      segments: [{ text: '', kind: 'plain' }]
+    })
+    expect(highlighted[2]?.segments).toContainEqual({ text: 'const', kind: 'keyword' })
+  })
+
   it('falls back to plain text when segment caps would create too many React Native nodes', () => {
     const result = highlightMobileCode('const label: string = "Orca"', 'typescript', 1_000, 1)
 

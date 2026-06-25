@@ -294,27 +294,23 @@ function buildShortcutBytes(key: string, modifiers: TerminalShortcutModifier[]):
     return buildCsiTildeShortcut(csiTilde, modifiers)
   }
   if (key === 'tab') {
-    if (
-      hasModifier(modifiers, 'shift') &&
-      !hasModifier(modifiers, 'ctrl') &&
-      !hasModifier(modifiers, 'alt')
-    ) {
+    if (modifiers.includes('shift') && !modifiers.includes('ctrl') && !modifiers.includes('alt')) {
       return `${ESC}[Z`
     }
     const bytes = '\t'
-    return hasModifier(modifiers, 'alt') ? `${ESC}${bytes}` : bytes
+    return modifiers.includes('alt') ? `${ESC}${bytes}` : bytes
   }
   if (key === 'escape') {
     const bytes = ESC
-    return hasModifier(modifiers, 'alt') ? `${ESC}${bytes}` : bytes
+    return modifiers.includes('alt') ? `${ESC}${bytes}` : bytes
   }
   if (key === 'enter') {
     const bytes = '\r'
-    return hasModifier(modifiers, 'alt') ? `${ESC}${bytes}` : bytes
+    return modifiers.includes('alt') ? `${ESC}${bytes}` : bytes
   }
   if (key === 'backspace') {
-    const bytes = hasModifier(modifiers, 'ctrl') ? '\b' : '\x7f'
-    return hasModifier(modifiers, 'alt') ? `${ESC}${bytes}` : bytes
+    const bytes = modifiers.includes('ctrl') ? '\b' : '\x7f'
+    return modifiers.includes('alt') ? `${ESC}${bytes}` : bytes
   }
   if (isPrintableShortcutKey(key)) {
     return buildPrintableShortcutBytes(key, modifiers)
@@ -326,16 +322,16 @@ function buildPrintableShortcutBytes(
   key: string,
   modifiers: TerminalShortcutModifier[]
 ): string | null {
-  const shifted = hasModifier(modifiers, 'shift') ? applyShift(key) : key
+  const shifted = modifiers.includes('shift') ? applyShift(key) : key
   let bytes = shifted
-  if (hasModifier(modifiers, 'ctrl')) {
+  if (modifiers.includes('ctrl')) {
     const ctrlBytes = controlBytesForPrintable(shifted)
     if (ctrlBytes == null) {
       return null
     }
     bytes = ctrlBytes
   }
-  return hasModifier(modifiers, 'alt') ? `${ESC}${bytes}` : bytes
+  return modifiers.includes('alt') ? `${ESC}${bytes}` : bytes
 }
 
 function buildCsiFinalShortcut(final: string, modifiers: TerminalShortcutModifier[]): string {
@@ -350,13 +346,13 @@ function buildCsiTildeShortcut(code: number, modifiers: TerminalShortcutModifier
 
 function csiModifierParameter(modifiers: TerminalShortcutModifier[]): number {
   let parameter = 1
-  if (hasModifier(modifiers, 'shift')) {
+  if (modifiers.includes('shift')) {
     parameter += 1
   }
-  if (hasModifier(modifiers, 'alt')) {
+  if (modifiers.includes('alt')) {
     parameter += 2
   }
-  if (hasModifier(modifiers, 'ctrl')) {
+  if (modifiers.includes('ctrl')) {
     parameter += 4
   }
   return parameter
@@ -412,11 +408,4 @@ function displayKeyLabel(key: string): string {
     return 'Space'
   }
   return key.length === 1 && key >= 'a' && key <= 'z' ? key.toUpperCase() : key
-}
-
-function hasModifier(
-  modifiers: TerminalShortcutModifier[],
-  modifier: TerminalShortcutModifier
-): boolean {
-  return modifiers.includes(modifier)
 }

@@ -25,6 +25,42 @@ describe('getSmartGitHubSubmitIntent', () => {
     })
   })
 
+  it('finds a GitHub item URL embedded in a short instruction', () => {
+    expect(
+      getSmartGitHubSubmitIntent(
+        'https://github.com/mvanhorn/cli-printing-press/issues/2635 and fix it'
+      )
+    ).toEqual({
+      kind: 'link',
+      owner: 'mvanhorn',
+      repo: 'cli-printing-press',
+      number: 2635,
+      type: 'issue'
+    })
+  })
+
+  it('finds an embedded GitHub item URL when prose punctuation touches the URL', () => {
+    expect(
+      getSmartGitHubSubmitIntent('review (https://github.com/stablyai/orca/pull/2049), please')
+    ).toEqual({
+      kind: 'link',
+      owner: 'stablyai',
+      repo: 'orca',
+      number: 2049,
+      type: 'pr'
+    })
+
+    expect(getSmartGitHubSubmitIntent('fix https://github.com/stablyai/orca/issues/2050.')).toEqual(
+      {
+        kind: 'link',
+        owner: 'stablyai',
+        repo: 'orca',
+        number: 2050,
+        type: 'issue'
+      }
+    )
+  })
+
   it('treats #number as source intent but leaves plain numbers as names', () => {
     expect(getSmartGitHubSubmitIntent('#2049')).toEqual({
       kind: 'hash-number',
@@ -228,7 +264,7 @@ describe('lookupSmartGitHubSubmitItem', () => {
 })
 
 describe('getSmartGitHubSubmitResolution', () => {
-  it('uses the resolved item title for workspace name and linked PR metadata', () => {
+  it('uses the resolved PR title for workspace name, display name, and linked PR metadata', () => {
     expect(
       getSmartGitHubSubmitResolution({
         type: 'pr',
@@ -250,7 +286,7 @@ describe('getSmartGitHubSubmitResolution', () => {
     })
   })
 
-  it('uses the resolved item title for workspace name and linked issue metadata', () => {
+  it('strips duplicated issue prefixes while preserving linked issue metadata', () => {
     const resolution = getSmartGitHubSubmitResolution({
       type: 'issue',
       number: 2050,
@@ -259,6 +295,7 @@ describe('getSmartGitHubSubmitResolution', () => {
     })
 
     expect(resolution.workspaceName).toBe('make-create-feel-instant')
+    expect(resolution.displayName).toBe('Make create feel instant')
     expect(resolution.linkedIssueNumber).toBe(2050)
     expect(resolution.linkedPR).toBeNull()
   })

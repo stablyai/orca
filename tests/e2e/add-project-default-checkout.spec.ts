@@ -111,7 +111,6 @@ test.describe('Add project default checkout', () => {
             const normalizedDefaultCheckoutPath = defaultCheckout?.path.replace(/\\/g, '/') ?? null
             return {
               activeCheckoutIsDefault: state.activeWorktreeId === defaultCheckout?.id,
-              cloneRepoVisibility: repo.externalWorktreeVisibility,
               defaultCheckoutLooksCloned:
                 normalizedDefaultCheckoutPath?.endsWith(`/clones/${cloneName}`) ?? false,
               oldSetupModalOpen: state.activeModal === 'project-added'
@@ -124,7 +123,6 @@ test.describe('Add project default checkout', () => {
       )
       .toEqual({
         activeCheckoutIsDefault: true,
-        cloneRepoVisibility: 'show',
         defaultCheckoutLooksCloned: true,
         oldSetupModalOpen: false
       })

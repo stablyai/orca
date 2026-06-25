@@ -66,8 +66,31 @@ describe('task page cache selectors', () => {
       {
         repoId: 'repo-1',
         repoPath: '/repo/one',
+        sourceKey: 'repo-1::local',
         sources: null,
         error: null
+      }
+    ])
+  })
+
+  it('scopes repo source rows by source cache scope for retry ownership', () => {
+    const localRepo = {
+      id: 'repo-1',
+      path: '/same/path',
+      sourceCacheScope: 'source:local:github:stablyai/orca'
+    }
+    const sshRepo = {
+      id: 'repo-1',
+      path: '/same/path',
+      sourceCacheScope: 'source:ssh:devbox:github:stablyai/orca'
+    }
+
+    expect(buildTaskPageRepoSourceState([localRepo, sshRepo], [])).toMatchObject([
+      {
+        sourceKey: 'repo-1::source:local:github:stablyai/orca'
+      },
+      {
+        sourceKey: 'repo-1::source:ssh:devbox:github:stablyai/orca'
       }
     ])
   })
@@ -82,6 +105,18 @@ describe('task page cache selectors', () => {
     }
 
     expect(selectTaskPageWorkItemsCacheEntries(cache, [repo], 20, '')).toEqual([repoEntry])
+  })
+
+  it('selects host-scoped work-item cache entries for remote repos', () => {
+    const repo = { id: 'repo-1', path: '/same/path', executionHostId: 'runtime:env-1' }
+    const remoteEntry = entry<GitHubWorkItem[]>([workItem('issue-remote', 'repo-1')])
+    const localEntry = entry<GitHubWorkItem[]>([workItem('issue-local', 'repo-1')])
+    const cache = {
+      [workItemsCacheKey(repo.id, 20, '')]: localEntry,
+      [workItemsCacheKey(repo.id, 20, '', repo.executionHostId)]: remoteEntry
+    }
+
+    expect(selectTaskPageWorkItemsCacheEntries(cache, [repo], 20, '')).toEqual([remoteEntry])
   })
 
   it('returns null while the GitHub dialog is closed so cache writes do not re-render it', () => {
@@ -146,12 +181,14 @@ describe('task page cache selectors', () => {
       type: 'pr' as const,
       state: 'open' as const,
       autoMergeEnabled: false,
+      autoMergeAllowed: false,
       mergeQueueRequired: null,
       updatedAt: '2026-01-01'
     }
     const refreshedFirst = {
       ...first,
       autoMergeEnabled: true,
+      autoMergeAllowed: true,
       mergeQueueRequired: true
     }
 

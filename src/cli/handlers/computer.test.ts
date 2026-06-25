@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: computer CLI coverage shares one mocked runtime setup across command contracts. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
@@ -38,11 +37,13 @@ vi.mock('../runtime-client', () => {
 import { main } from '../index'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from '../test-fixtures'
 
-describe('orca computer CLI handlers', () => {
+describe('orca computer observation CLI handlers', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     callMock.mockReset()
     vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    process.exitCode = undefined
   })
 
   it('prints group help with all computer subcommands', async () => {
@@ -57,21 +58,55 @@ describe('orca computer CLI handlers', () => {
     expect(output).toContain('paste-text')
     expect(output).toContain('permissions')
     expect(output).toContain('set-value')
+    expect(output).toContain('press-key')
+    expect(output).toContain('Press a single key such as Return or Escape')
+    expect(output).not.toContain(['Press a key using', 'xdotool-style syntax'].join(' '))
   })
 
-  it('passes list-apps through with a resolved worktree', async () => {
-    queueFixtures(
-      callMock,
-      worktreeListFixture([buildWorktree('/tmp/repo', 'feature')]),
-      okFixture('req_apps', { apps: [] })
+  it('prints targeted permission setup command help', async () => {
+    await main(['computer', 'permissions', '--help'], '/tmp/repo')
+
+    const output = vi.mocked(console.log).mock.calls[0][0]
+    expect(output).toContain(
+      'orca computer permissions [--id <accessibility|screenshots>] [--json]'
     )
+    expect(output).toContain('--id <id>')
+    expect(output).toContain('Identifier for a target item or permission')
+  })
+
+  it('prints command-specific keyboard action help', async () => {
+    await main(['computer', 'hotkey', '--help'], '/tmp/repo')
+
+    const hotkeyOutput = vi.mocked(console.log).mock.calls[0][0]
+    expect(hotkeyOutput).toContain('--key <key-combo>')
+    expect(hotkeyOutput).toContain('Modifier chord with one key')
+    expect(hotkeyOutput).not.toContain('CmdOrCtrl+L')
+
+    vi.mocked(console.log).mockClear()
+    await main(['computer', 'press-key', '--help'], '/tmp/repo')
+
+    const pressKeyOutput = vi.mocked(console.log).mock.calls[0][0]
+    expect(pressKeyOutput).toContain('--key <key>')
+    expect(pressKeyOutput).toContain('Single key, e.g. Return, Escape, Tab, Left, or PageUp')
+  })
+
+  it('passes list-apps through without resolving a worktree', async () => {
+    queueFixtures(callMock, okFixture('req_apps', { apps: [] }))
 
     await main(['computer', 'list-apps', '--json'], '/tmp/repo/src')
 
-    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
-    expect(callMock).toHaveBeenNthCalledWith(2, 'computer.listApps', {
-      worktree: 'id:repo::/tmp/repo'
-    })
+    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledWith('computer.listApps', {})
+  })
+
+  it('rejects ignored list-apps worktree scoping before calling the runtime', async () => {
+    await main(['computer', 'list-apps', '--worktree', 'active'], '/tmp/repo/src')
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(vi.mocked(console.error).mock.calls[0][0]).toContain(
+      'Unknown flag --worktree for command: computer list-apps'
+    )
+    expect(process.exitCode).toBe(1)
   })
 
   it('prints provider capabilities without resolving a worktree', async () => {
@@ -119,6 +154,33 @@ describe('orca computer CLI handlers', () => {
     expect(output).toContain('/Applications/Orca Computer Use.app')
   })
 
+  it('passes targeted computer permission setup id', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_permissions', {
+        platform: 'darwin',
+        helperAppPath: '/Applications/Orca Computer Use.app',
+        openedSettings: true,
+        launchedHelper: true
+      })
+    )
+
+    await main(['computer', 'permissions', '--id', 'screenshots'], '/tmp/repo/src')
+
+    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledWith('computer.permissions', { id: 'screenshots' })
+  })
+
+  it('rejects invalid computer permission setup id before calling the runtime', async () => {
+    await main(['computer', 'permissions', '--id', 'screen'], '/tmp/repo/src')
+
+    expect(callMock).not.toHaveBeenCalled()
+    const output = vi.mocked(console.error).mock.calls[0][0]
+    expect(output).toContain('--id must be "accessibility" or "screenshots"')
+    expect(output).toContain('Next step: Do not retry the same command unchanged.')
+    expect(process.exitCode).toBe(1)
+  })
+
   it('passes get-app-state target and observe flags', async () => {
     queueFixtures(
       callMock,
@@ -147,10 +209,21 @@ describe('orca computer CLI handlers', () => {
     })
   })
 
+  it('rejects get-app-state without an app before resolving a worktree', async () => {
+    await main(['computer', 'get-app-state', '--json'], '/tmp/repo/src')
+
+    expect(callMock).not.toHaveBeenCalled()
+    const output = JSON.parse(vi.mocked(console.log).mock.calls[0][0])
+    expect(output.error).toMatchObject({
+      code: 'invalid_argument',
+      message: expect.stringContaining('Missing required --app')
+    })
+    expect(process.exitCode).toBe(1)
+  })
+
   it('passes list-windows target and formats window IDs', async () => {
     queueFixtures(
       callMock,
-      worktreeListFixture([buildWorktree('/tmp/repo', 'feature')]),
       okFixture('req_windows', {
         app: { name: 'Finder', bundleId: 'com.apple.finder', pid: 100 },
         windows: [
@@ -173,268 +246,18 @@ describe('orca computer CLI handlers', () => {
 
     await main(['computer', 'list-windows', '--app', 'Finder'], '/tmp/repo/src')
 
-    expect(callMock).toHaveBeenNthCalledWith(2, 'computer.listWindows', {
-      app: 'Finder',
-      worktree: 'id:repo::/tmp/repo'
-    })
+    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledWith('computer.listWindows', { app: 'Finder' })
     const output = vi.mocked(console.log).mock.calls[0][0]
     expect(output).toContain('[0] id:42 "Recents"')
   })
 
-  it('does not resolve worktree when --session is explicit', async () => {
-    queueFixtures(callMock, okFixture('req_click', sampleSnapshot()))
+  it('rejects list-windows without an app before calling the runtime', async () => {
+    await main(['computer', 'list-windows'], '/tmp/repo/src')
 
-    await main(
-      [
-        'computer',
-        'click',
-        '--session',
-        'manual',
-        '--app',
-        'Finder',
-        '--element-index',
-        '3',
-        '--json'
-      ],
-      '/tmp/repo/src'
-    )
-
-    expect(callMock).toHaveBeenCalledTimes(1)
-    expect(callMock).toHaveBeenCalledWith('computer.click', {
-      session: 'manual',
-      app: 'Finder',
-      elementIndex: 3,
-      x: undefined,
-      y: undefined,
-      clickCount: undefined,
-      mouseButton: undefined,
-      noScreenshot: undefined
-    })
-  })
-
-  it('prints session and window context in action follow-up commands', async () => {
-    queueFixtures(callMock, okFixture('req_click', sampleSnapshot()))
-
-    await main(
-      [
-        'computer',
-        'click',
-        '--session',
-        'manual',
-        '--app',
-        'Finder',
-        '--element-index',
-        '3',
-        '--window-index',
-        '1',
-        '--restore-window'
-      ],
-      '/tmp/repo/src'
-    )
-
-    const output = vi.mocked(console.log).mock.calls[0][0]
-    expect(output).toContain(
-      'Use `orca computer get-app-state --app com.apple.finder --session manual --window-index 1 --restore-window`'
-    )
-  })
-
-  it('maps action command flags to RPC payloads', async () => {
-    queueFixtures(
-      callMock,
-      worktreeListFixture([buildWorktree('/tmp/repo', 'feature')]),
-      okFixture('req_drag', sampleSnapshot())
-    )
-
-    await main(
-      [
-        'computer',
-        'drag',
-        '--app',
-        'Finder',
-        '--from-x',
-        '1',
-        '--from-y',
-        '2',
-        '--to-x',
-        '3',
-        '--to-y',
-        '4',
-        '--json'
-      ],
-      '/tmp/repo/src'
-    )
-
-    expect(callMock).toHaveBeenNthCalledWith(2, 'computer.drag', {
-      app: 'Finder',
-      worktree: 'id:repo::/tmp/repo',
-      fromElementIndex: undefined,
-      toElementIndex: undefined,
-      fromX: 1,
-      fromY: 2,
-      toX: 3,
-      toY: 4,
-      noScreenshot: undefined
-    })
-  })
-
-  it('maps coordinate scroll flags to RPC payloads', async () => {
-    queueFixtures(callMock, okFixture('req_scroll', sampleSnapshot()))
-
-    await main(
-      [
-        'computer',
-        'scroll',
-        '--session',
-        'manual',
-        '--app',
-        'Finder',
-        '--x',
-        '10',
-        '--y',
-        '20',
-        '--direction',
-        'down',
-        '--pages',
-        '0.5',
-        '--json'
-      ],
-      '/tmp/repo/src'
-    )
-
-    expect(callMock).toHaveBeenCalledWith('computer.scroll', {
-      session: 'manual',
-      app: 'Finder',
-      elementIndex: undefined,
-      x: 10,
-      y: 20,
-      direction: 'down',
-      pages: 0.5,
-      noScreenshot: undefined
-    })
-  })
-
-  it('maps hotkey and paste-text command flags to RPC payloads', async () => {
-    queueFixtures(callMock, okFixture('req_hotkey', sampleSnapshot()))
-    await main(
-      [
-        'computer',
-        'hotkey',
-        '--session',
-        'manual',
-        '--app',
-        'Finder',
-        '--key',
-        'CmdOrCtrl+L',
-        '--no-screenshot',
-        '--json'
-      ],
-      '/tmp/repo/src'
-    )
-
-    expect(callMock).toHaveBeenCalledWith('computer.hotkey', {
-      session: 'manual',
-      app: 'Finder',
-      key: 'CmdOrCtrl+L',
-      noScreenshot: true
-    })
-
-    callMock.mockReset()
-    vi.mocked(console.log).mockClear()
-    queueFixtures(callMock, okFixture('req_paste', sampleSnapshot()))
-    await main(
-      [
-        'computer',
-        'paste-text',
-        '--session',
-        'manual',
-        '--app',
-        'Finder',
-        '--text',
-        'hello world',
-        '--json'
-      ],
-      '/tmp/repo/src'
-    )
-
-    expect(callMock).toHaveBeenCalledWith('computer.pasteText', {
-      session: 'manual',
-      app: 'Finder',
-      text: 'hello world',
-      noScreenshot: undefined
-    })
-  })
-
-  it('formats get-app-state without printing screenshot bytes in pretty mode', async () => {
-    queueFixtures(callMock, okFixture('req_state', sampleSnapshot()))
-
-    await main(['computer', 'get-app-state', '--session', 'manual', '--app', 'Finder'], '/tmp/repo')
-
-    const output = vi.mocked(console.log).mock.calls[0][0]
-    expect(output).toContain('Finder (pid 100, com.apple.finder)')
-    expect(output).toContain('App=com.apple.finder')
-    expect(output).not.toContain('base64-data')
-  })
-
-  it('omits screenshot bytes from JSON output and writes a screenshot path', async () => {
-    queueFixtures(callMock, okFixture('req_state', sampleSnapshot()))
-
-    await main(
-      ['computer', 'get-app-state', '--session', 'manual', '--app', 'Finder', '--json'],
-      '/tmp/repo'
-    )
-
-    const output = vi.mocked(console.log).mock.calls[0][0]
-    expect(output).not.toContain('base64-data')
-    const parsed = JSON.parse(output)
-    expect(parsed.result.screenshot).toMatchObject({
-      dataOmitted: true,
-      format: 'png',
-      expiresAt: expect.any(String)
-    })
-    expect(String(parsed.result.screenshot.path).replaceAll('\\', '/')).toContain(
-      'orca-computer-use/req_state-screenshot.png'
-    )
-  })
-
-  it('shows coordinate space and truncation in pretty state output', async () => {
-    queueFixtures(callMock, okFixture('req_state', sampleSnapshot()))
-
-    await main(['computer', 'get-app-state', '--session', 'manual', '--app', 'Finder'], '/tmp/repo')
-
-    const output = vi.mocked(console.log).mock.calls[0][0]
-    expect(output).toContain('Coordinates: window')
-    expect(output).toContain('Truncated: no')
-  })
-
-  it('passes get-app-state window target flags through', async () => {
-    queueFixtures(callMock, okFixture('req_snapshot', sampleSnapshot()))
-
-    await main(
-      [
-        'computer',
-        'get-app-state',
-        '--session',
-        'manual',
-        '--app',
-        'Finder',
-        '--window-id',
-        '42',
-        '--window-index',
-        '0',
-        '--no-screenshot',
-        '--json'
-      ],
-      '/tmp/repo/src'
-    )
-
-    expect(callMock).toHaveBeenCalledWith('computer.getAppState', {
-      session: 'manual',
-      app: 'Finder',
-      noScreenshot: true,
-      restoreWindow: undefined,
-      windowId: 42,
-      windowIndex: 0
-    })
+    expect(callMock).not.toHaveBeenCalled()
+    expect(vi.mocked(console.error).mock.calls[0][0]).toContain('Missing required --app')
+    expect(process.exitCode).toBe(1)
   })
 })
 
@@ -449,13 +272,6 @@ function sampleSnapshot() {
       treeText: 'App=com.apple.finder (pid 100)\n0 standard window Finder',
       elementCount: 1,
       focusedElementId: 0
-    },
-    screenshot: {
-      data: 'base64-data',
-      format: 'png',
-      width: 800,
-      height: 600,
-      scale: 1
     },
     screenshotStatus: { state: 'captured' }
   }

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import * as path from 'path'
 import type { GitExec } from './git-handler-ops'
 import { removeWorktreeOp } from './git-handler-worktree-ops'
 
@@ -12,6 +13,10 @@ function worktreeList(...entries: { path: string; branch?: string }[]): string {
       ].join('\n')
     )
     .join('\n\n')
+}
+
+function resolvedRepoPath(): string {
+  return path.posix.resolve('/repo-feature', '/repo/.git', '..')
 }
 
 describe('removeWorktreeOp branch cleanup', () => {
@@ -70,6 +75,90 @@ describe('removeWorktreeOp branch cleanup', () => {
       ['config', '--remove-section', 'branch.feature/test'],
       expect.any(String)
     )
+  })
+
+  it('deletes a squash-merged SSH branch with branch-only merge commits via expected head', async () => {
+    let zListCount = 0
+    const git = vi.fn<GitExec>(async (args, _cwd, opts) => {
+      if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
+        return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list' && args.includes('-z')) {
+        zListCount += 1
+        return {
+          stdout:
+            zListCount === 1
+              ? worktreeList(
+                  { path: '/repo', branch: 'main' },
+                  { path: '/repo-feature', branch: 'feature/test' }
+                )
+              : worktreeList({ path: '/repo', branch: 'main' }),
+          stderr: ''
+        }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        return { stdout: worktreeList({ path: '/repo', branch: 'main' }), stderr: '' }
+      }
+      if (args[0] === 'branch' && args[1] === '-d') {
+        throw new Error('error: the branch feature/test is not fully merged')
+      }
+      if (args[0] === 'config' && args[1] === '--get') {
+        return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main^{commit}')) {
+        return { stdout: 'target123\n', stderr: '' }
+      }
+      if (args[0] === 'merge-tree') {
+        return {
+          stdout: args[2] === 'squash123' ? 'squash-tree\n' : 'merged-tree\n',
+          stderr: ''
+        }
+      }
+      if (args[0] === 'rev-parse' && args.includes('target123^{tree}')) {
+        return { stdout: 'target-tree\n', stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args.includes('squash123^{tree}')) {
+        return { stdout: 'squash-tree\n', stderr: '' }
+      }
+      if (args[0] === 'rev-list' && args.includes('--right-only')) {
+        return { stdout: '1\n', stderr: '' }
+      }
+      if (args[0] === 'merge-base') {
+        return { stdout: 'base123\n', stderr: '' }
+      }
+      if (args[0] === 'diff') {
+        return { stdout: 'branch net diff\n', stderr: '' }
+      }
+      if (args[0] === 'rev-list' && args.includes('--ancestry-path')) {
+        return { stdout: 'squash123\n', stderr: '' }
+      }
+      if (args[0] === 'show') {
+        return { stdout: 'squash diff\n', stderr: '' }
+      }
+      if (args[0] === 'patch-id' && opts?.stdin === 'branch net diff\n') {
+        return {
+          stdout: 'patch123 0000000000000000000000000000000000000000\n',
+          stderr: ''
+        }
+      }
+      if (args[0] === 'patch-id' && opts?.stdin === 'squash diff\n') {
+        return { stdout: 'patch123 squash123\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(removeWorktreeOp(git, { worktreePath: '/repo-feature' })).resolves.toEqual({})
+
+    expect(git).toHaveBeenCalledWith(
+      ['update-ref', '-d', 'refs/heads/feature/test', '1'],
+      expect.any(String)
+    )
+    expect(git).toHaveBeenCalledWith(['patch-id', '--stable'], expect.any(String), {
+      stdin: 'branch net diff\n'
+    })
+    expect(git).toHaveBeenCalledWith(['patch-id', '--stable'], expect.any(String), {
+      stdin: 'squash diff\n'
+    })
   })
 
   it('refreshes the saved remote base before deleting a safe-delete-rejected SSH branch', async () => {
@@ -134,7 +223,7 @@ describe('removeWorktreeOp branch cleanup', () => {
     const updateRefIndex = commandIndex(['update-ref', '-d', 'refs/heads/feature/test', '1'])
 
     expect(fetchIndex).toBeGreaterThanOrEqual(0)
-    expect(calls[fetchIndex]?.cwd).toBe('/repo')
+    expect(calls[fetchIndex]?.cwd).toBe(resolvedRepoPath())
     expect(fetchIndex).toBeLessThan(mergeTreeIndex)
     expect(fetchIndex).toBeLessThan(updateRefIndex)
   })

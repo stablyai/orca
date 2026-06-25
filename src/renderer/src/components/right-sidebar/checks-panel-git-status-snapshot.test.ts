@@ -43,6 +43,67 @@ describe('buildChecksPanelGitStatusContextKey', () => {
       })
     )
   })
+
+  it('changes when linked hosted review metadata changes', () => {
+    const base = {
+      repoId: 'repo-1',
+      worktreeId: 'worktree-1',
+      worktreePath: 'repo-worktree',
+      branch: 'feature/checks',
+      runtimeEnvironmentId: 'runtime-1',
+      repoConnectionId: 'ssh-1',
+      pushTarget: null
+    }
+    const unlinkedContext = buildChecksPanelGitStatusContextKey({
+      ...base,
+      linkedGitHubPR: null,
+      linkedGitLabMR: null,
+      linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
+      linkedGiteaPR: null
+    })
+
+    expect(
+      buildChecksPanelGitStatusContextKey({
+        ...base,
+        linkedGitHubPR: 12,
+        linkedGitLabMR: null,
+        linkedBitbucketPR: null,
+        linkedAzureDevOpsPR: null,
+        linkedGiteaPR: null
+      })
+    ).not.toBe(unlinkedContext)
+    expect(
+      buildChecksPanelGitStatusContextKey({
+        ...base,
+        linkedGitHubPR: null,
+        linkedGitLabMR: null,
+        linkedBitbucketPR: 34,
+        linkedAzureDevOpsPR: null,
+        linkedGiteaPR: null
+      })
+    ).not.toBe(unlinkedContext)
+    expect(
+      buildChecksPanelGitStatusContextKey({
+        ...base,
+        linkedGitHubPR: null,
+        linkedGitLabMR: null,
+        linkedBitbucketPR: null,
+        linkedAzureDevOpsPR: 56,
+        linkedGiteaPR: null
+      })
+    ).not.toBe(unlinkedContext)
+    expect(
+      buildChecksPanelGitStatusContextKey({
+        ...base,
+        linkedGitHubPR: null,
+        linkedGitLabMR: null,
+        linkedBitbucketPR: null,
+        linkedAzureDevOpsPR: null,
+        linkedGiteaPR: 78
+      })
+    ).not.toBe(unlinkedContext)
+  })
 })
 
 describe('readChecksPanelGitStatusSnapshot', () => {

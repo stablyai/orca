@@ -25,6 +25,8 @@ describe('Electron runtime package contract', () => {
       'build:mac:release',
       'build:linux',
       'test:e2e',
+      'test:e2e:terminal-rendering-golden',
+      'test:e2e:terminal-rendering-release-evidence',
       'test:e2e:headful'
     ]
 
@@ -48,6 +50,11 @@ describe('Electron runtime package contract', () => {
     expect(scripts['build:release']).not.toContain('build:computer-macos')
   })
 
+  it('runs the web build through the heap-sized Vite wrapper', () => {
+    expect(packageJson.scripts['build:web']).toContain('node config/scripts/run-vite-web-build.mjs')
+    expect(packageJson.scripts['build:web']).toContain('node config/scripts/verify-web-build.mjs')
+  })
+
   it('guards release publishing before electron-builder runs', () => {
     const releaseWorkflow = readFileSync(
       join(projectDir, '.github/workflows/release-cut.yml'),
@@ -61,7 +68,7 @@ describe('Electron runtime package contract', () => {
       ])
     )
 
-    expect([...releaseCommands.keys()].sort()).toEqual(['linux', 'mac', 'win'])
+    expect([...releaseCommands.keys()].sort()).toEqual(['linux-arm64', 'linux-x64', 'mac', 'win'])
     for (const command of releaseCommands.values()) {
       expect(command).toContain('node config/scripts/ensure-native-runtime.mjs --runtime=electron')
       expect(command).toContain('electron-builder')
@@ -70,10 +77,95 @@ describe('Electron runtime package contract', () => {
       )
     }
     expect(releaseCommands.get('mac')).toContain(' && ORCA_MAC_RELEASE=1 ')
-    expect(releaseCommands.get('linux')).toContain(' && pnpm exec electron-builder ')
+    expect(releaseCommands.get('linux-x64')).toContain(' && pnpm exec electron-builder ')
+    expect(releaseCommands.get('linux-x64')).toContain('--linux AppImage deb rpm --x64')
+    expect(releaseCommands.get('linux-arm64')).toContain('ORCA_LINUX_ARM64_RELEASE=1')
+    expect(releaseCommands.get('linux-arm64')).toContain('--linux AppImage deb rpm --arm64')
     expect(releaseCommands.get('win')).toContain(
       '; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder '
     )
+  })
+
+  it('preflights SignPath module install before Windows signing side effects', () => {
+    const releaseWorkflow = readFileSync(
+      join(projectDir, '.github/workflows/release-cut.yml'),
+      'utf8'
+    )
+    const parsedWorkflow = parse(releaseWorkflow)
+    const steps = parsedWorkflow.jobs.build.steps
+    const stepNames = steps.map((step) => step.name)
+    const installStepIndexes = stepNames.flatMap((name, index) =>
+      name === 'Install SignPath PowerShell module' ? [index] : []
+    )
+    const buildIndex = stepNames.indexOf('Build Windows release artifacts')
+    const uploadIndex = stepNames.indexOf('Upload unsigned Windows installer for SignPath')
+    const downloadIndex = stepNames.indexOf('Download signed Windows installer from SignPath')
+
+    expect(installStepIndexes).toEqual([buildIndex + 1])
+    expect(installStepIndexes[0]).toBeLessThan(uploadIndex)
+
+    const uploadThroughDownloadScript = steps
+      .slice(uploadIndex, downloadIndex + 1)
+      .map((step) => step.run ?? '')
+      .join('\n')
+
+    expect(uploadThroughDownloadScript).not.toContain('Install-Module -Name SignPath')
+
+    const installStep = steps[installStepIndexes[0]]
+    const installRun = installStep.run
+    const sleepSeconds = [...installRun.matchAll(/Start-Sleep -Seconds (\d+)/g)].map(
+      ([, seconds]) => seconds
+    )
+
+    expect(installStep.if).toBe("matrix.platform == 'win'")
+    expect(installStep.shell).toBe('pwsh')
+    expect(installRun).toContain('Set-PSRepository -Name PSGallery -InstallationPolicy Trusted')
+    expect(installRun).toMatch(/\$env:PSModulePath -split \[System\.IO\.Path\]::PathSeparator/)
+    expect(installRun).toContain(
+      "$signPathModulePath = Join-Path -Path $currentUserModuleRoot -ChildPath 'SignPath'"
+    )
+    expect(installRun).toMatch(/for \(\$attempt = 1; \$attempt -le 3; \$attempt\+\+\)/)
+    expect(sleepSeconds).toEqual(['15', '30'])
+    expect(installRun).toContain(
+      'Install-Module -Name SignPath -Repository PSGallery -MinimumVersion 4.0.0 -MaximumVersion 4.999.999 -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop'
+    )
+    expect(installRun).toContain('Import-Module SignPath')
+    expect(installRun).toContain(
+      'Get-Command -Name Get-SignedArtifact -Module SignPath -ErrorAction Stop'
+    )
+    expect(installRun).toContain('Remove-Item -LiteralPath $signPathModulePath -Recurse -Force')
+    expect(installRun).not.toContain('SignPath*')
+    expect(installRun.indexOf('if ($attempt -eq 3)')).toBeLessThan(
+      installRun.indexOf('Remove-Item -LiteralPath $signPathModulePath')
+    )
+    expect(installRun).toMatch(/if \(\$attempt -eq 3\) {\s+throw\s+}/)
+    expect(installRun).not.toMatch(/throw\s+\$_/)
+  })
+
+  it('publishes both Linux release matrix entries', () => {
+    const releaseWorkflow = readFileSync(
+      join(projectDir, '.github/workflows/release-cut.yml'),
+      'utf8'
+    )
+    const parsedWorkflow = parse(releaseWorkflow)
+    const publishLinuxStep = parsedWorkflow.jobs.build.steps.find(
+      (step) => step.name === 'Publish release artifacts (Linux)'
+    )
+
+    expect(publishLinuxStep.if).toContain("matrix.platform == 'linux-x64'")
+    expect(publishLinuxStep.if).toContain("matrix.platform == 'linux-arm64'")
+    expect(publishLinuxStep.with.command).toBe('${{ matrix.release_command }}')
+  })
+
+  it('keeps Linux postinstall repairing Chromium sandbox permissions', () => {
+    const afterInstallScript = readFileSync(
+      join(projectDir, 'resources/linux/packaging/after-install.sh'),
+      'utf8'
+    )
+
+    expect(afterInstallScript).toContain('chrome-sandbox')
+    expect(afterInstallScript).toContain('chmod 4755 "$sandbox"')
+    expect(afterInstallScript).not.toContain('chmod 0755 "$sandbox"')
   })
 
   it('lets release-cut tag a version that is already present on main', () => {
@@ -158,6 +250,131 @@ describe('Electron runtime package contract', () => {
 
     expect(smokeStep.run).toBe(
       'node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked'
+    )
+  })
+
+  it('keeps terminal scale perf wired to the report budget gate', () => {
+    const packageScripts = packageJson.scripts
+    const terminalPerfWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/terminal-perf.yml'), 'utf8')
+    )
+    const steps = terminalPerfWorkflow.jobs['terminal-perf'].steps
+    const runStep = steps.find((step) => step.name === 'Run terminal scale perf report gate')
+    const uploadStep = steps.find((step) => step.name === 'Upload terminal perf report')
+
+    expect(packageScripts['test:e2e:terminal-perf:scale:report']).toContain(
+      'run-terminal-scale-perf-report-gate.mjs'
+    )
+    expect(runStep.run).toContain('pnpm run test:e2e:terminal-perf:scale:report')
+    expect(runStep.run).toContain('xvfb-run --auto-servernum')
+    const manualProfileKnobs = [
+      ['ORCA_TERMINAL_PERF_FRAME_COUNT', 'frame_count', 'ORCA_E2E_OPENCODE_FRAME_COUNT'],
+      [
+        'ORCA_TERMINAL_PERF_FRAME_INTERVAL_MS',
+        'frame_interval_ms',
+        'ORCA_E2E_OPENCODE_FRAME_INTERVAL_MS'
+      ],
+      [
+        'ORCA_TERMINAL_PERF_PRESSURE_OUTPUT_CHARS',
+        'pressure_output_chars',
+        'ORCA_E2E_OPENCODE_PRESSURE_OUTPUT_CHARS'
+      ],
+      ['ORCA_TERMINAL_PERF_SCALE_PANES', 'scale_panes', 'ORCA_E2E_OPENCODE_SCALE_PANES'],
+      [
+        'ORCA_TERMINAL_PERF_SCALE_CROSS_WORKSPACE_PANES',
+        'scale_cross_workspace_panes',
+        'ORCA_E2E_OPENCODE_SCALE_CROSS_WORKSPACE_PANES'
+      ],
+      [
+        'ORCA_TERMINAL_PERF_SCALE_PRESSURE_PANES',
+        'scale_pressure_panes',
+        'ORCA_E2E_OPENCODE_SCALE_PRESSURE_PANES'
+      ],
+      [
+        'ORCA_TERMINAL_PERF_SCALE_HIDDEN_PRESSURE_PANES',
+        'scale_hidden_pressure_panes',
+        'ORCA_E2E_OPENCODE_SCALE_HIDDEN_PRESSURE_PANES'
+      ]
+    ]
+    for (const [workflowEnv, inputName, runnerEnv] of manualProfileKnobs) {
+      expect(runStep.env[workflowEnv]).toBe(`\${{ inputs.${inputName} }}`)
+      expect(runStep.run).toContain(runnerEnv)
+    }
+    expect(uploadStep.uses).toBe('actions/upload-artifact@v7')
+    expect(uploadStep.with.path).toBe('${{ env.ORCA_E2E_TERMINAL_PERF_REPORT_PATH }}')
+  })
+
+  it('keeps terminal rendering regressions in the fast golden E2E gate', () => {
+    const packageScripts = packageJson.scripts
+    const goldenWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/golden-e2e-experiment.yml'), 'utf8')
+    )
+    const releaseWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
+    )
+    const steps = goldenWorkflow.jobs['golden-e2e'].steps
+    const goldenPlatformLabels = new Map([
+      ['linux', 'Linux'],
+      ['mac', 'macOS'],
+      ['windows', 'Windows']
+    ])
+    const goldenPlatforms = goldenWorkflow.jobs['golden-e2e'].strategy.matrix.include
+      .map(({ platform }) => platform)
+      .sort()
+    const goldenRunSteps = goldenPlatforms.map((platform) => {
+      const label = goldenPlatformLabels.get(platform)
+
+      expect(label, platform).toBeDefined()
+
+      return steps.find((step) => step.name === `Run golden E2E tests on ${label}`)
+    })
+    const pullRequestPaths = goldenWorkflow.on.pull_request.paths
+    const releaseGoldenJob = releaseWorkflow.jobs['terminal-rendering-golden']
+    const releaseEvidenceJob = releaseWorkflow.jobs['terminal-rendering-release-evidence']
+    const releaseBuildNeeds = releaseWorkflow.jobs.build.needs
+    const publishReleaseNeeds = releaseWorkflow.jobs['publish-release'].needs
+    // Why: Windows release evidence is temporarily paused for CI runner PTY readiness.
+    const releaseEvidencePlatforms = ['linux', 'mac']
+
+    expect(packageScripts['test:e2e:terminal-rendering-golden']).toContain(
+      '@terminal-rendering-golden'
+    )
+    expect(packageScripts['test:e2e:terminal-rendering-golden']).toContain(
+      'terminal-raw-emoji-table-scroll-restore.spec.ts'
+    )
+    expect(packageScripts['test:e2e:terminal-rendering-golden']).not.toContain(
+      'terminal-long-table-scroll-restore.spec.ts'
+    )
+    expect(packageScripts['test:e2e:terminal-rendering-release-evidence']).toContain(
+      'terminal-opencode-emoji-table-rendering.spec.ts'
+    )
+    expect(packageScripts['test:e2e:terminal-rendering-release-evidence']).toContain(
+      'terminal-long-table-scroll-restore.spec.ts'
+    )
+    for (const runStep of goldenRunSteps) {
+      expect(runStep?.run).toContain('pnpm run test:e2e:terminal-rendering-golden')
+    }
+    expect(pullRequestPaths).toContain('tests/e2e/terminal-raw-emoji-table-scroll-restore.spec.ts')
+    expect(pullRequestPaths).toContain('tests/e2e/fixtures/terminal-emoji-table.md')
+    expect(pullRequestPaths).toContain('src/renderer/src/lib/pane-manager/**')
+    expect(releaseBuildNeeds).not.toContain('terminal-rendering-golden')
+    expect(releaseBuildNeeds).not.toContain('terminal-rendering-release-evidence')
+    expect(publishReleaseNeeds).toContain('terminal-rendering-golden')
+    expect(publishReleaseNeeds).toContain('build')
+    expect(publishReleaseNeeds).not.toContain('terminal-rendering-release-evidence')
+    expect(releaseGoldenJob['continue-on-error']).toBeUndefined()
+    expect(releaseGoldenJob.strategy.matrix.include.map(({ platform }) => platform).sort()).toEqual(
+      goldenPlatforms
+    )
+    expect(releaseGoldenJob.steps.map((step) => step.run ?? '')).toContain(
+      'xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden'
+    )
+    expect(releaseEvidenceJob['continue-on-error']).toBe(true)
+    expect(
+      releaseEvidenceJob.strategy.matrix.include.map(({ platform }) => platform).sort()
+    ).toEqual(releaseEvidencePlatforms)
+    expect(releaseEvidenceJob.steps.map((step) => step.run ?? '')).toContain(
+      'xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-release-evidence'
     )
   })
 })

@@ -10,6 +10,7 @@ type RemoteCliBridgeEnv = {
   relayDir: string
   nodePath: string
   sockPath: string
+  pathDelimiter?: ':' | ';'
 }
 
 export const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -136,7 +137,10 @@ export class SshPtyProvider implements IPtyProvider {
       // relay does not execute `command` itself — the user types it into
       // the shell — but receiving it as a hint lets overlay resolution be
       // per-launch instead of always-Pi.
-      ...(opts.command ? { command: opts.command } : {})
+      ...(opts.command ? { command: opts.command } : {}),
+      ...(opts.startupCommandDelivery
+        ? { startupCommandDelivery: opts.startupCommandDelivery }
+        : {})
     })
     return {
       ...(result as PtySpawnResult),
@@ -152,13 +156,14 @@ export class SshPtyProvider implements IPtyProvider {
       return env
     }
     const merged = { ...env }
+    const pathDelimiter = this.remoteCliBridgeEnv.pathDelimiter ?? ':'
     const pathKey = merged.PATH !== undefined ? 'PATH' : merged.Path !== undefined ? 'Path' : null
     if (pathKey) {
       const pathValue = merged[pathKey] ?? ''
-      merged[pathKey] = pathValue.split(':').includes(this.remoteCliBridgeEnv.binDir)
+      merged[pathKey] = pathValue.split(pathDelimiter).includes(this.remoteCliBridgeEnv.binDir)
         ? pathValue
         : pathValue
-          ? `${this.remoteCliBridgeEnv.binDir}:${pathValue}`
+          ? `${this.remoteCliBridgeEnv.binDir}${pathDelimiter}${pathValue}`
           : this.remoteCliBridgeEnv.binDir
     }
     merged.ORCA_REMOTE_CLI_BIN_DIR = this.remoteCliBridgeEnv.binDir
@@ -170,6 +175,16 @@ export class SshPtyProvider implements IPtyProvider {
 
   async attach(id: string): Promise<void> {
     await this.mux.request('pty.attach', { id: this.toRelayPtyId(id) })
+  }
+
+  async attachForReconnect(id: string): Promise<{ replay?: string }> {
+    // Why: reconnect owns replay delivery so stale/duplicate attach results can
+    // be filtered before they reach the renderer.
+    const result = (await this.mux.request('pty.attach', {
+      id: this.toRelayPtyId(id),
+      suppressReplayNotification: true
+    })) as { replay?: string } | undefined
+    return result ?? {}
   }
 
   write(id: string, data: string): void {

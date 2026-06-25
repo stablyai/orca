@@ -14,6 +14,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { ReviewNotesSendMenuContent } from './ReviewNotesSendMenuContent'
+import { translate } from '@/i18n/i18n'
 
 const ENABLED_SEND_TOOLTIP = 'Send notes to an agent'
 
@@ -150,7 +151,15 @@ export function NotesSendMenu<TNote>({
               )}
               disabled={!hasDeliverableNotes}
               title={hasDeliverableNotes ? ENABLED_SEND_TOOLTIP : disabledTooltip}
-              aria-label={triggerLabel ? `Send ${triggerLabel} to an agent` : ENABLED_SEND_TOOLTIP}
+              aria-label={
+                triggerLabel
+                  ? translate(
+                      'auto.components.editor.NotesSendMenu.433928cd9f',
+                      'Send {{value0}} to an agent',
+                      { value0: triggerLabel }
+                    )
+                  : ENABLED_SEND_TOOLTIP
+              }
               onMouseDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
             >
@@ -183,7 +192,9 @@ export function NotesSendMenu<TNote>({
       >
         {scopes.length > 1 ? (
           <>
-            <DropdownMenuLabel>Send notes</DropdownMenuLabel>
+            <DropdownMenuLabel>
+              {translate('auto.components.editor.NotesSendMenu.44dc5e60a6', 'Send notes')}
+            </DropdownMenuLabel>
             {scopes.map((scope) => (
               <DropdownMenuSub key={scope.id}>
                 <DropdownMenuSubTrigger

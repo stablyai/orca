@@ -17,6 +17,7 @@ import {
   resolveExternalAutomationRunTableState,
   updateExternalAutomationRunTablePage
 } from './external-automation-run-table-state'
+import { translate } from '@/i18n/i18n'
 
 const PAGE_SIZE = 8
 
@@ -182,7 +183,9 @@ export function ExternalAutomationRunTable({
     <div className="mt-2 rounded-md border border-border/50 bg-background/50">
       <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="text-xs font-medium">Runs</div>
+          <div className="text-xs font-medium">
+            {translate('auto.components.automations.ExternalAutomationRunTable.2d4388a908', 'Runs')}
+          </div>
           {isLoading ? <Loader2 className="size-3.5 animate-spin text-muted-foreground" /> : null}
           {fetchError ? (
             <Tooltip>
@@ -196,7 +199,13 @@ export function ExternalAutomationRunTable({
           ) : null}
         </div>
         <div className="text-xs text-muted-foreground">
-          {totalCount} {totalCount === 1 ? 'run' : 'runs'}
+          {totalCount}{' '}
+          {totalCount === 1
+            ? translate('auto.components.automations.ExternalAutomationRunTable.872d032d05', 'run')
+            : translate(
+                'auto.components.automations.ExternalAutomationRunTable.d5527d8fe7',
+                'runs'
+              )}
         </div>
       </div>
 
@@ -204,9 +213,24 @@ export function ExternalAutomationRunTable({
         <div>
           <div className="min-w-0 border-b border-border/50">
             <div className="grid grid-cols-[minmax(7.5rem,.45fr)_minmax(0,1fr)_auto] gap-3 border-b border-border/50 px-3 py-1.5 text-[11px] font-medium uppercase text-muted-foreground">
-              <span>Run time</span>
-              <span>Preview</span>
-              <span>Status</span>
+              <span>
+                {translate(
+                  'auto.components.automations.ExternalAutomationRunTable.d4b34feb66',
+                  'Run time'
+                )}
+              </span>
+              <span>
+                {translate(
+                  'auto.components.automations.ExternalAutomationRunTable.a813df9808',
+                  'Preview'
+                )}
+              </span>
+              <span>
+                {translate(
+                  'auto.components.automations.ExternalAutomationRunTable.be551397ca',
+                  'Status'
+                )}
+              </span>
             </div>
             <div className="divide-y divide-border/50">
               {visibleRuns.map((run) => (
@@ -247,7 +271,15 @@ export function ExternalAutomationRunTable({
         </div>
       ) : (
         <div className="px-3 py-4 text-sm text-muted-foreground">
-          {isLoading ? 'Loading runs...' : 'No Hermes runs found yet.'}
+          {isLoading
+            ? translate(
+                'auto.components.automations.ExternalAutomationRunTable.8ea934cacf',
+                'Loading runs...'
+              )
+            : translate(
+                'auto.components.automations.ExternalAutomationRunTable.9c080765ff',
+                'No Hermes runs found yet.'
+              )}
         </div>
       )}
 
@@ -255,7 +287,9 @@ export function ExternalAutomationRunTable({
         <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
           <FileText className="size-3.5" />
           <span>
-            {pageStart}-{pageEnd} of {totalCount}
+            {pageStart}-{pageEnd}{' '}
+            {translate('auto.components.automations.ExternalAutomationRunTable.7475c0ce96', 'of')}
+            {totalCount}
           </span>
         </div>
         <div className="flex items-center gap-1">
@@ -263,7 +297,10 @@ export function ExternalAutomationRunTable({
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label="Previous run page"
+            aria-label={translate(
+              'auto.components.automations.ExternalAutomationRunTable.52d468a0b8',
+              'Previous run page'
+            )}
             disabled={page === 0 || isLoading}
             onClick={() => handlePageChange(Math.max(0, page - 1))}
           >
@@ -276,7 +313,10 @@ export function ExternalAutomationRunTable({
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label="Next run page"
+            aria-label={translate(
+              'auto.components.automations.ExternalAutomationRunTable.0ba9c0a95c',
+              'Next run page'
+            )}
             disabled={page >= totalPages - 1 || isLoading}
             onClick={() => handlePageChange(Math.min(totalPages - 1, page + 1))}
           >

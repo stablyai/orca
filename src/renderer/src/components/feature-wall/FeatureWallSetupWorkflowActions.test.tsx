@@ -37,15 +37,8 @@ vi.mock('@/runtime/web-runtime-session', () => ({
 
 vi.mock('./FeatureWallSetupStepVisuals', () => ({
   SetupTwoAgentsVisual: () => <div />,
-  SetupWorkspacesVisual: () => <div />
-}))
-
-vi.mock('./AddReposAnimatedVisual', () => ({
-  AddReposAnimatedVisual: () => <div />
-}))
-
-vi.mock('./SetupScriptAnimatedVisual', () => ({
-  SetupScriptAnimatedVisual: () => <div />
+  SetupWorkspacesVisual: () => <div />,
+  SetupMultipleReposVisual: () => <div />
 }))
 
 function makeRepo(id: string, overrides: Partial<Repo> = {}): Repo {

@@ -5,8 +5,8 @@
  * These functions have no side-effects and depend only on their arguments,
  * making them easy to test independently.
  */
-import * as path from 'path'
 import { existsSync } from 'fs'
+import * as path from 'path'
 import { isBinaryBuffer } from '../shared/binary-buffer'
 import type { GitLineStats } from '../shared/git-uncommitted-line-stats'
 
@@ -252,36 +252,4 @@ export function bufferToBlob(
     return { content: previewable ? buffer.toString('base64') : '', isBinary: true }
   }
   return { content: buffer.toString('utf-8'), isBinary: false }
-}
-
-/**
- * Build a diff result object from original/modified content.
- * Used by both working-tree diffs and branch diffs.
- */
-export function buildDiffResult(
-  originalContent: string,
-  modifiedContent: string,
-  originalIsBinary: boolean,
-  modifiedIsBinary: boolean,
-  filePath?: string
-) {
-  if (originalIsBinary || modifiedIsBinary) {
-    const ext = filePath ? path.extname(filePath).toLowerCase() : ''
-    const mimeType = PREVIEWABLE_MIME[ext]
-    return {
-      kind: 'binary' as const,
-      originalContent,
-      modifiedContent,
-      originalIsBinary,
-      modifiedIsBinary,
-      ...(mimeType ? { isImage: true, mimeType } : {})
-    }
-  }
-  return {
-    kind: 'text' as const,
-    originalContent,
-    modifiedContent,
-    originalIsBinary: false,
-    modifiedIsBinary: false
-  }
 }

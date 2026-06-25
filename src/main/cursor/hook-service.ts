@@ -3,12 +3,14 @@ import { join } from 'path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
+  buildManagedCommandDefinition,
   createManagedCommandMatcher,
   buildWindowsAgentHookPostCommand,
   getSharedManagedScriptPath,
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
+  wrapWindowsHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
@@ -28,7 +30,7 @@ import {
 //   - preToolUse/postToolUse/postToolUseFailure: in-flight tool preview
 //     between submit and stop — without these the pane appears idle for the
 //     entire duration of a long tool-heavy turn
-//   - beforeShellExecution / beforeMCPExecution: approval prompts (→ waiting)
+//   - beforeShellExecution / beforeMCPExecution: shell/MCP tool preview (→ working)
 //   - afterAgentResponse: carries the final composed reply text so the
 //     dashboard can surface it on done
 // sessionStart / sessionEnd are intentionally NOT subscribed — cursor-agent
@@ -59,7 +61,9 @@ function getManagedScriptPath(): string {
 }
 
 function getManagedCommand(scriptPath: string): string {
-  return process.platform === 'win32' ? scriptPath : wrapPosixHookCommand(scriptPath)
+  return process.platform === 'win32'
+    ? wrapWindowsHookCommand(scriptPath)
+    : wrapPosixHookCommand(scriptPath)
 }
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
@@ -106,6 +110,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
     '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
     '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
+    '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
     '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
@@ -226,7 +231,7 @@ export class CursorHookService {
       // Why: Cursor's documented schema puts `command` directly on the
       // definition (not under `hooks`). Emit that shape so cursor-agent
       // actually invokes the script.
-      const definition: HookDefinition = { command }
+      const definition: HookDefinition = buildManagedCommandDefinition(command)
       nextHooks[eventName] = [...cleaned, definition]
     }
 
@@ -276,7 +281,7 @@ export class CursorHookService {
         const cleaned = removeManagedCommands(current, isManagedCommand).filter(
           (definition) => !isManagedCommand(definition.command as string | undefined)
         )
-        const definition: HookDefinition = { command }
+        const definition: HookDefinition = buildManagedCommandDefinition(command)
         nextHooks[eventName] = [...cleaned, definition]
       }
 

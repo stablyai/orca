@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
@@ -10,7 +10,6 @@ import { requestEditorFileSave } from './editor-autosave'
 import { exportActiveMarkdownToPdf } from './export-active-markdown'
 import type { EditorToggleValue } from './EditorViewToggle'
 import { EditorPanelShell } from './EditorPanelShell'
-import { acquireExportPdfListener } from './editor-panel-export-pdf-listener'
 import { canUseChangesModeForFile } from './editor-panel-file-mode'
 import { getEditorPanelRenderModel } from './editor-panel-render-model'
 import { useClosedEditorTabCleanup } from './useClosedEditorTabCleanup'
@@ -18,6 +17,7 @@ import { useEditorCmdSaveRequest } from './useEditorCmdSaveRequest'
 import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { useMarkdownPreviewShortcut } from './useMarkdownPreviewShortcut'
 import { useUntitledFileRename } from './useUntitledFileRename'
+import { extractFrontMatter } from './markdown-frontmatter'
 
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
@@ -43,6 +43,8 @@ function EditorPanelInner({
   const setEditorViewMode = useAppStore((s) => s.setEditorViewMode)
   const openFile = useAppStore((s) => s.openFile)
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
+  const markdownFrontmatterVisible = useAppStore((s) => s.markdownFrontmatterVisible)
+  const setMarkdownFrontmatterVisible = useAppStore((s) => s.setMarkdownFrontmatterVisible)
   const closeFile = useAppStore((s) => s.closeFile)
   const clearUntitled = useAppStore((s) => s.clearUntitled)
   const editorDrafts = useAppStore((s) => s.editorDrafts)
@@ -109,7 +111,6 @@ function EditorPanelInner({
     handleRenameConfirm
   } = useUntitledFileRename({ openFiles, closeFile, openFile, clearUntitled })
 
-  useEffect(() => acquireExportPdfListener(), [])
   useClosedEditorTabCleanup(openFiles)
   useMarkdownPreviewShortcut({ activeFile, panelRef, openMarkdownPreview })
 
@@ -222,6 +223,7 @@ function EditorPanelInner({
   const model = getEditorPanelRenderModel({
     activeFile,
     fileContents,
+    editorDrafts,
     gitStatusByWorktree,
     gitBranchChangesByWorktree,
     markdownViewMode,
@@ -287,6 +289,10 @@ function EditorPanelInner({
     )
   }
   const handleOpenContainingFolder = (): void => {
+    // Why: virtual editor tabs use synthetic ids instead of on-disk paths.
+    if (activeFile.mode === 'check-details') {
+      return
+    }
     if (
       isLocalPathOpenBlocked(settingsForRuntimeOwner(settings, activeFile.runtimeEnvironmentId), {
         connectionId: getConnectionId(activeFile.worktreeId)
@@ -304,6 +310,26 @@ function EditorPanelInner({
     )?.activeRuntimeEnvironmentId?.trim() ||
     (renameDialogFile ? getConnectionId(renameDialogFile.worktreeId) : null)
   )
+  const markdownFrontmatterSourceFileId =
+    activeFile.mode === 'markdown-preview'
+      ? (activeFile.markdownPreviewSourceFileId ?? activeFile.filePath)
+      : activeFile.id
+  let activeMarkdownContent: string | null = null
+  if (activeFile.mode === 'markdown-preview') {
+    activeMarkdownContent =
+      editorDrafts[markdownFrontmatterSourceFileId] ?? fileContents[activeFile.id]?.content ?? null
+  } else if (activeFile.mode === 'edit') {
+    activeMarkdownContent =
+      editorDrafts[activeFile.id] ?? fileContents[activeFile.id]?.content ?? null
+  }
+  const canShowMarkdownFrontmatterToggle = Boolean(
+    model.isMarkdown &&
+    (activeFile.mode === 'markdown-preview' || model.mdViewMode !== 'source') &&
+    activeMarkdownContent &&
+    extractFrontMatter(activeMarkdownContent)
+  )
+  const isMarkdownFrontmatterVisible =
+    markdownFrontmatterVisible[markdownFrontmatterSourceFileId] ?? false
 
   return (
     <EditorPanelShell
@@ -313,6 +339,8 @@ function EditorPanelInner({
       model={model}
       copiedPathVisible={copiedPathToast?.fileId === activeFile.id}
       showMarkdownTableOfContents={showMarkdownTableOfContents}
+      canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
+      markdownFrontmatterVisible={isMarkdownFrontmatterVisible}
       sideBySide={sideBySide}
       openFiles={openFiles}
       fileContents={fileContents}
@@ -330,7 +358,15 @@ function EditorPanelInner({
       onToggleSideBySide={() => setSideBySide((prev) => !prev)}
       onEditorToggleChange={handleEditorToggleChange}
       onToggleMarkdownTableOfContents={() => setShowMarkdownTableOfContents((shown) => !shown)}
-      onExportMarkdownToPdf={() => void exportActiveMarkdownToPdf()}
+      onToggleMarkdownFrontmatter={() =>
+        setMarkdownFrontmatterVisible(
+          markdownFrontmatterSourceFileId,
+          !isMarkdownFrontmatterVisible
+        )
+      }
+      onExportMarkdownToPdf={() =>
+        void exportActiveMarkdownToPdf({ fileId: activeFile.id, root: panelRef.current })
+      }
       onContentChange={handleContentChange}
       onContentChangeForFile={handleContentChangeForFile}
       onDirtyStateHint={handleDirtyStateHint}

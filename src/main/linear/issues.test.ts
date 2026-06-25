@@ -1,15 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LinearClientForWorkspace } from './client'
+import { credentialDecryptionMessage } from '../../shared/integration-credential-errors'
 
 const rawRequest = vi.fn()
 const getClients = vi.fn()
 const clearToken = vi.fn()
+const isAuthError = vi.fn()
 
 vi.mock('./client', () => ({
   acquire: vi.fn().mockResolvedValue(undefined),
   release: vi.fn(),
   getClients: (...args: unknown[]) => getClients(...args),
-  isAuthError: vi.fn().mockReturnValue(false),
+  isAuthError: (...args: unknown[]) => isAuthError(...args),
   clearToken: (...args: unknown[]) => clearToken(...args)
 }))
 
@@ -87,6 +89,7 @@ function datedIssues(prefix: string, count: number, startMs: number, startIndex 
 describe('Linear issue queries', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    isAuthError.mockReturnValue(false)
     getClients.mockReturnValue([makeEntry()])
   })
 
@@ -104,7 +107,8 @@ describe('Linear issue queries', () => {
           labelIds: ['label-1'],
           workspaceId: 'workspace-1',
           team: { id: 'team-1' },
-          estimate: 3
+          estimate: 3,
+          dueDate: null
         }
       ],
       hasMore: false
@@ -114,6 +118,26 @@ describe('Linear issue queries', () => {
     expect(rawRequest.mock.calls[0][0]).toContain('query OrcaLinearIssues')
     expect(rawRequest.mock.calls[0][0]).toContain('pageInfo')
     expect(rawRequest.mock.calls[0][0]).toContain('estimate')
+  })
+
+  it('passes team filters into Linear before list pagination', async () => {
+    rawRequest.mockResolvedValueOnce({
+      data: { issues: { nodes: [rawIssue('LIN-1')], pageInfo: { hasNextPage: false } } }
+    })
+    const { listIssues } = await import('./issues')
+
+    await expect(listIssues('open', 10, 'workspace-1', 'team-1')).resolves.toMatchObject({
+      items: [{ id: 'LIN-1' }],
+      hasMore: false
+    })
+
+    expect(rawRequest.mock.calls[0][1]).toMatchObject({
+      first: 10,
+      filter: {
+        state: { type: { nin: ['completed', 'canceled'] } },
+        team: { id: { eq: 'team-1' } }
+      }
+    })
   })
 
   it('keeps single-workspace search results in Linear relevance order', async () => {
@@ -165,6 +189,20 @@ describe('Linear issue queries', () => {
         }
       ]
     })
+  })
+
+  it('surfaces Linear credential decrypt errors on active issue reads and mutations', async () => {
+    const error = new Error(credentialDecryptionMessage('Linear'))
+    getClients.mockImplementation(() => {
+      throw error
+    })
+    const { createIssue, listIssues, searchIssues } = await import('./issues')
+
+    await expect(searchIssues('bug', 20, 'workspace-1')).rejects.toThrow(error.message)
+    await expect(listIssues('all', 20, 'workspace-1')).rejects.toThrow(error.message)
+    await expect(createIssue('team-1', 'Fix auth', undefined, 'workspace-1')).rejects.toThrow(
+      error.message
+    )
   })
 
   it('marks plain list results as having more when Linear has a next page', async () => {
@@ -236,6 +274,57 @@ describe('Linear issue queries', () => {
     await expect(listIssues('all', 1, 'all')).resolves.toMatchObject({
       items: [{ id: 'LIN-NEW' }],
       hasMore: true
+    })
+  })
+
+  it('keeps partial workspace errors on multi-workspace lists', async () => {
+    const secondWorkspaceRequest = vi.fn().mockRejectedValue(new Error('fetch failed'))
+    getClients.mockReturnValue([
+      makeEntry(),
+      makeEntry({
+        workspaceId: 'workspace-2',
+        organizationName: 'Second Workspace',
+        request: secondWorkspaceRequest
+      })
+    ])
+    rawRequest.mockResolvedValueOnce({
+      data: {
+        issues: {
+          nodes: [rawIssue('LIN-OK')],
+          pageInfo: { hasNextPage: false }
+        }
+      }
+    })
+    const { listIssues } = await import('./issues')
+
+    await expect(listIssues('all', 10, 'all')).resolves.toMatchObject({
+      items: [{ id: 'LIN-OK' }],
+      errors: [
+        {
+          workspaceId: 'workspace-2',
+          workspaceName: 'Second Workspace',
+          type: 'network',
+          message: 'fetch failed'
+        }
+      ]
+    })
+  })
+
+  it('keeps workspace errors on single-workspace lists', async () => {
+    rawRequest.mockRejectedValueOnce(new Error('fetch failed'))
+    const { listIssues } = await import('./issues')
+
+    await expect(listIssues('all', 10, 'workspace-1')).resolves.toMatchObject({
+      items: [],
+      hasMore: false,
+      errors: [
+        {
+          workspaceId: 'workspace-1',
+          workspaceName: 'Workspace',
+          type: 'network',
+          message: 'fetch failed'
+        }
+      ]
     })
   })
 
@@ -314,5 +403,345 @@ describe('Linear issue queries', () => {
     })
 
     expect(updateIssue).toHaveBeenCalledWith('issue-1', { estimate: 5 })
+  })
+
+  it('sends due date updates through to Linear', async () => {
+    const updateIssue = vi.fn().mockResolvedValue({ success: true })
+    getClients.mockReturnValue([{ ...makeEntry(), client: { updateIssue } }])
+    const { updateIssue: updateLinearIssue } = await import('./issues')
+
+    await expect(
+      updateLinearIssue('issue-1', { dueDate: '2026-06-30' }, 'workspace-1')
+    ).resolves.toEqual({ ok: true })
+
+    expect(updateIssue).toHaveBeenCalledWith('issue-1', { dueDate: '2026-06-30' })
+  })
+
+  it('reads back agent state updates before confirming success', async () => {
+    const updateIssue = vi.fn().mockResolvedValue({ success: true })
+    rawRequest.mockResolvedValueOnce({
+      data: {
+        issue: {
+          id: 'issue-1',
+          identifier: 'ENG-1',
+          title: 'Fix thing',
+          description: 'Description',
+          url: 'https://linear.app/ENG-1',
+          team: { id: 'team-1', key: 'ENG', name: 'Engineering' },
+          state: { id: 'state-review', name: 'In Review' },
+          parent: null
+        }
+      }
+    })
+    getClients.mockReturnValue([
+      {
+        ...makeEntry(),
+        client: { updateIssue, client: { rawRequest } }
+      }
+    ])
+    const { updateIssueForAgent } = await import('./issues')
+
+    await expect(
+      updateIssueForAgent('issue-1', { stateId: 'state-review' }, 'workspace-1')
+    ).resolves.toMatchObject({ state: { id: 'state-review' } })
+
+    expect(updateIssue).toHaveBeenCalledWith('issue-1', { stateId: 'state-review' })
+    expect(rawRequest.mock.calls[0][0]).toContain('query OrcaLinearIssueByUuid')
+  })
+
+  it('reads back agent task field updates before confirming success', async () => {
+    const updateIssue = vi.fn().mockResolvedValue({ success: true })
+    rawRequest.mockResolvedValueOnce({
+      data: {
+        issue: {
+          id: 'issue-1',
+          identifier: 'ENG-1',
+          title: 'Fix thing',
+          description: 'Description',
+          url: 'https://linear.app/ENG-1',
+          team: { id: 'team-1', key: 'ENG', name: 'Engineering' },
+          state: { id: 'state-review', name: 'In Review' },
+          parent: null,
+          priority: 1,
+          estimate: 5,
+          dueDate: '2026-06-30',
+          labelIds: ['label-1'],
+          labels: { nodes: [{ id: 'label-1', name: 'Bug' }] }
+        }
+      }
+    })
+    getClients.mockReturnValue([
+      { ...makeEntry(), client: { updateIssue, client: { rawRequest } } }
+    ])
+    const { updateIssueForAgent } = await import('./issues')
+
+    await expect(
+      updateIssueForAgent(
+        'issue-1',
+        { priority: 1, estimate: 5, dueDate: '2026-06-30', labelIds: ['label-1'] },
+        'workspace-1'
+      )
+    ).resolves.toMatchObject({ priority: 1, dueDate: '2026-06-30', labelIds: ['label-1'] })
+
+    expect(updateIssue).toHaveBeenCalledWith('issue-1', {
+      priority: 1,
+      estimate: 5,
+      dueDate: '2026-06-30',
+      labelIds: ['label-1']
+    })
+  })
+
+  it('treats post-state-update readback misses as unconfirmed', async () => {
+    const updateIssue = vi.fn().mockResolvedValue({ success: true })
+    rawRequest.mockResolvedValueOnce({ data: { issue: null } })
+    getClients.mockReturnValue([
+      {
+        ...makeEntry(),
+        client: { updateIssue, client: { rawRequest } }
+      }
+    ])
+    const { updateIssueForAgent } = await import('./issues')
+
+    await expect(
+      updateIssueForAgent('issue-1', { stateId: 'state-review' }, 'workspace-1')
+    ).rejects.toMatchObject({ kind: 'unconfirmed' })
+  })
+
+  it('treats direct write-id lookup misses as null', async () => {
+    rawRequest
+      .mockRejectedValueOnce(
+        new Error('Entity not found: Issue - Could not find referenced Issue.')
+      )
+      .mockRejectedValueOnce(
+        new Error('Entity not found: Comment - Could not find referenced Comment.')
+      )
+      .mockRejectedValueOnce(
+        new Error('Entity not found: Attachment - Could not find referenced Attachment.')
+      )
+    getClients.mockReturnValue([{ ...makeEntry(), client: { client: { rawRequest } } }])
+    const { getIssueByUuidForAgent, getCommentByUuidForAgent, getAttachmentByUuidForAgent } =
+      await import('./issues')
+
+    await expect(getIssueByUuidForAgent('missing-issue', 'workspace-1')).resolves.toBeNull()
+    await expect(getCommentByUuidForAgent('missing-comment', 'workspace-1')).resolves.toBeNull()
+    await expect(
+      getAttachmentByUuidForAgent('missing-attachment', 'workspace-1')
+    ).resolves.toBeNull()
+    expect(clearToken).not.toHaveBeenCalled()
+  })
+
+  it('sends threaded agent comments with a client supplied id', async () => {
+    const createComment = vi.fn().mockResolvedValue({
+      success: true,
+      comment: Promise.resolve({ id: 'comment-1', url: 'https://linear.app/comment-1' })
+    })
+    getClients.mockReturnValue([
+      {
+        ...makeEntry(),
+        client: { createComment }
+      }
+    ])
+    const { addIssueComment } = await import('./issues')
+
+    await expect(
+      addIssueComment('issue-1', 'hello', 'workspace-1', {
+        id: '11111111-1111-4111-8111-111111111111',
+        parentId: 'parent-comment'
+      })
+    ).resolves.toMatchObject({ ok: true, id: 'comment-1', parentId: 'parent-comment' })
+
+    expect(createComment).toHaveBeenCalledWith({
+      id: '11111111-1111-4111-8111-111111111111',
+      issueId: 'issue-1',
+      body: 'hello',
+      parentId: 'parent-comment'
+    })
+  })
+
+  it('creates agent attachments with a client supplied id', async () => {
+    const createAttachment = vi.fn().mockResolvedValue({
+      success: true,
+      attachment: Promise.resolve({ id: 'attachment-1' })
+    })
+    rawRequest.mockResolvedValueOnce({
+      data: {
+        attachment: {
+          id: 'attachment-1',
+          title: 'PR link',
+          url: 'https://example.com/review/1',
+          issue: { id: 'issue-1', identifier: 'ENG-1', url: 'https://linear.app/ENG-1' }
+        }
+      }
+    })
+    getClients.mockReturnValue([
+      {
+        ...makeEntry(),
+        client: { createAttachment, client: { rawRequest } }
+      }
+    ])
+    const { createIssueAttachment } = await import('./issues')
+
+    await expect(
+      createIssueAttachment(
+        'issue-1',
+        {
+          id: '22222222-2222-4222-8222-222222222222',
+          title: 'PR link',
+          url: 'https://example.com/review/1'
+        },
+        'workspace-1'
+      )
+    ).resolves.toMatchObject({ id: 'attachment-1', issue: { identifier: 'ENG-1' } })
+
+    expect(createAttachment).toHaveBeenCalledWith({
+      id: '22222222-2222-4222-8222-222222222222',
+      issueId: 'issue-1',
+      title: 'PR link',
+      url: 'https://example.com/review/1'
+    })
+  })
+
+  it('treats post-mutation attachment readback misses as unconfirmed', async () => {
+    const createAttachment = vi.fn().mockResolvedValue({
+      success: true,
+      attachment: Promise.resolve({ id: 'attachment-1' })
+    })
+    rawRequest.mockResolvedValueOnce({ data: { attachment: null } })
+    getClients.mockReturnValue([
+      {
+        ...makeEntry(),
+        client: { createAttachment, client: { rawRequest } }
+      }
+    ])
+    const { createIssueAttachment } = await import('./issues')
+
+    await expect(
+      createIssueAttachment(
+        'issue-1',
+        {
+          id: '22222222-2222-4222-8222-222222222222',
+          title: 'PR link',
+          url: 'https://example.com/review/1'
+        },
+        'workspace-1'
+      )
+    ).rejects.toMatchObject({ kind: 'unconfirmed' })
+  })
+
+  it('creates parented agent issues with a client supplied id and project id', async () => {
+    const createIssue = vi.fn().mockResolvedValue({
+      success: true,
+      issue: Promise.resolve({ id: 'issue-created' })
+    })
+    rawRequest.mockResolvedValueOnce({
+      data: {
+        issue: {
+          id: 'issue-created',
+          identifier: 'ENG-2',
+          title: 'Follow up',
+          url: 'https://linear.app/ENG-2',
+          team: { id: 'team-1', key: 'ENG', name: 'Engineering' },
+          state: { id: 'state-1', name: 'Todo' },
+          parent: { id: 'issue-parent', identifier: 'ENG-1' }
+        }
+      }
+    })
+    getClients.mockReturnValue([
+      {
+        ...makeEntry(),
+        client: { createIssue, client: { rawRequest } }
+      }
+    ])
+    const { createIssueForAgent } = await import('./issues')
+
+    await expect(
+      createIssueForAgent('team-1', 'Follow up', 'Details', 'workspace-1', {
+        id: '33333333-3333-4333-8333-333333333333',
+        parentId: 'issue-parent',
+        projectId: 'project-1'
+      })
+    ).resolves.toMatchObject({
+      id: 'issue-created',
+      parent: { id: 'issue-parent' },
+      team: { key: 'ENG' }
+    })
+
+    expect(createIssue).toHaveBeenCalledWith({
+      id: '33333333-3333-4333-8333-333333333333',
+      teamId: 'team-1',
+      title: 'Follow up',
+      description: 'Details',
+      parentId: 'issue-parent',
+      projectId: 'project-1'
+    })
+    expect(rawRequest.mock.calls.at(-1)?.[0]).toContain('description')
+  })
+
+  it('treats post-create readback misses as unconfirmed', async () => {
+    const createIssue = vi.fn().mockResolvedValue({
+      success: true,
+      issue: Promise.resolve({ id: 'issue-created' })
+    })
+    rawRequest.mockResolvedValueOnce({ data: { issue: null } })
+    getClients.mockReturnValue([
+      {
+        ...makeEntry(),
+        client: { createIssue, client: { rawRequest } }
+      }
+    ])
+    const { createIssueForAgent } = await import('./issues')
+
+    await expect(
+      createIssueForAgent('team-1', 'Follow up', 'Details', 'workspace-1', {
+        id: '33333333-3333-4333-8333-333333333333'
+      })
+    ).rejects.toMatchObject({ kind: 'unconfirmed' })
+  })
+
+  it('treats post-create readback auth-like errors as unconfirmed', async () => {
+    const authError = new Error('Auth expired during confirmation')
+    isAuthError.mockImplementation((error) => error === authError)
+    const createIssue = vi.fn().mockResolvedValue({
+      success: true,
+      issue: Promise.resolve({ id: 'issue-created' })
+    })
+    rawRequest.mockRejectedValueOnce(authError)
+    getClients.mockReturnValue([
+      {
+        ...makeEntry(),
+        client: { createIssue, client: { rawRequest } }
+      }
+    ])
+    const { createIssueForAgent } = await import('./issues')
+
+    await expect(
+      createIssueForAgent('team-1', 'Follow up', 'Details', 'workspace-1', {
+        id: '33333333-3333-4333-8333-333333333333'
+      })
+    ).rejects.toMatchObject({ kind: 'unconfirmed' })
+    expect(clearToken).not.toHaveBeenCalled()
+  })
+
+  it('resolves a reply target to its thread root without reading capped issue comments', async () => {
+    rawRequest.mockResolvedValueOnce({
+      data: {
+        comment: {
+          id: 'reply-1',
+          url: 'https://linear.app/comment/reply-1',
+          body: 'Nested reply',
+          parent: { id: 'root-1' },
+          issue: { id: 'issue-1', identifier: 'ENG-1', url: 'https://linear.app/ENG-1' }
+        }
+      }
+    })
+    const { getIssueCommentThreadRoot } = await import('./issues')
+
+    await expect(getIssueCommentThreadRoot('issue-1', 'reply-1', 'workspace-1')).resolves.toEqual({
+      id: 'root-1',
+      parentId: 'root-1'
+    })
+
+    expect(rawRequest.mock.calls[0][0]).toContain('query OrcaLinearCommentByUuid')
+    expect(rawRequest.mock.calls[0][0]).toContain('body')
   })
 })

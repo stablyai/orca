@@ -3,7 +3,9 @@
 // format human-facing messages. Centralizing this mapping keeps the allowlist
 // auditable in one place instead of spread across per-method branches.
 import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from './core'
+import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
+import { LINEAR_ERROR_CODES } from '../../../shared/linear-agent-access'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
   return {
@@ -48,6 +50,7 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 ])
 
 const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(COMPUTER_ERROR_CODES))
+const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
   const message = error instanceof Error ? error.message : String(error)
@@ -57,13 +60,28 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     typeof (error as { code: unknown }).code === 'string' &&
     COMPUTER_PASSTHROUGH_CODES.has((error as { code: string }).code)
   ) {
-    return errorResponse(id, meta, (error as { code: string }).code, message)
+    const code = (error as { code: string }).code
+    return errorResponse(id, meta, code, message, computerErrorData(code))
   }
   if (
     error instanceof Error &&
     'code' in error &&
     typeof (error as { code: unknown }).code === 'string' &&
     (error as { code: string }).code.startsWith('LINEAGE_')
+  ) {
+    return errorResponse(
+      id,
+      meta,
+      (error as { code: string }).code,
+      message,
+      (error as { data?: unknown }).data
+    )
+  }
+  if (
+    error instanceof Error &&
+    'code' in error &&
+    typeof (error as { code: unknown }).code === 'string' &&
+    LINEAR_PASSTHROUGH_CODES.has((error as { code: string }).code)
   ) {
     return errorResponse(
       id,
@@ -82,11 +100,26 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
   return errorResponse(id, meta, 'runtime_error', message)
 }
 
+export const computerErrorData = computerUseErrorRecoveryData
+
 // Why: browser errors carry a structured .code property (BrowserError from
 // cdp-bridge.ts) that maps directly to agent-facing error codes. We forward
 // that code rather than falling back to the runtime allowlist, because the
 // browser surface area uses its own code namespace (browser_no_tab, etc.).
 export function mapBrowserError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
+  if (
+    error instanceof Error &&
+    'code' in error &&
+    typeof (error as { code: unknown }).code === 'string'
+  ) {
+    return errorResponse(id, meta, (error as { code: string }).code, error.message)
+  }
+  return mapRuntimeError(id, meta, error)
+}
+
+// Why: same as browser — emulator errors (EmulatorError) carry .code (emulator_no_active etc.)
+// so we forward the structured code instead of generic runtime_error.
+export function mapEmulatorError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
   if (
     error instanceof Error &&
     'code' in error &&

@@ -4,13 +4,15 @@ import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-sessio
 import {
   buildActiveConnectionIdsAtShutdown,
   buildEditorSessionData,
-  buildLastVisitedAtByWorktreeId,
   buildPersistedBrowserPagesByWorkspace,
   buildPersistedBrowserTabsByWorktree,
   buildSanitizedTabsByWorktree,
   buildTerminalSessionData,
   type WorkspaceSessionSnapshot
 } from './workspace-session'
+import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
+import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
+import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
 
 type SessionRelevantField = keyof WorkspaceSessionSnapshot
 
@@ -79,6 +81,7 @@ export function buildWorkspaceSessionPatch(
     hasAnyChangedField(changed, [
       'openFiles',
       'editorDrafts',
+      'markdownFrontmatterVisible',
       'activeFileIdByWorktree',
       'activeTabTypeByWorktree'
     ] as const)
@@ -88,6 +91,7 @@ export function buildWorkspaceSessionPatch(
       buildEditorSessionData(
         snapshot.openFiles,
         snapshot.editorDrafts,
+        snapshot.markdownFrontmatterVisible,
         snapshot.activeFileIdByWorktree,
         snapshot.activeTabTypeByWorktree
       )
@@ -109,17 +113,15 @@ export function buildWorkspaceSessionPatch(
   if (changed.has('browserUrlHistory')) {
     patch.browserUrlHistory = normalizeBrowserHistoryEntries(snapshot.browserUrlHistory)
   }
-  if (changed.has('unifiedTabsByWorktree')) {
-    patch.unifiedTabs = snapshot.unifiedTabsByWorktree
-  }
-  if (changed.has('groupsByWorktree')) {
-    patch.tabGroups = snapshot.groupsByWorktree
-  }
-  if (changed.has('layoutByWorktree')) {
-    patch.tabGroupLayouts = snapshot.layoutByWorktree
-  }
-  if (changed.has('activeGroupIdByWorktree')) {
-    patch.activeGroupIdByWorktree = snapshot.activeGroupIdByWorktree
+  if (
+    hasAnyChangedField(changed, [
+      'activeGroupIdByWorktree',
+      'groupsByWorktree',
+      'layoutByWorktree',
+      'unifiedTabsByWorktree'
+    ] as const)
+  ) {
+    Object.assign(patch, buildPersistedUnifiedTabSessionData(snapshot))
   }
   if (changed.has('lastVisitedAtByWorktreeId')) {
     patch.lastVisitedAtByWorktreeId = buildLastVisitedAtByWorktreeId(snapshot)
@@ -130,6 +132,10 @@ export function buildWorkspaceSessionPatch(
       Object.keys(snapshot.defaultTerminalTabsAppliedByWorktreeId).length > 0
         ? snapshot.defaultTerminalTabsAppliedByWorktreeId
         : undefined
+  }
+  if (changed.has('sleepingAgentSessionsByPaneKey')) {
+    patch.sleepingAgentSessionsByPaneKey =
+      buildSleepingAgentSessionData(snapshot).sleepingAgentSessionsByPaneKey
   }
 
   return patch

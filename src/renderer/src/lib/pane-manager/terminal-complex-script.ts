@@ -1,7 +1,6 @@
-// Why: xterm WebGL renders from a glyph atlas; complex text and background
-// repaint-heavy output are safer through the browser renderer path. Terminal
-// UI drawing glyphs stay on WebGL because xterm's custom-glyph renderer is
-// built for those ranges.
+// Why: some foreground ANSI redraws paint background fills before glyphs settle.
+// Detect those chunks so the terminal can force a narrow viewport refresh
+// without switching renderers based on the text content.
 const EMOJI_PRESENTATION_PATTERN = /\p{Emoji_Presentation}/u
 const ESCAPE_CHARACTER = String.fromCharCode(0x1b)
 const SGR_SEQUENCE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[([0-9:;]*)m`, 'g')
@@ -15,8 +14,8 @@ function isRendererRiskCodePoint(value: number): boolean {
     isInRange(value, 0x0590, 0x08ff) ||
     value === 0x200d ||
     isInRange(value, 0x1100, 0x11ff) ||
-    // Why: xterm WebGL can leave stale atlas cells for East Asian wide glyphs
-    // on Windows; force browser text rendering before long CJK output paints.
+    // Why: keep this list available for targeted refresh decisions without
+    // turning Unicode output into a renderer-selection signal.
     isInRange(value, 0x2e80, 0x9fff) ||
     isInRange(value, 0xa960, 0xa97f) ||
     isInRange(value, 0xac00, 0xd7ff) ||
@@ -87,7 +86,7 @@ function containsBackgroundSgr(data: string): boolean {
   return false
 }
 
-export function terminalOutputPrefersDomRenderer(data: string): boolean {
+export function terminalOutputPrefersRenderRefresh(data: string): boolean {
   if (containsBackgroundSgr(data)) {
     return true
   }

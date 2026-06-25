@@ -1,0 +1,215 @@
+import type {
+  AiVaultListResult,
+  AiVaultScanIssue,
+  AiVaultSession
+} from '../../shared/ai-vault-types'
+import { sessionSortTime } from './session-scanner-accumulator'
+import { parseAgentSessionFile } from './session-scanner-agent-parser'
+import { codexHomeForSessionsDir } from './session-scanner-codex-paths'
+import { discoverInScopeClaudeFiles } from './session-scanner-scope-discovery'
+import {
+  DEFAULT_CODEX_HOME_DIR,
+  discoverAiVaultSessionSources
+} from './session-scanner-source-discovery'
+import type {
+  AiVaultScanOptions,
+  SessionFileCandidate,
+  SessionFileDiscovery,
+  SessionParseResult
+} from './session-scanner-types'
+import { clampPositiveInteger, errorMessage } from './session-scanner-values'
+
+const DEFAULT_LIMIT = 1000
+const DEFAULT_SCAN_LIMIT_PER_AGENT = 1000
+const SESSION_PARSE_CONCURRENCY = 8
+// Upper bound on extra in-scope transcripts discovered and parsed past the
+// recency cap; guards against a pathological scoped history directory.
+const SCOPE_PARSE_LIMIT = 2000
+
+/**
+ * Scan all supported AI agent session stores and return a unified, sorted,
+ * deduplicated list of sessions for the AI Vault panel. Discovers sessions
+ * from file-based stores (Claude, Codex, Gemini, etc.) and SQLite-based
+ * stores (OpenCode 1.17.x). Results are sorted by session sort time DESC
+ * and truncated to `limit`.
+ * @param options - Optional scan configuration (limits, custom dirs, platform).
+ * @returns The list of sessions, scan issues, and a timestamp.
+ */
+export async function scanAiVaultSessions(
+  options: AiVaultScanOptions = {}
+): Promise<AiVaultListResult> {
+  const limit = clampPositiveInteger(options.limit, DEFAULT_LIMIT)
+  const limitPerAgent = clampPositiveInteger(options.limitPerAgent, DEFAULT_SCAN_LIMIT_PER_AGENT)
+  const platform = options.platform ?? process.platform
+  const issues: AiVaultScanIssue[] = []
+  const discoveries = await discoverAiVaultSessionSources({ options, limitPerAgent, issues })
+
+  const candidates = discoveries
+    .flatMap((discovery) =>
+      discovery.files.map(
+        (file): SessionFileCandidate => ({
+          agent: discovery.agent,
+          file,
+          codexHome:
+            discovery.agent === 'codex'
+              ? codexHomeForSessionsDir(discovery.rootDir, DEFAULT_CODEX_HOME_DIR)
+              : null
+        })
+      )
+    )
+    .sort((left, right) => right.file.mtimeMs - left.file.mtimeMs)
+
+  const parsedSessions = await parseSessionCandidates({
+    candidates,
+    limit,
+    platform,
+    issues
+  })
+
+  const cappedSessions = parsedSessions
+    .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
+    .slice(0, limit)
+
+  const scopeSessions = await scanInScopeSessions({
+    discoveries,
+    scopePaths: options.scopePaths ?? [],
+    alreadyParsedFilePaths: new Set(cappedSessions.map((session) => session.filePath)),
+    platform,
+    issues
+  })
+
+  return {
+    sessions: mergeSessions(cappedSessions, scopeSessions),
+    issues,
+    scannedAt: new Date().toISOString()
+  }
+}
+
+// In-scope sessions are guaranteed regardless of the recency cap, so the global
+// (already capped) result and the scope result are unioned and de-duplicated by
+// session id, then re-sorted DESC.
+function mergeSessions(
+  cappedSessions: AiVaultSession[],
+  scopeSessions: AiVaultSession[]
+): AiVaultSession[] {
+  if (scopeSessions.length === 0) {
+    return cappedSessions
+  }
+  const byId = new Map<string, AiVaultSession>()
+  for (const session of cappedSessions) {
+    byId.set(session.id, session)
+  }
+  for (const session of scopeSessions) {
+    byId.set(session.id, session)
+  }
+  return [...byId.values()].sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
+}
+
+async function scanInScopeSessions(args: {
+  discoveries: SessionFileDiscovery[]
+  scopePaths: readonly string[]
+  alreadyParsedFilePaths: ReadonlySet<string>
+  platform: NodeJS.Platform
+  issues: AiVaultScanIssue[]
+}): Promise<AiVaultSession[]> {
+  if (args.scopePaths.length === 0) {
+    return []
+  }
+  const claudeRootDirs = args.discoveries
+    .filter((discovery) => discovery.agent === 'claude')
+    .map((discovery) => discovery.rootDir)
+  const files = await discoverInScopeClaudeFiles({
+    rootDirs: claudeRootDirs,
+    scopePaths: args.scopePaths,
+    limit: SCOPE_PARSE_LIMIT,
+    excludedFilePaths: args.alreadyParsedFilePaths,
+    issues: args.issues
+  })
+  const candidates = files.map(
+    (file): SessionFileCandidate => ({ agent: 'claude', file, codexHome: null })
+  )
+  if (candidates.length === 0) {
+    return []
+  }
+  // Parse every in-scope candidate (limit === candidate count never early-stops).
+  return parseSessionCandidates({
+    candidates,
+    limit: candidates.length,
+    platform: args.platform,
+    issues: args.issues
+  })
+}
+
+async function parseSessionCandidates(args: {
+  candidates: SessionFileCandidate[]
+  limit: number
+  platform: NodeJS.Platform
+  issues: AiVaultScanIssue[]
+}): Promise<AiVaultSession[]> {
+  const sessions: AiVaultSession[] = []
+  let index = 0
+
+  while (index < args.candidates.length) {
+    if (canStopParsingSessions(sessions, args.limit, args.candidates[index]?.file.mtimeMs)) {
+      break
+    }
+
+    const remaining = args.candidates.length - index
+    const needed = Math.max(args.limit - sessions.length, 1)
+    const batchSize = Math.min(SESSION_PARSE_CONCURRENCY, needed, remaining)
+    const batch = args.candidates.slice(index, index + batchSize)
+    const results = await Promise.all(
+      batch.map((candidate) => parseSessionCandidate(candidate, args.platform))
+    )
+
+    for (const result of results) {
+      if (result.issue) {
+        args.issues.push(result.issue)
+      }
+      if (result.session) {
+        sessions.push(result.session)
+      }
+    }
+
+    index += batchSize
+  }
+
+  return sessions
+}
+
+async function parseSessionCandidate(
+  candidate: SessionFileCandidate,
+  platform: NodeJS.Platform
+): Promise<SessionParseResult> {
+  try {
+    const session = await parseAgentSessionFile(candidate, platform)
+    return { session, issue: null }
+  } catch (err) {
+    return {
+      session: null,
+      issue: {
+        agent: candidate.agent,
+        path: candidate.file.path,
+        message: errorMessage(err)
+      }
+    }
+  }
+}
+
+function canStopParsingSessions(
+  sessions: AiVaultSession[],
+  limit: number,
+  nextCandidateMtimeMs: number | undefined
+): boolean {
+  if (sessions.length < limit || typeof nextCandidateMtimeMs !== 'number') {
+    return false
+  }
+  const visibleCutoff = sessions
+    .map(sessionSortTime)
+    .sort((left, right) => right - left)
+    .at(limit - 1)
+
+  // Transcript mtime is already our discovery bound and fallback sort key; older
+  // files cannot displace the current visible set once the cutoff is newer.
+  return typeof visibleCutoff === 'number' && nextCandidateMtimeMs < visibleCutoff
+}

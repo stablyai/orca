@@ -58,7 +58,24 @@ function defaultEndpointDir(): string {
   return join(homedir(), RELAY_HOOKS_DIR_NAME, RELAY_HOOKS_SUBDIR)
 }
 
+function isWindowsNamedPipePath(sockPath: string): boolean {
+  return /^\\\\[.?]\\pipe\\/i.test(sockPath)
+}
+
+function windowsNamedPipeEndpointName(sockPath: string): string {
+  return (
+    sockPath
+      .replace(/^\\\\[.?]\\pipe\\/i, '')
+      .split(/[\\/]/)
+      .filter(Boolean)
+      .pop() ?? 'relay'
+  )
+}
+
 export function endpointDirForRelaySocket(sockPath: string): string {
+  if (isWindowsNamedPipePath(sockPath)) {
+    return join(defaultEndpointDir(), windowsNamedPipeEndpointName(sockPath))
+  }
   return join(dirname(sockPath), RELAY_HOOKS_SUBDIR, basename(sockPath))
 }
 
@@ -288,6 +305,7 @@ export class RelayAgentHookServer {
     const envelope: AgentHookRelayEnvelope = {
       source,
       paneKey: event.paneKey,
+      ...(event.launchToken ? { launchToken: event.launchToken } : {}),
       tabId: event.tabId,
       worktreeId: event.worktreeId,
       connectionId: null,
@@ -297,6 +315,7 @@ export class RelayAgentHookServer {
       toolUseId: event.toolUseId,
       toolAgentId: event.toolAgentId,
       toolAgentType: event.toolAgentType,
+      ...(event.providerSession ? { providerSession: event.providerSession } : {}),
       isReplay: options.isReplay === true ? true : undefined,
       env,
       version,

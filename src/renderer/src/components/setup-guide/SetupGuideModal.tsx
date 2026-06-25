@@ -20,6 +20,7 @@ import { FeatureWallSetupChecklist } from '../feature-wall/FeatureWallSetupCheck
 import { SetupGuideProgressRing } from './SetupGuideProgressRing'
 import { useSetupGuideProgress } from './use-setup-guide-progress'
 import { useSetupGuideOpenCloseTelemetry } from './use-setup-guide-telemetry'
+import { translate } from '@/i18n/i18n'
 
 export default function SetupGuideModal(): JSX.Element | null {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -28,9 +29,6 @@ export default function SetupGuideModal(): JSX.Element | null {
   const setSetupGuideSidebarDismissed = useAppStore((s) => s.setSetupGuideSidebarDismissed)
   const isOpen = activeModal === 'setup-guide'
   const setupSteps = useMemo(() => getFeatureWallSetupSteps(), [])
-  const [activeStepId, setActiveStepId] = useState<FeatureWallSetupStepId>(
-    () => setupSteps[0]?.id ?? 'default-agent'
-  )
   const [userSelectedStep, setUserSelectedStep] = useState(false)
   const [orchestrationSkillInstalled, setOrchestrationSkillInstalled] = useState(false)
   const [browserUseSkillInstalled, setBrowserUseSkillInstalled] = useState(false)
@@ -38,6 +36,9 @@ export default function SetupGuideModal(): JSX.Element | null {
     isOpen,
     orchestrationSkillInstalled,
     browserUseSkillInstalled
+  )
+  const [activeStepId, setActiveStepId] = useState<FeatureWallSetupStepId>(() =>
+    getFirstIncompleteFeatureWallSetupStepId(progress.stepDone)
   )
   const requestedStepId = isFeatureWallSetupStepId(modalData.setupStepId)
     ? modalData.setupStepId
@@ -123,7 +124,10 @@ export default function SetupGuideModal(): JSX.Element | null {
               type="button"
               variant="ghost"
               size="icon-xs"
-              aria-label="Hide checklist from sidebar"
+              aria-label={translate(
+                'auto.components.setup.guide.SetupGuideModal.f3b5ffb2a6',
+                'Hide checklist from sidebar'
+              )}
               onClick={handleHideFromSidebar}
               className="absolute right-10 top-3.5 text-muted-foreground"
             >
@@ -131,12 +135,20 @@ export default function SetupGuideModal(): JSX.Element | null {
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            This will hide the checklist from the sidebar
+            {translate(
+              'auto.components.setup.guide.SetupGuideModal.28cf59fcb4',
+              'This will hide the checklist from the sidebar'
+            )}
           </TooltipContent>
         </Tooltip>
         <DialogHeader className="gap-1 border-b border-border px-7 py-4">
           <div className="flex items-center gap-2">
-            <DialogTitle className="text-lg">Getting started</DialogTitle>
+            <DialogTitle className="text-lg">
+              {translate(
+                'auto.components.setup.guide.SetupGuideModal.48a9e5ef2d',
+                'Getting started'
+              )}
+            </DialogTitle>
             <SetupGuideProgressRing
               done={progress.coreDoneCount}
               total={progress.coreTotal}
@@ -145,7 +157,10 @@ export default function SetupGuideModal(): JSX.Element | null {
             />
           </div>
           <DialogDescription className="text-sm text-muted-foreground">
-            Finish the core workflows that make Orca useful for parallel agent work.
+            {translate(
+              'auto.components.setup.guide.SetupGuideModal.3598a3ca0c',
+              'Finish the core workflows that make Orca useful for parallel agent work.'
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 overflow-hidden px-7 py-6">

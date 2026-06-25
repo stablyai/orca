@@ -137,6 +137,30 @@ describe('github owner/repo resolution', () => {
     await expect(getIssueOwnerRepo('/repo')).resolves.toEqual({ owner: 'stablyai', repo: 'orca' })
   })
 
+  it('coalesces concurrent missing remote probes for the same repo and remote', async () => {
+    gitExecFileAsyncMock.mockImplementation(async () => {
+      await Promise.resolve()
+      throw new Error("error: No such remote 'upstream'")
+    })
+
+    await expect(
+      Promise.all([
+        getOwnerRepoForRemote('/repo', 'upstream'),
+        getOwnerRepoForRemote('/repo', 'upstream'),
+        getOwnerRepoForRemote('/repo', 'upstream'),
+        getOwnerRepoForRemote('/repo', 'upstream')
+      ])
+    ).resolves.toEqual([null, null, null, null])
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'upstream'], {
+      cwd: '/repo'
+    })
+
+    await expect(getOwnerRepoForRemote('/repo', 'upstream')).resolves.toBeNull()
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
   it('resolves SSH repo remotes through the registered SSH git provider', async () => {
     const sshProvider = {
       exec: vi.fn().mockResolvedValue({ stdout: 'git@github.com:stablyai/orca.git\n', stderr: '' })
@@ -165,6 +189,31 @@ describe('github owner/repo resolution', () => {
 
     await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'local', repo: 'orca' })
     await expect(getOwnerRepo('/repo', 'ssh-1')).resolves.toEqual({ owner: 'remote', repo: 'orca' })
+  })
+
+  it('keeps local host and local WSL owner/repo cache entries separate for the same path', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'git@github.com:host/orca.git\n' })
+      .mockResolvedValueOnce({ stdout: 'git@github.com:wsl/orca.git\n' })
+
+    await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'host', repo: 'orca' })
+    await expect(getOwnerRepo('/repo', null, { wslDistro: 'Ubuntu' })).resolves.toEqual({
+      owner: 'wsl',
+      repo: 'orca'
+    })
+    await expect(getOwnerRepo('/repo', null, { wslDistro: 'Ubuntu' })).resolves.toEqual({
+      owner: 'wsl',
+      repo: 'orca'
+    })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['remote', 'get-url', 'origin'], {
+      cwd: '/repo'
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['remote', 'get-url', 'origin'], {
+      cwd: '/repo',
+      wslDistro: 'Ubuntu'
+    })
   })
 
   it('prunes expired distinct owner/repo cache entries on later lookups', async () => {

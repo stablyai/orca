@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import type { FsChangedPayload } from '../../../../shared/types'
 import {
   canonicalizeFileExplorerWatchPath,
+  getFileExplorerWatchRuntimeEnvironmentId,
   getExternalFileChangeRelativePath,
   payloadRequiresDeferredTreeRefresh
 } from './useFileExplorerWatch'
+import type { AppState } from '@/store/types'
 
 describe('getExternalFileChangeRelativePath', () => {
   it('returns a worktree-relative file path for external file updates', () => {
@@ -132,5 +134,72 @@ describe('payloadRequiresDeferredTreeRefresh', () => {
     )
 
     expect(payloadRequiresDeferredTreeRefresh(changes, '/repo')).toBe(false)
+  })
+})
+
+describe('getFileExplorerWatchRuntimeEnvironmentId', () => {
+  function makeState(args: {
+    activeRuntimeEnvironmentId?: string | null
+    executionHostId?: AppState['repos'][number]['executionHostId']
+    connectionId?: string | null
+  }): Pick<AppState, 'repos' | 'settings' | 'worktreesByRepo'> {
+    return {
+      settings: {
+        activeRuntimeEnvironmentId: args.activeRuntimeEnvironmentId ?? null
+      } as AppState['settings'],
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/repo',
+          displayName: 'repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: args.connectionId ?? null,
+          executionHostId: args.executionHostId
+        }
+      ],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-1',
+            repoId: 'repo-1',
+            path: '/repo/worktree'
+          } as AppState['worktreesByRepo'][string][number]
+        ]
+      }
+    }
+  }
+
+  it('uses the active runtime for legacy unowned active worktrees', () => {
+    expect(
+      getFileExplorerWatchRuntimeEnvironmentId(
+        makeState({ activeRuntimeEnvironmentId: 'focused-runtime' }),
+        'wt-1'
+      )
+    ).toBe('focused-runtime')
+  })
+
+  it('uses the explicit runtime owner when another host is focused', () => {
+    expect(
+      getFileExplorerWatchRuntimeEnvironmentId(
+        makeState({
+          activeRuntimeEnvironmentId: 'focused-runtime',
+          executionHostId: 'runtime:owner-runtime'
+        }),
+        'wt-1'
+      )
+    ).toBe('owner-runtime')
+  })
+
+  it('keeps explicitly local active worktrees local when a runtime is focused', () => {
+    expect(
+      getFileExplorerWatchRuntimeEnvironmentId(
+        makeState({
+          activeRuntimeEnvironmentId: 'focused-runtime',
+          executionHostId: 'local'
+        }),
+        'wt-1'
+      )
+    ).toBeNull()
   })
 })

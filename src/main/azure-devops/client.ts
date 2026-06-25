@@ -1,4 +1,3 @@
-import { Buffer } from 'buffer'
 import {
   deriveAzureDevOpsStatus,
   mapAzureDevOpsPullRequest,
@@ -7,15 +6,18 @@ import {
   type RawAzureDevOpsStatus
 } from './pull-request-mappers'
 import { getAzureDevOpsRepoRef, type AzureDevOpsRepoRef } from './repository-ref'
-
-const REQUEST_TIMEOUT_MS = 5000
-
-type AzureDevOpsAuthConfig = {
-  apiBaseUrl: string | null
-  pat: string | null
-  accessToken: string | null
-  username: string | null
-}
+import {
+  getHostedReviewLocalGitOptions,
+  type HostedReviewExecutionOptions
+} from '../source-control/hosted-review-git-options'
+import {
+  azureDevOpsTokenConfigured,
+  getAzureDevOpsAuthConfig,
+  normalizeAzureDevOpsApiBaseUrl,
+  requestAzureDevOpsJson,
+  requestAzureDevOpsJsonAtBase
+} from './azure-devops-api-request'
+export { normalizeAzureDevOpsApiBaseUrl } from './azure-devops-api-request'
 
 export type AzureDevOpsAuthStatus = {
   configured: boolean
@@ -23,11 +25,6 @@ export type AzureDevOpsAuthStatus = {
   account: string | null
   baseUrl: string | null
   tokenConfigured: boolean
-}
-
-type RequestOptions = {
-  searchParams?: Record<string, string | number>
-  timeoutMs?: number
 }
 
 type RawAzureDevOpsRepository = {
@@ -41,91 +38,6 @@ type RawAzureDevOpsRepository = {
   } | null
 }
 
-function envValue(name: string): string | null {
-  const value = process.env[name]?.trim() ?? ''
-  return value.length > 0 ? value : null
-}
-
-export function normalizeAzureDevOpsApiBaseUrl(value: string): string {
-  return value
-    .trim()
-    .replace(/\/+$/, '')
-    .replace(/\/_apis$/i, '')
-}
-
-function getAuthConfig(): AzureDevOpsAuthConfig {
-  return {
-    apiBaseUrl: envValue('ORCA_AZURE_DEVOPS_API_BASE_URL'),
-    pat: envValue('ORCA_AZURE_DEVOPS_TOKEN') ?? envValue('ORCA_AZURE_DEVOPS_PAT'),
-    accessToken: envValue('ORCA_AZURE_DEVOPS_ACCESS_TOKEN'),
-    username: envValue('ORCA_AZURE_DEVOPS_USERNAME')
-  }
-}
-
-function tokenConfigured(config: AzureDevOpsAuthConfig): boolean {
-  return Boolean(config.pat || config.accessToken)
-}
-
-function authHeaders(config: AzureDevOpsAuthConfig): Record<string, string> {
-  if (config.accessToken) {
-    return { Authorization: `Bearer ${config.accessToken}` }
-  }
-  if (config.pat) {
-    const encoded = Buffer.from(`${config.username ?? ''}:${config.pat}`).toString('base64')
-    return { Authorization: `Basic ${encoded}` }
-  }
-  return {}
-}
-
-function configuredApiBaseUrl(repo: AzureDevOpsRepoRef): string {
-  const configured = getAuthConfig().apiBaseUrl
-  return configured ? normalizeAzureDevOpsApiBaseUrl(configured) : repo.apiBaseUrl
-}
-
-function apiUrl(baseUrl: string, path: string, searchParams?: RequestOptions['searchParams']): URL {
-  const url = new URL(`${baseUrl.replace(/\/+$/, '')}${path}`)
-  const params = { ...searchParams, 'api-version': searchParams?.['api-version'] ?? '7.1' }
-  for (const [key, value] of Object.entries(params)) {
-    url.searchParams.set(key, String(value))
-  }
-  return url
-}
-
-async function requestJsonAtBase<T>(
-  baseUrl: string,
-  path: string,
-  options: RequestOptions = {}
-): Promise<T | null> {
-  const config = getAuthConfig()
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? REQUEST_TIMEOUT_MS)
-  try {
-    const response = await fetch(apiUrl(baseUrl, path, options.searchParams), {
-      headers: {
-        Accept: 'application/json',
-        ...authHeaders(config)
-      },
-      signal: controller.signal
-    })
-    if (!response.ok) {
-      return null
-    }
-    return (await response.json()) as T
-  } catch {
-    return null
-  } finally {
-    clearTimeout(timeout)
-  }
-}
-
-function requestJson<T>(
-  repo: AzureDevOpsRepoRef,
-  path: string,
-  options: RequestOptions = {}
-): Promise<T | null> {
-  return requestJsonAtBase(configuredApiBaseUrl(repo), path, options)
-}
-
 function encodePathSegment(value: string): string {
   return encodeURIComponent(value)
 }
@@ -133,7 +45,7 @@ function encodePathSegment(value: string): string {
 async function getRepository(
   repo: AzureDevOpsRepoRef
 ): Promise<{ idOrName: string; webBaseUrl: string } | null> {
-  const raw = await requestJson<RawAzureDevOpsRepository>(
+  const raw = await requestAzureDevOpsJson<RawAzureDevOpsRepository>(
     repo,
     `/_apis/git/repositories/${encodePathSegment(repo.repository)}`
   )
@@ -160,7 +72,9 @@ async function getPullRequestStatuses(
   repoIdOrName: string,
   pr: RawAzureDevOpsPullRequest
 ): Promise<RawAzureDevOpsStatus[]> {
-  const raw = await requestJson<RawAzureDevOpsStatus[] | { value?: RawAzureDevOpsStatus[] }>(
+  const raw = await requestAzureDevOpsJson<
+    RawAzureDevOpsStatus[] | { value?: RawAzureDevOpsStatus[] }
+  >(
     repo,
     `/_apis/git/repositories/${encodePathSegment(repoIdOrName)}/pullRequests/${encodePathSegment(
       String(pr.pullRequestId)
@@ -174,7 +88,7 @@ async function getPullRequestStatuses(
   if (!commitId) {
     return pr.statuses ?? []
   }
-  const commitStatuses = await requestJson<
+  const commitStatuses = await requestAzureDevOpsJson<
     RawAzureDevOpsStatus[] | { value?: RawAzureDevOpsStatus[] }
   >(
     repo,
@@ -215,9 +129,9 @@ function sortPullRequestsForBranch(
 }
 
 export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus> {
-  const config = getAuthConfig()
+  const config = getAzureDevOpsAuthConfig()
   const baseUrl = config.apiBaseUrl ? normalizeAzureDevOpsApiBaseUrl(config.apiBaseUrl) : null
-  const hasToken = tokenConfigured(config)
+  const hasToken = azureDevOpsTokenConfigured(config)
   if (!baseUrl && !hasToken) {
     return {
       configured: false,
@@ -237,7 +151,7 @@ export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus>
     }
   }
 
-  const connection = await requestJsonAtBase<{
+  const connection = await requestAzureDevOpsJsonAtBase<{
     authenticatedUser?: {
       providerDisplayName?: string | null
       customDisplayName?: string | null
@@ -257,14 +171,19 @@ export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus>
 export async function getAzureDevOpsPullRequest(
   repoPath: string,
   prNumber: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<AzureDevOpsPullRequestInfo | null> {
-  const repo = await getAzureDevOpsRepoRef(repoPath, connectionId)
+  const repo = await getAzureDevOpsRepoRef(
+    repoPath,
+    connectionId,
+    getHostedReviewLocalGitOptions(options)
+  )
   const repository = repo ? await getRepository(repo) : null
   if (!repo || !repository) {
     return null
   }
-  const raw = await requestJson<RawAzureDevOpsPullRequest>(
+  const raw = await requestAzureDevOpsJson<RawAzureDevOpsPullRequest>(
     repo,
     `/_apis/git/repositories/${encodePathSegment(repository.idOrName)}/pullRequests/${encodePathSegment(
       String(prNumber)
@@ -277,21 +196,26 @@ export async function getAzureDevOpsPullRequestForBranch(
   repoPath: string,
   branch: string,
   linkedPRNumber?: number | null,
-  connectionId?: string | null
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<AzureDevOpsPullRequestInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
   if (!branchName && linkedPRNumber == null) {
     return null
   }
 
-  const repo = await getAzureDevOpsRepoRef(repoPath, connectionId)
+  const repo = await getAzureDevOpsRepoRef(
+    repoPath,
+    connectionId,
+    getHostedReviewLocalGitOptions(options)
+  )
   const repository = repo ? await getRepository(repo) : null
   if (!repo || !repository) {
     return null
   }
 
   if (branchName) {
-    const list = await requestJson<{ value?: RawAzureDevOpsPullRequest[] }>(
+    const list = await requestAzureDevOpsJson<{ value?: RawAzureDevOpsPullRequest[] }>(
       repo,
       `/_apis/git/repositories/${encodePathSegment(repository.idOrName)}/pullRequests`,
       {
@@ -311,7 +235,7 @@ export async function getAzureDevOpsPullRequestForBranch(
   if (typeof linkedPRNumber !== 'number') {
     return null
   }
-  const raw = await requestJson<RawAzureDevOpsPullRequest>(
+  const raw = await requestAzureDevOpsJson<RawAzureDevOpsPullRequest>(
     repo,
     `/_apis/git/repositories/${encodePathSegment(repository.idOrName)}/pullRequests/${encodePathSegment(
       String(linkedPRNumber)
@@ -322,7 +246,8 @@ export async function getAzureDevOpsPullRequestForBranch(
 
 export async function getAzureDevOpsRepoSlug(
   repoPath: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<AzureDevOpsRepoRef | null> {
-  return getAzureDevOpsRepoRef(repoPath, connectionId)
+  return getAzureDevOpsRepoRef(repoPath, connectionId, getHostedReviewLocalGitOptions(options))
 }

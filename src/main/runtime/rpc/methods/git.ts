@@ -1,36 +1,109 @@
 /* eslint-disable max-lines -- Why: this table is the runtime git RPC contract; splitting it would make method coverage harder to audit. */
 import { defineMethod, type RpcMethod } from '../core'
 import type { GlobalSettings } from '../../../../shared/types'
+import type { ResolvedSourceControlAiGenerationParams } from '../../../../shared/source-control-ai'
 import {
   GitBranchCompare,
   GitBranchDiff,
   GitBulkPaths,
   GitCheckIgnored,
+  GitCheckout,
   GitCommit,
   GitCommitCompare,
   GitCommitDiff,
   GitDiscoverCommitMessageModels,
   GitDiff,
   GitFilePath,
+  GitForkSync,
   GitGenerateCommitMessage,
   GitGeneratePullRequestFields,
   GitHistory,
   GitPush,
   GitRebaseFromBase,
+  GitRemoteCommitUrl,
   GitRemoteFileUrl,
   GitStatusParams,
   GitTargetedRemote,
   WorktreeSelector
 } from './git-params'
 
+type CommitMessageGenerationOverride = {
+  commitMessageAi?: GlobalSettings['commitMessageAi']
+  sourceControlAi?: GlobalSettings['sourceControlAi']
+  sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
+  agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
+  enableGitHubAttribution?: boolean
+  commitMessageDiscoveryHostKey?: string
+}
+
+// Why: generateCommitMessage and generatePullRequestFields share the same optional
+// override fields; returning undefined when none are set keeps the no-override call path.
+function buildCommitMessageGenerationOverride(params: {
+  commitMessageAi?: unknown
+  sourceControlAi?: unknown
+  sourceControlAiResolvedParams?: unknown
+  agentCmdOverrides?: unknown
+  enableGitHubAttribution?: boolean
+  commitMessageDiscoveryHostKey?: string
+}): CommitMessageGenerationOverride | undefined {
+  if (
+    params.commitMessageAi === undefined &&
+    params.sourceControlAi === undefined &&
+    params.sourceControlAiResolvedParams === undefined &&
+    params.agentCmdOverrides === undefined &&
+    params.enableGitHubAttribution === undefined &&
+    params.commitMessageDiscoveryHostKey === undefined
+  ) {
+    return undefined
+  }
+  return {
+    ...(params.commitMessageAi !== undefined
+      ? { commitMessageAi: params.commitMessageAi as GlobalSettings['commitMessageAi'] }
+      : {}),
+    ...(params.sourceControlAi !== undefined
+      ? { sourceControlAi: params.sourceControlAi as GlobalSettings['sourceControlAi'] }
+      : {}),
+    ...(params.sourceControlAiResolvedParams !== undefined
+      ? {
+          sourceControlAiResolvedParams:
+            params.sourceControlAiResolvedParams as ResolvedSourceControlAiGenerationParams
+        }
+      : {}),
+    ...(params.agentCmdOverrides !== undefined
+      ? {
+          agentCmdOverrides: params.agentCmdOverrides as GlobalSettings['agentCmdOverrides']
+        }
+      : {}),
+    ...(params.enableGitHubAttribution !== undefined
+      ? { enableGitHubAttribution: params.enableGitHubAttribution }
+      : {}),
+    ...(params.commitMessageDiscoveryHostKey !== undefined
+      ? { commitMessageDiscoveryHostKey: params.commitMessageDiscoveryHostKey }
+      : {})
+  }
+}
+
 export const GIT_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'git.status',
     params: GitStatusParams,
-    handler: async (params, { runtime }) =>
-      params.includeIgnored === undefined
+    handler: async (params, { runtime }) => {
+      const options =
+        params.includeIgnored === undefined &&
+        params.bypassEffectiveUpstreamNegativeCache === undefined
+          ? undefined
+          : {
+              ...(params.includeIgnored === undefined
+                ? {}
+                : { includeIgnored: params.includeIgnored }),
+              ...(params.bypassEffectiveUpstreamNegativeCache === true
+                ? { bypassEffectiveUpstreamNegativeCache: true }
+                : {})
+            }
+      return options === undefined
         ? runtime.getRuntimeGitStatus(params.worktree)
-        : runtime.getRuntimeGitStatus(params.worktree, { includeIgnored: params.includeIgnored })
+        : runtime.getRuntimeGitStatus(params.worktree, options)
+    }
   }),
   defineMethod({
     name: 'git.checkIgnored',
@@ -61,6 +134,17 @@ export const GIT_METHODS: RpcMethod[] = [
     name: 'git.abortRebase',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.abortRuntimeGitRebase(params.worktree)
+  }),
+  defineMethod({
+    name: 'git.checkout',
+    params: GitCheckout,
+    handler: async (params, { runtime }) =>
+      runtime.checkoutRuntimeGitBranch(params.worktree, params.branch)
+  }),
+  defineMethod({
+    name: 'git.localBranches',
+    params: WorktreeSelector,
+    handler: async (params, { runtime }) => runtime.listRuntimeGitLocalBranches(params.worktree)
   }),
   defineMethod({
     name: 'git.diff',
@@ -100,6 +184,12 @@ export const GIT_METHODS: RpcMethod[] = [
       params.pushTarget === undefined
         ? runtime.fetchRuntimeGit(params.worktree)
         : runtime.fetchRuntimeGit(params.worktree, params.pushTarget)
+  }),
+  defineMethod({
+    name: 'git.forkSync',
+    params: GitForkSync,
+    handler: async (params, { runtime }) =>
+      runtime.syncRuntimeGitForkDefaultBranch(params.worktree, params.expectedUpstream)
   }),
   defineMethod({
     name: 'git.pull',
@@ -166,34 +256,11 @@ export const GIT_METHODS: RpcMethod[] = [
     name: 'git.generateCommitMessage',
     params: GitGenerateCommitMessage,
     handler: async (params, { runtime }) => {
-      if (
-        params.commitMessageAi === undefined &&
-        params.sourceControlAi === undefined &&
-        params.agentCmdOverrides === undefined &&
-        params.enableGitHubAttribution === undefined &&
-        params.commitMessageDiscoveryHostKey === undefined
-      ) {
+      const override = buildCommitMessageGenerationOverride(params)
+      if (override === undefined) {
         return runtime.generateRuntimeCommitMessage(params.worktree)
       }
-      return runtime.generateRuntimeCommitMessage(params.worktree, {
-        ...(params.commitMessageAi !== undefined
-          ? { commitMessageAi: params.commitMessageAi as GlobalSettings['commitMessageAi'] }
-          : {}),
-        ...(params.sourceControlAi !== undefined
-          ? { sourceControlAi: params.sourceControlAi as GlobalSettings['sourceControlAi'] }
-          : {}),
-        ...(params.agentCmdOverrides !== undefined
-          ? {
-              agentCmdOverrides: params.agentCmdOverrides as GlobalSettings['agentCmdOverrides']
-            }
-          : {}),
-        ...(params.enableGitHubAttribution !== undefined
-          ? { enableGitHubAttribution: params.enableGitHubAttribution }
-          : {}),
-        ...(params.commitMessageDiscoveryHostKey !== undefined
-          ? { commitMessageDiscoveryHostKey: params.commitMessageDiscoveryHostKey }
-          : {})
-      })
+      return runtime.generateRuntimeCommitMessage(params.worktree, override)
     }
   }),
   defineMethod({
@@ -224,36 +291,15 @@ export const GIT_METHODS: RpcMethod[] = [
         base: params.base,
         title: params.title,
         body: params.body,
-        draft: params.draft
+        draft: params.draft,
+        provider: params.provider,
+        useTemplate: params.useTemplate
       }
-      if (
-        params.commitMessageAi === undefined &&
-        params.sourceControlAi === undefined &&
-        params.agentCmdOverrides === undefined &&
-        params.enableGitHubAttribution === undefined &&
-        params.commitMessageDiscoveryHostKey === undefined
-      ) {
+      const override = buildCommitMessageGenerationOverride(params)
+      if (override === undefined) {
         return runtime.generateRuntimePullRequestFields(params.worktree, input)
       }
-      return runtime.generateRuntimePullRequestFields(params.worktree, input, {
-        ...(params.commitMessageAi !== undefined
-          ? { commitMessageAi: params.commitMessageAi as GlobalSettings['commitMessageAi'] }
-          : {}),
-        ...(params.sourceControlAi !== undefined
-          ? { sourceControlAi: params.sourceControlAi as GlobalSettings['sourceControlAi'] }
-          : {}),
-        ...(params.agentCmdOverrides !== undefined
-          ? {
-              agentCmdOverrides: params.agentCmdOverrides as GlobalSettings['agentCmdOverrides']
-            }
-          : {}),
-        ...(params.enableGitHubAttribution !== undefined
-          ? { enableGitHubAttribution: params.enableGitHubAttribution }
-          : {}),
-        ...(params.commitMessageDiscoveryHostKey !== undefined
-          ? { commitMessageDiscoveryHostKey: params.commitMessageDiscoveryHostKey }
-          : {})
-      })
+      return runtime.generateRuntimePullRequestFields(params.worktree, input, override)
     }
   }),
   defineMethod({
@@ -303,5 +349,11 @@ export const GIT_METHODS: RpcMethod[] = [
     params: GitRemoteFileUrl,
     handler: async (params, { runtime }) =>
       runtime.getRuntimeGitRemoteFileUrl(params.worktree, params.relativePath, params.line)
+  }),
+  defineMethod({
+    name: 'git.remoteCommitUrl',
+    params: GitRemoteCommitUrl,
+    handler: async (params, { runtime }) =>
+      runtime.getRuntimeGitRemoteCommitUrl(params.worktree, params.sha)
   })
 ]

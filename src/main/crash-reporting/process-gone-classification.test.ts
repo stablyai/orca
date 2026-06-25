@@ -201,6 +201,16 @@ describe('shouldRecordProcessGoneCrash', () => {
         expectedTeardown: 'none'
       })
     ).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'Utility',
+        serviceName: 'video_capture.mojom.VideoCaptureService',
+        reason: 'killed',
+        exitCode: 1,
+        expectedTeardown: 'none'
+      })
+    ).toBe(false)
   })
 
   it('still records unknown child process crashes', () => {
@@ -236,6 +246,16 @@ describe('shouldRecordProcessGoneCrash', () => {
         expectedTeardown: 'none'
       })
     ).toBe(true)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'Utility',
+        serviceName: 'video_capture.mojom.VideoCaptureService',
+        reason: 'launch-failed',
+        exitCode: -1,
+        expectedTeardown: 'none'
+      })
+    ).toBe(true)
   })
 
   it('still records renderer kills from the recent Linux crash-report cluster', () => {
@@ -245,6 +265,18 @@ describe('shouldRecordProcessGoneCrash', () => {
         processType: 'renderer',
         reason: 'killed',
         exitCode: 61696,
+        expectedTeardown: 'none'
+      })
+    ).toBe(true)
+  })
+
+  it('still records renderer launch failures for diagnostics', () => {
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'renderer',
+        processType: 'renderer',
+        reason: 'launch-failed',
+        exitCode: 18,
         expectedTeardown: 'none'
       })
     ).toBe(true)
@@ -260,6 +292,36 @@ describe('shouldRecordProcessGoneCrash', () => {
         expectedTeardown: 'none'
       })
     ).toBe(true)
+  })
+
+  it('records Windows renderer killed exit 1 outside expected lifecycle teardown only', () => {
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'renderer',
+        processType: 'renderer',
+        reason: 'killed',
+        exitCode: 1,
+        expectedTeardown: 'none'
+      })
+    ).toBe(true)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'renderer',
+        processType: 'renderer',
+        reason: 'killed',
+        exitCode: 1,
+        expectedTeardown: 'renderer-reload'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'renderer',
+        processType: 'renderer',
+        reason: 'killed',
+        exitCode: 1,
+        expectedTeardown: 'app-shutdown'
+      })
+    ).toBe(false)
   })
 
   it('records non-SIGTERM child-process killed events during renderer-only reloads', () => {
@@ -300,6 +362,27 @@ describe('shouldRecoverRendererAfterProcessGone', () => {
       shouldRecoverRendererAfterProcessGone({
         reason: 'crashed',
         expectedTeardown: 'app-shutdown'
+      })
+    ).toBe(false)
+  })
+
+  it('does not recover renderer startup and security launch failures', () => {
+    expect(
+      shouldRecoverRendererAfterProcessGone({
+        reason: 'launch-failed',
+        expectedTeardown: 'none'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecoverRendererAfterProcessGone({
+        reason: 'launch-failed',
+        expectedTeardown: 'renderer-reload'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecoverRendererAfterProcessGone({
+        reason: 'integrity-failure',
+        expectedTeardown: 'none'
       })
     ).toBe(false)
   })

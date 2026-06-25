@@ -1,10 +1,13 @@
+import type { ReadClipboardTextOptions } from '../../../shared/clipboard-text'
+
 export const PRIMARY_SELECTION_MAX_LENGTH = 65_536
+const PRIMARY_SELECTION_MAX_BYTES = PRIMARY_SELECTION_MAX_LENGTH * 4
 
 let enabled = false
 let primarySelectionText = ''
 
 type SelectionClipboardApi = {
-  readSelectionClipboardText: () => Promise<string>
+  readSelectionClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   writeSelectionClipboardText: (text: string) => Promise<void>
 }
 
@@ -80,7 +83,9 @@ export async function readPrimarySelectionText(): Promise<string> {
     return primarySelectionText
   }
   try {
-    return await selectionClipboardApi.readSelectionClipboardText()
+    return await selectionClipboardApi.readSelectionClipboardText({
+      maxBytes: PRIMARY_SELECTION_MAX_BYTES
+    })
   } catch {
     return primarySelectionText
   }

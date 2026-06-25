@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import {
   detectRemoteAgents,
-  detectInstalledAgents,
+  detectInstalledAgentsWithShellPathHydration,
   refreshShellPathAndDetectAgents,
   runPreflightCheck
 } from '../../../ipc/preflight'
@@ -23,7 +23,7 @@ export const PREFLIGHT_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'preflight.detectAgents',
     params: null,
-    handler: async () => detectInstalledAgents()
+    handler: async () => detectInstalledAgentsWithShellPathHydration()
   }),
   defineMethod({
     name: 'preflight.detectRemoteAgents',

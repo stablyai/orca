@@ -7,6 +7,7 @@ import { buildAgentNotificationId } from '../../../../shared/agent-notification-
 
 type MockState = {
   activeWorktreeId: string | null
+  activeTabId: string | null
   tabsByWorktree: Record<string, { id: string; ptyId?: string | null }[]>
   ptyIdsByTabId: Record<string, string[]>
   suppressedPtyExitIds: Record<string, boolean>
@@ -35,6 +36,7 @@ type MockState = {
   markWorktreeUnread: ReturnType<typeof vi.fn>
   markTerminalTabUnread: ReturnType<typeof vi.fn>
   markTerminalPaneUnread: ReturnType<typeof vi.fn>
+  markAgentCompletionPaneUnread: ReturnType<typeof vi.fn>
 }
 
 const playDesktopNotificationSound = vi.hoisted(() => vi.fn())
@@ -50,18 +52,36 @@ vi.mock('@/lib/desktop-notification-sound', () => ({
   playDesktopNotificationSound
 }))
 
-function makeAgentStatus(paneKey: string): AgentStatusEntry {
+function makeAgentStatus(
+  paneKey: string,
+  overrides: Partial<AgentStatusEntry> = {}
+): AgentStatusEntry {
+  const now = Date.now()
   return {
     state: 'done',
     prompt: 'codex-hook-notify',
-    updatedAt: Date.now(),
-    stateStartedAt: Date.now(),
+    updatedAt: now,
+    stateStartedAt: now,
     agentType: 'codex',
     paneKey,
     terminalTitle: 'codex',
     stateHistory: [],
-    lastAssistantMessage: 'Done.'
+    lastAssistantMessage: 'Done.',
+    ...overrides
   }
+}
+
+function stubDocumentFocus({
+  visibilityState,
+  focused
+}: {
+  visibilityState: DocumentVisibilityState
+  focused: boolean
+}): void {
+  vi.stubGlobal('document', {
+    visibilityState,
+    hasFocus: vi.fn(() => focused)
+  })
 }
 
 describe('dispatchTerminalNotification', () => {
@@ -74,6 +94,7 @@ describe('dispatchTerminalNotification', () => {
     vi.clearAllMocks()
     mockState = {
       activeWorktreeId: 'wt-secondary',
+      activeTabId: 'tab-1',
       tabsByWorktree: {
         'wt-primary': [{ id: 'tab-1', ptyId: 'pty-1' }]
       },
@@ -114,7 +135,8 @@ describe('dispatchTerminalNotification', () => {
       settings: { experimentalTerminalAttention: true, notifications: { customSoundPath: null } },
       markWorktreeUnread: vi.fn(),
       markTerminalTabUnread: vi.fn(),
-      markTerminalPaneUnread: vi.fn()
+      markTerminalPaneUnread: vi.fn(),
+      markAgentCompletionPaneUnread: vi.fn()
     }
     vi.stubGlobal('window', {
       api: {
@@ -216,11 +238,103 @@ describe('dispatchTerminalNotification', () => {
     expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
     expect(mockState.markTerminalTabUnread).not.toHaveBeenCalled()
     expect(mockState.markTerminalPaneUnread).not.toHaveBeenCalled()
+    expect(mockState.markAgentCompletionPaneUnread).toHaveBeenCalledWith(paneKey)
   })
 
-  it('marks the visible focused worktree unread when terminal attention is disabled', () => {
+  it('can mark terminal attention without dispatching an OS notification', () => {
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey,
+      suppressOsNotification: true
+    })
+
+    expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
+    expect(mockState.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(mockState.markTerminalPaneUnread).toHaveBeenCalledWith(paneKey)
+    expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+  })
+
+  it('does not mark the visible focused pane unread', () => {
+    mockState.activeWorktreeId = 'wt-primary'
+    stubDocumentFocus({ visibilityState: 'visible', focused: true })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey
+    })
+
+    expect(window.api.notifications.dispatch).toHaveBeenCalled()
+    expect(mockState.markWorktreeUnread).not.toHaveBeenCalled()
+    expect(mockState.markTerminalTabUnread).not.toHaveBeenCalled()
+    expect(mockState.markTerminalPaneUnread).not.toHaveBeenCalled()
+    expect(mockState.markAgentCompletionPaneUnread).not.toHaveBeenCalled()
+  })
+
+  it('marks a hidden tab in the focused worktree unread', () => {
+    const hiddenLeafId = '33333333-3333-4333-8333-333333333333'
+    const hiddenPaneKey = `tab-2:${hiddenLeafId}`
+    mockState.activeWorktreeId = 'wt-primary'
+    mockState.activeTabId = 'tab-1'
+    mockState.tabsByWorktree['wt-primary'].push({ id: 'tab-2', ptyId: 'pty-2' })
+    mockState.ptyIdsByTabId['tab-2'] = ['pty-2']
+    mockState.terminalLayoutsByTabId['tab-2'] = {
+      root: { type: 'leaf', leafId: hiddenLeafId },
+      activeLeafId: hiddenLeafId,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [hiddenLeafId]: 'pty-2' }
+    }
+    mockState.agentStatusByPaneKey[hiddenPaneKey] = makeAgentStatus(hiddenPaneKey)
+    stubDocumentFocus({ visibilityState: 'visible', focused: true })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey: hiddenPaneKey
+    })
+
+    expect(window.api.notifications.dispatch).toHaveBeenCalled()
+    expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
+    expect(mockState.markTerminalTabUnread).toHaveBeenCalledWith('tab-2')
+    expect(mockState.markTerminalPaneUnread).toHaveBeenCalledWith(hiddenPaneKey)
+  })
+
+  it('marks a hidden split pane in the focused tab unread', () => {
+    const siblingPaneKey = stalePaneKey
+    mockState.activeWorktreeId = 'wt-primary'
+    mockState.activeTabId = 'tab-1'
+    mockState.ptyIdsByTabId['tab-1'] = ['pty-1', 'pty-2']
+    mockState.terminalLayoutsByTabId['tab-1'] = {
+      root: {
+        type: 'split',
+        direction: 'horizontal',
+        first: { type: 'leaf', leafId: liveLeafId },
+        second: { type: 'leaf', leafId: staleLeafId }
+      },
+      activeLeafId: liveLeafId,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [liveLeafId]: 'pty-1', [staleLeafId]: 'pty-2' }
+    }
+    mockState.agentStatusByPaneKey[siblingPaneKey] = makeAgentStatus(siblingPaneKey)
+    stubDocumentFocus({ visibilityState: 'visible', focused: true })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey: siblingPaneKey
+    })
+
+    expect(window.api.notifications.dispatch).toHaveBeenCalled()
+    expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
+    expect(mockState.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(mockState.markTerminalPaneUnread).toHaveBeenCalledWith(siblingPaneKey)
+  })
+
+  it('marks the selected worktree unread when Orca is backgrounded', () => {
     mockState.settings.experimentalTerminalAttention = false
     mockState.activeWorktreeId = 'wt-primary'
+    stubDocumentFocus({ visibilityState: 'hidden', focused: false })
 
     dispatchTerminalNotification('wt-primary', {
       source: 'agent-task-complete',
@@ -232,6 +346,7 @@ describe('dispatchTerminalNotification', () => {
     expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
     expect(mockState.markTerminalTabUnread).not.toHaveBeenCalled()
     expect(mockState.markTerminalPaneUnread).not.toHaveBeenCalled()
+    expect(mockState.markAgentCompletionPaneUnread).toHaveBeenCalledWith(paneKey)
   })
 
   it('drops a pane key when its tab is hydrated under another worktree', () => {
@@ -291,9 +406,10 @@ describe('dispatchTerminalNotification', () => {
     expect(mockState.markTerminalPaneUnread).toHaveBeenCalledWith(paneKey)
   })
 
-  it('uses the accepted hook snapshot when the live store row is gone before dispatch', () => {
+  it('uses accepted hook snapshot timing for the notification id when the live store row is gone before dispatch', () => {
     mockState.ptyIdsByTabId = {}
     mockState.agentStatusByPaneKey = {}
+    const stateStartedAt = Date.now() - 1_000
 
     dispatchTerminalNotification('wt-primary', {
       source: 'agent-task-complete',
@@ -303,13 +419,19 @@ describe('dispatchTerminalNotification', () => {
         state: 'done',
         prompt: 'codex-hook-notify',
         agentType: 'codex',
-        lastAssistantMessage: 'Done.'
+        lastAssistantMessage: 'Done.',
+        stateStartedAt
       }
     })
 
     expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
         source: 'agent-task-complete',
+        notificationId: buildAgentNotificationId({
+          worktreeId: 'wt-primary',
+          paneKey,
+          stateStartedAt
+        }),
         worktreeId: 'wt-primary',
         paneKey,
         agentType: 'codex',
@@ -318,12 +440,39 @@ describe('dispatchTerminalNotification', () => {
         agentLastAssistantMessage: 'Done.'
       })
     )
-    expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
-      expect.not.objectContaining({ notificationId: expect.any(String) })
-    )
     expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
     expect(mockState.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
     expect(mockState.markTerminalPaneUnread).toHaveBeenCalledWith(paneKey)
+  })
+
+  it('drops a delayed completion snapshot when the pane has already started a newer turn', () => {
+    const previousDoneStartedAt = Date.now() - 10_000
+    mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
+      state: 'working',
+      prompt: 'new prompt already running',
+      updatedAt: Date.now(),
+      stateStartedAt: Date.now(),
+      lastAssistantMessage: undefined
+    })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey,
+      agentStatusSnapshot: {
+        state: 'done',
+        prompt: 'previous prompt',
+        agentType: 'codex',
+        lastAssistantMessage: 'Done.',
+        stateStartedAt: previousDoneStartedAt
+      }
+    })
+
+    expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+    expect(mockState.markWorktreeUnread).not.toHaveBeenCalled()
+    expect(mockState.markAgentCompletionPaneUnread).not.toHaveBeenCalled()
+    expect(mockState.markTerminalTabUnread).not.toHaveBeenCalled()
+    expect(mockState.markTerminalPaneUnread).not.toHaveBeenCalled()
   })
 
   it('drops accepted hook snapshots for an intentionally suppressed pty', () => {
@@ -341,6 +490,42 @@ describe('dispatchTerminalNotification', () => {
         agentType: 'codex',
         lastAssistantMessage: 'Done.'
       }
+    })
+
+    expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+    expect(mockState.markWorktreeUnread).not.toHaveBeenCalled()
+    expect(mockState.markTerminalTabUnread).not.toHaveBeenCalled()
+    expect(mockState.markTerminalPaneUnread).not.toHaveBeenCalled()
+  })
+
+  it('drops final-flush notifications for suppressed live ptys', () => {
+    mockState.suppressedPtyExitIds = { 'pty-1': true }
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'terminal-bell',
+      terminalTitle: 'codex',
+      paneKey
+    })
+
+    expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+    expect(mockState.markWorktreeUnread).not.toHaveBeenCalled()
+    expect(mockState.markTerminalTabUnread).not.toHaveBeenCalled()
+    expect(mockState.markTerminalPaneUnread).not.toHaveBeenCalled()
+  })
+
+  it('drops layout-fallback notifications when all tab PTYs are suppressed', () => {
+    mockState.suppressedPtyExitIds = { 'pty-1': true }
+    mockState.terminalLayoutsByTabId['tab-1'] = {
+      root: { type: 'leaf', leafId: 'leaf-1' },
+      activeLeafId: 'leaf-1',
+      expandedLeafId: null,
+      ptyIdsByLeafId: {}
+    }
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'terminal-bell',
+      terminalTitle: 'codex',
+      paneKey
     })
 
     expect(window.api.notifications.dispatch).not.toHaveBeenCalled()

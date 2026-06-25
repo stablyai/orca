@@ -3,13 +3,15 @@ import type {
   DropZone,
   ManagedPane,
   ManagedPaneInternal,
-  PaneStyleOptions,
-  ScrollState
+  PaneStyleOptions
 } from './pane-manager-types'
 import { createDivider, disposeDivider } from './pane-divider'
 import { getFitOverrideForPty } from './mobile-fit-overrides'
 import { disposeWebgl, attachWebgl } from './pane-webgl-renderer'
-import { captureScrollState, restoreScrollStateAfterLayout } from './pane-scroll'
+import {
+  captureTerminalWriteScrollIntent,
+  enforceTerminalWriteScrollIntent
+} from './terminal-scroll-intent'
 
 export { captureScrollState, restoreScrollState } from './pane-scroll'
 
@@ -27,6 +29,11 @@ type TreeOpsCallbacks = {
   requestPaneReparentFrame?: (callback: FrameRequestCallback) => void
 }
 
+const MIN_PANE_FIT_WIDTH_PX = 48
+const MIN_PANE_FIT_HEIGHT_PX = 24
+const MIN_PANE_FIT_COLS = 8
+const MIN_PANE_FIT_ROWS = 4
+
 function getProposedDimensions(pane: ManagedPane): { cols: number; rows: number } | null {
   try {
     return pane.fitAddon.proposeDimensions() ?? null
@@ -35,15 +42,36 @@ function getProposedDimensions(pane: ManagedPane): { cols: number; rows: number 
   }
 }
 
-function captureScrollStateForFit(pane: ManagedPane): ScrollState | null {
+function canMeasurePaneForFit(pane: ManagedPane): boolean {
+  const measure = pane.container.getBoundingClientRect
+  if (typeof measure === 'function') {
+    const rect = measure.call(pane.container)
+    if (rect.width < MIN_PANE_FIT_WIDTH_PX || rect.height < MIN_PANE_FIT_HEIGHT_PX) {
+      return false
+    }
+  }
+  const dims = getProposedDimensions(pane)
+  if (!dims) {
+    return false
+  }
+  // Why: worktree switches can briefly measure a near-zero overlay before
+  // fallback positioning lands. Fitting there pins the PTY at ~2 cols until
+  // the next user-driven resize.
+  return dims.cols >= MIN_PANE_FIT_COLS && dims.rows >= MIN_PANE_FIT_ROWS
+}
+
+function canPreserveScrollIntentForFit(pane: ManagedPane): boolean {
   // Why: split reparent has its own delayed restore; restoring here can fight that timer.
-  return 'pendingSplitScrollState' in pane && (pane as ManagedPaneInternal).pendingSplitScrollState
-    ? null
-    : captureScrollState(pane.terminal)
+  return !(
+    'pendingSplitScrollState' in pane && (pane as ManagedPaneInternal).pendingSplitScrollState
+  )
 }
 
 export function safeFit(pane: ManagedPane): void {
-  let scrollState: ScrollState | null = null
+  if (!canMeasurePaneForFit(pane)) {
+    return
+  }
+  let scrollIntent = null as ReturnType<typeof captureTerminalWriteScrollIntent>
   let shouldRestoreScroll = false
   try {
     // Why: when a mobile client has resized this PTY to phone dimensions,
@@ -55,8 +83,10 @@ export function safeFit(pane: ManagedPane): void {
     const override = ptyId ? getFitOverrideForPty(ptyId) : null
     if (override) {
       if (pane.terminal.cols !== override.cols || pane.terminal.rows !== override.rows) {
-        scrollState = captureScrollStateForFit(pane)
-        shouldRestoreScroll = true
+        if (canPreserveScrollIntentForFit(pane)) {
+          scrollIntent = captureTerminalWriteScrollIntent(pane.terminal)
+          shouldRestoreScroll = true
+        }
         pane.terminal.resize(override.cols, override.rows)
       }
       return
@@ -69,15 +99,17 @@ export function safeFit(pane: ManagedPane): void {
       // churn, which was causing visible terminal blinking while resizing.
       return
     }
-    scrollState = captureScrollStateForFit(pane)
-    shouldRestoreScroll = true
+    if (canPreserveScrollIntentForFit(pane)) {
+      scrollIntent = captureTerminalWriteScrollIntent(pane.terminal)
+      shouldRestoreScroll = true
+    }
     pane.fitAddon.fit()
   } catch {
     // Container may not have dimensions yet
   } finally {
-    if (shouldRestoreScroll && scrollState) {
+    if (shouldRestoreScroll) {
       try {
-        restoreScrollStateAfterLayout(pane.terminal, scrollState)
+        enforceTerminalWriteScrollIntent(pane.terminal, scrollIntent)
       } catch {
         // Why: xterm can temporarily expose a terminal whose renderer has not
         // initialized dimensions yet during SSH reattach/layout. Fit is best-effort.

@@ -3,6 +3,7 @@ import { type CSSProperties, type JSX } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { type ImageViewerImageDimensions } from './image-viewer-zoom'
+import { translate } from '@/i18n/i18n'
 
 type ImageViewerPopupProps = {
   filename: string
@@ -32,7 +33,12 @@ export default function ImageViewerPopup({
         className="top-1/2 left-1/2 flex h-[80vh] w-[70vw] max-w-[70vw] -translate-x-1/2 -translate-y-1/2 flex-col gap-0 overflow-hidden border border-border/60 bg-background p-0 shadow-2xl sm:max-w-[70vw]"
       >
         <DialogTitle className="sr-only">{filename}</DialogTitle>
-        <DialogDescription className="sr-only">Full-size image preview</DialogDescription>
+        <DialogDescription className="sr-only">
+          {translate(
+            'auto.components.editor.ImageViewerPopup.9e27b2ecaf',
+            'Full-size image preview'
+          )}
+        </DialogDescription>
         <div className="flex shrink-0 items-center justify-between border-b border-border/60 bg-background/95 px-3 py-2">
           <div className="min-w-0 truncate text-sm font-medium text-foreground">{filename}</div>
           <button
@@ -41,7 +47,7 @@ export default function ImageViewerPopup({
             onClick={() => onOpenChange(false)}
           >
             <X size={14} />
-            <span>Close</span>
+            <span>{translate('auto.components.editor.ImageViewerPopup.535f4e2b56', 'Close')}</span>
           </button>
         </div>
         <div
@@ -62,7 +68,9 @@ export default function ImageViewerPopup({
           </div>
         </div>
         <div className="flex shrink-0 items-center justify-between border-t border-border/60 bg-background/95 px-3 py-2 text-xs text-muted-foreground">
-          <div>Press Esc to close</div>
+          <div>
+            {translate('auto.components.editor.ImageViewerPopup.0ef78475e7', 'Press Esc to close')}
+          </div>
           <div className="tabular-nums">{zoomPercent}%</div>
         </div>
       </DialogContent>

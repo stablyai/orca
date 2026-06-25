@@ -1,11 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handlers, appExitMock, appQuitMock, appRelaunchMock, execFileMock } = vi.hoisted(() => ({
+const {
+  handlers,
+  appExitMock,
+  appQuitMock,
+  appRelaunchMock,
+  execFileMock,
+  destroySystemTrayMock,
+  showOpenDialogMock,
+  grantFloatingWorkspaceDirectoryMock
+} = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
   appExitMock: vi.fn(),
   appQuitMock: vi.fn(),
   appRelaunchMock: vi.fn(),
-  execFileMock: vi.fn()
+  execFileMock: vi.fn(),
+  destroySystemTrayMock: vi.fn(),
+  showOpenDialogMock: vi.fn(),
+  grantFloatingWorkspaceDirectoryMock: vi.fn()
 }))
 
 vi.mock('node:child_process', () => ({
@@ -24,7 +36,7 @@ vi.mock('electron', () => ({
     fromWebContents: vi.fn(() => null)
   },
   dialog: {
-    showOpenDialog: vi.fn()
+    showOpenDialog: showOpenDialogMock
   },
   ipcMain: {
     handle: vi.fn((channel: string, handler: (_event: unknown, args?: unknown) => unknown) => {
@@ -35,6 +47,16 @@ vi.mock('electron', () => ({
 
 vi.mock('@electron-toolkit/utils', () => ({
   is: { dev: true }
+}))
+
+vi.mock('../tray/system-tray', () => ({
+  destroySystemTray: destroySystemTrayMock
+}))
+
+vi.mock('./floating-workspace-directory', () => ({
+  ensureDefaultFloatingWorkspacePath: vi.fn(),
+  grantFloatingWorkspaceDirectory: grantFloatingWorkspaceDirectoryMock,
+  resolveFloatingTerminalCwd: vi.fn()
 }))
 
 import { registerAppHandlers } from './app'
@@ -49,6 +71,9 @@ describe('registerAppHandlers', () => {
     appQuitMock.mockReset()
     appRelaunchMock.mockReset()
     execFileMock.mockReset()
+    destroySystemTrayMock.mockReset()
+    showOpenDialogMock.mockReset()
+    grantFloatingWorkspaceDirectoryMock.mockReset()
     Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
   })
 
@@ -57,34 +82,93 @@ describe('registerAppHandlers', () => {
     Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
   })
 
-  it('marks relaunch as expected shutdown before exiting', () => {
+  it('marks relaunch as expected shutdown before exiting', async () => {
     const onBeforeRelaunch = vi.fn()
     registerAppHandlers({} as never, { onBeforeRelaunch })
 
-    handlers.get('app:relaunch')?.(null)
+    const relaunchPromise = Promise.resolve(handlers.get('app:relaunch')?.(null))
 
     expect(onBeforeRelaunch).toHaveBeenCalledTimes(1)
     expect(appRelaunchMock).not.toHaveBeenCalled()
     expect(appExitMock).not.toHaveBeenCalled()
 
-    vi.advanceTimersByTime(150)
+    await relaunchPromise
+    await vi.advanceTimersByTimeAsync(150)
+
+    expect(destroySystemTrayMock).toHaveBeenCalledTimes(1)
+    expect(appRelaunchMock).toHaveBeenCalledTimes(1)
+    expect(appExitMock).toHaveBeenCalledWith(0)
+    expect(destroySystemTrayMock.mock.invocationCallOrder[0]).toBeLessThan(
+      appExitMock.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('waits for pre-relaunch cleanup before exiting', async () => {
+    let finishCleanup!: () => void
+    const onBeforeRelaunch = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishCleanup = resolve
+        })
+    )
+    registerAppHandlers({} as never, { onBeforeRelaunch })
+
+    const relaunchPromise = Promise.resolve(handlers.get('app:relaunch')?.(null))
+
+    expect(onBeforeRelaunch).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(150)
+    expect(appRelaunchMock).not.toHaveBeenCalled()
+    expect(appExitMock).not.toHaveBeenCalled()
+
+    finishCleanup()
+    await relaunchPromise
+    await vi.advanceTimersByTimeAsync(150)
 
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
     expect(appExitMock).toHaveBeenCalledWith(0)
   })
 
-  it('marks restart as expected shutdown before quitting through the normal pipeline', () => {
+  it('marks restart as expected shutdown before quitting through the normal pipeline', async () => {
     const onBeforeRelaunch = vi.fn()
     registerAppHandlers({} as never, { onBeforeRelaunch })
 
-    handlers.get('app:restart')?.(null)
+    const restartPromise = Promise.resolve(handlers.get('app:restart')?.(null))
 
     expect(onBeforeRelaunch).toHaveBeenCalledTimes(1)
     expect(appRelaunchMock).not.toHaveBeenCalled()
     expect(appQuitMock).not.toHaveBeenCalled()
     expect(appExitMock).not.toHaveBeenCalled()
 
-    vi.advanceTimersByTime(150)
+    await restartPromise
+    await vi.advanceTimersByTimeAsync(150)
+
+    expect(appRelaunchMock).toHaveBeenCalledTimes(1)
+    expect(appQuitMock).toHaveBeenCalledTimes(1)
+    expect(appExitMock).not.toHaveBeenCalled()
+  })
+
+  it('waits for pre-relaunch cleanup before restarting through the normal pipeline', async () => {
+    let finishCleanup!: () => void
+    const onBeforeRelaunch = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishCleanup = resolve
+        })
+    )
+    registerAppHandlers({} as never, { onBeforeRelaunch })
+
+    const restartPromise = Promise.resolve(handlers.get('app:restart')?.(null))
+
+    expect(onBeforeRelaunch).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(150)
+    expect(appRelaunchMock).not.toHaveBeenCalled()
+    expect(appQuitMock).not.toHaveBeenCalled()
+
+    finishCleanup()
+    await restartPromise
+    await vi.advanceTimersByTimeAsync(150)
 
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
     expect(appQuitMock).toHaveBeenCalledTimes(1)
@@ -110,5 +194,22 @@ describe('registerAppHandlers', () => {
     expect(settled).toBe(true)
     await expect(resultPromise).resolves.toBeNull()
     expect(killMock).toHaveBeenCalled()
+  })
+
+  it('picks an existing floating workspace directory without enabling native directory creation', async () => {
+    const store = {}
+    showOpenDialogMock.mockResolvedValue({
+      canceled: false,
+      filePaths: ['/Users/kaylee/notes']
+    })
+    registerAppHandlers(store as never)
+
+    await expect(
+      handlers.get('app:pickFloatingWorkspaceDirectory')?.({ sender: {} })
+    ).resolves.toBe('/Users/kaylee/notes')
+    expect(showOpenDialogMock).toHaveBeenCalledWith({
+      properties: ['openDirectory']
+    })
+    expect(grantFloatingWorkspaceDirectoryMock).toHaveBeenCalledWith(store, '/Users/kaylee/notes')
   })
 })

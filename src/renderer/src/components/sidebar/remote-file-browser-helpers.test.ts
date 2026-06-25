@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
+  REMOTE_FILE_BROWSER_FILTER_QUERY_MAX_BYTES,
   decideEnterAction,
   decideEscAction,
   filterEntries,
+  isRemoteFileBrowserFilterQueryTooLarge,
+  isRemoteFileBrowserPathResolveTextTooLarge,
   isPathMode,
   parentPath,
   parsePathInput,
   resolveSegmentStep,
+  shouldDeferRemoteFileBrowserPasteResolve,
   type DirEntry
 } from './remote-file-browser-helpers'
 
@@ -27,6 +31,27 @@ describe('filterEntries', () => {
   it('returns the full list when filter is empty or whitespace', () => {
     expect(filterEntries(entries, '')).toHaveLength(entries.length)
     expect(filterEntries(entries, '   ')).toHaveLength(entries.length)
+  })
+
+  it('rejects oversized pasted filters before reading remote entry names', () => {
+    const oversizedFilter = 'secret-remote-entry'.repeat(REMOTE_FILE_BROWSER_FILTER_QUERY_MAX_BYTES)
+    const throwingEntries = [
+      {
+        get name(): string {
+          throw new Error('oversized remote filters must not scan entry names')
+        },
+        isDirectory: true
+      }
+    ]
+
+    expect(isRemoteFileBrowserFilterQueryTooLarge(oversizedFilter)).toBe(true)
+    expect(filterEntries(throwingEntries, oversizedFilter)).toEqual([])
+  })
+
+  it('rejects oversized whitespace before trimming remote entry filters', () => {
+    expect(
+      filterEntries(entries, ' '.repeat(REMOTE_FILE_BROWSER_FILTER_QUERY_MAX_BYTES + 1))
+    ).toEqual([])
   })
 })
 
@@ -90,6 +115,27 @@ describe('isPathMode', () => {
     expect(isPathMode('~')).toBe(true)
     expect(isPathMode('.')).toBe(true)
     expect(isPathMode('..')).toBe(true)
+  })
+})
+
+describe('shouldDeferRemoteFileBrowserPasteResolve', () => {
+  it('keeps small path and filter pastes on the immediate resolver path', () => {
+    expect(shouldDeferRemoteFileBrowserPasteResolve('/workspaces/orca/src')).toBe(false)
+    expect(shouldDeferRemoteFileBrowserPasteResolve('remote notes')).toBe(false)
+  })
+
+  it('defers large text-control pastes to the chunked paste owner', () => {
+    expect(shouldDeferRemoteFileBrowserPasteResolve('x'.repeat(70 * 1024))).toBe(true)
+  })
+
+  it('defers multibyte paste text using bounded byte measurement', () => {
+    expect(shouldDeferRemoteFileBrowserPasteResolve('😀'.repeat(20 * 1024))).toBe(true)
+  })
+
+  it('treats oversized slash-containing paste as too large for path resolving', () => {
+    const pastedPathList = 'C:/Users/alice/project/file.txt\n'.repeat(3_000)
+
+    expect(isRemoteFileBrowserPathResolveTextTooLarge(pastedPathList)).toBe(true)
   })
 })
 

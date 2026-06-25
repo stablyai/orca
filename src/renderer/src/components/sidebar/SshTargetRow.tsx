@@ -1,5 +1,5 @@
 /**
- * Row used in the "Open remote project" step to pick an SSH target.
+ * Row used in the "Open project on SSH host" step to pick an SSH target.
  *
  * Why extracted: keeps AddRepoSteps.tsx under the 400-line oxlint limit
  * while isolating the inline-connect interaction logic.
@@ -7,6 +7,7 @@
 import React, { useCallback, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
+import { translate } from '@/i18n/i18n'
 
 type Props = {
   target: SshTarget & { state?: SshConnectionState }
@@ -95,10 +96,10 @@ export function SshTargetRow({
           {isBusy ? (
             <>
               <Loader2 className="size-3 animate-spin" />
-              Connecting…
+              {translate('auto.components.sidebar.SshTargetRow.4677394048', 'Connecting…')}
             </>
           ) : (
-            'Connect'
+            translate('auto.components.sidebar.SshTargetRow.75ad429b5d', 'Connect')
           )}
         </button>
       )}

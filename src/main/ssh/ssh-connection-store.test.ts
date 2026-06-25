@@ -70,6 +70,27 @@ describe('SshConnectionStore', () => {
     expect(mockStore.addSshTarget).toHaveBeenCalledWith(target)
   })
 
+  it('addTarget stamps source as manual by default', () => {
+    const target = sshStore.addTarget({
+      label: 'My Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    })
+    expect(target.source).toBe('manual')
+  })
+
+  it('addTarget preserves an explicitly provided source', () => {
+    const target = sshStore.addTarget({
+      label: 'My Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy',
+      source: 'ssh-config'
+    })
+    expect(target.source).toBe('ssh-config')
+  })
+
   it('updateTarget delegates to store', () => {
     const original: SshTarget = {
       id: 'ssh-1',
@@ -91,46 +112,194 @@ describe('SshConnectionStore', () => {
   })
 
   describe('importFromSshConfig', () => {
-    it('imports new hosts from SSH config', () => {
-      const configHosts = [{ host: 'staging', hostname: 'staging.example.com' }]
-      const newTargets: SshTarget[] = [
-        {
-          id: 'ssh-new-1',
-          label: 'staging',
-          host: 'staging.example.com',
-          port: 22,
-          username: ''
-        }
-      ]
+    function candidate(overrides: Partial<SshTarget> & { configHost: string }): SshTarget {
+      return {
+        id: `tmp-${overrides.configHost}`,
+        label: overrides.configHost,
+        host: `${overrides.configHost}.example.com`,
+        port: 22,
+        username: '',
+        ...overrides
+      }
+    }
 
-      loadUserSshConfigMock.mockReturnValue(configHosts)
-      sshConfigHostsToTargetsMock.mockReturnValue(newTargets)
+    it('inserts a new config host stamped as ssh-config', () => {
+      loadUserSshConfigMock.mockReturnValue([{ host: 'staging' }])
+      sshConfigHostsToTargetsMock.mockReturnValue([
+        candidate({ configHost: 'staging', host: 'staging.example.com' })
+      ])
 
       const result = sshStore.importFromSshConfig()
 
-      expect(result).toEqual(newTargets)
-      expect(mockStore.addSshTarget).toHaveBeenCalledWith(newTargets[0])
+      expect(mockStore.addSshTarget).toHaveBeenCalledWith(
+        expect.objectContaining({ configHost: 'staging', source: 'ssh-config' })
+      )
+      expect(result).toHaveLength(1)
+      expect(result[0].source).toBe('ssh-config')
     })
 
-    it('passes existing target labels to avoid duplicates', () => {
-      const existing: SshTarget = {
-        id: 'ssh-existing',
-        label: 'production',
-        host: 'prod.example.com',
-        port: 22,
-        username: 'deploy'
-      }
-      mockStore.addSshTarget(existing)
-
-      loadUserSshConfigMock.mockReturnValue([])
+    it('asks the parser for all hosts — reconciliation happens in the store', () => {
+      loadUserSshConfigMock.mockReturnValue([{ host: 'a' }])
       sshConfigHostsToTargetsMock.mockReturnValue([])
 
       sshStore.importFromSshConfig()
 
-      expect(sshConfigHostsToTargetsMock).toHaveBeenCalledWith([], new Set(['production']))
+      expect(sshConfigHostsToTargetsMock).toHaveBeenCalledWith([{ host: 'a' }], new Set())
     })
 
-    it('returns empty array when no new hosts found', () => {
+    // PRIMARY regression (#4684 item #1): a rotated port must take effect on
+    // re-import instead of silently keeping the stale value.
+    it('updates an existing config-sourced target when the port changed', () => {
+      mockStore.addSshTarget({
+        id: 'ssh-1',
+        label: 'cluster',
+        configHost: 'cluster',
+        host: '10.0.0.5',
+        port: 2200,
+        username: 'dev',
+        source: 'ssh-config'
+      })
+      loadUserSshConfigMock.mockReturnValue([{ host: 'cluster' }])
+      sshConfigHostsToTargetsMock.mockReturnValue([
+        candidate({ configHost: 'cluster', host: '10.0.0.5', port: 2222, username: 'dev' })
+      ])
+
+      const result = sshStore.importFromSshConfig()
+
+      expect(mockStore.updateSshTarget).toHaveBeenCalledWith(
+        'ssh-1',
+        expect.objectContaining({ port: 2222, source: 'ssh-config' })
+      )
+      // Only the seed insert — no duplicate target created.
+      expect(mockStore.addSshTarget).toHaveBeenCalledTimes(1)
+      expect(result).toHaveLength(1)
+      expect(result[0].port).toBe(2222)
+    })
+
+    it('refreshes host, username, and jump host on sync, not just port', () => {
+      mockStore.addSshTarget({
+        id: 'ssh-1',
+        label: 'box',
+        configHost: 'box',
+        host: 'old.example.com',
+        port: 22,
+        username: 'old',
+        source: 'ssh-config'
+      })
+      loadUserSshConfigMock.mockReturnValue([{ host: 'box' }])
+      sshConfigHostsToTargetsMock.mockReturnValue([
+        candidate({
+          configHost: 'box',
+          host: 'new.example.com',
+          port: 2200,
+          username: 'newuser',
+          jumpHost: 'bastion'
+        })
+      ])
+
+      sshStore.importFromSshConfig()
+
+      expect(mockStore.updateSshTarget).toHaveBeenCalledWith(
+        'ssh-1',
+        expect.objectContaining({
+          host: 'new.example.com',
+          port: 2200,
+          username: 'newuser',
+          jumpHost: 'bastion'
+        })
+      )
+    })
+
+    it('never overwrites a manual target that owns the alias', () => {
+      mockStore.addSshTarget({
+        id: 'ssh-m',
+        label: 'cluster',
+        configHost: 'cluster',
+        host: 'manual.example.com',
+        port: 22,
+        username: 'me',
+        source: 'manual'
+      })
+      loadUserSshConfigMock.mockReturnValue([{ host: 'cluster' }])
+      sshConfigHostsToTargetsMock.mockReturnValue([
+        candidate({ configHost: 'cluster', host: '10.0.0.9', port: 2222, username: 'dev' })
+      ])
+
+      const result = sshStore.importFromSshConfig()
+
+      expect(mockStore.updateSshTarget).not.toHaveBeenCalled()
+      // Only the manual seed insert — the config alias is not duplicated.
+      expect(mockStore.addSshTarget).toHaveBeenCalledTimes(1)
+      expect(result).toEqual([])
+    })
+
+    it('adopts a legacy unsourced target into config-sync', () => {
+      mockStore.addSshTarget({
+        id: 'ssh-legacy',
+        label: 'cluster',
+        configHost: 'cluster',
+        host: '10.0.0.5',
+        port: 2200,
+        username: 'dev'
+        // no source — predates the field
+      })
+      loadUserSshConfigMock.mockReturnValue([{ host: 'cluster' }])
+      sshConfigHostsToTargetsMock.mockReturnValue([
+        candidate({ configHost: 'cluster', host: '10.0.0.5', port: 2222, username: 'dev' })
+      ])
+
+      const result = sshStore.importFromSshConfig()
+
+      expect(mockStore.updateSshTarget).toHaveBeenCalledWith(
+        'ssh-legacy',
+        expect.objectContaining({ port: 2222, source: 'ssh-config' })
+      )
+      expect(result[0].source).toBe('ssh-config')
+    })
+
+    it('does not overwrite a legacy unsourced manual target with the same alias', () => {
+      mockStore.addSshTarget({
+        id: 'ssh-legacy-manual',
+        label: 'cluster',
+        configHost: 'cluster',
+        host: 'cluster',
+        port: 2200,
+        username: 'me'
+        // no source — predates the field, but does not look like a config import
+      })
+      loadUserSshConfigMock.mockReturnValue([{ host: 'cluster' }])
+      sshConfigHostsToTargetsMock.mockReturnValue([
+        candidate({ configHost: 'cluster', host: '10.0.0.5', port: 2222, username: 'dev' })
+      ])
+
+      const result = sshStore.importFromSshConfig()
+
+      expect(mockStore.updateSshTarget).not.toHaveBeenCalled()
+      expect(mockStore.addSshTarget).toHaveBeenCalledTimes(1)
+      expect(result).toEqual([])
+    })
+
+    it('does not rewrite an unchanged config-sourced target', () => {
+      mockStore.addSshTarget({
+        id: 'ssh-1',
+        label: 'cluster',
+        configHost: 'cluster',
+        host: 'cluster.example.com',
+        port: 22,
+        username: '',
+        source: 'ssh-config'
+      })
+      loadUserSshConfigMock.mockReturnValue([{ host: 'cluster' }])
+      // Candidate is identical to the persisted target (same default fields).
+      sshConfigHostsToTargetsMock.mockReturnValue([candidate({ configHost: 'cluster' })])
+
+      const result = sshStore.importFromSshConfig()
+
+      expect(mockStore.updateSshTarget).not.toHaveBeenCalled()
+      expect(result).toEqual([])
+    })
+
+    it('returns empty array when nothing changed', () => {
       loadUserSshConfigMock.mockReturnValue([])
       sshConfigHostsToTargetsMock.mockReturnValue([])
 

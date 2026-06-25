@@ -23,6 +23,7 @@ import type {
   SkillSourceKind
 } from '../../../../shared/skills'
 import { countSkillsBySource, filterSkills, type SkillsFilterState } from './skills-filter'
+import { translate } from '@/i18n/i18n'
 
 const providerLabels: Record<SkillProvider, string> = {
   codex: 'Codex',
@@ -58,7 +59,9 @@ function SkillCard({ skill }: { skill: DiscoveredSkill }): React.JSX.Element {
   const revealSkill = async (): Promise<void> => {
     const result = await window.api.shell.openInFileManager(skill.skillFilePath)
     if (!result.ok) {
-      toast.error('Could not reveal skill file')
+      toast.error(
+        translate('auto.components.skills.SkillsPage.995fde8337', 'Could not reveal skill file')
+      )
     }
   }
 
@@ -76,7 +79,9 @@ function SkillCard({ skill }: { skill: DiscoveredSkill }): React.JSX.Element {
                 variant={skill.installed ? 'secondary' : 'outline'}
                 className="h-5 text-[10px]"
               >
-                {skill.installed ? 'Local' : 'Available'}
+                {skill.installed
+                  ? translate('auto.components.skills.SkillsPage.0c74e7ff34', 'Local')
+                  : translate('auto.components.skills.SkillsPage.35b9a724a0', 'Available')}
               </Badge>
               <Badge variant="outline" className="h-5 text-[10px]">
                 {sourceLabels[skill.sourceKind]}
@@ -87,7 +92,9 @@ function SkillCard({ skill }: { skill: DiscoveredSkill }): React.JSX.Element {
                 {skill.description}
               </p>
             ) : (
-              <p className="text-xs text-muted-foreground">No description found.</p>
+              <p className="text-xs text-muted-foreground">
+                {translate('auto.components.skills.SkillsPage.9963dff6d3', 'No description found.')}
+              </p>
             )}
           </div>
           <Tooltip>
@@ -105,7 +112,7 @@ function SkillCard({ skill }: { skill: DiscoveredSkill }): React.JSX.Element {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
-              Reveal file
+              {translate('auto.components.skills.SkillsPage.dc4c3328ee', 'Reveal file')}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -154,18 +161,31 @@ function EmptyState({
         )}
         <div className="space-y-1">
           <h3 className="text-sm font-semibold">
-            {loading ? 'Scanning skills' : hasSkills ? 'No matches' : 'No local skills found'}
+            {loading
+              ? translate('auto.components.skills.SkillsPage.cd7893fbc1', 'Scanning skills')
+              : hasSkills
+                ? translate('auto.components.skills.SkillsPage.6a62a0168c', 'No matches')
+                : translate(
+                    'auto.components.skills.SkillsPage.4acd6d68ec',
+                    'No local skills found'
+                  )}
           </h3>
           <p className="text-xs leading-5 text-muted-foreground">
             {hasSkills
-              ? 'Adjust the search or filters.'
-              : 'Checked local home, repository, bundled, and plugin skill folders.'}
+              ? translate(
+                  'auto.components.skills.SkillsPage.08a321a984',
+                  'Adjust the search or filters.'
+                )
+              : translate(
+                  'auto.components.skills.SkillsPage.ab5b777350',
+                  'Checked local home, repository, bundled, and plugin skill folders.'
+                )}
           </p>
         </div>
         {!loading ? (
           <Button variant="outline" size="sm" onClick={onRefresh}>
             <RefreshCw className="size-4" />
-            Refresh
+            {translate('auto.components.skills.SkillsPage.cb142070b4', 'Refresh')}
           </Button>
         ) : null}
       </div>
@@ -194,7 +214,9 @@ export default function SkillsPage(): React.JSX.Element {
     } catch (error) {
       console.error('Failed to discover skills:', error)
       if (mountedRef.current) {
-        toast.error('Could not scan local skills')
+        toast.error(
+          translate('auto.components.skills.SkillsPage.ea72d6185b', 'Could not scan local skills')
+        )
       }
     } finally {
       if (mountedRef.current) {
@@ -260,17 +282,23 @@ export default function SkillsPage(): React.JSX.Element {
       <header className="flex shrink-0 items-center gap-3 border-b border-border px-5 py-3">
         <Button variant="outline" size="sm" onClick={closeSkillsPage} className="shrink-0 gap-1.5">
           <ArrowLeft className="size-3.5" />
-          Back
+          {translate('auto.components.skills.SkillsPage.7e828fb2c6', 'Back')}
         </Button>
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <BookOpen className="size-4 text-muted-foreground" />
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2">
-              <h1 className="truncate text-sm font-semibold">Skills</h1>
-              <Badge variant="secondary">Beta</Badge>
+              <h1 className="truncate text-sm font-semibold">
+                {translate('auto.components.skills.SkillsPage.f43ad6edf3', 'Skills')}
+              </h1>
+              <Badge variant="secondary">
+                {translate('auto.components.skills.SkillsPage.b088e0785d', 'Beta')}
+              </Badge>
             </div>
             <p className="truncate text-xs text-muted-foreground">
-              {pluralize(skills.length, 'skill')} from {pluralize(activeSourceCount, 'source')}
+              {pluralize(skills.length, 'skill')}{' '}
+              {translate('auto.components.skills.SkillsPage.e46e162e2e', 'from')}
+              {pluralize(activeSourceCount, 'source')}
             </p>
           </div>
         </div>
@@ -283,7 +311,10 @@ export default function SkillsPage(): React.JSX.Element {
             <Input
               value={filters.query}
               onChange={(event) => setFilters((next) => ({ ...next, query: event.target.value }))}
-              placeholder="Search skills"
+              placeholder={translate(
+                'auto.components.skills.SkillsPage.a68dee6a32',
+                'Search skills'
+              )}
               className="h-8 pl-8 text-sm"
             />
           </div>
@@ -301,10 +332,18 @@ export default function SkillsPage(): React.JSX.Element {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All providers</SelectItem>
-                <SelectItem value="codex">Codex</SelectItem>
-                <SelectItem value="claude">Claude</SelectItem>
-                <SelectItem value="agent-skills">Agent Skills</SelectItem>
+                <SelectItem value="all">
+                  {translate('auto.components.skills.SkillsPage.39b6998ddb', 'All providers')}
+                </SelectItem>
+                <SelectItem value="codex">
+                  {translate('auto.components.skills.SkillsPage.426be2aac6', 'Codex')}
+                </SelectItem>
+                <SelectItem value="claude">
+                  {translate('auto.components.skills.SkillsPage.fb6bf60b52', 'Claude')}
+                </SelectItem>
+                <SelectItem value="agent-skills">
+                  {translate('auto.components.skills.SkillsPage.38e0951c3a', 'Agent Skills')}
+                </SelectItem>
               </SelectContent>
             </Select>
             <Select
@@ -320,11 +359,21 @@ export default function SkillsPage(): React.JSX.Element {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All sources</SelectItem>
-                <SelectItem value="home">Home</SelectItem>
-                <SelectItem value="repo">Repository</SelectItem>
-                <SelectItem value="bundled">Bundled</SelectItem>
-                <SelectItem value="plugin">Plugin</SelectItem>
+                <SelectItem value="all">
+                  {translate('auto.components.skills.SkillsPage.0bc1379f4c', 'All sources')}
+                </SelectItem>
+                <SelectItem value="home">
+                  {translate('auto.components.skills.SkillsPage.571c5818c1', 'Home')}
+                </SelectItem>
+                <SelectItem value="repo">
+                  {translate('auto.components.skills.SkillsPage.aa59462502', 'Repository')}
+                </SelectItem>
+                <SelectItem value="bundled">
+                  {translate('auto.components.skills.SkillsPage.4d177feabd', 'Bundled')}
+                </SelectItem>
+                <SelectItem value="plugin">
+                  {translate('auto.components.skills.SkillsPage.984405683f', 'Plugin')}
+                </SelectItem>
               </SelectContent>
             </Select>
             <Button
@@ -338,7 +387,7 @@ export default function SkillsPage(): React.JSX.Element {
               }}
             >
               <RefreshCw className={cn('size-4', loading && 'animate-spin')} />
-              Refresh
+              {translate('auto.components.skills.SkillsPage.cb142070b4', 'Refresh')}
             </Button>
           </div>
         </div>

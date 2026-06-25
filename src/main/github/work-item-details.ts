@@ -6,6 +6,8 @@ import type {
   GitHubPRFile,
   GitHubPRFileContents,
   GitHubPRFileViewedState,
+  GitHubIssueTimelineItem,
+  GitHubIssueTimelineTarget,
   GitHubWorkItem,
   GitHubWorkItemDetails,
   PRCheckDetail,
@@ -18,16 +20,30 @@ import {
   getOwnerRepo,
   getIssueOwnerRepo,
   ghRepoExecOptions,
-  githubRepoContext
+  githubRepoContext,
+  type LocalGitExecOptions
 } from './gh-utils'
 import { getWorkItem, getPRChecks, getPRComments } from './client'
 import { noteRateLimitSpend, rateLimitGuard } from './rate-limit'
 import { getPRReviewCommentLineNumbersFromPatch } from './pr-review-comment-lines'
+import { isMaxBufferOverflowError } from '../git/max-buffer-overflow'
 
 // Why: a PR "changed file" listing returned by the REST endpoint is paginated
 // at 100 per page; we cap at a reasonable total so a massive PR cannot starve
 // the gh semaphore while we fetch file listings.
 const MAX_PR_FILES = 300
+// Why: issue timelines can be extremely noisy from automation and cross-links.
+// Bound drawer detail work so one huge issue cannot monopolize gh/API time.
+const MAX_ISSUE_TIMELINE_ITEMS = 300
+const GITHUB_REST_PAGE_SIZE = 100
+// Why: hosted PR files must exceed the renderer's large-diff threshold before
+// we give up on the raw fetch; otherwise the UI sees an empty diff instead of
+// the safety fallback.
+const GITHUB_RAW_CONTENT_MAX_BUFFER_BYTES = 8 * 1024 * 1024
+
+function localGitOptionArgs(options: LocalGitExecOptions = {}): [] | [LocalGitExecOptions] {
+  return Object.keys(options).length > 0 ? [options] : []
+}
 
 const PR_FILE_VIEWED_STATES_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $after: String) {
   repository(owner: $owner, name: $repo) {
@@ -116,18 +132,215 @@ type GraphQLIssueDetailsResponse = {
   errors?: { message?: string }[]
 }
 
+type GitHubOwnerRepoSlug = { owner: string; repo: string }
+
+type RestTimelineUser = {
+  login?: string | null
+  avatar_url?: string | null
+}
+
+type RestTimelineIssue = {
+  number?: number | null
+  title?: string | null
+  html_url?: string | null
+  repository?: {
+    name?: string | null
+    owner?: { login?: string | null } | null
+  } | null
+  pull_request?: unknown
+}
+
+type RestTimelineEvent = {
+  id?: number | string | null
+  node_id?: string | null
+  event?: string | null
+  actor?: RestTimelineUser | null
+  user?: RestTimelineUser | null
+  assignee?: RestTimelineUser | null
+  created_at?: string | null
+  source?: {
+    issue?: RestTimelineIssue | null
+  } | null
+  closer?: RestTimelineIssue | null
+  state_reason?: string | null
+  project_card?: {
+    column_name?: string | null
+    previous_column_name?: string | null
+    project_url?: string | null
+  } | null
+  project?: {
+    name?: string | null
+  } | null
+  project_column_name?: string | null
+  previous_column_name?: string | null
+}
+
+function isSupportedTimelineEvent(
+  eventName: string | null | undefined
+): eventName is GitHubIssueTimelineItem['event'] {
+  return (
+    eventName === 'assigned' ||
+    eventName === 'unassigned' ||
+    eventName === 'mentioned' ||
+    eventName === 'cross-referenced' ||
+    eventName === 'closed' ||
+    eventName === 'reopened' ||
+    eventName === 'moved_columns_in_project'
+  )
+}
+
+function mapTimelineTarget(
+  issue: RestTimelineIssue | null | undefined
+): GitHubIssueTimelineTarget | undefined {
+  if (!issue || typeof issue.number !== 'number' || !issue.html_url) {
+    return undefined
+  }
+  const owner = issue.repository?.owner?.login
+  const repo = issue.repository?.name
+  return {
+    type: issue.pull_request ? 'pr' : 'issue',
+    number: issue.number,
+    title: issue.title ?? '',
+    url: issue.html_url,
+    repository: owner && repo ? `${owner}/${repo}` : undefined
+  }
+}
+
+function getTimelineActor(event: RestTimelineEvent): { login: string; avatarUrl: string } {
+  const actor = event.actor ?? event.user
+  return {
+    login: actor?.login ?? 'ghost',
+    avatarUrl: actor?.avatar_url ?? ''
+  }
+}
+
+function mapRestTimelineEvent(event: RestTimelineEvent): GitHubIssueTimelineItem | null {
+  const eventName = event.event
+  if (!isSupportedTimelineEvent(eventName)) {
+    return null
+  }
+  if (!event.created_at) {
+    return null
+  }
+  const actor = getTimelineActor(event)
+  const id = String(event.node_id ?? event.id ?? `${eventName}:${event.created_at}`)
+  const base = {
+    id,
+    event: eventName,
+    actor: actor.login,
+    actorAvatarUrl: actor.avatarUrl,
+    createdAt: event.created_at
+  }
+  if (eventName === 'assigned' || eventName === 'unassigned') {
+    return {
+      ...base,
+      assignee: event.assignee?.login ?? undefined
+    }
+  }
+  if (eventName === 'mentioned' || eventName === 'cross-referenced') {
+    return {
+      ...base,
+      source: mapTimelineTarget(event.source?.issue)
+    }
+  }
+  if (eventName === 'closed') {
+    return {
+      ...base,
+      stateReason: event.state_reason ?? null,
+      closer: mapTimelineTarget(event.closer ?? event.source?.issue)
+    }
+  }
+  if (eventName === 'moved_columns_in_project') {
+    return {
+      ...base,
+      previousColumnName:
+        event.previous_column_name ?? event.project_card?.previous_column_name ?? null,
+      columnName: event.project_column_name ?? event.project_card?.column_name ?? null,
+      projectName: event.project?.name ?? null
+    }
+  }
+  return base
+}
+
+function parseRestTimelineEventLines(stdout: string): RestTimelineEvent[] {
+  const events: RestTimelineEvent[] = []
+  for (const line of stdout.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed) {
+      continue
+    }
+    try {
+      const parsed = JSON.parse(trimmed) as unknown
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        events.push(parsed)
+      }
+    } catch {
+      // Skip malformed jq lines; timeline activity is auxiliary to issue details.
+    }
+  }
+  return events
+}
+
+async function getIssueTimelineItems(
+  ownerRepo: GitHubOwnerRepoSlug,
+  issueNumber: number,
+  ghOptions: ReturnType<typeof ghRepoExecOptions>
+): Promise<GitHubIssueTimelineItem[]> {
+  try {
+    const items: GitHubIssueTimelineItem[] = []
+    for (let page = 1; items.length < MAX_ISSUE_TIMELINE_ITEMS; page += 1) {
+      const { stdout } = await ghExecFileAsync(
+        [
+          'api',
+          '--cache',
+          '60s',
+          `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${issueNumber}/timeline?per_page=${GITHUB_REST_PAGE_SIZE}&page=${page}`,
+          '--jq',
+          '.[] | @json'
+        ],
+        ghOptions
+      )
+      // Why: --jq emits compact NDJSON while explicit pages let us stop once
+      // supported activity reaches the drawer cap.
+      const pageEvents = parseRestTimelineEventLines(stdout)
+      for (const event of pageEvents) {
+        const item = mapRestTimelineEvent(event)
+        if (!item) {
+          continue
+        }
+        items.push(item)
+        if (items.length === MAX_ISSUE_TIMELINE_ITEMS) {
+          break
+        }
+      }
+      if (pageEvents.length < GITHUB_REST_PAGE_SIZE) {
+        break
+      }
+    }
+    return items
+  } catch {
+    return []
+  }
+}
+
 async function getIssueDetailsViaGraphQL(
   repoPath: string,
   issueNumber: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<{
   body: string
   comments: PRComment[]
   assignees: string[]
   participants: GitHubAssignableUser[]
+  timelineItems: GitHubIssueTimelineItem[]
 } | null> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = await getIssueOwnerRepo(repoPath, connectionId)
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = await getIssueOwnerRepo(
+    repoPath,
+    connectionId,
+    ...localGitOptionArgs(localGitOptions)
+  )
   if (!ownerRepo) {
     return null
   }
@@ -183,11 +396,13 @@ async function getIssueDetailsViaGraphQL(
         name: u.name ?? null,
         avatarUrl: u.avatarUrl ?? ''
       }))
+    const timelineItems = await getIssueTimelineItems(ownerRepo, issueNumber, ghOptions)
     return {
       body: issue.body ?? '',
       comments,
       assignees,
-      participants
+      participants,
+      timelineItems
     }
   } catch {
     return null
@@ -269,10 +484,15 @@ function isBinaryHint(file: RESTPRFile): boolean {
 async function getPRHeadBaseSha(
   repoPath: string,
   prNumber: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ headSha: string; baseSha: string } | null> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = await getOwnerRepo(
+    repoPath,
+    connectionId,
+    ...localGitOptionArgs(localGitOptions)
+  )
   try {
     if (ownerRepo) {
       const { stdout } = await ghExecFileAsync(
@@ -292,7 +512,10 @@ async function getPRHeadBaseSha(
       ['pr', 'view', String(prNumber), '--json', 'headRefOid,baseRefOid'],
       ghOptions
     )
-    const data = JSON.parse(stdout) as { headRefOid?: string; baseRefOid?: string }
+    const data = JSON.parse(stdout) as {
+      headRefOid?: string
+      baseRefOid?: string
+    }
     if (data.headRefOid && data.baseRefOid) {
       return { headSha: data.headRefOid, baseSha: data.baseRefOid }
     }
@@ -305,10 +528,15 @@ async function getPRHeadBaseSha(
 async function getPRFiles(
   repoPath: string,
   prNumber: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubPRFile[]> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = await getOwnerRepo(
+    repoPath,
+    connectionId,
+    ...localGitOptionArgs(localGitOptions)
+  )
   if (!ownerRepo) {
     return []
   }
@@ -345,10 +573,15 @@ type PRFileViewedStatesResult = {
 async function getPRFileViewedStates(
   repoPath: string,
   prNumber: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRFileViewedStatesResult | null> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = await getOwnerRepo(
+    repoPath,
+    connectionId,
+    ...localGitOptionArgs(localGitOptions)
+  )
   if (!ownerRepo) {
     return null
   }
@@ -436,13 +669,23 @@ function mergePRFileViewedStates(
 async function getIssueBodyAndComments(
   repoPath: string,
   issueNumber: number,
-  connectionId?: string | null
-): Promise<{ body: string; comments: PRComment[]; assignees: string[] }> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = await getIssueOwnerRepo(repoPath, connectionId)
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<{
+  body: string
+  comments: PRComment[]
+  assignees: string[]
+  timelineItems: GitHubIssueTimelineItem[]
+}> {
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = await getIssueOwnerRepo(
+    repoPath,
+    connectionId,
+    ...localGitOptionArgs(localGitOptions)
+  )
   try {
     if (ownerRepo) {
-      const [issueResult, commentsResult] = await Promise.all([
+      const [issueResult, commentsResult, timelineItems] = await Promise.all([
         ghExecFileAsync(
           [
             'api',
@@ -460,7 +703,8 @@ async function getIssueBodyAndComments(
             `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${issueNumber}/comments?per_page=100`
           ],
           ghOptions
-        )
+        ),
+        getIssueTimelineItems(ownerRepo, issueNumber, ghOptions)
       ])
       const issue = JSON.parse(issueResult.stdout) as {
         body?: string | null
@@ -485,7 +729,7 @@ async function getIssueBodyAndComments(
         })
       )
       const assignees = (issue.assignees ?? []).map((a) => a.login)
-      return { body: issue.body ?? '', comments, assignees }
+      return { body: issue.body ?? '', comments, assignees, timelineItems }
     }
     // Fallback: non-GitHub remote
     const { stdout } = await ghExecFileAsync(
@@ -513,19 +757,24 @@ async function getIssueBodyAndComments(
       })
     )
     const fallbackAssignees = (data.assignees ?? []).map((a) => a.login)
-    return { body: data.body ?? '', comments, assignees: fallbackAssignees }
+    return { body: data.body ?? '', comments, assignees: fallbackAssignees, timelineItems: [] }
   } catch {
-    return { body: '', comments: [], assignees: [] }
+    return { body: '', comments: [], assignees: [], timelineItems: [] }
   }
 }
 
 async function getPRBody(
   repoPath: string,
   prNumber: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<string> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = await getOwnerRepo(
+    repoPath,
+    connectionId,
+    ...localGitOptionArgs(localGitOptions)
+  )
   try {
     if (ownerRepo) {
       const { stdout } = await ghExecFileAsync(
@@ -549,15 +798,16 @@ async function getPRBody(
 async function getWorkItemParticipants(
   repoPath: string,
   item: Pick<GitHubWorkItem, 'number' | 'type'>,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubAssignableUser[]> {
   // Why: issues in a fork live on the upstream remote, so participants must be
   // resolved via getIssueOwnerRepo to stay consistent with getIssueBodyAndComments.
   // PRs remain tied to origin via getOwnerRepo.
   const ownerRepo =
     item.type === 'issue'
-      ? await getIssueOwnerRepo(repoPath, connectionId)
-      : await getOwnerRepo(repoPath, connectionId)
+      ? await getIssueOwnerRepo(repoPath, connectionId, ...localGitOptionArgs(localGitOptions))
+      : await getOwnerRepo(repoPath, connectionId, ...localGitOptionArgs(localGitOptions))
   if (!ownerRepo) {
     return []
   }
@@ -581,7 +831,7 @@ async function getWorkItemParticipants(
         '-F',
         `isPr=${item.type === 'pr'}`
       ],
-      ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
+      ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
     )
     const data = JSON.parse(stdout) as {
       data?: {
@@ -614,7 +864,8 @@ async function getWorkItemParticipants(
 async function getGitHubUsersByLogin(
   repoPath: string,
   logins: string[],
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubAssignableUser[]> {
   const uniqueLogins = Array.from(
     new Set(logins.filter((login) => login && login !== 'ghost').map((login) => login.trim()))
@@ -635,17 +886,27 @@ async function getGitHubUsersByLogin(
     noteRateLimitSpend('graphql')
     const { stdout } = await ghExecFileAsync(
       ['api', 'graphql', '-f', `query=query { ${fields} }`],
-      ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
+      ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
     )
     const data = JSON.parse(stdout) as {
       data?: Record<
         string,
-        { login?: string; name?: string | null; avatarUrl?: string | null } | null
+        {
+          login?: string
+          name?: string | null
+          avatarUrl?: string | null
+        } | null
       >
     }
     return Object.values(data.data ?? {})
-      .filter((user): user is { login: string; name?: string | null; avatarUrl?: string | null } =>
-        Boolean(user?.login)
+      .filter(
+        (
+          user
+        ): user is {
+          login: string
+          name?: string | null
+          avatarUrl?: string | null
+        } => Boolean(user?.login)
       )
       .map((user) => ({
         login: user.login,
@@ -662,14 +923,20 @@ async function getMentionParticipants(
   item: Pick<GitHubWorkItem, 'author' | 'number' | 'type'>,
   comments: PRComment[],
   participants: GitHubAssignableUser[],
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubAssignableUser[]> {
   const visibleLogins = [item.author ?? '', ...comments.map((comment) => comment.author)]
   // Why: one aliased GraphQL query returns login/name/avatarUrl for every
   // mentioned author in a single round-trip. The previous REST fan-out
   // (/users/<login>) returned the same fields but cost one rate-limit point
   // per user.
-  const graphQlUsers = await getGitHubUsersByLogin(repoPath, visibleLogins, connectionId)
+  const graphQlUsers = await getGitHubUsersByLogin(
+    repoPath,
+    visibleLogins,
+    connectionId,
+    localGitOptions
+  )
   return mergeGitHubUsers([...participants, ...graphQlUsers])
 }
 
@@ -677,10 +944,19 @@ async function getPRChecksForDetails(
   repoPath: string,
   prNumber: number,
   headSha: string | undefined,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRCheckDetail[]> {
   try {
-    return await getPRChecks(repoPath, prNumber, headSha, null, undefined, connectionId)
+    return await getPRChecks(
+      repoPath,
+      prNumber,
+      headSha,
+      null,
+      undefined,
+      connectionId,
+      ...localGitOptionArgs(localGitOptions)
+    )
   } catch (err) {
     // Why: checks are auxiliary PR metadata; a gh CLI edge case must not block
     // the user from opening the PR review drawer and reading the files/comments.
@@ -693,7 +969,8 @@ export async function getWorkItemDetails(
   repoPath: string,
   number: number,
   type?: 'issue' | 'pr',
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubWorkItemDetails | null> {
   // Why: getWorkItem already handles acquire/release. We call it first (outside
   // our semaphore) so the known-cheap lookup doesn't compete with the richer
@@ -702,7 +979,8 @@ export async function getWorkItemDetails(
     repoPath,
     number,
     type,
-    connectionId
+    connectionId,
+    ...localGitOptionArgs(localGitOptions)
   )
   if (!item) {
     return null
@@ -718,48 +996,68 @@ export async function getWorkItemDetails(
       // is preserved. The GraphQL `participants` connection includes every
       // commenter, so we skip the extra `getMentionParticipants` aliased
       // user-hydration trip when the collapsed path succeeds.
-      const collapsed = await getIssueDetailsViaGraphQL(repoPath, item.number, connectionId)
+      const collapsed = await getIssueDetailsViaGraphQL(
+        repoPath,
+        item.number,
+        connectionId,
+        localGitOptions
+      )
       if (collapsed) {
         return {
           item,
           body: collapsed.body,
           comments: collapsed.comments,
           assignees: collapsed.assignees,
-          participants: collapsed.participants
+          participants: collapsed.participants,
+          timelineItems: collapsed.timelineItems
         }
       }
       // Why: fall back to body/comments and GraphQL participants in parallel;
       // the mention-participant merge is a cheap local operation afterward.
-      const [{ body, comments, assignees }, participants] = await Promise.all([
-        getIssueBodyAndComments(repoPath, item.number, connectionId),
-        getWorkItemParticipants(repoPath, item, connectionId)
+      const [{ body, comments, assignees, timelineItems }, participants] = await Promise.all([
+        getIssueBodyAndComments(repoPath, item.number, connectionId, localGitOptions),
+        getWorkItemParticipants(repoPath, item, connectionId, localGitOptions)
       ])
       const mentionParticipants = await getMentionParticipants(
         repoPath,
         item,
         comments,
         participants,
-        connectionId
+        connectionId,
+        localGitOptions
       )
-      return { item, body, comments, assignees, participants: mentionParticipants }
+      return {
+        item,
+        body,
+        comments,
+        assignees,
+        participants: mentionParticipants,
+        timelineItems
+      }
     }
 
     // PR: fetch body + comments + checks + files + head/base SHAs in parallel.
     const [body, comments, shas, files, viewedStates, participants] = await Promise.all([
-      getPRBody(repoPath, item.number, connectionId),
-      getPRComments(repoPath, item.number, undefined, connectionId),
-      getPRHeadBaseSha(repoPath, item.number, connectionId),
-      getPRFiles(repoPath, item.number, connectionId),
-      getPRFileViewedStates(repoPath, item.number, connectionId),
-      getWorkItemParticipants(repoPath, item, connectionId)
+      getPRBody(repoPath, item.number, connectionId, localGitOptions),
+      getPRComments(
+        repoPath,
+        item.number,
+        undefined,
+        connectionId,
+        ...localGitOptionArgs(localGitOptions)
+      ),
+      getPRHeadBaseSha(repoPath, item.number, connectionId, localGitOptions),
+      getPRFiles(repoPath, item.number, connectionId, localGitOptions),
+      getPRFileViewedStates(repoPath, item.number, connectionId, localGitOptions),
+      getWorkItemParticipants(repoPath, item, connectionId, localGitOptions)
     ])
 
     // Why: run the mention-author GraphQL lookup in parallel with the final
     // checks fetch instead of serially — both depend only on data from the
     // Promise.all above, so there's no ordering requirement between them.
     const [mentionParticipants, checks] = await Promise.all([
-      getMentionParticipants(repoPath, item, comments, participants, connectionId),
-      getPRChecksForDetails(repoPath, item.number, shas?.headSha, connectionId)
+      getMentionParticipants(repoPath, item, comments, participants, connectionId, localGitOptions),
+      getPRChecksForDetails(repoPath, item.number, shas?.headSha, connectionId, localGitOptions)
     ])
 
     return {
@@ -785,11 +1083,12 @@ export async function getWorkItemDetails(
 async function fetchContentAtRef(args: {
   repoPath: string
   connectionId?: string | null
+  localGitOptions?: LocalGitExecOptions
   owner: string
   repo: string
   path: string
   ref: string
-}): Promise<{ content: string; isBinary: boolean }> {
+}): Promise<{ content: string; isBinary: boolean; tooLarge?: boolean }> {
   try {
     const { stdout } = await ghExecFileAsync(
       [
@@ -800,7 +1099,12 @@ async function fetchContentAtRef(args: {
         'Accept: application/vnd.github.raw',
         `repos/${args.owner}/${args.repo}/contents/${encodeURI(args.path)}?ref=${encodeURIComponent(args.ref)}`
       ],
-      ghRepoExecOptions(githubRepoContext(args.repoPath, args.connectionId))
+      {
+        ...ghRepoExecOptions(
+          githubRepoContext(args.repoPath, args.connectionId, args.localGitOptions)
+        ),
+        maxBuffer: GITHUB_RAW_CONTENT_MAX_BUFFER_BYTES
+      }
     )
     // Raw content response: Electron's execFile returns string in utf-8. If the
     // file is binary, the string will contain replacement characters — we treat
@@ -810,7 +1114,10 @@ async function fetchContentAtRef(args: {
       return { content: '', isBinary: true }
     }
     return { content: stdout, isBinary: false }
-  } catch {
+  } catch (error) {
+    if (isMaxBufferOverflowError(error)) {
+      return { content: '', isBinary: false, tooLarge: true }
+    }
     return { content: '', isBinary: false }
   }
 }
@@ -818,6 +1125,7 @@ async function fetchContentAtRef(args: {
 export async function getPRFileContents(args: {
   repoPath: string
   connectionId?: string | null
+  localGitOptions?: LocalGitExecOptions
   prNumber: number
   path: string
   oldPath?: string
@@ -825,7 +1133,11 @@ export async function getPRFileContents(args: {
   headSha: string
   baseSha: string
 }): Promise<GitHubPRFileContents> {
-  const ownerRepo = await getOwnerRepo(args.repoPath, args.connectionId)
+  const ownerRepo = await getOwnerRepo(
+    args.repoPath,
+    args.connectionId,
+    ...localGitOptionArgs(args.localGitOptions)
+  )
   if (!ownerRepo) {
     return {
       original: '',
@@ -850,29 +1162,39 @@ export async function getPRFileContents(args: {
         ? fetchContentAtRef({
             repoPath: args.repoPath,
             connectionId: args.connectionId,
+            localGitOptions: args.localGitOptions,
             owner: ownerRepo.owner,
             repo: ownerRepo.repo,
             path: originalPath,
             ref: originalRef
           })
-        : Promise.resolve({ content: '', isBinary: false }),
+        : Promise.resolve<{ content: string; isBinary: boolean; tooLarge?: boolean }>({
+            content: '',
+            isBinary: false
+          }),
       needsModified
         ? fetchContentAtRef({
             repoPath: args.repoPath,
             connectionId: args.connectionId,
+            localGitOptions: args.localGitOptions,
             owner: ownerRepo.owner,
             repo: ownerRepo.repo,
             path: args.path,
             ref: args.headSha
           })
-        : Promise.resolve({ content: '', isBinary: false })
+        : Promise.resolve<{ content: string; isBinary: boolean; tooLarge?: boolean }>({
+            content: '',
+            isBinary: false
+          })
     ])
 
     return {
       original: original.content,
       modified: modified.content,
       originalIsBinary: original.isBinary,
-      modifiedIsBinary: modified.isBinary
+      modifiedIsBinary: modified.isBinary,
+      originalTooLarge: original.tooLarge,
+      modifiedTooLarge: modified.tooLarge
     }
   } finally {
     release()

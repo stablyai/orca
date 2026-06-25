@@ -1,5 +1,13 @@
 import { createPortal } from 'react-dom'
-import { type CSSProperties, type JSX, type KeyboardEvent, type RefObject } from 'react'
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type JSX,
+  type KeyboardEvent,
+  type RefObject
+} from 'react'
 import { ArrowLeft, ArrowRight, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -13,7 +21,11 @@ import type {
 import { ContextualTourArrow } from './ContextualTourArrow'
 import { ContextualTourControl } from './ContextualTourControl'
 import { ContextualTourProgressDots } from './ContextualTourProgressDots'
-import type { ContextualTourPanelPlacement } from './contextual-tour-panel-position'
+import {
+  watchContextualTourFloatingPosition,
+  type ContextualTourFloatingPosition
+} from './contextual-tour-floating-position'
+import { translate } from '@/i18n/i18n'
 
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -36,16 +48,10 @@ export type ActiveTourRenderState = {
   panelHost: HTMLElement | null
 }
 
-type PanelPositionStyle = CSSProperties & {
-  '--contextual-tour-arrow-offset'?: string
-}
-
 type ContextualTourOverlaySurfaceProps = {
   activeTourId: ContextualTourId
   renderState: ActiveTourRenderState
   panelRef: RefObject<HTMLElement | null>
-  panelPosition: PanelPositionStyle
-  panelPlacement: ContextualTourPanelPlacement | null
   panelHost: HTMLElement | null
   onSkip: (id: ContextualTourId) => void
   onBack: () => void
@@ -73,8 +79,6 @@ export function ContextualTourOverlaySurface({
   activeTourId,
   renderState,
   panelRef,
-  panelPosition,
-  panelPlacement,
   panelHost,
   onSkip,
   onBack,
@@ -82,6 +86,10 @@ export function ContextualTourOverlaySurface({
   onStepAction,
   onOverlayKeyDownCapture
 }: ContextualTourOverlaySurfaceProps): JSX.Element {
+  const arrowRef = useRef<SVGSVGElement | null>(null)
+  const [floatingPosition, setFloatingPosition] = useState<ContextualTourFloatingPosition | null>(
+    null
+  )
   const panelHostSlot = panelHost?.getAttribute('data-slot')
   const hostedPanelClass = cn(
     PANEL_BASE_CLASSES,
@@ -112,6 +120,32 @@ export function ContextualTourOverlaySurface({
         height: renderState.rect.height
       } satisfies CSSProperties)
     : undefined
+  const unresolvedPanelPosition = {
+    left: 0,
+    top: 0,
+    visibility: 'hidden'
+  } satisfies CSSProperties
+
+  useLayoutEffect(() => {
+    const panelElement = panelRef.current
+    const arrowElement = arrowRef.current
+    if (!panelElement || !arrowElement) {
+      setFloatingPosition(null)
+      return
+    }
+
+    // Why: hide only until the new step's first measurement; autoUpdate then
+    // tracks the target continuously, so the panel never blinks mid-step.
+    setFloatingPosition(null)
+    return watchContextualTourFloatingPosition({
+      arrowElement,
+      floatingElement: panelElement,
+      panelHost,
+      preferredPlacement: renderState.preferredPlacement,
+      targetElement: renderState.targetElement,
+      onPosition: setFloatingPosition
+    })
+  }, [panelHost, panelRef, renderState.preferredPlacement, renderState.targetElement])
 
   const panel = (
     <section
@@ -119,19 +153,33 @@ export function ContextualTourOverlaySurface({
       aria-live="polite"
       aria-label={renderState.title}
       data-contextual-tour-panel=""
-      data-placement={panelPlacement ?? undefined}
+      data-placement={floatingPosition?.panelPlacement ?? undefined}
       role="dialog"
       tabIndex={-1}
       className={panelHost ? hostedPanelClass : floatingPanelClass}
-      style={panelPosition}
+      style={floatingPosition?.panelPosition ?? unresolvedPanelPosition}
     >
-      {panelPlacement ? <ContextualTourArrow placement={panelPlacement} /> : null}
+      <ContextualTourArrow
+        arrowRef={arrowRef}
+        placement={floatingPosition?.panelPlacement ?? renderState.preferredPlacement ?? 'right'}
+        style={floatingPosition?.arrowPosition ?? { visibility: 'hidden' }}
+      />
       <div key={stepKey} className="animate-in fade-in-0 duration-150 ease-out p-4">
         <Button
           type="button"
           variant="ghost"
           size="icon-xs"
-          aria-label={renderState.isLastStep ? 'Dismiss tour' : 'Skip tour'}
+          aria-label={
+            renderState.isLastStep
+              ? translate(
+                  'auto.components.contextual.tours.ContextualTourOverlaySurface.d974f32a83',
+                  'Dismiss tour'
+                )
+              : translate(
+                  'auto.components.contextual.tours.ContextualTourOverlaySurface.4f86e2a10b',
+                  'Skip tour'
+                )
+          }
           onClick={() => onSkip(activeTourId)}
           className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
         >
@@ -149,9 +197,21 @@ export function ContextualTourOverlaySurface({
           />
           <div className="flex items-center gap-1.5">
             {!renderState.isFirstStep ? (
-              <Button type="button" variant="ghost" size="xs" aria-label="Back" onClick={onBack}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                aria-label={translate(
+                  'auto.components.contextual.tours.ContextualTourOverlaySurface.4a9568f773',
+                  'Back'
+                )}
+                onClick={onBack}
+              >
                 <ArrowLeft />
-                Back
+                {translate(
+                  'auto.components.contextual.tours.ContextualTourOverlaySurface.4a9568f773',
+                  'Back'
+                )}
               </Button>
             ) : null}
             {renderState.secondaryAction ? (

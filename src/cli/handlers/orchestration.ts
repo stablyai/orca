@@ -14,6 +14,9 @@ import { getTerminalHandle } from '../selectors'
 // parent process the subprocess is alive without flooding logs. See design
 // doc §3.4.
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 15_000
+function getLifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
+  return `${type} messages must be sent to a concrete coordinator terminal handle, not a group address.`
+}
 
 // Why: test-only escape hatch so subprocess tests can verify the feature in
 // under 10 s rather than needing a full 15 s silence window. Production users
@@ -72,6 +75,54 @@ type MessageSummary = {
   payload?: string | null
 }
 
+function getOptionalStructuredMessagePayload(
+  flags: Map<string, string | boolean>
+): string | undefined {
+  const rawPayload = getOptionalStringFlag(flags, 'payload')
+  const taskId = getOptionalStringFlag(flags, 'task-id')
+  const dispatchId = getOptionalStringFlag(flags, 'dispatch-id')
+  const filesModified = getOptionalStringFlag(flags, 'files-modified')
+  const reportPath = getOptionalStringFlag(flags, 'report-path')
+  const phase = getOptionalStringFlag(flags, 'phase')
+  const hasStructuredPayload =
+    taskId !== undefined ||
+    dispatchId !== undefined ||
+    filesModified !== undefined ||
+    reportPath !== undefined ||
+    phase !== undefined
+  if (!hasStructuredPayload) {
+    return rawPayload
+  }
+  if (rawPayload !== undefined) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Use either --payload or structured payload flags, not both.'
+    )
+  }
+  // Why: raw JSON arguments are fragile in Windows PowerShell; these flags let
+  // workers send parseable orchestration payloads without shell-specific quoting.
+  const payload: Record<string, string | string[]> = {}
+  if (taskId) {
+    payload.taskId = taskId
+  }
+  if (dispatchId) {
+    payload.dispatchId = dispatchId
+  }
+  if (filesModified) {
+    payload.filesModified = filesModified
+      .split(',')
+      .map((file) => file.trim())
+      .filter(Boolean)
+  }
+  if (reportPath) {
+    payload.reportPath = reportPath
+  }
+  if (phase) {
+    payload.phase = phase
+  }
+  return JSON.stringify(payload)
+}
+
 async function resolveOrchestrationTerminalHandle(
   flags: Map<string, string | boolean>,
   cwd: string,
@@ -114,20 +165,30 @@ function getOptionalPositiveIntegerValueFlag(
   return value
 }
 
+function rejectLifecycleGroupRecipient(type: string | undefined, to: string): void {
+  if ((type === 'worker_done' || type === 'heartbeat') && to.startsWith('@')) {
+    throw new RuntimeClientError('invalid_argument', getLifecycleGroupRecipientError(type))
+  }
+}
+
 export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   'orchestration send': async ({ flags, client, cwd, json }) => {
+    const to = getRequiredStringFlag(flags, 'to')
+    const type = getOptionalStringFlag(flags, 'type')
+    rejectLifecycleGroupRecipient(type, to)
+
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
     const result = await client.call<
       { message: { id: string } } | { messages: { id: string }[]; recipients: number }
     >('orchestration.send', {
       from,
-      to: getRequiredStringFlag(flags, 'to'),
+      to,
       subject: getRequiredStringFlag(flags, 'subject'),
       body: getOptionalStringFlag(flags, 'body'),
-      type: getOptionalStringFlag(flags, 'type'),
+      type,
       priority: getOptionalStringFlag(flags, 'priority'),
       threadId: getOptionalStringFlag(flags, 'thread-id'),
-      payload: getOptionalStringFlag(flags, 'payload'),
+      payload: getOptionalStructuredMessagePayload(flags),
       devMode: isDevCliInvocation()
     })
     printResult(result, json, (r) => {
@@ -237,6 +298,8 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       'orchestration.taskCreate',
       {
         spec: getRequiredStringFlag(flags, 'spec'),
+        taskTitle: getOptionalStringFlag(flags, 'task-title'),
+        displayName: getOptionalStringFlag(flags, 'display-name'),
         deps: getOptionalStringFlag(flags, 'deps'),
         parent: getOptionalStringFlag(flags, 'parent'),
         callerTerminalHandle
@@ -250,6 +313,8 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       tasks: {
         id: string
         spec: string
+        task_title?: string | null
+        display_name?: string | null
         status: string
         assignee_handle?: string | null
         dispatch_id?: string | null
@@ -265,7 +330,8 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       }
       return r.tasks
         .map((t) => {
-          const head = `${t.id} [${t.status}] ${t.spec.slice(0, 60)}`
+          const label = t.display_name ?? t.task_title ?? t.spec
+          const head = `${t.id} [${t.status}] ${label.slice(0, 60)}`
           if (t.status === 'dispatched' && t.assignee_handle) {
             return `${head} -> ${t.assignee_handle} (${t.dispatch_id ?? '?'})`
           }

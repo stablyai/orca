@@ -22,41 +22,33 @@ function makeIssue(patch: Partial<LinearIssue> = {}): LinearIssue {
 }
 
 describe('buildLinearIssueLinkedWorkItem', () => {
-  it('preserves Linear metadata and attaches rendered context', () => {
-    const item = buildLinearIssueLinkedWorkItem(makeIssue(), 'Identifier: ENG-123')
+  it('preserves Linear metadata without attaching prompt-time issue context', () => {
+    const item = buildLinearIssueLinkedWorkItem(makeIssue())
 
     expect(item).toMatchObject({
       type: 'issue',
+      provider: 'linear',
       number: 0,
       title: 'Fix launch context handoff',
       url: 'https://linear.app/acme/issue/ENG-123/fix-launch-context-handoff',
       linearIdentifier: 'ENG-123',
-      linkedContext: {
-        provider: 'linear',
-        version: 1,
-        renderedText: 'Identifier: ENG-123'
-      }
+      linearOrganizationUrlKey: 'acme'
     })
+    expect(item).not.toHaveProperty('linkedContext')
   })
 
-  it('omits empty linked context while keeping the Linear identifier', () => {
-    const item = buildLinearIssueLinkedWorkItem(makeIssue(), '   ')
+  it('carries the Linear workspace id when the issue has one', () => {
+    const item = buildLinearIssueLinkedWorkItem(makeIssue({ workspaceId: 'ws-1' }))
 
-    expect(item.linearIdentifier).toBe('ENG-123')
-    expect(item.linkedContext).toBeUndefined()
-  })
-
-  it('builds a default snapshot when rendered text is not supplied', () => {
-    const item = buildLinearIssueLinkedWorkItem(makeIssue())
-
-    expect(item.linkedContext?.renderedText).toContain('Linear issue context snapshot')
-    expect(item.linkedContext?.renderedText).toContain('Identifier: ENG-123')
+    expect(item.linearWorkspaceId).toBe('ws-1')
   })
 })
 
 describe('isLinearLinkedWorkItem', () => {
-  it('recognizes Linear-linked composer sources by identifier', () => {
+  it('recognizes Linear-linked composer sources by provider or identifier', () => {
     expect(isLinearLinkedWorkItem(buildLinearIssueLinkedWorkItem(makeIssue()))).toBe(true)
+    expect(isLinearLinkedWorkItem({ provider: 'linear' })).toBe(true)
+    expect(isLinearLinkedWorkItem({ linearIdentifier: '   ' })).toBe(false)
     expect(isLinearLinkedWorkItem({})).toBe(false)
     expect(isLinearLinkedWorkItem(null)).toBe(false)
   })

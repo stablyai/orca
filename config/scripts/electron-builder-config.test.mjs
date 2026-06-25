@@ -8,8 +8,10 @@ const require = createRequire(import.meta.url)
 const electronBuilderConfig = require('../electron-builder.config.cjs')
 const electronBuilderNativeRebuild = require('./electron-builder-native-rebuild.cjs')
 const {
+  createPackagedRuntimeNodeModuleResources,
   findAsarEntry,
   prunePackagedNodePty,
+  prunePackagedParcelWatcher,
   prunePackagedSherpaOnnx,
   prunePackagedRuntimeTypeDeclarations,
   prunePackagedZodSources,
@@ -65,14 +67,38 @@ describe('electron-builder config', () => {
     expect(electronBuilderConfig.linux.icon).toBe('resources/build/icon.icns')
   })
 
-  it('builds RPMs without changing existing Linux artifact names', () => {
-    expect(electronBuilderConfig.linux.target).toEqual(['AppImage', 'deb', 'rpm'])
+  it('matches the Linux desktop entry to Electron window class', () => {
+    expect(electronBuilderConfig.linux.desktop.entry.StartupWMClass).toBe('orca')
+  })
+
+  it('uses AppImage and deb as local Linux targets without changing existing artifact names', () => {
+    expect(electronBuilderConfig.linux.target).toEqual(['AppImage', 'deb'])
     expect(electronBuilderConfig.appImage.artifactName).toBe('orca-linux.${ext}')
     expect(electronBuilderConfig.deb.artifactName).toBe('orca-ide_${version}_${arch}.${ext}')
     expect(electronBuilderConfig.rpm).toMatchObject({
       packageName: 'orca-ide',
       artifactName: 'orca-ide-${version}.${arch}.${ext}'
     })
+  })
+
+  it('uses a distinct AppImage name for Linux arm64 release uploads', () => {
+    const configPath = require.resolve('../electron-builder.config.cjs')
+    const original = process.env.ORCA_LINUX_ARM64_RELEASE
+    try {
+      delete require.cache[configPath]
+      process.env.ORCA_LINUX_ARM64_RELEASE = '1'
+      expect(require('../electron-builder.config.cjs').appImage.artifactName).toBe(
+        'orca-linux-arm64.${ext}'
+      )
+    } finally {
+      if (original === undefined) {
+        delete process.env.ORCA_LINUX_ARM64_RELEASE
+      } else {
+        process.env.ORCA_LINUX_ARM64_RELEASE = original
+      }
+      delete require.cache[configPath]
+      require('../electron-builder.config.cjs')
+    }
   })
 
   it('uses Orca native rebuild hook instead of electron-builder default rebuild', () => {
@@ -136,6 +162,65 @@ describe('electron-builder config', () => {
       await expect(
         readdir(join(resourcesDir, 'node_modules', 'node-pty', 'deps'))
       ).resolves.toEqual([])
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
+  it('includes @parcel/watcher in the packaged runtime closure', () => {
+    // Why: the main process imports '@parcel/watcher' for filesystem change
+    // events; if it is absent from the packaged closure the serve host silently
+    // stops propagating file changes to clients (regression guard for #4851).
+    const packaged = createPackagedRuntimeNodeModuleResources()
+    const packagedTargets = packaged.map((resource) => resource.to)
+    expect(packagedTargets).toContain(join('node_modules', '@parcel', 'watcher'))
+    expect(
+      packagedTargets.some((target) =>
+        target.startsWith(join('node_modules', '@parcel', 'watcher-'))
+      )
+    ).toBe(true)
+  })
+
+  it('prunes non-target @parcel/watcher platform subpackages from packaged runtime resources', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-parcel-watcher-prune-'))
+    try {
+      const parcelDir = join(resourcesDir, 'node_modules', '@parcel')
+      await mkdir(join(parcelDir, 'watcher'), { recursive: true })
+      await mkdir(join(parcelDir, 'watcher-darwin-arm64'), { recursive: true })
+      await mkdir(join(parcelDir, 'watcher-darwin-x64'), { recursive: true })
+      await mkdir(join(parcelDir, 'watcher-linux-x64-glibc'), { recursive: true })
+      await mkdir(join(parcelDir, 'watcher-linux-arm64-glibc'), { recursive: true })
+      await mkdir(join(parcelDir, 'watcher-win32-x64'), { recursive: true })
+
+      prunePackagedParcelWatcher(resourcesDir, 'linux')
+
+      await expect(readdir(parcelDir).then((entries) => entries.sort())).resolves.toEqual([
+        'watcher',
+        'watcher-linux-arm64-glibc',
+        'watcher-linux-x64-glibc'
+      ])
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
+  it('leaves unrelated @parcel/* runtime deps untouched when pruning the watcher', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-parcel-watcher-prune-unrelated-'))
+    try {
+      const parcelDir = join(resourcesDir, 'node_modules', '@parcel')
+      await mkdir(join(parcelDir, 'watcher'), { recursive: true })
+      await mkdir(join(parcelDir, 'watcher-darwin-arm64'), { recursive: true })
+      await mkdir(join(parcelDir, 'watcher-linux-x64-glibc'), { recursive: true })
+      // A hypothetical future @parcel/* runtime dep that is NOT a watcher subpackage.
+      await mkdir(join(parcelDir, 'transformer-js'), { recursive: true })
+
+      prunePackagedParcelWatcher(resourcesDir, 'linux')
+
+      await expect(readdir(parcelDir).then((entries) => entries.sort())).resolves.toEqual([
+        'transformer-js',
+        'watcher',
+        'watcher-linux-x64-glibc'
+      ])
     } finally {
       await rm(resourcesDir, { recursive: true, force: true })
     }

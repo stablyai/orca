@@ -64,7 +64,9 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   ${cli} orchestration send --to ${params.coordinatorHandle} \\
     --type worker_done --subject "<short status>" \\
     --body "<3-sentence summary: what you did, what you found, what's left>" \\
-    --payload '{"taskId":"${params.taskId}","dispatchId":"${params.dispatchId}","filesModified":["path/a","path/b"],"reportPath":"<optional: path to the full artifact>"}'
+    --task-id ${params.taskId} --dispatch-id ${params.dispatchId} \\
+    --files-modified "path/a,path/b" \\
+    --report-path "<optional: path to the full artifact>"
 
   # BEHAVIOR RULE: send a heartbeat every ${HEARTBEAT_INTERVAL_MIN} minutes
   # while actively working on the task. The coordinator uses this to
@@ -78,7 +80,8 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # cannot mask a hung retry.
   ${cli} orchestration send --to ${params.coordinatorHandle} \\
     --type heartbeat --subject "alive" \\
-    --payload '{"taskId":"${params.taskId}","dispatchId":"${params.dispatchId}","phase":"<short: investigating|implementing|reviewing|waiting>"}'
+    --task-id ${params.taskId} --dispatch-id ${params.dispatchId} \\
+    --phase "<short: investigating|implementing|reviewing|waiting>"
 
   # Ask the coordinator a question and block until it answers.
   #
@@ -102,7 +105,7 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   ${cli} orchestration send --to ${params.coordinatorHandle} \\
     --type escalation --subject "Blocked: <reason>" \\
     --body "<details>" \\
-    --payload '{"taskId":"${params.taskId}"}'
+    --task-id ${params.taskId}
 
   # Check for messages from the coordinator:
   ${cli} orchestration check

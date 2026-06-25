@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import type { ContextualTourStepControl } from '../../../../shared/contextual-tours'
 import { CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT } from './contextual-tour-composer-events'
+import { translate } from '@/i18n/i18n'
 
 export function ContextualTourControl({
   control
@@ -35,16 +36,21 @@ function AutoRenameBranchFromWorkControl(): JSX.Element {
     <div className="mt-3 rounded-md border border-border/70 bg-muted/35 px-3 py-2.5">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-xs font-medium text-foreground">Auto-name from first message</div>
-          <div className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
-            Auto-generates a new name when you leave this text box empty.
+          <div className="text-xs font-medium text-foreground">
+            {translate(
+              'auto.components.contextual.tours.ContextualTourControl.731c5573df',
+              'Auto-name from first message'
+            )}
           </div>
         </div>
         <button
           type="button"
           role="switch"
           aria-checked={enabled}
-          aria-label="Auto-name workspace from first agent message"
+          aria-label={translate(
+            'auto.components.contextual.tours.ContextualTourControl.186eecc34f',
+            'Auto-name workspace from first agent message'
+          )}
           onClick={() => {
             toggleAutoRenameBranchFromWork({
               enabled,

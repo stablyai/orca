@@ -16,7 +16,8 @@ vi.mock('../git/worktree', () => ({
       isBare: false,
       isMainWorktree: false
     }
-  ])
+  ]),
+  listWorktreesStrict: vi.fn().mockResolvedValue([])
 }))
 
 vi.mock('../hooks', () => ({
@@ -145,6 +146,7 @@ describe('mobile subscribe integration', () => {
     runtime.onPtyData('pty-1', first, Date.now())
     const initialSnapshot = await runtime.serializeMainTerminalBuffer('pty-1')
     expect(initialSnapshot?.seq).toBe(first.length)
+    expect(initialSnapshot?.source).toBe('headless')
 
     type HeadlessStateForTest = {
       emulator: { write: (data: string) => Promise<void> | void }
@@ -179,12 +181,14 @@ describe('mobile subscribe integration', () => {
 
       const snapshot = await racedSnapshot
       expect(snapshot?.seq).toBe(first.length + second.length)
+      expect(snapshot?.source).toBe('headless')
       expect(runtime.getPtyOutputSequence('pty-1')).toBe(
         first.length + second.length + third.length
       )
 
       const finalSnapshot = await runtime.serializeMainTerminalBuffer('pty-1')
       expect(finalSnapshot?.seq).toBe(first.length + second.length + third.length)
+      expect(finalSnapshot?.source).toBe('headless')
     } finally {
       headless!.emulator.write = originalWrite
       secondWriteGate.release?.()
@@ -222,7 +226,8 @@ describe('mobile subscribe integration', () => {
       data: '',
       cols: 90,
       rows: 30,
-      seq: 17
+      seq: 17,
+      source: 'headless'
     })
     await expect(runtime.serializeTerminalBuffer('pty-empty')).resolves.toBeNull()
   })
@@ -902,6 +907,25 @@ describe('mobile subscribe integration', () => {
       const ok = await runtime.reclaimTerminalForDesktop('pty-1')
       expect(ok).toBe(true)
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+    })
+
+    it('reclaimTerminalForDesktop prefers fresh desktop geometry for a held PTY', async () => {
+      // Why: the held override can carry the first phone-fit baseline, but
+      // desktop can measure newer real geometry while the phone-sized PTY is
+      // held. Manual restore must honor that fresh desktop measurement.
+      settingsState.mobileAutoRestoreFitMs = null
+      const { runtime, ptySizes } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+
+      runtime.recordRendererGeometry('pty-1', 180, 50)
+
+      const ok = await runtime.reclaimTerminalForDesktop('pty-1')
+      expect(ok).toBe(true)
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 180, rows: 50 })
     })
 
     it('setMobileAutoRestoreFitMs(null) clears all pending timers', async () => {

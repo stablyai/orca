@@ -18,6 +18,10 @@ vi.mock('./ssh-relay-deploy', () => ({
   deployAndLaunchRelay: vi.fn()
 }))
 
+vi.mock('./ssh-relay-deploy-helpers', () => ({
+  execCommand: vi.fn().mockResolvedValue('')
+}))
+
 vi.mock('./ssh-channel-multiplexer', () => {
   return {
     SshChannelMultiplexer: class MockSshChannelMultiplexer {
@@ -44,6 +48,7 @@ vi.mock('../providers/ssh-pty-provider', () => ({
     onReplay = vi.fn().mockReturnValue(() => {})
     onExit = vi.fn().mockReturnValue(() => {})
     attach = vi.fn().mockResolvedValue(undefined)
+    attachForReconnect = vi.fn().mockResolvedValue({})
     dispose = vi.fn()
   }
 }))
@@ -63,7 +68,8 @@ vi.mock('../ipc/pty', () => ({
   unregisterSshPtyProvider: vi.fn(),
   getSshPtyProvider: vi.fn().mockReturnValue({
     dispose: vi.fn(),
-    attach: vi.fn().mockResolvedValue(undefined)
+    attach: vi.fn().mockResolvedValue(undefined),
+    attachForReconnect: vi.fn().mockResolvedValue({})
   }),
   getPtyIdsForConnection: vi.fn().mockReturnValue([]),
   clearPtyOwnershipForConnection: vi.fn(),
@@ -84,6 +90,8 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 }))
 
 const { deployAndLaunchRelay } = await import('./ssh-relay-deploy')
+const { execCommand } = await import('./ssh-relay-deploy-helpers')
+const { getRemoteHostPlatform } = await import('./ssh-remote-platform')
 const {
   registerSshPtyProvider,
   unregisterSshPtyProvider,
@@ -197,6 +205,35 @@ describe('SshRelaySession', () => {
     )
   })
 
+  it('does not run POSIX managed hook installers on Windows remotes', async () => {
+    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
+    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const mockConn = {
+      writeFile: vi.fn().mockResolvedValue(undefined)
+    } as unknown as SshConnection
+    vi.mocked(deployAndLaunchRelay).mockResolvedValueOnce({
+      transport: {
+        write: vi.fn(),
+        onData: vi.fn(),
+        onClose: vi.fn()
+      },
+      platform: 'win32-x64',
+      hostPlatform: getRemoteHostPlatform('win32-x64'),
+      remoteHome: 'C:/Users/me',
+      remoteRelayDir: 'C:/Users/me/.orca-remote/relay-v1',
+      nodePath: 'C:/Program Files/nodejs/node.exe',
+      sockPath: '\\\\.\\pipe\\orca-relay-123'
+    })
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    await session.establish(mockConn)
+
+    expect(installRemoteManagedAgentHooksMock).not.toHaveBeenCalled()
+    expect(
+      muxRequestMock.mock.calls.some(([method]) => method === AGENT_HOOK_INSTALL_PLUGINS_METHOD)
+    ).toBe(true)
+  })
+
   it('does not register providers if dispose wins during initial plugin sync', async () => {
     process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
     let resolvePluginInstall!: () => void
@@ -266,6 +303,48 @@ describe('SshRelaySession', () => {
     expect(registerSshPtyProvider).toHaveBeenCalledWith('target-1', expect.anything())
   })
 
+  it('installs a native Windows Orca CLI bridge without POSIX shell commands', async () => {
+    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const mockConn = {
+      writeFile: vi.fn().mockResolvedValue(undefined)
+    } as unknown as SshConnection
+    vi.mocked(deployAndLaunchRelay).mockResolvedValueOnce({
+      transport: {
+        write: vi.fn(),
+        onData: vi.fn(),
+        onClose: vi.fn()
+      },
+      platform: 'win32-x64',
+      hostPlatform: getRemoteHostPlatform('win32-x64'),
+      remoteHome: 'C:/Users/me',
+      remoteRelayDir: 'C:/Users/me/.orca-remote/relay-v1',
+      nodePath: 'C:/Program Files/nodejs/node.exe',
+      sockPath: '\\\\.\\pipe\\orca-relay-123'
+    })
+
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    await session.establish(mockConn)
+
+    expect(execCommand).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(execCommand).mock.calls[0]?.[1]).toContain('powershell.exe')
+    expect(vi.mocked(execCommand).mock.calls[0]?.[2]).toEqual({ wrapCommand: false })
+    expect(mockConn.writeFile).toHaveBeenCalledWith(
+      'C:/Users/me/.orca-relay/bin/orca.cmd',
+      expect.stringContaining('@echo off'),
+      { hostPlatform: getRemoteHostPlatform('win32-x64') }
+    )
+    const shim = vi.mocked(mockConn.writeFile).mock.calls[0]?.[1] as string
+    expect(shim).toContain('C:/Users/me/.orca-remote/relay-v1')
+    expect(shim).toContain('\\\\.\\pipe\\orca-relay-123')
+    expect(shim).not.toContain('if not exist "%ORCA_RELAY_SOCKET_PATH%"')
+    expect(shim).not.toContain('Orca SSH CLI bridge cannot find the relay socket')
+    expect(shim).not.toContain('#!/usr/bin/env sh')
+    expect(vi.mocked(execCommand).mock.calls.some(([, command]) => command.includes('chmod'))).toBe(
+      false
+    )
+  })
+
   it('reconnect re-attaches live PTYs', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1', 'pty-2'])
@@ -278,7 +357,7 @@ describe('SshRelaySession', () => {
     const { getSshPtyProvider } = await import('../ipc/pty')
     const mockAttach = vi.fn().mockResolvedValue(undefined)
     vi.mocked(getSshPtyProvider).mockReturnValue({
-      attach: mockAttach,
+      attachForReconnect: mockAttach,
       dispose: vi.fn()
     } as unknown as ReturnType<typeof getSshPtyProvider>)
     vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1', 'pty-2'])
@@ -289,12 +368,60 @@ describe('SshRelaySession', () => {
     expect(mockAttach).toHaveBeenCalledWith('pty-2')
   })
 
+  it('forwards reconnect replay after the attach attempt is still current', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+    await session.establish(mockConn)
+    vi.clearAllMocks()
+    mockDeploySuccess()
+
+    const { getSshPtyProvider } = await import('../ipc/pty')
+    const mockAttach = vi.fn().mockResolvedValue({ replay: 'restored-output' })
+    vi.mocked(getSshPtyProvider).mockReturnValue({
+      attachForReconnect: mockAttach,
+      dispose: vi.fn()
+    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1'])
+
+    await session.reconnect(mockConn)
+
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:replay', {
+      id: 'ssh:target-1@@pty-1',
+      data: 'restored-output'
+    })
+  })
+
+  it('drops identical reconnect replay payloads inside one reconnect burst', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+    await session.establish(mockConn)
+    vi.clearAllMocks()
+    mockDeploySuccess()
+
+    const { getSshPtyProvider } = await import('../ipc/pty')
+    const mockAttach = vi.fn().mockResolvedValue({ replay: 'same-output' })
+    vi.mocked(getSshPtyProvider).mockReturnValue({
+      attachForReconnect: mockAttach,
+      dispose: vi.fn()
+    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1'])
+
+    await session.reconnect(mockConn)
+    await session.reconnect(mockConn)
+
+    const replaySends = vi
+      .mocked(mockWindow.webContents.send)
+      .mock.calls.filter(([channel]) => channel === 'pty:replay')
+    expect(mockAttach).toHaveBeenCalledTimes(2)
+    expect(replaySends).toHaveLength(1)
+  })
+
   it('establish re-attaches owned PTYs after explicit disconnect', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const { getSshPtyProvider } = await import('../ipc/pty')
     const mockAttach = vi.fn().mockResolvedValue(undefined)
     vi.mocked(getSshPtyProvider).mockReturnValue({
-      attach: mockAttach,
+      attachForReconnect: mockAttach,
       dispose: vi.fn()
     } as unknown as ReturnType<typeof getSshPtyProvider>)
     vi.mocked(getPtyIdsForConnection).mockReturnValue(['ssh:target-1@@pty-1'])
@@ -313,7 +440,7 @@ describe('SshRelaySession', () => {
     const { getSshPtyProvider } = await import('../ipc/pty')
     const mockAttach = vi.fn().mockResolvedValue(undefined)
     vi.mocked(getSshPtyProvider).mockReturnValue({
-      attach: mockAttach,
+      attachForReconnect: mockAttach,
       dispose: vi.fn()
     } as unknown as ReturnType<typeof getSshPtyProvider>)
     vi.mocked(getPtyIdsForConnection).mockReturnValue([])
@@ -342,7 +469,7 @@ describe('SshRelaySession', () => {
       })
     )
     vi.mocked(getSshPtyProvider).mockReturnValue({
-      attach: mockAttach,
+      attachForReconnect: mockAttach,
       dispose: vi.fn()
     } as unknown as ReturnType<typeof getSshPtyProvider>)
     vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1'])
@@ -377,7 +504,7 @@ describe('SshRelaySession', () => {
       })
     )
     vi.mocked(getSshPtyProvider).mockReturnValue({
-      attach: mockAttach,
+      attachForReconnect: mockAttach,
       dispose: vi.fn()
     } as unknown as ReturnType<typeof getSshPtyProvider>)
     vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1'])
@@ -409,7 +536,7 @@ describe('SshRelaySession', () => {
       .mockRejectedValueOnce(new Error('PTY "pty-stale" not found'))
       .mockResolvedValueOnce(undefined)
     vi.mocked(getSshPtyProvider).mockReturnValue({
-      attach: mockAttach,
+      attachForReconnect: mockAttach,
       dispose: vi.fn()
     } as unknown as ReturnType<typeof getSshPtyProvider>)
     vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-stale', 'pty-live'])
@@ -438,7 +565,7 @@ describe('SshRelaySession', () => {
     const { getSshPtyProvider } = await import('../ipc/pty')
     const mockAttach = vi.fn().mockRejectedValue(new Error('Multiplexer disposed'))
     vi.mocked(getSshPtyProvider).mockReturnValue({
-      attach: mockAttach,
+      attachForReconnect: mockAttach,
       dispose: vi.fn()
     } as unknown as ReturnType<typeof getSshPtyProvider>)
     vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-live'])

@@ -5,11 +5,27 @@ import {
   readFileSync,
   existsSync,
   rmSync,
-  renameSync,
-  unlinkSync
+  unlinkSync,
+  openSync,
+  closeSync,
+  readSync,
+  fstatSync,
+  promises as fsPromises
 } from 'fs'
 import { getHistorySessionDirName } from './history-paths'
-import type { TerminalSnapshot } from './types'
+import {
+  decodeLogHeader,
+  encodeLogBatch,
+  encodeLogHeader,
+  LOG_HEADER_BYTES
+} from './terminal-history-log'
+import type { PendingOutputRecord, TerminalCheckpointFile, TerminalSnapshot } from './types'
+
+// Why 5MB: bounds both cold-restore replay time and disk usage per session.
+// Reaching the cap triggers one full snapshot checkpoint (which subsumes and
+// resets the log) — one O(buffer) serialize per ~5MB of output instead of one
+// per 5-second tick.
+const LOG_MAX_BYTES = 5 * 1024 * 1024
 
 export type SessionMeta = {
   cwd: string
@@ -29,6 +45,12 @@ export type OpenSessionOptions = {
 type SessionWriter = {
   dir: string
   checkpointPath: string
+  logPath: string
+  /** Generation of the on-disk log header. Null until lazily resolved on the
+   *  first append after a warm registerWriter (the file may predate us). */
+  logGeneration: number | null
+  /** Current log file size. Null until lazily resolved alongside generation. */
+  logBytes: number | null
 }
 
 export type HistoryManagerOptions = {
@@ -70,7 +92,8 @@ export class HistoryManager {
       // because the reader falls back to scrollback.bin when no checkpoint
       // exists.
       const checkpointPath = join(dir, 'checkpoint.json')
-      for (const staleFile of [checkpointPath, join(dir, 'scrollback.bin')]) {
+      const logPath = join(dir, 'output.log')
+      for (const staleFile of [checkpointPath, join(dir, 'scrollback.bin'), logPath]) {
         try {
           unlinkSync(staleFile)
         } catch {
@@ -80,7 +103,10 @@ export class HistoryManager {
 
       this.writers.set(sessionId, {
         dir,
-        checkpointPath
+        checkpointPath,
+        logPath,
+        logGeneration: 0,
+        logBytes: 0
       })
     } catch (err) {
       this.handleWriteError(sessionId, err)
@@ -99,13 +125,57 @@ export class HistoryManager {
     const dir = join(this.basePath, getHistorySessionDirName(sessionId))
     this.writers.set(sessionId, {
       dir,
-      checkpointPath: join(dir, 'checkpoint.json')
+      checkpointPath: join(dir, 'checkpoint.json'),
+      logPath: join(dir, 'output.log'),
+      logGeneration: null,
+      logBytes: null
     })
   }
 
+  /** Appends one take batch to the incremental log. Returns 'needs-checkpoint'
+   *  when the log is at capacity — the caller must take a full snapshot, which
+   *  subsumes the un-appended records (they were already applied to the live
+   *  emulator) and resets the log via checkpoint(). */
+  async appendIncrements(
+    sessionId: string,
+    seq: number,
+    records: PendingOutputRecord[]
+  ): Promise<'ok' | 'needs-checkpoint'> {
+    if (this.disabledSessions.has(sessionId) || records.length === 0) {
+      return 'ok'
+    }
+    const writer = this.writers.get(sessionId)
+    if (!writer) {
+      return 'ok'
+    }
+    try {
+      this.resolveLogState(writer)
+      const batch = encodeLogBatch(seq, records)
+      // Why max(..., header): a fresh log gets its header written below, so
+      // the projected size must include it or the cap can be overshot.
+      const projectedBytes = Math.max(writer.logBytes ?? 0, LOG_HEADER_BYTES) + batch.length
+      if (projectedBytes > LOG_MAX_BYTES) {
+        return 'needs-checkpoint'
+      }
+      if (writer.logBytes === 0) {
+        // Why: header carries the generation that ties this log to its base
+        // checkpoint; written lazily so warm reattaches never clobber a log
+        // that already has appended batches.
+        await fsPromises.writeFile(writer.logPath, encodeLogHeader(writer.logGeneration ?? 0))
+        writer.logBytes = LOG_HEADER_BYTES
+      }
+      await fsPromises.appendFile(writer.logPath, batch)
+      writer.logBytes = (writer.logBytes ?? LOG_HEADER_BYTES) + batch.length
+      return 'ok'
+    } catch (err) {
+      this.handleWriteError(sessionId, err)
+      return 'ok'
+    }
+  }
+
   // Why: replaces the old appendData (which wrote every PTY chunk to disk).
-  // Checkpoints happen every ~5 seconds from a timer, not on every data event,
-  // so disk I/O drops from O(PTY throughput) to O(1 write per interval).
+  // Full checkpoints are now rare (clean disconnect, pending-buffer overflow,
+  // log cap); the 5s tick appends increments via appendIncrements instead.
   async checkpoint(sessionId: string, snapshot: TerminalSnapshot): Promise<void> {
     if (this.disabledSessions.has(sessionId)) {
       return
@@ -126,25 +196,85 @@ export class HistoryManager {
         effectiveCwd = meta?.cwd ?? null
       }
 
-      const data = JSON.stringify({
+      this.resolveLogState(writer)
+      const generation = (writer.logGeneration ?? 0) + 1
+      const checkpointFile: TerminalCheckpointFile = {
         snapshotAnsi: snapshot.snapshotAnsi,
         scrollbackAnsi: snapshot.scrollbackAnsi,
+        oscLinks: snapshot.oscLinks,
         rehydrateSequences: snapshot.rehydrateSequences,
         cwd: effectiveCwd,
         cols: snapshot.cols,
         rows: snapshot.rows,
         modes: snapshot.modes,
         scrollbackLines: snapshot.scrollbackLines,
+        generation,
         checkpointedAt: new Date().toISOString()
-      })
+      }
+      const data = JSON.stringify(checkpointFile)
       // Why: atomic write via tmp+rename prevents half-written checkpoints
       // on crash. Reading a corrupt checkpoint is worse than reading a
-      // slightly stale one.
+      // slightly stale one. Async IO — a sync ~MB write (worse under
+      // antivirus scanning on Windows) would stall input/IPC for its
+      // duration. Overlap is prevented by the adapter's checkpointInFlight
+      // guard, which awaits this promise before the next tick.
       const tmpPath = `${writer.checkpointPath}.tmp`
-      writeFileSync(tmpPath, data)
-      renameSync(tmpPath, writer.checkpointPath)
+      await fsPromises.writeFile(tmpPath, data)
+      await fsPromises.rename(tmpPath, writer.checkpointPath)
+      // Why: the snapshot subsumes every logged record, so the log resets to
+      // the new generation. Crash between rename and this reset is safe: the
+      // stale log's generation no longer matches the checkpoint's, so the
+      // restore reader ignores it.
+      await fsPromises.writeFile(writer.logPath, encodeLogHeader(generation))
+      writer.logGeneration = generation
+      writer.logBytes = LOG_HEADER_BYTES
     } catch (err) {
       this.handleWriteError(sessionId, err)
+    }
+  }
+
+  // Why: a warm registerWriter may attach to a session dir that already has a
+  // log (app relaunch while the daemon kept running). Generation and size are
+  // read from disk once so appends continue the existing stream instead of
+  // clobbering it.
+  private resolveLogState(writer: SessionWriter): void {
+    if (writer.logBytes !== null && writer.logGeneration !== null) {
+      return
+    }
+    let headerGeneration: number | null = null
+    let size = 0
+    try {
+      const fd = openSync(writer.logPath, 'r')
+      try {
+        size = fstatSync(fd).size
+        const header = Buffer.alloc(LOG_HEADER_BYTES)
+        if (readSync(fd, header, 0, LOG_HEADER_BYTES, 0) === LOG_HEADER_BYTES) {
+          headerGeneration = decodeLogHeader(header)
+        }
+      } finally {
+        closeSync(fd)
+      }
+    } catch {
+      // Missing log file — fresh state below.
+    }
+    if (headerGeneration !== null) {
+      writer.logGeneration = headerGeneration
+      writer.logBytes = size
+      return
+    }
+    // Missing or unreadable header: logBytes = 0 makes the next append rewrite
+    // the file from scratch (writeFile truncates), so a garbage file cannot be
+    // extended.
+    writer.logBytes = 0
+    writer.logGeneration = this.readCheckpointGeneration(writer) ?? 0
+  }
+
+  private readCheckpointGeneration(writer: SessionWriter): number | null {
+    try {
+      const checkpoint = JSON.parse(readFileSync(writer.checkpointPath, 'utf-8'))
+      return typeof checkpoint.generation === 'number' ? checkpoint.generation : null
+    } catch {
+      return null
     }
   }
 
@@ -155,6 +285,10 @@ export class HistoryManager {
     }
 
     this.writers.delete(sessionId)
+    // Why: the session is dead, so its disabled flag is dead state. Without this
+    // a session poisoned by a transient mid-life write error leaks its id in
+    // disabledSessions forever (sessionIds are fresh per PTY, never reused).
+    this.disabledSessions.delete(sessionId)
     try {
       this.updateMeta(writer.dir, { endedAt: new Date().toISOString(), exitCode })
     } catch (err) {
@@ -172,6 +306,14 @@ export class HistoryManager {
       recursive: true,
       force: true
     })
+  }
+
+  isSessionDisabled(sessionId: string): boolean {
+    return this.disabledSessions.has(sessionId)
+  }
+
+  disabledSessionCount(): number {
+    return this.disabledSessions.size
   }
 
   hasHistory(sessionId: string): boolean {

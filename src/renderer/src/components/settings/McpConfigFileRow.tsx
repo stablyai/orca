@@ -1,6 +1,7 @@
 import { AlertCircle, CheckCircle2 } from 'lucide-react'
 import type { McpConfigInspection } from '../../../../shared/mcp-config'
 import { Button } from '../ui/button'
+import { translate } from '@/i18n/i18n'
 
 export type LoadedMcpConfigInspection = McpConfigInspection & {
   absolutePath: string
@@ -72,7 +73,7 @@ export function McpConfigFileRow({ config, onOpen }: McpConfigFileRowProps): Rea
         </span>
         {config.exists ? (
           <Button variant="outline" size="xs" onClick={() => onOpen(config)}>
-            Open
+            {translate('auto.components.settings.McpConfigFileRow.e720c139cd', 'Open')}
           </Button>
         ) : null}
       </div>
@@ -100,7 +101,7 @@ export function McpConfigFileRow({ config, onOpen }: McpConfigFileRowProps): Rea
                 </p>
                 {server.env && Object.keys(server.env).length > 0 ? (
                   <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-                    env:{' '}
+                    {translate('auto.components.settings.McpConfigFileRow.b145eb6009', 'env:')}{' '}
                     {Object.entries(server.env)
                       .map(([key, value]) => `${key}=${value}`)
                       .join(', ')}

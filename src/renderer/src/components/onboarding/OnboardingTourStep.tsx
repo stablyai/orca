@@ -6,6 +6,7 @@ import type { FeatureWallTourDepthSummary } from '../../../../shared/feature-wal
 import { FeatureTourPreview } from '../feature-wall/FeatureTourPreview'
 import { FeatureWallTourSurface } from '../feature-wall/FeatureWallTourSurface'
 import { usePrefersReducedMotion } from '../feature-wall/feature-wall-modal-helpers'
+import { translate } from '@/i18n/i18n'
 
 type OnboardingTourStepProps = {
   tourStarted: boolean
@@ -84,7 +85,7 @@ export function OnboardingTourStep({
             disabled={Boolean(busyLabel)}
             onClick={onExitTour}
           >
-            Exit tour
+            {translate('auto.components.onboarding.OnboardingTourStep.60c5576353', 'Exit tour')}
           </button>
         }
       />
@@ -95,7 +96,7 @@ export function OnboardingTourStep({
     <div className="flex flex-col gap-5">
       <FeatureTourPreview />
       <Button onClick={handleStartTour} disabled={Boolean(busyLabel)} className="gap-2 self-start">
-        Take the tour
+        {translate('auto.components.onboarding.OnboardingTourStep.3f9586c043', 'Take the tour')}
         <ArrowRight className="size-4" />
       </Button>
     </div>

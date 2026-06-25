@@ -7,6 +7,7 @@ import {
 import { readEmittedSetupGuideStepIds } from '@/lib/feature-education-telemetry'
 import {
   createSetupGuideStepCompletionTelemetryState,
+  getSetupGuideTelemetryFirstIncompleteStepId,
   recordSetupGuideStepCompletionTelemetry
 } from './use-setup-guide-telemetry'
 
@@ -23,6 +24,32 @@ afterEach(() => {
 })
 
 describe('setup guide step completion telemetry', () => {
+  it('uses setup-first ordering for setup-guide open first-incomplete telemetry', () => {
+    expect(getSetupGuideTelemetryFirstIncompleteStepId(createProgress({}))).toBe('notifications')
+    expect(
+      getSetupGuideTelemetryFirstIncompleteStepId(
+        createProgress({
+          notifications: true,
+          'default-agent': true,
+          'agent-capabilities': true,
+          'task-sources': true,
+          'setup-script': true,
+          'add-two-repos': true
+        })
+      )
+    ).toBe('split-terminal')
+    expect(
+      getSetupGuideTelemetryFirstIncompleteStepId(
+        createProgress(
+          Object.fromEntries(FEATURE_WALL_SETUP_STEP_IDS.map((stepId) => [stepId, true])) as Record<
+            FeatureWallSetupStepId,
+            boolean
+          >
+        )
+      )
+    ).toBe('none')
+  })
+
   it('seeds startup-hydrated completed steps without backfilling completion events', () => {
     vi.stubGlobal('localStorage', createMemoryStorage())
     const state = createSetupGuideStepCompletionTelemetryState()

@@ -5,6 +5,7 @@ handling, and editor-local UI overlays so split-pane state remains coherent. */
 import React, { useRef, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
+import { toast } from 'sonner'
 import type { MarkdownDocument } from '../../../../shared/types'
 import { useAppStore } from '@/store'
 import { scrollTopCache, cursorPositionCache, setWithLRU } from '@/lib/scroll-cache'
@@ -49,6 +50,13 @@ import {
   getMonacoMarkdownSelectionAnnotationTarget,
   type MonacoMarkdownSelectionAnnotationTarget
 } from './monaco-markdown-selection-annotation'
+import { translate } from '@/i18n/i18n'
+import { handleMonacoLargeTextPaste } from './monaco-large-text-paste'
+import {
+  clampMonacoAutoHeight,
+  getMonacoAutoHeightForContent,
+  isMonacoAutoHeightCapped
+} from './monaco-auto-height'
 
 type MonacoEditorProps = {
   fileId: string
@@ -113,12 +121,14 @@ export default function MonacoEditor({
   // scroll position on unmount. Without this, a pending timer could fire after
   // cleanup and overwrite the correct value with a stale one.
   const scrollThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const propsRef = useRef({ relativePath, language, onSave })
+  const propsRef = useRef({ relativePath, language, onSave, onContentChange })
   // Why: assigning during render keeps the ref current before any event handler
   // or effect reads it, avoiding the one-render stale window that a useEffect
   // would introduce. Refs are mutable and don't trigger re-renders, so this is
   // safe to do unconditionally every render.
-  propsRef.current = { relativePath, language, onSave }
+  propsRef.current = { relativePath, language, onSave, onContentChange }
+  const readOnlyRef = useRef(readOnly)
+  readOnlyRef.current = readOnly
 
   const settings = useAppStore((s) => s.settings)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
@@ -140,12 +150,14 @@ export default function MonacoEditor({
     if (!autoHeight) {
       return null
     }
-    const lineHeight = Math.ceil(editorFontSize * 1.45)
-    return Math.max(80, content.split(/\r?\n/).length * lineHeight + 18)
+    return getMonacoAutoHeightForContent(content, Math.ceil(editorFontSize * 1.45))
   }, [autoHeight, content, editorFontSize])
   const renderedEditorHeight = autoHeight
     ? (autoHeightContentHeight ?? estimatedAutoHeight ?? 80)
     : null
+  const autoHeightLineHeight = Math.ceil(editorFontSize * 1.45)
+  const autoHeightUsesInternalScroll =
+    autoHeight && isMonacoAutoHeightCapped(renderedEditorHeight, autoHeightLineHeight)
   // Why: `keepCurrentModel` retains Monaco models across unmounts, and
   // @monaco-editor/react skips its value→model sync on the first render after
   // a remount. Without explicit sync, external file changes that arrived
@@ -311,6 +323,7 @@ export default function MonacoEditor({
   // typing, so split panes must suppress the resulting onChange callback or a
   // freshly mounted markdown source view can mark the shared file dirty.
   const isApplyingProgrammaticContentRef = useRef(false)
+  const isApplyingLargePasteRef = useRef(false)
 
   const handleMount: OnMount = useCallback(
     (editorInstance, monaco) => {
@@ -327,7 +340,12 @@ export default function MonacoEditor({
         }
         autoHeightFrame = window.requestAnimationFrame(() => {
           autoHeightFrame = null
-          setAutoHeightContentHeight(Math.ceil(editorInstance.getContentHeight()) + 1)
+          setAutoHeightContentHeight(
+            clampMonacoAutoHeight(
+              Math.ceil(editorInstance.getContentHeight()) + 1,
+              autoHeightLineHeight
+            )
+          )
         })
       }
       if (autoHeight) {
@@ -381,7 +399,7 @@ export default function MonacoEditor({
       )
       const searchInFilesAction = editorInstance.addAction({
         id: 'orca.searchInFiles',
-        label: 'Search in Files',
+        label: translate('auto.components.editor.MonacoEditor.fd68ae03b3', 'Search in Files'),
         contextMenuGroupId: 'navigation',
         contextMenuOrder: 2,
         run: () => {
@@ -397,11 +415,35 @@ export default function MonacoEditor({
             return
           }
           const state = useAppStore.getState()
-          state.seedFileSearchQuery(worktreeId, query)
-          state.setRightSidebarTab('search')
-          state.setRightSidebarOpen(true)
+          state.showRightSidebarSearch({ query })
         }
       })
+      const onLargeTextPaste = (event: ClipboardEvent): void => {
+        handleMonacoLargeTextPaste(editorInstance, event, {
+          readOnly: readOnlyRef.current,
+          onPasteStart: () => {
+            isApplyingLargePasteRef.current = true
+          },
+          onPasteResult: (result) => {
+            isApplyingLargePasteRef.current = false
+            if (result.status === 'pasted' || result.status === 'cancelled') {
+              const value = editorInstance.getValue()
+              lastSyncedContentRef.current = value
+              propsRef.current.onContentChange(value)
+            }
+            if (result.status === 'rejected' && result.reason === 'too-large') {
+              toast.error(
+                translate(
+                  'auto.components.editor.MonacoEditor.largePasteTooLarge',
+                  'Paste is too large.'
+                )
+              )
+            }
+          }
+        })
+      }
+      const editorDomNode = editorInstance.getContainerDomNode()
+      editorDomNode.addEventListener('paste', onLargeTextPaste, { capture: true })
 
       // Track cursor line for "copy path to line" feature
       const pos = editorInstance.getPosition()
@@ -454,6 +496,7 @@ export default function MonacoEditor({
         scrollStateSub.dispose()
         gutterMouseDownSub.dispose()
         cleanupSaveShortcut()
+        editorDomNode.removeEventListener('paste', onLargeTextPaste, { capture: true })
         searchInFilesAction.dispose()
         autoHeightSub?.dispose()
         if (autoHeightFrame !== null) {
@@ -511,6 +554,7 @@ export default function MonacoEditor({
       updateMarkdownCompletionDocuments,
       viewStateKey,
       autoHeight,
+      autoHeightLineHeight,
       worktreeId
     ]
   )
@@ -592,6 +636,10 @@ export default function MonacoEditor({
         // into the shared model, sibling panes must ignore the echoed onChange
         // or they'll treat the programmatic sync as a user edit and mark the
         // shared file dirty.
+        if (isApplyingLargePasteRef.current) {
+          lastSyncedContentRef.current = value
+          return
+        }
         if (
           shouldIgnoreMonacoContentChange({
             filePath,
@@ -750,8 +798,14 @@ export default function MonacoEditor({
             top: Math.max(4, selectionAnnotationTarget.top - 22),
             left: selectionAnnotationTarget.left ?? 4
           }}
-          title="Add note on selected text"
-          aria-label="Add note on selected text"
+          title={translate(
+            'auto.components.editor.MonacoEditor.68cb83f4a7',
+            'Add note on selected text'
+          )}
+          aria-label={translate(
+            'auto.components.editor.MonacoEditor.68cb83f4a7',
+            'Add note on selected text'
+          )}
           onMouseDown={(event) => {
             event.preventDefault()
             event.stopPropagation()
@@ -788,7 +842,12 @@ export default function MonacoEditor({
           automaticLayout: true,
           tabSize: 2,
           readOnly,
-          scrollbar: autoHeight ? { vertical: 'hidden', handleMouseWheel: false } : undefined,
+          scrollbar: autoHeight
+            ? {
+                vertical: autoHeightUsesInternalScroll ? 'auto' : 'hidden',
+                handleMouseWheel: autoHeightUsesInternalScroll
+              }
+            : undefined,
           smoothScrolling: true,
           cursorSmoothCaretAnimation: 'off',
           padding: { top: 0 },

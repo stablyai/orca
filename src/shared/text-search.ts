@@ -19,8 +19,10 @@
  * large repos. Centralizing the policy prevents future drift. Both call
  * sites must use this module; see filesystem.ts and relay/fs-handler.ts.
  */
-import { join, relative } from 'path'
-import type { SearchFileResult, SearchOptions, SearchResult } from './types'
+import { posix, win32 } from 'path'
+import { normalizeSearchResult } from './search-match-count'
+import { escapeRegex } from './string-utils'
+import type { SearchFileResult, SearchMatch, SearchOptions, SearchResult } from './types'
 
 export type SearchAccumulator = {
   fileMap: Map<string, SearchFileResult>
@@ -32,11 +34,30 @@ export function createAccumulator(): SearchAccumulator {
   return { fileMap: new Map(), totalMatches: 0, truncated: false }
 }
 
+function acceptMatch(fileResult: SearchFileResult): void {
+  fileResult.matchCount = (fileResult.matchCount ?? 0) + 1
+}
+
 // Why: collapse mixed separators and strip leading slashes so results are
 // stable across Windows/Linux and never start with `/` (which would break
 // `join(rootPath, relPath)` in callers).
 export function normalizeRelativePath(path: string): string {
   return path.replace(/[\\/]+/g, '/').replace(/^\/+/, '')
+}
+
+function pathFlavor(rootPath: string): typeof posix | typeof win32 {
+  if (/^[a-zA-Z]:[\\/]/.test(rootPath) || rootPath.startsWith('\\\\')) {
+    return win32
+  }
+  return posix
+}
+
+function relativeToSearchRoot(rootPath: string, absPath: string): string {
+  return pathFlavor(rootPath).relative(rootPath, absPath)
+}
+
+function joinSearchRoot(rootPath: string, relPath: string): string {
+  return pathFlavor(rootPath).join(rootPath, relPath)
 }
 
 // ─── Constants shared by both callers ────────────────────────────────
@@ -100,6 +121,39 @@ function clampLineContext(
   }
 }
 
+// Why: rg and git-grep share this append-and-cap step; keeping it in one
+// place preserves the synchronous truncation ordering required by callers.
+function pushMatch(
+  fileResult: SearchFileResult,
+  acc: SearchAccumulator,
+  clamped: ReturnType<typeof clampLineContext>,
+  lineNumber: number,
+  maxResults: number
+): 'continue' | 'stop' {
+  // Why: direct assignment avoids conditional-spread allocations on the
+  // per-match hot path while preserving optional display fields.
+  const match: SearchMatch = {
+    line: lineNumber,
+    column: clamped.column,
+    matchLength: clamped.matchLength,
+    lineContent: clamped.lineContent
+  }
+  if (clamped.displayColumn !== undefined) {
+    match.displayColumn = clamped.displayColumn
+  }
+  if (clamped.displayMatchLength !== undefined) {
+    match.displayMatchLength = clamped.displayMatchLength
+  }
+  fileResult.matches.push(match)
+  acceptMatch(fileResult)
+  acc.totalMatches++
+  if (acc.totalMatches >= maxResults) {
+    acc.truncated = true
+    return 'stop'
+  }
+  return 'continue'
+}
+
 // ─── rg ─────────────────────────────────────────────────────────────
 
 export type SearchOptionsLike = Pick<
@@ -149,7 +203,7 @@ export function splitSearchGlobPatterns(patterns: string): string[] {
  * target to a WSL-native path on the local side. On Windows/WSL, only the
  * rg *invocation* is routed through `wslAwareSpawn`; the target string keeps
  * its original shape, and rg's output paths are translated back to Windows
- * UNC via the `transformAbsPath` callback in `ingestRgJsonLine`.
+ * paths via the `transformAbsPath` callback in `ingestRgJsonLine`.
  */
 export function buildRgArgs(query: string, target: string, opts: SearchOptionsLike): string[] {
   const args: string[] = [
@@ -234,7 +288,7 @@ export function ingestRgJsonLine(
     return 'continue'
   }
   const absPath = transformAbsPath ? transformAbsPath(rawPath) : rawPath
-  const relPath = normalizeRelativePath(relative(rootPath, absPath))
+  const relPath = normalizeRelativePath(relativeToSearchRoot(rootPath, absPath))
   const lineContent = (data.lines?.text ?? '').replace(/\n$/, '')
   const lineNumber = data.line_number ?? 0
   let submatches = data.submatches ?? []
@@ -247,23 +301,11 @@ export function ingestRgJsonLine(
   for (const sub of submatches) {
     let fileResult = acc.fileMap.get(absPath)
     if (!fileResult) {
-      fileResult = { filePath: absPath, relativePath: relPath, matches: [] }
+      fileResult = { filePath: absPath, relativePath: relPath, matches: [], matchCount: 0 }
       acc.fileMap.set(absPath, fileResult)
     }
     const clamped = clampLineContext(lineContent, sub.start, sub.end - sub.start)
-    fileResult.matches.push({
-      line: lineNumber,
-      column: clamped.column,
-      matchLength: clamped.matchLength,
-      lineContent: clamped.lineContent,
-      ...(clamped.displayColumn !== undefined ? { displayColumn: clamped.displayColumn } : {}),
-      ...(clamped.displayMatchLength !== undefined
-        ? { displayMatchLength: clamped.displayMatchLength }
-        : {})
-    })
-    acc.totalMatches++
-    if (acc.totalMatches >= maxResults) {
-      acc.truncated = true
+    if (pushMatch(fileResult, acc, clamped, lineNumber, maxResults) === 'stop') {
       return 'stop'
     }
   }
@@ -271,17 +313,6 @@ export function ingestRgJsonLine(
 }
 
 // ─── git grep ───────────────────────────────────────────────────────
-
-// Why: esbuild's parser chokes on regex literals containing brace/bracket
-// character classes, so we escape special chars with a simple loop.
-const REGEX_SPECIAL = '.*+?^${}()|[]\\'
-function escapeRegexSource(str: string): string {
-  let out = ''
-  for (let i = 0; i < str.length; i++) {
-    out += REGEX_SPECIAL.includes(str[i]) ? `\\${str[i]}` : str[i]
-  }
-  return out
-}
 
 /**
  * Convert a user-facing glob pattern into a git pathspec.
@@ -365,7 +396,7 @@ export function buildSubmatchRegex(
   query: string,
   opts: { useRegex?: boolean; wholeWord?: boolean; caseSensitive?: boolean }
 ): RegExp | null {
-  let pattern = opts.useRegex ? query : escapeRegexSource(query)
+  let pattern = opts.useRegex ? query : escapeRegex(query)
   if (opts.wholeWord) {
     pattern = `\\b${pattern}\\b`
   }
@@ -418,11 +449,11 @@ export function ingestGitGrepLine(
   }
   const lineNum = Number(lineNumberText)
 
-  const absPath = join(rootPath, relPath)
+  const absPath = joinSearchRoot(rootPath, relPath)
   const getFileResult = (): SearchFileResult => {
     let fileResult = acc.fileMap.get(absPath)
     if (!fileResult) {
-      fileResult = { filePath: absPath, relativePath: relPath, matches: [] }
+      fileResult = { filePath: absPath, relativePath: relPath, matches: [], matchCount: 0 }
       acc.fileMap.set(absPath, fileResult)
     }
     return fileResult
@@ -434,46 +465,33 @@ export function ingestGitGrepLine(
   // whole-line highlight so the result still shows up in the UI.
   if (submatchRegex === null) {
     const clamped = clampLineContext(lineContent, 0, lineContent.length)
-    getFileResult().matches.push({
-      line: lineNum,
-      column: clamped.column,
-      matchLength: clamped.matchLength,
-      lineContent: clamped.lineContent,
-      ...(clamped.displayColumn !== undefined ? { displayColumn: clamped.displayColumn } : {}),
-      ...(clamped.displayMatchLength !== undefined
-        ? { displayMatchLength: clamped.displayMatchLength }
-        : {})
-    })
-    acc.totalMatches++
-    if (acc.totalMatches >= maxResults) {
-      acc.truncated = true
-      return 'stop'
-    }
-    return 'continue'
+    const fileResult = getFileResult()
+    return pushMatch(fileResult, acc, clamped, lineNum, maxResults)
   }
 
   submatchRegex.lastIndex = 0
   let m: RegExpExecArray | null
+  let acceptedLineMatch = false
   while ((m = submatchRegex.exec(lineContent)) !== null) {
     const clamped = clampLineContext(lineContent, m.index, m[0].length)
-    getFileResult().matches.push({
-      line: lineNum,
-      column: clamped.column,
-      matchLength: clamped.matchLength,
-      lineContent: clamped.lineContent,
-      ...(clamped.displayColumn !== undefined ? { displayColumn: clamped.displayColumn } : {}),
-      ...(clamped.displayMatchLength !== undefined
-        ? { displayMatchLength: clamped.displayMatchLength }
-        : {})
-    })
-    acc.totalMatches++
-    if (acc.totalMatches >= maxResults) {
-      acc.truncated = true
+    const fileResult = getFileResult()
+    acceptedLineMatch = true
+    if (pushMatch(fileResult, acc, clamped, lineNum, maxResults) === 'stop') {
       return 'stop'
     }
     // Prevent infinite loop on zero-length regex matches.
     if (m[0].length === 0) {
       submatchRegex.lastIndex++
+    }
+  }
+  // Why: git grep reported this line as a match, but JS regex semantics can
+  // still find no exact occurrence. Keep the result navigable instead of
+  // silently dropping a git-confirmed hit.
+  if (!acceptedLineMatch) {
+    const clamped = clampLineContext(lineContent, 0, lineContent.length)
+    const fileResult = getFileResult()
+    if (pushMatch(fileResult, acc, clamped, lineNum, maxResults) === 'stop') {
+      return 'stop'
     }
   }
   return 'continue'
@@ -482,9 +500,9 @@ export function ingestGitGrepLine(
 // ─── finalize ───────────────────────────────────────────────────────
 
 export function finalize(acc: SearchAccumulator): SearchResult {
-  return {
+  return normalizeSearchResult({
     files: Array.from(acc.fileMap.values()).filter((file) => file.matches.length > 0),
     totalMatches: acc.totalMatches,
     truncated: acc.truncated
-  }
+  })
 }

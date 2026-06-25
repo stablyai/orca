@@ -1,6 +1,7 @@
 import { RefreshCw, Sparkles, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { translate } from '@/i18n/i18n'
 
 export function CreatePullRequestGenerateButton({
   generating,
@@ -14,8 +15,8 @@ export function CreatePullRequestGenerateButton({
   generating: boolean
   generateDisabled: boolean
   generateDisabledReason: string | null | undefined
-  shortLabel: 'PR' | 'MR'
-  reviewLabel: 'pull request' | 'merge request'
+  shortLabel: string
+  reviewLabel: string
   onGenerate: () => void
   onCancelGenerate: () => void
 }): React.JSX.Element {
@@ -29,16 +30,30 @@ export function CreatePullRequestGenerateButton({
               variant="outline"
               size="sm"
               onClick={onCancelGenerate}
-              title="Stop generating"
-              aria-label={`Stop generating ${reviewLabel} details`}
+              title={translate(
+                'auto.components.right.sidebar.CreatePullRequestGenerateButton.e041998cad',
+                'Stop generating'
+              )}
+              aria-label={translate(
+                'auto.components.right.sidebar.CreatePullRequestGenerateButton.e61d7e7ad4',
+                'Stop generating {{value0}} details',
+                { value0: reviewLabel }
+              )}
             >
               <RefreshCw className="size-4 animate-spin" />
-              Generating…
+              {translate(
+                'auto.components.right.sidebar.CreatePullRequestGenerateButton.a6ea6dc3aa',
+                'Generating…'
+              )}
               <Square className="size-3 fill-current" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="left" sideOffset={6}>
-            Generating {shortLabel} details. Click to stop.
+            {translate(
+              'auto.components.right.sidebar.CreatePullRequestGenerateButton.d47fd63012',
+              'Generating {{value0}} details. Click to stop.',
+              { value0: shortLabel }
+            )}
           </TooltipContent>
         </Tooltip>
       </div>
@@ -53,11 +68,25 @@ export function CreatePullRequestGenerateButton({
         size="sm"
         disabled={generateDisabled}
         onClick={onGenerate}
-        title={generateDisabledReason ?? `Generate ${reviewLabel} details with AI`}
-        aria-label={`Generate ${reviewLabel} details with AI`}
+        title={
+          generateDisabledReason ??
+          translate(
+            'auto.components.right.sidebar.CreatePullRequestGenerateButton.a0501572c1',
+            'Generate {{value0}} details with AI',
+            { value0: reviewLabel }
+          )
+        }
+        aria-label={translate(
+          'auto.components.right.sidebar.CreatePullRequestGenerateButton.a0501572c1',
+          'Generate {{value0}} details with AI',
+          { value0: reviewLabel }
+        )}
       >
         <Sparkles className="size-4" />
-        Generate with AI
+        {translate(
+          'auto.components.right.sidebar.CreatePullRequestGenerateButton.4012459f8a',
+          'Generate with AI'
+        )}
       </Button>
     </div>
   )
