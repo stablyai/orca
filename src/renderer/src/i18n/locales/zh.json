@@ -12957,6 +12957,29 @@
         "searchLabels": "筛选标签…",
         "searchAssignee": "筛选负责人…",
         "back": "返回"
+      },
+      "browser-pane": {
+        "markup": {
+          "cancel": "取消",
+          "clear": "全部清除",
+          "copiedToast": "已复制标注 — 粘贴到你的智能体（{{value0}}）",
+          "copy": "复制标注",
+          "drawButton": "在截图上绘制",
+          "hint": "在页面上绘制，然后复制标注以粘贴到你的智能体。",
+          "redo": "重做",
+          "style": "颜色和粗细",
+          "textInput": "标注文字",
+          "undo": "撤销",
+          "tool": {
+            "arrow": "箭头",
+            "ellipse": "椭圆",
+            "highlight": "高亮",
+            "pen": "画笔",
+            "rect": "矩形",
+            "text": "文字"
+          },
+          "widthOption": "{{value0}} px"
+        }
       }
     },
     "i18n": {

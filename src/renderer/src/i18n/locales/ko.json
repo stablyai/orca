@@ -12957,6 +12957,29 @@
         "searchLabels": "레이블 필터…",
         "searchAssignee": "담당자 필터…",
         "back": "뒤로"
+      },
+      "browser-pane": {
+        "markup": {
+          "cancel": "취소",
+          "clear": "모두 지우기",
+          "copiedToast": "마크업을 복사했습니다 — 에이전트에 붙여넣으세요 ({{value0}})",
+          "copy": "마크업 복사",
+          "drawButton": "스크린샷에 그리기",
+          "hint": "페이지에 그린 다음 마크업을 복사해 에이전트에 붙여넣으세요.",
+          "redo": "다시 실행",
+          "style": "색상 및 두께",
+          "textInput": "주석 텍스트",
+          "undo": "실행 취소",
+          "tool": {
+            "arrow": "화살표",
+            "ellipse": "타원",
+            "highlight": "형광펜",
+            "pen": "펜",
+            "rect": "사각형",
+            "text": "텍스트"
+          },
+          "widthOption": "{{value0}} px"
+        }
       }
     },
     "i18n": {
