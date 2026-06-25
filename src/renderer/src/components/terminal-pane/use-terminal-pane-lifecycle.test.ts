@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   clearQueuedInitialCwdAfterFirstPane,
   mapRestoredPaneTitlesByPaneId,
+  resolvePaneLinkCwd,
   resolveQueuedInitialCwd,
   shouldDetachPaneTransportOnUnmount,
   splitPaneWithOneShotStartup,
@@ -204,6 +205,22 @@ describe('clearQueuedInitialCwdAfterFirstPane', () => {
       queuedInitialCwd: null,
       ptyCwd: '/repo'
     })
+  })
+})
+
+describe('resolvePaneLinkCwd', () => {
+  it('prefers the pane-specific cwd when one has been seeded or confirmed', () => {
+    expect(
+      resolvePaneLinkCwd(
+        new Map([[2, { cwd: '/repo/packages/web', confirmed: false }]]),
+        2,
+        '/repo'
+      )
+    ).toBe('/repo/packages/web')
+  })
+
+  it('falls back to the lifecycle startup cwd when the pane has no cached cwd yet', () => {
+    expect(resolvePaneLinkCwd(new Map(), 2, '/repo')).toBe('/repo')
   })
 })
 

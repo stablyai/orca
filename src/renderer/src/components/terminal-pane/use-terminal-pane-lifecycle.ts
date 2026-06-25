@@ -326,6 +326,14 @@ export function clearQueuedInitialCwdAfterFirstPane(
   return { queuedInitialCwd: null, ptyCwd: defaultTabCwd }
 }
 
+export function resolvePaneLinkCwd(
+  paneCwdMap: PaneCwdMap,
+  paneId: number,
+  fallbackCwd: string
+): string {
+  return paneCwdMap.get(paneId)?.cwd ?? fallbackCwd
+}
+
 type SplitStartupPayload = { command: string; env?: Record<string, string> }
 
 type SplitWithStartupDeps = {
@@ -543,6 +551,8 @@ export function useTerminalPaneLifecycle({
     queuedInitialCwdRef.current = initialCwdResolution.queuedInitialCwd
     const startupCwd = initialCwdResolution.startupCwd
     const terminalHomePath = resolveTerminalHomePathFromEnv(startup?.env)
+    const getPaneLinkCwd = (paneId: number): string =>
+      resolvePaneLinkCwd(paneCwdRef.current, paneId, startupCwd)
     // Why: existence probes can cross SSH/runtime boundaries. This cache is
     // lifecycle-scoped, so external mutations and the initial 'active' runtime
     // fallback can temporarily leave stale entries.
@@ -551,6 +561,7 @@ export function useTerminalPaneLifecycle({
       worktreeId,
       worktreePath,
       startupCwd,
+      getPaneLinkCwd,
       terminalHomePath,
       managerRef,
       linkProviderDisposablesRef,
@@ -703,6 +714,9 @@ export function useTerminalPaneLifecycle({
         // Return true so xterm marks the sequence handled. If a future
         // consumer registers on code 7, registration order decides who sees
         // each sequence.
+        if (!paneCwdRef.current.has(pane.id)) {
+          paneCwdRef.current.set(pane.id, { cwd: ptyDeps.cwd, confirmed: false })
+        }
         const osc7Disposable = pane.terminal.parser.registerOscHandler(7, (data) => {
           const parsedCwd = parseOsc7(data, { uncHost: osc7UncHost })
           if (parsedCwd) {
@@ -907,6 +921,7 @@ export function useTerminalPaneLifecycle({
           activate: (event, text) => {
             handleOscLink(text, event as MouseEvent | undefined, {
               ...linkDeps,
+              startupCwd: getPaneLinkCwd(pane.id),
               runtimeEnvironmentId: linkDeps.getRuntimeEnvironmentIdForPane?.(pane.id) ?? null,
               requestOpenLinksInAppPreference
             })
@@ -1219,6 +1234,7 @@ export function useTerminalPaneLifecycle({
         const activePane = managerRef.current?.getActivePane()
         void handleOscLink(url, event, {
           ...linkDeps,
+          startupCwd: activePane ? getPaneLinkCwd(activePane.id) : startupCwd,
           runtimeEnvironmentId: activePane
             ? (linkDeps.getRuntimeEnvironmentIdForPane?.(activePane.id) ?? null)
             : null,
