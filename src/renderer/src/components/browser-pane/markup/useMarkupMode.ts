@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { GRAB_BUDGET } from '../../../../../shared/browser-grab-types'
+import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../../shared/clipboard-image'
 import {
   captureMarkupBaseImage,
   type MarkupBaseImage,
@@ -106,7 +106,10 @@ export function useMarkupMode({
           displayCssHeight: context.cssHeight,
           outputScale: context.outputScale,
           shapes,
-          maxBytes: GRAB_BUDGET.screenshotMaxBytes
+          // Why: target the clipboard handler's own ceiling (≈18 MB) — well above a
+          // normal viewport PNG — so the composite stays full-resolution PNG and is
+          // never downscaled or rejected on copy.
+          maxBytes: CLIPBOARD_IMAGE_MAX_SOURCE_BYTES
         })
         await onDeliver(result)
         reset()

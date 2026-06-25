@@ -32,7 +32,12 @@ async function captureFromWebview(webview: Electron.WebviewTag): Promise<MarkupB
     throw new Error('markup: webview capturePage returned an empty image')
   }
   const size = native.getSize()
-  return { dataUrl: native.toDataURL(), width: size.width, height: size.height }
+  // Why: capturePage() can include an alpha channel where the page has no opaque
+  // background, which would let the live webview ghost through the frozen
+  // backdrop. Flatten onto white (the browser's default canvas color) so the
+  // base image is fully opaque.
+  const image = await loadImage(native.toDataURL())
+  return { dataUrl: flattenToOpaquePng(image, size.width, size.height), ...size }
 }
 
 function captureFromImage(element: HTMLImageElement): MarkupBaseImage {
@@ -43,15 +48,31 @@ function captureFromImage(element: HTMLImageElement): MarkupBaseImage {
   if (!element.complete || !element.isConnected || width <= 0 || height <= 0) {
     throw new Error('markup: remote frame image is not ready')
   }
-  // Why: snapshot the live frame into a detached canvas so later screencast
-  // frames (or a revoked blob URL) cannot change the base image mid-session.
+  // Why: snapshot the live frame into a detached canvas (opaque white backdrop)
+  // so later screencast frames can't change the base image and transparent
+  // regions don't ghost the live stream through.
+  return { dataUrl: flattenToOpaquePng(element, width, height), width, height }
+}
+
+function flattenToOpaquePng(image: CanvasImageSource, width: number, height: number): string {
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
   const ctx = canvas.getContext('2d')
   if (!ctx) {
-    throw new Error('markup: 2d context unavailable for frame snapshot')
+    throw new Error('markup: 2d context unavailable for base image')
   }
-  ctx.drawImage(element, 0, 0, width, height)
-  return { dataUrl: canvas.toDataURL('image/png'), width, height }
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, width, height)
+  ctx.drawImage(image, 0, 0, width, height)
+  return canvas.toDataURL('image/png')
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('markup: failed to decode captured screenshot'))
+    image.src = src
+  })
 }

@@ -3,8 +3,7 @@ import {
   clampMarkupScale,
   dataUrlByteLength,
   markupCanvasSize,
-  MARKUP_DOWNSCALE_STEPS,
-  MARKUP_JPEG_QUALITIES
+  MARKUP_DOWNSCALE_STEPS
 } from './markup-screenshot-compose'
 
 describe('clampMarkupScale', () => {
@@ -42,13 +41,9 @@ describe('dataUrlByteLength', () => {
 })
 
 describe('compose budget plans', () => {
-  it('tries full size first, then shrinks', () => {
+  it('tries full size first, then shrinks (PNG only, descending)', () => {
     expect(MARKUP_DOWNSCALE_STEPS[0]).toBe(1)
     expect([...MARKUP_DOWNSCALE_STEPS]).toEqual([...MARKUP_DOWNSCALE_STEPS].sort((a, b) => b - a))
-  })
-
-  it('has descending jpeg qualities as a final fallback', () => {
-    expect([...MARKUP_JPEG_QUALITIES]).toEqual([...MARKUP_JPEG_QUALITIES].sort((a, b) => b - a))
-    expect(MARKUP_JPEG_QUALITIES.every((q) => q > 0 && q <= 1)).toBe(true)
+    expect(MARKUP_DOWNSCALE_STEPS.every((s) => s > 0 && s <= 1)).toBe(true)
   })
 })

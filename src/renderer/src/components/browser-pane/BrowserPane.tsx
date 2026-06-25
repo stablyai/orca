@@ -2629,7 +2629,7 @@ function RemoteBrowserPagePane({
           </TooltipContent>
         </Tooltip>
         <MarkupDrawButton
-          onClick={() => void markup.start()}
+          onClick={() => (markup.isActive ? markup.cancel() : void markup.start())}
           disabled={!frameUrl}
           active={markup.isActive}
           className="h-7 w-7"
@@ -5114,7 +5114,7 @@ function BrowserPagePane({
           </Tooltip>
 
           <MarkupDrawButton
-            onClick={() => void markup.start()}
+            onClick={() => (markup.isActive ? markup.cancel() : void markup.start())}
             disabled={isBlankTab || grab.state !== 'idle'}
             active={markup.isActive}
           />

@@ -51,6 +51,7 @@ export function MarkupOverlay({
   const rootRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const baseImgRef = useRef<HTMLImageElement | null>(null)
+  const textInputRef = useRef<HTMLInputElement | null>(null)
 
   const [size, setSize] = useState<Size>({ width: 0, height: 0 })
   const [doc, setDoc] = useState<MarkupDocument>(() => createMarkupDocument())
@@ -104,6 +105,16 @@ export function MarkupOverlay({
     }
   }, [doc, inProgress, size])
 
+  // Why: focus the text input the moment it appears — a real placement click can
+  // beat autoFocus, leaving the field unfocused so keystrokes go nowhere.
+  useEffect(() => {
+    if (!pendingText) {
+      return undefined
+    }
+    const handle = requestAnimationFrame(() => textInputRef.current?.focus())
+    return () => cancelAnimationFrame(handle)
+  }, [pendingText])
+
   const undo = useCallback(() => setDoc((current) => undoShape(current)), [])
   const redo = useCallback(() => setDoc((current) => redoShape(current)), [])
   const clear = useCallback(() => setDoc((current) => clearShapes(current)), [])
@@ -156,6 +167,9 @@ export function MarkupOverlay({
       }
       const point = pointFromEvent(event)
       if (tool === 'text') {
+        // Why: stop the canvas mousedown from stealing focus so the text input
+        // that mounts next keeps it.
+        event.preventDefault()
         setPendingText(point)
         return
       }
@@ -259,14 +273,21 @@ export function MarkupOverlay({
 
       {pendingText ? (
         <input
-          autoFocus
+          ref={textInputRef}
           defaultValue=""
           aria-label={translate('auto.components.browser-pane.markup.textInput', 'Annotation text')}
+          onPointerDown={(event) => event.stopPropagation()}
           onBlur={(event) => commitPendingText(event.target.value)}
           onKeyDown={(event) => {
+            // Why: keep keystrokes local — without this the browser pane's global
+            // key handlers can swallow typing before it reaches the input.
+            event.stopPropagation()
             if (event.key === 'Enter') {
               event.preventDefault()
               commitPendingText(event.currentTarget.value)
+            } else if (event.key === 'Escape') {
+              event.preventDefault()
+              setPendingText(null)
             }
           }}
           className="absolute z-30 rounded-sm border border-ring bg-background/90 px-1 py-0.5 text-sm outline-none"

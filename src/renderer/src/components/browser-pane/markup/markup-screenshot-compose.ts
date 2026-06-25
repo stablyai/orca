@@ -12,7 +12,10 @@ import { drawShapes } from './markup-shape-render'
 
 export type MarkupComposeResult = {
   dataUrl: string
-  mimeType: 'image/png' | 'image/jpeg'
+  // Why: PNG only — the clipboard:writeImage handler accepts a PNG data URL and
+  // silently drops anything else, so a JPEG fallback would "succeed" with an
+  // empty clipboard.
+  mimeType: 'image/png'
   width: number
   height: number
   byteLength: number
@@ -64,9 +67,9 @@ export function dataUrlByteLength(dataUrl: string): number {
   return Math.max(0, Math.floor((payload.length * 3) / 4) - padding)
 }
 
-// Progressive raster sizes (full, then shrink) tried before falling back to JPEG.
-export const MARKUP_DOWNSCALE_STEPS = [1, 0.8, 0.65, 0.5] as const
-export const MARKUP_JPEG_QUALITIES = [0.85, 0.65, 0.45] as const
+// Progressive raster sizes (full, then shrink) tried to fit the byte budget.
+// PNG at every step — never JPEG (see MarkupComposeResult).
+export const MARKUP_DOWNSCALE_STEPS = [1, 0.85, 0.7, 0.55, 0.4, 0.3] as const
 
 // ─── Canvas raster (thin) ───────────────────────────────────────────────────
 
@@ -105,46 +108,34 @@ function downscaleCanvas(source: HTMLCanvasElement, factor: number): HTMLCanvasE
   return next
 }
 
-// Encodes within budget: full PNG, then progressively smaller PNGs, then JPEG.
-// Always returns something (best effort) so delivery never silently drops.
+// Encodes a PNG within budget: full size, then progressively smaller. Always
+// returns a PNG (best effort at the smallest step) so the clipboard handler
+// accepts it and delivery never silently drops.
 export function composeMarkupDataUrl(input: MarkupComposeInput): MarkupComposeResult {
   const composite = renderComposite(input)
 
+  let smallest: MarkupComposeResult | null = null
   for (const step of MARKUP_DOWNSCALE_STEPS) {
     const canvas = downscaleCanvas(composite, step)
     const dataUrl = canvas.toDataURL('image/png')
     const byteLength = dataUrlByteLength(dataUrl)
-    if (byteLength <= input.maxBytes) {
-      return {
-        dataUrl,
-        mimeType: 'image/png',
-        width: canvas.width,
-        height: canvas.height,
-        byteLength
-      }
-    }
-  }
-
-  let last: MarkupComposeResult | null = null
-  for (const quality of MARKUP_JPEG_QUALITIES) {
-    const dataUrl = composite.toDataURL('image/jpeg', quality)
-    const byteLength = dataUrlByteLength(dataUrl)
-    last = {
+    const result: MarkupComposeResult = {
       dataUrl,
-      mimeType: 'image/jpeg',
-      width: composite.width,
-      height: composite.height,
+      mimeType: 'image/png',
+      width: canvas.width,
+      height: canvas.height,
       byteLength
     }
     if (byteLength <= input.maxBytes) {
-      return last
+      return result
     }
+    smallest = result
   }
 
-  // Why: even if still over budget, return the smallest JPEG — a slightly large
-  // attachment is better than dropping the user's markup entirely.
+  // Why: still over budget at the smallest step — return it anyway (PNG), since a
+  // slightly large attachment beats dropping the user's markup entirely.
   return (
-    last ?? {
+    smallest ?? {
       dataUrl: composite.toDataURL('image/png'),
       mimeType: 'image/png',
       width: composite.width,
