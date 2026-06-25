@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: these activation cases share one mock store and assert ordering across startup, setup, issue commands, and default tabs. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SetupScriptLaunchMode } from '../../../shared/types'
-import { ensureWorktreeHasInitialTerminal } from './worktree-activation'
+import { activateAndRevealWorktree, ensureWorktreeHasInitialTerminal } from './worktree-activation'
 import { useAppStore } from '@/store'
 
 function setSetupScriptLaunchMode(mode: SetupScriptLaunchMode | null): void {
@@ -35,6 +35,7 @@ function createMockStore(overrides: Record<string, unknown> = {}) {
     markDefaultTerminalTabsApplied: vi.fn(),
     reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 0 })),
     queueTabStartupCommand: vi.fn(),
+    queueTabInitialCwd: vi.fn(),
     queueTabSetupSplit: vi.fn(),
     queueTabIssueCommandSplit: vi.fn(),
     ...overrides
@@ -400,5 +401,79 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       env: { ORCA_ROOT_PATH: '/tmp/repo' }
     })
     expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
+  })
+})
+
+describe('activateAndRevealWorktree', () => {
+  afterEach(() => {
+    useAppStore.setState({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeView: 'terminal',
+      filterRepoIds: [],
+      isNavigatingHistory: false
+    })
+  })
+
+  it('queues a one-shot initial cwd for the primary activation-created tab', () => {
+    const queueTabInitialCwd = vi.fn()
+    useAppStore.setState({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeView: 'settings',
+      filterRepoIds: [],
+      isNavigatingHistory: false,
+      repos: [{ id: 'repo-1', connectionId: null }],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-1',
+            repoId: 'repo-1',
+            path: '/repo',
+            displayName: 'main',
+            branch: 'main',
+            head: 'abc',
+            isBare: false,
+            isMainWorktree: true
+          }
+        ]
+      },
+      getKnownWorktreeById: (worktreeId: string) =>
+        worktreeId === 'wt-1'
+          ? ({
+              id: 'wt-1',
+              repoId: 'repo-1',
+              path: '/repo',
+              displayName: 'main',
+              branch: 'main',
+              head: 'abc',
+              isBare: false,
+              isMainWorktree: true
+            } as never)
+          : null,
+      setActiveRepo: vi.fn(),
+      setActiveView: vi.fn(),
+      setActiveWorktree: vi.fn(),
+      markWorktreeVisited: vi.fn(),
+      recordWorktreeVisit: vi.fn(),
+      reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 0 })),
+      createTab: vi.fn(() => ({ id: 'tab-1' })),
+      setActiveTab: vi.fn(),
+      setTabCustomTitle: vi.fn(),
+      setTabColor: vi.fn(),
+      markDefaultTerminalTabsApplied: vi.fn(),
+      queueTabStartupCommand: vi.fn(),
+      queueTabInitialCwd,
+      queueTabSetupSplit: vi.fn(),
+      queueTabIssueCommandSplit: vi.fn(),
+      revealWorktreeInSidebar: vi.fn()
+    } as never)
+
+    const result = activateAndRevealWorktree('wt-1', {
+      initialCwd: '/repo/packages/web'
+    })
+
+    expect(result).toEqual({ primaryTabId: 'tab-1' })
+    expect(queueTabInitialCwd).toHaveBeenCalledWith('tab-1', '/repo/packages/web')
   })
 })

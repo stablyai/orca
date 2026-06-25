@@ -122,6 +122,7 @@ type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
     tabId: string,
     startup: { command: string; env?: Record<string, string> }
   ) => void
+  queueTabInitialCwd: (tabId: string, cwd: string) => void
 }
 
 /**
@@ -265,6 +266,7 @@ export function activateAndRevealWorktree(
   worktreeId: string,
   opts?: {
     startup?: WorktreeStartupPayload
+    initialCwd?: string
     setup?: WorktreeSetupLaunch
     defaultTabs?: WorktreeDefaultTabsLaunch
     issueCommand?: IssueCommandLaunch
@@ -348,6 +350,9 @@ export function activateAndRevealWorktree(
     opts?.issueCommand,
     opts?.defaultTabs
   )
+  if (primaryTabId && opts?.initialCwd) {
+    useAppStore.getState().queueTabInitialCwd(primaryTabId, opts.initialCwd)
+  }
 
   // 5. Clear sidebar filters that would hide the target worktree
   // Why: revealWorktreeInSidebar relies on the worktree card being rendered

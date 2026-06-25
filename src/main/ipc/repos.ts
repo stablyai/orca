@@ -60,6 +60,7 @@ import {
 import { createNestedRepoImportTargetResolver } from '../project-groups/nested-repo-import-target'
 import {
   isGitRepo,
+  getGitRepoRoot,
   getGitUsername,
   getRepoName,
   getBaseRefDefault,
@@ -183,6 +184,7 @@ async function addLocalRepoFromPath(
     return { error: `Not a valid git repository: ${path}` }
   }
 
+  const resolvedPath = repoKind === 'git' ? getGitRepoRoot(path) : path
   const pathKey = normalizeRuntimePathForComparison(path)
   const existing = store
     .getRepos()
@@ -191,11 +193,24 @@ async function addLocalRepoFromPath(
     return { repo: existing, alreadyExisted: true }
   }
 
-  const detected = await detectRepoIconAndUpstream({ repoPath: path, kind: repoKind })
+  const resolvedPathKey = normalizeRuntimePathForComparison(resolvedPath)
+  if (resolvedPathKey !== pathKey) {
+    const existingAfterRootResolve = store
+      .getRepos()
+      .find(
+        (repo) =>
+          !repo.connectionId && normalizeRuntimePathForComparison(repo.path) === resolvedPathKey
+      )
+    if (existingAfterRootResolve) {
+      return { repo: existingAfterRootResolve, alreadyExisted: true }
+    }
+  }
+
+  const detected = await detectRepoIconAndUpstream({ repoPath: resolvedPath, kind: repoKind })
   const repo: Repo = {
     id: randomUUID(),
-    path,
-    displayName: getRepoName(path),
+    path: resolvedPath,
+    displayName: getRepoName(resolvedPath),
     badgeColor: DEFAULT_REPO_BADGE_COLOR,
     ...detected,
     addedAt: Date.now(),

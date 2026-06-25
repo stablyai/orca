@@ -435,6 +435,7 @@ export function useTerminalPaneLifecycle({
   const mouseHideDisposablesRef = useRef(new Map<number, IDisposable>())
   const imeCompositionDisposablesRef = useRef(new Map<number, IDisposable>())
   const imePunctuationForwarderDisposablesRef = useRef(new Map<number, IDisposable>())
+  const queuedInitialCwdRef = useRef<string | null | undefined>(undefined)
 
   const applyAppearance = (manager: PaneManager): void => {
     const currentSettings = settingsRef.current
@@ -509,7 +510,11 @@ export function useTerminalPaneLifecycle({
         .find((candidate) => candidate.id === worktreeId)?.path ??
       cwd ??
       ''
-    const startupCwd = cwd ?? worktreePath
+    if (queuedInitialCwdRef.current === undefined) {
+      queuedInitialCwdRef.current = useAppStore.getState().consumeTabInitialCwd(tabId)
+    }
+    const defaultTabCwd = cwd ?? worktreePath
+    const startupCwd = queuedInitialCwdRef.current ?? defaultTabCwd
     const terminalHomePath = resolveTerminalHomePathFromEnv(startup?.env)
     // Why: existence probes can cross SSH/runtime boundaries. This cache is
     // lifecycle-scoped, so external mutations and the initial 'active' runtime
@@ -578,7 +583,7 @@ export function useTerminalPaneLifecycle({
     const ptyDeps = {
       tabId,
       worktreeId,
-      cwd,
+      cwd: startupCwd,
       startup,
       paneTransportsRef,
       paneMode2031Ref,
@@ -618,7 +623,7 @@ export function useTerminalPaneLifecycle({
 
     const fileOpenLinkHint = getTerminalFileOpenHint()
     const urlOpenLinkHint = getTerminalUrlOpenHint()
-    const osc7UncHost = extractUncHost(cwd)
+    const osc7UncHost = extractUncHost(startupCwd)
 
     let releaseWebviewDragPassthrough: (() => void) | null = null
 
@@ -926,6 +931,10 @@ export function useTerminalPaneLifecycle({
         // sets deps.startup immediately before splitPane() and is therefore
         // unaffected by this clear.
         ptyDeps.startup = null
+        if (queuedInitialCwdRef.current) {
+          queuedInitialCwdRef.current = null
+          ptyDeps.cwd = defaultTabCwd
+        }
         panePtyBindings.set(pane.id, panePtyBinding)
         syncPaneCount()
         scheduleRuntimeGraphSync()

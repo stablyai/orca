@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import * as path from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { isGitRepo } from './repo'
+import { getGitRepoRoot, isGitRepo } from './repo'
 
 function git(cwd: string, args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] })
@@ -33,5 +33,21 @@ describe('isGitRepo', () => {
     git(tmpDir, ['init', '--bare', '--quiet', bareRepo])
 
     expect(isGitRepo(bareRepo)).toBe(true)
+  })
+
+  it('resolves a contained path to the worktree root', () => {
+    const repoRoot = path.join(tmpDir, 'repo')
+    const nestedDir = path.join(repoRoot, 'packages', 'web')
+    mkdirSync(nestedDir, { recursive: true })
+    git(tmpDir, ['init', '--quiet', repoRoot])
+
+    expect(getGitRepoRoot(nestedDir)).toBe(repoRoot.replace(/\\/g, '/'))
+  })
+
+  it('preserves bare repository paths when no worktree root exists', () => {
+    const bareRepo = path.join(tmpDir, 'bare.git')
+    git(tmpDir, ['init', '--bare', '--quiet', bareRepo])
+
+    expect(getGitRepoRoot(bareRepo)).toBe(bareRepo)
   })
 })
