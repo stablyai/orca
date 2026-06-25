@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
+import { buildAgentFeatureSkillInstallCommand } from '../../../../shared/agent-feature-install-commands'
 import {
   buildSkillCommandForRuntime,
   buildSkillInstallCommandForRuntime,
@@ -30,6 +31,19 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     expect(command).toContain("wsl.exe -d 'Fedora Remix' -- sh -c")
     expect(command).toContain('getent passwd')
     expect(command).toContain('npx skills update orchestration --global')
+  })
+
+  it('reinstalls Windows-host skill updates through the add path', () => {
+    const command = buildSkillCommandForRuntime('npx skills update orchestration --global', {
+      runtime: 'host',
+      label: 'Windows'
+    })
+    const expectedCommand =
+      process.platform === 'win32'
+        ? buildAgentFeatureSkillInstallCommand(['orchestration'])
+        : 'npx skills update orchestration --global'
+
+    expect(command).toBe(expectedCommand)
   })
 
   it('preserves the selected WSL distro for skill discovery', () => {

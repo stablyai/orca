@@ -7,6 +7,7 @@ import {
   buildWslLoginShellCommand,
   escapeWslShCommandForWindows
 } from '../../../../shared/wsl-login-shell-command'
+import { buildAgentFeatureSkillInstallCommand } from '../../../../shared/agent-feature-install-commands'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import {
@@ -63,14 +64,33 @@ export function getWslCliDistroRequest(
 }
 
 export function buildSkillCommandForRuntime(command: string, runtime: LocalAgentRuntime): string {
+  const normalizedCommand = normalizeWindowsSkillUpdateCommand(command, runtime)
   if (runtime.runtime !== 'wsl') {
-    return command
+    return normalizedCommand
   }
+
   const distroArg = runtime.wslDistro?.trim()
     ? ` -d ${quotePowerShellSingle(runtime.wslDistro.trim())}`
     : ''
-  const wslCommand = escapeWslShCommandForWindows(buildWslLoginShellCommand(command))
+  const wslCommand = escapeWslShCommandForWindows(buildWslLoginShellCommand(normalizedCommand))
   return `wsl.exe${distroArg} -- sh -c ${quotePowerShellSingle(wslCommand)}`
+}
+
+function normalizeWindowsSkillUpdateCommand(command: string, runtime: LocalAgentRuntime): string {
+  if (runtime.runtime === 'wsl' || process.platform !== 'win32') {
+    return command
+  }
+
+  const trimmedCommand = command.trim()
+  const updateMatch = /^npx\s+skills\s+update\s+([A-Za-z0-9_-]+)\s+--global$/i.exec(trimmedCommand)
+  if (!updateMatch) {
+    return command
+  }
+
+  // Why: the `skills update` subcommand is currently unreliable on native
+  // Windows, while reinstalling from the same repo source is idempotent and
+  // keeps the setup affordance working.
+  return buildAgentFeatureSkillInstallCommand([updateMatch[1]])
 }
 
 export function buildSkillInstallCommandForRuntime(

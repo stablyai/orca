@@ -9,7 +9,10 @@ import { OrchestrationPane } from './OrchestrationPane'
 
 const INSTALL_COMMAND =
   'npx skills add https://github.com/stablyai/orca --skill orchestration --global'
-const UPDATE_COMMAND = 'npx skills update orchestration --global'
+const UPDATE_COMMAND =
+  process.platform === 'win32'
+    ? INSTALL_COMMAND
+    : 'npx skills update orchestration --global'
 
 const mocks = vi.hoisted(() => ({
   dialogProps: [] as Record<string, unknown>[],
