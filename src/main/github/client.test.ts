@@ -1190,6 +1190,26 @@ describe('getPRForBranch', () => {
     expect(trackedUpstreamCalls).toHaveLength(1)
   })
 
+  it('does not fan out tracked-upstream probes after a transient for-each-ref failure', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValue({
+      candidates: [{ owner: 'acme', repo: 'widgets' }],
+      headRepo: { owner: 'acme', repo: 'widgets' }
+    })
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: JSON.stringify([]) })
+    gitExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('fatal: cannot lock ref'))
+      .mockResolvedValue({ stdout: 'alpha\0\nbeta\0\ngamma\0\n', stderr: '' })
+
+    await getPRForBranch('/repo-root', 'alpha')
+    await getPRForBranch('/repo-root', 'beta')
+    await getPRForBranch('/repo-root', 'gamma')
+
+    const trackedUpstreamCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) =>
+      (args as string[]).includes('refs/heads')
+    )
+    expect(trackedUpstreamCalls).toHaveLength(2)
+  })
+
   it('refreshes the tracked-upstream snapshot when a branch appears inside the TTL', async () => {
     resolvePRRepositoryCandidatesMock.mockResolvedValue({
       candidates: [{ owner: 'acme', repo: 'widgets' }],
@@ -1549,7 +1569,7 @@ describe('getPRForBranch', () => {
       candidates: [{ owner: 'acme', repo: 'widgets' }],
       headRepo: { owner: 'acme', repo: 'widgets' }
     })
-    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    getOwnerRepoForRemoteMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
     readLocalGitConfigSignatureMock.mockResolvedValue(
       '/repo-root/.git/config\u0000mtime-a\u0000100'
     )
@@ -1562,7 +1582,6 @@ describe('getPRForBranch', () => {
       )
       .mockResolvedValueOnce({ stdout: 'new-feature\0origin/contributor/original\n', stderr: '' })
     ghExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
       .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
       .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
       .mockResolvedValueOnce({
@@ -1585,14 +1604,13 @@ describe('getPRForBranch', () => {
     const waiterLookup = getPRForBranch('/repo-root', 'new-feature')
     await vi.waitFor(() => expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1))
     resolveSnapshot!({ stdout: 'existing\0\n', stderr: '' })
-    await Promise.all([existingLookup, waiterLookup])
-    const pr = await getPRForBranch('/repo-root', 'new-feature')
+    const [, waiterPr] = await Promise.all([existingLookup, waiterLookup])
 
     const trackedUpstreamCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) =>
       (args as string[]).includes('refs/heads')
     )
     expect(trackedUpstreamCalls).toHaveLength(2)
-    expect(pr).toMatchObject({
+    expect(waiterPr).toMatchObject({
       number: 84,
       title: 'Concurrent waiter upstream PR'
     })

@@ -2,10 +2,17 @@ import { gitExecFileAsync } from '../git/runner'
 import type { GitHubOwnerRepo, IssueSourcePreference } from '../../shared/types'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { readLocalGitConfigSignature } from './local-git-config-signature'
+import {
+  parseGitHubOwnerRepo,
+  parseGitHubRemoteIdentity,
+  type GitHubRemoteIdentity
+} from './github-remote-identity-parsing'
+import { isStableMissingGitRemoteError } from './stable-missing-git-remote-error'
 
 export type OwnerRepo = GitHubOwnerRepo
 
-export type GitHubRemoteIdentity = GitHubOwnerRepo & { host: string }
+export type { GitHubRemoteIdentity }
+export { parseGitHubOwnerRepo, parseGitHubRemoteIdentity }
 
 export type GitHubRepoContext = {
   repoPath: string
@@ -78,52 +85,6 @@ function pruneOwnerRepoCache(now: number): void {
       return
     }
     ownerRepoCache.delete(oldestKey)
-  }
-}
-
-export function parseGitHubOwnerRepo(remoteUrl: string): OwnerRepo | null {
-  const identity = parseGitHubRemoteIdentity(remoteUrl)
-  if (!identity || identity.host.toLowerCase() !== 'github.com') {
-    return null
-  }
-  return { owner: identity.owner, repo: identity.repo }
-}
-
-function normalizeGitHubRemoteHost(host: string): string {
-  const normalizedHost = host.toLowerCase()
-  // Why: GitHub documents ssh.github.com:443 as SSH-over-HTTPS for github.com repos.
-  return normalizedHost === 'ssh.github.com' ? 'github.com' : normalizedHost
-}
-
-function parseGitHubRemotePath(path: string): Pick<GitHubRemoteIdentity, 'owner' | 'repo'> | null {
-  const parts = path.replace(/^\/+/, '').replace(/\/+$/, '').split('/')
-  if (parts.length !== 2) {
-    return null
-  }
-  const [owner, repoWithSuffix] = parts
-  const repo = repoWithSuffix.replace(/\.git$/i, '')
-  if (!owner || !repo) {
-    return null
-  }
-  return { owner, repo }
-}
-
-export function parseGitHubRemoteIdentity(remoteUrl: string): GitHubRemoteIdentity | null {
-  const trimmed = remoteUrl.trim()
-  const sshMatch = trimmed.match(/^git@([^:]+):([^/]+)\/([^/]+?)(?:\.git)?$/i)
-  if (sshMatch) {
-    return { host: normalizeGitHubRemoteHost(sshMatch[1]), owner: sshMatch[2], repo: sshMatch[3] }
-  }
-
-  try {
-    const url = new URL(trimmed)
-    if (!['git:', 'git+ssh:', 'http:', 'https:', 'ssh:'].includes(url.protocol.toLowerCase())) {
-      return null
-    }
-    const path = parseGitHubRemotePath(url.pathname)
-    return path ? { host: normalizeGitHubRemoteHost(url.hostname), ...path } : null
-  } catch {
-    return null
   }
 }
 
@@ -223,8 +184,12 @@ async function resolveOwnerRepoForRemote(
       pruneOwnerRepoCache(now)
       return result
     }
-  } catch {
-    // ignore - non-GitHub remote or no remote
+  } catch (error) {
+    // Why: only stable "no such remote" misses are safe to hold for minutes.
+    // Transient git lock/IO failures must retry on the next lookup.
+    if (!isStableMissingGitRemoteError(error)) {
+      return null
+    }
   }
   // Why: a missing/non-GitHub remote is stable until `.git/config` changes.
   // Holding that negative longer avoids Git process churn across PR polling.

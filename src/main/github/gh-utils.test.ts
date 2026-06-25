@@ -318,6 +318,49 @@ describe('github owner/repo resolution', () => {
     }
   })
 
+  it('treats stderr-only missing-remote errors as stable negatives', async () => {
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-gh-utils-'))
+    await mkdir(join(repoPath, '.git'))
+    await writeFile(join(repoPath, '.git', 'config'), '[core]\n\trepositoryformatversion = 0\n')
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(1_000)
+      gitExecFileAsyncMock.mockRejectedValue(
+        Object.assign(new Error('Command failed'), {
+          stderr: "fatal: No such remote 'origin'"
+        })
+      )
+
+      await expect(getOwnerRepoForRemote(repoPath, 'origin')).resolves.toBeNull()
+      vi.setSystemTime(32_000)
+      await expect(getOwnerRepoForRemote(repoPath, 'origin')).resolves.toBeNull()
+      expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+      await rm(repoPath, { recursive: true, force: true })
+    }
+  })
+
+  it('does not apply the long negative TTL when git remote get-url fails transiently', async () => {
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-gh-utils-'))
+    await mkdir(join(repoPath, '.git'))
+    await writeFile(join(repoPath, '.git', 'config'), '[core]\n\trepositoryformatversion = 0\n')
+    try {
+      gitExecFileAsyncMock
+        .mockRejectedValueOnce(new Error('fatal: cannot lock ref'))
+        .mockResolvedValueOnce({ stdout: 'git@github.com:acme/widgets.git\n' })
+
+      await expect(getOwnerRepoForRemote(repoPath, 'origin')).resolves.toBeNull()
+      await expect(getOwnerRepoForRemote(repoPath, 'origin')).resolves.toEqual({
+        owner: 'acme',
+        repo: 'widgets'
+      })
+      expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    } finally {
+      await rm(repoPath, { recursive: true, force: true })
+    }
+  })
+
   it('invalidates a cached local missing remote when git config changes', async () => {
     const repoPath = await mkdtemp(join(tmpdir(), 'orca-gh-utils-'))
     await mkdir(join(repoPath, '.git'))

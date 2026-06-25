@@ -2285,6 +2285,7 @@ type TrackedUpstreamSnapshotCacheEntry = {
 type TrackedUpstreamSnapshotProbeResult = {
   cacheable: boolean
   gitConfigSignature?: string
+  probeFailed: boolean
   upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
 }
 
@@ -2293,10 +2294,18 @@ const trackedUpstreamSnapshotInFlight = new Map<
   string,
   Promise<TrackedUpstreamSnapshotProbeResult>
 >()
+const trackedUpstreamSnapshotGenerations = new Map<string, number>()
+
+function beginTrackedUpstreamSnapshotProbe(cacheKey: string): number {
+  const nextGeneration = (trackedUpstreamSnapshotGenerations.get(cacheKey) ?? 0) + 1
+  trackedUpstreamSnapshotGenerations.set(cacheKey, nextGeneration)
+  return nextGeneration
+}
 
 export function __resetTrackedUpstreamBranchCacheForTests(): void {
   trackedUpstreamSnapshotCache.clear()
   trackedUpstreamSnapshotInFlight.clear()
+  trackedUpstreamSnapshotGenerations.clear()
 }
 
 function parseTrackedUpstreamBranch(
@@ -2342,22 +2351,38 @@ async function getTrackedUpstreamBranch(
   const inFlight = trackedUpstreamSnapshotInFlight.get(cacheKey)
   if (inFlight) {
     const result = await inFlight
-    return result.upstreamsByBranchName.get(branchName) ?? null
+    if (result.upstreamsByBranchName.has(branchName)) {
+      return result.upstreamsByBranchName.get(branchName) ?? null
+    }
+    // Why: a concurrent snapshot may finish before this branch exists in git.
+    // Re-probe instead of returning a one-shot synthetic null.
+    const retryInFlight = trackedUpstreamSnapshotInFlight.get(cacheKey)
+    if (retryInFlight) {
+      const retryResult = await retryInFlight
+      return retryResult.upstreamsByBranchName.get(branchName) ?? null
+    }
   }
 
   // Why: PR polling can ask about hundreds of local worktree branches at once.
   // Read the branch upstream snapshot in one git process per repo/runtime
   // instead of spawning one failing `branch@{upstream}` probe per branch.
+  const probeGeneration = beginTrackedUpstreamSnapshotProbe(cacheKey)
   const probe = probeTrackedUpstreamSnapshot(repoPath, connectionId, localGitOptions)
   trackedUpstreamSnapshotInFlight.set(cacheKey, probe)
   try {
     const result = await probe
-    if (result.cacheable) {
+    if (result.cacheable && trackedUpstreamSnapshotGenerations.get(cacheKey) === probeGeneration) {
       trackedUpstreamSnapshotCache.set(cacheKey, {
         ...(result.gitConfigSignature ? { gitConfigSignature: result.gitConfigSignature } : {}),
         upstreamsByBranchName: getCacheableTrackedUpstreamSnapshot(result.upstreamsByBranchName),
         expiresAt: now + TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS
       })
+    }
+    if (trackedUpstreamSnapshotGenerations.get(cacheKey) !== probeGeneration) {
+      const fresherCached = trackedUpstreamSnapshotCache.get(cacheKey)
+      if (fresherCached?.upstreamsByBranchName.has(branchName)) {
+        return fresherCached.upstreamsByBranchName.get(branchName) ?? null
+      }
     }
     return result.upstreamsByBranchName.get(branchName) ?? null
   } finally {
@@ -2377,7 +2402,7 @@ async function probeTrackedUpstreamSnapshot(
     connectionId: connectionId ?? null,
     ...localGitOptions
   })
-  const upstreamsByBranchName = await probeTrackedUpstreamBranches(
+  const { probeFailed, upstreamsByBranchName } = await probeTrackedUpstreamBranches(
     repoPath,
     connectionId,
     localGitOptions
@@ -2393,7 +2418,10 @@ async function probeTrackedUpstreamSnapshot(
   const gitConfigSignature =
     startingGitConfigSignature === endingGitConfigSignature ? endingGitConfigSignature : undefined
   return {
-    cacheable: !configSignatureChanged,
+    // Why: transient git failures must not cache an empty snapshot that forces
+    // every branch lookup to delete and re-probe on the next refresh tick.
+    cacheable: !configSignatureChanged && !probeFailed,
+    probeFailed,
     ...(gitConfigSignature ? { gitConfigSignature } : {}),
     upstreamsByBranchName
   }
@@ -2446,7 +2474,10 @@ async function probeTrackedUpstreamBranches(
   repoPath: string,
   connectionId?: string | null,
   localGitOptions: { wslDistro?: string } = {}
-): Promise<Map<string, TrackedUpstreamBranch | null>> {
+): Promise<{
+  probeFailed: boolean
+  upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
+}> {
   const args = ['for-each-ref', '--format=%(refname)%00%(upstream)', 'refs/heads']
   try {
     const provider = connectionId ? getSshGitProvider(connectionId) : null
@@ -2456,9 +2487,12 @@ async function probeTrackedUpstreamBranches(
           cwd: repoPath,
           ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
         })
-    return parseTrackedUpstreamBranches(result.stdout)
+    return {
+      probeFailed: false,
+      upstreamsByBranchName: parseTrackedUpstreamBranches(result.stdout)
+    }
   } catch {
-    return new Map()
+    return { probeFailed: true, upstreamsByBranchName: new Map() }
   }
 }
 
