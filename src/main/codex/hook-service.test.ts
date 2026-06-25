@@ -88,9 +88,11 @@ function canonicalizeHookTrustKeyForTest(key: string): string {
   }
   const sourcePath = key.slice(0, thirdLast)
   try {
-    return `${realpathSync.native(sourcePath)}${key.slice(thirdLast)}`
+    // Why: mirrors getCodexCanonicalTrustPath separator normalization so test
+    // expectations match the forward-slash keys Orca writes on Windows.
+    return `${realpathSync.native(sourcePath).replace(/\\/g, '/')}${key.slice(thirdLast)}`
   } catch {
-    return key
+    return key.replace(/\\/g, '/')
   }
 }
 

@@ -102,10 +102,11 @@ export function getCodexCanonicalTrustPath(sourcePath: string): string {
   try {
     // Why: Codex canonicalizes trust paths before building config keys. On
     // macOS, /var is a symlink to /private/var; trusting the raw path still
-    // leaves the TUI in review/trust prompts.
-    return realpathSync.native(sourcePath)
+    // leaves the TUI in review/trust prompts. Forward-slash normalization
+    // prevents separator mismatch against Codex-written literal-string keys on Windows.
+    return realpathSync.native(sourcePath).replace(/\\/g, '/')
   } catch {
-    return sourcePath
+    return sourcePath.replace(/\\/g, '/')
   }
 }
 
@@ -342,6 +343,14 @@ type TrustBlockRange = {
   end: number
 }
 
+// Why: separator and casing drift between Codex-written keys (raw backslash,
+// potentially lowercased) and Orca-built keys (forward-slash, realpathSync.native
+// casing) must not prevent findTrustBlockRanges from matching an existing block.
+function normalizeTrustKeyPath(key: string): string {
+  const separated = key.replace(/\\/g, '/')
+  return process.platform === 'win32' ? separated.toLowerCase() : separated
+}
+
 function findTrustBlockRanges(content: string, key: string): TrustBlockRange[] {
   const ranges: TrustBlockRange[] = []
   let cursor = 0
@@ -355,7 +364,7 @@ function findTrustBlockRanges(content: string, key: string): TrustBlockRange[] {
     const headerKey = isInsideTomlMultilineString(multilineState)
       ? null
       : parseHookStateHeaderKey(line)
-    if (headerKey === key) {
+    if (headerKey !== null && normalizeTrustKeyPath(headerKey) === normalizeTrustKeyPath(key)) {
       const headerLineEnd = rawLine.endsWith('\r') ? lineEnd - 1 : lineEnd
       const after = content.slice(headerLineEnd)
       const nextHeaderRel = findNextTableHeader(after)
@@ -707,7 +716,7 @@ export function readHookTrustEntries(configPath: string): Map<string, CodexHookT
       // a line scan beats pulling in a full TOML value parser.
       const hashMatch = /^[ \t]*trusted_hash[ \t]*=[ \t]*"((?:[^"\\]|\\.)*)"/m.exec(block)
       const enabledMatch = /^[ \t]*enabled[ \t]*=[ \t]*(true|false)[ \t\r]*(?:#.*)?$/m.exec(block)
-      result.set(key, {
+      result.set(key.replace(/\\/g, '/'), {
         trustedHash: hashMatch ? unescapeTomlString(hashMatch[1]) : undefined,
         enabled: enabledMatch ? enabledMatch[1] === 'true' : undefined
       })
