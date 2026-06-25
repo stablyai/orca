@@ -14,6 +14,8 @@ export async function readLocalGitConfigSignature(
   context: GitHubRepoContext
 ): Promise<string | undefined> {
   if (context.connectionId || context.wslDistro) {
+    // Why: this signature only covers host filesystem config files; remote
+    // runtimes are already separated by cache key and probed through git.
     return undefined
   }
   const cacheKey = context.repoPath
