@@ -2606,6 +2606,13 @@ describe('WorktreeList header styles', () => {
     expect(source).toContain('headerKey: row.key')
     expect(source).toContain('color={repoHeaderColor}')
   })
+
+  it('adapts projected setup rows for sidebar project grouping', () => {
+    const source = readWorktreeListSource()
+
+    expect(source).toContain('const projectHostSetupProjection = useProjectHostSetupProjection()')
+    expect(source).toContain('projectHostSetups: projectHostSetupProjection.setups')
+  })
 })
 
 describe('buildRows pending creations', () => {
