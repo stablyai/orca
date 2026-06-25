@@ -1,11 +1,12 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { WorktreeStatus } from '@/lib/worktree-status'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 
 const mocks = vi.hoisted(() => ({
-  status: 'active'
+  status: 'active' as WorktreeStatus
 }))
 
 vi.mock('@/components/ui/tooltip', () => ({
@@ -17,6 +18,20 @@ vi.mock('@/components/ui/tooltip', () => ({
 vi.mock('./use-worktree-activity-status', () => ({
   useWorktreeActivityStatus: () => mocks.status
 }))
+
+function render(props: { isUnread: boolean; showStatus?: boolean; unreadTooltip: string }): string {
+  return renderToStaticMarkup(
+    <WorktreeCardStatusSlot
+      worktreeId="wt-1"
+      showStatus={props.showStatus ?? true}
+      showUnreadAction
+      isUnread={props.isUnread}
+      unreadTooltip={props.unreadTooltip}
+      onPointerDown={vi.fn()}
+      onToggleUnread={vi.fn()}
+    />
+  )
+}
 
 describe('WorktreeCardStatusSlot', () => {
   beforeEach(() => {
@@ -38,7 +53,31 @@ describe('WorktreeCardStatusSlot', () => {
     status: 'pending'
   }
 
-  it('lets the unread bell replace the visual status dot by default', () => {
+  it('shows a green dot, not the amber bell, when a finished agent is unread', () => {
+    mocks.status = 'done'
+    const markup = render({ isUnread: true, showStatus: false, unreadTooltip: 'Mark as read' })
+
+    expect(markup).toContain('bg-status-success')
+    expect(markup).not.toContain('text-amber-500')
+  })
+
+  it('shows the amber bell when an unread worktree needs user input', () => {
+    mocks.status = 'permission'
+    const markup = render({ isUnread: true, showStatus: false, unreadTooltip: 'Mark as read' })
+
+    expect(markup).toContain('text-amber-500')
+    expect(markup).not.toContain('bg-status-success')
+  })
+
+  it('shows a green dot for non-input unread pings', () => {
+    mocks.status = 'active'
+    const markup = render({ isUnread: true, showStatus: false, unreadTooltip: 'Mark as read' })
+
+    expect(markup).toContain('bg-status-success')
+    expect(markup).not.toContain('text-amber-500')
+  })
+
+  it('lets the unread indicator replace the visual status dot by default', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
@@ -55,10 +94,11 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).toContain('Mark as read')
     expect(markup).not.toContain('Active · Mark as read')
     expect(markup).not.toContain('bg-emerald-500')
-    expect(markup).toContain('text-amber-500')
+    expect(markup).toContain('bg-status-success')
+    expect(markup).not.toContain('text-amber-500')
   })
 
-  it('overlays an unread badge on the status dot when new card style is on', () => {
+  it('overlays a success unread badge on the status lane when new card style is on', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
@@ -78,8 +118,9 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).toContain('Active · Unread')
     expect(markup).toContain('data-worktree-status-lane-unread=""')
     expect(markup).toContain('data-worktree-unread-alert=""')
-    expect(markup).toContain('bg-amber-500')
-    expect(markup).toContain('bg-emerald-500')
+    expect(markup).toContain('bg-status-success')
+    expect(markup).not.toContain('bg-status-warning')
+    expect(markup).not.toContain('bg-emerald-500')
     expect(markup).not.toContain('lucide-bell')
     expect(markup).not.toContain('text-amber-500')
   })
@@ -101,7 +142,7 @@ describe('WorktreeCardStatusSlot', () => {
     )
 
     expect(markup).toContain('Working · Unread')
-    expect(markup).toContain('border-yellow-500')
+    expect(markup).toContain('border-muted-foreground')
     expect(markup).not.toContain('data-worktree-status-lane-unread=""')
     expect(markup).not.toContain('data-worktree-unread-alert=""')
     expect(markup).not.toContain('aria-label="Mark as read"')
@@ -126,12 +167,14 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).toContain('aria-label="Mark as read"')
     expect(markup).toContain('Mark as read')
     expect(markup).toContain('Working')
-    expect(markup).toContain('text-amber-500')
-    expect(markup).not.toContain('border-yellow-500')
+    expect(markup).toContain('bg-status-success')
+    expect(markup).not.toContain('text-amber-500')
+    expect(markup).not.toContain('border-muted-foreground')
     expect(markup).not.toContain('data-worktree-unread-alert=""')
   })
 
   it('shows status in the unread toggle affordance', () => {
+    mocks.status = 'permission'
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
@@ -144,11 +187,29 @@ describe('WorktreeCardStatusSlot', () => {
       />
     )
 
-    expect(markup).toContain('Active · Mark as unread')
-    expect(markup).toContain('bg-emerald-500')
+    expect(markup).toContain('Needs permission · Mark as unread')
+    expect(markup).toContain('bg-status-warning')
   })
 
-  it('keeps the quiet active dot ahead of PR status by default', () => {
+  it('lets the unread indicator replace the visual status dot', () => {
+    mocks.status = 'permission'
+    const markup = render({ isUnread: true, unreadTooltip: 'Mark as read' })
+
+    expect(markup).toContain('aria-label="Mark as read"')
+    expect(markup).toContain('Mark as read')
+    expect(markup).not.toContain('Needs permission · Mark as read')
+    expect(markup).not.toContain('bg-status-warning')
+  })
+
+  it('shows the live status dot until an unread indicator is active', () => {
+    mocks.status = 'permission'
+    const markup = render({ isUnread: false, unreadTooltip: 'Mark as unread' })
+
+    expect(markup).toContain('Needs permission · Mark as unread')
+    expect(markup).toContain('bg-status-warning')
+  })
+
+  it('keeps active activity ahead of PR status by default', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
@@ -163,7 +224,7 @@ describe('WorktreeCardStatusSlot', () => {
     )
 
     expect(markup).toContain('Active')
-    expect(markup).toContain('bg-emerald-500')
+    expect(markup).not.toContain('bg-status-success')
     expect(markup).not.toContain('PR checks: Failed')
   })
 
@@ -295,7 +356,7 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).toContain('lucide-git-branch')
   })
 
-  it('keeps the quiet dot when the row has no branch identity', () => {
+  it('keeps active activity when the row has no branch identity', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
@@ -311,7 +372,7 @@ describe('WorktreeCardStatusSlot', () => {
     )
 
     expect(markup).toContain('Active')
-    expect(markup).toContain('bg-emerald-500')
+    expect(markup).not.toContain('bg-status-success')
     expect(markup).not.toContain('lucide-git-branch')
   })
 
@@ -333,7 +394,7 @@ describe('WorktreeCardStatusSlot', () => {
 
     expect(markup).toContain('Working')
     expect(markup).toContain('inline-flex size-5 items-center justify-center')
-    expect(markup).toContain('border-yellow-500')
+    expect(markup).toContain('border-muted-foreground')
     expect(markup).not.toContain('PR checks: Failed')
   })
 
@@ -354,7 +415,7 @@ describe('WorktreeCardStatusSlot', () => {
     )
 
     expect(markup).toContain('Needs permission')
-    expect(markup).toContain('bg-amber-500')
+    expect(markup).toContain('bg-status-warning')
     expect(markup).not.toContain('PR checks: Failed')
   })
 
@@ -377,7 +438,8 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).not.toContain('Active · Mark as read')
     expect(markup).not.toContain('PR checks: Failed')
     expect(markup).not.toContain('bg-emerald-500')
-    expect(markup).toContain('text-amber-500')
+    expect(markup).toContain('bg-status-success')
+    expect(markup).not.toContain('text-amber-500')
   })
 
   it('overlays an unread badge on PR status when new card style is on', () => {
@@ -403,7 +465,7 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).not.toContain('group/unread')
     expect(markup).not.toContain('cursor-pointer')
     expect(markup).toContain('text-rose-500/85')
-    expect(markup).toContain('bg-amber-500')
+    expect(markup).toContain('bg-status-success')
     expect(markup).not.toContain('lucide-bell')
     expect(markup).not.toContain('text-amber-500')
     expect(markup).not.toContain('bg-emerald-500')
@@ -431,7 +493,7 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).not.toContain('group/unread')
     expect(markup).not.toContain('cursor-pointer')
     expect(markup).toContain('lucide-git-branch')
-    expect(markup).toContain('bg-amber-500')
+    expect(markup).toContain('bg-status-success')
     expect(markup).not.toContain('lucide-bell')
     expect(markup).not.toContain('text-amber-500')
     expect(markup).not.toContain('bg-emerald-500')

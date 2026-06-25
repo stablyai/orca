@@ -37,12 +37,13 @@ const compactReviewAndBranchStatusIconClassName = 'size-[13px] translate-x-px'
 const branchStatusIconClassName = `${compactReviewAndBranchStatusIconClassName} text-muted-foreground/70`
 // Why: a left-edge badge overlays unread on the status glyph without widening
 // the lane or indenting the title; ring-sidebar cuts the dot out from busy icons.
-const newCardUnreadAlertClassName =
-  'pointer-events-none absolute left-0 top-1/2 size-[6px] -translate-y-1/2 rounded-full bg-amber-500 ring-2 ring-sidebar'
+const newCardUnreadAlertBaseClassName =
+  'pointer-events-none absolute left-0 top-1/2 size-[6px] -translate-y-1/2 rounded-full ring-2 ring-sidebar'
 
 function overlayNewCardUnreadStatus(
   status: React.JSX.Element,
-  showUnreadAlert: boolean
+  showUnreadAlert: boolean,
+  unreadAlertClassName: string
 ): React.JSX.Element {
   if (!showUnreadAlert) {
     return status
@@ -56,7 +57,7 @@ function overlayNewCardUnreadStatus(
       {status}
       <span
         data-worktree-unread-alert=""
-        className={newCardUnreadAlertClassName}
+        className={cn(newCardUnreadAlertBaseClassName, unreadAlertClassName)}
         aria-hidden="true"
       />
     </span>
@@ -124,6 +125,8 @@ export function WorktreeCardStatusSlot({
   // Why: the working spinner owns the new-card status lane, but unread state
   // should still surface in tooltip/sr-only copy and reappear afterward.
   const showNewCardUnreadAlert = newCardStyle && isUnread && showStatus && status !== 'working'
+  const newCardUnreadAlertClassName =
+    status === 'permission' ? 'bg-status-warning' : 'bg-status-success'
   const reviewStatusIconClassName = compactReviewAndBranchStatusIconClassName
   const branchStatusIcon = <GitBranch className={branchStatusIconClassName} aria-hidden="true" />
   const passiveStatus =
@@ -176,7 +179,11 @@ export function WorktreeCardStatusSlot({
   }
 
   if (!unreadActionEnabled) {
-    return overlayNewCardUnreadStatus(passiveStatus, showNewCardUnreadAlert)
+    return overlayNewCardUnreadStatus(
+      passiveStatus,
+      showNewCardUnreadAlert,
+      newCardUnreadAlertClassName
+    )
   }
 
   const actionLabel = isUnread ? 'Mark as read' : 'Mark as unread'
@@ -201,26 +208,16 @@ export function WorktreeCardStatusSlot({
             )}
             aria-label={actionLabel}
           >
-            {newCardStyle ? (
-              showStatus && canShowReviewStatus && prDisplay ? (
-                <span className="inline-flex size-5 items-center justify-center p-0.5">
-                  <ReviewIcon
-                    review={prDisplay}
-                    className={reviewStatusIconClassName}
-                    variant="generic"
-                  />
-                </span>
-              ) : showStatus && canShowBranchStatus ? (
-                <span className="inline-flex size-5 items-center justify-center p-0.5">
-                  {branchStatusIcon}
-                </span>
-              ) : showStatus ? (
-                <StatusIndicator status={status} aria-hidden="true" />
+            {isUnread ? (
+              // Why: the amber bell means "needs your input": a permission
+              // prompt or ask-user question (agent state blocked/waiting ->
+              // 'permission'). Any other unread (a completed agent, a raw BEL)
+              // is a calm green "ready to review" dot, not an alert.
+              status === 'permission' ? (
+                <FilledBellIcon className="size-[13px] text-amber-500 drop-shadow-sm" />
               ) : (
-                <span className="sr-only">{actionLabel}</span>
+                <span className="block size-2 rounded-full bg-status-success" />
               )
-            ) : isUnread ? (
-              <FilledBellIcon className="size-[13px] text-amber-500 drop-shadow-sm" />
             ) : showStatus ? (
               <>
                 <StatusIndicator
