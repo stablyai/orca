@@ -359,7 +359,8 @@ vi.mock('../ipc/worktree-logic', async (importOriginal) => {
 vi.mock('../ipc/filesystem-auth', () => ({
   invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock,
   isENOENT: (error: unknown) =>
-    Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
+    Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'),
+  resolveAuthorizedPath: vi.fn(async (pathValue: string) => pathValue)
 }))
 
 vi.mock('../worktree-root-preparation', () => ({
@@ -1770,6 +1771,74 @@ describe('OrcaRuntimeService', () => {
     expect(gitProvider.listWorktrees).toHaveBeenCalledWith('//Server/Share/Repo')
     expect(fsProvider.readDir).toHaveBeenCalledWith('\\\\Server\\Share\\Repo\\src')
     expect(gitProvider.getStatus).toHaveBeenCalledWith('//Server/Share/Repo')
+  })
+
+  it.each([
+    { label: 'canonical folder workspace selector', selector: TEST_FOLDER_WORKSPACE_KEY },
+    { label: 'id-prefixed folder workspace selector', selector: `id:${TEST_FOLDER_WORKSPACE_KEY}` }
+  ])('reads file explorer paths for a $label', async ({ selector }) => {
+    const folderPath = await mkdtemp(join(tmpdir(), 'orca-runtime-folder-files-'))
+    await mkdir(join(folderPath, 'src'))
+    await writeFile(join(folderPath, 'src', 'app.ts'), 'export {}\n')
+    const folderWorkspace = makeFolderWorkspace({ folderPath })
+    const projectGroup = makeFolderProjectGroup({ parentPath: folderPath })
+    const runtime = new OrcaRuntimeService(
+      createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never
+    )
+
+    await expect(runtime.readFileExplorerDir(selector, 'src')).resolves.toContainEqual({
+      name: 'app.ts',
+      isDirectory: false,
+      isSymlink: false
+    })
+    await expect(runtime.readFileExplorerPreview(selector, 'src/app.ts')).resolves.toMatchObject({
+      content: 'export {}\n',
+      isBinary: false
+    })
+  })
+
+  it('routes SSH folder workspace file explorer paths through the filesystem provider', async () => {
+    const folderPath = '/srv/platform'
+    const fsProvider = {
+      stat: vi.fn(async (pathValue: string) => ({
+        size: pathValue.endsWith('/app.ts') ? 8 : 0,
+        type: pathValue.endsWith('/app.ts') ? 'file' : 'directory',
+        mtime: 1
+      })),
+      readDir: vi.fn().mockResolvedValue([
+        {
+          name: 'app.ts',
+          isDirectory: false,
+          isSymlink: false
+        }
+      ]),
+      readFile: vi.fn().mockResolvedValue({ content: 'remote\n', isBinary: false })
+    }
+    const folderWorkspace = makeFolderWorkspace({ folderPath, connectionId: 'ssh-folder' })
+    const projectGroup = makeFolderProjectGroup({ parentPath: folderPath })
+    const runtime = new OrcaRuntimeService(
+      createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never
+    )
+    registerSshFilesystemProvider('ssh-folder', fsProvider as never)
+
+    try {
+      await expect(
+        runtime.readFileExplorerDir(`id:${TEST_FOLDER_WORKSPACE_KEY}`, 'src')
+      ).resolves.toHaveLength(1)
+      await expect(
+        runtime.readFileExplorerPreview(`id:${TEST_FOLDER_WORKSPACE_KEY}`, 'src/app.ts')
+      ).resolves.toMatchObject({
+        content: 'remote\n',
+        isBinary: false
+      })
+    } finally {
+      unregisterSshFilesystemProvider('ssh-folder')
+    }
+
+    expect(fsProvider.stat).toHaveBeenCalledWith(folderPath)
+    expect(fsProvider.readDir).toHaveBeenCalledWith('/srv/platform/src')
+    expect(fsProvider.stat).toHaveBeenCalledWith('/srv/platform/src/app.ts')
+    expect(fsProvider.readFile).toHaveBeenCalledWith('/srv/platform/src/app.ts')
   })
 
   it('lists persisted SSH worktrees while the git provider is unavailable', async () => {
