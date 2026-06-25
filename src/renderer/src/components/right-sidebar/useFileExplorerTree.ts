@@ -80,6 +80,9 @@ export async function refreshFileExplorerExpandedDirs({
     uniqueDirs.map((dir) => [dir.dirPath, dirLoadTracker.begin(dir.dirPath)])
   )
 
+  // Why: expanded refresh can touch many directories; commit the loading and
+  // result states in two batched setDirCache writes (rather than per-directory)
+  // so refreshing large worktrees stays O(N) instead of O(N²) cache spreads.
   setDirCache((prev) => {
     const next = { ...prev }
     for (const { dirPath } of uniqueDirs) {
@@ -257,10 +260,14 @@ export function useFileExplorerTree(
     if (!rootLoadCompleted || !dirLoadTrackerRef.current.isSessionCurrent(refreshSession)) {
       return
     }
-    const expandedDirs = Array.from(expanded).map((dirPath) => ({
-      dirPath,
-      depth: splitPathSegments(dirPath.slice(worktreePath.length + 1)).length - 1
-    }))
+    // Why: root (worktreePath) was just force-loaded above; exclude it here so
+    // refreshFileExplorerExpandedDirs doesn't queue a duplicate read of root.
+    const expandedDirs = Array.from(expanded)
+      .filter((dirPath) => dirPath !== worktreePath)
+      .map((dirPath) => ({
+        dirPath,
+        depth: splitPathSegments(dirPath.slice(worktreePath.length + 1)).length - 1
+      }))
     await refreshFileExplorerExpandedDirs({
       dirs: expandedDirs,
       worktreePath,
