@@ -1674,6 +1674,8 @@ describe('useIpcEvents updater integration', () => {
     expect(setActiveTabType).toHaveBeenCalledWith('terminal')
     expect(setActiveTab).toHaveBeenCalledWith('tab-new')
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
+    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-new', undefined)
+    expect(focusTerminalTabSurface).toHaveBeenCalledWith('tab-new', undefined)
     expect(setTabCustomTitle).toHaveBeenCalledWith('tab-new', 'Runner', {
       recordInteraction: false
     })
@@ -1694,6 +1696,8 @@ describe('useIpcEvents updater integration', () => {
     setTabCustomTitle.mockClear()
     queueTabStartupCommand.mockClear()
     replyTerminalCreate.mockClear()
+    focusRuntimeTerminalSurface.mockClear()
+    focusTerminalTabSurface.mockClear()
     requestTerminalCreateListenerRef.current({
       requestId: 'req-focused',
       worktreeId: 'wt-3',
@@ -1708,6 +1712,8 @@ describe('useIpcEvents updater integration', () => {
     expect(setActiveTabType).toHaveBeenCalledWith('terminal')
     expect(setActiveTab).toHaveBeenCalledWith('tab-new')
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-3')
+    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-new', undefined)
+    expect(focusTerminalTabSurface).toHaveBeenCalledWith('tab-new', undefined)
     expect(setTabCustomTitle).toHaveBeenCalledWith('tab-new', 'Shell', {
       recordInteraction: false
     })
@@ -1727,6 +1733,8 @@ describe('useIpcEvents updater integration', () => {
     revealWorktreeInSidebar.mockClear()
     setTabCustomTitle.mockClear()
     queueTabStartupCommand.mockClear()
+    focusRuntimeTerminalSurface.mockClear()
+    focusTerminalTabSurface.mockClear()
     requestTerminalCreateListenerRef.current({
       requestId: 'req-renderer-backed',
       worktreeId: 'wt-2',
@@ -1752,6 +1760,8 @@ describe('useIpcEvents updater integration', () => {
     expect(setActiveTabType).not.toHaveBeenCalled()
     expect(setActiveTab).not.toHaveBeenCalled()
     expect(revealWorktreeInSidebar).not.toHaveBeenCalled()
+    expect(focusRuntimeTerminalSurface).not.toHaveBeenCalled()
+    expect(focusTerminalTabSurface).not.toHaveBeenCalled()
     expect(dispatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'orca-background-mount-terminal-worktree',
