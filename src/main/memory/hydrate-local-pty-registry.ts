@@ -52,7 +52,9 @@ let hasHydrated = false
  * union still covers that case until the daemon comes back. Any failure
  * here is a coverage degradation, not a correctness regression.
  */
-export async function hydrateLocalPtyRegistryAtBoot(store: Pick<Store, 'getRepos'>): Promise<void> {
+export async function hydrateLocalPtyRegistryAtBoot(
+  store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>
+): Promise<void> {
   try {
     if (hasHydrated) {
       return
@@ -89,6 +91,17 @@ export async function hydrateLocalPtyRegistryAtBoot(store: Pick<Store, 'getRepos
       }
     }
 
+    // Why: a renamed worktree's live session keeps its pre-rename, path-stamped
+    // id; the live-git map above is keyed by the *current* id. Map each prior id
+    // to its current worktree so those sessions register under the current id
+    // instead of being dropped (a lost pid/memory sample after a folder rename).
+    const currentIdByPriorId = new Map<string, string>()
+    for (const [currentId, meta] of Object.entries(store.getAllWorktreeMeta())) {
+      for (const priorId of meta.priorWorktreeIds ?? []) {
+        currentIdByPriorId.set(priorId, currentId)
+      }
+    }
+
     // Why: SessionInfo is read through the adapter's listSessions() so we
     // get the pid alongside each id. Routing through every adapter
     // (current + legacy) keeps protocol coverage symmetric with the
@@ -105,10 +118,17 @@ export async function hydrateLocalPtyRegistryAtBoot(store: Pick<Store, 'getRepos
       if (alreadyRegistered.has(info.sessionId)) {
         continue
       }
-      const { worktreeId } = parsePtySessionId(info.sessionId)
-      if (!worktreeId) {
+      const parsedWorktreeId = parsePtySessionId(info.sessionId).worktreeId
+      if (!parsedWorktreeId) {
         continue
       }
+      // Resolve a pre-rename id to its current worktree before the local/SSH gates
+      // so a renamed worktree's session attributes to the live id, not the alias.
+      // Guard: if the parsed id is itself a current worktree (a path recycled by a
+      // worktree created after an earlier rename), trust it over the stale alias.
+      const worktreeId = repoConnectionIdByWorktreeId.has(parsedWorktreeId)
+        ? parsedWorktreeId
+        : (currentIdByPriorId.get(parsedWorktreeId) ?? parsedWorktreeId)
       // Why: SSH sessions must stay out of the registry — mirrors the
       // spawn-time `if (!args.connectionId)` gate around `registerPty` in
       // `src/main/ipc/pty.ts`. If the repo isn't in the store, skip the

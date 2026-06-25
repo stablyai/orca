@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings, Repo } from '../../shared/types'
+import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   renameWorktreeFolderOnFirstWork,
   type FirstWorkFolderRenameDeps
@@ -75,5 +76,29 @@ describe('renameWorktreeFolderOnFirstWork', () => {
     const deps = makeDeps({ getRepo: vi.fn(() => undefined) })
     expect(await renameWorktreeFolderOnFirstWork(OLD_ID, 'fix-auth', deps)).toBe(false)
     expect(deps.moveWorktree).not.toHaveBeenCalled()
+  })
+
+  // #5535 regression: the move must not drop the running session. Wiring the real
+  // runtime notify proves the orchestration -> runtime re-point seam: a live PTY
+  // record stays bound to the worktree (under the NEW id) across the folder move,
+  // instead of being orphaned to the gone old id and replaced by a fresh terminal.
+  it('keeps a live PTY bound across the move by re-pointing it to the new id', async () => {
+    const runtime = new OrcaRuntimeService()
+    const internals = runtime as unknown as {
+      recordPtyWorktree: (ptyId: string, worktreeId: string) => { worktreeId: string }
+      ptysById: Map<string, { worktreeId: string }>
+    }
+    const ptyId = `${OLD_ID}@@aaaa`
+    internals.recordPtyWorktree(ptyId, OLD_ID)
+
+    const deps = makeDeps({
+      notifyWorktreeRenamed: (repoId, oldId, newId) =>
+        runtime.notifyWorktreeFolderRenamed(repoId, oldId, newId)
+    })
+
+    const result = await renameWorktreeFolderOnFirstWork(OLD_ID, 'work-derived', deps)
+
+    expect(result).toBe(true)
+    expect(internals.ptysById.get(ptyId)?.worktreeId).toBe('repo1::/ws/work-derived')
   })
 })

@@ -511,6 +511,23 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(killed).toHaveLength(0)
     })
 
+    it('keeps a session minted under a prior (pre-rename) worktree id when the caller seeds that alias', async () => {
+      // A folder rename changes the worktree's path-derived id, but live sessions
+      // keep the old id baked into their session id. The doc contract requires
+      // callers to union each worktree's WorktreeMeta.priorWorktreeIds into
+      // validWorktreeIds; this pins that a session minted under the old id then
+      // survives. A future change that wires reconcile into boot must honor this
+      // or it will reap renamed worktrees' live terminals (the #5535 failure mode).
+      const priorId = 'repo-a::/wt/old-creature-name'
+      const currentId = 'repo-a::/wt/work-derived-name'
+      await adapter.spawn({ cols: 80, rows: 24, worktreeId: priorId })
+
+      const { alive, killed } = await adapter.reconcileOnStartup(new Set([currentId, priorId]))
+      expect(alive).toHaveLength(1)
+      expect(alive[0]).toContain(priorId)
+      expect(killed).toHaveLength(0)
+    })
+
     it('kills sessions whose id does not match the minted format, even if id is in valid set', async () => {
       // Why: parsePtySessionId rejects bare UUIDs (no `@@`) and ids without
       // the `::` worktree shape. Such sessions can't be attributed to any

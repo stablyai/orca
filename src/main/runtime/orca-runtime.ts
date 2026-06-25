@@ -16599,9 +16599,33 @@ export class OrcaRuntimeService {
    *  (from a folder rename) as a deletion. Same channel = guaranteed ordering. */
   notifyWorktreeFolderRenamed(repoId: string, oldWorktreeId: string, newWorktreeId: string): void {
     this.invalidateResolvedWorktreeCache()
+    // Re-point live PTY records BEFORE notifying so in-process listeners and the
+    // renderer both observe the corrected ownership. A folder move changes the
+    // path-derived worktreeId; the session id is path-stamped and immutable, so
+    // ownership must be carried on the record, not re-derived from the id.
+    this.migratePtyWorktreeRecords(oldWorktreeId, newWorktreeId)
     this.notifier?.worktreesChanged(repoId, { oldWorktreeId, newWorktreeId })
     // Mirror notifyBranchRenamed so in-process onClientEvent listeners also see the rename.
     this.emitClientEvent({ type: 'worktreesChanged', repoId })
+  }
+
+  /** Carry every live PTY record (and its watcher bindings) from a renamed
+   *  worktree's old id to the new one. The session id stays path-stamped with the
+   *  old path, so this record is the authoritative source of a live session's
+   *  current owner — see {@link recordPtyWorktree}, which never reassigns an
+   *  existing record's worktreeId for the same reason. */
+  private migratePtyWorktreeRecords(oldWorktreeId: string, newWorktreeId: string): void {
+    if (oldWorktreeId === newWorktreeId) {
+      return
+    }
+    for (const pty of this.ptysById.values()) {
+      if (pty.worktreeId !== oldWorktreeId) {
+        continue
+      }
+      pty.worktreeId = newWorktreeId
+      advertisedUrlWatcher.bindPty(pty.ptyId, newWorktreeId)
+      serveSimStateWatcher.bindPty(pty.ptyId, newWorktreeId)
+    }
   }
 
   notifyFolderWorkspaceChanged(): void {
@@ -16611,7 +16635,10 @@ export class OrcaRuntimeService {
 
   private recordPtyWorktree(
     ptyId: string,
-    worktreeId: string,
+    // Only seeds a NEW record. An existing record keeps its own worktreeId — the
+    // periodic controller refresh passes the stale path-inferred id here, and
+    // honoring it would revert a folder-rename re-point (migratePtyWorktreeRecords).
+    initialWorktreeId: string,
     state: Partial<
       Pick<
         RuntimePtyWorktreeRecord,
@@ -16624,7 +16651,7 @@ export class OrcaRuntimeService {
       const titleObservedAt = state.title ? this.nextTitleObservationSequence() : null
       pty = {
         ptyId,
-        worktreeId,
+        worktreeId: initialWorktreeId,
         connectionId: state.connectionId ?? parseAppSshPtyId(ptyId)?.connectionId ?? null,
         tabId: state.tabId ?? null,
         paneKey: state.paneKey ?? null,
@@ -16657,12 +16684,13 @@ export class OrcaRuntimeService {
       this.ptysById.set(ptyId, pty)
       // Why: restored/controller-discovered PTYs learn their worktree here
       // without registerPty(), so URL enrichment must bind at this source.
-      advertisedUrlWatcher.bindPty(ptyId, worktreeId)
-      serveSimStateWatcher.bindPty(ptyId, worktreeId)
+      advertisedUrlWatcher.bindPty(ptyId, initialWorktreeId)
+      serveSimStateWatcher.bindPty(ptyId, initialWorktreeId)
       return pty
     }
 
-    pty.worktreeId = worktreeId
+    // worktreeId intentionally not reassigned on an existing record — see the
+    // initialWorktreeId param doc above.
     if (state.connectionId !== undefined) {
       pty.connectionId = state.connectionId
     }
@@ -16690,8 +16718,10 @@ export class OrcaRuntimeService {
     }
     // Why: recordPtyWorktree is the common lifecycle point for every path that
     // resolves a PTY's worktree, including renderer restore and controller list.
-    advertisedUrlWatcher.bindPty(ptyId, worktreeId)
-    serveSimStateWatcher.bindPty(ptyId, worktreeId)
+    // Bind watchers to the record's authoritative owner (not the possibly-stale
+    // `worktreeId` argument) so a post-rename refresh can't repoint them to the old id.
+    advertisedUrlWatcher.bindPty(ptyId, pty.worktreeId)
+    serveSimStateWatcher.bindPty(ptyId, pty.worktreeId)
     return pty
   }
 

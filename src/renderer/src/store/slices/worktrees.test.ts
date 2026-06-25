@@ -5279,3 +5279,48 @@ describe('pending worktree creation state', () => {
     expect(store.getState().activePendingCreationId).toBeNull()
   })
 })
+
+describe('migrateWorktreeIdentity — folder rename re-keying', () => {
+  const OLD = 'repo1::/work/old-creature-name'
+  const NEW = 'repo1::/work/work-derived-name'
+  const OTHER = 'repo1::/work/unrelated'
+
+  it('moves tabs and the default-tabs-applied marker to the new id so activation does not spawn a fresh terminal', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: {
+        [OLD]: [{ id: 't1', worktreeId: OLD }],
+        [OTHER]: [{ id: 't2', worktreeId: OTHER }]
+      },
+      // The marker that applyDefaultTerminalTabs guards on: if it survives the
+      // rename, activation of the new id won't re-apply defaults (the #5535 symptom).
+      defaultTerminalTabsAppliedByWorktreeId: { [OLD]: true, [OTHER]: true }
+    } as unknown as Partial<AppState>)
+
+    store.getState().migrateWorktreeIdentity(OLD, NEW)
+    const s = store.getState()
+
+    // Tabs follow the rename, with their worktreeId rewritten; old id is gone.
+    expect(s.tabsByWorktree[NEW]).toEqual([{ id: 't1', worktreeId: NEW }])
+    expect(s.tabsByWorktree[OLD]).toBeUndefined()
+    // The applied marker follows too — so the worktree is treated as initialized.
+    expect(s.defaultTerminalTabsAppliedByWorktreeId[NEW]).toBe(true)
+    expect(s.defaultTerminalTabsAppliedByWorktreeId[OLD]).toBeUndefined()
+    // An unrelated worktree is untouched.
+    expect(s.tabsByWorktree[OTHER]).toEqual([{ id: 't2', worktreeId: OTHER }])
+    expect(s.defaultTerminalTabsAppliedByWorktreeId[OTHER]).toBe(true)
+  })
+
+  it('is a no-op when old equals new', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: { [OLD]: [{ id: 't1', worktreeId: OLD }] },
+      defaultTerminalTabsAppliedByWorktreeId: { [OLD]: true }
+    } as unknown as Partial<AppState>)
+
+    store.getState().migrateWorktreeIdentity(OLD, OLD)
+
+    expect(store.getState().tabsByWorktree[OLD]).toEqual([{ id: 't1', worktreeId: OLD }])
+    expect(store.getState().defaultTerminalTabsAppliedByWorktreeId[OLD]).toBe(true)
+  })
+})

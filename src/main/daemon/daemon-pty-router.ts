@@ -167,6 +167,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     this.adapterFor(sessionId).clearTombstone(sessionId)
   }
 
+  /** No production caller yet. Before wiring this into boot, the caller MUST seed
+   *  `validWorktreeIds` with every live worktree's `WorktreeMeta.priorWorktreeIds`
+   *  — otherwise sessions on a renamed worktree (whose id is path-stamped with the
+   *  pre-rename path) are reaped as false orphans. See DaemonPtyAdapter.reconcileOnStartup. */
   async reconcileOnStartup(validWorktreeIds: Set<string>): Promise<{
     alive: string[]
     killed: string[]
