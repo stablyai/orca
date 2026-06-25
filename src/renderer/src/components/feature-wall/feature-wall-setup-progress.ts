@@ -4,12 +4,7 @@ import {
   FEATURE_WALL_SETUP_STEPS,
   type FeatureWallSetupStepId
 } from '../../../../shared/feature-wall-setup-steps'
-import type {
-  GlobalSettings,
-  TerminalLayoutSnapshot,
-  TerminalTab,
-  Worktree
-} from '../../../../shared/types'
+import type { GlobalSettings, Worktree } from '../../../../shared/types'
 
 export type FeatureWallSetupProgressInput = {
   ready?: boolean
@@ -23,8 +18,6 @@ export type FeatureWallSetupProgressInput = {
   orchestrationSkillInstalled: boolean
   gitRepoCount: number
   worktreesByRepo: Record<string, Worktree[]>
-  tabsByWorktree: Record<string, TerminalTab[]>
-  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
   hasSetupScript: boolean
 }
 
@@ -63,7 +56,6 @@ export function getFeatureWallSetupProgress(
     notifications:
       input.settings?.notifications.enabled === true &&
       input.settings.notifications.agentTaskComplete === true,
-    'split-terminal': hasFeatureInteraction(input.featureInteractions, 'terminal-pane-split'),
     'two-worktrees': countAvailableNonMainWorktrees(input.worktreesByRepo) >= 1,
     // Why: the 'browser' interaction fires when a non-blank page is viewed, so
     // opening any real page in Orca's browser durably completes this milestone.

@@ -36,7 +36,7 @@
 
 Monitor and steer your agents from your phone — get notified when an agent finishes and send follow-ups from anywhere.
 
-[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.15/app-release.apk) · [Docs →](https://www.onorca.dev/docs/mobile)
+[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [TestFlight](https://testflight.apple.com/join/YjeGMQBA) · [Android APK](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.16/app-release.apk) · [Docs →](https://www.onorca.dev/docs/mobile)
 
 </td>
 <td width="50%">
@@ -228,8 +228,8 @@ yay -S stably-orca-bin
 
 Pair with your desktop app to monitor and steer your agents from your phone.
 
-- **iOS:** [Download on the App Store](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [Download the APK](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.15/app-release.apk)
+- **iOS:** [Download on the App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) or [join TestFlight](https://testflight.apple.com/join/YjeGMQBA)
+- **Android:** [Download the APK](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.16/app-release.apk)
 
 ---
 
@@ -237,6 +237,10 @@ Pair with your desktop app to monitor and steer your agents from your phone.
 
 - **Discord:** Join the community on **[Discord](https://discord.gg/fzjDKHxv8Q)**.
 - **Twitter / X:** Follow **[@orca_build](https://x.com/orca_build)** for updates and announcements.
+- **WeChat:** Scan the QR code to join the community.
+
+  <img src="docs/assets/wechat-qr.png" alt="WeChat QR code for the Orca community" width="160" />
+
 - **Feedback &amp; Ideas:** We ship fast. Missing something? [Request a new feature](https://github.com/stablyai/orca/issues).
 - **Privacy:** See the [privacy &amp; telemetry docs](https://www.onorca.dev/docs/telemetry) for what anonymous usage data Orca collects and how to opt out.
 - **Show Support:** [Star](https://github.com/stablyai/orca) this repo to follow along with our daily ships.

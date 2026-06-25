@@ -1,10 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import {
-  buildAiVaultResumeCommandForWorktree,
-  buildAiVaultResumeStartupForWorktree
-} from '@/lib/ai-vault-resume-command'
-import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
 import { useAppStore } from '@/store'
 import {
   useActiveRepo,
@@ -14,7 +9,7 @@ import {
   useRepoById,
   useRepos
 } from '@/store/selectors'
-import { agentLabel, filterAiVaultSessions, groupAiVaultSessions } from './ai-vault-session-filters'
+import { filterAiVaultSessions, groupAiVaultSessions } from './ai-vault-session-filters'
 import {
   deriveAiVaultScopeSessionPaths,
   deriveAiVaultWorkspaceScopePaths
@@ -25,6 +20,13 @@ import {
   normalizeAiVaultScopeForContext
 } from './ai-vault-scope-state'
 import { buildAiVaultProjectContext } from './ai-vault-session-projects'
+import {
+  resolveAiVaultSessionResumeActions,
+  resolveAiVaultSessionResumeState
+} from './ai-vault-session-resume'
+import { useAiVaultSessionLaunchActions } from './ai-vault-session-launch-actions'
+import { useAiVaultSessionWorktreeMap } from './ai-vault-session-worktree'
+import { useAiVaultOriginalPaneActions } from './ai-vault-original-pane-actions'
 import {
   AI_VAULT_AGENTS,
   type AiVaultAgent,
@@ -47,7 +49,9 @@ export default function AiVaultPanel(): React.JSX.Element {
   const allWorktrees = useAllWorktrees()
   const projectHostSetupProjection = useProjectHostSetupProjection()
   const settings = useAppStore((s) => s.settings)
-  const agentCmdOverrides = settings?.agentCmdOverrides ?? {}
+  const agentCmdOverrides = settings?.agentCmdOverrides
+  const { getOriginalPaneTarget, jumpToOriginalPane, jumpToWorktree } =
+    useAiVaultOriginalPaneActions()
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState<AiVaultScope>(DEFAULT_AI_VAULT_SCOPE)
   const [sort, setSort] = useState<AiVaultSort>('updated')
@@ -101,6 +105,17 @@ export default function AiVaultPanel(): React.JSX.Element {
       }).sessionProjectById,
     [activeRepo, activeWorktree, allWorktrees, projectHostSetupProjection, repos, sessions]
   )
+  const sessionWorktreeById = useAiVaultSessionWorktreeMap({
+    sessions,
+    worktrees: allWorktrees,
+    activeWorktreeId: activeWorktree?.id ?? null
+  })
+  const { buildResumeStartup, copyResumeCommand, handleResume } = useAiVaultSessionLaunchActions({
+    activeWorktree: activeWorktree ?? null,
+    allWorktrees,
+    repos,
+    agentCmdOverrides
+  })
   const hasAllAgentsSelected = agents.length === AI_VAULT_AGENTS.length
   const viewAdjustmentCount =
     (hasAllAgentsSelected ? 0 : 1) +
@@ -169,41 +184,6 @@ export default function AiVaultPanel(): React.JSX.Element {
     [filteredSessions, group, projectLabelByKey, sessionProjectById]
   )
 
-  const buildResumeCommand = useCallback(
-    (session: AiVaultSession): string =>
-      buildAiVaultResumeCommandForWorktree({
-        state: useAppStore.getState(),
-        worktreeId: activeWorktree?.id ?? null,
-        session,
-        commandOverride: agentCmdOverrides[session.agent]
-      }),
-    [activeWorktree?.id, agentCmdOverrides, settings]
-  )
-
-  const buildResumeStartup = useCallback(
-    (session: AiVaultSession) =>
-      buildAiVaultResumeStartupForWorktree({
-        state: useAppStore.getState(),
-        worktreeId: activeWorktree?.id ?? null,
-        session,
-        commandOverride: agentCmdOverrides[session.agent]
-      }),
-    [activeWorktree?.id, agentCmdOverrides, settings]
-  )
-
-  const copyResumeCommand = useCallback(
-    async (session: AiVaultSession): Promise<void> => {
-      await window.api.ui.writeClipboardText(buildResumeCommand(session))
-      toast.success(
-        translate(
-          'auto.components.right.sidebar.AiVaultPanel.resumeCommandCopied',
-          'Resume command copied'
-        )
-      )
-    },
-    [buildResumeCommand]
-  )
-
   const copyText = useCallback(async (text: string, label: string): Promise<void> => {
     await window.api.ui.writeClipboardText(text)
     toast.success(
@@ -213,40 +193,26 @@ export default function AiVaultPanel(): React.JSX.Element {
     )
   }, [])
 
-  const handleResume = useCallback(
-    (session: AiVaultSession): void => {
-      if (!activeWorktree) {
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.AiVaultPanel.openWorkspaceBeforeResuming',
-            'Open a workspace before resuming a session.'
-          )
-        )
-        return
-      }
-      if (isRemoteWorktree) {
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.AiVaultPanel.localWorkspacesOnly',
-            'Resume from history is only available in local workspaces.'
-          )
-        )
-        return
-      }
-      launchAiVaultSessionInNewTab({
-        agent: session.agent,
-        worktreeId: activeWorktree.id,
-        ...buildResumeStartup(session)
-      })
-      toast.success(
-        translate(
-          'auto.components.right.sidebar.AiVaultPanel.agentSessionQueued',
-          '{{value0}} session queued',
-          { value0: agentLabel(session.agent) }
-        )
-      )
-    },
-    [activeWorktree, buildResumeStartup, isRemoteWorktree]
+  const getSessionResumeState = useCallback(
+    (session: AiVaultSession) =>
+      resolveAiVaultSessionResumeState({
+        worktreeInfo: sessionWorktreeById.get(session.id) ?? null,
+        activeWorktreeId: activeWorktree?.id ?? null,
+        worktrees: allWorktrees,
+        repos
+      }),
+    [activeWorktree?.id, allWorktrees, repos, sessionWorktreeById]
+  )
+
+  const getSessionResumeActions = useCallback(
+    (session: AiVaultSession) =>
+      resolveAiVaultSessionResumeActions({
+        worktreeInfo: sessionWorktreeById.get(session.id) ?? null,
+        activeWorktreeId: activeWorktree?.id ?? null,
+        worktrees: allWorktrees,
+        repos
+      }),
+    [activeWorktree?.id, allWorktrees, repos, sessionWorktreeById]
   )
 
   const setAgentEnabled = useCallback((agent: AiVaultAgent, enabled: boolean) => {
@@ -343,11 +309,16 @@ export default function AiVaultPanel(): React.JSX.Element {
         sessionsCount={sessions.length}
         filteredSessionsCount={filteredSessions.length}
         error={error}
-        resumeDisabled={!activeWorktree || isRemoteWorktree}
         buildResumeStartup={buildResumeStartup}
+        getSessionResumeState={getSessionResumeState}
+        getSessionResumeActions={getSessionResumeActions}
+        getOriginalPaneTarget={getOriginalPaneTarget}
+        getWorktreeInfo={(session) => sessionWorktreeById.get(session.id) ?? null}
         onToggleGroup={toggleGroup}
+        onJumpToOriginalPane={jumpToOriginalPane}
+        onJumpToWorktree={jumpToWorktree}
         onResume={handleResume}
-        onCopyResume={(session) => void copyResumeCommand(session)}
+        onCopyResume={(session, worktreeId) => void copyResumeCommand(session, worktreeId)}
         onCopyId={(session) =>
           void copyText(
             session.sessionId,

@@ -37,7 +37,7 @@ describe('setup guide step completion telemetry', () => {
           'add-two-repos': true
         })
       )
-    ).toBe('split-terminal')
+    ).toBe('two-worktrees')
     expect(
       getSetupGuideTelemetryFirstIncompleteStepId(
         createProgress(
@@ -61,21 +61,21 @@ describe('setup guide step completion telemetry', () => {
     })
     recordSetupGuideStepCompletionTelemetry({
       state,
-      progress: createProgress({ 'split-terminal': true }),
+      progress: createProgress({ 'two-worktrees': true }),
       setupGuideVisible: false
     })
 
     expect(trackMock).not.toHaveBeenCalled()
-    expect([...readEmittedSetupGuideStepIds()]).toEqual(['split-terminal'])
+    expect([...readEmittedSetupGuideStepIds()]).toEqual(['two-worktrees'])
 
     recordSetupGuideStepCompletionTelemetry({
       state,
-      progress: createProgress({ 'split-terminal': true, 'two-worktrees': true }),
+      progress: createProgress({ browser: true, 'two-worktrees': true }),
       setupGuideVisible: false
     })
 
     expect(trackMock).not.toHaveBeenCalled()
-    expect([...readEmittedSetupGuideStepIds()].sort()).toEqual(['split-terminal', 'two-worktrees'])
+    expect([...readEmittedSetupGuideStepIds()].sort()).toEqual(['browser', 'two-worktrees'])
   })
 
   it('emits visible setup-guide completions during the startup baseline window', () => {

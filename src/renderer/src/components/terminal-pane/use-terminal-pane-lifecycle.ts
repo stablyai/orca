@@ -1209,7 +1209,7 @@ export function useTerminalPaneLifecycle({
     const initialPane = manager.getActivePane() ?? manager.getPanes()[0]
 
     // Why: setup/issue automation panes are internal workspace bootstrap flows,
-    // not the user-visible split-terminal milestone recorded below.
+    // not the user-initiated terminal split interaction recorded below.
     if (setupSplit) {
       if (initialPane) {
         const setupPane = splitPaneWithOneShotStartup(

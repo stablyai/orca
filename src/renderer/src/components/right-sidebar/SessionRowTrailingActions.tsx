@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type React from 'react'
-import { ChevronDown, GripVertical, MoreHorizontal, Play } from 'lucide-react'
+import {
+  ChevronDown,
+  GripVertical,
+  LocateFixed,
+  MoreHorizontal,
+  PanelTopOpen,
+  Play
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -14,6 +21,10 @@ import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { agentLabel } from './ai-vault-session-filters'
 import { translate } from '@/i18n/i18n'
 import { SessionActionMenuItems } from './AiVaultSessionRow'
+import {
+  aiVaultWorktreeJumpTooltip,
+  type AiVaultSessionWorktreeInfo
+} from './ai-vault-session-worktree'
 
 // Why: hover-only actions live on the title row and collapse on hover-capable
 // devices so the prompt keeps the full width until the row is hovered.
@@ -36,7 +47,11 @@ export function SessionRowTrailingActions({
   detailsId,
   detailsTooltip,
   resumeDisabled,
+  resumeLabel,
+  worktreeInfo,
   onToggleDetails,
+  onJumpToOriginalPane,
+  onJumpToWorktree,
   onResume,
   onCopyResume,
   onCopyId,
@@ -51,7 +66,11 @@ export function SessionRowTrailingActions({
   detailsId: string
   detailsTooltip: string
   resumeDisabled: boolean
+  resumeLabel: string
+  worktreeInfo: AiVaultSessionWorktreeInfo | null
   onToggleDetails: () => void
+  onJumpToOriginalPane?: () => void
+  onJumpToWorktree?: () => void
   onResume: () => void
   onCopyResume: () => void
   onCopyId: () => void
@@ -76,6 +95,8 @@ export function SessionRowTrailingActions({
     isDraggingRef.current = false
     window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_END_EVENT))
   }, [])
+
+  const jumpToWorktreeTooltip = aiVaultWorktreeJumpTooltip(worktreeInfo)
 
   // Cleanup drag state on unmount if a drag was in progress
   useEffect(() => {
@@ -126,17 +147,53 @@ export function SessionRowTrailingActions({
             )}
           </TooltipContent>
         </Tooltip>
+        {onJumpToOriginalPane ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label={translate(
+                  'auto.components.right.sidebar.AiVaultSessionRow.jumpToOriginalPane',
+                  'Jump to Original Pane'
+                )}
+                draggable={false}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onJumpToOriginalPane()
+                }}
+                data-testid="ai-vault-session-jump-original-pane"
+                className="can-hover:pointer-events-none group-hover/session-row:pointer-events-auto group-focus-within/session-row:pointer-events-auto focus-visible:pointer-events-auto"
+              >
+                <LocateFixed className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {translate(
+                'auto.components.right.sidebar.AiVaultSessionRow.jumpToOriginalPane',
+                'Jump to Original Pane'
+              )}
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
+        <Tooltip>
+          <WorktreeJumpTooltipTrigger
+            disabled={!onJumpToWorktree}
+            ariaLabel={jumpToWorktreeTooltip}
+            onJumpToWorktree={onJumpToWorktree}
+          />
+          <TooltipContent side="top" sideOffset={4}>
+            {jumpToWorktreeTooltip}
+          </TooltipContent>
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               type="button"
               variant="ghost"
               size="icon-xs"
-              aria-label={translate(
-                'auto.components.right.sidebar.AiVaultSessionRow.resumeAgentSession',
-                'Resume {{value0}} session',
-                { value0: agentLabel(session.agent) }
-              )}
+              aria-label={resumeLabel}
               disabled={resumeDisabled}
               draggable={false}
               onClick={(event) => {
@@ -153,10 +210,7 @@ export function SessionRowTrailingActions({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            {translate(
-              'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab',
-              'Resume in New Tab'
-            )}
+            {resumeLabel}
           </TooltipContent>
         </Tooltip>
       </div>
@@ -219,7 +273,10 @@ export function SessionRowTrailingActions({
         <DropdownMenuContent align="end">
           <SessionActionMenuItems
             resumeDisabled={resumeDisabled}
+            resumeLabel={resumeLabel}
             onResume={onResume}
+            onJumpToOriginalPane={onJumpToOriginalPane}
+            onJumpToWorktree={onJumpToWorktree}
             onCopyResume={onCopyResume}
             onCopyId={onCopyId}
             onCopyPath={onCopyPath}
@@ -230,5 +287,52 @@ export function SessionRowTrailingActions({
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
+  )
+}
+
+function WorktreeJumpTooltipTrigger({
+  disabled,
+  ariaLabel,
+  onJumpToWorktree
+}: {
+  disabled: boolean
+  ariaLabel: string
+  onJumpToWorktree?: () => void
+}): React.JSX.Element {
+  const button = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-xs"
+      aria-label={ariaLabel}
+      disabled={disabled}
+      draggable={false}
+      onClick={(event) => {
+        event.stopPropagation()
+        onJumpToWorktree?.()
+      }}
+      data-testid="ai-vault-session-jump-worktree"
+      className={cn(
+        !disabled &&
+          'can-hover:pointer-events-none group-hover/session-row:pointer-events-auto group-focus-within/session-row:pointer-events-auto focus-visible:pointer-events-auto'
+      )}
+    >
+      <PanelTopOpen className="size-3.5" />
+    </Button>
+  )
+
+  if (!disabled) {
+    return <TooltipTrigger asChild>{button}</TooltipTrigger>
+  }
+
+  return (
+    <TooltipTrigger asChild>
+      <span
+        className="inline-flex can-hover:pointer-events-none group-hover/session-row:pointer-events-auto group-focus-within/session-row:pointer-events-auto"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {button}
+      </span>
+    </TooltipTrigger>
   )
 }
