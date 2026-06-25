@@ -33,12 +33,21 @@ const LOCAL_PATH_REGEX =
 // Matches separator paths whose file or folder names include spaces. This runs
 // before LOCAL_PATH_REGEX so `/Users/A/Foo Bar/file.ts` is claimed as one link
 // instead of split into `/Users/A/Foo` and `Bar/file.ts`.
+// Why `\s` is in the first lookahead segment: without it that `[^…]*` also
+// matches spaces, overlapping the following `\s+`, which makes the lookahead
+// backtrack catastrophically (ReDoS) on long space-heavy lines — e.g. a TUI
+// like ngrok rendered through Windows ConPTY emits one huge newline-free line
+// and froze the renderer for tens of seconds (#5970). Anchoring the first
+// segment at the first whitespace keeps the match identical but linear-time.
 const SPACED_PATH_WITH_SEPARATOR_REGEX =
-  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])(?=[^()[\]{}'",;<>|`\r\n]*\s+[^()[\]{}'",;<>|`\r\n]*[\\/])[^()[\]{}'",;<>|`\r\n]+(?::\d+)?(?::\d+)?/g
+  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])(?=[^()[\]{}'",;<>|`\r\n\s]*\s+[^()[\]{}'",;<>|`\r\n]*[\\/])[^()[\]{}'",;<>|`\r\n]+(?::\d+)?(?::\d+)?/g
 const SPACED_PATH_WITH_EXTENSION_REGEX =
   /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^()[\]{}'",;<>|`\r\n]*?\s+[^()[\]{}'",;<>|`\\/ \r\n]*\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?/g
+// Why `\s` in the lookahead's first segment: same ReDoS guard as
+// SPACED_PATH_WITH_SEPARATOR_REGEX — stop the `[^…]*` at the first whitespace
+// so it cannot overlap the `\s+` and backtrack catastrophically (#5970).
 const LINE_ENDING_SPACED_PATH_REGEX =
-  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])(?=[^()[\]{}'",;<>|`\r\n]*\s+)[^()[\]{}'",;<>|`\r\n]*\S(?=\s*$)/g
+  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])(?=[^()[\]{}'",;<>|`\r\n\s]*\s+)[^()[\]{}'",;<>|`\r\n]*\S(?=\s*$)/g
 const SPACED_LOCAL_PATH_REGEXES = [
   SPACED_PATH_WITH_SEPARATOR_REGEX,
   SPACED_PATH_WITH_EXTENSION_REGEX,
