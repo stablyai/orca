@@ -110,6 +110,13 @@ export function MarkupOverlay({
             fontSize: editor.fontSize,
             fontWeight: 600,
             fontFamily: TEXT_FONT_FAMILY,
+            // Why: force line-height to 1 (the UA default ~1.2 pushes the glyph
+            // down) and zero the height so the text top aligns with the canvas's
+            // textBaseline:'top' render — otherwise editing text sits slightly low.
+            lineHeight: 1,
+            height: '1em',
+            boxSizing: 'content-box',
+            padding: 0,
             textShadow:
               editor.color.toLowerCase() === '#ffffff'
                 ? '0 0 3px rgba(0,0,0,0.7)'
