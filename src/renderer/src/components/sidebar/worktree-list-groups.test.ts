@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import {
   ALL_GROUP_META,
   buildRows,
@@ -359,6 +360,89 @@ describe('buildRows with pinned worktrees', () => {
       { type: 'item', worktree: { id: worktree.id }, hostContextLabel: LOCAL_HOST_LABEL },
       { type: 'item', worktree: { id: remoteWorktree.id }, hostContextLabel: 'gpu-vm' }
     ])
+  })
+
+  it('reproduces legacy same-project records rendering as separate host-local project headers', () => {
+    const localRepo: Repo = {
+      ...repo,
+      id: 'local-sample-app',
+      path: '/Users/alice/work/sample-app',
+      displayName: 'sample-app'
+    }
+    const sshRepo: Repo = {
+      ...repo,
+      id: 'ssh-sample-app',
+      path: '/home/alice/src/sample-app',
+      displayName: 'sample-app',
+      connectionId: 'build server'
+    }
+    const runtimeRepo: Repo = {
+      ...repo,
+      id: 'runtime-sample-app',
+      path: '/workspace/sample-app',
+      displayName: 'sample-app',
+      executionHostId: 'runtime:dev-container'
+    }
+    const localWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-local-sample-app',
+      repoId: localRepo.id,
+      path: '/Users/alice/work/sample-app-feature'
+    }
+    const sshWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-ssh-sample-app',
+      repoId: sshRepo.id,
+      path: '/home/alice/src/sample-app-feature'
+    }
+    const runtimeWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-runtime-sample-app',
+      repoId: runtimeRepo.id,
+      path: '/workspace/sample-app-feature'
+    }
+    const projection = projectHostSetupProjectionFromRepos([localRepo, sshRepo, runtimeRepo])
+    const rows = buildRows(
+      'repo',
+      [localWorktree, sshWorktree, runtimeWorktree],
+      new Map([
+        [localRepo.id, localRepo],
+        [sshRepo.id, sshRepo],
+        [runtimeRepo.id, runtimeRepo]
+      ]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [localWorktree.id, localWorktree],
+        [sshWorktree.id, sshWorktree],
+        [runtimeWorktree.id, runtimeWorktree]
+      ]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      [],
+      {
+        projects: projection.projects,
+        projectHostSetups: projection.setups
+      }
+    )
+
+    expect(rows.filter((row) => row.type === 'header')).toMatchObject([
+      { key: 'project:repo:local-sample-app', label: 'work/sample-app', count: 1 },
+      { key: 'project:repo:ssh-sample-app', label: 'src/sample-app', count: 1 },
+      { key: 'project:repo:runtime-sample-app', label: 'workspace/sample-app', count: 1 }
+    ])
+    for (const row of rows) {
+      if (row.type === 'item') {
+        expect(row.hostContextLabel).toBeUndefined()
+      }
+    }
   })
 
   it('orders project identity headers by the manual repo order anchor', () => {
