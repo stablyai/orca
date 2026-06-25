@@ -1,6 +1,7 @@
 import { gitExecFileAsync } from '../git/runner'
 import type { GitHubOwnerRepo, IssueSourcePreference } from '../../shared/types'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import { readLocalGitConfigSignature } from './local-git-config-signature'
 
 export type OwnerRepo = GitHubOwnerRepo
 
@@ -41,12 +42,14 @@ export function ghRepoExecOptions(context: GitHubRepoContext): {
       }
 }
 
-const OWNER_REPO_CACHE_TTL_MS = 30_000
+const OWNER_REPO_POSITIVE_CACHE_TTL_MS = 30_000
+const OWNER_REPO_NEGATIVE_CACHE_TTL_MS = 5 * 60_000
 const OWNER_REPO_CACHE_MAX_ENTRIES = 512
 
 type OwnerRepoCacheEntry = {
   value: OwnerRepo | null
   expiresAt: number
+  configSignature?: string
 }
 
 const ownerRepoCache = new Map<string, OwnerRepoCacheEntry>()
@@ -143,6 +146,13 @@ export async function getRemoteUrlForRepo(
   return stdout
 }
 
+function getOwnerRepoCacheTtl(value: OwnerRepo | null, configSignature?: string): number {
+  if (value) {
+    return OWNER_REPO_POSITIVE_CACHE_TTL_MS
+  }
+  return configSignature ? OWNER_REPO_NEGATIVE_CACHE_TTL_MS : OWNER_REPO_POSITIVE_CACHE_TTL_MS
+}
+
 export async function getOwnerRepoForRemote(
   repoPath: string,
   remoteName: string,
@@ -156,7 +166,25 @@ export async function getOwnerRepoForRemote(
   pruneOwnerRepoCache(now)
   const cached = ownerRepoCache.get(cacheKey)
   if (cached && cached.expiresAt > now) {
-    return cached.value
+    if (cached.value === null && cached.configSignature !== undefined) {
+      const currentSignature = await readLocalGitConfigSignature(context)
+      if (currentSignature !== cached.configSignature) {
+        ownerRepoCache.delete(cacheKey)
+      } else {
+        return cached.value
+      }
+    } else {
+      return cached.value
+    }
+  }
+  if (cached && cached.expiresAt <= now) {
+    ownerRepoCache.delete(cacheKey)
+  }
+
+  const nextConfigSignature = await readLocalGitConfigSignature(context)
+  const refreshedCached = ownerRepoCache.get(cacheKey)
+  if (refreshedCached && refreshedCached.expiresAt > now) {
+    return refreshedCached.value
   }
 
   const inFlight = ownerRepoInFlight.get(cacheKey)
@@ -166,7 +194,7 @@ export async function getOwnerRepoForRemote(
 
   // Why: startup can resolve issue sources, PR candidates, and repo metadata
   // for the same repo concurrently. Coalesce missing-remote probes.
-  const probe = resolveOwnerRepoForRemote(context, remoteName, cacheKey)
+  const probe = resolveOwnerRepoForRemote(context, remoteName, cacheKey, nextConfigSignature)
   ownerRepoInFlight.set(cacheKey, probe)
   try {
     return await probe
@@ -180,7 +208,8 @@ export async function getOwnerRepoForRemote(
 async function resolveOwnerRepoForRemote(
   context: GitHubRepoContext,
   remoteName: string,
-  cacheKey: string
+  cacheKey: string,
+  configSignature?: string
 ): Promise<OwnerRepo | null> {
   const now = Date.now()
   try {
@@ -189,7 +218,7 @@ async function resolveOwnerRepoForRemote(
     if (result) {
       ownerRepoCache.set(cacheKey, {
         value: result,
-        expiresAt: now + OWNER_REPO_CACHE_TTL_MS
+        expiresAt: now + getOwnerRepoCacheTtl(result, configSignature)
       })
       pruneOwnerRepoCache(now)
       return result
@@ -197,7 +226,13 @@ async function resolveOwnerRepoForRemote(
   } catch {
     // ignore - non-GitHub remote or no remote
   }
-  ownerRepoCache.set(cacheKey, { value: null, expiresAt: now + OWNER_REPO_CACHE_TTL_MS })
+  // Why: a missing/non-GitHub remote is stable until `.git/config` changes.
+  // Holding that negative longer avoids Git process churn across PR polling.
+  ownerRepoCache.set(cacheKey, {
+    value: null,
+    expiresAt: now + getOwnerRepoCacheTtl(null, configSignature),
+    ...(configSignature ? { configSignature } : {})
+  })
   pruneOwnerRepoCache(now)
   return null
 }

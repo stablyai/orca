@@ -2037,6 +2037,55 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('does not reuse host detected worktree scans for a selected WSL runtime', async () => {
+    listWorktreesMock
+      .mockResolvedValueOnce([
+        {
+          path: '/workspace/repo',
+          head: 'host-head',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true
+        }
+      ])
+      .mockResolvedValueOnce([
+        {
+          path: '/workspace/repo',
+          head: 'wsl-head',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true
+        }
+      ])
+
+    const hostResult = (await handlers['worktrees:listDetected'](null, {
+      repoId: 'repo-1'
+    })) as { worktrees: Worktree[] }
+    setPlatform('win32')
+    store.getProjects.mockReturnValue([
+      {
+        id: 'project-1',
+        displayName: 'repo',
+        badgeColor: '#000',
+        sourceRepoIds: ['repo-1'],
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
+        createdAt: 0,
+        updatedAt: 0
+      }
+    ])
+    const wslResult = (await handlers['worktrees:listDetected'](null, {
+      repoId: 'repo-1'
+    })) as { worktrees: Worktree[] }
+
+    expect(hostResult.worktrees[0].head).toBe('host-head')
+    expect(wslResult.worktrees[0].head).toBe('wsl-head')
+    expect(listWorktreesMock).toHaveBeenCalledTimes(2)
+    expect(listWorktreesMock).toHaveBeenNthCalledWith(1, '/workspace/repo')
+    expect(listWorktreesMock).toHaveBeenNthCalledWith(2, '/workspace/repo', {
+      wslDistro: 'Ubuntu'
+    })
+  })
+
   it('reuses a recent authoritative detected worktree scan', async () => {
     listWorktreesMock.mockResolvedValue([
       {
