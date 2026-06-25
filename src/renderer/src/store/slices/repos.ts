@@ -918,6 +918,7 @@ function getRuntimeTargetCachePrefix(
 }
 
 type FolderWorkspacePathStatusRouteOptions = { runtimeEnvironmentId?: string | null }
+type AddRepoPathRouteOptions = { runtimeEnvironmentId?: string | null }
 
 function getFolderWorkspacePathStatusRouteSettings(
   options: FolderWorkspacePathStatusRouteOptions | undefined,
@@ -926,6 +927,58 @@ function getFolderWorkspacePathStatusRouteSettings(
   return options && 'runtimeEnvironmentId' in options
     ? { activeRuntimeEnvironmentId: options.runtimeEnvironmentId ?? null }
     : fallbackSettings
+}
+
+function getAddRepoPathRouteSettings(
+  options: AddRepoPathRouteOptions | undefined,
+  fallbackSettings: GlobalSettings | null
+): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined {
+  return options && 'runtimeEnvironmentId' in options
+    ? { activeRuntimeEnvironmentId: options.runtimeEnvironmentId ?? null }
+    : fallbackSettings
+}
+
+function getRuntimeEnvironmentDisplayName(state: AppState, environmentId: string): string {
+  const environment = state.runtimeEnvironments.find((entry) => entry.id === environmentId)
+  return environment?.name || environmentId
+}
+
+async function fetchRuntimeAddProjectPathStatus(args: {
+  target: Extract<ReturnType<typeof getActiveRuntimeTarget>, { kind: 'environment' }>
+  path: string
+}): Promise<FolderWorkspacePathStatus | null> {
+  let groupId: string | null = null
+  try {
+    const created = await callRuntimeRpc<{ group: ProjectGroup }>(
+      args.target,
+      'projectGroup.create',
+      {
+        name: 'Path status check',
+        parentPath: args.path,
+        createdFrom: 'manual'
+      },
+      { timeoutMs: 15_000 }
+    )
+    groupId = created.group.id
+    const { status } = await callRuntimeRpc<{ status: FolderWorkspacePathStatus }>(
+      args.target,
+      'folderWorkspace.getPathStatus',
+      { scope: 'project-group', projectGroupId: groupId },
+      { timeoutMs: 15_000 }
+    )
+    return status
+  } catch (err) {
+    console.warn('Failed to check runtime folder path status:', err)
+    return null
+  } finally {
+    if (groupId) {
+      try {
+        await callRuntimeRpc(args.target, 'projectGroup.delete', { groupId }, { timeoutMs: 15_000 })
+      } catch (err) {
+        console.warn('Failed to delete runtime folder path status scope:', err)
+      }
+    }
+  }
 }
 
 function getFolderWorkspaceStatusRequestSnapshot(
@@ -1040,7 +1093,11 @@ export type RepoSlice = {
   fetchFolderWorkspaces: () => Promise<void>
   fetchFolderWorkspacesForAllHosts: () => Promise<void>
   addRepo: () => Promise<Repo | null>
-  addRepoPath: (path: string, kind?: 'git' | 'folder') => Promise<Repo | null>
+  addRepoPath: (
+    path: string,
+    kind?: 'git' | 'folder',
+    options?: AddRepoPathRouteOptions
+  ) => Promise<Repo | null>
   setupProjectExistingFolder: (
     args: ProjectHostSetupExistingFolderArgs
   ) => Promise<ProjectHostSetupResult | null>
@@ -1054,7 +1111,7 @@ export type RepoSlice = {
     args: ProjectHostSetupDeleteArgs
   ) => Promise<ProjectHostSetupDeleteResult | null>
   setupProjectClone: (args: ProjectHostSetupCloneArgs) => Promise<ProjectHostSetupResult | null>
-  addNonGitFolder: (path: string) => Promise<Repo | null>
+  addNonGitFolder: (path: string, options?: AddRepoPathRouteOptions) => Promise<Repo | null>
   scanNestedRepos: (
     path: string,
     connectionId?: string,
@@ -1837,9 +1894,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  addRepoPath: async (path, kind = 'git') => {
+  addRepoPath: async (path, kind = 'git', options) => {
     try {
-      const target = getActiveRuntimeTarget(get().settings)
+      const target = getActiveRuntimeTarget(getAddRepoPathRouteSettings(options, get().settings))
       let repo: Repo
       try {
         if (target.kind === 'local') {
@@ -1863,12 +1920,36 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         if (kind !== 'git' || !message.includes('Not a valid git repository')) {
           throw err
         }
+        if (target.kind !== 'local') {
+          const status = await fetchRuntimeAddProjectPathStatus({ target, path })
+          if (status?.exists !== true) {
+            const hostName = getRuntimeEnvironmentDisplayName(get(), target.environmentId)
+            toast.error(
+              translate(
+                'auto.store.slices.repos.3be0f7df04',
+                'Cannot open folder on selected runtime'
+              ),
+              {
+                description: translate(
+                  'auto.store.slices.repos.15cf5319ec',
+                  '{{path}} was checked on {{hostName}}, but that host did not report a usable folder.',
+                  { path, hostName }
+                ),
+                duration: ERROR_TOAST_DURATION
+              }
+            )
+            return null
+          }
+        }
         // Why: folder mode is a capability downgrade, not a silent fallback.
         // Show an in-app confirmation dialog so users understand that worktrees,
         // SCM, PRs, and checks will be unavailable for this root. The dialog's
         // OK handler calls addNonGitFolder to complete the flow.
         const { openModal } = get()
-        openModal('confirm-non-git-folder', { folderPath: path })
+        openModal('confirm-non-git-folder', {
+          folderPath: path,
+          ...(target.kind === 'environment' ? { runtimeEnvironmentId: target.environmentId } : {})
+        })
         return null
       }
       repo = repoWithFetchedOwner(repo, target)
@@ -2172,10 +2253,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     return get().addRepoPath(path)
   },
 
-  addNonGitFolder: async (path) => {
+  addNonGitFolder: async (path, options) => {
     try {
       const hadProjectBeforeAdd = get().repos.length > 0
-      const repo = await get().addRepoPath(path, 'folder')
+      const repo = await get().addRepoPath(path, 'folder', options)
       if (!repo) {
         return null
       }
