@@ -57,7 +57,8 @@ vi.mock('lucide-react', () => ({
 }))
 
 vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string) => fallback
+  translate: (_key: string, fallback: string) => fallback,
+  i18n: { language: 'en' }
 }))
 
 vi.mock('../../store', () => ({

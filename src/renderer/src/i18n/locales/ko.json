@@ -2673,6 +2673,10 @@
           "EditorFileTabCloseButton": {
             "4655cf570e": "탭 닫기",
             "a768f428f1": "탭 닫기"
+          },
+          "tab-color-swatch": {
+            "clearTabColor": "Clear tab color",
+            "setTabColor": "Set tab color {{value0}}"
           }
         }
       },
@@ -11667,12 +11671,17 @@
           "beb2c19173": "읽지 않음",
           "5651b216c6": "알 수 없는 프로젝트",
           "22b22034bc": "활동에서는 독립형 terminal을 사용할 수 없습니다.",
-          "afdc2139a8": "Agent terminal이 닫혔습니다. 계속하려면 이 워크스페이스에서 새 terminal을 여세요."
+          "afdc2139a8": "Agent terminal이 닫혔습니다. 계속하려면 이 워크스페이스에서 새 terminal을 여세요.",
+          "renameThreadTab": "Rename agent tab {{value0}}"
         },
         "ActivityTitlebarControls": {
           "f915168c8e": "읽지 않음",
           "d6a8de3934": "에이전트",
           "dc708f3eff": "agents 닫기"
+        },
+        "ActivityThreadRowContextMenu": {
+          "clearTabColor": "Clear tab color",
+          "setTabColor": "Set tab color {{value0}}"
         }
       },
       "confirmation": {

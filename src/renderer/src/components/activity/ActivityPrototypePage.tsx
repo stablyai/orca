@@ -68,6 +68,8 @@ import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { translate } from '@/i18n/i18n'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { closeTerminalTab } from '../terminal/terminal-tab-actions'
+import { ActivityThreadRowContextMenu } from './ActivityThreadRowContextMenu'
 
 type ThreadReadFilter = 'all' | 'unread'
 type ActivityGroupBy = 'status' | 'project' | 'worktree' | 'agent'
@@ -1151,7 +1153,12 @@ function ThreadRow({
   onJump,
   onMarkUnread,
   canJump,
-  compactMode
+  compactMode,
+  liveTab,
+  onCloseTab,
+  onRenameCommit,
+  onSetTabColor,
+  onMarkRead
 }: {
   thread: AgentPaneThread
   selected: boolean
@@ -1160,11 +1167,56 @@ function ThreadRow({
   onMarkUnread: () => void
   canJump: boolean
   compactMode: boolean
+  liveTab: boolean
+  onCloseTab: (tabId: string) => void
+  onRenameCommit: (tabId: string, value: string) => void
+  onSetTabColor: (tabId: string, color: string | null) => void
+  onMarkRead: () => void
 }): React.JSX.Element {
   const renderedResponsePreview = activityThreadResponseRenderPreview({
     responsePreview: thread.responsePreview
   })
-  return (
+  const [isRenaming, setIsRenaming] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
+  // Why: React's onBlur fires during the input's unmount when isRenaming flips
+  // to false. Without this guard, Enter/Escape would run commit a second time
+  // and overwrite the title the user just discarded. Mirrors SortableTab.tsx.
+  const committedOrCancelledRef = useRef(false)
+  const renameFocusFrameRef = useRef<number | null>(null)
+  const openRename = (): void => {
+    committedOrCancelledRef.current = false
+    setRenameValue(thread.tab.customTitle ?? thread.tab.title)
+    setIsRenaming(true)
+  }
+  const commitRename = (): void => {
+    if (committedOrCancelledRef.current) {
+      return
+    }
+    committedOrCancelledRef.current = true
+    onRenameCommit(thread.tab.id, renameValue)
+    setIsRenaming(false)
+  }
+  const cancelRename = (): void => {
+    committedOrCancelledRef.current = true
+    setIsRenaming(false)
+  }
+  const setRenameInputElement = useCallback((input: HTMLInputElement | null): void => {
+    if (renameFocusFrameRef.current !== null) {
+      cancelAnimationFrame(renameFocusFrameRef.current)
+      renameFocusFrameRef.current = null
+    }
+    if (!input) {
+      return
+    }
+    // Why: defer past Radix menu teardown/focus restore while still keying off
+    // input mount only; terminal title updates must not re-select in-progress text.
+    renameFocusFrameRef.current = requestAnimationFrame(() => {
+      renameFocusFrameRef.current = null
+      input.focus()
+      input.select()
+    })
+  }, [])
+  const row = (
     <div
       data-current={selected ? 'true' : undefined}
       onClick={onSelect}
@@ -1195,7 +1247,7 @@ function ThreadRow({
         // ~3px of internal space above the cap-height that isn't present
         // below the secondary badge row. Symmetric py made the top read
         // heavier; the smaller top pad visually evens the row.
-        'group relative flex w-full cursor-pointer flex-col gap-1 border-b border-border px-3 pt-2.5 pb-3 text-left transition-colors',
+        'group/thread-row relative flex w-full cursor-pointer flex-col gap-1 border-b border-border px-3 pt-2.5 pb-3 text-left transition-colors',
         selected
           ? 'bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:bg-white/[0.10] dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
           : 'hover:bg-accent/40'
@@ -1216,16 +1268,62 @@ function ThreadRow({
           </span>
         </span>
         <div className="min-w-0 flex-1">
-          <span
-            className={cn(
-              'min-w-0 text-xs leading-snug',
-              compactMode ? 'block truncate' : 'line-clamp-3 break-words',
-              thread.unread ? 'font-semibold text-foreground' : 'font-medium text-foreground'
+          <div className="flex min-w-0 items-start gap-1.5">
+            {isRenaming ? (
+              <Input
+                ref={setRenameInputElement}
+                data-activity-thread-rename-input="true"
+                value={renameValue}
+                aria-label={translate(
+                  'auto.components.activity.ActivityPrototypePage.renameThreadTab',
+                  'Rename agent tab {{value0}}',
+                  { value0: thread.paneTitle }
+                )}
+                onChange={(event) => setRenameValue(event.target.value)}
+                onBlur={commitRename}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    commitRename()
+                  } else if (event.key === 'Escape') {
+                    event.preventDefault()
+                    cancelRename()
+                  }
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+                onMouseDown={(event) => {
+                  event.stopPropagation()
+                  if (event.button === 1) {
+                    event.preventDefault()
+                  }
+                }}
+                onClick={(event) => event.stopPropagation()}
+                onDoubleClick={(event) => event.stopPropagation()}
+                onAuxClick={(event) => event.stopPropagation()}
+                className="h-5 min-w-0 flex-1 px-1 py-0 text-xs"
+                spellCheck={false}
+              />
+            ) : (
+              <span
+                className={cn(
+                  'min-w-0 text-xs leading-snug',
+                  compactMode ? 'block truncate' : 'line-clamp-3 break-words',
+                  thread.unread ? 'font-semibold text-foreground' : 'font-medium text-foreground'
+                )}
+                title={compactMode ? thread.paneTitle : undefined}
+              >
+                {thread.paneTitle}
+              </span>
             )}
-            title={compactMode ? thread.paneTitle : undefined}
-          >
-            {thread.paneTitle}
-          </span>
+            {thread.tab.color && !isRenaming ? (
+              <span
+                data-activity-thread-color-dot="true"
+                className="mt-[5px] size-2 shrink-0 rounded-full"
+                style={{ backgroundColor: thread.tab.color }}
+                aria-hidden
+              />
+            ) : null}
+          </div>
           {!compactMode && renderedResponsePreview ? (
             <CommentMarkdown
               content={renderedResponsePreview}
@@ -1245,8 +1343,8 @@ function ThreadRow({
           {/* Why (bell matches WorktreeCard pattern): unread → amber filled
               bell as a static, non-interactive cue (selecting the thread
               auto-marks it read, so a Mark-read button would be redundant);
-              read → outline Bell that fades in on row hover and acts as
-              Mark-unread. Bare button (no shadcn outline) so it reads as
+              read → outline Bell that fades in on row hover/focus and acts
+              as Mark-unread. Bare button (no shadcn outline) so it reads as
               an inline cue rather than a discrete control square. */}
           <span className="inline-flex size-4 shrink-0 items-center justify-center">
             {thread.unread ? (
@@ -1277,7 +1375,7 @@ function ThreadRow({
                       'Mark thread unread'
                     )}
                   >
-                    <Bell className="size-3 text-muted-foreground/40 can-hover:opacity-0 transition-opacity group-hover:opacity-100 group-hover/unread:opacity-100" />
+                    <Bell className="size-3 text-muted-foreground/40 can-hover:opacity-0 transition-opacity group-hover/thread-row:opacity-100 group-focus-within/thread-row:opacity-100 group-hover/unread:opacity-100" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="left">
@@ -1301,13 +1399,13 @@ function ThreadRow({
             on the title row already holds the unread/Mark-unread state, so
             the navigation action gets its own slot down here aligned with
             the worktree name. On hover-capable pointers, the hidden state
-            keeps the worktree-name's flex-1 width stable across hover. */}
+            keeps the worktree-name's flex-1 width stable until hover or keyboard focus. */}
         {canJump ? (
           <span
             className={cn(
               'ml-auto inline-flex shrink-0 items-center transition-opacity',
               'can-hover:pointer-events-none can-hover:invisible can-hover:opacity-0',
-              'group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100'
+              'group-hover/thread-row:pointer-events-auto group-hover/thread-row:visible group-hover/thread-row:opacity-100 group-focus-within/thread-row:pointer-events-auto group-focus-within/thread-row:visible group-focus-within/thread-row:opacity-100'
             )}
           >
             <Tooltip>
@@ -1340,6 +1438,20 @@ function ThreadRow({
         ) : null}
       </div>
     </div>
+  )
+  return (
+    <ActivityThreadRowContextMenu
+      tab={thread.tab}
+      unread={thread.unread}
+      liveTab={liveTab}
+      onCloseTab={onCloseTab}
+      onRenameOpen={openRename}
+      onSetTabColor={onSetTabColor}
+      onMarkRead={onMarkRead}
+      onMarkUnread={onMarkUnread}
+    >
+      {row}
+    </ActivityThreadRowContextMenu>
   )
 }
 
@@ -1391,6 +1503,8 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   // computation itself) so the memo recomputes when freshness boundaries expire,
   // even if no new PTY data arrives.
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
+  const setTabCustomTitle = useAppStore((s) => s.setTabCustomTitle)
+  const setTabColor = useAppStore((s) => s.setTabColor)
 
   const { events: allEvents, liveAgentByPaneKey } = useMemo(
     () =>
@@ -1640,6 +1754,16 @@ export default function ActivityPrototypePage(): React.JSX.Element {
 
   const markThreadUnread = (thread: AgentPaneThread): void => {
     storeData.unacknowledgeAgents([thread.paneKey])
+  }
+
+  const isThreadTabLive = (thread: AgentPaneThread): boolean =>
+    (storeData.tabsByWorktree[thread.worktree.id] ?? []).some((tab) => tab.id === thread.tab.id)
+
+  // Status helpers removed for Commit 1; will be added in Commit 2
+
+  const commitThreadRename = (tabId: string, value: string): void => {
+    const trimmed = value.trim()
+    setTabCustomTitle(tabId, trimmed.length > 0 ? trimmed : null)
   }
 
   const activateThreadTerminal = (thread: AgentPaneThread): void => {
@@ -1894,6 +2018,11 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                     onMarkUnread={() => markThreadUnread(thread)}
                     canJump={storeData.worktreeMap.has(thread.worktree.id)}
                     compactMode={compactMode}
+                    liveTab={isThreadTabLive(thread)}
+                    onCloseTab={(tabId) => closeTerminalTab(tabId)}
+                    onRenameCommit={commitThreadRename}
+                    onSetTabColor={setTabColor}
+                    onMarkRead={() => markThreadRead(thread)}
                   />
                 ))}
               </section>
@@ -1953,6 +2082,13 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                     <h2 className="line-clamp-3 break-words text-sm font-semibold leading-snug">
                       {selectedThread.paneTitle}
                     </h2>
+                    {selectedThread.tab.color ? (
+                      <span
+                        className="mt-[7px] size-2 shrink-0 rounded-full"
+                        style={{ backgroundColor: selectedThread.tab.color }}
+                        aria-hidden
+                      />
+                    ) : null}
                   </div>
                   <div className="mt-1 flex min-w-0 items-center gap-1.5 pl-11">
                     <EventRepoBadge repo={selectedThread.repo} />

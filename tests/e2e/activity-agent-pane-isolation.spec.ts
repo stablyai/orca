@@ -444,4 +444,89 @@ test.describe('Activity Agent Pane Isolation', () => {
         activeLeafId: second.leafId
       })
   })
+
+  test('agent row context menu updates tab title, color, and close state', async ({
+    orcaPage
+  }): Promise<void> => {
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    await waitForPaneCount(orcaPage, 2)
+    const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
+    const [first] = await seedActivityThreadsForSplitPanes(orcaPage, snapshot)
+
+    await agentsSidebarButton(orcaPage).click()
+    await expect(orcaPage.getByText(first.prompt)).toBeVisible()
+
+    // 1. Select the row so we can target it stably via data-current="true"
+    await orcaPage.getByRole('button').filter({ hasText: first.prompt }).first().click()
+    const selectedRow = orcaPage.locator('[data-current="true"]').first()
+
+    // Extract tabId and worktreeId for assertions
+    const [tabId] = first.paneKey.split(':')
+    const worktreeId = await orcaPage.evaluate((tid) => {
+      const state = window.__store.getState()
+      for (const [wId, tabs] of Object.entries(state.tabsByWorktree)) {
+        if (tabs.some((t) => t.id === tid)) {
+          return wId
+        }
+      }
+      return null
+    }, tabId)
+    if (!worktreeId) {
+      throw new Error('Could not resolve worktreeId for E2E test')
+    }
+
+    // 2. Change Title
+    await selectedRow.click({ button: 'right' })
+    await orcaPage.getByRole('menuitem', { name: 'Change Title' }).click()
+    const renameInput = orcaPage.locator('[data-activity-thread-rename-input="true"]')
+    await expect(renameInput).toBeVisible()
+    await renameInput.fill('Renamed activity agent')
+    await renameInput.press('Enter')
+
+    await expect
+      .poll(async () => {
+        return orcaPage.evaluate(
+          ({ wId, tId }) => {
+            const tab = window.__store.getState().tabsByWorktree[wId]?.find((t) => t.id === tId)
+            return tab?.customTitle
+          },
+          { wId: worktreeId, tId: tabId }
+        )
+      })
+      .toBe('Renamed activity agent')
+    await expect(selectedRow).toContainText('Renamed activity agent')
+
+    // 3. Set tab color
+    await selectedRow.click({ button: 'right' })
+    await orcaPage.getByLabel('Set tab color Orange').click()
+    await expect
+      .poll(async () => {
+        return orcaPage.evaluate(
+          ({ wId, tId }) => {
+            const tab = window.__store.getState().tabsByWorktree[wId]?.find((t) => t.id === tId)
+            return tab?.color
+          },
+          { wId: worktreeId, tId: tabId }
+        )
+      })
+      .toBe('#f97316')
+
+    // Confirm color dot is visible
+    const colorDot = selectedRow.locator('[data-activity-thread-color-dot="true"]')
+    await expect(colorDot).toBeVisible()
+
+    // 4. Close Tab
+    await selectedRow.click({ button: 'right' })
+    await orcaPage.getByRole('menuitem', { name: 'Close' }).click()
+    await expect
+      .poll(async () => {
+        return orcaPage.evaluate(
+          ({ wId, tId }) => {
+            return window.__store.getState().tabsByWorktree[wId]?.some((t) => t.id === tId) ?? false
+          },
+          { wId: worktreeId, tId: tabId }
+        )
+      })
+      .toBe(false)
+  })
 })

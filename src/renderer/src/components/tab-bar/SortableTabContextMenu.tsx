@@ -13,69 +13,7 @@ import { formatShortcutLabel, useOptionalShortcutLabel } from '@/hooks/useShortc
 import { translate } from '@/i18n/i18n'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { requestActiveTerminalPaneSplit } from './request-active-terminal-pane-split'
-
-const TAB_COLORS = [
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.20baa43c05', 'None')
-    },
-    value: null
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.cb3eadefd2', 'Blue')
-    },
-    value: '#3b82f6'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.c2d8b0991f', 'Purple')
-    },
-    value: '#a855f7'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.03cf6dab1a', 'Pink')
-    },
-    value: '#ec4899'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.620aec6729', 'Red')
-    },
-    value: '#ef4444'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.a47629b3cf', 'Orange')
-    },
-    value: '#f97316'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.69682e2ce4', 'Yellow')
-    },
-    value: '#eab308'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.be905e9b0a', 'Green')
-    },
-    value: '#22c55e'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.845576bed1', 'Teal')
-    },
-    value: '#14b8a6'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.7703990447', 'Gray')
-    },
-    value: '#9ca3af'
-  }
-] as const
+import { TabColorSwatchGrid } from './tab-color-swatch'
 
 type SortableTabContextMenuProps = {
   tab: TerminalTab
@@ -187,29 +125,22 @@ export function SortableTabContextMenu({
           <div className="text-xs font-medium text-muted-foreground mb-1.5">
             {translate('auto.components.tab.bar.SortableTabContextMenu.35e8892fd0', 'Tab Color')}
           </div>
-          <div className="flex flex-wrap gap-2">
-            {TAB_COLORS.map((color) => {
-              const isSelected = tab.color === color.value
-              return (
-                <DropdownMenuItem
-                  key={color.label}
-                  className={`relative h-4 w-4 min-w-4 p-0 rounded-full border ${
-                    isSelected ? 'ring-1 ring-foreground/70 ring-offset-1 ring-offset-popover' : ''
-                  } ${
-                    color.value ? 'border-transparent' : 'border-muted-foreground/50 bg-transparent'
-                  }`}
-                  style={color.value ? { backgroundColor: color.value } : undefined}
-                  onSelect={() => {
-                    onSetTabColor(tab.id, color.value)
-                  }}
-                >
-                  {color.value === null && (
-                    <span className="absolute block h-px w-3 rotate-45 bg-muted-foreground/80" />
-                  )}
-                </DropdownMenuItem>
-              )
-            })}
-          </div>
+          <TabColorSwatchGrid
+            selectedColor={tab.color}
+            renderSwatch={({ color, className, style, ariaLabel, children }) => (
+              <DropdownMenuItem
+                key={color.label}
+                className={className}
+                style={style}
+                aria-label={ariaLabel}
+                onSelect={() => {
+                  onSetTabColor(tab.id, color.value)
+                }}
+              >
+                {children}
+              </DropdownMenuItem>
+            )}
+          />
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

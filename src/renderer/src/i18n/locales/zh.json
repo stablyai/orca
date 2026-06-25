@@ -2673,6 +2673,10 @@
           "EditorFileTabCloseButton": {
             "4655cf570e": "关闭选项卡",
             "a768f428f1": "关闭选项卡"
+          },
+          "tab-color-swatch": {
+            "clearTabColor": "Clear tab color",
+            "setTabColor": "Set tab color {{value0}}"
           }
         }
       },
@@ -11667,12 +11671,17 @@
           "beb2c19173": "未读",
           "5651b216c6": "未知项目",
           "22b22034bc": "独立终端在活动中不可用。",
-          "afdc2139a8": "智能体终端关闭。在此工作区中打开一个新终端以继续。"
+          "afdc2139a8": "智能体终端关闭。在此工作区中打开一个新终端以继续。",
+          "renameThreadTab": "Rename agent tab {{value0}}"
         },
         "ActivityTitlebarControls": {
           "f915168c8e": "未读",
           "d6a8de3934": "智能体",
           "dc708f3eff": "紧密智能体"
+        },
+        "ActivityThreadRowContextMenu": {
+          "clearTabColor": "Clear tab color",
+          "setTabColor": "Set tab color {{value0}}"
         }
       },
       "confirmation": {
