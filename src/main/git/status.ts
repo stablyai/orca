@@ -126,7 +126,13 @@ function getStatusReadKey(worktreePath: string, options: GetStatusOptions): stri
     typeof options.limit === 'number' && Number.isInteger(options.limit) && options.limit >= 0
       ? options.limit
       : DEFAULT_GIT_STATUS_LIMIT
-  return [worktreePath, options.wslDistro ?? '', options.includeIgnored === true, limit].join('\0')
+  return [
+    worktreePath,
+    options.wslDistro ?? '',
+    options.includeIgnored === true,
+    options.bypassEffectiveUpstreamNegativeCache === true,
+    limit
+  ].join('\0')
 }
 
 async function runGetStatus(
