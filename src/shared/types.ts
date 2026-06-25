@@ -35,6 +35,7 @@ import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
 import type { TerminalCustomTheme } from './terminal-custom-themes'
 import type { UiLanguage } from './ui-language'
 import type { ForkSyncMode } from './git-fork-sync'
+import type { GitRemoteIdentity } from './git-remote-identity'
 import type {
   GlobalWindowsRuntimeDefault,
   LocalWindowsRuntimePreference
@@ -109,6 +110,7 @@ export type Project = {
   repoIcon?: RepoIcon | null
   kind?: RepoKind
   providerIdentity?: ProjectProviderIdentity
+  gitRemoteIdentity?: GitRemoteIdentity
   /** Local Windows projects inherit the global runtime default unless this override is set. */
   localWindowsRuntimePreference?: LocalWindowsRuntimePreference
   sourceRepoIds: string[]
@@ -235,6 +237,7 @@ export type Repo = {
    *  default avatar (upstream owner, not the personal fork) and the fork
    *  indicator. Absent = not a fork, or fork status not yet resolved. */
   upstream?: GitHubRepositoryIdentity | null
+  gitRemoteIdentity?: GitRemoteIdentity | null
   addedAt: number
   kind?: RepoKind
   gitUsername?: string
@@ -1310,6 +1313,36 @@ export type PRComment = {
   isBot?: boolean
 }
 
+export type GitHubIssueTimelineTarget = {
+  type: 'issue' | 'pr'
+  number: number
+  title: string
+  url: string
+  repository?: string
+}
+
+export type GitHubIssueTimelineItem = {
+  id: string
+  event:
+    | 'assigned'
+    | 'unassigned'
+    | 'mentioned'
+    | 'cross-referenced'
+    | 'closed'
+    | 'reopened'
+    | 'moved_columns_in_project'
+  actor: string
+  actorAvatarUrl: string
+  createdAt: string
+  assignee?: string
+  source?: GitHubIssueTimelineTarget
+  closer?: GitHubIssueTimelineTarget
+  stateReason?: string | null
+  previousColumnName?: string | null
+  columnName?: string | null
+  projectName?: string | null
+}
+
 export type GitHubCommentResult = { ok: true; comment: PRComment } | { ok: false; error: string }
 
 export type IssueInfo = {
@@ -1428,6 +1461,8 @@ export type GitHubWorkItemDetails = {
   item: Omit<GitHubWorkItem, 'repoId'>
   body: string
   comments: PRComment[]
+  /** Issue-only provider activity such as assignment, references, project moves, and state changes. */
+  timelineItems?: GitHubIssueTimelineItem[]
   /** Only set for PRs. Head/base SHAs used by the Files tab to fetch per-file content. */
   headSha?: string
   baseSha?: string
@@ -2556,6 +2591,7 @@ export type GlobalSettings = {
    *  ~/.orca/keybindings.json; main migrates this once when present. */
   keybindings?: KeybindingOverrides
   diffDefaultView: 'inline' | 'side-by-side'
+  diffWordWrap: boolean
   combinedDiffFileTreeVisibleByDefault: boolean
   notifications: NotificationSettings
   /** When true, a countdown timer is shown after a Claude agent becomes idle,

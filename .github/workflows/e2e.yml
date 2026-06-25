@@ -81,16 +81,26 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - shard: '1/5'
-            shard_name: 1-of-5
-          - shard: '2/5'
-            shard_name: 2-of-5
-          - shard: '3/5'
-            shard_name: 3-of-5
-          - shard: '4/5'
-            shard_name: 4-of-5
-          - shard: '5/5'
-            shard_name: 5-of-5
+          - shard: '1/10'
+            shard_name: 1-of-10
+          - shard: '2/10'
+            shard_name: 2-of-10
+          - shard: '3/10'
+            shard_name: 3-of-10
+          - shard: '4/10'
+            shard_name: 4-of-10
+          - shard: '5/10'
+            shard_name: 5-of-10
+          - shard: '6/10'
+            shard_name: 6-of-10
+          - shard: '7/10'
+            shard_name: 7-of-10
+          - shard: '8/10'
+            shard_name: 8-of-10
+          - shard: '9/10'
+            shard_name: 9-of-10
+          - shard: '10/10'
+            shard_name: 10-of-10
 
     steps:
       - name: Checkout
@@ -142,8 +152,9 @@ jobs:
           path: out/
 
       # Why: the Electron suite is wall-clock constrained on OSS runners, but
-      # raising workers on one runner OOMs. Sharding keeps each VM at 4 workers
-      # while splitting the 91-test headless suite across separate runners.
+      # multiple Electron apps on one Xvfb VM contend on git/Chromium resources.
+      # Sharding keeps each VM at one Playwright worker while splitting the
+      # headless suite across separate runners.
       # SKIP_BUILD makes Playwright globalSetup reuse the single build job's
       # artifact instead of starting five concurrent electron-vite builds.
       # ORCA_E2E_FORWARD_APP_LOGS keeps startup failures visible when Electron

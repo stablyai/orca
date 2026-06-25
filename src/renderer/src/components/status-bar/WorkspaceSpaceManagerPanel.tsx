@@ -43,6 +43,7 @@ import { getHostedReviewCacheKey } from '../../store/slices/hosted-review'
 import { issueCacheKey as getIssueCacheKey } from '../../store/slices/github'
 import { refreshGitStatusForWorktree } from '../right-sidebar/git-status-refresh'
 import { runWorktreeBatchDelete } from '../sidebar/delete-worktree-flow'
+import { prepareActiveWorktreeFocusAfterDelete } from '../sidebar/active-worktree-focus-after-delete'
 import { branchDisplayName } from '../sidebar/WorktreeCardHelpers'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
@@ -1592,6 +1593,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
     (worktree: WorkspaceSpaceWorktree): void => {
       // Why: Space keeps normal deletes non-force so uncommitted work is not
       // discarded silently; a failed row gets this explicit recovery path.
+      const commitFocus = prepareActiveWorktreeFocusAfterDelete(worktree.worktreeId)
       void removeWorktree(worktree.worktreeId, true)
         .then((result) => {
           if (!result.ok) {
@@ -1606,6 +1608,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
             )
             return
           }
+          commitFocus()
           handleDeletedWorktrees([worktree.worktreeId])
         })
         .catch((error: unknown) => {

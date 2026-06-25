@@ -917,6 +917,56 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install SignPath PowerShell module
+        if: matrix.platform == 'win'
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+
+          $trimChars = [char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+          $documentsRoot = [System.IO.Path]::GetFullPath([Environment]::GetFolderPath('MyDocuments')).TrimEnd($trimChars)
+          $currentUserModuleRoot = $env:PSModulePath -split [System.IO.Path]::PathSeparator |
+            Where-Object {
+              if ([string]::IsNullOrWhiteSpace($_)) {
+                $false
+              } else {
+                $candidate = [System.IO.Path]::GetFullPath($_).TrimEnd($trimChars)
+                $candidate.StartsWith($documentsRoot, [System.StringComparison]::OrdinalIgnoreCase)
+              }
+            } |
+            Select-Object -First 1
+
+          if ([string]::IsNullOrWhiteSpace($currentUserModuleRoot)) {
+            throw 'Unable to resolve the current-user PowerShell module root from PSModulePath.'
+          }
+
+          $signPathModulePath = Join-Path -Path $currentUserModuleRoot -ChildPath 'SignPath'
+
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            if ($attempt -eq 2) {
+              Start-Sleep -Seconds 15
+            } elseif ($attempt -eq 3) {
+              Start-Sleep -Seconds 30
+            }
+
+            try {
+              Install-Module -Name SignPath -Repository PSGallery -MinimumVersion 4.0.0 -MaximumVersion 4.999.999 -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
+              Import-Module SignPath -ErrorAction Stop
+              Get-Command -Name Get-SignedArtifact -Module SignPath -ErrorAction Stop
+              break
+            } catch {
+              if ($attempt -eq 3) {
+                throw
+              }
+
+              Write-Warning "SignPath PowerShell module preflight attempt $attempt failed: $_"
+              if (Test-Path -LiteralPath $signPathModulePath) {
+                Write-Warning "Removing current-user SignPath module directory before retry: $signPathModulePath"
+                Remove-Item -LiteralPath $signPathModulePath -Recurse -Force
+              }
+            }
+          }
+
       - name: Upload unsigned Windows installer for SignPath
         if: matrix.platform == 'win'
         id: upload-unsigned-windows-installer
@@ -976,13 +1026,6 @@ jobs:
           } | ConvertTo-Json -Depth 5
 
           Invoke-RestMethod -Method Post -Uri $env:SLACK_WEBHOOK_URL -ContentType 'application/json' -Body $payload
-
-      - name: Install SignPath PowerShell module
-        if: matrix.platform == 'win'
-        shell: pwsh
-        run: |
-          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-          Install-Module -Name SignPath -MinimumVersion 4.0.0 -MaximumVersion 4.999.999 -Scope CurrentUser -Force
 
       - name: Download signed Windows installer from SignPath
         if: matrix.platform == 'win'

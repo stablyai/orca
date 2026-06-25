@@ -1,7 +1,5 @@
 import {
   isPathInsideOrEqual,
-  isRuntimePathAbsolute,
-  normalizeRuntimePathForComparison,
   normalizeRuntimePathSeparators
 } from '../../../../shared/cross-platform-path'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
@@ -14,8 +12,6 @@ import type {
   AiVaultSort
 } from '../../../../shared/ai-vault-types'
 import { aiVaultAgentLabel } from '../../../../shared/ai-vault-types'
-import type { Worktree } from '../../../../shared/types'
-import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
 import { sessionPreviewSearchText } from './ai-vault-session-display'
 import type { AiVaultSessionProject } from './ai-vault-session-projects'
 
@@ -93,31 +89,6 @@ export function filterAiVaultSessions(
       return matchesQuery(session, parsedQuery, filters)
     })
     .sort((left, right) => compareSessions(left, right, filters.sort))
-}
-
-export function deriveAiVaultWorkspaceScopePaths(
-  activeWorktree: Pick<Worktree, 'id' | 'path' | 'priorWorktreeIds' | 'repoId'> | null,
-  liveWorktrees: readonly Pick<Worktree, 'id' | 'path' | 'repoId'>[] = []
-): string[] {
-  if (!activeWorktree) {
-    return []
-  }
-
-  const paths: string[] = []
-  addAiVaultWorkspaceScopePath(paths, activeWorktree.path)
-
-  for (const priorWorktreeId of activeWorktree.priorWorktreeIds ?? []) {
-    const parsed = splitWorktreeIdForFilesystem(priorWorktreeId)
-    if (!parsed || parsed.repoId !== activeWorktree.repoId) {
-      continue
-    }
-    if (isAiVaultWorkspaceScopePathClaimed(parsed.worktreePath, activeWorktree, liveWorktrees)) {
-      continue
-    }
-    addAiVaultWorkspaceScopePath(paths, parsed.worktreePath)
-  }
-
-  return paths
 }
 
 export function groupAiVaultSessions(
@@ -264,20 +235,6 @@ function getFolderGroupKey(pathValue: string | null): string {
   return pathValue ? normalizeRuntimePathSeparators(pathValue).toLowerCase() : 'unknown'
 }
 
-function addAiVaultWorkspaceScopePath(paths: string[], pathValue: string): void {
-  const trimmedPath = pathValue.trim()
-  if (!trimmedPath || !isRuntimePathAbsolute(trimmedPath)) {
-    return
-  }
-  const comparisonPath = normalizeRuntimePathForComparison(trimmedPath)
-  if (
-    paths.some((existingPath) => normalizeRuntimePathForComparison(existingPath) === comparisonPath)
-  ) {
-    return
-  }
-  paths.push(trimmedPath)
-}
-
 function isAiVaultSessionInWorkspacePath(workspacePath: string, sessionCwd: string): boolean {
   if (isPathInsideOrEqual(workspacePath, sessionCwd)) {
     return true
@@ -291,24 +248,6 @@ function isAiVaultSessionInWorkspacePath(workspacePath: string, sessionCwd: stri
   // WSL agent transcripts record Linux cwd values even when Orca stores the
   // active worktree as a Windows UNC path.
   return isPathInsideOrEqual(workspaceWslPath.linuxPath, sessionCwd)
-}
-
-function isAiVaultWorkspaceScopePathClaimed(
-  pathValue: string,
-  activeWorktree: Pick<Worktree, 'id'>,
-  liveWorktrees: readonly Pick<Worktree, 'id' | 'path'>[]
-): boolean {
-  const trimmedPath = pathValue.trim()
-  if (!trimmedPath || !isRuntimePathAbsolute(trimmedPath)) {
-    return false
-  }
-  const comparisonPath = normalizeRuntimePathForComparison(trimmedPath)
-  // AI Vault sessions are keyed by cwd only, so any live worktree now owning this path wins.
-  return liveWorktrees.some(
-    (worktree) =>
-      worktree.id !== activeWorktree.id &&
-      normalizeRuntimePathForComparison(worktree.path) === comparisonPath
-  )
 }
 
 function tokenizeQuery(query: string): string[] {

@@ -822,7 +822,23 @@
         "ba8e329d92": "閲覧済みのマークを外す",
         "3f79ffc8b7": "PR の詳細を開いて、現在のレビュアーを表示します。",
         "5c1c973855": "レビュアーを削除",
-        "commentTooLarge": "Comment is too large to submit safely."
+        "commentTooLarge": "Comment is too large to submit safely.",
+        "timeline": {
+          "completed": "as completed",
+          "notPlanned": "as not planned",
+          "someone": "someone",
+          "assigned": "assigned",
+          "unassigned": "unassigned",
+          "mentioned": "mentioned this",
+          "in": "in",
+          "closed": "closed this",
+          "reopened": "reopened this",
+          "moved": "moved this",
+          "from": "from",
+          "to": "to",
+          "activity": "Activity",
+          "noActivity": "No activity yet."
+        }
       },
       "GitLabItemDialog": {
         "65e784c1f1": "再度開く",
@@ -4926,7 +4942,11 @@
           "70bb30feb1": "エディターと編集可能な差分を保存すると、少し停止した後、自動的に変更されます。",
           "0df2e4fd12": "ファイルの自動保存",
           "d21136d9ef": "Orca がファイル編集を保持する方法を構成します。",
-          "45c6e85c4d": "エディタ"
+          "45c6e85c4d": "エディタ",
+          "8f1afdfbd8": "Diff Word Wrap",
+          "4aa4d9fb73": "Wrap long lines in diff editors instead of requiring horizontal scrolling.",
+          "bf16ef0af2": "Off",
+          "3f6892f307": "On"
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "ローカルホスト、127.0.0.1、*.internal",
@@ -10465,7 +10485,9 @@
           "8368d256ec": "結合分岐",
           "8f68ad9ca9": "{{value0}} AI {{value1}} を表示",
           "724a13568d": "{{value0}} に",
-          "6094135eec": "vs {{value0}}"
+          "6094135eec": "vs {{value0}}",
+          "a4420ca1f7": "Wrap On",
+          "dde325ddfe": "Wrap Off"
         },
         "ConflictComponents": {
           "f338288514": "競合するコンテンツを読み込んでいます...",
@@ -10553,7 +10575,8 @@
           "3e0ce48c24": "PDFとしてエクスポート",
           "561251019a": "その他の操作",
           "8c8b7f5ff5": "前付を表示",
-          "10c39d58c1": "前付を隠す"
+          "10c39d58c1": "前付を隠す",
+          "1eef809708": "Word Wrap"
         },
         "EditorPanelShell": {
           "e2c4dec350": "エディターを読み込み中..."

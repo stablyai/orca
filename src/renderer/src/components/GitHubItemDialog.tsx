@@ -20,6 +20,7 @@ import {
   Ban,
   Braces,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -33,9 +34,11 @@ import {
   GitPullRequest,
   GitPullRequestClosed,
   ListChecks,
+  Link2,
   LoaderCircle,
   MessageSquare,
   MessageSquarePlus,
+  MoveRight,
   PanelLeftOpen,
   Pencil,
   Plus,
@@ -44,6 +47,8 @@ import {
   Send,
   Settings,
   UndoDot,
+  UserMinus,
+  UserPlus,
   Wrench,
   X
 } from 'lucide-react'
@@ -140,7 +145,10 @@ import {
   type CommentCodeContextLineUpdate
 } from '@/components/comment-code-context-state'
 import { getPrCommentCodeContext } from '@/components/github/pr-comment-code-context'
-import { resolveCommentReplyTarget } from '@/components/comment-reply-target-state'
+import {
+  getCommentReplyTargetCandidates,
+  resolveCommentReplyTarget
+} from '@/components/comment-reply-target-state'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -181,6 +189,8 @@ import type {
   GitHubPRFileViewedState,
   GitHubWorkItem,
   GitHubWorkItemDetails,
+  GitHubIssueTimelineItem,
+  GitHubIssueTimelineTarget,
   GitHubAssignableUser,
   GitHubReaction,
   GitHubPRMergeMethod,
@@ -2806,12 +2816,75 @@ function CommentCodeContext({
   )
 }
 
+type IssueConversationEntry =
+  | { kind: 'comment'; id: string; createdAt: string; comment: PRComment; index: number }
+  | {
+      kind: 'activity'
+      id: string
+      createdAt: string
+      activity: GitHubIssueTimelineItem
+      index: number
+    }
+
+const EMPTY_GITHUB_ISSUE_TIMELINE_ITEMS: GitHubIssueTimelineItem[] = []
+
+function getTimelineSortValue(createdAt: string): number {
+  const value = new Date(createdAt).getTime()
+  return Number.isFinite(value) ? value : 0
+}
+
+function getIssueConversationEntries(
+  comments: PRComment[],
+  timelineItems: GitHubIssueTimelineItem[]
+): IssueConversationEntry[] {
+  return [
+    ...comments.map(
+      (comment, index): IssueConversationEntry => ({
+        kind: 'comment',
+        id: `comment:${comment.id}`,
+        createdAt: comment.createdAt,
+        comment,
+        index
+      })
+    ),
+    ...timelineItems.map(
+      (activity, index): IssueConversationEntry => ({
+        kind: 'activity',
+        id: `activity:${activity.id}`,
+        createdAt: activity.createdAt,
+        activity,
+        index: comments.length + index
+      })
+    )
+  ].sort((a, b) => {
+    const diff = getTimelineSortValue(a.createdAt) - getTimelineSortValue(b.createdAt)
+    return diff === 0 ? a.index - b.index : diff
+  })
+}
+
+function getTimelineTargetLabel(target: GitHubIssueTimelineTarget): string {
+  const prefix = target.type === 'pr' ? 'PR' : 'issue'
+  const title = target.title ? ` ${target.title}` : ''
+  return `${prefix} #${target.number}${title}`
+}
+
+function getTimelineStateReasonLabel(reason: string | null | undefined): string | null {
+  if (reason === 'completed') {
+    return translate('auto.components.GitHubItemDialog.timeline.completed', 'as completed')
+  }
+  if (reason === 'not_planned') {
+    return translate('auto.components.GitHubItemDialog.timeline.notPlanned', 'as not planned')
+  }
+  return null
+}
+
 function ConversationTab({
   item,
   repoPath,
   sourceContext,
   body,
   comments,
+  timelineItems,
   files,
   headSha,
   baseSha,
@@ -2833,6 +2906,7 @@ function ConversationTab({
   sourceContext?: TaskSourceContext | null
   body: string
   comments: PRComment[]
+  timelineItems?: GitHubIssueTimelineItem[]
   files: GitHubPRFile[]
   headSha: string | undefined
   baseSha: string | undefined
@@ -2860,7 +2934,13 @@ function ConversationTab({
     [commentFilter, comments]
   )
   const visibleCommentGroups = useMemo(() => groupPRComments(visibleComments), [visibleComments])
-  const resolvedReplyingTo = resolveCommentReplyTarget(replyingTo, visibleComments)
+  const resolvedTimelineItems = timelineItems ?? EMPTY_GITHUB_ISSUE_TIMELINE_ITEMS
+  const issueConversationEntries = useMemo(
+    () => getIssueConversationEntries(comments, resolvedTimelineItems),
+    [comments, resolvedTimelineItems]
+  )
+  const replyTargetComments = getCommentReplyTargetCandidates(item.type, comments, visibleComments)
+  const resolvedReplyingTo = resolveCommentReplyTarget(replyingTo, replyTargetComments)
 
   if (resolvedReplyingTo !== replyingTo) {
     // Why: comment filters/refetches can hide the active reply target; clear it
@@ -3192,6 +3272,147 @@ function ConversationTab({
     )
   }
 
+  const renderTimelineTarget = (target: GitHubIssueTimelineTarget | undefined): React.ReactNode => {
+    if (!target) {
+      return null
+    }
+    return (
+      <button
+        key={target.url}
+        type="button"
+        className="min-w-0 truncate font-medium text-foreground underline underline-offset-2 hover:text-muted-foreground"
+        title={getTimelineTargetLabel(target)}
+        onClick={() => window.api.shell.openUrl(target.url)}
+      >
+        {getTimelineTargetLabel(target)}
+      </button>
+    )
+  }
+
+  const renderTimelineActivityMessage = (activity: GitHubIssueTimelineItem): React.ReactNode => {
+    const assignee =
+      activity.assignee ?? translate('auto.components.GitHubItemDialog.timeline.someone', 'someone')
+    if (activity.event === 'assigned') {
+      return (
+        <>
+          {translate('auto.components.GitHubItemDialog.timeline.assigned', 'assigned')}{' '}
+          <span className="font-medium text-foreground">{assignee}</span>
+        </>
+      )
+    }
+    if (activity.event === 'unassigned') {
+      return (
+        <>
+          {translate('auto.components.GitHubItemDialog.timeline.unassigned', 'unassigned')}{' '}
+          <span className="font-medium text-foreground">{assignee}</span>
+        </>
+      )
+    }
+    if (activity.event === 'mentioned' || activity.event === 'cross-referenced') {
+      return (
+        <>
+          {translate('auto.components.GitHubItemDialog.timeline.mentioned', 'mentioned this')}
+          {activity.source ? (
+            <>
+              {' '}
+              {translate('auto.components.GitHubItemDialog.timeline.in', 'in')}{' '}
+              {renderTimelineTarget(activity.source)}
+            </>
+          ) : null}
+        </>
+      )
+    }
+    if (activity.event === 'closed') {
+      const stateReason = getTimelineStateReasonLabel(activity.stateReason)
+      return (
+        <>
+          {translate('auto.components.GitHubItemDialog.timeline.closed', 'closed this')}
+          {stateReason ? ` ${stateReason}` : ''}
+          {activity.closer ? (
+            <>
+              {' '}
+              {translate('auto.components.GitHubItemDialog.timeline.in', 'in')}{' '}
+              {renderTimelineTarget(activity.closer)}
+            </>
+          ) : null}
+        </>
+      )
+    }
+    if (activity.event === 'reopened') {
+      return translate('auto.components.GitHubItemDialog.timeline.reopened', 'reopened this')
+    }
+    const hasFrom = Boolean(activity.previousColumnName)
+    const hasTo = Boolean(activity.columnName)
+    return (
+      <>
+        {translate('auto.components.GitHubItemDialog.timeline.moved', 'moved this')}
+        {hasFrom ? (
+          <>
+            {' '}
+            {translate('auto.components.GitHubItemDialog.timeline.from', 'from')}{' '}
+            <span className="font-medium text-foreground">{activity.previousColumnName}</span>
+          </>
+        ) : null}
+        {hasTo ? (
+          <>
+            {' '}
+            {translate('auto.components.GitHubItemDialog.timeline.to', 'to')}{' '}
+            <span className="font-medium text-foreground">{activity.columnName}</span>
+          </>
+        ) : null}
+        {activity.projectName ? (
+          <>
+            {' '}
+            {translate('auto.components.GitHubItemDialog.timeline.in', 'in')}{' '}
+            <span className="font-medium text-foreground">{activity.projectName}</span>
+          </>
+        ) : null}
+      </>
+    )
+  }
+
+  const renderTimelineActivity = (activity: GitHubIssueTimelineItem): React.JSX.Element => {
+    const Icon =
+      activity.event === 'assigned'
+        ? UserPlus
+        : activity.event === 'unassigned'
+          ? UserMinus
+          : activity.event === 'closed'
+            ? CheckCircle2
+            : activity.event === 'reopened'
+              ? CircleDot
+              : activity.event === 'moved_columns_in_project'
+                ? MoveRight
+                : Link2
+    return (
+      <div
+        key={`activity-${activity.id}`}
+        className="flex min-w-0 items-start gap-3 rounded-md px-1 py-1.5 text-[13px] text-muted-foreground"
+      >
+        <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/30 text-muted-foreground">
+          <Icon className="size-3.5" />
+        </span>
+        {activity.actorAvatarUrl ? (
+          <img src={activity.actorAvatarUrl} alt="" className="mt-1 size-5 shrink-0 rounded-full" />
+        ) : null}
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
+            <span className="font-medium text-foreground">{activity.actor}</span>
+            <span className="contents">{renderTimelineActivityMessage(activity)}</span>
+            <span className="text-[12px] text-muted-foreground">
+              {formatRelativeTime(activity.createdAt)}
+            </span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const renderIssueConversationEntry = (entry: IssueConversationEntry): React.JSX.Element =>
+    entry.kind === 'comment'
+      ? renderCommentCard(entry.comment)
+      : renderTimelineActivity(entry.activity)
+
   return (
     <div
       className={cn(
@@ -3308,13 +3529,19 @@ function ConversationTab({
         {detailsLoaded ? (
           <>
             <div className="flex items-center gap-2 pt-1">
-              <MessageSquare className="size-4 text-muted-foreground" />
+              {item.type === 'issue' ? (
+                <FolderKanban className="size-4 text-muted-foreground" />
+              ) : (
+                <MessageSquare className="size-4 text-muted-foreground" />
+              )}
               <span className="text-[13px] font-medium text-foreground">
-                {translate('auto.components.GitHubItemDialog.1506916c09', 'Comments')}
+                {item.type === 'issue'
+                  ? translate('auto.components.GitHubItemDialog.timeline.activity', 'Activity')
+                  : translate('auto.components.GitHubItemDialog.1506916c09', 'Comments')}
               </span>
-              {comments.length > 0 && (
+              {comments.length + (item.type === 'issue' ? resolvedTimelineItems.length : 0) > 0 && (
                 <span className="rounded-full border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
-                  {comments.length}
+                  {comments.length + (item.type === 'issue' ? resolvedTimelineItems.length : 0)}
                 </span>
               )}
             </div>
@@ -3342,7 +3569,20 @@ function ConversationTab({
               </div>
             )}
 
-            {comments.length === 0 ? (
+            {item.type === 'issue' ? (
+              issueConversationEntries.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-left text-[13px] text-muted-foreground">
+                  {translate(
+                    'auto.components.GitHubItemDialog.timeline.noActivity',
+                    'No activity yet.'
+                  )}
+                </div>
+              ) : (
+                <div className="flex min-w-0 flex-col gap-3">
+                  {issueConversationEntries.map(renderIssueConversationEntry)}
+                </div>
+              )
+            ) : comments.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-left text-[13px] text-muted-foreground">
                 {translate('auto.components.GitHubItemDialog.5a94f3d0e9', 'No comments yet.')}
               </div>
@@ -6151,15 +6391,6 @@ export default function GitHubItemDialog({
     })
   }, [repoPath, effectiveRepoId, workItem, issueSourcePreference])
 
-  // Why: reset lifted edit state when the dialog switches items or when the
-  // same item receives an optimistic cache patch from the surrounding table.
-  useEffect(() => {
-    if (workItemState && workItemLabels) {
-      setLocalState(workItemState)
-      setLocalLabels(workItemLabels)
-    }
-  }, [workItemId, workItemState, workItemLabels])
-
   // Why: track comments added optimistically before the detail fetch resolves
   // so they can be merged into the fetch result instead of being overwritten.
   const optimisticCommentsRef = useRef<PRComment[]>([])
@@ -6256,6 +6487,19 @@ export default function GitHubItemDialog({
     // it would silently break the cold-open optimistic-shell path.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cachedEntry, workItem, optimisticTick])
+
+  const resolvedWorkItemState = details?.item.state ?? workItemState
+
+  // Why: the list row that opens the dialog can be stale; the detail payload
+  // carries the authoritative issue/PR state and should refresh local edit UI.
+  useEffect(() => {
+    if (resolvedWorkItemState) {
+      setLocalState(resolvedWorkItemState)
+    }
+    if (workItemLabels) {
+      setLocalLabels(workItemLabels)
+    }
+  }, [workItemId, resolvedWorkItemState, workItemLabels])
 
   const loading = !!cachedEntry?.pending && !cachedEntry?.details
   const error = cachedEntry?.error && !cachedEntry?.details ? cachedEntry.error : null
@@ -6393,6 +6637,7 @@ export default function GitHubItemDialog({
 
   const body = details?.body ?? ''
   const comments = details?.comments ?? []
+  const timelineItems = details?.timelineItems ?? []
   const files = details?.files ?? []
   const checks = details?.checks ?? []
   const [pendingViewedPaths, setPendingViewedPaths] = useState<Set<string>>(() => new Set())
@@ -6910,6 +7155,7 @@ export default function GitHubItemDialog({
                   sourceContext={sourceContext}
                   body={body}
                   comments={comments}
+                  timelineItems={timelineItems}
                   files={files}
                   headSha={details?.headSha}
                   baseSha={details?.baseSha}
@@ -7030,6 +7276,7 @@ export default function GitHubItemDialog({
                   sourceContext={sourceContext}
                   body={body}
                   comments={comments}
+                  timelineItems={timelineItems}
                   files={files}
                   headSha={details?.headSha}
                   baseSha={details?.baseSha}

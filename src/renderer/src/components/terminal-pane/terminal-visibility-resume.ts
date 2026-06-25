@@ -5,7 +5,7 @@ import {
   flushTerminalOutput,
   requestTerminalBacklogRecovery
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
-import { restoreScrollStateAfterLayout } from '@/lib/pane-manager/pane-scroll'
+import { enforceTerminalCurrentScrollIntent } from '@/lib/pane-manager/terminal-scroll-intent'
 import { fitAndFocusPanes, fitPanes, focusActivePane } from './pane-helpers'
 
 const VISIBLE_RESUME_FLUSH_CHARS = 256 * 1024
@@ -47,7 +47,7 @@ export function resumeTerminalVisibility({
   // post-resume fit runs. Capture numeric viewport positions first; the
   // restore path avoids content matching so duplicate agent log lines do
   // not jump to the wrong history entry.
-  const viewportPositions = captureViewportPositions(!wasVisible)
+  captureViewportPositions(!wasVisible)
   withSuppressedScrollTracking(() => {
     if (shouldUseLightTabResume) {
       // Why: intra-worktree tab switches only toggle the overlay. Keeping
@@ -61,7 +61,7 @@ export function resumeTerminalVisibility({
     } else {
       resumeTerminalVisibilityHeavy(manager, isActive)
     }
-    restoreTerminalViewportPositions(manager, viewportPositions)
+    enforceTerminalViewportIntents(manager)
     if (!shouldUseLightTabResume) {
       // Why: this clear wipes the glyph atlas shared with other same-config
       // terminals; the global reset rebuilds their render models too.
@@ -137,14 +137,8 @@ function resumeTerminalVisibilityHeavy(manager: PaneManager, isActive: boolean):
   }
 }
 
-function restoreTerminalViewportPositions(
-  manager: PaneManager,
-  viewportPositions: Map<number, ScrollState>
-): void {
+function enforceTerminalViewportIntents(manager: PaneManager): void {
   for (const pane of manager.getPanes()) {
-    const position = viewportPositions.get(pane.id)
-    if (position) {
-      restoreScrollStateAfterLayout(pane.terminal, position)
-    }
+    enforceTerminalCurrentScrollIntent(pane.terminal)
   }
 }

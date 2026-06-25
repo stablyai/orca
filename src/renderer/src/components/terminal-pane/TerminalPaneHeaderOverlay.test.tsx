@@ -127,11 +127,13 @@ describe('TerminalPaneHeaderOverlay', () => {
     expect(onClosePane).not.toHaveBeenCalledWith(1)
   })
 
-  it('keeps close-pane available for untitled split pane headers', () => {
+  it('keeps split and close-pane controls available for untitled split pane headers', () => {
     const { container, onClosePane, onRemoveTitle } = renderOverlay({
       paneTitles: { 1: '', 2: '' }
     })
 
+    expect(container.querySelector('button[aria-label="Split Terminal Right"]')).not.toBeNull()
+    expect(container.querySelector('.pane-title-drag-handle')).toBeNull()
     const closePane = container.querySelector<HTMLButtonElement>('button[aria-label="Close Pane"]')
     expect(closePane).not.toBeNull()
 

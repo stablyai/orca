@@ -21,6 +21,11 @@ import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { useAppStore } from '@/store'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+import {
+  markTerminalFollowOutput,
+  markTerminalPinnedViewport,
+  syncTerminalScrollIntentFromViewport
+} from '@/lib/pane-manager/terminal-scroll-intent'
 
 export function recordKeyboardCreatedTerminalPaneSplit(
   createdPane: unknown,
@@ -314,9 +319,13 @@ export function useTerminalKeyboardShortcuts({
           return
         }
         if (action.position === 'top') {
+          markTerminalPinnedViewport(pane.terminal)
           pane.terminal.scrollToLine(0)
+          syncTerminalScrollIntentFromViewport(pane.terminal)
         } else {
+          markTerminalFollowOutput(pane.terminal)
           pane.terminal.scrollToBottom()
+          syncTerminalScrollIntentFromViewport(pane.terminal)
         }
         return
       }

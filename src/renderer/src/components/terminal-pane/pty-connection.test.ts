@@ -6255,6 +6255,12 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     pane.terminal.buffer.active.viewportY = 42
     pane.terminal.buffer.active.baseY = 100
+    pane.terminal.write.mockImplementation((data: string, callback?: () => void) => {
+      if (data.includes('snapshot-state')) {
+        pane.terminal.buffer.active.viewportY = 0
+      }
+      callback?.()
+    })
     const manager = createManager(1)
     const deps = createDeps({
       isVisibleRef: { current: false }

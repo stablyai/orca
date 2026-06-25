@@ -46,7 +46,7 @@ import type {
   GitDiffResult,
   GitStatusEntry
 } from '../../../../shared/types'
-import { Check, Copy, MessageSquare, PanelLeftOpen, Sparkles, Trash2 } from 'lucide-react'
+import { Check, Copy, MessageSquare, PanelLeftOpen, Sparkles, Trash2, WrapText } from 'lucide-react'
 import { toast } from 'sonner'
 import { DiffSectionItem } from './DiffSectionItem'
 import { DiffNotesSendMenu } from './DiffNotesSendMenu'
@@ -251,6 +251,7 @@ export default function CombinedDiffViewer({
   const openCommitDiff = useAppStore((s) => s.openCommitDiff)
   const openConflictReview = useAppStore((s) => s.openConflictReview)
   const openBranchAllDiffs = useAppStore((s) => s.openBranchAllDiffs)
+  const updateSettings = useAppStore((s) => s.updateSettings)
   const clearDiffComments = useAppStore((s) => s.clearDiffComments)
   const diffCommentsForWorktree = useAppStore((s) => s.getDiffComments(file.worktreeId))
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[file.worktreeId])
@@ -1129,6 +1130,10 @@ export default function CombinedDiffViewer({
     })
   }, [])
 
+  const toggleDiffWordWrap = useCallback(() => {
+    void updateSettings({ diffWordWrap: settings?.diffWordWrap !== true })
+  }, [settings?.diffWordWrap, updateSettings])
+
   const openSection = useCallback(
     (index: number) => {
       const section = sectionsRef.current[index]
@@ -1837,6 +1842,20 @@ export default function CombinedDiffViewer({
               {sideBySide
                 ? translate('auto.components.editor.CombinedDiffViewer.f786fd54e1', 'Inline')
                 : translate('auto.components.editor.CombinedDiffViewer.ec5053c7f5', 'Side by Side')}
+            </button>
+            <button
+              className={`inline-flex h-6 items-center gap-1 rounded border border-border px-2 text-xs transition-colors hover:text-foreground ${
+                settings?.diffWordWrap === true
+                  ? 'bg-accent text-foreground'
+                  : 'text-muted-foreground'
+              }`}
+              onClick={toggleDiffWordWrap}
+              aria-pressed={settings?.diffWordWrap === true}
+            >
+              <WrapText className="size-3.5" />
+              {settings?.diffWordWrap === true
+                ? translate('auto.components.editor.CombinedDiffViewer.a4420ca1f7', 'Wrap On')
+                : translate('auto.components.editor.CombinedDiffViewer.dde325ddfe', 'Wrap Off')}
             </button>
           </div>
         </div>

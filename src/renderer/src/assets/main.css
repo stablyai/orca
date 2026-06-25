@@ -166,15 +166,15 @@
   --terminal-pane-title-on-dark-fg: rgb(255 255 255 / 0.52);
   --terminal-pane-title-on-dark-input-fg: rgb(255 255 255 / 0.7);
   --terminal-pane-title-on-dark-placeholder: rgb(255 255 255 / 0.38);
-  --terminal-pane-title-on-dark-button-fg: rgb(255 255 255 / 0.3);
-  --terminal-pane-title-on-dark-button-hover-fg: rgb(255 255 255 / 0.8);
+  --terminal-pane-title-on-dark-button-fg: rgb(255 255 255);
+  --terminal-pane-title-on-dark-button-hover-fg: rgb(255 255 255);
   --terminal-pane-title-on-dark-input-bg: rgb(255 255 255 / 0.04);
   --terminal-pane-title-on-dark-separator: rgb(255 255 255 / 0.06);
   --terminal-pane-title-on-light-fg: rgb(24 24 27 / 0.64);
   --terminal-pane-title-on-light-input-fg: rgb(24 24 27 / 0.82);
   --terminal-pane-title-on-light-placeholder: rgb(24 24 27 / 0.48);
-  --terminal-pane-title-on-light-button-fg: rgb(24 24 27 / 0.42);
-  --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27 / 0.82);
+  --terminal-pane-title-on-light-button-fg: rgb(24 24 27);
+  --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27);
   --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
   --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
   --git-decoration-added: #587c0c;
@@ -234,7 +234,9 @@
   --worktree-sidebar-foreground: #fafafa;
   --worktree-sidebar-accent: #353535;
   --worktree-sidebar-accent-foreground: #fafafa;
-  --worktree-sidebar-border: rgb(255 255 255 / 0.1);
+  /* Match --border / --sidebar-border (7%) so the left sidebar's divider lines
+     aren't brighter than the rest of the UI in dark mode (#5906). */
+  --worktree-sidebar-border: rgb(255 255 255 / 0.07);
   --worktree-sidebar-ring: #737373;
   --sidebar: #171717;
   --sidebar-foreground: #fafafa;
@@ -247,15 +249,15 @@
   --terminal-pane-title-on-dark-fg: rgb(255 255 255 / 0.52);
   --terminal-pane-title-on-dark-input-fg: rgb(255 255 255 / 0.7);
   --terminal-pane-title-on-dark-placeholder: rgb(255 255 255 / 0.38);
-  --terminal-pane-title-on-dark-button-fg: rgb(255 255 255 / 0.3);
-  --terminal-pane-title-on-dark-button-hover-fg: rgb(255 255 255 / 0.8);
+  --terminal-pane-title-on-dark-button-fg: rgb(255 255 255);
+  --terminal-pane-title-on-dark-button-hover-fg: rgb(255 255 255);
   --terminal-pane-title-on-dark-input-bg: rgb(255 255 255 / 0.04);
   --terminal-pane-title-on-dark-separator: rgb(255 255 255 / 0.06);
   --terminal-pane-title-on-light-fg: rgb(24 24 27 / 0.64);
   --terminal-pane-title-on-light-input-fg: rgb(24 24 27 / 0.82);
   --terminal-pane-title-on-light-placeholder: rgb(24 24 27 / 0.48);
-  --terminal-pane-title-on-light-button-fg: rgb(24 24 27 / 0.42);
-  --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27 / 0.82);
+  --terminal-pane-title-on-light-button-fg: rgb(24 24 27);
+  --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27);
   --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
   --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
   --git-decoration-added: #81b88b;
@@ -694,6 +696,21 @@
 .right-sidebar-header-drag {
   -webkit-app-region: drag;
   user-select: none;
+}
+
+[data-terminal-focus-release-surface='true'] {
+  -webkit-app-region: drag;
+}
+
+/* Why: Electron drag regions swallow renderer pointer events. While regular
+   xterm owns focus, make the next top-chrome click observable so it can release
+   terminal zoom ownership; after release these surfaces become draggable again. */
+:root[data-regular-terminal-input-focused] .titlebar,
+:root[data-regular-terminal-input-focused] .titlebar-left,
+:root[data-regular-terminal-input-focused] .window-controls-titlebar-spacer,
+:root[data-regular-terminal-input-focused] .right-sidebar-header-drag,
+:root[data-regular-terminal-input-focused] [data-terminal-focus-release-surface='true'] {
+  -webkit-app-region: no-drag;
 }
 
 .right-sidebar-header-no-drag {

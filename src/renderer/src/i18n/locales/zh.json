@@ -822,7 +822,23 @@
         "ba8e329d92": "取消标记已查看",
         "3f79ffc8b7": "打开 PR 详情以查看当前评审人。",
         "5c1c973855": "移除评审人",
-        "commentTooLarge": "评论过长，无法安全提交。"
+        "commentTooLarge": "评论过长，无法安全提交。",
+        "timeline": {
+          "completed": "as completed",
+          "notPlanned": "as not planned",
+          "someone": "someone",
+          "assigned": "assigned",
+          "unassigned": "unassigned",
+          "mentioned": "mentioned this",
+          "in": "in",
+          "closed": "closed this",
+          "reopened": "reopened this",
+          "moved": "moved this",
+          "from": "from",
+          "to": "to",
+          "activity": "Activity",
+          "noActivity": "No activity yet."
+        }
       },
       "GitLabItemDialog": {
         "65e784c1f1": "重新打开",
@@ -4926,7 +4942,11 @@
           "70bb30feb1": "短暂暂停后自动保存编辑器和可编辑差异更改。",
           "0df2e4fd12": "自动保存文件",
           "d21136d9ef": "配置 Orca 如何保留文件编辑。",
-          "45c6e85c4d": "编辑"
+          "45c6e85c4d": "编辑",
+          "8f1afdfbd8": "Diff Word Wrap",
+          "4aa4d9fb73": "Wrap long lines in diff editors instead of requiring horizontal scrolling.",
+          "bf16ef0af2": "Off",
+          "3f6892f307": "On"
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "本地主机，127.0.0.1，*.internal",
@@ -10465,7 +10485,9 @@
           "8368d256ec": "组合分支",
           "8f68ad9ca9": "显示 {{value0}} AI {{value1}}",
           "724a13568d": "在 {{value0}}",
-          "6094135eec": "与 {{value0}}"
+          "6094135eec": "与 {{value0}}",
+          "a4420ca1f7": "Wrap On",
+          "dde325ddfe": "Wrap Off"
         },
         "ConflictComponents": {
           "f338288514": "正在加载冲突内容...",
@@ -10553,7 +10575,8 @@
           "3e0ce48c24": "导出为 PDF",
           "561251019a": "更多操作",
           "8c8b7f5ff5": "显示前面的内容",
-          "10c39d58c1": "隐藏前面的内容"
+          "10c39d58c1": "隐藏前面的内容",
+          "1eef809708": "Word Wrap"
         },
         "EditorPanelShell": {
           "e2c4dec350": "正在加载编辑器..."

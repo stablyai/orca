@@ -83,9 +83,16 @@ export function RepositoryWorktreeDefaultsSection({
           repoId={repo.id}
           storeValue={repo.worktreeBasePath ?? ''}
           placeholder={settings?.workspaceDir ?? ''}
-          onTextChange={(text) =>
-            updateRepo(repo.id, { worktreeBasePath: text.trim() ? text : undefined })
-          }
+          onTextChange={() => {}}
+          onBlur={(e) => {
+            const worktreeBasePath = e.currentTarget.value.trim() || undefined
+            // Why: even an unchanged worktreeBasePath update asks main to
+            // prepare the root, which can touch the filesystem.
+            if (worktreeBasePath === (repo.worktreeBasePath?.trim() || undefined)) {
+              return
+            }
+            updateRepo(repo.id, { worktreeBasePath })
+          }}
           className="h-9 text-sm"
         />
         <p className="text-xs text-muted-foreground">

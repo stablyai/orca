@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: coordinator tests cover dispatch, DAG ordering, escalation, decision gates, concurrency, and stop — splitting by category would scatter shared setup without improving clarity. */
 import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from './db'
+import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
 import {
   Coordinator,
   DISPATCH_STALE_THRESHOLD,
@@ -139,6 +140,68 @@ describe('Coordinator', () => {
     expect(result.status).toBe('completed')
     expect(result.completedTasks).toContain(task.id)
     expect(runtime.sentMessages.length).toBeGreaterThan(0)
+  })
+
+  it('records completedTasks when send reconciled worker_done before coordinator read', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = createMockRuntime()
+
+    const task = db.createTask({ spec: 'send-driven completion' })
+    const dispatch = db.createDispatchContext(task.id, 'term_a')
+    const msg = db.insertMessage({
+      from: 'term_a',
+      to: 'coord',
+      subject: 'Done',
+      type: 'worker_done',
+      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+    })
+
+    reconcileLifecycleMessage(db, msg)
+
+    const coordinator = new Coordinator(db, runtime, {
+      spec: 'go',
+      coordinatorHandle: 'coord',
+      pollIntervalMs: 20
+    })
+    const result = await coordinator.run()
+
+    expect(result.status).toBe('completed')
+    expect(result.completedTasks).toContain(task.id)
+  })
+
+  it('does not duplicate completedTasks for repeated completed worker_done messages', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = createMockRuntime()
+
+    const task = db.createTask({ spec: 'duplicate completion' })
+    const dispatch = db.createDispatchContext(task.id, 'term_a')
+    const payload = JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+    const first = db.insertMessage({
+      from: 'term_a',
+      to: 'coord',
+      subject: 'Done',
+      type: 'worker_done',
+      payload
+    })
+    db.insertMessage({
+      from: 'term_a',
+      to: 'coord',
+      subject: 'Done again',
+      type: 'worker_done',
+      payload
+    })
+
+    reconcileLifecycleMessage(db, first)
+
+    const coordinator = new Coordinator(db, runtime, {
+      spec: 'go',
+      coordinatorHandle: 'coord',
+      pollIntervalMs: 20
+    })
+    const result = await coordinator.run()
+
+    expect(result.status).toBe('completed')
+    expect(result.completedTasks.filter((id) => id === task.id)).toHaveLength(1)
   })
 
   it('creates a terminal when none are available', async () => {

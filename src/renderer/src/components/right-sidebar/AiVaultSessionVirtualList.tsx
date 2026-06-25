@@ -1,6 +1,7 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { getActiveStickyHeaderIndexForScroll } from '../sidebar/worktree-list-virtual-rows'
@@ -29,7 +30,7 @@ export function AiVaultSessionVirtualList({
   filteredSessionsCount,
   error,
   resumeDisabled,
-  buildResumeCommand,
+  buildResumeStartup,
   onToggleGroup,
   onResume,
   onCopyResume,
@@ -46,7 +47,7 @@ export function AiVaultSessionVirtualList({
   filteredSessionsCount: number
   error: string | null
   resumeDisabled: boolean
-  buildResumeCommand: (session: AiVaultSession) => string
+  buildResumeStartup: (session: AiVaultSession) => AiVaultResumeStartup
   onToggleGroup: (key: string) => void
   onResume: (session: AiVaultSession) => void
   onCopyResume: (session: AiVaultSession) => void
@@ -163,7 +164,7 @@ export function AiVaultSessionVirtualList({
               collapsedGroups={collapsedGroups}
               expandedSessionIds={expandedSessionIds}
               resumeDisabled={resumeDisabled}
-              buildResumeCommand={buildResumeCommand}
+              buildResumeStartup={buildResumeStartup}
               onToggleGroup={onToggleGroup}
               onToggleSessionDetails={toggleSessionDetails}
               onResume={onResume}
@@ -190,7 +191,7 @@ function AiVaultVirtualRow({
   collapsedGroups,
   expandedSessionIds,
   resumeDisabled,
-  buildResumeCommand,
+  buildResumeStartup,
   onToggleGroup,
   onToggleSessionDetails,
   onResume,
@@ -209,7 +210,7 @@ function AiVaultVirtualRow({
   collapsedGroups: ReadonlySet<string>
   expandedSessionIds: ReadonlySet<string>
   resumeDisabled: boolean
-  buildResumeCommand: (session: AiVaultSession) => string
+  buildResumeStartup: (session: AiVaultSession) => AiVaultResumeStartup
   onToggleGroup: (key: string) => void
   onToggleSessionDetails: (sessionId: string) => void
   onResume: (session: AiVaultSession) => void
@@ -245,7 +246,7 @@ function AiVaultVirtualRow({
       ) : (
         <VaultSessionRow
           session={row.session}
-          resumeCommand={buildResumeCommand(row.session)}
+          resumeStartup={buildResumeStartup(row.session)}
           detailsExpanded={expandedSessionIds.has(row.session.id)}
           resumeDisabled={resumeDisabled}
           onToggleDetails={() => onToggleSessionDetails(row.session.id)}

@@ -83,6 +83,8 @@ export function EditorPanelHeader({
 }: EditorPanelHeaderProps): React.JSX.Element {
   const diffComments = useAppStore((s) => s.getDiffComments(activeFile.worktreeId))
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[activeFile.worktreeId])
+  const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap === true)
+  const updateSettings = useAppStore((s) => s.updateSettings)
   const fileDiffComments = useMemo(
     () => diffComments.filter((comment) => comment.filePath === activeFile.relativePath),
     [activeFile.relativePath, diffComments]
@@ -246,10 +248,13 @@ export function EditorPanelHeader({
       )}
       <EditorPanelMarkdownActionsMenu
         isMarkdown={isMarkdown}
+        isDiffSurface={isDiffSurface}
+        diffWordWrap={diffWordWrap}
         shouldShowMarkdownExportAction={shouldShowMarkdownExportAction}
         canExportMarkdownToPdf={canExportMarkdownToPdf}
         canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
         markdownFrontmatterVisible={markdownFrontmatterVisible}
+        onToggleDiffWordWrap={() => void updateSettings({ diffWordWrap: !diffWordWrap })}
         onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
         onExportMarkdownToPdf={onExportMarkdownToPdf}
       />

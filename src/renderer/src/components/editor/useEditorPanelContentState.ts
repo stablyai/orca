@@ -78,6 +78,12 @@ export function useEditorPanelContentState({
   const diffContentsRef = useRef(diffContents)
   diffContentsRef.current = diffContents
   const fileLoadRetryAttemptsRef = useRef<Record<string, number>>({})
+  // Why: per-tab read generations let a forced/external reload supersede an
+  // older in-flight read so a slower stale promise cannot overwrite fresh state.
+  const fileReadGenerationRef = useRef<Record<string, number>>({})
+  const diffReadGenerationRef = useRef<Record<string, number>>({})
+  const fileReadGenerationCounterRef = useRef(0)
+  const diffReadGenerationCounterRef = useRef(0)
   const openFilesRef = useRef(openFiles)
   openFilesRef.current = openFiles
   const editorViewModeRef = useRef(editorViewMode)
@@ -92,8 +98,12 @@ export function useEditorPanelContentState({
       filePath: string,
       id: string,
       worktreeId?: string,
-      relativePath?: string
+      relativePath?: string,
+      options?: { force?: boolean }
     ): Promise<void> => {
+      const generation = fileReadGenerationCounterRef.current + 1
+      fileReadGenerationCounterRef.current = generation
+      fileReadGenerationRef.current[id] = generation
       try {
         const connectionId = getConnectionIdForFile(worktreeId ?? null, filePath) ?? undefined
         const restoredOpenFile = openFilesRef.current.find((file) => file.id === id)
@@ -115,6 +125,11 @@ export function useEditorPanelContentState({
         }
         const readScope = getRuntimeFileReadScope(readSettings, connectionId)
         const key = inFlightReadKey(readScope, filePath)
+        if (options?.force) {
+          // Why: forced reloads must not attach to a currently registered read
+          // started before the external change landed.
+          inFlightFileReads.delete(key)
+        }
         let pending = inFlightFileReads.get(key)
         if (!pending) {
           pending = readRuntimeFileContent({
@@ -132,9 +147,15 @@ export function useEditorPanelContentState({
           })
         }
         const result = await pending
+        if (fileReadGenerationRef.current[id] !== generation) {
+          return
+        }
         delete fileLoadRetryAttemptsRef.current[id]
         setFileContents((prev) => ({ ...prev, [id]: result }))
       } catch (err) {
+        if (fileReadGenerationRef.current[id] !== generation) {
+          return
+        }
         const message = err instanceof Error ? err.message : String(err)
         setFileContents((prev) => ({
           ...prev,
@@ -150,6 +171,9 @@ export function useEditorPanelContentState({
       if (!file || (file.mode === 'edit' && !canUseChangesModeForFile(file))) {
         return
       }
+      const generation = diffReadGenerationCounterRef.current + 1
+      diffReadGenerationCounterRef.current = generation
+      diffReadGenerationRef.current[file.id] = generation
       try {
         const worktreePath = file.filePath.slice(
           0,
@@ -173,6 +197,8 @@ export function useEditorPanelContentState({
           compareAgainstHead
         )
         if (options?.force) {
+          // Why: forced diff reloads must not attach to a read started before
+          // the external change landed.
           inFlightDiffReads.delete(key)
         }
         let pending = inFlightDiffReads.get(key)
@@ -236,8 +262,14 @@ export function useEditorPanelContentState({
           })
         }
         const result = await pending
+        if (diffReadGenerationRef.current[file.id] !== generation) {
+          return
+        }
         setDiffContents((prev) => ({ ...prev, [file.id]: result }))
       } catch (err) {
+        if (diffReadGenerationRef.current[file.id] !== generation) {
+          return
+        }
         setDiffContents((prev) => ({
           ...prev,
           [file.id]: {
@@ -264,7 +296,9 @@ export function useEditorPanelContentState({
         delete next[file.id]
         return next
       })
-      void loadFileContent(file.filePath, file.id, file.worktreeId, file.relativePath)
+      void loadFileContent(file.filePath, file.id, file.worktreeId, file.relativePath, {
+        force: true
+      })
     },
     [loadFileContent]
   )
@@ -432,7 +466,9 @@ export function useEditorPanelContentState({
       delete next[current.id]
       return next
     })
-    void loadFileContent(current.filePath, current.id, current.worktreeId, current.relativePath)
+    void loadFileContent(current.filePath, current.id, current.worktreeId, current.relativePath, {
+      force: true
+    })
   }, [activeFile?.fileContentReloadNonce, activeFile?.filePath, activeFile?.id, loadFileContent])
 
   useEditorPanelExternalContentEvents({
@@ -443,7 +479,14 @@ export function useEditorPanelContentState({
     setFileContents,
     setDiffContents
   })
-  usePruneClosedEditorContent(openFiles, fileLoadRetryAttemptsRef, setFileContents, setDiffContents)
+  usePruneClosedEditorContent(
+    openFiles,
+    fileLoadRetryAttemptsRef,
+    fileReadGenerationRef,
+    diffReadGenerationRef,
+    setFileContents,
+    setDiffContents
+  )
 
   return { fileContents, diffContents, reloadFileContent }
 }

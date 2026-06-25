@@ -6,6 +6,9 @@ import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 const store = {
   settings: { activeRuntimeEnvironmentId: null as string | null },
   beginPendingWorktreeCreation: vi.fn(),
+  updatePendingWorktreeCreation: vi.fn(),
+  pendingWorktreeCreations: { 'creation-1': { creationId: 'creation-1' } },
+  setActivePendingWorktreeCreation: vi.fn(),
   setActiveView: vi.fn(),
   setSidebarOpen: vi.fn(),
   createWorktree: vi.fn(() => new Promise(() => {}))
@@ -34,7 +37,11 @@ vi.mock('@/lib/new-workspace', () => ({
   ensureAgentStartupInTerminal: vi.fn()
 }))
 
-import { runBackgroundWorktreeCreation } from './worktree-creation-flow'
+import {
+  beginBackgroundWorktreePreparation,
+  continueBackgroundWorktreeCreation,
+  runBackgroundWorktreeCreation
+} from './worktree-creation-flow'
 
 const FLOW_SOURCE = readFileSync(join(__dirname, 'worktree-creation-flow.ts'), 'utf8')
 
@@ -93,6 +100,47 @@ describe('runBackgroundWorktreeCreation', () => {
         })
       })
     )
+  })
+})
+
+describe('staged background worktree creation', () => {
+  it('shows a pending preparing row before async preflight finishes', () => {
+    store.beginPendingWorktreeCreation.mockClear()
+
+    const creationId = beginBackgroundWorktreePreparation(makeRequest({ displayName: 'Issue 42' }))
+
+    expect(creationId).toBe('creation-1')
+    expect(store.beginPendingWorktreeCreation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        creationId: 'creation-1',
+        phase: 'preparing',
+        request: expect.objectContaining({ displayName: 'Issue 42' })
+      })
+    )
+  })
+
+  it('replaces the staged request before the create starts', () => {
+    store.updatePendingWorktreeCreation.mockClear()
+    store.createWorktree.mockClear()
+
+    const request = makeRequest({ setupDecision: 'run' })
+    const started = continueBackgroundWorktreeCreation('creation-1', request)
+
+    expect(started).toBe(true)
+    expect(store.updatePendingWorktreeCreation).toHaveBeenCalledWith(
+      'creation-1',
+      expect.objectContaining({
+        phase: 'fetching',
+        request
+      })
+    )
+    expect(store.createWorktree).toHaveBeenCalledTimes(1)
+    const createCall = store.createWorktree.mock.calls[0] as unknown[] | undefined
+    expect(createCall).toBeDefined()
+    expect(createCall?.[0]).toBe('repo-1')
+    expect(createCall?.[1]).toBe('feature')
+    expect(createCall?.[3]).toBe('run')
+    expect(createCall?.[18]).toBe('creation-1')
   })
 })
 

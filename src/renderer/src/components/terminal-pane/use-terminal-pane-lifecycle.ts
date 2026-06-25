@@ -71,6 +71,10 @@ import { getConnectionId } from '@/lib/connection-context'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { isPaneReplaying, type ReplayingPanesRef } from './replay-guard'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
+import {
+  markTerminalPinnedViewport,
+  syncTerminalScrollIntentSoon
+} from '@/lib/pane-manager/terminal-scroll-intent'
 import { registerRuntimeTerminalTab, scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { e2eConfig } from '@/lib/e2e-config'
 import {
@@ -718,6 +722,15 @@ export function useTerminalPaneLifecycle({
               pane.terminal.input(jisYenInput.data)
             }
             return false
+          }
+
+          if (e.type === 'keydown') {
+            if (e.key === 'PageUp' || e.key === 'Home') {
+              markTerminalPinnedViewport(pane.terminal)
+              syncTerminalScrollIntentSoon(pane.terminal, { preservePinnedAtBottom: true })
+            } else if (e.key === 'PageDown' || e.key === 'End') {
+              syncTerminalScrollIntentSoon(pane.terminal)
+            }
           }
 
           return !shouldBypassXtermKeyboardEvent(e, {

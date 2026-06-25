@@ -72,7 +72,6 @@ import {
   setDriverForBrowserPage
 } from '@/lib/pane-manager/browser-mobile-driver-state'
 import { destroyPersistentWebview } from '@/components/browser-pane/webview-registry'
-import { dispatchBrowserPageZoomEvent } from '@/components/browser-pane/browser-page-zoom'
 import {
   acquireBrowserAutomationVisibility,
   releaseBrowserAutomationVisibility
@@ -253,21 +252,21 @@ function getVisibleWorktreeIdsForRepo(state: AppState, repoId: string): Set<stri
   return new Set((state.worktreesByRepo[repoId] ?? []).map((worktree) => worktree.id))
 }
 
-function resolveActiveBrowserPageId(state: AppState): string | null {
-  const worktreeId = state.activeWorktreeId
-  if (!worktreeId) {
-    return null
+function activateTerminalInitiatedWorktree(store: AppState, worktreeId: string): void {
+  store.setActiveView('terminal')
+  store.setActiveWorktree(worktreeId)
+  // Why: CLI/runtime terminal focus is user-visible worktree navigation, so it
+  // must feed both Cmd+J recency and the titlebar back/forward stack.
+  store.markWorktreeVisited(worktreeId)
+  if (!store.isNavigatingHistory) {
+    store.recordWorktreeVisit(worktreeId)
   }
-  const activeWorkspaceId =
-    state.activeBrowserTabIdByWorktree[worktreeId] ?? state.activeBrowserTabId ?? null
-  const browserWorkspaces = state.browserTabsByWorktree[worktreeId] ?? []
-  const workspace =
-    browserWorkspaces.find((candidate) => candidate.id === activeWorkspaceId) ?? null
-  if (!workspace) {
-    return null
+}
+
+function focusTerminalInitiatedTab(tabId: string, leafId?: string | null): void {
+  if (!focusRuntimeTerminalSurface(tabId, leafId)) {
+    focusTerminalTabSurface(tabId, leafId)
   }
-  const pages = state.browserPagesByWorkspace[workspace.id] ?? []
-  return workspace.activePageId ?? workspace.pageIds?.[0] ?? pages[0]?.id ?? null
 }
 
 type TerminalSplitDirection = 'horizontal' | 'vertical'
@@ -1358,13 +1357,7 @@ export function useIpcEvents(): void {
             const store = useAppStore.getState()
             const shouldActivate = activate !== false
             if (shouldActivate) {
-              store.setActiveView('terminal')
-              store.setActiveWorktree(worktreeId)
-              // Why: CLI-driven terminal focus is a user-initiated worktree switch
-              // and must stamp focus recency for Cmd+J. Doesn't route through
-              // activateAndRevealWorktree because it has custom terminal-creation
-              // logic; see docs/cmd-j-empty-query-ordering.md.
-              store.markWorktreeVisited(worktreeId)
+              activateTerminalInitiatedWorktree(store, worktreeId)
             }
             const existingTab = ptyId
               ? (store.tabsByWorktree[worktreeId] ?? []).find(
@@ -1406,6 +1399,7 @@ export function useIpcEvents(): void {
               store.setActiveTabType('terminal')
               store.setActiveTab(tab.id)
               store.revealWorktreeInSidebar(worktreeId)
+              focusTerminalInitiatedTab(tab.id, leafId)
             }
             // Why: only stamp the runtime-supplied title on freshly created tabs.
             // Existing tabs may have a user customTitle (set via UI rename) that
@@ -1537,11 +1531,7 @@ export function useIpcEvents(): void {
           }
           const shouldActivate = data.activate !== false
           if (shouldActivate) {
-            store.setActiveView('terminal')
-            store.setActiveWorktree(worktreeId)
-            // Why: CLI-driven focused terminal-create requests are user-initiated
-            // worktree switches; unfocused renderer-backed creates must not reorder Cmd+J.
-            store.markWorktreeVisited(worktreeId)
+            activateTerminalInitiatedWorktree(store, worktreeId)
           } else {
             // Why: renderer-backed Codex startup must mount a TerminalPane so the
             // PTY is born in the renderer, but it must not switch the active UI.
@@ -1588,6 +1578,7 @@ export function useIpcEvents(): void {
             store.setActiveTabType('terminal')
             store.setActiveTab(tab.id)
             store.revealWorktreeInSidebar(worktreeId)
+            focusTerminalInitiatedTab(tab.id)
           }
           if (data.title) {
             store.setTabCustomTitle(tab.id, data.title, { recordInteraction: false })
@@ -1650,11 +1641,7 @@ export function useIpcEvents(): void {
           scrollToBottomIfOutputSinceLastView
         }) => {
           const store = useAppStore.getState()
-          store.setActiveWorktree(worktreeId)
-          // Why: CLI-driven focus is a user-initiated switch; stamp focus
-          // recency for Cmd+J. See docs/cmd-j-empty-query-ordering.md.
-          store.markWorktreeVisited(worktreeId)
-          store.setActiveView('terminal')
+          activateTerminalInitiatedWorktree(store, worktreeId)
           store.setActiveTab(tabId)
           store.revealWorktreeInSidebar(worktreeId)
           if (ackPaneKeyOnSuccess || flashFocusedPane || scrollToBottomIfOutputSinceLastView) {
@@ -1667,9 +1654,7 @@ export function useIpcEvents(): void {
             })
             return
           }
-          if (!focusRuntimeTerminalSurface(tabId, leafId)) {
-            focusTerminalTabSurface(tabId, leafId)
-          }
+          focusTerminalInitiatedTab(tabId, leafId)
         }
       )
     )
@@ -2664,21 +2649,12 @@ export function useIpcEvents(): void {
         const store = useAppStore.getState()
         const { activeView, activeTabType, editorFontZoomLevel, setEditorFontZoomLevel, settings } =
           store
-        const activeBrowserPageId = resolveActiveBrowserPageId(store)
         const target = resolveZoomTarget({
           activeView,
           activeTabType,
-          activeBrowserPageId,
           activeElement: document.activeElement
         })
         if (target === 'terminal') {
-          return
-        }
-        if (target === 'browser') {
-          if (!activeBrowserPageId) {
-            return
-          }
-          dispatchBrowserPageZoomEvent({ browserPageId: activeBrowserPageId, direction })
           return
         }
         if (target === 'editor') {

@@ -11,7 +11,11 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
-import type { TerminalTab } from '../../../shared/types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
+  TerminalTab
+} from '../../../shared/types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
@@ -141,13 +145,27 @@ function hasRestorableLegacyTabPty(
   return Boolean(tab.ptyId) || (ptyIdsByTabId[tab.id]?.length ?? 0) > 0
 }
 
+function layoutContainsLeaf(
+  node: TerminalPaneLayoutNode | null | undefined,
+  leafId: string
+): boolean {
+  if (!node) {
+    return false
+  }
+  if (node.type === 'leaf') {
+    return node.leafId === leafId
+  }
+  return layoutContainsLeaf(node.first, leafId) || layoutContainsLeaf(node.second, leafId)
+}
+
 function hasMatchingStablePaneLayout(
   tabId: string,
   leafId: string,
-  terminalLayoutsByTabId: ReturnType<typeof useAppStore.getState>['terminalLayoutsByTabId']
+  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
 ): boolean {
-  const ptyIdsByLeafId = terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId
-  return Boolean(ptyIdsByLeafId && Object.hasOwn(ptyIdsByLeafId, leafId))
+  // Why: hibernation intentionally clears the live PTY binding after the pane
+  // exits, but the preserved leaf still owns cold-restore for its session.
+  return layoutContainsLeaf(terminalLayoutsByTabId[tabId]?.root, leafId)
 }
 
 function findSameWorktreeTab(

@@ -16,6 +16,7 @@ import {
   writeAiVaultSessionDragData
 } from '@/lib/ai-vault-session-drag'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { agentLabel } from './ai-vault-session-filters'
 import { translate } from '@/i18n/i18n'
 import { SessionInlineDetails, SessionTime } from './AiVaultSessionDetails'
@@ -24,7 +25,7 @@ import { SessionRowTrailingActions } from './SessionRowTrailingActions'
 
 export function VaultSessionRow({
   session,
-  resumeCommand,
+  resumeStartup,
   detailsExpanded,
   resumeDisabled,
   onToggleDetails,
@@ -37,7 +38,7 @@ export function VaultSessionRow({
   onOpenCwd
 }: {
   session: AiVaultSession
-  resumeCommand: string
+  resumeStartup: AiVaultResumeStartup
   detailsExpanded: boolean
   resumeDisabled: boolean
   onToggleDetails: () => void
@@ -66,11 +67,13 @@ export function VaultSessionRow({
         agent: session.agent,
         sessionId: session.sessionId,
         title: session.title,
-        command: resumeCommand
+        command: resumeStartup.command,
+        ...(resumeStartup.env ? { env: resumeStartup.env } : {}),
+        ...(resumeStartup.launchConfig ? { launchConfig: resumeStartup.launchConfig } : {})
       })
       window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_START_EVENT))
     },
-    [resumeDisabled, session.agent, session.sessionId, session.title, resumeCommand]
+    [resumeDisabled, session.agent, session.sessionId, session.title, resumeStartup]
   )
 
   return (

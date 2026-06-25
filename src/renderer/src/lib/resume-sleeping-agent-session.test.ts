@@ -119,6 +119,30 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
+  it('skips hibernated stable panes after their live PTY binding is cleared', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    const record = makeRecord({ paneKey, origin: 'worktree-sleep', state: 'done' })
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null
+        }
+      },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    } as never)
+
+    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
+
+    const state = useAppStore.getState()
+    expect(launched).toBe(0)
+    expect(state.tabsByWorktree['wt-1']).toHaveLength(1)
+    expect(state.pendingStartupByTabId).toEqual({})
+    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
+  })
+
   it('skips legacy numeric pane-key records owned by a preserved tab wake hint', () => {
     const record = makeRecord({ paneKey: 'tab-1:0', origin: 'worktree-sleep' })
     useAppStore.setState({

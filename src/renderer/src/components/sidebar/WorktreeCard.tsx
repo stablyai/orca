@@ -23,6 +23,7 @@ import WorktreeContextMenu from './WorktreeContextMenu'
 import { SshDisconnectedDialog } from './SshDisconnectedDialog'
 import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
 import WorktreeCardAgents from './WorktreeCardAgents'
+import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
 import { cn } from '@/lib/utils'
 import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
@@ -75,6 +76,7 @@ import { translate } from '@/i18n/i18n'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
 
 type WorktreeRenameRequest = {
   worktreeId: string
@@ -231,6 +233,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const fetchIssue = useAppStore((s) => s.fetchIssue)
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
+  const agentActivityDisplayMode =
+    useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
   const projectGroups = useAppStore((s) => s.projectGroups)
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
   const compactCards = !newCardStyle && settings?.compactWorktreeCards === true
@@ -959,6 +963,16 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const metaReview = showPR ? hoverReview : null
   const metaAutomationProvenance = showAutomation ? worktree.automationProvenance : null
   const metaComment = showComment ? hoverComment : null
+  const showInlineAgentList = cardProps.includes('inline-agents') && (newCardStyle || !compactCards)
+  const compactInlineAgentRows = useWorktreeAgentRows(
+    worktree.id,
+    showInlineAgentList && agentActivityDisplayMode === 'compact'
+  )
+  const compactInlineAgentRowsVisible =
+    showInlineAgentList &&
+    agentActivityDisplayMode === 'compact' &&
+    compactInlineAgentRows.length > 0
+  const showAggregateCacheTimer = !compactCards && !compactInlineAgentRowsVisible
   const handleOpenGitHubIssueInOrca = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -1051,8 +1065,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
     automationProvenance: metaAutomationProvenance
   })
   const hasPorts = showPorts && workspacePorts.length > 0
-  const cacheStartedAt = usePromptCacheCountdownStartedAt(worktree.id)
-  const cacheTtlMs = useAppStore((s) => s.settings?.promptCacheTtlMs ?? 0)
+  const cacheStartedAt = usePromptCacheCountdownStartedAt(worktree.id, showAggregateCacheTimer)
+  const cacheTtlMs = useAppStore((s) =>
+    showAggregateCacheTimer ? (s.settings?.promptCacheTtlMs ?? 0) : 0
+  )
   // Why: pinned trees mix repos in one section; a leading repo icon keeps the
   // list scannable, so it shows regardless of groupBy's hideRepoBadge.
   const showPinnedRepoIcon = inPinnedSection && !!repo
@@ -1118,7 +1134,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
       ? trimmedVisibleCardTitle
       : undefined
   const hasHoverIdentity = Boolean(hoverWorkspaceTitle || hoverBranchName)
-  const showInlineAgentList = cardProps.includes('inline-agents') && (newCardStyle || !compactCards)
   const hasHoverDetails =
     newCardStyle &&
     (hasWorktreeCardDetails({
@@ -1626,6 +1641,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         {showInlineAgentList && (
           <WorktreeCardAgents
             worktreeId={worktree.id}
+            agents={agentActivityDisplayMode === 'compact' ? compactInlineAgentRows : undefined}
             className={hasMetaRow || remoteBranchConflict ? 'mt-0' : '-mt-1'}
           />
         )}

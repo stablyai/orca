@@ -277,7 +277,9 @@ export class Coordinator {
   private handleLifecycleMessage(msg: MessageRow): void {
     const result = reconcileLifecycleMessage(this.db, msg, this.opts.onLog)
     if (result.action === 'completed') {
-      this.state.completedTasks.push(result.taskId)
+      if (!this.state.completedTasks.includes(result.taskId)) {
+        this.state.completedTasks.push(result.taskId)
+      }
     }
   }
 

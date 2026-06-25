@@ -138,6 +138,7 @@ import {
   findGithubWorkItemWorkspaceAttachment,
   getGithubWorkItemWorkspaceAttachmentLabel
 } from '@/lib/github-work-item-workspace-attachment'
+import { createGitHubWorkItemWorkspaceInBackground } from '@/lib/github-work-item-background-create'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import GitHubItemDialog, { type ItemDialogTab } from '@/components/GitHubItemDialog'
@@ -6495,17 +6496,16 @@ export default function TaskPage(): React.JSX.Element {
 
   const handleUseWorkItem = useCallback(
     (item: GitHubWorkItem): void => {
-      // Why: open the unified New Workspace dialog pre-filled with the work
-      // item as the selected source so the user can confirm name / agent /
-      // setup before the worktree is created. Earlier the "Use" CTA created
-      // and activated the worktree synchronously, which was disorienting —
-      // the worktree appeared in the sidebar before the user had a chance
-      // to review it. The composer already owns the prefill flow. Telemetry
-      // attribution flows via `openComposerForItem` (sets telemetrySource).
       useAppStore.getState().recordFeatureInteraction('github-tasks')
-      openComposerForItem(item)
+      void createGitHubWorkItemWorkspaceInBackground({
+        item,
+        repoId: item.repoId,
+        taskSourceContext: getTaskPageRepoSourceContext(repoMap.get(item.repoId), 'github'),
+        telemetrySource: 'sidebar',
+        openModalFallback: () => openComposerForItem(item)
+      })
     },
-    [openComposerForItem]
+    [openComposerForItem, repoMap]
   )
 
   const handleOpenOrUseGitHubWorkItem = useCallback(

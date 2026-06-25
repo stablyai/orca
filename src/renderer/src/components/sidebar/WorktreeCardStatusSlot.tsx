@@ -121,6 +121,9 @@ export function WorktreeCardStatusSlot({
         : statusLabel
   const passiveStatusTooltip =
     newCardStyle && isUnread ? `${passiveStatusLabel} · Unread` : passiveStatusLabel
+  // Why: the working spinner owns the new-card status lane, but unread state
+  // should still surface in tooltip/sr-only copy and reappear afterward.
+  const showNewCardUnreadAlert = newCardStyle && isUnread && showStatus && status !== 'working'
   const reviewStatusIconClassName = compactReviewAndBranchStatusIconClassName
   const branchStatusIcon = <GitBranch className={branchStatusIconClassName} aria-hidden="true" />
   const passiveStatus =
@@ -173,7 +176,7 @@ export function WorktreeCardStatusSlot({
   }
 
   if (!unreadActionEnabled) {
-    return overlayNewCardUnreadStatus(passiveStatus, newCardStyle && isUnread && showStatus)
+    return overlayNewCardUnreadStatus(passiveStatus, showNewCardUnreadAlert)
   }
 
   const actionLabel = isUnread ? 'Mark as read' : 'Mark as unread'

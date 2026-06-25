@@ -822,7 +822,23 @@
         "ba8e329d92": "Desmarcar visto",
         "3f79ffc8b7": "Abra los detalles de relaciones públicas para ver los revisores actuales.",
         "5c1c973855": "Eliminar revisor",
-        "commentTooLarge": "Comment is too large to submit safely."
+        "commentTooLarge": "Comment is too large to submit safely.",
+        "timeline": {
+          "completed": "as completed",
+          "notPlanned": "as not planned",
+          "someone": "someone",
+          "assigned": "assigned",
+          "unassigned": "unassigned",
+          "mentioned": "mentioned this",
+          "in": "in",
+          "closed": "closed this",
+          "reopened": "reopened this",
+          "moved": "moved this",
+          "from": "from",
+          "to": "to",
+          "activity": "Activity",
+          "noActivity": "No activity yet."
+        }
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Reabrir",
@@ -4941,7 +4957,11 @@
           "70bb30feb1": "Guarde el editor y los cambios de diferencias editables automáticamente después de una breve pausa.",
           "0df2e4fd12": "Guardar archivos automáticamente",
           "d21136d9ef": "Configure cómo Orca persiste en las ediciones de archivos.",
-          "45c6e85c4d": "Editor"
+          "45c6e85c4d": "Editor",
+          "8f1afdfbd8": "Diff Word Wrap",
+          "4aa4d9fb73": "Wrap long lines in diff editors instead of requiring horizontal scrolling.",
+          "bf16ef0af2": "Off",
+          "3f6892f307": "On"
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "host local, 127.0.0.1, *.interno",
@@ -10465,7 +10485,9 @@
           "8368d256ec": "rama combinada",
           "8f68ad9ca9": "Mostrar {{value0}} AI {{value1}}",
           "724a13568d": "en {{value0}}",
-          "6094135eec": "frente a {{value0}}"
+          "6094135eec": "frente a {{value0}}",
+          "a4420ca1f7": "Wrap On",
+          "dde325ddfe": "Wrap Off"
         },
         "ConflictComponents": {
           "f338288514": "Cargando contenidos conflictivos...",
@@ -10553,7 +10575,8 @@
           "3e0ce48c24": "Exportar como PDF",
           "561251019a": "Más acciones",
           "8c8b7f5ff5": "Mostrar portada",
-          "10c39d58c1": "Ocultar materia preliminar"
+          "10c39d58c1": "Ocultar materia preliminar",
+          "1eef809708": "Word Wrap"
         },
         "EditorPanelShell": {
           "e2c4dec350": "Cargando editor..."
