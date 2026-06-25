@@ -31,6 +31,7 @@ import {
   computeTrustedHash,
   escapeTomlString,
   getCodexCanonicalTrustPath,
+  normalizeHookTrustKeyForLookup,
   parseTrustKey,
   readHookTrustEntries,
   removeHookTrustEntries,
@@ -209,7 +210,10 @@ function removeStaleRuntimeHookTrustEntries(
   expectedEntries: readonly CodexTrustEntry[]
 ): void {
   const expectedHashes = new Map(
-    expectedEntries.map((entry) => [computeTrustKey(entry), computeTrustedHash(entry)])
+    expectedEntries.map((entry) => [
+      normalizeHookTrustKeyForLookup(computeTrustKey(entry)),
+      computeTrustedHash(entry)
+    ])
   )
   const canonicalRuntimeHooksPath = getCodexCanonicalTrustPath(runtimeHooksPath)
   const staleKeys: string[] = []
@@ -218,7 +222,7 @@ function removeStaleRuntimeHookTrustEntries(
     if (!parsed || getCodexCanonicalTrustPath(parsed.sourcePath) !== canonicalRuntimeHooksPath) {
       continue
     }
-    if (expectedHashes.get(key) === state.trustedHash) {
+    if (expectedHashes.get(normalizeHookTrustKeyForLookup(key)) === state.trustedHash) {
       continue
     }
     staleKeys.push(key)
