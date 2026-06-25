@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: this file keeps the repo host-routing and add-project fallback matrix on one shared store fixture surface, which makes the runtime-versus-local invariants auditable in one place. */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import { workItemsCacheKey } from './github'
