@@ -22,6 +22,7 @@ vi.mock('./filesystem-auth', () => ({
 import {
   ensureDefaultFloatingWorkspacePath,
   grantFloatingWorkspaceDirectory,
+  isTrustedFloatingWorkspaceDescendant,
   resolveFloatingTerminalCwd,
   sanitizeFloatingWorkspaceDirectorySetting
 } from './floating-workspace-directory'
@@ -201,5 +202,77 @@ describe('floating workspace directory authorization', () => {
       arbitraryDir
     )
     expect(authorizeExternalPathMock).not.toHaveBeenCalledWith(arbitraryDir)
+  })
+
+  it('recognizes the app-owned floating workspace and descendants as mobile-trusted', async () => {
+    const store = createStore()
+    const appWorkspace = path.join(userDataDir, 'floating-workspace')
+    await mkdir(appWorkspace, { recursive: true })
+    const childDir = path.join(appWorkspace, 'child')
+    await mkdir(childDir)
+
+    await expect(isTrustedFloatingWorkspaceDescendant(store as never, appWorkspace)).resolves.toBe(
+      true
+    )
+    await expect(isTrustedFloatingWorkspaceDescendant(store as never, childDir)).resolves.toBe(true)
+  })
+
+  it('recognizes picker-approved directories and descendants as mobile-trusted', async () => {
+    const store = createStore()
+    const selectedDir = path.join(tempRoot, 'notes')
+    await mkdir(selectedDir)
+    const childDir = path.join(selectedDir, 'child')
+    await mkdir(childDir)
+
+    await grantFloatingWorkspaceDirectory(store as never, selectedDir)
+
+    await expect(isTrustedFloatingWorkspaceDescendant(store as never, selectedDir)).resolves.toBe(
+      true
+    )
+    await expect(isTrustedFloatingWorkspaceDescendant(store as never, childDir)).resolves.toBe(true)
+  })
+
+  it('rejects sibling prefix paths for mobile trust', async () => {
+    const store = createStore()
+    const trustedDir = path.join(tempRoot, 'notes')
+    await mkdir(trustedDir)
+    const siblingDir = path.join(tempRoot, 'notes-other')
+    await mkdir(siblingDir)
+
+    await grantFloatingWorkspaceDirectory(store as never, trustedDir)
+
+    await expect(isTrustedFloatingWorkspaceDescendant(store as never, siblingDir)).resolves.toBe(
+      false
+    )
+  })
+
+  it('rejects home for mobile trust without a picker grant', async () => {
+    const store = createStore()
+
+    await expect(isTrustedFloatingWorkspaceDescendant(store as never, homeDir)).resolves.toBe(false)
+  })
+
+  it('canonicalizes symlink cwd before mobile trust', async () => {
+    const store = createStore()
+    const originalTarget = path.join(tempRoot, 'original-target')
+    const retargetedTarget = path.join(tempRoot, 'retargeted-target')
+    const selectedLink = path.join(tempRoot, 'selected-link')
+    await mkdir(originalTarget)
+    await mkdir(retargetedTarget)
+    await symlinkDirectory(originalTarget, selectedLink)
+
+    await grantFloatingWorkspaceDirectory(store as never, selectedLink)
+
+    const insideOriginal = path.join(originalTarget, 'child')
+    await mkdir(insideOriginal)
+    await expect(
+      isTrustedFloatingWorkspaceDescendant(store as never, insideOriginal)
+    ).resolves.toBe(true)
+
+    await unlink(selectedLink)
+    await symlinkDirectory(retargetedTarget, selectedLink)
+    await expect(isTrustedFloatingWorkspaceDescendant(store as never, selectedLink)).resolves.toBe(
+      false
+    )
   })
 })

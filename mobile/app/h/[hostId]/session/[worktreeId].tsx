@@ -4183,6 +4183,7 @@ export default function SessionScreen() {
 
   useEffect(() => {
     if (
+      isFloatingWorkspaceRoute ||
       !client ||
       !showEmptyState ||
       creating ||
@@ -4196,7 +4197,15 @@ export default function SessionScreen() {
     initialEmptySessionAutoCreateRef.current = worktreeId
     setCreateError('')
     void handleCreateTerminal()
-  }, [client, creating, creatingBrowser, creatingMarkdown, showEmptyState, worktreeId])
+  }, [
+    client,
+    creating,
+    creatingBrowser,
+    creatingMarkdown,
+    isFloatingWorkspaceRoute,
+    showEmptyState,
+    worktreeId
+  ])
 
   // Why: reconnect trickles to 90s at its give-up cap; surface tap-to-retry so recovery needn't wait it out (issue #5049).
   const connectionVerdict = classifyConnection({
@@ -4346,6 +4355,14 @@ export default function SessionScreen() {
   }, [])
 
   const handlePanelTap = (tapped: Exclude<ActivePanel, null>) => {
+    if (
+      isFloatingWorkspaceRoute &&
+      (tapped === 'files' || tapped === 'sourceControl' || tapped === 'pr')
+    ) {
+      // Why: the floating sentinel exposes terminal tabs only; ignore stale
+      // panel taps so Files/Source Control/PR never open from this route.
+      return
+    }
     const action = resolvePanelAction({ canDock: canDockPanel, tapped, current: activePanel })
     if (action.kind === 'dock') {
       setActivePanel(action.next)
@@ -4510,25 +4527,31 @@ export default function SessionScreen() {
                 ))}
               </ScrollView>
               {/* Why: pinned outside the scroll strip so the new-agent button stays reachable however far the tabs scroll. */}
-              <Pressable
-                style={({ pressed }) => [
-                  styles.newTerminalButton,
-                  pressed && styles.newTerminalButtonPressed,
-                  (creating || creatingBrowser || creatingMarkdown || connState !== 'connected') &&
-                    styles.newTerminalButtonDisabled
-                ]}
-                disabled={
-                  creating || creatingBrowser || creatingMarkdown || connState !== 'connected'
-                }
-                onPress={() => {
-                  setCreateError('')
-                  setShowCreateTabDrawer(true)
-                }}
-                accessibilityLabel="New tab"
-              >
-                <Plus size={16} color={colors.textSecondary} strokeWidth={2.2} />
-              </Pressable>
-              {quickCommandsSupported === true ? (
+              {/* Why: the floating sentinel is a read-only projection of desktop-owned terminals — no tab creation or quick commands. */}
+              {!isFloatingWorkspaceRoute && (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.newTerminalButton,
+                    pressed && styles.newTerminalButtonPressed,
+                    (creating ||
+                      creatingBrowser ||
+                      creatingMarkdown ||
+                      connState !== 'connected') &&
+                      styles.newTerminalButtonDisabled
+                  ]}
+                  disabled={
+                    creating || creatingBrowser || creatingMarkdown || connState !== 'connected'
+                  }
+                  onPress={() => {
+                    setCreateError('')
+                    setShowCreateTabDrawer(true)
+                  }}
+                  accessibilityLabel="New tab"
+                >
+                  <Plus size={16} color={colors.textSecondary} strokeWidth={2.2} />
+                </Pressable>
+              )}
+              {!isFloatingWorkspaceRoute && quickCommandsSupported === true ? (
                 <QuickCommandsTabButton
                   disabled={
                     creating || creatingBrowser || creatingMarkdown || connState !== 'connected'
@@ -4564,33 +4587,39 @@ export default function SessionScreen() {
               </View>
             ) : showEmptyState ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>No tabs in this session</Text>
+                <Text style={styles.emptyText}>
+                  {isFloatingWorkspaceRoute
+                    ? 'No trusted floating terminal sessions'
+                    : 'No tabs in this session'}
+                </Text>
                 {createError ? <Text style={styles.createError}>{createError}</Text> : null}
-                <View style={styles.emptyActions}>
-                  <Pressable
-                    style={[
-                      styles.createButton,
-                      (creating ||
-                        creatingBrowser ||
-                        creatingMarkdown ||
-                        connState !== 'connected') &&
-                        styles.createButtonDisabled
-                    ]}
-                    disabled={
-                      creating || creatingBrowser || creatingMarkdown || connState !== 'connected'
-                    }
-                    onPress={() => {
-                      setCreateError('')
-                      setShowCreateTabDrawer(true)
-                    }}
-                  >
-                    <Text style={styles.createButtonText}>
-                      {creating || creatingBrowser || creatingMarkdown
-                        ? 'Creating...'
-                        : 'Create Tab'}
-                    </Text>
-                  </Pressable>
-                </View>
+                {!isFloatingWorkspaceRoute && (
+                  <View style={styles.emptyActions}>
+                    <Pressable
+                      style={[
+                        styles.createButton,
+                        (creating ||
+                          creatingBrowser ||
+                          creatingMarkdown ||
+                          connState !== 'connected') &&
+                          styles.createButtonDisabled
+                      ]}
+                      disabled={
+                        creating || creatingBrowser || creatingMarkdown || connState !== 'connected'
+                      }
+                      onPress={() => {
+                        setCreateError('')
+                        setShowCreateTabDrawer(true)
+                      }}
+                    >
+                      <Text style={styles.createButtonText}>
+                        {creating || creatingBrowser || creatingMarkdown
+                          ? 'Creating...'
+                          : 'Create Tab'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                )}
               </View>
             ) : activeMarkdownTab ? (
               <View style={styles.markdownFrame}>

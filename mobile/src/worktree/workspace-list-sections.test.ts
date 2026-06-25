@@ -695,3 +695,86 @@ describe('buildSections', () => {
     expect(sections[0]?.data[0]?.lineageCollapsed).toBe(true)
   })
 })
+
+describe('floating workspace row', () => {
+  function floatingWorktree(overrides: Partial<Worktree> = {}): Worktree {
+    return worktree({
+      workspaceKind: 'floating-workspace',
+      worktreeId: 'global-floating-terminal',
+      repoId: 'global-floating-terminal',
+      repo: 'Floating Workspace',
+      branch: '',
+      displayName: 'Floating Workspace',
+      path: '',
+      comment: 'Trusted floating terminal sessions',
+      isPinned: true,
+      liveTerminalCount: 1,
+      hasAttachedPty: true,
+      status: 'active',
+      ...overrides
+    })
+  }
+
+  it('survives an active repo filter', () => {
+    const floating = floatingWorktree()
+    const repoMatch = worktree({ worktreeId: 'repo-match', repoId: 'repo-1' })
+    const repoMiss = worktree({ worktreeId: 'repo-miss', repoId: 'repo-2' })
+
+    const result = filterWorktrees(
+      [floating, repoMatch, repoMiss],
+      { filterRepoIds: new Set(['repo-1']), hideSleeping: false, hideDefaultBranch: false },
+      ''
+    )
+
+    expect(result.map((w) => w.worktreeId)).toEqual(['global-floating-terminal', 'repo-match'])
+  })
+
+  it('is searchable by floating but not by unrelated branch/repo terms', () => {
+    const floating = floatingWorktree()
+    const other = worktree({ worktreeId: 'other', repo: 'orca', branch: 'feature/foo' })
+
+    const floatingHit = filterWorktrees(
+      [floating, other],
+      { filterRepoIds: new Set(), hideSleeping: false, hideDefaultBranch: false },
+      'floating'
+    )
+    expect(floatingHit.map((w) => w.worktreeId)).toEqual(['global-floating-terminal'])
+
+    const branchQuery = filterWorktrees(
+      [floating, other],
+      { filterRepoIds: new Set(), hideSleeping: false, hideDefaultBranch: false },
+      'feature'
+    )
+    expect(branchQuery.map((w) => w.worktreeId)).toEqual(['other'])
+  })
+
+  it('stays in the pinned section across repo/status/pr grouping', () => {
+    const floating = floatingWorktree()
+    const normal = worktree({ worktreeId: 'normal', repoId: 'repo-1' })
+
+    for (const groupMode of ['repo', 'workspaceStatus', 'prStatus'] as const) {
+      const sections = buildSections(
+        [floating, normal],
+        'recent',
+        { filterRepoIds: new Set(), hideSleeping: false, hideDefaultBranch: false },
+        '',
+        groupMode,
+        new Set(['global-floating-terminal'])
+      )
+      const pinned = sections.find((section) => section.title === 'Pinned')
+      expect(pinned?.data.map((w) => w.worktreeId)).toEqual(['global-floating-terminal'])
+    }
+  })
+})
+
+describe('FLOATING_TERMINAL_WORKTREE_ID mobile mirror', () => {
+  it('matches the canonical sentinel from src/shared/constants', async () => {
+    // Why: Metro cannot bundle runtime values from ../../../src/shared, so mobile
+    // mirrors the sentinel locally. Vitest runs in node (not Metro-sandboxed), so it
+    // can import the real constant and pin the mirror against drift.
+    const { FLOATING_TERMINAL_WORKTREE_ID: mobileSentinel } = await import('./workspace-list-types')
+    const { FLOATING_TERMINAL_WORKTREE_ID: canonicalSentinel } =
+      await import('../../../src/shared/constants')
+    expect(mobileSentinel).toBe(canonicalSentinel)
+  })
+})

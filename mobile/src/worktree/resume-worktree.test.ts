@@ -29,4 +29,17 @@ describe('pickResumeWorktree', () => {
     const list = [wt('a'), wt('b'), wt('c')]
     expect(pickResumeWorktree(list)?.id).toBe('a')
   })
+
+  it('never resumes a floating workspace even when pinned/active', () => {
+    const list = [
+      { id: 'floating', isActive: true, workspaceKind: 'floating-workspace' as const },
+      { id: 'normal', isActive: true, lastOutputAt: 5, workspaceKind: 'git' as const }
+    ]
+    expect(pickResumeWorktree(list)?.id).toBe('normal')
+  })
+
+  it('returns null when only floating workspaces are present', () => {
+    const list = [{ id: 'floating', isActive: true, workspaceKind: 'floating-workspace' as const }]
+    expect(pickResumeWorktree(list)).toBeNull()
+  })
 })

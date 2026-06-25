@@ -67,13 +67,51 @@ function isTrustedFloatingWorkspaceDirectory(
   return getTrustedFloatingWorkspaceDirectories(settings).has(path.resolve(canonicalDirPath))
 }
 
+export function getDefaultFloatingWorkspacePath(): string {
+  return path.join(app.getPath('userData'), FLOATING_WORKSPACE_DIRNAME)
+}
+
 export async function ensureDefaultFloatingWorkspacePath(): Promise<string> {
-  const cwd = path.join(app.getPath('userData'), FLOATING_WORKSPACE_DIRNAME)
+  const cwd = getDefaultFloatingWorkspacePath()
   await mkdir(cwd, { recursive: true })
   // Why: the default floating workspace lives outside repo roots by design;
   // authorize only this app-owned directory instead of widening access to ~.
   authorizeExternalPath(cwd)
   return cwd
+}
+
+function isExactOrDescendant(root: string, target: string): boolean {
+  const relative = path.relative(root, target)
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
+}
+
+export async function isTrustedFloatingWorkspaceDescendant(
+  store: Store,
+  cwd: string | null | undefined
+): Promise<boolean> {
+  if (typeof cwd !== 'string' || cwd.trim().length === 0) {
+    return false
+  }
+  const canonicalCwd = await canonicalizeAccessibleDirectory(resolveFloatingWorkspaceInput(cwd))
+  if (!canonicalCwd) {
+    return false
+  }
+  const trustRoots = new Set<string>()
+  const canonicalDefault = await canonicalizeAccessibleDirectory(getDefaultFloatingWorkspacePath())
+  if (canonicalDefault) {
+    trustRoots.add(canonicalDefault)
+  }
+  for (const trustedDir of await getPreservedTrustedFloatingWorkspaceDirectories(
+    store.getSettings()
+  )) {
+    trustRoots.add(trustedDir)
+  }
+  for (const root of trustRoots) {
+    if (isExactOrDescendant(root, canonicalCwd)) {
+      return true
+    }
+  }
+  return false
 }
 
 export async function resolveFloatingTerminalCwd(

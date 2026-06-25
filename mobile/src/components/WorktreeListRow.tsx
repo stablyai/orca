@@ -18,7 +18,7 @@ function displayBranch(branch: string): string {
 // Minimal row shape needed for rendering — a structural subset of the screen's
 // Worktree so this component stays decoupled from the screen's local type.
 export type WorktreeListRowItem = {
-  workspaceKind?: 'git' | 'folder-workspace'
+  workspaceKind?: 'git' | 'folder-workspace' | 'floating-workspace'
   worktreeId: string
   repo: string
   branch: string
@@ -70,8 +70,13 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
   onToggleLineage
 }: Props<T>) {
   const isFolderWorkspace = item.workspaceKind === 'folder-workspace'
+  const isFloatingWorkspace = item.workspaceKind === 'floating-workspace'
   const folderMeta = item.comment?.trim() || item.path || 'Folder'
-  const metaText = isFolderWorkspace ? folderMeta : displayBranch(item.branch)
+  const metaText = isFloatingWorkspace
+    ? item.comment?.trim() || 'Terminal-only'
+    : isFolderWorkspace
+      ? folderMeta
+      : displayBranch(item.branch)
   const lineageDepth = Math.max(0, item.lineageDepth ?? 0)
   const lineageChildCount = item.lineageChildCount ?? 0
 
@@ -132,6 +137,11 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
               <Text style={styles.folderBadgeText}>Folder</Text>
             </View>
           )}
+          {isFloatingWorkspace && (
+            <View style={styles.floatingBadge}>
+              <Text style={styles.floatingBadgeText}>Floating</Text>
+            </View>
+          )}
           <WorktreeMetaGlyphs
             comment={item.comment}
             linkedLinearIssue={item.linkedLinearIssue}
@@ -150,7 +160,7 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
           {/* Repo glyph+name only when not already grouped under this repo;
               MobileRepoIcon falls back to a Folder (matching desktop's default)
               rather than a bare colored dot. */}
-          {!hideRepo && (
+          {!hideRepo && !isFloatingWorkspace && (
             <>
               <MobileRepoIcon repoIcon={repoIcon} size={11} color={repoColor} />
               <Text style={styles.repoName} numberOfLines={1}>
@@ -268,6 +278,16 @@ const styles = StyleSheet.create({
     borderRadius: 4
   },
   folderBadgeText: {
+    fontSize: 10,
+    color: colors.textSecondary
+  },
+  floatingBadge: {
+    backgroundColor: colors.bgRaised,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4
+  },
+  floatingBadgeText: {
     fontSize: 10,
     color: colors.textSecondary
   },

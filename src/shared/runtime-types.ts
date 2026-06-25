@@ -609,7 +609,7 @@ export type RuntimeWorktreeAgentRow = {
 }
 
 export type RuntimeWorktreePsSummary = {
-  workspaceKind?: 'git' | 'folder-workspace'
+  workspaceKind?: 'git' | 'folder-workspace' | 'floating-workspace'
   worktreeId: string
   repoId: string
   hostId?: Worktree['hostId']

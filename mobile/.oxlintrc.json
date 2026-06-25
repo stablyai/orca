@@ -24,7 +24,7 @@
     {
       "files": ["app/h/*/session/*.tsx"],
       "rules": {
-        "max-lines": ["error", { "max": 5015, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": ["error", { "max": 5029, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {
@@ -48,7 +48,7 @@
     {
       "files": ["app/h/*/index.tsx"],
       "rules": {
-        "max-lines": ["error", { "max": 1603, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": ["error", { "max": 1605, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {

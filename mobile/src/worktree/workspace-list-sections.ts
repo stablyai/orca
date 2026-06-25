@@ -53,7 +53,7 @@ export function isWorktreeActive(w: Worktree): boolean {
 }
 
 function isDefaultBranchWorkspace(w: Worktree): boolean {
-  if (w.workspaceKind === 'folder-workspace') {
+  if (w.workspaceKind === 'folder-workspace' || w.workspaceKind === 'floating-workspace') {
     return false
   }
   if (w.isMainWorktree !== undefined) {
@@ -86,16 +86,28 @@ export function filterWorktrees(
     result = result.filter((w) => !isDefaultBranchWorkspace(w))
   }
   if (filters.filterRepoIds.size > 0) {
-    result = result.filter((w) => filters.filterRepoIds.has(w.repoId))
+    result = result.filter(
+      (w) => w.workspaceKind === 'floating-workspace' || filters.filterRepoIds.has(w.repoId)
+    )
   }
   if (search.trim()) {
     const q = search.toLowerCase()
-    result = result.filter(
-      (w) =>
-        w.displayName.toLowerCase().includes(q) ||
+    result = result.filter((w) => {
+      if (w.workspaceKind === 'floating-workspace') {
+        return (
+          (w.displayName || w.repo).toLowerCase().includes(q) ||
+          'floating'.includes(q) ||
+          'floating workspace'.includes(q) ||
+          'floating terminal'.includes(q) ||
+          q.includes('floating')
+        )
+      }
+      return (
+        (w.displayName || w.repo).toLowerCase().includes(q) ||
         w.branch.toLowerCase().includes(q) ||
         w.repo.toLowerCase().includes(q)
-    )
+      )
+    })
   }
   return result
 }

@@ -1,10 +1,15 @@
+// @vitest-environment jsdom
+import { act, createElement } from 'react'
+import { createRoot } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
 import type { MobileGitBranchCompareResult } from '../source-control/mobile-branch-compare'
 import type { MobileGitStatusResult } from '../source-control/mobile-git-status'
 import {
   deriveMobilePrBranchContext,
   loadMobilePrBranchContext,
-  loadMobilePrRepoContext
+  loadMobilePrRepoContext,
+  useMobilePrBranchContext,
+  type MobilePrBranchContext
 } from './use-mobile-pr-branch-context'
 
 function status(overrides: Partial<MobileGitStatusResult>): MobileGitStatusResult {
@@ -130,5 +135,47 @@ describe('loadMobilePrBranchContext', () => {
       'github.repoSlug',
       expect.objectContaining({ repo: expect.any(String) })
     )
+  })
+})
+
+describe('useMobilePrBranchContext floating sentinel', () => {
+  it('does no RPC and stays parked when the caller nulls the client', async () => {
+    // Why: the floating sentinel is terminal-only; the session screen passes
+    // `client: null` so the hook never issues PR/git RPCs for it.
+    const sendRequest = vi.fn(async () => ({ ok: false, error: { message: 'unexpected' } }))
+    let observed: MobilePrBranchContext | null = null
+
+    function Probe() {
+      observed = useMobilePrBranchContext({
+        client: null,
+        connState: 'connected',
+        worktreeId: 'global-floating-terminal',
+        includeBranchIdentity: false
+      })
+      return null
+    }
+
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(Probe))
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(sendRequest).not.toHaveBeenCalled()
+    expect(observed).toEqual({
+      branch: null,
+      headSha: null,
+      status: null,
+      isGithubRepo: false,
+      repoLoaded: false,
+      loaded: true
+    })
+
+    await act(async () => {
+      root.unmount()
+    })
   })
 })

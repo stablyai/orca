@@ -6,19 +6,23 @@
 export type ResumeCandidate = {
   isActive?: boolean
   lastOutputAt?: number
+  workspaceKind?: 'git' | 'folder-workspace' | 'floating-workspace'
 }
 
 export function pickResumeWorktree<T extends ResumeCandidate>(worktrees: T[]): T | null {
-  if (worktrees.length === 0) {
+  // Why: the floating sentinel is terminal-only and never a cold-launch resume
+  // target, even when pinned/active, so a phone never auto-opens it.
+  const resumable = worktrees.filter((w) => w.workspaceKind !== 'floating-workspace')
+  if (resumable.length === 0) {
     return null
   }
-  const desktopActive = worktrees.find((w) => w.isActive)
+  const desktopActive = resumable.find((w) => w.isActive)
   if (desktopActive) {
     return desktopActive
   }
   // No desktop focus → most recent terminal output, else the first.
-  let best = worktrees[0]
-  for (const w of worktrees) {
+  let best = resumable[0]
+  for (const w of resumable) {
     if ((w.lastOutputAt ?? 0) > (best.lastOutputAt ?? 0)) {
       best = w
     }

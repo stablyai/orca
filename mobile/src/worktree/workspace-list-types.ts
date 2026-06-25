@@ -1,9 +1,14 @@
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 
+// Why: Metro only bundles modules under mobile/; runtime VALUES from ../../../src/shared
+// cannot cross that boundary (only `import type` is erased pre-resolution). Mirror the
+// canonical sentinel from src/shared/constants.ts here, matching mobile-workspace-statuses.ts.
+export const FLOATING_TERMINAL_WORKTREE_ID = 'global-floating-terminal'
+
 export type Worktree = {
   sectionListKey?: string
-  workspaceKind?: 'git' | 'folder-workspace'
+  workspaceKind?: 'git' | 'folder-workspace' | 'floating-workspace'
   worktreeId: string
   repoId: string
   hostId?: ExecutionHostId

@@ -55,6 +55,7 @@ import { WorktreeListRow } from '../../../src/components/WorktreeListRow'
 import { useNow } from '../../../src/hooks/use-now'
 import { useActiveWorktreeScroll } from '../../../src/hooks/use-active-worktree-scroll'
 import type { RepoIcon } from '../../../../src/shared/repo-icon'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../src/worktree/workspace-list-types'
 import { PickerModal } from '../../../src/components/PickerModal'
 import { ActionSheetContent } from '../../../src/components/ActionSheetModal'
 import { buildWorktreeNavigationActions } from '../../../src/agent-history/worktree-navigation-actions'
@@ -647,7 +648,11 @@ export function HostScreen({
   const openWorktreeSession = useCallback(
     (item: Worktree) => {
       setOptimisticActiveWorktreeId(item.worktreeId)
-      if (client && connState === 'connected') {
+      // Why: the floating sentinel is terminal-only and never a managed worktree.
+      const isFloating = item.worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+      if (!isFloating && client && connState === 'connected') {
+        // Why: opening a mobile session should hydrate host-owned tabs without
+        // pulling other paired clients, especially desktop, into this worktree.
         void client
           .sendRequest('worktree.activate', {
             worktree: `id:${item.worktreeId}`,
