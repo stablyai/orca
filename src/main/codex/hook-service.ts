@@ -68,15 +68,6 @@ function writeCodexHooksJson(configPath: string, hooks: Record<string, HookDefin
   writeHooksJson(configPath, { hooks })
 }
 
-async function writeCodexHooksJsonRemote(
-  sftp: SFTPWrapper,
-  remotePath: string,
-  hooks: Record<string, HookDefinition[]>
-): Promise<void> {
-  // Why: remote Codex parses this file with the same strict schema as local.
-  await writeHooksJsonRemote(sftp, remotePath, { hooks })
-}
-
 function getCodexConfigTomlPath(): string {
   return join(getOrcaManagedCodexHomePath(), 'config.toml')
 }
@@ -996,7 +987,9 @@ export class CodexHookService {
       // Why: SSH remotes use POSIX `.sh` hook paths even when Orca itself is
       // running on Windows; never derive remote script syntax from local OS.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
-      await writeCodexHooksJsonRemote(sftp, remoteConfigPath, nextHooks)
+      // Why: SSH installs edit the user's remote ~/.codex/hooks.json directly.
+      // Preserve non-Orca top-level metadata while replacing the hooks tree.
+      await writeHooksJsonRemote(sftp, remoteConfigPath, { ...config, hooks: nextHooks })
       try {
         const existingToml = (await readTextFileRemote(sftp, remoteTomlPath)) ?? ''
         const updatedToml = upsertHookTrustEntriesInContent(existingToml, trustEntries)
