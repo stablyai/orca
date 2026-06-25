@@ -13,10 +13,11 @@ import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 
 /** Two-phase status reported by the main process while a worktree is created.
+ *  `preparing` covers renderer-side preflight before `createWorktree` starts;
  *  `fetching` covers the base-ref git fetch; `creating` covers `git worktree
- *  add`. The remote/runtime path emits neither, so consumers must tolerate a
- *  phase that never advances past `fetching`. */
-export type WorktreeCreationPhase = 'fetching' | 'creating'
+ *  add`. The remote/runtime path emits neither create phase, so consumers must
+ *  tolerate a preparation state that jumps straight to completion. */
+export type WorktreeCreationPhase = 'preparing' | 'fetching' | 'creating'
 
 export type WorktreeCreationProgressMode = 'stepped' | 'indeterminate'
 
@@ -87,6 +88,9 @@ export type WorktreeCreationRequest = {
   startupPlanTemplate?: WorktreeAgentStartupPlanTemplate | null
   quickPrompt: string
   quickTelemetry: AgentStartedTelemetry | null
+  /** When the composer stays open for sequential creates, completion must not
+   *  steal focus from the next workspace name field. */
+  suppressTerminalFocusOnCompletion?: boolean
 }
 
 /** Renderer-only, session-ephemeral record of an in-flight (or failed) worktree
@@ -119,6 +123,9 @@ export function getCreationProgressLabel(
 ): string {
   if (entry.indeterminate) {
     return 'Setting up your workspace…'
+  }
+  if (entry.phase === 'preparing') {
+    return 'Preparing workspace…'
   }
   return entry.phase === 'creating' ? 'Creating worktree…' : 'Fetching base branch…'
 }

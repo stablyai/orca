@@ -12,30 +12,58 @@ export function computeLineStats(
     return null
   }
   if (status === 'added') {
-    return { added: modified ? modified.split('\n').length : 0, removed: 0 }
+    return { added: modified ? countLinesWithoutAllocation(modified) : 0, removed: 0 }
   }
   if (status === 'deleted') {
-    return { added: 0, removed: original ? original.split('\n').length : 0 }
+    return { added: 0, removed: original ? countLinesWithoutAllocation(original) : 0 }
   }
 
-  const origLines = original.split('\n')
-  const modLines = modified.split('\n')
   const origMap = new Map<string, number>()
-  for (const line of origLines) {
-    origMap.set(line, (origMap.get(line) ?? 0) + 1)
-  }
-
+  const originalLineCount = countDiffLinesIntoMultiset(original, origMap)
+  let modifiedLineCount = 0
   let matched = 0
-  for (const line of modLines) {
+
+  forEachDiffLine(modified, (line) => {
+    modifiedLineCount += 1
     const count = origMap.get(line) ?? 0
     if (count > 0) {
       origMap.set(line, count - 1)
-      matched++
+      matched += 1
     }
-  }
+  })
 
   return {
-    added: modLines.length - matched,
-    removed: origLines.length - matched
+    added: modifiedLineCount - matched,
+    removed: originalLineCount - matched
+  }
+}
+
+function countDiffLinesIntoMultiset(content: string, lineCounts: Map<string, number>): number {
+  let lineCount = 0
+  forEachDiffLine(content, (line) => {
+    lineCount += 1
+    lineCounts.set(line, (lineCounts.get(line) ?? 0) + 1)
+  })
+  return lineCount
+}
+
+function countLinesWithoutAllocation(content: string): number {
+  let lineCount = 1
+  for (let index = 0; index < content.length; index += 1) {
+    if (content.charCodeAt(index) === 10) {
+      lineCount += 1
+    }
+  }
+  return lineCount
+}
+
+function forEachDiffLine(content: string, visit: (line: string) => void): void {
+  let lineStart = 0
+  for (let index = 0; index <= content.length; index += 1) {
+    if (index < content.length && content.charCodeAt(index) !== 10) {
+      continue
+    }
+    visit(content.slice(lineStart, index))
+    lineStart = index + 1
   }
 }

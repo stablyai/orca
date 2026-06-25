@@ -4,7 +4,12 @@ import type { IDisposable, Terminal } from '@xterm/xterm'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { consumePendingWebRuntimeSplitMirrorTelemetry } from '@/runtime/web-runtime-session'
-import { resolveTerminalCursorInactiveStyle } from '@/lib/pane-manager/pane-terminal-options'
+import {
+  normalizeTerminalFastScrollSensitivity,
+  normalizeTerminalScrollSensitivity,
+  resolveTerminalCursorInactiveStyle
+} from '@/lib/pane-manager/pane-terminal-options'
+import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-mouse-wheel'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
 import { useAppStore } from '@/store'
 import {
@@ -63,8 +68,13 @@ import { connectPanePty } from './pty-connection'
 import type { PtyTransport } from './pty-transport'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { getConnectionId } from '@/lib/connection-context'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { isPaneReplaying, type ReplayingPanesRef } from './replay-guard'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
+import {
+  markTerminalPinnedViewport,
+  syncTerminalScrollIntentSoon
+} from '@/lib/pane-manager/terminal-scroll-intent'
 import { registerRuntimeTerminalTab, scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { e2eConfig } from '@/lib/e2e-config'
 import {
@@ -201,11 +211,14 @@ type UseTerminalPaneLifecycleDeps = {
   setPaneTitles: React.Dispatch<React.SetStateAction<Record<number, string>>>
   paneTitlesRef: React.RefObject<Record<number, string>>
   setRenamingPaneId: React.Dispatch<React.SetStateAction<number | null>>
-  // Why: TerminalPane exposes a reactive pane count so effects (e.g. the
-  // data-has-title toggler) re-run when panes are split or closed. The
+  // Why: TerminalPane exposes reactive pane metadata so effects that read the
+  // imperative pane list re-run when panes are split or closed. The
   // imperative managerRef.getPanes().length is not reactive, so without this
   // dispatcher structural changes wouldn't trigger dependent effects.
   setPaneCount: React.Dispatch<React.SetStateAction<number>>
+  // Why: same pane count does not imply same geometry; drag-reorder can move
+  // panes without resizing them, so overlay rects need a layout-change tick.
+  setPaneLayoutRevision: React.Dispatch<React.SetStateAction<number>>
 }
 
 export function suppressIntentionalPaneCloseExit(
@@ -217,6 +230,24 @@ export function suppressIntentionalPaneCloseExit(
     suppressPtyExit(ptyId)
   }
   return ptyId
+}
+
+export function mapRestoredPaneTitlesByPaneId(
+  savedTitles: Record<string, string> | undefined,
+  restoredPaneByLeafId: ReadonlyMap<string, number>
+): Record<number, string> {
+  if (!savedTitles) {
+    return {}
+  }
+
+  const restored: Record<number, string> = {}
+  for (const [oldLeafId, title] of Object.entries(savedTitles)) {
+    const newPaneId = restoredPaneByLeafId.get(oldLeafId)
+    if (newPaneId != null && title) {
+      restored[newPaneId] = title
+    }
+  }
+  return restored
 }
 
 function terminalSelectionExceedsPrimaryLimit(terminal: Terminal): boolean {
@@ -378,7 +409,8 @@ export function useTerminalPaneLifecycle({
   setPaneTitles,
   paneTitlesRef,
   setRenamingPaneId,
-  setPaneCount
+  setPaneCount,
+  setPaneLayoutRevision
 }: UseTerminalPaneLifecycleDeps): void {
   const systemPrefersDarkRef = useRef(systemPrefersDark)
   systemPrefersDarkRef.current = systemPrefersDark
@@ -510,11 +542,15 @@ export function useTerminalPaneLifecycle({
     }
 
     // Why: publish the current pane count to React state so effects depending
-    // on structural changes (e.g. the data-has-title toggler) re-run on
-    // split/close. The pane list lives in an imperative PaneManager ref, so
+    // on structural changes re-run on split/close. The pane list lives in an
+    // imperative PaneManager ref, so
     // without this sync those effects would miss structural-only changes.
     const syncPaneCount = (): void => {
       setPaneCount(managerRef.current?.getPanes().length ?? 0)
+    }
+
+    const syncPaneLayoutRevision = (): void => {
+      setPaneLayoutRevision((revision) => revision + 1)
     }
 
     const normalizedInitialLayout = normalizeTerminalLayoutSnapshot(initialLayoutRef.current)
@@ -686,6 +722,15 @@ export function useTerminalPaneLifecycle({
               pane.terminal.input(jisYenInput.data)
             }
             return false
+          }
+
+          if (e.type === 'keydown') {
+            if (e.key === 'PageUp' || e.key === 'Home') {
+              markTerminalPinnedViewport(pane.terminal)
+              syncTerminalScrollIntentSoon(pane.terminal, { preservePinnedAtBottom: true })
+            } else if (e.key === 'PageDown' || e.key === 'End') {
+              syncTerminalScrollIntentSoon(pane.terminal)
+            }
           }
 
           return !shouldBypassXtermKeyboardEvent(e, {
@@ -994,6 +1039,7 @@ export function useTerminalPaneLifecycle({
         syncExpandedLayout()
         syncCanExpandState()
         syncPaneCount()
+        syncPaneLayoutRevision()
         queueResizeAll(false)
         if (shouldPersistLayout) {
           persistLayoutSnapshot()
@@ -1022,7 +1068,8 @@ export function useTerminalPaneLifecycle({
           osRelease: platformInfo?.osRelease,
           connectionId: getConnectionId(worktreeId),
           cwd: startupCwd,
-          shellOverride: currentTab?.shellOverride
+          shellOverride: currentTab?.shellOverride,
+          executionHostId: getExecutionHostIdForWorktree(storeState, worktreeId)
         })
         return {
           ...windowsPtyCompatibilityOptions,
@@ -1040,11 +1087,19 @@ export function useTerminalPaneLifecycle({
           cursorStyle,
           cursorInactiveStyle: resolveTerminalCursorInactiveStyle(cursorStyle),
           cursorBlink: currentSettings?.terminalCursorBlink ?? true,
+          scrollSensitivity: normalizeTerminalScrollSensitivity(
+            currentSettings?.terminalScrollSensitivity
+          ),
+          fastScrollSensitivity: normalizeTerminalFastScrollSensitivity(
+            currentSettings?.terminalFastScrollSensitivity
+          ),
           macOptionIsMeta: effectiveMacOptionAsAltRef.current === 'true',
           lineHeight: currentSettings?.terminalLineHeight ?? 1,
           wordSeparator: currentSettings?.terminalWordSeparator
         }
       },
+      terminalTuiScrollSensitivity: () =>
+        normalizeTerminalTuiMouseWheelMultiplier(settingsRef.current?.terminalTuiScrollSensitivity),
       onLinkClick: (event, url) => {
         if (!event) {
           return
@@ -1102,24 +1157,18 @@ export function useTerminalPaneLifecycle({
 
     // Seed pane titles from the persisted snapshot using the same
     // old-leafId → new-paneId mapping used for buffer restore.
-    const savedTitles = initialLayoutRef.current.titlesByLeafId
-    if (savedTitles) {
-      const restored: Record<number, string> = {}
-      for (const [oldLeafId, title] of Object.entries(savedTitles)) {
-        const newPaneId = restoredPaneByLeafId.get(oldLeafId)
-        if (newPaneId != null && title) {
-          restored[newPaneId] = title
-        }
-      }
-      if (Object.keys(restored).length > 0) {
-        // Merge (not replace) so we don't discard any concurrent state
-        // updates from onPaneClosed that React may have batched.
-        setPaneTitles((prev) => ({ ...prev, ...restored }))
-        // Why: the lifecycle immediately persists a fresh layout after restore,
-        // before React state has flushed. Keep the ref in sync now so that
-        // persist preserves restored titles instead of rewriting them away.
-        paneTitlesRef.current = { ...paneTitlesRef.current, ...restored }
-      }
+    const restoredTitles = mapRestoredPaneTitlesByPaneId(
+      initialLayoutRef.current.titlesByLeafId,
+      restoredPaneByLeafId
+    )
+    if (Object.keys(restoredTitles).length > 0) {
+      // Merge (not replace) so we don't discard any concurrent state
+      // updates from onPaneClosed that React may have batched.
+      setPaneTitles((prev) => ({ ...prev, ...restoredTitles }))
+      // Why: the lifecycle immediately persists a fresh layout after restore,
+      // before React state has flushed. Keep the ref in sync now so that
+      // persist preserves restored titles instead of rewriting them away.
+      paneTitlesRef.current = { ...paneTitlesRef.current, ...restoredTitles }
     }
 
     const restoredActivePaneId =

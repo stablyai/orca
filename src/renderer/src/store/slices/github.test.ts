@@ -28,6 +28,7 @@ import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rp
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 import { getTaskSourceCacheScope } from '../../../../shared/task-source-context'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import { GITHUB_WORK_ITEMS_QUERY_MAX_BYTES } from './github-work-items-query-bounds'
 
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
@@ -2966,6 +2967,114 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     })
   })
 
+  it('does not direct-fetch when enqueue returns an automatic validation skip', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+    const worktreeId = 'wt-1'
+    mockApi.gh.enqueuePRRefresh.mockResolvedValueOnce({
+      kind: 'skipped',
+      skippedReason: 'validation-denied'
+    })
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: worktreeId,
+            repoId: 'repo-1',
+            path: '/repo/worktrees/test',
+            branch,
+            displayName: 'test',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false
+          }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().enqueueGitHubPRRefresh(worktreeId, 'active', 80)
+    await Promise.resolve()
+
+    expect(mockApi.gh.enqueuePRRefresh).toHaveBeenCalledTimes(1)
+    expect(mockApi.gh.prForBranch).not.toHaveBeenCalled()
+  })
+
+  it('direct-fetches when enqueue returns an explicit fallback result', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+    const worktreeId = 'wt-1'
+    mockApi.gh.enqueuePRRefresh.mockResolvedValueOnce({ kind: 'fallback' })
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({ kind: 'no-pr', fetchedAt: 1 })
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: worktreeId,
+            repoId: 'repo-1',
+            path: '/repo/worktrees/test',
+            branch,
+            displayName: 'test',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false
+          }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().enqueueGitHubPRRefresh(worktreeId, 'active', 80)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(mockApi.gh.enqueuePRRefresh).toHaveBeenCalledTimes(1)
+    expect(mockApi.gh.refreshPRNow).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds rejected active PR refresh IPCs during worktree activation', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+    const worktreeId = 'wt-1'
+    const error = new Error('Access denied: unknown repository path')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockApi.gh.enqueuePRRefresh.mockRejectedValueOnce(error)
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: worktreeId,
+            repoId: 'repo-1',
+            path: '/repo/worktrees/test',
+            branch,
+            displayName: 'test',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false
+          }
+        ]
+      },
+      worktreeCardProperties: ['status', 'pr']
+    } as unknown as Partial<AppState>)
+
+    try {
+      store.getState().refreshGitHubForWorktreeIfStale(worktreeId)
+
+      await vi.waitFor(() =>
+        expect(warn).toHaveBeenCalledWith('Failed to enqueue PR refresh:', error)
+      )
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   it('enqueues active PR refresh with a GitHub hosted-review fallback number', () => {
     const store = createTestStore()
     const repoPath = '/repo'
@@ -3457,6 +3566,49 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
     })
   })
 
+  it('bounds rejected stale PR refresh IPCs', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+    const error = new Error('Access denied: unknown repository path')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockApi.gh.enqueuePRRefresh.mockRejectedValueOnce(error)
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      groupBy: 'repo',
+      worktreeCardProperties: ['comment'],
+      activeWorktreeId: 'wt-1',
+      rightSidebarOpen: true,
+      rightSidebarTab: 'source-control',
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-1',
+            repoId: 'repo-1',
+            path: '/repo/worktrees/test',
+            branch,
+            displayName: 'test',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false,
+            lastActivityAt: 1
+          }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+
+    try {
+      store.getState().refreshAllGitHub()
+
+      await vi.waitFor(() =>
+        expect(warn).toHaveBeenCalledWith('Failed to enqueue PR refresh:', error)
+      )
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   it('refreshes runtime PR data directly instead of enqueueing local coordinator work', async () => {
     runtimeEnvironmentCall.mockResolvedValueOnce({
       id: 'rpc-1',
@@ -3625,6 +3777,44 @@ describe('createGitHubSlice.refreshGitHubForWorktree', () => {
       params: { repo: 'repo-1', branch, linkedPRNumber: null },
       timeoutMs: 30_000
     })
+  })
+
+  it('bounds rejected post-push PR refresh IPCs', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+    const worktreeId = 'wt-1'
+    const error = new Error('Access denied: unknown repository path')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockApi.gh.enqueuePRRefresh.mockRejectedValueOnce(error)
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: worktreeId,
+            repoId: 'repo-1',
+            path: '/repo/worktrees/test',
+            branch,
+            displayName: 'test',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false
+          }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+
+    try {
+      store.getState().refreshGitHubForWorktree(worktreeId)
+
+      await vi.waitFor(() =>
+        expect(warn).toHaveBeenCalledWith('Failed to enqueue PR refresh:', error)
+      )
+    } finally {
+      warn.mockRestore()
+    }
   })
 })
 
@@ -4533,6 +4723,54 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       repoId: 'repo-id',
       query: undefined
     })
+  })
+
+  it('rejects oversized work-item queries before cache keys or provider calls', async () => {
+    const store = createTestStore()
+    const secret = 'github-work-items-secret'
+    const oversizedQuery = secret + 'x'.repeat(GITHUB_WORK_ITEMS_QUERY_MAX_BYTES)
+
+    await expect(
+      store.getState().fetchWorkItems('repo-id', '/local/repo', 24, oversizedQuery)
+    ).resolves.toEqual([])
+    await expect(
+      store
+        .getState()
+        .fetchWorkItemsAcrossRepos(
+          [{ repoId: 'repo-id', path: '/local/repo' }],
+          24,
+          24,
+          oversizedQuery
+        )
+    ).resolves.toEqual({ items: [], failedCount: 0 })
+    await expect(
+      store
+        .getState()
+        .fetchWorkItemsNextPage(
+          [{ repoId: 'repo-id', path: '/local/repo' }],
+          24,
+          24,
+          oversizedQuery,
+          'cursor'
+        )
+    ).resolves.toEqual({ items: [], failedCount: 0 })
+    await expect(
+      store
+        .getState()
+        .countWorkItemsAcrossRepos([{ repoId: 'repo-id', path: '/local/repo' }], oversizedQuery)
+    ).resolves.toBe(0)
+    store.getState().prefetchWorkItems('repo-id', '/local/repo', 24, oversizedQuery)
+
+    expect(store.getState().getCachedWorkItems('repo-id', 24, oversizedQuery, '/local/repo')).toBe(
+      null
+    )
+    expect(
+      store.getState().getWorkItemsSourcesAndError('repo-id', 24, oversizedQuery, '/local/repo')
+    ).toEqual({ sources: null, error: null })
+    expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
+    expect(mockApi.gh.countWorkItems).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(JSON.stringify(store.getState().workItemsCache)).not.toContain(secret)
   })
 
   it('routes project table fetches through the active runtime environment', async () => {

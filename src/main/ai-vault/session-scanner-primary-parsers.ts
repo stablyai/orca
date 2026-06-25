@@ -2,7 +2,7 @@ import { createReadStream } from 'fs'
 import { readFile } from 'fs/promises'
 import { createInterface } from 'readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
-import type { CodexUsageSnapshot, FileWithMtime, SessionAccumulator } from './session-scanner-types'
+import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import {
   addPreviewContent,
   createAccumulator,
@@ -16,14 +16,10 @@ import {
   asRecord,
   claudeUsageTotal,
   extractContentText,
-  extractGitBranch,
   extractMessageText,
-  extractModel,
   extractString,
-  normalizeCodexUsage,
   normalizeTitleText,
   parseJsonObject,
-  subtractCodexUsage,
   tokenTotal
 } from './session-scanner-values'
 
@@ -97,120 +93,6 @@ export async function parseClaudeSessionFile(
 
   accumulator.fallbackTitle = generatedTitle ?? metaTitle
   return finalizeSession(accumulator, platform)
-}
-
-export async function parseCodexSessionFile(
-  file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform,
-  codexHome: string | null = null
-): Promise<AiVaultSession | null> {
-  const accumulator = createAccumulator({
-    agent: 'codex',
-    file,
-    sessionId: sessionIdFromFileName(file.path)
-  })
-  let previousTotals: CodexUsageSnapshot | null = null
-
-  const lines = createInterface({
-    input: createReadStream(file.path, { encoding: 'utf-8' }),
-    crlfDelay: Infinity
-  })
-
-  for await (const line of lines) {
-    const record = parseJsonObject(line)
-    if (!record) {
-      continue
-    }
-
-    updateTimeline(accumulator, extractString(record.timestamp))
-
-    const payload = asRecord(record.payload)
-    if (record.type === 'session_meta' && payload) {
-      const sessionId = extractString(payload.id)
-      if (sessionId) {
-        accumulator.sessionId = sessionId
-      }
-      const cwd = extractString(payload.cwd)
-      if (cwd) {
-        accumulator.cwd = cwd
-      }
-      accumulator.branch = extractGitBranch(payload.git) ?? accumulator.branch
-      continue
-    }
-
-    if (record.type === 'turn_context' && payload) {
-      const cwd = extractString(payload.cwd)
-      if (cwd) {
-        accumulator.cwd = cwd
-      }
-      const model = extractModel(payload)
-      if (model) {
-        accumulator.model = model
-      }
-      continue
-    }
-
-    if (!payload) {
-      continue
-    }
-
-    if (record.type === 'response_item' && payload.type === 'message') {
-      accumulator.messageCount++
-      if (payload.role === 'user' && !accumulator.title) {
-        accumulator.title = extractContentText(payload.content)
-      }
-      addPreviewContent(
-        accumulator,
-        payload.role === 'assistant' ? 'assistant' : payload.role === 'user' ? 'user' : 'unknown',
-        payload.content,
-        record.timestamp
-      )
-      continue
-    }
-
-    if (record.type !== 'event_msg') {
-      continue
-    }
-
-    if (payload.type === 'user_message') {
-      accumulator.messageCount++
-      if (!accumulator.title) {
-        accumulator.title = extractContentText(payload.message)
-      }
-      addPreviewContent(accumulator, 'user', payload.message, record.timestamp)
-      continue
-    }
-
-    if (payload.type === 'agent_message') {
-      accumulator.messageCount++
-      addPreviewContent(accumulator, 'assistant', payload.message, record.timestamp)
-      continue
-    }
-
-    if (payload.type !== 'token_count') {
-      continue
-    }
-
-    const info = asRecord(payload.info)
-    if (!info) {
-      continue
-    }
-    const totalUsage = normalizeCodexUsage(info.total_token_usage)
-    const lastUsage = normalizeCodexUsage(info.last_token_usage)
-    const delta = totalUsage ? subtractCodexUsage(totalUsage, previousTotals) : lastUsage
-    if (totalUsage) {
-      previousTotals = totalUsage
-    }
-    if (delta) {
-      accumulator.totalTokens += delta.totalTokens
-    }
-    const model = extractModel(payload)
-    if (model) {
-      accumulator.model = model
-    }
-  }
-
-  return finalizeSession(accumulator, platform, { codexHome })
 }
 
 export async function parseGeminiSessionFile(

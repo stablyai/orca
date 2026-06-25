@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { getDetectedSetupScriptTextareaRows } from '@/lib/script-textarea-rows'
 
 type DismissButtonProps = {
   onDismiss: () => void
@@ -62,7 +63,7 @@ export function DetectedSetupPreview({
         )}
         onChange={(event) => onSetupChange(event.target.value)}
         spellCheck={false}
-        rows={Math.min(Math.max(setup.split('\n').length, 2), 6)}
+        rows={getDetectedSetupScriptTextareaRows(setup)}
         className="setup-script-prompt-command max-h-28 w-full resize-y overflow-auto scrollbar-sleek rounded-md border border-worktree-sidebar-border px-2 py-1.5 font-mono text-[11px] leading-5 text-foreground shadow-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
       />
       {provenance ? (

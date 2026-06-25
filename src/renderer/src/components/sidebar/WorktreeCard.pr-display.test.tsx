@@ -29,6 +29,7 @@ vi.mock('@/store', () => ({
       issueCache: {},
       linearIssueCache: {},
       openModal,
+      projectGroups: [],
       remoteBranchConflictByWorktreeId: {},
       settings,
       sshConnectionStates: new Map(),
@@ -124,6 +125,16 @@ function renderWorktreeCardMarkup(element: ReactNode): string {
   return renderToStaticMarkup(<>{element}</>)
 }
 
+function countAutomationCreatedLabels(markup: string): number {
+  return markup.match(/Created by automation/g)?.length ?? 0
+}
+
+function getInlineRenameTitleTag(markup: string): string {
+  const match = markup.match(/<span[^>]*data-worktree-title-inline-rename=""[^>]*>/)
+  expect(match).not.toBeNull()
+  return match?.[0] ?? ''
+}
+
 describe('WorktreeCard linked PR display', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -144,6 +155,70 @@ describe('WorktreeCard linked PR display', () => {
     expect(markup).toContain('bg-emerald-500')
     expect(markup).not.toContain('PR: Open')
     expect(markup).not.toContain('Linked PR #456')
+  }, 20_000)
+
+  it('keeps compact toggle-off unread and read-title visuals legacy', async () => {
+    settings = { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: false }
+    hostedReviewCache = {
+      'local::repo-1::feature/local-branch': {
+        data: makeHostedReview({ status: 'failure' }),
+        fetchedAt: Date.now()
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const unreadMarkup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ linkedPR: 456, isUnread: true })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+    const readMarkup = renderWorktreeCardMarkup(
+      <WorktreeCard worktree={makeWorktree({ linkedPR: 456 })} repo={makeRepo()} isActive={false} />
+    )
+    const readTitleTag = getInlineRenameTitleTag(readMarkup)
+
+    expect(unreadMarkup).toContain('aria-label="Mark as read"')
+    expect(unreadMarkup).toContain('text-amber-500')
+    expect(unreadMarkup).not.toContain('PR checks: Failed · Mark read')
+    expect(unreadMarkup).not.toContain('size-[13px] translate-x-px')
+    expect(readTitleTag).toContain('font-normal text-foreground')
+    expect(readTitleTag).not.toContain('text-foreground/80')
+  }, 20_000)
+
+  it('applies experimental unread status and read-title visuals only when enabled', async () => {
+    settings = { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: true }
+    hostedReviewCache = {
+      'local::repo-1::feature/local-branch': {
+        data: makeHostedReview({ status: 'failure' }),
+        fetchedAt: Date.now()
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const unreadMarkup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ linkedPR: 456, isUnread: true })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+    const readMarkup = renderWorktreeCardMarkup(
+      <WorktreeCard worktree={makeWorktree({ linkedPR: 456 })} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(unreadMarkup).not.toContain('aria-label="Mark as read"')
+    expect(unreadMarkup).toContain('PR checks: Failed · Unread')
+    expect(unreadMarkup).not.toContain('Mark read')
+    expect(unreadMarkup).toContain('size-[13px] translate-x-px')
+    expect(unreadMarkup).not.toContain('lucide-bell')
+    expect(unreadMarkup).not.toContain('text-amber-500')
+    expect(unreadMarkup).toContain('data-worktree-status-lane-unread=""')
+    expect(unreadMarkup).toContain('data-worktree-unread-alert=""')
+    expect(unreadMarkup).toContain('bg-amber-500')
+    expect(getInlineRenameTitleTag(unreadMarkup)).toContain('font-semibold text-foreground')
+    expect(getInlineRenameTitleTag(readMarkup)).toContain('font-normal text-foreground/80')
   }, 20_000)
 
   it('shows linked GH PR status in the left status slot before hosted review details are cached when new card style is on', async () => {
@@ -178,6 +253,30 @@ describe('WorktreeCard linked PR display', () => {
 
     expect(markup).not.toContain('PR #456')
     expect(markup).not.toContain('Stale branch PR')
+  })
+
+  it('shows branch-discovered GH PR status when the worktree has no linked PR', async () => {
+    settings = { experimentalNewWorktreeCardStyle: true }
+    hostedReviewCache = {
+      'local::repo-1::feature/local-branch': {
+        data: makeHostedReview({ number: 456, title: 'Branch PR', state: 'open' }),
+        fetchedAt: Date.now(),
+        linkedReviewHintKey: ''
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ linkedPR: null })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('PR checks: Passing')
+    expect(markup).toContain('text-emerald-500/80')
+    expect(markup).not.toContain('Branch')
   })
 
   it('shows branch-discovered hosted review providers without linked worktree metadata', async () => {
@@ -362,7 +461,7 @@ describe('WorktreeCard linked PR display', () => {
       />
     )
 
-    expect(markup).toContain('Created by automation')
+    expect(countAutomationCreatedLabels(markup)).toBe(1)
     expect(markup).not.toContain('>Automation</span>')
   }, 20_000)
 
@@ -393,7 +492,7 @@ describe('WorktreeCard linked PR display', () => {
       />
     )
 
-    expect(markup).not.toContain('Created by automation')
+    expect(countAutomationCreatedLabels(markup)).toBe(0)
     expect(markup).not.toContain('>Automation</span>')
     expect(markup).not.toContain('Nightly triage automation')
   }, 20_000)
@@ -425,7 +524,7 @@ describe('WorktreeCard linked PR display', () => {
       />
     )
 
-    expect(markup).toContain('Created by automation')
+    expect(countAutomationCreatedLabels(markup)).toBe(1)
     expect(markup).not.toContain('>Automation</span>')
   }, 20_000)
 
@@ -455,7 +554,7 @@ describe('WorktreeCard linked PR display', () => {
       />
     )
 
-    expect(markup).not.toContain('Created by automation')
+    expect(countAutomationCreatedLabels(markup)).toBe(0)
     expect(markup).not.toContain('>Automation</span>')
     expect(markup).not.toContain('Nightly triage automation')
   })

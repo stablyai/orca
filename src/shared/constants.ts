@@ -28,6 +28,7 @@ import {
   DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY
 } from './left-sidebar-appearance'
+import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
@@ -36,7 +37,7 @@ export {
   TASK_WORKTREE_CARD_PROPERTIES,
   getWorktreeCardModeProperties,
   getWorktreeCardModeUpdates,
-  isLegacyDefaultedCompactWorktreeCardProperties,
+  isDefaultedCompactWorktreeCardProperties,
   normalizeWorktreeCardProperties
 } from './worktree-card-properties'
 
@@ -209,6 +210,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalFontFamily: defaultTerminalFontFamily(),
     terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,
     terminalLineHeight: 1,
+    terminalScrollSensitivity: 1.15,
+    terminalFastScrollSensitivity: 5,
+    terminalTuiScrollSensitivity: 3,
     // Why: "auto" should use WebGL when supported while keeping DOM fallback
     // for renderer failures and Linux software/unknown GPU renderers.
     terminalGpuAcceleration: 'auto',
@@ -250,6 +254,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // focus-follows-mouse never happens unexpectedly.
     terminalFocusFollowsMouse: false,
     windowBackgroundBlur: false,
+    minimizeToTrayOnClose: false,
     terminalClipboardOnSelect: false,
     terminalAllowOsc52Clipboard: false,
     claudeAgentTeamsMode: 'off',
@@ -264,6 +269,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     rightSidebarOpenByDefault: true,
     showGitIgnoredFiles: true,
     sourceControlViewMode: 'list',
+    sourceControlGroupOrder: DEFAULT_SOURCE_CONTROL_GROUP_ORDER,
     showTitlebarAppName: true,
     showTasksButton: true,
     showAutomationsButton: true,
@@ -280,6 +286,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     floatingTerminalTriggerLocation: 'floating-button',
     notifications: getDefaultNotificationSettings(),
     diffDefaultView: 'inline',
+    diffWordWrap: false,
     combinedDiffFileTreeVisibleByDefault: false,
     promptCacheTimerEnabled: false,
     promptCacheTtlMs: 300_000,
@@ -473,6 +480,7 @@ export function getDefaultUIState(): PersistedUIState {
     setupGuideBrowserMilestoneMigrated: true,
     setupGuideBrowserMilestoneLegacyComplete: false,
     browserImportHintHidden: false,
+    trayMinimizeNoticeShown: false,
     mobileEmulatorTabIntroDismissed: false,
     mobileEmulatorAgentSetupDismissed: false,
     // Why: brand-new profiles never saw recent project ordering; only upgraded

@@ -17,6 +17,11 @@ Staged diff:
 \`\`\`
 `
 
+export {
+  cleanGeneratedCommitMessage,
+  extractAgentErrorMessage
+} from './commit-message-agent-output'
+
 /** Builds the final prompt sent to the agent. The custom suffix is appended verbatim
  *  when non-empty so the user can override style (Conventional Commits, gitmoji, …). */
 export function buildCommitPrompt(diff: string, customSuffix: string): string {
@@ -122,40 +127,6 @@ export function truncateDiffForPrompt(
     budget
   )
   return sections.map((section, i) => clipSectionOnLineBoundary(section, allocations[i])).join('')
-}
-
-/** Strips noise around the agent's output: surrounding whitespace, a single
- *  enclosing fenced code block, and lone "Generating…" preamble lines some
- *  CLIs print before the real answer. */
-export function cleanGeneratedCommitMessage(raw: string): string {
-  let text = raw.replace(/\r\n/g, '\n').trim()
-
-  // Why: real commit messages never start with an ellipsis or the word
-  // "Generating"/"Thinking" — those leak from CLIs that print a status line
-  // before the actual response.
-  const firstNewline = text.indexOf('\n')
-  if (firstNewline !== -1) {
-    const firstLine = text.slice(0, firstNewline)
-    if (/^(generating|thinking)\b/i.test(firstLine) || /^[.…]+$/.test(firstLine.trim())) {
-      text = text.slice(firstNewline + 1).trim()
-    }
-  }
-
-  const fence = /^```[a-zA-Z0-9_-]*\n([\s\S]*?)\n```$/
-  const fenced = text.match(fence)
-  if (fenced) {
-    text = fenced[1].trim()
-  }
-
-  // Why: some CLIs format a one-shot answer as a list item even when the
-  // prompt asks for raw text; a Git subject should not carry that marker.
-  text = text.replace(/^(\s*)(?:[-*•●]\s+|\d+[.)]\s+)/, '$1').trim()
-
-  return text
-}
-
-function stripAnsiControlSequences(value: string): string {
-  return value.replace(new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, 'g'), '')
 }
 
 export const CUSTOM_PROMPT_PLACEHOLDER = '{prompt}'
@@ -276,58 +247,4 @@ export function planCustomCommand(template: string, prompt: string): CustomComma
     }
   }
   return { ok: true, binary, args: rest, stdinPayload: prompt }
-}
-
-// Why: agent CLIs (Codex, Claude) prefix their stdout/stderr with config
-// preamble, the echoed prompt, and hook lifecycle messages. When something
-// fails, the actionable error is buried far below all of that. This pulls
-// out the real message so the user sees something legible instead of a
-// dump of the agent's runtime state.
-export function extractAgentErrorMessage(stdout: string, stderr: string): string | null {
-  const combined = stripAnsiControlSequences(`${stdout}\n${stderr}`)
-  const lines = combined.split(/\r?\n/)
-
-  // Pass 1: look for an `ERROR:`/`Error:` line carrying a JSON payload.
-  // Walk from the end so the most recent (and usually most meaningful)
-  // error wins when an agent prints multiple.
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const line = lines[i]
-    const match = /^\s*(?:ERROR|Error(?:\s+during\s+[^:]+)?)\s*:\s*(.+)$/i.exec(line)
-    if (!match) {
-      continue
-    }
-    const payload = match[1].trim()
-    if (payload.startsWith('{')) {
-      try {
-        const parsed = JSON.parse(payload) as {
-          message?: string
-          error?: { message?: string }
-        }
-        const inner = parsed.error?.message ?? parsed.message
-        if (typeof inner === 'string' && inner.trim().length > 0) {
-          return inner.trim()
-        }
-      } catch {
-        // Fall through to using the raw payload below.
-      }
-    }
-    if (payload.length > 0) {
-      return payload
-    }
-  }
-
-  const compact = combined.replace(/([A-Za-z])\r?\n\s*([A-Za-z_])/g, '$1$2').replace(/\s+/g, ' ')
-  const errorCodeMatch = /\bError code:\s*\d+\s*-\s*(.+)$/i.exec(compact)
-  if (errorCodeMatch) {
-    const payload = errorCodeMatch[1].trim()
-    const messageMatch = /['"]message['"]\s*:\s*['"]([^'"]+)['"]/i.exec(payload)
-    if (messageMatch?.[1]?.trim()) {
-      return messageMatch[1].trim()
-    }
-    if (payload.length > 0) {
-      return payload
-    }
-  }
-
-  return null
 }

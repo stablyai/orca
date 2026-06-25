@@ -193,6 +193,24 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
   })
 
+  describe('sessionsNeedingFullCheckpoint cleanup (leak regression)', () => {
+    // Why: the cold-restore path flags a session for a full checkpoint. If the
+    // session exits before that checkpoint lands, the flag was never cleared and
+    // leaked a permanent Set entry for the daemon's lifetime.
+    it('clears the pending full-checkpoint flag when a session exits', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      const internals = adapter as unknown as { sessionsNeedingFullCheckpoint: Set<string> }
+      // Simulate the cold-restore reanchor path having flagged this session.
+      internals.sessionsNeedingFullCheckpoint.add(id)
+      expect(internals.sessionsNeedingFullCheckpoint.has(id)).toBe(true)
+
+      lastSubprocess._simulateExit(0)
+      await new Promise((r) => setTimeout(r, 50))
+
+      expect(internals.sessionsNeedingFullCheckpoint.has(id)).toBe(false)
+    })
+  })
+
   describe('sendSignal', () => {
     it('sends signal to the session', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
@@ -775,6 +793,27 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         expect.objectContaining({ snapshotAnsi: expect.stringContaining('fresh output') })
       )
       expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(true)
+    })
+
+    it('persists final take records that are not represented in the snapshot', async () => {
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
+      const { id } = await historyAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/home/user',
+        command: 'printf ready',
+        env: { SHELL: '/bin/zsh' },
+        sessionId: 'sleep-checkpoint-tail'
+      })
+      const appendSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'appendIncrements')
+
+      lastSubprocess._simulateData('\x1b]777;orca-shell-ready')
+      await historyAdapter.shutdown(id, { immediate: true, keepHistory: true })
+
+      expect(appendSpy).toHaveBeenCalledWith(id, expect.any(Number), [
+        { kind: 'output', data: '\x1b]777;orca-shell-ready' }
+      ])
     })
 
     it('returns cold restore data when disk history has unclean shutdown', async () => {

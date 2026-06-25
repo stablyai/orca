@@ -15,11 +15,12 @@ import { useSidebarProjectDrop } from './useSidebarProjectDrop'
 import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
 
-const WorktreeMetaDialog = React.lazy(() => import('./WorktreeMetaDialog'))
-const RemoveFolderDialog = React.lazy(() => import('./RemoveFolderDialog'))
-const WorktreeVisibilityDialog = React.lazy(() => import('./WorktreeVisibilityDialog'))
-const OrcaYamlTrustDialog = React.lazy(() => import('./OrcaYamlTrustDialog'))
+const WorktreeMetaDialog = lazyWithRetry(() => import('./WorktreeMetaDialog'))
+const RemoveFolderDialog = lazyWithRetry(() => import('./RemoveFolderDialog'))
+const WorktreeVisibilityDialog = lazyWithRetry(() => import('./WorktreeVisibilityDialog'))
+const OrcaYamlTrustDialog = lazyWithRetry(() => import('./OrcaYamlTrustDialog'))
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
@@ -43,6 +44,7 @@ function Sidebar({
   const settings = useAppStore((s) => s.settings)
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
   const activeModal = useAppStore((s) => s.activeModal)
+  const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const systemPrefersDark = useSystemPrefersDark()
   const leftSidebarStyle = useMemo(
     () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
@@ -74,6 +76,39 @@ function Sidebar({
       fetchAllWorktrees()
     }
   }, [repoCount, fetchAllWorktrees])
+
+  // Why: a runtime host coming online/offline must refresh the sidebar so its
+  // worktrees appear/drop, the same way SSH state changes already refetch. Only
+  // the manual connect button refetched before, so the list went stale until the
+  // user forced a refetch (e.g. via Add Project). React to the set of online
+  // runtime envs (a host has a status entry once it is connected).
+  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const fetchWorktreeLineage = useAppStore((s) => s.fetchWorktreeLineage)
+  const onlineRuntimeEnvKey = React.useMemo(
+    () =>
+      // Why: tolerate an absent map — a partial/hydrating store can leave this
+      // undefined, and a thrown selector would crash the whole sidebar render.
+      [...(runtimeStatusByEnvironmentId?.entries() ?? [])]
+        .filter(([, entry]) => Boolean(entry?.status))
+        .map(([id]) => id)
+        .sort()
+        .join(','),
+    [runtimeStatusByEnvironmentId]
+  )
+  const previousOnlineRuntimeEnvKeyRef = React.useRef<string | null>(null)
+  useEffect(() => {
+    // Skip the initial value — startup/repoCount effects already fetch. Only
+    // refetch when the online-host set actually changes.
+    if (previousOnlineRuntimeEnvKeyRef.current === null) {
+      previousOnlineRuntimeEnvKeyRef.current = onlineRuntimeEnvKey
+      return
+    }
+    if (previousOnlineRuntimeEnvKeyRef.current === onlineRuntimeEnvKey) {
+      return
+    }
+    previousOnlineRuntimeEnvKeyRef.current = onlineRuntimeEnvKey
+    void fetchAllWorktrees().then(() => fetchWorktreeLineage())
+  }, [onlineRuntimeEnvKey, fetchAllWorktrees, fetchWorktreeLineage])
 
   useEffect(() => {
     if (!sidebarOpen && workspaceBoardRenderedOpen) {
@@ -120,6 +155,7 @@ function Sidebar({
             {/* Fixed bottom toolbar */}
             <SidebarToolbar
               workspaceBoardOpen={workspaceBoardOpen}
+              workspaceBoardDragPreviewOpen={workspaceBoardDragPreviewOpen}
               onWorkspaceBoardToggle={toggleWorkspaceBoard}
             />
           </>
@@ -166,6 +202,7 @@ function Sidebar({
         <WorkspaceKanbanDrawer
           leftSidebarStyle={leftSidebarStyle}
           open={workspaceBoardRenderedOpen}
+          statusBarVisible={statusBarVisible}
           dragPreview={workspaceBoardDragPreviewOpen}
           preserveOpenForMenu={workspaceBoardMenuOpen}
           onOpenChange={handleWorkspaceBoardOpenChange}

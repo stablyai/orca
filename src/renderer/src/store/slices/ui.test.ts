@@ -23,15 +23,19 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 
 const mocks = vi.hoisted(() => ({
-  sendBracketedPasteToRunningAgent: vi.fn(),
+  sendNotesToActiveAgentSession: vi.fn(),
   track: vi.fn(),
   toastMessage: vi.fn(),
   toastSuccess: vi.fn(),
   toastError: vi.fn()
 }))
 
-vi.mock('@/lib/agent-paste-draft', () => ({
-  sendBracketedPasteToRunningAgent: mocks.sendBracketedPasteToRunningAgent
+vi.mock('@/lib/active-agent-note-send', () => ({
+  activeAgentNotesSendFailureMessage: (
+    status: string,
+    options: { explicitTarget?: boolean } = {}
+  ) => (options.explicitTarget ? `selected:${status}` : status),
+  sendNotesToActiveAgentSession: mocks.sendNotesToActiveAgentSession
 }))
 
 vi.mock('@/lib/telemetry', () => ({
@@ -52,7 +56,8 @@ afterEach(() => {
 })
 
 beforeEach(() => {
-  mocks.sendBracketedPasteToRunningAgent.mockReset()
+  mocks.sendNotesToActiveAgentSession.mockReset()
+  mocks.sendNotesToActiveAgentSession.mockResolvedValue({ status: 'sent' })
   mocks.track.mockReset()
   mocks.toastMessage.mockReset()
   mocks.toastSuccess.mockReset()
@@ -274,10 +279,8 @@ describe('createUISlice agent send target mode', () => {
 
     expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
       id: 'send-1',
-      eligiblePaneKeys: [readyPaneKey],
-      disabledPaneKeys: {
-        [workingPaneKey]: 'Agent is working'
-      },
+      eligiblePaneKeys: [readyPaneKey, workingPaneKey],
+      disabledPaneKeys: {},
       status: 'open'
     })
     expect(store.getState().pendingRevealWorktree).toMatchObject({
@@ -285,6 +288,43 @@ describe('createUISlice agent send target mode', () => {
       behavior: 'auto',
       highlight: true
     })
+  })
+
+  it('disables sidebar target rows that need permission', async () => {
+    const store = createUIStore()
+    seedAgentSendState(store)
+    const agentStatusByPaneKey = store.getState().agentStatusByPaneKey
+    store.setState({
+      agentStatusByPaneKey: {
+        ...agentStatusByPaneKey,
+        [workingPaneKey]: {
+          ...agentStatusByPaneKey[workingPaneKey]!,
+          state: 'blocked'
+        }
+      }
+    } as Partial<AppState>)
+
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: 'Review this',
+      label: 'All unsent notes',
+      launchSource: 'notes_send'
+    })
+
+    expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
+      id: 'send-1',
+      eligiblePaneKeys: [readyPaneKey],
+      disabledPaneKeys: {
+        [workingPaneKey]: 'Agent needs permission'
+      },
+      status: 'open'
+    })
+    await expect(store.getState().sendPromptToSidebarAgentTarget(workingPaneKey)).resolves.toBe(
+      false
+    )
+    expect(mocks.sendNotesToActiveAgentSession).not.toHaveBeenCalled()
   })
 
   it('does not reveal the sidebar when the current workspace has no eligible targets', () => {
@@ -336,7 +376,6 @@ describe('createUISlice agent send target mode', () => {
     const store = createUIStore()
     const onPromptDelivered = vi.fn()
     seedAgentSendState(store)
-    mocks.sendBracketedPasteToRunningAgent.mockResolvedValue(true)
     store.getState().openAgentSendPopoverTargetMode({
       id: 'send-1',
       worktreeId,
@@ -349,9 +388,10 @@ describe('createUISlice agent send target mode', () => {
 
     await expect(store.getState().sendPromptToSidebarAgentTarget(readyPaneKey)).resolves.toBe(true)
 
-    expect(mocks.sendBracketedPasteToRunningAgent).toHaveBeenCalledWith({
-      ptyId: 'pty-ready',
-      content: 'Review this'
+    expect(mocks.sendNotesToActiveAgentSession).toHaveBeenCalledWith({
+      worktreeId,
+      prompt: 'Review this',
+      noteTarget: { tabId, leafId: readyLeafId }
     })
     expect(onPromptDelivered).toHaveBeenCalledTimes(1)
     expect(mocks.track).toHaveBeenCalledWith('agent_prompt_sent', {
@@ -367,7 +407,7 @@ describe('createUISlice agent send target mode', () => {
     const store = createUIStore()
     const onPromptDelivered = vi.fn()
     seedAgentSendState(store)
-    mocks.sendBracketedPasteToRunningAgent.mockResolvedValue(false)
+    mocks.sendNotesToActiveAgentSession.mockResolvedValue({ status: 'not-ready' })
     store.getState().openAgentSendPopoverTargetMode({
       id: 'send-1',
       worktreeId,
@@ -383,19 +423,18 @@ describe('createUISlice agent send target mode', () => {
     expect(onPromptDelivered).not.toHaveBeenCalled()
     expect(mocks.track).not.toHaveBeenCalled()
     expect(mocks.toastError).toHaveBeenCalledWith("Couldn't send to Codex", {
-      description: 'Terminal is no longer available'
+      description: 'selected:not-ready'
     })
     expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
       id: 'send-1',
       status: 'error',
-      error: 'Terminal is no longer available'
+      error: 'selected:not-ready'
     })
   })
 
-  it('does not send to a working agent row', async () => {
+  it('sends to a working agent row through the selected-target note helper', async () => {
     const store = createUIStore()
     seedAgentSendState(store)
-    mocks.sendBracketedPasteToRunningAgent.mockResolvedValue(true)
     store.getState().openAgentSendPopoverTargetMode({
       id: 'send-1',
       worktreeId,
@@ -406,29 +445,32 @@ describe('createUISlice agent send target mode', () => {
     })
 
     await expect(store.getState().sendPromptToSidebarAgentTarget(workingPaneKey)).resolves.toBe(
-      false
+      true
     )
 
-    expect(mocks.sendBracketedPasteToRunningAgent).not.toHaveBeenCalled()
-    expect(mocks.toastSuccess).not.toHaveBeenCalled()
-    expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
-      id: 'send-1',
-      status: 'open'
+    expect(mocks.sendNotesToActiveAgentSession).toHaveBeenCalledWith({
+      worktreeId,
+      prompt: 'Review this',
+      noteTarget: { tabId, leafId: workingLeafId }
     })
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('Sent to Codex')
+    expect(store.getState().agentSendPopoverTargetMode).toBeNull()
   })
 
   it('does not let an older send close a reopened popover with the same id', async () => {
     const store = createUIStore()
-    const write = deferred<boolean>()
+    const onPromptDelivered = vi.fn()
+    const write = deferred<{ status: 'sent' }>()
     seedAgentSendState(store)
-    mocks.sendBracketedPasteToRunningAgent.mockReturnValue(write.promise)
+    mocks.sendNotesToActiveAgentSession.mockReturnValue(write.promise)
     store.getState().openAgentSendPopoverTargetMode({
       id: 'send-1',
       worktreeId,
       source: 'diff-notes',
       prompt: 'Review this',
       label: 'All unsent notes',
-      launchSource: 'notes_send'
+      launchSource: 'notes_send',
+      onPromptDelivered
     })
 
     const send = store.getState().sendPromptToSidebarAgentTarget(readyPaneKey)
@@ -443,8 +485,8 @@ describe('createUISlice agent send target mode', () => {
     })
     const reopenedMode = store.getState().agentSendPopoverTargetMode
 
-    write.resolve(true)
-    await expect(send).resolves.toBe(true)
+    write.resolve({ status: 'sent' })
+    await expect(send).resolves.toBe(false)
 
     expect(store.getState().agentSendPopoverTargetMode).toBe(reopenedMode)
     expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
@@ -452,13 +494,60 @@ describe('createUISlice agent send target mode', () => {
       prompt: 'Review this again',
       status: 'open'
     })
+    expect(onPromptDelivered).not.toHaveBeenCalled()
+    expect(mocks.track).not.toHaveBeenCalled()
+    expect(mocks.toastSuccess).not.toHaveBeenCalled()
+    expect(mocks.toastError).not.toHaveBeenCalled()
+  })
+
+  it('does not let an older send failure mutate a reopened popover with the same id', async () => {
+    const store = createUIStore()
+    const onPromptDelivered = vi.fn()
+    const write = deferred<{ status: 'not-ready' }>()
+    seedAgentSendState(store)
+    mocks.sendNotesToActiveAgentSession.mockReturnValue(write.promise)
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: 'Review this',
+      label: 'All unsent notes',
+      launchSource: 'notes_send',
+      onPromptDelivered
+    })
+
+    const send = store.getState().sendPromptToSidebarAgentTarget(readyPaneKey)
+    store.getState().closeAgentSendPopoverTargetMode('send-1')
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: 'Review this again',
+      label: 'All unsent notes',
+      launchSource: 'notes_send'
+    })
+    const reopenedMode = store.getState().agentSendPopoverTargetMode
+
+    write.resolve({ status: 'not-ready' })
+    await expect(send).resolves.toBe(false)
+
+    expect(store.getState().agentSendPopoverTargetMode).toBe(reopenedMode)
+    expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
+      id: 'send-1',
+      prompt: 'Review this again',
+      status: 'open'
+    })
+    expect(onPromptDelivered).not.toHaveBeenCalled()
+    expect(mocks.track).not.toHaveBeenCalled()
+    expect(mocks.toastSuccess).not.toHaveBeenCalled()
+    expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
   it('does not retarget the same popover while a send is in progress', async () => {
     const store = createUIStore()
-    const write = deferred<boolean>()
+    const write = deferred<{ status: 'sent' }>()
     seedAgentSendState(store)
-    mocks.sendBracketedPasteToRunningAgent.mockReturnValue(write.promise)
+    mocks.sendNotesToActiveAgentSession.mockReturnValue(write.promise)
     store.getState().openAgentSendPopoverTargetMode({
       id: 'send-1',
       worktreeId,
@@ -487,7 +576,7 @@ describe('createUISlice agent send target mode', () => {
       sendingPaneKey: readyPaneKey
     })
 
-    write.resolve(true)
+    write.resolve({ status: 'sent' })
     await expect(send).resolves.toBe(true)
   })
 })

@@ -188,4 +188,19 @@ describe('getProjectGroupOrderForSidebarDrop', () => {
       })
     ).toBe(1)
   })
+
+  it('assigns an order that sorts before siblings ranked by repo order', () => {
+    const order = getProjectGroupOrderForSidebarDrop({
+      siblings: [repo('a'), repo('b')],
+      dropIndex: 1,
+      repoOrderRankById: new Map([
+        ['a', 0],
+        ['b', 1],
+        ['c', 2]
+      ])
+    })
+
+    expect(order).toBeGreaterThan(0)
+    expect(order).toBeLessThan(2000)
+  })
 })

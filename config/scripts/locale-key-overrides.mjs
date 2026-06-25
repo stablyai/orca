@@ -1,8 +1,8 @@
-import { KO_KEY_OVERRIDES } from './locale-ko-key-overrides.mjs'
+import { mergeLocaleKeyOverrides } from './locale-key-override-merge.mjs'
 
 // Key-specific overrides from high-visibility UI audit (P0/P1/P2).
 // Why: some fixes depend on full key context, not English value alone.
-export const LOCALE_KEY_OVERRIDES = {
+const BASE_LOCALE_KEY_OVERRIDES = {
   // "Open in" is a submenu header for "open in <app>"; bare で開く reads as broken JP.
   'auto.components.sidebar.WorktreeOpenInMenu.8009ab69a6': { ja: 'アプリで開く' },
   // "Assigned to me" filter; the MT past-passive 割り当てられました reads as a sentence, not a filter label.
@@ -341,7 +341,7 @@ export const LOCALE_KEY_OVERRIDES = {
   'auto.App.62ca9895a7': { ko: '스페이스', zh: '空间', ja: 'スペース' },
   'settings.appearance.statusBar.kimiToggleDescription': {
     ko: '활성 워크스페이스의 Kimi 구독 사용량을 표시합니다.',
-    zh: 'Kimi 订阅',
+    zh: '显示当前工作区的 Kimi 订阅使用情况。',
     ja: 'Kimi サブスクリプション'
   },
   'auto.components.mobile.MobileHero.cd4e5e816f': {
@@ -541,12 +541,12 @@ export const LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.editor.EditorContent.e4b074749d': {
     ko: '머리말',
-    zh: '前线事项',
+    zh: '前言',
     ja: 'フロントマター'
   },
   'auto.components.editor.MarkdownPreview.2b2b31382c': {
     ko: '머리말',
-    zh: '前线事项',
+    zh: '前言',
     ja: 'フロントマター'
   },
   'auto.components.settings.IntegrationsPane.c0c8575e05': {
@@ -601,5 +601,9 @@ export const LOCALE_KEY_OVERRIDES = {
   },
   // Port forwarding "Forward" is 転送, not the browser-navigation 進む.
   'auto.components.right.sidebar.PortsPanel.c9d106547a': { ja: '転送' },
-  ...KO_KEY_OVERRIDES
+  // Worktree badge: stand-alone 主要な leaves the adnominal な dangling — align with the Tooltip's プライマリ.
+  'auto.components.sidebar.WorktreeCard.7d517f82e2': { ja: 'プライマリ' },
+  'auto.components.WorktreeJumpPalette.739bda980c': { ja: 'プライマリ' }
 }
+
+export const LOCALE_KEY_OVERRIDES = mergeLocaleKeyOverrides(BASE_LOCALE_KEY_OVERRIDES)

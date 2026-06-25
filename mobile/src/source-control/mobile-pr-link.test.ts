@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
-import { buildWorktreeSetLinkParams, fetchWorktreeLinkedPR, linkMobilePr } from './mobile-pr-link'
+import {
+  buildWorktreeSetHostedReviewLinkParams,
+  buildWorktreeSetLinkParams,
+  fetchWorktreeLinkedPR,
+  linkMobilePr
+} from './mobile-pr-link'
 
 describe('buildWorktreeSetLinkParams', () => {
   it('sets linkedPR to a number when linking', () => {
@@ -14,6 +19,39 @@ describe('buildWorktreeSetLinkParams', () => {
     expect(buildWorktreeSetLinkParams('repo42::/p', null)).toEqual({
       worktree: 'id:repo42::/p',
       linkedPR: null
+    })
+  })
+})
+
+describe('buildWorktreeSetHostedReviewLinkParams', () => {
+  it.each([
+    ['github', 'linkedPR'],
+    ['gitlab', 'linkedGitLabMR'],
+    ['bitbucket', 'linkedBitbucketPR'],
+    ['azure-devops', 'linkedAzureDevOpsPR'],
+    ['gitea', 'linkedGiteaPR']
+  ] as const)('maps %s reviews to the matching worktree field', (provider, key) => {
+    expect(buildWorktreeSetHostedReviewLinkParams('repo42::/p', provider, 12)).toEqual({
+      worktree: 'id:repo42::/p',
+      [key]: 12
+    })
+  })
+
+  it('includes a submitted base ref so mobile diff review refreshes against the review base', () => {
+    expect(
+      buildWorktreeSetHostedReviewLinkParams('repo42::/p', 'github', 12, {
+        baseRef: ' origin/release '
+      })
+    ).toEqual({
+      worktree: 'id:repo42::/p',
+      baseRef: 'origin/release',
+      linkedPR: 12
+    })
+  })
+
+  it('does not invent a metadata field for unsupported providers', () => {
+    expect(buildWorktreeSetHostedReviewLinkParams('repo42::/p', 'unsupported', 12)).toEqual({
+      worktree: 'id:repo42::/p'
     })
   })
 })

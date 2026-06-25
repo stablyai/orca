@@ -1,13 +1,18 @@
-import { Columns2, Pin, PinOff, Rows2 } from 'lucide-react'
+import { PanelBottomClose, PanelRightClose, Pin, PinOff } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import type { TerminalTab } from '../../../../shared/types'
+import { useAppStore } from '../../store'
+import { formatShortcutLabel, useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
+import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
+import { requestActiveTerminalPaneSplit } from './request-active-terminal-pane-split'
 
 const TAB_COLORS = [
   {
@@ -74,37 +79,56 @@ const TAB_COLORS = [
 
 type SortableTabContextMenuProps = {
   tab: TerminalTab
+  unifiedTabId: string
+  groupId: string
+  isActive: boolean
   open: boolean
   point: { x: number; y: number }
   tabCount: number
   hasTabsToRight: boolean
   isPinned: boolean
   onOpenChange: (open: boolean) => void
+  onActivate: (tabId: string) => void
   onClose: (tabId: string) => void
   onCloseOthers: (tabId: string) => void
   onCloseToRight: (tabId: string) => void
   onRenameOpen: () => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePin: () => void
-  onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
 }
 
 export function SortableTabContextMenu({
   tab,
+  unifiedTabId,
+  groupId,
+  isActive,
   open,
   point,
   tabCount,
   hasTabsToRight,
   isPinned,
   onOpenChange,
+  onActivate,
   onClose,
   onCloseOthers,
   onCloseToRight,
   onRenameOpen,
   onSetTabColor,
-  onTogglePin,
-  onSplitGroup
+  onTogglePin
 }: SortableTabContextMenuProps): React.JSX.Element {
+  const keybindings = useAppStore((state) => state.keybindings)
+  const splitRightShortcut = formatShortcutLabel('terminal.splitRight', keybindings)
+  const splitDownShortcut = formatShortcutLabel('terminal.splitDown', keybindings)
+
+  const splitActiveTerminalPane = (direction: 'vertical' | 'horizontal'): void => {
+    if (!isActive) {
+      onActivate(tab.id)
+    }
+    requestActiveTerminalPaneSplit({ tabId: tab.id, direction })
+  }
+  const closeShortcut = useOptionalShortcutLabel('tab.close')
+  const renameShortcut = useOptionalShortcutLabel('tab.rename')
+
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
       <DropdownMenuTrigger asChild>
@@ -115,23 +139,24 @@ export function SortableTabContextMenu({
           style={{ left: point.x, top: point.y }}
         />
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-48" sideOffset={0} align="start">
-        <DropdownMenuItem onSelect={() => onSplitGroup('up', tab.id)}>
-          <Rows2 className="mr-1.5 size-3.5" />
-          {translate('auto.components.tab.bar.SortableTabContextMenu.591f9b12c1', 'Split Up')}
+      <DropdownMenuContent className="w-56" sideOffset={0} align="start">
+        <DropdownMenuItem onSelect={() => splitActiveTerminalPane('vertical')}>
+          <PanelRightClose />
+          {translate(
+            'auto.components.tab.bar.SortableTabContextMenu.splitTerminalRight',
+            'Split terminal right'
+          )}
+          <DropdownMenuShortcut>{splitRightShortcut}</DropdownMenuShortcut>
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onSplitGroup('down', tab.id)}>
-          <Rows2 className="mr-1.5 size-3.5" />
-          {translate('auto.components.tab.bar.SortableTabContextMenu.af80ed83c1', 'Split Down')}
+        <DropdownMenuItem onSelect={() => splitActiveTerminalPane('horizontal')}>
+          <PanelBottomClose />
+          {translate(
+            'auto.components.tab.bar.SortableTabContextMenu.splitTerminalDown',
+            'Split terminal down'
+          )}
+          <DropdownMenuShortcut>{splitDownShortcut}</DropdownMenuShortcut>
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onSplitGroup('left', tab.id)}>
-          <Columns2 className="mr-1.5 size-3.5" />
-          {translate('auto.components.tab.bar.SortableTabContextMenu.0ce4bae39d', 'Split Left')}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onSplitGroup('right', tab.id)}>
-          <Columns2 className="mr-1.5 size-3.5" />
-          {translate('auto.components.tab.bar.SortableTabContextMenu.21132389e9', 'Split Right')}
-        </DropdownMenuItem>
+        <TabWorkspaceLayoutMenuSection unifiedTabId={unifiedTabId} groupId={groupId} />
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onTogglePin}>
           {isPinned ? <PinOff className="mr-1.5 size-3.5" /> : <Pin className="mr-1.5 size-3.5" />}
@@ -142,6 +167,7 @@ export function SortableTabContextMenu({
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => !isPinned && onClose(tab.id)} disabled={isPinned}>
           {translate('auto.components.tab.bar.SortableTabContextMenu.89359a36f7', 'Close')}
+          {closeShortcut ? <DropdownMenuShortcut>{closeShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onCloseOthers(tab.id)} disabled={tabCount <= 1}>
           {translate('auto.components.tab.bar.SortableTabContextMenu.8d16f9cd30', 'Close Others')}
@@ -155,6 +181,7 @@ export function SortableTabContextMenu({
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onRenameOpen}>
           {translate('auto.components.tab.bar.SortableTabContextMenu.2f697b3c31', 'Change Title')}
+          {renameShortcut ? <DropdownMenuShortcut>{renameShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
         <div className="px-2 pt-1.5 pb-1">
           <div className="text-xs font-medium text-muted-foreground mb-1.5">

@@ -41,11 +41,17 @@ import { isShellProcess } from '../../shared/shell-process-detection'
 import { parsePtySessionId } from './pty-session-id'
 import { getAgentForegroundContextPaths } from '../providers/agent-foreground-context-paths'
 
-const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
+const PANE_IDENTITY_ENV_KEYS = [
+  'ORCA_PANE_KEY',
+  'ORCA_TAB_ID',
+  'ORCA_WORKTREE_ID',
+  'ORCA_AGENT_LAUNCH_TOKEN'
+] as const
 const FOREGROUND_AGENT_CACHE_TTL_MS = 1000
 const SHELL_FOREGROUND_REFRESH_RETRY_MS = 5_000
 const STARTUP_AGENT_FOREGROUND_BOOTSTRAP_MS = 5_000
 const PTY_SPAWN_HEALTH_TIMEOUT_MS = 2_000
+const PENDING_PRE_LISTENER_DATA_MAX_CHARS = 512 * 1024
 
 export type PtySubprocessOptions = {
   sessionId: string
@@ -64,6 +70,9 @@ export type PtySubprocessOptions = {
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
 }
 
+/**
+ * Returns a stable default working directory for daemon-spawned PTYs.
+ */
 function getDefaultCwd(): string {
   if (process.platform !== 'win32') {
     return process.env.HOME || '/'
@@ -81,6 +90,9 @@ function getDefaultCwd(): string {
   return 'C:\\'
 }
 
+/**
+ * Removes pane identity inherited from the daemon parent unless explicitly set.
+ */
 function removeUnspecifiedPaneIdentityEnv(
   env: Record<string, string>,
   explicitEnv: Record<string, string> | undefined
@@ -92,6 +104,9 @@ function removeUnspecifiedPaneIdentityEnv(
   }
 }
 
+/**
+ * Promotes the agent-teams shim path ahead of inherited PATH entries.
+ */
 function promoteAgentTeamsShimPath(
   env: Record<string, string>,
   requestedPath: string | undefined
@@ -107,6 +122,9 @@ function promoteAgentTeamsShimPath(
   env.PATH = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(delimiter)
 }
 
+/**
+ * Removes stale development hook endpoints inherited by daemon children.
+ */
 function removeInheritedDevAgentHookEndpoint(
   env: Record<string, string>,
   explicitEnv: Record<string, string> | undefined
@@ -119,6 +137,9 @@ function removeInheritedDevAgentHookEndpoint(
   }
 }
 
+/**
+ * Resolves a WSL launch context from a user-selected distro name.
+ */
 function getWslContextFromPreferredDistro(
   distro: string | null | undefined
 ): { distro: string } | undefined {
@@ -126,12 +147,18 @@ function getWslContextFromPreferredDistro(
   return trimmed ? { distro: trimmed } : undefined
 }
 
+/**
+ * Strips Electron's internal run-as-node flag from user shell environments.
+ */
 function removeInheritedElectronRunAsNode(env: Record<string, string>): void {
   // Why: the daemon needs ELECTRON_RUN_AS_NODE=1 internally, but user shells
   // must not inherit it or nested Electron commands run as plain Node.
   delete env.ELECTRON_RUN_AS_NODE
 }
 
+/**
+ * Formats a daemon preflight failure with the same ENOENT details node-pty exposes.
+ */
 function formatMissingDaemonPathError(kind: 'helper' | 'cwd', path: string): DaemonProtocolError {
   const detailName = kind === 'helper' ? 'helper' : 'cwd'
   const step = kind === 'helper' ? 'posix_spawn' : 'daemon_cwd'
@@ -142,6 +169,9 @@ function formatMissingDaemonPathError(kind: 'helper' | 'cwd', path: string): Dae
   )
 }
 
+/**
+ * Checks whether a path currently exists and is a directory.
+ */
 function isExistingDirectory(path: string | undefined): path is string {
   if (!path) {
     return false
@@ -153,6 +183,9 @@ function isExistingDirectory(path: string | undefined): path is string {
   }
 }
 
+/**
+ * Moves the daemon process to a stable cwd after its original cwd disappears.
+ */
 function repairDaemonCwd(): string | null {
   const candidates = [
     process.env.ORCA_USER_DATA_PATH,
@@ -172,6 +205,9 @@ function repairDaemonCwd(): string | null {
   return null
 }
 
+/**
+ * Ensures the daemon cwd is valid before native PTY spawning.
+ */
 function preflightDaemonCwd(): void {
   let daemonCwd = '<unavailable>'
   try {
@@ -192,6 +228,9 @@ function preflightDaemonCwd(): void {
   throw formatMissingDaemonPathError('cwd', daemonCwd)
 }
 
+/**
+ * Validates macOS node-pty helper availability before spawning terminals.
+ */
 function preflightMacNodePtySpawnEnvironment(): void {
   if (process.platform !== 'darwin') {
     return
@@ -219,10 +258,16 @@ function preflightMacNodePtySpawnEnvironment(): void {
   throw formatMissingDaemonPathError('helper', candidates[0] ?? '<unresolved>')
 }
 
+/**
+ * Detects native Windows paths that should be validated before spawn.
+ */
 function isNativeWindowsPath(path: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(path) || path.startsWith('\\\\')
 }
 
+/**
+ * Validates explicit native Windows cwd paths before ConPTY launch.
+ */
 function preflightWindowsPtySpawnEnvironment(args: {
   validationCwd: string
   cwdWasExplicit: boolean
@@ -238,6 +283,9 @@ function preflightWindowsPtySpawnEnvironment(args: {
   validateWorkingDirectory(args.validationCwd)
 }
 
+/**
+ * Wraps native PTY spawn failures with shell and cwd context.
+ */
 function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string): Error {
   const message = err instanceof Error ? err.message : String(err)
   const formatted = new DaemonProtocolError(
@@ -249,6 +297,9 @@ function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string):
   return formatted
 }
 
+/**
+ * Runs a short native PTY spawn probe for daemon health checks.
+ */
 export async function checkPtySpawnHealth(): Promise<void> {
   if (process.platform !== 'darwin') {
     return
@@ -318,6 +369,9 @@ export async function checkPtySpawnHealth(): Promise<void> {
   })
 }
 
+/**
+ * Normalizes node-pty foreground process strings to executable basenames.
+ */
 function normalizeForegroundProcessName(processName: string | null | undefined): string | null {
   const trimmed = processName?.trim().replace(/^["']|["']$/g, '') ?? ''
   if (!trimmed || trimmed === 'xterm-256color') {
@@ -326,6 +380,9 @@ function normalizeForegroundProcessName(processName: string | null | undefined):
   return trimmed.split(/[\\/]/).pop() || null
 }
 
+/**
+ * Falls back to the spawned Windows shell when node-pty reports a terminal name.
+ */
 function resolveFallbackForegroundProcess(
   processName: string | null | undefined,
   shellPath: string
@@ -339,6 +396,12 @@ function resolveFallbackForegroundProcess(
   return normalizeForegroundProcessName(pathWin32.basename(shellPath))
 }
 
+/**
+ * Spawns the daemon-owned PTY subprocess for a terminal session.
+ *
+ * The returned handle records whether the startup command was already embedded
+ * in Windows shell args so the daemon host does not write it a second time.
+ */
 export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandle {
   const size = normalizePtySize(opts.cols, opts.rows)
   const env: Record<string, string> = {
@@ -392,6 +455,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let shellPath =
     cwdWslInfo || sessionWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
+  let startupCommandDeliveredInShellArgs = false
   const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
   const isCodexStartupCommand = startupAgentRecognition?.agent === 'codex'
   const requestedCwd = opts.cwd || getDefaultCwd()
@@ -436,11 +500,13 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       shellPath,
       spawnCwd,
       getDefaultCwd(),
-      sessionWslContext ?? preferredWslContext
+      sessionWslContext ?? preferredWslContext,
+      opts.command
     )
     shellArgs = resolved.shellArgs
     spawnCwd = resolved.effectiveCwd
     validationCwd = resolved.validationCwd
+    startupCommandDeliveredInShellArgs = resolved.startupCommandDeliveredInShellArgs === true
     if (isWindowsGitBashShellPath(shellPath)) {
       // Why: Git for Windows login startup files otherwise cd to $HOME,
       // ignoring node-pty's cwd for repo-scoped terminals.
@@ -466,11 +532,14 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
               getDefaultCwd(),
               {
                 distro: codexHomeWslInfo.distro
-              }
+              },
+              opts.command
             )
             shellArgs = resolved.shellArgs
             spawnCwd = resolved.effectiveCwd
             validationCwd = resolved.validationCwd
+            startupCommandDeliveredInShellArgs =
+              resolved.startupCommandDeliveredInShellArgs === true
           }
         }
       } else if (isHostCodexHomeForWsl(env.CODEX_HOME)) {
@@ -524,6 +593,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       shellLaunch =
         env.ORCA_ATTRIBUTION_SHIM_DIR ||
         env.ORCA_OPENCODE_CONFIG_DIR ||
+        env.ORCA_MIMOCODE_HOME ||
         env.ORCA_OMP_STATUS_EXTENSION ||
         env.ORCA_CODEX_HOME ||
         env.ORCA_AGENT_TEAMS_SHIM_DIR
@@ -565,9 +635,52 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
 
   let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
+  let pendingPreListenerData: string[] = []
+  let pendingPreListenerDataChars = 0
+  let pendingPreListenerExitCode: number | null = null
 
-  proc.onData((data) => onDataCb?.(data))
-  proc.onExit(({ exitCode }) => onExitCb?.(exitCode))
+  const bufferPreListenerData = (data: string): void => {
+    // Why: Windows shell-arg startup commands can print before Session wires
+    // this subprocess into the daemon. Preserve that spawn-time race window.
+    pendingPreListenerData.push(data)
+    pendingPreListenerDataChars += data.length
+    while (pendingPreListenerDataChars > PENDING_PRE_LISTENER_DATA_MAX_CHARS) {
+      const removed = pendingPreListenerData.shift()
+      if (removed === undefined) {
+        pendingPreListenerDataChars = 0
+        return
+      }
+      pendingPreListenerDataChars -= removed.length
+    }
+  }
+
+  const flushPreListenerData = (): void => {
+    if (!onDataCb || pendingPreListenerData.length === 0) {
+      return
+    }
+    const pending = pendingPreListenerData
+    pendingPreListenerData = []
+    pendingPreListenerDataChars = 0
+    for (const data of pending) {
+      onDataCb(data)
+    }
+  }
+
+  proc.onData((data) => {
+    if (onDataCb) {
+      onDataCb(data)
+    } else {
+      bufferPreListenerData(data)
+    }
+  })
+  proc.onExit(({ exitCode }) => {
+    if (onExitCb) {
+      flushPreListenerData()
+      onExitCb(exitCode)
+    } else {
+      pendingPreListenerExitCode = exitCode
+    }
+  })
 
   // Why: node-pty's native NAPI layer throws a C++ Napi::Error when
   // write/resize/kill is called on a PTY whose underlying fd is already
@@ -683,6 +796,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
 
   return {
     pid: proc.pid,
+    ...(startupCommandDeliveredInShellArgs ? { startupCommandDeliveredInShellArgs: true } : {}),
     getForegroundProcess: () => {
       // Why: node-pty's `.process` getter reports the PTY's live foreground
       // process name (the agent running in the shell, or the shell itself) and
@@ -782,9 +896,16 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     },
     onData: (cb) => {
       onDataCb = cb
+      flushPreListenerData()
     },
     onExit: (cb) => {
       onExitCb = cb
+      if (pendingPreListenerExitCode !== null) {
+        const code = pendingPreListenerExitCode
+        pendingPreListenerExitCode = null
+        flushPreListenerData()
+        cb(code)
+      }
     },
     dispose: () => {
       if (disposed) {
@@ -794,6 +915,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       dead = true
       onDataCb = null
       onExitCb = null
+      pendingPreListenerData = []
+      pendingPreListenerDataChars = 0
+      pendingPreListenerExitCode = null
       // Why: UnixTerminal.destroy() registers `_socket.once('close', () => this.kill('SIGHUP'))`
       // (unixTerminal.js:219-229). The socket close fires asynchronously; by then
       // the child may have exited and its pid been recycled to an unrelated

@@ -38,7 +38,7 @@ const DictationHandle = z.object({
   dictationId: requiredString('Missing dictation ID')
 })
 
-const SpeechModelDownload = z.object({
+const SpeechModelAction = z.object({
   modelId: requiredString('Missing model ID')
 })
 
@@ -56,8 +56,13 @@ export const SPEECH_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'speech.models.download',
-    params: SpeechModelDownload,
+    params: SpeechModelAction,
     handler: async (params, { runtime }) => runtime.downloadMobileSpeechModel(params.modelId)
+  }),
+  defineMethod({
+    name: 'speech.models.delete',
+    params: SpeechModelAction,
+    handler: async (params, { runtime }) => runtime.deleteMobileSpeechModel(params.modelId)
   }),
   defineMethod({
     name: 'speech.dictation.setup',

@@ -211,7 +211,19 @@ function splitIpynbSource(source: string): string[] {
   if (!source) {
     return []
   }
-  return source.endsWith('\n') ? (source.match(/[^\n]*\n/g) ?? []) : source.split(/(?<=\n)/)
+  const lines: string[] = []
+  let lineStart = 0
+  for (let index = 0; index < source.length; index += 1) {
+    if (source.charCodeAt(index) !== 10) {
+      continue
+    }
+    lines.push(source.slice(lineStart, index + 1))
+    lineStart = index + 1
+  }
+  if (lineStart < source.length) {
+    lines.push(source.slice(lineStart))
+  }
+  return lines
 }
 
 function parseNotebookRoot(content: string): Record<string, unknown> {

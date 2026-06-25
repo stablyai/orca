@@ -121,7 +121,7 @@ export function HeroFlow({
               </div>
             </div>
             <div
-              className="mp-qr"
+              className="mp-qr mp-qr-large"
               aria-label={translate(
                 'auto.components.mobile.MobileHero.7af266b80d',
                 'Install QR code'
@@ -225,7 +225,7 @@ export function HeroFlow({
             </div>
             <div className="mp-qr-stack">
               <div
-                className="mp-qr"
+                className="mp-qr mp-qr-large"
                 aria-label={translate(
                   'auto.components.mobile.MobileHero.bb0074ce11',
                   'Pairing QR code'

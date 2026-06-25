@@ -76,6 +76,36 @@ describe('launchAiVaultSessionInNewTab', () => {
     expect(result).toEqual({ tabId: 'tab-1', groupId: 'group-1' })
   })
 
+  it('queues configured resume startup details for agent history resumes', () => {
+    launchAiVaultSessionInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      command: "claude '--dangerously-skip-permissions' '--effort' 'max' '--resume' 'session-1'",
+      env: { ANTHROPIC_BASE_URL: 'https://claude.example.test' },
+      launchConfig: {
+        agentCommand: "claude '--dangerously-skip-permissions' '--effort' 'max'",
+        agentArgs: '--dangerously-skip-permissions --effort max',
+        agentEnv: { ANTHROPIC_BASE_URL: 'https://claude.example.test' }
+      }
+    })
+
+    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
+      command: "claude '--dangerously-skip-permissions' '--effort' 'max' '--resume' 'session-1'",
+      env: { ANTHROPIC_BASE_URL: 'https://claude.example.test' },
+      launchConfig: {
+        agentCommand: "claude '--dangerously-skip-permissions' '--effort' 'max'",
+        agentArgs: '--dangerously-skip-permissions --effort max',
+        agentEnv: { ANTHROPIC_BASE_URL: 'https://claude.example.test' }
+      },
+      launchAgent: 'claude',
+      telemetry: {
+        agent_kind: 'claude',
+        launch_source: 'sidebar',
+        request_kind: 'resume'
+      }
+    })
+  })
+
   it('creates a split group before launching when a split direction is provided', () => {
     launchAiVaultSessionInNewTab({
       agent: 'codex',

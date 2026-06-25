@@ -37,6 +37,7 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     isCommitting: inputs.isCommitting,
     isFixingCommitFailureWithAI: false,
     showComposer: true,
+    sourceControlAiActionsVisible: true,
     aiEnabled: false,
     aiAgentConfigured: false,
     isGenerating: false,

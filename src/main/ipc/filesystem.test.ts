@@ -132,7 +132,8 @@ vi.mock('../git/check-ignored-paths', () => ({
 }))
 
 vi.mock('../git/worktree', () => ({
-  listWorktrees: listWorktreesMock
+  listWorktrees: listWorktreesMock,
+  listWorktreesStrict: listWorktreesMock
 }))
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
@@ -882,6 +883,36 @@ describe('registerFilesystemHandlers', () => {
 
     expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, { includeIgnored: true })
     expect(sshProvider.getStatus).toHaveBeenCalledWith('/remote/repo', { includeIgnored: true })
+  })
+
+  it('forwards upstream-negative-cache bypass through local and SSH git status IPC', async () => {
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    getStatusMock.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    const sshProvider = {
+      getStatus: vi.fn().mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    }
+    getSshGitProviderMock.mockReturnValue(sshProvider)
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:status')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      bypassEffectiveUpstreamNegativeCache: true
+    })
+    await handlers.get('git:status')!(null, {
+      worktreePath: '/remote/repo',
+      connectionId: 'ssh-1',
+      bypassEffectiveUpstreamNegativeCache: true
+    })
+
+    expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
+      includeIgnored: false,
+      bypassEffectiveUpstreamNegativeCache: true
+    })
+    expect(sshProvider.getStatus).toHaveBeenCalledWith('/remote/repo', {
+      includeIgnored: false,
+      bypassEffectiveUpstreamNegativeCache: true
+    })
   })
 
   it('checks ignored paths through local and SSH git providers', async () => {

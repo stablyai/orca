@@ -5,17 +5,30 @@ boundary. Splitting it by line count would scatter tightly coupled terminal
 process behavior across files without a cleaner ownership seam. */
 import { join, delimiter } from 'path'
 import { randomUUID } from 'crypto'
-import { type BrowserWindow, type WebContents, ipcMain, app } from 'electron'
+import {
+  type BrowserWindow,
+  type IpcMainEvent,
+  type IpcMainInvokeEvent,
+  type WebContents,
+  ipcMain,
+  app
+} from 'electron'
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings, TuiAgent } from '../../shared/types'
+import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import {
   isWslShellName,
   resolveLocalWindowsTerminalRuntimeOptions
 } from '../../shared/local-windows-terminal-runtime'
 import { openCodeHookService } from '../opencode/hook-service'
+import { mimoCodeHookService } from '../mimo/hook-service'
+import {
+  getCommandTokenPathBasename,
+  getFirstCommandToken
+} from '../../shared/command-token-scanner'
 import { agentHookServer } from '../agent-hooks/server'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { piTitlebarExtensionService } from '../pi/titlebar-extension-service'
@@ -50,6 +63,10 @@ import {
   launchSourceSchema,
   requestKindSchema
 } from '../../shared/telemetry-events'
+import {
+  isTerminalInputTooLargeWithDeferredMeasurement,
+  iterateTerminalInputChunks
+} from '../../shared/terminal-input'
 import { isRemoteAgentHooksEnabled } from '../../shared/agent-hook-relay'
 import { createTerminalSessionStateSaveFailureMessage } from '../../shared/terminal-session-state-save-failure'
 import { readShellStartupEnvVar } from '../pty/shell-startup-env'
@@ -171,6 +188,16 @@ function isValidPaneKey(paneKey: unknown): paneKey is string {
   return parseValidPaneKey(paneKey) !== null
 }
 
+function shouldRefreshNativeClaudeAgentTeamsEnv(args: {
+  command?: string
+  launchConfig?: SleepingAgentLaunchConfig
+}): boolean {
+  const capturedCommand = args.launchConfig?.agentCommand?.trim() || args.command?.trim() || ''
+  const capturedArgs = args.launchConfig?.agentArgs?.trim() ?? ''
+  const capturedLaunch = `${capturedCommand} ${capturedArgs}`.trim()
+  return /(^|\s)--teammate-mode(?:=|\s+)auto(?:\s|$)/.test(capturedLaunch)
+}
+
 function rememberPaneKeyForPty(ptyId: string, paneKey: unknown): string | null {
   const normalizedPaneKey = typeof paneKey === 'string' ? paneKey.trim() : ''
   if (!isValidPaneKey(normalizedPaneKey)) {
@@ -258,7 +285,10 @@ function stripRemotePaneEnvWhenHooksDisabled(
   }
   if (
     !env ||
-    (!('ORCA_PANE_KEY' in env) && !('ORCA_TAB_ID' in env) && !('ORCA_WORKTREE_ID' in env))
+    (!('ORCA_PANE_KEY' in env) &&
+      !('ORCA_TAB_ID' in env) &&
+      !('ORCA_WORKTREE_ID' in env) &&
+      !('ORCA_AGENT_LAUNCH_TOKEN' in env))
   ) {
     return env
   }
@@ -266,6 +296,7 @@ function stripRemotePaneEnvWhenHooksDisabled(
   delete stripped.ORCA_PANE_KEY
   delete stripped.ORCA_TAB_ID
   delete stripped.ORCA_WORKTREE_ID
+  delete stripped.ORCA_AGENT_LAUNCH_TOKEN
   return stripped
 }
 
@@ -585,6 +616,26 @@ function restoreOrStripOverlayEnv(
   delete baseEnv[keys.source]
 }
 
+function isMimoLaunchCommand(launchCommand: string | undefined): boolean {
+  const binary = getCommandTokenPathBasename(getFirstCommandToken(launchCommand ?? ''))
+    .toLowerCase()
+    .replace(/\.(?:cmd|exe|sh)$/, '')
+  return binary === 'mimo'
+}
+
+function resolveMimocodeSourceHome(baseEnv: Record<string, string>): string | undefined {
+  const sourceHome = baseEnv.ORCA_MIMOCODE_SOURCE_HOME ?? process.env.ORCA_MIMOCODE_SOURCE_HOME
+  if (sourceHome) {
+    return sourceHome
+  }
+  const configHome = baseEnv.MIMOCODE_HOME ?? process.env.MIMOCODE_HOME
+  const orcaHome = baseEnv.ORCA_MIMOCODE_HOME ?? process.env.ORCA_MIMOCODE_HOME
+  if (configHome && orcaHome && configHome === orcaHome) {
+    return undefined
+  }
+  return configHome
+}
+
 function resolveOpenCodeSourceConfigDir(baseEnv: Record<string, string>): string | undefined {
   const sourceDir =
     baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR ?? process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
@@ -671,11 +722,28 @@ export function buildPtyHostEnv(
         delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
       }
     }
+    if (isMimoLaunchCommand(opts.launchCommand)) {
+      const preexistingMimocodeHome = resolveMimocodeSourceHome(baseEnv)
+      Object.assign(baseEnv, mimoCodeHookService.buildPtyEnv(id, preexistingMimocodeHome))
+      if (baseEnv.MIMOCODE_HOME) {
+        baseEnv.ORCA_MIMOCODE_HOME = baseEnv.MIMOCODE_HOME
+        if (preexistingMimocodeHome) {
+          baseEnv.ORCA_MIMOCODE_SOURCE_HOME = preexistingMimocodeHome
+        } else {
+          delete baseEnv.ORCA_MIMOCODE_SOURCE_HOME
+        }
+      }
+    }
   } else {
     restoreOrStripOverlayEnv(baseEnv, {
       primary: 'OPENCODE_CONFIG_DIR',
       overlay: 'ORCA_OPENCODE_CONFIG_DIR',
       source: 'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
+    })
+    restoreOrStripOverlayEnv(baseEnv, {
+      primary: 'MIMOCODE_HOME',
+      overlay: 'ORCA_MIMOCODE_HOME',
+      source: 'ORCA_MIMOCODE_SOURCE_HOME'
     })
   }
 
@@ -2102,6 +2170,8 @@ export function registerPtyHandlers(
         env?: Record<string, string>
         envToDelete?: string[]
         command?: string
+        launchConfig?: SleepingAgentLaunchConfig
+        launchAgent?: TuiAgent
         startupCommandDelivery?: StartupCommandDelivery
         connectionId?: string | null
         worktreeId?: string
@@ -2234,8 +2304,46 @@ export function registerPtyHandlers(
           ? makePaneKey(args.tabId, args.leafId)
           : null
       const stablePaneKey = verifiedPaneKey ?? migrationUnsupportedPaneKey
-      const baseEnv = baseEnvWithAuth ? { ...baseEnvWithAuth } : undefined
+      let baseEnv = baseEnvWithAuth ? { ...baseEnvWithAuth } : undefined
+      const shouldRefreshAgentTeamsEnv =
+        !args.connectionId &&
+        runtime !== undefined &&
+        stablePaneKey !== null &&
+        shouldRefreshNativeClaudeAgentTeamsEnv({
+          command: args.command,
+          launchConfig: args.launchConfig
+        })
+      let effectiveLaunchConfig = args.launchConfig
+      const preAllocatedHandle =
+        runtime && (!(provider instanceof LocalPtyProvider) || shouldRefreshAgentTeamsEnv)
+          ? runtime.createPreAllocatedTerminalHandle()
+          : null
+      if (shouldRefreshAgentTeamsEnv && preAllocatedHandle) {
+        // Why: native Agent Teams team ids/tokens are process-local. A sleeping
+        // record preserves the user's native launch shape, but the team env
+        // itself must be regenerated for the new leader PTY.
+        const prepared = await runtime.prepareClaudeAgentTeamsLeaderForHandle({
+          handle: preAllocatedHandle,
+          baseEnv: baseEnv ?? {}
+        })
+        baseEnv = {
+          ...baseEnv,
+          ...prepared.env
+        }
+        if (args.launchConfig) {
+          effectiveLaunchConfig = {
+            ...args.launchConfig,
+            agentEnv: {
+              ...args.launchConfig.agentEnv,
+              ...prepared.env
+            }
+          }
+        }
+      }
       const requestedAgentTeamsPath = baseEnv?.ORCA_AGENT_TEAMS_TEAM_ID ? baseEnv.PATH : undefined
+      const agentTeamsEnvToDelete = shouldRefreshAgentTeamsEnv
+        ? ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+        : undefined
       if (baseEnv && stablePaneKey) {
         baseEnv.ORCA_PANE_KEY = stablePaneKey
         if (typeof args.tabId === 'string') {
@@ -2254,14 +2362,11 @@ export function registerPtyHandlers(
         delete baseEnv.ORCA_PANE_KEY
         delete baseEnv.ORCA_TAB_ID
         delete baseEnv.ORCA_WORKTREE_ID
+        delete baseEnv.ORCA_AGENT_LAUNCH_TOKEN
       }
       const validatedPaneKey = stablePaneKey
       const validatedLeafId = verifiedLeafId ?? metadataLeafId
       let env: Record<string, string> | undefined = baseEnv
-      const preAllocatedHandle =
-        runtime && !(provider instanceof LocalPtyProvider)
-          ? runtime.createPreAllocatedTerminalHandle()
-          : null
       const effectiveShellOverride = terminalRuntimeOptions.shellOverride
       const codexSelectionTarget = getCodexSelectionTargetForPty(
         effectiveShellOverride,
@@ -2333,7 +2438,10 @@ export function registerPtyHandlers(
         : undefined
       const combinedEnvToDelete = mergePtyEnvDeletions(
         mergePtyEnvDeletions(
-          mergePtyEnvDeletions(envToDelete, args.envToDelete ?? []),
+          mergePtyEnvDeletions(
+            mergePtyEnvDeletions(envToDelete, args.envToDelete ?? []),
+            agentTeamsEnvToDelete ?? []
+          ),
           isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(spawnEnv) : []
         ),
         skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : []
@@ -2652,11 +2760,94 @@ export function registerPtyHandlers(
           })
         }
       }
-      return result
+      return {
+        ...result,
+        ...(!result.isReattach && effectiveLaunchConfig
+          ? { launchConfig: effectiveLaunchConfig }
+          : {})
+      }
     }
   )
 
-  const writePtyInput = (args: { id: string; data: string }): boolean => {
+  const writePtyProviderInputWithinLimit = (
+    provider: IPtyProvider,
+    id: string,
+    data: string
+  ): boolean | Promise<boolean> => {
+    const chunks = iterateTerminalInputChunks(data)
+    const first = chunks.next()
+    if (first.done) {
+      provider.write(id, data)
+      return true
+    }
+    const second = chunks.next()
+    if (second.done) {
+      provider.write(id, first.value)
+      return true
+    }
+    return writePtyProviderInputChunks(provider, id, chunks, first.value, second.value)
+  }
+
+  const writePtyProviderInput = (
+    provider: IPtyProvider,
+    id: string,
+    data: string
+  ): boolean | Promise<boolean> => {
+    try {
+      const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(data)
+      if (typeof tooLarge === 'boolean') {
+        return tooLarge ? false : writePtyProviderInputWithinLimit(provider, id, data)
+      }
+      return tooLarge
+        .then((result) => (result ? false : writePtyProviderInputWithinLimit(provider, id, data)))
+        .catch(() => false)
+    } catch {
+      return false
+    }
+  }
+
+  const writePtyProviderInputChunks = async (
+    provider: IPtyProvider,
+    id: string,
+    chunks: Iterator<string>,
+    firstChunk: string,
+    secondChunk: string
+  ): Promise<boolean> => {
+    try {
+      let chunk: IteratorResult<string> = { done: false, value: firstChunk }
+      let nextChunk: IteratorResult<string> = { done: false, value: secondChunk }
+      while (!chunk.done) {
+        provider.write(id, chunk.value)
+        if (!nextChunk.done) {
+          await new Promise((resolve) => setTimeout(resolve, 0))
+        }
+        chunk = nextChunk
+        nextChunk = chunks.next()
+      }
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  type PtyWritePayload = { id: string; data: string }
+
+  const isPtyWritePayload = (value: unknown): value is PtyWritePayload =>
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { id?: unknown }).id === 'string' &&
+    (value as { id: string }).id.length > 0 &&
+    typeof (value as { data?: unknown }).data === 'string'
+
+  const isPtyWriteEventFromMainWindow = (
+    event: IpcMainEvent | IpcMainInvokeEvent,
+    mainWebContents: WebContents
+  ): boolean =>
+    event.sender === mainWebContents &&
+    !mainWindow.isDestroyed() &&
+    !(typeof mainWebContents.isDestroyed === 'function' && mainWebContents.isDestroyed())
+
+  const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {
     // Why: defense-in-depth for the mobile-presence lock. The renderer's
     // xterm.onData guard already drops desktop keystrokes when mobile is
     // driving, but a stale view between the main-side state flip and the
@@ -2674,14 +2865,13 @@ export function registerPtyHandlers(
       const now = performance.now()
       lastInputAtByPty.set(args.id, now)
       interactiveOutputCharsByPty.set(args.id, 0)
-      provider.write(args.id, args.data)
-      return true
+      return writePtyProviderInput(provider, args.id, args.data)
     } catch {
       return false
     }
   }
 
-  const writePtyInputAccepted = (args: { id: string; data: string }): boolean => {
+  const writePtyInputAccepted = (args: PtyWritePayload): boolean | Promise<boolean> => {
     if (runtime?.getDriver(args.id).kind === 'mobile') {
       return false
     }
@@ -2700,17 +2890,22 @@ export function registerPtyHandlers(
       const now = performance.now()
       lastInputAtByPty.set(args.id, now)
       interactiveOutputCharsByPty.set(args.id, 0)
-      provider.write(args.id, args.data)
-      return true
+      return writePtyProviderInput(provider, args.id, args.data)
     } catch {
       return false
     }
   }
 
-  ipcMain.on('pty:write', (_event, args: { id: string; data: string }) => {
+  ipcMain.on('pty:write', (event, args: unknown) => {
+    if (!isPtyWriteEventFromMainWindow(event, mainWindow.webContents) || !isPtyWritePayload(args)) {
+      return
+    }
     writePtyInput(args)
   })
-  ipcMain.handle('pty:writeAccepted', (_event, args: { id: string; data: string }): boolean => {
+  ipcMain.handle('pty:writeAccepted', (event, args: unknown): boolean | Promise<boolean> => {
+    if (!isPtyWriteEventFromMainWindow(event, mainWindow.webContents) || !isPtyWritePayload(args)) {
+      return false
+    }
     return writePtyInputAccepted(args)
   })
 

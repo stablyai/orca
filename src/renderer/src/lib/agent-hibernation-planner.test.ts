@@ -82,7 +82,11 @@ function plannedWorktrees(input: AgentHibernationPlannerSnapshot): string[] {
   return planAgentHibernationCandidates(input).map((candidate) => candidate.worktreeId)
 }
 
-describe('agent hibernation planner', () => {
+function plannedPaneKeys(input: AgentHibernationPlannerSnapshot): string[] {
+  return planAgentHibernationCandidates(input).map((candidate) => candidate.paneKey)
+}
+
+describe('agent sleep planner', () => {
   it('selects nothing when disabled, active, or foreground', () => {
     expect(
       plannedWorktrees(
@@ -105,6 +109,10 @@ describe('agent hibernation planner', () => {
       const e = entry({ state })
       expect(plannedWorktrees(snapshot({ agentStatusByPaneKey: { [e.paneKey]: e } }))).toEqual([])
     }
+    const interrupted = entry({ interrupted: true })
+    expect(
+      plannedWorktrees(snapshot({ agentStatusByPaneKey: { [interrupted.paneKey]: interrupted } }))
+    ).toEqual([])
     const noSession = entry({ providerSession: undefined })
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [noSession.paneKey]: noSession } }))
@@ -128,10 +136,26 @@ describe('agent hibernation planner', () => {
     ).toEqual(['wt-bg'])
   })
 
-  it('rejects untracked live PTYs and already-sleeping panes', () => {
+  it('emits a pane candidate when a sibling shell PTY is live', () => {
     expect(
-      plannedWorktrees(snapshot({ ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-shell'] } }))
-    ).toEqual([])
+      planAgentHibernationCandidates(
+        snapshot({ ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-shell'] } })
+      )
+    ).toMatchObject([
+      {
+        id: `wt-bg|tab-1:${LEAF}`,
+        worktreeId: 'wt-bg',
+        paneKey: `tab-1:${LEAF}`,
+        tabId: 'tab-1',
+        leafId: LEAF,
+        targetPtyIds: ['pty-1'],
+        expectedRuntimePtyIds: ['pty-1'],
+        paneKeys: [`tab-1:${LEAF}`]
+      }
+    ])
+  })
+
+  it('rejects panes without live PTYs and already-sleeping panes', () => {
     expect(plannedWorktrees(snapshot({ ptyIdsByTabId: { 'tab-1': [] } }))).toEqual([])
     expect(
       plannedWorktrees(
@@ -142,6 +166,17 @@ describe('agent hibernation planner', () => {
 
   it('rejects mobile-driven panes because paired clients can send input outside desktop xterm', () => {
     expect(plannedWorktrees(snapshot({ mobileLockedPtyIds: ['pty-1'] }))).toEqual([])
+  })
+
+  it('does not let a mobile-locked sibling PTY block an unlocked target pane', () => {
+    expect(
+      plannedPaneKeys(
+        snapshot({
+          ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-shell'] },
+          mobileLockedPtyIds: ['pty-shell']
+        })
+      )
+    ).toEqual([`tab-1:${LEAF}`])
   })
 
   it('selects runtime-backed live PTYs when the renderer live map is empty', () => {
@@ -206,16 +241,16 @@ describe('agent hibernation planner', () => {
     ).toEqual([])
   })
 
-  it('rejects runtime-backed worktrees with extra unknown live PTYs', () => {
+  it('allows runtime-backed worktrees with sibling live PTYs', () => {
     expect(
-      plannedWorktrees(
+      plannedPaneKeys(
         snapshot({
           ptyIdsByTabId: { 'tab-1': [] },
           runtimeLivePtyIdsByWorktreeId: { 'wt-bg': ['pty-1', 'pty-shell'] },
           runtimeLivenessRequiredWorktreeIds: ['wt-bg']
         })
       )
-    ).toEqual([])
+    ).toEqual([`tab-1:${LEAF}`])
   })
 
   it('applies mobile locks to runtime-backed PTYs', () => {
@@ -245,14 +280,14 @@ describe('agent hibernation planner', () => {
     ).toEqual([])
   })
 
-  it('selects a worktree when all live PTYs are eligible done agents', () => {
+  it('selects each eligible done agent pane independently', () => {
     expect(plannedWorktrees(snapshot())).toEqual(['wt-bg'])
     const second = entry({
       paneKey: `tab-1:${OTHER_LEAF}`,
       providerSession: { key: 'session_id', id: 'session-2' }
     })
     expect(
-      plannedWorktrees(
+      plannedPaneKeys(
         snapshot({
           terminalLayoutsByTabId: {
             'tab-1': {
@@ -271,7 +306,7 @@ describe('agent hibernation planner', () => {
           agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry(), [second.paneKey]: second }
         })
       )
-    ).toEqual(['wt-bg'])
+    ).toEqual([`tab-1:${LEAF}`, `tab-1:${OTHER_LEAF}`])
   })
 
   it('requires two stable ticks and resets on signature changes', () => {

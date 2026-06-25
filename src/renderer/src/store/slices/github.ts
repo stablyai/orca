@@ -45,6 +45,7 @@ import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import { getHostedReviewCacheKey, linkedReviewHintKey } from './hosted-review-cache-identity'
 import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from './github-cache-key'
+import { isGitHubWorkItemsQueryTooLarge } from './github-work-items-query-bounds'
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
 import { translate } from '@/i18n/i18n'
 import {
@@ -127,6 +128,69 @@ function getRuntimeRepoTarget(
   }
   const repo = state.repos.find((candidate) => candidate.path === repoPath)
   return repo ? { target, repo } : null
+}
+
+function getPRRefreshOwnerRuntimeEnvironmentId(
+  candidate: Pick<GitHubPRRefreshCandidate, 'cacheKey' | 'executionHostId'>
+): string | null {
+  const parsed = parseExecutionHostId(candidate.executionHostId)
+  if (parsed?.kind === 'runtime') {
+    return parsed.environmentId
+  }
+  const cacheScope = candidate.cacheKey.split('::', 1)[0]
+  const cacheScopeHost = parseExecutionHostId(cacheScope)
+  return cacheScopeHost?.kind === 'runtime' ? cacheScopeHost.environmentId : null
+}
+
+function getPRRefreshRuntimeRepoTarget(
+  state: AppState,
+  candidate: GitHubPRRefreshCandidate
+): { target: { kind: 'environment'; environmentId: string }; repo: Repo } | null {
+  const ownerRuntimeEnvironmentId = getPRRefreshOwnerRuntimeEnvironmentId(candidate)
+  if (!ownerRuntimeEnvironmentId) {
+    return null
+  }
+  // Why: PR refreshes must follow the repo owner host, not the Active Server
+  // dropdown. A runtime-owned worktree can be visible while Local desktop is focused.
+  return getRuntimeRepoTarget(
+    state,
+    candidate.repoPath,
+    state.settings
+      ? { ...state.settings, activeRuntimeEnvironmentId: ownerRuntimeEnvironmentId }
+      : ({ activeRuntimeEnvironmentId: ownerRuntimeEnvironmentId } as AppState['settings'])
+  )
+}
+
+function shouldEnqueueLocalPRRefresh(candidate: GitHubPRRefreshCandidate): boolean {
+  // Why: the local PR coordinator owns local git and SSH bridge refreshes, but
+  // runtime-owned repos and disconnected SSH repos must not hit the IPC crash path.
+  if (getPRRefreshOwnerRuntimeEnvironmentId(candidate) !== null) {
+    return false
+  }
+  return !candidate.connectionId || candidate.connectionState === 'connected'
+}
+
+function enqueueLocalGitHubPRRefresh(
+  args: {
+    candidate: GitHubPRRefreshCandidate
+    reason: GitHubPRRefreshReason
+    priority: number
+  },
+  onNotQueued?: () => void | Promise<unknown>
+): void {
+  const enqueue = window.api.gh.enqueuePRRefresh
+  if (!enqueue) {
+    return
+  }
+  // Why: main can reject stale/unknown local paths; renderer refresh triggers
+  // are best-effort and must not become unhandled rejection crash breadcrumbs.
+  void enqueue(args)
+    .then((queued) =>
+      queued === false || queued?.kind === 'fallback' ? onNotQueued?.() : undefined
+    )
+    .catch((err) => {
+      console.warn('Failed to enqueue PR refresh:', err)
+    })
 }
 
 type GitHubWorkItemRequestContext = {
@@ -1365,6 +1429,81 @@ function withBoundedCacheEntry<T extends { fetchedAt: number }>(
   return evictStaleEntries({ ...cache, [key]: entry })
 }
 
+// Why: the prRefresh* maps are keyed by PR cache key (repo/branch/execution-host)
+// — an ephemeral, unbounded key space over a long session. They have no
+// `fetchedAt` to sort by, so bound them by insertion order (oldest-touched keys
+// evicted first; the writers move each touched key to the end). An evicted
+// long-idle branch simply restarts from a clean state, which is acceptable.
+function capRecordByInsertionOrder<T>(
+  record: Record<string, T>,
+  maxEntries = MAX_CACHE_ENTRIES
+): Record<string, T> {
+  const keys = Object.keys(record)
+  if (keys.length <= maxEntries) {
+    return record
+  }
+  const capped: Record<string, T> = {}
+  for (const key of keys.slice(keys.length - maxEntries)) {
+    capped[key] = record[key]
+  }
+  return capped
+}
+
+function capPrRefreshSequences(
+  sequences: Record<string, number>,
+  maxEntries = MAX_CACHE_ENTRIES
+): Record<string, number> {
+  return capRecordByInsertionOrder(sequences, maxEntries)
+}
+
+// Why: prRefreshStates backs visible status pills (refreshing/queued/paused/error)
+// so — unlike the invisible sequence guard — eviction must never drop an in-progress
+// indicator. Bound it well above any realistic tracked-branch count, and when over
+// cap evict *settled* statuses (error/skipped) first; only fall back to evicting an
+// active (in-flight/queued/paused) entry as a last-resort hard memory bound that
+// realistic usage never reaches. Evicted entries self-heal on the next refresh event.
+const MAX_PR_REFRESH_STATE_ENTRIES = 2000
+const SETTLED_PR_REFRESH_STATUSES = new Set<PRRefreshState['status']>(['error', 'skipped'])
+
+function capPrRefreshStates(
+  states: Record<string, PRRefreshState>,
+  maxEntries = MAX_PR_REFRESH_STATE_ENTRIES
+): Record<string, PRRefreshState> {
+  const keys = Object.keys(states)
+  let toEvict = keys.length - maxEntries
+  if (toEvict <= 0) {
+    return states
+  }
+  const evicted = new Set<string>()
+  // First pass: evict oldest settled (error/skipped) entries.
+  for (const key of keys) {
+    if (toEvict === 0) {
+      break
+    }
+    if (SETTLED_PR_REFRESH_STATUSES.has(states[key].status)) {
+      evicted.add(key)
+      toEvict--
+    }
+  }
+  // Last resort: evict oldest remaining keys to enforce the hard bound.
+  for (const key of keys) {
+    if (toEvict === 0) {
+      break
+    }
+    if (!evicted.has(key)) {
+      evicted.add(key)
+      toEvict--
+    }
+  }
+  const capped: Record<string, PRRefreshState> = {}
+  for (const key of keys) {
+    if (!evicted.has(key)) {
+      capped[key] = states[key]
+    }
+  }
+  return capped
+}
+
 function shouldRefreshIssueDecorations(state: AppState): boolean {
   return (state.worktreeCardProperties ?? []).includes('issue')
 }
@@ -2166,6 +2305,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   getCachedWorkItems: (repoId, limit, query, repoPath, sourceContext) => {
+    if (isGitHubWorkItemsQueryTooLarge(query)) {
+      return null
+    }
     const state = get()
     const key =
       sourceContext?.provider === 'github'
@@ -2175,6 +2317,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   getWorkItemsSourcesAndError: (repoId, limit, query, repoPath) => {
+    if (isGitHubWorkItemsQueryTooLarge(query)) {
+      return { sources: null, error: null }
+    }
     const key = getWorkItemsCacheKeyForOwner(get(), repoId, limit, query, repoPath)
     const entry = get().workItemsCache[key]
     return {
@@ -2200,6 +2345,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   fetchWorkItems: async (repoId, repoPath, limit, query, options): Promise<GitHubWorkItem[]> => {
+    if (isGitHubWorkItemsQueryTooLarge(query)) {
+      return []
+    }
     const requestState = get()
     const repo = findRepoForGitHubOwner(requestState, repoId, repoPath)
     const requestSettings = getGitHubWorkItemSourceSettings(
@@ -2316,6 +2464,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   fetchWorkItemsAcrossRepos: async (repos, perRepoLimit, displayLimit, query, options) => {
+    if (isGitHubWorkItemsQueryTooLarge(query)) {
+      return { items: [], failedCount: 0 }
+    }
     const state = get()
     let failedCount = 0
     const perProjectResults = await Promise.all(
@@ -2360,6 +2511,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   fetchWorkItemsNextPage: async (repos, perRepoLimit, displayLimit, query, before) => {
+    if (isGitHubWorkItemsQueryTooLarge(query)) {
+      return { items: [], failedCount: 0 }
+    }
     let failedCount = 0
     const perProjectResults = await Promise.all(
       repos.map(async (r) => {
@@ -2415,6 +2569,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   countWorkItemsAcrossRepos: async (repos, query) => {
+    if (isGitHubWorkItemsQueryTooLarge(query)) {
+      return 0
+    }
     const counts = await Promise.all(
       repos.map(async (r) => {
         try {
@@ -2442,6 +2599,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   prefetchWorkItems: (repoId, repoPath, limit = PER_REPO_FETCH_LIMIT, query = '', options) => {
+    if (isGitHubWorkItemsQueryTooLarge(query)) {
+      return
+    }
     const requestState = get()
     const repo = findRepoForGitHubOwner(requestState, repoId, repoPath)
     const key =
@@ -2562,7 +2722,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                 repo: runtimeRepo.repo.id,
                 branch,
                 linkedPRNumber,
-                ...(fallbackPRNumber !== null ? { fallbackPRNumber } : {})
+                ...(fallbackPRNumber !== null
+                  ? { fallbackPRNumber, acceptMergedFallbackPR: fallbackPRSource !== null }
+                  : {})
               },
               { timeoutMs: 30_000 }
             ).then((pr) =>
@@ -2593,7 +2755,14 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               return window.api.gh.refreshPRNow
                 ? await window.api.gh.refreshPRNow({ candidate })
                 : await window.api.gh
-                    .prForBranch({ repoPath, repoId, branch, linkedPRNumber, fallbackPRNumber })
+                    .prForBranch({
+                      repoPath,
+                      repoId,
+                      branch,
+                      linkedPRNumber,
+                      fallbackPRNumber,
+                      acceptMergedFallbackPR: fallbackPRNumber !== null && fallbackPRSource !== null
+                    })
                     .then((pr) =>
                       pr
                         ? ({ kind: 'found', pr, fetchedAt: Date.now() } as const)
@@ -3277,7 +3446,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (!candidate) {
       return
     }
-    if (getRuntimeRepoTarget(state, candidate.repoPath)) {
+    if (getPRRefreshRuntimeRepoTarget(state, candidate)) {
       void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
         force: bypassesGitHubPRRefreshFreshness(reason),
         repoId: candidate.repoId,
@@ -3288,26 +3457,19 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       })
       return
     }
-    const enqueue = window.api.gh.enqueuePRRefresh
-    if (enqueue) {
-      void enqueue({ candidate, reason, priority })
-        .then((queued) => {
-          if (queued === false) {
-            return get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
-              force: bypassesGitHubPRRefreshFreshness(reason),
-              repoId: candidate.repoId,
-              worktreeId: candidate.worktreeId,
-              linkedPRNumber: candidate.linkedPRNumber ?? null,
-              fallbackPRNumber: candidate.fallbackPRNumber ?? null,
-              fallbackPRSource: candidate.fallbackPRSource ?? null
-            })
-          }
-          return null
-        })
-        .catch((err) => {
-          console.warn('Failed to enqueue PR refresh:', err)
-        })
+    if (!shouldEnqueueLocalPRRefresh(candidate)) {
+      return
     }
+    enqueueLocalGitHubPRRefresh({ candidate, reason, priority }, async () => {
+      await get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
+        force: bypassesGitHubPRRefreshFreshness(reason),
+        repoId: candidate.repoId,
+        worktreeId: candidate.worktreeId,
+        linkedPRNumber: candidate.linkedPRNumber ?? null,
+        fallbackPRNumber: candidate.fallbackPRNumber ?? null,
+        fallbackPRSource: candidate.fallbackPRSource ?? null
+      })
+    })
   },
 
   reportVisibleGitHubPRRefreshCandidates: (worktreeIds, generation) => {
@@ -3318,8 +3480,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         return worktree ? buildPRRefreshCandidate(state, worktree) : null
       })
       .filter((candidate): candidate is GitHubPRRefreshCandidate => candidate !== null)
-    if (getActiveRuntimeTarget(state.settings).kind === 'environment') {
-      for (const candidate of candidates) {
+    const localCandidates: GitHubPRRefreshCandidate[] = []
+    for (const candidate of candidates) {
+      if (getPRRefreshRuntimeRepoTarget(state, candidate)) {
         void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
           repoId: candidate.repoId,
           worktreeId: candidate.worktreeId,
@@ -3327,12 +3490,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           fallbackPRNumber: candidate.fallbackPRNumber ?? null,
           fallbackPRSource: candidate.fallbackPRSource ?? null
         })
+        continue
       }
-      return
+      if (shouldEnqueueLocalPRRefresh(candidate)) {
+        localCandidates.push(candidate)
+      }
     }
     const reportVisible = window.api.gh.reportVisiblePRRefreshCandidates
     if (reportVisible) {
-      void reportVisible({ candidates, generation }).catch((err) => {
+      void reportVisible({ candidates: localCandidates, generation }).catch((err) => {
         console.warn('Failed to report visible PR refresh candidates:', err)
       })
     }
@@ -3361,6 +3527,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           }
           continue
         }
+        // Why: delete-then-set moves this key to the end of insertion order so
+        // capPrRefreshSequences evicts genuinely idle keys, not active ones.
+        delete nextSequences[alias.cacheKey]
         nextSequences[alias.cacheKey] = event.sequence
         changed = true
 
@@ -3499,6 +3668,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             // longer live and would otherwise accumulate per refresh sequence.
             deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)
           }
+          // Why: delete-then-set moves this key to the end of insertion order so
+          // capRecordByInsertionOrder evicts genuinely idle keys, not active ones.
+          delete nextStates[alias.cacheKey]
           nextStates[alias.cacheKey] = {
             status: event.status,
             reason: event.reason,
@@ -3510,8 +3682,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
       return changed
         ? {
-            prRefreshSequences: nextSequences,
-            prRefreshStates: nextStates,
+            prRefreshSequences: capPrRefreshSequences(nextSequences),
+            // Why: bound prRefreshStates too (same unbounded PR-cache-key space),
+            // but with status-aware eviction so visible in-progress pills survive.
+            prRefreshStates: capPrRefreshStates(nextStates),
             prCache: nextPRCache,
             hostedReviewCache: nextHostedReviewCache
           }
@@ -3619,8 +3793,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           fallbackPRNumber: candidate.fallbackPRNumber ?? null,
           fallbackPRSource: candidate.fallbackPRSource ?? null
         })
-      } else {
-        void window.api.gh.enqueuePRRefresh?.({ candidate, reason: 'swr', priority: 10 })
+      } else if (shouldEnqueueLocalPRRefresh(candidate)) {
+        enqueueLocalGitHubPRRefresh({ candidate, reason: 'swr', priority: 10 })
       }
     }
   },
@@ -3683,7 +3857,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (!worktree.isBare && branch) {
       const candidate = buildPRRefreshCandidate(get(), worktree)
       if (candidate) {
-        if (getRuntimeRepoTarget(get(), candidate.repoPath)) {
+        if (getPRRefreshRuntimeRepoTarget(get(), candidate)) {
           void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
             force: true,
             repoId: candidate.repoId,
@@ -3692,8 +3866,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             fallbackPRNumber: candidate.fallbackPRNumber ?? null,
             fallbackPRSource: candidate.fallbackPRSource ?? null
           })
-        } else {
-          void window.api.gh.enqueuePRRefresh?.({ candidate, reason: 'post-push', priority: 100 })
+        } else if (shouldEnqueueLocalPRRefresh(candidate)) {
+          enqueueLocalGitHubPRRefresh({ candidate, reason: 'post-push', priority: 100 })
         }
       }
     }
@@ -3881,7 +4055,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (shouldRefreshPR && !worktree.isBare && branch) {
       const candidate = buildPRRefreshCandidate(state, worktree)
       if (candidate) {
-        if (getRuntimeRepoTarget(state, candidate.repoPath)) {
+        if (getPRRefreshRuntimeRepoTarget(state, candidate)) {
           void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
             force: true,
             repoId: candidate.repoId,
@@ -3890,8 +4064,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             fallbackPRNumber: candidate.fallbackPRNumber ?? null,
             fallbackPRSource: candidate.fallbackPRSource ?? null
           })
-        } else {
-          void window.api.gh.enqueuePRRefresh?.({ candidate, reason: 'active', priority: 80 })
+        } else if (shouldEnqueueLocalPRRefresh(candidate)) {
+          enqueueLocalGitHubPRRefresh({ candidate, reason: 'active', priority: 80 })
         }
       }
     }

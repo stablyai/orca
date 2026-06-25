@@ -5,7 +5,10 @@ import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
   ensureOrcaCliAvailableForAgentSkillTerminal
 } from '@/lib/agent-skill-cli-prerequisite'
-import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
+import {
+  ORCHESTRATION_SKILL_INSTALL_COMMAND,
+  ORCHESTRATION_SKILL_UPDATE_COMMAND
+} from '@/lib/orchestration-install-command'
 import { getOrchestrationUsageExamples } from '@/lib/orchestration-usage-examples'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
@@ -18,7 +21,7 @@ import { useAppStore } from '../../store'
 import { getOrchestrationPaneSearchEntries } from './orchestration-search'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import {
-  buildSkillInstallCommandForRuntime,
+  buildSkillCommandForRuntime,
   ensureWslCliAvailableForAgentSkillTerminal,
   getWslCliDistroRequest
 } from './CliSkillRuntimeSetup'
@@ -43,11 +46,18 @@ export function OrchestrationPane(): React.JSX.Element {
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const orchestrationInstallCommand =
     activeSkillRuntime.agentRuntime && !activeSkillRuntime.installDisabledReason
-      ? buildSkillInstallCommandForRuntime(
+      ? buildSkillCommandForRuntime(
           ORCHESTRATION_SKILL_INSTALL_COMMAND,
           activeSkillRuntime.agentRuntime
         )
       : ORCHESTRATION_SKILL_INSTALL_COMMAND
+  const orchestrationUpdateCommand =
+    activeSkillRuntime.agentRuntime && !activeSkillRuntime.installDisabledReason
+      ? buildSkillCommandForRuntime(
+          ORCHESTRATION_SKILL_UPDATE_COMMAND,
+          activeSkillRuntime.agentRuntime
+        )
+      : ORCHESTRATION_SKILL_UPDATE_COMMAND
 
   const {
     installed: orchestrationSkillDetected,
@@ -87,6 +97,7 @@ export function OrchestrationPane(): React.JSX.Element {
           'Enables agents to hand off context and coordinate work through Orca.'
         )}
         command={orchestrationInstallCommand}
+        installedCommand={orchestrationUpdateCommand}
         terminalTitle="Orchestration setup"
         terminalAriaLabel="Orchestration skill install terminal"
         terminalWorktreeId="settings-orchestration-skill-terminal"
@@ -111,7 +122,8 @@ export function OrchestrationPane(): React.JSX.Element {
             : ensureOrcaCliAvailableForAgentSkillTerminal())
         }}
         actionHint={
-          activeSkillRuntime.installDisabledReason ? null : (
+          // Installed updates stay on the primary panel so there is only one update path.
+          activeSkillRuntime.installDisabledReason || orchestrationSkillDetected ? null : (
             <p className="text-[12px] leading-snug text-muted-foreground">
               {translate(
                 'auto.components.settings.OrchestrationPane.832f1f3ee6',
@@ -120,7 +132,9 @@ export function OrchestrationPane(): React.JSX.Element {
               <button
                 type="button"
                 className="font-medium text-foreground underline-offset-2 hover:underline"
-                onClick={() => setSkillPromptOpen(true)}
+                onClick={() => {
+                  setSkillPromptOpen(true)
+                }}
               >
                 {translate(
                   'auto.components.settings.OrchestrationPane.7bc082f4de',

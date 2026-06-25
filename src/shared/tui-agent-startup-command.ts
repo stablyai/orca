@@ -1,22 +1,32 @@
 import { tokenizeCustomCommandTemplate } from './commit-message-prompt'
-import { TUI_AGENT_CONFIG } from './tui-agent-config'
+import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from './tui-agent-config'
 import { resolveTuiAgentLaunchCommandOverride } from './tui-agent-launch-defaults'
-import { resolveTuiAgentBaseAgent, type TuiAgentProfileVariables } from './tui-agent-profiles'
+import {
+  resolveTuiAgentBaseAgent,
+  type TuiAgentProfileVariables,
+} from './tui-agent-profiles'
 import type { TuiAgent, TuiAgentProfile } from './types'
 
 export type AgentStartupShell = 'posix' | 'powershell' | 'cmd'
 
-export type AgentCliArgsPlan = { ok: true; suffix: string } | { ok: false; error: string }
-type TokenizeCliArgsResult = { ok: true; tokens: string[] } | { ok: false; error: string }
+export type AgentCliArgsPlan =
+  | { ok: true; suffix: string }
+  | { ok: false; error: string }
+type TokenizeCliArgsResult =
+  | { ok: true; tokens: string[] }
+  | { ok: false; error: string }
 
 export function resolveStartupShell(
   platform: NodeJS.Platform,
-  shell?: AgentStartupShell
+  shell?: AgentStartupShell,
 ): AgentStartupShell {
   return shell ?? (platform === 'win32' ? 'powershell' : 'posix')
 }
 
-export function quoteStartupArg(value: string, shell: AgentStartupShell): string {
+export function quoteStartupArg(
+  value: string,
+  shell: AgentStartupShell,
+): string {
   if (shell === 'powershell') {
     return `'${value.replace(/'/g, "''")}'`
   }
@@ -28,7 +38,7 @@ export function quoteStartupArg(value: string, shell: AgentStartupShell): string
 
 export function buildShellCommandFromArgv(
   args: readonly string[],
-  shell: AgentStartupShell
+  shell: AgentStartupShell,
 ): string {
   const command = args.map((arg) => quoteStartupArg(arg, shell)).join(' ')
   if (shell === 'powershell' && command) {
@@ -39,7 +49,7 @@ export function buildShellCommandFromArgv(
 
 function tokenizeCliArgsTemplate(
   template: string,
-  shell: AgentStartupShell
+  shell: AgentStartupShell,
 ): TokenizeCliArgsResult {
   if (shell === 'posix') {
     return tokenizeCustomCommandTemplate(template)
@@ -102,7 +112,7 @@ function tokenizeCliArgsTemplate(
 
 export function planAgentCliArgsSuffix(
   agentArgs: string | null | undefined,
-  shell: AgentStartupShell
+  shell: AgentStartupShell,
 ): AgentCliArgsPlan {
   const trimmed = agentArgs?.trim()
   if (!trimmed) {
@@ -112,18 +122,21 @@ export function planAgentCliArgsSuffix(
   if (!tokenized.ok) {
     return {
       ok: false,
-      error: `CLI arguments are invalid: ${tokenized.error}`
+      error: `CLI arguments are invalid: ${tokenized.error}`,
     }
   }
   return {
     ok: true,
-    suffix: tokenized.tokens.map((token) => quoteStartupArg(token, shell)).join(' ')
+    suffix: tokenized.tokens
+      .map((token) => quoteStartupArg(token, shell))
+      .join(' '),
   }
 }
 
 export function resolveAgentStartupBaseCommand(args: {
   agent: TuiAgent
   cmdOverrides: Partial<Record<TuiAgent, string>>
+  platform: NodeJS.Platform
   shell: AgentStartupShell
   agentArgs?: string | null
   agentProfiles?: readonly TuiAgentProfile[] | null
@@ -137,9 +150,11 @@ export function resolveAgentStartupBaseCommand(args: {
     args.agent,
     args.cmdOverrides,
     args.agentProfiles,
-    args.variables
+    args.variables,
   )
-  const command = override || TUI_AGENT_CONFIG[baseAgent].launchCmd
+  const command =
+    override ||
+    getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[baseAgent], args.platform)
   const suffix = planAgentCliArgsSuffix(args.agentArgs, args.shell)
   if (!suffix.ok) {
     return suffix
@@ -148,6 +163,6 @@ export function resolveAgentStartupBaseCommand(args: {
   // --profile-v2 makes Codex load a second hook representation and warn.
   return {
     ok: true,
-    command: suffix.suffix ? `${command} ${suffix.suffix}` : command
+    command: suffix.suffix ? `${command} ${suffix.suffix}` : command,
   }
 }

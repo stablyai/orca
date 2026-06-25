@@ -831,9 +831,19 @@ export function registerFilesystemHandlers(
     'git:status',
     async (
       _event,
-      args: { worktreePath: string; connectionId?: string; includeIgnored?: boolean }
+      args: {
+        worktreePath: string
+        connectionId?: string
+        includeIgnored?: boolean
+        bypassEffectiveUpstreamNegativeCache?: boolean
+      }
     ): Promise<GitStatusResult> => {
-      const options = { includeIgnored: args.includeIgnored ?? false }
+      const options = {
+        includeIgnored: args.includeIgnored ?? false,
+        ...(args.bypassEffectiveUpstreamNegativeCache === true
+          ? { bypassEffectiveUpstreamNegativeCache: true }
+          : {})
+      }
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {

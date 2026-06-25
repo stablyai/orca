@@ -3,136 +3,80 @@ import { useAppStore } from '@/store'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { resolveTuiAgentBaseAgent } from '../../../shared/tui-agent-profiles'
 import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
-import {
   activateAndRevealWorktree,
   ensureWorktreeHasInitialTerminal,
   type ActivateAndRevealResult,
-  type WorktreeStartupPayload
 } from '@/lib/worktree-activation'
 import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
 import {
-  buildAgentDraftLaunchPlan,
-  buildAgentStartupPlan,
-  type AgentStartupPlan
-} from './tui-agent-startup'
-import { draftPlanToStartupPlan } from './launch-agent-tab-startup-plan'
+  buildPostCreateStartupPlan,
+  buildWorktreeCreationStartupPayload,
+} from './worktree-creation-startup'
 import { queueNewWorkspaceTerminalFocus } from '@/lib/new-workspace-terminal-focus'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   formatWorkspaceCreateError,
-  getWorkspaceCreateErrorToastMessage
+  getWorkspaceCreateErrorToastMessage,
 } from '@/lib/workspace-create-error-format'
 import type { CreateWorktreeResult } from '../../../shared/types'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 
-// Why: mirrors the startup-opt the composer used to build inline. The renderer
-// only seeds the first terminal when the backend did not already spawn it.
-function buildStartupOpt(
+function getWorktreeCreationIndeterminate(
   request: WorktreeCreationRequest,
-  backendSpawned: boolean,
-  startupPlan: AgentStartupPlan | null
-): WorktreeStartupPayload | undefined {
-  const plan = startupPlan
-  if (!plan || backendSpawned) {
-    return undefined
-  }
-  return {
-    command: plan.launchCommand,
-    ...(plan.env ? { env: plan.env } : {}),
-    ...(plan.startupCommandDelivery ? { startupCommandDelivery: plan.startupCommandDelivery } : {}),
-    // Why: command-code shows its prompt in the tab status before the first
-    // hook fires, so the prompt is threaded through here.
-    ...(request.agent === 'command-code' && request.quickPrompt.trim().length > 0
-      ? {
-          initialAgentStatus: {
-            agent: request.agent,
-            prompt: request.quickPrompt.trim()
-          }
-        }
-      : {}),
-    ...(request.quickTelemetry ? { telemetry: request.quickTelemetry } : {})
-  }
-}
-
-function buildPostCreateStartupPlan(
-  request: WorktreeCreationRequest,
-  repoPath: string | null | undefined,
-  worktreePath: string | null | undefined
-): AgentStartupPlan | null {
-  const template = request.startupPlanTemplate
-  if (!template) {
-    return request.startupPlan
-  }
-  const variables = { repoPath, worktreePath }
-  const agentArgs = resolveTuiAgentLaunchArgs(
-    template.agent,
-    template.agentDefaultArgs,
-    template.agentProfiles,
-    variables
-  )
-  const agentEnv = resolveTuiAgentLaunchEnv(
-    template.agent,
-    template.agentDefaultEnv,
-    template.agentProfiles,
-    variables
-  )
-  const common = {
-    agent: template.agent,
-    cmdOverrides: template.cmdOverrides,
-    agentArgs,
-    agentEnv,
-    agentProfiles: template.agentProfiles,
-    variables,
-    platform: template.platform
-  }
-
-  if (template.draftPrompt) {
-    const draftPlan = buildAgentDraftLaunchPlan({
-      ...common,
-      draft: template.draftPrompt
-    })
-    if (draftPlan) {
-      return draftPlanToStartupPlan(draftPlan)
-    }
-  }
-
-  const startupPlan = buildAgentStartupPlan({
-    ...common,
-    prompt: template.prompt,
-    allowEmptyPromptLaunch: template.allowEmptyPromptLaunch
-  })
-  if (startupPlan && template.draftPrompt) {
-    startupPlan.draftPrompt = template.draftPrompt
-  }
-  return startupPlan
-}
-
-function getWorktreeCreationIndeterminate(request: WorktreeCreationRequest): boolean {
+): boolean {
   if (request.worktreeCreateProgressMode) {
     return request.worktreeCreateProgressMode === 'indeterminate'
   }
-  return getActiveRuntimeTarget(useAppStore.getState().settings).kind !== 'local'
+  return (
+    getActiveRuntimeTarget(useAppStore.getState().settings).kind !== 'local'
+  )
+}
+
+function revealPendingCreation(
+  creationId: string,
+  request: WorktreeCreationRequest,
+  phase: 'preparing' | 'fetching',
+): void {
+  const store = useAppStore.getState()
+  const indeterminate = getWorktreeCreationIndeterminate(request)
+  store.beginPendingWorktreeCreation({
+    creationId,
+    phase,
+    status: 'creating',
+    indeterminate,
+    // Why: the creation surface owns the tab strip immediately. Delaying this
+    // caused the real workspace tab bar to flash out when the debounce elapsed.
+    loaderVisible: true,
+    request,
+  })
+  // Why: the creation panel only renders under the terminal view (App content
+  // router), so force it active so the panel is what fills the content area.
+  store.setActiveView('terminal')
+  store.setSidebarOpen(true)
 }
 
 async function preflightAgentTrust(
   request: WorktreeCreationRequest,
   path: string,
-  connectionId?: string | null
+  connectionId?: string | null,
 ): Promise<void> {
   // Why: trust-gated agents (cursor-agent, copilot) consume the bracketed paste
   // as menu input on first launch. Pre-write the trust artifact before any
   // terminal spawns. Best-effort — the worktree already exists, so a failure
   // here must not strand it.
-  if (!request.agent || typeof window === 'undefined' || !window.api.agentTrust?.markTrusted) {
+  if (
+    !request.agent ||
+    typeof window === 'undefined' ||
+    !window.api.agentTrust?.markTrusted
+  ) {
     return
   }
   const agentProfiles = useAppStore.getState().settings?.agentProfiles
   const baseAgent = resolveTuiAgentBaseAgent(request.agent, agentProfiles)
-  const preflight = baseAgent ? TUI_AGENT_CONFIG[baseAgent].preflightTrust : undefined
+  const preflight = baseAgent
+    ? TUI_AGENT_CONFIG[baseAgent].preflightTrust
+    : undefined
   if (!preflight) {
     return
   }
@@ -140,7 +84,7 @@ async function preflightAgentTrust(
     await window.api.agentTrust.markTrusted({
       preset: preflight,
       workspacePath: path,
-      ...(connectionId ? { connectionId } : {})
+      ...(connectionId ? { connectionId } : {}),
     })
   } catch {
     // Best-effort: continue with launch.
@@ -149,7 +93,7 @@ async function preflightAgentTrust(
 
 async function executeWorktreeCreation(
   creationId: string,
-  request: WorktreeCreationRequest
+  request: WorktreeCreationRequest,
 ): Promise<void> {
   let result: CreateWorktreeResult
   try {
@@ -180,7 +124,7 @@ async function executeWorktreeCreation(
         request.linkedBitbucketPR,
         request.linkedAzureDevOpsPR,
         request.linkedGiteaPR,
-        request.compareBaseRef
+        request.compareBaseRef,
       )
   } catch (error) {
     // Why: a missing entry means the user cancelled mid-flight — abandon
@@ -188,12 +132,14 @@ async function executeWorktreeCreation(
     if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
       return
     }
-    const message = getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error))
+    const message = getWorkspaceCreateErrorToastMessage(
+      formatWorkspaceCreateError(error),
+    )
     // Why: an error must stay on the same creation surface that owns the faux
     // tab strip, rather than falling back to stale previous-workspace tabs.
     useAppStore.getState().updatePendingWorktreeCreation(creationId, {
       status: 'error',
-      error: message
+      error: message,
     })
     // Why: only toast when the panel isn't already showing this error (the user
     // navigated away), so a visible failure isn't announced twice.
@@ -214,9 +160,25 @@ async function executeWorktreeCreation(
   }
 
   const backendSpawned = result.startupTerminal?.spawned === true
-  const repo = useAppStore.getState().repos.find((entry) => entry.id === worktree.repoId) ?? null
-  const startupPlan = buildPostCreateStartupPlan(request, repo?.path, worktree.path)
-  const startupOpt = buildStartupOpt(request, backendSpawned, startupPlan)
+  const repo =
+    useAppStore
+      .getState()
+      .repos.find((entry) => entry.id === worktree.repoId) ?? null
+  const startupPlan = buildPostCreateStartupPlan(
+    request,
+    repo?.path,
+    worktree.path,
+  )
+  if (startupPlan && !backendSpawned && !startupPlan.launchToken) {
+    // Why: delayed delivery must target the exact pane spawned from this queued
+    // startup, so both halves of the handoff share one renderer-session token.
+    startupPlan.launchToken = createBrowserUuid()
+  }
+  const startupOpt = buildWorktreeCreationStartupPayload(
+    request,
+    backendSpawned,
+    startupPlan,
+  )
 
   if (worktree.path) {
     const repoConnectionId = repo?.connectionId ?? null
@@ -225,7 +187,8 @@ async function executeWorktreeCreation(
 
   // `createWorktree` already inserted the real worktree row. Whether we steal
   // the view depends on whether the user is still watching this creation.
-  const stillActive = useAppStore.getState().activePendingCreationId === creationId
+  const stillActive =
+    useAppStore.getState().activePendingCreationId === creationId
 
   let activation: ActivateAndRevealResult | false = false
   let primaryTabId: string | null
@@ -234,7 +197,7 @@ async function executeWorktreeCreation(
       sidebarRevealBehavior: 'auto',
       ...(result.setup ? { setup: result.setup } : {}),
       ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
-      ...(startupOpt ? { startup: startupOpt } : {})
+      ...(startupOpt ? { startup: startupOpt } : {}),
     })
     primaryTabId = activation === false ? null : activation.primaryTabId
   } else {
@@ -247,7 +210,7 @@ async function executeWorktreeCreation(
       startupOpt,
       result.setup,
       undefined,
-      result.defaultTabs
+      result.defaultTabs,
     )
   }
 
@@ -258,10 +221,10 @@ async function executeWorktreeCreation(
     void ensureAgentStartupInTerminal({
       worktreeId: worktree.id,
       primaryTabId,
-      startup: startupPlan
+      startup: startupPlan,
     })
   }
-  if (stillActive) {
+  if (stillActive && !request.suppressTerminalFocusOnCompletion) {
     queueNewWorkspaceTerminalFocus(worktree.id, activation)
   }
 
@@ -269,7 +232,9 @@ async function executeWorktreeCreation(
   // the panel→terminal transition; it's cosmetic, so it runs last.
   if (request.note) {
     try {
-      await useAppStore.getState().updateWorktreeMeta(worktree.id, { comment: request.note })
+      await useAppStore
+        .getState()
+        .updateWorktreeMeta(worktree.id, { comment: request.note })
     } catch {
       console.error('Failed to update worktree meta after creation')
     }
@@ -282,30 +247,45 @@ async function executeWorktreeCreation(
  * immediately and the work outlives the now-closed modal. Progress and errors
  * surface on the pending creation's sidebar row and content panel.
  */
-export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest): void {
+export function runBackgroundWorktreeCreation(
+  request: WorktreeCreationRequest,
+): void {
   // Why: crypto.randomUUID is undefined in non-secure browser contexts (LAN web
   // client over plain HTTP). createBrowserUuid falls back to getRandomValues.
   const creationId = createBrowserUuid()
+  revealPendingCreation(creationId, request, 'fetching')
+  void executeWorktreeCreation(creationId, request)
+}
+
+/** Stage a pending entry before async preflight so the UI shows immediate progress. */
+export function beginBackgroundWorktreePreparation(
+  request: WorktreeCreationRequest,
+): string {
+  const creationId = createBrowserUuid()
+  revealPendingCreation(creationId, request, 'preparing')
+  return creationId
+}
+
+/** Continue a staged pending entry once async preflight has produced a final request. */
+export function continueBackgroundWorktreeCreation(
+  creationId: string,
+  request: WorktreeCreationRequest,
+): boolean {
   const store = useAppStore.getState()
-  // Why: the remote/runtime create path emits no progress events, so the stepped
-  // checklist would freeze on step 1. Use the request's captured repo owner so
-  // Retry does not change shape when focus moves to another runtime.
-  const indeterminate = getWorktreeCreationIndeterminate(request)
-  store.beginPendingWorktreeCreation({
-    creationId,
+  if (!store.pendingWorktreeCreations[creationId]) {
+    return false
+  }
+  store.updatePendingWorktreeCreation(creationId, {
     phase: 'fetching',
     status: 'creating',
-    indeterminate,
-    // Why: the creation surface owns the tab strip immediately. Delaying this
-    // caused the real workspace tab bar to flash out when the debounce elapsed.
-    loaderVisible: true,
-    request
+    error: undefined,
+    request,
   })
-  // Why: the creation panel only renders under the terminal view (App content
-  // router), so force it active so the panel is what fills the content area.
+  store.setActivePendingWorktreeCreation(creationId)
   store.setActiveView('terminal')
   store.setSidebarOpen(true)
   void executeWorktreeCreation(creationId, request)
+  return true
 }
 
 /** Re-run a failed creation from its panel, reusing the captured request. */
@@ -318,7 +298,7 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
   store.updatePendingWorktreeCreation(creationId, {
     status: 'creating',
     phase: 'fetching',
-    error: undefined
+    error: undefined,
   })
   store.setActivePendingWorktreeCreation(creationId)
   store.setActiveView('terminal')

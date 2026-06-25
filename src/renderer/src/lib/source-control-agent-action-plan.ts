@@ -2,7 +2,7 @@ import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
   planAgentCliArgsSuffix,
-  type AgentStartupPlan
+  type AgentStartupPlan,
 } from '@/lib/tui-agent-startup'
 import { draftPlanToStartupPlan } from '@/lib/launch-agent-tab-startup-plan'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
@@ -11,7 +11,7 @@ import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import {
   findTuiAgentProfile,
   isTuiAgentProfileDetected,
-  resolveTuiAgentBaseAgent
+  resolveTuiAgentBaseAgent,
 } from '../../../shared/tui-agent-profiles'
 import type { TuiAgent, TuiAgentProfile } from '../../../shared/types'
 import { translate } from '@/i18n/i18n'
@@ -50,8 +50,8 @@ export function planSourceControlAgentActionLaunch(args: {
       ok: false,
       error: translate(
         'auto.lib.source.control.agent.action.plan.a7ac8717c7',
-        'Choose an agent before starting.'
-      )
+        'Choose an agent before starting.',
+      ),
     }
   }
   if (!isTuiAgentEnabled(agent, args.disabledAgents)) {
@@ -59,19 +59,23 @@ export function planSourceControlAgentActionLaunch(args: {
       ok: false,
       error: translate(
         'auto.lib.source.control.agent.action.plan.b96e091fc9',
-        'The selected agent is disabled in Settings.'
-      )
+        'The selected agent is disabled in Settings.',
+      ),
     }
   }
   const profile = findTuiAgentProfile(agent, args.agentProfiles)
   const detectedSet = new Set(args.detectedAgents)
-  if (profile ? !isTuiAgentProfileDetected(profile, detectedSet) : !detectedSet.has(agent)) {
+  if (
+    profile
+      ? !isTuiAgentProfileDetected(profile, detectedSet)
+      : !detectedSet.has(agent)
+  ) {
     return {
       ok: false,
       error: translate(
         'auto.lib.source.control.agent.action.plan.8eb541cc83',
-        'The selected agent was not detected on this workspace host.'
-      )
+        'The selected agent was not detected on this workspace host.',
+      ),
     }
   }
 
@@ -81,8 +85,8 @@ export function planSourceControlAgentActionLaunch(args: {
       ok: false,
       error: translate(
         'auto.lib.source.control.agent.action.plan.46f1a2c9bd',
-        'Command input is empty.'
-      )
+        'Command input is empty.',
+      ),
     }
   }
 
@@ -101,8 +105,8 @@ export function planSourceControlAgentActionLaunch(args: {
       ok: false,
       error: translate(
         'auto.lib.source.control.agent.action.plan.profile.resolution.failed',
-        'Could not resolve the selected agent profile.'
-      )
+        'Could not resolve the selected agent profile.',
+      ),
     }
   }
   const commonLaunchArgs = {
@@ -110,20 +114,20 @@ export function planSourceControlAgentActionLaunch(args: {
     cmdOverrides,
     platform,
     agentArgs: args.agentArgs,
-    agentProfiles: args.agentProfiles
+    agentProfiles: args.agentProfiles,
   }
 
   if (args.promptDelivery === 'submit-after-ready') {
     startupPlan = buildAgentStartupPlan({
       ...commonLaunchArgs,
       prompt: '',
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
     })
     delivery = 'paste-submit'
   } else if (args.promptDelivery === 'draft') {
     const draftLaunchPlan = buildAgentDraftLaunchPlan({
       ...commonLaunchArgs,
-      draft: trimmedInput
+      draft: trimmedInput,
     })
     if (draftLaunchPlan) {
       startupPlan = draftPlanToStartupPlan(draftLaunchPlan)
@@ -132,22 +136,24 @@ export function planSourceControlAgentActionLaunch(args: {
       startupPlan = buildAgentStartupPlan({
         ...commonLaunchArgs,
         prompt: '',
-        allowEmptyPromptLaunch: true
+        allowEmptyPromptLaunch: true,
       })
       delivery = 'draft-paste'
     }
-  } else if (TUI_AGENT_CONFIG[baseAgent].promptInjectionMode === 'stdin-after-start') {
+  } else if (
+    TUI_AGENT_CONFIG[baseAgent].promptInjectionMode === 'stdin-after-start'
+  ) {
     startupPlan = buildAgentStartupPlan({
       ...commonLaunchArgs,
       prompt: '',
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
     })
     delivery = 'draft-paste'
   } else {
     startupPlan = buildAgentStartupPlan({
       ...commonLaunchArgs,
       prompt: trimmedInput,
-      allowEmptyPromptLaunch: false
+      allowEmptyPromptLaunch: false,
     })
     delivery = 'argv'
   }
@@ -157,8 +163,8 @@ export function planSourceControlAgentActionLaunch(args: {
       ok: false,
       error: translate(
         'auto.lib.source.control.agent.action.plan.3f0ea9aa0d',
-        'Could not build the agent launch command.'
-      )
+        'Could not build the agent launch command.',
+      ),
     }
   }
 
@@ -178,6 +184,6 @@ export function planSourceControlAgentActionLaunch(args: {
     commandLabel: startupPlan.launchCommand,
     summary,
     caveat:
-      'This check builds Orca’s launch plan only. PATH, binary availability, account setup, and terminal startup failures are still caught by the real launch watchdog.'
+      'This check builds Orca’s launch plan only. PATH, binary availability, account setup, and terminal startup failures are still caught by the real launch watchdog.',
   }
 }

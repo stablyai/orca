@@ -1,5 +1,7 @@
 import { execFile } from 'child_process'
 import { platform } from 'os'
+import { commandContainsToken } from '../../shared/command-token-scanner'
+import { iterateProcessOutputLines } from '../../shared/process-output-field-scanner'
 
 export type ServeSimHelperProcess = {
   pid: number
@@ -25,7 +27,7 @@ function execFileText(command: string, args: string[]): Promise<string> {
 
 export function parseServeSimHelperProcesses(psOutput: string): ServeSimHelperProcess[] {
   const helpers: ServeSimHelperProcess[] = []
-  for (const line of psOutput.split('\n')) {
+  for (const line of iterateProcessOutputLines(psOutput)) {
     const match = /^\s*(\d+)\s+(.+)$/.exec(line)
     if (!match) {
       continue
@@ -41,7 +43,7 @@ export function parseServeSimHelperProcesses(psOutput: string): ServeSimHelperPr
 }
 
 function commandTargetsDevice(command: string, deviceUdid: string): boolean {
-  return command.split(/\s+/).includes(deviceUdid)
+  return commandContainsToken(command, deviceUdid)
 }
 
 export async function listServeSimHelperProcessesForDevice(

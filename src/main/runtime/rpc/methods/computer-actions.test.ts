@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { CLIPBOARD_TEXT_WRITE_MAX_BYTES } from '../../../../shared/clipboard-text'
 
 const computerMocks = vi.hoisted(() => ({
   callComputerSidecarAction: vi.fn(),
@@ -191,6 +192,18 @@ describe('computer action RPC methods', () => {
       app: 'Finder',
       text: 'long text'
     })
+  })
+
+  it('leaves oversized computer paste text to async sidecar validation', async () => {
+    const secret = 'computer-paste-secret'
+    const text = secret + 'x'.repeat(CLIPBOARD_TEXT_WRITE_MAX_BYTES + 1)
+
+    expect(
+      findMethod('computer.pasteText').params!.safeParse({
+        app: 'Finder',
+        text
+      }).success
+    ).toBe(true)
   })
 
   it('dispatches scroll and setValue actions through the sidecar', async () => {

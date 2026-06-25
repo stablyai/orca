@@ -3,7 +3,7 @@
    indirection — every method is a 1:1 forwarder to a relay RPC plus a
    small amount of param plumbing. */
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
-import type { IGitProvider } from './types'
+import type { GitProviderStatusOptions, IGitProvider } from './types'
 import type {
   GitStatusResult,
   GitDiffResult,
@@ -82,12 +82,16 @@ export class SshGitProvider implements IGitProvider {
 
   async getStatus(
     worktreePath: string,
-    options?: { includeIgnored?: boolean }
+    options?: GitProviderStatusOptions
   ): Promise<GitStatusResult> {
     const includeIgnoredArgs = options?.includeIgnored ? { includeIgnored: true } : {}
+    const upstreamCacheBypassArgs = options?.bypassEffectiveUpstreamNegativeCache
+      ? { bypassEffectiveUpstreamNegativeCache: true }
+      : {}
     return (await this.mux.request('git.status', {
       worktreePath,
-      ...includeIgnoredArgs
+      ...includeIgnoredArgs,
+      ...upstreamCacheBypassArgs
     })) as GitStatusResult
   }
 

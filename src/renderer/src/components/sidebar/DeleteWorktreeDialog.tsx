@@ -12,6 +12,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeGitStatus } from '@/runtime/runtime-git-client'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { runWorktreeDeletesInParallel } from './delete-worktree-flow'
+import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import { DeleteWorktreeLineageNotice } from './DeleteWorktreeLineageNotice'
 import { DeleteWorktreeSkipConfirmOption } from './DeleteWorktreeSkipConfirmOption'
@@ -270,6 +271,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         // inside the dialog — it runs the destructive retry directly without
         // the shared toast wrapper. Close immediately because workspace cards
         // already show the deleting state while the retry runs.
+        const commitFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
         const deletePromise = removeWorktree(worktreeId, true)
         closeModal()
         deletePromise
@@ -286,6 +288,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
               )
               return
             }
+            commitFocus()
             onDeleted?.([worktreeId])
           })
           .catch((err: unknown) => {

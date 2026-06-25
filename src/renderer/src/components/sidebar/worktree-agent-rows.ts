@@ -59,6 +59,8 @@ function orchestrationContextsEqual(
   return (
     a.taskId === b.taskId &&
     a.dispatchId === b.dispatchId &&
+    a.taskTitle === b.taskTitle &&
+    a.displayName === b.displayName &&
     a.parentTerminalHandle === b.parentTerminalHandle &&
     a.parentPaneKey === b.parentPaneKey &&
     a.coordinatorHandle === b.coordinatorHandle &&

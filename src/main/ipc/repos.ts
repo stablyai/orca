@@ -81,6 +81,7 @@ import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import type { RepoMethod } from '../../shared/telemetry-events'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
+import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
 import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-projection'
 import { normalizeExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
@@ -1137,10 +1138,18 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('sparsePresets:remove')
 
   ipcMain.handle('repos:list', () => {
+    enrichMissingRepoGitRemoteIdentities(store, {
+      onChanged: () => notifyReposChanged(mainWindow)
+    })
     return store.getRepos()
   })
 
-  ipcMain.handle('projects:list', () => store.getProjects())
+  ipcMain.handle('projects:list', () => {
+    enrichMissingRepoGitRemoteIdentities(store, {
+      onChanged: () => notifyReposChanged(mainWindow)
+    })
+    return store.getProjects()
+  })
 
   ipcMain.handle('projects:update', (_event, rawArgs: ProjectUpdateArgs): Project | null => {
     const args = parseProjectGroupIpcArgs(
@@ -1151,7 +1160,12 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     return store.updateProject(args.projectId, args.updates)
   })
 
-  ipcMain.handle('projectHostSetups:list', () => store.getProjectHostSetups())
+  ipcMain.handle('projectHostSetups:list', () => {
+    enrichMissingRepoGitRemoteIdentities(store, {
+      onChanged: () => notifyReposChanged(mainWindow)
+    })
+    return store.getProjectHostSetups()
+  })
 
   ipcMain.handle(
     'projectHostSetups:create',
@@ -2070,7 +2084,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   // destination directory that may not be a git repo yet.
   ipcMain.handle('repos:pickDirectory', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
-      properties: ['openDirectory', 'createDirectory']
+      // Why: macOS can materialize typed partial paths when directory creation
+      // is enabled; clone/create actions already create the final path on submit.
+      properties: ['openDirectory']
     })
     if (result.canceled || result.filePaths.length === 0) {
       return null

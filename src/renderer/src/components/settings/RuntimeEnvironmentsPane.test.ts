@@ -13,6 +13,7 @@ import {
   getHostDetailsSummary,
   getHostModelCapabilitySummary,
   getRuntimeCapabilitiesSummary,
+  getRuntimeServerConnectionState,
   type RuntimeHostDetails
 } from './RuntimeEnvironmentsPane'
 
@@ -172,6 +173,33 @@ describe('RuntimeEnvironmentsPane host details', () => {
         capabilities: [PROJECT_HOST_SETUP_RUNTIME_CAPABILITY]
       })
     ).toBe('Host model support: update server for task source context, workspace run context')
+  })
+
+  it('reports an attached, ready, compatible host as Connected regardless of active-ness', () => {
+    // Why: the row tracks attachment (reachable + ready), which exposes Disconnect.
+    // Whether the host is the default *active* server is a separate concept, so it
+    // must NOT change this label — otherwise the dot/label/button disagree (a host
+    // showed "Available" with a grey dot yet offered Disconnect).
+    expect(getRuntimeServerConnectionState(details({ status: 'ready' }))).toBe('connected')
+    expect(getRuntimeServerConnectionState(undefined)).toBe('checking')
+    expect(getRuntimeServerConnectionState(details({ status: 'loading' }))).toBe('checking')
+    expect(getRuntimeServerConnectionState(details({ status: 'error', error: 'offline' }))).toBe(
+      'disconnected'
+    )
+    expect(
+      getRuntimeServerConnectionState(
+        details({
+          status: 'ready',
+          compatibility: {
+            kind: 'blocked',
+            reason: 'server-too-old',
+            clientProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+            serverProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION - 1,
+            requiredServerProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION
+          }
+        })
+      )
+    ).toBe('disconnected')
   })
 
   it('explains that selecting a saved server is the explicit default Host mode', () => {

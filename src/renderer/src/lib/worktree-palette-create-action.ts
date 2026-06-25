@@ -1,3 +1,5 @@
+import { isWorktreePaletteQueryTooLarge } from './worktree-palette-query-bounds'
+
 export const CREATE_WORKTREE_ITEM_ID = '__create_worktree__'
 
 export type WorktreePaletteCreateActionState = {
@@ -12,6 +14,12 @@ export function getWorktreePaletteCreateActionState({
   query: string
 }): WorktreePaletteCreateActionState {
   const createWorktreeName = query.trim()
+  if (isWorktreePaletteQueryTooLarge(createWorktreeName)) {
+    return {
+      createWorktreeName: '',
+      showCreateAction: false
+    }
+  }
   const showCreateAction = createWorktreeName.length > 0
   return {
     createWorktreeName,

@@ -717,6 +717,13 @@ export function createAgentCompletionCoordinator(
     clearPollTimer()
     clearPendingHookDone()
     dropPendingTitle()
+    // Why: the dedup identity is module-scoped so it survives a live-stream remount
+    // (dispose-then-recreate with the same paneKey while isLive() stays true). Only
+    // evict it on genuine teardown — when the PTY is gone (isLive() false) — so the
+    // never-reused ${tabId}:${leafUUID} key can't leak one identity per closed pane.
+    if (!options.isLive()) {
+      lastCompletionIdentityByPaneKey.delete(options.paneKey)
+    }
   }
 
   return {
@@ -733,4 +740,8 @@ export function createAgentCompletionCoordinator(
 
 export function resetAgentCompletionCoordinatorIdentitiesForTest(): void {
   lastCompletionIdentityByPaneKey.clear()
+}
+
+export function getAgentCompletionCoordinatorIdentityCountForTest(): number {
+  return lastCompletionIdentityByPaneKey.size
 }

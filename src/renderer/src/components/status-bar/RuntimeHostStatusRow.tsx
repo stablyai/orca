@@ -3,19 +3,12 @@ import { Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useMountedRef } from '@/hooks/useMountedRef'
 
-export type RuntimeHostConnectionState =
-  | 'connected'
-  | 'available'
-  | 'checking'
-  | 'reconnecting'
-  | 'disconnected'
+export type RuntimeHostConnectionState = 'connected' | 'checking' | 'reconnecting' | 'disconnected'
 
 function runtimeStatusLabel(state: RuntimeHostConnectionState): string {
   switch (state) {
     case 'connected':
       return translate('auto.components.status.bar.SshStatusSegment.runtime_online', 'Connected')
-    case 'available':
-      return translate('auto.components.status.bar.SshStatusSegment.runtime_available', 'Available')
     case 'checking':
       return translate('auto.components.status.bar.SshStatusSegment.runtime_checking', 'Checking')
     case 'reconnecting':
@@ -38,7 +31,6 @@ function runtimeDotColor(state: RuntimeHostConnectionState): string {
     case 'checking':
     case 'reconnecting':
       return 'bg-yellow-500'
-    case 'available':
     case 'disconnected':
       return 'bg-muted-foreground/40'
   }
@@ -55,7 +47,6 @@ function runtimeActionLabel(state: RuntimeHostConnectionState): string | null {
   switch (state) {
     case 'connected':
       return translate('auto.components.status.bar.SshStatusSegment.59b553e2aa', 'Disconnect')
-    case 'available':
     case 'disconnected':
       return translate('auto.components.status.bar.SshStatusSegment.63f36455cc', 'Connect')
     case 'checking':

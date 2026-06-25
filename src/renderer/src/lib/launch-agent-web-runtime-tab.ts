@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import {
   createWebRuntimeSessionTerminal,
-  isWebTerminalSurfaceTabId
+  isWebTerminalSurfaceTabId,
 } from '@/runtime/web-runtime-session'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { TuiAgent } from '../../../shared/types'
@@ -39,11 +39,19 @@ export function launchWebRuntimeAgentTab(args: {
     ...(args.hasPrompt
       ? {
           command: args.startupPlan.launchCommand,
+          ...(args.startupPlan.env ? { env: args.startupPlan.env } : {}),
+          launchConfig: args.startupPlan.launchConfig,
+          ...(args.startupPlan.launchToken
+            ? { launchToken: args.startupPlan.launchToken }
+            : {}),
+          launchAgent: args.agent,
           ...(args.startupPlan.startupCommandDelivery
-            ? { startupCommandDelivery: args.startupPlan.startupCommandDelivery }
-            : {})
+            ? {
+                startupCommandDelivery: args.startupPlan.startupCommandDelivery,
+              }
+            : {}),
         }
-      : { agent: args.agent })
+      : { agent: args.agent }),
   }).then((created) => {
     removeStaleLocalAgentTabsForWebHostLaunch(args.worktreeId)
     if (!created) {
@@ -51,8 +59,8 @@ export function launchWebRuntimeAgentTab(args: {
         translate(
           'auto.lib.launch.agent.in.new.tab.11cce5cc77',
           'Could not launch {{value0}} in a new terminal.',
-          { value0: args.agent }
-        )
+          { value0: args.agent },
+        ),
       )
       return
     }
@@ -63,7 +71,11 @@ export function launchWebRuntimeAgentTab(args: {
   })
   return {
     handled: true,
-    result: { tabId: null, startupPlan: args.startupPlan, pasteDraftAfterLaunch: false }
+    result: {
+      tabId: null,
+      startupPlan: args.startupPlan,
+      pasteDraftAfterLaunch: false,
+    },
   }
 }
 

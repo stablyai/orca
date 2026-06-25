@@ -40,6 +40,24 @@ function getFolderScopeCandidateRepos(args: {
   ]
 }
 
+export function getFolderWorkspaceCandidateRepos(
+  state: FolderWorkspaceConnectionState,
+  folderWorkspaceId: string
+): Repo[] {
+  const workspace = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
+  if (!workspace) {
+    return []
+  }
+  const group = state.projectGroups.find((entry) => entry.id === workspace.projectGroupId)
+  return getFolderScopeCandidateRepos({
+    folderPath: workspace.folderPath,
+    projectGroupId: workspace.projectGroupId,
+    connectionId: workspace.connectionId ?? group?.connectionId ?? null,
+    projectGroups: state.projectGroups,
+    repos: state.repos
+  })
+}
+
 export function getFolderWorkspaceConnectionId(
   state: FolderWorkspaceConnectionState,
   folderWorkspaceId: string
@@ -48,16 +66,11 @@ export function getFolderWorkspaceConnectionId(
   if (!workspace) {
     return undefined
   }
-  const group = state.projectGroups.find((entry) => entry.id === workspace.projectGroupId)
-  const scopeConnectionId = workspace.connectionId ?? group?.connectionId ?? null
-
-  const candidateRepos = getFolderScopeCandidateRepos({
-    folderPath: workspace.folderPath,
-    projectGroupId: workspace.projectGroupId,
-    connectionId: scopeConnectionId,
-    projectGroups: state.projectGroups,
-    repos: state.repos
-  })
+  const scopeConnectionId =
+    workspace.connectionId ??
+    state.projectGroups.find((entry) => entry.id === workspace.projectGroupId)?.connectionId ??
+    null
+  const candidateRepos = getFolderWorkspaceCandidateRepos(state, folderWorkspaceId)
   let hasLocalRepo = false
   const connectionIds = new Set<string>()
   for (const repo of candidateRepos) {

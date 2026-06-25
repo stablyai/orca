@@ -31,7 +31,7 @@ type AgentHibernationCoordinatorState = {
   interval: IntervalHandle | null
   confirmationState: AgentHibernationConfirmationState
   tickInFlight: boolean
-  shuttingDownWorktreeIds: Set<string>
+  shuttingDownCandidateIds: Set<string>
   now: () => number
 }
 
@@ -39,7 +39,7 @@ const coordinator: AgentHibernationCoordinatorState = {
   interval: null,
   confirmationState: {},
   tickInFlight: false,
-  shuttingDownWorktreeIds: new Set(),
+  shuttingDownCandidateIds: new Set(),
   now: () => Date.now()
 }
 
@@ -152,37 +152,38 @@ async function currentCandidates(now: number) {
     }))
 }
 
-async function hibernateWorktreeIfStillEligible(
+async function hibernatePaneIfStillEligible(
   confirmedCandidate: AgentHibernationCandidate
 ): Promise<void> {
-  const { worktreeId } = confirmedCandidate
-  if (coordinator.shuttingDownWorktreeIds.has(worktreeId)) {
+  const { id, worktreeId } = confirmedCandidate
+  if (coordinator.shuttingDownCandidateIds.has(id)) {
     return
   }
   const candidates = await currentCandidates(coordinator.now())
   const stillEligible = candidates.some(
     (candidate) =>
-      candidate.worktreeId === worktreeId && candidate.signature === confirmedCandidate.signature
+      candidate.id === confirmedCandidate.id && candidate.signature === confirmedCandidate.signature
   )
   if (!stillEligible) {
     return
   }
-  coordinator.shuttingDownWorktreeIds.add(worktreeId)
+  coordinator.shuttingDownCandidateIds.add(id)
   try {
     const state = useAppStore.getState()
     const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
-    await state.shutdownWorktreeTerminals(worktreeId, {
-      keepIdentifiers: true,
-      shutdownReason: 'auto-hibernate-completed-agent',
-      sleepingPaneKeys: confirmedCandidate.paneKeys,
+    await state.shutdownCompletedAgentPaneForHibernation(worktreeId, {
+      paneKey: confirmedCandidate.paneKey,
+      tabId: confirmedCandidate.tabId,
+      leafId: confirmedCandidate.leafId,
+      ptyId: confirmedCandidate.targetPtyIds[0],
       ...(runtimeEnvironmentId
-        ? { expectedRuntimePtyIds: confirmedCandidate.expectedRuntimePtyIds }
+        ? { expectedRuntimePtyId: confirmedCandidate.expectedRuntimePtyIds[0] }
         : {})
     })
   } catch (err) {
-    console.warn('[agent-hibernation] failed to hibernate worktree:', worktreeId, err)
+    console.warn('[agent-hibernation] failed to hibernate agent pane:', id, err)
   } finally {
-    coordinator.shuttingDownWorktreeIds.delete(worktreeId)
+    coordinator.shuttingDownCandidateIds.delete(id)
   }
 }
 
@@ -198,7 +199,7 @@ export async function runAgentHibernationTick(): Promise<void> {
     )
     coordinator.confirmationState = plan.confirmationState
     for (const candidate of plan.candidates) {
-      void hibernateWorktreeIfStillEligible(candidate)
+      void hibernatePaneIfStillEligible(candidate)
     }
   } finally {
     coordinator.tickInFlight = false
@@ -231,7 +232,7 @@ export function isAgentHibernationCoordinatorRunning(): boolean {
 
 export function resetAgentHibernationCoordinatorForTests(): void {
   stopAgentHibernationCoordinator()
-  coordinator.shuttingDownWorktreeIds.clear()
+  coordinator.shuttingDownCandidateIds.clear()
   coordinator.tickInFlight = false
   coordinator.now = () => Date.now()
 }

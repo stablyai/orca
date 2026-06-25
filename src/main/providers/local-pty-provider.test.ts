@@ -95,9 +95,16 @@ describe('LocalPtyProvider', () => {
 
     exitCb = undefined
     mockProc = {
-      onData: vi.fn(),
+      onData: vi.fn(() => ({ dispose: vi.fn() })),
       onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
         exitCb = cb
+        return {
+          dispose: () => {
+            if (exitCb === cb) {
+              exitCb = undefined
+            }
+          }
+        }
       }),
       write: vi.fn(),
       resize: vi.fn(),
@@ -211,13 +218,64 @@ describe('LocalPtyProvider', () => {
         const dataCallback = mockProc.onData.mock.calls[0]?.[0] as (data: string) => void
         dataCallback('\x1b]777;orca-shell-ready\x07user@host % ')
         await Promise.resolve()
-        vi.advanceTimersByTime(50)
+        vi.advanceTimersByTime(29)
         await Promise.resolve()
+        expect(mockProc.write).not.toHaveBeenCalled()
 
+        vi.advanceTimersByTime(1)
+        await Promise.resolve()
         expect(mockProc.write).toHaveBeenCalledWith("printf 'linked issue context'\n")
       } finally {
         vi.useRealTimers()
       }
+    })
+
+    it('releases held marker-prefix bytes when local shell readiness times out', async () => {
+      vi.useFakeTimers()
+      const onData = vi.fn()
+      provider.configure({ onData })
+      try {
+        await provider.spawn({ cols: 80, rows: 24, command: 'printf ready' })
+        const dataCallback = mockProc.onData.mock.calls[0]?.[0] as (data: string) => void
+
+        dataCallback('\x1b]777;orca-shell-ready')
+        expect(onData).not.toHaveBeenCalled()
+
+        vi.advanceTimersByTime(1500)
+        await Promise.resolve()
+
+        expect(onData).toHaveBeenCalledWith(
+          expect.any(String),
+          '\x1b]777;orca-shell-ready',
+          expect.any(Number)
+        )
+        expect(mockProc.write).not.toHaveBeenCalled()
+
+        vi.advanceTimersByTime(200)
+        await Promise.resolve()
+        expect(mockProc.write).toHaveBeenCalledWith('printf ready\n')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('releases held marker-prefix bytes when local shell exits before readiness', async () => {
+      const onData = vi.fn()
+      provider.configure({ onData })
+
+      await provider.spawn({ cols: 80, rows: 24, command: 'printf ready' })
+      const dataCallback = mockProc.onData.mock.calls[0]?.[0] as (data: string) => void
+
+      dataCallback('\x1b]777;orca-shell-ready')
+      expect(onData).not.toHaveBeenCalled()
+
+      exitCb?.({ exitCode: 0 })
+
+      expect(onData).toHaveBeenCalledWith(
+        expect.any(String),
+        '\x1b]777;orca-shell-ready',
+        expect.any(Number)
+      )
     })
 
     it('honors explicit terminal env overrides after deleting requested defaults', async () => {
@@ -247,6 +305,23 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.PATH.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
       expect(spawnCall[2].env.TERM_PROGRAM).toBeUndefined()
       expect(spawnCall[2].env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    })
+
+    it('uses shell wrapper when MiMo home must survive shell startup', async () => {
+      provider.configure({
+        buildSpawnEnv: (_id, env) => {
+          env.MIMOCODE_HOME = '/tmp/orca-mimocode-overlay'
+          env.ORCA_MIMOCODE_HOME = '/tmp/orca-mimocode-overlay'
+          return env
+        }
+      })
+
+      await provider.spawn({ cols: 80, rows: 24 })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[1]).toEqual(['-l'])
+      expect(spawnCall[2].env.ZDOTDIR).toMatch(/shell-ready[\\/]zsh/)
+      expect(spawnCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
     })
 
     it('does not pass a Windows Codex home into WSL terminals', async () => {
@@ -660,6 +735,21 @@ describe('LocalPtyProvider', () => {
 
       expect(killSpy).toHaveBeenCalledTimes(1)
       expect(destroySpy).not.toHaveBeenCalled()
+    })
+
+    it('cancels pending shell-ready startup delivery on forced shutdown', async () => {
+      vi.useFakeTimers()
+      try {
+        const { id } = await provider.spawn({ cols: 80, rows: 24, command: 'printf ready' })
+
+        await provider.shutdown(id, { immediate: true })
+        vi.advanceTimersByTime(2000)
+        await Promise.resolve()
+
+        expect(mockProc.write).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
     it('is a no-op for unknown PTY ids', async () => {

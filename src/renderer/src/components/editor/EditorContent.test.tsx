@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 import { EditorContent, getMarkdownSourceLineOffset } from './EditorContent'
 
@@ -16,11 +16,24 @@ function createOpenFile(overrides: Partial<OpenFile> = {}): OpenFile {
   }
 }
 
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
 describe('EditorContent', () => {
   it('maps rich-editor annotation lines after front matter to source lines', () => {
     expect(getMarkdownSourceLineOffset('---\ntitle: x\n---\n')).toBe(3)
     expect(getMarkdownSourceLineOffset('+++\ntitle = "x"\n+++\n')).toBe(3)
     expect(getMarkdownSourceLineOffset('---\r\ntitle: x\r\n---\r\n')).toBe(3)
+    expect(getMarkdownSourceLineOffset('---\rtitle: x\n---\r\n')).toBe(3)
+  })
+
+  it('counts newline-heavy front matter offsets without regex match', () => {
+    const matchSpy = vi.spyOn(String.prototype, 'match')
+    const frontMatterRaw = `---\n${'title: x\n'.repeat(12_000)}---\n`
+
+    expect(getMarkdownSourceLineOffset(frontMatterRaw)).toBe(12_002)
+    expect(matchSpy).not.toHaveBeenCalled()
   })
 
   it('surfaces file load errors before notebook content is parsed', () => {

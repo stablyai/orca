@@ -120,7 +120,10 @@ const gitHubForgeProvider = {
             input.linkedReviewNumber ?? null,
             input.connectionId,
             fallbackReviewNumber,
-            ...executionArgs
+            {
+              ...executionArgs[0],
+              acceptMergedFallbackPR: true
+            }
           )
         : executionArgs.length > 0
           ? await getPRForBranch(

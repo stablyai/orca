@@ -3,6 +3,21 @@ import type { ITerminalOptions } from '@xterm/xterm'
 type TerminalCursorStyle = NonNullable<ITerminalOptions['cursorStyle']>
 type TerminalCursorInactiveStyle = NonNullable<ITerminalOptions['cursorInactiveStyle']>
 
+export const DEFAULT_TERMINAL_SCROLL_SENSITIVITY = 1.15
+export const DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY = 5
+
+export function normalizeTerminalScrollSensitivity(value: number | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(10, Math.max(0.1, value))
+    : DEFAULT_TERMINAL_SCROLL_SENSITIVITY
+}
+
+export function normalizeTerminalFastScrollSensitivity(value: number | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(20, Math.max(1, value))
+    : DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY
+}
+
 export function resolveTerminalCursorInactiveStyle(
   cursorStyle: TerminalCursorStyle | undefined
 ): TerminalCursorInactiveStyle {
@@ -26,7 +41,14 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
     fontWeight: '300',
     fontWeightBold: '500',
     scrollback: 10000,
+    // Why: Orca's default terminal cells are taller than many users' baseline
+    // terminal, so a small multiplier keeps row-per-wheel movement familiar.
+    scrollSensitivity: DEFAULT_TERMINAL_SCROLL_SENSITIVITY,
+    fastScrollSensitivity: DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
     allowTransparency: false,
+    // Why: agent CLIs sometimes render body text with ANSI white/bright-white
+    // on light themes; xterm can keep those cells readable across renderers.
+    minimumContrastRatio: 4.5,
     // Why: on macOS, non-US layouts rely on Option to compose characters like @ and €.
     macOptionIsMeta: false,
     macOptionClickForcesSelection: true,

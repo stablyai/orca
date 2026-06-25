@@ -29,6 +29,7 @@ type WorktreeTitleInlineRenameProps = {
   displayName: string
   disabled?: boolean
   showUnreadEmphasis?: boolean
+  dimReadTitle?: boolean
   className?: string
   editingClassName?: string
   inputClassName?: string
@@ -46,6 +47,7 @@ export function WorktreeTitleInlineRename({
   displayName,
   disabled = false,
   showUnreadEmphasis = false,
+  dimReadTitle = false,
   className,
   editingClassName,
   inputClassName,
@@ -269,13 +271,19 @@ export function WorktreeTitleInlineRename({
     )
   }
 
+  const titleEmphasisClassName = showUnreadEmphasis
+    ? 'font-semibold text-foreground'
+    : dimReadTitle
+      ? 'font-normal text-foreground/80'
+      : 'font-normal text-foreground'
+
   const title = (
     <span
       key={`title:${titleElementKey}`}
       ref={handleRootRef}
       className={cn(
-        'block min-w-0 truncate leading-tight text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
-        showUnreadEmphasis ? 'font-semibold' : 'font-normal',
+        'block min-w-0 truncate leading-tight focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
+        titleEmphasisClassName,
         className
       )}
       data-worktree-title-inline-rename=""

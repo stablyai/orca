@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../shared/types'
 
@@ -50,6 +50,7 @@ export function useDetectedAgents(
   connectionId: AgentDetectionTarget | string | null | undefined = null
 ): UseDetectedAgentsResult {
   const target = normalizeAgentDetectionTarget(connectionId)
+  const retriedEmptyTargetRef = useRef<string | null>(null)
   // Why: undefined means "store not yet hydrated" — we don't know if the
   // worktree is local or remote yet. This prevents flashing local agents for
   // remote worktrees during hydration.
@@ -96,12 +97,30 @@ export function useDetectedAgents(
     if (isUnknown) {
       return
     }
+    const emptyRetryKey =
+      targetKind === 'ssh' && targetId
+        ? `ssh:${targetId}`
+        : targetKind === 'runtime' && targetId
+          ? `runtime:${targetId}`
+          : null
     if (targetKind === 'ssh' && targetId) {
       if (detectedIds === null) {
+        retriedEmptyTargetRef.current = emptyRetryKey
+        void ensureRemote(targetId)
+      } else if (detectedIds.length === 0 && retriedEmptyTargetRef.current !== emptyRetryKey) {
+        // Why: a newly opened remote launch surface should get one fresh probe
+        // after a prior empty result, but must not spin while the host has no agents.
+        retriedEmptyTargetRef.current = emptyRetryKey
         void ensureRemote(targetId)
       }
     } else if (targetKind === 'runtime' && targetId) {
       if (detectedIds === null) {
+        retriedEmptyTargetRef.current = emptyRetryKey
+        void ensureRuntime(targetId)
+      } else if (detectedIds.length === 0 && retriedEmptyTargetRef.current !== emptyRetryKey) {
+        // Why: remote `orca serve` users can install/fix PATH without reconnecting;
+        // retry once per mounted surface so the menu can pick that up.
+        retriedEmptyTargetRef.current = emptyRetryKey
         void ensureRuntime(targetId)
       }
     } else {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
 import {
+  WORKSPACE_SPACE_FILTER_QUERY_MAX_BYTES,
   countWorkspaceSpaceActiveAgents,
   filterWorkspaceSpaceRows,
   getLargestWorkspaceSpaceItemSize,
@@ -8,6 +9,7 @@ import {
   getSelectedDeletableWorkspaceIds,
   getVisibleDeletableWorkspaceIds,
   getWorkspaceSpaceGitStatusRefreshCandidates,
+  isWorkspaceSpaceFilterQueryTooLarge,
   isWorkspaceSpaceRowReadyToDelete,
   pruneWorkspaceSpaceSelectedIds,
   resolveWorkspaceSpaceInspectedWorktreeId,
@@ -102,6 +104,31 @@ describe('workspace space presentation helpers', () => {
       'a'
     ])
     expect(filterWorkspaceSpaceRows(rows, '', true).map((item) => item.worktreeId)).toEqual(['a'])
+  })
+
+  it('rejects oversized pasted filters before reading workspace rows', () => {
+    const oversizedQuery = 'secret-workspace-space'.repeat(WORKSPACE_SPACE_FILTER_QUERY_MAX_BYTES)
+    const rows = [
+      {
+        get canDelete(): boolean {
+          throw new Error('oversized workspace-space filters must not check delete state')
+        },
+        get displayName(): string {
+          throw new Error('oversized workspace-space filters must not scan names')
+        }
+      }
+    ] as WorkspaceSpaceWorktree[]
+
+    expect(isWorkspaceSpaceFilterQueryTooLarge(oversizedQuery)).toBe(true)
+    expect(filterWorkspaceSpaceRows(rows, oversizedQuery, true)).toEqual([])
+  })
+
+  it('rejects oversized whitespace before trimming', () => {
+    const rows = [row({ worktreeId: 'a', displayName: 'Frontend Cache' })]
+
+    expect(
+      filterWorkspaceSpaceRows(rows, ' '.repeat(WORKSPACE_SPACE_FILTER_QUERY_MAX_BYTES + 1), false)
+    ).toEqual([])
   })
 
   it('finds largest sizes without spreading large workspace arrays', () => {

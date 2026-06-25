@@ -3,9 +3,12 @@ import {
   buildAgentDraftLaunchPlan,
   buildAgentResumeStartupPlan,
   buildAgentStartupPlan,
-  buildShellCommandFromArgv
+  buildShellCommandFromArgv,
 } from './tui-agent-startup'
-import { normalizeTuiAgentArgsRecord, resolveTuiAgentLaunchArgs } from './tui-agent-launch-defaults'
+import {
+  normalizeTuiAgentArgsRecord,
+  resolveTuiAgentLaunchArgs,
+} from './tui-agent-launch-defaults'
 
 describe('tui agent startup plans', () => {
   it('uses POSIX quoting when the target shell is Linux', () => {
@@ -13,7 +16,7 @@ describe('tui agent startup plans', () => {
       agent: 'claude',
       prompt: "fix Bob's branch",
       cmdOverrides: {},
-      platform: 'linux'
+      platform: 'linux',
     })
 
     expect(plan?.launchCommand).toBe("claude 'fix Bob'\\''s branch'")
@@ -24,16 +27,16 @@ describe('tui agent startup plans', () => {
       agent: 'claude',
       prompt: 'fix Bob\'s "quoted" branch',
       cmdOverrides: {},
-      platform: 'win32'
+      platform: 'win32',
     })
 
     expect(plan?.launchCommand).toBe("claude 'fix Bob''s \"quoted\" branch'")
   })
 
   it('invokes fully quoted argv commands in PowerShell', () => {
-    expect(buildShellCommandFromArgv(['codex', 'resume', 's1'], 'powershell')).toBe(
-      "& 'codex' 'resume' 's1'"
-    )
+    expect(
+      buildShellCommandFromArgv(['codex', 'resume', 's1'], 'powershell'),
+    ).toBe("& 'codex' 'resume' 's1'")
   })
 
   it('uses cmd escaping when requested explicitly', () => {
@@ -42,7 +45,7 @@ describe('tui agent startup plans', () => {
       prompt: 'fix "quoted" & %PATH%',
       cmdOverrides: {},
       platform: 'win32',
-      shell: 'cmd'
+      shell: 'cmd',
     })
 
     expect(plan?.launchCommand).toBe('claude "fix ^"quoted^" ^& ^%PATH^%"')
@@ -53,7 +56,7 @@ describe('tui agent startup plans', () => {
       agent: 'codex',
       prompt: 'fix it',
       cmdOverrides: {},
-      platform: 'linux'
+      platform: 'linux',
     })
 
     expect(plan?.launchCommand).toBe("codex 'fix it'")
@@ -66,14 +69,15 @@ describe('tui agent startup plans', () => {
       prompt: '',
       cmdOverrides: {},
       platform: 'linux',
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
     })
 
     expect(plan).toEqual({
       agent: 'codex',
       launchCommand: 'codex',
       expectedProcess: 'codex',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} },
     })
   })
 
@@ -82,11 +86,23 @@ describe('tui agent startup plans', () => {
       agent: 'claude',
       prompt: 'fix it',
       cmdOverrides: {},
-      platform: 'linux'
+      platform: 'linux',
     })
 
     expect(plan?.launchCommand).toBe("claude 'fix it'")
     expect(plan?.launchCommand).not.toContain('--settings')
+  })
+
+  it('uses the Linux Orca CLI command for Claude Agent Teams launches', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'claude-agent-teams',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+    })
+
+    expect(plan?.launchCommand).toBe('orca-ide claude-teams')
   })
 
   it('launches OpenClaude as a distinct argv agent', () => {
@@ -94,14 +110,15 @@ describe('tui agent startup plans', () => {
       agent: 'openclaude',
       prompt: 'fix it',
       cmdOverrides: {},
-      platform: 'linux'
+      platform: 'linux',
     })
 
     expect(plan).toEqual({
       agent: 'openclaude',
       launchCommand: "openclaude 'fix it'",
       expectedProcess: 'openclaude',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: { agentCommand: 'openclaude', agentArgs: '', agentEnv: {} },
     })
   })
 
@@ -110,14 +127,15 @@ describe('tui agent startup plans', () => {
       agent: 'mistral-vibe',
       prompt: 'fix it',
       cmdOverrides: {},
-      platform: 'linux'
+      platform: 'linux',
     })
 
     expect(plan).toEqual({
       agent: 'mistral-vibe',
       launchCommand: 'vibe',
       expectedProcess: 'vibe',
-      followupPrompt: 'fix it'
+      followupPrompt: 'fix it',
+      launchConfig: { agentCommand: 'vibe', agentArgs: '', agentEnv: {} },
     })
   })
 
@@ -126,10 +144,12 @@ describe('tui agent startup plans', () => {
       agent: 'claude',
       prompt: 'fix it',
       cmdOverrides: { claude: 'claude --dangerously-skip-permissions' },
-      platform: 'linux'
+      platform: 'linux',
     })
 
-    expect(plan?.launchCommand).toBe("claude --dangerously-skip-permissions 'fix it'")
+    expect(plan?.launchCommand).toBe(
+      "claude --dangerously-skip-permissions 'fix it'",
+    )
   })
 
   it('leaves Codex command overrides untouched', () => {
@@ -137,7 +157,7 @@ describe('tui agent startup plans', () => {
       agent: 'codex',
       prompt: 'fix it',
       cmdOverrides: { codex: 'codex --profile work' },
-      platform: 'linux'
+      platform: 'linux',
     })
 
     expect(plan?.launchCommand).toBe("codex --profile work 'fix it'")
@@ -149,8 +169,8 @@ describe('tui agent startup plans', () => {
         id: 'agent-profile:claude-work' as const,
         baseAgent: 'claude' as const,
         label: 'Claude Work',
-        defaultArgs: '--plugin-dir {worktreePath}/plugins'
-      }
+        defaultArgs: '--plugin-dir {worktreePath}/plugins',
+      },
     ]
     const agent = profiles[0].id
     const plan = buildAgentStartupPlan({
@@ -158,18 +178,23 @@ describe('tui agent startup plans', () => {
       prompt: 'fix it',
       cmdOverrides: {},
       agentArgs: resolveTuiAgentLaunchArgs(agent, null, profiles, {
-        worktreePath: '/repo/worktree'
+        worktreePath: '/repo/worktree',
       }),
       agentProfiles: profiles,
       variables: { worktreePath: '/repo/worktree' },
-      platform: 'linux'
+      platform: 'linux',
     })
 
     expect(plan).toEqual({
       agent,
       launchCommand: "claude '--plugin-dir' '/repo/worktree/plugins' 'fix it'",
       expectedProcess: 'claude',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: {
+        agentArgs: '--plugin-dir /repo/worktree/plugins',
+        agentCommand: "claude '--plugin-dir' '/repo/worktree/plugins'",
+        agentEnv: {},
+      },
     })
   })
 
@@ -178,7 +203,7 @@ describe('tui agent startup plans', () => {
       agent: 'codex',
       providerSession: { key: 'session_id', id: 's1' },
       cmdOverrides: {},
-      platform: 'win32'
+      platform: 'win32',
     })
 
     expect(plan?.launchCommand).toBe("codex 'resume' 's1'")
@@ -189,10 +214,27 @@ describe('tui agent startup plans', () => {
       agent: 'codex',
       providerSession: { key: 'session_id', id: 's1' },
       cmdOverrides: { codex: 'codex --profile work' },
-      platform: 'linux'
+      platform: 'linux',
     })
 
     expect(plan?.launchCommand).toBe("codex --profile work 'resume' 's1'")
+  })
+
+  it('uses a captured launch command when building resume plans after overrides change', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: { codex: 'codex --profile changed' },
+      agentCommand: 'codex --profile captured',
+      platform: 'linux',
+    })
+
+    expect(plan?.launchCommand).toBe("codex --profile captured 'resume' 's1'")
+    expect(plan?.launchConfig).toEqual({
+      agentCommand: 'codex --profile captured',
+      agentArgs: '',
+      agentEnv: {},
+    })
   })
 
   it('appends shell-quoted CLI arguments before prompt delivery flags', () => {
@@ -201,11 +243,11 @@ describe('tui agent startup plans', () => {
       prompt: 'fix it',
       cmdOverrides: {},
       agentArgs: '--model sonnet --add-dir "path with spaces"',
-      platform: 'linux'
+      platform: 'linux',
     })
 
     expect(plan?.launchCommand).toBe(
-      "claude '--model' 'sonnet' '--add-dir' 'path with spaces' 'fix it'"
+      "claude '--model' 'sonnet' '--add-dir' 'path with spaces' 'fix it'",
     )
   })
 
@@ -215,10 +257,12 @@ describe('tui agent startup plans', () => {
       prompt: 'fix it',
       cmdOverrides: {},
       agentArgs: '--model sonnet --name "Bob\'s"',
-      platform: 'win32'
+      platform: 'win32',
     })
 
-    expect(plan?.launchCommand).toBe("claude '--model' 'sonnet' '--name' 'Bob''s' 'fix it'")
+    expect(plan?.launchCommand).toBe(
+      "claude '--model' 'sonnet' '--name' 'Bob''s' 'fix it'",
+    )
   })
 
   it('preserves Windows path separators in CLI arguments before quoting', () => {
@@ -228,10 +272,12 @@ describe('tui agent startup plans', () => {
       cmdOverrides: {},
       agentArgs: '--plugin-dir C:\\Users\\me\\repo\\plugin',
       platform: 'win32',
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
     })
 
-    expect(plan?.launchCommand).toBe("claude '--plugin-dir' 'C:\\Users\\me\\repo\\plugin'")
+    expect(plan?.launchCommand).toBe(
+      "claude '--plugin-dir' 'C:\\Users\\me\\repo\\plugin'",
+    )
   })
 
   it('carries agent launch environment defaults into startup plans', () => {
@@ -241,23 +287,46 @@ describe('tui agent startup plans', () => {
       cmdOverrides: {},
       agentEnv: { GOOSE_MODE: 'auto' },
       platform: 'linux',
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
     })
 
     expect(plan?.launchCommand).toBe('goose')
     expect(plan?.env).toEqual({ GOOSE_MODE: 'auto' })
+    expect(plan?.launchConfig).toEqual({
+      agentCommand: 'goose',
+      agentArgs: '',
+      agentEnv: { GOOSE_MODE: 'auto' },
+    })
+  })
+
+  it('captures empty args and env as explicit launch config values', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'claude',
+      prompt: '',
+      cmdOverrides: {},
+      agentArgs: '',
+      agentEnv: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+    })
+
+    expect(plan?.launchConfig).toEqual({
+      agentCommand: 'claude',
+      agentArgs: '',
+      agentEnv: {},
+    })
   })
 
   it('does not append the unsupported OpenCode TUI skip-permissions arg', () => {
     const agentDefaultArgs = normalizeTuiAgentArgsRecord({
-      opencode: '--dangerously-skip-permissions'
+      opencode: '--dangerously-skip-permissions',
     })
     const plan = buildAgentStartupPlan({
       agent: 'opencode',
       prompt: 'fix it',
       cmdOverrides: {},
       agentArgs: resolveTuiAgentLaunchArgs('opencode', agentDefaultArgs),
-      platform: 'linux'
+      platform: 'linux',
     })
 
     expect(plan?.launchCommand).toBe("opencode --prompt 'fix it'")
@@ -269,7 +338,7 @@ describe('tui agent startup plans', () => {
       prompt: 'fix it',
       cmdOverrides: {},
       agentArgs: '--trust-all-tools',
-      platform: 'linux'
+      platform: 'linux',
     })
 
     expect(plan?.launchCommand).toBe("kiro-cli chat --tui '--trust-all-tools'")
@@ -281,7 +350,7 @@ describe('tui agent startup plans', () => {
       prompt: 'fix it',
       cmdOverrides: {},
       agentArgs: '--allow "*"',
-      platform: 'linux'
+      platform: 'linux',
     })
 
     expect(plan?.launchCommand).toBe("cn '--allow' '*'")
@@ -293,8 +362,8 @@ describe('tui agent startup plans', () => {
         agent: 'pi',
         draft: 'https://github.com/acme/repo/issues/42',
         cmdOverrides: {},
-        platform: 'win32'
-      })?.launchCommand
+        platform: 'win32',
+      })?.launchCommand,
     ).toBe('pi; Remove-Item Env:ORCA_PI_PREFILL -ErrorAction SilentlyContinue')
 
     expect(
@@ -303,8 +372,8 @@ describe('tui agent startup plans', () => {
         draft: 'https://github.com/acme/repo/issues/42',
         cmdOverrides: {},
         platform: 'win32',
-        shell: 'cmd'
-      })?.launchCommand
+        shell: 'cmd',
+      })?.launchCommand,
     ).toBe('pi & set "ORCA_PI_PREFILL="')
   })
 
@@ -318,7 +387,7 @@ describe('tui agent startup plans', () => {
       agent: 'omp',
       draft: 'fix the omp regression',
       cmdOverrides: {},
-      platform: 'linux'
+      platform: 'linux',
     })
 
     expect(plan).not.toBeNull()
@@ -333,8 +402,8 @@ describe('tui agent startup plans', () => {
         agent: 'claude',
         draft: 'x'.repeat(25_000),
         cmdOverrides: {},
-        platform: 'win32'
-      })
+        platform: 'win32',
+      }),
     ).toBeNull()
   })
 
@@ -344,8 +413,8 @@ describe('tui agent startup plans', () => {
         agent: 'pi',
         draft: 'x'.repeat(25_000),
         cmdOverrides: {},
-        platform: 'win32'
-      })
+        platform: 'win32',
+      }),
     ).toBeNull()
   })
 
@@ -355,17 +424,44 @@ describe('tui agent startup plans', () => {
       prompt: 'fix the tests',
       cmdOverrides: {},
       agentArgs: resolveTuiAgentLaunchArgs('devin', null),
-      platform: 'linux'
+      platform: 'linux',
     })
     expect(plan).toEqual({
       agent: 'devin',
       launchCommand: "devin '--permission-mode' 'bypass'",
       expectedProcess: 'devin',
-      followupPrompt: 'fix the tests'
+      followupPrompt: 'fix the tests',
+      launchConfig: {
+        agentCommand: "devin '--permission-mode' 'bypass'",
+        agentArgs: '--permission-mode bypass',
+        agentEnv: {},
+      },
+    })
+  })
+
+  it('excludes transient draft prompt env from launch config', () => {
+    const plan = buildAgentDraftLaunchPlan({
+      agent: 'pi',
+      draft: 'prefill text',
+      cmdOverrides: {},
+      agentEnv: { ORCA_AGENT_MODE: 'managed' },
+      platform: 'linux',
+    })
+
+    expect(plan?.env).toEqual({
+      ORCA_AGENT_MODE: 'managed',
+      ORCA_PI_PREFILL: 'prefill text',
+    })
+    expect(plan?.launchConfig).toEqual({
+      agentCommand: 'pi',
+      agentArgs: '',
+      agentEnv: { ORCA_AGENT_MODE: 'managed' },
     })
   })
 
   it('appends Devin default permission-mode bypass before stdin prompt delivery', () => {
-    expect(resolveTuiAgentLaunchArgs('devin', null)).toBe('--permission-mode bypass')
+    expect(resolveTuiAgentLaunchArgs('devin', null)).toBe(
+      '--permission-mode bypass',
+    )
   })
 })

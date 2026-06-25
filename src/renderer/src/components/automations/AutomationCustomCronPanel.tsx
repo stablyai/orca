@@ -2,7 +2,10 @@ import React from 'react'
 import { CheckCircle2, CircleAlert } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { formatAutomationSchedule } from '../../../../shared/automation-schedules'
+import {
+  formatAutomationSchedule,
+  getAutomationCronExpressionFields
+} from '../../../../shared/automation-schedules'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { Field } from './automation-page-parts'
 import { translate } from '@/i18n/i18n'
@@ -39,7 +42,7 @@ export function getCronScheduleStatusLabel(
 }
 
 export function getCronFieldValues(schedule: string): readonly string[] {
-  const parts = schedule.trim().split(/\s+/).filter(Boolean)
+  const parts = getAutomationCronExpressionFields(schedule)
   return AUTOMATION_CRON_FIELD_LABELS.map((_, index) => parts[index] ?? '...')
 }
 

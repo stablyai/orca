@@ -81,58 +81,212 @@ describe('getWorkItemDetails', () => {
     acquireMock.mockResolvedValue(undefined)
   })
 
-  it('uses the collapsed GraphQL issue query as the hot path', async () => {
+  it('uses the collapsed GraphQL issue query with timeline activity enrichment', async () => {
     getWorkItemMock.mockResolvedValueOnce({
       id: 'issue:923',
       type: 'issue',
       number: 923,
       title: 'Use upstream issues',
       state: 'open',
-      url: 'https://github.com/stablyai/orca/issues/923',
+      url: 'https://github.com/acme/widgets/issues/923',
       labels: [],
       updatedAt: '2026-04-01T00:00:00Z',
-      author: 'octocat'
+      author: 'issue-author'
     })
-    getIssueOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
-    ghExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: JSON.stringify({
-        data: {
-          repository: {
-            issue: {
-              body: 'Issue body',
-              assignees: { nodes: [{ login: 'jinjing' }] },
-              participants: {
-                nodes: [{ login: 'octocat', avatarUrl: 'https://x/y', name: 'Octo Cat' }]
-              },
-              comments: {
-                nodes: [
-                  {
-                    databaseId: 7,
-                    body: 'first',
-                    createdAt: '2026-04-01T00:00:00Z',
-                    url: 'https://github.com/stablyai/orca/issues/923#issuecomment-7',
-                    author: { login: 'octocat', avatarUrl: 'https://x/y' }
-                  }
-                ]
+    getIssueOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    const timelineEvents = [
+      {
+        id: 101,
+        event: 'assigned',
+        actor: { login: 'timeline-actor', avatar_url: 'https://x/timeline-actor' },
+        assignee: { login: 'assigned-user' },
+        created_at: '2026-04-01T01:00:00Z'
+      },
+      {
+        id: 102,
+        event: 'cross-referenced',
+        actor: { login: 'timeline-actor', avatar_url: 'https://x/timeline-actor' },
+        created_at: '2026-04-01T02:00:00Z',
+        source: {
+          issue: {
+            number: 6180,
+            title: 'Synthetic reference PR',
+            html_url: 'https://github.com/acme/widgets/pull/6180',
+            repository: { owner: { login: 'acme' }, name: 'widgets' },
+            pull_request: {}
+          }
+        }
+      },
+      {
+        id: 103,
+        event: 'moved_columns_in_project',
+        actor: { login: 'github-project-automation', avatar_url: 'https://x/bot' },
+        created_at: '2026-04-01T03:00:00Z',
+        previous_column_name: 'Doing',
+        project_column_name: 'Complete',
+        project: { name: 'Example Project' }
+      },
+      {
+        id: 104,
+        event: 'closed',
+        actor: { login: 'timeline-actor', avatar_url: 'https://x/timeline-actor' },
+        created_at: '2026-04-01T04:00:00Z',
+        state_reason: 'completed',
+        closer: {
+          number: 6180,
+          title: 'Synthetic reference PR',
+          html_url: 'https://github.com/acme/widgets/pull/6180',
+          repository: { owner: { login: 'acme' }, name: 'widgets' },
+          pull_request: {}
+        }
+      }
+    ]
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          data: {
+            repository: {
+              issue: {
+                body: 'Issue body',
+                assignees: { nodes: [{ login: 'assigned-user' }] },
+                participants: {
+                  nodes: [{ login: 'issue-author', avatarUrl: 'https://x/y', name: 'Issue Author' }]
+                },
+                comments: {
+                  nodes: [
+                    {
+                      databaseId: 7,
+                      body: 'first',
+                      createdAt: '2026-04-01T00:00:00Z',
+                      url: 'https://github.com/acme/widgets/issues/923#issuecomment-7',
+                      author: { login: 'issue-author', avatarUrl: 'https://x/y' }
+                    }
+                  ]
+                }
               }
             }
           }
-        }
+        })
       })
-    })
+      .mockResolvedValueOnce({
+        stdout: timelineEvents.map((event) => JSON.stringify(event)).join('\n')
+      })
 
     const details = await getWorkItemDetails('/repo-root', 923, 'issue')
 
     expect(getWorkItemMock).toHaveBeenCalledWith('/repo-root', 923, 'issue', undefined)
-    // Why: a single gh subprocess call replaces the previous REST + REST + GraphQL fan-out.
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(ghExecFileAsyncMock.mock.calls[0][0][0]).toBe('api')
     expect(ghExecFileAsyncMock.mock.calls[0][0][1]).toBe('graphql')
+    expect(ghExecFileAsyncMock.mock.calls[1][0]).toEqual([
+      'api',
+      '--cache',
+      '60s',
+      'repos/acme/widgets/issues/923/timeline?per_page=100&page=1',
+      '--jq',
+      '.[] | @json'
+    ])
     expect(details?.body).toBe('Issue body')
-    expect(details?.assignees).toEqual(['jinjing'])
+    expect(details?.assignees).toEqual(['assigned-user'])
     expect(details?.comments).toHaveLength(1)
     expect(details?.comments[0].id).toBe(7)
-    expect(details?.participants?.[0]?.login).toBe('octocat')
+    expect(details?.timelineItems).toMatchObject([
+      { event: 'assigned', actor: 'timeline-actor', assignee: 'assigned-user' },
+      {
+        event: 'cross-referenced',
+        source: {
+          type: 'pr',
+          number: 6180,
+          repository: 'acme/widgets'
+        }
+      },
+      {
+        event: 'moved_columns_in_project',
+        actor: 'github-project-automation',
+        previousColumnName: 'Doing',
+        columnName: 'Complete',
+        projectName: 'Example Project'
+      },
+      {
+        event: 'closed',
+        stateReason: 'completed',
+        closer: { type: 'pr', number: 6180 }
+      }
+    ])
+    expect(details?.participants?.[0]?.login).toBe('issue-author')
+  })
+
+  it('caps issue timeline pagination by supported activity items', async () => {
+    getWorkItemMock.mockResolvedValueOnce({
+      id: 'issue:923',
+      type: 'issue',
+      number: 923,
+      title: 'Use upstream issues',
+      state: 'open',
+      url: 'https://github.com/acme/widgets/issues/923',
+      labels: [],
+      updatedAt: '2026-04-01T00:00:00Z',
+      author: 'issue-author'
+    })
+    getIssueOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    const makeTimelineEvent = (page: number, index: number, event: string): string =>
+      JSON.stringify({
+        id: `${page}:${index}`,
+        event,
+        actor: { login: 'issue-author', avatar_url: 'https://x/y' },
+        assignee: { login: `assignee-${page}-${index}` },
+        created_at: '2026-04-01T00:00:00Z'
+      })
+    const makeTimelinePage = (page: number, supportedCount: number): string =>
+      Array.from({ length: 100 }, (_, index) =>
+        makeTimelineEvent(page, index, index < supportedCount ? 'assigned' : 'subscribed')
+      ).join('\n')
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          data: {
+            repository: {
+              issue: {
+                body: 'Issue body',
+                assignees: { nodes: [] },
+                participants: { nodes: [] },
+                comments: { nodes: [] }
+              }
+            }
+          }
+        })
+      })
+      .mockResolvedValueOnce({ stdout: makeTimelinePage(1, 0) })
+      .mockResolvedValueOnce({ stdout: makeTimelinePage(2, 0) })
+      .mockResolvedValueOnce({ stdout: makeTimelinePage(3, 10) })
+      .mockResolvedValueOnce({ stdout: makeTimelinePage(4, 100) })
+      .mockResolvedValueOnce({ stdout: makeTimelinePage(5, 100) })
+      .mockResolvedValueOnce({ stdout: makeTimelinePage(6, 100) })
+
+    const details = await getWorkItemDetails('/repo-root', 923, 'issue')
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(7)
+    expect(ghExecFileAsyncMock.mock.calls[1][0]).toContain(
+      'repos/acme/widgets/issues/923/timeline?per_page=100&page=1'
+    )
+    expect(ghExecFileAsyncMock.mock.calls[2][0]).toContain(
+      'repos/acme/widgets/issues/923/timeline?per_page=100&page=2'
+    )
+    expect(ghExecFileAsyncMock.mock.calls[3][0]).toContain(
+      'repos/acme/widgets/issues/923/timeline?per_page=100&page=3'
+    )
+    expect(ghExecFileAsyncMock.mock.calls[6][0]).toContain(
+      'repos/acme/widgets/issues/923/timeline?per_page=100&page=6'
+    )
+    expect(
+      ghExecFileAsyncMock.mock.calls.some((call) =>
+        call[0].includes('repos/acme/widgets/issues/923/timeline?per_page=100&page=7')
+      )
+    ).toBe(false)
+    const timelineItems = details?.timelineItems ?? []
+    expect(timelineItems).toHaveLength(300)
+    expect(timelineItems.at(0)).toMatchObject({ assignee: 'assignee-3-0' })
+    expect(timelineItems.at(-1)).toMatchObject({ assignee: 'assignee-6-89' })
   })
 
   it('falls back to REST + GraphQL when the collapsed issue query fails', async () => {
@@ -142,16 +296,17 @@ describe('getWorkItemDetails', () => {
       number: 923,
       title: 'Use upstream issues',
       state: 'open',
-      url: 'https://github.com/stablyai/orca/issues/923',
+      url: 'https://github.com/acme/widgets/issues/923',
       labels: [],
       updatedAt: '2026-04-01T00:00:00Z',
-      author: 'octocat'
+      author: 'issue-author'
     })
-    getIssueOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+    getIssueOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
     // Collapsed GraphQL throws → fallback path picks up.
     ghExecFileAsyncMock
       .mockRejectedValueOnce(new Error('GraphQL error'))
       .mockResolvedValueOnce({ stdout: JSON.stringify({ body: 'Issue body' }) })
+      .mockResolvedValueOnce({ stdout: '[]' })
       .mockResolvedValueOnce({ stdout: '[]' })
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
@@ -166,12 +321,24 @@ describe('getWorkItemDetails', () => {
 
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['api', '--cache', '60s', 'repos/stablyai/orca/issues/923'],
+      ['api', '--cache', '60s', 'repos/acme/widgets/issues/923'],
       { cwd: '/repo-root' }
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       3,
-      ['api', '--cache', '60s', 'repos/stablyai/orca/issues/923/comments?per_page=100'],
+      ['api', '--cache', '60s', 'repos/acme/widgets/issues/923/comments?per_page=100'],
+      { cwd: '/repo-root' }
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      4,
+      [
+        'api',
+        '--cache',
+        '60s',
+        'repos/acme/widgets/issues/923/timeline?per_page=100&page=1',
+        '--jq',
+        '.[] | @json'
+      ],
       { cwd: '/repo-root' }
     )
     expect(details?.body).toBe('Issue body')
@@ -190,19 +357,20 @@ describe('getWorkItemDetails', () => {
       number: 923,
       title: 'Use upstream issues',
       state: 'open',
-      url: 'https://github.com/stablyai/orca/issues/923',
+      url: 'https://github.com/acme/widgets/issues/923',
       labels: [],
       updatedAt: '2026-04-01T00:00:00Z',
-      author: 'octocat'
+      author: 'issue-author'
     })
-    getIssueOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+    getIssueOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: JSON.stringify({ body: 'Issue body', assignees: [] }) })
+      .mockResolvedValueOnce({ stdout: '[]' })
       .mockResolvedValueOnce({ stdout: '[]' })
 
     const details = await getWorkItemDetails('/repo-root', 923, 'issue')
 
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(3)
     expect(ghExecFileAsyncMock.mock.calls.some((call) => call[0][1] === 'graphql')).toBe(false)
     expect(noteRateLimitSpendMock).not.toHaveBeenCalled()
     expect(details?.body).toBe('Issue body')
@@ -216,31 +384,33 @@ describe('getWorkItemDetails', () => {
       number: 923,
       title: 'Use upstream issues',
       state: 'open',
-      url: 'https://github.com/stablyai/orca/issues/923',
+      url: 'https://github.com/acme/widgets/issues/923',
       labels: [],
       updatedAt: '2026-04-01T00:00:00Z',
-      author: 'octocat'
+      author: 'issue-author'
     })
-    getIssueOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
-    ghExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: JSON.stringify({
-        data: {
-          repository: {
-            issue: {
-              body: 'Remote issue body',
-              assignees: { nodes: [] },
-              participants: { nodes: [] },
-              comments: { nodes: [] }
+    getIssueOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          data: {
+            repository: {
+              issue: {
+                body: 'Remote issue body',
+                assignees: { nodes: [] },
+                participants: { nodes: [] },
+                comments: { nodes: [] }
+              }
             }
           }
-        }
+        })
       })
-    })
+      .mockResolvedValueOnce({ stdout: '[]' })
 
-    const details = await getWorkItemDetails('/home/jinwoo/orca', 923, 'issue', 'openclaw-2')
+    const details = await getWorkItemDetails('/home/tester/widgets', 923, 'issue', 'ssh-test-1')
 
-    expect(getWorkItemMock).toHaveBeenCalledWith('/home/jinwoo/orca', 923, 'issue', 'openclaw-2')
-    expect(getIssueOwnerRepoMock).toHaveBeenCalledWith('/home/jinwoo/orca', 'openclaw-2')
+    expect(getWorkItemMock).toHaveBeenCalledWith('/home/tester/widgets', 923, 'issue', 'ssh-test-1')
+    expect(getIssueOwnerRepoMock).toHaveBeenCalledWith('/home/tester/widgets', 'ssh-test-1')
     expect(ghExecFileAsyncMock.mock.calls[0][1]).toEqual({})
     expect(details?.body).toBe('Remote issue body')
   })
@@ -253,17 +423,17 @@ describe('getWorkItemDetails', () => {
       number: 42,
       title: 'Review drawer WSL',
       state: 'open',
-      url: 'https://github.com/stablyai/orca/pull/42',
+      url: 'https://github.com/acme/widgets/pull/42',
       labels: [],
       updatedAt: '2026-04-01T00:00:00Z',
-      author: 'octocat'
+      author: 'pr-author'
     })
-    getOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
     getPRCommentsMock.mockResolvedValue([])
     getPRChecksMock.mockResolvedValue([])
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const target = args.at(-1)
-      if (target === 'repos/stablyai/orca/pulls/42') {
+      if (target === 'repos/acme/widgets/pulls/42') {
         return {
           stdout: JSON.stringify({
             body: 'PR body',
@@ -272,7 +442,7 @@ describe('getWorkItemDetails', () => {
           })
         }
       }
-      if (target === 'repos/stablyai/orca/pulls/42/files?per_page=100') {
+      if (target === 'repos/acme/widgets/pulls/42/files?per_page=100') {
         return { stdout: '[]' }
       }
       const query = args.find((arg) => arg.startsWith('query=')) ?? ''

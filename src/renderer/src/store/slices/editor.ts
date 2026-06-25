@@ -35,14 +35,14 @@ import type {
   WorkspaceSessionState,
   WorkspaceVisibleTabType
 } from '../../../../shared/types'
-import {
-  formatSubmodulePushFailureDetail,
-  stripCredentialsFromMessage
-} from '../../../../shared/git-remote-error'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-panel-width'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { RemoteOpKind } from '@/components/right-sidebar/source-control-primary-action'
+import {
+  isNonFastForwardRemoteError,
+  resolveRemoteOperationErrorMessage
+} from '@/lib/source-control-remote-error'
 import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
 import {
   fastForwardRuntimeGit,
@@ -58,6 +58,7 @@ import {
   statRuntimePath
 } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
@@ -93,6 +94,7 @@ export type DiffSource =
   | 'staged'
   | 'branch'
   | 'commit'
+  | 'combined-all'
   | 'combined-uncommitted'
   | 'combined-branch'
   | 'combined-commit'
@@ -154,7 +156,7 @@ type CommitCompareLike = Pick<
 }
 
 type CombinedDiffAlternate = {
-  source: 'combined-uncommitted' | 'combined-branch'
+  source: 'combined-all' | 'combined-branch'
   branchCompare?: BranchCompareSnapshot
 }
 
@@ -293,6 +295,7 @@ type EditorOpenTargetOptions = {
 
 type GitRuntimeOperationOptions = {
   runtimeTargetSettings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  applyUpstreamStatus?: boolean
 }
 
 export type PendingEditorReveal = {
@@ -500,7 +503,8 @@ export type EditorSlice = {
     worktreeId: string,
     worktreePath: string,
     alternate?: CombinedDiffAlternate,
-    areaFilter?: string
+    areaFilter?: string,
+    entriesSnapshot?: GitStatusEntry[]
   ) => void
   openConflictFile: (
     worktreeId: string,
@@ -593,7 +597,7 @@ export type EditorSlice = {
     connectionId?: string,
     pushTarget?: GitPushTarget,
     options?: GitRuntimeOperationOptions
-  ) => Promise<void>
+  ) => Promise<GitUpstreamStatus | null>
   pushBranch: (
     worktreeId: string,
     worktreePath: string,
@@ -1191,246 +1195,6 @@ function migrateHydratedEditorTabsAndGroups(
     ...(tabsChanged ? { unifiedTabsByWorktree: nextUnifiedTabsByWorktree } : {}),
     ...(groupsChanged ? { groupsByWorktree: nextGroupsByWorktree } : {})
   }
-}
-
-const REMOTE_OPERATION_FAILED_MESSAGE = 'Remote operation failed'
-const REMOTE_OPERATION_DETAIL_MAX_LENGTH = 200
-
-// Why: arbitrarily long git stderr lines (for instance, a multi-kilobyte
-// server-side pre-receive hook message) should not blow up the toast. Cap the
-// detail length so the toast stays readable; the underlying error is still
-// rethrown for console/logs if a caller needs the full payload.
-function truncateDetail(detail: string): string {
-  if (detail.length <= REMOTE_OPERATION_DETAIL_MAX_LENGTH) {
-    return detail
-  }
-  return `${detail.slice(0, REMOTE_OPERATION_DETAIL_MAX_LENGTH).trimEnd()}...`
-}
-
-function extractPublishFailureDetail(message: string): string | null {
-  const normalized = message.replace(/\r\n/g, '\n')
-  const lines = normalized
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-  const fatalLine = lines.find((line) => line.startsWith('fatal:'))
-  if (fatalLine) {
-    return truncateDetail(stripCredentialsFromMessage(fatalLine.slice('fatal:'.length).trim()))
-  }
-  const remoteLine = lines.find((line) => line.startsWith('remote:'))
-  if (remoteLine) {
-    return truncateDetail(stripCredentialsFromMessage(remoteLine.slice('remote:'.length).trim()))
-  }
-  return null
-}
-
-function resolveSubmodulePushFailureMessage(
-  message: string,
-  operationLabel: string
-): string | null {
-  const detail = formatSubmodulePushFailureDetail(message)
-  return detail ? `${operationLabel} failed. ${truncateDetail(detail)}` : null
-}
-
-function isNonFastForwardRemoteError(error: unknown): boolean {
-  if (!(error instanceof Error)) {
-    return false
-  }
-  return (
-    /non-fast-forward|fetch first|updates were rejected|stale info/i.test(error.message) ||
-    formatSubmodulePushFailureDetail(error.message)?.includes('has remote changes') === true
-  )
-}
-
-export function resolveRemoteOperationErrorMessage(
-  error: unknown,
-  options?: {
-    publish?: boolean
-    isPush?: boolean
-    isForcePush?: boolean
-    isSync?: boolean
-    isFetch?: boolean
-    isFastForward?: boolean
-    isRebase?: boolean
-  }
-): string {
-  if (!(error instanceof Error)) {
-    return REMOTE_OPERATION_FAILED_MESSAGE
-  }
-
-  if (/unmerged files|needs merge|you have not concluded your merge/i.test(error.message)) {
-    if (options?.isRebase) {
-      return 'Rebase blocked — resolve existing conflicts first.'
-    }
-    return options?.isSync
-      ? 'Sync blocked — resolve existing merge conflicts first.'
-      : 'Pull blocked — resolve existing merge conflicts first.'
-  }
-
-  if (/automatic merge failed|CONFLICT \(|fix conflicts/i.test(error.message)) {
-    if (options?.isRebase) {
-      return 'Rebase stopped with conflicts. Resolve them in Source Control, then continue the rebase.'
-    }
-    return options?.isSync
-      ? 'Sync stopped with merge conflicts. Resolve them in Source Control, then commit the merge.'
-      : 'Pull stopped with merge conflicts. Resolve them in Source Control, then commit the merge.'
-  }
-
-  if (options?.publish) {
-    const submoduleMessage = resolveSubmodulePushFailureMessage(error.message, 'Publish Branch')
-    if (submoduleMessage) {
-      return submoduleMessage
-    }
-  }
-
-  if (options?.isSync) {
-    const submoduleMessage = resolveSubmodulePushFailureMessage(error.message, 'Sync')
-    if (submoduleMessage) {
-      return submoduleMessage
-    }
-  }
-
-  if (options?.isForcePush) {
-    const submoduleMessage = resolveSubmodulePushFailureMessage(error.message, 'Force Push')
-    if (submoduleMessage) {
-      return submoduleMessage
-    }
-  }
-
-  if (options?.isPush) {
-    const submoduleMessage = resolveSubmodulePushFailureMessage(error.message, 'Push')
-    if (submoduleMessage) {
-      return submoduleMessage
-    }
-  }
-
-  // Why: under sync, the inner push runs *after* a successful pull, so a
-  // non-fast-forward at that point means the remote raced ahead between
-  // fetch and push — not "user forgot to pull". Saying "Pull first" would
-  // be wrong (sync just did). Branch isSync above the shared NFF path so
-  // sync gets a sync-shaped message instead of inheriting the push wording.
-  if (
-    options?.isSync &&
-    /non-fast-forward|fetch first|updates were rejected/i.test(error.message)
-  ) {
-    return 'Sync failed — remote moved while syncing. Try again.'
-  }
-
-  // Why: force-with-lease rejection means the remote moved since our last
-  // snapshot; telling the user to pull would defeat the explicit force-push
-  // path and can reintroduce commits they meant to replace.
-  if (
-    options?.isForcePush &&
-    /non-fast-forward|fetch first|updates were rejected|stale info/i.test(error.message)
-  ) {
-    return 'Force push rejected — remote changed since last fetch. Fetch first, then try again.'
-  }
-
-  // Why: non-fast-forward/rejected detection is shared across publish and push so
-  // both paths surface the same actionable toast regardless of operation type.
-  if (/non-fast-forward|fetch first|updates were rejected/i.test(error.message)) {
-    return 'Push rejected — remote has changes. Pull first, then try again.'
-  }
-
-  // Why: `git pull` / merge refuses to run when the working tree has changes
-  // that would be overwritten; surface a single readable line instead of the
-  // multi-line git stderr (which lists every affected path).
-  if (
-    /local changes.*would be overwritten|Please commit your changes or stash them/i.test(
-      error.message
-    )
-  ) {
-    if (options?.isRebase) {
-      return 'Rebase blocked — commit or stash your local changes first.'
-    }
-    if (options?.isFastForward) {
-      return 'Fast-forward blocked — commit or stash your local changes first.'
-    }
-    return 'Pull blocked — commit or stash your local changes first.'
-  }
-
-  if (/Pull would overwrite local changes/i.test(error.message)) {
-    if (options?.isRebase) {
-      return 'Rebase blocked — commit or stash your local changes first.'
-    }
-    if (options?.isFastForward) {
-      return 'Fast-forward blocked — commit or stash your local changes first.'
-    }
-    return 'Pull blocked — commit or stash your local changes first.'
-  }
-
-  if (/Pull would overwrite untracked files/i.test(error.message)) {
-    if (options?.isRebase) {
-      return 'Rebase blocked — move, remove, or add untracked files first.'
-    }
-    if (options?.isFastForward) {
-      return 'Fast-forward blocked — move, remove, or add untracked files first.'
-    }
-    return 'Pull blocked — move, remove, or add untracked files first.'
-  }
-
-  if (options?.publish) {
-    // Why: publish failures often bubble up as raw wrapped git/IPC payloads; this
-    // keeps the toast human-readable while preserving the actionable fatal reason.
-    const detail = extractPublishFailureDetail(error.message)
-    if (detail) {
-      return `Publish Branch failed. ${detail}. Check your remote access and try again.`
-    }
-
-    return 'Publish Branch failed. Check your remote access and try again.'
-  }
-
-  if (options?.isSync) {
-    // Why: the user invoked Sync — surface "Sync failed" rather than leaking
-    // the inner-step name ("Push failed"). Detail extraction matches push so
-    // auth / protected-branch reasons stay actionable.
-    const detail = extractPublishFailureDetail(error.message)
-    if (detail) {
-      return `Sync failed. ${detail}. Check your remote access and try again.`
-    }
-    return 'Sync failed. Check your connection and try again.'
-  }
-
-  if (options?.isForcePush) {
-    const detail = extractPublishFailureDetail(error.message)
-    if (detail) {
-      return `Force Push failed. ${detail}. Check your remote access and try again.`
-    }
-    return 'Force Push failed. Check your connection and try again.'
-  }
-
-  if (options?.isPush) {
-    // Why: surfacing fatal/remote lines from git is more actionable than a generic
-    // connection message for auth errors, protected branches, etc.
-    const detail = extractPublishFailureDetail(error.message)
-    if (detail) {
-      return `Push failed. ${detail}. Check your remote access and try again.`
-    }
-    return 'Push failed. Check your connection and try again.'
-  }
-
-  if (options?.isFetch) {
-    const detail =
-      extractPublishFailureDetail(error.message) ??
-      truncateDetail(stripCredentialsFromMessage(error.message))
-    return `Fetch failed. ${detail}`
-  }
-
-  if (options?.isFastForward) {
-    const detail =
-      extractPublishFailureDetail(error.message) ??
-      truncateDetail(stripCredentialsFromMessage(error.message))
-    return `Fast-forward failed. ${detail}`
-  }
-
-  if (options?.isRebase) {
-    const detail =
-      extractPublishFailureDetail(error.message) ??
-      truncateDetail(stripCredentialsFromMessage(error.message))
-    return `Rebase failed. ${detail}`
-  }
-
-  return error.message
 }
 
 function deleteUntouchedUntitledFile(state: AppState, file: OpenFile): void {
@@ -2151,6 +1915,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     const hasDraft = !!get().editorDrafts[fileId]
     const shouldDeleteFromDisk = shouldDeleteUntouchedUntitledFile(preClose, hasDraft)
 
+    // Why: closeFile is the single chokepoint every editor close funnels through
+    // (tab strips, bulk close, save/discard, floating panel). Mirrored tabs are
+    // host-owned, so the host must close its copy too or its next snapshot
+    // re-mirrors the file and the tab reopens. No-op for the host's own files.
+    notifyHostOfMirroredEditorClose(get(), preClose?.worktreeId, fileId)
+
     set((s) => {
       const closedFile = s.openFiles.find((f) => f.id === fileId)
       const idx = s.openFiles.findIndex((f) => f.id === fileId)
@@ -2375,6 +2145,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         shouldDeleteUntouchedUntitledFile(f, !!state.editorDrafts[f.id]) &&
         (!activeWorktreeId || f.worktreeId === activeWorktreeId)
     )
+    const closingFiles = state.openFiles.filter(
+      (file) => !activeWorktreeId || file.worktreeId === activeWorktreeId
+    )
+    // Why: close-all bypasses closeFile's per-tab path, so mirrored host-owned
+    // editors must be notified here or the next host snapshot reopens them.
+    for (const file of closingFiles) {
+      notifyHostOfMirroredEditorClose(state, file.worktreeId, file.id)
+    }
 
     const closingItemIds = Object.values(state.unifiedTabsByWorktree ?? {})
       .flat()
@@ -2432,16 +2210,17 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const shouldDeactivateWorktree =
         browserTabsForWorktree.length === 0 && terminalTabsForWorktree.length === 0
 
-      // Why: remove all closed editor file IDs from tab bar order so stale
-      // entries don't cause position shifts on subsequent tab operations.
+      // Why: mirrored editor tabs use host tab ids in tab order, while local
+      // editor entries may still use file ids. Remove both close-all shapes.
       const closedFileIds = new Set(
         s.openFiles.filter((f) => f.worktreeId === activeWorktreeId).map((f) => f.id)
       )
+      const closedTabOrderIds = new Set([...closedFileIds, ...closingItemIds])
       const nextTabBarOrderByWorktree = s.tabBarOrderByWorktree
         ? {
             ...s.tabBarOrderByWorktree,
             [activeWorktreeId]: (s.tabBarOrderByWorktree[activeWorktreeId] ?? []).filter(
-              (entryId) => !closedFileIds.has(entryId)
+              (entryId) => !closedTabOrderIds.has(entryId)
             )
           }
         : s.tabBarOrderByWorktree
@@ -2870,7 +2649,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     )
   },
 
-  openAllDiffs: (worktreeId, worktreePath, alternate, areaFilter) => {
+  openAllDiffs: (worktreeId, worktreePath, alternate, areaFilter, entriesSnapshot) => {
     const id = areaFilter
       ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
       : `${worktreeId}::all-diffs::uncommitted`
@@ -2880,12 +2659,23 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         ] ?? 'All Changes')
       : 'All Changes'
     set((s) => {
-      const relevantEntries = (s.gitStatusByWorktree[worktreeId] ?? []).filter((entry) => {
-        if (areaFilter) {
-          return entry.area === areaFilter
-        }
-        return entry.area !== 'untracked'
-      })
+      const branchSummary = s.gitBranchCompareSummaryByWorktree[worktreeId]
+      const branchCompare =
+        !areaFilter &&
+        branchSummary?.status === 'ready' &&
+        branchSummary.baseOid &&
+        branchSummary.headOid &&
+        branchSummary.mergeBase
+          ? toBranchCompareSnapshot(branchSummary)
+          : undefined
+      const branchEntriesSnapshot = branchCompare
+        ? (s.gitBranchChangesByWorktree[worktreeId] ?? [])
+        : undefined
+      const relevantEntries =
+        entriesSnapshot ??
+        (s.gitStatusByWorktree[worktreeId] ?? []).filter((entry) => {
+          return areaFilter === undefined || entry.area === areaFilter
+        })
       const skippedConflicts = relevantEntries
         .filter((entry) => entry.conflictStatus === 'unresolved' && entry.conflictKind)
         .map((entry) => ({ path: entry.path, conflictKind: entry.conflictKind! }))
@@ -2908,6 +2698,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             f.id === id
               ? {
                   ...f,
+                  diffSource: branchCompare ? 'combined-all' : 'combined-uncommitted',
+                  branchCompare,
+                  branchEntriesSnapshot,
                   uncommittedEntriesSnapshot,
                   combinedAlternate: alternate,
                   combinedAreaFilter: areaFilter,
@@ -2931,7 +2724,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         language: 'plaintext',
         isDirty: false,
         mode: 'diff',
-        diffSource: 'combined-uncommitted',
+        diffSource: branchCompare ? 'combined-all' : 'combined-uncommitted',
+        branchCompare,
+        branchEntriesSnapshot,
         uncommittedEntriesSnapshot,
         combinedAlternate: alternate,
         combinedAreaFilter: areaFilter,
@@ -3746,7 +3541,10 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         },
         pushTarget
       )
-      get().setUpstreamStatus(worktreeId, status)
+      if (options?.applyUpstreamStatus !== false) {
+        get().setUpstreamStatus(worktreeId, status)
+      }
+      return status
     } catch (error) {
       // Why: on error we leave the prior status in place rather than writing a
       // synthetic {hasUpstream:false} — that would flash 'Publish Branch' on a
@@ -3755,6 +3553,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       // genuinely newly unpublished, the polling effect will eventually correct
       // the status on success.
       console.error('fetchUpstreamStatus failed', error)
+      return null
     }
   },
   pushBranch: async (

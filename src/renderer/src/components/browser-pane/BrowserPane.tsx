@@ -15,7 +15,11 @@ import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import { getWorkspaceFileBrowserOpenTarget } from '@/lib/file-preview'
-import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import {
+  getWorkspaceFileDragRejectionMessage,
+  readWorkspaceFileDragPaths,
+  WORKSPACE_FILE_PATH_MIME
+} from '@/lib/workspace-file-drag'
 import {
   ArrowLeft,
   ArrowRight,
@@ -23,7 +27,9 @@ import {
   Copy,
   CornerDownLeft,
   Crosshair,
+  Download,
   ExternalLink,
+  FolderOpen,
   Globe,
   Image,
   Loader2,
@@ -34,7 +40,8 @@ import {
   RefreshCw,
   Send,
   SquareCode,
-  Trash2
+  Trash2,
+  X
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -151,7 +158,6 @@ import {
 import { withBrowserPaneUiRuntimeRpcSource } from '../../../../shared/runtime-rpc-feature-interaction-source'
 import {
   formatByteCount,
-  formatDownloadFinishedNotice,
   formatLoadFailureDescription,
   formatLoadFailureRecoveryHint,
   formatPermissionNotice,
@@ -160,11 +166,13 @@ import {
 import {
   getDriverForBrowserPage,
   onBrowserDriverChange,
+  useBrowserMobileDrivenPageIds,
   type BrowserDriverState
 } from '@/lib/pane-manager/browser-mobile-driver-state'
 import { shouldPollChromiumErrorPage } from './chromium-error-page-polling'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { translate } from '@/i18n/i18n'
+import { isBrowserPagePanePaintable } from './browser-page-paintability'
 
 type BrowserTabPageState = Partial<
   Pick<
@@ -173,9 +181,22 @@ type BrowserTabPageState = Partial<
   >
 >
 
-type BrowserDownloadState = BrowserDownloadRequestedEvent & {
+type BrowserDownloadState = Omit<BrowserDownloadRequestedEvent, 'status' | 'savePath'> & {
   receivedBytes: number
-  status: 'requested' | 'downloading'
+  status: 'downloading' | 'completed' | 'failed' | 'canceled'
+  savePath: string | null
+  error: string | null
+  progressState: BrowserDownloadProgressEvent['state']
+  completedAt: number | null
+}
+
+function formatBrowserDownloadProgress(download: BrowserDownloadState): string | null {
+  const received = formatByteCount(download.receivedBytes)
+  const total = formatByteCount(download.totalBytes)
+  if (received && total) {
+    return `${received} / ${total}`
+  }
+  return received ?? total
 }
 
 type GrabIntent = 'copy' | 'annotate'
@@ -763,6 +784,7 @@ export default function BrowserPane({
   const activeBrowserPageId = activeBrowserPage?.id ?? null
   const browserPageIds = useMemo(() => browserPages.map((page) => page.id), [browserPages])
   const automationVisiblePageIds = useBrowserAutomationVisiblePageIds(browserPageIds)
+  const mobileDrivenPageIds = useBrowserMobileDrivenPageIds(browserPageIds)
   // Why: inactive Electron webviews must stay mounted in their original DOM
   // parent. Parking them by unmounting/reparenting loses form text and SPA
   // state on normal tab switches.
@@ -839,6 +861,7 @@ export default function BrowserPane({
               sessionProfileId={browserTab.sessionProfileId ?? null}
               isActive={isActive && page.id === activeBrowserPage?.id}
               isAutomationVisible={automationVisiblePageIds.has(page.id)}
+              isMobileDriven={mobileDrivenPageIds.has(page.id)}
               inputLocked={activeBrowserDriver.kind === 'mobile'}
               onUpdatePageState={updateBrowserPageState}
               onSetUrl={setBrowserPageUrl}
@@ -1144,6 +1167,11 @@ function RemoteBrowserPagePane({
   )
 
   useEffect(() => {
+    // Why: StrictMode (and any real remount) runs mount→cleanup→mount. The
+    // cleanup sets mountedRef false; without re-arming it on mount, every
+    // subsequent operation token reads as stale (isCurrentRemoteOperationToken
+    // gates on mountedRef) and the pane wedges on "Opening remote browser".
+    mountedRef.current = true
     return () => {
       mountedRef.current = false
       remoteOperationGenerationRef.current += 1
@@ -1173,9 +1201,11 @@ function RemoteBrowserPagePane({
   }, [clearPendingRemoteWheel])
 
   useEffect(() => {
-    remoteOperationGenerationRef.current += 1
-    streamGenerationRef.current += 1
-    activeStreamTokenRef.current = null
+    // Why: only reset the visible frame/wheel when the pane's identity changes.
+    // The stream/operation generations are owned solely by the streaming effect
+    // below — bumping them here too races that effect (e.g. under StrictMode's
+    // mount→cleanup→mount), leaving its captured token permanently one behind so
+    // the pane wedges on "Opening remote browser" while frames are available.
     remoteStreamViewportSizeRef.current = null
     clearPendingRemoteWheel()
     clearStreamFrame()
@@ -1856,6 +1886,32 @@ function RemoteBrowserPagePane({
     })
   }, [isActive])
 
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    const handleBrowserFocusRequest = (event: Event): void => {
+      const detail = (event as CustomEvent<BrowserFocusRequestDetail>).detail
+      if (!detail || detail.pageId !== browserTab.id) {
+        return
+      }
+      const focusTarget = consumeBrowserFocusRequest(browserTab.id)
+      if (!focusTarget) {
+        return
+      }
+      if (focusTarget === 'address-bar') {
+        addressBarInputRef.current?.focus()
+        addressBarInputRef.current?.select()
+        return
+      }
+      const target = imageRef.current ?? remoteViewportRef.current
+      target?.focus()
+    }
+    window.addEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
+    return () =>
+      window.removeEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
+  }, [browserTab.id, isActive])
+
   const runRemoteNavigation = useCallback(
     async (
       method: 'browser.goto' | 'browser.back' | 'browser.forward' | 'browser.reload',
@@ -2508,6 +2564,7 @@ function RemoteBrowserPagePane({
       </div>
       <div
         ref={remoteViewportRef}
+        tabIndex={-1}
         className="relative min-h-0 flex-1 overflow-hidden bg-background"
       >
         {frameUrl ? (
@@ -2583,6 +2640,7 @@ function BrowserPagePane({
   sessionProfileId,
   isActive,
   isAutomationVisible,
+  isMobileDriven,
   inputLocked,
   onUpdatePageState,
   onSetUrl
@@ -2593,11 +2651,16 @@ function BrowserPagePane({
   sessionProfileId: string | null
   isActive: boolean
   isAutomationVisible: boolean
+  isMobileDriven: boolean
   inputLocked: boolean
   onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
   onSetUrl: (tabId: string, url: string) => void
 }): React.JSX.Element {
-  const isPaintable = isActive || isAutomationVisible
+  const isPaintable = isBrowserPagePanePaintable({
+    isActive,
+    isAutomationVisible,
+    isMobileDriven
+  })
   const containerRef = useRef<HTMLDivElement | null>(null)
   const grabToastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const annotationCopyTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -2614,6 +2677,7 @@ function BrowserPagePane({
     clearTimeout(browserZoomFeedbackTimerRef.current)
   }, [])
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
+  const dismissAddressBarSuggestionsRef = useRef<(() => void) | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const browserTabIdRef = useRef(browserTab.id)
   browserTabIdRef.current = browserTab.id
@@ -2664,8 +2728,8 @@ function BrowserPagePane({
   const [addressBarValue, setAddressBarValue] = useState(browserTab.url)
   const addressBarValueRef = useRef(browserTab.url)
   const [resourceNotice, setResourceNotice] = useState<string | null>(null)
-  const [downloadState, setDownloadState] = useState<BrowserDownloadState | null>(null)
-  const downloadStateRef = useRef<BrowserDownloadState | null>(null)
+  const [downloadStates, setDownloadStates] = useState<BrowserDownloadState[]>([])
+  const downloadStatesRef = useRef<BrowserDownloadState[]>([])
   const [browserZoomPercent, setBrowserZoomPercent] = useState(browserDefaultZoomPercent)
   const [browserZoomFeedbackVisible, setBrowserZoomFeedbackVisible] = useState(false)
   const [contextMenu, setContextMenu] = useState<{
@@ -2928,12 +2992,12 @@ function BrowserPagePane({
   }, [addressBarValue])
 
   useEffect(() => {
-    downloadStateRef.current = downloadState
-  }, [downloadState])
+    downloadStatesRef.current = downloadStates
+  }, [downloadStates])
 
   useEffect(() => {
     setResourceNotice(null)
-    setDownloadState(null)
+    setDownloadStates([])
   }, [browserTab.id])
 
   useEffect(() => {
@@ -3054,13 +3118,30 @@ function BrowserPagePane({
       if (event.browserPageId !== browserTab.id) {
         return
       }
-      // Why: downloads are approved per browser tab, not globally. Keep the
-      // request local to the owning BrowserPane so the user can see which page
-      // triggered the save prompt before Orca asks main to choose a path.
-      setDownloadState({
-        ...event,
-        receivedBytes: 0,
-        status: 'requested'
+      setDownloadStates((current) => {
+        const nextEntry: BrowserDownloadState = {
+          browserPageId: event.browserPageId,
+          downloadId: event.downloadId,
+          origin: event.origin,
+          filename: event.filename,
+          totalBytes: event.totalBytes,
+          mimeType: event.mimeType,
+          receivedBytes: 0,
+          status: 'downloading',
+          savePath: event.savePath,
+          error: null,
+          progressState: null,
+          completedAt: null
+        }
+        const existingIndex = current.findIndex(
+          (download) => download.downloadId === event.downloadId
+        )
+        if (existingIndex === -1) {
+          return [nextEntry, ...current]
+        }
+        const next = [...current]
+        next[existingIndex] = { ...next[existingIndex], ...nextEntry }
+        return next
       })
       setResourceNotice(null)
     })
@@ -3068,35 +3149,45 @@ function BrowserPagePane({
 
   useEffect(() => {
     return window.api.browser.onDownloadProgress((event: BrowserDownloadProgressEvent) => {
-      setDownloadState((current) => {
-        if (!current || current.downloadId !== event.downloadId) {
-          return current
-        }
-        return {
-          ...current,
-          receivedBytes: event.receivedBytes,
-          totalBytes: event.totalBytes,
-          status: 'downloading'
-        }
-      })
+      setDownloadStates((current) =>
+        current.map((download) =>
+          download.downloadId === event.downloadId
+            ? {
+                ...download,
+                receivedBytes: event.receivedBytes,
+                totalBytes: event.totalBytes,
+                progressState: event.state
+              }
+            : download
+        )
+      )
     })
   }, [])
 
   useEffect(() => {
     return window.api.browser.onDownloadFinished((event: BrowserDownloadFinishedEvent) => {
-      const current = downloadStateRef.current
-      if (!current || current.downloadId !== event.downloadId) {
+      if (event.browserPageId && event.browserPageId !== browserTab.id) {
         return
       }
-      setDownloadState((current) => {
-        if (!current || current.downloadId !== event.downloadId) {
-          return current
-        }
-        return null
-      })
-      setResourceNotice(formatDownloadFinishedNotice(event))
+      const current = downloadStatesRef.current
+      if (!current.some((download) => download.downloadId === event.downloadId)) {
+        return
+      }
+      setDownloadStates((current) =>
+        current.map((download) =>
+          download.downloadId === event.downloadId
+            ? {
+                ...download,
+                status: event.status,
+                savePath: event.savePath,
+                error: event.error,
+                completedAt: Date.now()
+              }
+            : download
+        )
+      )
     })
-  }, [])
+  }, [browserTab.id])
 
   const focusAddressBarNow = useCallback(() => {
     const input = addressBarInputRef.current
@@ -3503,6 +3594,10 @@ function BrowserPagePane({
 
     webviewRef.current = webview
 
+    const dismissAddressBarSuggestions = (): void => {
+      dismissAddressBarSuggestionsRef.current?.()
+    }
+
     const handleDomReady = (): void => {
       const webContentsId = webview.getWebContentsId()
       let queuedAnnotationViewportBridgeSync = false
@@ -3737,6 +3832,7 @@ function BrowserPagePane({
     }
 
     webview.addEventListener('dom-ready', handleDomReady)
+    webview.addEventListener('focus', dismissAddressBarSuggestions)
     webview.addEventListener('did-start-loading', handleDidStartLoading)
     webview.addEventListener('did-stop-loading', handleDidStopLoading)
     // Why: separate handler registered only on 'did-navigate' (full page loads),
@@ -3769,6 +3865,7 @@ function BrowserPagePane({
 
     return () => {
       webview.removeEventListener('dom-ready', handleDomReady)
+      webview.removeEventListener('focus', dismissAddressBarSuggestions)
       webview.removeEventListener('did-start-loading', handleDidStartLoading)
       webview.removeEventListener('did-stop-loading', handleDidStopLoading)
       webview.removeEventListener('did-navigate', handleDidNavigate)
@@ -4412,19 +4509,13 @@ function BrowserPagePane({
   const loadErrorMeta = getLoadErrorMetadata(browserTab.loadError)
   const loadErrorHint = formatLoadFailureRecoveryHint(loadErrorMeta)
   const showFailureOverlay = Boolean(browserTab.loadError) && !isBlankTab
-  const downloadProgressLabel = (() => {
-    if (!downloadState) {
-      return null
-    }
-    const received = formatByteCount(downloadState.receivedBytes)
-    const total = formatByteCount(downloadState.totalBytes)
-    if (received && total) {
-      return `${received} / ${total}`
-    }
-    if (total) {
-      return total
-    }
-    return received
+  const visibleDownloads = (() => {
+    const active = downloadStates.filter((download) => download.status === 'downloading')
+    const recent = downloadStates
+      .filter((download) => download.status !== 'downloading')
+      .sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0))
+      .slice(0, 3)
+    return [...active, ...recent]
   })()
   const browserZoomIndicatorState = getBrowserPageZoomIndicatorState({
     feedbackVisible: browserZoomFeedbackVisible,
@@ -4464,12 +4555,23 @@ function BrowserPagePane({
 
   const handleInternalFileDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
-      const filePath = event.dataTransfer.getData(WORKSPACE_FILE_PATH_MIME)
-      if (!filePath) {
+      if (!event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
         return
       }
       event.preventDefault()
       event.stopPropagation()
+
+      // Why: browser drops open one URL; multi-path drags must not silently
+      // degrade into opening whichever selected file happened to lead.
+      const dragPaths = readWorkspaceFileDragPaths(event.dataTransfer, { maxPaths: 1 })
+      if (dragPaths.status === 'rejected') {
+        setResourceNotice(getWorkspaceFileDragRejectionMessage(dragPaths.reason))
+        return
+      }
+      const filePath = dragPaths.paths[0]
+      if (!filePath) {
+        return
+      }
 
       const target = getWorkspaceFileBrowserOpenTarget({ filePath, worktreeId })
       if (target.status === 'unsupported') {
@@ -4495,6 +4597,52 @@ function BrowserPagePane({
     [navigateToUrl, worktreeId]
   )
 
+  const dismissBrowserDownload = useCallback((downloadId: string) => {
+    setDownloadStates((current) => current.filter((download) => download.downloadId !== downloadId))
+  }, [])
+
+  const handleOpenDownloadedFile = useCallback(async (download: BrowserDownloadState) => {
+    if (!download.savePath) {
+      setResourceNotice(
+        translate(
+          'auto.components.browser.pane.BrowserPane.9f6f2e8c19',
+          'The downloaded file path is unavailable.'
+        )
+      )
+      return
+    }
+    const opened = await window.api.shell.openFilePath(download.savePath)
+    if (!opened) {
+      setResourceNotice(
+        translate(
+          'auto.components.browser.pane.BrowserPane.0c79b7634d',
+          'Could not open the downloaded file. It may have been moved or deleted.'
+        )
+      )
+    }
+  }, [])
+
+  const handleShowDownloadedFile = useCallback(async (download: BrowserDownloadState) => {
+    if (!download.savePath) {
+      setResourceNotice(
+        translate(
+          'auto.components.browser.pane.BrowserPane.9f6f2e8c19',
+          'The downloaded file path is unavailable.'
+        )
+      )
+      return
+    }
+    const result = await window.api.shell.openInFileManager(download.savePath)
+    if (!result.ok) {
+      setResourceNotice(
+        translate(
+          'auto.components.browser.pane.BrowserPane.397d9dc923',
+          'Could not show the downloaded file. It may have been moved or deleted.'
+        )
+      )
+    }
+  }, [])
+
   return (
     <div
       className={cn(
@@ -4505,8 +4653,8 @@ function BrowserPagePane({
             ? 'pointer-events-none z-0 opacity-0'
             : 'pointer-events-none hidden'
       )}
-      // Why: automation-visible webviews must remain mounted and paintable, but
-      // their hidden toolbar and guest content cannot stay keyboard-focusable.
+      // Why: automation-visible and mobile-driven webviews must stay paintable,
+      // but hidden toolbar and guest content cannot stay keyboard-focusable.
       inert={!isActive}
       aria-hidden={!isActive}
     >
@@ -4705,6 +4853,7 @@ function BrowserPagePane({
           onSubmit={submitAddressBar}
           onNavigate={navigateToUrl}
           inputRef={addressBarInputRef}
+          dismissSuggestionsRef={dismissAddressBarSuggestionsRef}
         />
 
         <BrowserImportHintButton profileId={sessionProfileId} />
@@ -4824,60 +4973,127 @@ function BrowserPagePane({
           isActive={isActive}
         />
       </div>
-      {downloadState ? (
-        <div className="flex items-center gap-3 border-b border-border/60 bg-amber-500/10 px-3 py-2 text-xs text-foreground/90">
-          <div className="min-w-0 flex-1">
-            <div className="truncate font-medium text-foreground">{downloadState.filename}</div>
-            <div className="truncate text-muted-foreground">
-              {downloadState.status === 'requested'
-                ? translate(
-                    'auto.components.browser.pane.BrowserPane.31375046b7',
-                    'Download from {{value0}}',
-                    { value0: downloadState.origin }
-                  )
-                : translate(
-                    'auto.components.browser.pane.BrowserPane.4300f38145',
-                    'Downloading from {{value0}}{{value1}}',
-                    {
-                      value0: downloadState.origin,
-                      value1: downloadProgressLabel ? ` • ${downloadProgressLabel}` : ''
-                    }
+      {visibleDownloads.length > 0 ? (
+        <div className="border-b border-border/60 bg-background px-3 py-1.5">
+          <div className="scrollbar-sleek flex max-h-36 flex-col gap-1 overflow-y-auto">
+            {visibleDownloads.map((download) => {
+              const progressLabel = formatBrowserDownloadProgress(download)
+              const statusLabel =
+                download.status === 'downloading'
+                  ? download.progressState === 'interrupted'
+                    ? translate(
+                        'auto.components.browser.pane.BrowserPane.39c04fed61',
+                        'Downloading paused'
+                      )
+                    : (progressLabel ??
+                      translate(
+                        'auto.components.browser.pane.BrowserPane.759f32af29',
+                        'Downloading'
+                      ))
+                  : download.status === 'completed'
+                    ? translate('auto.components.browser.pane.BrowserPane.5c3d530a68', 'Downloaded')
+                    : download.status === 'canceled'
+                      ? translate('auto.components.browser.pane.BrowserPane.4bb7424d6b', 'Canceled')
+                      : (download.error ??
+                        translate(
+                          'auto.components.browser.pane.BrowserPane.6e776f9ef9',
+                          'Download failed'
+                        ))
+              return (
+                <div
+                  key={download.downloadId}
+                  className="flex min-h-8 items-center gap-2 text-xs text-foreground"
+                >
+                  {download.status === 'completed' ? (
+                    <CircleCheck className="size-3.5 shrink-0 text-muted-foreground" />
+                  ) : download.status === 'failed' ? (
+                    <OctagonX className="size-3.5 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <Download className="size-3.5 shrink-0 text-muted-foreground" />
                   )}
-            </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium">{download.filename}</div>
+                    <div className="truncate text-muted-foreground">
+                      {download.status === 'downloading'
+                        ? translate(
+                            'auto.components.browser.pane.BrowserPane.4300f38145',
+                            'Downloading from {{value0}}{{value1}}',
+                            {
+                              value0: download.origin,
+                              value1: statusLabel ? ` • ${statusLabel}` : ''
+                            }
+                          )
+                        : statusLabel}
+                    </div>
+                  </div>
+                  {download.status === 'downloading' ? (
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      className="h-6 shrink-0"
+                      onClick={() => {
+                        void window.api.browser.cancelDownload({
+                          downloadId: download.downloadId
+                        })
+                      }}
+                    >
+                      {translate('auto.components.browser.pane.BrowserPane.fa6ea61de3', 'Cancel')}
+                    </Button>
+                  ) : download.status === 'completed' ? (
+                    <>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        className="h-6 shrink-0 gap-1"
+                        onClick={() => {
+                          void handleOpenDownloadedFile(download)
+                        }}
+                      >
+                        <ExternalLink className="size-3" />
+                        {translate('auto.components.browser.pane.BrowserPane.756bfc25c9', 'Open')}
+                      </Button>
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        className="h-6 shrink-0 gap-1"
+                        onClick={() => {
+                          void handleShowDownloadedFile(download)
+                        }}
+                      >
+                        <FolderOpen className="size-3" />
+                        {translate('auto.components.browser.pane.BrowserPane.09a9489aa5', 'Show')}
+                      </Button>
+                      <Button
+                        size="icon-xs"
+                        variant="ghost"
+                        className="h-6 w-6 shrink-0"
+                        onClick={() => dismissBrowserDownload(download.downloadId)}
+                        aria-label={translate(
+                          'auto.components.browser.pane.BrowserPane.2fdca7df09',
+                          'Dismiss'
+                        )}
+                      >
+                        <X className="size-3.5" />
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      className="h-6 w-6 shrink-0"
+                      onClick={() => dismissBrowserDownload(download.downloadId)}
+                      aria-label={translate(
+                        'auto.components.browser.pane.BrowserPane.2fdca7df09',
+                        'Dismiss'
+                      )}
+                    >
+                      <X className="size-3.5" />
+                    </Button>
+                  )}
+                </div>
+              )
+            })}
           </div>
-          {downloadState.status === 'requested' ? (
-            <>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7"
-                onClick={() => {
-                  void window.api.browser.acceptDownload({
-                    downloadId: downloadState.downloadId
-                  })
-                }}
-              >
-                {translate('auto.components.browser.pane.BrowserPane.8b6fab9ffa', 'Save')}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7"
-                onClick={() => {
-                  void window.api.browser.cancelDownload({
-                    downloadId: downloadState.downloadId
-                  })
-                }}
-              >
-                {translate('auto.components.browser.pane.BrowserPane.fa6ea61de3', 'Cancel')}
-              </Button>
-            </>
-          ) : (
-            <span className="shrink-0 text-muted-foreground">
-              {downloadProgressLabel ??
-                translate('auto.components.browser.pane.BrowserPane.759f32af29', 'Downloading')}
-            </span>
-          )}
         </div>
       ) : null}
       {resourceNotice ? (

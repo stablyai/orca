@@ -71,14 +71,34 @@ describe('electron-builder config', () => {
     expect(electronBuilderConfig.linux.desktop.entry.StartupWMClass).toBe('orca')
   })
 
-  it('builds RPMs without changing existing Linux artifact names', () => {
-    expect(electronBuilderConfig.linux.target).toEqual(['AppImage', 'deb', 'rpm'])
+  it('uses AppImage and deb as local Linux targets without changing existing artifact names', () => {
+    expect(electronBuilderConfig.linux.target).toEqual(['AppImage', 'deb'])
     expect(electronBuilderConfig.appImage.artifactName).toBe('orca-linux.${ext}')
     expect(electronBuilderConfig.deb.artifactName).toBe('orca-ide_${version}_${arch}.${ext}')
     expect(electronBuilderConfig.rpm).toMatchObject({
       packageName: 'orca-ide',
       artifactName: 'orca-ide-${version}.${arch}.${ext}'
     })
+  })
+
+  it('uses a distinct AppImage name for Linux arm64 release uploads', () => {
+    const configPath = require.resolve('../electron-builder.config.cjs')
+    const original = process.env.ORCA_LINUX_ARM64_RELEASE
+    try {
+      delete require.cache[configPath]
+      process.env.ORCA_LINUX_ARM64_RELEASE = '1'
+      expect(require('../electron-builder.config.cjs').appImage.artifactName).toBe(
+        'orca-linux-arm64.${ext}'
+      )
+    } finally {
+      if (original === undefined) {
+        delete process.env.ORCA_LINUX_ARM64_RELEASE
+      } else {
+        process.env.ORCA_LINUX_ARM64_RELEASE = original
+      }
+      delete require.cache[configPath]
+      require('../electron-builder.config.cjs')
+    }
   })
 
   it('uses Orca native rebuild hook instead of electron-builder default rebuild', () => {

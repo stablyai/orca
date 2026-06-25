@@ -10,6 +10,7 @@ import {
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive,
   moveWebRuntimeSessionTab,
+  setWebRuntimeTabProps,
   splitWebRuntimeTerminal
 } from './web-runtime-session'
 
@@ -22,7 +23,8 @@ const mocks = vi.hoisted(() => ({
   focusBrowserTabInWorktree: vi.fn(),
   applyFreshWebSessionTabsSnapshot: vi.fn(),
   resolveHostSessionTabIdForWebSessionTab: vi.fn(),
-  trackTerminalPaneSplit: vi.fn()
+  trackTerminalPaneSplit: vi.fn(),
+  getRuntimeEnvironmentIdForWorktree: vi.fn()
 }))
 
 vi.mock('../store', () => ({
@@ -39,6 +41,10 @@ vi.mock('./web-session-tabs-sync', () => ({
 
 vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
+}))
+
+vi.mock('@/lib/worktree-runtime-owner', () => ({
+  getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
 }))
 
 const ENVIRONMENT_ID = 'web-env-1'
@@ -131,6 +137,9 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         worktree: `id:${WORKTREE_ID}`,
         url: 'https://example.com/',
         profileId: undefined,
+        // Why: a user-initiated "New Browser Tab" focuses the new tab, which on a
+        // headless host marks it active in the session snapshot.
+        activate: true,
         waitForRegistration: false
       },
       timeoutMs: 15_000
@@ -421,7 +430,13 @@ describe('createWebRuntimeSessionTerminal', () => {
         afterTabId: 'web-terminal-host-tab-1%3A%3Aleaf-1',
         targetGroupId: 'group-left',
         command: "codex 'linked issue context'",
+        env: { CODEX_PROFILE: 'captured' },
         startupCommandDelivery: 'shell-ready',
+        launchConfig: {
+          agentArgs: '--model gpt-5',
+          agentEnv: { CODEX_PROFILE: 'captured' }
+        },
+        launchAgent: 'codex',
         activate: true
       })
     ).resolves.toBe(true)
@@ -434,7 +449,13 @@ describe('createWebRuntimeSessionTerminal', () => {
         afterTabId: 'host-tab-1::leaf-1',
         targetGroupId: 'group-left',
         command: "codex 'linked issue context'",
+        env: { CODEX_PROFILE: 'captured' },
         startupCommandDelivery: 'shell-ready',
+        launchConfig: {
+          agentArgs: '--model gpt-5',
+          agentEnv: { CODEX_PROFILE: 'captured' }
+        },
+        launchAgent: 'codex',
         activate: true
       },
       timeoutMs: 15_000
@@ -982,5 +1003,85 @@ describe('closeWebRuntimeTerminal', () => {
     expect(isWebRuntimeSessionActive('env-1')).toBe(true)
     expect(isWebRuntimeSessionActive('   ')).toBe(false)
     expect(isWebRuntimeSessionActive(null)).toBe(false)
+  })
+})
+
+describe('setWebRuntimeTabProps', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('pushes pin to the host via session.tabs.setTabProps for a remote tab', async () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
+    mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue(ENVIRONMENT_ID)
+    mocks.getState.mockReturnValue({})
+    const runtimeCall = vi.fn().mockResolvedValue({ id: 'p', ok: true, result: { updated: true } })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    expect(
+      setWebRuntimeTabProps({
+        worktreeId: WORKTREE_ID,
+        tabId: 'web-terminal-host-tab-1',
+        isPinned: true
+      })
+    ).toBe(true)
+
+    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(1))
+    expect(runtimeCall).toHaveBeenCalledWith({
+      selector: ENVIRONMENT_ID,
+      method: 'session.tabs.setTabProps',
+      params: {
+        worktree: `id:${WORKTREE_ID}`,
+        tabId: 'host-tab-1',
+        isPinned: true
+      },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('maps mirrored browser/editor unified ids before setting host tab props', async () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
+    mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue(ENVIRONMENT_ID)
+    mocks.getState.mockReturnValue({})
+    mocks.resolveHostSessionTabIdForWebSessionTab.mockImplementation(
+      (_state, args: { tabId: string }) =>
+        args.tabId === 'local-browser-unified' ? 'host-browser-unified' : null
+    )
+    const runtimeCall = vi.fn().mockResolvedValue({ id: 'p', ok: true, result: { updated: true } })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    expect(
+      setWebRuntimeTabProps({
+        worktreeId: WORKTREE_ID,
+        tabId: 'local-browser-unified',
+        color: '#3b82f6'
+      })
+    ).toBe(true)
+
+    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(1))
+    expect(runtimeCall).toHaveBeenCalledWith({
+      selector: ENVIRONMENT_ID,
+      method: 'session.tabs.setTabProps',
+      params: {
+        worktree: `id:${WORKTREE_ID}`,
+        tabId: 'host-browser-unified',
+        color: '#3b82f6'
+      },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('no-ops for a worktree with no runtime environment (local tab)', () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
+    mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue(null)
+    mocks.getState.mockReturnValue({})
+    const runtimeCall = vi.fn()
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    expect(
+      setWebRuntimeTabProps({ worktreeId: WORKTREE_ID, tabId: 'local-tab', color: '#fff' })
+    ).toBe(false)
+    expect(runtimeCall).not.toHaveBeenCalled()
   })
 })

@@ -12,14 +12,42 @@ import {
 } from '@/components/ui/command'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 
 export type PickerOption = { key: string; primary: string; secondary?: string }
 
-function filterOptions(options: PickerOption[], query: string): PickerOption[] {
-  const q = query.trim().toLowerCase()
-  if (!q) {
+export const PULL_REQUEST_PICKER_QUERY_MAX_BYTES = 2 * 1024
+
+export function isPullRequestPickerQueryTooLarge(
+  query: string,
+  maxBytes = PULL_REQUEST_PICKER_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
+
+export function getPullRequestPickerQueryState(query: string): {
+  queryTooLarge: boolean
+  trimmedQuery: string
+} {
+  const queryTooLarge = isPullRequestPickerQueryTooLarge(query)
+  return {
+    queryTooLarge,
+    trimmedQuery: queryTooLarge ? '' : query.trim()
+  }
+}
+
+export function filterPullRequestPickerOptions(
+  options: PickerOption[],
+  query: string
+): PickerOption[] {
+  const { queryTooLarge, trimmedQuery } = getPullRequestPickerQueryState(query)
+  if (queryTooLarge) {
+    return []
+  }
+  if (!trimmedQuery) {
     return options
   }
+  const q = trimmedQuery.toLowerCase()
   return options.filter(
     (o) => o.primary.toLowerCase().includes(q) || (o.secondary ?? '').toLowerCase().includes(q)
   )
@@ -50,17 +78,20 @@ export function SingleSelectList({
   onSelect: (value: string | null) => void
 }): React.JSX.Element {
   const [query, setQuery] = useState('')
-  const filtered = useMemo(() => filterOptions(options, query), [options, query])
-  const trimmed = query.trim()
+  const filtered = useMemo(() => filterPullRequestPickerOptions(options, query), [options, query])
+  const { queryTooLarge, trimmedQuery } = getPullRequestPickerQueryState(query)
   const showCustom =
     allowCustomValue &&
-    trimmed.length > 0 &&
-    !filtered.some((o) => o.key.toLowerCase() === trimmed.toLowerCase())
+    trimmedQuery.length > 0 &&
+    !queryTooLarge &&
+    !filtered.some((o) => o.key.toLowerCase() === trimmedQuery.toLowerCase())
   const fallback = loading
     ? 'Loading…'
-    : showCustom
-      ? 'Press Enter to use the typed value.'
-      : (error ?? emptyText ?? 'No matches')
+    : queryTooLarge
+      ? 'Search text is too large.'
+      : showCustom
+        ? 'Press Enter to use the typed value.'
+        : (error ?? emptyText ?? 'No matches')
 
   return (
     <Command shouldFilter={false}>
@@ -74,14 +105,14 @@ export function SingleSelectList({
         <CommandEmpty>{fallback}</CommandEmpty>
         {showCustom ? (
           <CommandItem
-            value={`__custom__:${trimmed}`}
-            onSelect={() => onSelect(trimmed)}
+            value={`__custom__:${trimmedQuery}`}
+            onSelect={() => onSelect(trimmedQuery)}
             className="items-center gap-2 px-3 py-1.5 text-xs"
           >
             <span className="text-muted-foreground">
               {translate('auto.components.github.PRFilterPickers.2d1f58eda6', 'Use')}
             </span>
-            <span className="truncate font-medium">{trimmed}</span>
+            <span className="truncate font-medium">{trimmedQuery}</span>
           </CommandItem>
         ) : null}
         {activeValue ? (
@@ -135,9 +166,14 @@ export function MultiSelectList({
   onChange: (next: string[]) => void
 }): React.JSX.Element {
   const [query, setQuery] = useState('')
-  const filtered = useMemo(() => filterOptions(options, query), [options, query])
+  const filtered = useMemo(() => filterPullRequestPickerOptions(options, query), [options, query])
   const selectedSet = useMemo(() => new Set(selected), [selected])
-  const fallback = loading ? 'Loading…' : (error ?? emptyText ?? 'No matches')
+  const { queryTooLarge } = getPullRequestPickerQueryState(query)
+  const fallback = loading
+    ? 'Loading…'
+    : queryTooLarge
+      ? 'Search text is too large.'
+      : (error ?? emptyText ?? 'No matches')
 
   const toggle = (key: string): void => {
     const next = new Set(selectedSet)

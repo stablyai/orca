@@ -65,7 +65,11 @@ export function DiffSectionItem({
   isBranchMode: boolean
   sideBySide: boolean
   isDark: boolean
-  settings: { terminalFontSize?: number; terminalFontFamily?: string } | null
+  settings: {
+    terminalFontSize?: number
+    terminalFontFamily?: string
+    diffWordWrap?: boolean
+  } | null
   sectionHeight: number | undefined
   worktreeId?: string
   loadSection: (index: number) => void
@@ -421,6 +425,7 @@ export function DiffSectionItem({
           modelPathBase={modelPathBase}
           isEditable={isEditable}
           diffEditorFontSize={diffEditorFontSize}
+          diffWordWrap={settings?.diffWordWrap}
           terminalFontFamily={settings?.terminalFontFamily}
           onCancelComment={() => setPopover(null)}
           onSubmitComment={handleSubmitComment}

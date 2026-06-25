@@ -38,6 +38,7 @@ export type PaneManagerOptions = {
    *  pane drags unless callers temporarily put them in pointer passthrough. */
   onPaneDragActiveChange?: (active: boolean) => void
   terminalOptions?: (paneId: number) => Partial<ITerminalOptions>
+  terminalTuiScrollSensitivity?: () => number | undefined
   onLinkClick?: (event: MouseEvent | undefined, url: string) => void
   initialRenderingSuspended?: boolean
   terminalGpuAcceleration?: GlobalSettings['terminalGpuAcceleration']
@@ -104,6 +105,7 @@ export type ScrollState = {
 export type ManagedPaneInternal = {
   xtermContainer: HTMLElement
   linkTooltip: HTMLElement
+  terminalTuiScrollSensitivity?: () => number | undefined
   terminalGpuAcceleration: GlobalSettings['terminalGpuAcceleration']
   gpuRenderingEnabled: boolean
   webglAttachmentDeferred: boolean
@@ -133,6 +135,8 @@ export type ManagedPaneInternal = {
   compositionHandler: (() => void) | null
   // Stored so disposePane() can remove DOM-renderer focus synchronization.
   focusClassSyncCleanup?: (() => void) | null
+  // Stored so disposePane() can remove user-scroll intent listeners.
+  terminalScrollIntentDisposable?: IDisposable | null
   // Why: splitPane reparents DOM; its delayed restore owns scroll until the
   // browser settles, so intermediate fits must not compete with it.
   pendingSplitScrollState: ScrollState | null

@@ -7,9 +7,9 @@ import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery
 // when daemon-baked behavior cannot be delivered by on-disk wrapper refresh.
 // Why: bump when adding daemon wire behavior so same-version old daemons do
 // not silently accept the handshake and then reject new RPCs.
-export const PROTOCOL_VERSION = 17
+export const PROTOCOL_VERSION = 18
 export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
 ] as const
 
 // ─── Session State Machine ──────────────────────────────────────────
@@ -246,6 +246,11 @@ export type TakePendingOutputRequest = {
      *  snapshot taken in a separate request could include bytes that a later
      *  take would replay again, duplicating content on cold restore. */
     includeSnapshot?: boolean
+    /** True only for final checkpoints taken immediately before PTY teardown.
+     *  This lets the daemon release pending parser-state bytes that should be
+     *  preserved before the backing PTY is destroyed, without disturbing live
+     *  full checkpoints or warm-reconnect checkpoints. */
+    teardownSnapshot?: boolean
   }
 }
 

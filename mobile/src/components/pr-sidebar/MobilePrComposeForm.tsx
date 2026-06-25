@@ -36,7 +36,7 @@ type Props = {
   // Head branch — enables the base≠head guard and the "from <branch>" hint.
   head?: string | null
   onCancel: () => void
-  onCreated: (url: string) => void
+  onCreated: (url: string, warning?: string) => void
 }
 
 // PR compose form body: title/body/base/draft with AI prefill (git.generate
@@ -132,7 +132,13 @@ export function MobilePrComposeForm({
       })
       if (outcome.ok) {
         triggerSuccess()
-        onCreated(outcome.url)
+        const warning = outcome.linkError
+          ? `${copy.titleLabel} created, but Orca could not refresh it yet.`
+          : undefined
+        if (warning) {
+          setError(warning)
+        }
+        onCreated(outcome.url, warning)
       } else {
         triggerError()
         setError(outcome.error)
@@ -145,6 +151,7 @@ export function MobilePrComposeForm({
     body,
     canSubmit,
     client,
+    copy.titleLabel,
     draft,
     head,
     onCreated,

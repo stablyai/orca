@@ -2,6 +2,7 @@ import { readBlobAtOid, type GitBufferExec, type GitExec } from './git-handler-o
 import { parseBranchDiff } from './git-handler-utils'
 import { buildDiffResult } from './git-diff-result'
 import { parseNumstat } from '../shared/git-uncommitted-line-stats'
+import { parseGitRevListFirstParentOid } from '../shared/git-rev-list-output'
 
 const FULL_GIT_OBJECT_ID_PATTERN = /^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/
 
@@ -49,8 +50,8 @@ export async function commitCompare(git: GitExec, worktreePath: string, commitId
       ['rev-list', '--parents', '-n', '1', commitOid],
       worktreePath
     )
-    const [, firstParent] = parentsOut.trim().split(/\s+/)
-    summary.parentOid = firstParent ?? null
+    const firstParent = parseGitRevListFirstParentOid(parentsOut)
+    summary.parentOid = firstParent
     summary.baseRef = firstParent ? firstParent.slice(0, 7) : 'empty tree'
 
     // Why: root commits have no parent tree; diff-tree --root asks git to

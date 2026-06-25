@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import {
   ALL_GROUP_META,
   buildRows,
@@ -13,6 +14,10 @@ import {
   getPRGroupKey,
   type PendingCreationRef
 } from './worktree-list-groups'
+import {
+  REPO_HEADER_ACTION_BUTTON_CLASS,
+  REPO_HEADER_ACTION_REVEAL_CLASS
+} from './repo-header-action-button-class'
 import type {
   DetectedWorktree,
   Project,
@@ -55,6 +60,10 @@ const worktree: Worktree = {
 }
 
 const repoMap = new Map([[repo.id, repo]])
+
+function readWorktreeListSource(): string {
+  return readFileSync(fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)), 'utf8')
+}
 
 const remoteRepo: Repo = {
   id: 'repo-remote',
@@ -205,7 +214,7 @@ describe('buildRows with pinned worktrees', () => {
 
   it('emits Pinned and All headers in groupBy none', () => {
     const rows = buildRows('none', [unpinned1, pinned, unpinned2], repoMap, null, new Set())
-    expect(rows[0]).toMatchObject({ type: 'header', key: 'pinned', label: 'Pinned', count: 1 })
+    expect(rows[0]).toMatchObject({ type: 'header', key: 'pinned', label: 'Pinned' })
     expect(rows[1]).toMatchObject({ type: 'item', worktree: { id: 'wt-pinned' } })
     expect(rows[2]).toMatchObject({ type: 'header', key: 'all', label: 'All', count: 3 })
     expect(rows[2]).toMatchObject({ type: 'header', icon: ALL_GROUP_META.icon })
@@ -215,7 +224,7 @@ describe('buildRows with pinned worktrees', () => {
     const rows = buildRows('none', [unpinned1, unpinned2], repoMap, null, new Set())
 
     expect(rows).toMatchObject([
-      { type: 'header', key: 'all', label: 'All', count: 2 },
+      { type: 'header', key: 'all', label: 'All' },
       { type: 'item', worktree: { id: 'wt-1' } },
       { type: 'item', worktree: { id: 'wt-2' } }
     ])
@@ -225,7 +234,7 @@ describe('buildRows with pinned worktrees', () => {
     const rows = buildRows('none', [unpinned1, pinned, unpinned2], repoMap, null, new Set())
 
     expect(rows).toMatchObject([
-      { type: 'header', key: 'pinned', count: 1 },
+      { type: 'header', key: 'pinned' },
       { type: 'item', worktree: { id: 'wt-pinned' } },
       { type: 'header', key: 'all', count: 3 },
       { type: 'item', worktree: { id: 'wt-1' } },
@@ -238,7 +247,7 @@ describe('buildRows with pinned worktrees', () => {
     const rows = buildRows('none', [unpinned1, pinned, unpinned2], repoMap, null, new Set(['all']))
 
     expect(rows).toMatchObject([
-      { type: 'header', key: 'pinned', count: 1 },
+      { type: 'header', key: 'pinned' },
       { type: 'item', worktree: { id: 'wt-pinned' } },
       { type: 'header', key: 'all', count: 3 }
     ])
@@ -280,8 +289,7 @@ describe('buildRows with pinned worktrees', () => {
     expect(rows[0]).toMatchObject({
       type: 'header',
       key: 'workspace-status:in-progress',
-      label: 'In progress',
-      count: 2
+      label: 'In progress'
     })
     expect(rows[1]).toMatchObject({ type: 'item', worktree: { id: 'wt-1' } })
     expect(rows[2]).toMatchObject({ type: 'item', worktree: { id: 'wt-2' } })
@@ -352,6 +360,181 @@ describe('buildRows with pinned worktrees', () => {
       { type: 'item', worktree: { id: worktree.id }, hostContextLabel: LOCAL_HOST_LABEL },
       { type: 'item', worktree: { id: remoteWorktree.id }, hostContextLabel: 'gpu-vm' }
     ])
+  })
+
+  it('renders same-project records with git remote identity as one mixed-host project header', () => {
+    const localRepo: Repo = {
+      ...repo,
+      id: 'local-sample-app',
+      path: '/Users/alice/work/sample-app',
+      displayName: 'sample-app',
+      gitRemoteIdentity: {
+        canonicalKey: 'git.company.test/team/sample-app',
+        remoteName: 'origin',
+        remoteUrl: 'git@git.company.test:team/sample-app.git'
+      }
+    }
+    const sshRepo: Repo = {
+      ...repo,
+      id: 'ssh-sample-app',
+      path: '/home/alice/src/sample-app',
+      displayName: 'sample-app',
+      connectionId: 'build server',
+      gitRemoteIdentity: {
+        canonicalKey: 'git.company.test/team/sample-app',
+        remoteName: 'origin',
+        remoteUrl: 'https://git.company.test/team/sample-app.git'
+      }
+    }
+    const runtimeRepo: Repo = {
+      ...repo,
+      id: 'runtime-sample-app',
+      path: '/workspace/sample-app',
+      displayName: 'sample-app',
+      executionHostId: 'runtime:dev-container',
+      gitRemoteIdentity: {
+        canonicalKey: 'git.company.test/team/sample-app',
+        remoteName: 'origin',
+        remoteUrl: 'ssh://git@git.company.test/team/sample-app.git'
+      }
+    }
+    const localWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-local-sample-app',
+      repoId: localRepo.id,
+      path: '/Users/alice/work/sample-app-feature'
+    }
+    const sshWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-ssh-sample-app',
+      repoId: sshRepo.id,
+      path: '/home/alice/src/sample-app-feature'
+    }
+    const runtimeWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-runtime-sample-app',
+      repoId: runtimeRepo.id,
+      path: '/workspace/sample-app-feature'
+    }
+    const projection = projectHostSetupProjectionFromRepos([localRepo, sshRepo, runtimeRepo])
+    const rows = buildRows(
+      'repo',
+      [localWorktree, sshWorktree, runtimeWorktree],
+      new Map([
+        [localRepo.id, localRepo],
+        [sshRepo.id, sshRepo],
+        [runtimeRepo.id, runtimeRepo]
+      ]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [localWorktree.id, localWorktree],
+        [sshWorktree.id, sshWorktree],
+        [runtimeWorktree.id, runtimeWorktree]
+      ]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      [],
+      {
+        projects: projection.projects,
+        projectHostSetups: projection.setups
+      }
+    )
+
+    expect(rows).toMatchObject([
+      {
+        type: 'header',
+        key: 'project:git:git.company.test/team/sample-app',
+        label: 'sample-app',
+        count: 3
+      },
+      { type: 'item', worktree: { id: localWorktree.id }, hostContextLabel: LOCAL_HOST_LABEL },
+      { type: 'item', worktree: { id: sshWorktree.id }, hostContextLabel: 'build server' },
+      { type: 'item', worktree: { id: runtimeWorktree.id }, hostContextLabel: 'dev-container' }
+    ])
+  })
+
+  it('orders project identity headers by the manual repo order anchor', () => {
+    const analyticsProject: Project = {
+      ...project,
+      id: 'github:stablyai/analytics',
+      displayName: 'Analytics',
+      sourceRepoIds: ['repo-analytics']
+    }
+    const analyticsRepo: Repo = {
+      ...repo,
+      id: 'repo-analytics',
+      path: '/tmp/analytics',
+      displayName: 'analytics',
+      upstream: { owner: 'stablyai', repo: 'analytics' }
+    }
+    const analyticsWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-analytics',
+      repoId: analyticsRepo.id,
+      displayName: 'analytics'
+    }
+    const analyticsSetup: ProjectHostSetup = {
+      ...projectHostSetups[0]!,
+      id: analyticsRepo.id,
+      projectId: analyticsProject.id,
+      repoId: analyticsRepo.id,
+      path: analyticsRepo.path,
+      displayName: analyticsRepo.displayName
+    }
+    const repoOrder = new Map([
+      [repo.id, 0],
+      [remoteRepo.id, 1],
+      [analyticsRepo.id, 2]
+    ])
+
+    const rows = buildRows(
+      'repo',
+      [worktree, analyticsWorktree, remoteWorktree],
+      new Map([
+        [repo.id, repo],
+        [remoteRepo.id, remoteRepo],
+        [analyticsRepo.id, analyticsRepo]
+      ]),
+      null,
+      new Set(),
+      repoOrder,
+      undefined,
+      'manual',
+      {},
+      new Map([
+        [worktree.id, worktree],
+        [remoteWorktree.id, remoteWorktree],
+        [analyticsWorktree.id, analyticsWorktree]
+      ]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      [],
+      {
+        projects: [project, analyticsProject],
+        projectHostSetups: [...projectHostSetups, analyticsSetup]
+      }
+    )
+
+    const headers = rows.filter((row) => row.type === 'header')
+    expect(headers.map((row) => row.key)).toEqual([
+      'project:github:stablyai/orca',
+      'project:github:stablyai/analytics'
+    ])
+    expect(headers[0]).toMatchObject({
+      key: 'project:github:stablyai/orca',
+      repo: { id: repo.id, badgeColor: repo.badgeColor }
+    })
   })
 
   it('splits same-host checkouts of one project into separate per-setup groups', () => {
@@ -634,7 +817,7 @@ describe('buildRows with pinned worktrees', () => {
     )
 
     expect(rows).toMatchObject([
-      { type: 'header', key: 'repo:repo-1', count: 0 },
+      { type: 'header', key: 'repo:repo-1' },
       {
         type: 'imported-worktrees-card',
         key: 'imported-worktrees-card:repo-group:repo-1',
@@ -663,7 +846,7 @@ describe('buildRows with pinned worktrees', () => {
     )
 
     expect(rows).toMatchObject([
-      { type: 'header', key: 'repo:repo-1', label: 'orca', count: 0 },
+      { type: 'header', key: 'repo:repo-1', label: 'orca' },
       {
         type: 'imported-worktrees-card',
         key: 'imported-worktrees-card:repo-group:repo-1',
@@ -873,7 +1056,6 @@ describe('buildRows with pinned worktrees', () => {
       type: 'header',
       key: 'repo:folder-1',
       label: 'design-assets',
-      count: 1,
       repo: folderRepo
     })
     expect(rows[1]).toMatchObject({ type: 'item', worktree: { id: folderWorktree.id } })
@@ -884,10 +1066,8 @@ describe('buildRows with pinned worktrees', () => {
     const rows = buildRows('workspace-status', [review], repoMap, null, new Set())
 
     expect(
-      rows
-        .filter((r) => r.type === 'header')
-        .map((r) => ({ key: r.key, label: r.label, count: r.count }))
-    ).toEqual([{ key: 'workspace-status:in-review', label: 'In review', count: 1 }])
+      rows.filter((r) => r.type === 'header').map((r) => ({ key: r.key, label: r.label }))
+    ).toEqual([{ key: 'workspace-status:in-review', label: 'In review' }])
   })
 
   it('uses customized workspace status labels and order', () => {
@@ -909,12 +1089,10 @@ describe('buildRows with pinned worktrees', () => {
     )
 
     expect(
-      rows
-        .filter((r) => r.type === 'header')
-        .map((r) => ({ key: r.key, label: r.label, count: r.count }))
+      rows.filter((r) => r.type === 'header').map((r) => ({ key: r.key, label: r.label }))
     ).toEqual([
-      { key: 'workspace-status:blocked', label: 'Blocked', count: 1 },
-      { key: 'workspace-status:in-progress', label: 'Doing', count: 1 }
+      { key: 'workspace-status:blocked', label: 'Blocked' },
+      { key: 'workspace-status:in-progress', label: 'Doing' }
     ])
   })
 })
@@ -1166,13 +1344,12 @@ describe('project groups', () => {
         type: 'header',
         key: 'project-group:group-1',
         label: 'Platform',
-        count: 0,
         projectGroup: group
       })
     ])
   })
 
-  it('counts grouped repos before their visible worktrees are loaded', () => {
+  it('renders grouped repos before their visible worktrees are loaded', () => {
     const group: ProjectGroup = {
       id: 'group-1',
       name: 'Platform',
@@ -1206,14 +1383,12 @@ describe('project groups', () => {
 
     expect(rows[0]).toMatchObject({
       type: 'header',
-      key: 'project-group:group-1',
-      count: 1
+      key: 'project-group:group-1'
     })
     expect(rows[1]).toMatchObject({
       type: 'header',
       key: 'repo:repo-1',
-      projectGroupDepth: 1,
-      count: 0
+      projectGroupDepth: 1
     })
   })
 
@@ -1251,7 +1426,7 @@ describe('project groups', () => {
     expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
       'project-group:group-1'
     ])
-    expect(rows[0]).toMatchObject({ count: 0 })
+    expect(rows[0]).toMatchObject({ label: 'Platform' })
   })
 
   it('renders ungrouped repos as top-level repo rows when Project Groups exist', () => {
@@ -1287,6 +1462,89 @@ describe('project groups', () => {
     expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
       'project-group:group-1',
       'repo:repo-1'
+    ])
+  })
+
+  it('renders repos whose Project Group metadata is missing as top-level repo rows', () => {
+    const group: ProjectGroup = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const repoWithMissingGroup: Repo = { ...repo, projectGroupId: 'missing-group' }
+
+    const rows = buildRows(
+      'repo',
+      [worktree],
+      new Map([[repoWithMissingGroup.id, repoWithMissingGroup]]),
+      null,
+      new Set(),
+      new Map([[repoWithMissingGroup.id, 0]]),
+      undefined,
+      'manual',
+      {},
+      new Map([[worktree.id, worktree]]),
+      false,
+      undefined,
+      [group]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:group-1',
+      'repo:repo-1'
+    ])
+    expect(rows.find((row) => row.type === 'header' && row.key === 'repo:repo-1')).toMatchObject({
+      projectGroupDepth: 0
+    })
+  })
+
+  it('does not render collapsed child-group repos as missing metadata fallbacks', () => {
+    const parentGroup: ProjectGroup = {
+      id: 'parent-group',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const childGroup: ProjectGroup = {
+      ...parentGroup,
+      id: 'child-group',
+      name: 'Services',
+      parentPath: '/platform/services',
+      parentGroupId: parentGroup.id
+    }
+    const repoInChildGroup: Repo = { ...repo, projectGroupId: childGroup.id }
+
+    const rows = buildRows(
+      'repo',
+      [worktree],
+      new Map([[repoInChildGroup.id, repoInChildGroup]]),
+      null,
+      new Set(['project-group:parent-group']),
+      new Map([[repoInChildGroup.id, 0]]),
+      undefined,
+      'manual',
+      {},
+      new Map([[worktree.id, worktree]]),
+      false,
+      undefined,
+      [parentGroup, childGroup]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:parent-group'
     ])
   })
 
@@ -1501,6 +1759,122 @@ describe('project groups', () => {
     ])
   })
 
+  it('falls back to repoOrder for grouped repos missing projectGroupOrder in manual mode', () => {
+    const group: ProjectGroup = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const repoA: Repo = { ...repo, id: 'repo-a', displayName: 'alpha', projectGroupId: group.id }
+    const repoB: Repo = { ...repo, id: 'repo-b', displayName: 'beta', projectGroupId: group.id }
+    const repoC: Repo = { ...repo, id: 'repo-c', displayName: 'gamma', projectGroupId: group.id }
+    const groupedMap = new Map([
+      [repoA.id, repoA],
+      [repoB.id, repoB],
+      [repoC.id, repoC]
+    ])
+    const repoOrder = new Map([
+      [repoA.id, 0],
+      [repoB.id, 1],
+      [repoC.id, 2]
+    ])
+
+    const rows = buildRows(
+      'repo',
+      [
+        { ...worktree, id: 'wt-a', repoId: repoA.id },
+        { ...worktree, id: 'wt-b', repoId: repoB.id },
+        { ...worktree, id: 'wt-c', repoId: repoC.id }
+      ],
+      groupedMap,
+      null,
+      new Set(),
+      repoOrder,
+      undefined,
+      'manual',
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [group]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:group-1',
+      'repo:repo-a',
+      'repo:repo-b',
+      'repo:repo-c'
+    ])
+  })
+
+  it('sorts a dragged project between repo-order fallbacks inside a group', () => {
+    const group: ProjectGroup = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const repoA: Repo = { ...repo, id: 'repo-a', displayName: 'alpha', projectGroupId: group.id }
+    const repoB: Repo = { ...repo, id: 'repo-b', displayName: 'beta', projectGroupId: group.id }
+    const repoC: Repo = {
+      ...repo,
+      id: 'repo-c',
+      displayName: 'gamma',
+      projectGroupId: group.id,
+      projectGroupOrder: 500
+    }
+    const groupedMap = new Map([
+      [repoA.id, repoA],
+      [repoB.id, repoB],
+      [repoC.id, repoC]
+    ])
+    const repoOrder = new Map([
+      [repoA.id, 0],
+      [repoB.id, 1],
+      [repoC.id, 2]
+    ])
+
+    const rows = buildRows(
+      'repo',
+      [
+        { ...worktree, id: 'wt-a', repoId: repoA.id },
+        { ...worktree, id: 'wt-b', repoId: repoB.id },
+        { ...worktree, id: 'wt-c', repoId: repoC.id }
+      ],
+      groupedMap,
+      null,
+      new Set(),
+      repoOrder,
+      undefined,
+      'manual',
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [group]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:group-1',
+      'repo:repo-a',
+      'repo:repo-c',
+      'repo:repo-b'
+    ])
+  })
+
   it('orders repos inside a Project Group by activity in recent mode, keeping tabOrder', () => {
     const groupA: ProjectGroup = {
       id: 'group-a',
@@ -1628,7 +2002,6 @@ describe('project groups', () => {
       type: 'item',
       groupDepth: 2
     })
-    expect(rows[0]).toMatchObject({ count: 1 })
   })
 
   it('renders folder workspaces under their owning folder-backed Project Group', () => {
@@ -1909,17 +2282,65 @@ describe('project groups', () => {
       'repo:repo-service-a',
       'repo:repo-service-b'
     ])
-    expect(rows.filter((row) => row.type === 'header').map((row) => row.count)).toEqual([
-      2, 2, 2, 0, 0
-    ])
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.projectGroupDepth)).toEqual(
+      [0, 1, 2, 3, 3]
+    )
   })
 
   it('returns both parent Project Group and repo keys for grouped repo reveals', () => {
     const groupedRepo: Repo = { ...repo, projectGroupId: 'group-1' }
+    const group: ProjectGroup = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
 
     expect(
-      getGroupKeysForWorktree('repo', worktree, new Map([[groupedRepo.id, groupedRepo]]), null)
+      getGroupKeysForWorktree(
+        'repo',
+        worktree,
+        new Map([[groupedRepo.id, groupedRepo]]),
+        null,
+        undefined,
+        undefined,
+        [group]
+      )
     ).toEqual(['project-group:group-1', 'repo:repo-1'])
+  })
+
+  it('returns only the repo key for missing Project Group metadata reveals', () => {
+    const groupedRepo: Repo = { ...repo, projectGroupId: 'missing-group' }
+    const loadedGroup: ProjectGroup = {
+      id: 'loaded-group',
+      name: 'Loaded',
+      parentPath: '/loaded',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+
+    expect(
+      getGroupKeysForWorktree(
+        'repo',
+        worktree,
+        new Map([[groupedRepo.id, groupedRepo]]),
+        null,
+        undefined,
+        undefined,
+        [loadedGroup]
+      )
+    ).toEqual(['repo:repo-1'])
   })
 
   it('returns only the repo key for ungrouped repo reveals', () => {
@@ -2159,32 +2580,38 @@ describe('buildRows workspace lineage nesting', () => {
 
 describe('WorktreeList header styles', () => {
   it('does not title-case workspace group labels', () => {
-    const source = readFileSync(
-      fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)),
-      'utf8'
-    )
+    const source = readWorktreeListSource()
 
     expect(source).not.toContain('leading-none capitalize')
   })
 
-  it('shows a pointer cursor over the disclosure chevron path', () => {
-    const source = readFileSync(
-      fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)),
-      'utf8'
+  it('collapses repo header actions without reserving title width', () => {
+    expect(REPO_HEADER_ACTION_REVEAL_CLASS).toContain('min-w-0 max-w-0 -ml-1.5')
+    expect(REPO_HEADER_ACTION_REVEAL_CLASS).toContain('focus:ml-0 focus:max-w-5 focus:opacity-100')
+    expect(REPO_HEADER_ACTION_REVEAL_CLASS).toContain(
+      'group-hover:ml-0 group-hover:max-w-5 group-hover:opacity-100'
     )
-
-    expect(source).toContain('[&_path]:cursor-pointer')
+    expect(REPO_HEADER_ACTION_BUTTON_CLASS).toContain(
+      'transition-[margin,max-width,opacity,background-color,color]'
+    )
+    expect(REPO_HEADER_ACTION_BUTTON_CLASS).toContain(
+      'data-[state=open]:ml-0 data-[state=open]:max-w-5 data-[state=open]:opacity-100'
+    )
   })
 
   it('resolves repo header color from project group headers only', () => {
-    const source = readFileSync(
-      fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)),
-      'utf8'
-    )
+    const source = readWorktreeListSource()
 
     expect(source).toContain('resolveProjectGroupHeaderColor({')
     expect(source).toContain('headerKey: row.key')
     expect(source).toContain('color={repoHeaderColor}')
+  })
+
+  it('adapts projected setup rows for sidebar project grouping', () => {
+    const source = readWorktreeListSource()
+
+    expect(source).toContain('const projectHostSetupProjection = useProjectHostSetupProjection()')
+    expect(source).toContain('projectHostSetups: projectHostSetupProjection.setups')
   })
 })
 

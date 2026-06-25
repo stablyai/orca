@@ -194,7 +194,9 @@ describe('getHostedReviewForBranch', () => {
       number: 42,
       status: 'success'
     })
-    expect(getPRForBranchMock).toHaveBeenCalledWith('/repo', '', null, undefined, 42)
+    expect(getPRForBranchMock).toHaveBeenCalledWith('/repo', '', null, undefined, 42, {
+      acceptMergedFallbackPR: true
+    })
   })
 
   it('falls through to Bitbucket when origin is not GitLab or GitHub', async () => {

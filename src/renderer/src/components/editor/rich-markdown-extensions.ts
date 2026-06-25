@@ -1,6 +1,7 @@
 import type { AnyExtension } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
+import { Code } from '@tiptap/extension-code'
 import Image from '@tiptap/extension-image'
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -28,6 +29,18 @@ import { createRichMarkdownAnnotationHighlightExtension } from './rich-markdown-
 
 const lowlight = createLowlight(common)
 
+const RichMarkdownLink = Link.extend({
+  // Why: link's priority must stay below code's default 100 so Markdown
+  // serializes code-styled labels as [`label`](href).
+  priority: 90
+})
+
+const RichMarkdownCode = Code.extend({
+  // Why: Markdown supports linked code labels, so code cannot exclude the link
+  // mark even though it should still stay exclusive with emphasis marks.
+  excludes: 'code bold italic strike underline'
+})
+
 export function createRichMarkdownExtensions({
   includePlaceholder = false
 }: {
@@ -39,8 +52,10 @@ export function createRichMarkdownExtensions({
     // preview and then still lose syntax on save.
     StarterKit.configure({
       link: false,
+      code: false,
       codeBlock: false
     }),
+    RichMarkdownCode,
     CodeBlockLowlight.extend({
       addNodeView() {
         return safeReactNodeViewRenderer(RichMarkdownCodeBlock)
@@ -49,7 +64,7 @@ export function createRichMarkdownExtensions({
       lowlight,
       defaultLanguage: null
     }),
-    Link.configure({
+    RichMarkdownLink.configure({
       openOnClick: false,
       autolink: true,
       linkOnPaste: true
@@ -60,7 +75,12 @@ export function createRichMarkdownExtensions({
     // and works identically in dev and production modes.
     Image.extend({
       addStorage() {
-        return { filePath: '', runtimeContext: undefined as RuntimeFileOperationArgs | undefined }
+        return {
+          contextVersion: 0,
+          filePath: '',
+          reloadListeners: new Set<() => void>(),
+          runtimeContext: undefined as RuntimeFileOperationArgs | undefined
+        }
       },
       addNodeView() {
         return ({ node, HTMLAttributes }) => {
@@ -81,15 +101,17 @@ export function createRichMarkdownExtensions({
           dom.appendChild(img)
 
           let currentSrc = node.attrs.src as string | undefined
+          let currentContextVersion = getImageContextVersion(this.storage)
 
           const loadImage = (src: string | undefined): void => {
             const fp = this.storage.filePath as string
             const runtimeContext = this.storage.runtimeContext as
               | RuntimeFileOperationArgs
               | undefined
+            const contextVersionAtLoad = getImageContextVersion(this.storage)
             if (src && fp) {
               void loadLocalImageSrc(src, fp, undefined, runtimeContext).then((resolved) => {
-                if (currentSrc !== src) {
+                if (currentSrc !== src || currentContextVersion !== contextVersionAtLoad) {
                   return
                 }
                 if (resolved) {
@@ -116,6 +138,14 @@ export function createRichMarkdownExtensions({
           const unsubscribe = onImageCacheInvalidated(() => {
             loadImage(currentSrc)
           })
+          const reloadForContextChange = (): void => {
+            currentContextVersion = getImageContextVersion(this.storage)
+            loadImage(currentSrc)
+          }
+          const reloadListeners = this.storage.reloadListeners
+          if (reloadListeners instanceof Set) {
+            reloadListeners.add(reloadForContextChange)
+          }
 
           return {
             dom,
@@ -124,13 +154,18 @@ export function createRichMarkdownExtensions({
                 return false
               }
               const newSrc = updatedNode.attrs.src as string | undefined
-              if (newSrc !== currentSrc) {
+              const nextContextVersion = getImageContextVersion(this.storage)
+              if (newSrc !== currentSrc || nextContextVersion !== currentContextVersion) {
                 currentSrc = newSrc
+                currentContextVersion = nextContextVersion
                 loadImage(newSrc)
               }
               return true
             },
             destroy: () => {
+              if (reloadListeners instanceof Set) {
+                reloadListeners.delete(reloadForContextChange)
+              }
               unsubscribe()
             }
           }
@@ -183,4 +218,9 @@ export function createRichMarkdownExtensions({
   }
 
   return extensions
+}
+
+function getImageContextVersion(storage: Record<string, unknown>): number {
+  const version = storage.contextVersion
+  return typeof version === 'number' ? version : 0
 }

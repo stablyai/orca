@@ -117,6 +117,12 @@ export type PendingSidebarWorktreeReveal = {
   beginRename?: boolean
 }
 
+export type PendingSidebarRowReveal = {
+  rowKey: string
+  behavior: 'auto' | 'smooth'
+  highlight?: boolean
+}
+
 export type AgentSendPopoverTargetMode = {
   id: string
   instanceId: string
@@ -847,6 +853,7 @@ export type UISlice = {
   petSize: number
   setPetSize: (size: number) => void
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
+  pendingRevealSidebarRow: PendingSidebarRowReveal | null
   revealWorktreeInSidebar: (
     worktreeId: string,
     options?: {
@@ -855,7 +862,15 @@ export type UISlice = {
       beginRename?: boolean
     }
   ) => void
+  revealSidebarRow: (
+    rowKey: string,
+    options?: {
+      behavior?: PendingSidebarRowReveal['behavior']
+      highlight?: boolean
+    }
+  ) => void
   clearPendingRevealWorktreeId: () => void
+  clearPendingRevealSidebarRow: () => void
   // Why: lets the SourceControl sidebar request that the diff editor scroll
   // to a specific note. Cleared by the diff decorator after it reveals the
   // line, so the same id can be requested again later without the surface
@@ -979,14 +994,28 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     )
 
     const label = formatAgentTypeLabel(target.entry.agentType)
-    const { sendBracketedPasteToRunningAgent } = await import('@/lib/agent-paste-draft')
-    const delivered = await sendBracketedPasteToRunningAgent({
-      ptyId: target.ptyId,
-      content: mode.prompt
-    }).catch(() => false)
+    const { activeAgentNotesSendFailureMessage, sendNotesToActiveAgentSession } =
+      await import('@/lib/active-agent-note-send')
+    const result = await sendNotesToActiveAgentSession({
+      worktreeId: mode.worktreeId,
+      prompt: mode.prompt,
+      noteTarget: { tabId: target.tabId, leafId: target.leafId }
+    }).catch((error) => {
+      console.error('Failed to send notes to sidebar agent target:', error)
+      return { status: 'no-active-terminal' as const }
+    })
 
-    if (!delivered) {
-      const message = 'Terminal is no longer available'
+    const stillCurrent = (): boolean => {
+      const current = get().agentSendPopoverTargetMode
+      return current?.id === mode.id && current.instanceId === mode.instanceId
+    }
+
+    if (!stillCurrent()) {
+      return false
+    }
+
+    if (result.status !== 'sent') {
+      const message = activeAgentNotesSendFailureMessage(result.status, { explicitTarget: true })
       set((s) =>
         s.agentSendPopoverTargetMode?.id === mode.id &&
         s.agentSendPopoverTargetMode.instanceId === mode.instanceId
@@ -1001,6 +1030,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           : s
       )
       const { toast } = await import('sonner')
+      if (!stillCurrent()) {
+        return false
+      }
       toast.error(
         translate('auto.store.slices.ui.53883b7bc3', "Couldn't send to {{value0}}", {
           value0: label
@@ -1010,8 +1042,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       return false
     }
 
-    mode.onPromptDelivered?.()
     const [{ toast }, { track }] = await Promise.all([import('sonner'), import('@/lib/telemetry')])
+    if (!stillCurrent()) {
+      return false
+    }
+    mode.onPromptDelivered?.()
     track('agent_prompt_sent', {
       agent_kind: agentKindForAgentType(target.entry.agentType),
       launch_source: mode.launchSource,
@@ -2125,6 +2160,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     }),
 
   pendingRevealWorktree: null,
+  pendingRevealSidebarRow: null,
   revealWorktreeInSidebar: (worktreeId, options) =>
     set({
       pendingRevealWorktree: {
@@ -2134,7 +2170,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         ...(options?.beginRename ? { beginRename: true } : {})
       }
     }),
+  revealSidebarRow: (rowKey, options) =>
+    set({
+      pendingRevealSidebarRow: {
+        rowKey,
+        behavior: options?.behavior ?? 'smooth',
+        ...(options?.highlight === false ? {} : { highlight: true })
+      }
+    }),
   clearPendingRevealWorktreeId: () => set({ pendingRevealWorktree: null }),
+  clearPendingRevealSidebarRow: () => set({ pendingRevealSidebarRow: null }),
   scrollToDiffCommentId: null,
   setScrollToDiffCommentId: (id) => set({ scrollToDiffCommentId: id }),
   persistedUIReady: false,

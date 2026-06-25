@@ -1,5 +1,6 @@
 import { isTuiAgentProfileId } from './tui-agent-profile-id'
 import type { BuiltInTuiAgent, TuiAgent } from './types'
+import { getOrcaCliCommandNameForPlatform } from './orca-cli-command-name'
 
 export type AgentPromptInjectionMode =
   | 'argv'
@@ -8,13 +9,17 @@ export type AgentPromptInjectionMode =
   | 'flag-interactive'
   | 'stdin-after-start'
 
-export type DraftPasteReadySignal = 'render-quiet-after-bracketed-paste' | 'codex-composer-prompt'
+export type DraftPasteReadySignal =
+  | 'render-quiet-after-bracketed-paste'
+  | 'codex-composer-prompt'
 
 export type TuiAgentConfig = {
   detectCmd: string
   /** Additional executable names that identify the same agent on PATH. */
   detectCmdAliases?: readonly string[]
   launchCmd: string
+  /** Platform-specific launch command when the public binary name differs. */
+  launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>
   expectedProcess: string
   promptInjectionMode: AgentPromptInjectionMode
   /** Why: flag that launches the TUI with the given text already in the
@@ -62,7 +67,7 @@ export const TUI_AGENT_CONFIG: Record<BuiltInTuiAgent, TuiAgentConfig> = {
     // input box, nothing submitted. Strictly better than the paste-after-
     // ready fallback because it eliminates the readiness race entirely.
     // See PR https://github.com/stablyai/orca/pull/926 for context.
-    draftPromptFlag: '--prefill'
+    draftPromptFlag: '--prefill',
   },
   'claude-agent-teams': {
     // Why: this is an Orca-provided launch mode, not a separate upstream
@@ -71,15 +76,19 @@ export const TUI_AGENT_CONFIG: Record<BuiltInTuiAgent, TuiAgentConfig> = {
     detectCmd: 'orca',
     detectCmdAliases: ['orca-dev', 'orca-ide'],
     launchCmd: 'orca claude-teams',
+    launchCmdByPlatform: {
+      linux: `${getOrcaCliCommandNameForPlatform('linux')} claude-teams`,
+      win32: `${getOrcaCliCommandNameForPlatform('win32')} claude-teams`,
+    },
     expectedProcess: 'claude',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
   },
   openclaude: {
     detectCmd: 'openclaude',
     launchCmd: 'openclaude',
     expectedProcess: 'openclaude',
     promptInjectionMode: 'argv',
-    draftPromptFlag: '--prefill'
+    draftPromptFlag: '--prefill',
   },
   codex: {
     detectCmd: 'codex',
@@ -87,13 +96,13 @@ export const TUI_AGENT_CONFIG: Record<BuiltInTuiAgent, TuiAgentConfig> = {
     expectedProcess: 'codex',
     promptInjectionMode: 'argv',
     preflightTrust: 'codex',
-    draftPasteReadySignal: 'codex-composer-prompt'
+    draftPasteReadySignal: 'codex-composer-prompt',
   },
   autohand: {
     detectCmd: 'autohand',
     launchCmd: 'autohand',
     expectedProcess: 'autohand',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
   },
   ante: {
     detectCmd: 'ante',
@@ -102,13 +111,19 @@ export const TUI_AGENT_CONFIG: Record<BuiltInTuiAgent, TuiAgentConfig> = {
     // Why: `ante --prompt` is Ante's documented headless mode (runs the task
     // once and exits), so Orca launches the bare interactive TUI and injects
     // the composed prompt after startup to keep the hosted session alive.
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
   },
   opencode: {
     detectCmd: 'opencode',
     launchCmd: 'opencode',
     expectedProcess: 'opencode',
-    promptInjectionMode: 'flag-prompt'
+    promptInjectionMode: 'flag-prompt',
+  },
+  'mimo-code': {
+    detectCmd: 'mimo',
+    launchCmd: 'mimo',
+    expectedProcess: 'mimo',
+    promptInjectionMode: 'flag-prompt',
   },
   pi: {
     detectCmd: 'pi',
@@ -122,50 +137,50 @@ export const TUI_AGENT_CONFIG: Record<BuiltInTuiAgent, TuiAgentConfig> = {
     // src/main/pi/titlebar-extension-service.ts) that reads this env var
     // on session_start and calls `pi.ui.setEditorText(text)`. Same
     // user-visible behavior as `claude --prefill <text>`.
-    draftPromptEnvVar: 'ORCA_PI_PREFILL'
+    draftPromptEnvVar: 'ORCA_PI_PREFILL',
   },
   omp: {
     detectCmd: 'omp',
     launchCmd: 'omp',
     expectedProcess: 'omp',
     promptInjectionMode: 'argv',
-    draftPromptEnvVar: 'ORCA_OMP_PREFILL'
+    draftPromptEnvVar: 'ORCA_OMP_PREFILL',
   },
   gemini: {
     detectCmd: 'gemini',
     launchCmd: 'gemini',
     expectedProcess: 'gemini',
-    promptInjectionMode: 'flag-prompt-interactive'
+    promptInjectionMode: 'flag-prompt-interactive',
   },
   antigravity: {
     detectCmd: 'agy',
     launchCmd: 'agy',
     expectedProcess: 'agy',
-    promptInjectionMode: 'flag-prompt-interactive'
+    promptInjectionMode: 'flag-prompt-interactive',
   },
   aider: {
     detectCmd: 'aider',
     launchCmd: 'aider',
     expectedProcess: 'aider',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
   },
   goose: {
     detectCmd: 'goose',
     launchCmd: 'goose',
     expectedProcess: 'goose',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
   },
   amp: {
     detectCmd: 'amp',
     launchCmd: 'amp',
     expectedProcess: 'amp',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
   },
   kilo: {
     detectCmd: 'kilo',
     launchCmd: 'kilo',
     expectedProcess: 'kilo',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
   },
   kiro: {
     // Why: the official Kiro installer (https://cli.kiro.dev/install) places a
@@ -178,13 +193,13 @@ export const TUI_AGENT_CONFIG: Record<BuiltInTuiAgent, TuiAgentConfig> = {
     // like --trust-all-tools are appended where the installed CLI accepts them.
     launchCmd: 'kiro-cli chat --tui',
     expectedProcess: 'kiro-cli',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
   },
   crush: {
     detectCmd: 'crush',
     launchCmd: 'crush',
     expectedProcess: 'crush',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
   },
   aug: {
     // Why: the published @augmentcode/auggie npm package installs a binary
@@ -193,19 +208,19 @@ export const TUI_AGENT_CONFIG: Record<BuiltInTuiAgent, TuiAgentConfig> = {
     detectCmd: 'auggie',
     launchCmd: 'auggie',
     expectedProcess: 'auggie',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
   },
   cline: {
     detectCmd: 'cline',
     launchCmd: 'cline',
     expectedProcess: 'cline',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
   },
   codebuff: {
     detectCmd: 'codebuff',
     launchCmd: 'codebuff',
     expectedProcess: 'codebuff',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
   },
   'command-code': {
     // Why: `npm i -g command-code` installs two binaries — `command-code` and
@@ -219,7 +234,7 @@ export const TUI_AGENT_CONFIG: Record<BuiltInTuiAgent, TuiAgentConfig> = {
     // TUIs so launch prompts do not consume the task text.
     launchCmd: 'command-code --trust',
     expectedProcess: 'command-code',
-    promptInjectionMode: 'argv'
+    promptInjectionMode: 'argv',
   },
   continue: {
     // Why: Continue's CLI binary is `cn`; `continue` is a shell builtin in
@@ -228,7 +243,7 @@ export const TUI_AGENT_CONFIG: Record<BuiltInTuiAgent, TuiAgentConfig> = {
     detectCmd: 'cn',
     launchCmd: 'cn',
     expectedProcess: 'cn',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
   },
   cursor: {
     detectCmd: 'cursor-agent',
@@ -240,19 +255,19 @@ export const TUI_AGENT_CONFIG: Record<BuiltInTuiAgent, TuiAgentConfig> = {
     // marker the CLI itself writes after the user accepts (see
     // agent-trust-presets.ts) makes the menu skip entirely, so the draft
     // URL paste lands in the input as intended.
-    preflightTrust: 'cursor'
+    preflightTrust: 'cursor',
   },
   droid: {
     detectCmd: 'droid',
     launchCmd: 'droid',
     expectedProcess: 'droid',
-    promptInjectionMode: 'argv'
+    promptInjectionMode: 'argv',
   },
   kimi: {
     detectCmd: 'kimi',
     launchCmd: 'kimi',
     expectedProcess: 'kimi',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
   },
   'mistral-vibe': {
     // Why: Mistral's installer and PyPI package expose `vibe` even though the
@@ -262,19 +277,19 @@ export const TUI_AGENT_CONFIG: Record<BuiltInTuiAgent, TuiAgentConfig> = {
     detectCmdAliases: ['mistral-vibe'],
     launchCmd: 'vibe',
     expectedProcess: 'vibe',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
   },
   'qwen-code': {
     detectCmd: 'qwen-code',
     launchCmd: 'qwen-code',
     expectedProcess: 'qwen-code',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
   },
   rovo: {
     detectCmd: 'rovo',
     launchCmd: 'rovo',
     expectedProcess: 'rovo',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
   },
   hermes: {
     detectCmd: 'hermes',
@@ -282,13 +297,13 @@ export const TUI_AGENT_CONFIG: Record<BuiltInTuiAgent, TuiAgentConfig> = {
     // `--tui` starts the full-screen agent UI Orca is designed to host.
     launchCmd: 'hermes --tui',
     expectedProcess: 'hermes',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
   },
   openclaw: {
     detectCmd: 'openclaw',
     launchCmd: 'openclaw',
     expectedProcess: 'openclaw',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
   },
   copilot: {
     detectCmd: 'copilot',
@@ -304,13 +319,13 @@ export const TUI_AGENT_CONFIG: Record<BuiltInTuiAgent, TuiAgentConfig> = {
     // ~/.copilot/config.json (the same array Copilot's own
     // `addTrustedFolder` writes after the user accepts) makes the menu skip
     // entirely. See agent-trust-presets.ts for the file layout.
-    preflightTrust: 'copilot'
+    preflightTrust: 'copilot',
   },
   grok: {
     detectCmd: 'grok',
     launchCmd: 'grok',
     expectedProcess: 'grok',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
   },
   devin: {
     detectCmd: 'devin',
@@ -320,12 +335,15 @@ export const TUI_AGENT_CONFIG: Record<BuiltInTuiAgent, TuiAgentConfig> = {
     // `stdin-after-start` starts the REPL with no argv prompt; Orca then sends
     // `followupPrompt` to the PTY as plain input + Enter after startup (not
     // bracketed paste). Use `draftPrompt` / agent-paste-draft for review-before-send.
-    promptInjectionMode: 'stdin-after-start'
-  }
+    promptInjectionMode: 'stdin-after-start',
+  },
 }
 
 export function isBuiltInTuiAgent(value: unknown): value is BuiltInTuiAgent {
-  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(TUI_AGENT_CONFIG, value)
+  return (
+    typeof value === 'string' &&
+    Object.prototype.hasOwnProperty.call(TUI_AGENT_CONFIG, value)
+  )
 }
 
 export function isTuiAgent(value: unknown): value is TuiAgent {
@@ -336,4 +354,11 @@ export function isTuiAgent(value: unknown): value is TuiAgent {
 
 export function getTuiAgentDetectCommands(config: TuiAgentConfig): string[] {
   return [config.detectCmd, ...(config.detectCmdAliases ?? [])]
+}
+
+export function getTuiAgentLaunchCommand(
+  config: TuiAgentConfig,
+  platform: NodeJS.Platform,
+): string {
+  return config.launchCmdByPlatform?.[platform] ?? config.launchCmd
 }

@@ -4,9 +4,10 @@ import type { PtyTransport } from './pty-transport'
 import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { serializeTerminalLayout } from './layout-serialization'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
-import { TERMINAL_SCROLLBACK_SESSION_BUFFER_CHAR_LIMIT } from '../../../../shared/terminal-scrollback-limits'
+import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
+import { measureUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 
-const MAX_BUFFER_BYTES = TERMINAL_SCROLLBACK_SESSION_BUFFER_CHAR_LIMIT
+const MAX_BUFFER_BYTES = TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
 
 type ShutdownPane = Pick<ManagedPane, 'id' | 'leafId' | 'terminal' | 'serializeAddon'>
 
@@ -39,6 +40,10 @@ function omitClearedLeafState(
   return Object.keys(next).length > 0 ? next : undefined
 }
 
+function fitsSessionScrollbackByteLimit(serialized: string): boolean {
+  return !measureUtf8ByteLength(serialized, { stopAfterBytes: MAX_BUFFER_BYTES }).exceededLimit
+}
+
 export function captureTerminalShutdownLayout({
   manager,
   container,
@@ -61,15 +66,16 @@ export function captureTerminalShutdownLayout({
         const leafId = pane.leafId
         let scrollback = pane.terminal.options.scrollback ?? 10_000
         let serialized = pane.serializeAddon.serialize({ scrollback })
-        // Cap at 512KB — binary search for largest scrollback that fits.
-        if (serialized.length > MAX_BUFFER_BYTES && scrollback > 1) {
+        // Why: SSH sleep keeps this string in session JSON; cap by UTF-8
+        // bytes so non-ASCII scrollback cannot bypass the intended bound.
+        if (!fitsSessionScrollbackByteLimit(serialized) && scrollback > 1) {
           let lo = 1
           let hi = scrollback
           let best = ''
           while (lo <= hi) {
             const mid = Math.floor((lo + hi) / 2)
             const attempt = pane.serializeAddon.serialize({ scrollback: mid })
-            if (attempt.length <= MAX_BUFFER_BYTES) {
+            if (fitsSessionScrollbackByteLimit(attempt)) {
               best = attempt
               lo = mid + 1
             } else {

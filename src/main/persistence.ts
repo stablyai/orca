@@ -72,6 +72,7 @@ import {
   normalizeProjectRuntimePreference
 } from '../shared/project-execution-runtime'
 import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setup-projection'
+import type { GitRemoteIdentity } from '../shared/git-remote-identity'
 import {
   buildTaskSourceContextFromRepo,
   buildWorkspaceRunContext
@@ -90,7 +91,7 @@ import {
   getDefaultRepoHookSettings,
   getDefaultWorkspaceSession,
   getWorktreeCardModeProperties,
-  isLegacyDefaultedCompactWorktreeCardProperties,
+  isDefaultedCompactWorktreeCardProperties,
   normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties,
   ONBOARDING_FLOW_VERSION,
@@ -128,6 +129,7 @@ import { normalizeTaskProviderSettings } from '../shared/task-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../shared/auto-rename-branch-from-work-settings'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
+import { normalizeSourceControlGroupOrder } from '../shared/source-control-group-order'
 import { normalizeAppIconId } from '../shared/app-icon'
 import { normalizeTerminalCustomThemes } from '../shared/terminal-custom-themes'
 import {
@@ -1048,6 +1050,10 @@ function resolveSetupGuideSidebarDismissedOnLoad(
   return onboarding.closedAt !== null || persistedDismissed === true
 }
 
+function shouldDefaultNewWorktreeCardStyleOn(onboarding: OnboardingState): boolean {
+  return onboarding.closedAt === null
+}
+
 // Why: read a settings field that was removed from GlobalSettings but can
 // still exist on disk. One-shot use for the inline-agents migration.
 function readDeprecatedExperimentFlag(parsed: PersistedState | undefined): boolean {
@@ -1077,6 +1083,24 @@ function sanitizeRepoUpstream(value: unknown): Repo['upstream'] | undefined {
   return owner && repo ? { owner, repo } : undefined
 }
 
+function sanitizeGitRemoteIdentity(value: unknown): GitRemoteIdentity | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+  const candidate = value as {
+    canonicalKey?: unknown
+    remoteName?: unknown
+    remoteUrl?: unknown
+  }
+  const canonicalKey =
+    typeof candidate.canonicalKey === 'string' ? candidate.canonicalKey.trim() : ''
+  const remoteName = typeof candidate.remoteName === 'string' ? candidate.remoteName.trim() : ''
+  const remoteUrl = typeof candidate.remoteUrl === 'string' ? candidate.remoteUrl.trim() : ''
+  return canonicalKey && remoteName && remoteUrl
+    ? { canonicalKey, remoteName, remoteUrl }
+    : undefined
+}
+
 function sanitizeRepoProjectHostSetupMethod(
   value: unknown
 ): RepoProjectHostSetupMethod | undefined {
@@ -1094,6 +1118,7 @@ function sanitizeRepoUpdatesForPersistence<
       | 'badgeColor'
       | 'repoIcon'
       | 'upstream'
+      | 'gitRemoteIdentity'
       | 'worktreeBasePath'
       | 'projectHostSetupMethod'
       | 'forkSyncMode'
@@ -1124,6 +1149,14 @@ function sanitizeRepoUpdatesForPersistence<
       delete sanitized.upstream
     } else {
       sanitized.upstream = upstream
+    }
+  }
+  if ('gitRemoteIdentity' in sanitized) {
+    const gitRemoteIdentity = sanitizeGitRemoteIdentity(sanitized.gitRemoteIdentity)
+    if (gitRemoteIdentity === undefined) {
+      delete sanitized.gitRemoteIdentity
+    } else {
+      sanitized.gitRemoteIdentity = gitRemoteIdentity
     }
   }
   if ('worktreeBasePath' in sanitized && sanitized.worktreeBasePath !== undefined) {
@@ -2653,11 +2686,30 @@ export class Store {
         if (!parsed.onboarding) {
           this.loadNeedsSave = true
         }
+        const defaultNewWorktreeCardStyle =
+          shouldDefaultNewWorktreeCardStyleOn(normalizedOnboarding)
+        const migratedExperimentalNewWorktreeCardStyle =
+          parsed.settings?.experimentalNewWorktreeCardStyle ?? defaultNewWorktreeCardStyle
+        if (
+          parsed.settings?.experimentalNewWorktreeCardStyle === undefined &&
+          defaultNewWorktreeCardStyle
+        ) {
+          this.loadNeedsSave = true
+        }
         const normalizedProjectGroups = normalizeProjectGroups(parsed.projectGroups)
         const loadedCompactWorktreeCards =
           parsed.settings?.compactWorktreeCards ??
           parsed.settings?.experimentalCompactWorktreeCards ??
           defaults.settings.compactWorktreeCards
+        const normalizedSourceControlGroupOrder = normalizeSourceControlGroupOrder(
+          parsed.settings?.sourceControlGroupOrder
+        )
+        if (
+          parsed.settings?.sourceControlGroupOrder !== undefined &&
+          parsed.settings.sourceControlGroupOrder !== normalizedSourceControlGroupOrder
+        ) {
+          this.loadNeedsSave = true
+        }
         result = {
           ...defaults,
           ...parsed,
@@ -2696,6 +2748,9 @@ export class Store {
             ...migratedTerminalCursorStyle,
             experimentalActivity: migratedExperimentalActivity,
             experimentalActivityDefaultedOffForAllUsers: true,
+            // Why: open first-run onboarding is the local fresh-install signal;
+            // closed/backfilled onboarding identifies existing profiles.
+            experimentalNewWorktreeCardStyle: migratedExperimentalNewWorktreeCardStyle,
             // Why: compact worktree cards graduated from Experimental; preserve
             // the old opt-in for profiles written during the rollout.
             compactWorktreeCards: loadedCompactWorktreeCards,
@@ -2715,6 +2770,9 @@ export class Store {
               parsed.settings?.terminalCustomThemes
             ),
             appIcon: normalizeAppIconId(parsed.settings?.appIcon),
+            // Why: persisted settings can be user-edited or written by older
+            // builds; keep tray-minimize false unless the stored value is true.
+            minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
             uiLanguage: normalizeUiLanguage(parsed.settings?.uiLanguage),
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
             visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
@@ -2731,6 +2789,7 @@ export class Store {
             }),
             notifications: normalizeNotificationSettings(parsed.settings?.notifications),
             sourceControlAi: migratedSourceControlAi,
+            sourceControlGroupOrder: normalizedSourceControlGroupOrder,
             // Why: new builds read sourceControlAi, but rollback builds still
             // write commitMessageAi; after merging those writes, refresh the
             // legacy projection for continued rollback compatibility.
@@ -2805,7 +2864,7 @@ export class Store {
             const needsLegacyDefaultedCompactMigration =
               loadedCompactWorktreeCards &&
               parsed.ui?._worktreeCardModeDefaulted === true &&
-              isLegacyDefaultedCompactWorktreeCardProperties(rawCardProps)
+              isDefaultedCompactWorktreeCardProperties(rawCardProps)
             const migratedCardProps = (() => {
               if (!Array.isArray(rawCardProps)) {
                 return undefined
@@ -2965,7 +3024,18 @@ export class Store {
     }
 
     if (result === null) {
-      result = getDefaultPersistedState(homedir())
+      const defaults = getDefaultPersistedState(homedir())
+      const isFreshDefaultProfile =
+        !fileExistedOnLoad && shouldDefaultNewWorktreeCardStyleOn(defaults.onboarding)
+      result = {
+        ...defaults,
+        settings: {
+          ...defaults.settings,
+          // Why: a corrupt existing data file also falls back to defaults; only
+          // the absent-file path is a true fresh install.
+          experimentalNewWorktreeCardStyle: isFreshDefaultProfile
+        }
+      }
     }
 
     const workspaceSession = pruneWorkspaceSessionBrowserHistory(
@@ -3680,6 +3750,7 @@ export class Store {
         | 'badgeColor'
         | 'repoIcon'
         | 'upstream'
+        | 'gitRemoteIdentity'
         | 'hookSettings'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
@@ -3855,6 +3926,7 @@ export class Store {
     const {
       repoIcon: rawRepoIcon,
       upstream: rawUpstream,
+      gitRemoteIdentity: rawGitRemoteIdentity,
       sourceControlAi: rawSourceControlAi,
       projectHostSetupMethod: rawProjectHostSetupMethod,
       forkSyncMode: rawForkSyncMode,
@@ -3862,6 +3934,7 @@ export class Store {
     } = repo
     const repoIcon = sanitizeRepoIcon(rawRepoIcon)
     const upstream = sanitizeRepoUpstream(rawUpstream)
+    const gitRemoteIdentity = sanitizeGitRemoteIdentity(rawGitRemoteIdentity)
     const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
     const projectHostSetupMethod = sanitizeRepoProjectHostSetupMethod(rawProjectHostSetupMethod)
     const forkSyncMode = sanitizeForkSyncMode(rawForkSyncMode)
@@ -3878,6 +3951,7 @@ export class Store {
       ...repoWithoutIcon,
       ...(repoIcon !== undefined ? { repoIcon } : {}),
       ...(upstream !== undefined ? { upstream } : {}),
+      ...(gitRemoteIdentity !== undefined ? { gitRemoteIdentity } : {}),
       ...(sourceControlAi !== undefined ? { sourceControlAi } : {}),
       ...(projectHostSetupMethod !== undefined ? { projectHostSetupMethod } : {}),
       ...(forkSyncMode !== undefined ? { forkSyncMode } : {}),
@@ -4500,6 +4574,12 @@ export class Store {
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): GlobalSettings {
     const sanitizedUpdates = { ...updates }
+    // Why: coerce strictly to boolean here (not at the IPC edge) so every write
+    // path is covered and a non-bool renderer payload can never persist a
+    // truthy non-bool that later reads as "tray-minimize on".
+    if ('minimizeToTrayOnClose' in updates) {
+      sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true
+    }
     if ('disabledTuiAgents' in updates) {
       sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
     }
@@ -4550,6 +4630,11 @@ export class Store {
     if ('terminalShortcutPolicy' in updates) {
       sanitizedUpdates.terminalShortcutPolicy = normalizeTerminalShortcutPolicy(
         updates.terminalShortcutPolicy
+      )
+    }
+    if ('sourceControlGroupOrder' in updates) {
+      sanitizedUpdates.sourceControlGroupOrder = normalizeSourceControlGroupOrder(
+        updates.sourceControlGroupOrder
       )
     }
     if ('appIcon' in updates) {
@@ -4645,6 +4730,9 @@ export class Store {
         this.state.ui?.workspaceBoardColumnWidth
       ),
       syncTaskStatusFromWorkspaceBoard: this.state.ui?.syncTaskStatusFromWorkspaceBoard === true,
+      // Why: strict boolean coercion so a missing/legacy value reads as false
+      // (first-run notice still fires) rather than leaking a non-bool through.
+      trayMinimizeNoticeShown: this.state.ui?.trayMinimizeNoticeShown === true,
       markdownTocPanelWidth: clampMarkdownTocPanelWidth(this.state.ui?.markdownTocPanelWidth),
       visibleWorkspaceHostIds: normalizeVisibleExecutionHostIds(
         this.state.ui?.visibleWorkspaceHostIds

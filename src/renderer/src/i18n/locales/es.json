@@ -58,6 +58,13 @@
     "window": "Ventana",
     "help": "Ayuda"
   },
+  "tray": {
+    "openOrca": "Abrir Orca",
+    "quit": "Salir",
+    "minimizeNotice": {
+      "body": "Orca sigue ejecutándose en la bandeja del sistema"
+    }
+  },
   "worktreeJumpPalette": {
     "matchLabel": {
       "comment": "Comentario",
@@ -215,7 +222,12 @@
           "0216895fb5": "No se pudo eliminar la rama",
           "19db0085fb": "Sucursal local eliminada",
           "2b0afc7f14": "No se pudo mantener actualizado el {{value0}} local",
-          "670864ab52": "Mantener actualizado el {{value0}} local"
+          "670864ab52": "Mantener actualizado el {{value0}} local",
+          "5366d13eec": "Espacio de trabajo eliminado, rama conservada",
+          "2e17f825d4": "Árbol de trabajo eliminado, rama conservada",
+          "78e08cd877": "Git no pudo eliminar de forma segura la rama \"{{value0}}\", por lo que Orca la conservó para evitar perder commits locales.",
+          "3b57982bf6": "Git no pudo eliminar de forma segura la rama \"{{value0}}\" después de eliminar el espacio de trabajo \"{{value1}}\", por lo que Orca la conservó para evitar perder commits locales.",
+          "81f13f48d2": "Git no pudo eliminar de forma segura la rama \"{{value0}}\" después de eliminar el árbol de trabajo \"{{value1}}\", por lo que Orca la conservó para evitar perder commits locales."
         },
         "repos": {
           "b7e14472ae": "No se pudo agregar la carpeta",
@@ -277,7 +289,8 @@
           "bf53f09bf8": "Claude Agent Teams",
           "0708ed89f1": "Claude",
           "fc80296033": "Devin",
-          "da41abbdd4": "Ante"
+          "da41abbdd4": "Ante",
+          "mimo_code_label": "MiMo Code"
         },
         "skill": {
           "cli": {
@@ -528,7 +541,11 @@
       "useGlobalFileDrop": {
         "38c9f034ff": "No se pudieron cargar los archivos eliminados.",
         "d720e2f855": "Algunos archivos caídos no se pudieron cargar.",
-        "245faa95b9": "No hay ninguna ruta de espacio de trabajo remoto disponible para los archivos descartados."
+        "245faa95b9": "No hay ninguna ruta de espacio de trabajo remoto disponible para los archivos descartados.",
+        "nativeDropTooManyPathsDescription": "Drop {{value0}} or fewer files at a time.",
+        "nativeDropTooManyPaths": "Drop contains too many files.",
+        "nativeDropPathsTooLargeDescription": "Drop fewer files or use a shorter path list.",
+        "nativeDropPathsTooLarge": "Drop path list is too large."
       },
       "useIpcEvents": {
         "0e3cf53060": "Pestaña del navegador {{value0}} no encontrada",
@@ -607,13 +624,23 @@
         "f70ac54d38": "Cuentas de proveedores de IA",
         "4121f7a0a2": "Administre agents de IA, establezca un valor predeterminado y personalice comandos.",
         "b49abbd2f7": "Agents"
+      },
+      "useAppMenuPaste": {
+        "pasteTooLarge": "Paste is too large."
+      },
+      "useLargeTextControlPaste": {
+        "pasteTooLarge": "Paste is too large."
       }
     },
     "components": {
       "CodexRestartChip": {
         "9132779820": "Despedir",
         "c72a5fb234": "Reanudar",
-        "9263e75f49": "Codex está usando la cuenta anterior."
+        "9263e75f49": "Codex está usando la cuenta anterior.",
+        "a4c8e1b2f7": "Codex is still signed in as {{value0}}",
+        "d3e8a1f4b2": "Account switched",
+        "e9b2c7d1a5": "Restart this session to use {{value0}}. Collapse to keep working with the current account.",
+        "f1a6c8e3b4": "Collapse"
       },
       "FirstLaunchBanner": {
         "b9e1b966c7": "Descartar aviso",
@@ -799,7 +826,24 @@
         "16c1abe76c": "Marcar visto",
         "ba8e329d92": "Desmarcar visto",
         "3f79ffc8b7": "Abra los detalles de relaciones públicas para ver los revisores actuales.",
-        "5c1c973855": "Eliminar revisor"
+        "5c1c973855": "Eliminar revisor",
+        "commentTooLarge": "Comment is too large to submit safely.",
+        "timeline": {
+          "completed": "as completed",
+          "notPlanned": "as not planned",
+          "someone": "someone",
+          "assigned": "assigned",
+          "unassigned": "unassigned",
+          "mentioned": "mentioned this",
+          "in": "in",
+          "closed": "closed this",
+          "reopened": "reopened this",
+          "moved": "moved this",
+          "from": "from",
+          "to": "to",
+          "activity": "Activity",
+          "noActivity": "No activity yet."
+        }
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Reabrir",
@@ -863,7 +907,8 @@
         "40c56b95e2": "{{value0}} aprobación{{value1}} restante",
         "3a051b8ade": "Elemento de trabajo",
         "32f8bef818": "Sin salida de registro.",
-        "4168eb2c51": "Resolver"
+        "4168eb2c51": "Resolver",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "JiraIssueWorkspace": {
         "b0b92666c9": "Comentario",
@@ -897,7 +942,8 @@
         "54649eaeab": "+ Cesionario",
         "2a829a2f00": "prioridad",
         "693be070d0": "transición",
-        "ef21405c6d": "Problema con Jira"
+        "ef21405c6d": "Problema con Jira",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "Landing": {
         "76a95f7f47": "Crear",
@@ -1019,7 +1065,8 @@
         "858d0630da": "Cerrar vista previa",
         "39883467f4": "Cuestión Linear",
         "fda549766e": "{{value0}} para comentar",
-        "d71cd3003e": "+ Cesionario"
+        "d71cd3003e": "+ Cesionario",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "NewWorkspaceComposerCard": {
         "cbb47ee0dc": "Solo disponible para proyectos Git locales.",
@@ -1074,7 +1121,11 @@
         "setupKindFolder": "Folder",
         "setupHostExistingFolderHelp": "Link a checkout that already exists there, then create this workspace on that host.",
         "importingHostSetup": "Importing...",
-        "importHostSetup": "Import"
+        "importHostSetup": "Import",
+        "notePasteTooLarge": "Paste is too large for the note field.",
+        "reuseExistingBranch": "Reuse branch",
+        "reuseExistingBranchHint": "Check out the existing branch instead of creating a new one from it.",
+        "createMultiple": "Create more"
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "Elija el proyecto, el nombre del espacio de trabajo y el agente antes de crear el espacio de trabajo."
@@ -1243,7 +1294,11 @@
         "50b8fb290f": "Marcar visto",
         "2b4fdb880c": "Desmarcar visto",
         "56ec6eafb7": "Abra los detalles de relaciones públicas para ver los revisores actuales.",
-        "7f964a365a": "Eliminar revisor"
+        "7f964a365a": "Eliminar revisor",
+        "commentTooLarge": "Comment is too large to submit safely.",
+        "8ff5ae8866": "Assignees",
+        "82c87eceb9": "Edit assignees",
+        "1ff5d979df": "No one assigned"
       },
       "QuickOpen": {
         "1dbd3f59ff": "Mover",
@@ -1572,7 +1627,26 @@
         "ff90d0abc7": "Iniciar espacio de trabajo desde {{value0}}",
         "fe28c9821f": "vista",
         "8d1e17a3ef": "Abra {{value0}} en GitHub",
-        "4ac8ff2275": "Abrir {{value0}} en Jira"
+        "4ac8ff2275": "Abrir {{value0}} en Jira",
+        "40eaf2c27c": "Details",
+        "closeAsCompleted": "Close as completed",
+        "closeAsCompletedDescription": "Done, closed, fixed, resolved",
+        "closeAsNotPlanned": "Close as not planned",
+        "closeAsNotPlannedDescription": "Won't fix, can't repro, stale",
+        "closeAsDuplicate": "Close as duplicate",
+        "closeAsDuplicateDescription": "Duplicate of another issue in this repository",
+        "duplicateIssueNumberPlaceholder": "Issue number",
+        "closeAsDuplicateSubmit": "Close duplicate",
+        "duplicateIssueMissing": "Enter an issue number in this repository.",
+        "duplicateIssueNotInteger": "Use a whole issue number.",
+        "duplicateIssueNotPositive": "Use a positive issue number.",
+        "duplicateIssueSameIssue": "Choose a different issue.",
+        "repository": "Repository",
+        "backToCloseReasons": "Back",
+        "searchIssues": "Search issues",
+        "useIssueNumber": "Use issue #{{value0}}",
+        "noMatchingIssuesLoaded": "No matching issues loaded.",
+        "editReviewersWithCurrent": "Edit reviewers: {{value0}}"
       },
       "Terminal": {
         "73768427cf": "Cerca",
@@ -1655,7 +1729,7 @@
         "1628fd7dfa": "No hay árboles de trabajo, configuraciones, acciones ni pestañas abiertas activas",
         "b781ae05e3": "Escriba para buscar árboles de trabajo, configuraciones, pestañas y acciones.",
         "f60f8730be": "No hay otros árboles de trabajo a los que cambiar",
-        "c4afa68159": "Pruebe con un árbol de trabajo, configuración, acción, título de página, emulador, URL, PR o puerto.",
+        "c4afa68159": "Pruebe con un árbol de trabajo, ajuste, acción, título de pestaña, prompt de agente, URL, PR o puerto.",
         "dbd9d87eec": "Ningún resultado coincide con tu búsqueda",
         "2c38630a01": "El espacio de trabajo ya no existe",
         "7726ce9970": "La pestaña del emulador móvil ya no existe",
@@ -1672,7 +1746,11 @@
         "recentWorktreesHeader": "Árboles de trabajo recientes",
         "settingsBadge": "Ajustes",
         "actionBadge": "Acción",
-        "paletteHostBadge": "Host: {{value0}}"
+        "paletteHostBadge": "Host: {{value0}}",
+        "workspaceTabMissing": "La pestaña ya no existe",
+        "projectsGroupsHeader": "Projects & Groups",
+        "projectBadge": "Project",
+        "repoGroupBadge": "Repo group"
       },
       "github": {
         "pr": {
@@ -1815,7 +1893,10 @@
             "22df63c393": "Los datos de la subemisión no están disponibles para su token.",
             "067119985c": "Búsqueda de GitHub, p. cesionario:@yo es:abierto",
             "1850fceac8": "{{value0}}/{{value1}} no se agrega a Orca. Agréguelo para comenzar a trabajar o ábralo en GitHub.",
-            "1aa7c952b9": "Project view"
+            "1aa7c952b9": "Project view",
+            "f352abf7c3": "Repository list is updating.",
+            "1ce21b8cff": "This item is outside the selected repositories.",
+            "030de75bc5": "This item matches multiple selected repositories."
           },
           "slug": {
             "dialog": {
@@ -1831,7 +1912,8 @@
                 "c3e829b4d9": "Ahorrar",
                 "463d030ae4": "Borrar",
                 "8564f58542": "Editar",
-                "5f104bf855": "Aún no hay comentarios."
+                "5f104bf855": "Aún no hay comentarios.",
+                "commentTooLarge": "Comment is too large to submit safely."
               },
               "LabelsEditor": {
                 "34dd57d6c8": "Cargando…",
@@ -1859,7 +1941,8 @@
           "b7e4a1c902": "Paste, drop, or click to add files",
           "8f1c2d4e6a": "Nothing to preview",
           "c91f0a2b14": "Write",
-          "d82b1e3f05": "Preview"
+          "d82b1e3f05": "Preview",
+          "imageUrlTooLarge": "Image URL is too large."
         },
         "IssueSourceSelector": {
           "d6aeb2012b": "Mostrando problemas de",
@@ -1949,7 +2032,8 @@
           "f6a7b8c9d0": "Close issue",
           "b1c2d3e4f5": "Reopen issue",
           "0a73f59e85": "Send comment",
-          "bf43425540": "Comment"
+          "bf43425540": "Comment",
+          "commentTooLarge": "Comment is too large to submit safely."
         },
         "GitHubWorkItemAssigneePopoverContent": {
           "cddd9b04a7": "Loading assignees",
@@ -2279,6 +2363,7 @@
           "TerminalContextMenu": {
             "b4cdd9314e": "Borrar pantalla",
             "8c17d6786d": "Cerrar panel",
+            "copyTerminalId": "Copiar ID de terminal",
             "2cf85a6a55": "Copiar ID del panel",
             "39809d152f": "Establecer título…",
             "06c2b0f043": "Igualar tamaños de paneles",
@@ -2353,7 +2438,12 @@
                 "53f015fd85": "Se omitió el enlace simbólico {{value0}}{{value1}}.",
                 "29c031b49a": "Subiendo el archivo {{value0}}{{value1}} al tiempo de ejecución...",
                 "0c77693641": "Worktree no está listo; inténtalo de nuevo en un momento.",
-                "ce8248b835": "Ruta del árbol de trabajo no disponible."
+                "ce8248b835": "Ruta del árbol de trabajo no disponible.",
+                "internalTooManyPaths": "Drop contains too many paths for a safe terminal paste.",
+                "internalPathsTooLarge": "Drop path list is too large for a safe terminal paste.",
+                "b4cf68e889": "Skipped {{value0}} {{value1}}.",
+                "writeTimeout": "File drop cancelled: terminal did not accept the path before the safety timeout.",
+                "writeRejected": "File drop cancelled: terminal could not accept the path."
               }
             }
           },
@@ -2362,7 +2452,15 @@
               "pane": {
                 "context": {
                   "menu": {
-                    "a29b9faa01": "ID del panel copiado"
+                    "a29b9faa01": "ID del panel copiado",
+                    "terminal": {
+                      "id": {
+                        "copied": "ID de terminal copiado",
+                        "copy": {
+                          "failed": "No se pudo copiar el ID de terminal"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -2389,7 +2487,9 @@
             "9acaf92093": "Acciones del panel",
             "1bce81dba6": "simulador",
             "1ff1c77616": "navegador",
-            "586d2ac445": "terminal"
+            "586d2ac445": "terminal",
+            "addSplitPane": "Agregar panel dividido",
+            "closePaneColumn": "Cerrar panel dividido"
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "Drop onto a terminal pane to resume this session.",
@@ -2397,6 +2497,9 @@
             "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
             "openLocalWorkspace": "Open a local workspace before resuming a session.",
             "sessionQueued": "Session queued"
+          },
+          "TabGroupDropOverlay": {
+            "paneColumnLabel": "Nueva división"
           }
         },
         "bar": {
@@ -2444,7 +2547,8 @@
           "SortableTab": {
             "ab19f603eb": "Cambiar nombre de pestaña {{value0}}",
             "6df69d9388": "Cerrar pestaña {{value0}}",
-            "fdb2691425": "Contraer panel"
+            "fdb2691425": "Contraer panel",
+            "95db5f2f7d": "Cerrar pestaña"
           },
           "SortableTabContextMenu": {
             "35e8892fd0": "Color de pestaña",
@@ -2467,7 +2571,9 @@
             "cb3eadefd2": "Azul",
             "20baa43c05": "Ninguno",
             "60f958ec75": "Pestaña Fijar",
-            "417722e9c2": "Desanclar pestaña"
+            "417722e9c2": "Desanclar pestaña",
+            "splitTerminalRight": "Dividir terminal a la derecha",
+            "splitTerminalDown": "Dividir terminal hacia abajo"
           },
           "TabBar": {
             "b1a132357f": "Nueva pestaña",
@@ -2528,7 +2634,8 @@
                   "097a982ee0": "Cargando archivos...",
                   "5a9c83c04b": "Abra cualquier archivo, URL, agente, ...",
                   "90eb94dc48": "Introduzca una URL http:// o https://.",
-                  "5553b283ce": "Ingrese una URL o ruta de archivo."
+                  "5553b283ce": "Ingrese una URL o ruta de archivo.",
+                  "queryTooLarge": "Search text is too large."
                 }
               },
               "menu": {
@@ -2558,6 +2665,17 @@
                 }
               }
             }
+          },
+          "TabWorkspaceLayoutMenuSection": {
+            "right": "Derecha",
+            "left": "Izquierda",
+            "down": "Abajo",
+            "up": "Arriba",
+            "moveToPaneColumn": "Mover pestaña a división"
+          },
+          "EditorFileTabCloseButton": {
+            "4655cf570e": "Cerrar pestaña",
+            "a768f428f1": "Cerrar pestaña"
           }
         }
       },
@@ -2669,13 +2787,11 @@
             "runtime_checking": "Checking",
             "runtime_online": "Connected",
             "runtime_unavailable": "Disconnected",
-            "runtime_available": "Available",
             "runtime_connect_unavailable": "Remote host is not reachable",
             "runtime_disconnect_failed": "Disconnect failed",
             "runtime_reconnecting": "Reconnecting",
             "runtime_last_close_reason": "Closed: {{value0}}",
-            "runtime_reconnect_attempt": "Attempt {{value0}}",
-            "runtime_channel_counts": "{{value0}} pending · {{value1}} streams"
+            "runtime_reconnect_attempt": "Attempt {{value0}}"
           },
           "StatusBar": {
             "9659e38343": "Puertos",
@@ -2870,7 +2986,21 @@
             "e740f92596": "Error al actualizar",
             "8418ec448d": "No se pudo actualizar el uso de {{value0}}. Es posible que las sesiones de agente sigan iniciadas.",
             "45198c7d95": "1 rate-limit reset available",
-            "bce421cba3": "{{value0}} rate-limit resets available"
+            "bce421cba3": "{{value0}} rate-limit resets available",
+            "7ec6e030a0": "Next expires now",
+            "d1e442a9e5": "Expires now",
+            "6cf9eaed10": "Next expires in {{value0}}",
+            "20ad66aed1": "Expires in {{value0}}",
+            "0d8d7cfe15": "Waiting for Claude session",
+            "1804cd8c3f": "Refreshing sign-in",
+            "f8f0f9d8cc": "Network issue",
+            "bf2e739f18": "Sign-in unavailable",
+            "f8b8dbed85": "Usage unavailable",
+            "3d3c9c0c1f": "Claude usage will refresh after the live Claude terminal rotates its credentials.",
+            "42fdd4da1d": "Claude sign-in is being refreshed. Agent sessions may still be signed in.",
+            "c06c1d215d": "Claude usage could not be refreshed because the network request failed.",
+            "cabdc2a9e0": "Claude sign-in credentials could not be read.",
+            "a7517cccb6": "Claude usage is unavailable right now."
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -3270,26 +3400,21 @@
           "496f68cf8c": "Escaneo de repositorios. Haga clic para detener.",
           "a32bef9516": "Dejar de escanear",
           "2f8298f3c3": "Detener escaneo",
-          "c157f31a95": "Importar como grupo",
-          "40199ef7b3": "Nombre del grupo",
-          "787412361a": "¿Qué es el nombre de un grupo?",
           "5f857ba8e6": "en",
           "4df0d08cc5": "Encontró",
           "8db50afe1a": "Importar repositorios desde la carpeta",
           "5b2e6fe3c8": "Importar por separado",
           "cf9d382ca1": "Importar",
           "220dd32d83": "Exploración...",
-          "fb33359f69": "¿Es esto un monorepo?",
-          "d75170194e": "Impórtalos como grupo si son un monorepo o si pertenecen juntos. Orca los agrupará y te permitirá trabajar desde la carpeta principal.",
+          "fb33359f69": "¿Agrupar estos repositorios?",
+          "d75170194e": "Elige esto si estos proyectos van juntos: un monorepo o simplemente un conjunto de repositorios relacionados. Orca los agrupará y te permitirá trabajar desde la carpeta principal.",
           "39d51212cc": "Nombre del grupo",
           "aa0247680d": "No, importar por separado",
-          "a0bc4d1f8e": "Importar como grupo",
+          "a0bc4d1f8e": "Sí, importar como grupo",
           "8401a7a0d0": "1 repositorio",
           "d4f1df62ef": "{{value0}} repositorios",
           "b4263a2ac4": "Se encontraron {{value0}} en {{value1}}.",
-          "24eda6c8b2": "Explorando... {{value0}}",
-          "b20bb7c24f": "Keeps these repos together in one group. Best for related repos like microservices.",
-          "e907ec8935": "What is a monorepo name?"
+          "24eda6c8b2": "Explorando... {{value0}}"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "Detener escaneo",
@@ -3465,7 +3590,8 @@
           "f8b1deb1a4": "Cancelar",
           "51001182e3": "directorio vacio",
           "971d85cc84": "Se abre como proyecto remoto · {{value0}}",
-          "00c4235c10": "No hay coincidencias para '{{value0}}'"
+          "00c4235c10": "No hay coincidencias para '{{value0}}'",
+          "largeInputNoMatches": "No matches for this long input"
         },
         "RemoveFolderDialog": {
           "4dc5b5065b": "Eliminar",
@@ -3661,7 +3787,8 @@
           "automation": "Automation",
           "2d74665a56": "Puertos",
           "65a9820bd1": "Estados del agente",
-          "219ebf1961": "Nombre de rama"
+          "219ebf1961": "Nombre de rama",
+          "folderPathIdentity": "Branch / folder path"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "Conectando...",
@@ -3734,13 +3861,19 @@
           "93aebe4529": "Carpeta",
           "0d224eff10": "árbol de trabajo primario",
           "ca74db7550": "Proyecto remoto vía SSH",
-          "021538e1d1": "SSH desconectado"
+          "021538e1d1": "SSH desconectado",
+          "runtimeHostDisconnected": "Server disconnected",
+          "runtimeHostProject": "Project on Orca server",
+          "automationCreated": "Created by automation",
+          "branchIdentity": "Branch",
+          "branchFolderPathIdentity": "Branch or folder path"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
         },
         "WorktreeCardReviewDetailSection": {
-          "reviewHeader": "{{value0}} #{{value1}}"
+          "reviewHeader": "{{value0}} #{{value1}}",
+          "copyLink": "Copy link"
         },
         "WorktreeCardMeta": {
           "3e65e11cc6": "Metadatos del espacio de trabajo",
@@ -3767,7 +3900,13 @@
           "checkingAutomationAvailability": "Comprobando disponibilidad de la automatización...",
           "automationMissing": "La automatización ya no está disponible.",
           "automationRunMissing": "El historial de ejecuciones ya no está disponible.",
-          "automationAvailabilityUnavailable": "No se pudo comprobar la disponibilidad de la automatización."
+          "automationAvailabilityUnavailable": "No se pudo comprobar la disponibilidad de la automatización.",
+          "moreIssueActions": "More issue actions",
+          "copyLink": "Copy link",
+          "copyLinkSuccess": "{{value0}} copied",
+          "copyLinkFailure": "Failed to copy link",
+          "issueLinkLabel": "Issue link",
+          "reviewLinkLabel": "{{value0}} link"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "Estado: Abierto",
@@ -3796,7 +3935,7 @@
           "e091caab15": "No se pudo encontrar el proyecto.",
           "439fa94d53": "Actualizar",
           "579b1a8e61": "Quitar del padre",
-          "8d9cd19d09": "Abrir espacio de trabajo principal",
+          "8d9cd19d09": "Abrir árbol de trabajo padre",
           "d35dfeae58": "Quitar del grupo",
           "76865d827f": "Mover al grupo",
           "503ec0f8e6": "Nuevo grupo del proyecto",
@@ -3812,7 +3951,10 @@
           "8dacff1fe0": "Marcar como leído",
           "3baa7d6507": "Alfiler",
           "697d0f6e1b": "Desprender",
-          "250de158fd": "Remove Workspace"
+          "250de158fd": "Remove Workspace",
+          "changeParentWorkspace": "Cambiar árbol de trabajo padre...",
+          "setParentWorkspace": "Establecer árbol de trabajo padre...",
+          "workspaceSection": "Espacio de trabajo"
         },
         "WorktreeList": {
           "d880ea0744": "Crea un grupo y mueve este proyecto a él.",
@@ -3853,7 +3995,9 @@
           "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
           "7a8b9c0d1e": "Update required",
           "hostAuthNeeded": "Authentication needed",
-          "hostDisconnected": "Disconnected"
+          "hostDisconnected": "Disconnected",
+          "failedNestWorkspace": "No se pudo anidar el espacio de trabajo",
+          "sidebarRowMissing": "Target no longer exists"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancelar",
@@ -4176,6 +4320,15 @@
           "c7d8e9f0a1": "{{value0}} actualizadas",
           "d8e9f0a1b2": "{{value0}} omitidas",
           "e9f0a1b2c3": "{{value0}} fallidas"
+        },
+        "WorktreeParentPickerPopover": {
+          "failedSetParent": "No se pudo establecer el árbol de trabajo padre",
+          "current": "Actual",
+          "searchPlaceholder": "Buscar árboles de trabajo...",
+          "empty": "No hay árboles de trabajo elegibles que coincidan."
+        },
+        "WorktreeCardStatusSlot": {
+          "branchIdentity": "Branch"
         }
       },
       "shared": {
@@ -4327,15 +4480,19 @@
           "f97b986b7f": "wsl"
         },
         "AgentSkillSetupPanel": {
-          "0b810ec59f": "Presione Entrar para ejecutar el comando de instalación.",
+          "0b810ec59f": "Press Enter to run the command.",
           "ed197f59a2": "comando copiar",
-          "817d3f9f18": "Copiar comando de instalación",
+          "817d3f9f18": "Copy command",
           "5289300939": "No instalado",
           "9fcebceb2a": "Instalado",
           "68a468752e": "De cheques...",
           "c689392435": "Vuelva a comprobar",
-          "a31e2aa302": "No se pudo copiar el comando de instalación.",
-          "378ad26865": "Comando de instalación copiado."
+          "a31e2aa302": "Failed to copy command.",
+          "378ad26865": "Copied command.",
+          "copiedCommand": "Copied command.",
+          "failedToCopyCommand": "Failed to copy command.",
+          "copyCommandAria": "Copy command",
+          "runCommandDescription": "Press Enter to run the command."
         },
         "AgentsPane": {
           "d83834f5e6": "Detectando agents instalados…",
@@ -4377,12 +4534,13 @@
           "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "Manual",
+          "3f1bdf3cb4": "Environment text is too large to parse safely.",
+          "variables": "Variables",
+          "worktreePathVariableHint": "Available in command, arguments, and environment values.",
           "profileName": "Name",
           "profileBadge": "Profile",
           "duplicateProfile": "Duplicate agent",
-          "deleteProfile": "Delete profile",
-          "variables": "Variables",
-          "worktreePathVariableHint": "Available in command, arguments, and environment values."
+          "deleteProfile": "Delete profile"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Icono siguiente",
@@ -4433,7 +4591,10 @@
             "tintOpacity": "Intensidad del tinte",
             "tintOpacityDescription": "Controla con qué fuerza se mezcla el tinte en la barra lateral."
           },
-          "workspaceCardLayoutGuidance": "Usa el menú de opciones de la barra lateral de espacios de trabajo > Diseño de tarjeta > Compacto."
+          "workspaceCardLayoutGuidance": "Usa el menú de opciones de la barra lateral de espacios de trabajo > Diseño de tarjeta > Compacto.",
+          "872af9556e": "Bandeja del sistema",
+          "2edf606c46": "Minimizar a la bandeja al cerrar",
+          "b707773a0d": "Cuando está activado, cerrar la ventana mantiene Orca en ejecución en la bandeja del sistema en lugar de salir."
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -4745,13 +4906,13 @@
           "dd6f0a1d45": "Mascota",
           "0e89a574ae": "Mascota animada flotante en la esquina inferior derecha.",
           "agentHibernation": {
-            "copy": "Detiene los terminales de agentes en segundo plano que estén inactivos después del intervalo configurado y reanuda las sesiones compatibles cuando las vuelves a abrir. Experimental mientras ajustamos el modelo de seguridad.",
+            "copy": "Detiene los terminales de agentes en segundo plano que estén inactivos después del intervalo configurado y reanuda las sesiones compatibles cuando las vuelves a abrir. La suspensión de agentes conserva las opciones de inicio de los agentes iniciados por Orca. Los agentes iniciados manualmente pueden reanudarse con tus valores predeterminados actuales de Orca. Experimental mientras ajustamos el modelo de seguridad.",
             "description": "Detiene los terminales de agentes en segundo plano que estén inactivos después del intervalo configurado y reanuda las sesiones compatibles cuando las vuelves a abrir.",
-            "idleMinutesDescription": "Cuántos minutos inactivo debe esperar un agente en segundo plano completado antes de que Orca pueda hibernarlo.",
-            "idleMinutesLabel": "Hibernar después de",
+            "idleMinutesDescription": "Cuántos minutos inactivo debe esperar un agente en segundo plano completado antes de que Orca pueda suspenderlo.",
+            "idleMinutesLabel": "Suspender después de",
             "idleMinutesSuffix": "minutos",
-            "title": "Hibernación de agentes",
-            "toggleLabel": "Alternar hibernación de agentes"
+            "title": "Suspensión de agentes",
+            "toggleLabel": "Alternar suspensión de agentes"
           },
           "newWorktreeCardStyle": {
             "copy": "Previsualiza el diseño actualizado de tarjetas de worktree, la ubicación de metadatos, las opciones del menú de visualización de tarjeta y la presentación de estado.",
@@ -4807,7 +4968,11 @@
           "70bb30feb1": "Guarde el editor y los cambios de diferencias editables automáticamente después de una breve pausa.",
           "0df2e4fd12": "Guardar archivos automáticamente",
           "d21136d9ef": "Configure cómo Orca persiste en las ediciones de archivos.",
-          "45c6e85c4d": "Editor"
+          "45c6e85c4d": "Editor",
+          "8f1afdfbd8": "Diff Word Wrap",
+          "4aa4d9fb73": "Wrap long lines in diff editors instead of requiring horizontal scrolling.",
+          "bf16ef0af2": "Off",
+          "3f6892f307": "On"
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "host local, 127.0.0.1, *.interno",
@@ -4942,7 +5107,12 @@
           "f35007e6e8": "nombre de usuario git",
           "3d172725cc": "Ninguno",
           "1f32ba27a6": "Costumbre",
-          "a182c5125e": "Nombre de usuario"
+          "a182c5125e": "Nombre de usuario",
+          "sourceControlGroupOrderTitle": "Orden de grupos de control de código fuente",
+          "sourceControlGroupOrderDescription": "Elige si Cambios, Cambios preparados o Archivos sin seguimiento aparecen primero en Control de código fuente.",
+          "changesFirst": "Cambios primero",
+          "stagedFirst": "Cambios preparados primero",
+          "untrackedFirst": "Archivos sin seguimiento primero"
         },
         "HiddenExperimentalGroup": {
           "d0f914a528": "Alternar marcador de posición",
@@ -5546,7 +5716,11 @@
           "bea897eec2": "En",
           "62511a575d": "Usar global",
           "30ae6dcce8": "El valor predeterminado global es",
-          "cf5959c834": "Control de fuente AI habilitado"
+          "cf5959c834": "Control de fuente AI habilitado",
+          "show": "Mostrar",
+          "hide": "Ocultar",
+          "showActionsLabel": "Mostrar acciones de IA de control de código fuente",
+          "visibilityHelper": "Controla si los botones de IA de control de código fuente se muestran para este repositorio. La generación usada por funciones separadas sigue la configuración de esas funciones. El valor predeterminado global es {{value0}}."
         },
         "RepositorySourceControlAiHostedReviewDefaults": {
           "053ccfbf52": "Apagado",
@@ -5786,19 +5960,6 @@
           "82db1b7de4": "Lista de verificación de incorporación, {{value0}} de {{value1}} realizada. Mostrar guía de configuración.",
           "df38d612b7": "Aún no se han agregado proyectos.",
           "3e483e256b": "No hay configuraciones de proyecto coincidentes."
-        },
-        "ShortcutBindingRow": {
-          "4a4c2c9d32": "Agregar acceso directo",
-          "87381fd8f8": "Presione las teclas…",
-          "9cdaaa3d8f": "Deshabilitar acceso directo",
-          "3b62c142fa": "Deshabilitar {{value0}}",
-          "f75335b155": "Restablecer los valores predeterminados",
-          "4f2c9b2a05": "Restablecer {{value0}} a los valores predeterminados",
-          "97dccee14e": "Modificado",
-          "3b11ef3a43": "{{value0}} atajo",
-          "f6579be67b": "Cambiar acceso directo",
-          "6a7848fdac": "Escuchando atajos",
-          "a98d551407": "Pulsa un atajo o toca dos veces una tecla modificadora (p. ej., {{value0}}). Esc cancela."
         },
         "ShortcutFilterRail": {
           "28b63545bf": "Estado",
@@ -6132,7 +6293,19 @@
           "ab20575a8a": "apagado",
           "ab3a1f9068": "wsl.exe",
           "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
-          "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent."
+          "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent.",
+          "scrollSpeed": {
+            "title": "Velocidad de desplazamiento",
+            "description": "Ajusta el desplazamiento normal del terminal, el desplazamiento rápido con modificador y la velocidad de rueda en TUI de pantalla completa.",
+            "helper": "Ajusta cómo se siente la entrada de la rueda en el historial y en apps de terminal compatibles con mouse.",
+            "reset": "Restablecer",
+            "normal": "Normal",
+            "normalDescription": "Multiplicador de rueda del historial.",
+            "fast": "Rápido",
+            "fastDescription": "Multiplicador adicional al desplazarse con una tecla modificadora.",
+            "tui": "TUI",
+            "tuiDescription": "Eventos discretos de rueda para apps de terminal de pantalla completa."
+          }
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "Vista previa del tema {{value0}}",
@@ -6262,7 +6435,8 @@
           "ad5d036ecc": "No se pudo solicitar permiso del micrófono. El dictado de voz no estaba habilitado.",
           "f9a9cf6928": "Se requiere permiso del micrófono antes de habilitar el dictado de voz.",
           "1eac933202": "Se abrió Privacidad y seguridad de macOS. Habilite el dictado nuevamente después de otorgar acceso.",
-          "cd9fe37556": "Permiso de micrófono concedido"
+          "cd9fe37556": "Permiso de micrófono concedido",
+          "6fa734ed95": "Delete {{value0}}"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Quitar {{value0}}",
@@ -6556,7 +6730,9 @@
               "cardLayout": "diseño de tarjeta",
               "workspaceOptions": "opciones de espacios de trabajo",
               "detailed": "detallado"
-            }
+            },
+            "9a115966d3": "Minimizar a la bandeja al cerrar",
+            "4d5b9427b5": "Cuando está activado, cerrar la ventana mantiene Orca en ejecución en la bandeja del sistema en lugar de salir."
           }
         },
         "auto": {
@@ -6820,12 +6996,11 @@
             "agentHibernation": {
               "agent": "agente",
               "agents": "agentes",
-              "description": "Detiene los terminales de agentes en segundo plano que estén inactivos después del intervalo configurado y reanuda las sesiones compatibles cuando se vuelven a abrir.",
-              "hibernate": "hibernar",
+              "description": "Detiene los terminales de agentes en segundo plano que estén inactivos después del intervalo configurado y reanuda las sesiones compatibles cuando se vuelven a abrir. La suspensión de agentes conserva las opciones de inicio de los agentes iniciados por Orca; los agentes iniciados manualmente pueden reanudarse con los valores predeterminados actuales de Orca.",
               "minutes": "minutos",
               "sleep": "suspender",
               "terminal": "terminal",
-              "title": "Hibernación de agentes"
+              "title": "Suspensión de agentes"
             },
             "newWorktreeCardStyle": {
               "card": "tarjeta",
@@ -7042,7 +7217,15 @@
             "1d2fae1fa2": "nombre de usuario git",
             "f83c8937c4": "denominación de sucursales",
             "5ecd91c5ef": "Prefijo agregado a los nombres de las ramas al crear árboles de trabajo.",
-            "68bd65fdb8": "Prefijo de rama"
+            "68bd65fdb8": "Prefijo de rama",
+            "sourceControlGroupOrderTitle": "Orden de grupos de control de código fuente",
+            "sourceControlGroupOrderDescription": "Elige si Cambios, Cambios preparados o Archivos sin seguimiento aparecen primero en Control de código fuente.",
+            "groupOrder": "orden de grupos",
+            "changesFirst": "cambios primero",
+            "stagedFirst": "cambios preparados primero",
+            "untrackedFirst": "sin seguimiento primero",
+            "sourceControl": "control de código fuente",
+            "gitChanges": "cambios de git"
           }
         },
         "input": {
@@ -7758,7 +7941,11 @@
               "keyword_custom": "custom"
             },
             "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
-            "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent."
+            "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent.",
+            "scrollSpeed": {
+              "title": "Velocidad de desplazamiento",
+              "description": "Ajusta el desplazamiento normal del terminal, el desplazamiento rápido con modificador y la velocidad de rueda en TUI de pantalla completa."
+            }
           },
           "windows": {
             "search": {
@@ -8009,11 +8196,12 @@
           "thisDevice": "This device"
         },
         "WorkspaceDirectorySetting": {
-          "1a2b3c4d5e": "Client default",
-          "2b3c4d5e6f": "Apply to",
-          "3c4d5e6f7a": "Overrides client default",
-          "4d5e6f7a8b": "Inherits the client default",
-          "5e6f7a8b9c": "Reset"
+          "1a2b3c4d5e": "Predeterminado del cliente",
+          "2b3c4d5e6f": "Aplicar a",
+          "3c4d5e6f7a": "Anula el valor predeterminado del cliente",
+          "4d5e6f7a8b": "Hereda el valor predeterminado del cliente",
+          "5e6f7a8b9c": "Restablecer",
+          "6f7a8b9cad": "Usa una ruta relativa (p. ej. .orca/worktrees) para una ubicación por proyecto, o una ruta absoluta para una carpeta compartida."
         },
         "ProviderHostScopeControl": {
           "scope_label": "{{value0}}: {{value1}}",
@@ -8107,6 +8295,36 @@
           "d37e92a06b": "ORCA_DIAGNOSTICS_DISABLED=1 está configurado: los diagnósticos de la app están desactivados.",
           "5ebb31e1fb": "Se está ejecutando en CI: los diagnósticos están desactivados.",
           "e27c8d45bf": "Los diagnósticos están desactivados por una variable de entorno."
+        },
+        "ShortcutCommandBlock": {
+          "eb72c52c28": "Press a shortcut, or double-tap a modifier (e.g. {{value0}}). Esc cancels.",
+          "70b5d25583": "{{value0}} shortcut",
+          "287e07ddde": "Modified",
+          "3c83cd7d1c": "Disabled",
+          "07939d084e": "Reset {{value0}} to default",
+          "9b02917027": "Reset to default",
+          "a799f90f82": "Disable {{value0}}",
+          "25e6e76618": "Disable shortcut",
+          "035a822ef0": "Add shortcut",
+          "a0e2ef0e61": "Add another shortcut for {{value0}}",
+          "245c83af24": "Add another shortcut",
+          "482a60225d": "Enable {{value0}}",
+          "6287677c37": "Enable",
+          "01481b964c": "Add shortcut for {{value0}}"
+        },
+        "ShortcutRecorderButton": {
+          "1a13bb054d": "Press shortcut keys for {{value0}}. Escape cancels.",
+          "3732775d74": "Add shortcut for {{value0}}",
+          "88764af2c1": "Change shortcut for {{value0}}",
+          "30feb099d6": "Change shortcut {{value0}} of {{value1}} for {{value2}}",
+          "5d982a2a1f": "Listening for shortcut",
+          "152e0bcd64": "Add shortcut",
+          "5bd56445da": "Change shortcut",
+          "f5ed5dcbf6": "Press keys…"
+        },
+        "ShortcutRemoveButton": {
+          "9e29aff18b": "Remove {{value0}} shortcut {{value1}}",
+          "2a9588b1c2": "Remove this binding"
         }
       },
       "right": {
@@ -8222,6 +8440,8 @@
             "66a29dde82": "Copiar ruta relativa",
             "42e10cbf57": "Copiar rutas relativas",
             "b5d436aa30": "Copiar ruta",
+            "98a79948b3": "Copiar",
+            "b234ab25b4": "No se pudo copiar el archivo al portapapeles",
             "f9d7ca753d": "Copiar rutas",
             "3161c4e425": "carpeta"
           },
@@ -8367,8 +8587,12 @@
             "cc06595a3b": "Copiar ruta de línea",
             "3596b9668d": "Copiar ruta"
           },
+          "SourceControlEntryContextMenu": {
+            "a1f2c8d901": "Ver"
+          },
           "SourceControl": {
             "1406954883": "Borrar todas las notas...",
+            "conflictsSection": "Conflictos",
             "cc05b2d088": "Abrir en el Explorador de archivos",
             "03194cfff4": "Estado de la sesión local derivado de un conflicto que abrió aquí.",
             "413a3ba113": "conflicto",
@@ -8693,13 +8917,28 @@
                 "066fedd446": "Trabajos fallidos",
                 "ae8a04ef17": "Los detalles del archivo de conflicto no están disponibles",
                 "73d0675356": "Detalles refrescantes del conflicto...",
+                "f5bc5c4cf1": "The hosting provider reports conflicts, but local Git did not reproduce them. Refresh the review or push the branch to recalculate mergeability.",
+                "5bc9bda2af": "Run from this worktree",
+                "e87fb3d929": "Copy mergeability refresh commands",
+                "1e53e45072": "Copied",
+                "084c516efb": "Copy commands",
                 "5dc3af25c0": "Seleccionar comentario",
                 "d7a2f9c401": "Send unresolved {{value0}} comments",
-                "d91f2a6c39": "Enviar {{value0}} comentarios en cola",
+                "d91f2a6c39": "Enviar {{value0}} comentarios en cola a la IA",
                 "a6de3e5a20": "Borrar comentarios en cola",
                 "49ea0937e4": "Agregar comentario a la lista de resolución",
                 "9fecebb29d": "Agregar",
-                "b8c4e2a1f7": "View full logs"
+                "b8c4e2a1f7": "View full logs",
+                "f8a2c91d04": "Queue for agent",
+                "b4e8a1c902": "Queued",
+                "7c1f0a2b11": "Open",
+                "e8b4c1a903": "Resolved · {{value0}}",
+                "c3a8e5d710": "Needs review · {{value0}}",
+                "a7f0c7e8d1": "Queue",
+                "8a621a2c4f": "Grouped",
+                "b13f85d75c": "Timeline",
+                "f5cf324efa": "Comment display options",
+                "5e6e5a13fa": "View"
               },
               "empty": {
                 "state": {
@@ -8775,7 +9014,8 @@
                   "f49e0a21e0": "Código",
                   "542bf6a7e2": "Itálico",
                   "256300f8ea": "Atrevido",
-                  "87aff03d63": "Envío..."
+                  "87aff03d63": "Envío...",
+                  "commentTooLarge": "Comment is too large to submit safely."
                 }
               }
             }
@@ -8826,7 +9066,8 @@
                   "9e779995dd": "Crear {{value0}}",
                   "226b85a3a7": "Buscar",
                   "323bb614aa": "Commit y sincronizar",
-                  "2b8e6595fd": "Commit"
+                  "2b8e6595fd": "Commit",
+                  "04d709801d": "Fetch from remote without merging"
                 }
               },
               "primary": {
@@ -8964,7 +9205,10 @@
             "hideEmptySessions": "Hide empty sessions",
             "workspaceScope": "Workspace",
             "worktreeScope": "Worktree",
-            "globalScope": "Global"
+            "globalScope": "Global",
+            "projectScope": "Proyecto",
+            "currentProjectLower": "proyecto actual",
+            "project": "Proyecto"
           },
           "AiVaultSessionDetails": {
             "updated": "Updated",
@@ -9002,7 +9246,16 @@
             "daysAgo": "{{value0}}d ago",
             "monthsAgo": "{{value0}}mo ago",
             "yearsAgo": "{{value0}}y ago",
-            "sessionId": "ID de sesión"
+            "sessionId": "ID de sesión",
+            "originalAsk": "Solicitud original",
+            "latestTurns": "Últimos turnos",
+            "noPreviewAvailable": "No hay vista previa de conversación disponible",
+            "messageCount": "{{value0}} mensajes",
+            "userRole": "Tú",
+            "agentRole": "Agente",
+            "toolRole": "Herramienta",
+            "systemRole": "Sistema",
+            "sessionRole": "Sesión"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "Resume {{value0}} session",
@@ -9019,7 +9272,14 @@
             "hideDetails": "Ocultar detalles",
             "showDetails": "Mostrar detalles",
             "moreSessionActions": "Más acciones de sesión",
-            "moreActions": "Más acciones"
+            "moreActions": "Más acciones",
+            "noPreviewAvailable": "No hay vista previa de conversación disponible",
+            "dragToResume": "Arrastra para reanudar en una pestaña nueva",
+            "userRole": "Tú",
+            "agentRole": "Agente",
+            "toolRole": "Herramienta",
+            "systemRole": "Sistema",
+            "sessionRole": "Sesión"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "Buscar archivos",
@@ -9980,7 +10240,6 @@
             "3dddb2d565": "connected for tasks",
             "33b650af52": "Connect where your team tracks work. Orca starts workspaces with the issue title, link, and context already attached.",
             "5b3577a492": "connected for review status",
-            "3a1fcdddad": "Two quick steps: connect where your code is reviewed, then where your team plans work.",
             "list_end": ", and ",
             "list_pair": " and ",
             "list_mid": ", ",
@@ -10176,6 +10435,11 @@
                 }
               }
             }
+          },
+          "useEmulatorScreenKeyboard": {
+            "pasteTooLarge": "Paste is too large for emulator keyboard input.",
+            "unsupportedPasteText": "Emulator keyboard paste supports US keyboard text only.",
+            "pasteTargetUnavailable": "Emulator keyboard paste failed because the device is not ready."
           }
         }
       },
@@ -10199,7 +10463,8 @@
           "4cc7b83ffe": "Filtrar archivos...",
           "21783df79f": "Contraer árbol de archivos",
           "481e63ca52": "Archivos",
-          "d5ac717d65": "no comprometido"
+          "d5ac717d65": "no comprometido",
+          "39b6b9e4e4": "Committed on Branch"
         },
         "CombinedDiffViewer": {
           "35cc27aeb2": "en control de fuente",
@@ -10231,7 +10496,9 @@
           "8368d256ec": "rama combinada",
           "8f68ad9ca9": "Mostrar {{value0}} AI {{value1}}",
           "724a13568d": "en {{value0}}",
-          "6094135eec": "frente a {{value0}}"
+          "6094135eec": "frente a {{value0}}",
+          "a4420ca1f7": "Wrap On",
+          "dde325ddfe": "Wrap Off"
         },
         "ConflictComponents": {
           "f338288514": "Cargando contenidos conflictivos...",
@@ -10319,7 +10586,8 @@
           "3e0ce48c24": "Exportar como PDF",
           "561251019a": "Más acciones",
           "8c8b7f5ff5": "Mostrar portada",
-          "10c39d58c1": "Ocultar materia preliminar"
+          "10c39d58c1": "Ocultar materia preliminar",
+          "1eef809708": "Word Wrap"
         },
         "EditorPanelShell": {
           "e2c4dec350": "Cargando editor..."
@@ -10427,7 +10695,8 @@
         },
         "MonacoEditor": {
           "68cb83f4a7": "Agregar nota sobre el texto seleccionado",
-          "fd68ae03b3": "Buscar en archivos"
+          "fd68ae03b3": "Buscar en archivos",
+          "largePasteTooLarge": "Paste is too large."
         },
         "MonacoGutterContextMenu": {
           "7b57b1b468": "Copiar URL remota",
@@ -10708,6 +10977,9 @@
               }
             }
           }
+        },
+        "richMarkdownLargeTextPaste": {
+          "tooLarge": "Paste is too large."
         }
       },
       "diff": {
@@ -10724,7 +10996,8 @@
           "DiffCommentPopover": {
             "2b3ce6d394": "Cancelar",
             "e05063cfc1": "Línea {{value0}}",
-            "c845170b3b": "Líneas {{value0}}-{{value1}}"
+            "c845170b3b": "Líneas {{value0}}-{{value1}}",
+            "commentTooLarge": "Comment is too large to submit safely."
           },
           "useDiffCommentDecorator": {
             "995fa28b50": "esta nota"
@@ -10849,6 +11122,14 @@
                 "newQuickCommand": "nuevo comando rápido"
               }
             }
+          },
+          "palette": {
+            "project": {
+              "results": {
+                "repoGroup": "Repo group",
+                "project": "Project"
+              }
+            }
           }
         }
       },
@@ -10954,7 +11235,16 @@
             "ea6af700da": "{{value0}} anotación",
             "c13693fe27": "{{value0}} anotaciones",
             "074f0ed10b": "{{value0}} anotación lista. Seleccione otro elemento o copie todos los comentarios.",
-            "a2164a6e5a": "{{value0}} anotaciones listas. Seleccione otro elemento o copie todos los comentarios."
+            "a2164a6e5a": "{{value0}} anotaciones listas. Seleccione otro elemento o copie todos los comentarios.",
+            "9f6f2e8c19": "The downloaded file path is unavailable.",
+            "0c79b7634d": "Could not open the downloaded file. It may have been moved or deleted.",
+            "397d9dc923": "Could not show the downloaded file. It may have been moved or deleted.",
+            "39c04fed61": "Downloading paused",
+            "5c3d530a68": "Downloaded",
+            "4bb7424d6b": "Canceled",
+            "6e776f9ef9": "Download failed",
+            "756bfc25c9": "Open",
+            "09a9489aa5": "Show"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancelar",
@@ -11401,7 +11691,15 @@
           "openReviewExternally": "Abrir {{value0}} externamente",
           "summary": "{{value0}} adjuntos · {{value1}} con PR/MR · {{value2}} requieren atención · {{value3}} pendientes · {{value4}} correctos · {{value5}} sin PR · {{value6}} desconocidos",
           "showDetails": "Mostrar detalles de comprobaciones de PR de {{value0}}",
-          "hideDetails": "Ocultar detalles de comprobaciones de PR de {{value0}}"
+          "hideDetails": "Ocultar detalles de comprobaciones de PR de {{value0}}",
+          "reviewChecks": "Comprobaciones de revisión",
+          "allChecksPassing": "todas las comprobaciones correctas",
+          "oneWorktree": "1 árbol de trabajo",
+          "worktreeCount": "{{value0}} árboles de trabajo",
+          "oneFailing": "1 fallando",
+          "failingCount": "{{value0}} fallando",
+          "onePending": "1 pendiente",
+          "pendingCount": "{{value0}} pendientes"
         },
         "parentPrChecks": {
           "rowSummary": {

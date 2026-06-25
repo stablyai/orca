@@ -168,6 +168,119 @@ describe('project host setup projection', () => {
     ])
   })
 
+  it('groups same-project records across local, SSH, and runtime hosts by git remote identity', () => {
+    const projection = projectHostSetupProjectionFromRepos([
+      repo({
+        id: 'local-sample-app',
+        path: '/Users/alice/work/sample-app',
+        displayName: 'sample-app',
+        gitRemoteIdentity: {
+          canonicalKey: 'git.company.test/team/sample-app',
+          remoteName: 'origin',
+          remoteUrl: 'git@git.company.test:team/sample-app.git'
+        }
+      }),
+      repo({
+        id: 'ssh-sample-app',
+        path: '/home/alice/src/sample-app',
+        displayName: 'sample-app',
+        connectionId: 'build server',
+        gitRemoteIdentity: {
+          canonicalKey: 'git.company.test/team/sample-app',
+          remoteName: 'origin',
+          remoteUrl: 'https://git.company.test/team/sample-app.git'
+        }
+      }),
+      repo({
+        id: 'runtime-sample-app',
+        path: '/workspace/sample-app',
+        displayName: 'sample-app',
+        executionHostId: 'runtime:dev-container',
+        gitRemoteIdentity: {
+          canonicalKey: 'git.company.test/team/sample-app',
+          remoteName: 'origin',
+          remoteUrl: 'ssh://git@git.company.test/team/sample-app.git'
+        }
+      })
+    ])
+
+    expect(projection.projects).toHaveLength(1)
+    expect(projection.projects[0]).toMatchObject({
+      id: 'git:git.company.test/team/sample-app',
+      displayName: 'sample-app',
+      sourceRepoIds: ['local-sample-app', 'ssh-sample-app', 'runtime-sample-app'],
+      gitRemoteIdentity: {
+        canonicalKey: 'git.company.test/team/sample-app',
+        remoteName: 'origin'
+      }
+    })
+    expect(projection.setups.map((setup) => setup.hostId)).toEqual([
+      'local',
+      'ssh:build%20server',
+      'runtime:dev-container'
+    ])
+    expect(
+      getProjectHostSetupsForProject(projection.setups, 'git:git.company.test/team/sample-app')
+    ).toHaveLength(3)
+  })
+
+  it('keeps same-named cross-host records separate when there is no shared repo identity', () => {
+    const projection = projectHostSetupProjectionFromRepos([
+      repo({
+        id: 'local-sample-app',
+        path: '/Users/alice/work/sample-app',
+        displayName: 'sample-app'
+      }),
+      repo({
+        id: 'ssh-sample-app',
+        path: '/srv/unrelated/sample-app',
+        displayName: 'sample-app',
+        connectionId: 'staging server'
+      }),
+      repo({
+        id: 'runtime-sample-app',
+        path: '/workspace/sample-app',
+        displayName: 'sample-app',
+        executionHostId: 'runtime:preview'
+      })
+    ])
+
+    // Why: display names are labels, not identity. A future fix needs a
+    // normalized git remote identity or an explicit user link before merging.
+    expect(projection.projects).toHaveLength(3)
+  })
+
+  it('does not collapse case-distinct remote paths for self-hosted git remotes', () => {
+    const projection = projectHostSetupProjectionFromRepos([
+      repo({
+        id: 'uppercase-repo',
+        path: '/Users/alice/work/sample-app',
+        displayName: 'sample-app',
+        gitRemoteIdentity: {
+          canonicalKey: 'git.company.test/Team/Sample-App',
+          remoteName: 'origin',
+          remoteUrl: 'git@git.company.test:Team/Sample-App.git'
+        }
+      }),
+      repo({
+        id: 'lowercase-repo',
+        path: '/home/alice/src/sample-app',
+        displayName: 'sample-app',
+        connectionId: 'build server',
+        gitRemoteIdentity: {
+          canonicalKey: 'git.company.test/team/sample-app',
+          remoteName: 'origin',
+          remoteUrl: 'git@git.company.test:team/sample-app.git'
+        }
+      })
+    ])
+
+    expect(projection.projects.map((project) => project.id)).toEqual([
+      'git:git.company.test/Team/Sample-App',
+      'git:git.company.test/team/sample-app'
+    ])
+  })
+
   it('ignores malformed provider identity values', () => {
     const projection = projectHostSetupProjectionFromRepos([
       repo({
