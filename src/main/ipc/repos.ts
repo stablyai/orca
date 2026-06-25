@@ -1137,19 +1137,17 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('sparsePresets:save')
   ipcMain.removeHandler('sparsePresets:remove')
 
-  ipcMain.handle('repos:list', async () => {
-    const changed = await enrichMissingRepoGitRemoteIdentities(store)
-    if (changed) {
-      notifyReposChanged(mainWindow)
-    }
+  ipcMain.handle('repos:list', () => {
+    enrichMissingRepoGitRemoteIdentities(store, {
+      onChanged: () => notifyReposChanged(mainWindow)
+    })
     return store.getRepos()
   })
 
-  ipcMain.handle('projects:list', async () => {
-    const changed = await enrichMissingRepoGitRemoteIdentities(store)
-    if (changed) {
-      notifyReposChanged(mainWindow)
-    }
+  ipcMain.handle('projects:list', () => {
+    enrichMissingRepoGitRemoteIdentities(store, {
+      onChanged: () => notifyReposChanged(mainWindow)
+    })
     return store.getProjects()
   })
 
@@ -1162,11 +1160,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     return store.updateProject(args.projectId, args.updates)
   })
 
-  ipcMain.handle('projectHostSetups:list', async () => {
-    const changed = await enrichMissingRepoGitRemoteIdentities(store)
-    if (changed) {
-      notifyReposChanged(mainWindow)
-    }
+  ipcMain.handle('projectHostSetups:list', () => {
+    enrichMissingRepoGitRemoteIdentities(store, {
+      onChanged: () => notifyReposChanged(mainWindow)
+    })
     return store.getProjectHostSetups()
   })
 

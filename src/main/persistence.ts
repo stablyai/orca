@@ -1092,7 +1092,7 @@ function sanitizeGitRemoteIdentity(value: unknown): GitRemoteIdentity | undefine
     remoteUrl?: unknown
   }
   const canonicalKey =
-    typeof candidate.canonicalKey === 'string' ? candidate.canonicalKey.trim().toLowerCase() : ''
+    typeof candidate.canonicalKey === 'string' ? candidate.canonicalKey.trim() : ''
   const remoteName = typeof candidate.remoteName === 'string' ? candidate.remoteName.trim() : ''
   const remoteUrl = typeof candidate.remoteUrl === 'string' ? candidate.remoteUrl.trim() : ''
   return canonicalKey && remoteName && remoteUrl

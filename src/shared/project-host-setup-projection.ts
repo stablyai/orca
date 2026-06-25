@@ -46,7 +46,7 @@ function getProjectGitRemoteIdentity(
 ): NonNullable<Repo['gitRemoteIdentity']> | null {
   const identity = repo.gitRemoteIdentity
   const canonicalKey =
-    typeof identity?.canonicalKey === 'string' ? identity.canonicalKey.trim().toLowerCase() : ''
+    typeof identity?.canonicalKey === 'string' ? identity.canonicalKey.trim() : ''
   const remoteName = typeof identity?.remoteName === 'string' ? identity.remoteName.trim() : ''
   const remoteUrl = typeof identity?.remoteUrl === 'string' ? identity.remoteUrl.trim() : ''
   return canonicalKey && remoteName && remoteUrl ? { canonicalKey, remoteName, remoteUrl } : null

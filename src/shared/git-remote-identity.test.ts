@@ -12,6 +12,9 @@ describe('normalizeGitRemoteUrl', () => {
     expect(normalizeGitRemoteUrl('ssh://git@github.com/example/sample-app.git')).toBe(
       'github.com/example/sample-app'
     )
+    expect(normalizeGitRemoteUrl('https://GitHub.com/example/sample-app.git')).toBe(
+      'github.com/example/sample-app'
+    )
   })
 
   it('preserves nested GitLab/self-hosted paths', () => {
@@ -24,6 +27,20 @@ describe('normalizeGitRemoteUrl', () => {
     expect(normalizeGitRemoteUrl('ssh://git@git.company.test:2222/team/sample-app.git')).toBe(
       'git.company.test/team/sample-app'
     )
+  })
+
+  it('preserves path case for case-sensitive hosted remotes', () => {
+    expect(normalizeGitRemoteUrl('git@Git.Company.Test:Team/Sample-App.git')).toBe(
+      'git.company.test/Team/Sample-App'
+    )
+    expect(normalizeGitRemoteUrl('https://git.company.test/Team/Sample-App.git')).toBe(
+      'git.company.test/Team/Sample-App'
+    )
+  })
+
+  it('rejects Windows local filesystem remotes', () => {
+    expect(normalizeGitRemoteUrl('C:\\Repos\\sample-app.git')).toBeNull()
+    expect(normalizeGitRemoteUrl('C:/Repos/sample-app.git')).toBeNull()
   })
 })
 

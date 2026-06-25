@@ -14,16 +14,23 @@ function stripGitSuffix(path: string): string {
 }
 
 function normalizeRemotePath(path: string): string {
-  return stripGitSuffix(path.replace(/^\/+/, '').replace(/\/+$/, '')).toLowerCase()
+  return stripGitSuffix(path.replace(/^\/+/, '').replace(/\/+$/, ''))
 }
 
 function normalizeRemoteHost(host: string): string {
   return host.trim().toLowerCase()
 }
 
+function isLocalFilesystemRemote(remoteUrl: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(remoteUrl)
+}
+
 export function normalizeGitRemoteUrl(remoteUrl: string): string | null {
   const trimmed = remoteUrl.trim()
   if (!trimmed) {
+    return null
+  }
+  if (isLocalFilesystemRemote(trimmed)) {
     return null
   }
 

@@ -158,8 +158,8 @@ export const REPO_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'repo.list',
     params: null,
-    handler: async (_params, { runtime }) => {
-      await runtime.enrichMissingRepoGitRemoteIdentities?.()
+    handler: (_params, { runtime }) => {
+      runtime.enrichMissingRepoGitRemoteIdentities?.()
       return { repos: runtime.listRepos() }
     }
   }),

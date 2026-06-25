@@ -8808,14 +8808,16 @@ export class OrcaRuntimeService {
     return this.store?.getRepos() ?? []
   }
 
-  async enrichMissingRepoGitRemoteIdentities(): Promise<void> {
+  enrichMissingRepoGitRemoteIdentities(): void {
     if (!this.store) {
       return
     }
-    if (await enrichMissingRepoGitRemoteIdentities(this.store)) {
-      this.invalidateResolvedWorktreeCache()
-      this.notifyReposChanged()
-    }
+    enrichMissingRepoGitRemoteIdentities(this.store, {
+      onChanged: () => {
+        this.invalidateResolvedWorktreeCache()
+        this.notifyReposChanged()
+      }
+    })
   }
 
   listProjects(): Project[] {
