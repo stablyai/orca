@@ -108,6 +108,17 @@ describe('RepositoryWorktreeDefaultsSection — worktree path', () => {
     expect(updateRepo).toHaveBeenCalledWith('repo-1', { worktreeBasePath: './worktree' })
   })
 
+  it('does not call updateRepo when the normalized value is unchanged on blur', () => {
+    const updateRepo = vi.fn()
+    render({ ...BASE_REPO, worktreeBasePath: './worktree' }, updateRepo)
+
+    const input = getWorktreePathInput()
+    typeText(input, '  ./worktree  ')
+    blurInput(input)
+
+    expect(updateRepo).not.toHaveBeenCalled()
+  })
+
   it('calls updateRepo with undefined when the field is cleared', () => {
     const updateRepo = vi.fn()
     render({ ...BASE_REPO, worktreeBasePath: '../worktrees' }, updateRepo)
@@ -121,7 +132,7 @@ describe('RepositoryWorktreeDefaultsSection — worktree path', () => {
 
   it('calls updateRepo with undefined when the value is whitespace-only', () => {
     const updateRepo = vi.fn()
-    render(BASE_REPO, updateRepo)
+    render({ ...BASE_REPO, worktreeBasePath: '../worktrees' }, updateRepo)
 
     const input = getWorktreePathInput()
     typeText(input, '   ')
