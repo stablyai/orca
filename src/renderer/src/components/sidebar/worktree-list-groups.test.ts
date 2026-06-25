@@ -362,26 +362,41 @@ describe('buildRows with pinned worktrees', () => {
     ])
   })
 
-  it('reproduces legacy same-project records rendering as separate host-local project headers', () => {
+  it('renders same-project records with git remote identity as one mixed-host project header', () => {
     const localRepo: Repo = {
       ...repo,
       id: 'local-sample-app',
       path: '/Users/alice/work/sample-app',
-      displayName: 'sample-app'
+      displayName: 'sample-app',
+      gitRemoteIdentity: {
+        canonicalKey: 'git.company.test/team/sample-app',
+        remoteName: 'origin',
+        remoteUrl: 'git@git.company.test:team/sample-app.git'
+      }
     }
     const sshRepo: Repo = {
       ...repo,
       id: 'ssh-sample-app',
       path: '/home/alice/src/sample-app',
       displayName: 'sample-app',
-      connectionId: 'build server'
+      connectionId: 'build server',
+      gitRemoteIdentity: {
+        canonicalKey: 'git.company.test/team/sample-app',
+        remoteName: 'origin',
+        remoteUrl: 'https://git.company.test/team/sample-app.git'
+      }
     }
     const runtimeRepo: Repo = {
       ...repo,
       id: 'runtime-sample-app',
       path: '/workspace/sample-app',
       displayName: 'sample-app',
-      executionHostId: 'runtime:dev-container'
+      executionHostId: 'runtime:dev-container',
+      gitRemoteIdentity: {
+        canonicalKey: 'git.company.test/team/sample-app',
+        remoteName: 'origin',
+        remoteUrl: 'ssh://git@git.company.test/team/sample-app.git'
+      }
     }
     const localWorktree: Worktree = {
       ...worktree,
@@ -433,16 +448,17 @@ describe('buildRows with pinned worktrees', () => {
       }
     )
 
-    expect(rows.filter((row) => row.type === 'header')).toMatchObject([
-      { key: 'project:repo:local-sample-app', label: 'work/sample-app', count: 1 },
-      { key: 'project:repo:ssh-sample-app', label: 'src/sample-app', count: 1 },
-      { key: 'project:repo:runtime-sample-app', label: 'workspace/sample-app', count: 1 }
+    expect(rows).toMatchObject([
+      {
+        type: 'header',
+        key: 'project:git:git.company.test/team/sample-app',
+        label: 'sample-app',
+        count: 3
+      },
+      { type: 'item', worktree: { id: localWorktree.id }, hostContextLabel: LOCAL_HOST_LABEL },
+      { type: 'item', worktree: { id: sshWorktree.id }, hostContextLabel: 'build server' },
+      { type: 'item', worktree: { id: runtimeWorktree.id }, hostContextLabel: 'dev-container' }
     ])
-    for (const row of rows) {
-      if (row.type === 'item') {
-        expect(row.hostContextLabel).toBeUndefined()
-      }
-    }
   })
 
   it('orders project identity headers by the manual repo order anchor', () => {

@@ -643,6 +643,7 @@ import {
 } from '../project-groups/folder-workspace-path-status'
 import { getSshGitProvider, requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
+import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
 import { githubAvatarIcon } from '../../shared/repo-icon'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { CodexAccountService } from '../codex-accounts/service'
@@ -8805,6 +8806,16 @@ export class OrcaRuntimeService {
 
   listRepos(): Repo[] {
     return this.store?.getRepos() ?? []
+  }
+
+  async enrichMissingRepoGitRemoteIdentities(): Promise<void> {
+    if (!this.store) {
+      return
+    }
+    if (await enrichMissingRepoGitRemoteIdentities(this.store)) {
+      this.invalidateResolvedWorktreeCache()
+      this.notifyReposChanged()
+    }
   }
 
   listProjects(): Project[] {
