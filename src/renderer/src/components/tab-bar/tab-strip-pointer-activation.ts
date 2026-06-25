@@ -33,10 +33,9 @@ export function useTabStripPointerActivation({
     if (!isPressed) {
       return
     }
-    const finishPointerPress = (event: PointerEvent): void => {
-      if (event.button !== 0) {
-        return
-      }
+    const finishPointerPress = (): void => {
+      // Why: pointerup often reports button -1/no changed button; the left-button
+      // gate is on pointerdown, so release must always clear the pending click.
       const shouldActivate = pendingActivationRef.current && !isTabDragActiveRef.current
       pendingActivationRef.current = false
       setIsPressed(false)

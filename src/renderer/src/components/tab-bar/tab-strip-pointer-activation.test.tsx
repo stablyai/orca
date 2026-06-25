@@ -65,8 +65,8 @@ function renderProbe(onActivate = vi.fn()): {
   }
 }
 
-function dispatchPointer(target: EventTarget, type: string): void {
-  target.dispatchEvent(new MouseEvent(type, { bubbles: true, button: 0 }))
+function dispatchPointer(target: EventTarget, type: string, button = 0): void {
+  target.dispatchEvent(new MouseEvent(type, { bubbles: true, button }))
 }
 
 afterEach(() => {
@@ -85,6 +85,16 @@ describe('useTabStripPointerActivation', () => {
     expect(onActivate).not.toHaveBeenCalled()
 
     act(() => dispatchPointer(window, 'pointerup'))
+    expect(tabButton.dataset.pressed).toBe('false')
+    expect(onActivate).toHaveBeenCalledTimes(1)
+  })
+
+  it('activates when the release event reports no changed button', () => {
+    const { onActivate, tabButton } = renderProbe()
+
+    act(() => dispatchPointer(tabButton, 'pointerdown'))
+    act(() => dispatchPointer(window, 'pointerup', -1))
+
     expect(tabButton.dataset.pressed).toBe('false')
     expect(onActivate).toHaveBeenCalledTimes(1)
   })
