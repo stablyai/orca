@@ -2340,7 +2340,7 @@ export function useIpcEvents(): void {
         const store = useAppStore.getState()
         const payloadBrowserTabId =
           payload && typeof payload.browserTabId === 'string' ? payload.browserTabId : null
-        const tabId =
+        let tabId =
           payloadBrowserTabId ??
           (store.activeTabType === 'browser' && store.activeBrowserTabId
             ? store.activeBrowserTabId
@@ -2348,9 +2348,26 @@ export function useIpcEvents(): void {
         if (!tabId) {
           return
         }
-        const worktreeId = payloadBrowserTabId
+        let worktreeId = payloadBrowserTabId
           ? findBrowserTabWorktreeId(store, payloadBrowserTabId)
           : store.activeWorktreeId
+        // Why: the incoming browserTabId may be a browser page id rather than a
+        // workspace tab id. Mirror onRequestTabClose by resolving the page id to
+        // its owning workspace tab via browserPagesByWorkspace before closing,
+        // otherwise findBrowserTabWorktreeId yields no match and we silently no-op.
+        if (payloadBrowserTabId && !worktreeId) {
+          const owningWorkspaceId =
+            Object.entries(store.browserPagesByWorkspace).find(([, pages]) =>
+              pages.some((p) => p.id === payloadBrowserTabId)
+            )?.[0] ?? null
+          if (owningWorkspaceId) {
+            const owningWorktreeId = findBrowserTabWorktreeId(store, owningWorkspaceId)
+            if (owningWorktreeId) {
+              tabId = owningWorkspaceId
+              worktreeId = owningWorktreeId
+            }
+          }
+        }
         if (!worktreeId) {
           return
         }
