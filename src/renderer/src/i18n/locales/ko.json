@@ -12976,7 +12976,8 @@
             "highlight": "형광펜",
             "pen": "펜",
             "rect": "사각형",
-            "text": "텍스트"
+            "text": "텍스트",
+            "select": "선택 / 이동"
           },
           "widthOption": "{{value0}} px"
         }

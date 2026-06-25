@@ -12976,7 +12976,8 @@
             "highlight": "Highlighter",
             "pen": "Pen",
             "rect": "Rectangle",
-            "text": "Text"
+            "text": "Text",
+            "select": "Select / move"
           },
           "widthOption": "{{value0}} px"
         }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   arrowHeadGeometry,
+  boundingBox,
   canRedo,
   canUndo,
   clearShapes,
@@ -9,11 +10,15 @@ import {
   isEmptyDocument,
   normalizeRect,
   redoShape,
+  restyleShape,
   scaleShape,
+  setShapes,
+  translateShape,
   undoShape,
   type ArrowShape,
   type MarkupShape,
   type PenShape,
+  type RectShape,
   type TextShape
 } from './markup-drawing-model'
 
@@ -73,7 +78,15 @@ describe('markup document undo/redo', () => {
     let doc = commitShape(empty, pen('a'))
     doc = clearShapes(doc)
     expect(doc.shapes).toHaveLength(0)
-    expect(doc.undone).toHaveLength(0)
+    expect(canRedo(doc)).toBe(false)
+  })
+
+  it('undoes an edit (not just an add) via whole-list snapshots', () => {
+    let doc = commitShape(createMarkupDocument(), pen('a'))
+    doc = setShapes(doc, []) // delete everything
+    expect(doc.shapes).toHaveLength(0)
+    doc = undoShape(doc)
+    expect(doc.shapes.map((s) => s.id)).toEqual(['a'])
   })
 })
 
@@ -131,6 +144,69 @@ describe('markup geometry', () => {
     const scaledText = scaleShape(text, 2) as TextShape
     expect(scaledText.at).toEqual({ x: 20, y: 40 })
     expect(scaledText.fontSize).toBe(36)
+  })
+
+  it('translates every shape kind by an offset', () => {
+    const rect: RectShape = {
+      id: 'r',
+      kind: 'rect',
+      color: '#fff',
+      width: 2,
+      from: { x: 1, y: 2 },
+      to: { x: 5, y: 6 }
+    }
+    const moved = translateShape(rect, 10, 20) as RectShape
+    expect(moved.from).toEqual({ x: 11, y: 22 })
+    expect(moved.to).toEqual({ x: 15, y: 26 })
+
+    const text: TextShape = {
+      id: 't',
+      kind: 'text',
+      color: '#fff',
+      at: { x: 3, y: 4 },
+      text: 'hi',
+      fontSize: 18
+    }
+    expect((translateShape(text, 5, 5) as TextShape).at).toEqual({ x: 8, y: 9 })
+  })
+
+  it('restyles color/width for strokes and color/fontSize for text', () => {
+    const rect: RectShape = {
+      id: 'r',
+      kind: 'rect',
+      color: '#fff',
+      width: 2,
+      from: { x: 0, y: 0 },
+      to: { x: 1, y: 1 }
+    }
+    const restyled = restyleShape(rect, { color: '#ef4444', width: 8 }) as RectShape
+    expect(restyled.color).toBe('#ef4444')
+    expect(restyled.width).toBe(8)
+
+    const text: TextShape = {
+      id: 't',
+      kind: 'text',
+      color: '#fff',
+      at: { x: 0, y: 0 },
+      text: 'hi',
+      fontSize: 18
+    }
+    const restyledText = restyleShape(text, { fontSize: 32 }) as TextShape
+    expect(restyledText.fontSize).toBe(32)
+  })
+
+  it('computes a bounding box for pen and rect shapes', () => {
+    const stroke: PenShape = {
+      id: 'p',
+      kind: 'pen',
+      color: '#fff',
+      width: 4,
+      points: [
+        { x: 2, y: 8 },
+        { x: 10, y: 2 }
+      ]
+    }
+    expect(boundingBox(stroke)).toEqual({ x: 2, y: 2, width: 8, height: 6 })
   })
 
   it('returns null arrowhead for a zero-length segment', () => {

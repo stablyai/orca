@@ -12976,7 +12976,8 @@
             "highlight": "Resaltador",
             "pen": "Lápiz",
             "rect": "Rectángulo",
-            "text": "Texto"
+            "text": "Texto",
+            "select": "Seleccionar / mover"
           },
           "widthOption": "{{value0}} px"
         }

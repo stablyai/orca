@@ -5,6 +5,9 @@
 
 export type MarkupToolKind = 'pen' | 'highlight' | 'arrow' | 'rect' | 'ellipse' | 'text'
 
+// Toolbar selection: a drawing tool, or the select/edit cursor.
+export type MarkupTool = MarkupToolKind | 'select'
+
 export type MarkupPoint = { x: number; y: number }
 
 type MarkupShapeBase = { id: string; color: string }
@@ -63,6 +66,7 @@ export const DEFAULT_MARKUP_COLOR: string = MARKUP_COLORS[0]
 
 export const MARKUP_WIDTHS = [2, 4, 8] as const
 export const DEFAULT_MARKUP_WIDTH = 4
+export const MARKUP_FONT_SIZES = [14, 18, 24, 32, 48] as const
 export const DEFAULT_MARKUP_FONT_SIZE = 18
 
 // Highlight strokes are intentionally fat and translucent.
@@ -73,49 +77,52 @@ export const HIGHLIGHT_ALPHA = 0.35
 
 export type MarkupDocument = {
   shapes: MarkupShape[]
-  /** Shapes removed by undo, newest last; cleared whenever a new shape commits. */
-  undone: MarkupShape[]
+  /** Prior whole-list states (oldest first) for undo. */
+  past: MarkupShape[][]
+  /** Undone whole-list states (newest first) for redo. */
+  future: MarkupShape[][]
 }
 
 export function createMarkupDocument(): MarkupDocument {
-  return { shapes: [], undone: [] }
+  return { shapes: [], past: [], future: [] }
+}
+
+// Replace the whole shape list as one undoable step. Snapshot-based so every
+// edit — add, move, restyle, delete — is reversible, not just adding a shape.
+export function setShapes(doc: MarkupDocument, shapes: MarkupShape[]): MarkupDocument {
+  return { shapes, past: [...doc.past, doc.shapes], future: [] }
 }
 
 export function commitShape(doc: MarkupDocument, shape: MarkupShape): MarkupDocument {
-  // Why: committing a new shape discards the redo stack — the standard
-  // editor contract where a fresh edit forks history.
-  return { shapes: [...doc.shapes, shape], undone: [] }
+  return setShapes(doc, [...doc.shapes, shape])
 }
 
 export function undoShape(doc: MarkupDocument): MarkupDocument {
-  const last = doc.shapes.at(-1)
-  if (!last) {
+  const prev = doc.past.at(-1)
+  if (!prev) {
     return doc
   }
-  return { shapes: doc.shapes.slice(0, -1), undone: [...doc.undone, last] }
+  return { shapes: prev, past: doc.past.slice(0, -1), future: [doc.shapes, ...doc.future] }
 }
 
 export function redoShape(doc: MarkupDocument): MarkupDocument {
-  const restored = doc.undone.at(-1)
-  if (!restored) {
+  const next = doc.future.at(0)
+  if (!next) {
     return doc
   }
-  return { shapes: [...doc.shapes, restored], undone: doc.undone.slice(0, -1) }
+  return { shapes: next, past: [...doc.past, doc.shapes], future: doc.future.slice(1) }
 }
 
 export function clearShapes(doc: MarkupDocument): MarkupDocument {
-  if (doc.shapes.length === 0 && doc.undone.length === 0) {
-    return doc
-  }
-  return { shapes: [], undone: [] }
+  return doc.shapes.length === 0 ? doc : setShapes(doc, [])
 }
 
 export function canUndo(doc: MarkupDocument): boolean {
-  return doc.shapes.length > 0
+  return doc.past.length > 0
 }
 
 export function canRedo(doc: MarkupDocument): boolean {
-  return doc.undone.length > 0
+  return doc.future.length > 0
 }
 
 export function isEmptyDocument(doc: MarkupDocument): boolean {
@@ -202,4 +209,72 @@ export function arrowHeadGeometry(
 
 export function highlightWidth(width: number): number {
   return width * HIGHLIGHT_WIDTH_MULTIPLIER
+}
+
+// ─── Editing existing shapes (select / move / restyle) ──────────────────────
+
+export function translateShape(shape: MarkupShape, dx: number, dy: number): MarkupShape {
+  const move = (point: MarkupPoint): MarkupPoint => ({ x: point.x + dx, y: point.y + dy })
+  switch (shape.kind) {
+    case 'pen':
+    case 'highlight':
+      return { ...shape, points: shape.points.map(move) }
+    case 'arrow':
+    case 'rect':
+    case 'ellipse':
+      return { ...shape, from: move(shape.from), to: move(shape.to) }
+    case 'text':
+      return { ...shape, at: move(shape.at) }
+  }
+}
+
+export type MarkupStylePatch = { color?: string; width?: number; fontSize?: number }
+
+export function restyleShape(shape: MarkupShape, patch: MarkupStylePatch): MarkupShape {
+  switch (shape.kind) {
+    case 'pen':
+    case 'highlight':
+    case 'arrow':
+    case 'rect':
+    case 'ellipse':
+      return {
+        ...shape,
+        color: patch.color ?? shape.color,
+        width: patch.width ?? shape.width
+      }
+    case 'text':
+      return {
+        ...shape,
+        color: patch.color ?? shape.color,
+        fontSize: patch.fontSize ?? shape.fontSize
+      }
+  }
+}
+
+export function boundingBox(shape: MarkupShape): NormalizedRect {
+  switch (shape.kind) {
+    case 'pen':
+    case 'highlight': {
+      const xs = shape.points.map((point) => point.x)
+      const ys = shape.points.map((point) => point.y)
+      const x = Math.min(...xs)
+      const y = Math.min(...ys)
+      return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y }
+    }
+    case 'arrow':
+    case 'rect':
+    case 'ellipse':
+      return normalizeRect(shape.from, shape.to)
+    case 'text': {
+      const lines = shape.text.split('\n')
+      const longest = lines.reduce((max, line) => Math.max(max, line.length), 0)
+      // Rough glyph-width estimate — good enough for selection/hit bounds.
+      return {
+        x: shape.at.x,
+        y: shape.at.y,
+        width: longest * shape.fontSize * 0.6,
+        height: lines.length * shape.fontSize * 1.25
+      }
+    }
+  }
 }

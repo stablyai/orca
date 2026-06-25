@@ -12976,7 +12976,8 @@
             "highlight": "高亮",
             "pen": "画笔",
             "rect": "矩形",
-            "text": "文字"
+            "text": "文字",
+            "select": "选择 / 移动"
           },
           "widthOption": "{{value0}} px"
         }

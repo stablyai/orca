@@ -3,6 +3,7 @@ import {
   ArrowUpRight,
   Circle,
   Highlighter,
+  MousePointer2,
   Pencil,
   Redo2,
   Square,
@@ -15,16 +16,26 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { MARKUP_COLORS, MARKUP_WIDTHS, type MarkupToolKind } from './markup-drawing-model'
+import {
+  MARKUP_COLORS,
+  MARKUP_FONT_SIZES,
+  MARKUP_WIDTHS,
+  type MarkupTool
+} from './markup-drawing-model'
 
 type ToolItem = {
-  kind: MarkupToolKind
+  kind: MarkupTool
   icon: React.ComponentType<{ className?: string }>
   label: string
 }
 
 function toolItems(): ToolItem[] {
   return [
+    {
+      kind: 'select',
+      icon: MousePointer2,
+      label: translate('auto.components.browser-pane.markup.tool.select', 'Select / move')
+    },
     {
       kind: 'pen',
       icon: Pencil,
@@ -59,12 +70,14 @@ function toolItems(): ToolItem[] {
 }
 
 export type MarkupToolbarProps = {
-  tool: MarkupToolKind
-  onToolChange: (tool: MarkupToolKind) => void
+  tool: MarkupTool
+  onToolChange: (tool: MarkupTool) => void
   color: string
   onColorChange: (color: string) => void
   width: number
   onWidthChange: (width: number) => void
+  fontSize: number
+  onFontSizeChange: (fontSize: number) => void
   canUndo: boolean
   canRedo: boolean
   onUndo: () => void
@@ -79,6 +92,8 @@ export const MarkupToolbar = React.memo(function MarkupToolbar({
   onColorChange,
   width,
   onWidthChange,
+  fontSize,
+  onFontSizeChange,
   canUndo,
   canRedo,
   onUndo,
@@ -161,6 +176,27 @@ export const MarkupToolbar = React.memo(function MarkupToolbar({
                     className="rounded-full bg-foreground"
                     style={{ width: option + 2, height: option + 2 }}
                   />
+                </button>
+              ))}
+            </div>
+            <div className="mt-2 flex items-center gap-1">
+              <Type className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              {MARKUP_FONT_SIZES.map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  aria-label={translate(
+                    'auto.components.browser-pane.markup.widthOption',
+                    '{{value0}} px',
+                    { value0: size }
+                  )}
+                  onClick={() => onFontSizeChange(size)}
+                  className={cn(
+                    'flex h-6 flex-1 items-center justify-center rounded-sm border text-[11px] tabular-nums',
+                    fontSize === size ? 'border-ring bg-accent' : 'border-border hover:bg-accent/50'
+                  )}
+                >
+                  {size}
                 </button>
               ))}
             </div>
