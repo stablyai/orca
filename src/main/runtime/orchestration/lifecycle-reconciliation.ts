@@ -117,6 +117,11 @@ function reconcileWorkerDoneMessage(
     )
     return { action: 'ignored' }
   }
+  // Why: `orchestration.send` can release the DB lock before waking the
+  // coordinator; the later coordinator read still needs to observe completion.
+  if (dispatch.status === 'completed' && task.status === 'completed') {
+    return { action: 'completed', taskId, dispatchId }
+  }
   if (dispatch.status !== 'dispatched') {
     onLog(`Warning: worker_done for inactive dispatch ${dispatchId} ignored`)
     return { action: 'ignored' }

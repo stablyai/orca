@@ -402,6 +402,26 @@ describe('orchestration RPC methods', () => {
       expect(() => db.createDispatchContext(t2.id, 'term_worker')).not.toThrow()
     })
 
+    it('records heartbeat when heartbeat is sent via send', async () => {
+      setup()
+      const task = db.createTask({ spec: 'heartbeat work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+
+      await call('orchestration.send', {
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'alive',
+        type: 'heartbeat',
+        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+      })
+
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+      expect(db.getDispatchContextById(dispatch.id)?.last_heartbeat_at).toBeTruthy()
+      expect(db.getActiveDispatchForTerminal('term_worker')).toBeDefined()
+    })
+
     it('does not release dispatch lock for non-lifecycle sends', async () => {
       setup()
       const task = db.createTask({ spec: 'in-flight work' })
