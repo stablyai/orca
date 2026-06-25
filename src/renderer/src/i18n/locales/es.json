@@ -9401,10 +9401,6 @@
             "a84d5677ff": "OpenCode",
             "2528586aa7": "Claudio"
           }
-        },
-        "PetOverlay": {
-          "de932b0e8f": "@keyframes pet-bob { 0%,100% { transformar: traducirY(0); } 50% { transformar: traducirY(-4px); } }",
-          "4712d196c6": "@keyframes pet-{{value0}} { desde { posición-fondo: {{value1}}px {{value2}}px; } a { posición de fondo: {{value3}}px {{value4}}px; } }"
         }
       },
       "onboarding": {

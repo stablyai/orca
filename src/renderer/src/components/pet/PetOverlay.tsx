@@ -6,7 +6,6 @@ import type { CustomPet } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
 import { selectPetAnimationName, type PetAnimationName } from './pet-agent-state'
-import { translate } from '@/i18n/i18n'
 
 type Sprite = NonNullable<CustomPet['sprite']>
 
@@ -66,15 +65,15 @@ function SpriteFrame({
   const startY = -(row * sprite.frameHeight * scale)
   const endX = -(frames * sprite.frameWidth * scale)
   const duration = Math.max(0.1, frames / Math.max(0.1, sprite.fps))
+  // Why: build the @keyframes as a plain string variable so the localization
+  // coverage audit does not classify the CSS as a user-visible JSX expression.
+  // CSS must never pass through translate()/i18n — translated keywords
+  // (transform, background-position, to) produce invalid CSS the browser
+  // discards, freezing the sprite on frame 0.
+  const keyframesCss = `@keyframes pet-${animKeyframesId} { from { background-position: ${startX}px ${startY}px; } to { background-position: ${endX}px ${startY}px; } }`
   return (
     <>
-      <style>
-        {translate(
-          'auto.components.pet.PetOverlay.4712d196c6',
-          '@keyframes pet-{{value0}} { from { background-position: {{value1}}px {{value2}}px; } to { background-position: {{value3}}px {{value4}}px; } }',
-          { value0: animKeyframesId, value1: startX, value2: startY, value3: endX, value4: startY }
-        )}
-      </style>
+      <style>{keyframesCss}</style>
       <div
         style={{
           width: renderedW,
@@ -262,6 +261,11 @@ function defaultPosition(size: number = SIZE): Position {
   )
 }
 
+// Why: static CSS keyframes for the pet bob float. Declared as a module-level
+// string constant (not via translate()/i18n) so the CSS keywords are never
+// localized — translated CSS keywords produce invalid CSS the browser discards.
+const PET_BOB_KEYFRAMES_CSS =
+  '@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }'
 export function PetOverlay(): React.JSX.Element {
   const documentVisible = useDocumentVisible()
   const reducedMotion = usePrefersReducedMotion()
@@ -389,12 +393,7 @@ export function PetOverlay(): React.JSX.Element {
           touchAction: 'none'
         }}
       >
-        <style>
-          {translate(
-            'auto.components.pet.PetOverlay.de932b0e8f',
-            '@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }'
-          )}
-        </style>
+        <style>{PET_BOB_KEYFRAMES_CSS}</style>
         {sprite ? (
           <SpriteFrame
             url={url}

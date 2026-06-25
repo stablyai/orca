@@ -9401,10 +9401,6 @@
             "a84d5677ff": "OpenCode",
             "2528586aa7": "클라우디노"
           }
-        },
-        "PetOverlay": {
-          "de932b0e8f": "@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }",
-          "4712d196c6": "@keyframes pet-{{value0}} { from { background-position: {{value1}}px {{value2}}px; } to { background-position: {{value3}}px {{value4}}px; } }"
         }
       },
       "onboarding": {
