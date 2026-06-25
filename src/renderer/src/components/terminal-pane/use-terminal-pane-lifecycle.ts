@@ -334,6 +334,10 @@ export function resolvePaneLinkCwd(
   return paneCwdMap.get(paneId)?.cwd ?? fallbackCwd
 }
 
+export function resolvePaneSeedCwd(splitPaneCwd: string | undefined, fallbackCwd: string): string {
+  return splitPaneCwd ?? fallbackCwd
+}
+
 type SplitStartupPayload = { command: string; env?: Record<string, string> }
 
 type SplitWithStartupDeps = {
@@ -715,7 +719,10 @@ export function useTerminalPaneLifecycle({
         // consumer registers on code 7, registration order decides who sees
         // each sequence.
         if (!paneCwdRef.current.has(pane.id)) {
-          paneCwdRef.current.set(pane.id, { cwd: ptyDeps.cwd, confirmed: false })
+          paneCwdRef.current.set(pane.id, {
+            cwd: resolvePaneSeedCwd(spawnHints?.cwd, ptyDeps.cwd),
+            confirmed: false
+          })
         }
         const osc7Disposable = pane.terminal.parser.registerOscHandler(7, (data) => {
           const parsedCwd = parseOsc7(data, { uncHost: osc7UncHost })

@@ -3,6 +3,7 @@ import {
   clearQueuedInitialCwdAfterFirstPane,
   mapRestoredPaneTitlesByPaneId,
   resolvePaneLinkCwd,
+  resolvePaneSeedCwd,
   resolveQueuedInitialCwd,
   shouldDetachPaneTransportOnUnmount,
   splitPaneWithOneShotStartup,
@@ -221,6 +222,16 @@ describe('resolvePaneLinkCwd', () => {
 
   it('falls back to the lifecycle startup cwd when the pane has no cached cwd yet', () => {
     expect(resolvePaneLinkCwd(new Map(), 2, '/repo')).toBe('/repo')
+  })
+})
+
+describe('resolvePaneSeedCwd', () => {
+  it('prefers the inherited split cwd before OSC 7 confirms the pane cwd', () => {
+    expect(resolvePaneSeedCwd('/repo/packages/web', '/repo')).toBe('/repo/packages/web')
+  })
+
+  it('falls back to the lifecycle cwd when the pane has no split override', () => {
+    expect(resolvePaneSeedCwd(undefined, '/repo')).toBe('/repo')
   })
 })
 
