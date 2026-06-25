@@ -116,6 +116,30 @@ describe('buildEditableContextMenuTemplate', () => {
       y: 34
     })
 
+    const paragraphMenu = template[3].submenu as Electron.MenuItemConstructorOptions[]
+    expect(paragraphMenu.map((item) => item.label ?? item.type)).toEqual([
+      'Body text',
+      'Heading 1',
+      'Heading 2',
+      'Heading 3',
+      'Heading 4',
+      'Heading 5',
+      'separator',
+      'Bullet list',
+      'Numbered list',
+      'Checklist'
+    ])
+    paragraphMenu[5].click?.(
+      {} as Electron.MenuItem,
+      {} as Electron.BrowserWindow,
+      {} as KeyboardEvent
+    )
+    expect(send).toHaveBeenLastCalledWith(richMarkdownContextMenuCommandChannel, {
+      command: 'heading-5',
+      x: 12,
+      y: 34
+    })
+
     template[8].click?.({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent)
     template[9].click?.({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent)
     expect(send).toHaveBeenCalledWith('ui:editableContextPaste', { plainTextOnly: false })
