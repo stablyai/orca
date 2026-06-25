@@ -32,7 +32,7 @@ Orca targets macOS, Linux, and Windows. Keep all platform-dependent behavior beh
 
 ## Localization (i18n)
 
-All user-facing copy is localized. `src/renderer/src/i18n/locales/en.json` is the source of truth; the `zh`, `ja`, `ko`, and `es` catalogs mirror its keys. Strings reach the UI through `translate('auto.<key>', 'English fallback')` (also `t` / `translateMain`) — never hardcode display text.
+All user-facing copy is localized. `src/renderer/src/i18n/locales/en.json` is the source of truth; the `zh`, `ja`, `ko`, and `es` catalogs mirror its keys. Strings reach the UI through `translate('auto.<key>', 'English fallback')` — never hardcode display text.
 
 When you touch user-facing copy, keep all five catalogs in sync:
 
