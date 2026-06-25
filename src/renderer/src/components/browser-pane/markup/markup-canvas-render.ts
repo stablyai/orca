@@ -65,11 +65,17 @@ export function renderMarkupScene(canvas: HTMLCanvasElement, scene: MarkupScene)
   if (scene.inProgress) {
     drawShapes(ctx, [scene.inProgress])
   }
-  // Why: don't outline the shape being re-edited — the text input stands in for it.
-  if (scene.selectedId && scene.selectedId !== scene.hiddenId) {
-    const selected = displayShapes.find((shape) => shape.id === scene.selectedId)
-    if (selected) {
-      drawSelectionBox(ctx, boundingBox(selected))
+  if (scene.selectedId) {
+    // Why: draw the frame from the full shape list — even while a text shape is
+    // being re-edited (and hidden) — so the box is identical whether the user is
+    // selecting or editing. The text input renders only the editable glyphs.
+    const base = scene.shapes.find((shape) => shape.id === scene.selectedId)
+    if (base) {
+      const framed =
+        scene.dragId === scene.selectedId && offset
+          ? translateShape(base, offset.dx, offset.dy)
+          : base
+      drawSelectionBox(ctx, boundingBox(framed))
     }
   }
 }

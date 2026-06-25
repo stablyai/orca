@@ -97,10 +97,12 @@ export function MarkupOverlay({
               editor.cancelPendingText()
             }
           }}
-          // Why: no padding/border and the same font as the canvas so the typing
-          // preview sits exactly where the committed text renders (otherwise it
-          // shifts). field-sizing:content makes the box hug the text.
-          className="absolute z-30 min-w-0 border-0 bg-transparent p-0 leading-none [field-sizing:content]"
+          // Why: the input renders ONLY the editable glyphs (no box of its own) —
+          // the selection frame is drawn on the canvas so it's identical whether
+          // selecting or editing. No padding/border + the same font as the canvas
+          // so the text sits exactly where it commits. field-sizing hugs the text
+          // so clicks outside it still reach the canvas.
+          className="absolute z-30 min-w-0 border-0 bg-transparent p-0 leading-none outline-none [field-sizing:content]"
           style={{
             left: pendingText.x,
             top: pendingText.y,
@@ -108,8 +110,6 @@ export function MarkupOverlay({
             fontSize: editor.fontSize,
             fontWeight: 600,
             fontFamily: TEXT_FONT_FAMILY,
-            outline: '1px dashed var(--ring)',
-            outlineOffset: '1px',
             textShadow:
               editor.color.toLowerCase() === '#ffffff'
                 ? '0 0 3px rgba(0,0,0,0.7)'
