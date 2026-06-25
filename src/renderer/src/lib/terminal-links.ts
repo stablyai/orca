@@ -307,6 +307,15 @@ function trimSpacedPathTrailingProse(range: DetectedRange): DetectedRange {
   }
 }
 
+function trimTrailingWhitespace(range: DetectedRange): DetectedRange {
+  const text = range.text.trimEnd()
+  return {
+    text,
+    startIndex: range.startIndex,
+    endIndex: range.startIndex + text.length
+  }
+}
+
 function buildLineEndingSpacedPathPrefixRanges(range: DetectedRange): DetectedRange[] {
   const ranges: DetectedRange[] = []
   for (const match of range.text.matchAll(/\s+/g)) {
@@ -408,7 +417,9 @@ function detectSpacedLocalPathLinks(
           ? [range, ...buildLineEndingSpacedPathPrefixRanges(range)]
           : [range]
       const candidateLinks = candidateRanges
-        .map((candidateRange) => toParsedLink(trimSpacedPathTrailingProse(candidateRange)))
+        .map((candidateRange) =>
+          toParsedLink(trimSpacedPathTrailingProse(trimTrailingWhitespace(candidateRange)))
+        )
         .filter((link): link is ParsedTerminalFileLink => link !== null)
       const link = candidateLinks[0]
       if (link) {
