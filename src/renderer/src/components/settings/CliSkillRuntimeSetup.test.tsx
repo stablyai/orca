@@ -34,16 +34,35 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
   })
 
   it('reinstalls Windows-host skill updates through the add path', () => {
-    const command = buildSkillCommandForRuntime('npx skills update orchestration --global', {
-      runtime: 'host',
-      label: 'Windows'
-    })
-    const expectedCommand =
-      process.platform === 'win32'
-        ? buildAgentFeatureSkillInstallCommand(['orchestration'])
-        : 'npx skills update orchestration --global'
+    expect(
+      buildSkillCommandForRuntime(
+        'npx skills update orchestration --global',
+        {
+          runtime: 'host',
+          label: 'Windows'
+        },
+        'win32'
+      )
+    ).toBe(buildAgentFeatureSkillInstallCommand(['orchestration']))
+  })
 
-    expect(command).toBe(expectedCommand)
+  it('treats missing runtime as a Windows host fallback for skill updates', () => {
+    expect(
+      buildSkillCommandForRuntime('npx skills update orca-cli --global', undefined, 'win32')
+    ).toBe(buildAgentFeatureSkillInstallCommand(['orca-cli']))
+  })
+
+  it('keeps non-Windows host skill updates on the update path', () => {
+    expect(
+      buildSkillCommandForRuntime(
+        'npx skills update orchestration --global',
+        {
+          runtime: 'host',
+          label: 'This device'
+        },
+        'linux'
+      )
+    ).toBe('npx skills update orchestration --global')
   })
 
   it('preserves the selected WSL distro for skill discovery', () => {

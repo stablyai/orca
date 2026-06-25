@@ -44,20 +44,18 @@ export function OrchestrationPane(): React.JSX.Element {
   const [selectedExampleId, setSelectedExampleId] = useState<string | null>(null)
   const [skillPromptOpen, setSkillPromptOpen] = useState(false)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
-  const orchestrationInstallCommand =
-    activeSkillRuntime.agentRuntime && !activeSkillRuntime.installDisabledReason
-      ? buildSkillCommandForRuntime(
-          ORCHESTRATION_SKILL_INSTALL_COMMAND,
-          activeSkillRuntime.agentRuntime
-        )
-      : ORCHESTRATION_SKILL_INSTALL_COMMAND
-  const orchestrationUpdateCommand =
-    activeSkillRuntime.agentRuntime && !activeSkillRuntime.installDisabledReason
-      ? buildSkillCommandForRuntime(
-          ORCHESTRATION_SKILL_UPDATE_COMMAND,
-          activeSkillRuntime.agentRuntime
-        )
-      : ORCHESTRATION_SKILL_UPDATE_COMMAND
+  const orchestrationInstallCommand = !activeSkillRuntime.installDisabledReason
+    ? buildSkillCommandForRuntime(
+        ORCHESTRATION_SKILL_INSTALL_COMMAND,
+        activeSkillRuntime.agentRuntime
+      )
+    : ORCHESTRATION_SKILL_INSTALL_COMMAND
+  const orchestrationUpdateCommand = !activeSkillRuntime.installDisabledReason
+    ? buildSkillCommandForRuntime(
+        ORCHESTRATION_SKILL_UPDATE_COMMAND,
+        activeSkillRuntime.agentRuntime
+      )
+    : ORCHESTRATION_SKILL_UPDATE_COMMAND
 
   const {
     installed: orchestrationSkillDetected,

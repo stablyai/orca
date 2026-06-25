@@ -22,6 +22,11 @@ export type LocalAgentRuntime = {
   label: string
 }
 
+const LOCAL_HOST_AGENT_RUNTIME: LocalAgentRuntime = {
+  runtime: 'host',
+  label: ''
+}
+
 export function getHostRuntimeLabel(): string {
   return navigator.userAgent.includes('Windows') ? 'Windows' : 'This device'
 }
@@ -63,21 +68,34 @@ export function getWslCliDistroRequest(
     : undefined
 }
 
-export function buildSkillCommandForRuntime(command: string, runtime: LocalAgentRuntime): string {
-  const normalizedCommand = normalizeWindowsSkillUpdateCommand(command, runtime)
-  if (runtime.runtime !== 'wsl') {
+export function buildSkillCommandForRuntime(
+  command: string,
+  runtime?: LocalAgentRuntime,
+  currentPlatform = getSkillCommandPlatform()
+): string {
+  const resolvedRuntime = runtime ?? LOCAL_HOST_AGENT_RUNTIME
+  const normalizedCommand = normalizeWindowsSkillUpdateCommand(
+    command,
+    resolvedRuntime,
+    currentPlatform
+  )
+  if (resolvedRuntime.runtime !== 'wsl') {
     return normalizedCommand
   }
 
-  const distroArg = runtime.wslDistro?.trim()
-    ? ` -d ${quotePowerShellSingle(runtime.wslDistro.trim())}`
+  const distroArg = resolvedRuntime.wslDistro?.trim()
+    ? ` -d ${quotePowerShellSingle(resolvedRuntime.wslDistro.trim())}`
     : ''
   const wslCommand = escapeWslShCommandForWindows(buildWslLoginShellCommand(normalizedCommand))
   return `wsl.exe${distroArg} -- sh -c ${quotePowerShellSingle(wslCommand)}`
 }
 
-function normalizeWindowsSkillUpdateCommand(command: string, runtime: LocalAgentRuntime): string {
-  if (runtime.runtime === 'wsl' || process.platform !== 'win32') {
+function normalizeWindowsSkillUpdateCommand(
+  command: string,
+  runtime: LocalAgentRuntime,
+  currentPlatform: NodeJS.Platform
+): string {
+  if (runtime.runtime === 'wsl' || currentPlatform !== 'win32') {
     return command
   }
 
@@ -91,6 +109,23 @@ function normalizeWindowsSkillUpdateCommand(command: string, runtime: LocalAgent
   // Windows, while reinstalling from the same repo source is idempotent and
   // keeps the setup affordance working.
   return buildAgentFeatureSkillInstallCommand([updateMatch[1]])
+}
+
+function getSkillCommandPlatform(): NodeJS.Platform {
+  const platform =
+    typeof window === 'undefined' ? undefined : window.api?.platform?.get?.()?.platform
+  if (platform) {
+    return platform
+  }
+
+  const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
+  if (userAgent.includes('Windows')) {
+    return 'win32'
+  }
+  if (userAgent.includes('Mac')) {
+    return 'darwin'
+  }
+  return 'linux'
 }
 
 export function buildSkillInstallCommandForRuntime(
