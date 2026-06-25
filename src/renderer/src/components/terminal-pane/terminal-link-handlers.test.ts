@@ -1559,6 +1559,9 @@ describe('createFilePathLinkProvider range bounds', () => {
   })
 
   it('uses the pane-specific cwd instead of a stale lifecycle startup cwd', async () => {
+    vi.mocked(window.api.shell.pathExists).mockImplementation(async (pathValue) => {
+      return pathValue === '/repo/package.json'
+    })
     const { provider } = createProviderSetup([makeBufferLine('package.json')], new Map(), {
       startupCwd: '/repo/packages/web',
       getPaneLinkCwd: () => '/repo'
@@ -1569,6 +1572,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     })
 
     expect(links.map((link) => link.text)).toEqual(['package.json'])
+    expect(window.api.shell.pathExists).toHaveBeenCalledWith('/repo/package.json')
   })
 
   it('opens an existing extensionless spaced prefix from direct fallback cache', async () => {

@@ -1705,6 +1705,7 @@ describe('setActiveWorktree', () => {
       'canExpandPaneByTabId',
       'terminalLayoutsByTabId',
       'pendingStartupByTabId',
+      'pendingInitialCwdByTabId',
       'pendingSetupSplitByTabId',
       'pendingIssueCommandSplitByTabId',
       'tabBarOrderByWorktree',
@@ -1745,6 +1746,9 @@ describe('setActiveWorktree', () => {
       pendingStartupByTabId: {
         [orphanId]: { command: 'codex' }
       },
+      pendingInitialCwdByTabId: {
+        [orphanId]: '/repo/packages/web'
+      },
       tabBarOrderByWorktree: {
         [wt]: [orphanId]
       },
@@ -1765,6 +1769,7 @@ describe('setActiveWorktree', () => {
     expect(s.runtimePaneTitlesByTabId[orphanId]).toBeUndefined()
     expect(s.terminalLayoutsByTabId[orphanId]).toBeUndefined()
     expect(s.pendingStartupByTabId[orphanId]).toBeUndefined()
+    expect(s.pendingInitialCwdByTabId[orphanId]).toBeUndefined()
     expect(s.cacheTimerByKey[`${orphanId}:seed`]).toBeUndefined()
     expect(s.terminalLayoutsByTabId[replacement.id]).toEqual(makeLayout())
   })
