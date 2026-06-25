@@ -201,13 +201,12 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
             'right-leaf': 'pty-right'
           },
           root: {
-            id: 'root-split',
+            type: 'split',
             direction: 'horizontal',
-            children: [
-              { id: 'left-leaf', type: 'pane' },
-              { id: 'right-leaf', type: 'pane' }
-            ]
-          }
+            first: { type: 'leaf', leafId: 'left-leaf' },
+            second: { type: 'leaf', leafId: 'right-leaf' }
+          },
+          expandedLeafId: null
         }
       }
     }
