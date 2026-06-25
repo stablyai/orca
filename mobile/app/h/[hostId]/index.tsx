@@ -765,6 +765,8 @@ export function HostScreen({
     count += filters.filterRepoIds.size
     return count
   }, [filters])
+  const selectedSortLabel =
+    SORT_OPTIONS.find((option) => option.value === sortMode)?.label ?? 'Recent'
 
   const handleGroupChange = useCallback(
     (value: MobileGroupMode) => {
@@ -937,19 +939,19 @@ export function HostScreen({
               </Pressable>
 
               <Pressable
-                style={[styles.sortButton, styles.embeddedModeButton]}
+                style={[styles.modeButton, styles.embeddedModeButton]}
                 onPress={() => setShowSortPicker(true)}
                 accessibilityRole="button"
-                accessibilityLabel={`Sort by ${SORT_OPTIONS.find((o) => o.value === sortMode)?.label ?? 'Recent'}`}
+                accessibilityLabel={`Sort by ${selectedSortLabel}`}
               >
                 <SlidersHorizontal size={14} color={colors.textSecondary} />
                 <Text style={styles.sortLabel} numberOfLines={1}>
-                  {SORT_OPTIONS.find((o) => o.value === sortMode)?.label ?? 'Recent'}
+                  {selectedSortLabel}
                 </Text>
               </Pressable>
 
               <Pressable
-                style={[styles.groupButton, styles.embeddedModeButton]}
+                style={[styles.modeButton, styles.embeddedModeButton]}
                 onPress={() => setShowGroupPicker(true)}
                 accessibilityRole="button"
                 accessibilityLabel="Group workspaces"
@@ -1050,16 +1052,16 @@ export function HostScreen({
               </Text>
             </Pressable>
 
-            <Pressable style={styles.sortButton} onPress={() => setShowSortPicker(true)}>
+            <Pressable style={styles.modeButton} onPress={() => setShowSortPicker(true)}>
               <SlidersHorizontal size={14} color={colors.textSecondary} />
-              <Text style={styles.sortLabel}>
-                {SORT_OPTIONS.find((o) => o.value === sortMode)?.label ?? 'Recent'}
+              <Text style={styles.sortLabel} numberOfLines={1}>
+                {selectedSortLabel}
               </Text>
             </Pressable>
 
-            <Pressable style={styles.groupButton} onPress={() => setShowGroupPicker(true)}>
+            <Pressable style={styles.modeButton} onPress={() => setShowGroupPicker(true)}>
               <Layers size={14} color={colors.textSecondary} />
-              <Text style={styles.sortLabel}>
+              <Text style={styles.sortLabel} numberOfLines={1}>
                 {groupMode === 'none'
                   ? 'Group'
                   : groupMode === 'workspaceStatus'
@@ -1570,21 +1572,18 @@ const styles = StyleSheet.create({
   filterChipTextActive: {
     color: colors.textPrimary
   },
-  sortButton: {
+  modeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
-  groupButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexShrink: 1,
+    minWidth: 0,
     gap: 4,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs
   },
   sortLabel: {
+    flexShrink: 1,
+    minWidth: 0,
     fontSize: 12,
     color: colors.textSecondary
   },
