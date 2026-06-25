@@ -121,9 +121,10 @@ export function WorktreeCardStatusSlot({
         : statusLabel
   const passiveStatusTooltip =
     newCardStyle && isUnread ? `${passiveStatusLabel} · Unread` : passiveStatusLabel
-  // Why: the working spinner owns the new-card status lane, but unread state
-  // should still surface in tooltip/sr-only copy and reappear afterward.
-  const showNewCardUnreadAlert = newCardStyle && isUnread && showStatus && status !== 'working'
+  // Why: working and permission already own the new-card status lane, but
+  // unread state should still surface in tooltip/sr-only copy and reappear afterward.
+  const showNewCardUnreadAlert =
+    newCardStyle && isUnread && showStatus && status !== 'working' && status !== 'permission'
   const reviewStatusIconClassName = compactReviewAndBranchStatusIconClassName
   const branchStatusIcon = <GitBranch className={branchStatusIconClassName} aria-hidden="true" />
   const passiveStatus =
