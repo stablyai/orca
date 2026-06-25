@@ -113,7 +113,7 @@ export function MarkupOverlay({
         />
       ) : null}
 
-      <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center">
+      <div className="pointer-events-none absolute inset-x-0 bottom-3 flex flex-col items-center gap-2 px-3">
         <div className="pointer-events-auto">
           <MarkupToolbar
             tool={editor.tool}
@@ -131,9 +131,6 @@ export function MarkupOverlay({
             onClear={editor.clear}
           />
         </div>
-      </div>
-
-      <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center px-3">
         <div className="pointer-events-auto flex items-center gap-2 rounded-md border border-border bg-card/95 p-1.5 shadow-md backdrop-blur">
           <span className="px-1 text-xs text-muted-foreground">
             {translate(

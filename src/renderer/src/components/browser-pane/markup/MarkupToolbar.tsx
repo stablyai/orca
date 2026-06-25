@@ -140,7 +140,7 @@ export const MarkupToolbar = React.memo(function MarkupToolbar({
               {translate('auto.components.browser-pane.markup.style', 'Color and thickness')}
             </TooltipContent>
           </Tooltip>
-          <PopoverContent side="bottom" align="start" className="w-auto p-2">
+          <PopoverContent side="top" align="start" className="w-auto p-2">
             <div className="flex flex-wrap gap-1">
               {MARKUP_COLORS.map((swatch) => (
                 <button

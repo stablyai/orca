@@ -20,10 +20,12 @@ export type MarkupPointerParams = {
   color: string
   width: number
   shapes: readonly MarkupShape[]
+  pendingText: PendingText | null
   canvasRef: React.RefObject<HTMLCanvasElement | null>
   dragRef: React.MutableRefObject<{ id: string; startX: number; startY: number } | null>
   dragOffsetRef: React.MutableRefObject<{ dx: number; dy: number }>
   select: (id: string | null) => void
+  setTool: (tool: MarkupTool) => void
   setInProgress: React.Dispatch<React.SetStateAction<MarkupShape | null>>
   setPendingText: (value: PendingText | null) => void
   setEditingTextId: (value: string | null) => void
@@ -43,10 +45,12 @@ export function useMarkupPointerHandlers(params: MarkupPointerParams) {
     color,
     width,
     shapes,
+    pendingText,
     canvasRef,
     dragRef,
     dragOffsetRef,
     select,
+    setTool,
     setInProgress,
     setPendingText,
     setEditingTextId,
@@ -86,6 +90,13 @@ export function useMarkupPointerHandlers(params: MarkupPointerParams) {
         return
       }
       if (tool === 'text') {
+        if (pendingText) {
+          // Why: a text box is already open — clicking elsewhere finishes it (the
+          // input's blur commits the text) and switches to the select tool, rather
+          // than discarding it and opening a new box at the click.
+          setTool('select')
+          return
+        }
         // Why: keep focus off the canvas so the mounting text input keeps it.
         event.preventDefault()
         setPendingText({ x: point.x, y: point.y, initial: '' })
@@ -104,11 +115,13 @@ export function useMarkupPointerHandlers(params: MarkupPointerParams) {
       color,
       dragRef,
       dragOffsetRef,
+      pendingText,
       pointFromEvent,
       select,
       setDragOffset,
       setInProgress,
       setPendingText,
+      setTool,
       shapes,
       tool,
       width
