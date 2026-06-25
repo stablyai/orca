@@ -136,6 +136,77 @@ describe('repo slice runtime folder fallback', () => {
     )
   })
 
+  it('treats runtime status RPC failures as host-scoped errors', async () => {
+    runtimeEnvironmentCall.mockImplementation((request: RuntimeEnvironmentCallRequest) => {
+      const { method } = request
+      const params = (request as { params?: unknown }).params
+      if (method === 'repo.add') {
+        return {
+          id: 'rpc-add-git',
+          ok: false,
+          error: { code: 'repo.invalid', message: 'Not a valid git repository' },
+          _meta: { runtimeId: 'runtime-remote' }
+        }
+      }
+      if (method === 'projectGroup.create') {
+        return {
+          id: 'rpc-create-status-scope',
+          ok: true,
+          result: {
+            group: {
+              id: 'status-scope-error',
+              name: 'Path status check',
+              parentPath: (params as { parentPath: string }).parentPath,
+              parentGroupId: null,
+              createdFrom: 'manual',
+              tabOrder: 0,
+              isCollapsed: false,
+              color: null,
+              createdAt: 1,
+              updatedAt: 1
+            }
+          },
+          _meta: { runtimeId: 'runtime-remote' }
+        }
+      }
+      if (method === 'folderWorkspace.getPathStatus') {
+        throw new Error('status unavailable')
+      }
+      if (method === 'projectGroup.delete') {
+        return {
+          id: 'rpc-delete-status-scope',
+          ok: true,
+          result: { deleted: true },
+          _meta: { runtimeId: 'runtime-remote' }
+        }
+      }
+      throw new Error(`Unexpected runtime method ${method}`)
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      runtimeEnvironments: [{ id: 'env-1', name: 'Remote Mac' }] as never
+    })
+
+    await expect(
+      store.getState().addRepoPath('/Users/me/GitHub/travel-hub', 'git')
+    ).resolves.toBeNull()
+
+    expect(store.getState().activeModal).not.toBe('confirm-non-git-folder')
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'projectGroup.delete',
+      params: { groupId: 'status-scope-error' },
+      timeoutMs: 15_000
+    })
+    expect(toastError).toHaveBeenCalledWith(
+      'Cannot open folder on selected runtime',
+      expect.objectContaining({
+        description: expect.stringContaining('Remote Mac')
+      })
+    )
+  })
+
   it('keeps runtime folder fallback on the checked host', async () => {
     const folderRepo: Repo = {
       ...remoteRepo,
