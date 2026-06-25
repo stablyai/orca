@@ -3,10 +3,15 @@ export type CoalescedPollRunner = {
   dispose: () => void
 }
 
-export function createCoalescedPollRunner(task: () => Promise<void>): CoalescedPollRunner {
+export function createCoalescedPollRunner(
+  task: () => Promise<void>,
+  options?: { minIntervalMs?: number }
+): CoalescedPollRunner {
   let disposed = false
   let inFlight = false
   let rerun = false
+  let lastRunEndedAt = -Infinity
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
 
   const run = (): void => {
     if (disposed) {
@@ -16,6 +21,22 @@ export function createCoalescedPollRunner(task: () => Promise<void>): CoalescedP
       rerun = true
       return
     }
+    if (timeoutId !== null) {
+      return
+    }
+
+    const now = Date.now()
+    const timeSinceLastEnd = now - lastRunEndedAt
+    const minInterval = options?.minIntervalMs ?? 0
+    if (timeSinceLastEnd < minInterval) {
+      const delay = minInterval - timeSinceLastEnd
+      timeoutId = setTimeout(() => {
+        timeoutId = null
+        run()
+      }, delay)
+      return
+    }
+
     inFlight = true
     void task()
       .catch(() => {
@@ -24,12 +45,12 @@ export function createCoalescedPollRunner(task: () => Promise<void>): CoalescedP
       })
       .finally(() => {
         inFlight = false
-        if (rerun && !disposed) {
-          rerun = false
-          run()
-          return
-        }
+        lastRunEndedAt = Date.now()
+        const shouldRerun = rerun && !disposed
         rerun = false
+        if (shouldRerun) {
+          run()
+        }
       })
   }
 
@@ -38,6 +59,10 @@ export function createCoalescedPollRunner(task: () => Promise<void>): CoalescedP
     dispose: () => {
       disposed = true
       rerun = false
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId)
+        timeoutId = null
+      }
     }
   }
 }

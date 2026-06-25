@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeById } from '@/store/selectors'
 import type { GitConflictOperation } from '../../../../shared/types'
@@ -32,9 +32,6 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const openFiles = useAppStore((s) => s.openFiles)
   const repoMap = useRepoMap()
-  const statusPollInFlightRef = useRef(false)
-  const statusPollRerunRef = useRef(false)
-  const fetchStatusRef = useRef<() => void>(() => {})
 
   const worktreePath = activeWorktree?.path ?? null
   const activePushTarget = activeWorktree?.pushTarget
@@ -138,24 +135,22 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     updateWorktreeGitIdentity
   ])
 
+  // Why: sustained file-watch events can request another status while git is
+  // still running. Keep one trailing refresh, then let the previous run settle
+  // for one visible-poll interval before spawning git again.
+  const statusPollRunner = useMemo(
+    () =>
+      createCoalescedPollRunner(runFetchStatus, {
+        minIntervalMs: POLL_INTERVAL_MS
+      }),
+    [runFetchStatus]
+  )
+
+  useEffect(() => () => statusPollRunner.dispose(), [statusPollRunner])
+
   const fetchStatus = useCallback(() => {
-    if (statusPollInFlightRef.current) {
-      statusPollRerunRef.current = true
-      return
-    }
-    statusPollInFlightRef.current = true
-    // Why: git status can exceed the 3s poll interval on large repos. Keep at
-    // most one subprocess chain in flight, then run one trailing refresh if a
-    // tick was skipped so the UI catches up without process pileups.
-    void runFetchStatus().finally(() => {
-      statusPollInFlightRef.current = false
-      if (statusPollRerunRef.current) {
-        statusPollRerunRef.current = false
-        fetchStatusRef.current()
-      }
-    })
-  }, [runFetchStatus])
-  fetchStatusRef.current = fetchStatus
+    statusPollRunner.run()
+  }, [statusPollRunner])
 
   useEffect(() => {
     if (!enabled) {
