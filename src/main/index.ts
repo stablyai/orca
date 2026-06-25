@@ -255,6 +255,16 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
         // Only worktrees Orca stamped at creation are safe to auto-rename.
         return !!meta?.orcaCreationSource && meta.preserveBranchOnDelete !== true
       },
+      getAutoRenameBranchEligibility: (worktreeId) => {
+        const meta = currentStore.getWorktreeMeta(worktreeId)
+        if (!meta) {
+          return 'transient-unknown'
+        }
+        if (!meta.orcaCreationSource || meta.preserveBranchOnDelete === true) {
+          return 'permanent-ineligible'
+        }
+        return 'eligible'
+      },
       setDisplayName: (worktreeId, displayName) => {
         const scope = parseWorkspaceKey(worktreeId)
         if (scope?.type === 'folder') {
