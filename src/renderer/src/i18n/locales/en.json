@@ -10840,7 +10840,12 @@
           "cf5817d827": "Heading 3",
           "d34a2021c8": "Heading 2",
           "abb5100a3d": "Heading 1",
-          "b462641ed2": "Body text"
+          "b462641ed2": "Body text",
+          "91a843fb43": "More blocks",
+          "2cd9e0bbb3": "Headings",
+          "b05e14620d": "Heading 4",
+          "6bbf827ef5": "Heading 5",
+          "d1bbf9a835": "Collapsible section"
         },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "Save",
@@ -10918,7 +10923,11 @@
                 "3294a2c0cc": "Create a collapsible section with a large heading summary.",
                 "41482b15ce": "Toggle Heading 1",
                 "570611864e": "Large section heading.",
-                "e66e7f04c6": "Heading 1"
+                "e66e7f04c6": "Heading 1",
+                "5f9a0ed7c4": "Heading 4",
+                "01a71dbbdd": "Nested section heading.",
+                "8440fa4acf": "Heading 5",
+                "b287b93c66": "Deep section heading."
               }
             }
           }

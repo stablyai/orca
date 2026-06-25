@@ -10840,7 +10840,12 @@
           "cf5817d827": "Título 3",
           "d34a2021c8": "Título 2",
           "abb5100a3d": "Título 1",
-          "b462641ed2": "Texto del cuerpo"
+          "b462641ed2": "Texto del cuerpo",
+          "91a843fb43": "More blocks",
+          "2cd9e0bbb3": "Headings",
+          "b05e14620d": "Heading 4",
+          "6bbf827ef5": "Heading 5",
+          "d1bbf9a835": "Collapsible section"
         },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "Ahorrar",
@@ -10918,7 +10923,11 @@
                 "3294a2c0cc": "Cree una sección plegable con un resumen de encabezado grande.",
                 "41482b15ce": "Alternar título 1",
                 "570611864e": "Encabezado de sección grande.",
-                "e66e7f04c6": "Título 1"
+                "e66e7f04c6": "Título 1",
+                "5f9a0ed7c4": "Heading 4",
+                "01a71dbbdd": "Nested section heading.",
+                "8440fa4acf": "Heading 5",
+                "b287b93c66": "Deep section heading."
               }
             }
           }
