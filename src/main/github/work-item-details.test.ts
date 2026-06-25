@@ -284,10 +284,10 @@ describe('getWorkItemDetails', () => {
       )
     ).toBe(false)
     const timelineItems = details?.timelineItems
-    expect(timelineItems).toHaveLength(300)
     if (!timelineItems) {
       throw new Error('Expected timeline items to be present')
     }
+    expect(timelineItems).toHaveLength(300)
     expect(timelineItems.at(0)).toMatchObject({ assignee: 'assignee-3-0' })
     expect(timelineItems.at(-1)).toMatchObject({ assignee: 'assignee-6-89' })
   })

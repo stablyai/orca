@@ -7,7 +7,8 @@ import {
 import type { FeatureWallSetupProgress } from '../feature-wall/feature-wall-setup-progress'
 
 export function useSetupGuideBrowserMilestoneProgress(
-  rawProgress: FeatureWallSetupProgress
+  rawProgress: FeatureWallSetupProgress,
+  historicalSplitTerminalDone: boolean
 ): FeatureWallSetupProgress {
   const setupGuideSidebarDismissed = useAppStore((s) => s.setupGuideSidebarDismissed)
   const browserMilestoneMigrated = useAppStore((s) => s.setupGuideBrowserMilestoneMigrated)
@@ -19,6 +20,7 @@ export function useSetupGuideBrowserMilestoneProgress(
     !browserMilestoneMigrated && rawProgress.ready
       ? shouldMarkBrowserMilestoneLegacyComplete({
           stepDone: rawProgress.stepDone,
+          historicalSplitTerminalDone,
           setupGuideSidebarDismissed
         })
       : false
@@ -44,12 +46,18 @@ export function useSetupGuideBrowserMilestoneProgress(
 
 export function shouldMarkBrowserMilestoneLegacyComplete(input: {
   stepDone: Partial<Record<FeatureWallSetupStepId, boolean>>
+  historicalSplitTerminalDone: boolean
   setupGuideSidebarDismissed: boolean
 }): boolean {
   if (input.setupGuideSidebarDismissed) {
     return true
   }
-  return FEATURE_WALL_SETUP_STEPS.every((step) => step.id === 'browser' || input.stepDone[step.id])
+  // Why: browser migration preserves the old pre-browser checklist, which
+  // included the now-removed split-terminal milestone.
+  return (
+    input.historicalSplitTerminalDone &&
+    FEATURE_WALL_SETUP_STEPS.every((step) => step.id === 'browser' || input.stepDone[step.id])
+  )
 }
 
 export function getSetupGuideBrowserMilestoneAwareProgress(

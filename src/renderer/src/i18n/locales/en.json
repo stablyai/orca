@@ -10026,7 +10026,6 @@
             "1a6a7d6c80": "Setup",
             "713cc529a5": "Milestones",
             "b1f1981c5e": "See tasks",
-            "505f4c910c": "split-terminal",
             "0235b268b2": "Not done yet",
             "13294d3405": "Done"
           },
@@ -10039,9 +10038,6 @@
             "a7463915b6": "Failed to save setup script",
             "6299297dac": "Setup script saved",
             "f0bbf7da77": "Try it out",
-            "364430eb3d": ", or right-click a pane and choose a split. Close the active pane with",
-            "29e64f111d": "or down with",
-            "971775f639": "Split right with",
             "522cce9e33": "Add project"
           },
           "FeatureWallTourPanel": {

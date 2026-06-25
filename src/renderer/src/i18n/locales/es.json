@@ -10026,7 +10026,6 @@
             "1a6a7d6c80": "Configuración",
             "713cc529a5": "Hitos",
             "b1f1981c5e": "Ver tareas",
-            "505f4c910c": "terminal dividido",
             "0235b268b2": "Aún no hecho",
             "13294d3405": "Hecho"
           },
@@ -10039,9 +10038,6 @@
             "a7463915b6": "No se pudo guardar el script de configuración",
             "6299297dac": "Script de configuración guardado",
             "f0bbf7da77": "Pruébalo",
-            "364430eb3d": "o haga clic con el botón derecho en un panel y elija una división. Cierre el panel activo con",
-            "29e64f111d": "o abajo con",
-            "971775f639": "Dividir a la derecha con",
             "522cce9e33": "Agregar proyecto"
           },
           "FeatureWallTourPanel": {
