@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeById } from '@/store/selectors'
 import type { GitConflictOperation } from '../../../../shared/types'
@@ -6,7 +6,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeGitConflictOperation } from '@/runtime/runtime-git-client'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
-import { createCoalescedPollRunner } from './coalesced-poll-runner'
+import { type CoalescedPollRunner, createCoalescedPollRunner } from './coalesced-poll-runner'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { shouldPollActiveGitStatus } from '@/lib/passive-macos-app-data-access'
 import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
@@ -135,22 +135,30 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     updateWorktreeGitIdentity
   ])
 
-  // Why: sustained file-watch events can request another status while git is
-  // still running. Keep one trailing refresh, then let the previous run settle
-  // for one visible-poll interval before spawning git again.
-  const statusPollRunner = useMemo(
-    () =>
-      createCoalescedPollRunner(runFetchStatus, {
-        minIntervalMs: POLL_INTERVAL_MS
-      }),
-    [runFetchStatus]
-  )
+  // Why: the runner must survive rerenders so `lastRunEndedAt` and `inFlight`
+  // are never reset by a UI-state change mid-burst (e.g. openFiles update while
+  // git is still running). A ref keeps one runner per active-worktree lifetime;
+  // `runFetchStatusRef` lets the runner always call the latest closure without
+  // being recreated. The runner is disposed and replaced only when the active
+  // worktree changes or the hook unmounts.
+  const runFetchStatusRef = useRef(runFetchStatus)
+  runFetchStatusRef.current = runFetchStatus
 
-  useEffect(() => () => statusPollRunner.dispose(), [statusPollRunner])
+  const statusPollRunnerRef = useRef<CoalescedPollRunner | null>(null)
+  useEffect(() => {
+    const runner = createCoalescedPollRunner(() => runFetchStatusRef.current(), {
+      minIntervalMs: POLL_INTERVAL_MS
+    })
+    statusPollRunnerRef.current = runner
+    return () => {
+      runner.dispose()
+      statusPollRunnerRef.current = null
+    }
+  }, [activeWorktreeId])
 
   const fetchStatus = useCallback(() => {
-    statusPollRunner.run()
-  }, [statusPollRunner])
+    statusPollRunnerRef.current?.run()
+  }, [])
 
   useEffect(() => {
     if (!enabled) {
