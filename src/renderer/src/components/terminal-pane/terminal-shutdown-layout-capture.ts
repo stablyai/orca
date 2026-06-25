@@ -4,6 +4,7 @@ import type { PtyTransport } from './pty-transport'
 import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { serializeTerminalLayout } from './layout-serialization'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
+import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
 import { measureUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 
@@ -117,10 +118,13 @@ export function captureTerminalShutdownLayout({
     fresh: {},
     currentLeafIds
   })
-  const mergedPtyIds = mergeCapturedLeafState({
-    prior: existingLayout?.ptyIdsByLeafId,
-    fresh: Object.fromEntries(ptyEntries),
-    currentLeafIds
+  const livePtyIdsByLeafId = Object.fromEntries(ptyEntries)
+  // Why: PTY bindings are live ownership, unlike scrollback history; merging
+  // prior IDs can resurrect dead panes as focus/input targets after restart.
+  layout.activeLeafId = resolveTerminalLayoutActiveLeafId({
+    root: layout.root,
+    activeLeafId: layout.activeLeafId,
+    ptyIdsByLeafId: livePtyIdsByLeafId
   })
   if (Object.keys(mergedBuffers).length > 0) {
     layout.buffersByLeafId = mergedBuffers
@@ -128,8 +132,8 @@ export function captureTerminalShutdownLayout({
   if (Object.keys(mergedScrollbackRefs).length > 0) {
     layout.scrollbackRefsByLeafId = mergedScrollbackRefs
   }
-  if (Object.keys(mergedPtyIds).length > 0) {
-    layout.ptyIdsByLeafId = mergedPtyIds
+  if (Object.keys(livePtyIdsByLeafId).length > 0) {
+    layout.ptyIdsByLeafId = livePtyIdsByLeafId
   }
 
   const titleEntries = panes

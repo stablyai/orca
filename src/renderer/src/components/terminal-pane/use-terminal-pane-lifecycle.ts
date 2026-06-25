@@ -42,6 +42,7 @@ import {
   replayTerminalLayout,
   restoreScrollbackBuffers
 } from './layout-serialization'
+import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { applyExpandedLayoutTo, restoreExpandedLayoutFrom } from './expand-collapse'
 import {
@@ -203,6 +204,7 @@ type UseTerminalPaneLifecycleDeps = {
   }) => void
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
+  clearExitedPanePtyLayoutBinding: (paneId: number, exitedPtyId: string) => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setExpandedPane: (paneId: number | null) => void
@@ -401,6 +403,7 @@ export function useTerminalPaneLifecycle({
   dispatchNotification,
   setCacheTimerStartedAt,
   syncPanePtyLayoutBinding,
+  clearExitedPanePtyLayoutBinding,
   setTabPaneExpanded,
   setTabCanExpandPane,
   setExpandedPane,
@@ -593,6 +596,7 @@ export function useTerminalPaneLifecycle({
       dispatchNotification,
       setCacheTimerStartedAt,
       syncPanePtyLayoutBinding,
+      clearExitedPanePtyLayoutBinding,
       restoredPtyIdByLeafId: initialLayoutRef.current.ptyIdsByLeafId ?? {}
     }
 
@@ -1019,6 +1023,24 @@ export function useTerminalPaneLifecycle({
         scheduleRuntimeGraphSync()
       },
       onActivePaneChange: (pane) => {
+        const layout = useAppStore.getState().terminalLayoutsByTabId[tabId]
+        const ptyIdsByLeafId = layout?.ptyIdsByLeafId ?? {}
+        if (Object.keys(ptyIdsByLeafId).length > 0 && !ptyIdsByLeafId[pane.leafId]) {
+          const fallbackLeafId = resolveTerminalLayoutActiveLeafId({
+            root: layout?.root,
+            activeLeafId: pane.leafId,
+            ptyIdsByLeafId
+          })
+          const fallbackPaneId = fallbackLeafId
+            ? (managerRef.current?.getNumericIdForLeaf(fallbackLeafId) ?? null)
+            : null
+          if (fallbackPaneId != null && fallbackPaneId !== pane.id) {
+            // Why: a pane whose PTY exited can remain visible; do not let a
+            // click park focus on a leaf that will swallow keyboard input.
+            managerRef.current?.setActivePane(fallbackPaneId, { focus: true })
+            return
+          }
+        }
         scheduleRuntimeGraphSync()
         if (shouldPersistLayout) {
           persistLayoutSnapshot()

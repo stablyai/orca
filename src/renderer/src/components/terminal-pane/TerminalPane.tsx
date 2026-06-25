@@ -58,6 +58,7 @@ import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
 import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
 import { useNotificationDispatch } from './use-notification-dispatch'
 import { connectPanePty } from './pty-connection'
+import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
 import {
   getAllOverrides,
@@ -723,6 +724,11 @@ export default function TerminalPane({
     if (Object.keys(mergedPtyIds).length > 0) {
       layout.ptyIdsByLeafId = mergedPtyIds
     }
+    layout.activeLeafId = resolveTerminalLayoutActiveLeafId({
+      root: layout.root,
+      activeLeafId: layout.activeLeafId,
+      ptyIdsByLeafId: mergedPtyIds
+    })
     // Preserve pane titles — uses the live React state (via ref) rather than
     // the stale Zustand value because React state reflects in-flight title
     // edits that haven't been persisted yet.
@@ -853,6 +859,34 @@ export default function TerminalPane({
       delete nextBindings[leafId]
       setTabLayout(tabId, {
         ...layoutWithoutPtyBindings,
+        ...(Object.keys(nextBindings).length > 0 ? { ptyIdsByLeafId: nextBindings } : {})
+      })
+    },
+    [setTabLayout, tabId]
+  )
+
+  const clearExitedPanePtyLayoutBinding = useCallback(
+    (paneId: number, exitedPtyId: string): void => {
+      const existingLayout = useAppStore.getState().terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT
+      const { ptyIdsByLeafId: _existingPtyIdsByLeafId, ...layoutWithoutPtyBindings } =
+        existingLayout
+      const existingBindings = existingLayout.ptyIdsByLeafId ?? {}
+      const leafId = managerRef.current?.getLeafId(paneId)
+      if (!leafId || existingBindings[leafId] !== exitedPtyId) {
+        return
+      }
+
+      const nextBindings = { ...existingBindings }
+      delete nextBindings[leafId]
+      // Why: a focused pane that lost its PTY can swallow input while a live
+      // sibling still exists, so unexpected exits repair focus to a bound leaf.
+      setTabLayout(tabId, {
+        ...layoutWithoutPtyBindings,
+        activeLeafId: resolveTerminalLayoutActiveLeafId({
+          root: existingLayout.root,
+          activeLeafId: existingLayout.activeLeafId,
+          ptyIdsByLeafId: nextBindings
+        }),
         ...(Object.keys(nextBindings).length > 0 ? { ptyIdsByLeafId: nextBindings } : {})
       })
     },
@@ -1031,6 +1065,7 @@ export default function TerminalPane({
     dispatchNotification,
     setCacheTimerStartedAt,
     syncPanePtyLayoutBinding,
+    clearExitedPanePtyLayoutBinding,
     setTabPaneExpanded,
     setTabCanExpandPane,
     setExpandedPane,
@@ -1248,7 +1283,8 @@ export default function TerminalPane({
         onShowSessionRestoredBanner: showRestoredSessionBanner,
         dispatchNotification,
         setCacheTimerStartedAt,
-        syncPanePtyLayoutBinding
+        syncPanePtyLayoutBinding,
+        clearExitedPanePtyLayoutBinding
       })
       panePtyBindingsRef.current.set(paneId, newPaneBinding)
       manager.setActivePane(paneId, { focus: true })
@@ -1270,6 +1306,7 @@ export default function TerminalPane({
       setCacheTimerStartedAt,
       setRuntimePaneTitle,
       suppressPtyExit,
+      clearExitedPanePtyLayoutBinding,
       syncPanePtyLayoutBinding,
       tabId,
       updateTabPtyId,
