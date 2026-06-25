@@ -822,7 +822,23 @@
         "ba8e329d92": "Unmark viewed",
         "3f79ffc8b7": "Open the PR details to view current reviewers.",
         "5c1c973855": "Remove reviewer",
-        "commentTooLarge": "Comment is too large to submit safely."
+        "commentTooLarge": "Comment is too large to submit safely.",
+        "timeline": {
+          "completed": "as completed",
+          "notPlanned": "as not planned",
+          "someone": "someone",
+          "assigned": "assigned",
+          "unassigned": "unassigned",
+          "mentioned": "mentioned this",
+          "in": "in",
+          "closed": "closed this",
+          "reopened": "reopened this",
+          "moved": "moved this",
+          "from": "from",
+          "to": "to",
+          "activity": "Activity",
+          "noActivity": "No activity yet."
+        }
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Reopen",
@@ -1107,6 +1123,8 @@
         "notePasteTooLarge": "Paste is too large for the note field."
       },
       "NewWorkspaceComposerModal": {
+        "createWorktree": "Create worktree",
+        "createWorkspace": "Create workspace",
         "fa90f739a5": "Choose the project, workspace name, and agent before creating the workspace."
       },
       "PullRequestPage": {
@@ -4944,7 +4962,11 @@
           "70bb30feb1": "Save editor and editable diff changes automatically after a short pause.",
           "0df2e4fd12": "Auto Save Files",
           "d21136d9ef": "Configure how Orca persists file edits.",
-          "45c6e85c4d": "Editor"
+          "45c6e85c4d": "Editor",
+          "8f1afdfbd8": "Diff Word Wrap",
+          "4aa4d9fb73": "Wrap long lines in diff editors instead of requiring horizontal scrolling.",
+          "bf16ef0af2": "Off",
+          "3f6892f307": "On"
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -5042,7 +5064,7 @@
           "1f744a72f4": "Config"
         },
         "WarpThemeImportModal": {
-          "title": "Import themes from Warp",
+          "title": "Import from Warp",
           "description": "Import Warp themes as Orca terminal themes.",
           "yaml_title": "Import theme YAML",
           "yaml_description": "Import theme YAML files (Warp format) as Orca terminal themes.",
@@ -6324,22 +6346,28 @@
           "d06664e889": "dark"
         },
         "TerminalThemeSections": {
-          "import_themes_title": "Import Themes",
-          "import_themes_description": "Imported themes are available in both the dark and light theme pickers.",
           "db210115c5": "Light Mode Preview",
           "5e0c24b5c8": "Controls the split divider line between panes in light mode.",
           "ec2e33ad80": "Light Divider Color",
           "d56af60e6f": "Choose the theme used when Orca is in light mode.",
           "8273bc75d7": "Light Theme",
-          "74b15574c8": "Configure the optional light-mode terminal appearance.",
-          "b584287e84": "When disabled, light mode reuses the dark terminal theme.",
-          "d76f60c9cc": "Use Separate Theme In Light Mode",
           "bc8e8a251a": "Dark Mode Preview",
           "cbe56a0f79": "Controls the split divider line between panes in dark mode.",
           "b739d2abfe": "Dark Divider Color",
           "7add204bd5": "Choose the terminal theme used in dark mode.",
           "9499ad1dc4": "Dark Theme",
-          "f012172e21": "Choose the theme used for terminal panes in dark mode."
+          "f012172e21": "Choose the theme used for terminal panes in dark mode.",
+          "catalog_title": "Terminal Themes",
+          "catalog_description": "Choose terminal themes and divider colors for dark and light mode.",
+          "target_title": "Theme Mode",
+          "target_label": "Theme Mode",
+          "target_aria": "Terminal theme mode",
+          "target_dark": "Dark",
+          "target_light": "Light",
+          "match_dark_mode": "Match dark mode",
+          "match_dark_mode_description": "Share the dark terminal theme and divider color in light mode.",
+          "light_preview_description": "Shows the effective light terminal appearance.",
+          "dark_preview_description": "Shows the effective dark terminal appearance."
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI magenta color",
@@ -7836,11 +7864,12 @@
             "73e9422f19": "One-time import of supported Ghostty terminal settings.",
             "a979df0083": "Import from Ghostty",
             "warp_import": {
-              "title": "Import themes from Warp",
+              "title": "Import from Warp",
               "description": "Import Warp themes as Orca terminal themes.",
               "keyword_warp": "warp",
               "keyword_themes": "themes",
-              "keyword_yaml": "yaml"
+              "keyword_yaml": "yaml",
+              "keyword_legacy_title": "Import themes from Warp"
             },
             "yaml_import": {
               "title": "Import from YAML",
@@ -7887,8 +7916,8 @@
             "1dee533bd9": "Choose the theme used when Orca is in light mode.",
             "1d89457764": "Light Theme",
             "da864e6cec": "light mode",
-            "f268092ee3": "When disabled, light mode reuses the dark terminal theme.",
-            "232e532169": "Use Separate Theme In Light Mode",
+            "f268092ee3": "Light mode can use its own terminal theme.",
+            "match_dark_mode_title": "Match dark mode",
             "f785374072": "dark",
             "9c32726f47": "Controls the split divider line between panes in dark mode.",
             "8987db7ff2": "Dark Divider Color",
@@ -7954,6 +7983,11 @@
             "scrollSpeed": {
               "title": "Scroll Speed",
               "description": "Tune normal terminal scrollback, fast modifier scrolling, and full-screen TUI wheel speed."
+            },
+            "theme_target": {
+              "title": "Theme Mode",
+              "keyword_target": "target",
+              "keyword_editing": "editing"
             }
           },
           "windows": {
@@ -9151,7 +9185,9 @@
             "noAgentSessionsFound": "No agent sessions found",
             "noSessionsMatchFilters": "No sessions match the current filters",
             "sessionId": "Session ID",
-            "logPath": "Log path"
+            "logPath": "Log path",
+            "originalPaneUnavailable": "Original pane is no longer available.",
+            "worktreeUnavailable": "Worktree is no longer available."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -9204,6 +9240,8 @@
             "resumeCommand": "Resume command",
             "sessionActions": "{{value0}} session actions",
             "resumeInNewTab": "Resume in New Tab",
+            "resumeInWorktree": "Resume in Worktree",
+            "viewLog": "View Log",
             "copyResumeCommand": "Copy Resume Command",
             "openLog": "Open Log",
             "revealLog": "Reveal Log",
@@ -9227,7 +9265,10 @@
             "agentRole": "Agent",
             "toolRole": "Tool",
             "systemRole": "System",
-            "sessionRole": "Session"
+            "sessionRole": "Session",
+            "jumpToOriginalPane": "Jump to Original Pane",
+            "worktree": "Worktree",
+            "jumpToWorktree": "Jump to Worktree"
           },
           "AiVaultSessionRow": {
             "noPreviewAvailable": "No conversation preview available",
@@ -9251,7 +9292,9 @@
             "agentRole": "Agent",
             "toolRole": "Tool",
             "systemRole": "System",
-            "sessionRole": "Session"
+            "sessionRole": "Session",
+            "jumpToOriginalPane": "Jump to Original Pane",
+            "jumpToWorktree": "Jump to Worktree"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "Find files",
@@ -9295,6 +9338,17 @@
                 "copyCommand": "Copy command"
               }
             }
+          },
+          "AiVaultSessionWorktree": {
+            "currentWorktree": "Current worktree",
+            "activeWorktree": "Active worktree",
+            "archivedWorktree": "Archived worktree",
+            "unavailableWorktree": "Unavailable worktree",
+            "jumpToWorktree": "Jump to Worktree",
+            "noRecordedWorktree": "No worktree was recorded for this session.",
+            "archivedJumpUnavailable": "This session is in an archived worktree.",
+            "noActiveWorktreeMatch": "No active worktree matches this session.",
+            "noActiveWorktreeTarget": "No active worktree is available."
           }
         }
       },
@@ -9975,7 +10029,6 @@
             "1a6a7d6c80": "Setup",
             "713cc529a5": "Milestones",
             "b1f1981c5e": "See tasks",
-            "505f4c910c": "split-terminal",
             "0235b268b2": "Not done yet",
             "13294d3405": "Done"
           },
@@ -9988,9 +10041,6 @@
             "a7463915b6": "Failed to save setup script",
             "6299297dac": "Setup script saved",
             "f0bbf7da77": "Try it out",
-            "364430eb3d": ", or right-click a pane and choose a split. Close the active pane with",
-            "29e64f111d": "or down with",
-            "971775f639": "Split right with",
             "522cce9e33": "Add project"
           },
           "FeatureWallTourPanel": {
@@ -10468,7 +10518,9 @@
           "8368d256ec": "combined-branch",
           "8f68ad9ca9": "Show {{value0}} AI {{value1}}",
           "724a13568d": " in {{value0}}",
-          "6094135eec": " vs {{value0}}"
+          "6094135eec": " vs {{value0}}",
+          "a4420ca1f7": "Wrap On",
+          "dde325ddfe": "Wrap Off"
         },
         "ConflictComponents": {
           "f338288514": "Loading conflict contents...",
@@ -10556,7 +10608,8 @@
           "3e0ce48c24": "Export as PDF",
           "561251019a": "More actions",
           "8c8b7f5ff5": "Show front matter",
-          "10c39d58c1": "Hide front matter"
+          "10c39d58c1": "Hide front matter",
+          "1eef809708": "Word Wrap"
         },
         "EditorPanelShell": {
           "e2c4dec350": "Loading editor..."

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import {
   ALL_GROUP_META,
   buildRows,
@@ -358,6 +359,105 @@ describe('buildRows with pinned worktrees', () => {
       { type: 'header', key: 'project:github:stablyai/orca', label: 'Orca', count: 2 },
       { type: 'item', worktree: { id: worktree.id }, hostContextLabel: LOCAL_HOST_LABEL },
       { type: 'item', worktree: { id: remoteWorktree.id }, hostContextLabel: 'gpu-vm' }
+    ])
+  })
+
+  it('renders same-project records with git remote identity as one mixed-host project header', () => {
+    const localRepo: Repo = {
+      ...repo,
+      id: 'local-sample-app',
+      path: '/Users/alice/work/sample-app',
+      displayName: 'sample-app',
+      gitRemoteIdentity: {
+        canonicalKey: 'git.company.test/team/sample-app',
+        remoteName: 'origin',
+        remoteUrl: 'git@git.company.test:team/sample-app.git'
+      }
+    }
+    const sshRepo: Repo = {
+      ...repo,
+      id: 'ssh-sample-app',
+      path: '/home/alice/src/sample-app',
+      displayName: 'sample-app',
+      connectionId: 'build server',
+      gitRemoteIdentity: {
+        canonicalKey: 'git.company.test/team/sample-app',
+        remoteName: 'origin',
+        remoteUrl: 'https://git.company.test/team/sample-app.git'
+      }
+    }
+    const runtimeRepo: Repo = {
+      ...repo,
+      id: 'runtime-sample-app',
+      path: '/workspace/sample-app',
+      displayName: 'sample-app',
+      executionHostId: 'runtime:dev-container',
+      gitRemoteIdentity: {
+        canonicalKey: 'git.company.test/team/sample-app',
+        remoteName: 'origin',
+        remoteUrl: 'ssh://git@git.company.test/team/sample-app.git'
+      }
+    }
+    const localWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-local-sample-app',
+      repoId: localRepo.id,
+      path: '/Users/alice/work/sample-app-feature'
+    }
+    const sshWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-ssh-sample-app',
+      repoId: sshRepo.id,
+      path: '/home/alice/src/sample-app-feature'
+    }
+    const runtimeWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-runtime-sample-app',
+      repoId: runtimeRepo.id,
+      path: '/workspace/sample-app-feature'
+    }
+    const projection = projectHostSetupProjectionFromRepos([localRepo, sshRepo, runtimeRepo])
+    const rows = buildRows(
+      'repo',
+      [localWorktree, sshWorktree, runtimeWorktree],
+      new Map([
+        [localRepo.id, localRepo],
+        [sshRepo.id, sshRepo],
+        [runtimeRepo.id, runtimeRepo]
+      ]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [localWorktree.id, localWorktree],
+        [sshWorktree.id, sshWorktree],
+        [runtimeWorktree.id, runtimeWorktree]
+      ]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      [],
+      {
+        projects: projection.projects,
+        projectHostSetups: projection.setups
+      }
+    )
+
+    expect(rows).toMatchObject([
+      {
+        type: 'header',
+        key: 'project:git:git.company.test/team/sample-app',
+        label: 'sample-app',
+        count: 3
+      },
+      { type: 'item', worktree: { id: localWorktree.id }, hostContextLabel: LOCAL_HOST_LABEL },
+      { type: 'item', worktree: { id: sshWorktree.id }, hostContextLabel: 'build server' },
+      { type: 'item', worktree: { id: runtimeWorktree.id }, hostContextLabel: 'dev-container' }
     ])
   })
 
@@ -2505,6 +2605,13 @@ describe('WorktreeList header styles', () => {
     expect(source).toContain('resolveProjectGroupHeaderColor({')
     expect(source).toContain('headerKey: row.key')
     expect(source).toContain('color={repoHeaderColor}')
+  })
+
+  it('adapts projected setup rows for sidebar project grouping', () => {
+    const source = readWorktreeListSource()
+
+    expect(source).toContain('const projectHostSetupProjection = useProjectHostSetupProjection()')
+    expect(source).toContain('projectHostSetups: projectHostSetupProjection.setups')
   })
 })
 

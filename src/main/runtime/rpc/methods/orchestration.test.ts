@@ -374,6 +374,71 @@ describe('orchestration RPC methods', () => {
         })
       ).rejects.toThrow('No recipients resolved for group address')
     })
+
+    it('releases dispatch lock before waking recipients when worker_done is sent via send', async () => {
+      setup()
+      const task = db.createTask({ spec: 'lock-release work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
+
+      // Why: assert lock is already gone at delivery time, not just after the call.
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {
+        expect(db.getActiveDispatchForTerminal('term_worker')).toBeUndefined()
+      })
+
+      const result = (await call('orchestration.send', {
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'done',
+        type: 'worker_done',
+        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+      })) as { message: { type: string } }
+
+      expect(result.message.type).toBe('worker_done')
+      expect(db.getTask(task.id)?.status).toBe('completed')
+      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
+      expect(db.getActiveDispatchForTerminal('term_worker')).toBeUndefined()
+      // Lock released — a new dispatch to the same terminal must succeed.
+      const t2 = db.createTask({ spec: 'follow-up work' })
+      expect(() => db.createDispatchContext(t2.id, 'term_worker')).not.toThrow()
+    })
+
+    it('records heartbeat when heartbeat is sent via send', async () => {
+      setup()
+      const task = db.createTask({ spec: 'heartbeat work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+
+      await call('orchestration.send', {
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'alive',
+        type: 'heartbeat',
+        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+      })
+
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+      expect(db.getDispatchContextById(dispatch.id)?.last_heartbeat_at).toBeTruthy()
+      expect(db.getActiveDispatchForTerminal('term_worker')).toBeDefined()
+    })
+
+    it('does not release dispatch lock for non-lifecycle sends', async () => {
+      setup()
+      const task = db.createTask({ spec: 'in-flight work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+
+      await call('orchestration.send', {
+        from: 'term_coord',
+        to: 'term_worker',
+        subject: 'how is it going?',
+        type: 'status'
+      })
+
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+      expect(db.getActiveDispatchForTerminal('term_worker')).toBeDefined()
+    })
   })
 
   describe('orchestration.check', () => {

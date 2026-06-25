@@ -70,7 +70,7 @@ describe('feature education telemetry event schemas', () => {
         source: 'help_menu',
         initial_completed_count: 0,
         total_steps: 8,
-        first_incomplete_step_id: 'split-terminal'
+        first_incomplete_step_id: 'two-worktrees'
       }).success
     ).toBe(true)
 
@@ -84,5 +84,16 @@ describe('feature education telemetry event schemas', () => {
         active_step_id: 'notifications'
       }).success
     ).toBe(true)
+  })
+
+  it('rejects inactive historical setup guide step ids', () => {
+    expect(
+      eventSchemas.setup_guide_opened.safeParse({
+        source: 'help_menu',
+        initial_completed_count: 0,
+        total_steps: 8,
+        first_incomplete_step_id: 'split-terminal'
+      }).success
+    ).toBe(false)
   })
 })

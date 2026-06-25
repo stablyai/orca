@@ -234,7 +234,9 @@
   --worktree-sidebar-foreground: #fafafa;
   --worktree-sidebar-accent: #353535;
   --worktree-sidebar-accent-foreground: #fafafa;
-  --worktree-sidebar-border: rgb(255 255 255 / 0.1);
+  /* Match --border / --sidebar-border (7%) so the left sidebar's divider lines
+     aren't brighter than the rest of the UI in dark mode (#5906). */
+  --worktree-sidebar-border: rgb(255 255 255 / 0.07);
   --worktree-sidebar-ring: #737373;
   --sidebar: #171717;
   --sidebar-foreground: #fafafa;

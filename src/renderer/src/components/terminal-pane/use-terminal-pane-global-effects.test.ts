@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   flushTerminalOutput: vi.fn(),
   getTerminalOutputEpoch: vi.fn(() => 0),
   handleTerminalFileDrop: vi.fn(),
+  enforceTerminalCurrentScrollIntent: vi.fn(),
   pasteTerminalText: vi.fn(),
   recordTerminalUserInputForLeaf: vi.fn(),
   requestTerminalBacklogRecovery: vi.fn(),
@@ -73,6 +74,10 @@ vi.mock('@/lib/pane-manager/pane-scroll', () => ({
   getTerminalOutputEpoch: mocks.getTerminalOutputEpoch,
   restoreScrollState: mocks.restoreScrollState,
   restoreScrollStateAfterLayout: mocks.restoreScrollStateAfterLayout
+}))
+
+vi.mock('@/lib/pane-manager/terminal-scroll-intent', () => ({
+  enforceTerminalCurrentScrollIntent: mocks.enforceTerminalCurrentScrollIntent
 }))
 
 vi.mock('./terminal-drop-handler', () => ({
@@ -234,6 +239,9 @@ describe('useTerminalPaneGlobalEffects', () => {
     mocks.restoreScrollStateAfterLayout.mockImplementation((terminal: { name: string }) => {
       order.push(`restore:${terminal.name}`)
     })
+    mocks.enforceTerminalCurrentScrollIntent.mockImplementation((terminal: { name: string }) => {
+      order.push(`intent:${terminal.name}`)
+    })
     mocks.fitAndFocusPanes.mockImplementation(() => order.push('fit-focus'))
 
     // Why: the resume path resets atlases through the live-manager registry
@@ -267,10 +275,11 @@ describe('useTerminalPaneGlobalEffects', () => {
       'flush:terminal-b',
       'resume',
       'fit-focus',
-      'restore:terminal-a',
-      'restore:terminal-b',
+      'intent:terminal-a',
+      'intent:terminal-b',
       'reset-atlas'
     ])
+    expect(mocks.restoreScrollStateAfterLayout).not.toHaveBeenCalled()
     expect(mocks.flushTerminalOutput).toHaveBeenNthCalledWith(1, terminalA, {
       maxChars: 256 * 1024
     })
@@ -563,7 +572,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(window.api.pty.setActiveRendererPty).toHaveBeenCalledWith('pty-active', true)
   })
 
-  it('restores from the pre-hide scroll state when hidden layout changes the viewport', () => {
+  it('enforces scroll intent after hidden layout changes the viewport', () => {
     const terminalA = { name: 'terminal-a' }
     const manager = {
       getPanes: vi.fn(() => [{ id: 1, terminal: terminalA }]),
@@ -618,7 +627,8 @@ describe('useTerminalPaneGlobalEffects', () => {
 
     expect(mocks.captureScrollState).toHaveBeenCalledTimes(2)
     expect(manager.suspendRendering).toHaveBeenCalledTimes(1)
-    expect(mocks.restoreScrollStateAfterLayout).toHaveBeenLastCalledWith(terminalA, preHideState)
+    expect(mocks.restoreScrollStateAfterLayout).not.toHaveBeenCalled()
+    expect(mocks.enforceTerminalCurrentScrollIntent).toHaveBeenLastCalledWith(terminalA)
   })
 
   it('clears WebGL texture atlases when the active visible terminal regains focus', () => {

@@ -58,8 +58,11 @@ import {
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { recordAgentHibernationPaneOutput } from '@/lib/agent-hibernation-output-activity'
 import { isLocalNativeWindowsConpty } from '@/lib/pane-manager/windows-pty-compatibility'
-import { recordTerminalOutput, restoreScrollStateAfterLayout } from '@/lib/pane-manager/pane-scroll'
-import type { ScrollState } from '@/lib/pane-manager/pane-manager-types'
+import { recordTerminalOutput } from '@/lib/pane-manager/pane-scroll'
+import {
+  captureTerminalWriteScrollIntent,
+  enforceTerminalWriteScrollIntent
+} from '@/lib/pane-manager/terminal-scroll-intent'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { makePaneKey, parseLegacyNumericPaneKey } from '../../../../shared/stable-pane-id'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
@@ -3114,40 +3117,13 @@ export function connectPanePty(
       })
     }
 
-    function captureScrollStateForSnapshotReplay(): ScrollState | null {
-      const buf = pane.terminal.buffer?.active
-      if (!buf) {
-        return null
-      }
-      const viewportY = buf.viewportY
-      const baseY = buf.baseY
-      if (!Number.isFinite(viewportY) || !Number.isFinite(baseY)) {
-        return null
-      }
-      return {
-        bufferType: buf.type,
-        wasAtBottom: viewportY >= baseY,
-        viewportY,
-        baseY
-      }
-    }
-
-    function restoreScrollStateAfterSnapshotReplay(state: ScrollState | null): void {
-      if (!state || state.wasAtBottom) {
-        return
-      }
-      // Why: hidden-backlog replay clears xterm after visibility scroll restore;
-      // re-apply a scrolled-up viewport so recovery does not jump to bottom.
-      restoreScrollStateAfterLayout(pane.terminal, state)
-    }
-
     function applyMainBufferSnapshot(snapshot: {
       data: string
       cols: number
       rows: number
       seq?: number
     }): void {
-      const scrollState = captureScrollStateForSnapshotReplay()
+      const scrollIntent = captureTerminalWriteScrollIntent(pane.terminal)
       const colsBeforeReplay = pane.terminal.cols
       const rowsBeforeReplay = pane.terminal.rows
       const hasSnapshotDimensions =
@@ -3191,7 +3167,9 @@ export function connectPanePty(
         }
         scheduleReattachIdleAgentCursorReset()
       }
-      restoreScrollStateAfterSnapshotReplay(scrollState)
+      // Why: snapshot replay clears and rebuilds xterm state; re-apply the
+      // user's scroll intent once so hidden catch-up cannot repin the viewport.
+      enforceTerminalWriteScrollIntent(pane.terminal, scrollIntent)
     }
 
     function requestHiddenOutputRestoreIfNeeded(opts?: { bypassScheduler?: boolean }): boolean {

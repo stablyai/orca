@@ -72,6 +72,7 @@ import {
   normalizeProjectRuntimePreference
 } from '../shared/project-execution-runtime'
 import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setup-projection'
+import type { GitRemoteIdentity } from '../shared/git-remote-identity'
 import {
   buildTaskSourceContextFromRepo,
   buildWorkspaceRunContext
@@ -1082,6 +1083,24 @@ function sanitizeRepoUpstream(value: unknown): Repo['upstream'] | undefined {
   return owner && repo ? { owner, repo } : undefined
 }
 
+function sanitizeGitRemoteIdentity(value: unknown): GitRemoteIdentity | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+  const candidate = value as {
+    canonicalKey?: unknown
+    remoteName?: unknown
+    remoteUrl?: unknown
+  }
+  const canonicalKey =
+    typeof candidate.canonicalKey === 'string' ? candidate.canonicalKey.trim() : ''
+  const remoteName = typeof candidate.remoteName === 'string' ? candidate.remoteName.trim() : ''
+  const remoteUrl = typeof candidate.remoteUrl === 'string' ? candidate.remoteUrl.trim() : ''
+  return canonicalKey && remoteName && remoteUrl
+    ? { canonicalKey, remoteName, remoteUrl }
+    : undefined
+}
+
 function sanitizeRepoProjectHostSetupMethod(
   value: unknown
 ): RepoProjectHostSetupMethod | undefined {
@@ -1099,6 +1118,7 @@ function sanitizeRepoUpdatesForPersistence<
       | 'badgeColor'
       | 'repoIcon'
       | 'upstream'
+      | 'gitRemoteIdentity'
       | 'worktreeBasePath'
       | 'projectHostSetupMethod'
       | 'forkSyncMode'
@@ -1129,6 +1149,14 @@ function sanitizeRepoUpdatesForPersistence<
       delete sanitized.upstream
     } else {
       sanitized.upstream = upstream
+    }
+  }
+  if ('gitRemoteIdentity' in sanitized) {
+    const gitRemoteIdentity = sanitizeGitRemoteIdentity(sanitized.gitRemoteIdentity)
+    if (gitRemoteIdentity === undefined) {
+      delete sanitized.gitRemoteIdentity
+    } else {
+      sanitized.gitRemoteIdentity = gitRemoteIdentity
     }
   }
   if ('worktreeBasePath' in sanitized && sanitized.worktreeBasePath !== undefined) {
@@ -3721,6 +3749,7 @@ export class Store {
         | 'badgeColor'
         | 'repoIcon'
         | 'upstream'
+        | 'gitRemoteIdentity'
         | 'hookSettings'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
@@ -3896,6 +3925,7 @@ export class Store {
     const {
       repoIcon: rawRepoIcon,
       upstream: rawUpstream,
+      gitRemoteIdentity: rawGitRemoteIdentity,
       sourceControlAi: rawSourceControlAi,
       projectHostSetupMethod: rawProjectHostSetupMethod,
       forkSyncMode: rawForkSyncMode,
@@ -3903,6 +3933,7 @@ export class Store {
     } = repo
     const repoIcon = sanitizeRepoIcon(rawRepoIcon)
     const upstream = sanitizeRepoUpstream(rawUpstream)
+    const gitRemoteIdentity = sanitizeGitRemoteIdentity(rawGitRemoteIdentity)
     const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
     const projectHostSetupMethod = sanitizeRepoProjectHostSetupMethod(rawProjectHostSetupMethod)
     const forkSyncMode = sanitizeForkSyncMode(rawForkSyncMode)
@@ -3919,6 +3950,7 @@ export class Store {
       ...repoWithoutIcon,
       ...(repoIcon !== undefined ? { repoIcon } : {}),
       ...(upstream !== undefined ? { upstream } : {}),
+      ...(gitRemoteIdentity !== undefined ? { gitRemoteIdentity } : {}),
       ...(sourceControlAi !== undefined ? { sourceControlAi } : {}),
       ...(projectHostSetupMethod !== undefined ? { projectHostSetupMethod } : {}),
       ...(forkSyncMode !== undefined ? { forkSyncMode } : {}),

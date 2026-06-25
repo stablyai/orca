@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import type React from 'react'
-import { Copy, FileJson, FolderOpen, Play } from 'lucide-react'
+import { Copy, FileJson, FolderOpen, LocateFixed, PanelTopOpen, Play } from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import {
   ContextMenu,
@@ -9,26 +9,45 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
+import { Badge } from '@/components/ui/badge'
+import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
+import { useRepoById } from '@/store/selectors'
+import { resolveRepoBadgeColor } from '../../../../shared/repo-badge-color'
+import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
 import {
   AI_VAULT_SESSION_DRAG_START_EVENT,
   writeAiVaultSessionDragData
 } from '@/lib/ai-vault-session-drag'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { agentLabel } from './ai-vault-session-filters'
 import { translate } from '@/i18n/i18n'
 import { SessionInlineDetails, SessionTime } from './AiVaultSessionDetails'
 import { latestSessionConversationTurn } from './ai-vault-session-display'
 import { SessionRowTrailingActions } from './SessionRowTrailingActions'
+import type { AiVaultSessionResumeActions } from './ai-vault-session-resume'
+import {
+  aiVaultWorktreeStatusLabel,
+  shouldShowAiVaultWorktreeStatusBadge,
+  type AiVaultSessionWorktreeInfo
+} from './ai-vault-session-worktree'
 
 export function VaultSessionRow({
   session,
-  resumeCommand,
+  resumeStartup,
+  worktreeInfo,
   detailsExpanded,
   resumeDisabled,
   onToggleDetails,
+  onJumpToOriginalPane,
+  onJumpToWorktree,
   onResume,
+  resumeLabel,
+  resumeActions,
+  onResumeInWorktree,
+  onResumeInNewTab,
   onCopyResume,
   onCopyId,
   onCopyPath,
@@ -37,11 +56,18 @@ export function VaultSessionRow({
   onOpenCwd
 }: {
   session: AiVaultSession
-  resumeCommand: string
+  resumeStartup: AiVaultResumeStartup
+  worktreeInfo: AiVaultSessionWorktreeInfo | null
   detailsExpanded: boolean
   resumeDisabled: boolean
   onToggleDetails: () => void
+  onJumpToOriginalPane?: () => void
+  onJumpToWorktree?: () => void
   onResume: () => void
+  resumeLabel: string
+  resumeActions: AiVaultSessionResumeActions
+  onResumeInWorktree: () => void
+  onResumeInNewTab: () => void
   onCopyResume: () => void
   onCopyId: () => void
   onCopyPath: () => void
@@ -66,18 +92,23 @@ export function VaultSessionRow({
         agent: session.agent,
         sessionId: session.sessionId,
         title: session.title,
-        command: resumeCommand
+        command: resumeStartup.command,
+        ...(resumeStartup.env ? { env: resumeStartup.env } : {}),
+        ...(resumeStartup.launchConfig ? { launchConfig: resumeStartup.launchConfig } : {})
       })
       window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_START_EVENT))
     },
-    [resumeDisabled, session.agent, session.sessionId, session.title, resumeCommand]
+    [resumeDisabled, session.agent, session.sessionId, session.title, resumeStartup]
   )
 
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild className="block w-full min-w-0">
         <div
-          className="group/session-row flex min-h-[82px] w-full min-w-0 cursor-pointer flex-col border-b border-sidebar-border px-3 py-2 text-left transition-colors hover:bg-sidebar-accent/55"
+          className={cn(
+            'group/session-row flex w-full min-w-0 cursor-pointer flex-col border-b border-sidebar-border px-3 py-2 text-left transition-colors hover:bg-sidebar-accent/55',
+            !detailsExpanded && 'min-h-[98px]'
+          )}
           onClick={() => {
             onToggleDetails()
           }}
@@ -86,7 +117,7 @@ export function VaultSessionRow({
             <div
               className={cn(
                 'min-w-0 text-[13px] font-medium leading-5 text-foreground',
-                detailsExpanded ? 'break-words [overflow-wrap:anywhere]' : 'line-clamp-1'
+                detailsExpanded ? 'line-clamp-2 [overflow-wrap:anywhere]' : 'line-clamp-1'
               )}
             >
               {session.title}
@@ -97,7 +128,11 @@ export function VaultSessionRow({
               detailsId={detailsId}
               detailsTooltip={detailsTooltip}
               resumeDisabled={resumeDisabled}
+              resumeLabel={resumeLabel}
+              worktreeInfo={worktreeInfo}
               onToggleDetails={onToggleDetails}
+              onJumpToOriginalPane={onJumpToOriginalPane}
+              onJumpToWorktree={onJumpToWorktree}
               onResume={onResume}
               onCopyResume={onCopyResume}
               onCopyId={onCopyId}
@@ -108,29 +143,44 @@ export function VaultSessionRow({
               onStartResumeDrag={startResumeDrag}
             />
           </div>
-          <div className="mt-0.5 min-w-0 line-clamp-2 text-[12px] leading-4 text-muted-foreground">
-            {latestTurn ? (
-              <>
-                <span className="font-medium text-foreground/80">
-                  {conversationRoleLabel(latestTurn.role)}
-                </span>
-                <span>: {latestTurn.text}</span>
-              </>
-            ) : (
-              translate(
-                'auto.components.right.sidebar.AiVaultSessionRow.noPreviewAvailable',
-                'No conversation preview available'
-              )
-            )}
-          </div>
-          <SessionMetadata session={session} updatedAt={updatedAt} />
+          {detailsExpanded && worktreeInfo ? (
+            <div className="mt-1">
+              <SessionWorktreeLine worktreeInfo={worktreeInfo} />
+            </div>
+          ) : null}
+          {!detailsExpanded ? (
+            <>
+              <div className="mt-0.5 min-w-0 line-clamp-2 text-[12px] leading-4 text-muted-foreground">
+                {latestTurn ? (
+                  <>
+                    <span className="font-medium text-foreground/80">
+                      {conversationRoleLabel(latestTurn.role)}
+                    </span>
+                    <span>: {latestTurn.text}</span>
+                  </>
+                ) : (
+                  translate(
+                    'auto.components.right.sidebar.AiVaultSessionRow.noPreviewAvailable',
+                    'No conversation preview available'
+                  )
+                )}
+              </div>
+              <SessionMetadata
+                session={session}
+                updatedAt={updatedAt}
+                worktreeInfo={worktreeInfo}
+              />
+            </>
+          ) : null}
           {detailsExpanded ? (
             <SessionInlineDetails
               id={detailsId}
               session={session}
-              resumeDisabled={resumeDisabled}
-              onResume={onResume}
-              onCopyResume={onCopyResume}
+              worktreeInfo={worktreeInfo}
+              resumeActions={resumeActions}
+              onResumeInWorktree={onResumeInWorktree}
+              onResumeInNewTab={onResumeInNewTab}
+              onOpenLog={onOpenLog}
             />
           ) : null}
         </div>
@@ -139,6 +189,9 @@ export function VaultSessionRow({
         <SessionActionMenuItems
           menuKind="context"
           resumeDisabled={resumeDisabled}
+          resumeLabel={resumeLabel}
+          onJumpToOriginalPane={onJumpToOriginalPane}
+          onJumpToWorktree={onJumpToWorktree}
           onResume={onResume}
           onCopyResume={onCopyResume}
           onCopyId={onCopyId}
@@ -155,7 +208,10 @@ export function VaultSessionRow({
 export function SessionActionMenuItems({
   menuKind = 'dropdown',
   resumeDisabled,
+  resumeLabel,
   onResume,
+  onJumpToOriginalPane,
+  onJumpToWorktree,
   onCopyResume,
   onCopyId,
   onCopyPath,
@@ -165,7 +221,10 @@ export function SessionActionMenuItems({
 }: {
   menuKind?: 'dropdown' | 'context'
   resumeDisabled: boolean
+  resumeLabel: string
   onResume: () => void
+  onJumpToOriginalPane?: () => void
+  onJumpToWorktree?: () => void
   onCopyResume: () => void
   onCopyId: () => void
   onCopyPath: () => void
@@ -178,12 +237,25 @@ export function SessionActionMenuItems({
 
   return (
     <>
+      {onJumpToOriginalPane ? (
+        <Item onSelect={onJumpToOriginalPane}>
+          <LocateFixed className="size-3.5" />
+          {translate(
+            'auto.components.right.sidebar.AiVaultSessionRow.jumpToOriginalPane',
+            'Jump to Original Pane'
+          )}
+        </Item>
+      ) : null}
+      <Item disabled={!onJumpToWorktree} onSelect={onJumpToWorktree}>
+        <PanelTopOpen className="size-3.5" />
+        {translate(
+          'auto.components.right.sidebar.AiVaultSessionRow.jumpToWorktree',
+          'Jump to Worktree'
+        )}
+      </Item>
       <Item disabled={resumeDisabled} onSelect={onResume}>
         <Play className="size-3.5" />
-        {translate(
-          'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab',
-          'Resume in New Tab'
-        )}
+        {resumeLabel}
       </Item>
       <Item onSelect={onCopyResume}>
         <Copy className="size-3.5" />
@@ -228,24 +300,72 @@ function getSessionDetailsId(sessionId: string): string {
   return `ai-vault-session-details-${sessionId.replace(/[^A-Za-z0-9_-]/g, '-')}`
 }
 
-function SessionMetadata({ session, updatedAt }: { session: AiVaultSession; updatedAt: string }) {
+function SessionMetadata({
+  session,
+  updatedAt,
+  worktreeInfo
+}: {
+  session: AiVaultSession
+  updatedAt: string
+  worktreeInfo: AiVaultSessionWorktreeInfo | null
+}) {
   return (
-    <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] leading-4 text-muted-foreground">
-      <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
-        <AgentIcon agent={session.agent} size={14} />
-      </span>
-      <span className="min-w-0 truncate">{agentLabel(session.agent)}</span>
-      <span className="shrink-0 rounded-sm border border-sidebar-border bg-sidebar-accent/45 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
-        {translate(
-          'auto.components.right.sidebar.AiVaultSessionRow.messageCount',
-          '{{value0}} msgs',
-          { value0: session.messageCount }
-        )}
-      </span>
-      <span className="shrink-0 text-muted-foreground/55">·</span>
-      <SessionTime value={updatedAt} />
+    <div className="mt-1 grid min-w-0 gap-0.5 text-[11px] leading-4 text-muted-foreground">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
+          <AgentIcon agent={session.agent} size={14} />
+        </span>
+        <span className="min-w-0 truncate">{agentLabel(session.agent)}</span>
+        <span className="shrink-0 tabular-nums">
+          {translate(
+            'auto.components.right.sidebar.AiVaultSessionRow.messageCount',
+            '{{value0}} msgs',
+            { value0: session.messageCount }
+          )}
+        </span>
+        <span className="shrink-0 text-muted-foreground/55">·</span>
+        <SessionTime value={updatedAt} />
+      </div>
+      {worktreeInfo ? <SessionWorktreeLine worktreeInfo={worktreeInfo} /> : null}
     </div>
   )
+}
+
+function SessionWorktreeLine({
+  worktreeInfo
+}: {
+  worktreeInfo: AiVaultSessionWorktreeInfo
+}): React.JSX.Element {
+  const repoId = worktreeInfo.worktreeId
+    ? (splitWorktreeIdForFilesystem(worktreeInfo.worktreeId)?.repoId ?? null)
+    : null
+  const repo = useRepoById(repoId)
+
+  return (
+    <div className="flex min-w-0 items-center gap-1.5 pl-5">
+      {shouldShowAiVaultWorktreeStatusBadge(worktreeInfo.status) ? (
+        <span className="shrink-0 rounded-sm border border-sidebar-border bg-sidebar-accent/45 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+          {worktreeStatusLabel(worktreeInfo.status)}
+        </span>
+      ) : null}
+      <Badge
+        variant="outline"
+        className="h-5 max-w-full gap-1 border-border/70 bg-background px-1.5 py-0 text-[11px] font-medium"
+        title={worktreeInfo.label}
+      >
+        <RepoBadgeLabel
+          name={worktreeInfo.label}
+          color={resolveRepoBadgeColor(repo?.badgeColor)}
+          className="min-w-0 max-w-full"
+          badgeClassName="size-1.5"
+        />
+      </Badge>
+    </div>
+  )
+}
+
+function worktreeStatusLabel(status: AiVaultSessionWorktreeInfo['status']): string {
+  return aiVaultWorktreeStatusLabel(status)
 }
 
 function conversationRoleLabel(role: AiVaultSession['previewMessages'][number]['role']): string {

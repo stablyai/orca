@@ -52,6 +52,26 @@ export type CodexHookTrustState = {
 
 export type CodexProjectTrustLevel = 'trusted' | 'untrusted'
 
+// Why: callers use computeTrustKey() for lookups, while existing TOML can carry
+// Codex-written separator/casing variants. Normalize both sides at the Map edge.
+class HookTrustEntryMap extends Map<string, CodexHookTrustState> {
+  override get(key: string): CodexHookTrustState | undefined {
+    return super.get(normalizeHookTrustKeyForLookup(key))
+  }
+
+  override has(key: string): boolean {
+    return super.has(normalizeHookTrustKeyForLookup(key))
+  }
+
+  override delete(key: string): boolean {
+    return super.delete(normalizeHookTrustKeyForLookup(key))
+  }
+
+  override set(key: string, value: CodexHookTrustState): this {
+    return super.set(normalizeHookTrustKeyForLookup(key), value)
+  }
+}
+
 // Why: matches Codex's canonical_json. Sorts object keys recursively before
 // SHA-256ing; arrays preserve order.
 function canonicalize(value: unknown): unknown {
@@ -102,11 +122,23 @@ export function getCodexCanonicalTrustPath(sourcePath: string): string {
   try {
     // Why: Codex canonicalizes trust paths before building config keys. On
     // macOS, /var is a symlink to /private/var; trusting the raw path still
-    // leaves the TUI in review/trust prompts.
-    return realpathSync.native(sourcePath)
+    // leaves the TUI in review/trust prompts. Forward-slash normalization
+    // prevents separator mismatch against Codex-written literal-string keys on Windows.
+    return normalizeWindowsPathSeparators(realpathSync.native(sourcePath))
   } catch {
+    return normalizeWindowsPathSeparators(sourcePath)
+  }
+}
+
+function normalizeWindowsPathSeparators(sourcePath: string): string {
+  if (!usesWindowsPathSeparators(sourcePath)) {
     return sourcePath
   }
+  return sourcePath.replace(/\\/g, '/')
+}
+
+function usesWindowsPathSeparators(sourcePath: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(sourcePath) || sourcePath.startsWith('\\\\')
 }
 
 export function parseTrustKey(key: string): {
@@ -342,6 +374,17 @@ type TrustBlockRange = {
   end: number
 }
 
+// Why: separator and casing drift between Codex-written keys (raw backslash,
+// potentially lowercased) and Orca-built keys (forward-slash, realpathSync.native
+// casing) must not prevent findTrustBlockRanges from matching an existing block.
+export function normalizeHookTrustKeyForLookup(key: string): string {
+  const parsed = parseTrustKey(key)
+  const separated = parsed
+    ? `${normalizeWindowsPathSeparators(parsed.sourcePath)}:${parsed.eventLabel}:${parsed.groupIndex}:${parsed.handlerIndex}`
+    : normalizeWindowsPathSeparators(key)
+  return process.platform === 'win32' ? separated.toLowerCase() : separated
+}
+
 function findTrustBlockRanges(content: string, key: string): TrustBlockRange[] {
   const ranges: TrustBlockRange[] = []
   let cursor = 0
@@ -355,7 +398,10 @@ function findTrustBlockRanges(content: string, key: string): TrustBlockRange[] {
     const headerKey = isInsideTomlMultilineString(multilineState)
       ? null
       : parseHookStateHeaderKey(line)
-    if (headerKey === key) {
+    if (
+      headerKey !== null &&
+      normalizeHookTrustKeyForLookup(headerKey) === normalizeHookTrustKeyForLookup(key)
+    ) {
       const headerLineEnd = rawLine.endsWith('\r') ? lineEnd - 1 : lineEnd
       const after = content.slice(headerLineEnd)
       const nextHeaderRel = findNextTableHeader(after)
@@ -371,9 +417,13 @@ function findTrustBlockRanges(content: string, key: string): TrustBlockRange[] {
 }
 
 function buildProjectHeaderPattern(projectPath: string): RegExp {
-  const escapedPath = escapeRegex(escapeTomlString(projectPath))
+  const headerPaths = [escapeRegex(escapeTomlString(projectPath))]
+  if (usesWindowsPathSeparators(projectPath)) {
+    headerPaths.push(escapeRegex(escapeTomlString(projectPath.replace(/\//g, '\\'))))
+  }
   return new RegExp(
-    `(^|\\r?\\n)[ \\t]*\\[projects\\."${escapedPath}"\\][ \\t]*(?:#[^\\r\\n]*)?(?=\\r?\\n|$)`
+    `(^|\\r?\\n)[ \\t]*\\[projects\\."(?:${headerPaths.join('|')})"\\][ \\t]*(?:#[^\\r\\n]*)?(?=\\r?\\n|$)`,
+    process.platform === 'win32' ? 'i' : undefined
   )
 }
 
@@ -681,7 +731,7 @@ function removeTrustBlock(content: string, key: string): string {
 }
 
 export function readHookTrustEntries(configPath: string): Map<string, CodexHookTrustState> {
-  const result = new Map<string, CodexHookTrustState>()
+  const result = new HookTrustEntryMap()
   if (!existsSync(configPath)) {
     return result
   }
@@ -707,7 +757,7 @@ export function readHookTrustEntries(configPath: string): Map<string, CodexHookT
       // a line scan beats pulling in a full TOML value parser.
       const hashMatch = /^[ \t]*trusted_hash[ \t]*=[ \t]*"((?:[^"\\]|\\.)*)"/m.exec(block)
       const enabledMatch = /^[ \t]*enabled[ \t]*=[ \t]*(true|false)[ \t\r]*(?:#.*)?$/m.exec(block)
-      result.set(key, {
+      result.set(normalizeHookTrustKeyForLookup(key), {
         trustedHash: hashMatch ? unescapeTomlString(hashMatch[1]) : undefined,
         enabled: enabledMatch ? enabledMatch[1] === 'true' : undefined
       })

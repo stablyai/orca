@@ -240,6 +240,19 @@ describe('useComposerState host-context boundaries', () => {
     )
   })
 
+  it('selects a project by its own host instead of pinning the current host', () => {
+    // Regression: passing the current host as a hard `hostId` made picking a
+    // project set up only on a different host a silent no-op. The current host
+    // must be a preference (focusedHostScope), with a fallback to any ready host.
+    const handleProjectChange = sourceBetween(
+      HOOK_SOURCE,
+      'const handleProjectChange = useCallback',
+      'const handleSmartGitHubItemSelect'
+    )
+    expect(handleProjectChange).toContain('focusedHostScope: preferredHostId ?? workspaceHostScope')
+    expect(handleProjectChange).not.toContain('hostId: preferredHostId')
+  })
+
   it('clears GitLab-specific linked state when clearing smart-name selection', () => {
     const section = sourceBetween(
       HOOK_SOURCE,

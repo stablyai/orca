@@ -5216,6 +5216,20 @@ describe('pending worktree creation state', () => {
     expect(store.getState().pendingWorktreeCreations.c1.phase).toBe('creating')
   })
 
+  it('updatePendingWorktreeCreation can replace the retryable request during preflight', () => {
+    const store = createTestStore()
+    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
+
+    store.getState().updatePendingWorktreeCreation('c1', {
+      request: {
+        ...store.getState().pendingWorktreeCreations.c1.request,
+        setupDecision: 'run'
+      }
+    })
+
+    expect(store.getState().pendingWorktreeCreations.c1.request.setupDecision).toBe('run')
+  })
+
   it('updatePendingWorktreeCreation is a no-op for an unknown id', () => {
     const store = createTestStore()
     const before = store.getState().pendingWorktreeCreations

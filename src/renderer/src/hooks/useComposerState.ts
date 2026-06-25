@@ -2277,13 +2277,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setSelectedProjectGroupId(null)
       const preferredHostId =
         selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target.hostId : null
+      // Why: prefer the host the user is currently on, but treat it as a
+      // preference (focusedHostScope) rather than a hard hostId match. Pinning
+      // hostId made selecting a project that is only set up on a different host
+      // a silent no-op — the resolver returned '' (project-not-set-up-on-host)
+      // and the early return below swallowed the click. Falling back to any
+      // host the project is ready on lets cross-host selection work.
       const nextRepoId = resolveWorkspaceCreationRepoId({
         eligibleRepos,
         projects,
         projectHostSetups,
         projectId,
-        hostId: preferredHostId,
-        focusedHostScope: workspaceHostScope
+        focusedHostScope: preferredHostId ?? workspaceHostScope
       })
       if (!nextRepoId) {
         return

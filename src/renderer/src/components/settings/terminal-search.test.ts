@@ -122,12 +122,32 @@ describe('getTerminalPaneSearchEntries', () => {
     )
   })
 
+  it.each([
+    'dark',
+    'light',
+    'divider',
+    'preview',
+    'theme',
+    'dark terminal theme',
+    'target',
+    'editing',
+    'Match dark mode',
+    'Customize Light Mode',
+    'Match dark mode terminal theme',
+    'Use Separate Theme In Light Mode',
+    'import',
+    'Warp',
+    'YAML'
+  ])('matches terminal appearance search for %s', (query) => {
+    expect(matchesSettingsSearch(query, getAppearancePaneSearchEntries())).toBe(true)
+  })
+
   it('omits the Warp import appearance entry when desktop-only controls are hidden', () => {
     const desktopEntries = getAppearancePaneSearchEntries({ showWarpImport: true })
     const webEntries = getAppearancePaneSearchEntries({ showWarpImport: false })
 
-    expect(desktopEntries.some((entry) => entry.title === 'Import themes from Warp')).toBe(true)
-    expect(webEntries.some((entry) => entry.title === 'Import themes from Warp')).toBe(false)
+    expect(desktopEntries.some((entry) => entry.title === 'Import from Warp')).toBe(true)
+    expect(webEntries.some((entry) => entry.title === 'Import from Warp')).toBe(false)
     expect(webEntries.some((entry) => entry.title === 'Import from Ghostty')).toBe(true)
   })
 

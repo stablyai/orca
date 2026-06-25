@@ -197,6 +197,13 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           threadId: params.threadId,
           payload: params.payload
         })
+        // Why: worker_done/heartbeat sent via `send` must release the dispatch
+        // lock before waking recipients — a coordinator woken by delivery may
+        // immediately dispatch to the same terminal, which fails if the lock
+        // is still held.
+        if (msg.type === 'worker_done' || msg.type === 'heartbeat') {
+          reconcileLifecycleMessage(db, msg)
+        }
         runtime.deliverPendingMessagesForHandle(params.to)
         runtime.notifyMessageArrived(params.to, msg.type)
         return { message: msg }

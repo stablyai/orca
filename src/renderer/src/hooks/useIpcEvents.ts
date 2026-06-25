@@ -263,6 +263,12 @@ function activateTerminalInitiatedWorktree(store: AppState, worktreeId: string):
   }
 }
 
+function focusTerminalInitiatedTab(tabId: string, leafId?: string | null): void {
+  if (!focusRuntimeTerminalSurface(tabId, leafId)) {
+    focusTerminalTabSurface(tabId, leafId)
+  }
+}
+
 type TerminalSplitDirection = 'horizontal' | 'vertical'
 
 function insertLeafAfterSource(
@@ -1393,6 +1399,7 @@ export function useIpcEvents(): void {
               store.setActiveTabType('terminal')
               store.setActiveTab(tab.id)
               store.revealWorktreeInSidebar(worktreeId)
+              focusTerminalInitiatedTab(tab.id, leafId)
             }
             // Why: only stamp the runtime-supplied title on freshly created tabs.
             // Existing tabs may have a user customTitle (set via UI rename) that
@@ -1571,6 +1578,7 @@ export function useIpcEvents(): void {
             store.setActiveTabType('terminal')
             store.setActiveTab(tab.id)
             store.revealWorktreeInSidebar(worktreeId)
+            focusTerminalInitiatedTab(tab.id)
           }
           if (data.title) {
             store.setTabCustomTitle(tab.id, data.title, { recordInteraction: false })
@@ -1646,9 +1654,7 @@ export function useIpcEvents(): void {
             })
             return
           }
-          if (!focusRuntimeTerminalSurface(tabId, leafId)) {
-            focusTerminalTabSurface(tabId, leafId)
-          }
+          focusTerminalInitiatedTab(tabId, leafId)
         }
       )
     )

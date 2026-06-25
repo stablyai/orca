@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import {
   buildAiVaultResumeCommandForWorktree,
+  buildAiVaultResumeStartupForWorktree,
   getAiVaultResumePlatform
 } from './ai-vault-resume-command'
 
@@ -31,7 +32,11 @@ function makeState(args: {
           : {})
       }
     ],
-    settings: { localWindowsRuntimeDefault: { kind: 'windows-host' } },
+    settings: {
+      localWindowsRuntimeDefault: { kind: 'windows-host' },
+      agentDefaultArgs: { claude: '', codex: '' },
+      agentDefaultEnv: { claude: {}, codex: {} }
+    },
     worktreesByRepo: {
       'repo-1': [
         {
@@ -62,7 +67,41 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe('cmd /d /s /c "cd /d ""C:\\Users\\alice\\repo"" && claude --resume ""session one"""')
+    ).toBe('cmd /d /s /c "cd /d ""C:\\Users\\alice\\repo"" && claude ""--resume"" ""session one"""')
+  })
+
+  it('uses configured agent defaults for resumable session history entries', () => {
+    const state = makeState({
+      worktreePath: 'C:\\Users\\alice\\repo',
+      localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+    })
+    state.settings = {
+      ...state.settings,
+      agentDefaultArgs: { claude: '--dangerously-skip-permissions --effort max' },
+      agentDefaultEnv: { claude: { ANTHROPIC_BASE_URL: 'https://claude.example.test' } }
+    } as never
+
+    expect(
+      buildAiVaultResumeStartupForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'claude',
+          sessionId: 'session-1',
+          cwd: '/home/alice/repo',
+          codexHome: null
+        }
+      })
+    ).toEqual({
+      command:
+        "cd '/home/alice/repo' && claude '--dangerously-skip-permissions' '--effort' 'max' '--resume' 'session-1'",
+      env: { ANTHROPIC_BASE_URL: 'https://claude.example.test' },
+      launchConfig: {
+        agentCommand: "claude '--dangerously-skip-permissions' '--effort' 'max'",
+        agentArgs: '--dangerously-skip-permissions --effort max',
+        agentEnv: { ANTHROPIC_BASE_URL: 'https://claude.example.test' }
+      }
+    })
   })
 
   it('uses POSIX command wrapping for Windows-path projects forced to WSL', () => {
@@ -83,7 +122,7 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe("cd '/home/alice/repo' && claude --resume 'session one'")
+    ).toBe("cd '/home/alice/repo' && claude '--resume' 'session one'")
   })
 
   it('keeps WSL UNC worktrees on POSIX command wrapping without an explicit override', () => {
@@ -110,6 +149,6 @@ describe('ai vault resume command runtime', () => {
           codexHome: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex'
         }
       })
-    ).toBe("cd '/home/alice/repo' && CODEX_HOME='/home/alice/.codex' codex resume 'session one'")
+    ).toBe("cd '/home/alice/repo' && CODEX_HOME='/home/alice/.codex' codex 'resume' 'session one'")
   })
 })
