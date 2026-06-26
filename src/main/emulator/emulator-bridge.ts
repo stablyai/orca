@@ -95,8 +95,13 @@ export class EmulatorBridge {
     if (!backend) {
       return null
     }
-    if (device && (await backend.resolveDeviceId(device)) !== active.deviceUdid) {
-      return null
+    if (device) {
+      // resolveDeviceId throws for a not-yet-booted AVD; treat that as "not the
+      // active device" so the caller falls through to a fresh (booting) attach.
+      const resolved = await backend.resolveDeviceId(device).catch(() => null)
+      if (resolved !== active.deviceUdid) {
+        return null
+      }
     }
     return (await backend.isSessionReusable(active)) ? active : null
   }
