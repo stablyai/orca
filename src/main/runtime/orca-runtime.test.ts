@@ -8185,6 +8185,27 @@ describe('OrcaRuntimeService', () => {
     expect(snapshot?.data).not.toContain('line-0')
   })
 
+  it('preserves pre-alternate-screen shell output when explicitly requested for remote snapshots', async () => {
+    const runtime = createRuntime()
+    syncSinglePty(runtime, 'pty-1')
+
+    runtime.onPtyData('pty-1', 'PRE_CODEX_START\nls | head -5\n', 100)
+    runtime.onPtyData('pty-1', '\x1b[?1049hTUI_FRAME\n', 200)
+
+    const defaultSnapshot = await runtime.serializeTerminalBuffer('pty-1', { scrollbackRows: 100 })
+    const optInSnapshot = await runtime.serializeTerminalBuffer('pty-1', {
+      scrollbackRows: 100,
+      altScreenPreservesScrollback: true
+    })
+
+    expect(defaultSnapshot?.data).not.toContain('PRE_CODEX_START')
+    expect(defaultSnapshot?.data).toContain('TUI_FRAME')
+    expect(optInSnapshot?.data).toContain('PRE_CODEX_START')
+    expect(optInSnapshot?.data).toContain('TUI_FRAME')
+    expect(optInSnapshot?.data).toContain('\x1b[?1049h')
+    expect(optInSnapshot?.source).toBe('headless')
+  })
+
   it('waits for terminal exit and resolves with the exit status', async () => {
     const runtime = new OrcaRuntimeService(store)
 

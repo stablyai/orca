@@ -389,11 +389,18 @@ function requestedSnapshotScrollbackCandidates(requestedRows: number | undefined
 async function serializeBudgetedRequestedSnapshot(
   runtime: OrcaRuntimeService,
   ptyId: string,
-  scrollbackRows: number | undefined
+  scrollbackRows: number | undefined,
+  options: { altScreenPreservesScrollback?: boolean } = {}
 ): Promise<SerializedSnapshot> {
   const requestedRows = scrollbackRows ?? 0
   for (const rows of requestedSnapshotScrollbackCandidates(scrollbackRows)) {
-    const serialized = await runtime.serializeTerminalBuffer(ptyId, { scrollbackRows: rows })
+    const requestOptions = options.altScreenPreservesScrollback === false
+      ? { scrollbackRows: rows }
+      : {
+          scrollbackRows: rows,
+          altScreenPreservesScrollback: true
+        }
+    const serialized = await runtime.serializeTerminalBuffer(ptyId, requestOptions)
     if (!serialized) {
       return null
     }
@@ -1307,7 +1314,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           let serialized = await serializeBudgetedRequestedSnapshot(
             runtime,
             stream.ptyId,
-            scrollbackRows
+            scrollbackRows,
+            { altScreenPreservesScrollback: !stream.isMobile }
           )
           if (closed || streams.get(stream.streamId) !== stream) {
             return
@@ -1323,7 +1331,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             serialized = await serializeBudgetedRequestedSnapshot(
               runtime,
               stream.ptyId,
-              scrollbackRows
+              scrollbackRows,
+              { altScreenPreservesScrollback: !stream.isMobile }
             )
             if (closed || streams.get(stream.streamId) !== stream) {
               return

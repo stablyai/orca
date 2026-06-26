@@ -5190,7 +5190,7 @@ export class OrcaRuntimeService {
 
   serializeTerminalBuffer(
     ptyId: string,
-    opts: { scrollbackRows?: number } = {}
+    opts: { scrollbackRows?: number; altScreenPreservesScrollback?: boolean } = {}
   ): Promise<{
     data: string
     cols: number
@@ -5442,7 +5442,7 @@ export class OrcaRuntimeService {
 
   private async serializeTerminalBufferFromAvailableState(
     ptyId: string,
-    opts: { scrollbackRows?: number } = {}
+    opts: { scrollbackRows?: number; altScreenPreservesScrollback?: boolean } = {}
   ): Promise<{
     data: string
     cols: number
@@ -5538,7 +5538,8 @@ export class OrcaRuntimeService {
 
   private async serializeHeadlessTerminalBuffer(
     ptyId: string,
-    opts: { scrollbackRows?: number; includeEmpty?: boolean } = {}
+    opts: { scrollbackRows?: number; includeEmpty?: boolean; altScreenPreservesScrollback?: boolean } =
+      {}
   ): Promise<{
     data: string
     cols: number
@@ -5562,8 +5563,15 @@ export class OrcaRuntimeService {
     // caller can request scrollback so the user can scroll up to see prior
     // agent output.
     const requested = opts.scrollbackRows ?? 0
-    const scrollbackRows = state.emulator.isAlternateScreen ? 0 : requested
-    const snapshot = state.emulator.getSnapshot({ scrollbackRows })
+    const shouldPreserveAltScreen = opts.altScreenPreservesScrollback === true
+    const scrollbackRows = state.emulator.isAlternateScreen && !shouldPreserveAltScreen
+      ? 0
+      : requested
+    const snapshot = state.emulator.getSnapshot({
+      scrollbackRows,
+      preserveNormalBufferOnAltScreen:
+        opts.altScreenPreservesScrollback === true && state.emulator.isAlternateScreen
+    })
     const data = snapshot.rehydrateSequences + snapshot.snapshotAnsi
     return data.length > 0 || opts.includeEmpty === true
       ? {

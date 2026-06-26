@@ -126,12 +126,15 @@ export class HeadlessEmulator {
     this.terminal.resize(cols, rows)
   }
 
-  getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot {
+  getSnapshot(
+    opts: { scrollbackRows?: number; preserveNormalBufferOnAltScreen?: boolean } = {}
+  ): TerminalSnapshot {
     const modes = this.getModes()
-    const snapshotAnsi = this.normalizeSnapshotAnsiForModes(
-      this.serializer.serialize({ scrollback: opts.scrollbackRows }),
-      modes
-    )
+    const rawSnapshotAnsi = this.serializer.serialize({ scrollback: opts.scrollbackRows })
+    const snapshotAnsi =
+      opts.preserveNormalBufferOnAltScreen && modes.alternateScreen
+        ? rawSnapshotAnsi
+        : this.normalizeSnapshotAnsiForModes(rawSnapshotAnsi, modes)
     return {
       snapshotAnsi,
       scrollbackAnsi: '',
@@ -140,7 +143,12 @@ export class HeadlessEmulator {
         opts.scrollbackRows,
         this.restoredOscLinks
       ),
-      rehydrateSequences: this.buildRehydrateSequences(modes),
+      // Why: opt-in alternate-screen snapshots already include the raw ?1049h
+      // marker in snapshotAnsi, so adding rehydrate sequences would duplicate it.
+      rehydrateSequences:
+        opts.preserveNormalBufferOnAltScreen && modes.alternateScreen
+          ? ''
+          : this.buildRehydrateSequences(modes),
       cwd: this.cwd,
       modes,
       cols: this.terminal.cols,

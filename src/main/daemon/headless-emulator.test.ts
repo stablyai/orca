@@ -498,6 +498,27 @@ describe('HeadlessEmulator', () => {
       expect(snapshot.rehydrateSequences).toContain('\x1b[?1006h')
       expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1002h')
     })
+
+    it('preserves pre-alternate-screen content with opt-in mode', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+      await emulator.write('PRE_CODEX_START\nls | head -5\n')
+      await emulator.write('\x1b[?1049h')
+      await emulator.write('TUI_FRAME\n')
+
+      const defaultSnapshot = emulator.getSnapshot({ scrollbackRows: 10 })
+      expect(defaultSnapshot.snapshotAnsi).not.toContain('PRE_CODEX_START')
+      expect(defaultSnapshot.snapshotAnsi).toContain('TUI_FRAME')
+      expect(defaultSnapshot.rehydrateSequences).toContain('\x1b[?1049h')
+
+      const preservedSnapshot = emulator.getSnapshot({
+        scrollbackRows: 10,
+        preserveNormalBufferOnAltScreen: true
+      })
+      expect(preservedSnapshot.snapshotAnsi).toContain('PRE_CODEX_START')
+      expect(preservedSnapshot.snapshotAnsi).toContain('TUI_FRAME')
+      expect(preservedSnapshot.snapshotAnsi).toContain('\x1b[?1049h')
+      expect(preservedSnapshot.rehydrateSequences).toBe('')
+    })
   })
 
   describe('dispose', () => {
