@@ -62,8 +62,12 @@ export function useEmulatorVideoStream(
     const decoder = new DecoderCtor({
       output: (frame) => {
         if (!disposed && ctx && canvas) {
-          canvas.width = frame.displayWidth
-          canvas.height = frame.displayHeight
+          // Resizing the canvas reallocates its backing store and forces a
+          // reflow, so only do it when the frame dimensions actually change.
+          if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
+            canvas.width = frame.displayWidth
+            canvas.height = frame.displayHeight
+          }
           ctx.drawImage(frame, 0, 0)
         }
         frame.close()
