@@ -40,9 +40,9 @@ import { bootAndroidDevice } from '../android/android-avd-boot'
 import { ensureScrcpyServerJar } from '../android/scrcpy-server-download'
 import {
   startAndroidStreamSession,
-  type AndroidStreamHandle,
   type StartAndroidStream
 } from '../android/android-stream-session-starter'
+import { AndroidStreamController } from '../android/android-stream-controller'
 import type { EmulatorGesturePoint } from '../emulator-gesture-sender'
 
 export type AndroidEmulatorBackendOptions = {
@@ -83,7 +83,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
   private readonly startStreamSession: StartAndroidStream
   private readonly streamMaxSize: number
   private readonly screenSizes = new Map<string, DeviceScreenSize>()
-  private readonly streamHandles = new Map<string, AndroidStreamHandle>()
+  private readonly streams: AndroidStreamController
 
   constructor(options: AndroidEmulatorBackendOptions = {}) {
     this.runner = options.runner ?? execFileAndroidCommandRunner
@@ -94,6 +94,13 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     this.ensureJar = options.ensureJar ?? ensureScrcpyServerJar
     this.startStreamSession = options.startStreamSession ?? startAndroidStreamSession
     this.streamMaxSize = options.streamMaxSize ?? 1280
+    this.streams = new AndroidStreamController({
+      runner: this.runner,
+      sdk: () => this.requireSdk(),
+      ensureJar: this.ensureJar,
+      startStreamSession: this.startStreamSession,
+      maxSize: this.streamMaxSize
+    })
   }
 
   isSupportedOnHost(): boolean {
@@ -154,25 +161,11 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
   }
 
   async startSession(deviceId: string): Promise<EmulatorSessionInfo> {
-    const serial = await this.ensureBooted(deviceId)
-    const jarPath = await this.ensureJar()
-    const { info, handle } = await this.startStreamSession({
-      runner: this.runner,
-      sdk: this.requireSdk(),
-      serial,
-      jarPath,
-      maxSize: this.streamMaxSize
-    })
-    this.streamHandles.set(serial, handle)
-    return info
+    return this.streams.start(await this.ensureBooted(deviceId))
   }
 
   async stopHelperForDevice(deviceId: string): Promise<void> {
-    const handle = this.streamHandles.get(deviceId)
-    if (handle) {
-      handle.close()
-      this.streamHandles.delete(deviceId)
-    }
+    this.streams.stop(deviceId)
   }
 
   async shutdownDevice(deviceId: string): Promise<void> {

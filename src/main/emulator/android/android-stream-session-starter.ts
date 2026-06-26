@@ -52,18 +52,22 @@ export const startAndroidStreamSession: StartAndroidStream = async ({
   scrcpyVideoRegistry.register(serial, () => session.close())
 
   return {
-    info: {
-      deviceUdid: serial,
-      streamUrl: `scrcpy://${serial}`,
-      wsUrl: '',
-      streamCodec: 'h264',
-      backend: 'android'
-    },
+    info: androidStreamSessionInfo(serial),
     handle: {
       close: () => {
         session.close()
         scrcpyVideoRegistry.stop(serial)
       }
     }
+  }
+}
+
+export function androidStreamSessionInfo(serial: string): EmulatorSessionInfo {
+  return {
+    deviceUdid: serial,
+    streamUrl: `scrcpy://${serial}`,
+    wsUrl: '',
+    streamCodec: 'h264',
+    backend: 'android'
   }
 }

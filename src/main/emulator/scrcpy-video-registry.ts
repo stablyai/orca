@@ -31,7 +31,7 @@ class ScrcpyVideoRegistry {
   private readonly entries = new Map<string, RegistryEntry>()
 
   register(deviceId: string, close: () => void): void {
-    this.entries.set(deviceId, { subscribers: new Set(), close })
+    this.entries.set(deviceId, { subscribers: new Set(), gop: [], close })
   }
 
   pushMeta(deviceId: string, meta: ScrcpyVideoMeta): void {
