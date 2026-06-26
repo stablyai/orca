@@ -35,6 +35,8 @@ import {
 } from './editor/editor-autosave'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import EditorAutosaveController from './editor/EditorAutosaveController'
+import CompareStrip from './compare/CompareStrip'
+import { getWorktreeActiveTerminalPane } from './compare/worktree-active-pane'
 import type { Tab, TabContentType, TabGroupLayoutNode, TuiAgent } from '../../../shared/types'
 import { hasFeatureInteraction } from '../../../shared/feature-interactions'
 import BrowserPane from './browser-pane/BrowserPane'
@@ -276,8 +278,10 @@ function Terminal(): React.JSX.Element | null {
   // activeTabId here used to flash the wrong terminal — selectThread updates
   // the store in multiple steps and intermediate renders briefly pointed the
   // portal at the new worktree's stale last-active tab.
+  const compareWorktreeIds = useAppStore((s) => s.compareWorktreeIds)
+  const compareOn = compareWorktreeIds != null && compareWorktreeIds.length > 0
   const activityTerminalPortals: ActivityTerminalPortalTarget[] = useActivityTerminalPortals(
-    activeView === 'activity'
+    activeView === 'activity' || compareOn
   )
   const foregroundTerminalWorktreeIds = useMemo(() => {
     const ids = new Set<string>()
@@ -296,6 +300,55 @@ function Terminal(): React.JSX.Element | null {
     setForegroundTerminalWorktreeIds(foregroundTerminalWorktreeIds)
     return () => setForegroundTerminalWorktreeIds([])
   }, [foregroundTerminalWorktreeIds])
+
+  // Side-by-side trigger. Hotkey ⌘/Ctrl+Shift+\ toggles compare on the active
+  // worktree + the first other mounted worktree with a live terminal. Also
+  // exposed as window.__orcaCompare([ids]) for explicit selection / scripting.
+  useEffect(() => {
+    const w = window as unknown as { __orcaCompare?: (ids?: string[] | null) => void }
+    const enterCompareAuto = (): void => {
+      const state = useAppStore.getState()
+      const active = state.activeWorktreeId
+      const others = Array.from(mountedWorktreeIdsRef.current).filter(
+        (id) => id !== active && getWorktreeActiveTerminalPane(state, id)
+      )
+      const picked = [active, others[0]].filter((id): id is string => typeof id === 'string')
+      if (picked.length < 2) {
+        console.warn('[compare] need 2 worktrees with live terminals; got', picked)
+        return
+      }
+      state.setCompareWorktreeIds(picked)
+    }
+    w.__orcaCompare = (ids) => {
+      const state = useAppStore.getState()
+      if (ids === null) {
+        state.setCompareWorktreeIds(null)
+      } else if (ids && ids.length > 0) {
+        state.setCompareWorktreeIds(ids)
+      } else {
+        enterCompareAuto()
+      }
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      // Why: platform-correct modifier per AGENTS.md (metaKey mac, ctrlKey else).
+      // e.code (not e.key) because Shift+\ yields '|' on US layouts.
+      const mod = navigator.userAgent.includes('Mac') ? event.metaKey : event.ctrlKey
+      if (mod && event.shiftKey && event.code === 'Backslash') {
+        event.preventDefault()
+        const state = useAppStore.getState()
+        if (state.compareWorktreeIds) {
+          state.setCompareWorktreeIds(null)
+        } else {
+          enterCompareAuto()
+        }
+      }
+    }
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, { capture: true })
+      delete w.__orcaCompare
+    }
+  }, [])
 
   const tabs = useMemo(
     () => (renderedActiveWorktreeId ? (tabsByWorktree[renderedActiveWorktreeId] ?? []) : []),
@@ -1723,10 +1776,11 @@ function Terminal(): React.JSX.Element | null {
 
   return (
     <div
-      className={`flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${renderedActiveWorktreeId ? '' : ' hidden'}`}
+      className={`relative flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${renderedActiveWorktreeId ? '' : ' hidden'}`}
       data-rendered-active-worktree-id={renderedActiveWorktreeId ?? undefined}
     >
       <EditorAutosaveController />
+      {compareOn && compareWorktreeIds ? <CompareStrip worktreeIds={compareWorktreeIds} /> : null}
 
       {/* Why: once split groups are enabled, each group owns its own tab strip
           inline. The old titlebar portal stays only as a fallback
@@ -1809,7 +1863,7 @@ function Terminal(): React.JSX.Element | null {
               // Why: use strict equality with 'terminal' instead of !== 'settings'
               // so the terminal/browser surface hides on the tasks page too.
               const isVisible =
-                activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
+                activeView === 'terminal' && !compareOn && workspace.id === renderedActiveWorktreeId
               const shouldMeasureHiddenWorktree =
                 !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspace.id)
               return (
@@ -1869,7 +1923,9 @@ function Terminal(): React.JSX.Element | null {
                 // Why: use strict equality with 'terminal' instead of !== 'settings'
                 // so the terminal/browser surface hides on the tasks page too.
                 const isVisible =
-                  activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
+                  activeView === 'terminal' &&
+                  !compareOn &&
+                  workspace.id === renderedActiveWorktreeId
                 const shouldMeasureHiddenWorktree =
                   !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspace.id)
                 return (
@@ -1944,7 +2000,7 @@ function Terminal(): React.JSX.Element | null {
               // Why: use strict equality with 'terminal' instead of !== 'settings'
               // so browser panes also hide on the tasks page.
               const isVisibleWorktree =
-                activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
+                activeView === 'terminal' && !compareOn && workspace.id === renderedActiveWorktreeId
               if (browserTabs.length === 0) {
                 return null
               }
