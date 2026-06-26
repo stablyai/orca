@@ -5220,6 +5220,32 @@ export class OrcaRuntimeService {
     return this.serializeHeadlessTerminalBuffer(ptyId, { ...opts, includeEmpty: true })
   }
 
+  async serializeHiddenOutputRecoveryBuffer(
+    ptyId: string,
+    opts: { scrollbackRows?: number } = {}
+  ): Promise<{
+    data: string
+    cols: number
+    rows: number
+    cwd?: string | null
+    lastTitle?: string
+    seq?: number
+    source?: 'headless' | 'renderer'
+    oscLinks?: TerminalOscLinkRange[]
+  } | null> {
+    const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId, {
+      ...opts,
+      includeEmpty: true
+    })
+    if (headlessSnapshot) {
+      return headlessSnapshot
+    }
+    // Why: hidden-output recovery is initiated by the desktop renderer. If the
+    // runtime has not built headless state yet, the mounted xterm is still the
+    // best available state and avoids a false "snapshot unavailable" result.
+    return this.serializeRendererTerminalBuffer(ptyId, opts)
+  }
+
   async clearTerminalBuffer(handle: string): Promise<{ handle: string; cleared: boolean }> {
     const leaf = this.resolveLeafForHandle(handle)
     if (!leaf?.ptyId) {
@@ -5458,6 +5484,21 @@ export class OrcaRuntimeService {
       return headlessSnapshot
     }
 
+    return this.serializeRendererTerminalBuffer(ptyId, opts)
+  }
+
+  private async serializeRendererTerminalBuffer(
+    ptyId: string,
+    opts: { scrollbackRows?: number } = {}
+  ): Promise<{
+    data: string
+    cols: number
+    rows: number
+    cwd?: string | null
+    lastTitle?: string
+    source?: 'renderer'
+    oscLinks?: TerminalOscLinkRange[]
+  } | null> {
     let rendererSnapshot: {
       data: string
       cols: number
@@ -5467,18 +5508,17 @@ export class OrcaRuntimeService {
       oscLinks?: TerminalOscLinkRange[]
     } | null = null
     try {
-      // Why: read-fallback wants visible alt-screen content (e.g. an active
-      // TUI like vim) so altScreenForcesZeroRows is FALSE here. Hydration is
-      // the only path that suppresses alt-screen scrollback. See
-      // docs/mobile-prefer-renderer-scrollback.md.
+      // Why: recovery/read fallback wants visible alt-screen content (e.g. an
+      // active TUI), so altScreenForcesZeroRows is FALSE here. Hydration is
+      // the only path that suppresses alt-screen scrollback.
       rendererSnapshot = await (this.ptyController?.serializeBuffer?.(ptyId, {
         scrollbackRows: opts.scrollbackRows,
         altScreenForcesZeroRows: false
       }) ?? Promise.resolve(null))
     } catch {
-      // Why: mobile scrollback should not depend on a mounted renderer pane.
-      // If renderer serialization races reload/unmount, the runtime snapshot
-      // below can still preserve colored terminal state.
+      // Why: terminal snapshots should not depend on a mounted renderer pane.
+      // If renderer serialization races reload/unmount, callers can still use
+      // their existing null fallback paths.
     }
     return rendererSnapshot ? { ...rendererSnapshot, source: 'renderer' } : null
   }

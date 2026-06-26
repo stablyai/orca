@@ -5094,6 +5094,89 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('falls back to the renderer snapshot for hidden-output recovery without headless state', async () => {
+    const serializeBuffer = vi.fn().mockResolvedValue({
+      data: '\x1b[?1049hRenderer TUI\r\nStill running\r\n',
+      cols: 100,
+      rows: 30,
+      lastTitle: 'Renderer working'
+    })
+    const runtime = createRuntime()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeBuffer,
+      hasRendererSerializer: () => true
+    })
+    syncSinglePty(runtime, 'pty-1')
+
+    const snapshot = await runtime.serializeHiddenOutputRecoveryBuffer('pty-1', {
+      scrollbackRows: 5000
+    })
+
+    expect(snapshot).toEqual({
+      data: '\x1b[?1049hRenderer TUI\r\nStill running\r\n',
+      cols: 100,
+      rows: 30,
+      lastTitle: 'Renderer working',
+      source: 'renderer'
+    })
+    expect(serializeBuffer).toHaveBeenCalledWith('pty-1', {
+      scrollbackRows: 5000,
+      altScreenForcesZeroRows: false
+    })
+  })
+
+  it('keeps an empty headless snapshot authoritative for hidden-output recovery', async () => {
+    const serializeBuffer = vi.fn().mockResolvedValue({
+      data: 'stale renderer content\r\n',
+      cols: 80,
+      rows: 24
+    })
+    const runtime = createRuntime()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeBuffer,
+      hasRendererSerializer: () => true
+    })
+    type HeadlessStateForTest = {
+      emulator: {
+        isAlternateScreen: boolean
+        getSnapshot: (opts: { scrollbackRows?: number }) => {
+          rehydrateSequences: string
+          snapshotAnsi: string
+          cols: number
+          rows: number
+        }
+      }
+      outputSequence: number
+      writeChain: Promise<void>
+    }
+    const runtimePrivate = runtime as unknown as {
+      headlessTerminals: Map<string, HeadlessStateForTest>
+    }
+    runtimePrivate.headlessTerminals.set('pty-empty', {
+      emulator: {
+        isAlternateScreen: false,
+        getSnapshot: () => ({ rehydrateSequences: '', snapshotAnsi: '', cols: 90, rows: 30 })
+      },
+      outputSequence: 17,
+      writeChain: Promise.resolve()
+    })
+
+    await expect(runtime.serializeHiddenOutputRecoveryBuffer('pty-empty')).resolves.toEqual({
+      data: '',
+      cols: 90,
+      rows: 30,
+      seq: 17,
+      source: 'headless'
+    })
+    expect(serializeBuffer).not.toHaveBeenCalled()
+  })
+
   it('emits explicit OSC 9999 agent status from runtime PTY data', () => {
     const statuses: RuntimeTerminalAgentStatusEvent[] = []
     const runtime = new OrcaRuntimeService(store, undefined, {

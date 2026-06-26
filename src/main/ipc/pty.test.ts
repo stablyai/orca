@@ -7089,10 +7089,10 @@ describe('registerPtyHandlers', () => {
   })
 
   describe('main buffer snapshot dispatch', () => {
-    it('returns a sequenced main-owned terminal snapshot with clamped scrollback', async () => {
+    it('returns a hidden-output recovery snapshot with clamped scrollback', async () => {
       const runtime = {
         setPtyController: vi.fn(),
-        serializeMainTerminalBuffer: vi.fn().mockResolvedValue({
+        serializeHiddenOutputRecoveryBuffer: vi.fn().mockResolvedValue({
           data: 'snapshot\r\n',
           cols: 120,
           rows: 40,
@@ -7109,7 +7109,7 @@ describe('registerPtyHandlers', () => {
         opts: { scrollbackRows: 999_999 }
       })
 
-      expect(runtime.serializeMainTerminalBuffer).toHaveBeenCalledWith('pty-1', {
+      expect(runtime.serializeHiddenOutputRecoveryBuffer).toHaveBeenCalledWith('pty-1', {
         scrollbackRows: 50_000
       })
       expect(result).toEqual({

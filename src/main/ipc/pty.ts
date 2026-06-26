@@ -2230,7 +2230,7 @@ export function registerPtyHandlers(
       }
       const scrollbackRows = normalizeSnapshotScrollbackRows(args.opts?.scrollbackRows)
       try {
-        return await runtime.serializeMainTerminalBuffer(args.id, { scrollbackRows })
+        return await runtime.serializeHiddenOutputRecoveryBuffer(args.id, { scrollbackRows })
       } catch {
         return null
       }
