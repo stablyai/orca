@@ -538,9 +538,6 @@ describe('buildRows with pinned worktrees', () => {
   })
 
   it('splits same-host checkouts of one project into separate per-setup groups', () => {
-    // Why: multiple local clones/worktrees of one repo share the GitHub slug, so
-    // collapsing to the project would merge them into one arbitrarily-named group.
-    // They are distinct ProjectHostSetups on the same host and must stay separate.
     const repoB: Repo = { ...repo, id: 'repo-2', path: '/tmp/orca-2', displayName: 'orca-2' }
     const worktreeB: Worktree = {
       ...worktree,
@@ -599,6 +596,146 @@ describe('buildRows with pinned worktrees', () => {
         })
       ])
     )
+  })
+
+  it('splits all project setups when one host has duplicate checkouts', () => {
+    const localRepoB: Repo = {
+      ...repo,
+      id: 'repo-local-b',
+      path: '/tmp/orca-b',
+      displayName: 'orca-b'
+    }
+    const localWorktreeB: Worktree = {
+      ...worktree,
+      id: 'wt-local-b',
+      repoId: localRepoB.id,
+      path: '/tmp/orca-b-feature',
+      displayName: 'feature-b'
+    }
+    const localSetupB: ProjectHostSetup = {
+      ...projectHostSetups[0]!,
+      id: localRepoB.id,
+      repoId: localRepoB.id,
+      path: localRepoB.path,
+      displayName: localRepoB.displayName
+    }
+    const rows = buildRows(
+      'repo',
+      [worktree, localWorktreeB, remoteWorktree],
+      new Map([
+        [repo.id, repo],
+        [localRepoB.id, localRepoB],
+        [remoteRepo.id, remoteRepo]
+      ]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [worktree.id, worktree],
+        [localWorktreeB.id, localWorktreeB],
+        [remoteWorktree.id, remoteWorktree]
+      ]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      [],
+      {
+        projects: [{ ...project, sourceRepoIds: [repo.id, localRepoB.id, remoteRepo.id] }],
+        projectHostSetups: [projectHostSetups[0]!, localSetupB, projectHostSetups[1]!]
+      }
+    )
+
+    const headers = rows.filter((row) => row.type === 'header')
+    expect(headers.map((row) => row.key)).toEqual([
+      'project:github:stablyai/orca::setup:repo-1',
+      'project:github:stablyai/orca::setup:repo-local-b',
+      'project:github:stablyai/orca::setup:repo-remote'
+    ])
+  })
+
+  it('groups Windows host and WSL setups on the same runtime host', () => {
+    const runtimeHostId = 'runtime:g16'
+    const windowsRepo: Repo = {
+      ...repo,
+      id: 'repo-windows',
+      path: String.raw`C:\Users\alice\git\orca`,
+      displayName: 'orca',
+      executionHostId: runtimeHostId
+    }
+    const wslRepo: Repo = {
+      ...repo,
+      id: 'repo-wsl',
+      path: String.raw`\\wsl.localhost\Ubuntu\home\alice\git\orca`,
+      displayName: 'orca',
+      executionHostId: runtimeHostId
+    }
+    const windowsWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-windows',
+      repoId: windowsRepo.id,
+      path: String.raw`C:\Users\alice\git\orca\feature`
+    }
+    const wslWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-wsl',
+      repoId: wslRepo.id,
+      path: String.raw`\\wsl.localhost\Ubuntu\home\alice\git\orca\feature`
+    }
+    const windowsSetup: ProjectHostSetup = {
+      ...projectHostSetups[0]!,
+      id: windowsRepo.id,
+      hostId: runtimeHostId,
+      repoId: windowsRepo.id,
+      path: windowsRepo.path,
+      displayName: windowsRepo.displayName
+    }
+    const wslSetup: ProjectHostSetup = {
+      ...windowsSetup,
+      id: wslRepo.id,
+      repoId: wslRepo.id,
+      path: wslRepo.path
+    }
+    const rows = buildRows(
+      'repo',
+      [windowsWorktree, wslWorktree],
+      new Map([
+        [windowsRepo.id, windowsRepo],
+        [wslRepo.id, wslRepo]
+      ]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [windowsWorktree.id, windowsWorktree],
+        [wslWorktree.id, wslWorktree]
+      ]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      [],
+      {
+        projects: [{ ...project, sourceRepoIds: [windowsRepo.id, wslRepo.id] }],
+        projectHostSetups: [windowsSetup, wslSetup]
+      }
+    )
+
+    expect(rows.filter((row) => row.type === 'header')).toMatchObject([
+      {
+        key: 'project:github:stablyai/orca',
+        label: 'Orca',
+        count: 2
+      }
+    ])
   })
 
   it('uses saved host labels for mixed-host sidebar card badges', () => {
