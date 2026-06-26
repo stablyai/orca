@@ -344,7 +344,10 @@ function ensureDevcontainerProvider(connectionId: string): IPtyProvider | undefi
     return undefined
   }
   const provider = new DevcontainerRuntime({
-    containerKey: parsed.containerKey
+    containerKey: parsed.containerKey,
+    // Why: devcontainer PTYs must receive an explicit spawn env from pty.ts or
+    // this resolver; never let DockerPtyProvider fall back to ambient process.env.
+    resolveSpawnEnv: () => ({})
   }).createPtyProvider()
   dockerProviders.set(connectionId, provider)
   return provider

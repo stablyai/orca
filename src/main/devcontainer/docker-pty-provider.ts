@@ -77,8 +77,10 @@ export class DockerPtyProvider implements IPtyProvider {
     // Why: pty.ts already assembles the canonical host spawn env (including
     // deletions and provider shims). Prefer the IPC-passed env so docker exec
     // inherits the same values instead of ambient process.env.
-    const env =
-      opts.env ?? this.config.resolveSpawnEnv?.() ?? (process.env as Record<string, string>)
+    const env = opts.env ?? this.config.resolveSpawnEnv?.()
+    if (!env) {
+      throw new Error('Missing spawn environment for devcontainer PTY')
+    }
     const proc = spawnFn('docker', args, {
       name: term,
       cols: opts.cols,

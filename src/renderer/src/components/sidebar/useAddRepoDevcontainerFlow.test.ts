@@ -33,7 +33,7 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
     displayName: 'aprium',
     badgeColor: '#999999',
     addedAt: 1,
-    kind: 'folder',
+    kind: 'git',
     ...overrides
   }
 }
@@ -68,7 +68,7 @@ describe('useAddRepoDevcontainerFlow', () => {
     })
     await result.handleSelectDevcontainer(makeInfo())
 
-    expect(mocks.storeState.addRepoPath).toHaveBeenCalledWith('/Users/me/work/aprium', 'folder')
+    expect(mocks.storeState.addRepoPath).toHaveBeenCalledWith('/Users/me/work/aprium', 'git')
     expect(mocks.storeState.updateRepo).toHaveBeenCalledWith(repo.id, {
       executionHostId: 'devcontainer:%2FUsers%2Fme%2Fwork%2Faprium',
       connectionId: 'devcontainer:%2FUsers%2Fme%2Fwork%2Faprium',

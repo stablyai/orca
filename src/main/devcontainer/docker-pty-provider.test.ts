@@ -58,39 +58,65 @@ function setup(overrides: Partial<DockerPtyProviderConfig> = {}) {
 describe('DockerPtyProvider.spawn', () => {
   it('spawns docker exec with translated cwd, forwarded env, and TERM', async () => {
     const { provider, ptySpawn } = setup()
-    const result = await provider.spawn({
-      cols: 120,
-      rows: 30,
-      cwd: '/Users/me/work/aprium/.worktrees/feat',
-      env: { TERM: 'xterm-kitty', ANTHROPIC_API_KEY: 'from-spawn-env', PATH: '/opt/bin' }
+    const originalAnthropic = process.env.ANTHROPIC_API_KEY
+    process.env.ANTHROPIC_API_KEY = 'ambient-secret'
+    try {
+      const result = await provider.spawn({
+        cols: 120,
+        rows: 30,
+        cwd: '/Users/me/work/aprium/.worktrees/feat',
+        env: { TERM: 'xterm-kitty', ANTHROPIC_API_KEY: 'from-spawn-env', PATH: '/opt/bin' }
+      })
+
+      expect(result.pid).toBe(4242)
+      expect(result.id).toMatch(/^dpty-\d+$/)
+
+      const [file, args, options] = ptySpawn.mock.calls[0] as unknown as [
+        string,
+        string[],
+        { env: Record<string, string>; cols: number }
+      ]
+      expect(file).toBe('docker')
+      expect(args).toEqual([
+        'exec',
+        '-i',
+        '-t',
+        '-w',
+        '/workspaces/aprium/.worktrees/feat',
+        '-e',
+        'ANTHROPIC_API_KEY',
+        '-e',
+        'TERM=xterm-kitty',
+        'container-xyz',
+        'bash'
+      ])
+      // Secret value travels via the spawn env, not the argv.
+      expect(options.env.ANTHROPIC_API_KEY).toBe('from-spawn-env')
+      expect(options.env.PATH).toBe('/opt/bin')
+      expect(args.join(' ')).not.toContain('from-spawn-env')
+      expect(args.join(' ')).not.toContain('ambient-secret')
+    } finally {
+      if (originalAnthropic !== undefined) {
+        process.env.ANTHROPIC_API_KEY = originalAnthropic
+      } else {
+        delete process.env.ANTHROPIC_API_KEY
+      }
+    }
+  })
+
+  it('uses the configured spawn env resolver when opts.env is omitted', async () => {
+    const { provider, ptySpawn } = setup({
+      resolveSpawnEnv: () => ({ TERM: 'xterm-256color', ANTHROPIC_API_KEY: 'resolved-secret' })
     })
 
-    expect(result.pid).toBe(4242)
-    expect(result.id).toMatch(/^dpty-\d+$/)
+    await provider.spawn({ cols: 80, rows: 24, cwd: '/Users/me/work/aprium' })
 
-    const [file, args, options] = ptySpawn.mock.calls[0] as unknown as [
+    const [, , options] = ptySpawn.mock.calls[0] as unknown as [
       string,
       string[],
-      { env: Record<string, string>; cols: number }
+      { env: Record<string, string> }
     ]
-    expect(file).toBe('docker')
-    expect(args).toEqual([
-      'exec',
-      '-i',
-      '-t',
-      '-w',
-      '/workspaces/aprium/.worktrees/feat',
-      '-e',
-      'ANTHROPIC_API_KEY',
-      '-e',
-      'TERM=xterm-kitty',
-      'container-xyz',
-      'bash'
-    ])
-    // Secret value travels via the spawn env, not the argv.
-    expect(options.env.ANTHROPIC_API_KEY).toBe('from-spawn-env')
-    expect(options.env.PATH).toBe('/opt/bin')
-    expect(args.join(' ')).not.toContain('from-spawn-env')
+    expect(options.env.ANTHROPIC_API_KEY).toBe('resolved-secret')
   })
 
   it('routes onData and cleans up on exit', async () => {

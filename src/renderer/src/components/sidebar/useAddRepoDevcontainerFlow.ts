@@ -30,7 +30,10 @@ export function useAddRepoDevcontainerFlow({
       setIsAdding(true)
       let repo: Repo | null = null
       try {
-        repo = await addRepoPath(info.hostFolder, 'folder')
+        // Why: devcontainer projects should preserve git capabilities when the
+        // mounted host folder is a repo. `addRepoPath(..., 'git')` keeps SCM and
+        // worktree wiring intact instead of downgrading to folder mode.
+        repo = await addRepoPath(info.hostFolder, 'git')
         if (!repo) {
           return
         }
