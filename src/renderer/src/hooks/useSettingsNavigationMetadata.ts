@@ -293,7 +293,7 @@ export function buildSettingsNavigationMetadata({
           }
         ]
       : []),
-    ...(showDesktopOnlySettings && isMac
+    ...(showDesktopOnlySettings
       ? [
           {
             id: 'mobile-emulator',
