@@ -241,9 +241,26 @@ describe('AndroidEmulatorBackend', () => {
     )
   })
 
-  it('startSession boots then reports streaming is not yet wired', async () => {
-    await expect(backend(runner).startSession('emulator-5554')).rejects.toMatchObject({
-      code: 'emulator_helper_failed'
+  it('startSession boots, ensures the jar, returns an h264 session, and tears it down', async () => {
+    const close = vi.fn()
+    const android = new AndroidEmulatorBackend({
+      runner: runner as unknown as AndroidCommandRunner,
+      sdk: SDK,
+      sleep: async () => {},
+      ensureJar: async () => '/cache/scrcpy-server.jar',
+      startStreamSession: async ({ serial }) => ({
+        info: {
+          deviceUdid: serial,
+          streamUrl: `scrcpy://${serial}`,
+          wsUrl: '',
+          streamCodec: 'h264'
+        },
+        handle: { close }
+      })
     })
+    const info = await android.startSession('emulator-5554')
+    expect(info).toMatchObject({ deviceUdid: 'emulator-5554', streamCodec: 'h264' })
+    await android.stopHelperForDevice('emulator-5554')
+    expect(close).toHaveBeenCalledTimes(1)
   })
 })

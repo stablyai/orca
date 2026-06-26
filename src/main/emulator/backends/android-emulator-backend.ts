@@ -1,5 +1,3 @@
-import { homedir, platform } from 'node:os'
-import { existsSync } from 'node:fs'
 import { EmulatorError } from '../emulator-errors'
 import type { EmulatorSessionInfo } from '../emulator-types'
 import type {
@@ -8,9 +6,10 @@ import type {
   EmulatorBackendCapabilities,
   EmulatorDevice
 } from './emulator-backend'
-import { discoverAndroidSdk, type AndroidSdkPaths } from '../android/android-sdk-discovery'
-import { bootCompletedArgs, isBootCompleted, parseWmSize, wmSizeArgs } from '../android/adb-devices'
-import { bootAvdArgs, emuKillArgs } from '../android/avd-manager'
+import type { AndroidSdkPaths } from '../android/android-sdk-discovery'
+import { discoverAndroidSdkFromHost } from '../android/android-sdk-host-discovery'
+import { parseWmSize, wmSizeArgs } from '../android/adb-devices'
+import { emuKillArgs } from '../android/avd-manager'
 import type { DeviceScreenSize } from '../android/android-input-mapping'
 import {
   androidButton,
@@ -37,6 +36,13 @@ import {
   setAndroidPermission
 } from '../android/android-capability-operations'
 import type { AndroidPermissionOp } from '../android/android-permissions'
+import { bootAndroidDevice } from '../android/android-avd-boot'
+import { ensureScrcpyServerJar } from '../android/scrcpy-server-download'
+import {
+  startAndroidStreamSession,
+  type AndroidStreamHandle,
+  type StartAndroidStream
+} from '../android/android-stream-session-starter'
 import type { EmulatorGesturePoint } from '../emulator-gesture-sender'
 
 export type AndroidEmulatorBackendOptions = {
@@ -46,6 +52,9 @@ export type AndroidEmulatorBackendOptions = {
   bootTimeoutMs?: number
   pollIntervalMs?: number
   sleep?: (ms: number) => Promise<void>
+  ensureJar?: () => Promise<string>
+  startStreamSession?: StartAndroidStream
+  streamMaxSize?: number
 }
 
 const DEFAULT_BOOT_TIMEOUT_MS = 180_000
@@ -70,14 +79,21 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
   private readonly bootTimeoutMs: number
   private readonly pollIntervalMs: number
   private readonly sleep: (ms: number) => Promise<void>
+  private readonly ensureJar: () => Promise<string>
+  private readonly startStreamSession: StartAndroidStream
+  private readonly streamMaxSize: number
   private readonly screenSizes = new Map<string, DeviceScreenSize>()
+  private readonly streamHandles = new Map<string, AndroidStreamHandle>()
 
   constructor(options: AndroidEmulatorBackendOptions = {}) {
     this.runner = options.runner ?? execFileAndroidCommandRunner
-    this.sdk = options.sdk !== undefined ? options.sdk : safeDiscoverSdk()
+    this.sdk = options.sdk !== undefined ? options.sdk : discoverAndroidSdkFromHost()
     this.bootTimeoutMs = options.bootTimeoutMs ?? DEFAULT_BOOT_TIMEOUT_MS
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS
     this.sleep = options.sleep ?? defaultSleep
+    this.ensureJar = options.ensureJar ?? ensureScrcpyServerJar
+    this.startStreamSession = options.startStreamSession ?? startAndroidStreamSession
+    this.streamMaxSize = options.streamMaxSize ?? 1280
   }
 
   isSupportedOnHost(): boolean {
@@ -138,16 +154,25 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
   }
 
   async startSession(deviceId: string): Promise<EmulatorSessionInfo> {
-    // Boot if needed so the device is ready for the (later) scrcpy stream.
-    await this.ensureBooted(deviceId)
-    throw new EmulatorError(
-      'emulator_helper_failed',
-      'Android live streaming (scrcpy) is added in the streaming phase; device control works via the CLI.'
-    )
+    const serial = await this.ensureBooted(deviceId)
+    const jarPath = await this.ensureJar()
+    const { info, handle } = await this.startStreamSession({
+      runner: this.runner,
+      sdk: this.requireSdk(),
+      serial,
+      jarPath,
+      maxSize: this.streamMaxSize
+    })
+    this.streamHandles.set(serial, handle)
+    return info
   }
 
-  async stopHelperForDevice(): Promise<void> {
-    // No scrcpy helper exists yet; nothing to stop until the streaming phase.
+  async stopHelperForDevice(deviceId: string): Promise<void> {
+    const handle = this.streamHandles.get(deviceId)
+    if (handle) {
+      handle.close()
+      this.streamHandles.delete(deviceId)
+    }
   }
 
   async shutdownDevice(deviceId: string): Promise<void> {
@@ -215,24 +240,14 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     apkPath: string,
     options?: { reinstall?: boolean }
   ): Promise<void> {
-    const sdk = this.requireSdk()
-    await installAndroidApk(
-      this.runner,
-      sdk,
-      await this.resolveDeviceId(deviceId),
-      apkPath,
-      options
+    await this.withSerial(deviceId, (sdk, serial) =>
+      installAndroidApk(this.runner, sdk, serial, apkPath, options)
     )
   }
 
   async launchApp(deviceId: string, packageName: string, activity?: string): Promise<void> {
-    const sdk = this.requireSdk()
-    await launchAndroidApp(
-      this.runner,
-      sdk,
-      await this.resolveDeviceId(deviceId),
-      packageName,
-      activity
+    await this.withSerial(deviceId, (sdk, serial) =>
+      launchAndroidApp(this.runner, sdk, serial, packageName, activity)
     )
   }
 
@@ -242,68 +257,40 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     packageName: string,
     permission?: string
   ): Promise<void> {
-    const sdk = this.requireSdk()
-    await setAndroidPermission(
-      this.runner,
-      sdk,
-      await this.resolveDeviceId(deviceId),
-      op,
-      packageName,
-      permission
+    await this.withSerial(deviceId, (sdk, serial) =>
+      setAndroidPermission(this.runner, sdk, serial, op, packageName, permission)
     )
   }
 
   async accessibilityTree(deviceId: string): Promise<unknown> {
-    const sdk = this.requireSdk()
-    return dumpAndroidAccessibilityTree(this.runner, sdk, await this.resolveDeviceId(deviceId))
+    return this.withSerial(deviceId, (sdk, serial) =>
+      dumpAndroidAccessibilityTree(this.runner, sdk, serial)
+    )
   }
 
   async logcat(
     deviceId: string,
     options?: { lines?: number; filters?: readonly string[] }
   ): Promise<unknown> {
-    const sdk = this.requireSdk()
-    return captureAndroidLogcat(this.runner, sdk, await this.resolveDeviceId(deviceId), options)
-  }
-
-  // Boots an AVD (by name) when not already running and waits for the framework
-  // to come up; returns the running adb serial.
-  async ensureBooted(deviceOrName: string): Promise<string> {
-    const sdk = this.requireSdk()
-    const running = await listRunningAdbDevices(this.runner, sdk)
-    if (running.some((device) => device.serial === deviceOrName)) {
-      return deviceOrName
-    }
-    const existingSerial = await findRunningAvdSerial(this.runner, sdk, deviceOrName, running)
-    if (existingSerial) {
-      return existingSerial
-    }
-    const knownSerials = new Set(running.map((device) => device.serial))
-    // Detached: the emulator process must outlive this call.
-    void this.runner(sdk.emulator, bootAvdArgs(deviceOrName), { timeoutMs: this.bootTimeoutMs })
-    return this.waitForNewBootedSerial(deviceOrName, knownSerials)
-  }
-
-  private async waitForNewBootedSerial(avdName: string, known: Set<string>): Promise<string> {
-    const sdk = this.requireSdk()
-    let waited = 0
-    while (waited < this.bootTimeoutMs) {
-      const fresh = (await listRunningAdbDevices(this.runner, sdk)).filter(
-        (device) => device.isEmulator && !known.has(device.serial)
-      )
-      for (const device of fresh) {
-        const booted = await this.runner(sdk.adb, bootCompletedArgs(device.serial))
-        if (isBootCompleted(booted.stdout)) {
-          return device.serial
-        }
-      }
-      await this.sleep(this.pollIntervalMs)
-      waited += this.pollIntervalMs
-    }
-    throw new EmulatorError(
-      'emulator_helper_failed',
-      `AVD "${avdName}" did not finish booting in time.`
+    return this.withSerial(deviceId, (sdk, serial) =>
+      captureAndroidLogcat(this.runner, sdk, serial, options)
     )
+  }
+
+  private async withSerial<T>(
+    deviceId: string,
+    run: (sdk: AndroidSdkPaths, serial: string) => Promise<T>
+  ): Promise<T> {
+    return run(this.requireSdk(), await this.resolveDeviceId(deviceId))
+  }
+
+  // Boots an AVD (by name) when not running and waits for boot; returns the serial.
+  async ensureBooted(deviceOrName: string): Promise<string> {
+    return bootAndroidDevice(this.runner, this.requireSdk(), deviceOrName, {
+      bootTimeoutMs: this.bootTimeoutMs,
+      pollIntervalMs: this.pollIntervalMs,
+      sleep: this.sleep
+    })
   }
 
   private async getScreenSize(serial: string): Promise<DeviceScreenSize> {
@@ -329,19 +316,6 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
       )
     }
     return this.sdk
-  }
-}
-
-function safeDiscoverSdk(): AndroidSdkPaths | null {
-  try {
-    return discoverAndroidSdk({
-      env: process.env,
-      platform: platform(),
-      homedir: homedir(),
-      exists: existsSync
-    })
-  } catch {
-    return null
   }
 }
 

@@ -21,7 +21,7 @@ export class EmulatorSessionRegistry {
       initialized: true,
       // Why: default to the iOS/serve-sim contract so existing callers that
       // predate multi-backend keep their prior behavior.
-      backend: options.backend ?? 'ios',
+      backend: info.backend ?? options.backend ?? 'ios',
       streamCodec: info.streamCodec ?? 'mjpeg'
     })
     this.activeByWorktree.set(worktreeId, key)
