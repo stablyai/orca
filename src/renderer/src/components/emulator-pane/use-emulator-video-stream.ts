@@ -18,7 +18,7 @@ type VideoMetaMessage = {
 
 type EmulatorVideoApi = {
   startVideoStream?: (args: { deviceId: string }) => Promise<void>
-  stopVideoStream?: (args: { deviceId: string }) => void
+  stopVideoStream?: (args: { deviceId: string }) => Promise<void>
   onVideoStreamMeta?: (cb: (msg: VideoMetaMessage) => void) => () => void
   onVideoStreamFrame?: (cb: (msg: VideoFrameMessage) => void) => () => void
 }
@@ -123,7 +123,7 @@ export function useEmulatorVideoStream(
       disposed = true
       unsubMeta?.()
       unsubFrame?.()
-      api.stopVideoStream?.({ deviceId })
+      void api.stopVideoStream?.({ deviceId })
       if (decoder.state !== 'closed') {
         decoder.close()
       }

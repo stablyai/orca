@@ -7,7 +7,7 @@ import type { AndroidSdkPaths } from '../android/android-sdk-discovery'
 // The AVD boot spawns the emulator detached (not via the command runner).
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
-  return { ...actual, spawn: vi.fn(() => ({ unref: () => {} })) }
+  return { ...actual, spawn: vi.fn(() => ({ on: () => {}, unref: () => {} })) }
 })
 
 const SDK: AndroidSdkPaths = {
@@ -223,7 +223,7 @@ describe('AndroidEmulatorBackend', () => {
     let bootStarted = false
     vi.mocked(spawn).mockImplementation(() => {
       bootStarted = true
-      return { unref: () => {} } as unknown as ReturnType<typeof spawn>
+      return { on: () => {}, unref: () => {} } as unknown as ReturnType<typeof spawn>
     })
     const bootRunner = vi.fn(async (binary: string, args: readonly string[]) => {
       const a = args.join(' ')
@@ -236,6 +236,9 @@ describe('AndroidEmulatorBackend', () => {
       }
       if (binary === SDK.adb && a === '-s emulator-5556 shell getprop sys.boot_completed') {
         return ok('1')
+      }
+      if (binary === SDK.emulator && a === '-list-avds') {
+        return ok('Pixel_Tablet')
       }
       return ok('')
     })

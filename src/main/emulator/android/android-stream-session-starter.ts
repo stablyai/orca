@@ -51,10 +51,15 @@ export const startAndroidStreamSession: StartAndroidStream = async ({
   )
   scrcpyVideoRegistry.register(serial, () => session.close())
 
+  let closed = false
   return {
     info: androidStreamSessionInfo(serial),
     handle: {
       close: () => {
+        if (closed) {
+          return
+        }
+        closed = true
         session.close()
         scrcpyVideoRegistry.stop(serial)
       }

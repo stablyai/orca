@@ -3,8 +3,9 @@ import { EmulatorError } from '../emulator-errors'
 import type { AndroidCommandRunner } from './android-command-runner'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
 import { bootCompletedArgs, isBootCompleted } from './adb-devices'
-import { bootAvdArgs } from './avd-manager'
+import { bootAvdArgs, listAvdsArgs, parseAvdList } from './avd-manager'
 import { findRunningAvdSerial, listRunningAdbDevices } from './android-device-inventory'
+import { emulatorProbeError } from '../emulator-probe'
 
 export type AndroidBootOptions = {
   bootTimeoutMs: number
@@ -28,6 +29,15 @@ export async function bootAndroidDevice(
   if (existing) {
     return existing
   }
+  // Validate the target is a real AVD before spawning, so a stale/offline serial
+  // doesn't launch an invalid `-avd` and burn the full boot timeout.
+  const avds = parseAvdList((await runner(sdk.emulator, listAvdsArgs)).stdout)
+  if (!avds.includes(deviceOrName)) {
+    throw new EmulatorError(
+      'emulator_device_not_found',
+      `"${deviceOrName}" is not a running device or a known AVD.`
+    )
+  }
   const known = new Set(running.map((device) => device.serial))
   launchAvd(sdk.emulator, deviceOrName)
   return waitForNewBootedSerial(runner, sdk, deviceOrName, known, options)
@@ -44,6 +54,9 @@ function launchAvd(emulatorPath: string, avdName: string): void {
     stdio: 'ignore',
     windowsHide: true
   })
+  // An unhandled 'error' (ENOENT/EACCES) on a ChildProcess crashes the main
+  // process; swallow + log it so the boot wait surfaces a timeout instead.
+  child.on('error', (error) => emulatorProbeError('emulator.launch.fail', error, { avdName }))
   child.unref()
 }
 

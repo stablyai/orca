@@ -12,6 +12,15 @@ const existsIn = (paths: Iterable<string>): ((path: string) => boolean) => {
 const adbFor = (sdkRoot: string, win32: boolean): string =>
   join(sdkRoot, 'platform-tools', win32 ? 'adb.exe' : 'adb')
 
+const emulatorFor = (sdkRoot: string, win32: boolean): string =>
+  join(sdkRoot, 'emulator', win32 ? 'emulator.exe' : 'emulator')
+
+// discoverAndroidSdk requires both adb and the emulator binary to be present.
+const sdkToolsFor = (sdkRoot: string, win32: boolean): string[] => [
+  adbFor(sdkRoot, win32),
+  emulatorFor(sdkRoot, win32)
+]
+
 describe('discoverAndroidSdk', () => {
   it('prefers ANDROID_HOME when its adb exists', () => {
     const sdkRoot = '/opt/android-home'
@@ -19,7 +28,7 @@ describe('discoverAndroidSdk', () => {
       env: { ANDROID_HOME: sdkRoot, ANDROID_SDK_ROOT: '/opt/android-sdk-root' },
       platform: 'linux',
       homedir: '/home/erik',
-      exists: existsIn([adbFor(sdkRoot, false)])
+      exists: existsIn(sdkToolsFor(sdkRoot, false))
     }
 
     expect(discoverAndroidSdk(options)).toEqual({
@@ -36,7 +45,7 @@ describe('discoverAndroidSdk', () => {
       env: { ANDROID_HOME: '/opt/android-home', ANDROID_SDK_ROOT: sdkRoot },
       platform: 'linux',
       homedir: '/home/erik',
-      exists: existsIn([adbFor(sdkRoot, false)])
+      exists: existsIn(sdkToolsFor(sdkRoot, false))
     })
 
     expect(result?.sdkRoot).toBe(sdkRoot)
@@ -49,7 +58,7 @@ describe('discoverAndroidSdk', () => {
       env: { ANDROID_HOME: '', ANDROID_SDK_ROOT: '' },
       platform: 'linux',
       homedir: home,
-      exists: existsIn([adbFor(sdkRoot, false)])
+      exists: existsIn(sdkToolsFor(sdkRoot, false))
     })
 
     expect(result?.sdkRoot).toBe(sdkRoot)
@@ -62,7 +71,7 @@ describe('discoverAndroidSdk', () => {
       env: {},
       platform: 'darwin',
       homedir: home,
-      exists: existsIn([adbFor(sdkRoot, false)])
+      exists: existsIn(sdkToolsFor(sdkRoot, false))
     })
 
     expect(result).toEqual({
@@ -80,7 +89,7 @@ describe('discoverAndroidSdk', () => {
       env: {},
       platform: 'linux',
       homedir: home,
-      exists: existsIn([adbFor(sdkRoot, false)])
+      exists: existsIn(sdkToolsFor(sdkRoot, false))
     })
 
     expect(result?.sdkRoot).toBe(sdkRoot)
@@ -94,7 +103,7 @@ describe('discoverAndroidSdk', () => {
       env: { LOCALAPPDATA: localAppData },
       platform: 'win32',
       homedir: 'C:\\Users\\erik',
-      exists: existsIn([adbFor(sdkRoot, true)])
+      exists: existsIn(sdkToolsFor(sdkRoot, true))
     })
 
     expect(result).toEqual({
@@ -112,7 +121,7 @@ describe('discoverAndroidSdk', () => {
       env: {},
       platform: 'win32',
       homedir: home,
-      exists: existsIn([adbFor(sdkRoot, true)])
+      exists: existsIn(sdkToolsFor(sdkRoot, true))
     })
 
     expect(result?.sdkRoot).toBe(sdkRoot)

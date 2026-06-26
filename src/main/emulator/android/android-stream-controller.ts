@@ -6,6 +6,7 @@ import {
   type AndroidStreamHandle,
   type StartAndroidStream
 } from './android-stream-session-starter'
+import { scrcpyVideoRegistry } from '../scrcpy-video-registry'
 
 export type AndroidStreamControllerDeps = {
   runner: AndroidCommandRunner
@@ -38,9 +39,12 @@ export class AndroidStreamController {
   }
 
   private async begin(serial: string): Promise<EmulatorSessionInfo> {
-    if (this.handles.has(serial)) {
+    // Reuse only a live stream; if the session died on its own the registry entry
+    // is gone, so drop the stale handle and start fresh.
+    if (this.handles.has(serial) && scrcpyVideoRegistry.has(serial)) {
       return androidStreamSessionInfo(serial)
     }
+    this.handles.delete(serial)
     const jarPath = await this.deps.ensureJar()
     const { info, handle } = await this.deps.startStreamSession({
       runner: this.deps.runner,

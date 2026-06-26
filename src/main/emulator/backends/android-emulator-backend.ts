@@ -108,7 +108,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
   }
 
   async checkAvailability(): Promise<BackendAvailability> {
-    const sdk = this.sdkState.resolve(true)
+    const sdk = this.sdkState.resolve()
     if (!sdk) {
       return {
         available: false,

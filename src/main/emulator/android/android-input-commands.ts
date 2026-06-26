@@ -109,7 +109,9 @@ export async function androidExec(
   serial: string,
   command: string
 ): Promise<string> {
-  const result = await runner(sdk.adb, androidShellArgs(serial, command.split(' ').filter(Boolean)))
+  // Pass the whole command as a single arg so the device shell parses quotes,
+  // pipes, and compound commands instead of naively splitting on spaces.
+  const result = await runner(sdk.adb, androidShellArgs(serial, [command]))
   return result.stdout
 }
 

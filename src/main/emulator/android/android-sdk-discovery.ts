@@ -22,7 +22,9 @@ export function discoverAndroidSdk(options: DiscoverAndroidSdkOptions): AndroidS
 
   for (const sdkRoot of candidateSdkRoots(env, platform, homedir)) {
     const paths = resolveToolPaths(sdkRoot, win32)
-    if (exists(paths.adb)) {
+    // Require both tools the backend depends on: adb (devices/input/stream) and
+    // the emulator binary (boot + list AVDs). A partial SDK isn't usable.
+    if (exists(paths.adb) && exists(paths.emulator)) {
       return paths
     }
   }

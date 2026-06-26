@@ -1,16 +1,13 @@
 // `emulator -list-avds`
 export const listAvdsArgs: readonly string[] = ['-list-avds']
 
-// Why: the emulator binary interleaves AVD names with informational/warning
-// noise, so a kept line must be non-empty and not match these markers.
+// Emulator log lines look like `INFO    | ...` (marker + padding + pipe). AVD
+// names contain no whitespace, so match the log prefix exactly rather than via
+// substring — otherwise a name like `PixelWARNINGTest` would be dropped.
+const EMULATOR_LOG_PREFIX = /^(INFO|WARNING|ERROR|DEBUG|VERBOSE|PANIC)\s/
+
 function isNoiseLine(line: string): boolean {
-  return (
-    line === '' ||
-    line.startsWith('No AVD') ||
-    line.includes('INFO') ||
-    line.includes('WARNING') ||
-    line.includes('ERROR')
-  )
+  return line === '' || line.startsWith('No AVD') || EMULATOR_LOG_PREFIX.test(line)
 }
 
 // Parses `emulator -list-avds` stdout: one AVD name per line. Drops blank lines

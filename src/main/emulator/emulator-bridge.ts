@@ -1,3 +1,4 @@
+import { platform } from 'os'
 import { EmulatorError } from './emulator-errors'
 import type { EmulatorSessionInfo } from './emulator-types'
 import type { SimulatorDevice } from './simctl-simulator-devices'
@@ -320,8 +321,12 @@ export class EmulatorBridge {
         return backend
       }
     }
-    // Why: fall back to a host-supported backend (else the first) so an
-    // unrecognized device surfaces a usable backend's error, not iOS-on-Windows.
-    return this.backends.find((backend) => backend.isSupportedOnHost()) ?? this.backends[0]
+    // Why: fall back to a host-supported backend, else the platform-primary one,
+    // so an unrecognized device (e.g. no SDK yet) surfaces the right setup error
+    // — Android on Windows/Linux, iOS/CoreSimulator on macOS — not iOS-on-Windows.
+    return (
+      this.backends.find((backend) => backend.isSupportedOnHost()) ??
+      (platform() === 'darwin' ? this.iosBackend : this.androidBackend)
+    )
   }
 }

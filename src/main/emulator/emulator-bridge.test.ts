@@ -48,6 +48,12 @@ vi.mock('./android/android-sdk-host-discovery', () => ({
   setConfiguredAndroidSdkPath: () => {}
 }))
 
+// These tests exercise the iOS backend, which is gated to macOS.
+vi.mock('os', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return { ...actual, platform: () => 'darwin' }
+})
+
 import { EmulatorBridge } from './emulator-bridge'
 import { RuntimeEmulatorCommands } from '../runtime/orca-runtime-emulator'
 

@@ -71,6 +71,10 @@ class ScrcpyVideoRegistry {
     if (entry.config) {
       subscriber({ type: 'frame', frame: entry.config })
     }
+    // Replay the current GOP (keyframe + deltas) so the decoder starts now.
+    for (const frame of entry.gop) {
+      subscriber({ type: 'frame', frame })
+    }
     entry.subscribers.add(subscriber)
     return () => entry.subscribers.delete(subscriber)
   }

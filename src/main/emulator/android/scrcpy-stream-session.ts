@@ -140,6 +140,7 @@ export class ScrcpyStreamSession {
         return
       }
       settled = true
+      socket.setTimeout(0)
       emulatorProbe('scrcpy.video.connected', { attempt, bytes: chunk.length })
       this.videoSocket = socket
       socket.on('data', (next: Buffer) => this.handleVideoChunk(next))
@@ -149,6 +150,9 @@ export class ScrcpyStreamSession {
     })
     socket.once('error', retry)
     socket.once('close', retry)
+    // adb may accept the forwarded TCP connection but never deliver if the server
+    // stalls; a short idle timeout retries instead of hanging the connect forever.
+    socket.setTimeout(2000, retry)
   }
 
   private openControlSocket(): void {
@@ -156,7 +160,9 @@ export class ScrcpyStreamSession {
       return
     }
     const socket = connect(this.port, '127.0.0.1')
-    socket.on('error', () => {})
+    socket.on('error', (error) =>
+      emulatorProbeError('scrcpy.control.fail', error, { serial: this.options.serial })
+    )
     this.controlSocket = socket
   }
 

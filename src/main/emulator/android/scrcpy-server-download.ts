@@ -26,13 +26,25 @@ export function isScrcpyServerJarReady(): boolean {
   }
 }
 
-// Returns the cached jar path, downloading it once if missing. Throws a clear
+let inFlightDownload: Promise<string> | null = null
+
+// Returns the cached jar path, downloading it once if missing. Concurrent callers
+// (e.g. two devices on first run) share one download. Throws a clear
 // EmulatorError when the download fails (e.g. offline).
 export async function ensureScrcpyServerJar(): Promise<string> {
   const path = scrcpyServerJarPath()
   if (isScrcpyServerJarReady()) {
     return path
   }
+  if (!inFlightDownload) {
+    inFlightDownload = downloadScrcpyServerJar(path).finally(() => {
+      inFlightDownload = null
+    })
+  }
+  return inFlightDownload
+}
+
+async function downloadScrcpyServerJar(path: string): Promise<string> {
   emulatorProbe('scrcpy.jar.download.start', { url: DOWNLOAD_URL, dest: path })
   mkdirSync(dirname(path), { recursive: true })
   try {
@@ -60,7 +72,7 @@ function downloadTo(url: string, dest: string, redirects = 0): Promise<void> {
       reject(new Error('too many redirects'))
       return
     }
-    get(url, (res: IncomingMessage) => {
+    const req = get(url, (res: IncomingMessage) => {
       const status = res.statusCode ?? 0
       // GitHub release downloads 302-redirect to the asset CDN.
       if (status >= 300 && status < 400 && res.headers.location) {
@@ -77,6 +89,9 @@ function downloadTo(url: string, dest: string, redirects = 0): Promise<void> {
       res.pipe(file)
       file.on('finish', () => file.close(() => resolve()))
       file.on('error', reject)
-    }).on('error', reject)
+    })
+    req.on('error', reject)
+    // Don't hang forever if GitHub/CDN stalls before or during the response.
+    req.setTimeout(30_000, () => req.destroy(new Error('download timed out')))
   })
 }

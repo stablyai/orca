@@ -1,5 +1,5 @@
 import { EmulatorError } from '../emulator-errors'
-import type { AndroidCommandRunner } from './android-command-runner'
+import type { AndroidCommandResult, AndroidCommandRunner } from './android-command-runner'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
 import { installApkArgs, launchAppArgs } from './android-app-control'
 import { permissionArgs, type AndroidPermissionOp } from './android-permissions'
@@ -10,6 +10,18 @@ import { parseUiAutomatorXml, type AndroidAxNode } from './uiautomator-tree'
 // command runner. The backend exposes thin delegations to these.
 
 const UIAUTOMATOR_DUMP_PATH = '/sdcard/window_dump.xml'
+
+// AndroidCommandRunner resolves even on non-zero exit, so a failed adb command
+// otherwise becomes a silent no-op (offline device, bad package, denied perm).
+function ensureAdbOk(result: AndroidCommandResult, label: string): AndroidCommandResult {
+  if (result.code !== 0) {
+    throw new EmulatorError(
+      'emulator_error',
+      `${label} failed: ${(result.stderr || result.stdout).trim() || 'unknown error'}`
+    )
+  }
+  return result
+}
 
 export async function installAndroidApk(
   runner: AndroidCommandRunner,
@@ -35,7 +47,7 @@ export async function launchAndroidApp(
   packageName: string,
   activity?: string
 ): Promise<void> {
-  await runner(sdk.adb, launchAppArgs(serial, packageName, activity))
+  ensureAdbOk(await runner(sdk.adb, launchAppArgs(serial, packageName, activity)), 'adb launch')
 }
 
 export async function setAndroidPermission(
@@ -46,7 +58,10 @@ export async function setAndroidPermission(
   packageName: string,
   permission?: string
 ): Promise<void> {
-  await runner(sdk.adb, permissionArgs(serial, op, packageName, permission))
+  ensureAdbOk(
+    await runner(sdk.adb, permissionArgs(serial, op, packageName, permission)),
+    'adb permission'
+  )
 }
 
 export async function dumpAndroidAccessibilityTree(
@@ -54,9 +69,16 @@ export async function dumpAndroidAccessibilityTree(
   sdk: AndroidSdkPaths,
   serial: string
 ): Promise<AndroidAxNode> {
-  // uiautomator dump writes XML to a device file; read it back and parse.
-  await runner(sdk.adb, ['-s', serial, 'shell', 'uiautomator', 'dump', UIAUTOMATOR_DUMP_PATH])
-  const xml = await runner(sdk.adb, ['-s', serial, 'shell', 'cat', UIAUTOMATOR_DUMP_PATH])
+  // uiautomator dump writes XML to a device file; read it back and parse. Check
+  // the dump first — otherwise `cat` can return a stale file from a prior dump.
+  ensureAdbOk(
+    await runner(sdk.adb, ['-s', serial, 'shell', 'uiautomator', 'dump', UIAUTOMATOR_DUMP_PATH]),
+    'uiautomator dump'
+  )
+  const xml = ensureAdbOk(
+    await runner(sdk.adb, ['-s', serial, 'shell', 'cat', UIAUTOMATOR_DUMP_PATH]),
+    'read ui dump'
+  )
   return parseUiAutomatorXml(xml.stdout)
 }
 
@@ -67,7 +89,10 @@ export async function captureAndroidLogcat(
   options?: { lines?: number; filters?: readonly string[] }
 ): Promise<LogcatEntry[]> {
   // One-shot dump for a request/response RPC; follow-mode would need streaming.
-  const result = await runner(sdk.adb, logcatArgs(serial, { ...options, dump: true }))
+  const result = ensureAdbOk(
+    await runner(sdk.adb, logcatArgs(serial, { ...options, dump: true })),
+    'adb logcat'
+  )
   return result.stdout
     .split('\n')
     .filter((line) => line.trim() !== '')

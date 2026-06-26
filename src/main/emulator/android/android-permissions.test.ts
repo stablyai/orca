@@ -31,21 +31,20 @@ describe('permissionArgs', () => {
     ])
   })
 
-  it('builds reset-permissions args when op is reset', () => {
+  it('builds reset-permissions args without a package (it resets all apps)', () => {
     expect(permissionArgs('emulator-5554', 'reset', 'com.example.app')).toEqual([
       '-s',
       'emulator-5554',
       'shell',
       'pm',
-      'reset-permissions',
-      'com.example.app'
+      'reset-permissions'
     ])
   })
 
-  it('ignores a supplied permission for reset', () => {
+  it('ignores the package and permission for reset', () => {
     expect(
       permissionArgs('emulator-5554', 'reset', 'com.example.app', 'android.permission.CAMERA')
-    ).toEqual(['-s', 'emulator-5554', 'shell', 'pm', 'reset-permissions', 'com.example.app'])
+    ).toEqual(['-s', 'emulator-5554', 'shell', 'pm', 'reset-permissions'])
   })
 
   it('throws EmulatorError with code emulator_error when grant has no permission', () => {

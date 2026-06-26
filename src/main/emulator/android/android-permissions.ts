@@ -15,8 +15,10 @@ export function permissionArgs(
   permission?: string
 ): string[] {
   const base = ['-s', serial, 'shell', 'pm']
+  // `pm reset-permissions` resets every app's runtime grants and rejects a
+  // package argument, so it is omitted here.
   if (op === 'reset') {
-    return [...base, 'reset-permissions', packageName]
+    return [...base, 'reset-permissions']
   }
   // grant/revoke target a single permission, so it must be present.
   if (!permission || permission.trim() === '') {
