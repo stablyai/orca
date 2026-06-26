@@ -119,11 +119,14 @@ export class ScrcpyStreamSession {
       return
     }
     const socket = connect(this.port, '127.0.0.1')
-    let delivered = false
+    // A failed connect emits both 'error' and 'close'; settle once so retries
+    // (and post-delivery close) don't fan out into exponential connection storms.
+    let settled = false
     const retry = (): void => {
-      if (this.closed || delivered) {
+      if (settled || this.closed) {
         return
       }
+      settled = true
       socket.destroy()
       if (attempt >= 100) {
         emulatorProbeError('scrcpy.socket.fail', new Error('no data'), { attempt })
@@ -133,7 +136,10 @@ export class ScrcpyStreamSession {
       setTimeout(() => this.openVideoSocket(attempt + 1), 100)
     }
     socket.once('data', (chunk: Buffer) => {
-      delivered = true
+      if (settled) {
+        return
+      }
+      settled = true
       emulatorProbe('scrcpy.video.connected', { attempt, bytes: chunk.length })
       this.videoSocket = socket
       socket.on('data', (next: Buffer) => this.handleVideoChunk(next))
