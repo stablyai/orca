@@ -259,6 +259,7 @@ test.describe('Terminal foreground redraw freeze repro', () => {
     await waitForTerminalPtyDataInjector(orcaPage, paneKey)
     await installActivePaneRefreshProbe(orcaPage)
     try {
+      const refreshBaseline = await readRefreshProbeCount(orcaPage)
       await resetSchedulerDebug(orcaPage)
       const measurement = await measureRendererDuringRewriteBurst(orcaPage, paneKey)
       const scheduler = await readSchedulerDebug(orcaPage)
@@ -267,7 +268,7 @@ test.describe('Terminal foreground redraw freeze repro', () => {
       expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_RENDERER_TIMER_DRIFT_MS)
       expect(scheduler.deferredForegroundEnqueueCount).toBeGreaterThan(0)
       await expect
-        .poll(() => readRefreshProbeCount(orcaPage), {
+        .poll(async () => (await readRefreshProbeCount(orcaPage)) - refreshBaseline, {
           timeout: 5_000,
           message: 'Codex-style terminal rewrites did not request an xterm refresh'
         })

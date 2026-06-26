@@ -2785,7 +2785,7 @@ export function connectPanePty(
       const foregroundRenderRefreshNeeded =
         foregroundOutput && shouldForceForegroundRenderRefresh(data)
       synchronizedForegroundOutputActive = nextSynchronizedForegroundOutputActive
-      if (hiddenMode2031ScanTail) {
+      if (!foreground && hiddenMode2031ScanTail) {
         respondToSkippedMode2031Subscribe(data)
       }
       writeTerminalOutput(pane.terminal, data, {
