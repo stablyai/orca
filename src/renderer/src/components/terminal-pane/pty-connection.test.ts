@@ -5977,6 +5977,113 @@ describe('connectPanePty', () => {
     disposable.dispose()
   })
 
+  it('keeps foreground output when hidden-backlog snapshot recovery is unavailable', async () => {
+    const pendingTimeouts: {
+      canceled: boolean
+      delay: number
+      fn: () => void
+      id: number
+    }[] = []
+    const originalSetTimeout = globalThis.setTimeout
+    const originalClearTimeout = globalThis.clearTimeout
+    let nextTimeoutId = 1
+    globalThis.setTimeout = vi.fn((fn: () => void, delay?: number) => {
+      const timeout = {
+        canceled: false,
+        delay: typeof delay === 'number' ? delay : 0,
+        fn,
+        id: nextTimeoutId++
+      }
+      pendingTimeouts.push(timeout)
+      return timeout.id as unknown as ReturnType<typeof setTimeout>
+    }) as unknown as typeof setTimeout
+    globalThis.clearTimeout = vi.fn((id: ReturnType<typeof setTimeout>) => {
+      const numericId = id as unknown as number
+      const timeout = pendingTimeouts.find((candidate) => candidate.id === numericId)
+      if (timeout) {
+        timeout.canceled = true
+      }
+    }) as unknown as typeof clearTimeout
+
+    const runNextTimeoutWithDelay = async (delay: number): Promise<void> => {
+      const index = pendingTimeouts.findIndex(
+        (timeout) => !timeout.canceled && timeout.delay === delay
+      )
+      expect(index).toBeGreaterThanOrEqual(0)
+      const [timeout] = pendingTimeouts.splice(index, 1)
+      timeout.fn()
+      await flushAsyncTicks(20)
+    }
+    const drainTimeoutsWithDelay = async (delay: number): Promise<void> => {
+      while (pendingTimeouts.some((timeout) => !timeout.canceled && timeout.delay === delay)) {
+        await runNextTimeoutWithDelay(delay)
+      }
+    }
+
+    let disposable: { dispose: () => void } | null = null
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport('pty-id')
+      const capturedDataCallback: {
+        current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
+      } = { current: null }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-id'
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+        typeof vi.fn
+      >
+      getMainBufferSnapshot.mockResolvedValue(null)
+
+      const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
+      const live = 'foreground-after-unavailable\r\n'
+      const pane = createPane(1)
+      const manager = createManager(1)
+      const deps = createDeps({
+        isVisibleRef: { current: false }
+      })
+      disposable = connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks(6)
+
+      capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
+      ;(deps.isVisibleRef as { current: boolean }).current = true
+      capturedDataCallback.current?.(live, {
+        seq: hidden.length + live.length,
+        rawLength: live.length
+      })
+      await flushAsyncTicks(20)
+
+      expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(
+        expect.stringContaining(live),
+        expect.any(Function)
+      )
+
+      await runNextTimeoutWithDelay(50)
+      await runNextTimeoutWithDelay(50)
+      await runNextTimeoutWithDelay(50)
+      await drainTimeoutsWithDelay(0)
+
+      expect(getMainBufferSnapshot).toHaveBeenCalledTimes(4)
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        expect.stringContaining('Orca skipped hidden terminal output because main recovery was unavailable.'),
+        expect.any(Function)
+      )
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        expect.stringContaining(live),
+        expect.any(Function)
+      )
+    } finally {
+      disposable?.dispose()
+      globalThis.setTimeout = originalSetTimeout
+      globalThis.clearTimeout = originalClearTimeout
+    }
+  })
+
   it('ignores an async hidden-backlog snapshot if the pane changes PTYs first', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('old-pty-id')

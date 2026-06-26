@@ -3050,6 +3050,31 @@ export function connectPanePty(
       hiddenOutputRestoreDeferredRetryAttempts = 0
     }
 
+    function drainPendingLiveChunksWithoutSnapshot(): void {
+      if (hiddenOutputRestorePendingOverflow) {
+        hiddenOutputRestorePendingChunks = []
+        hiddenOutputRestorePendingChars = 0
+        hiddenOutputRestorePendingOverflow = false
+        return
+      }
+      // Why: once snapshot retries are exhausted, these bounded chunks are the
+      // only known visible-era PTY bytes; replay them without overlap trimming.
+      while (hiddenOutputRestorePendingChunks.length > 0) {
+        const chunks = hiddenOutputRestorePendingChunks
+        hiddenOutputRestorePendingChunks = []
+        hiddenOutputRestorePendingChars = 0
+        for (const chunk of chunks) {
+          writePtyOutputToXterm(chunk.data, true)
+        }
+        if (hiddenOutputRestorePendingOverflow) {
+          hiddenOutputRestorePendingChunks = []
+          hiddenOutputRestorePendingChars = 0
+          hiddenOutputRestorePendingOverflow = false
+          return
+        }
+      }
+    }
+
     function clearHiddenOutputRestoreDeferredRetryTimer(): void {
       if (hiddenOutputRestoreDeferredRetryTimer === null) {
         return
@@ -3068,8 +3093,9 @@ export function connectPanePty(
         return
       }
       if (hiddenOutputRestoreDeferredRetryAttempts >= HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MAX) {
-        clearHiddenOutputRestoreState()
         writeRestoreUnavailableWarning()
+        drainPendingLiveChunksWithoutSnapshot()
+        clearHiddenOutputRestoreState()
         return
       }
       hiddenOutputRestoreDeferredRetryAttempts += 1
