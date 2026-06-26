@@ -1686,11 +1686,15 @@ describe('Store', () => {
       dtstart: new Date('2026-05-13T00:00:00Z').getTime()
     })
     const run = store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+    const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
 
     store.updateAutomationRun({
       runId: run.id,
-      status: 'completed',
+      status: 'dispatched',
       workspaceId: 'wt1',
+      terminalSessionId: 'tab-1',
+      terminalPaneKey: paneKey,
+      terminalPtyId: 'pty-run',
       outputSnapshot: {
         format: 'plain_text',
         content: 'Run finished',
@@ -1703,14 +1707,19 @@ describe('Store', () => {
       runId: run.id,
       status: 'completed',
       workspaceId: 'wt1',
-      terminalSessionId: 'tab-1',
       usage: null,
       error: null
     })
 
-    expect(store.listAutomationRuns(automation.id)[0].outputSnapshot).toMatchObject({
+    const persisted = store.listAutomationRuns(automation.id)[0]
+    expect(persisted.outputSnapshot).toMatchObject({
       content: 'Run finished',
       truncated: false
+    })
+    expect(persisted).toMatchObject({
+      terminalSessionId: 'tab-1',
+      terminalPaneKey: paneKey,
+      terminalPtyId: 'pty-run'
     })
   })
 

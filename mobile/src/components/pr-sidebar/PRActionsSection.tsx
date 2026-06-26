@@ -8,6 +8,7 @@ import type { MobilePrActions } from '../../session/use-mobile-pr-actions'
 import { unlinkMobilePr } from '../../source-control/mobile-pr-link'
 import { ConfirmModal } from '../ConfirmModal'
 import { PRSection } from './PRSection'
+import { canShowMobilePRAutoMergeControl } from './pr-auto-merge-availability'
 import { resolvePrActionAvailability } from './pr-actions-state'
 import { prActionsStyles as styles } from './pr-actions-styles'
 
@@ -62,6 +63,12 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
   const mergeBusy = actions.isBusy({ kind: 'merge' })
   const autoMergeBusy = actions.isBusy({ kind: 'autoMerge' })
   const stateBusy = actions.isBusy({ kind: 'state' })
+  const showAutoMerge =
+    avail.canAutoMerge &&
+    canShowMobilePRAutoMergeControl({
+      ...pr,
+      autoMergeEnabled: autoMerge || pr.autoMergeEnabled === true
+    })
 
   const unlink = useCallback(async (): Promise<void> => {
     if (!client || unlinking) {
@@ -166,7 +173,7 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
       ) : null}
 
       {/* Auto-merge toggle — optimistic, reverts on transient failure. */}
-      {avail.canAutoMerge ? (
+      {showAutoMerge ? (
         <View style={styles.toggleRow}>
           <Text style={styles.toggleLabel}>Auto-merge when ready</Text>
           <Pressable

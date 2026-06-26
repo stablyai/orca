@@ -230,13 +230,16 @@
           "81f13f48d2": "ワークツリー\"{{value1}}\"を削除した後、Git はブランチ\"{{value0}}\"を安全に削除できなかったため、Orca はローカルコミットを失わないように保持しました。"
         },
         "repos": {
+          "2975400634": "Update Orca server to open non-Git folders on this runtime.",
           "b7e14472ae": "フォルダーの追加に失敗しました",
           "e649269645": "サーバー パスを使用して、リモート ランタイムからプロジェクトを追加します。",
           "c6e022ddfc": "プロジェクトの追加に失敗しました",
           "90d129b48b": "フォルダーが追加されました",
           "8bb3ad7935": "プロジェクトを追加しました",
           "a8e4b3af5b": "プロジェクトはすでに追加されています",
-          "6d3318e813": "repos のインポートに失敗しました"
+          "6d3318e813": "repos のインポートに失敗しました",
+          "3be0f7df04": "Cannot open folder on selected runtime",
+          "15cf5319ec": "{{path}} was checked on {{hostName}}, but that host did not report a usable folder."
         },
         "settings": {
           "e12dab333b": "サーバーの切り替えに失敗しました",
@@ -3521,7 +3524,10 @@
           "e52454b7f6": "フォルダーとして開く",
           "05b33a17a9": "キャンセル",
           "8fba4b8cbb": "このフォルダーは Git repos ではありません。エディター、terminal、検索は利用できますが、Git ベースの機能は利用できません。",
-          "c49fb13492": "リモートフォルダーの追加に失敗しました"
+          "c49fb13492": "リモートフォルダーの追加に失敗しました",
+          "9a766f33ac": "This path was checked on the SSH host.",
+          "79fd02cf5f": "This path was checked on {{hostName}}.",
+          "8851b77327": "This path was checked locally."
         },
         "OrcaYamlTrustDialog": {
           "f3e2b868fb": "フックを実行する",
@@ -6621,7 +6627,9 @@
             "a79d266f71": "セッション",
             "afbf35be68": "安定したセッション",
             "agentPermissions": "Agent Permissions",
-            "agentPermissionsDescription": "Switch agent permission defaults between Yolo and Manual."
+            "agentPermissionsDescription": "Switch agent permission defaults between Yolo and Manual.",
+            "agentRuntime": "Agent Runtime",
+            "agentRuntimeDescription": "Choose whether agents are detected and launched on Windows or in WSL by default."
           }
         },
         "appearance": {
@@ -8328,6 +8336,16 @@
         "ShortcutRemoveButton": {
           "9e29aff18b": "Remove {{value0}} shortcut {{value1}}",
           "2a9588b1c2": "Remove this binding"
+        },
+        "AgentRuntimeSetting": {
+          "label": "Agent runtime",
+          "wsl": "WSL",
+          "loadingWsl": "Loading WSL",
+          "selectDistro": "Select distro",
+          "windowsDescription": "Detect and launch agents on Windows for projects that do not override their runtime.",
+          "wslUnavailable": "WSL is not available on this machine.",
+          "distroRequired": "Choose a WSL distro before projects can inherit WSL.",
+          "wslDescription": "Detect and launch agents in {{value0}} via WSL for projects that do not override their runtime."
         }
       },
       "right": {
@@ -8945,6 +8963,7 @@
               },
               "empty": {
                 "state": {
+                  "3322603418": "Pull request status unavailable",
                   "5b0cfae9a5": "{{value0}} を作成してチェックとレビューを開始します。",
                   "13e1c7d5ed": "{{value0}} が見つかりませんでした",
                   "d372072df1": "現在のレート制限予算により GitHub の更新が一時停止されています",
@@ -8959,7 +8978,8 @@
                   "f8543140cc": "{{value0}} を作成する前に、このブランチを公開してください。",
                   "41252bc53f": "ブランチは公開されていません",
                   "05e4aec17b": "{{value0}} チェックは操作の完了後に利用可能になります",
-                  "d77c513c1e": "{{value0}} が進行中です"
+                  "d77c513c1e": "{{value0}} が進行中です",
+                  "b597440265": "Refresh GitHub status for this branch to load checks and review."
                 }
               }
             }

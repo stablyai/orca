@@ -2057,6 +2057,53 @@ describe('useIpcEvents updater integration', () => {
       title: 'Terminal 1'
     })
 
+    const pendingTabId = 'ba416891-cbcb-4778-8d9c-d8907f31a68c'
+    const pendingLeafId = 'e4583c63-2d9a-4877-b66f-05c0150f05f9'
+    storeState.tabsByWorktree = {
+      'wt-2': [{ id: pendingTabId, ptyId: null, title: 'Terminal 3' }]
+    }
+    storeState.ptyIdsByTabId = { [pendingTabId]: [] }
+    storeState.terminalLayoutsByTabId = {
+      [pendingTabId]: {
+        root: { type: 'leaf', leafId: pendingLeafId },
+        activeLeafId: pendingLeafId,
+        expandedLeafId: null,
+        ptyIdsByLeafId: {}
+      }
+    }
+    createTab.mockClear()
+    updateTabPtyId.mockClear()
+    setTabLayout.mockClear()
+    setActiveTab.mockClear()
+    replyTerminalCreate.mockClear()
+    createTerminalListenerRef.current({
+      requestId: 'req-adopt-pending',
+      worktreeId: 'wt-2',
+      ptyId: 'serve-cf39bedb-a33a-417c-9ab6-f304dc27a6c0',
+      tabId: pendingTabId,
+      leafId: pendingLeafId
+    })
+
+    expect(createTab).not.toHaveBeenCalled()
+    expect(updateTabPtyId).toHaveBeenCalledWith(
+      pendingTabId,
+      'serve-cf39bedb-a33a-417c-9ab6-f304dc27a6c0'
+    )
+    expect(setTabLayout).toHaveBeenCalledWith(pendingTabId, {
+      root: { type: 'leaf', leafId: pendingLeafId },
+      activeLeafId: pendingLeafId,
+      expandedLeafId: null,
+      ptyIdsByLeafId: {
+        [pendingLeafId]: 'serve-cf39bedb-a33a-417c-9ab6-f304dc27a6c0'
+      }
+    })
+    expect(setActiveTab).toHaveBeenCalledWith(pendingTabId)
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-adopt-pending',
+      tabId: pendingTabId,
+      title: 'Terminal 3'
+    })
+
     storeState.tabsByWorktree = {
       'wt-2': [{ id: 'tab-existing', ptyId: 'pty-bg', title: 'Terminal 1' }]
     }

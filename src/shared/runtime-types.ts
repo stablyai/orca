@@ -441,6 +441,8 @@ export type RuntimeTerminalAgentStatus = {
 export type RuntimeTerminalCreate = {
   handle: string
   tabId?: string
+  paneKey?: string | null
+  ptyId?: string | null
   worktreeId: string
   title: string | null
   surface?: 'background' | 'visible'

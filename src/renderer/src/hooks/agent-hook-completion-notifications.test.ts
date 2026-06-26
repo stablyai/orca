@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: notification edge cases share one module-scoped coordinator, so keeping setup and regression cases together prevents brittle cross-file mock resets. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
+import { createHookListenerState, normalizeHookPayload } from '../../../shared/agent-hook-listener'
 
 const dispatchTerminalNotification = vi.fn()
 
@@ -412,6 +413,83 @@ describe('agent hook completion notifications', () => {
     })
 
     expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+  })
+
+  it('does not notify on Grok routine permission prompt notifications during tool use', async () => {
+    const { observeAgentHookCompletionForNotification } =
+      await import('./agent-hook-completion-notifications')
+    const listenerState = createHookListenerState()
+    const observeGrokHook = (payload: Record<string, unknown>): void => {
+      const event = normalizeHookPayload(
+        listenerState,
+        'grok',
+        {
+          paneKey,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload
+        },
+        'production'
+      )
+      if (!event) {
+        return
+      }
+      observeAgentHookCompletionForNotification({
+        paneKey: event.paneKey,
+        worktreeId: event.worktreeId ?? 'wt-1',
+        payload: event.payload
+      })
+    }
+
+    observeGrokHook({
+      hookEventName: 'user_prompt_submit',
+      prompt: 'run shell and glob'
+    })
+    observeGrokHook({
+      hookEventName: 'pre_tool_use',
+      toolName: 'Shell',
+      toolInput: { command: 'echo hi' }
+    })
+    observeGrokHook({
+      hookEventName: 'notification',
+      notificationType: 'permission_prompt',
+      message: 'Tool permission requested',
+      level: 'info'
+    })
+    observeGrokHook({
+      hookEventName: 'pre_tool_use',
+      toolName: 'Glob',
+      toolInput: { pattern: '**/package.json' }
+    })
+    observeGrokHook({
+      hookEventName: 'notification',
+      notificationType: 'permission_prompt',
+      message: 'Tool permission requested',
+      level: 'info'
+    })
+
+    expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+
+    observeGrokHook({
+      hookEventName: 'stop',
+      lastAssistantMessage: 'Done.'
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
+    expect(dispatchTerminalNotification).toHaveBeenCalledWith(
+      'wt-1',
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        paneKey,
+        agentStatusSnapshot: expect.objectContaining({
+          state: 'done',
+          agentType: 'grok',
+          prompt: 'run shell and glob',
+          lastAssistantMessage: 'Done.'
+        })
+      })
+    )
   })
 
   it('suppresses an internal milestone completion when hook work resumes before quiet', async () => {

@@ -71,13 +71,6 @@ vi.mock('@dnd-kit/sortable', () => ({
   })
 }))
 
-vi.mock('./tab-strip-pointer-activation', () => ({
-  useTabStripPointerActivation: () => ({
-    isPressed: false,
-    onPointerDown: vi.fn()
-  })
-}))
-
 vi.mock('lucide-react', () => ({
   Columns2: function Columns2(props: Record<string, unknown>) {
     return { type: 'Columns2', props }
@@ -178,8 +171,7 @@ vi.mock('./drop-indicator', () => ({
   ACTIVE_TAB_INDICATOR_CLASSES: 'active-tab-indicator',
   getDropIndicatorClasses: () => '',
   getTabStripBorderClasses: () => '',
-  getTabRootStateClasses: () => '',
-  showsTabSelectionChrome: () => true
+  getTabRootStateClasses: () => ''
 }))
 
 vi.mock('./middle-button-default-guard', () => ({

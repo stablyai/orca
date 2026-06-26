@@ -230,13 +230,16 @@
           "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits."
         },
         "repos": {
+          "2975400634": "Update Orca server to open non-Git folders on this runtime.",
           "b7e14472ae": "Failed to add folder",
           "e649269645": "Use Add Project to enter a path on the selected host.",
           "c6e022ddfc": "Failed to add project",
           "90d129b48b": "Folder added",
           "8bb3ad7935": "Project added",
           "a8e4b3af5b": "Project already added",
-          "6d3318e813": "Failed to import repositories"
+          "6d3318e813": "Failed to import repositories",
+          "3be0f7df04": "Cannot open folder on selected runtime",
+          "15cf5319ec": "{{path}} was checked on {{hostName}}, but that host did not report a usable folder."
         },
         "settings": {
           "e12dab333b": "Failed to switch servers",
@@ -3546,7 +3549,10 @@
           "e52454b7f6": "Open as Folder",
           "05b33a17a9": "Cancel",
           "8fba4b8cbb": "This folder isn't a Git repository. You'll have the editor, terminal, and search, but Git-based features won't be available.",
-          "c49fb13492": "Failed to add folder on this host"
+          "c49fb13492": "Failed to add folder on this host",
+          "9a766f33ac": "This path was checked on the SSH host.",
+          "79fd02cf5f": "This path was checked on {{hostName}}.",
+          "8851b77327": "This path was checked locally."
         },
         "OrcaYamlTrustDialog": {
           "f3e2b868fb": "Run hooks",
@@ -6636,7 +6642,9 @@
             "a79d266f71": "session",
             "afbf35be68": "stable session",
             "agentPermissions": "Agent Permissions",
-            "agentPermissionsDescription": "Switch agent permission defaults between Yolo and Manual."
+            "agentPermissionsDescription": "Switch agent permission defaults between Yolo and Manual.",
+            "agentRuntime": "Agent Runtime",
+            "agentRuntimeDescription": "Choose whether agents are detected and launched on Windows or in WSL by default."
           }
         },
         "appearance": {
@@ -8328,6 +8336,16 @@
         "ShortcutRemoveButton": {
           "9e29aff18b": "Remove {{value0}} shortcut {{value1}}",
           "2a9588b1c2": "Remove this binding"
+        },
+        "AgentRuntimeSetting": {
+          "label": "Agent runtime",
+          "wsl": "WSL",
+          "loadingWsl": "Loading WSL",
+          "selectDistro": "Select distro",
+          "windowsDescription": "Detect and launch agents on Windows for projects that do not override their runtime.",
+          "wslUnavailable": "WSL is not available on this machine.",
+          "distroRequired": "Choose a WSL distro before projects can inherit WSL.",
+          "wslDescription": "Detect and launch agents in {{value0}} via WSL for projects that do not override their runtime."
         }
       },
       "right": {
@@ -8945,6 +8963,7 @@
               },
               "empty": {
                 "state": {
+                  "3322603418": "Pull request status unavailable",
                   "5b0cfae9a5": "Create a {{value0}} to start checks and review.",
                   "13e1c7d5ed": "No {{value0}} found",
                   "d372072df1": "GitHub refresh is paused by the current rate-limit budget",
@@ -8959,7 +8978,8 @@
                   "f8543140cc": "Publish this branch before creating a {{value0}}.",
                   "41252bc53f": "Branch not published",
                   "05e4aec17b": "{{value0}} checks will be available after the operation completes",
-                  "d77c513c1e": "{{value0}} in progress"
+                  "d77c513c1e": "{{value0}} in progress",
+                  "b597440265": "Refresh GitHub status for this branch to load checks and review."
                 }
               }
             }

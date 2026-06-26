@@ -1,4 +1,5 @@
 import type { Repo, Worktree } from '../../../../shared/types'
+import { isLocalAiVaultResumeRepo } from '@/lib/ai-vault-resume-target'
 import { translate } from '@/i18n/i18n'
 import {
   canJumpToAiVaultSessionWorktree,
@@ -45,7 +46,7 @@ export function resolveAiVaultSessionResumeState(args: {
       continue
     }
     const repo = args.repos.find((candidate) => candidate.id === worktree.repoId)
-    if (repo?.connectionId) {
+    if (!isLocalAiVaultResumeRepo(repo)) {
       continue
     }
     return {
@@ -117,7 +118,7 @@ function resolveLocalResumeWorktreeId(args: {
   }
 
   const repo = args.repos.find((candidate) => candidate.id === worktree.repoId)
-  if (repo?.connectionId) {
+  if (!isLocalAiVaultResumeRepo(repo)) {
     return null
   }
 

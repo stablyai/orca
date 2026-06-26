@@ -666,6 +666,16 @@ function normalizeAutomationRunWorkspaceDisplayName(value: string | null): strin
   return trimmed ? trimmed : null
 }
 
+function normalizeAutomationRunTerminalPaneKey(value: string | null | undefined): string | null {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  return trimmed && parsePaneKey(trimmed) ? trimmed : null
+}
+
+function normalizeAutomationRunTerminalPtyId(value: string | null | undefined): string | null {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  return trimmed || null
+}
+
 function normalizeAutomationRunOutputSnapshot(
   value: AutomationRunOutputSnapshot | null | undefined
 ): AutomationRunOutputSnapshot | null {
@@ -821,6 +831,14 @@ function backfillLegacyAutomationContexts(
     }
     if (!Object.hasOwn(next, 'sourceContext')) {
       next.sourceContext = automationContexts?.sourceContext ?? null
+      changed = true
+    }
+    if (!Object.hasOwn(next, 'terminalPaneKey')) {
+      next.terminalPaneKey = null
+      changed = true
+    }
+    if (!Object.hasOwn(next, 'terminalPtyId')) {
+      next.terminalPtyId = null
       changed = true
     }
     return next
@@ -4150,6 +4168,8 @@ export class Store {
       sessionKind: 'terminal',
       chatSessionId: null,
       terminalSessionId: null,
+      terminalPaneKey: null,
+      terminalPtyId: null,
       outputSnapshot: null,
       precheckResult: null,
       usage: null,
@@ -4185,7 +4205,15 @@ export class Store {
         workspaceDisplayName ??
         normalizeAutomationRunWorkspaceDisplayName(current.workspaceDisplayName ?? null) ??
         this.getAutomationRunWorkspaceDisplayName(workspaceId),
-      terminalSessionId: result.terminalSessionId ?? current.terminalSessionId,
+      terminalSessionId: Object.hasOwn(result, 'terminalSessionId')
+        ? (result.terminalSessionId ?? null)
+        : current.terminalSessionId,
+      terminalPaneKey: Object.hasOwn(result, 'terminalPaneKey')
+        ? normalizeAutomationRunTerminalPaneKey(result.terminalPaneKey)
+        : normalizeAutomationRunTerminalPaneKey(current.terminalPaneKey),
+      terminalPtyId: Object.hasOwn(result, 'terminalPtyId')
+        ? normalizeAutomationRunTerminalPtyId(result.terminalPtyId)
+        : normalizeAutomationRunTerminalPtyId(current.terminalPtyId),
       outputSnapshot: Object.hasOwn(result, 'outputSnapshot')
         ? normalizeAutomationRunOutputSnapshot(result.outputSnapshot)
         : normalizeAutomationRunOutputSnapshot(current.outputSnapshot),

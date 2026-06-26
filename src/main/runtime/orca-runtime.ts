@@ -1051,6 +1051,8 @@ const BRACKETED_PASTE_BEGIN = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
 const DRAFT_PASTE_READY_TIMEOUT_MS = 8000
+const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
+const MOBILE_TERMINAL_READY_FALLBACK_MS = 1000
 const RECENT_PTY_OUTPUT_LIMIT = 4096
 
 type RuntimeNotifier = {
@@ -2983,6 +2985,49 @@ export class OrcaRuntimeService {
     )
   }
 
+  // Why: serve-* (local serve) and ssh:<conn>@@<relay> (SSH relay) ids are minted
+  // ONLY for runtime-owned terminals and are preserved/re-hydrated, so tear them
+  // down even if the renderer adopted a view (else they resurrect). The daemon
+  // session form <worktreeId>@@<shortUuid> is deliberately NOT here: the daemon
+  // mints it for ordinary renderer-owned local terminals too, so id shape can't
+  // classify ownership for that form — renderer-graph membership does (below).
+  private isServeOrSshOwnedPtyId(ptyId: string | null | undefined): boolean {
+    return (
+      this.isServeOwnedPtyId(ptyId) ||
+      (typeof ptyId === 'string' && parseAppSshPtyId(ptyId) !== null)
+    )
+  }
+
+  private hasServeOrSshOwnedBinding(tab: RuntimeMobileSessionTerminalTab): boolean {
+    if (this.isServeOrSshOwnedPtyId(tab.ptyId)) {
+      return true
+    }
+    return Object.values(tab.parentLayout?.ptyIdsByLeafId ?? {}).some((ptyId) =>
+      this.isServeOrSshOwnedPtyId(ptyId)
+    )
+  }
+
+  // Why: a tab needs authoritative runtime teardown (kill + de-persist + prune)
+  // only when the renderer can't durably tear it down: either it's serve/SSH
+  // (preserved + re-hydrated, would resurrect) or the renderer graph never
+  // published it (a leaked/unadopted shell — incl. daemon-session `@@` tabs the
+  // host materialized but the renderer never showed). A tab the renderer graph
+  // DOES list — including an ordinary daemon-backed local terminal or a pending
+  // tab whose PTY hasn't bound — is renderer-owned: delegate, do not de-persist.
+  private isRuntimeOwnedHeadlessMobileTab(
+    worktreeId: string,
+    tab: RuntimeMobileSessionTerminalTab
+  ): boolean {
+    if (this.hasServeOrSshOwnedBinding(tab)) {
+      return true
+    }
+    const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
+    if (pty && this.isServeOrSshOwnedPtyId(pty.ptyId)) {
+      return true
+    }
+    return !this.tabs.has(tab.parentTabId)
+  }
+
   private mergeMobileSessionSnapshotTabs(
     baseTabs: readonly RuntimeMobileSessionSnapshotTab[],
     extraTabs: readonly RuntimeMobileSessionSnapshotTab[]
@@ -3834,6 +3879,21 @@ export class OrcaRuntimeService {
     if (tab.type === 'terminal') {
       if (!this.notifier?.closeTerminal) {
         this.closeHeadlessMobileTerminalTab(worktreeId, snapshot!, tab)
+        return { closed: true }
+      }
+      // Why: a runtime-owned headless tab whose whole parent is being closed must
+      // be torn down authoritatively even with a renderer attached — kill the
+      // PTY, drop the persisted binding, and prune+emit — or syncMobileSessionTabs
+      // keeps republishing the "closed" tab with a live PTY. Best-effort notify the
+      // renderer too so any adopted pane closes (no dead pane). A single split leaf
+      // (exact id, multi-leaf parent) keeps the per-leaf path so siblings survive.
+      const parentLeafCount = snapshot!.tabs.filter(
+        (candidate) => candidate.type === 'terminal' && candidate.parentTabId === tab.parentTabId
+      ).length
+      const closingWholeParent = tab.id !== tabId || parentLeafCount <= 1
+      if (closingWholeParent && this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)) {
+        this.closeHeadlessMobileTerminalTab(worktreeId, snapshot!, tab)
+        this.notifier?.closeTerminal(tab.parentTabId)
         return { closed: true }
       }
       if (tab.id === tabId) {
@@ -12555,6 +12615,8 @@ export class OrcaRuntimeService {
     let didSpawnSetup = false
     let startupTerminalHandle: string | null = null
     let startupTerminalTabId: string | null = null
+    let startupTerminalPaneKey: string | null = null
+    let startupTerminalPtyId: string | null = null
     if (effectiveStartup && this.ptyController?.spawn) {
       try {
         // Why: automation startup must not depend on a renderer TerminalPane
@@ -12581,6 +12643,8 @@ export class OrcaRuntimeService {
         didSpawnStartup = true
         startupTerminalHandle = terminal.handle
         startupTerminalTabId = terminal.tabId ?? null
+        startupTerminalPaneKey = terminal.paneKey ?? null
+        startupTerminalPtyId = terminal.ptyId ?? null
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         warning = warning
@@ -12708,6 +12772,8 @@ export class OrcaRuntimeService {
               spawned: true,
               handle: startupTerminalHandle,
               ...(startupTerminalTabId ? { tabId: startupTerminalTabId } : {}),
+              ...(startupTerminalPaneKey ? { paneKey: startupTerminalPaneKey } : {}),
+              ...(startupTerminalPtyId ? { ptyId: startupTerminalPtyId } : {}),
               surface: 'background' as const
             }
           }
@@ -12815,6 +12881,8 @@ export class OrcaRuntimeService {
     let didSpawnSetup = false
     let startupTerminalHandle: string | null = null
     let startupTerminalTabId: string | null = null
+    let startupTerminalPaneKey: string | null = null
+    let startupTerminalPtyId: string | null = null
     if (args.startup && this.ptyController?.spawn) {
       try {
         const startupTrustAgent = args.startupDraftPaste?.agent ?? args.createdWithAgent
@@ -12842,6 +12910,8 @@ export class OrcaRuntimeService {
         didSpawnStartup = true
         startupTerminalHandle = terminal.handle
         startupTerminalTabId = terminal.tabId ?? null
+        startupTerminalPaneKey = terminal.paneKey ?? null
+        startupTerminalPtyId = terminal.ptyId ?? null
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         warning = warning
@@ -12951,6 +13021,8 @@ export class OrcaRuntimeService {
               spawned: true,
               handle: startupTerminalHandle,
               ...(startupTerminalTabId ? { tabId: startupTerminalTabId } : {}),
+              ...(startupTerminalPaneKey ? { paneKey: startupTerminalPaneKey } : {}),
+              ...(startupTerminalPtyId ? { ptyId: startupTerminalPtyId } : {}),
               surface: 'background' as const
             }
           }
@@ -14573,7 +14645,15 @@ export class OrcaRuntimeService {
           console.warn(`[terminal-create] failed to create inactive tab for ${result.id}:`, err)
         }
       }
-      return { handle, tabId, worktreeId: workspace.id, title: opts.title ?? null, surface }
+      return {
+        handle,
+        tabId,
+        paneKey,
+        ptyId: result.id,
+        worktreeId: workspace.id,
+        title: opts.title ?? null,
+        surface
+      }
     }
 
     this.assertGraphReady()
@@ -14789,7 +14869,38 @@ export class OrcaRuntimeService {
       this.notifier?.focusTerminal(reply.tabId, worktreeId, null)
     }
     try {
-      return await this.waitForMobileTerminalSurface(worktreeId, reply.tabId)
+      const surface = await this.waitForMobileTerminalSurface(worktreeId, reply.tabId, {
+        timeoutMs: MOBILE_TERMINAL_SURFACE_TIMEOUT_MS
+      })
+      if (this.isReadyMobileTerminalSurface(surface)) {
+        return surface
+      }
+      const readySurface = await this.waitForMobileTerminalSurface(worktreeId, reply.tabId, {
+        timeoutMs: MOBILE_TERMINAL_READY_FALLBACK_MS,
+        requireReady: true
+      }).catch(() => null)
+      if (readySurface) {
+        return readySurface
+      }
+      const pendingSurface = this.findMobileTerminalSurface(worktreeId, reply.tabId)
+      if (!pendingSurface) {
+        throw new Error('Timed out waiting for terminal surface after creation')
+      }
+      // Why: hidden/occluded renderer windows can publish the tab shell before
+      // TerminalPane mounts and spawns the PTY. Materialize into the same
+      // identity so later renderer focus adopts instead of creating another tab.
+      return await this.createHeadlessMobileSessionTerminal(
+        worktreeId,
+        opts.activate !== false,
+        opts.afterTabId,
+        startupCommand.command,
+        startupCommand.env,
+        startupCommand.startupCommandDelivery,
+        { tabId: pendingSurface.tab.parentTabId, leafId: pendingSurface.tab.leafId },
+        startupCommand.launchAgent,
+        opts.targetGroupId,
+        startupCommand.launchConfig
+      )
     } catch (error) {
       // Why: the renderer created the tab but its terminal surface never
       // published (PTY spawn/handle failure). Roll the half-created tab back via
@@ -14992,9 +15103,10 @@ export class OrcaRuntimeService {
   private waitForMobileTerminalSurface(
     worktreeId: string,
     parentTabId: string,
-    timeoutMs = 10_000
+    options: { timeoutMs?: number; requireReady?: boolean } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
-    const existing = this.findMobileTerminalSurface(worktreeId, parentTabId)
+    const timeoutMs = options.timeoutMs ?? MOBILE_TERMINAL_SURFACE_TIMEOUT_MS
+    const existing = this.findMobileTerminalSurface(worktreeId, parentTabId, options)
     if (existing) {
       return Promise.resolve(existing)
     }
@@ -15009,7 +15121,7 @@ export class OrcaRuntimeService {
       }, timeoutMs)
 
       const check = (): void => {
-        const next = this.findMobileTerminalSurface(worktreeId, parentTabId)
+        const next = this.findMobileTerminalSurface(worktreeId, parentTabId, options)
         if (!next) {
           return
         }
@@ -15027,7 +15139,8 @@ export class OrcaRuntimeService {
 
   private findMobileTerminalSurface(
     worktreeId: string,
-    parentTabId: string
+    parentTabId: string,
+    options: { requireReady?: boolean } = {}
   ): RuntimeMobileSessionCreateTerminalResult | null {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (!snapshot) {
@@ -15040,11 +15153,25 @@ export class OrcaRuntimeService {
     if (!tab || tab.type !== 'terminal') {
       return null
     }
-    return {
+    const surface = {
       tab,
       publicationEpoch: result.publicationEpoch,
       snapshotVersion: result.snapshotVersion
     }
+    if (options.requireReady === true && !this.isReadyMobileTerminalSurface(surface)) {
+      return null
+    }
+    return surface
+  }
+
+  private isReadyMobileTerminalSurface(
+    surface: RuntimeMobileSessionCreateTerminalResult | null
+  ): boolean {
+    return (
+      surface?.tab.status === 'ready' &&
+      typeof surface.tab.terminal === 'string' &&
+      surface.tab.terminal.length > 0
+    )
   }
 
   private waitForTerminalHandle(tabId: string, timeoutMs = 10_000): Promise<string> {

@@ -1,7 +1,7 @@
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
-  buildWindowsAgentHookPostCommand,
+  buildWindowsAgentHookCurlPostCommand,
   readHooksJson,
   writeHooksJson,
   writeManagedScript
@@ -63,7 +63,12 @@ function getManagedScript(
       'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
       'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
       'if "%ORCA_PANE_KEY%"=="" exit /b 0',
-      buildWindowsAgentHookPostCommand('claude'),
+      // Why: post via curl.exe, not a second PowerShell. Claude's launcher is
+      // already an encoded PowerShell command (Git Bash needs it to survive
+      // spaces); a PowerShell post on top of that meant two interpreter
+      // startups per hook. The post runs inside the .cmd (cmd.exe context), so
+      // curl works the same here as for the POSIX/Codex hooks.
+      buildWindowsAgentHookCurlPostCommand('claude'),
       'exit /b 0',
       ''
     ].join('\r\n')

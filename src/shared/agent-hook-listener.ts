@@ -1864,6 +1864,28 @@ function isGrokPermissionNotification(message: string | undefined): boolean {
   )
 }
 
+function getGrokNotificationType(hookPayload: Record<string, unknown>): string | undefined {
+  return (
+    readString(hookPayload, 'notificationType') ??
+    readString(hookPayload, 'notification_type') ??
+    readString(hookPayload, 'type')
+  )
+}
+
+function isGrokRoutinePermissionPromptNotification(
+  notificationType: string | undefined,
+  message: string | undefined,
+  level: string | undefined
+): boolean {
+  // Why: Grok emits this info notification before each tool even under
+  // bypassPermissions; PreToolUse already captures progress without paging users.
+  return (
+    isGrokEvent(notificationType, 'permission_prompt') &&
+    message?.trim().toLowerCase() === 'tool permission requested' &&
+    (!level || level.trim().toLowerCase() === 'info')
+  )
+}
+
 function isGrokIdleNotification(message: string | undefined): boolean {
   if (!message) {
     return false
@@ -2860,6 +2882,8 @@ function normalizeGrokEvent(
   }
 
   const notificationMessage = readString(hookPayload, 'message')
+  const notificationType = getGrokNotificationType(hookPayload)
+  const notificationLevel = readString(hookPayload, 'level')
   let stateName: 'working' | 'waiting' | 'done' | null = null
   if (
     isGrokEvent(
@@ -2873,6 +2897,15 @@ function normalizeGrokEvent(
     stateName = 'working'
   } else if (isGrokEvent(eventName, 'stop', 'session_end')) {
     stateName = 'done'
+  } else if (
+    isGrokEvent(eventName, 'notification') &&
+    isGrokRoutinePermissionPromptNotification(
+      notificationType,
+      notificationMessage,
+      notificationLevel
+    )
+  ) {
+    return null
   } else if (
     isGrokEvent(eventName, 'notification') &&
     isGrokPermissionNotification(notificationMessage)

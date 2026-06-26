@@ -629,13 +629,22 @@ type RepoScopedFetchOptions = FetchOptions & {
   repoId?: string
 }
 
-type PRRefreshState = {
+export type PRRefreshState = {
   status: 'queued' | 'in-flight' | 'paused' | 'skipped' | 'error'
   reason: GitHubPRRefreshReason
   updatedAt: number
   pausedUntil?: number
   message?: string
 }
+
+export type PRRefreshStateClearToken = {
+  sequence: number
+  status: PRRefreshState['status']
+  updatedAt: number
+}
+
+const PR_REFRESH_ACTIVE_STALE_MS = 120_000
+const PR_REFRESH_PAUSED_GRACE_MS = 5_000
 
 function bypassesGitHubPRRefreshFreshness(reason: GitHubPRRefreshReason): boolean {
   return reason === 'manual' || reason === 'active' || reason === 'post-push'
@@ -1464,6 +1473,88 @@ function capPrRefreshSequences(
 // realistic usage never reaches. Evicted entries self-heal on the next refresh event.
 const MAX_PR_REFRESH_STATE_ENTRIES = 2000
 const SETTLED_PR_REFRESH_STATUSES = new Set<PRRefreshState['status']>(['error', 'skipped'])
+const ACTIVE_PR_REFRESH_STATUSES = new Set<PRRefreshState['status']>([
+  'queued',
+  'in-flight',
+  'paused'
+])
+
+function isPRRefreshStateExpired(state: PRRefreshState, now: number): boolean {
+  const expiryAt = getGitHubPRRefreshStateExpiryAt(state)
+  return expiryAt !== null && now > expiryAt
+}
+
+/**
+ * Captures the exact refresh snapshot a later timeout or request is allowed to clear.
+ */
+export function buildGitHubPRRefreshStateClearToken(
+  state: PRRefreshState | undefined,
+  sequences: Record<string, number>,
+  cacheKey: string
+): PRRefreshStateClearToken | null {
+  if (!state) {
+    return null
+  }
+  return {
+    sequence: sequences[cacheKey] ?? 0,
+    status: state.status,
+    updatedAt: state.updatedAt
+  }
+}
+
+/**
+ * Returns the wall-clock expiry for transient refresh states; settled states persist.
+ */
+export function getGitHubPRRefreshStateExpiryAt(state: PRRefreshState | undefined): number | null {
+  if (!state) {
+    return null
+  }
+  if (state.status === 'queued' || state.status === 'in-flight') {
+    return Number.isFinite(state.updatedAt) ? state.updatedAt + PR_REFRESH_ACTIVE_STALE_MS : 0
+  }
+  if (state.status === 'paused') {
+    return Number.isFinite(state.pausedUntil)
+      ? (state.pausedUntil ?? 0) + PR_REFRESH_PAUSED_GRACE_MS
+      : 0
+  }
+  return null
+}
+
+function isExpiredActivePRRefreshState(state: PRRefreshState, now: number): boolean {
+  return ACTIVE_PR_REFRESH_STATUSES.has(state.status) && isPRRefreshStateExpired(state, now)
+}
+
+/**
+ * Reads refresh state for UI selectors while hiding stale active entries from view.
+ */
+export function getEffectiveGitHubPRRefreshState(
+  states: Record<string, PRRefreshState>,
+  cacheKey: string,
+  now = Date.now()
+): PRRefreshState | undefined {
+  const state = states[cacheKey]
+  if (!state || isExpiredActivePRRefreshState(state, now)) {
+    return undefined
+  }
+  return state
+}
+
+function pruneExpiredPRRefreshStates(
+  states: Record<string, PRRefreshState>,
+  now = Date.now()
+): Record<string, PRRefreshState> {
+  let next: Record<string, PRRefreshState> | null = null
+  for (const [cacheKey, state] of Object.entries(states)) {
+    if (!isExpiredActivePRRefreshState(state, now)) {
+      continue
+    }
+    if (!next) {
+      next = { ...states }
+    }
+    delete next[cacheKey]
+  }
+  return next ?? states
+}
 
 function capPrRefreshStates(
   states: Record<string, PRRefreshState>,
@@ -1614,6 +1705,12 @@ export type GitHubSlice = {
   reportVisibleGitHubPRRefreshCandidates: (worktreeIds: string[], generation: number) => void
   bumpGitHubPRVisibleRefreshGeneration: () => void
   applyGitHubPRRefreshEvent: (event: GitHubPRRefreshEvent) => void
+  getEffectiveGitHubPRRefreshState: (cacheKey: string, now?: number) => PRRefreshState | undefined
+  expireGitHubPRRefreshState: (
+    cacheKey: string,
+    token: PRRefreshStateClearToken,
+    now?: number
+  ) => void
   /**
    * Why: returns cached work items immediately (null if none) and fires a
    * background refresh when stale. Callers can render the cached list while
@@ -1805,6 +1902,40 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   workItemsCache: {},
   workItemsInvalidationNonce: 0,
   projectViewCache: {},
+
+  getEffectiveGitHubPRRefreshState: (cacheKey, now) =>
+    getEffectiveGitHubPRRefreshState(get().prRefreshStates, cacheKey, now),
+
+  expireGitHubPRRefreshState: (cacheKey, token, now = Date.now()) => {
+    const currentState = get()
+    const currentRefreshState = currentState.prRefreshStates[cacheKey]
+    if (
+      !currentRefreshState ||
+      !ACTIVE_PR_REFRESH_STATUSES.has(currentRefreshState.status) ||
+      !isExpiredActivePRRefreshState(currentRefreshState, now) ||
+      (currentState.prRefreshSequences[cacheKey] ?? 0) !== token.sequence ||
+      currentRefreshState.status !== token.status ||
+      currentRefreshState.updatedAt !== token.updatedAt
+    ) {
+      return
+    }
+    set((s) => {
+      const state = s.prRefreshStates[cacheKey]
+      if (
+        !state ||
+        !ACTIVE_PR_REFRESH_STATUSES.has(state.status) ||
+        !isExpiredActivePRRefreshState(state, now) ||
+        (s.prRefreshSequences[cacheKey] ?? 0) !== token.sequence ||
+        state.status !== token.status ||
+        state.updatedAt !== token.updatedAt
+      ) {
+        return s
+      }
+      const nextStates = { ...s.prRefreshStates }
+      delete nextStates[cacheKey]
+      return { prRefreshStates: nextStates }
+    })
+  },
 
   fetchProjectViewTable: async (args, options) => {
     const target = getActiveRuntimeTarget(get().settings)
@@ -2709,6 +2840,12 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const generation = (prRequestGenerations.get(cacheKey) ?? 0) + 1
     const requestStartedAt = Date.now()
     const requestStartedHostedReviewEntry = get().hostedReviewCache[hostedReviewCacheKey]
+    const requestStartedPRRefreshState = get().prRefreshStates[cacheKey]
+    const requestStartedPRRefreshToken = buildGitHubPRRefreshStateClearToken(
+      requestStartedPRRefreshState,
+      get().prRefreshSequences,
+      cacheKey
+    )
     prRequestGenerations.set(cacheKey, generation)
 
     const request = (async () => {
@@ -2827,6 +2964,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           if (prRequestGenerations.get(cacheKey) === generation) {
             prRequestGenerations.delete(cacheKey)
           }
+        }
+        if (requestStartedPRRefreshToken) {
+          get().expireGitHubPRRefreshState(cacheKey, requestStartedPRRefreshToken)
         }
       }
     })()
@@ -3511,10 +3651,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   applyGitHubPRRefreshEvent: (event) => {
     set((s) => {
       const nextSequences = { ...s.prRefreshSequences }
-      const nextStates = { ...s.prRefreshStates }
+      const prunedStates = pruneExpiredPRRefreshStates(s.prRefreshStates)
+      const nextStates = { ...prunedStates }
       let nextPRCache = s.prCache
       let nextHostedReviewCache = s.hostedReviewCache ?? {}
-      let changed = false
+      let changed = prunedStates !== s.prRefreshStates
 
       for (const alias of event.aliases) {
         const aliasExecutionHostId = getRefreshAliasExecutionHostId(alias)
@@ -3706,7 +3847,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       issueCache: evictStaleEntries(s.issueCache),
       checksCache: evictStaleEntries(s.checksCache),
       workItemsCache: evictStaleEntries(s.workItemsCache),
-      projectViewCache: evictStaleEntries(s.projectViewCache)
+      projectViewCache: evictStaleEntries(s.projectViewCache),
+      prRefreshStates: pruneExpiredPRRefreshStates(s.prRefreshStates)
     }))
 
     // Why: prRequestGenerations tracks only live inflight fetches and is

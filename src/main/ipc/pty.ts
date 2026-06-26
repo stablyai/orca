@@ -167,6 +167,19 @@ export function registerPaneKeyTeardownListener(listener: PaneKeyTeardownListene
 let pendingSerializerGenSeq = 0
 const pendingByPaneKey = new Map<string, { gen: number; ownerWebContentsId: number | null }>()
 const pendingPaneSerializerCleanupRegistered = new Set<number>()
+type PaneSpawnReservation = {
+  promise: Promise<PaneSpawnReservationResult>
+  resolve: (result: PaneSpawnReservationResult) => void
+  reject: (error: unknown) => void
+}
+type PaneSpawnReservationResult = {
+  id: string
+  launchConfig?: SleepingAgentLaunchConfig
+} & Partial<PtySpawnResult>
+// Why: mobile runtime materialization and a newly-focused renderer pane can
+// race to spawn the same tab/leaf. Key by stable paneKey so the loser adopts
+// the winner's PTY instead of creating a duplicate shell.
+const paneSpawnReservationsByPaneKey = new Map<string, PaneSpawnReservation>()
 // Why: at PTY spawn time we capture the gen that was pending for the spawn's
 // paneKey, so teardown can settle ONLY that gen. Without this, a paneKey
 // remount that replaces the pending entry with a new gen would still get
@@ -230,6 +243,54 @@ function declarePendingPaneSerializer(paneKey: string, sender: WebContents | und
   registerPendingPaneSerializerCleanup(sender)
   pendingByPaneKey.set(paneKey, { gen, ownerWebContentsId: sender?.id ?? null })
   return gen
+}
+
+function reservePaneSpawn(paneKey: string): PaneSpawnReservation {
+  let resolve!: (result: PaneSpawnReservationResult) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<PaneSpawnReservationResult>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve
+    reject = promiseReject
+  })
+  promise.catch(() => {})
+  const reservation = { promise, resolve, reject }
+  paneSpawnReservationsByPaneKey.set(paneKey, reservation)
+  return reservation
+}
+
+function clearPaneSpawnReservation(paneKey: string, reservation: PaneSpawnReservation): void {
+  if (paneSpawnReservationsByPaneKey.get(paneKey) === reservation) {
+    paneSpawnReservationsByPaneKey.delete(paneKey)
+  }
+}
+
+function rejectPaneSpawnReservation(
+  paneKey: string | null | undefined,
+  reservation: PaneSpawnReservation | null | undefined,
+  error: unknown
+): void {
+  if (!reservation) {
+    return
+  }
+  reservation.reject(error)
+  if (paneKey) {
+    clearPaneSpawnReservation(paneKey, reservation)
+  }
+}
+
+function resolvePaneSpawnReservation<T extends PaneSpawnReservationResult>(
+  paneKey: string | null | undefined,
+  reservation: PaneSpawnReservation | null | undefined,
+  response: T
+): T {
+  if (!reservation) {
+    return response
+  }
+  reservation.resolve(response)
+  if (paneKey) {
+    clearPaneSpawnReservation(paneKey, reservation)
+  }
+  return response
 }
 
 function settlePendingPaneSerializer(paneKey: string, gen: number): void {
@@ -1838,128 +1899,152 @@ export function registerPtyHandlers(
           : undefined
       }
 
+      const materializedPaneKey = hostSessionBinding
+        ? makePaneKey(hostSessionBinding.tabId, hostSessionBinding.leafId)
+        : null
+      const existingPaneSpawn = materializedPaneKey
+        ? paneSpawnReservationsByPaneKey.get(materializedPaneKey)
+        : undefined
+      if (existingPaneSpawn) {
+        return await existingPaneSpawn.promise
+      }
+      const paneSpawnReservation = materializedPaneKey
+        ? reservePaneSpawn(materializedPaneKey)
+        : null
       let result: PtySpawnResult
       try {
-        if (args.preAllocatedHandle) {
-          trustedTerminalHandleEnv.add(args.preAllocatedHandle)
+        try {
+          if (args.preAllocatedHandle) {
+            trustedTerminalHandleEnv.add(args.preAllocatedHandle)
+          }
+          result = await provider.spawn(spawnOptions)
+        } catch (err) {
+          const rawMessage = err instanceof Error ? err.message : String(err)
+          const spawnError = normalizeNodePtySpawnError(err)
+          if (effectiveSessionAppId !== undefined) {
+            ptySizes.delete(effectiveSessionAppId)
+          }
+          if (
+            args.connectionId &&
+            effectiveSessionRelayId !== undefined &&
+            (spawnError.message.includes(SSH_SESSION_EXPIRED_ERROR) ||
+              rawMessage.includes(SSH_SESSION_EXPIRED_ERROR))
+          ) {
+            if (effectiveSessionAppId !== undefined) {
+              clearProviderPtyState(effectiveSessionAppId)
+              deletePtyOwnership(effectiveSessionAppId)
+            }
+            store?.markSshRemotePtyLease(args.connectionId, effectiveSessionRelayId, 'expired')
+          }
+          if (isMintedSessionId && sessionId !== undefined) {
+            clearProviderPtyState(sessionId)
+          }
+          throw spawnError
+        } finally {
+          if (args.preAllocatedHandle) {
+            trustedTerminalHandleEnv.delete(args.preAllocatedHandle)
+          }
         }
-        result = await provider.spawn(spawnOptions)
-      } catch (err) {
-        const rawMessage = err instanceof Error ? err.message : String(err)
-        const spawnError = normalizeNodePtySpawnError(err)
-        if (effectiveSessionAppId !== undefined) {
+        ptyOwnership.set(result.id, args.connectionId ?? null)
+        const relayResultId = getRelayPtyId(args.connectionId, result.id)
+        const persistSshLease = (): void => {
+          if (!store || !args.connectionId) {
+            return
+          }
+          // Why: workspace-session bindings keep app-facing PTY ids for hydration,
+          // while SSH leases keep relay ids for remote lease reconciliation.
+          store.upsertSshRemotePtyLease({
+            targetId: args.connectionId,
+            ptyId: relayResultId,
+            ...(typeof args.worktreeId === 'string' ? { worktreeId: args.worktreeId } : {}),
+            ...(typeof args.tabId === 'string' ? { tabId: args.tabId } : {}),
+            ...(typeof args.leafId === 'string' && isTerminalLeafId(args.leafId)
+              ? { leafId: args.leafId }
+              : {}),
+            state: 'attached',
+            lastAttachedAt: Date.now()
+          })
+        }
+        if (!hostSessionBinding) {
+          persistSshLease()
+        }
+        ptySizes.set(result.id, { cols: args.cols, rows: args.rows })
+        if (effectiveSessionAppId !== undefined && effectiveSessionAppId !== result.id) {
           ptySizes.delete(effectiveSessionAppId)
         }
-        if (
-          args.connectionId &&
-          effectiveSessionRelayId !== undefined &&
-          (spawnError.message.includes(SSH_SESSION_EXPIRED_ERROR) ||
-            rawMessage.includes(SSH_SESSION_EXPIRED_ERROR))
-        ) {
-          if (effectiveSessionAppId !== undefined) {
-            clearProviderPtyState(effectiveSessionAppId)
-            deletePtyOwnership(effectiveSessionAppId)
-          }
-          store?.markSshRemotePtyLease(args.connectionId, effectiveSessionRelayId, 'expired')
-        }
-        if (isMintedSessionId && sessionId !== undefined) {
-          clearProviderPtyState(sessionId)
-        }
-        throw spawnError
-      } finally {
-        if (args.preAllocatedHandle) {
-          trustedTerminalHandleEnv.delete(args.preAllocatedHandle)
-        }
-      }
-      ptyOwnership.set(result.id, args.connectionId ?? null)
-      const relayResultId = getRelayPtyId(args.connectionId, result.id)
-      const persistSshLease = (): void => {
-        if (!store || !args.connectionId) {
-          return
-        }
-        // Why: workspace-session bindings keep app-facing PTY ids for hydration,
-        // while SSH leases keep relay ids for remote lease reconciliation.
-        store.upsertSshRemotePtyLease({
-          targetId: args.connectionId,
-          ptyId: relayResultId,
-          ...(typeof args.worktreeId === 'string' ? { worktreeId: args.worktreeId } : {}),
-          ...(typeof args.tabId === 'string' ? { tabId: args.tabId } : {}),
-          ...(typeof args.leafId === 'string' && isTerminalLeafId(args.leafId)
-            ? { leafId: args.leafId }
-            : {}),
-          state: 'attached',
-          lastAttachedAt: Date.now()
-        })
-      }
-      if (!hostSessionBinding) {
-        persistSshLease()
-      }
-      ptySizes.set(result.id, { cols: args.cols, rows: args.rows })
-      if (effectiveSessionAppId !== undefined && effectiveSessionAppId !== result.id) {
-        ptySizes.delete(effectiveSessionAppId)
-      }
-      if (hostSessionBinding) {
-        try {
-          hostSessionBinding.store.persistPtyBinding({
-            worktreeId: hostSessionBinding.worktreeId,
-            tabId: hostSessionBinding.tabId,
-            leafId: hostSessionBinding.leafId,
-            ptyId: result.id
-          })
-        } catch (err) {
-          console.error('[pty] failed to persist runtime PTY binding after spawn:', err)
-          deletePtyOwnership(result.id)
-          if (!result.isReattach) {
-            try {
-              await provider.shutdown(result.id, { immediate: true })
-            } catch (shutdownErr) {
-              console.warn('[pty] failed to clean up PTY after persistence failure:', shutdownErr)
+        if (hostSessionBinding) {
+          try {
+            hostSessionBinding.store.persistPtyBinding({
+              worktreeId: hostSessionBinding.worktreeId,
+              tabId: hostSessionBinding.tabId,
+              leafId: hostSessionBinding.leafId,
+              ptyId: result.id
+            })
+          } catch (err) {
+            console.error('[pty] failed to persist runtime PTY binding after spawn:', err)
+            deletePtyOwnership(result.id)
+            if (!result.isReattach) {
+              try {
+                await provider.shutdown(result.id, { immediate: true })
+              } catch (shutdownErr) {
+                console.warn('[pty] failed to clean up PTY after persistence failure:', shutdownErr)
+              }
+              clearProviderPtyState(result.id)
             }
-            clearProviderPtyState(result.id)
+            throw new Error(createTerminalSessionStateSaveFailureMessage())
           }
-          throw new Error(createTerminalSessionStateSaveFailureMessage())
+          persistSshLease()
         }
-        persistSshLease()
-      }
-      if (args.preAllocatedHandle) {
-        runtime?.registerPreAllocatedHandleForPty(result.id, args.preAllocatedHandle)
-      }
-      if (args.worktreeId) {
-        runtime?.registerPty(result.id, args.worktreeId, args.connectionId ?? null)
-      }
-      if (isClaudeLaunch) {
-        markClaudePtySpawned(result.id)
-      }
-      if (args.telemetry) {
-        const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)
-        const launchSourceParse = launchSourceSchema.safeParse(args.telemetry.launch_source)
-        const requestKindParse = requestKindSchema.safeParse(args.telemetry.request_kind)
-        if (agentKindParse.success && launchSourceParse.success && requestKindParse.success) {
-          track('agent_started', {
-            agent_kind: agentKindParse.data,
-            launch_source: launchSourceParse.data,
-            request_kind: requestKindParse.data,
-            ...getCohortAtEmit()
+        if (args.preAllocatedHandle) {
+          runtime?.registerPreAllocatedHandleForPty(result.id, args.preAllocatedHandle)
+        }
+        if (args.worktreeId) {
+          runtime?.registerPty(result.id, args.worktreeId, args.connectionId ?? null)
+        }
+        if (isClaudeLaunch) {
+          markClaudePtySpawned(result.id)
+        }
+        if (args.telemetry) {
+          const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)
+          const launchSourceParse = launchSourceSchema.safeParse(args.telemetry.launch_source)
+          const requestKindParse = requestKindSchema.safeParse(args.telemetry.request_kind)
+          if (agentKindParse.success && launchSourceParse.success && requestKindParse.success) {
+            track('agent_started', {
+              agent_kind: agentKindParse.data,
+              launch_source: launchSourceParse.data,
+              request_kind: requestKindParse.data,
+              ...getCohortAtEmit()
+            })
+          }
+        }
+        // Why: runtime-owned CLI PTYs bypass the renderer `pty:spawn` handler,
+        // so record their spawn-time paneKey here too. Synthetic hook titles and
+        // paneKey-scoped cache cleanup both depend on this reverse lookup.
+        const paneKey = rememberPaneKeyForPty(result.id, env?.ORCA_PANE_KEY)
+        if (!args.connectionId) {
+          registerPty({
+            ptyId: result.id,
+            worktreeId: args.worktreeId ?? null,
+            sessionId: sessionId ?? null,
+            paneKey,
+            pid:
+              typeof result.pid === 'number' && Number.isFinite(result.pid) && result.pid > 0
+                ? result.pid
+                : null
           })
         }
+        const response = { id: result.id }
+        return resolvePaneSpawnReservation(materializedPaneKey, paneSpawnReservation, response)
+      } catch (err) {
+        // Why: once the reservation is created, any later throw — spawn
+        // failure, persist failure, or a post-spawn helper such as
+        // registerPty/rememberPaneKeyForPty/track — must settle it. Otherwise
+        // it lingers in paneSpawnReservationsByPaneKey and every future spawn
+        // for this pane awaits a promise that never resolves. reject is a
+        // no-op once the reservation has already resolved.
+        rejectPaneSpawnReservation(materializedPaneKey, paneSpawnReservation, err)
+        throw err
       }
-      // Why: runtime-owned CLI PTYs bypass the renderer `pty:spawn` handler,
-      // so record their spawn-time paneKey here too. Synthetic hook titles and
-      // paneKey-scoped cache cleanup both depend on this reverse lookup.
-      const paneKey = rememberPaneKeyForPty(result.id, env?.ORCA_PANE_KEY)
-      if (!args.connectionId) {
-        registerPty({
-          ptyId: result.id,
-          worktreeId: args.worktreeId ?? null,
-          sessionId: sessionId ?? null,
-          paneKey,
-          pid:
-            typeof result.pid === 'number' && Number.isFinite(result.pid) && result.pid > 0
-              ? result.pid
-              : null
-        })
-      }
-      return { id: result.id }
     },
     write: (ptyId, data) => {
       const provider = getProviderForPty(ptyId)
@@ -2294,6 +2379,13 @@ export function registerPtyHandlers(
         verifiedPaneKey && parsedSpawnPaneKey ? parsedSpawnPaneKey.leafId : null
       const metadataLeafId =
         typeof args.leafId === 'string' && isTerminalLeafId(args.leafId) ? args.leafId : null
+      const metadataPaneKey =
+        typeof args.tabId === 'string' &&
+        args.tabId.length > 0 &&
+        args.tabId.length <= 512 &&
+        metadataLeafId
+          ? makePaneKey(args.tabId, metadataLeafId)
+          : null
       const legacySpawnPaneKey = verifiedPaneKey ? null : parseLegacyNumericPaneKey(spawnPaneKey)
       const migrationUnsupportedPaneKey =
         legacySpawnPaneKey &&
@@ -2365,6 +2457,9 @@ export function registerPtyHandlers(
         delete baseEnv.ORCA_AGENT_LAUNCH_TOKEN
       }
       const validatedPaneKey = stablePaneKey
+      // Why: SSH can strip ORCA_PANE_KEY when remote hooks are disabled; the
+      // IPC tab/leaf metadata still names the pane and matches runtime fallback.
+      const reservationPaneKey = metadataPaneKey ?? validatedPaneKey
       const validatedLeafId = verifiedLeafId ?? metadataLeafId
       let env: Record<string, string> | undefined = baseEnv
       const effectiveShellOverride = terminalRuntimeOptions.shellOverride
@@ -2500,271 +2595,292 @@ export function registerPtyHandlers(
           ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
           : undefined
       }
+      const existingPaneSpawn = reservationPaneKey
+        ? paneSpawnReservationsByPaneKey.get(reservationPaneKey)
+        : undefined
+      if (existingPaneSpawn) {
+        return await existingPaneSpawn.promise
+      }
+      const paneSpawnReservation = reservationPaneKey ? reservePaneSpawn(reservationPaneKey) : null
       let result: PtySpawnResult
       try {
-        if (preAllocatedHandle) {
-          trustedTerminalHandleEnv.add(preAllocatedHandle)
+        try {
+          if (preAllocatedHandle) {
+            trustedTerminalHandleEnv.add(preAllocatedHandle)
+          }
+          result = await provider.spawn(spawnOptions)
+        } catch (err) {
+          const rawMessage = err instanceof Error ? err.message : String(err)
+          const spawnError = normalizeNodePtySpawnError(err)
+          if (effectiveSessionAppId !== undefined) {
+            ptySizes.delete(effectiveSessionAppId)
+          }
+          if (
+            args.connectionId &&
+            effectiveSessionRelayId !== undefined &&
+            (spawnError.message.includes(SSH_SESSION_EXPIRED_ERROR) ||
+              rawMessage.includes(SSH_SESSION_EXPIRED_ERROR))
+          ) {
+            // Why: expired remote reattach means the relay has already dropped
+            // the backing PTY. Clear the durable lease so later session writes
+            // cannot restore the stale pane binding.
+            if (effectiveSessionAppId !== undefined) {
+              clearProviderPtyState(effectiveSessionAppId)
+              deletePtyOwnership(effectiveSessionAppId)
+            }
+            store?.markSshRemotePtyLease(args.connectionId, effectiveSessionRelayId, 'expired')
+          }
+          // Why: if buildPtyHostEnv materialized provider state for this minted
+          // id but provider.spawn failed, that state would otherwise leak.
+          if (isMintedSessionId && effectiveSessionId !== undefined) {
+            clearProviderPtyState(effectiveSessionId)
+          }
+          // Why: telemetry-plan.md§agent_error — when the renderer threaded
+          // agent_kind through args.telemetry, attribute the error to that agent.
+          // Otherwise fall back to sniffing the command for `claude` (the one
+          // agent the main process can identify on its own via the existing
+          // `isClaudeLaunchCommand` regex used for auth gating). Bare-shell
+          // catches and unknown-agent catches without renderer telemetry remain
+          // unattributed. The event still emits with a classified `error_class`;
+          // raw error messages are dropped at the telemetry validator boundary.
+          const rendererAgentKindParse =
+            args.telemetry?.agent_kind !== undefined
+              ? agentKindSchema.safeParse(args.telemetry.agent_kind)
+              : null
+          const errorAgentKind = rendererAgentKindParse?.success
+            ? rendererAgentKindParse.data
+            : isClaudeLaunch
+              ? ('claude-code' as const)
+              : null
+          if (errorAgentKind) {
+            const classified = classifyError(spawnError)
+            track('agent_error', {
+              agent_kind: errorAgentKind,
+              error_class: classified.error_class,
+              ...getCohortAtEmit()
+            })
+          }
+          throw spawnError
+        } finally {
+          if (preAllocatedHandle) {
+            trustedTerminalHandleEnv.delete(preAllocatedHandle)
+          }
         }
-        result = await provider.spawn(spawnOptions)
-      } catch (err) {
-        const rawMessage = err instanceof Error ? err.message : String(err)
-        const spawnError = normalizeNodePtySpawnError(err)
-        if (effectiveSessionAppId !== undefined) {
-          ptySizes.delete(effectiveSessionAppId)
+        ptyOwnership.set(result.id, args.connectionId ?? null)
+        const relayResultId = getRelayPtyId(args.connectionId, result.id)
+        if (store && args.connectionId) {
+          // Why: remote PTYs live in the SSH relay grace window after Orca
+          // detaches. Persist their IDs immediately so reconnect can reattach
+          // instead of treating the tab as a fresh shell.
+          store.upsertSshRemotePtyLease({
+            targetId: args.connectionId,
+            ptyId: relayResultId,
+            ...(typeof args.worktreeId === 'string' ? { worktreeId: args.worktreeId } : {}),
+            ...(typeof args.tabId === 'string' ? { tabId: args.tabId } : {}),
+            ...(validatedLeafId ? { leafId: validatedLeafId } : {}),
+            state: 'attached',
+            lastAttachedAt: Date.now()
+          })
+        }
+        if (preAllocatedHandle) {
+          runtime?.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
+        }
+        ptySizes.set(result.id, { cols: args.cols, rows: args.rows })
+        // Why: closes the SIGKILL-between-spawn-and-persist race (Issue #217)
+        // for local daemon PTYs and the equivalent remote-relay race for SSH.
+        // The renderer's debounced session writer runs in parallel for every
+        // other field; patch the load-bearing (tab.ptyId, ptyIdsByLeafId)
+        // binding synchronously so a force-quit in the ~450 ms debounce window
+        // cannot orphan either daemon history or a remote relay PTY lease.
+        if (
+          (isDaemonHostSpawn || args.connectionId) &&
+          store &&
+          typeof args.worktreeId === 'string' &&
+          typeof args.tabId === 'string' &&
+          validatedLeafId !== null
+        ) {
+          try {
+            store.persistPtyBinding({
+              worktreeId: args.worktreeId,
+              tabId: args.tabId,
+              leafId: validatedLeafId,
+              ptyId: result.id
+            })
+          } catch (err) {
+            console.error('[pty] failed to persist PTY binding after spawn:', err)
+            if (!result.isReattach) {
+              try {
+                await provider.shutdown(result.id, { immediate: true })
+              } catch (shutdownErr) {
+                console.warn('[pty] failed to clean up PTY after persistence failure:', shutdownErr)
+              }
+              clearProviderPtyState(result.id)
+              deletePtyOwnership(result.id)
+            }
+            if (!result.isReattach && args.connectionId && store) {
+              store.removeSshRemotePtyLease(args.connectionId, relayResultId)
+            }
+            throw new Error(createTerminalSessionStateSaveFailureMessage())
+          }
+        }
+        // Why: pre-signal cooperation gate — when the renderer has declared it
+        // will own the serializer for this paneKey, suppress the daemon-snapshot
+        // seed so the renderer's hydration path (maybeHydrateHeadlessFromRenderer)
+        // is the sole authority. The pre-signal is keyed on paneKey because at
+        // spawn time the renderer doesn't yet know the new ptyId. See
+        // docs/mobile-prefer-renderer-scrollback.md.
+        const rendererPreSignaled = validatedPaneKey
+          ? pendingByPaneKey.has(validatedPaneKey)
+          : false
+        const rendererAlreadyRegistered = rendererSerializerByPtyId.has(result.id)
+        // Why: capture the pending gen at spawn time so teardown for THIS PTY
+        // only settles its own generation. A remount that replaces the entry
+        // with a new gen must not be stomped by the old PTY's teardown.
+        if (validatedPaneKey && rendererPreSignaled) {
+          const pending = pendingByPaneKey.get(validatedPaneKey)
+          if (pending) {
+            ptyPendingGenByPtyId.set(result.id, pending.gen)
+          }
+        }
+
+        // Why: hydrate the runtime's headless emulator with the adapter's
+        // restore data BEFORE registerPty so any live PTY data that arrives
+        // concurrently lands on top of the seed instead of replacing it. Mobile
+        // subscribers then see the same scrollback the desktop xterm received
+        // via coldRestore/snapshot. Without this, mobile snapshots after a
+        // daemon-restored attach contain only bytes emitted since the relaunch
+        // and the prior agent output silently disappears.
+        //
+        // Skip when the renderer is or will be authoritative for this PTY:
+        // its hydration path will seed the emulator from xterm's live buffer,
+        // which is richer than the daemon snapshot.
+        if (runtime && !rendererPreSignaled && !rendererAlreadyRegistered) {
+          const seedSize =
+            typeof result.snapshotCols === 'number' && typeof result.snapshotRows === 'number'
+              ? { cols: result.snapshotCols, rows: result.snapshotRows }
+              : undefined
+          if (typeof result.snapshot === 'string' && result.snapshot.length > 0) {
+            runtime.seedHeadlessTerminal(result.id, result.snapshot, seedSize)
+          } else if (
+            result.coldRestore &&
+            typeof result.coldRestore.scrollback === 'string' &&
+            result.coldRestore.scrollback.length > 0
+          ) {
+            runtime.seedHeadlessTerminal(result.id, result.coldRestore.scrollback, seedSize, {
+              cwd: result.coldRestore.cwd,
+              oscLinks: result.coldRestore.oscLinks
+            })
+          }
         }
         if (
-          args.connectionId &&
-          effectiveSessionRelayId !== undefined &&
-          (spawnError.message.includes(SSH_SESSION_EXPIRED_ERROR) ||
-            rawMessage.includes(SSH_SESSION_EXPIRED_ERROR))
+          typeof args.worktreeId === 'string' &&
+          args.worktreeId.length > 0 &&
+          args.worktreeId.length <= 512
         ) {
-          // Why: expired remote reattach means the relay has already dropped
-          // the backing PTY. Clear the durable lease so later session writes
-          // cannot restore the stale pane binding.
-          if (effectiveSessionAppId !== undefined) {
-            clearProviderPtyState(effectiveSessionAppId)
-            deletePtyOwnership(effectiveSessionAppId)
-          }
-          store?.markSshRemotePtyLease(args.connectionId, effectiveSessionRelayId, 'expired')
+          runtime?.registerPty(result.id, args.worktreeId, args.connectionId ?? null)
         }
-        // Why: if buildPtyHostEnv materialized provider state for this minted
-        // id but provider.spawn failed, that state would otherwise leak.
-        if (isMintedSessionId && effectiveSessionId !== undefined) {
-          clearProviderPtyState(effectiveSessionId)
+        if (isClaudeLaunch) {
+          markClaudePtySpawned(result.id)
         }
-        // Why: telemetry-plan.md§agent_error — when the renderer threaded
-        // agent_kind through args.telemetry, attribute the error to that agent.
-        // Otherwise fall back to sniffing the command for `claude` (the one
-        // agent the main process can identify on its own via the existing
-        // `isClaudeLaunchCommand` regex used for auth gating). Bare-shell
-        // catches and unknown-agent catches without renderer telemetry remain
-        // unattributed. The event still emits with a classified `error_class`;
-        // raw error messages are dropped at the telemetry validator boundary.
-        const rendererAgentKindParse =
-          args.telemetry?.agent_kind !== undefined
-            ? agentKindSchema.safeParse(args.telemetry.agent_kind)
-            : null
-        const errorAgentKind = rendererAgentKindParse?.success
-          ? rendererAgentKindParse.data
-          : isClaudeLaunch
-            ? ('claude-code' as const)
-            : null
-        if (errorAgentKind) {
-          const classified = classifyError(spawnError)
-          track('agent_error', {
-            agent_kind: errorAgentKind,
-            error_class: classified.error_class,
-            ...getCohortAtEmit()
-          })
-        }
-        throw spawnError
-      } finally {
-        if (preAllocatedHandle) {
-          trustedTerminalHandleEnv.delete(preAllocatedHandle)
-        }
-      }
-      ptyOwnership.set(result.id, args.connectionId ?? null)
-      const relayResultId = getRelayPtyId(args.connectionId, result.id)
-      if (store && args.connectionId) {
-        // Why: remote PTYs live in the SSH relay grace window after Orca
-        // detaches. Persist their IDs immediately so reconnect can reattach
-        // instead of treating the tab as a fresh shell.
-        store.upsertSshRemotePtyLease({
-          targetId: args.connectionId,
-          ptyId: relayResultId,
-          ...(typeof args.worktreeId === 'string' ? { worktreeId: args.worktreeId } : {}),
-          ...(typeof args.tabId === 'string' ? { tabId: args.tabId } : {}),
-          ...(validatedLeafId ? { leafId: validatedLeafId } : {}),
-          state: 'attached',
-          lastAttachedAt: Date.now()
-        })
-      }
-      if (preAllocatedHandle) {
-        runtime?.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
-      }
-      ptySizes.set(result.id, { cols: args.cols, rows: args.rows })
-      // Why: closes the SIGKILL-between-spawn-and-persist race (Issue #217)
-      // for local daemon PTYs and the equivalent remote-relay race for SSH.
-      // The renderer's debounced session writer runs in parallel for every
-      // other field; patch the load-bearing (tab.ptyId, ptyIdsByLeafId)
-      // binding synchronously so a force-quit in the ~450 ms debounce window
-      // cannot orphan either daemon history or a remote relay PTY lease.
-      if (
-        (isDaemonHostSpawn || args.connectionId) &&
-        store &&
-        typeof args.worktreeId === 'string' &&
-        typeof args.tabId === 'string' &&
-        validatedLeafId !== null
-      ) {
-        try {
-          store.persistPtyBinding({
-            worktreeId: args.worktreeId,
-            tabId: args.tabId,
-            leafId: validatedLeafId,
-            ptyId: result.id
-          })
-        } catch (err) {
-          console.error('[pty] failed to persist PTY binding after spawn:', err)
+        // Why: renderer sets ORCA_PANE_KEY in `args.env` for every pane-owned
+        // spawn (see pty-connection.ts). Recording the mapping here lets
+        // clearProviderPtyState clear the agent-hooks server's per-paneKey
+        // caches when the PTY exits.
+        // Why: args.env arrives as untrusted JSON over IPC — the static
+        // Record<string, string> type is not actually enforced at the boundary.
+        // Narrow to a bounded string so malformed or oversized values cannot
+        // pollute ptyPaneKey or the downstream clearPaneState call.
+        const rememberedPaneKey = validatedPaneKey
+          ? rememberPaneKeyForPty(result.id, validatedPaneKey)
+          : null
+        if (legacySpawnPaneKey && migrationUnsupportedPaneKey) {
+          agentHookServer.registerPaneKeyAlias(
+            legacySpawnPaneKey.paneKey,
+            migrationUnsupportedPaneKey,
+            result.id
+          )
+          clearMigrationUnsupportedPtysForPaneKey(migrationUnsupportedPaneKey)
+        } else if (validatedPaneKey) {
           if (!result.isReattach) {
-            try {
-              await provider.shutdown(result.id, { immediate: true })
-            } catch (shutdownErr) {
-              console.warn('[pty] failed to clean up PTY after persistence failure:', shutdownErr)
-            }
-            clearProviderPtyState(result.id)
-            deletePtyOwnership(result.id)
+            clearMigrationUnsupportedPtysForPaneKey(validatedPaneKey)
           }
-          if (!result.isReattach && args.connectionId && store) {
-            store.removeSshRemotePtyLease(args.connectionId, relayResultId)
-          }
-          throw new Error(createTerminalSessionStateSaveFailureMessage())
         }
-      }
-      // Why: pre-signal cooperation gate — when the renderer has declared it
-      // will own the serializer for this paneKey, suppress the daemon-snapshot
-      // seed so the renderer's hydration path (maybeHydrateHeadlessFromRenderer)
-      // is the sole authority. The pre-signal is keyed on paneKey because at
-      // spawn time the renderer doesn't yet know the new ptyId. See
-      // docs/mobile-prefer-renderer-scrollback.md.
-      const rendererPreSignaled = validatedPaneKey ? pendingByPaneKey.has(validatedPaneKey) : false
-      const rendererAlreadyRegistered = rendererSerializerByPtyId.has(result.id)
-      // Why: capture the pending gen at spawn time so teardown for THIS PTY
-      // only settles its own generation. A remount that replaces the entry
-      // with a new gen must not be stomped by the old PTY's teardown.
-      if (validatedPaneKey && rendererPreSignaled) {
-        const pending = pendingByPaneKey.get(validatedPaneKey)
-        if (pending) {
-          ptyPendingGenByPtyId.set(result.id, pending.gen)
-        }
-      }
-
-      // Why: hydrate the runtime's headless emulator with the adapter's
-      // restore data BEFORE registerPty so any live PTY data that arrives
-      // concurrently lands on top of the seed instead of replacing it. Mobile
-      // subscribers then see the same scrollback the desktop xterm received
-      // via coldRestore/snapshot. Without this, mobile snapshots after a
-      // daemon-restored attach contain only bytes emitted since the relaunch
-      // and the prior agent output silently disappears.
-      //
-      // Skip when the renderer is or will be authoritative for this PTY:
-      // its hydration path will seed the emulator from xterm's live buffer,
-      // which is richer than the daemon snapshot.
-      if (runtime && !rendererPreSignaled && !rendererAlreadyRegistered) {
-        const seedSize =
-          typeof result.snapshotCols === 'number' && typeof result.snapshotRows === 'number'
-            ? { cols: result.snapshotCols, rows: result.snapshotRows }
-            : undefined
-        if (typeof result.snapshot === 'string' && result.snapshot.length > 0) {
-          runtime.seedHeadlessTerminal(result.id, result.snapshot, seedSize)
-        } else if (
-          result.coldRestore &&
-          typeof result.coldRestore.scrollback === 'string' &&
-          result.coldRestore.scrollback.length > 0
-        ) {
-          runtime.seedHeadlessTerminal(result.id, result.coldRestore.scrollback, seedSize, {
-            cwd: result.coldRestore.cwd,
-            oscLinks: result.coldRestore.oscLinks
+        // Why: register local PTYs (connectionId falsy) with the memory
+        // collector so it can walk each PTY's process subtree and attribute
+        // memory back to its worktree. SSH PTYs execute remotely and their
+        // process tree is not visible to our local `ps`, so we skip them.
+        if (!args.connectionId) {
+          // Why: providers publish the OS pid on the spawn result (both
+          // LocalPtyProvider and DaemonPtyAdapter). Recording it once here keeps
+          // the memory module from reaching back into ipc/pty on a hot path, and
+          // works uniformly whether the PTY is hosted in-process or by the
+          // daemon subprocess.
+          const spawnedPid = result.pid ?? null
+          // Why: args.worktreeId and args.sessionId arrive as untrusted IPC
+          // payload strings — the static type is not enforced at the boundary.
+          // Narrow them to bounded strings here to match the paneKey defense
+          // above so malformed or oversized values cannot pollute registerPty's
+          // maps or downstream memory-attribution lookups.
+          registerPty({
+            ptyId: result.id,
+            worktreeId:
+              typeof args.worktreeId === 'string' &&
+              args.worktreeId.length > 0 &&
+              args.worktreeId.length <= 512
+                ? args.worktreeId
+                : null,
+            sessionId:
+              typeof args.sessionId === 'string' &&
+              args.sessionId.length > 0 &&
+              args.sessionId.length <= 256
+                ? args.sessionId
+                : null,
+            paneKey: rememberedPaneKey,
+            pid:
+              typeof spawnedPid === 'number' && Number.isFinite(spawnedPid) && spawnedPid > 0
+                ? spawnedPid
+                : null
           })
         }
-      }
-      if (
-        typeof args.worktreeId === 'string' &&
-        args.worktreeId.length > 0 &&
-        args.worktreeId.length <= 512
-      ) {
-        runtime?.registerPty(result.id, args.worktreeId, args.connectionId ?? null)
-      }
-      if (isClaudeLaunch) {
-        markClaudePtySpawned(result.id)
-      }
-      // Why: renderer sets ORCA_PANE_KEY in `args.env` for every pane-owned
-      // spawn (see pty-connection.ts). Recording the mapping here lets
-      // clearProviderPtyState clear the agent-hooks server's per-paneKey
-      // caches when the PTY exits.
-      // Why: args.env arrives as untrusted JSON over IPC — the static
-      // Record<string, string> type is not actually enforced at the boundary.
-      // Narrow to a bounded string so malformed or oversized values cannot
-      // pollute ptyPaneKey or the downstream clearPaneState call.
-      const rememberedPaneKey = validatedPaneKey
-        ? rememberPaneKeyForPty(result.id, validatedPaneKey)
-        : null
-      if (legacySpawnPaneKey && migrationUnsupportedPaneKey) {
-        agentHookServer.registerPaneKeyAlias(
-          legacySpawnPaneKey.paneKey,
-          migrationUnsupportedPaneKey,
-          result.id
-        )
-        clearMigrationUnsupportedPtysForPaneKey(migrationUnsupportedPaneKey)
-      } else if (validatedPaneKey) {
-        if (!result.isReattach) {
-          clearMigrationUnsupportedPtysForPaneKey(validatedPaneKey)
+        // Why: telemetry-plan.md§Agent launch semantics — fire `agent_started`
+        // only after `provider.spawn` resolved. The renderer threads
+        // `args.telemetry` through the spawn IPC for every launch we want to
+        // attribute; bare-shell tabs (no agent) leave the field undefined and
+        // do not produce an event. Each field is parsed against its closed
+        // enum here so a malformed renderer payload (or a spoofed IPC) does
+        // not poison the event — `safeParse` failure drops that field, and
+        // if any required field is missing we skip the event entirely. The
+        // main-side `track()` validator re-runs the schema on the full
+        // payload as a second defense-in-depth check.
+        if (args.telemetry) {
+          const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)
+          const launchSourceParse = launchSourceSchema.safeParse(args.telemetry.launch_source)
+          const requestKindParse = requestKindSchema.safeParse(args.telemetry.request_kind)
+          if (agentKindParse.success && launchSourceParse.success && requestKindParse.success) {
+            track('agent_started', {
+              agent_kind: agentKindParse.data,
+              launch_source: launchSourceParse.data,
+              request_kind: requestKindParse.data,
+              ...getCohortAtEmit()
+            })
+          }
         }
-      }
-      // Why: register local PTYs (connectionId falsy) with the memory
-      // collector so it can walk each PTY's process subtree and attribute
-      // memory back to its worktree. SSH PTYs execute remotely and their
-      // process tree is not visible to our local `ps`, so we skip them.
-      if (!args.connectionId) {
-        // Why: providers publish the OS pid on the spawn result (both
-        // LocalPtyProvider and DaemonPtyAdapter). Recording it once here keeps
-        // the memory module from reaching back into ipc/pty on a hot path, and
-        // works uniformly whether the PTY is hosted in-process or by the
-        // daemon subprocess.
-        const spawnedPid = result.pid ?? null
-        // Why: args.worktreeId and args.sessionId arrive as untrusted IPC
-        // payload strings — the static type is not enforced at the boundary.
-        // Narrow them to bounded strings here to match the paneKey defense
-        // above so malformed or oversized values cannot pollute registerPty's
-        // maps or downstream memory-attribution lookups.
-        registerPty({
-          ptyId: result.id,
-          worktreeId:
-            typeof args.worktreeId === 'string' &&
-            args.worktreeId.length > 0 &&
-            args.worktreeId.length <= 512
-              ? args.worktreeId
-              : null,
-          sessionId:
-            typeof args.sessionId === 'string' &&
-            args.sessionId.length > 0 &&
-            args.sessionId.length <= 256
-              ? args.sessionId
-              : null,
-          paneKey: rememberedPaneKey,
-          pid:
-            typeof spawnedPid === 'number' && Number.isFinite(spawnedPid) && spawnedPid > 0
-              ? spawnedPid
-              : null
-        })
-      }
-      // Why: telemetry-plan.md§Agent launch semantics — fire `agent_started`
-      // only after `provider.spawn` resolved. The renderer threads
-      // `args.telemetry` through the spawn IPC for every launch we want to
-      // attribute; bare-shell tabs (no agent) leave the field undefined and
-      // do not produce an event. Each field is parsed against its closed
-      // enum here so a malformed renderer payload (or a spoofed IPC) does
-      // not poison the event — `safeParse` failure drops that field, and
-      // if any required field is missing we skip the event entirely. The
-      // main-side `track()` validator re-runs the schema on the full
-      // payload as a second defense-in-depth check.
-      if (args.telemetry) {
-        const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)
-        const launchSourceParse = launchSourceSchema.safeParse(args.telemetry.launch_source)
-        const requestKindParse = requestKindSchema.safeParse(args.telemetry.request_kind)
-        if (agentKindParse.success && launchSourceParse.success && requestKindParse.success) {
-          track('agent_started', {
-            agent_kind: agentKindParse.data,
-            launch_source: launchSourceParse.data,
-            request_kind: requestKindParse.data,
-            ...getCohortAtEmit()
-          })
+        const response = {
+          ...result,
+          ...(!result.isReattach && effectiveLaunchConfig
+            ? { launchConfig: effectiveLaunchConfig }
+            : {})
         }
-      }
-      return {
-        ...result,
-        ...(!result.isReattach && effectiveLaunchConfig
-          ? { launchConfig: effectiveLaunchConfig }
-          : {})
+        return resolvePaneSpawnReservation(reservationPaneKey, paneSpawnReservation, response)
+      } catch (err) {
+        // Why: once the reservation is created, any later throw —
+        // spawn failure, persist failure, or a post-spawn helper such as
+        // seedHeadlessTerminal/registerPty/track — must settle it. Otherwise
+        // it lingers in paneSpawnReservationsByPaneKey and every future spawn
+        // for this pane awaits a promise that never resolves. reject is a
+        // no-op once the reservation has already resolved.
+        rejectPaneSpawnReservation(reservationPaneKey, paneSpawnReservation, err)
+        throw err
       }
     }
   )

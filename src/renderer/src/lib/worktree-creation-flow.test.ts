@@ -1,13 +1,23 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+
+type TestActiveView = 'terminal' | 'tasks'
 
 const store = {
   settings: { activeRuntimeEnvironmentId: null as string | null },
+  activeView: 'terminal' as TestActiveView,
+  activePendingCreationId: 'creation-1' as string | null,
+  repos: [] as { id: string; connectionId?: string | null }[],
   beginPendingWorktreeCreation: vi.fn(),
   updatePendingWorktreeCreation: vi.fn(),
-  pendingWorktreeCreations: { 'creation-1': { creationId: 'creation-1' } },
+  pendingWorktreeCreations: { 'creation-1': { creationId: 'creation-1' } } as Record<
+    string,
+    { creationId: string; request?: WorktreeCreationRequest }
+  >,
+  removePendingWorktreeCreation: vi.fn(),
+  updateWorktreeMeta: vi.fn(),
   setActivePendingWorktreeCreation: vi.fn(),
   setActiveView: vi.fn(),
   setSidebarOpen: vi.fn(),
@@ -37,6 +47,18 @@ vi.mock('@/lib/new-workspace', () => ({
   ensureAgentStartupInTerminal: vi.fn()
 }))
 
+vi.mock('sonner', () => ({
+  toast: {
+    error: vi.fn()
+  }
+}))
+
+import { toast } from 'sonner'
+import {
+  activateAndRevealWorktree,
+  ensureWorktreeHasInitialTerminal
+} from '@/lib/worktree-activation'
+import { queueNewWorkspaceTerminalFocus } from '@/lib/new-workspace-terminal-focus'
 import {
   beginBackgroundWorktreePreparation,
   continueBackgroundWorktreeCreation,
@@ -44,6 +66,17 @@ import {
 } from './worktree-creation-flow'
 
 const FLOW_SOURCE = readFileSync(join(__dirname, 'worktree-creation-flow.ts'), 'utf8')
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  store.settings.activeRuntimeEnvironmentId = null
+  store.activeView = 'terminal'
+  store.activePendingCreationId = 'creation-1'
+  store.repos = []
+  store.pendingWorktreeCreations = { 'creation-1': { creationId: 'creation-1' } }
+  store.createWorktree.mockImplementation(() => new Promise(() => {}))
+  vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('tab-1')
+})
 
 function makeRequest(overrides: Partial<WorktreeCreationRequest> = {}): WorktreeCreationRequest {
   return {
@@ -58,6 +91,11 @@ function makeRequest(overrides: Partial<WorktreeCreationRequest> = {}): Worktree
     quickTelemetry: null,
     ...overrides
   }
+}
+
+async function flushAsyncWorktreeCreation(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
 }
 
 function sourceBetween(source: string, startPattern: string, endPattern: string): string {
@@ -122,6 +160,9 @@ describe('staged background worktree creation', () => {
   it('replaces the staged request before the create starts', () => {
     store.updatePendingWorktreeCreation.mockClear()
     store.createWorktree.mockClear()
+    store.setActivePendingWorktreeCreation.mockClear()
+    store.setActiveView.mockClear()
+    store.setSidebarOpen.mockClear()
 
     const request = makeRequest({ setupDecision: 'run' })
     const started = continueBackgroundWorktreeCreation('creation-1', request)
@@ -141,6 +182,82 @@ describe('staged background worktree creation', () => {
     expect(createCall?.[1]).toBe('feature')
     expect(createCall?.[3]).toBe('run')
     expect(createCall?.[18]).toBe('creation-1')
+    expect(store.setActivePendingWorktreeCreation).toHaveBeenCalledWith('creation-1')
+    expect(store.setActiveView).toHaveBeenCalledWith('terminal')
+    expect(store.setSidebarOpen).toHaveBeenCalledWith(true)
+  })
+
+  it('can continue without revealing a staged create after background preflight', () => {
+    store.updatePendingWorktreeCreation.mockClear()
+    store.createWorktree.mockClear()
+    store.setActivePendingWorktreeCreation.mockClear()
+    store.setActiveView.mockClear()
+    store.setSidebarOpen.mockClear()
+
+    const request = makeRequest({ setupDecision: 'run' })
+    const started = continueBackgroundWorktreeCreation('creation-1', request, {
+      revealCreationSurface: false
+    })
+
+    expect(started).toBe(true)
+    expect(store.updatePendingWorktreeCreation).toHaveBeenCalledWith(
+      'creation-1',
+      expect.objectContaining({
+        phase: 'fetching',
+        request
+      })
+    )
+    expect(store.createWorktree).toHaveBeenCalledTimes(1)
+    expect(store.setActivePendingWorktreeCreation).not.toHaveBeenCalled()
+    expect(store.setActiveView).not.toHaveBeenCalled()
+    expect(store.setSidebarOpen).not.toHaveBeenCalled()
+  })
+
+  it('does not reveal a completed staged create after the user leaves the creation surface', async () => {
+    store.activeView = 'tasks'
+    store.createWorktree.mockResolvedValueOnce({
+      worktree: {
+        id: 'wt-1',
+        repoId: 'repo-1'
+      }
+    })
+
+    const started = continueBackgroundWorktreeCreation('creation-1', makeRequest(), {
+      revealCreationSurface: false
+    })
+
+    expect(started).toBe(true)
+    await flushAsyncWorktreeCreation()
+    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledWith(
+      store,
+      'wt-1',
+      undefined,
+      undefined,
+      undefined,
+      undefined
+    )
+    expect(queueNewWorkspaceTerminalFocus).not.toHaveBeenCalled()
+    expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1')
+  })
+
+  it('toasts a staged create error after the user leaves the creation surface', async () => {
+    store.activeView = 'tasks'
+    store.createWorktree.mockRejectedValueOnce(new Error('create failed'))
+
+    const started = continueBackgroundWorktreeCreation('creation-1', makeRequest(), {
+      revealCreationSurface: false
+    })
+
+    expect(started).toBe(true)
+    await flushAsyncWorktreeCreation()
+    expect(store.updatePendingWorktreeCreation).toHaveBeenCalledWith(
+      'creation-1',
+      expect.objectContaining({
+        status: 'error'
+      })
+    )
+    expect(toast.error).toHaveBeenCalledTimes(1)
   })
 })
 

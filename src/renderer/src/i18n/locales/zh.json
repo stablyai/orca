@@ -230,13 +230,16 @@
           "81f13f48d2": "删除工作树\"{{value1}}\"后，Git 无法安全删除分支\"{{value0}}\"，因此 Orca 将其保留以避免丢失本地提交。"
         },
         "repos": {
+          "2975400634": "Update Orca server to open non-Git folders on this runtime.",
           "b7e14472ae": "添加文件夹失败",
           "e649269645": "使用\"添加项目\"在所选主机上输入路径。",
           "c6e022ddfc": "添加项目失败",
           "90d129b48b": "文件夹已添加",
           "8bb3ad7935": "项目已添加",
           "a8e4b3af5b": "项目已添加过了",
-          "6d3318e813": "导入存储库失败"
+          "6d3318e813": "导入存储库失败",
+          "3be0f7df04": "Cannot open folder on selected runtime",
+          "15cf5319ec": "{{path}} was checked on {{hostName}}, but that host did not report a usable folder."
         },
         "settings": {
           "e12dab333b": "切换服务器失败",
@@ -3521,7 +3524,10 @@
           "e52454b7f6": "作为文件夹打开",
           "05b33a17a9": "取消",
           "8fba4b8cbb": "此文件夹不是 Git 存储库。您将拥有编辑器、终端和搜索，但基于 Git 的功能将不可用。",
-          "c49fb13492": "添加远程文件夹失败"
+          "c49fb13492": "添加远程文件夹失败",
+          "9a766f33ac": "This path was checked on the SSH host.",
+          "79fd02cf5f": "This path was checked on {{hostName}}.",
+          "8851b77327": "This path was checked locally."
         },
         "OrcaYamlTrustDialog": {
           "f3e2b868fb": "运行钩子",
@@ -6584,7 +6590,9 @@
             "a79d266f71": "会话",
             "afbf35be68": "稳定会话",
             "agentPermissions": "智能体权限",
-            "agentPermissionsDescription": "在 Yolo 和手动之间切换智能体权限默认值。"
+            "agentPermissionsDescription": "在 Yolo 和手动之间切换智能体权限默认值。",
+            "agentRuntime": "Agent Runtime",
+            "agentRuntimeDescription": "Choose whether agents are detected and launched on Windows or in WSL by default."
           }
         },
         "appearance": {
@@ -8328,6 +8336,16 @@
         "ShortcutRemoveButton": {
           "9e29aff18b": "Remove {{value0}} shortcut {{value1}}",
           "2a9588b1c2": "移除此绑定"
+        },
+        "AgentRuntimeSetting": {
+          "label": "Agent runtime",
+          "wsl": "WSL",
+          "loadingWsl": "Loading WSL",
+          "selectDistro": "Select distro",
+          "windowsDescription": "Detect and launch agents on Windows for projects that do not override their runtime.",
+          "wslUnavailable": "WSL is not available on this machine.",
+          "distroRequired": "Choose a WSL distro before projects can inherit WSL.",
+          "wslDescription": "Detect and launch agents in {{value0}} via WSL for projects that do not override their runtime."
         }
       },
       "right": {
@@ -8945,6 +8963,7 @@
               },
               "empty": {
                 "state": {
+                  "3322603418": "Pull request status unavailable",
                   "5b0cfae9a5": "创建 {{value0}} 以开始检查和评审。",
                   "13e1c7d5ed": "未找到 {{value0}}",
                   "d372072df1": "GitHub 刷新因当前速率限制预算而暂停",
@@ -8959,7 +8978,8 @@
                   "f8543140cc": "在创建 {{value0}} 之前发布此分支。",
                   "41252bc53f": "分支未发布",
                   "05e4aec17b": "{{value0}} 检查将在操作完成后可用",
-                  "d77c513c1e": "{{value0}} 正在进行中"
+                  "d77c513c1e": "{{value0}} 正在进行中",
+                  "b597440265": "Refresh GitHub status for this branch to load checks and review."
                 }
               }
             }

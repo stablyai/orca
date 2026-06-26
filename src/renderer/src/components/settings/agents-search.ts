@@ -59,7 +59,13 @@ function expandAgentSearchText(value: string): string[] {
   return spaced === value ? [value] : [value, spaced]
 }
 
-export const getAgentsPaneSearchEntries = createLocalizedCatalog(() => [
+type AgentsPaneSearchOptions = {
+  includeAgentRuntime?: boolean
+}
+
+const AGENT_RUNTIME_SEARCH_ENTRY_ID = 'agent-runtime'
+
+const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.agents.search.bb9ad95777', 'Agents'),
     description: translate(
@@ -67,6 +73,33 @@ export const getAgentsPaneSearchEntries = createLocalizedCatalog(() => [
       'Configure AI coding agents, default agent, and command overrides.'
     ),
     keywords: buildAgentSettingsKeywords()
+  },
+  {
+    title: translate('auto.components.settings.agents.search.agentRuntime', 'Agent Runtime'),
+    id: AGENT_RUNTIME_SEARCH_ENTRY_ID,
+    description: translate(
+      'auto.components.settings.agents.search.agentRuntimeDescription',
+      'Choose whether agents are detected and launched on Windows or in WSL by default.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.agents.search.96ba2373b6', 'agent'),
+      ...translateSearchKeyword('auto.components.settings.agents.search.runtime', 'runtime'),
+      ...translateSearchKeyword('auto.components.settings.agents.search.d2952dfd74', 'location'),
+      ...translateSearchKeyword(
+        'auto.components.settings.agents.search.agentLocation',
+        'agent location'
+      ),
+      ...translateSearchKeyword('auto.components.settings.agents.search.77c02fa3c3', 'windows'),
+      ...translateSearchKeyword('auto.components.settings.agents.search.d608654c03', 'wsl'),
+      ...translateSearchKeyword('auto.components.settings.agents.search.f622b8eb2a', 'linux'),
+      ...translateSearchKeyword('auto.components.settings.agents.search.839e82c81f', 'detect'),
+      ...translateSearchKeyword('auto.components.settings.agents.search.2814401339', 'installed'),
+      ...translateSearchKeyword(
+        'auto.components.settings.agents.search.installedAgentsWsl',
+        'installed agents in wsl'
+      ),
+      ...translateSearchKeyword('auto.components.settings.agents.search.719f53350c', 'path')
+    ]
   },
   {
     title: getAgentStatusHooksTitle(),
@@ -106,3 +139,13 @@ export const getAgentsPaneSearchEntries = createLocalizedCatalog(() => [
   },
   ...getAgentCacheTimerSearchEntries()
 ])
+
+export function getAgentsPaneSearchEntries({
+  includeAgentRuntime = true
+}: AgentsPaneSearchOptions = {}) {
+  const entries = getAllAgentsPaneSearchEntries()
+  if (includeAgentRuntime) {
+    return entries
+  }
+  return entries.filter((entry) => !('id' in entry) || entry.id !== AGENT_RUNTIME_SEARCH_ENTRY_ID)
+}

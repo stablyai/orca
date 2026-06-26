@@ -3,7 +3,7 @@
  * completion bookkeeping, and focus restoration. */
 import { useEffect } from 'react'
 import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-session'
-import { submitPromptToAgentTab } from '@/lib/agent-paste-draft'
+import { submitPromptToAgentPty } from '@/lib/agent-paste-draft'
 import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
 import { useAppStore } from '@/store'
@@ -16,7 +16,6 @@ import {
   didAutomationPrecheckPass,
   formatAutomationPrecheckFailure
 } from '../../../shared/automation-precheck'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
 import {
   createAutomationRunOutputSnapshotBuffer,
   selectAutomationRunOutputSnapshot
@@ -296,7 +295,7 @@ export function useAutomationDispatchEvents(): void {
             void markCompletionResult()
           }
           const observeAgentStatus = (
-            tabId: string,
+            targetPaneKey: string,
             startedAfter: number,
             options?: { requireWorkingAfterStart?: boolean }
           ): void => {
@@ -304,8 +303,7 @@ export function useAutomationDispatchEvents(): void {
             const checkCurrentStatus = (): void => {
               const { agentStatusByPaneKey } = useAppStore.getState()
               for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
-                const parsed = parsePaneKey(paneKey)
-                if (parsed?.tabId !== tabId || entry.updatedAt < startedAfter) {
+                if (paneKey !== targetPaneKey || entry.updatedAt < startedAfter) {
                   continue
                 }
                 if (entry.state === 'working') {
@@ -342,8 +340,9 @@ export function useAutomationDispatchEvents(): void {
               if (releaseTab) {
                 releaseReuseDispatchTab = releaseTab
                 try {
-                  const submitted = await submitPromptToAgentTab({
+                  const submitted = await submitPromptToAgentPty({
                     tabId: reusableSession.tabId,
+                    ptyId: reusableSession.ptyId,
                     content: automation.prompt
                   })
                   if (!submitted) {
@@ -383,7 +382,7 @@ export function useAutomationDispatchEvents(): void {
                         void markExitResult(code)
                       }
                     })
-                    observeAgentStatus(reusableSession.tabId, reuseCompletionStartedAt, {
+                    observeAgentStatus(reusableSession.paneKey, reuseCompletionStartedAt, {
                       requireWorkingAfterStart: true
                     })
                     await markDispatchResult({
@@ -392,6 +391,8 @@ export function useAutomationDispatchEvents(): void {
                       workspaceId: worktree.id,
                       workspaceDisplayName: worktree.displayName,
                       terminalSessionId: reusableSession.tabId,
+                      terminalPaneKey: reusableSession.paneKey,
+                      terminalPtyId: reusableSession.ptyId,
                       precheckResult,
                       error: null
                     })
@@ -442,12 +443,7 @@ export function useAutomationDispatchEvents(): void {
             throw new Error('Unable to build an agent launch plan.')
           }
           const launchedTabId = result.tabId
-          // Why: host-backed automation terminals may lack a local tab id; skip
-          // pane-key status observation while background session output still
-          // tracks completion.
-          if (launchedTabId) {
-            observeAgentStatus(launchedTabId, dispatchStartedAt)
-          }
+          observeAgentStatus(result.paneKey, dispatchStartedAt)
           try {
             await markDispatchResult({
               runId: run.id,
@@ -455,6 +451,8 @@ export function useAutomationDispatchEvents(): void {
               workspaceId: worktree.id,
               workspaceDisplayName: worktree.displayName,
               terminalSessionId: launchedTabId,
+              terminalPaneKey: result.paneKey,
+              terminalPtyId: result.ptyId,
               precheckResult,
               error: null
             })

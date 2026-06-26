@@ -18,6 +18,10 @@ import type { CreateWorktreeResult } from '../../../shared/types'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 
+type ContinueBackgroundWorktreeCreationOptions = {
+  revealCreationSurface?: boolean
+}
+
 // Why: mirrors the startup-opt the composer used to build inline. The renderer
 // only seeds the first terminal when the backend did not already spawn it.
 function buildStartupOpt(
@@ -49,6 +53,13 @@ function getWorktreeCreationIndeterminate(request: WorktreeCreationRequest): boo
     return request.worktreeCreateProgressMode === 'indeterminate'
   }
   return getActiveRuntimeTarget(useAppStore.getState().settings).kind !== 'local'
+}
+
+// Why: activePendingCreationId can outlive the terminal route when the user
+// switches app views; only the terminal route renders the creation panel.
+function isPendingCreationSurfaceVisible(creationId: string): boolean {
+  const state = useAppStore.getState()
+  return state.activeView === 'terminal' && state.activePendingCreationId === creationId
 }
 
 function revealPendingCreation(
@@ -151,7 +162,7 @@ async function executeWorktreeCreation(
     })
     // Why: only toast when the panel isn't already showing this error (the user
     // navigated away), so a visible failure isn't announced twice.
-    if (useAppStore.getState().activePendingCreationId !== creationId) {
+    if (!isPendingCreationSurfaceVisible(creationId)) {
       toast.error(message)
     }
     return
@@ -183,7 +194,7 @@ async function executeWorktreeCreation(
 
   // `createWorktree` already inserted the real worktree row. Whether we steal
   // the view depends on whether the user is still watching this creation.
-  const stillActive = useAppStore.getState().activePendingCreationId === creationId
+  const stillActive = isPendingCreationSurfaceVisible(creationId)
 
   let activation: ActivateAndRevealResult | false = false
   let primaryTabId: string | null
@@ -258,7 +269,8 @@ export function beginBackgroundWorktreePreparation(request: WorktreeCreationRequ
 /** Continue a staged pending entry once async preflight has produced a final request. */
 export function continueBackgroundWorktreeCreation(
   creationId: string,
-  request: WorktreeCreationRequest
+  request: WorktreeCreationRequest,
+  options: ContinueBackgroundWorktreeCreationOptions = {}
 ): boolean {
   const store = useAppStore.getState()
   if (!store.pendingWorktreeCreations[creationId]) {
@@ -270,9 +282,13 @@ export function continueBackgroundWorktreeCreation(
     error: undefined,
     request
   })
-  store.setActivePendingWorktreeCreation(creationId)
-  store.setActiveView('terminal')
-  store.setSidebarOpen(true)
+  // Why: background work-item preflight can finish after the user moved on; keep
+  // the pending row alive without reselecting the creation panel in that case.
+  if (options.revealCreationSurface !== false) {
+    store.setActivePendingWorktreeCreation(creationId)
+    store.setActiveView('terminal')
+    store.setSidebarOpen(true)
+  }
   void executeWorktreeCreation(creationId, request)
   return true
 }

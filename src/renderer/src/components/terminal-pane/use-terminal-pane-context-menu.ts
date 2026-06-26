@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { getConnectionId } from '@/lib/connection-context'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import type { TerminalQuickCommand } from '../../../../shared/types'
 import { isTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-commands'
@@ -286,10 +287,15 @@ export function useTerminalPaneContextMenu({
       return
     }
     const connectionId = getConnectionId(worktreeId) ?? null
+    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
+      useAppStore.getState(),
+      worktreeId
+    )
     const result = await pasteTerminalClipboard({
       readClipboardText: window.api.ui.readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
       connectionId,
+      runtimeEnvironmentId,
       forceBracketedMultilineTextPaste,
       pasteText: (text, options) => executeMenuPasteText(pane, source, text, options),
       onTextPasteError: () =>
