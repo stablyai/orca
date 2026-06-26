@@ -304,8 +304,8 @@ export class EmulatorBridge {
         return backend
       }
     }
-    // Why: fall back to the first backend so an unrecognized device surfaces that
-    // backend's own clear error rather than a generic routing failure.
-    return this.backends[0]
+    // Why: fall back to a host-supported backend (else the first) so an
+    // unrecognized device surfaces a usable backend's error, not iOS-on-Windows.
+    return this.backends.find((backend) => backend.isSupportedOnHost()) ?? this.backends[0]
   }
 }

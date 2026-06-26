@@ -42,6 +42,11 @@ vi.mock('./simulator-app-visibility', () => ({
   hideNativeSimulatorApp: hideNativeSimulatorAppMock
 }))
 
+// Keep the Android backend inert in these iOS-focused tests (no host SDK, no adb I/O).
+vi.mock('./android/android-sdk-host-discovery', () => ({
+  discoverAndroidSdkFromHost: () => null
+}))
+
 import { EmulatorBridge } from './emulator-bridge'
 import { RuntimeEmulatorCommands } from '../runtime/orca-runtime-emulator'
 

@@ -63,6 +63,10 @@ export class IosEmulatorBackend implements EmulatorBackend {
   }
 
   async ownsDevice(id: string): Promise<boolean> {
+    // iOS only owns devices on macOS; otherwise it must not claim Android serials.
+    if (!this.isSupportedOnHost()) {
+      return false
+    }
     try {
       await this.resolveDeviceId(id)
       return true
