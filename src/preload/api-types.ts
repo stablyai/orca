@@ -258,7 +258,8 @@ import type {
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
   RuntimeSyncWindowGraph,
-  RuntimeTerminalDriverState
+  RuntimeTerminalDriverState,
+  RuntimeTerminalPresentation
 } from '../shared/runtime-types'
 import type {
   CommitMessageAgentCapability,
@@ -2466,6 +2467,7 @@ export type PreloadApi = {
         title?: string
         ptyId?: string
         activate?: boolean
+        presentation?: RuntimeTerminalPresentation
         tabId?: string
         leafId?: string
         splitFromLeafId?: string
@@ -2487,6 +2489,7 @@ export type PreloadApi = {
         startupCommandDelivery?: StartupCommandDelivery
         title?: string
         activate?: boolean
+        presentation?: RuntimeTerminalPresentation
       }) => void
     ) => () => void
     replyTerminalCreate: (reply: {

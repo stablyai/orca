@@ -1626,7 +1626,7 @@ describe('useIpcEvents updater integration', () => {
     expect(setSshConnectionState).toHaveBeenCalledWith('conn-refresh-failure', refreshFailureState)
   })
 
-  it('activates the target worktree when CLI creates a terminal there', async () => {
+  it('surfaces terminal creates without stealing focus unless requested', async () => {
     const createTab = vi.fn(() => ({ id: 'tab-new' }))
     const setActiveView = vi.fn()
     const setActiveWorktree = vi.fn()
@@ -1712,6 +1712,7 @@ describe('useIpcEvents updater integration', () => {
             title?: string
             ptyId?: string
             activate?: boolean
+            presentation?: 'background' | 'focused'
             tabId?: string
             leafId?: string
             splitFromLeafId?: string
@@ -1737,6 +1738,7 @@ describe('useIpcEvents updater integration', () => {
             launchAgent?: TuiAgent
             title?: string
             activate?: boolean
+            presentation?: 'background' | 'focused'
           }) => void)
         | null
     } = { current: null }
@@ -1852,6 +1854,7 @@ describe('useIpcEvents updater integration', () => {
               title?: string
               ptyId?: string
               activate?: boolean
+              presentation?: 'background' | 'focused'
               tabId?: string
               leafId?: string
               splitFromLeafId?: string
@@ -1878,6 +1881,7 @@ describe('useIpcEvents updater integration', () => {
               launchAgent?: TuiAgent
               title?: string
               activate?: boolean
+              presentation?: 'background' | 'focused'
             }) => void
           ) => {
             requestTerminalCreateListenerRef.current = listener
@@ -2006,7 +2010,11 @@ describe('useIpcEvents updater integration', () => {
 
     createWebRuntimeSessionTerminal.mockClear()
     createTab.mockClear()
+    setActiveView.mockClear()
+    setActiveWorktree.mockClear()
     setActiveTabType.mockClear()
+    setActiveTab.mockClear()
+    revealWorktreeInSidebar.mockClear()
 
     createTerminalListenerRef.current({
       worktreeId: 'wt-2',
@@ -2014,13 +2022,16 @@ describe('useIpcEvents updater integration', () => {
       command: 'opencode'
     })
 
-    expect(setActiveView).toHaveBeenCalledWith('terminal')
-    expect(setActiveWorktree).toHaveBeenCalledWith('wt-2')
-    expect(markWorktreeVisited).toHaveBeenCalledWith('wt-2')
-    expect(recordWorktreeVisit).toHaveBeenCalledWith('wt-2')
-    expect(createTab).toHaveBeenCalledWith('wt-2')
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
-    expect(setActiveTab).toHaveBeenCalledWith('tab-new')
+    expect(setActiveView).not.toHaveBeenCalled()
+    expect(setActiveWorktree).not.toHaveBeenCalled()
+    expect(markWorktreeVisited).not.toHaveBeenCalled()
+    expect(recordWorktreeVisit).not.toHaveBeenCalled()
+    expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
+      activate: false,
+      recordInteraction: false
+    })
+    expect(setActiveTabType).not.toHaveBeenCalled()
+    expect(setActiveTab).not.toHaveBeenCalled()
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
     expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-new', undefined)
     expect(focusTerminalTabSurface).toHaveBeenCalledWith('tab-new', undefined)
@@ -2028,6 +2039,30 @@ describe('useIpcEvents updater integration', () => {
       recordInteraction: false
     })
     expect(queueTabStartupCommand).toHaveBeenCalledWith('tab-new', { command: 'opencode' })
+
+    createTab.mockClear()
+    setActiveView.mockClear()
+    setActiveWorktree.mockClear()
+    setActiveTabType.mockClear()
+    setActiveTab.mockClear()
+    revealWorktreeInSidebar.mockClear()
+    createTerminalListenerRef.current({
+      worktreeId: 'wt-2',
+      title: 'Runner',
+      command: 'opencode',
+      presentation: 'focused'
+    })
+
+    expect(setActiveView).toHaveBeenCalledWith('terminal')
+    expect(setActiveWorktree).toHaveBeenCalledWith('wt-2')
+    expect(markWorktreeVisited).toHaveBeenCalledWith('wt-2')
+    expect(recordWorktreeVisit).toHaveBeenCalledWith('wt-2')
+    expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, undefined)
+    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(setActiveTab).toHaveBeenCalledWith('tab-new')
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
+    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-new', undefined)
+    expect(focusTerminalTabSurface).toHaveBeenCalledWith('tab-new', undefined)
 
     if (typeof requestTerminalCreateListenerRef.current !== 'function') {
       throw new Error('Expected request-terminal-create listener to be registered')
@@ -2052,16 +2087,25 @@ describe('useIpcEvents updater integration', () => {
       title: 'Shell'
     })
 
-    expect(setActiveView).toHaveBeenCalledWith('terminal')
-    expect(setActiveWorktree).toHaveBeenCalledWith('wt-3')
-    expect(markWorktreeVisited).toHaveBeenCalledWith('wt-3')
-    expect(recordWorktreeVisit).toHaveBeenCalledWith('wt-3')
-    expect(createTab).toHaveBeenCalledWith('wt-3', undefined, undefined, undefined)
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
-    expect(setActiveTab).toHaveBeenCalledWith('tab-new')
+    expect(setActiveView).not.toHaveBeenCalled()
+    expect(setActiveWorktree).not.toHaveBeenCalled()
+    expect(markWorktreeVisited).not.toHaveBeenCalled()
+    expect(recordWorktreeVisit).not.toHaveBeenCalled()
+    expect(createTab).toHaveBeenCalledWith('wt-3', undefined, undefined, {
+      activate: false,
+      recordInteraction: false
+    })
+    expect(setActiveTabType).not.toHaveBeenCalled()
+    expect(setActiveTab).not.toHaveBeenCalled()
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-3')
     expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-new', undefined)
     expect(focusTerminalTabSurface).toHaveBeenCalledWith('tab-new', undefined)
+    expect(dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'orca-background-mount-terminal-worktree',
+        detail: { worktreeId: 'wt-3' }
+      })
+    )
     expect(setTabCustomTitle).toHaveBeenCalledWith('tab-new', 'Shell', {
       recordInteraction: false
     })
@@ -2114,9 +2158,9 @@ describe('useIpcEvents updater integration', () => {
     expect(recordWorktreeVisit).not.toHaveBeenCalled()
     expect(setActiveTabType).not.toHaveBeenCalled()
     expect(setActiveTab).not.toHaveBeenCalled()
-    expect(revealWorktreeInSidebar).not.toHaveBeenCalled()
-    expect(focusRuntimeTerminalSurface).not.toHaveBeenCalled()
-    expect(focusTerminalTabSurface).not.toHaveBeenCalled()
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
+    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-new', undefined)
+    expect(focusTerminalTabSurface).toHaveBeenCalledWith('tab-new', undefined)
     expect(dispatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'orca-background-mount-terminal-worktree',
@@ -2188,6 +2232,36 @@ describe('useIpcEvents updater integration', () => {
     storeState.isNavigatingHistory = false
 
     createTab.mockClear()
+    setActiveView.mockClear()
+    setActiveWorktree.mockClear()
+    setActiveTabType.mockClear()
+    setActiveTab.mockClear()
+    revealWorktreeInSidebar.mockClear()
+    replyTerminalCreate.mockClear()
+    requestTerminalCreateListenerRef.current({
+      requestId: 'req-renderer-backed-background',
+      worktreeId: 'wt-2',
+      title: 'Codex',
+      command: 'codex',
+      presentation: 'background'
+    })
+
+    expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
+      activate: false,
+      recordInteraction: false
+    })
+    expect(setActiveView).not.toHaveBeenCalled()
+    expect(setActiveWorktree).not.toHaveBeenCalled()
+    expect(setActiveTabType).not.toHaveBeenCalled()
+    expect(setActiveTab).not.toHaveBeenCalled()
+    expect(revealWorktreeInSidebar).not.toHaveBeenCalled()
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-renderer-backed-background',
+      tabId: 'tab-new',
+      title: 'Codex'
+    })
+
+    createTab.mockClear()
     registerAgentLaunchConfig.mockClear()
     createTerminalListenerRef.current({
       worktreeId: 'wt-2',
@@ -2202,10 +2276,15 @@ describe('useIpcEvents updater integration', () => {
 
     expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
       initialPtyId: 'pty-bg',
-      activate: true,
+      activate: false,
       launchAgent: 'codex',
       viewMode: 'chat'
     })
+    expect(setActiveView).not.toHaveBeenCalled()
+    expect(setActiveWorktree).not.toHaveBeenCalled()
+    expect(setActiveTabType).not.toHaveBeenCalled()
+    expect(setActiveTab).not.toHaveBeenCalled()
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
     expect(registerAgentLaunchConfig).toHaveBeenCalledWith(
       makePaneKey('tab-new', '55555555-5555-4555-8555-555555555555'),
       {
@@ -2241,6 +2320,30 @@ describe('useIpcEvents updater integration', () => {
     expect(setActiveWorktree).not.toHaveBeenCalled()
     expect(setActiveTabType).not.toHaveBeenCalled()
     expect(setActiveTab).not.toHaveBeenCalled()
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
+
+    createTab.mockClear()
+    setActiveView.mockClear()
+    setActiveWorktree.mockClear()
+    setActiveTabType.mockClear()
+    setActiveTab.mockClear()
+    revealWorktreeInSidebar.mockClear()
+    createTerminalListenerRef.current({
+      worktreeId: 'wt-2',
+      ptyId: 'pty-bg-3',
+      presentation: 'background',
+      tabId: 'tab-cli-bg-reveal'
+    })
+
+    expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
+      initialPtyId: 'pty-bg-3',
+      activate: false,
+      id: 'tab-cli-bg-reveal'
+    })
+    expect(setActiveView).not.toHaveBeenCalled()
+    expect(setActiveWorktree).not.toHaveBeenCalled()
+    expect(setActiveTabType).not.toHaveBeenCalled()
+    expect(setActiveTab).not.toHaveBeenCalled()
     expect(revealWorktreeInSidebar).not.toHaveBeenCalled()
 
     storeState.tabsByWorktree = {
@@ -2249,6 +2352,7 @@ describe('useIpcEvents updater integration', () => {
     storeState.ptyIdsByTabId = { 'tab-existing': ['pty-bg'] }
     createTab.mockClear()
     setActiveTab.mockClear()
+    revealWorktreeInSidebar.mockClear()
     setTabCustomTitle.mockClear()
     createTerminalListenerRef.current({
       worktreeId: 'wt-2',
@@ -2257,7 +2361,8 @@ describe('useIpcEvents updater integration', () => {
     })
 
     expect(createTab).not.toHaveBeenCalled()
-    expect(setActiveTab).toHaveBeenCalledWith('tab-existing')
+    expect(setActiveTab).not.toHaveBeenCalled()
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
     expect(setTabCustomTitle).not.toHaveBeenCalled()
 
     createTerminalListenerRef.current({
@@ -2290,6 +2395,9 @@ describe('useIpcEvents updater integration', () => {
     updateTabPtyId.mockClear()
     setTabLayout.mockClear()
     setActiveTab.mockClear()
+    revealWorktreeInSidebar.mockClear()
+    focusRuntimeTerminalSurface.mockClear()
+    focusTerminalTabSurface.mockClear()
     replyTerminalCreate.mockClear()
     createTerminalListenerRef.current({
       requestId: 'req-adopt-pending',
@@ -2312,7 +2420,10 @@ describe('useIpcEvents updater integration', () => {
         [pendingLeafId]: 'serve-cf39bedb-a33a-417c-9ab6-f304dc27a6c0'
       }
     })
-    expect(setActiveTab).toHaveBeenCalledWith(pendingTabId)
+    expect(setActiveTab).not.toHaveBeenCalled()
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
+    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith(pendingTabId, pendingLeafId)
+    expect(focusTerminalTabSurface).toHaveBeenCalledWith(pendingTabId, pendingLeafId)
     expect(replyTerminalCreate).toHaveBeenCalledWith({
       requestId: 'req-adopt-pending',
       tabId: pendingTabId,
@@ -2343,7 +2454,8 @@ describe('useIpcEvents updater integration', () => {
       leafId: 'leaf-split',
       splitFromLeafId: 'leaf-source',
       splitDirection: 'vertical',
-      splitTelemetrySource: 'contextual_tour'
+      splitTelemetrySource: 'contextual_tour',
+      presentation: 'focused'
     })
 
     expect(createTab).not.toHaveBeenCalled()

@@ -64,7 +64,8 @@ import type {
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
   RuntimeSyncWindowGraph,
-  RuntimeTerminalDriverState
+  RuntimeTerminalDriverState,
+  RuntimeTerminalPresentation
 } from '../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
@@ -3089,6 +3090,7 @@ const api = {
         title?: string
         ptyId?: string
         activate?: boolean
+        presentation?: RuntimeTerminalPresentation
         tabId?: string
         leafId?: string
         splitFromLeafId?: string
@@ -3109,6 +3111,7 @@ const api = {
           title?: string
           ptyId?: string
           activate?: boolean
+          presentation?: RuntimeTerminalPresentation
           tabId?: string
           leafId?: string
           splitFromLeafId?: string
@@ -3133,6 +3136,7 @@ const api = {
         startupCommandDelivery?: StartupCommandDelivery
         title?: string
         activate?: boolean
+        presentation?: RuntimeTerminalPresentation
       }) => void
     ): (() => void) => {
       const listener = (
@@ -3150,6 +3154,7 @@ const api = {
           startupCommandDelivery?: StartupCommandDelivery
           title?: string
           activate?: boolean
+          presentation?: RuntimeTerminalPresentation
         }
       ) => callback(data)
       ipcRenderer.on('terminal:requestTabCreate', listener)

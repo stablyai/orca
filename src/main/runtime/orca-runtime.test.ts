@@ -7182,7 +7182,7 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('returns a background handle when inactive tab adoption fails after spawn', async () => {
+  it('returns an actionable discoverability warning when default adoption fails after spawn', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const revealTerminalSession = vi.fn().mockRejectedValue(new Error('Renderer timed out'))
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -7209,11 +7209,15 @@ describe('OrcaRuntimeService', () => {
     })
 
     try {
-      await expect(runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)).resolves.toMatchObject({
+      const created = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      expect(created).toMatchObject({
         worktreeId: TEST_WORKTREE_ID,
         surface: 'background',
         handle: expect.stringMatching(/^term_/)
       })
+      expect(created.warning).toContain('Renderer timed out')
+      expect(created.warning).toContain('could not make it discoverable')
+      expect(created.warning).toContain(`orca terminal focus --terminal ${created.handle}`)
       const spawnCall = spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined
       const spawnedEnv = spawnCall?.env ?? {}
       expectStablePaneKeyEnv(spawnedEnv)
@@ -7232,6 +7236,49 @@ describe('OrcaRuntimeService', () => {
     } finally {
       warn.mockRestore()
     }
+  })
+
+  it('returns an actionable warning when default discoverability has no renderer notifier', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    const created = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+
+    expect(created).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      surface: 'background',
+      handle: expect.stringMatching(/^term_/)
+    })
+    expect(created.warning).toContain('could not make it discoverable')
+    expect(created.warning).toContain(`orca terminal focus --terminal ${created.handle}`)
+  })
+
+  it('does not warn when background presentation has no renderer notifier', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    const created = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      presentation: 'background'
+    })
+
+    expect(created).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      surface: 'background',
+      handle: expect.stringMatching(/^term_/)
+    })
+    expect(created.warning).toBeUndefined()
   })
 
   it('waits for exit on background terminal handles', async () => {

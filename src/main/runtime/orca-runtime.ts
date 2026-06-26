@@ -237,6 +237,7 @@ import type {
   RuntimeTerminalAgentStatus,
   RuntimeTerminalSend,
   RuntimeTerminalCreate,
+  RuntimeTerminalPresentation,
   RuntimeTerminalSplit,
   RuntimeTerminalFocus,
   RuntimeTerminalClose,
@@ -1069,6 +1070,31 @@ const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
 const MOBILE_TERMINAL_READY_FALLBACK_MS = 1000
 const RECENT_PTY_OUTPUT_LIMIT = 4096
 
+function createTerminalRevealWarning(handle: string, error?: unknown): string {
+  const reason =
+    error instanceof Error && error.message.trim().length > 0
+      ? ` Reason: ${error.message.trim()}.`
+      : ''
+  return [
+    `Terminal ${handle} is running, but Orca could not make it discoverable.${reason}`,
+    `Run \`orca terminal focus --terminal ${handle}\` to reveal and focus it.`
+  ].join(' ')
+}
+
+function resolveTerminalPresentation(opts: {
+  presentation?: RuntimeTerminalPresentation
+  focus?: boolean
+  activate?: boolean
+}): RuntimeTerminalPresentation | undefined {
+  if (opts.presentation) {
+    return opts.presentation
+  }
+  if (opts.focus === true || opts.activate === true) {
+    return 'focused'
+  }
+  return undefined
+}
+
 type RuntimeNotifier = {
   worktreesChanged(repoId: string, renamed?: { oldWorktreeId: string; newWorktreeId: string }): void
   worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void
@@ -1083,7 +1109,12 @@ type RuntimeNotifier = {
   ): void
   createTerminal(
     worktreeId: string,
-    opts: { command?: string; env?: Record<string, string>; title?: string }
+    opts: {
+      command?: string
+      env?: Record<string, string>
+      title?: string
+      presentation?: RuntimeTerminalPresentation
+    }
   ): void
   revealTerminalSession?(
     worktreeId: string,
@@ -1094,6 +1125,7 @@ type RuntimeNotifier = {
       launchToken?: string
       launchAgent?: TuiAgent
       activate?: boolean
+      presentation?: RuntimeTerminalPresentation
       tabId?: string
       leafId?: string
       splitFromLeafId?: string
@@ -14921,6 +14953,7 @@ export class OrcaRuntimeService {
       focus?: boolean
       rendererBacked?: boolean
       activate?: boolean
+      presentation?: RuntimeTerminalPresentation
       tabId?: string
       leafId?: string
       sessionId?: string
@@ -14932,6 +14965,8 @@ export class OrcaRuntimeService {
       deferMobileSessionPublish?: boolean
     } = {}
   ): Promise<RuntimeTerminalCreate> {
+    const presentation = resolveTerminalPresentation(opts)
+    const requiresRendererFocus = opts.presentation === 'focused' || opts.focus === true
     // Why: pre-diff createTerminal fell back to the renderer's active worktree
     // when no selector was provided. The new background-spawn branch hard-
     // requires a resolvable selector, so route the no-selector case through
@@ -14940,7 +14975,7 @@ export class OrcaRuntimeService {
       opts.rendererBacked === true ? this.getAvailableAuthoritativeWindow() : null
     const shouldCreateInBackground =
       worktreeSelector !== undefined &&
-      ((opts.focus !== true && opts.rendererBacked !== true) ||
+      ((!requiresRendererFocus && opts.rendererBacked !== true) ||
         // Why: `orca serve` exposes the local runtime without a renderer
         // window. Renderer-backed Codex terminals are preferred for the app,
         // but headless CLI users still need a usable terminal handle.
@@ -15084,7 +15119,8 @@ export class OrcaRuntimeService {
         })
       }
       let surface: RuntimeTerminalCreate['surface'] = 'background'
-      if (this.notifier?.revealTerminalSession) {
+      let warning: string | undefined
+      if (presentation !== 'background' && this.notifier?.revealTerminalSession) {
         try {
           // Why: after the PTY is spawned, renderer tab adoption is best-effort;
           // failing here must not strand a live process without returning a handle.
@@ -15096,14 +15132,18 @@ export class OrcaRuntimeService {
             ...(effectiveLaunchConfig ? { launchConfig: effectiveLaunchConfig } : {}),
             ...(launchToken ? { launchToken } : {}),
             ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
-            activate: opts.activate === true,
+            activate: presentation === 'focused',
+            ...(presentation ? { presentation } : {}),
             tabId,
             leafId
           })
           surface = 'visible'
         } catch (err) {
           console.warn(`[terminal-create] failed to create inactive tab for ${result.id}:`, err)
+          warning = createTerminalRevealWarning(handle, err)
         }
+      } else if (presentation !== 'background') {
+        warning = createTerminalRevealWarning(handle)
       }
       return {
         handle,
@@ -15112,7 +15152,8 @@ export class OrcaRuntimeService {
         ptyId: result.id,
         worktreeId: workspace.id,
         title: opts.title ?? null,
-        surface
+        surface,
+        ...(warning ? { warning } : {})
       }
     }
 
@@ -15160,7 +15201,8 @@ export class OrcaRuntimeService {
         ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
         startupCommandDelivery: opts.startupCommandDelivery,
         title: opts.title,
-        activate: opts.focus === true || opts.activate === true
+        activate: presentation === 'focused',
+        ...(presentation ? { presentation } : {})
       })
     })
 

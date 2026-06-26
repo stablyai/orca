@@ -447,6 +447,8 @@ export type RuntimeTerminalAgentStatus = {
   status: RuntimeTerminalAgentStatusState
 }
 
+export type RuntimeTerminalPresentation = 'background' | 'focused'
+
 export type RuntimeTerminalCreate = {
   handle: string
   tabId?: string
@@ -455,6 +457,7 @@ export type RuntimeTerminalCreate = {
   worktreeId: string
   title: string | null
   surface?: 'background' | 'visible'
+  warning?: string
 }
 
 export type RuntimeTerminalSplit = {
