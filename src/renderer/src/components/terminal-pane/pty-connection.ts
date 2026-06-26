@@ -25,7 +25,11 @@ import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty, bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { isPaneReplaying, replayIntoTerminal, replayIntoTerminalAsync } from './replay-guard'
-import { terminalOutputPrefersRenderRefresh } from '@/lib/pane-manager/terminal-complex-script'
+import {
+  terminalOutputPrefersRenderRefresh,
+  terminalRewriteOutputRenderRefreshDecision,
+  terminalRewriteOutputPrefersRenderRefresh
+} from '@/lib/pane-manager/terminal-complex-script'
 import {
   PANE_PTY_RESIZE_HOLD_FLUSH_EVENT,
   queuePanePtyResizeIfHeld,
@@ -2594,6 +2598,8 @@ export function connectPanePty(
     let hiddenOutputRestoreGeneration = 0
     let foregroundImmediateBudgetChars = 0
     let foregroundImmediateBudgetWindowStart = 0
+    let foregroundRewriteChunkEndedWithCarriageReturn = false
+    let foregroundRewriteCsiScanTail = ''
     let hiddenMode2031ScanTail = ''
     const shouldSnapshotHiddenCodexOutput = shouldKeepHiddenStartupRendererQueriesLive(paneStartup)
     let hiddenStartupRendererQueryPending = ''
@@ -2710,33 +2716,29 @@ export function connectPanePty(
     }
 
     function containsWindowsRewriteControl(data: string): boolean {
-      if (data.includes('\r') || data.includes('\b')) {
-        return true
-      }
-      let escapeIndex = data.indexOf('\x1b[')
-      while (escapeIndex !== -1) {
-        for (let index = escapeIndex + 2; index < data.length; index++) {
-          const char = data[index]
-          if (char >= '0' && char <= '9') {
-            continue
-          }
-          if (char === ';' || char === '?') {
-            continue
-          }
-          if (char === 'J' || char === 'K') {
-            return true
-          }
-          break
-        }
-        escapeIndex = data.indexOf('\x1b[', escapeIndex + 2)
-      }
-      return false
+      return data.includes('\r') || terminalRewriteOutputPrefersRenderRefresh(data)
+    }
+
+    function foregroundRewriteOutputPrefersRenderRefresh(data: string): boolean {
+      const decision = terminalRewriteOutputRenderRefreshDecision(data, {
+        previousChunkEndsWithCarriageReturn: foregroundRewriteChunkEndedWithCarriageReturn,
+        previousRewriteCsiScanTail: foregroundRewriteCsiScanTail
+      })
+      foregroundRewriteChunkEndedWithCarriageReturn = decision.nextChunkEndsWithCarriageReturn
+      foregroundRewriteCsiScanTail = decision.nextRewriteCsiScanTail
+      return decision.prefersRenderRefresh
     }
 
     function shouldForceForegroundRenderRefresh(data: string): boolean {
+      const rewriteOutputPrefersRenderRefresh = foregroundRewriteOutputPrefersRenderRefresh(data)
       if (foregroundAnsiOutputPrefersRenderRefresh(data)) {
         // Why: Codex-style background SGR panels can paint cell fills while
         // glyphs lag behind; refresh only renderer-risk ANSI chunks, not all output.
+        return true
+      }
+      if (rewriteOutputPrefersRenderRefresh) {
+        // Why: resize fixes these panes because xterm's buffer is right but
+        // in-place redraw cells can remain stale in the renderer until repaint.
         return true
       }
       return (
@@ -2779,21 +2781,24 @@ export function connectPanePty(
       // cursor-only restores need row invalidation even outside DEC 2026.
       const nativeWindowsCursorRestore =
         shouldProtectNativeWindowsSynchronizedOutput && foreground && containsCursorRestore(data)
+      const foregroundOutput = foreground || parseHiddenStartupOutput
+      const foregroundRenderRefreshNeeded =
+        foregroundOutput && shouldForceForegroundRenderRefresh(data)
       synchronizedForegroundOutputActive = nextSynchronizedForegroundOutputActive
       if (hiddenMode2031ScanTail) {
         respondToSkippedMode2031Subscribe(data)
       }
       writeTerminalOutput(pane.terminal, data, {
-        foreground: foreground || parseHiddenStartupOutput,
+        foreground: foregroundOutput,
         beforeWrite: beforeTerminalOutputWrite,
         onBackgroundBacklogDropped: markHiddenOutputRestoreNeeded,
         latencySensitive:
           !foreground || parseHiddenStartupOutput ? true : isLatencySensitiveForegroundOutput(data),
         forceForegroundRefresh:
-          (foreground || parseHiddenStartupOutput) &&
+          foregroundOutput &&
           (synchronizedForegroundOutput ||
             nativeWindowsCursorRestore ||
-            shouldForceForegroundRenderRefresh(data)),
+            foregroundRenderRefreshNeeded),
         followupForegroundRefresh: nativeWindowsCursorRestore,
         stripTransientCursorShows: shouldProtectNativeWindowsSynchronizedOutput && foreground,
         coalesceForeground: synchronizedForegroundOutput && synchronizedOutputEnded,
