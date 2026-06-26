@@ -955,6 +955,13 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       }
     },
 
+    async clearBuffer() {
+      if (!connected || !ptyId) {
+        return
+      }
+      await window.api.pty.clearBuffer(ptyId)
+    },
+
     destroy() {
       destroyed = true
       this.disconnect()

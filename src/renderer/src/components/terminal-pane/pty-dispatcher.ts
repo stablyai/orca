@@ -363,6 +363,7 @@ export type PtyTransport = {
   getPtyId: () => string | null
   getConnectionId?: () => string | null | undefined
   getLocalSessionMetadata?: () => LocalPtySessionMetadata | null
+  clearBuffer?: () => Promise<void>
   serializeBuffer?: (opts?: { scrollbackRows?: number }) => Promise<PtyBufferSnapshot | null>
   preserve?: () => void
   /** Unregister PTY handlers without killing the process for pane remounts. */

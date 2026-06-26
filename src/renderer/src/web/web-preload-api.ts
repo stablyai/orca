@@ -2442,6 +2442,7 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     onSerializeBufferRequest: () => noopUnsubscribe,
     onClearBufferRequest: () => noopUnsubscribe,
     sendSerializedBuffer: () => {},
+    clearBuffer: () => Promise.resolve(),
     declarePendingPaneSerializer: () => Promise.resolve(0),
     settlePaneSerializer: () => Promise.resolve(),
     clearPendingPaneSerializer: () => Promise.resolve(),

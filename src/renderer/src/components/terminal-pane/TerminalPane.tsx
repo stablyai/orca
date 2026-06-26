@@ -772,29 +772,35 @@ export default function TerminalPane({
   const clearPaneScrollback = useCallback(
     (pane: ManagedPane): void => {
       clearedScrollbackLeafIdsRef.current.add(pane.leafId)
-      pane.terminal.clear()
-      // Why: also clear the host buffer for remote-server panes, or the next
-      // host snapshot replays the scrollback we just cleared locally.
       const transport = paneTransportsRef.current.get(pane.id)
       const ptyId = transport?.getPtyId() ?? null
+      pane.terminal.clear()
       clearWebRuntimeTerminalBuffer(ptyId)
       const isRemoteRuntimePty = typeof ptyId === 'string' && isRemoteRuntimePtyId(ptyId)
-      if (isWindowsUserAgent() && getConnectionId(worktreeId) === null && !isRemoteRuntimePty) {
-        // Why: local Windows ConPTY can keep wrapped prompt/cursor paint stale
-        // after xterm.clear(), including after a TUI exit drops the live pty id.
+      const shouldRepairWindowsClear =
+        isWindowsUserAgent() && getConnectionId(worktreeId) === null && !isRemoteRuntimePty
+      const repairWindowsClear = (): void => {
+        if (!shouldRepairWindowsClear) {
+          return
+        }
+        // Why: local Windows xterm can keep wrapped prompt/cursor paint stale
+        // after clear; keep this frontend-only so ConPTY does not repaint it.
         safeFit(pane)
-        transport?.resize(pane.terminal.cols, pane.terminal.rows)
         pane.terminal.refresh(0, Math.max(0, pane.terminal.rows - 1))
         requestAnimationFrame(() => {
           if (!managerRef.current?.getPanes().some((livePane) => livePane.id === pane.id)) {
             return
           }
           safeFit(pane)
-          transport?.resize(pane.terminal.cols, pane.terminal.rows)
           pane.terminal.refresh(0, Math.max(0, pane.terminal.rows - 1))
         })
       }
-      persistLayoutSnapshot()
+      // Why: provider/session buffers can outlive the visible xterm. Clear
+      // them through the same contract used by remote/mobile terminal state.
+      void transport?.clearBuffer?.().finally(() => {
+        repairWindowsClear()
+        persistLayoutSnapshot()
+      })
     },
     [paneTransportsRef, persistLayoutSnapshot, worktreeId]
   )

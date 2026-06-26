@@ -3051,6 +3051,18 @@ export function registerPtyHandlers(
     runtime?.onPtyExit(args.id, -1)
   })
 
+  ipcMain.handle('pty:clearBuffer', async (_event, args: { id?: unknown }): Promise<void> => {
+    if (typeof args?.id !== 'string' || args.id.length === 0) {
+      return
+    }
+    mainWindow.webContents.send('pty:clearBuffer:request', { ptyId: args.id })
+    try {
+      await getProviderForPty(args.id).clearBuffer(args.id)
+    } catch {
+      /* best effort: renderer clear still handles local PTYs */
+    }
+  })
+
   ipcMain.handle(
     'pty:listSessions',
     async (): Promise<{ id: string; cwd: string; title: string }[]> => {

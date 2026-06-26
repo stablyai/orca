@@ -93,6 +93,68 @@ async function focusActiveTerminal(page: Page): Promise<void> {
   })
 }
 
+async function writeActiveViewportMarker(
+  page: Page,
+  promptMarker: string,
+  staleMarker: string
+): Promise<{ cursorX: number; cursorY: number }> {
+  return page.evaluate(
+    async ({ prompt, stale }) => {
+      const state = window.__store?.getState()
+      const worktreeId = state?.activeWorktreeId
+      const tabId =
+        state?.activeTabType === 'terminal'
+          ? state.activeTabId
+          : worktreeId
+            ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+            : null
+      const manager = tabId ? window.__paneManagers?.get(tabId) : null
+      const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+      if (!pane) {
+        throw new Error('No active terminal pane for viewport marker')
+      }
+      await new Promise<void>((resolve) => {
+        pane.terminal.write(`\x1b[2J\x1b[H${prompt}\x1b7\r\n${stale}\r\n${stale}\x1b8`, resolve)
+      })
+      return {
+        cursorX: pane.terminal.buffer.active.cursorX,
+        cursorY: pane.terminal.buffer.active.cursorY
+      }
+    },
+    { prompt: promptMarker, stale: staleMarker }
+  )
+}
+
+async function getActiveTerminalSnapshot(
+  page: Page
+): Promise<{ content: string; cursorLine: string; cursorX: number; cursorY: number }> {
+  return page.evaluate(() => {
+    const state = window.__store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    if (!pane) {
+      throw new Error('No active terminal pane for cursor read')
+    }
+    const cursorY = pane.terminal.buffer.active.cursorY
+    const cursorLineIndex = pane.terminal.buffer.active.baseY + cursorY
+    return {
+      content: pane.serializeAddon?.serialize?.() ?? '',
+      cursorLine:
+        pane.terminal.buffer.active.getLine(cursorLineIndex)?.translateToString(true).trimEnd() ??
+        '',
+      cursorX: pane.terminal.buffer.active.cursorX,
+      cursorY
+    }
+  })
+}
+
 async function dispatchCtrlCToActiveTerminalTextarea(
   page: Page,
   options: { keyupCtrlKey?: boolean } = {}
@@ -668,6 +730,58 @@ test.describe('Terminal Shortcuts', () => {
     await expect(getActiveBackgroundTerminalTabId(orcaPage)).resolves.toBe(
       scenario.backgroundFirstTabId
     )
+  })
+
+  test('Cmd/Ctrl+K preserves prompt line and erases stale viewport rows', async ({ orcaPage }) => {
+    await waitForActivePanePtyId(orcaPage)
+    const promptMarker = `PROMPT_MARKER_${Date.now()}> `
+    const staleMarker = `STALE_VIEWPORT_${Date.now()}`
+    await expect(
+      await writeActiveViewportMarker(orcaPage, promptMarker, staleMarker)
+    ).toMatchObject({
+      cursorX: promptMarker.length,
+      cursorY: 0
+    })
+    await expect
+      .poll(async () => (await getActiveTerminalSnapshot(orcaPage)).content.includes(staleMarker), {
+        timeout: 3_000,
+        message: 'stale viewport marker was not written below the active prompt'
+      })
+      .toBe(true)
+    await focusActiveTerminal(orcaPage)
+    await orcaPage.keyboard.press(`${mod}+k`)
+    await expect
+      .poll(
+        async () => {
+          const snapshot = await getActiveTerminalSnapshot(orcaPage)
+          return {
+            promptPreserved: snapshot.content.includes(promptMarker),
+            staleRowsPresent: snapshot.content.includes(staleMarker)
+          }
+        },
+        {
+          timeout: 5_000,
+          message: 'Cmd+K did not preserve the prompt while erasing stale rows'
+        }
+      )
+      .toEqual({
+        promptPreserved: true,
+        staleRowsPresent: false
+      })
+    const inputMarker = `AFTER_CLEAR_${Date.now()}`
+    await orcaPage.keyboard.type(inputMarker)
+    await expect
+      .poll(async () => {
+        const snapshot = await getActiveTerminalSnapshot(orcaPage)
+        return {
+          oldViewportPresent: snapshot.content.includes(staleMarker),
+          typedOnCursorLine: snapshot.cursorLine.includes(inputMarker)
+        }
+      })
+      .toEqual({
+        oldViewportPresent: false,
+        typedOnCursorLine: true
+      })
   })
 
   test('all terminal chords reach the PTY or fire their action', async ({

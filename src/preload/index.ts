@@ -771,6 +771,7 @@ const api = {
 
     kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
       ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
+    clearBuffer: (id: string): Promise<void> => ipcRenderer.invoke('pty:clearBuffer', { id }),
 
     listSessions: (): Promise<{ id: string; cwd: string; title: string }[]> =>
       ipcRenderer.invoke('pty:listSessions'),
