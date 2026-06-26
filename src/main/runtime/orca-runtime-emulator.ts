@@ -150,9 +150,9 @@ export class RuntimeEmulatorCommands {
         }
         return { attached: true, info: reusable }
       }
-      // Why: a different requested device is an explicit simulator switch.
-      // Replace the old Orca-owned helper so switching does not leak devices.
-      const stoppedUdid = await bridge.stopActiveForWorktree(worktreeId, { shutdownDevice: true })
+      // A different requested device is an explicit switch; the bridge keeps a
+      // slow-to-boot Android emulator alive for instant switch-back.
+      const stoppedUdid = await bridge.stopActiveForSwitch(worktreeId)
       if (stoppedUdid) {
         serveSimStateWatcher.unmarkOrcaManaged(stoppedUdid)
       }

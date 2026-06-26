@@ -83,6 +83,17 @@ export class EmulatorBridge {
     return this.sessionRegistry.getActiveForWorktree(worktreeId)
   }
 
+  getActiveBackendKind(worktreeId: string): EmulatorBackendKind | null {
+    return this.backendForActiveWorktree(worktreeId)?.kind ?? null
+  }
+
+  // On a device switch, keep slow-to-boot Android emulators running for instant
+  // switch-back; shut down other backends' devices so they are not leaked.
+  async stopActiveForSwitch(worktreeId: string): Promise<string | null> {
+    const keepAlive = this.getActiveBackendKind(worktreeId) === 'android'
+    return this.stopActiveForWorktreeInternal(worktreeId, { shutdownDevice: !keepAlive })
+  }
+
   async getReusableActiveForWorktree(
     worktreeId: string,
     device?: string
