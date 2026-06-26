@@ -1,6 +1,6 @@
 import type { ProjectExecutionRuntimeResolution } from './project-execution-runtime'
 
-export type SkillProvider = 'codex' | 'claude' | 'agent-skills'
+export type SkillProvider = 'codex' | 'claude' | 'agent-skills' | 'omp'
 
 export type SkillSourceKind = 'home' | 'repo' | 'bundled' | 'plugin'
 

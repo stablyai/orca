@@ -23,14 +23,17 @@ describe('skill discovery', () => {
     const home = join(root, 'home')
     const repo = join(root, 'repo')
     const codexSkill = join(home, '.codex', 'skills', 'review')
+    const ompSkill = join(home, '.omp', 'agent', 'skills', 'planning')
     const repoSkill = join(repo, '.claude', 'skills', 'docs')
     await mkdir(codexSkill, { recursive: true })
+    await mkdir(ompSkill, { recursive: true })
     await mkdir(repoSkill, { recursive: true })
     await writeFile(
       join(codexSkill, 'SKILL.md'),
       ['---', 'name: code-review', 'description: Review code changes.', '---', ''].join('\n')
     )
     await writeFile(join(repoSkill, 'SKILL.md'), '# Docs\n\nWrite project docs.')
+    await writeFile(join(ompSkill, 'SKILL.md'), '# Planning\n\nPlan OMP work.')
 
     const result = await discoverSkills({
       homeDir: home,
@@ -38,11 +41,16 @@ describe('skill discovery', () => {
       repos: [makeRepo(repo)]
     })
 
-    expect(result.skills.map((skill) => skill.name).sort()).toEqual(['Docs', 'code-review'])
+    expect(result.skills.map((skill) => skill.name).sort()).toEqual([
+      'Docs',
+      'Planning',
+      'code-review'
+    ])
     expect(result.skills.find((skill) => skill.name === 'code-review')?.providers).toEqual([
       'codex'
     ])
     expect(result.skills.find((skill) => skill.name === 'Docs')?.providers).toEqual(['claude'])
+    expect(result.skills.find((skill) => skill.name === 'Planning')?.providers).toEqual(['omp'])
   })
 
   it('does not add SSH-backed repository paths to local scan roots', () => {
@@ -55,6 +63,7 @@ describe('skill discovery', () => {
     const rootPaths = roots.map((root) => root.path.replace(/\\/g, '/'))
     expect(rootPaths).not.toContain('/remote/repo/.claude/skills')
     expect(rootPaths).toContain('/workspace/current/.claude/skills')
+    expect(rootPaths).toContain('/home/test/.omp/agent/skills')
   })
 
   it('discovers skill packages through symlinked skill directories', async () => {

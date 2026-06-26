@@ -28,7 +28,8 @@ import { translate } from '@/i18n/i18n'
 const providerLabels: Record<SkillProvider, string> = {
   codex: 'Codex',
   claude: 'Claude',
-  'agent-skills': 'Agent Skills'
+  'agent-skills': 'Agent Skills',
+  omp: 'OMP'
 }
 
 const sourceLabels: Record<SkillSourceKind, string> = {

@@ -35,6 +35,7 @@ export function buildSkillDiscoverySources(
       'agent-skills'
     ]),
     source('home-claude', 'Claude home', join(home, '.claude', 'skills'), 'home', ['claude']),
+    source('home-omp', 'OMP home', join(home, '.omp', 'agent', 'skills'), 'home', ['omp']),
     source(
       'codex-plugin-cache',
       'Codex plugin cache',
