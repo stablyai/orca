@@ -10,6 +10,7 @@ import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { showAutomationPromptNotSentToast } from '@/lib/agent-background-session-timeout-toast'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT } from '@/constants/terminal'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -100,6 +101,11 @@ export async function launchAgentBackgroundSession(
 
   // Why: automation runs should start without revealing the workspace.
   // Spawn the PTY immediately, then attach an inactive tab to the live session.
+  window.dispatchEvent(
+    new CustomEvent(BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT, {
+      detail: { worktreeId }
+    })
+  )
   const tab = store.createTab(worktreeId, undefined, undefined, {
     activate: false,
     recordInteraction: false
