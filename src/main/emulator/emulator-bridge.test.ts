@@ -44,7 +44,8 @@ vi.mock('./simulator-app-visibility', () => ({
 
 // Keep the Android backend inert in these iOS-focused tests (no host SDK, no adb I/O).
 vi.mock('./android/android-sdk-host-discovery', () => ({
-  discoverAndroidSdkFromHost: () => null
+  discoverAndroidSdkFromHost: () => null,
+  setConfiguredAndroidSdkPath: () => {}
 }))
 
 import { EmulatorBridge } from './emulator-bridge'

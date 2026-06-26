@@ -6,6 +6,7 @@ import {
   type EmulatorAvailability
 } from '../emulator/emulator-availability'
 import { resolveDefaultAttachDevice } from '../emulator/emulator-default-attach-device'
+import { setConfiguredAndroidSdkPath } from '../emulator/android/android-sdk-host-discovery'
 import { serveSimStateWatcher } from '../emulator/serve-sim-state-watcher'
 import type { EmulatorGesturePoint } from '../emulator/emulator-gesture-sender'
 import type { EmulatorSessionInfo } from '../emulator/emulator-types'
@@ -31,6 +32,8 @@ export class RuntimeEmulatorCommands {
     if (!bridge) {
       throw new EmulatorError('emulator_no_active', 'No emulator session is active')
     }
+    // Honor the user's configured Android SDK path before the backend resolves it.
+    setConfiguredAndroidSdkPath((this.host.getSettings() as GlobalSettings).androidSdkPath ?? null)
     return bridge
   }
 

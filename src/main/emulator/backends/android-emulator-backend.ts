@@ -7,7 +7,7 @@ import type {
   EmulatorDevice
 } from './emulator-backend'
 import type { AndroidSdkPaths } from '../android/android-sdk-discovery'
-import { discoverAndroidSdkFromHost } from '../android/android-sdk-host-discovery'
+import { AndroidSdkState } from '../android/android-sdk-state'
 import { parseWmSize, wmSizeArgs } from '../android/adb-devices'
 import { emuKillArgs } from '../android/avd-manager'
 import type { DeviceScreenSize } from '../android/android-input-mapping'
@@ -75,7 +75,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
   }
 
   private readonly runner: AndroidCommandRunner
-  private readonly sdk: AndroidSdkPaths | null
+  private readonly sdkState: AndroidSdkState
   private readonly bootTimeoutMs: number
   private readonly pollIntervalMs: number
   private readonly sleep: (ms: number) => Promise<void>
@@ -87,7 +87,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
 
   constructor(options: AndroidEmulatorBackendOptions = {}) {
     this.runner = options.runner ?? execFileAndroidCommandRunner
-    this.sdk = options.sdk !== undefined ? options.sdk : discoverAndroidSdkFromHost()
+    this.sdkState = new AndroidSdkState(options.sdk !== undefined, options.sdk ?? null)
     this.bootTimeoutMs = options.bootTimeoutMs ?? DEFAULT_BOOT_TIMEOUT_MS
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS
     this.sleep = options.sleep ?? defaultSleep
@@ -104,18 +104,19 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
   }
 
   isSupportedOnHost(): boolean {
-    return this.sdk !== null
+    return this.sdkState.resolve() !== null
   }
 
   async checkAvailability(): Promise<BackendAvailability> {
-    if (!this.sdk) {
+    const sdk = this.sdkState.resolve(true)
+    if (!sdk) {
       return {
         available: false,
         devices: [],
         message: 'Android SDK not found. Install Android Studio and set ANDROID_HOME.'
       }
     }
-    const sdkPath = this.sdk.sdkRoot
+    const sdkPath = sdk.sdkRoot
     let devices: EmulatorDevice[] = []
     try {
       devices = await this.listDevices()
@@ -135,11 +136,12 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
   }
 
   async listDevices(): Promise<EmulatorDevice[]> {
-    return this.sdk ? listAndroidDevices(this.runner, this.sdk) : []
+    const sdk = this.sdkState.resolve()
+    return sdk ? listAndroidDevices(this.runner, sdk) : []
   }
 
   async ownsDevice(id: string): Promise<boolean> {
-    if (!this.sdk) {
+    if (!this.sdkState.resolve()) {
       return false
     }
     const devices = await this.listDevices()
@@ -304,13 +306,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
   }
 
   private requireSdk(): AndroidSdkPaths {
-    if (!this.sdk) {
-      throw new EmulatorError(
-        'emulator_error',
-        'Android SDK not found. Install Android Studio and set ANDROID_HOME.'
-      )
-    }
-    return this.sdk
+    return this.sdkState.require()
   }
 }
 

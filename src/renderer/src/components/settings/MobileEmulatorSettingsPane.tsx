@@ -245,7 +245,16 @@ export function MobileEmulatorSettingsPane({
         />
       </SearchableSetting>
 
-      {enabled && availability ? <MobileEmulatorSdkStatus availability={availability} /> : null}
+      {enabled && availability ? (
+        <MobileEmulatorSdkStatus
+          availability={availability}
+          configuredPath={settings.androidSdkPath ?? null}
+          onSetAndroidSdkPath={(path) => {
+            updateSettings({ androidSdkPath: path })
+            void refreshAvailability()
+          }}
+        />
+      ) : null}
 
       {enabled ? (
         <SearchableSetting

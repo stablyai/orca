@@ -2730,6 +2730,9 @@ export type GlobalSettings = {
   mobileEmulatorEnabled?: boolean
   /** Preferred iOS Simulator UDID for UI auto-attach and agent CLI attach. */
   mobileEmulatorDefaultDeviceUdid?: string | null
+  /** Explicit Android SDK root, used when auto-discovery (ANDROID_HOME / the
+   *  default install path) does not find it. `null` (default) auto-discovers. */
+  androidSdkPath?: string | null
   /** Auto-restore window for a phone-fit PTY after the last mobile
    *  subscriber leaves. `null` (default) holds the PTY at phone size
    *  indefinitely; the desktop "Restore" banner remains the explicit

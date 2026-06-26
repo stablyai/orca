@@ -8,6 +8,12 @@ type EmulatorSdkAvailability = {
   serveSim: { ok: boolean; message?: string }
 }
 
+type MobileEmulatorSdkStatusProps = {
+  availability: EmulatorSdkAvailability
+  configuredPath?: string | null
+  onSetAndroidSdkPath: (path: string | null) => void
+}
+
 const ANDROID_STUDIO_URL = 'https://developer.android.com/studio'
 
 function StatusIcon({ ok }: { ok: boolean }): React.JSX.Element {
@@ -19,15 +25,25 @@ function StatusIcon({ ok }: { ok: boolean }): React.JSX.Element {
 }
 
 // Shows which emulator toolchains Orca detected (Android SDK everywhere, iOS via
-// Xcode on macOS) so users know what to install — mirrors the agent-control card.
+// Xcode on macOS) and lets users point Orca at an SDK in a custom location.
 export function MobileEmulatorSdkStatus({
-  availability
-}: {
-  availability: EmulatorSdkAvailability
-}): React.JSX.Element {
-  const { android } = availability
-  const iosOk = availability.simctl.ok && availability.serveSim.ok
+  availability,
+  configuredPath,
+  onSetAndroidSdkPath
+}: MobileEmulatorSdkStatusProps): React.JSX.Element {
+  // Guard against an older/remote runtime that predates the android block.
+  const android = availability.android ?? { sdkFound: false, sdkPath: undefined, message: '' }
+  const iosOk = Boolean(availability.simctl?.ok && availability.serveSim?.ok)
   const showIos = availability.platform === 'darwin'
+
+  const handleLocate = async (): Promise<void> => {
+    const picked = await window.api.shell.pickDirectory({
+      defaultPath: android.sdkPath ?? configuredPath ?? undefined
+    })
+    if (picked) {
+      onSetAndroidSdkPath(picked)
+    }
+  }
 
   return (
     <div className="rounded-2xl border border-border/60 bg-card/30 p-4">
@@ -40,29 +56,47 @@ export function MobileEmulatorSdkStatus({
       <div className="mt-3 divide-y divide-border/40">
         <div className="flex items-start gap-3 py-3">
           <StatusIcon ok={android.sdkFound} />
-          <div className="min-w-0 flex-1 space-y-1">
-            <p className="text-sm font-medium">Android SDK</p>
-            {android.sdkFound ? (
-              <p className="break-all text-[11px] text-muted-foreground">
-                Detected at <code className="rounded bg-muted px-1 py-0.5">{android.sdkPath}</code>
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                {android.message ||
-                  'Not found. Install Android Studio, then create a Virtual Device.'}
-              </p>
-            )}
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Android SDK</p>
+              {android.sdkFound ? (
+                <p className="break-all text-[11px] text-muted-foreground">
+                  {configuredPath ? 'Using configured path ' : 'Detected at '}
+                  <code className="rounded bg-muted px-1 py-0.5">{android.sdkPath}</code>
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {android.message ||
+                    'Not found. Install Android Studio, then create a Virtual Device.'}
+                </p>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {!android.sdkFound ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void window.api.shell.openUrl(ANDROID_STUDIO_URL)}
+                >
+                  Download Android Studio
+                </Button>
+              ) : null}
+              <Button type="button" size="sm" variant="outline" onClick={() => void handleLocate()}>
+                Locate SDK folder…
+              </Button>
+              {configuredPath ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onSetAndroidSdkPath(null)}
+                >
+                  Clear
+                </Button>
+              ) : null}
+            </div>
           </div>
-          {!android.sdkFound ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => void window.api.shell.openUrl(ANDROID_STUDIO_URL)}
-            >
-              Download Android Studio
-            </Button>
-          ) : null}
         </div>
 
         {showIos ? (
@@ -73,8 +107,8 @@ export function MobileEmulatorSdkStatus({
               <p className="text-xs text-muted-foreground">
                 {iosOk
                   ? 'Ready'
-                  : availability.simctl.message ||
-                    availability.serveSim.message ||
+                  : availability.simctl?.message ||
+                    availability.serveSim?.message ||
                     'Install Xcode and add an iOS Simulator runtime.'}
               </p>
             </div>
