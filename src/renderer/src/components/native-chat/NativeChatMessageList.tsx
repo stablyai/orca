@@ -84,7 +84,7 @@ function MessageRow({
   onScrollMessageToTop: (el: HTMLElement) => void
   /** True when this is an optimistic, not-yet-confirmed composer send. */
   isPending?: boolean
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
   const { prose, tools } = useMemo(() => splitNativeChatBlocks(message.blocks), [message.blocks])
   const markdown = proseToMarkdown(prose)
@@ -97,6 +97,13 @@ function MessageRow({
       onScrollMessageToTop(rowRef.current)
     }
   }, [onScrollMessageToTop])
+
+  // Skip rows with nothing renderable (e.g. an image-ref-only turn, which we
+  // don't render inline yet) so the transcript shows no empty/ghost bubble.
+  // After all hooks, so hook order stays unconditional.
+  if (markdown.length === 0 && tools.length === 0) {
+    return null
+  }
 
   if (isUser) {
     return (

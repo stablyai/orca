@@ -23,6 +23,9 @@ type Props = {
 
 const MAX_TABLE_ROWS = 40
 const MAX_TABLE_COLUMNS = 8
+// Distinct bullet glyphs per nesting depth (cycled), so nested unordered lists
+// read as an outline rather than a flat run of identical dashes.
+const NESTED_BULLETS = ['-', '◦', '▪']
 
 function openMarkdownUrl(url: string): void {
   const trimmed = url.trim()
@@ -232,24 +235,36 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
           )
         }
         if (block.type === 'list') {
+          // Per-depth ordinal counters so nested ordered lists number 1,2,3…
+          // within their level rather than continuing the parent's count.
+          const ordinalByDepth: number[] = []
           return (
             <View key={index} style={styles.list}>
-              {block.items.map((item, itemIndex) => (
-                <View key={itemIndex} style={styles.listItem}>
-                  <Text style={styles.listMarker}>
-                    {item.checked == null
-                      ? block.ordered
-                        ? `${itemIndex + 1}.`
-                        : '-'
-                      : item.checked
-                        ? '[x]'
-                        : '[ ]'}
-                  </Text>
-                  <Text style={[styles.listText, listScale]}>
-                    {renderInline(item.text, onOpenFile)}
-                  </Text>
-                </View>
-              ))}
+              {block.items.map((item, itemIndex) => {
+                const depth = item.depth ?? 0
+                // Reset deeper counters when we step back out to a shallower level.
+                ordinalByDepth.length = depth + 1
+                ordinalByDepth[depth] = (ordinalByDepth[depth] ?? 0) + 1
+                const marker =
+                  item.checked == null
+                    ? block.ordered
+                      ? `${ordinalByDepth[depth]}.`
+                      : NESTED_BULLETS[Math.min(depth, NESTED_BULLETS.length - 1)]
+                    : item.checked
+                      ? '[x]'
+                      : '[ ]'
+                return (
+                  <View
+                    key={itemIndex}
+                    style={[styles.listItem, depth > 0 ? { paddingLeft: depth * 16 } : null]}
+                  >
+                    <Text style={styles.listMarker}>{marker}</Text>
+                    <Text style={[styles.listText, listScale]}>
+                      {renderInline(item.text, onOpenFile)}
+                    </Text>
+                  </View>
+                )
+              })}
             </View>
           )
         }

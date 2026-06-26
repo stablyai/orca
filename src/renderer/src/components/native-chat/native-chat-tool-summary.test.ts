@@ -48,6 +48,15 @@ describe('summarizeToolRun', () => {
     ]
     expect(summarizeToolRun(blocks)).toBe('Bash ls  ·  Edit app.tsx')
   })
+
+  it('skips nameless tool calls so the join has no orphan separators', () => {
+    const blocks: NativeChatBlock[] = [
+      { type: 'tool-call', name: 'Bash', input: { command: 'ls' } },
+      { type: 'tool-call', name: '   ', input: { command: 'x' } },
+      { type: 'tool-call', name: 'Edit', input: { file_path: '/x/app.tsx' } }
+    ]
+    expect(summarizeToolRun(blocks)).toBe('Bash ls  ·  Edit app.tsx')
+  })
 })
 
 describe('countToolCalls', () => {

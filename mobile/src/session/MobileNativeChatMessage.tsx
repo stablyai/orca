@@ -267,7 +267,7 @@ function MobileNativeChatMessageImpl({
   /** Ask the list to align this message's top to the top of the viewport. */
   onScrollToMessage?: (index: number) => void
   onOpenFile?: (relativePath: string) => void
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isAgent = !isUser
@@ -286,6 +286,11 @@ function MobileNativeChatMessageImpl({
   // tool calls fold into a collapsible run beneath. The user's own messages get
   // an inverted (filled accent) bubble so they stand apart from agent prose.
   const { prose, tools } = splitNativeChatBlocks(message.blocks)
+  // Skip a genuinely empty turn so the transcript shows no empty bubble. (Unlike
+  // desktop, mobile renders image-ref blocks, so an image-only turn is content.)
+  if (prose.length === 0 && tools.length === 0) {
+    return null
+  }
 
   const handleCopy = (): void => {
     const text = nativeChatMessageText(message.blocks)

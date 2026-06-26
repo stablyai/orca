@@ -45,8 +45,14 @@ export function summarizeToolRun(blocks: readonly NativeChatBlock[]): string {
     if (!isToolCallBlock(block)) {
       continue
     }
+    const name = block.name.trim()
+    // Skip nameless tool calls so the join can't produce orphan separators
+    // ("Tool  ·  ·").
+    if (!name) {
+      continue
+    }
     const brief = briefToolArg(block.input)
-    parts.push(brief ? `${block.name} ${brief}` : block.name)
+    parts.push(brief ? `${name} ${brief}` : name)
   }
   return parts.join('  ·  ')
 }
