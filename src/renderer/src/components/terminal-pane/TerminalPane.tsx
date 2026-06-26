@@ -797,7 +797,7 @@ export default function TerminalPane({
       }
       // Why: provider/session buffers can outlive the visible xterm. Clear
       // them through the same contract used by remote/mobile terminal state.
-      void transport?.clearBuffer?.().finally(() => {
+      void Promise.resolve(transport?.clearBuffer?.()).finally(() => {
         repairWindowsClear()
         persistLayoutSnapshot()
       })
