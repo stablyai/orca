@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -903,7 +904,7 @@ describe('registerWorktreeHandlers', () => {
 
   it('spawns a startup terminal and setup terminal after local worktree registration', async () => {
     addWorktreeMock.mockResolvedValue({})
-    listWorktreesMock.mockResolvedValueOnce([
+    listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/improve-dashboard',
         head: 'def',
@@ -1036,6 +1037,169 @@ describe('registerWorktreeHandlers', () => {
       })
     )
     expect(result.setup?.command).toContain('printf')
+  })
+
+  it('copies source orca.yaml and .envrc into a new worktree before hook discovery', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-worktree-copy-'))
+    const repoPath = join(root, 'repo')
+    const worktreePath = join(root, 'improve-dashboard')
+
+    try {
+      await mkdir(repoPath, { recursive: true })
+      await mkdir(worktreePath, { recursive: true })
+      await writeFile(join(repoPath, 'orca.yaml'), 'scripts:\n  setup: copied-setup\n')
+      await writeFile(join(repoPath, '.envrc'), 'export ORCA_SOURCE=1\n')
+
+      const repo = {
+        id: 'repo-1',
+        path: repoPath,
+        displayName: 'repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        worktreeBaseRef: null
+      }
+
+      store.getRepos.mockReturnValue([repo])
+      store.getRepo.mockReturnValue(repo)
+      store.getProjectHostSetups.mockReturnValue([])
+      store.getSettings.mockReturnValue({
+        branchPrefix: 'none',
+        nestWorkspaces: false,
+        refreshLocalBaseRefOnWorktreeCreate: false,
+        workspaceDir: root
+      })
+
+      let createdPath: string | undefined
+      addWorktreeMock.mockImplementation(async (_repoPath: string, path: string) => {
+        createdPath = path
+        await mkdir(path, { recursive: true })
+        return {}
+      })
+      listWorktreesMock.mockImplementation(async () =>
+        createdPath
+          ? [
+              {
+                path: createdPath,
+                head: 'def',
+                branch: 'improve-dashboard',
+                isBare: false,
+                isMainWorktree: false
+              }
+            ]
+          : []
+      )
+      loadHooksMock.mockImplementation((path: string) => {
+        if (path === (createdPath ?? worktreePath)) {
+          expect(readFileSync(join(createdPath ?? worktreePath, 'orca.yaml'), 'utf-8')).toBe(
+            'scripts:\n  setup: copied-setup\n'
+          )
+        }
+        return null
+      })
+      getEffectiveHooksMock.mockReturnValue(null)
+      getEffectiveHooksFromConfigMock.mockReturnValue(null)
+      getDefaultTabsLaunchMock.mockReturnValue(undefined)
+
+      await handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        name: 'improve-dashboard'
+      })
+
+      expect(readFileSync(join(createdPath ?? worktreePath, 'orca.yaml'), 'utf-8')).toBe(
+        'scripts:\n  setup: copied-setup\n'
+      )
+      expect(readFileSync(join(createdPath ?? worktreePath, '.envrc'), 'utf-8')).toBe(
+        'export ORCA_SOURCE=1\n'
+      )
+      expect(loadHooksMock).toHaveBeenCalledWith(createdPath ?? worktreePath)
+      expect(loadHooksMock).not.toHaveBeenCalledWith(repoPath)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('does not overwrite existing orca.yaml or .envrc in a new worktree', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-worktree-preserve-'))
+    const repoPath = join(root, 'repo')
+    const worktreePath = join(root, 'improve-dashboard')
+
+    try {
+      await mkdir(repoPath, { recursive: true })
+      await mkdir(worktreePath, { recursive: true })
+      await writeFile(join(repoPath, 'orca.yaml'), 'scripts:\n  setup: copied-setup\n')
+      await writeFile(join(repoPath, '.envrc'), 'export ORCA_SOURCE=1\n')
+
+      const repo = {
+        id: 'repo-1',
+        path: repoPath,
+        displayName: 'repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        worktreeBaseRef: null
+      }
+
+      store.getRepos.mockReturnValue([repo])
+      store.getRepo.mockReturnValue(repo)
+      store.getProjectHostSetups.mockReturnValue([])
+      store.getSettings.mockReturnValue({
+        branchPrefix: 'none',
+        nestWorkspaces: false,
+        refreshLocalBaseRefOnWorktreeCreate: false,
+        workspaceDir: root
+      })
+
+      let createdPath: string | undefined
+      addWorktreeMock.mockImplementation(async (_repoPath: string, path: string) => {
+        createdPath = path
+        await mkdir(path, { recursive: true })
+        await writeFile(join(path, 'orca.yaml'), 'scripts:\n  setup: keep-existing\n')
+        await writeFile(join(path, '.envrc'), 'export ORCA_DEST=1\n')
+        return {}
+      })
+      listWorktreesMock.mockImplementation(async () =>
+        createdPath
+          ? [
+              {
+                path: createdPath,
+                head: 'def',
+                branch: 'improve-dashboard',
+                isBare: false,
+                isMainWorktree: false
+              }
+            ]
+          : []
+      )
+      loadHooksMock.mockImplementation((path: string) => {
+        if (path === (createdPath ?? worktreePath)) {
+          expect(readFileSync(join(createdPath ?? worktreePath, 'orca.yaml'), 'utf-8')).toBe(
+            'scripts:\n  setup: keep-existing\n'
+          )
+          expect(readFileSync(join(createdPath ?? worktreePath, '.envrc'), 'utf-8')).toBe(
+            'export ORCA_DEST=1\n'
+          )
+        }
+        return null
+      })
+      getEffectiveHooksMock.mockReturnValue(null)
+      getEffectiveHooksFromConfigMock.mockReturnValue(null)
+      getDefaultTabsLaunchMock.mockReturnValue(undefined)
+
+      await handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        name: 'improve-dashboard'
+      })
+
+      expect(readFileSync(join(createdPath ?? worktreePath, 'orca.yaml'), 'utf-8')).toBe(
+        'scripts:\n  setup: keep-existing\n'
+      )
+      expect(readFileSync(join(createdPath ?? worktreePath, '.envrc'), 'utf-8')).toBe(
+        'export ORCA_DEST=1\n'
+      )
+      expect(loadHooksMock).toHaveBeenCalledWith(createdPath ?? worktreePath)
+      expect(loadHooksMock).not.toHaveBeenCalledWith(repoPath)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   })
 
   it('checks out a selected existing local branch exactly', async () => {
@@ -3159,7 +3323,7 @@ describe('registerWorktreeHandlers', () => {
     expect(result.localBaseRefUpdateSuggestion).toBeUndefined()
   })
 
-  it('reads remote orca.yaml and returns a setup launch payload during SSH create', async () => {
+  it('uses the created remote orca.yaml for setup launch during SSH create', async () => {
     const repo = {
       id: 'repo-ssh',
       path: '/remote/repo',
@@ -3198,12 +3362,27 @@ describe('registerWorktreeHandlers', () => {
       ])
     }
     const fsProvider = {
-      readFile: vi.fn().mockResolvedValue({
-        content: 'scripts:\n  setup: pnpm install\n',
-        isBinary: false
+      stat: vi.fn().mockImplementation(async (path: string) => {
+        if (path === '/remote/repo/orca.yaml') {
+          return { size: 31, type: 'file', mtime: 0 }
+        }
+        if (path === '/remote/improve-dashboard/orca.yaml') {
+          return { size: 34, type: 'file', mtime: 0 }
+        }
+        const error = new Error('missing') as Error & { code: string }
+        error.code = 'ENOENT'
+        throw error
       }),
+      readFile: vi.fn().mockImplementation(async (path: string) => ({
+        content:
+          path === '/remote/repo/orca.yaml'
+            ? 'scripts:\n  setup: source-setup\n'
+            : 'scripts:\n  setup: copied-setup\n',
+        isBinary: false
+      })),
       createDir: vi.fn().mockResolvedValue(undefined),
-      writeFile: vi.fn().mockResolvedValue(undefined)
+      writeFile: vi.fn().mockResolvedValue(undefined),
+      copy: vi.fn().mockResolvedValue(undefined)
     }
     const mux = {
       request: vi.fn().mockResolvedValue(undefined),
@@ -3215,8 +3394,12 @@ describe('registerWorktreeHandlers', () => {
     getSshFilesystemProviderMock.mockReturnValue(fsProvider)
     getActiveMultiplexerMock.mockReturnValue(mux)
     store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
-    parseOrcaYamlMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
-    getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+    parseOrcaYamlMock.mockImplementation((content: string) => ({
+      scripts: {
+        setup: content.includes('copied-setup') ? 'copied-setup' : 'source-setup'
+      }
+    }))
+    getEffectiveHooksFromConfigMock.mockImplementation((_repo, yamlHooks) => yamlHooks)
     shouldRunSetupForCreateMock.mockReturnValue(true)
 
     const result = await handlers['worktrees:create'](null, {
@@ -3227,6 +3410,7 @@ describe('registerWorktreeHandlers', () => {
 
     expect(fsProvider.readFile).toHaveBeenCalledWith('/remote/repo/orca.yaml')
     expect(fsProvider.readFile).toHaveBeenCalledWith('/remote/improve-dashboard/orca.yaml')
+    expect(fsProvider.copy).not.toHaveBeenCalled()
     expect(provider.exec).toHaveBeenCalledWith(
       ['rev-parse', '--git-path', 'orca/setup-runner.sh'],
       '/remote/improve-dashboard'
@@ -3236,7 +3420,7 @@ describe('registerWorktreeHandlers', () => {
     )
     expect(fsProvider.writeFile).toHaveBeenCalledWith(
       '/remote/repo/.git/worktrees/improve-dashboard/orca/setup-runner.sh',
-      '#!/usr/bin/env bash\nset -e\npnpm install\n'
+      '#!/usr/bin/env bash\nset -e\ncopied-setup\n'
     )
     expect(result).toEqual(
       expect.objectContaining({
@@ -5272,6 +5456,11 @@ describe('registerWorktreeHandlers', () => {
         setup: 'pnpm worktree:setup'
       }
     })
+    loadHooksMock.mockReturnValue({
+      scripts: {
+        setup: 'pnpm worktree:setup'
+      }
+    })
     shouldRunSetupForCreateMock.mockReturnValue(true)
 
     const result = await handlers['worktrees:create'](null, {
@@ -5285,6 +5474,7 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/improve-dashboard',
       'pnpm worktree:setup'
     )
+    expect(loadHooksMock).toHaveBeenCalledWith('/workspace/improve-dashboard')
     expect(result).toMatchObject({
       worktree: expect.objectContaining({
         repoId: 'repo-1',
@@ -5327,6 +5517,11 @@ describe('registerWorktreeHandlers', () => {
         setup: 'pnpm worktree:setup'
       }
     })
+    loadHooksMock.mockReturnValue({
+      scripts: {
+        setup: 'pnpm worktree:setup'
+      }
+    })
     getEffectiveHooksFromConfigMock.mockReturnValue({
       scripts: {
         setup: 'pnpm worktree:setup'
@@ -5346,6 +5541,7 @@ describe('registerWorktreeHandlers', () => {
       'pnpm worktree:setup',
       { wslDistro: 'Ubuntu' }
     )
+    expect(loadHooksMock).toHaveBeenCalledWith('/workspace/improve-dashboard')
     expect(addWorktreeMock).toHaveBeenCalledWith(
       '/workspace/repo',
       '/workspace/improve-dashboard',
@@ -5373,6 +5569,11 @@ describe('registerWorktreeHandlers', () => {
         setup: 'pnpm worktree:setup # worktree'
       }
     })
+    loadHooksMock.mockReturnValue({
+      scripts: {
+        setup: 'pnpm worktree:setup # worktree'
+      }
+    })
     shouldRunSetupForCreateMock.mockReturnValue(true)
 
     const result = await handlers['worktrees:create'](null, {
@@ -5386,6 +5587,7 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/improve-dashboard',
       'pnpm worktree:setup # worktree'
     )
+    expect(loadHooksMock).toHaveBeenCalledWith('/workspace/improve-dashboard')
     expect(result).toEqual(
       expect.objectContaining({
         setup: expect.objectContaining({
@@ -5565,6 +5767,11 @@ describe('registerWorktreeHandlers', () => {
   it('still returns the created worktree when setup runner generation fails', async () => {
     listWorktreesMock.mockResolvedValue(createdWorktreeList)
     getEffectiveHooksMock.mockReturnValue({
+      scripts: {
+        setup: 'pnpm worktree:setup'
+      }
+    })
+    loadHooksMock.mockReturnValue({
       scripts: {
         setup: 'pnpm worktree:setup'
       }

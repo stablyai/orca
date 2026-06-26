@@ -10,6 +10,7 @@
 import type { BrowserWindow } from 'electron'
 import { posix, win32 } from 'node:path'
 import { existsSync } from 'node:fs'
+import { copyFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
 import type {
@@ -117,6 +118,7 @@ import {
 
 const SSH_WORKTREE_CREATE_FETCH_FRESHNESS_MS = 30_000
 const SSH_WORKTREE_CREATE_FETCH_CACHE_MAX = 512
+const WORKTREE_SOURCE_CONFIG_FILES = ['orca.yaml', '.envrc'] as const
 const sshWorktreeCreateFetchInflight = new Map<string, Promise<void>>()
 const sshWorktreeCreateFetchCompletedAt = new Map<string, number>()
 const sshWorktreeCreateFetchQueueTail = new Map<string, Promise<void>>()
@@ -128,6 +130,48 @@ const sshWorktreeCreateBasePlanInflight = new Map<
 type RemoteWorktreeCreateBasePlan = {
   baseBranch: string
   remoteTrackingBase: RemoteTrackingBase | null
+}
+
+async function copyMissingWorktreeSourceFiles(
+  sourceRoot: string,
+  destinationRoot: string,
+  fsProvider?: IFilesystemProvider | null
+): Promise<void> {
+  await Promise.all(
+    WORKTREE_SOURCE_CONFIG_FILES.map(async (filename) => {
+      const sourcePath = joinWorktreeRelativePath(sourceRoot, filename)
+      const destinationPath = joinWorktreeRelativePath(destinationRoot, filename)
+
+      if (fsProvider) {
+        try {
+          await fsProvider.stat(destinationPath)
+          return
+        } catch (error) {
+          if (!isENOENT(error)) {
+            throw error
+          }
+        }
+
+        try {
+          await fsProvider.stat(sourcePath)
+        } catch (error) {
+          if (isENOENT(error)) {
+            return
+          }
+          throw error
+        }
+
+        await fsProvider.copy(sourcePath, destinationPath)
+        return
+      }
+
+      if (existsSync(destinationPath) || !existsSync(sourcePath)) {
+        return
+      }
+
+      await copyFile(sourcePath, destinationPath)
+    })
+  )
 }
 
 type StagedStartupResult = {
@@ -1800,14 +1844,16 @@ export async function createRemoteWorktree(
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
   if (fsProvider) {
+    await copyMissingWorktreeSourceFiles(repo.path, created.path, fsProvider)
     await timing.time('prepare_setup', async () => {
       const yamlHooks = await readRemoteOrcaYaml(fsProvider, created.path)
       const hooks = getEffectiveHooksFromConfig(repo, yamlHooks)
       try {
         defaultTabs = getDefaultTabsLaunch(yamlHooks, repo, args.setupDecision)
       } catch (error) {
-        // Why: default tab commands share setup's run policy. If the target branch
-        // adds commands without a renderer decision, create the tabs but don't run them.
+        // Why: default tab commands share setup's run policy. If the created
+        // worktree adds commands without a renderer decision,
+        // create the tabs but don't run them.
         console.warn(`[hooks] default tab commands skipped for ${created.path}:`, error)
         defaultTabs = yamlHooks?.defaultTabs
           ? { tabs: yamlHooks.defaultTabs, runCommands: false }
@@ -2387,31 +2433,25 @@ export async function createLocalWorktree(
     })
   }
 
-  // Why: the worktree's own `orca.yaml` (at the tip of the base branch) is
-  // authoritative for what runs post-creation. The repo-level trust already
-  // granted by the user in the pre-create flow covers execution of that
-  // script; we intentionally do not re-gate on content equality with the
-  // primary checkout's preview, because benign divergence (whitespace,
-  // comments, or any setup-script edit that has landed on the base branch
-  // but not yet been pulled into the primary checkout) was silently
-  // disabling setup with no UI signal. See #1280 for the original gate and
-  // the regression this replaced.
+  await copyMissingWorktreeSourceFiles(repo.path, created.path)
+
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
   await timing.time('prepare_setup', async () => {
     const createdYamlHooks = loadHooks(worktreePath)
-    const createdEffectiveHooks = getEffectiveHooksFromConfig(repo, createdYamlHooks)
+    const createdHooks = getEffectiveHooksFromConfig(repo, createdYamlHooks)
     try {
       defaultTabs = getDefaultTabsLaunch(createdYamlHooks, repo, args.setupDecision)
     } catch (error) {
-      // Why: default tab commands share setup's run policy. If the target branch
-      // adds commands without a renderer decision, create the tabs but don't run them.
+      // Why: default tab commands share setup's run policy. If the created
+      // worktree adds commands without a renderer decision,
+      // create the tabs but don't run them.
       console.warn(`[hooks] default tab commands skipped for ${worktreePath}:`, error)
       defaultTabs = createdYamlHooks?.defaultTabs
         ? { tabs: createdYamlHooks.defaultTabs, runCommands: false }
         : undefined
     }
-    const setupScript = createdEffectiveHooks?.scripts.setup
+    const setupScript = createdHooks?.scripts.setup
     let shouldLaunchSetup = false
     if (setupScript) {
       try {
