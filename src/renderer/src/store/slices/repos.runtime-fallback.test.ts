@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 import type { Repo } from '../../../../shared/types'
 import {
+  FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
+  RUNTIME_CAPABILITIES
+} from '../../../../shared/protocol-version'
+import {
+  createCompatibleRuntimeStatusResponse,
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
@@ -139,6 +144,59 @@ describe('repo slice runtime folder fallback', () => {
       'Cannot open folder on selected runtime',
       expect.objectContaining({
         description: expect.stringContaining('Remote Mac')
+      })
+    )
+  })
+
+  it('reports an update error when the checked runtime lacks raw path status support', async () => {
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      if (args.method === 'status.get') {
+        const response = createCompatibleRuntimeStatusResponse()
+        if (!response.ok) {
+          throw new Error('Expected compatible runtime status fixture')
+        }
+        return {
+          ...response,
+          result: {
+            ...response.result,
+            capabilities: RUNTIME_CAPABILITIES.filter(
+              (capability) => capability !== FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY
+            )
+          }
+        }
+      }
+      return runtimeEnvironmentCall(args)
+    })
+    runtimeEnvironmentCall.mockImplementation((request: RuntimeEnvironmentCallRequest) => {
+      const { method } = request
+      if (method === 'repo.add') {
+        return {
+          id: 'rpc-add-git',
+          ok: false,
+          error: { code: 'repo.invalid', message: 'Not a valid git repository' },
+          _meta: { runtimeId: 'runtime-remote' }
+        }
+      }
+      throw new Error(`Unexpected runtime method ${method}`)
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      runtimeEnvironments: [{ id: 'env-1', name: 'Remote Mac' }] as never
+    })
+
+    await expect(store.getState().addRepoPath('/srv/non-git', 'git')).resolves.toBeNull()
+
+    expect(store.getState().activeModal).not.toBe('confirm-non-git-folder')
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'folderWorkspace.getPathStatus'
+      })
+    )
+    expect(toastError).toHaveBeenCalledWith(
+      'Failed to add project',
+      expect.objectContaining({
+        description: 'Update Orca server to open non-Git folders on this runtime.'
       })
     )
   })

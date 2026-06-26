@@ -230,13 +230,16 @@
           "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits."
         },
         "repos": {
+          "2975400634": "Update Orca server to open non-Git folders on this runtime.",
           "b7e14472ae": "Failed to add folder",
           "e649269645": "Use Add Project to enter a path on the selected host.",
           "c6e022ddfc": "Failed to add project",
           "90d129b48b": "Folder added",
           "8bb3ad7935": "Project added",
           "a8e4b3af5b": "Project already added",
-          "6d3318e813": "Failed to import repositories"
+          "6d3318e813": "Failed to import repositories",
+          "3be0f7df04": "Cannot open folder on selected runtime",
+          "15cf5319ec": "{{path}} was checked on {{hostName}}, but that host did not report a usable folder."
         },
         "settings": {
           "e12dab333b": "Failed to switch servers",
@@ -3546,7 +3549,10 @@
           "e52454b7f6": "Open as Folder",
           "05b33a17a9": "Cancel",
           "8fba4b8cbb": "This folder isn't a Git repository. You'll have the editor, terminal, and search, but Git-based features won't be available.",
-          "c49fb13492": "Failed to add folder on this host"
+          "c49fb13492": "Failed to add folder on this host",
+          "9a766f33ac": "This path was checked on the SSH host.",
+          "79fd02cf5f": "This path was checked on {{hostName}}.",
+          "8851b77327": "This path was checked locally."
         },
         "OrcaYamlTrustDialog": {
           "f3e2b868fb": "Run hooks",

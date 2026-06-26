@@ -230,13 +230,16 @@
           "81f13f48d2": "ワークツリー\"{{value1}}\"を削除した後、Git はブランチ\"{{value0}}\"を安全に削除できなかったため、Orca はローカルコミットを失わないように保持しました。"
         },
         "repos": {
+          "2975400634": "Update Orca server to open non-Git folders on this runtime.",
           "b7e14472ae": "フォルダーの追加に失敗しました",
           "e649269645": "サーバー パスを使用して、リモート ランタイムからプロジェクトを追加します。",
           "c6e022ddfc": "プロジェクトの追加に失敗しました",
           "90d129b48b": "フォルダーが追加されました",
           "8bb3ad7935": "プロジェクトを追加しました",
           "a8e4b3af5b": "プロジェクトはすでに追加されています",
-          "6d3318e813": "repos のインポートに失敗しました"
+          "6d3318e813": "repos のインポートに失敗しました",
+          "3be0f7df04": "Cannot open folder on selected runtime",
+          "15cf5319ec": "{{path}} was checked on {{hostName}}, but that host did not report a usable folder."
         },
         "settings": {
           "e12dab333b": "サーバーの切り替えに失敗しました",
@@ -3521,7 +3524,10 @@
           "e52454b7f6": "フォルダーとして開く",
           "05b33a17a9": "キャンセル",
           "8fba4b8cbb": "このフォルダーは Git repos ではありません。エディター、terminal、検索は利用できますが、Git ベースの機能は利用できません。",
-          "c49fb13492": "リモートフォルダーの追加に失敗しました"
+          "c49fb13492": "リモートフォルダーの追加に失敗しました",
+          "9a766f33ac": "This path was checked on the SSH host.",
+          "79fd02cf5f": "This path was checked on {{hostName}}.",
+          "8851b77327": "This path was checked locally."
         },
         "OrcaYamlTrustDialog": {
           "f3e2b868fb": "フックを実行する",

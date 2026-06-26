@@ -230,13 +230,16 @@
           "81f13f48d2": "删除工作树\"{{value1}}\"后，Git 无法安全删除分支\"{{value0}}\"，因此 Orca 将其保留以避免丢失本地提交。"
         },
         "repos": {
+          "2975400634": "Update Orca server to open non-Git folders on this runtime.",
           "b7e14472ae": "添加文件夹失败",
           "e649269645": "使用\"添加项目\"在所选主机上输入路径。",
           "c6e022ddfc": "添加项目失败",
           "90d129b48b": "文件夹已添加",
           "8bb3ad7935": "项目已添加",
           "a8e4b3af5b": "项目已添加过了",
-          "6d3318e813": "导入存储库失败"
+          "6d3318e813": "导入存储库失败",
+          "3be0f7df04": "Cannot open folder on selected runtime",
+          "15cf5319ec": "{{path}} was checked on {{hostName}}, but that host did not report a usable folder."
         },
         "settings": {
           "e12dab333b": "切换服务器失败",
@@ -3521,7 +3524,10 @@
           "e52454b7f6": "作为文件夹打开",
           "05b33a17a9": "取消",
           "8fba4b8cbb": "此文件夹不是 Git 存储库。您将拥有编辑器、终端和搜索，但基于 Git 的功能将不可用。",
-          "c49fb13492": "添加远程文件夹失败"
+          "c49fb13492": "添加远程文件夹失败",
+          "9a766f33ac": "This path was checked on the SSH host.",
+          "79fd02cf5f": "This path was checked on {{hostName}}.",
+          "8851b77327": "This path was checked locally."
         },
         "OrcaYamlTrustDialog": {
           "f3e2b868fb": "运行钩子",

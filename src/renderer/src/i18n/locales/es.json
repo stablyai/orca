@@ -230,13 +230,16 @@
           "81f13f48d2": "Git no pudo eliminar de forma segura la rama \"{{value0}}\" después de eliminar el árbol de trabajo \"{{value1}}\", por lo que Orca la conservó para evitar perder commits locales."
         },
         "repos": {
+          "2975400634": "Update Orca server to open non-Git folders on this runtime.",
           "b7e14472ae": "No se pudo agregar la carpeta",
           "e649269645": "Utilice una ruta de servidor para agregar proyectos desde un tiempo de ejecución remoto.",
           "c6e022ddfc": "No se pudo agregar el proyecto",
           "90d129b48b": "Carpeta agregada",
           "8bb3ad7935": "Proyecto agregado",
           "a8e4b3af5b": "Proyecto ya agregado",
-          "6d3318e813": "No se pudieron importar repositorios"
+          "6d3318e813": "No se pudieron importar repositorios",
+          "3be0f7df04": "Cannot open folder on selected runtime",
+          "15cf5319ec": "{{path}} was checked on {{hostName}}, but that host did not report a usable folder."
         },
         "settings": {
           "e12dab333b": "No se pudo cambiar de servidor",
@@ -3540,7 +3543,10 @@
           "e52454b7f6": "Abrir como carpeta",
           "05b33a17a9": "Cancelar",
           "8fba4b8cbb": "Esta carpeta no es un repositorio de Git. Tendrás el editor, la terminal y la búsqueda, pero las funciones basadas en Git no estarán disponibles.",
-          "c49fb13492": "No se pudo agregar la carpeta remota"
+          "c49fb13492": "No se pudo agregar la carpeta remota",
+          "9a766f33ac": "This path was checked on the SSH host.",
+          "79fd02cf5f": "This path was checked on {{hostName}}.",
+          "8851b77327": "This path was checked locally."
         },
         "OrcaYamlTrustDialog": {
           "f3e2b868fb": "Ejecutar ganchos",

@@ -30,6 +30,7 @@ import {
   type ProjectHostSetupProjection
 } from '../../../../shared/project-host-setup-projection'
 import {
+  FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
@@ -951,6 +952,15 @@ async function fetchRuntimeAddProjectPathStatus(args: {
   target: Extract<ReturnType<typeof getActiveRuntimeTarget>, { kind: 'environment' }>
   path: string
 }): Promise<FolderWorkspacePathStatus | null> {
+  await assertRuntimeEnvironmentCapability(
+    args.target.environmentId,
+    FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
+    translate(
+      'auto.store.slices.repos.2975400634',
+      'Update Orca server to open non-Git folders on this runtime.'
+    ),
+    15_000
+  )
   try {
     const { status } = await callRuntimeRpc<{ status: FolderWorkspacePathStatus }>(
       args.target,
