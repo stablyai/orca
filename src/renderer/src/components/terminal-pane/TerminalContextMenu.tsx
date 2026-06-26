@@ -59,6 +59,8 @@ type TerminalContextMenuProps = {
   onAddQuickCommand: () => void
   onToggleExpand: () => void
   onSetTitle: () => void
+  onClearPaneTitle: () => void
+  canClearPaneTitle: boolean
   onCopyTerminalId: () => void
   onCopyPaneId: () => void
 }
@@ -88,6 +90,8 @@ export default function TerminalContextMenu({
   onAddQuickCommand,
   onToggleExpand,
   onSetTitle,
+  onClearPaneTitle,
+  canClearPaneTitle,
   onCopyTerminalId,
   onCopyPaneId
 }: TerminalContextMenuProps): React.JSX.Element {
@@ -99,12 +103,16 @@ export default function TerminalContextMenu({
       splitDown: formatShortcutLabel('terminal.splitDown', keybindings),
       equalize: formatShortcutLabel('terminal.equalizePaneSizes', keybindings),
       expand: formatShortcutLabel('terminal.expandPane', keybindings),
+      setTitle: formatShortcutLabel('terminal.setTitle', keybindings),
+      clearPaneTitle: formatShortcutLabel('terminal.clearPaneTitle', keybindings),
       close: formatShortcutLabel('terminal.closePane', keybindings)
     }),
     [keybindings]
   )
   const hasQuickCommands = repoQuickCommands.length > 0 || globalQuickCommands.length > 0
   const showEqualizeShortcut = shortcuts.equalize !== 'Unassigned'
+  const showSetTitleShortcut = shortcuts.setTitle !== 'Unassigned'
+  const showClearPaneTitleShortcut = shortcuts.clearPaneTitle !== 'Unassigned'
   const renderQuickCommandItem = (command: TerminalQuickCommand): React.JSX.Element => (
     <DropdownMenuItem key={command.id} onSelect={() => onQuickCommand(command)}>
       {isTerminalAgentQuickCommand(command) ? (
@@ -302,7 +310,22 @@ export default function TerminalContextMenu({
         >
           <Pencil />
           {translate('auto.components.terminal.pane.TerminalContextMenu.39809d152f', 'Set Title…')}
+          {showSetTitleShortcut ? (
+            <DropdownMenuShortcut>{shortcuts.setTitle}</DropdownMenuShortcut>
+          ) : null}
         </DropdownMenuItem>
+        {canClearPaneTitle ? (
+          <DropdownMenuItem onSelect={onClearPaneTitle}>
+            <X />
+            {translate(
+              'auto.components.terminal.pane.TerminalContextMenu.clearPaneTitle',
+              'Clear Pane Title'
+            )}
+            {showClearPaneTitleShortcut ? (
+              <DropdownMenuShortcut>{shortcuts.clearPaneTitle}</DropdownMenuShortcut>
+            ) : null}
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem onSelect={onCopyTerminalId}>
           <Copy />
           {translate(

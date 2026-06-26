@@ -434,6 +434,65 @@ export default function TerminalPane({
   const renameFocusFrameRef = useRef<number | null>(null)
   const renameEnableBlurFrameRef = useRef<number | null>(null)
   const renameRefocusFrameRef = useRef<number | null>(null)
+  /**
+   * Cancels deferred focus/blur work from inline title editing.
+   * Rename sessions schedule multiple frames because xterm and Radix can both
+   * move focus after the menu closes.
+   */
+  const cancelPendingRenameFrames = useCallback(() => {
+    const frameRefs = [renameFocusFrameRef, renameEnableBlurFrameRef, renameRefocusFrameRef]
+    for (const frameRef of frameRefs) {
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current)
+        frameRef.current = null
+      }
+    }
+  }, [])
+
+  /**
+   * Invalidates the active inline title edit session before unmount or cancel.
+   * Session IDs keep stale animation-frame callbacks from committing old titles.
+   */
+  const closeRenameSession = useCallback(() => {
+    renameSessionIdRef.current += 1
+    renameBlurCommitEnabledRef.current = true
+    renameUserRequestedBlurCommitRef.current = false
+    cancelPendingRenameFrames()
+  }, [cancelPendingRenameFrames])
+
+  /**
+   * Owns the terminal container ref and closes rename work when that owner
+   * detaches, preventing delayed focus callbacks from targeting stale DOM.
+   */
+  const setContainerRef = useCallback(
+    (node: HTMLDivElement | null): void => {
+      containerRef.current = node
+      if (node !== null) {
+        return
+      }
+      // Why: inline title rename focus/blur frames are owned by the terminal
+      // container; invalidate them when that DOM owner detaches.
+      closeRenameSession()
+    },
+    [closeRenameSession]
+  )
+
+  /**
+   * Starts inline title editing from either the context menu or keyboard
+   * shortcut while resetting stale blur-submit state from prior sessions.
+   */
+  const handleStartRename = useCallback(
+    (paneId: number) => {
+      cancelPendingRenameFrames()
+      renameSessionIdRef.current += 1
+      renameBlurCommitEnabledRef.current = false
+      renameUserRequestedBlurCommitRef.current = false
+      renameSubmittedRef.current = false
+      setRenameValue(paneTitlesRef.current[paneId] ?? '')
+      setRenamingPaneId(paneId)
+    },
+    [cancelPendingRenameFrames]
+  )
   const onPtyErrorRef = useRef((_paneId: number, message: string) => {
     if (isTerminalSessionStateSaveFailure(message)) {
       setTerminalError(null)
@@ -774,6 +833,49 @@ export default function TerminalPane({
       persistLayoutSnapshot()
     },
     [paneTransportsRef, persistLayoutSnapshot]
+  )
+
+  /**
+   * Removes a custom pane title from React state, the fresh persistence ref,
+   * and the leaf-id tombstone set so the next layout snapshot stays cleared.
+   */
+  const removePaneTitle = useCallback(
+    (paneId: number) => {
+      setPaneTitles((prev) => {
+        if (!(paneId in prev)) {
+          return prev
+        }
+        const next = { ...prev }
+        delete next[paneId]
+        return next
+      })
+      // Eagerly remove from the ref so persistLayoutSnapshot sees the change.
+      if (paneId in paneTitlesRef.current) {
+        const next = { ...paneTitlesRef.current }
+        delete next[paneId]
+        paneTitlesRef.current = next
+      }
+      const leafId = managerRef.current?.getPanes().find((pane) => pane.id === paneId)?.leafId
+      if (leafId) {
+        removedTitleLeafIdsRef.current.add(leafId)
+      }
+      persistLayoutSnapshot()
+    },
+    [persistLayoutSnapshot]
+  )
+
+  /**
+   * Ignores clear-title shortcuts for panes already using their automatic
+   * title, keeping the command idempotent and avoiding unnecessary snapshots.
+   */
+  const handleClearPaneTitleShortcut = useCallback(
+    (paneId: number) => {
+      if (!paneTitlesRef.current[paneId]) {
+        return
+      }
+      removePaneTitle(paneId)
+    },
+    [removePaneTitle]
   )
 
   useEffect(() => {
@@ -1312,6 +1414,8 @@ export default function TerminalPane({
     onSearchSelectedText: handleSearchSelectedText,
     onRequestClosePane: handleRequestClosePane,
     onClearPaneScrollback: clearPaneScrollback,
+    onSetTitle: handleStartRename,
+    onClearPaneTitle: handleClearPaneTitleShortcut,
     searchOpenRef,
     searchStateRef,
     macOptionAsAltRef,
@@ -1929,49 +2033,6 @@ export default function TerminalPane({
     }
   }, [tabId, worktreeId, setTabLayout])
 
-  const cancelPendingRenameFrames = useCallback(() => {
-    const frameRefs = [renameFocusFrameRef, renameEnableBlurFrameRef, renameRefocusFrameRef]
-    for (const frameRef of frameRefs) {
-      if (frameRef.current !== null) {
-        cancelAnimationFrame(frameRef.current)
-        frameRef.current = null
-      }
-    }
-  }, [])
-
-  const closeRenameSession = useCallback(() => {
-    renameSessionIdRef.current += 1
-    renameBlurCommitEnabledRef.current = true
-    renameUserRequestedBlurCommitRef.current = false
-    cancelPendingRenameFrames()
-  }, [cancelPendingRenameFrames])
-
-  const setContainerRef = useCallback(
-    (node: HTMLDivElement | null): void => {
-      containerRef.current = node
-      if (node !== null) {
-        return
-      }
-      // Why: inline title rename focus/blur frames are owned by the terminal
-      // container; invalidate them when that DOM owner detaches.
-      closeRenameSession()
-    },
-    [closeRenameSession]
-  )
-
-  const handleStartRename = useCallback(
-    (paneId: number) => {
-      cancelPendingRenameFrames()
-      renameSessionIdRef.current += 1
-      renameBlurCommitEnabledRef.current = false
-      renameUserRequestedBlurCommitRef.current = false
-      renameSubmittedRef.current = false
-      setRenameValue(paneTitlesRef.current[paneId] ?? '')
-      setRenamingPaneId(paneId)
-    },
-    [cancelPendingRenameFrames]
-  )
-
   useEffect(() => {
     if (renamingPaneId === null) {
       return
@@ -1997,31 +2058,6 @@ export default function TerminalPane({
       document.removeEventListener('keydown', markKeyboardBlurIntent, true)
     }
   }, [renamingPaneId])
-
-  const removePaneTitle = useCallback(
-    (paneId: number) => {
-      setPaneTitles((prev) => {
-        if (!(paneId in prev)) {
-          return prev
-        }
-        const next = { ...prev }
-        delete next[paneId]
-        return next
-      })
-      // Eagerly remove from the ref so persistLayoutSnapshot sees the change.
-      if (paneId in paneTitlesRef.current) {
-        const next = { ...paneTitlesRef.current }
-        delete next[paneId]
-        paneTitlesRef.current = next
-      }
-      const leafId = managerRef.current?.getPanes().find((pane) => pane.id === paneId)?.leafId
-      if (leafId) {
-        removedTitleLeafIdsRef.current.add(leafId)
-      }
-      persistLayoutSnapshot()
-    },
-    [persistLayoutSnapshot]
-  )
 
   const handleRenameSubmit = useCallback(() => {
     if (renamingPaneId === null || renameSubmittedRef.current) {
@@ -2146,6 +2182,7 @@ export default function TerminalPane({
     onRequestClosePane: handleRequestClosePane,
     onClearPaneScrollback: clearPaneScrollback,
     onSetTitle: handleStartRename,
+    onClearPaneTitle: handleClearPaneTitleShortcut,
     onPasteError: setTerminalError,
     onAgentSessionForkReady: setAgentSessionFork,
     forceBracketedMultilineTextPaste,
@@ -2401,6 +2438,8 @@ export default function TerminalPane({
 
   const activePane = managerRef.current?.getActivePane()
   const managedPanes = managerRef.current?.getPanes() ?? []
+  const menuPaneHasCustomTitle =
+    contextMenu.menuPaneId !== null && Boolean(paneTitles[contextMenu.menuPaneId])
   return (
     <>
       <div
@@ -2506,6 +2545,8 @@ export default function TerminalPane({
         }
         onToggleExpand={contextMenu.onToggleExpand}
         onSetTitle={contextMenu.onSetTitle}
+        onClearPaneTitle={contextMenu.onClearPaneTitle}
+        canClearPaneTitle={menuPaneHasCustomTitle}
         onCopyTerminalId={() => void contextMenu.onCopyTerminalId()}
         onCopyPaneId={contextMenu.onCopyPaneId}
       />

@@ -102,6 +102,8 @@ export type KeybindingActionId =
   | 'terminal.focusPreviousPane'
   | 'terminal.equalizePaneSizes'
   | 'terminal.expandPane'
+  | 'terminal.setTitle'
+  | 'terminal.clearPaneTitle'
   | 'terminal.closePane'
   | 'terminal.splitRight'
   | 'terminal.splitDown'
@@ -925,6 +927,22 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'terminal',
     searchKeywords: ['shortcut', 'pane', 'expand', 'collapse'],
     defaultBindings: platformBindings(['Mod+Shift+Enter'])
+  },
+  {
+    id: 'terminal.setTitle',
+    title: 'Set Title…',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'pane', 'set title', 'title', 'rename'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'terminal.clearPaneTitle',
+    title: 'Clear Pane Title',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'pane', 'clear title', 'remove title', 'title'],
+    defaultBindings: platformBindings([])
   },
   {
     id: 'terminal.closePane',

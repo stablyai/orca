@@ -2344,6 +2344,7 @@
             "copyTerminalId": "터미널 ID 복사",
             "2cf85a6a55": "창 ID 복사",
             "39809d152f": "제목 설정…",
+            "clearPaneTitle": "창 제목 지우기",
             "06c2b0f043": "창 크기 균등화",
             "98bccf4fa2": "Terminal을 아래로 분할",
             "20e565d865": "Terminal 오른쪽 분할",

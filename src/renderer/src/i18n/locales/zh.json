@@ -2343,6 +2343,7 @@
             "copyTerminalId": "复制终端 ID",
             "2cf85a6a55": "复制窗格 ID",
             "39809d152f": "设置标题...",
+            "clearPaneTitle": "清除窗格标题",
             "06c2b0f043": "均衡窗格大小",
             "98bccf4fa2": "向下拆分 Terminal",
             "20e565d865": "向右拆分 Terminal",

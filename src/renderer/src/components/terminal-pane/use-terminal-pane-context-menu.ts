@@ -65,6 +65,7 @@ type UseTerminalPaneContextMenuDeps = {
   onRequestClosePane: (paneId: number) => void
   onClearPaneScrollback: (pane: ManagedPane) => void
   onSetTitle: (paneId: number) => void
+  onClearPaneTitle: (paneId: number) => void
   onPasteError: (message: string) => void
   onAgentSessionForkReady: (fork: PreparedAgentSessionFork) => void
   forceBracketedMultilineTextPaste: boolean
@@ -93,6 +94,7 @@ type TerminalMenuState = {
   onQuickCommand: (command: TerminalQuickCommand) => void
   onToggleExpand: () => void
   onSetTitle: () => void
+  onClearPaneTitle: () => void
 }
 
 export function useTerminalPaneContextMenu({
@@ -108,6 +110,7 @@ export function useTerminalPaneContextMenu({
   onRequestClosePane,
   onClearPaneScrollback,
   onSetTitle,
+  onClearPaneTitle,
   onPasteError,
   onAgentSessionForkReady,
   forceBracketedMultilineTextPaste,
@@ -413,10 +416,19 @@ export function useTerminalPaneContextMenu({
     }
   }
 
+  /** Routes title edits through the resolved menu pane instead of active pane. */
   const handleSetTitle = (): void => {
     const pane = resolveMenuPane()
     if (pane) {
       onSetTitle(pane.id)
+    }
+  }
+
+  /** Clears the title for the pane that opened the context menu. */
+  const handleClearPaneTitle = (): void => {
+    const pane = resolveMenuPane()
+    if (pane) {
+      onClearPaneTitle(pane.id)
     }
   }
 
@@ -516,7 +528,8 @@ export function useTerminalPaneContextMenu({
     onForkAgentSession,
     onQuickCommand,
     onToggleExpand,
-    onSetTitle: handleSetTitle
+    onSetTitle: handleSetTitle,
+    onClearPaneTitle: handleClearPaneTitle
   }
 }
 
