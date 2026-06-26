@@ -279,6 +279,63 @@ test.describe('Tabs', () => {
       .toEqual([domOrderBefore[1], domOrderBefore[0], ...domOrderBefore.slice(2)])
   })
 
+  test('clicking tabs still switches after a tab drag gesture releases', async ({ orcaPage }) => {
+    const worktreeId = (await getActiveWorktreeId(orcaPage))!
+
+    await orcaPage.evaluate((targetWorktreeId) => {
+      const store = window.__store
+      if (!store) {
+        return
+      }
+      const state = store.getState()
+      const existing = (state.tabsByWorktree[targetWorktreeId] ?? []).length
+      for (let i = existing; i < 2; i++) {
+        state.createTab(targetWorktreeId)
+      }
+    }, worktreeId)
+    await expect
+      .poll(() => countRenderedTabs(orcaPage), { timeout: 5_000 })
+      .toBeGreaterThanOrEqual(2)
+
+    const domOrder = await orcaPage.$$eval(SORTABLE_TAB, (nodes) =>
+      nodes.map((n) => (n as HTMLElement).dataset.tabId ?? '')
+    )
+    const [firstTabId, secondTabId] = domOrder
+    expect(firstTabId).toBeTruthy()
+    expect(secondTabId).toBeTruthy()
+
+    await orcaPage.evaluate((tabId) => {
+      window.__store?.getState().setActiveTab(tabId)
+    }, firstTabId)
+    await expect.poll(() => getDomActiveTabId(orcaPage), { timeout: 3_000 }).toBe(firstTabId)
+
+    const firstTabBox = await tabLocator(orcaPage, firstTabId).boundingBox()
+    expect(firstTabBox).not.toBeNull()
+    const startX = firstTabBox!.x + firstTabBox!.width / 2
+    const startY = firstTabBox!.y + firstTabBox!.height / 2
+    await orcaPage.mouse.move(startX, startY)
+    await orcaPage.mouse.down()
+    // Why: exceed dnd-kit's 12px tab-drag threshold so this exercises the
+    // drag/click handshake, not just an ordinary tab press.
+    await orcaPage.mouse.move(startX + 24, startY, { steps: 4 })
+    await orcaPage.mouse.up()
+
+    // Reset selection through setup state, then prove the user-visible click
+    // path still activates another tab after the drag release.
+    await orcaPage.evaluate((tabId) => {
+      window.__store?.getState().setActiveTab(tabId)
+    }, firstTabId)
+    await expect.poll(() => getDomActiveTabId(orcaPage), { timeout: 3_000 }).toBe(firstTabId)
+
+    await tabLocator(orcaPage, secondTabId).click({ force: true })
+    await expect
+      .poll(() => getDomActiveTabId(orcaPage), {
+        timeout: 5_000,
+        message: 'Tab click did not activate after a completed tab drag gesture'
+      })
+      .toBe(secondTabId)
+  })
+
   /**
    * Regression: after a drag-reorder, Cmd/Ctrl+Shift+[ must walk tabs in
    * the new visible order. The pre-fix bug read a stale legacy order
