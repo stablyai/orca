@@ -434,10 +434,15 @@ export function PetOverlay(): React.JSX.Element {
           ) : detected ? (
             <DetectedSpriteFrame detected={detected} animate={animate} maxSize={size} />
           ) : (
+            // Why: cap explicitly at the pet size — the w-fit/h-fit wrapper is
+            // fit-content, so max-w/h-full has no fixed box to resolve against
+            // and the image would otherwise render at its intrinsic size and
+            // overflow the persisted size box that clamping still assumes.
             <img
               src={url}
               alt=""
               className="max-h-full max-w-full object-contain"
+              style={{ maxWidth: size, maxHeight: size }}
               draggable={false}
             />
           )}
