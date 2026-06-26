@@ -29,7 +29,11 @@ export async function inspectEmulatorAvailability(
   bridge: EmulatorBridge
 ): Promise<EmulatorAvailability> {
   const currentPlatform = platform()
-  if (currentPlatform !== 'darwin') {
+  // Why: gate on the iOS backend's own host support rather than a bare platform
+  // literal, so the single multi-backend seam decides availability (and so this
+  // is testable without mocking os.platform).
+  const iosBackend = bridge.listBackends().find((backend) => backend.kind === 'ios')
+  if (!iosBackend?.isSupportedOnHost()) {
     return {
       platform: currentPlatform,
       available: false,
