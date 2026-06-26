@@ -61,6 +61,61 @@ describe('resolveTerminalLayoutActiveLeafId', () => {
 })
 
 describe('normalizeTerminalLayoutSnapshot active leaf repair', () => {
+  it('preserves a rootless active leaf before terminal replay', () => {
+    const result = normalizeTerminalLayoutSnapshot({
+      root: null,
+      activeLeafId: LEAF_1,
+      expandedLeafId: null
+    })
+
+    expect(result.changed).toBe(false)
+    expect(result.snapshot.activeLeafId).toBe(LEAF_1)
+  })
+
+  it('prefers a rootless active leaf over multiple retained PTY bindings', () => {
+    const result = normalizeTerminalLayoutSnapshot({
+      root: null,
+      activeLeafId: LEAF_3,
+      expandedLeafId: null,
+      ptyIdsByLeafId: {
+        [LEAF_1]: 'pty-1',
+        [LEAF_2]: 'pty-2'
+      }
+    })
+
+    expect(result.changed).toBe(false)
+    expect(result.snapshot.activeLeafId).toBe(LEAF_3)
+  })
+
+  it('uses a sole rootless PTY binding when no active leaf remains', () => {
+    const result = normalizeTerminalLayoutSnapshot({
+      root: null,
+      activeLeafId: null,
+      expandedLeafId: null,
+      ptyIdsByLeafId: {
+        [LEAF_2]: 'pty-2'
+      }
+    })
+
+    expect(result.changed).toBe(true)
+    expect(result.snapshot.activeLeafId).toBe(LEAF_2)
+  })
+
+  it('does not pick an arbitrary rootless PTY binding when multiple remain', () => {
+    const result = normalizeTerminalLayoutSnapshot({
+      root: null,
+      activeLeafId: null,
+      expandedLeafId: null,
+      ptyIdsByLeafId: {
+        [LEAF_1]: 'pty-1',
+        [LEAF_2]: 'pty-2'
+      }
+    })
+
+    expect(result.changed).toBe(false)
+    expect(result.snapshot.activeLeafId).toBeNull()
+  })
+
   it('repairs a hydrated active leaf that has lost its PTY while a sibling is bound', () => {
     const result = normalizeTerminalLayoutSnapshot({
       root: split(LEAF_1, LEAF_2),

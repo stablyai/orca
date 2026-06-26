@@ -1274,6 +1274,21 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     downloadFile: async () => {
       throw new Error('Remote file download is unavailable in paired web clients.')
     },
+    saveDownloadedFile: async () => {
+      throw new Error('Remote file download is unavailable in paired web clients.')
+    },
+    startDownloadedFile: async () => {
+      throw new Error('Remote file download is unavailable in paired web clients.')
+    },
+    appendDownloadedFileChunk: async () => {
+      throw new Error('Remote file download is unavailable in paired web clients.')
+    },
+    finishDownloadedFile: async () => {
+      throw new Error('Remote file download is unavailable in paired web clients.')
+    },
+    cancelDownloadedFile: async () => {
+      throw new Error('Remote file download is unavailable in paired web clients.')
+    },
     listMarkdownDocuments: async ({ rootPath }) => {
       const file = await resolveRuntimeFilePath(rootPath)
       return callRuntimeResult('files.listMarkdownDocuments', {

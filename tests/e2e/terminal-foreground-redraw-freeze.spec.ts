@@ -39,8 +39,17 @@ type SchedulerDebugWindow = Window & {
   }
 }
 
+type RefreshProbeWindow = SchedulerDebugWindow & {
+  __terminalRefreshProbe?: {
+    count: () => number
+    dispose: () => void
+  }
+}
+
 const REDRAW_FRAME_COUNT = 270
 const REDRAW_PAYLOAD_CHARS = 520
+const REWRITE_REDRAW_FRAME_COUNT = REDRAW_FRAME_COUNT
+const REWRITE_REDRAW_PAYLOAD_CHARS = REDRAW_PAYLOAD_CHARS
 const TIMER_SAMPLE_MS = 16
 const MAX_RENDERER_TIMER_DRIFT_MS = 500
 const FOREGROUND_IMMEDIATE_BUDGET_CHARS = 128 * 1024
@@ -78,6 +87,18 @@ async function measureRendererDuringBurst(page: Page, paneKey: string): Promise<
       `\x1b[4;6H\x1b[38;2;231;237;247m${payload}\x1b[0m` +
       '\x1b[?2026l'
     )
+  })
+  return measureRendererDuringFrames(page, paneKey, frames)
+}
+
+async function measureRendererDuringRewriteBurst(
+  page: Page,
+  paneKey: string
+): Promise<BurstMeasurement> {
+  const frames = Array.from({ length: REWRITE_REDRAW_FRAME_COUNT }, (_, frame) => {
+    const text = `• Working ${String(frame).padStart(4, '0')}`
+    const payload = 'x'.repeat(REWRITE_REDRAW_PAYLOAD_CHARS)
+    return `\r\x1b[2K${text} ${payload}`
   })
   return measureRendererDuringFrames(page, paneKey, frames)
 }
@@ -133,6 +154,58 @@ async function measureRendererDuringFrames(
   )
 }
 
+async function installActivePaneRefreshProbe(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    ;(window as RefreshProbeWindow).__terminalRefreshProbe?.dispose()
+    const state = window.__store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    if (!pane) {
+      throw new Error('Active terminal pane is unavailable')
+    }
+    const terminal = pane.terminal as unknown as {
+      _core?: { refresh?: (start: number, end: number, sync?: boolean) => void }
+    }
+    const originalCoreRefresh = terminal._core?.refresh?.bind(terminal._core)
+    if (!terminal._core || !originalCoreRefresh) {
+      throw new Error('Active terminal core refresh hook is unavailable')
+    }
+    let refreshCount = 0
+    terminal._core.refresh = (start, end, sync) => {
+      if (sync === true) {
+        refreshCount += 1
+      }
+      originalCoreRefresh(start, end, sync)
+    }
+    ;(window as RefreshProbeWindow).__terminalRefreshProbe = {
+      count: () => refreshCount,
+      dispose: () => {
+        if (terminal._core) {
+          terminal._core.refresh = originalCoreRefresh
+        }
+        delete (window as RefreshProbeWindow).__terminalRefreshProbe
+      }
+    }
+  })
+}
+
+async function readRefreshProbeCount(page: Page): Promise<number> {
+  return page.evaluate(() => (window as RefreshProbeWindow).__terminalRefreshProbe?.count() ?? 0)
+}
+
+async function disposeActivePaneRefreshProbe(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    ;(window as RefreshProbeWindow).__terminalRefreshProbe?.dispose()
+  })
+}
+
 function loadCapturedOpenCodeSmallRedrawFrames(): string[] {
   if (!existsSync(OPENCODE_CAPTURE_PATH)) {
     return []
@@ -176,6 +249,35 @@ function annotateMeasurement(
 }
 
 test.describe('Terminal foreground redraw freeze repro', () => {
+  test('Codex-style line rewrites request a visible row refresh', async ({ orcaPage }) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+
+    const { paneKey } = await waitForActivePaneHookDescriptor(orcaPage)
+    await waitForTerminalPtyDataInjector(orcaPage, paneKey)
+    await installActivePaneRefreshProbe(orcaPage)
+    try {
+      const refreshBaseline = await readRefreshProbeCount(orcaPage)
+      await resetSchedulerDebug(orcaPage)
+      const measurement = await measureRendererDuringRewriteBurst(orcaPage, paneKey)
+      const scheduler = await readSchedulerDebug(orcaPage)
+
+      expect(measurement.injectedFrames).toBe(REWRITE_REDRAW_FRAME_COUNT)
+      expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_RENDERER_TIMER_DRIFT_MS)
+      expect(scheduler.deferredForegroundEnqueueCount).toBeGreaterThan(0)
+      await expect
+        .poll(async () => (await readRefreshProbeCount(orcaPage)) - refreshBaseline, {
+          timeout: 5_000,
+          message: 'Codex-style terminal rewrites did not request an xterm refresh'
+        })
+        .toBeGreaterThan(0)
+    } finally {
+      await disposeActivePaneRefreshProbe(orcaPage)
+    }
+  })
+
   test('active OpenTUI-style redraw bursts do not monopolize the renderer', async ({
     orcaPage
   }, testInfo) => {

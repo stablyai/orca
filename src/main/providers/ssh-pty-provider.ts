@@ -1,6 +1,7 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from './types'
 import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
+import { seedPowerlevel10kWizardEnv } from '../pty/powerlevel10k-wizard-env'
 
 type DataCallback = (payload: { id: string; data: string }) => void
 type ReplayCallback = (payload: { id: string; data: string }) => void
@@ -130,7 +131,7 @@ export class SshPtyProvider implements IPtyProvider {
       cols: opts.cols,
       rows: opts.rows,
       cwd: opts.cwd,
-      env: this.withRemoteCliBridgeEnv(opts.env),
+      env: this.withRemoteCliBridgeEnv(opts.env, opts.envToDelete),
       // Why: the relay's plugin-overlay env augmenter needs to know which
       // Pi-compatible agent is being launched (`pi` vs `omp`) so it mirrors
       // the right `~/.<kind>/agent` source dir on the remote disk. The
@@ -150,12 +151,17 @@ export class SshPtyProvider implements IPtyProvider {
   }
 
   private withRemoteCliBridgeEnv(
-    env: Record<string, string> | undefined
-  ): Record<string, string> | undefined {
-    if (!this.remoteCliBridgeEnv) {
-      return env
-    }
+    env: Record<string, string> | undefined,
+    envToDelete?: readonly string[]
+  ): Record<string, string> {
     const merged = { ...env }
+    for (const key of envToDelete ?? []) {
+      delete merged[key]
+    }
+    seedPowerlevel10kWizardEnv(merged, { envToDelete })
+    if (!this.remoteCliBridgeEnv) {
+      return merged
+    }
     const pathDelimiter = this.remoteCliBridgeEnv.pathDelimiter ?? ':'
     const pathKey = merged.PATH !== undefined ? 'PATH' : merged.Path !== undefined ? 'Path' : null
     if (pathKey) {

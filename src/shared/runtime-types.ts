@@ -327,6 +327,12 @@ export type RuntimeFilePreviewResult = {
   mimeType?: string
 }
 
+export type RuntimeFileReadChunkResult = {
+  contentBase64: string
+  bytesRead: number
+  eof: boolean
+}
+
 export type RuntimeTerminalSummary = {
   handle: string
   ptyId: string | null

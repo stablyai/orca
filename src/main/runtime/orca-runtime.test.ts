@@ -70,6 +70,7 @@ import { RpcDispatcher } from './rpc/dispatcher'
 import type { RpcRequest } from './rpc/core'
 import { TERMINAL_METHODS } from './rpc/methods/terminal'
 
+const ORIGINAL_PLATFORM = process.platform
 const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'platform')
 
 function setPlatform(platform: NodeJS.Platform): void {
@@ -1376,6 +1377,100 @@ describe('OrcaRuntimeService', () => {
     const shown = await runtime.showTerminal(terminals.terminals[0].handle)
     expect(shown.handle).toBe(terminals.terminals[0].handle)
     expect(shown.ptyId).toBe('pty-1')
+  })
+
+  it('surfaces stale terminal handles for stranded panes and recovers after same-pane wake', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const tabId = 'tab-1'
+    const leafId = HEADLESS_LEAF_ID
+    const paneKey = makePaneKey(tabId, leafId)
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Codex',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-before-sleep'
+        }
+      ]
+    })
+
+    const beforeSleep = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
+    const staleHandle = beforeSleep.terminals[0]?.handle ?? ''
+    expect(staleHandle).toBeTruthy()
+
+    // Why: `terminal.show` is read-only; only the later renderer wake/rebind
+    // graph publish can repair the CLI handle surface for this pane.
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Codex',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId: null
+        }
+      ]
+    })
+
+    await expect(runtime.showTerminal(staleHandle)).rejects.toThrow('terminal_handle_stale')
+
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Codex',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-after-wake'
+        }
+      ]
+    })
+    runtime.onPtyData('pty-after-wake', 'resumed in place\n', 123)
+
+    const resolved = runtime.resolveTerminalPane(paneKey)
+    expect(resolved).toMatchObject({
+      tabId,
+      leafId,
+      ptyId: 'pty-after-wake'
+    })
+    await expect(runtime.showTerminal(resolved.handle)).resolves.toMatchObject({
+      handle: resolved.handle,
+      tabId,
+      leafId,
+      ptyId: 'pty-after-wake',
+      preview: 'resumed in place'
+    })
   })
 
   it('keeps targeted terminal lists from adopting controller PTYs for other worktrees', async () => {
@@ -5092,6 +5187,89 @@ describe('OrcaRuntimeService', () => {
       source: 'headless',
       cwd: '/projects/restored'
     })
+  })
+
+  it('falls back to the renderer snapshot for hidden-output recovery without headless state', async () => {
+    const serializeBuffer = vi.fn().mockResolvedValue({
+      data: '\x1b[?1049hRenderer TUI\r\nStill running\r\n',
+      cols: 100,
+      rows: 30,
+      lastTitle: 'Renderer working'
+    })
+    const runtime = createRuntime()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeBuffer,
+      hasRendererSerializer: () => true
+    })
+    syncSinglePty(runtime, 'pty-1')
+
+    const snapshot = await runtime.serializeHiddenOutputRecoveryBuffer('pty-1', {
+      scrollbackRows: 5000
+    })
+
+    expect(snapshot).toEqual({
+      data: '\x1b[?1049hRenderer TUI\r\nStill running\r\n',
+      cols: 100,
+      rows: 30,
+      lastTitle: 'Renderer working',
+      source: 'renderer'
+    })
+    expect(serializeBuffer).toHaveBeenCalledWith('pty-1', {
+      scrollbackRows: 5000,
+      altScreenForcesZeroRows: false
+    })
+  })
+
+  it('keeps an empty headless snapshot authoritative for hidden-output recovery', async () => {
+    const serializeBuffer = vi.fn().mockResolvedValue({
+      data: 'stale renderer content\r\n',
+      cols: 80,
+      rows: 24
+    })
+    const runtime = createRuntime()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeBuffer,
+      hasRendererSerializer: () => true
+    })
+    type HeadlessStateForTest = {
+      emulator: {
+        isAlternateScreen: boolean
+        getSnapshot: (opts: { scrollbackRows?: number }) => {
+          rehydrateSequences: string
+          snapshotAnsi: string
+          cols: number
+          rows: number
+        }
+      }
+      outputSequence: number
+      writeChain: Promise<void>
+    }
+    const runtimePrivate = runtime as unknown as {
+      headlessTerminals: Map<string, HeadlessStateForTest>
+    }
+    runtimePrivate.headlessTerminals.set('pty-empty', {
+      emulator: {
+        isAlternateScreen: false,
+        getSnapshot: () => ({ rehydrateSequences: '', snapshotAnsi: '', cols: 90, rows: 30 })
+      },
+      outputSequence: 17,
+      writeChain: Promise.resolve()
+    })
+
+    await expect(runtime.serializeHiddenOutputRecoveryBuffer('pty-empty')).resolves.toEqual({
+      data: '',
+      cols: 90,
+      rows: 30,
+      seq: 17,
+      source: 'headless'
+    })
+    expect(serializeBuffer).not.toHaveBeenCalled()
   })
 
   it('emits explicit OSC 9999 agent status from runtime PTY data', () => {
@@ -20720,6 +20898,127 @@ describe('OrcaRuntimeService', () => {
     expect(result.warning).toBe(
       `orca.yaml archive hook skipped for ${TEST_WORKTREE_PATH}; pass --run-hooks to run it.`
     )
+  })
+
+  it('recovers forced Windows runtime long-path removal and keeps skipped-hook warnings', async () => {
+    setPlatform('win32')
+    const runtime = new OrcaRuntimeService(store)
+    await mkdir(TEST_WORKTREE_PATH, { recursive: true })
+    await writeFile(join(TEST_WORKTREE_PATH, 'scratch.txt'), 'delete me')
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
+      stdout: '',
+      stderr: ''
+    })
+    vi.mocked(getEffectiveHooks).mockReturnValue({
+      scripts: {
+        archive: 'pnpm worktree:archive'
+      }
+    })
+    vi.mocked(removeWorktree).mockRejectedValue(
+      Object.assign(new Error('git worktree remove failed'), {
+        stderr: 'error: failed to delete deep/file.txt: Filename too long'
+      })
+    )
+
+    try {
+      const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID, true)
+
+      expect(result).toEqual({
+        preservedBranch: { branchName: 'feature/foo', head: 'abc' },
+        warning: `orca.yaml archive hook skipped for ${TEST_WORKTREE_PATH}; pass --run-hooks to run it.`
+      })
+      expect(gitSpy).toHaveBeenCalledWith(['worktree', 'prune'], {
+        cwd: TEST_REPO_PATH
+      })
+      if (ORIGINAL_PLATFORM === 'win32') {
+        await expect(lstat(TEST_WORKTREE_PATH)).rejects.toMatchObject({ code: 'ENOENT' })
+      }
+      expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(TEST_WORKTREE_ID)
+    } finally {
+      gitSpy.mockRestore()
+      await rm(TEST_WORKTREE_PATH, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps runtime metadata when long-path recovery deletes the directory but prune fails', async () => {
+    setPlatform('win32')
+    const removeWorktreeMeta = vi.fn()
+    const runtimeStore = {
+      ...store,
+      removeWorktreeMeta
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockRejectedValue(
+      Object.assign(new Error('git prune failed'), {
+        stderr: 'fatal: unable to lock worktree admin dir'
+      })
+    )
+    vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    vi.mocked(removeWorktree).mockRejectedValue(
+      Object.assign(new Error('git worktree remove failed'), {
+        stderr: 'error: failed to delete deep/file.txt: Filename too long'
+      })
+    )
+
+    try {
+      await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID, true)).rejects.toThrow(
+        'Git still has stale worktree registration'
+      )
+      expect(removeWorktreeMeta).not.toHaveBeenCalled()
+    } finally {
+      gitSpy.mockRestore()
+    }
+  })
+
+  it('retries stale runtime Git registration cleanup after prior filesystem recovery', async () => {
+    setPlatform('win32')
+    const missingWorktreePath = 'C:\\workspace\\already-removed'
+    const worktreeId = `${TEST_REPO_ID}::${missingWorktreePath}`
+    const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const registeredWorktrees = [
+      {
+        path: TEST_REPO_PATH,
+        head: 'main',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: missingWorktreePath,
+        head: 'abc',
+        branch: 'refs/heads/feature/foo',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
+      stdout: '',
+      stderr: ''
+    })
+    vi.mocked(listWorktrees).mockResolvedValue(registeredWorktrees)
+    vi.mocked(listWorktreesStrict).mockResolvedValue(registeredWorktrees)
+    vi.mocked(getEffectiveHooks).mockReturnValue({
+      scripts: {
+        archive: 'pnpm worktree:archive'
+      }
+    })
+
+    try {
+      const result = await runtime.removeManagedWorktree(worktreeId, true)
+
+      expect(result).toEqual({
+        preservedBranch: { branchName: 'feature/foo', head: 'abc' }
+      })
+      expect(runHook).not.toHaveBeenCalled()
+      expect(removeWorktree).not.toHaveBeenCalled()
+      expect(gitSpy).toHaveBeenCalledWith(['worktree', 'prune'], {
+        cwd: TEST_REPO_PATH
+      })
+      expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId)
+    } finally {
+      gitSpy.mockRestore()
+    }
   })
 
   it('routes runtime worktree removal through the selected WSL project runtime', async () => {

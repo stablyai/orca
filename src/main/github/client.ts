@@ -2314,15 +2314,31 @@ export function __resetTrackedUpstreamBranchCacheForTests(): void {
   trackedUpstreamSnapshotGenerations.clear()
 }
 
-function parseTrackedUpstreamBranch(
-  upstreamRef: string,
-  branchName: string
-): TrackedUpstreamBranch | null {
+function parseTrackedUpstreamBranch(upstreamRef: string): TrackedUpstreamBranch | null {
   const parsed = splitRemoteBranchName(upstreamRef.trim())
-  if (!parsed || parsed.branchName === branchName) {
+  if (!parsed) {
     return null
   }
   return parsed
+}
+
+function prOwnerRepoKey(ownerRepo: OwnerRepo): string {
+  return `${ownerRepo.owner.toLowerCase()}/${ownerRepo.repo.toLowerCase()}`
+}
+
+function shouldRetryTrackedUpstreamBranch(
+  upstreamBranch: TrackedUpstreamBranch,
+  branchName: string,
+  upstreamHeadRepo: OwnerRepo,
+  headRepo: OwnerRepo | null
+): boolean {
+  if (upstreamBranch.branchName !== branchName) {
+    return true
+  }
+  if (!headRepo) {
+    return true
+  }
+  return prOwnerRepoKey(upstreamHeadRepo) !== prOwnerRepoKey(headRepo)
 }
 
 async function getTrackedUpstreamBranch(
@@ -2513,27 +2529,21 @@ function parseTrackedUpstreamBranches(stdout: string): Map<string, TrackedUpstre
     if (!localBranchName) {
       continue
     }
-    upstreamsByBranchName.set(
-      localBranchName,
-      parseTrackedUpstreamRef(upstreamRef ?? '', localBranchName)
-    )
+    upstreamsByBranchName.set(localBranchName, parseTrackedUpstreamRef(upstreamRef ?? ''))
   }
   return upstreamsByBranchName
 }
 
-function parseTrackedUpstreamRef(
-  upstreamRef: string,
-  branchName: string
-): TrackedUpstreamBranch | null {
+function parseTrackedUpstreamRef(upstreamRef: string): TrackedUpstreamBranch | null {
   const remoteRefPrefix = 'refs/remotes/'
   const normalizedRef = upstreamRef.trim()
   if (normalizedRef.startsWith(remoteRefPrefix)) {
-    return parseTrackedUpstreamBranch(normalizedRef.slice(remoteRefPrefix.length), branchName)
+    return parseTrackedUpstreamBranch(normalizedRef.slice(remoteRefPrefix.length))
   }
   if (normalizedRef.startsWith('refs/heads/')) {
     return null
   }
-  return parseTrackedUpstreamBranch(normalizedRef, branchName)
+  return parseTrackedUpstreamBranch(normalizedRef)
 }
 
 async function lookupPRByBranchName(args: {
@@ -2799,8 +2809,8 @@ export async function getPRForBranchOutcome(
       data = branchLookup.data
       dataRepo = branchLookup.dataRepo
       if (!data) {
-        // Why: worktrees can have a short local branch tracking a differently
-        // named remote PR head; after the local miss, try that configured head.
+        // Why: the tracked upstream can identify the real PR head by branch
+        // name or by fork owner even when branch names match locally.
         const upstreamBranch = await getTrackedUpstreamBranch(
           repoPath,
           branchName,
@@ -2815,16 +2825,21 @@ export async function getPRForBranchOutcome(
               connectionId,
               ...localGitArgs
             )) ?? headRepo
-          const upstreamLookup = await lookupPRByBranchName({
-            candidates,
-            headRepo: upstreamHeadRepo,
-            branchName: upstreamBranch.branchName,
-            ghOptions
-          })
-          data = upstreamLookup.data
-          dataRepo = upstreamLookup.dataRepo
-          if (data) {
-            dataHeadRepo = upstreamHeadRepo
+          if (
+            upstreamHeadRepo &&
+            shouldRetryTrackedUpstreamBranch(upstreamBranch, branchName, upstreamHeadRepo, headRepo)
+          ) {
+            const upstreamLookup = await lookupPRByBranchName({
+              candidates,
+              headRepo: upstreamHeadRepo,
+              branchName: upstreamBranch.branchName,
+              ghOptions
+            })
+            data = upstreamLookup.data
+            dataRepo = upstreamLookup.dataRepo
+            if (data) {
+              dataHeadRepo = upstreamHeadRepo
+            }
           }
         }
       }

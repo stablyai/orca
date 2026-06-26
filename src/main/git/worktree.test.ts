@@ -21,6 +21,7 @@ vi.mock('./runner', () => ({
 import {
   addSparseWorktree,
   addWorktree,
+  listWorktreeGraph,
   moveWorktree,
   parseWorktreeList,
   removeWorktree
@@ -232,6 +233,49 @@ bare
         isMainWorktree: false
       }
     ])
+  })
+})
+
+describe('listWorktreeGraph', () => {
+  it('returns the worktree graph without sparse-checkout annotation probes', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/feature/test
+`
+    })
+
+    await expect(listWorktreeGraph('/repo')).resolves.toEqual([
+      {
+        path: '/repo',
+        head: 'abc123',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: '/repo-feature',
+        head: 'def456',
+        branch: 'refs/heads/feature/test',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], {
+      cwd: '/repo'
+    })
+  })
+
+  it('returns an empty graph for paths Git reports as non-repositories', async () => {
+    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('fatal: not a git repository'))
+
+    await expect(listWorktreeGraph('/not-a-repo')).resolves.toEqual([])
   })
 })
 

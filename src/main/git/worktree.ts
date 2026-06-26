@@ -457,6 +457,41 @@ async function readWorktreeList(
   return parseWorktreeList(stdout)
 }
 
+async function readTranslatedWorktreeGraph(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  return (await readWorktreeList(repoPath, options)).map((worktree) => {
+    const translatedPath = translateWorktreePath(worktree.path, repoPath, options)
+    return translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
+  })
+}
+
+export async function listWorktreeGraph(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  try {
+    return await readTranslatedWorktreeGraph(repoPath, options)
+  } catch (err) {
+    if (getErrorCode(err) === 'ENOENT') {
+      try {
+        await stat(repoPath)
+      } catch (statErr) {
+        if (getErrorCode(statErr) === 'ENOENT') {
+          console.warn(`[git/worktree] repo path missing; skipping worktree list: ${repoPath}`)
+          return []
+        }
+      }
+    }
+    if (isNotGitRepositoryError(err)) {
+      return []
+    }
+    console.warn(`[git/worktree] listWorktreeGraph failed for ${repoPath}:`, err)
+    return []
+  }
+}
+
 /**
  * List all worktrees for a git repo at the given path.
  */
@@ -465,10 +500,7 @@ export async function listWorktrees(
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo[]> {
   try {
-    const worktrees = (await readWorktreeList(repoPath, options)).map((worktree) => {
-      const translatedPath = translateWorktreePath(worktree.path, repoPath, options)
-      return translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
-    })
+    const worktrees = await readTranslatedWorktreeGraph(repoPath, options)
     return annotateSparseCheckoutStatus(worktrees)
   } catch (err) {
     if (getErrorCode(err) === 'ENOENT') {
