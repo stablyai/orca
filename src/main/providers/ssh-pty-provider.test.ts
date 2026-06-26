@@ -117,7 +117,7 @@ describe('SshPtyProvider', () => {
         cols: 120,
         rows: 40,
         cwd: undefined,
-        env: undefined,
+        env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true' },
         command: 'echo from-runtime',
         commandDelivery: 'provider',
         startupCommandDelivery: 'shell-ready'

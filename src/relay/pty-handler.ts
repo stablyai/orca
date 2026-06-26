@@ -13,6 +13,7 @@ import {
 import { getRelayShellLaunchConfig } from './pty-shell-launch'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
+import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
 import {
   createShellReadyScanState,
   drainShellReadyHeldBytes,
@@ -511,16 +512,18 @@ export class PtyHandler {
     const commandDelivery = params.commandDelivery === 'provider' ? 'provider' : 'renderer'
     const shouldProviderDeliverCommand = commandDelivery === 'provider' && command !== undefined
     const spawnEnv = this.buildSpawnEnv(env, { id, paneKey, shell, command })
-    // Why: only the provider-delivery path scans and strips this internal
-    // marker; renderer-delivered commands must not leak it to the terminal.
+    const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(spawnEnv, command)
+    const shouldEmitShellReadyMarker =
+      launchCommandHint !== undefined &&
+      shouldUseShellReadyStartupDelivery({
+        command: launchCommandHint,
+        startupCommandDelivery:
+          params.startupCommandDelivery === 'shell-ready' ? 'shell-ready' : undefined
+      })
+    // Why: renderer- and provider-delivered startup commands both use this
+    // marker; the side responsible for delivery also strips it from output.
     const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv, process.platform, {
-      emitReadyMarker:
-        shouldProviderDeliverCommand &&
-        shouldUseShellReadyStartupDelivery({
-          command,
-          startupCommandDelivery:
-            params.startupCommandDelivery === 'shell-ready' ? 'shell-ready' : undefined
-        })
+      emitReadyMarker: shouldEmitShellReadyMarker
     })
 
     // Why: SSH exec channels give the relay a minimal environment without
@@ -533,7 +536,9 @@ export class PtyHandler {
       cols,
       rows,
       cwd,
-      env: { ...spawnEnv, ...shellLaunch.env }
+      // Why: relay shells inherit process.env; never let an ambient Orca marker
+      // enable shell-ready behavior unless this spawn explicitly requested it.
+      env: { ...spawnEnv, ORCA_SHELL_READY_MARKER: '0', ...shellLaunch.env }
     })
 
     // Why: capture the renderer-supplied paneKey on the managed entry so the
@@ -864,7 +869,9 @@ export class PtyHandler {
         cols: entry.cols,
         rows: entry.rows,
         cwd: entry.cwd,
-        env: { ...spawnEnv, ...shellLaunch.env }
+        // Why: revived shells should not inherit an ambient shell-ready marker
+        // because no provider-delivered startup command is waiting on it.
+        env: { ...spawnEnv, ORCA_SHELL_READY_MARKER: '0', ...shellLaunch.env }
       })
       this.wireAndStore({
         id: entry.id,

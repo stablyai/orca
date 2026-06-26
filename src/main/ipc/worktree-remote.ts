@@ -98,6 +98,7 @@ import {
   getSetupRunnerCommandPlatformForPath
 } from '../../shared/setup-runner-command'
 import { createSequencedSetupAgentCommands } from '../../shared/setup-agent-sequencing'
+import { shouldWaitForSetupBeforeAgentStartup } from '../../shared/setup-agent-startup-policy'
 import { createWorktreeCreateTimingRecorder } from '../worktree-create-timing'
 import {
   markCodexProjectTrusted,
@@ -237,7 +238,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
 
   let sequencedStartup = startup
   let wrappedSetupCommandStr: string | undefined
-  if (startup && setup) {
+  if (startup && setup?.waitForAgentStartup === true) {
     const platform = getSetupRunnerCommandPlatformForPath(
       setup.runnerScriptPath,
       process.platform === 'win32' ? 'windows' : 'posix'
@@ -1113,7 +1114,10 @@ async function createRemoteSetupRunnerScript(
   )
   return {
     runnerScriptPath,
-    envVars: getSetupRunnerEnvVars(repo, worktreePath)
+    envVars: getSetupRunnerEnvVars(repo, worktreePath),
+    ...(shouldWaitForSetupBeforeAgentStartup(repo.hookSettings?.setupAgentStartupPolicy)
+      ? { waitForAgentStartup: true }
+      : {})
   }
 }
 

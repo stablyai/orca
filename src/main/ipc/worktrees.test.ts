@@ -941,7 +941,7 @@ describe('registerWorktreeHandlers', () => {
       'id:repo-1::/workspace/improve-dashboard',
       {
         claudeAgentTeamsSourceCommand: 'claude --prefill test',
-        command: expect.stringContaining('exec claude'),
+        command: 'claude --prefill test',
         env: { ORCA_AGENT_MODE: 'direct' },
         launchAgent: 'claude',
         startupCommandDelivery: undefined,
@@ -973,10 +973,8 @@ describe('registerWorktreeHandlers', () => {
     }
     const startupCommand = (startupCreateCall[1] as { command: string }).command
     const setupCommand = (setupCreateCall[1] as { command: string }).command
-    const nonceMatch = startupCommand.match(/if \[ "\$seen" = ([0-9a-f-]+) \]/)
-    expect(nonceMatch).toBeTruthy()
-    expect(setupCommand).toContain('printf')
-    expect(setupCommand).toContain(`${nonceMatch?.[1] ?? ''} "$status"`)
+    expect(startupCommand).toBe('claude --prefill test')
+    expect(setupCommand).toBe('bash /workspace/repo/.git/orca/setup-runner.sh')
     expect(result.setup).toBeUndefined()
     expect(result.startupTerminal).toEqual({ spawned: true, surface: 'visible' })
     expect(result.timing?.phases.map((phase) => phase.phase)).toEqual(
@@ -1004,6 +1002,14 @@ describe('registerWorktreeHandlers', () => {
     getEffectiveHooksMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
     getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
     shouldRunSetupForCreateMock.mockReturnValue(true)
+    createSetupRunnerScriptMock.mockReturnValueOnce({
+      runnerScriptPath: '/workspace/repo/.git/orca/setup-runner.sh',
+      envVars: {
+        ORCA_ROOT_PATH: '/workspace/repo',
+        ORCA_WORKTREE_PATH: '/workspace/improve-dashboard'
+      },
+      waitForAgentStartup: true
+    })
     runtimeStub.createTerminal
       .mockResolvedValueOnce({ handle: 'term-startup', surface: 'visible' })
       .mockRejectedValueOnce(new Error('setup creation failed'))

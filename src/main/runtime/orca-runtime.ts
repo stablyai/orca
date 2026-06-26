@@ -12687,7 +12687,7 @@ export class OrcaRuntimeService {
 
     let sequencedStartup = effectiveStartup
     let wrappedSetupCommandStr: string | undefined
-    if (effectiveStartup && setup) {
+    if (effectiveStartup && setup?.waitForAgentStartup === true) {
       const platform = getSetupRunnerCommandPlatformForPath(
         setup.runnerScriptPath,
         process.platform === 'win32' ? 'windows' : 'posix'
@@ -13008,7 +13008,7 @@ export class OrcaRuntimeService {
 
     let sequencedStartup = args.startup
     let wrappedSetupCommandStr: string | undefined
-    if (args.startup && result.setup) {
+    if (args.startup && result.setup?.waitForAgentStartup === true) {
       const platform = getSetupRunnerCommandPlatformForPath(result.setup.runnerScriptPath, 'posix')
       const sequenced = createSequencedSetupAgentCommands({
         runnerScriptPath: result.setup.runnerScriptPath,

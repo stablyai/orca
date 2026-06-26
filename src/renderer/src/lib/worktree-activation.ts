@@ -445,27 +445,10 @@ export function ensureWorktreeHasInitialTerminal(
     store.settings !== undefined || store.repos !== undefined || store.worktreesByRepo !== undefined
       ? store
       : useAppStore.getState()
-  // Why: remote web clients mirror the runtime server's session tabs. A local
-  // activation fallback can spawn a second host terminal before the mirror lands.
-  if (isWebRuntimeSessionActive(getRuntimeEnvironmentIdForWorktree(ownerState, worktreeId))) {
-    return null
-  }
-
-  if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
-    const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
-    if (existingTerminalTabId && (setup || issueCommand)) {
-      // Why: main may have already adopted the startup tab but failed to spawn
-      // setup; renderer activation must still launch the returned fallback setup.
-      queueSetupAndIssueCommands(store, worktreeId, existingTerminalTabId, setup, issueCommand)
-      return existingTerminalTabId
-    }
-    return null
-  }
-
   let sequencedStartup = startup
   let wrappedSetupCommandStr: string | undefined
 
-  if (startup && setup) {
+  if (startup && setup?.waitForAgentStartup === true) {
     const platform = getSetupRunnerCommandPlatformForPath(
       setup.runnerScriptPath,
       navigator.userAgent.includes('Windows') ? 'windows' : 'posix'
@@ -481,6 +464,43 @@ export function ensureWorktreeHasInitialTerminal(
       ...(sequenced.startupEnv ? { env: { ...startup.env, ...sequenced.startupEnv } } : {})
     }
     wrappedSetupCommandStr = sequenced.setupCommand
+  }
+
+  // Why: remote web clients mirror the runtime server's session tabs. A local
+  // activation fallback can spawn a second host terminal before the mirror lands,
+  // but returned setup fallbacks still need to run on an already mirrored tab.
+  if (isWebRuntimeSessionActive(getRuntimeEnvironmentIdForWorktree(ownerState, worktreeId))) {
+    const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
+    if (existingTerminalTabId && (setup || issueCommand)) {
+      queueSetupAndIssueCommands(
+        store,
+        worktreeId,
+        existingTerminalTabId,
+        setup,
+        issueCommand,
+        wrappedSetupCommandStr
+      )
+      return existingTerminalTabId
+    }
+    return null
+  }
+
+  if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
+    const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
+    if (existingTerminalTabId && (setup || issueCommand)) {
+      // Why: main may have already adopted the startup tab but failed to spawn
+      // setup; renderer activation must still launch the returned fallback setup.
+      queueSetupAndIssueCommands(
+        store,
+        worktreeId,
+        existingTerminalTabId,
+        setup,
+        issueCommand,
+        wrappedSetupCommandStr
+      )
+      return existingTerminalTabId
+    }
+    return null
   }
 
   const templatedTabId = applyDefaultTerminalTabs(
@@ -503,11 +523,13 @@ export function ensureWorktreeHasInitialTerminal(
   //
   // Why: the initial terminal can be seeded with a coding agent (new-workspace
   // flow, or reopening an empty worktree created with an agent). The startup
-  // payload only carries telemetry's agent_kind, so reverse it back to a
-  // TuiAgent to stamp the tab — giving it the provider icon before any hook.
-  const launchAgent = sequencedStartup?.telemetry
-    ? (agentKindToTuiAgent(sequencedStartup.telemetry.agent_kind) ?? undefined)
-    : undefined
+  // payload may carry explicit launchAgent; older flows only carry telemetry's
+  // agent_kind, so reverse that back to a TuiAgent when needed for the icon.
+  const launchAgent =
+    sequencedStartup?.launchAgent ??
+    (sequencedStartup?.telemetry
+      ? (agentKindToTuiAgent(sequencedStartup.telemetry.agent_kind) ?? undefined)
+      : undefined)
   const terminalTab = store.createTab(worktreeId, undefined, undefined, {
     pendingActivationSpawn: true,
     ...(launchAgent ? { launchAgent } : {})

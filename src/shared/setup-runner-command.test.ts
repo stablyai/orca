@@ -13,6 +13,21 @@ describe('buildSetupRunnerCommand', () => {
       )
     ).toBe('bash /home/jin/repo/.git/worktrees/feature/orca/setup-runner.sh')
   })
+
+  it('uses bash with Linux paths for forward-slash WSL UNC runner scripts', () => {
+    expect(
+      buildSetupRunnerCommand(
+        '//wsl.localhost/Ubuntu/home/jin/repo/.git/worktrees/feature/orca/setup-runner.sh',
+        'windows'
+      )
+    ).toBe('bash /home/jin/repo/.git/worktrees/feature/orca/setup-runner.sh')
+  })
+
+  it('keeps generic forward-slash UNC runner scripts on cmd.exe', () => {
+    expect(
+      buildSetupRunnerCommand('//server/share/repo/.git/orca/setup-runner.cmd', 'windows')
+    ).toBe('cmd.exe /c "//server/share/repo/.git/orca/setup-runner.cmd"')
+  })
 })
 
 describe('getSetupRunnerCommandPlatformForPath', () => {
@@ -32,6 +47,21 @@ describe('getSetupRunnerCommandPlatformForPath', () => {
     expect(
       getSetupRunnerCommandPlatformForPath(
         '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\.git\\orca\\setup-runner.sh',
+        'posix'
+      )
+    ).toBe('windows')
+  })
+
+  it('keeps forward-slash UNC paths on the Windows resolver', () => {
+    expect(
+      getSetupRunnerCommandPlatformForPath(
+        '//wsl.localhost/Ubuntu/home/jin/repo/.git/orca/setup-runner.sh',
+        'posix'
+      )
+    ).toBe('windows')
+    expect(
+      getSetupRunnerCommandPlatformForPath(
+        '//server/share/repo/.git/orca/setup-runner.cmd',
         'posix'
       )
     ).toBe('windows')

@@ -20,11 +20,11 @@ export function getSetupRunnerCommandPlatformForPath(
   runnerScriptPath: string,
   fallbackPlatform: SetupRunnerCommandPlatform
 ): SetupRunnerCommandPlatform {
-  if (runnerScriptPath.startsWith('/')) {
-    return 'posix'
-  }
   if (isWindowsAbsolutePathLike(runnerScriptPath)) {
     return 'windows'
+  }
+  if (runnerScriptPath.startsWith('/')) {
+    return 'posix'
   }
   return fallbackPlatform
 }
@@ -34,18 +34,18 @@ export function resolveSetupRunnerCommand(
   platform: SetupRunnerCommandPlatform
 ): SetupRunnerCommandResolution {
   if (platform === 'windows') {
-    if (runnerScriptPath.startsWith('/')) {
-      return {
-        command: `bash ${quotePosixArg(runnerScriptPath)}`,
-        runnerScriptPathForShell: runnerScriptPath,
-        shell: 'posix'
-      }
-    }
     if (isWslUncPath(runnerScriptPath)) {
       const linuxPath = wslUncToLinuxPath(runnerScriptPath)
       return {
         command: `bash ${quotePosixArg(linuxPath)}`,
         runnerScriptPathForShell: linuxPath,
+        shell: 'posix'
+      }
+    }
+    if (runnerScriptPath.startsWith('/') && !isWindowsAbsolutePathLike(runnerScriptPath)) {
+      return {
+        command: `bash ${quotePosixArg(runnerScriptPath)}`,
+        runnerScriptPathForShell: runnerScriptPath,
         shell: 'posix'
       }
     }

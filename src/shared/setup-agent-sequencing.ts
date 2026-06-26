@@ -38,7 +38,9 @@ export function createSequencedSetupAgentCommands(args: {
 }): SequencedSetupAgentCommands {
   const nonce = args.nonce ?? createSetupAgentSequenceNonce()
   const resolution = resolveSetupRunnerCommand(args.runnerScriptPath, args.platform)
-  const markerPath = `${resolution.runnerScriptPathForShell}.done`
+  // Why: overlapping gated launches of the same setup runner must not race on
+  // a shared completion marker.
+  const markerPath = `${resolution.runnerScriptPathForShell}.${nonce}.done`
   const waitTimeoutSeconds = args.waitTimeoutSeconds ?? DEFAULT_WAIT_TIMEOUT_SECONDS
 
   if (resolution.shell === 'windows') {
@@ -58,7 +60,10 @@ export function createSequencedSetupAgentCommands(args: {
       markerPath,
       nonce,
       waitTimeoutSeconds
-    )
+    ),
+    startupEnv: {
+      [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: args.startupCommand
+    }
   }
 }
 
@@ -86,6 +91,7 @@ function buildPosixStartupCommand(
   waitTimeoutSeconds: number
 ): string {
   const marker = quotePosixArg(markerPath)
+  const tmp = quotePosixArg(`${markerPath}.tmp`)
   const nonceValue = quotePosixArg(nonce)
   const timeout = Math.max(1, Math.floor(waitTimeoutSeconds))
   const startupSuccessCommand = buildPosixStartupSuccessCommand(startupCommand)
@@ -99,7 +105,8 @@ function buildPosixStartupCommand(
     `if [ -f ${marker} ]; then`,
     `IFS=: read -r seen status < ${marker} || true;`,
     `if [ "$seen" = ${nonceValue} ]; then`,
-    `if [ "$status" = "0" ]; then if [ -n "\${${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}:-}" ]; then eval "exec \$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; else ${startupSuccessCommand}; fi; fi;`,
+    `rm -f ${marker} ${tmp} 2>/dev/null;`,
+    `if [ "$status" = "0" ]; then if [ -n "\${${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}:-}" ]; then eval "\$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; else ${startupSuccessCommand}; fi; fi;`,
     'echo "Setup failed; skipping agent startup." >&2;',
     'exit "${status:-1}";',
     'fi;',
@@ -181,6 +188,7 @@ function buildWindowsStartupCommand(
   // gives us safe bounded file polling/parsing without a fragile batch label loop.
   const script = [
     '$marker = $env:ORCA_SETUP_MARKER',
+    '$tmp = $marker + ".tmp"',
     '$nonce = $env:ORCA_SETUP_NONCE',
     `$deadline = (Get-Date).AddSeconds(${timeout})`,
     'while ($true) {',
@@ -188,6 +196,7 @@ function buildWindowsStartupCommand(
     '    $content = Get-Content -LiteralPath $marker -TotalCount 1',
     '    if ($content -match "^([0-9A-Za-z_-]+):([0-9]+)$" -and $Matches[1] -eq $nonce) {',
     '      $setupStatus = [int]$Matches[2]',
+    '      Remove-Item -LiteralPath $marker, $tmp -Force -ErrorAction SilentlyContinue',
     '      if ($setupStatus -ne 0) {',
     '        [Console]::Error.WriteLine("Setup failed; skipping agent startup.")',
     '        exit $setupStatus',
