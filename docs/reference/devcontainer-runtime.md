@@ -12,7 +12,7 @@ Install the Linux Orca build in the devcontainer, then start a headless runtime:
 orca serve --json --port 6768 --pairing-address 127.0.0.1:31682
 ```
 
-Expose the container port to the host so desktop Orca can reach it. The pairing address must be the host-reachable address, not the container-local address.
+Expose the container port to the host so desktop Orca can reach it. The `127.0.0.1:31682` example assumes the devcontainer port is forwarded or bridged to host loopback at that fixed port. If your container is reached through a different host address, pass that host-reachable address instead; do not use a container-only loopback address that the desktop cannot reach.
 
 Copy the `pairing.url` from the JSON output and save it on the desktop:
 

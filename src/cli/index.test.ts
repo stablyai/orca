@@ -2193,6 +2193,79 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('reports the imported setup id when devcontainer worktree base update fails', async () => {
+    callMock
+      .mockResolvedValueOnce(
+        okFixture('req_project_setup', {
+          result: {
+            project: {
+              id: 'git:bitbucket.org/acme/app',
+              displayName: 'app',
+              badgeColor: '#7c3aed',
+              sourceRepoIds: ['repo-1'],
+              createdAt: 1,
+              updatedAt: 1
+            },
+            setup: {
+              id: 'setup-devcontainer',
+              projectId: 'git:bitbucket.org/acme/app',
+              hostId: 'local',
+              repoId: 'repo-1',
+              path: '/workspaces/lac/projects/app',
+              displayName: 'app',
+              setupState: 'ready',
+              setupMethod: 'imported-existing-folder',
+              createdAt: 1,
+              updatedAt: 1
+            },
+            repo: {
+              id: 'repo-1',
+              path: '/workspaces/lac/projects/app',
+              displayName: 'app',
+              badgeColor: '#7c3aed',
+              addedAt: 1
+            }
+          }
+        })
+      )
+      .mockRejectedValueOnce(new Error('update failed'))
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'project',
+        'setup-devcontainer',
+        '--project',
+        'git:bitbucket.org/acme/app',
+        '--host',
+        'local',
+        '--path',
+        '/workspaces/lac/projects/app',
+        '--worktree-base-path',
+        '/workspaces/lac/projects/.worktrees/orca',
+        '--pairing-code',
+        'remote-runtime',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(2, 'projectHostSetup.update', {
+      setupId: 'setup-devcontainer',
+      updates: {
+        worktreeBasePath: '/workspaces/lac/projects/.worktrees/orca'
+      }
+    })
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'orca project setup-update --setup setup-devcontainer --worktree-base-path /workspaces/lac/projects/.worktrees/orca'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('rejects devcontainer setup without a paired remote runtime', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})

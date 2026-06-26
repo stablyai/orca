@@ -24,6 +24,7 @@ import {
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
 import { RuntimeClientError } from '../runtime-client'
+import type { RuntimeRpcSuccess } from '../runtime-client'
 
 function getOptionalRepoKind(flags: Map<string, string | boolean>): RepoKind | undefined {
   const kind = getOptionalStringFlag(flags, 'kind')
@@ -101,16 +102,28 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
         kind: getOptionalRepoKind(flags)
       } satisfies ProjectHostSetupExistingFolderArgs
     )
+    // setupExistingFolder does not accept worktreeBasePath, so apply the
+    // persistent worktree base in a follow-up update against the new setup id.
     const setupId = setupResult.result.result.setup.id
-    const updateResult = await client.call<{ result: ProjectHostSetupUpdateResult }>(
-      'projectHostSetup.update',
-      {
-        setupId,
-        updates: {
-          worktreeBasePath
-        }
-      } satisfies ProjectHostSetupUpdateArgs
-    )
+    let updateResult: RuntimeRpcSuccess<{ result: ProjectHostSetupUpdateResult }>
+    try {
+      updateResult = await client.call<{ result: ProjectHostSetupUpdateResult }>(
+        'projectHostSetup.update',
+        {
+          setupId,
+          updates: {
+            worktreeBasePath
+          }
+        } satisfies ProjectHostSetupUpdateArgs
+      )
+    } catch (error) {
+      const detail =
+        error instanceof Error && error.message ? ` Runtime error: ${error.message}` : ''
+      throw new RuntimeClientError(
+        'runtime_error',
+        `Imported folder but failed to set the worktree base. Rerun this command or use: orca project setup-update --setup ${setupId} --worktree-base-path ${worktreeBasePath}.${detail}`
+      )
+    }
     printResult(updateResult, json, formatProjectHostSetupUpdateResult)
   },
   'project setup-clone': async ({ flags, client, cwd, json }) => {
