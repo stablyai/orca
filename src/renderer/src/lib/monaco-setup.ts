@@ -70,6 +70,15 @@ monacoTS.javascriptDefaults.setCompilerOptions({
   jsx: monacoTS.JsxEmit.Preserve
 })
 
+// Why: the bundled TS service only resolves files it has already loaded and
+// can't preview unopened ones in a peek, so it never reaches cross-file
+// definitions here. The tree-sitter provider (lib/tree-sitter-definitions) owns
+// go-to-definition for TS/JS instead; disable Monaco's so the two don't both
+// answer and force a "Definitions (2)" peek. Hover/completions/references stay.
+for (const defaults of [monacoTS.typescriptDefaults, monacoTS.javascriptDefaults]) {
+  defaults.setModeConfiguration({ ...defaults.modeConfiguration, definitions: false })
+}
+
 registerVueLanguage(monaco)
 registerSvelteLanguage(monaco)
 registerAstroLanguage(monaco)

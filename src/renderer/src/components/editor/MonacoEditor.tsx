@@ -17,6 +17,7 @@ import { useContextualCopySetup } from './useContextualCopySetup'
 import { MAX_REVEAL_CONTENT_WAIT_FRAMES, performReveal } from './monaco-reveal'
 import { syncContentOnMount, syncContentUpdate } from './monaco-content-sync'
 import { getMonacoCodebaseSearchQuery } from './monaco-codebase-search'
+import { ensureTreeSitterDefinitions } from './ensure-tree-sitter-definitions'
 import {
   beginProgrammaticContentSync,
   endProgrammaticContentSync,
@@ -357,6 +358,7 @@ export default function MonacoEditor({
         () => languageRef.current
       )
       ensureMarkdownDocCompletionProvider(monaco)
+      ensureTreeSitterDefinitions(monaco)
       updateMarkdownCompletionDocuments()
 
       // Why: see comment on contentRef — reconcile the retained model against
