@@ -67,6 +67,52 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
     )
     printResult(result, json, formatProjectHostSetupResult)
   },
+  'project setup-devcontainer': async ({ flags, client, cwd, json }) => {
+    if (!client.isRemote) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Devcontainer setup requires a paired remote runtime. Use --environment, --pairing-code, ORCA_ENVIRONMENT, or ORCA_PAIRING_CODE.'
+      )
+    }
+    const rawPath = getRequiredStringFlag(flags, 'path')
+    const rawWorktreeBasePath = getRequiredStringFlag(flags, 'worktree-base-path')
+    const projectPath = resolveRepoPathArgument(
+      rawPath,
+      cwd,
+      client.isRemote,
+      'Devcontainer project setup'
+    )
+    const worktreeBasePath = resolveRepoPathArgument(
+      rawWorktreeBasePath,
+      cwd,
+      client.isRemote,
+      'Devcontainer worktree base path',
+      '--worktree-base-path'
+    )
+    const setupResult = await client.call<{ result: ProjectHostSetupResult }>(
+      'projectHostSetup.setupExistingFolder',
+      {
+        projectId: getRequiredStringFlag(flags, 'project'),
+        hostId: getRequiredStringFlag(
+          flags,
+          'host'
+        ) as ProjectHostSetupExistingFolderArgs['hostId'],
+        path: projectPath,
+        kind: getOptionalRepoKind(flags)
+      } satisfies ProjectHostSetupExistingFolderArgs
+    )
+    const setupId = setupResult.result.result.setup.id
+    const updateResult = await client.call<{ result: ProjectHostSetupUpdateResult }>(
+      'projectHostSetup.update',
+      {
+        setupId,
+        updates: {
+          worktreeBasePath
+        }
+      } satisfies ProjectHostSetupUpdateArgs
+    )
+    printResult(updateResult, json, formatProjectHostSetupUpdateResult)
+  },
   'project setup-clone': async ({ flags, client, cwd, json }) => {
     const rawDestination = getRequiredStringFlag(flags, 'destination')
     const args: ProjectHostSetupCloneArgs = {

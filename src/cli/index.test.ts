@@ -146,6 +146,9 @@ describe('orca root help', () => {
       'project setup-existing-folder Make a project available on a host by importing an existing folder'
     )
     expect(logSpy.mock.calls[0][0]).toContain(
+      'project setup-devcontainer Configure a paired devcontainer runtime checkout with persistent worktrees'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
       'project setup-create      Create independent project host setup metadata'
     )
     expect(logSpy.mock.calls[0][0]).toContain(
@@ -2079,6 +2082,208 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).not.toHaveBeenCalled()
     expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
       'Remote project setup requires --path to be an absolute path on the remote server.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('sets up a devcontainer project with a persistent remote worktree base', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setup', {
+        result: {
+          project: {
+            id: 'git:bitbucket.org/acme/app',
+            displayName: 'app',
+            badgeColor: '#7c3aed',
+            sourceRepoIds: ['repo-1'],
+            createdAt: 1,
+            updatedAt: 1
+          },
+          setup: {
+            id: 'setup-devcontainer',
+            projectId: 'git:bitbucket.org/acme/app',
+            hostId: 'local',
+            repoId: 'repo-1',
+            path: '/workspaces/lac/projects/app',
+            displayName: 'app',
+            setupState: 'ready',
+            setupMethod: 'imported-existing-folder',
+            createdAt: 1,
+            updatedAt: 1
+          },
+          repo: {
+            id: 'repo-1',
+            path: '/workspaces/lac/projects/app',
+            displayName: 'app',
+            badgeColor: '#7c3aed',
+            addedAt: 1
+          }
+        }
+      }),
+      okFixture('req_project_setup_update', {
+        result: {
+          project: {
+            id: 'git:bitbucket.org/acme/app',
+            displayName: 'app',
+            badgeColor: '#7c3aed',
+            sourceRepoIds: ['repo-1'],
+            createdAt: 1,
+            updatedAt: 1
+          },
+          setup: {
+            id: 'setup-devcontainer',
+            projectId: 'git:bitbucket.org/acme/app',
+            hostId: 'local',
+            repoId: 'repo-1',
+            path: '/workspaces/lac/projects/app',
+            worktreeBasePath: '/workspaces/lac/projects/.worktrees/orca',
+            displayName: 'app',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 1,
+            updatedAt: 1
+          },
+          repo: {
+            id: 'repo-1',
+            path: '/workspaces/lac/projects/app',
+            worktreeBasePath: '/workspaces/lac/projects/.worktrees/orca',
+            displayName: 'app',
+            badgeColor: '#7c3aed',
+            addedAt: 1
+          }
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'project',
+        'setup-devcontainer',
+        '--project',
+        'git:bitbucket.org/acme/app',
+        '--host',
+        'local',
+        '--path',
+        '/workspaces/lac/projects/app',
+        '--worktree-base-path',
+        '/workspaces/lac/projects/.worktrees/orca',
+        '--kind',
+        'git',
+        '--pairing-code',
+        'remote-runtime',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'projectHostSetup.setupExistingFolder', {
+      projectId: 'git:bitbucket.org/acme/app',
+      hostId: 'local',
+      path: '/workspaces/lac/projects/app',
+      kind: 'git'
+    })
+    expect(callMock).toHaveBeenNthCalledWith(2, 'projectHostSetup.update', {
+      setupId: 'setup-devcontainer',
+      updates: {
+        worktreeBasePath: '/workspaces/lac/projects/.worktrees/orca'
+      }
+    })
+  })
+
+  it('rejects devcontainer setup without a paired remote runtime', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'project',
+        'setup-devcontainer',
+        '--project',
+        'git:bitbucket.org/acme/app',
+        '--host',
+        'local',
+        '--path',
+        '/workspaces/lac/projects/app',
+        '--worktree-base-path',
+        '/workspaces/lac/projects/.worktrees/orca',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Devcontainer setup requires a paired remote runtime.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects remote devcontainer project relative paths before setup calls', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'project',
+        'setup-devcontainer',
+        '--project',
+        'git:bitbucket.org/acme/app',
+        '--host',
+        'local',
+        '--path',
+        './app',
+        '--worktree-base-path',
+        '/workspaces/lac/projects/.worktrees/orca',
+        '--pairing-code',
+        'remote-runtime',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Devcontainer project setup requires --path to be an absolute path on the remote server.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects remote devcontainer relative worktree base paths before setup calls', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'project',
+        'setup-devcontainer',
+        '--project',
+        'git:bitbucket.org/acme/app',
+        '--host',
+        'local',
+        '--path',
+        '/workspaces/lac/projects/app',
+        '--worktree-base-path',
+        './.worktrees/orca',
+        '--pairing-code',
+        'remote-runtime',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Devcontainer worktree base path requires --worktree-base-path to be an absolute path on the remote server.'
     )
     expect(process.exitCode).toBe(1)
 
