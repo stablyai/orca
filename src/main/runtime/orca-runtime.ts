@@ -414,6 +414,10 @@ import {
   toLocalWorktreeRuntimePath
 } from '../local-worktree-filesystem'
 import {
+  pruneStaleLocalWorktreeRegistrationAfterFilesystemRemoval,
+  recoverLocalWindowsLongPathWorktreeRemoval
+} from '../local-worktree-removal-recovery'
+import {
   connect as connectLinear,
   disconnect as disconnectLinear,
   getStatus as getLinearStatus,
@@ -14246,6 +14250,44 @@ export class OrcaRuntimeService {
       }
       const canonicalWorktreePath = registeredWorktree.path
       const deleteBranch = removedMeta?.preserveBranchOnDelete !== true
+
+      // Why: a prior forced Windows recovery can delete the directory but leave
+      // Git's stale registration; retry by pruning instead of removing a missing path.
+      if (
+        !repo.connectionId &&
+        force === true &&
+        process.platform === 'win32' &&
+        (isWindowsAbsolutePathLike(canonicalWorktreePath) || !!localWorktreeGitOptions.wslDistro) &&
+        removedMeta &&
+        (await isRuntimeWorktreePathMissing(repo, canonicalWorktreePath, localWorktreeGitOptions))
+      ) {
+        const removalResult = await pruneStaleLocalWorktreeRegistrationAfterFilesystemRemoval({
+          canonicalWorktreePath,
+          repoPath: repo.path,
+          localWorktreeGitOptions,
+          registeredWorktree,
+          deleteBranch
+        })
+        await cleanupUnusedWorktreePushTargetRemote(
+          repo.path,
+          removalTarget.id,
+          removedPushTarget,
+          store,
+          localWorktreeGitOptions
+        )
+        this.rememberPreservedBranchCleanupTarget(
+          removalTarget.id,
+          removalResult,
+          registeredWorktree.head,
+          removedPushTarget
+        )
+        this.clearOptimisticReconcileToken(removalTarget.id)
+        this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
+        this.invalidateResolvedWorktreeCache()
+        invalidateAuthorizedRootsCache()
+        this.notifyWorktreesChanged(repo.id)
+        return removalResult ?? {}
+      }
       if (repo.connectionId) {
         const rawRemovalResult = await (deleteBranch
           ? provider!.removeWorktree(canonicalWorktreePath, force)
@@ -14356,7 +14398,24 @@ export class OrcaRuntimeService {
           registeredWorktree.head
         )
       } catch (error) {
-        if (isOrphanedWorktreeError(error)) {
+        // Why: Git for Windows can fail long-path directory deletion after
+        // Orca has already validated the target and explicit force delete.
+        const recoveredRemovalResult = await recoverLocalWindowsLongPathWorktreeRemoval({
+          error,
+          force,
+          canonicalWorktreePath,
+          repoPath: repo.path,
+          localWorktreeGitOptions,
+          registeredWorktree,
+          deleteBranch,
+          closeWatcher: (worktreePath) =>
+            closeLocalWatcherForWorktreePath(worktreePath).catch((err) => {
+              console.warn(`[filesystem-watcher] failed to close ${worktreePath}:`, err)
+            })
+        })
+        if (recoveredRemovalResult) {
+          removalResult = recoveredRemovalResult
+        } else if (isOrphanedWorktreeError(error)) {
           const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
           if (
             await canSafelyRemoveOrphanedWorktreeDirectory(
@@ -14401,8 +14460,9 @@ export class OrcaRuntimeService {
           return {
             ...(warning ? { warning } : {})
           }
+        } else {
+          throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
         }
-        throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
       }
 
       await cleanupUnusedWorktreePushTargetRemote(

@@ -18,6 +18,7 @@ import {
   mergeWorktree,
   parseWorktreeId,
   formatWorktreeRemovalError,
+  isWindowsLongPathWorktreeRemovalError,
   isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError,
   areWorktreePathsEqual
@@ -532,6 +533,32 @@ describe('isOrphanedWorktreeError', () => {
   it('returns false for non-Error input', () => {
     expect(isOrphanedWorktreeError('string error')).toBe(false)
     expect(isOrphanedWorktreeError(null)).toBe(false)
+  })
+})
+
+describe('isWindowsLongPathWorktreeRemovalError', () => {
+  it('matches Git for Windows long-path deletion failures on Windows', () => {
+    const error = Object.assign(new Error('git worktree remove failed'), {
+      stderr: 'error: failed to delete some/deep/file: Filename too long'
+    })
+
+    expect(isWindowsLongPathWorktreeRemovalError(error, 'win32')).toBe(true)
+  })
+
+  it('does not match long-path text off Windows', () => {
+    const error = Object.assign(new Error('file name too long'), {
+      stderr: 'Filename too long'
+    })
+
+    expect(isWindowsLongPathWorktreeRemovalError(error, 'linux')).toBe(false)
+  })
+
+  it('does not match unrelated Git removal failures on Windows', () => {
+    const error = Object.assign(new Error('git worktree remove failed'), {
+      stderr: 'fatal: contains modified or untracked files'
+    })
+
+    expect(isWindowsLongPathWorktreeRemovalError(error, 'win32')).toBe(false)
   })
 })
 
