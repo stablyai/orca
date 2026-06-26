@@ -14,6 +14,8 @@ import {
 } from 'lucide-react'
 import { useAppStore, type AppState } from '@/store'
 import {
+  buildGitHubPRRefreshStateClearToken,
+  getGitHubPRRefreshStateExpiryAt,
   mergePRCommentIntoList,
   prChecksCacheSuffix,
   prCommentsCacheSuffix
@@ -94,6 +96,8 @@ import {
   getChecksPanelEmptyStateCopy,
   shouldShowChecksPanelPublishBranchAction
 } from './checks-panel-empty-state'
+import { hasAmbiguousGitHubHostedReviewForChecksPanel } from './checks-panel-ambiguous-github-review'
+import { recordChecksPanelPRRefreshBreadcrumb } from './checks-panel-pr-refresh-breadcrumb'
 import {
   cancelRuntimeGeneratePullRequestFields,
   generateRuntimePullRequestFields,
@@ -372,6 +376,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const prCache = useAppStore((s) => s.prCache)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
+  const expireGitHubPRRefreshState = useAppStore((s) => s.expireGitHubPRRefreshState)
   const getHostedReviewCreationEligibility = useAppStore(
     (s) => s.getHostedReviewCreationEligibility
   )
@@ -559,6 +564,7 @@ export default function ChecksPanel(): React.JSX.Element {
   // Done during render (not useEffect) so the reset takes effect on the same
   // paint as the context change; useEffect would leave one stale render.
   const [prevPanelContextKey, setPrevPanelContextKey] = useState(panelContextKey)
+  const [prRefreshStateNow, setPrRefreshStateNow] = useState(() => Date.now())
   if (panelContextKey !== prevPanelContextKey) {
     setPrevPanelContextKey(panelContextKey)
     setEditingTitle(false)
@@ -572,6 +578,7 @@ export default function ChecksPanel(): React.JSX.Element {
     setIsRefreshing(false)
     setEmptyRefreshing(false)
     setConflictDetailsRefreshing(false)
+    setPrRefreshStateNow(Date.now())
     createPrInFlightRef.current = null
     setIsCreatingPr(false)
     setCreatePrError(null)
@@ -619,10 +626,16 @@ export default function ChecksPanel(): React.JSX.Element {
     refreshContextKeyRef.current = refreshContextKey
     refreshRequestKeyRef.current = null
   }
-  const pr: PRInfo | null = prCacheKey ? (prCache[prCacheKey]?.data ?? null) : null
+  const prCacheEntry = prCacheKey ? prCache[prCacheKey] : undefined
+  const pr: PRInfo | null = prCacheEntry?.data ?? null
   const hostedReview = useAppStore((s) =>
     hostedReviewCacheKey ? (s.hostedReviewCache[hostedReviewCacheKey]?.data ?? null) : null
   )
+  const hasAmbiguousGitHubHostedReview = hasAmbiguousGitHubHostedReviewForChecksPanel({
+    hostedReview,
+    prCacheEntry,
+    prCacheKey
+  })
   // Fetch PR data when the active worktree/branch changes.
   // Why: branch lookup is lossy for fork/deleted-head PRs; reuse a known PR
   // number from metadata or the visible cache whenever we have one.
@@ -640,9 +653,60 @@ export default function ChecksPanel(): React.JSX.Element {
   const isGitLabReviewContext = Boolean(activeGitLabReview || linkedGitLabMR !== null)
   const activeConflictReview = activeReview?.mergeable === 'CONFLICTING' ? activeReview : null
   const prRefreshState = useAppStore((s) =>
+    prCacheKey ? s.getEffectiveGitHubPRRefreshState(prCacheKey, prRefreshStateNow) : undefined
+  )
+  const rawPRRefreshState = useAppStore((s) =>
     prCacheKey ? s.prRefreshStates[prCacheKey] : undefined
   )
   const prNumber = pr?.number ?? null
+
+  useEffect(() => {
+    const expiryAt = getGitHubPRRefreshStateExpiryAt(rawPRRefreshState)
+    if (!prCacheKey || expiryAt === null) {
+      return
+    }
+    const timeout = window.setTimeout(
+      () => {
+        setPrRefreshStateNow(Date.now())
+        const storeState = useAppStore.getState()
+        const rawState = storeState.prRefreshStates[prCacheKey]
+        const token = buildGitHubPRRefreshStateClearToken(
+          rawState,
+          storeState.prRefreshSequences,
+          prCacheKey
+        )
+        if (!token) {
+          return
+        }
+        // Why: time alone does not publish Zustand updates; this timeout clears
+        // abandoned active refresh UI without treating expiry as no-PR evidence.
+        recordChecksPanelPRRefreshBreadcrumb({
+          event: 'stale_cleared',
+          provider: 'github',
+          repoId: repo?.id,
+          worktreeId: activeWorktreeId,
+          branch,
+          prCacheKey,
+          prNumber,
+          prState: pr?.state,
+          prChecksStatus: pr?.checksStatus,
+          refreshState: rawState
+        })
+        storeState.expireGitHubPRRefreshState(prCacheKey, token)
+      },
+      Math.max(0, expiryAt - Date.now() + 1)
+    )
+    return () => window.clearTimeout(timeout)
+  }, [
+    activeWorktreeId,
+    branch,
+    pr?.checksStatus,
+    pr?.state,
+    prCacheKey,
+    prNumber,
+    rawPRRefreshState,
+    repo?.id
+  ])
 
   // Why: select only timestamps (not whole cache records) so the entry-refresh
   // effect doesn't re-run on every cache mutation. See
@@ -1775,8 +1839,23 @@ export default function ChecksPanel(): React.JSX.Element {
     const refreshRequestKey = `${activeWorktreeId ?? ''}::${prCacheKey}::${branch}::${Date.now()}::${Math.random()}`
     refreshRequestKeyRef.current = refreshRequestKey
     const isCurrentRequest = (): boolean => refreshRequestKeyRef.current === refreshRequestKey
+    const refreshStartedAt = Date.now()
+    const refreshProvider = isGitLabReviewContext ? 'gitlab' : 'github'
+    let refreshOutcome = 'started'
     setIsRefreshing(true)
     setGitStatusRefreshNonce((value) => value + 1)
+    recordChecksPanelPRRefreshBreadcrumb({
+      event: 'start',
+      provider: refreshProvider,
+      repoId: repo.id,
+      worktreeId: activeWorktreeId,
+      branch,
+      prCacheKey,
+      prNumber: activeGitLabReview?.number ?? prNumber,
+      prState: activeGitLabReview?.state ?? pr?.state,
+      prChecksStatus: pr?.checksStatus,
+      refreshState: prCacheKey ? useAppStore.getState().prRefreshStates[prCacheKey] : null
+    })
     try {
       if (isGitLabReviewContext) {
         const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
@@ -1801,19 +1880,35 @@ export default function ChecksPanel(): React.JSX.Element {
             headShaOverride: refreshedGitLabReview.headSha,
             commitAsCurrent: true
           })
+          refreshOutcome = 'review'
         } else {
           setChecks([])
           setComments([])
+          refreshOutcome = 'no-review'
         }
         return
       }
-      const refreshedPR = await fetchPRForBranch(repo.path, branch, {
-        force: true,
-        repoId: repo.id,
-        worktreeId: activeWorktreeId ?? undefined,
-        linkedPRNumber: linkedPR,
-        fallbackPRNumber: fallbackGitHubPRNumber
-      })
+      const refreshStoreState = useAppStore.getState()
+      const rawPRRefreshState = refreshStoreState.prRefreshStates[prCacheKey]
+      const startedPRRefreshToken = buildGitHubPRRefreshStateClearToken(
+        rawPRRefreshState,
+        refreshStoreState.prRefreshSequences,
+        prCacheKey
+      )
+      let refreshedPR: PRInfo | null = null
+      try {
+        refreshedPR = await fetchPRForBranch(repo.path, branch, {
+          force: true,
+          repoId: repo.id,
+          worktreeId: activeWorktreeId ?? undefined,
+          linkedPRNumber: linkedPR,
+          fallbackPRNumber: fallbackGitHubPRNumber
+        })
+      } finally {
+        if (startedPRRefreshToken) {
+          expireGitHubPRRefreshState(prCacheKey, startedPRRefreshToken)
+        }
+      }
       if (!isCurrentRequest()) {
         return
       }
@@ -1832,6 +1927,7 @@ export default function ChecksPanel(): React.JSX.Element {
         return
       }
       if (refreshedPR) {
+        refreshOutcome = 'pr'
         const prRequestKey = checksPanelAsyncResultKey(
           prCacheKey,
           branch,
@@ -1914,8 +2010,27 @@ export default function ChecksPanel(): React.JSX.Element {
       } else if (isCurrentRequest()) {
         setChecks([])
         setComments([])
+        refreshOutcome = 'no-pr'
       }
+    } catch (error) {
+      refreshOutcome = 'error'
+      throw error
     } finally {
+      recordChecksPanelPRRefreshBreadcrumb({
+        event: 'done',
+        provider: refreshProvider,
+        repoId: repo.id,
+        worktreeId: activeWorktreeId,
+        branch,
+        prCacheKey,
+        prNumber: activeGitLabReview?.number ?? prNumber,
+        prState: activeGitLabReview?.state ?? pr?.state,
+        prChecksStatus: pr?.checksStatus,
+        refreshState: prCacheKey ? useAppStore.getState().prRefreshStates[prCacheKey] : null,
+        outcome: refreshOutcome,
+        durationMs: Date.now() - refreshStartedAt,
+        currentRequest: isCurrentRequest()
+      })
       if (isCurrentRequest()) {
         setIsRefreshing(false)
       }
@@ -1926,8 +2041,10 @@ export default function ChecksPanel(): React.JSX.Element {
     activeWorktreeId,
     activeGitLabReview,
     prNumber,
+    pr?.checksStatus,
     pr?.headSha,
     pr?.prRepo,
+    pr?.state,
     prCacheKey,
     linkedPR,
     fallbackGitHubPRNumber,
@@ -1941,6 +2058,7 @@ export default function ChecksPanel(): React.JSX.Element {
     fetchPRChecks,
     fetchPRComments,
     fetchHostedReviewForBranch,
+    expireGitHubPRRefreshState,
     isCurrentAsyncResult
   ])
 
@@ -3297,7 +3415,8 @@ export default function ChecksPanel(): React.JSX.Element {
       hasUpstream: publishActionRemoteStatus?.hasUpstream,
       hasCurrentBranch: Boolean(branch),
       reviewLabel: emptyReviewLabel,
-      reviewShortLabel: emptyReviewShortLabel
+      reviewShortLabel: emptyReviewShortLabel,
+      hasAmbiguousGitHubHostedReview
     })
     return (
       <div className="px-4 py-6">

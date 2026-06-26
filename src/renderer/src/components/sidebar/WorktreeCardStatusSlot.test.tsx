@@ -109,6 +109,30 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).not.toContain('text-amber-500')
   })
 
+  it('suppresses the new-card unread badge while unread status is permission', () => {
+    mocks.status = 'permission'
+    const markup = renderToStaticMarkup(
+      <WorktreeCardStatusSlot
+        worktreeId="wt-1"
+        showStatus
+        showUnreadAction
+        isUnread
+        unreadTooltip="Mark as read"
+        onPointerDown={vi.fn()}
+        onToggleUnread={vi.fn()}
+        newCardStyle
+        hasBranchIdentity={false}
+      />
+    )
+
+    expect(markup).toContain('Needs permission · Unread')
+    expect(markup).toContain('bg-amber-500')
+    expect(markup).not.toContain('data-worktree-status-lane-unread=""')
+    expect(markup).not.toContain('data-worktree-unread-alert=""')
+    expect(markup).not.toContain('aria-label="Mark as read"')
+    expect(markup).not.toContain('lucide-bell')
+  })
+
   it('keeps legacy unread working cards on the unread bell control', () => {
     mocks.status = 'working'
     const markup = renderToStaticMarkup(

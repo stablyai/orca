@@ -168,6 +168,22 @@ function hasMatchingStablePaneLayout(
   return layoutContainsLeaf(terminalLayoutsByTabId[tabId]?.root, leafId)
 }
 
+function hasRestorableStablePanePty(
+  tab: TerminalTab,
+  tabId: string,
+  leafId: string,
+  ptyIdsByTabId: Record<string, string[] | undefined>,
+  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
+): boolean {
+  const layout = terminalLayoutsByTabId[tabId]
+  const hasLeafPty = Boolean(layout?.ptyIdsByLeafId?.[leafId])
+  const isSingleLeafLayout = layout?.root?.type === 'leaf' && layout.root.leafId === leafId
+
+  return Boolean(
+    hasLeafPty || (isSingleLeafLayout && (tab.ptyId || (ptyIdsByTabId[tabId]?.length ?? 0) > 0))
+  )
+}
+
 function findSameWorktreeTab(
   worktreeTabs: readonly TerminalTab[],
   tabId: string
@@ -187,8 +203,20 @@ function recordPaneIsOwnedByPreservedPane(
     }
     const tabId = record.tabId ?? stable.tabId
     const tab = findSameWorktreeTab(worktreeTabs, tabId)
-    return Boolean(
-      tab && hasMatchingStablePaneLayout(tabId, stable.leafId, state.terminalLayoutsByTabId)
+    if (!tab || !hasMatchingStablePaneLayout(tabId, stable.leafId, state.terminalLayoutsByTabId)) {
+      return false
+    }
+    if (record.origin !== 'quit' && record.origin !== 'live') {
+      return true
+    }
+    // Why: live/quit captures rely on pane-level cold restore. A preserved
+    // leaf without a PTY/session id can repaint scrollback but cannot resume.
+    return hasRestorableStablePanePty(
+      tab,
+      tabId,
+      stable.leafId,
+      state.ptyIdsByTabId,
+      state.terminalLayoutsByTabId
     )
   }
 
@@ -223,20 +251,16 @@ export function resumeSleepingAgentSessionsForWorktree(worktreeId: string): numb
   const worktreeRecords = Object.values(state.sleepingAgentSessionsByPaneKey)
     .filter((record) => record.worktreeId === worktreeId)
     .sort((a, b) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)
-  const records = worktreeRecords
-    // Why: pane-owned captures (#5232/#5626) cover panes that still exist in
-    // the restored session. Those panes own their own recovery — warm reattach
-    // when the daemon kept the agent alive, or pane-level cold-restore resume.
-    .filter((record) => record.origin !== 'quit' && record.origin !== 'live')
 
   const paneOwnedClaimKeys = new Set(
     worktreeRecords
+      .filter((record) => !isInvalidWorktreeActivationRecord(record))
       .filter((record) => recordPaneIsOwnedByPreservedPane(record, state))
       .map(getProviderSessionClaimKey)
   )
 
   let launched = 0
-  for (const record of records) {
+  for (const record of worktreeRecords) {
     const claimKey = getProviderSessionClaimKey(record)
     if (isInvalidWorktreeActivationRecord(record)) {
       state.clearSleepingAgentSession(record.paneKey)

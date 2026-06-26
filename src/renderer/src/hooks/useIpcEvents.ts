@@ -1359,8 +1359,9 @@ export function useIpcEvents(): void {
             if (shouldActivate) {
               activateTerminalInitiatedWorktree(store, worktreeId)
             }
+            const worktreeTabs = store.tabsByWorktree[worktreeId] ?? []
             const existingTab = ptyId
-              ? (store.tabsByWorktree[worktreeId] ?? []).find(
+              ? worktreeTabs.find(
                   (candidate) =>
                     candidate.ptyId === ptyId ||
                     (store.ptyIdsByTabId[candidate.id] ?? []).includes(ptyId)
@@ -1368,12 +1369,25 @@ export function useIpcEvents(): void {
               : undefined
             const isSplitReveal = Boolean(ptyId && tabId && leafId && splitFromLeafId)
             const splitTargetTab = isSplitReveal
-              ? (store.tabsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === tabId)
+              ? worktreeTabs.find((candidate) => candidate.id === tabId)
               : undefined
             if (isSplitReveal && !splitTargetTab) {
               throw new Error(`Terminal tab ${tabId} not found`)
             }
-            const reusedTab = existingTab ?? splitTargetTab
+            const hintedPendingTab =
+              ptyId && tabId && !isSplitReveal
+                ? worktreeTabs.find((candidate) => {
+                    if (candidate.id !== tabId) {
+                      return false
+                    }
+                    const candidatePtyIds = store.ptyIdsByTabId[candidate.id] ?? []
+                    return candidate.ptyId == null && candidatePtyIds.length === 0
+                  })
+                : undefined
+            // Why: runtime fallback can reveal a PTY for a renderer-created
+            // pending tab; that id collision is adoption only until another
+            // PTY is already associated with the hinted tab.
+            const reusedTab = existingTab ?? splitTargetTab ?? hintedPendingTab
             const tab =
               reusedTab ??
               (ptyId

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { toast } from 'sonner'
-import { getConnectionId } from '@/lib/connection-context'
+import { getAiVaultResumeWorkspaceTargetStatus } from '@/lib/ai-vault-resume-target'
 import {
   AI_VAULT_SESSION_DRAG_END_EVENT,
   AI_VAULT_SESSION_DRAG_START_EVENT,
@@ -9,6 +9,7 @@ import {
   readAiVaultSessionDragData
 } from '@/lib/ai-vault-session-drag'
 import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
+import { useAppStore } from '@/store'
 import { resolveDropZone } from './tab-drop-zone'
 import type { TabDropZone } from './useTabDragSplit'
 import { translate } from '@/i18n/i18n'
@@ -165,8 +166,8 @@ export default function AiVaultSessionDropLayer({
         return true
       }
 
-      const connectionId = getConnectionId(worktreeId)
-      if (connectionId) {
+      const targetStatus = getAiVaultResumeWorkspaceTargetStatus(useAppStore.getState(), worktreeId)
+      if (targetStatus === 'non-local') {
         toast.error(
           translate(
             'auto.components.tab.group.AiVaultSessionDropLayer.localWorkspacesOnly',
@@ -175,7 +176,7 @@ export default function AiVaultSessionDropLayer({
         )
         return true
       }
-      if (connectionId === undefined) {
+      if (targetStatus === 'unknown') {
         toast.error(
           translate(
             'auto.components.tab.group.AiVaultSessionDropLayer.openLocalWorkspace',

@@ -37,6 +37,29 @@ type RestartSession = {
   dispose: () => Promise<void>
 }
 
+async function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timeout = setTimeout(resolve, ms)
+    timeout.unref?.()
+  })
+}
+
+async function removeProfileDir(userDataDir: string): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      rmSync(userDataDir, { recursive: true, force: true })
+      return
+    } catch (error) {
+      if (attempt === 4) {
+        throw error
+      }
+      // Why: on Windows, taskkill can return before Electron/PTY handles are
+      // fully released, making immediate temp-profile deletion flaky.
+      await delay(250)
+    }
+  }
+}
+
 function shouldLaunchHeadful(testInfo: TestInfo): boolean {
   return testInfo.project.metadata.orcaHeadful === true
 }
@@ -90,7 +113,7 @@ export function createRestartSession(testInfo: TestInfo): RestartSession {
   const dispose = async (): Promise<void> => {
     await cleanupE2EDaemons(userDataDir)
     if (existsSync(userDataDir)) {
-      rmSync(userDataDir, { recursive: true, force: true })
+      await removeProfileDir(userDataDir)
     }
   }
 

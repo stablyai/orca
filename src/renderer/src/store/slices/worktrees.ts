@@ -72,6 +72,7 @@ const pendingActivationTerminalPrepCancels = new Map<string, () => void>()
 const detachedHeadAutoDerivedDisplayNames = new Map<string, string>()
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
 const hostedReviewPushTargetLookupsInFlight = new Set<string>()
+const detectedWorktreeRefreshesInFlight = new Map<string, Promise<DetectedWorktreeListResult>>()
 
 async function mapReposForWorktreeRefresh<TRepo extends { id: string }, TResult>(
   repos: readonly TRepo[],
@@ -822,6 +823,44 @@ async function listDetectedWorktreesForRepo(
       { timeoutMs: 15_000 }
     )
     return toLegacyDetectedWorktreeResult(repoId, legacy)
+  }
+}
+
+function detectedWorktreeRefreshKey(
+  settings: AppState['settings'],
+  repoId: string,
+  options: { executionHostId: ExecutionHostId; requireAuthoritative?: boolean }
+): string {
+  const target = getActiveRuntimeTarget(settings)
+  const targetKey = target.kind === 'local' ? 'local' : `runtime:${target.environmentId}`
+  return [
+    repoId,
+    options.executionHostId,
+    targetKey,
+    options.requireAuthoritative === true ? 'authoritative' : 'best-effort'
+  ].join('\n')
+}
+
+async function listDetectedWorktreesForRepoCoalesced(
+  settings: AppState['settings'],
+  repoId: string,
+  options: { executionHostId: ExecutionHostId; requireAuthoritative?: boolean }
+): Promise<DetectedWorktreeListResult> {
+  const key = detectedWorktreeRefreshKey(settings, repoId, options)
+  const existing = detectedWorktreeRefreshesInFlight.get(key)
+  if (existing) {
+    return existing
+  }
+  // Why: startup/event fan-out can ask for the same repo/host refresh many
+  // times at once; share only the scan promise so state merge semantics stay local.
+  const refresh = listDetectedWorktreesForRepo(settings, repoId)
+  detectedWorktreeRefreshesInFlight.set(key, refresh)
+  try {
+    return await refresh
+  } finally {
+    if (detectedWorktreeRefreshesInFlight.get(key) === refresh) {
+      detectedWorktreeRefreshesInFlight.delete(key)
+    }
   }
 }
 
@@ -1691,12 +1730,26 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
   fetchDetectedWorktrees: async (repoId) => {
     try {
-      const result = await listDetectedWorktreesForRepo(settingsForRepoOwner(get(), repoId), repoId)
-      set((s) =>
-        areDetectedWorktreeResultsEqual(s.detectedWorktreesByRepo[repoId], result)
-          ? s
-          : { detectedWorktreesByRepo: { ...s.detectedWorktreesByRepo, [repoId]: result } }
+      const ownerState = get()
+      const hostId = repoHostId(ownerState, repoId)
+      const result = await listDetectedWorktreesForRepoCoalesced(
+        settingsForRepoOwner(ownerState, repoId, hostId),
+        repoId,
+        { executionHostId: hostId }
       )
+      set((s) => {
+        // Why: detected-only refreshes can overlap host-scoped visible refreshes;
+        // keep detected state stamped/merged so SSH/runtime rows are not clobbered.
+        const mergedDetected = mergeDetectedWorktreesForHost(
+          s.detectedWorktreesByRepo[repoId],
+          result,
+          hostId,
+          worktreeHostMatchOptions(s, repoId, hostId)
+        )
+        return areDetectedWorktreeResultsEqual(s.detectedWorktreesByRepo[repoId], mergedDetected)
+          ? s
+          : { detectedWorktreesByRepo: { ...s.detectedWorktreesByRepo, [repoId]: mergedDetected } }
+      })
       return result
     } catch (err) {
       console.error(`Failed to fetch detected worktrees for repo ${repoId}:`, err)
@@ -1709,7 +1762,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const ownerState = get()
       const hostId = repoHostId(ownerState, repoId)
       const settings = settingsForRepoOwner(ownerState, repoId, hostId)
-      const detected = await listDetectedWorktreesForRepo(settings, repoId)
+      const detected = await listDetectedWorktreesForRepoCoalesced(settings, repoId, {
+        executionHostId: hostId,
+        requireAuthoritative: options?.requireAuthoritative
+      })
       if (options?.requireAuthoritative && !detected.authoritative) {
         return false
       }
@@ -1834,7 +1890,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       await mapReposForWorktreeRefresh(repos, async (r) => {
         const hostId = getRepoExecutionHostId(r)
         const settings = settingsForKnownRepoOwner(get().settings, r)
-        const detected = await listDetectedWorktreesForRepo(settings, r.id)
+        const detected = await listDetectedWorktreesForRepoCoalesced(settings, r.id, {
+          executionHostId: hostId
+        })
         const worktrees = toVisibleWorktrees(detected, hostId)
         set((s) => {
           const matchOptions = worktreeHostMatchOptions(s, r.id, hostId)
@@ -1890,9 +1948,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       > => {
         try {
           const hostId = getRepoExecutionHostId(r)
-          const detected = await listDetectedWorktreesForRepo(
+          const detected = await listDetectedWorktreesForRepoCoalesced(
             settingsForKnownRepoOwner(get().settings, r),
-            r.id
+            r.id,
+            { executionHostId: hostId }
           )
           const list = toVisibleWorktrees(detected, hostId)
           const current = get().worktreesByRepo[r.id]

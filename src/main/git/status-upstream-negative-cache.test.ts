@@ -92,8 +92,10 @@ describe('local upstream negative cache', () => {
   it('keeps an older automatic negative probe from overwriting a strict positive result', async () => {
     let originBranchExists = false
     let deferredOriginReject: ((error: Error) => void) | null = null
+    let statusCommandCalls = 0
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args.includes('status')) {
+        statusCommandCalls += 1
         return {
           stdout: '# branch.oid abcdef1234567890\n# branch.head feature\n'
         }
@@ -123,6 +125,7 @@ describe('local upstream negative cache', () => {
 
     originBranchExists = true
     const strict = await getStatus('/repo', { bypassEffectiveUpstreamNegativeCache: true })
+    expect(statusCommandCalls).toBe(2)
     if (!deferredOriginReject) {
       throw new Error('expected deferred origin reject')
     }

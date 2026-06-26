@@ -2,7 +2,12 @@ import type { PickerOption } from '../components/PickerModal'
 import type { MobileGroupMode, MobileSortMode } from './workspace-view-settings'
 
 export const WORKSPACE_SORT_OPTIONS: PickerOption<MobileSortMode>[] = [
-  { value: 'smart', label: 'Smart', subtitle: 'Unread and active first' },
+  // Why: desktop and persisted state keep the `smart` key, while mobile shows the product label.
+  {
+    value: 'smart',
+    label: 'Agent activity',
+    subtitle: 'Agents that need attention, then recent activity'
+  },
   { value: 'name', label: 'Name', subtitle: 'Alphabetical by name' },
   { value: 'recent', label: 'Recent', subtitle: 'Most recent output first' },
   { value: 'repo', label: 'Repo', subtitle: 'Repository, then workspace name' },

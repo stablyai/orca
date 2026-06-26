@@ -151,7 +151,8 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
         startupPlan: null,
         quickPrompt: '',
         quickTelemetry: null
-      })
+      }),
+      { revealCreationSurface: false }
     )
   })
 
@@ -573,7 +574,8 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
         pushTarget: { remote: 'origin', branch: 'feature/from-pr' },
         branchNameOverride: 'feature/from-pr',
         compareBaseRef: 'main'
-      })
+      }),
+      { revealCreationSurface: false }
     )
   })
 

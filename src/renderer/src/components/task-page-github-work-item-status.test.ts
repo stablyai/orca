@@ -33,9 +33,16 @@ describe('task-page-github-work-item-status', () => {
     expect(isTaskPageGitHubDraftPR({ type: 'pr', state: 'open' })).toBe(false)
   })
 
-  it('uses distinct tones for merged and open PRs', () => {
-    expect(getTaskPageGitHubWorkItemStateTone({ type: 'pr', state: 'merged' })).toContain('purple')
-    expect(getTaskPageGitHubWorkItemStateTone({ type: 'pr', state: 'open' })).toContain('emerald')
+  it('uses distinct muted tones for merged and open PRs', () => {
+    const mergedTone = getTaskPageGitHubWorkItemStateTone({ type: 'pr', state: 'merged' })
+    expect(mergedTone).toContain('purple')
+    expect(mergedTone).toContain('text-purple-700')
+    expect(mergedTone).not.toContain('bg-purple-600')
+
+    const openTone = getTaskPageGitHubWorkItemStateTone({ type: 'pr', state: 'open' })
+    expect(openTone).toContain('emerald')
+    expect(openTone).toContain('text-emerald-700')
+    expect(openTone).not.toContain('bg-emerald-600')
   })
 
   it('handles edge cases gracefully', () => {

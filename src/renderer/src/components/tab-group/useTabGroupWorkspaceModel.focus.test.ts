@@ -133,6 +133,7 @@ function resetStore(): void {
     reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 0 })),
     settings: { activeRuntimeEnvironmentId: null },
     tabsByWorktree: { 'wt-1': [terminalTab] },
+    terminalLayoutsByTabId: {},
     unifiedTabsByWorktree: { 'wt-1': [unifiedTab] },
     activateTab: mocks.activateTab,
     closeBrowserTab: mocks.closeBrowserTab,
@@ -186,7 +187,35 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(mocks.activateTab).toHaveBeenCalledWith('unified-terminal-1')
     expect(mocks.setActiveTab).toHaveBeenCalledWith('terminal-1')
     expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
-    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1')
+    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', null)
+  })
+
+  it('returns keyboard focus to the active split pane leaf when a terminal tab is activated', async () => {
+    storeBox.state = {
+      ...storeBox.state,
+      terminalLayoutsByTabId: {
+        'terminal-1': {
+          activeLeafId: 'right-leaf',
+          ptyIdsByLeafId: {
+            'left-leaf': 'pty-left',
+            'right-leaf': 'pty-right'
+          },
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: 'left-leaf' },
+            second: { type: 'leaf', leafId: 'right-leaf' }
+          },
+          expandedLeafId: null
+        }
+      }
+    }
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.activateTerminal('terminal-1')
+
+    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', 'right-leaf')
   })
 
   it('toggles pane expansion from the split-group tab bar collapse button', async () => {

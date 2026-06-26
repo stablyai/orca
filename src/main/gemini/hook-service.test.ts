@@ -25,6 +25,9 @@ vi.mock('os', async (importOriginal) => {
 
 import { GeminiHookService } from './hook-service'
 
+const WINDOWS_POWERSHELL_LAUNCHER =
+  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+
 describe('GeminiHookService', () => {
   let homeDir: string
   let userDataDir: string
@@ -102,7 +105,7 @@ describe('GeminiHookService', () => {
     expect(config.hooks.BeforeAgent[0].hooks[0].command).toBe('echo user-before-agent')
     const managedCommandPattern =
       process.platform === 'win32'
-        ? /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+        ? WINDOWS_POWERSHELL_LAUNCHER
         : new RegExp(managedHookPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     expect(config.hooks.BeforeAgent[1].hooks[0].command).toMatch(managedCommandPattern)
     expect(config.hooks.AfterAgent[0].hooks[0].command).toMatch(managedCommandPattern)
@@ -129,9 +132,7 @@ describe('GeminiHookService', () => {
 
         for (const eventName of ['BeforeAgent', 'AfterAgent', 'AfterTool']) {
           const command = config.hooks[eventName]?.[0]?.hooks?.[0]?.command
-          expect(command).toMatch(
-            /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
-          )
+          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
         }
       } finally {
         rmSync(spaceHome, { recursive: true, force: true })
@@ -183,7 +184,7 @@ describe('GeminiHookService', () => {
     expect(preToolCommands).toEqual(['echo user-authored'])
     expect(config.hooks.BeforeTool[0].hooks[0].command).toMatch(
       process.platform === 'win32'
-        ? /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+        ? WINDOWS_POWERSHELL_LAUNCHER
         : new RegExp(managedHookFileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     )
   })

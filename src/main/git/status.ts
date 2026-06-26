@@ -45,6 +45,7 @@ import {
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
 import { getLargeDiffRenderLimit } from '../../shared/large-diff-render-limit'
+import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
 import { parseGitRevListFirstParentOid } from '../../shared/git-rev-list-output'
@@ -63,13 +64,23 @@ type EffectiveUpstreamStatusCacheEntry = {
 const effectiveUpstreamStatusCache = new Map<string, EffectiveUpstreamStatusCacheEntry>()
 const effectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatus>>()
 const retiredEffectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatus>>()
+const gitDiffReadDedupe = new InFlightPromiseDedupe<GitDiffResult>()
 const effectiveUpstreamStatusWriteGeneration = new Map<string, number>()
+const statusReadsInFlight = new Map<string, Promise<GitStatusResult>>()
 
+function gitRuntimeOptionsKey(options: GitRuntimeOptions): readonly unknown[] {
+  return [options.wslDistro ?? null]
+}
+
+// Why: status tests reuse this reset hook, so every cross-call memoization layer
+// must reset together even though the historical name mentions upstream only.
 export function clearEffectiveUpstreamStatusCacheForTests(): void {
   effectiveUpstreamStatusCache.clear()
   effectiveUpstreamStatusInFlight.clear()
   retiredEffectiveUpstreamStatusInFlight.clear()
+  gitDiffReadDedupe.clear()
   effectiveUpstreamStatusWriteGeneration.clear()
+  statusReadsInFlight.clear()
 }
 
 export function getEffectiveUpstreamStatusCacheCountForTests(): number {
@@ -94,6 +105,45 @@ export type GetStatusOptions = GitRuntimeOptions & {
  * Parse `git status --porcelain=v2` output into structured entries.
  */
 export async function getStatus(
+  worktreePath: string,
+  options: GetStatusOptions = {}
+): Promise<GitStatusResult> {
+  gitDiffReadDedupe.clear()
+  // Why: dedupe only concurrent identical reads; after settle, callers must
+  // execute a fresh status read rather than observing a cached result.
+  const cacheKey = getStatusReadKey(worktreePath, options)
+  const inFlightStatus = statusReadsInFlight.get(cacheKey)
+  if (inFlightStatus) {
+    return inFlightStatus
+  }
+
+  const statusPromise = runGetStatus(worktreePath, options)
+  statusReadsInFlight.set(cacheKey, statusPromise)
+  try {
+    return await statusPromise
+  } finally {
+    if (statusReadsInFlight.get(cacheKey) === statusPromise) {
+      statusReadsInFlight.delete(cacheKey)
+    }
+  }
+}
+
+function getStatusReadKey(worktreePath: string, options: GetStatusOptions): string {
+  // Why: each key part can change the output shape or runtime routing.
+  const limit =
+    typeof options.limit === 'number' && Number.isInteger(options.limit) && options.limit >= 0
+      ? options.limit
+      : DEFAULT_GIT_STATUS_LIMIT
+  return [
+    worktreePath,
+    options.wslDistro ?? '',
+    options.includeIgnored === true,
+    options.bypassEffectiveUpstreamNegativeCache === true,
+    limit
+  ].join('\0')
+}
+
+async function runGetStatus(
   worktreePath: string,
   options: GetStatusOptions = {}
 ): Promise<GitStatusResult> {
@@ -681,6 +731,26 @@ export async function getDiff(
   compareAgainstHead = false,
   options: GitRuntimeOptions = {}
 ): Promise<GitDiffResult> {
+  return gitDiffReadDedupe.run(
+    stableInFlightKey([
+      'diff',
+      worktreePath,
+      filePath,
+      staged,
+      compareAgainstHead,
+      ...gitRuntimeOptionsKey(options)
+    ]),
+    () => loadDiff(worktreePath, filePath, staged, compareAgainstHead, options)
+  )
+}
+
+async function loadDiff(
+  worktreePath: string,
+  filePath: string,
+  staged: boolean,
+  compareAgainstHead: boolean,
+  options: GitRuntimeOptions
+): Promise<GitDiffResult> {
   let originalContent = ''
   let modifiedContent = ''
   let originalIsBinary = false
@@ -811,6 +881,30 @@ export async function getBranchDiff(
   },
   options: GitRuntimeOptions = {}
 ): Promise<GitDiffResult> {
+  return gitDiffReadDedupe.run(
+    stableInFlightKey([
+      'branchDiff',
+      worktreePath,
+      args.headOid,
+      args.mergeBase,
+      args.filePath,
+      args.oldPath ?? null,
+      ...gitRuntimeOptionsKey(options)
+    ]),
+    () => loadBranchDiff(worktreePath, args, options)
+  )
+}
+
+async function loadBranchDiff(
+  worktreePath: string,
+  args: {
+    headOid: string
+    mergeBase: string
+    filePath: string
+    oldPath?: string
+  },
+  options: GitRuntimeOptions
+): Promise<GitDiffResult> {
   try {
     const leftPath = args.oldPath ?? args.filePath
     const leftBlob = await readGitBlobAtOidPath(worktreePath, args.mergeBase, leftPath, options)
@@ -899,6 +993,30 @@ export async function getCommitDiff(
     oldPath?: string
   },
   options: GitRuntimeOptions = {}
+): Promise<GitDiffResult> {
+  return gitDiffReadDedupe.run(
+    stableInFlightKey([
+      'commitDiff',
+      worktreePath,
+      args.commitOid,
+      args.parentOid ?? null,
+      args.filePath,
+      args.oldPath ?? null,
+      ...gitRuntimeOptionsKey(options)
+    ]),
+    () => loadCommitDiff(worktreePath, args, options)
+  )
+}
+
+async function loadCommitDiff(
+  worktreePath: string,
+  args: {
+    commitOid: string
+    parentOid?: string | null
+    filePath: string
+    oldPath?: string
+  },
+  options: GitRuntimeOptions
 ): Promise<GitDiffResult> {
   try {
     const leftPath = args.oldPath ?? args.filePath
@@ -1274,10 +1392,15 @@ export async function stageFile(
   filePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  await gitExecFileAsync(
-    ['add', '--', literalPathspec(filePath)],
-    gitOptionsForWorktree(worktreePath, options)
-  )
+  gitDiffReadDedupe.clear()
+  try {
+    await gitExecFileAsync(
+      ['add', '--', literalPathspec(filePath)],
+      gitOptionsForWorktree(worktreePath, options)
+    )
+  } finally {
+    gitDiffReadDedupe.clear()
+  }
 }
 
 /**
@@ -1288,9 +1411,14 @@ export async function unstageFile(
   filePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  await gitExecFileAsync(['restore', '--staged', '--', literalPathspec(filePath)], {
-    ...gitOptionsForWorktree(worktreePath, options)
-  })
+  gitDiffReadDedupe.clear()
+  try {
+    await gitExecFileAsync(['restore', '--staged', '--', literalPathspec(filePath)], {
+      ...gitOptionsForWorktree(worktreePath, options)
+    })
+  } finally {
+    gitDiffReadDedupe.clear()
+  }
 }
 
 export async function getStagedCommitContext(
@@ -1346,6 +1474,7 @@ export async function commitChanges(
   message: string,
   options: GitRuntimeOptions = {}
 ): Promise<{ success: boolean; error?: string }> {
+  gitDiffReadDedupe.clear()
   try {
     await gitExecFileAsync(['commit', '-m', message], gitOptionsForWorktree(worktreePath, options))
     return { success: true }
@@ -1367,6 +1496,8 @@ export async function commitChanges(
       readStringField('stdout') ??
       (error instanceof Error ? error.message : 'Commit failed')
     return { success: false, error: errorMessage }
+  } finally {
+    gitDiffReadDedupe.clear()
   }
 }
 
@@ -1378,35 +1509,40 @@ export async function discardChanges(
   filePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
+  gitDiffReadDedupe.clear()
   const resolvedWorktree = path.resolve(worktreePath)
   const resolvedTarget = path.resolve(worktreePath, filePath)
-  if (!isWithinWorktree(path, resolvedWorktree, resolvedTarget)) {
-    throw new Error(`Path "${filePath}" resolves outside the worktree`)
-  }
-
-  let tracked = false
   try {
-    await gitExecFileAsync(['ls-files', '--error-unmatch', '--', literalPathspec(filePath)], {
-      ...gitOptionsForWorktree(worktreePath, options)
-    })
-    tracked = true
-  } catch {
-    // File is not tracked by git
-  }
+    if (!isWithinWorktree(path, resolvedWorktree, resolvedTarget)) {
+      throw new Error(`Path "${filePath}" resolves outside the worktree`)
+    }
 
-  if (tracked) {
-    await gitExecFileAsync(
-      ['restore', '--worktree', '--source=HEAD', '--', literalPathspec(filePath)],
-      {
+    let tracked = false
+    try {
+      await gitExecFileAsync(['ls-files', '--error-unmatch', '--', literalPathspec(filePath)], {
         ...gitOptionsForWorktree(worktreePath, options)
-      }
-    )
-    return
-  }
+      })
+      tracked = true
+    } catch {
+      // File is not tracked by git
+    }
 
-  await removeSafeUntrackedDiscardTarget(worktreePath, filePath, (targetPath) =>
-    cleanUntrackedPaths(worktreePath, [targetPath], options)
-  )
+    if (tracked) {
+      await gitExecFileAsync(
+        ['restore', '--worktree', '--source=HEAD', '--', literalPathspec(filePath)],
+        {
+          ...gitOptionsForWorktree(worktreePath, options)
+        }
+      )
+      return
+    }
+
+    await removeSafeUntrackedDiscardTarget(worktreePath, filePath, (targetPath) =>
+      cleanUntrackedPaths(worktreePath, [targetPath], options)
+    )
+  } finally {
+    gitDiffReadDedupe.clear()
+  }
 }
 
 function normalizeGitPathForCompare(filePath: string): string {
@@ -1475,39 +1611,46 @@ export async function bulkDiscardChanges(
   filePaths: string[],
   options: GitRuntimeOptions = {}
 ): Promise<void> {
+  gitDiffReadDedupe.clear()
   if (filePaths.length === 0) {
     return
   }
 
-  const resolvedWorktree = path.resolve(worktreePath)
-  for (const filePath of filePaths) {
-    const resolvedTarget = path.resolve(worktreePath, filePath)
-    if (!isWithinWorktree(path, resolvedWorktree, resolvedTarget)) {
-      throw new Error(`Path "${filePath}" resolves outside the worktree`)
-    }
-  }
-
-  const trackedPathSpecs = await listTrackedPathSpecs(worktreePath, filePaths, options)
-  const trackedPaths = filePaths.filter((filePath) => isTrackedPathSpec(filePath, trackedPathSpecs))
-  const untrackedPaths = filePaths.filter(
-    (filePath) => !isTrackedPathSpec(filePath, trackedPathSpecs)
-  )
-  await removeSafeUntrackedDiscardTargets(
-    worktreePath,
-    untrackedPaths,
-    (targetPaths) => cleanUntrackedPaths(worktreePath, targetPaths, options),
-    async () => {
-      for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
-        const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
-        await gitExecFileAsync(
-          ['restore', '--worktree', '--source=HEAD', '--', ...chunk.map(literalPathspec)],
-          {
-            ...gitOptionsForWorktree(worktreePath, options)
-          }
-        )
+  try {
+    const resolvedWorktree = path.resolve(worktreePath)
+    for (const filePath of filePaths) {
+      const resolvedTarget = path.resolve(worktreePath, filePath)
+      if (!isWithinWorktree(path, resolvedWorktree, resolvedTarget)) {
+        throw new Error(`Path "${filePath}" resolves outside the worktree`)
       }
     }
-  )
+
+    const trackedPathSpecs = await listTrackedPathSpecs(worktreePath, filePaths, options)
+    const trackedPaths = filePaths.filter((filePath) =>
+      isTrackedPathSpec(filePath, trackedPathSpecs)
+    )
+    const untrackedPaths = filePaths.filter(
+      (filePath) => !isTrackedPathSpec(filePath, trackedPathSpecs)
+    )
+    await removeSafeUntrackedDiscardTargets(
+      worktreePath,
+      untrackedPaths,
+      (targetPaths) => cleanUntrackedPaths(worktreePath, targetPaths, options),
+      async () => {
+        for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
+          const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
+          await gitExecFileAsync(
+            ['restore', '--worktree', '--source=HEAD', '--', ...chunk.map(literalPathspec)],
+            {
+              ...gitOptionsForWorktree(worktreePath, options)
+            }
+          )
+        }
+      }
+    )
+  } finally {
+    gitDiffReadDedupe.clear()
+  }
 }
 
 export function isWithinWorktree(
@@ -1532,15 +1675,20 @@ export async function bulkStageFiles(
   filePaths: string[],
   options: GitRuntimeOptions = {}
 ): Promise<void> {
+  gitDiffReadDedupe.clear()
   if (filePaths.length === 0) {
     return
   }
-  for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
-    const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-    await gitExecFileAsync(
-      ['add', '--', ...chunk.map(literalPathspec)],
-      gitOptionsForWorktree(worktreePath, options)
-    )
+  try {
+    for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
+      const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
+      await gitExecFileAsync(
+        ['add', '--', ...chunk.map(literalPathspec)],
+        gitOptionsForWorktree(worktreePath, options)
+      )
+    }
+  } finally {
+    gitDiffReadDedupe.clear()
   }
 }
 
@@ -1552,13 +1700,18 @@ export async function bulkUnstageFiles(
   filePaths: string[],
   options: GitRuntimeOptions = {}
 ): Promise<void> {
+  gitDiffReadDedupe.clear()
   if (filePaths.length === 0) {
     return
   }
-  for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
-    const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-    await gitExecFileAsync(['restore', '--staged', '--', ...chunk.map(literalPathspec)], {
-      ...gitOptionsForWorktree(worktreePath, options)
-    })
+  try {
+    for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
+      const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
+      await gitExecFileAsync(['restore', '--staged', '--', ...chunk.map(literalPathspec)], {
+        ...gitOptionsForWorktree(worktreePath, options)
+      })
+    }
+  } finally {
+    gitDiffReadDedupe.clear()
   }
 }

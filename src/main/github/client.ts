@@ -67,6 +67,7 @@ import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
+import { readLocalGitConfigSignature } from './local-git-config-signature'
 export { _resetOwnerRepoCache } from './gh-utils'
 export {
   getIssue,
@@ -1988,6 +1989,12 @@ const PR_LOOKUP_JSON_FIELDS =
   'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid'
 const PR_BRANCH_LIST_JSON_FIELDS =
   'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
+const PR_AUTO_MERGE_IDENTITY_JSON_FIELDS = 'id,headRefOid,baseRefName'
+const GITHUB_AUTO_MERGE_METHODS: Record<GitHubPRMergeMethod, 'MERGE' | 'SQUASH' | 'REBASE'> = {
+  merge: 'MERGE',
+  squash: 'SQUASH',
+  rebase: 'REBASE'
+}
 
 export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
   acceptMergedFallbackPR?: boolean
@@ -2273,18 +2280,38 @@ type TrackedUpstreamBranch = {
   branchName: string
 }
 
-const TRACKED_UPSTREAM_NULL_CACHE_TTL_MS = 30_000
+const TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS = 30_000
 
-type TrackedUpstreamNullCacheEntry = {
+type TrackedUpstreamSnapshotCacheEntry = {
   expiresAt: number
+  gitConfigSignature?: string
+  upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
 }
 
-const trackedUpstreamNullCache = new Map<string, TrackedUpstreamNullCacheEntry>()
-const trackedUpstreamInFlight = new Map<string, Promise<TrackedUpstreamBranch | null>>()
+type TrackedUpstreamSnapshotProbeResult = {
+  cacheable: boolean
+  gitConfigSignature?: string
+  probeFailed: boolean
+  upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
+}
+
+const trackedUpstreamSnapshotCache = new Map<string, TrackedUpstreamSnapshotCacheEntry>()
+const trackedUpstreamSnapshotInFlight = new Map<
+  string,
+  Promise<TrackedUpstreamSnapshotProbeResult>
+>()
+const trackedUpstreamSnapshotGenerations = new Map<string, number>()
+
+function beginTrackedUpstreamSnapshotProbe(cacheKey: string): number {
+  const nextGeneration = (trackedUpstreamSnapshotGenerations.get(cacheKey) ?? 0) + 1
+  trackedUpstreamSnapshotGenerations.set(cacheKey, nextGeneration)
+  return nextGeneration
+}
 
 export function __resetTrackedUpstreamBranchCacheForTests(): void {
-  trackedUpstreamNullCache.clear()
-  trackedUpstreamInFlight.clear()
+  trackedUpstreamSnapshotCache.clear()
+  trackedUpstreamSnapshotInFlight.clear()
+  trackedUpstreamSnapshotGenerations.clear()
 }
 
 function parseTrackedUpstreamBranch(
@@ -2304,66 +2331,160 @@ async function getTrackedUpstreamBranch(
   connectionId?: string | null,
   localGitOptions: { wslDistro?: string } = {}
 ): Promise<TrackedUpstreamBranch | null> {
-  // Why: branches without configured upstreams are stable misses during PR
-  // polling; cache only nulls so positive PR discovery stays fresh.
-  const cacheKey = getTrackedUpstreamBranchCacheKey(
-    repoPath,
-    branchName,
-    connectionId,
-    localGitOptions
-  )
+  const cacheKey = getTrackedUpstreamBranchCacheKey(repoPath, connectionId, localGitOptions)
   const now = Date.now()
-  const cachedNull = trackedUpstreamNullCache.get(cacheKey)
-  if (cachedNull && cachedNull.expiresAt > now) {
-    return null
+  const cached = trackedUpstreamSnapshotCache.get(cacheKey)
+  if (cached && cached.expiresAt > now) {
+    const configSignatureMatches = await doesTrackedUpstreamCacheConfigSignatureMatch(
+      cached,
+      repoPath,
+      connectionId,
+      localGitOptions
+    )
+    if (
+      configSignatureMatches &&
+      cached.upstreamsByBranchName.has(branchName) &&
+      canUseCachedTrackedUpstreamBranch(cached, branchName)
+    ) {
+      return cached.upstreamsByBranchName.get(branchName) ?? null
+    }
+    trackedUpstreamSnapshotCache.delete(cacheKey)
   }
-  if (cachedNull) {
-    trackedUpstreamNullCache.delete(cacheKey)
+  if (cached) {
+    trackedUpstreamSnapshotCache.delete(cacheKey)
   }
 
-  const inFlight = trackedUpstreamInFlight.get(cacheKey)
+  const inFlight = trackedUpstreamSnapshotInFlight.get(cacheKey)
   if (inFlight) {
-    return inFlight
+    const result = await inFlight
+    if (result.upstreamsByBranchName.has(branchName)) {
+      return result.upstreamsByBranchName.get(branchName) ?? null
+    }
+    // Why: a concurrent snapshot may finish before this branch exists in git.
+    // Re-probe instead of returning a one-shot synthetic null.
+    const retryInFlight = trackedUpstreamSnapshotInFlight.get(cacheKey)
+    if (retryInFlight) {
+      const retryResult = await retryInFlight
+      return retryResult.upstreamsByBranchName.get(branchName) ?? null
+    }
   }
 
-  const probe = probeTrackedUpstreamBranch(repoPath, branchName, connectionId, localGitOptions)
-  trackedUpstreamInFlight.set(cacheKey, probe)
+  // Why: PR polling can ask about hundreds of local worktree branches at once.
+  // Read the branch upstream snapshot in one git process per repo/runtime
+  // instead of spawning one failing `branch@{upstream}` probe per branch.
+  const probeGeneration = beginTrackedUpstreamSnapshotProbe(cacheKey)
+  const probe = probeTrackedUpstreamSnapshot(repoPath, connectionId, localGitOptions)
+  trackedUpstreamSnapshotInFlight.set(cacheKey, probe)
   try {
     const result = await probe
-    if (result) {
-      trackedUpstreamNullCache.delete(cacheKey)
-    } else {
-      trackedUpstreamNullCache.set(cacheKey, {
-        expiresAt: now + TRACKED_UPSTREAM_NULL_CACHE_TTL_MS
+    if (result.cacheable && trackedUpstreamSnapshotGenerations.get(cacheKey) === probeGeneration) {
+      trackedUpstreamSnapshotCache.set(cacheKey, {
+        ...(result.gitConfigSignature ? { gitConfigSignature: result.gitConfigSignature } : {}),
+        upstreamsByBranchName: getCacheableTrackedUpstreamSnapshot(result.upstreamsByBranchName),
+        expiresAt: Date.now() + TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS
       })
     }
-    return result
+    if (trackedUpstreamSnapshotGenerations.get(cacheKey) !== probeGeneration) {
+      const fresherCached = trackedUpstreamSnapshotCache.get(cacheKey)
+      if (fresherCached?.upstreamsByBranchName.has(branchName)) {
+        return fresherCached.upstreamsByBranchName.get(branchName) ?? null
+      }
+    }
+    return result.upstreamsByBranchName.get(branchName) ?? null
   } finally {
-    if (trackedUpstreamInFlight.get(cacheKey) === probe) {
-      trackedUpstreamInFlight.delete(cacheKey)
+    if (trackedUpstreamSnapshotInFlight.get(cacheKey) === probe) {
+      trackedUpstreamSnapshotInFlight.delete(cacheKey)
     }
   }
 }
 
+async function probeTrackedUpstreamSnapshot(
+  repoPath: string,
+  connectionId?: string | null,
+  localGitOptions: { wslDistro?: string } = {}
+): Promise<TrackedUpstreamSnapshotProbeResult> {
+  const startingGitConfigSignature = await readLocalGitConfigSignature({
+    repoPath,
+    connectionId: connectionId ?? null,
+    ...localGitOptions
+  })
+  const { probeFailed, upstreamsByBranchName } = await probeTrackedUpstreamBranches(
+    repoPath,
+    connectionId,
+    localGitOptions
+  )
+  const endingGitConfigSignature = await readLocalGitConfigSignature({
+    repoPath,
+    connectionId: connectionId ?? null,
+    ...localGitOptions
+  })
+  const isLocalHostRuntime = !connectionId && !localGitOptions.wslDistro
+  const configSignatureChanged =
+    isLocalHostRuntime && startingGitConfigSignature !== endingGitConfigSignature
+  const gitConfigSignature =
+    startingGitConfigSignature === endingGitConfigSignature ? endingGitConfigSignature : undefined
+  return {
+    // Why: transient git failures must not cache an empty snapshot that forces
+    // every branch lookup to delete and re-probe on the next refresh tick.
+    cacheable: !configSignatureChanged && !probeFailed,
+    probeFailed,
+    ...(gitConfigSignature ? { gitConfigSignature } : {}),
+    upstreamsByBranchName
+  }
+}
+
+function getCacheableTrackedUpstreamSnapshot(
+  upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
+): Map<string, TrackedUpstreamBranch | null> {
+  // Why: SSH/WSL cannot cheaply inspect remote .git/config here. The short TTL
+  // still bounds stale positives, while repeated PR refreshes share one scan.
+  return upstreamsByBranchName
+}
+
+function canUseCachedTrackedUpstreamBranch(
+  cached: TrackedUpstreamSnapshotCacheEntry,
+  branchName: string
+): boolean {
+  return cached.upstreamsByBranchName.has(branchName)
+}
+
+async function doesTrackedUpstreamCacheConfigSignatureMatch(
+  cached: TrackedUpstreamSnapshotCacheEntry,
+  repoPath: string,
+  connectionId?: string | null,
+  localGitOptions: { wslDistro?: string } = {}
+): Promise<boolean> {
+  if (!cached.gitConfigSignature) {
+    return true
+  }
+  const currentSignature = await readLocalGitConfigSignature({
+    repoPath,
+    connectionId: connectionId ?? null,
+    ...localGitOptions
+  })
+  return currentSignature === cached.gitConfigSignature
+}
+
 function getTrackedUpstreamBranchCacheKey(
   repoPath: string,
-  branchName: string,
   connectionId?: string | null,
   localGitOptions: { wslDistro?: string } = {}
 ): string {
   const runtimeKey = connectionId
     ? `ssh:${connectionId}`
     : `local:${localGitOptions.wslDistro ?? 'host'}`
-  return [runtimeKey, repoPath, branchName].join('\0')
+  return [runtimeKey, repoPath].join('\0')
 }
 
-async function probeTrackedUpstreamBranch(
+async function probeTrackedUpstreamBranches(
   repoPath: string,
-  branchName: string,
   connectionId?: string | null,
   localGitOptions: { wslDistro?: string } = {}
-): Promise<TrackedUpstreamBranch | null> {
-  const args = ['rev-parse', '--abbrev-ref', '--symbolic-full-name', `${branchName}@{upstream}`]
+): Promise<{
+  probeFailed: boolean
+  upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
+}> {
+  const args = ['for-each-ref', '--format=%(refname)%00%(upstream)', 'refs/heads']
   try {
     const provider = connectionId ? getSshGitProvider(connectionId) : null
     const result = provider
@@ -2372,10 +2493,47 @@ async function probeTrackedUpstreamBranch(
           cwd: repoPath,
           ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
         })
-    return parseTrackedUpstreamBranch(result.stdout, branchName)
+    return {
+      probeFailed: false,
+      upstreamsByBranchName: parseTrackedUpstreamBranches(result.stdout)
+    }
   } catch {
+    return { probeFailed: true, upstreamsByBranchName: new Map() }
+  }
+}
+
+function parseTrackedUpstreamBranches(stdout: string): Map<string, TrackedUpstreamBranch | null> {
+  const upstreamsByBranchName = new Map<string, TrackedUpstreamBranch | null>()
+  for (const line of stdout.split(/\r?\n/)) {
+    if (!line) {
+      continue
+    }
+    const [branchName, upstreamRef] = line.split('\0')
+    const localBranchName = branchName?.replace(/^refs\/heads\//, '')
+    if (!localBranchName) {
+      continue
+    }
+    upstreamsByBranchName.set(
+      localBranchName,
+      parseTrackedUpstreamRef(upstreamRef ?? '', localBranchName)
+    )
+  }
+  return upstreamsByBranchName
+}
+
+function parseTrackedUpstreamRef(
+  upstreamRef: string,
+  branchName: string
+): TrackedUpstreamBranch | null {
+  const remoteRefPrefix = 'refs/remotes/'
+  const normalizedRef = upstreamRef.trim()
+  if (normalizedRef.startsWith(remoteRefPrefix)) {
+    return parseTrackedUpstreamBranch(normalizedRef.slice(remoteRefPrefix.length), branchName)
+  }
+  if (normalizedRef.startsWith('refs/heads/')) {
     return null
   }
+  return parseTrackedUpstreamBranch(normalizedRef, branchName)
 }
 
 async function lookupPRByBranchName(args: {
@@ -3751,10 +3909,10 @@ export async function setPRAutoMerge(
   const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId, localGitOptions))
   await acquire()
   try {
-    const args = ['pr', 'merge', String(prNumber), enabled ? '--auto' : '--disable-auto']
     if (enabled) {
-      args.push(`--${method}`)
+      return await enablePRAutoMerge(prNumber, method, ownerRepo, ghOptions)
     }
+    const args = ['pr', 'merge', String(prNumber), '--disable-auto']
     if (ownerRepo) {
       args.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
     }
@@ -3770,6 +3928,103 @@ export async function setPRAutoMerge(
   } finally {
     release()
   }
+}
+
+type PRAutoMergeIdentity = {
+  id?: string
+  headRefOid?: string
+  baseRefName?: string
+}
+
+async function getPRAutoMergeIdentity(
+  prNumber: number,
+  ownerRepo: OwnerRepo | null,
+  ghOptions: GhExecOptions
+): Promise<PRAutoMergeIdentity | null> {
+  const args = ['pr', 'view', String(prNumber), '--json', PR_AUTO_MERGE_IDENTITY_JSON_FIELDS]
+  if (ownerRepo) {
+    args.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
+  }
+  const { stdout } = await ghExecFileAsync(args, ghOptions)
+  const data = JSON.parse(stdout) as PRAutoMergeIdentity
+  return {
+    id: typeof data.id === 'string' ? data.id : undefined,
+    headRefOid: typeof data.headRefOid === 'string' ? data.headRefOid : undefined,
+    baseRefName: typeof data.baseRefName === 'string' ? data.baseRefName : undefined
+  }
+}
+
+async function runPRAutoMergeCommand(
+  prNumber: number,
+  method: GitHubPRMergeMethod,
+  ownerRepo: OwnerRepo | null,
+  ghOptions: GhExecOptions
+): Promise<void> {
+  const args = ['pr', 'merge', String(prNumber), '--auto', `--${method}`]
+  if (ownerRepo) {
+    args.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
+  }
+  await ghExecFileAsync(args, {
+    ...ghOptions,
+    env: { ...process.env, GH_PROMPT_DISABLED: '1' }
+  })
+}
+
+async function shouldUseMergeQueueAutoMerge(
+  pr: PRAutoMergeIdentity,
+  ownerRepo: OwnerRepo | null,
+  ghOptions: GhExecOptions
+): Promise<boolean> {
+  if (!ownerRepo || !pr.baseRefName) {
+    return false
+  }
+  const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, pr.baseRefName, ghOptions)
+  return mergeMetadata.mergeQueueRequired === true
+}
+
+async function enablePRAutoMerge(
+  prNumber: number,
+  method: GitHubPRMergeMethod,
+  ownerRepo: OwnerRepo | null,
+  ghOptions: GhExecOptions
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const pr = await getPRAutoMergeIdentity(prNumber, ownerRepo, ghOptions)
+  if (!pr?.id) {
+    return { ok: false, error: 'Could not resolve GitHub pull request ID' }
+  }
+  if (await shouldUseMergeQueueAutoMerge(pr, ownerRepo, ghOptions)) {
+    await runPRAutoMergeCommand(prNumber, method, ownerRepo, ghOptions)
+    return { ok: true }
+  }
+  const query = `mutation($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!, $expectedHeadOid: GitObjectID) {
+    enablePullRequestAutoMerge(input: {
+      pullRequestId: $pullRequestId,
+      mergeMethod: $mergeMethod,
+      expectedHeadOid: $expectedHeadOid
+    }) {
+      pullRequest { id }
+    }
+  }`
+  const args = [
+    'api',
+    'graphql',
+    '-f',
+    `query=${query}`,
+    '-f',
+    `pullRequestId=${pr.id}`,
+    '-f',
+    `mergeMethod=${GITHUB_AUTO_MERGE_METHODS[method]}`
+  ]
+  if (pr.headRefOid) {
+    args.push('-f', `expectedHeadOid=${pr.headRefOid}`)
+  }
+  // Why: `gh pr merge --auto` can perform an immediate merge; this mutation
+  // only creates GitHub's auto-merge request and lets branch requirements gate it.
+  await ghExecFileAsync(args, {
+    ...ghOptions,
+    env: { ...process.env, GH_PROMPT_DISABLED: '1' }
+  })
+  return { ok: true }
 }
 
 async function getPRMergeBlocker(
