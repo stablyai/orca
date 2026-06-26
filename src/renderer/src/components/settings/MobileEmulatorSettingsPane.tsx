@@ -35,6 +35,7 @@ type MobileEmulatorSettingsPaneProps = {
 
 const AUTOMATIC_DEVICE_VALUE = '__orca_automatic_emulator_device__'
 const AUTOMATIC_DEVICE_LABEL = 'Auto-select device'
+const ANDROID_STUDIO_URL = 'https://developer.android.com/studio'
 const SIMULATOR_STATE_SUFFIX_RE =
   /\s+\((Booted|Booting|Creating|Shutdown|Shutting Down|Unavailable|Unknown)\)\s*$/i
 
@@ -79,7 +80,7 @@ function deviceLabel(device: SimulatorDeviceRow): string {
 
 function availabilityDetail(availability: EmulatorAvailability | null): string {
   if (!availability) {
-    return 'Checking Xcode, simctl, serve-sim, and available devices.'
+    return 'Checking iOS (Xcode) and Android (Android Studio) emulator support.'
   }
   if (availability.available) {
     return `${availability.devices.length} emulator device${
@@ -136,7 +137,7 @@ export function MobileEmulatorSettingsPane({
     if (devices.length === 0) {
       return 'Orca will auto-select an emulator device after devices are detected.'
     }
-    return 'Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running iPhone.'
+    return 'Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running device.'
   }, [devices.length])
 
   return (
@@ -202,6 +203,24 @@ export function MobileEmulatorSettingsPane({
             </div>
           }
         />
+
+        {enabled && availability && !availability.available ? (
+          <SettingsRow
+            alignTop
+            label="Set up an emulator"
+            description="Install Android Studio and create a Virtual Device to run Android on any OS; on macOS install Xcode for iOS Simulators. Orca finds the Android SDK via ANDROID_HOME or the default install path — click Refresh above after installing."
+            control={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void window.api.shell.openUrl(ANDROID_STUDIO_URL)}
+              >
+                Download Android Studio
+              </Button>
+            }
+          />
+        ) : null}
 
         <SettingsRow
           alignTop

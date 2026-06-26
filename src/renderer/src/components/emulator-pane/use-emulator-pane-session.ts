@@ -178,7 +178,7 @@ export function useEmulatorPaneSession({
         })
         if (!target) {
           throw new Error(
-            'No emulator devices found. Open Xcode → Settings → Platforms and add an iOS Simulator.'
+            'No emulator devices found. Add an iOS Simulator in Xcode, or an Android Virtual Device in Android Studio.'
           )
         }
         requestedTarget = target
@@ -220,7 +220,7 @@ export function useEmulatorPaneSession({
         suppressAutoAttachRef.current = true
         const msg = emulatorPaneErrorMessage(
           e,
-          'Could not start the emulator. Check that Xcode is installed and try another device.'
+          'Could not start the emulator. Make sure Xcode (iOS) or Android Studio (Android) is set up, then try another device.'
         )
         setError(msg)
         if (tabId) {
