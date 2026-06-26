@@ -108,6 +108,7 @@ const LAST_STATUS_FILE_VERSION = 2
 // hook-server batching; quit-time uses flushStatusPersistSync() for the
 // guaranteed final flush.
 const STATUS_PERSIST_DEBOUNCE_MS = 250
+const TOOL_PROGRESS_HOOK_EVENTS = new Set(['PreToolUse', 'PostToolUse', 'PostToolUseFailure'])
 const AGENT_PROMPT_SENT_AGENT_KINDS = new Set<AgentKind>(AGENT_KIND_VALUES)
 
 // Why: bound the on-disk file's growth across many sessions. PTY-teardown
@@ -269,6 +270,18 @@ function trackEmptyPaneKeyHook(body: unknown): void {
     return
   }
   track('agent_hook_unattributed', { reason: 'empty_pane_key' })
+}
+
+function isToolProgressWorkingAfterInterrupt(next: AgentHookEventPayload): boolean {
+  if (next.payload.state !== 'working') {
+    return false
+  }
+  if (next.payload.agentType !== 'claude') {
+    return false
+  }
+  // Why: a same-prompt retry is another UserPromptSubmit, while late Claude
+  // progress after Ctrl+C arrives as tool lifecycle work for the old turn.
+  return next.hookEventName !== undefined && TOOL_PROGRESS_HOOK_EVENTS.has(next.hookEventName)
 }
 
 function paneCacheKeyTabId(key: string): string | null {
@@ -737,6 +750,7 @@ export class AgentHookServer {
       previous.payload.agentType === effectivePayload.payload.agentType &&
       previous.payload.prompt === effectivePayload.payload.prompt &&
       (effectivePayload.isReplay === true ||
+        isToolProgressWorkingAfterInterrupt(effectivePayload) ||
         (effectivePayload.hasExplicitPrompt !== true &&
           Date.now() - previous.receivedAt <= INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS))
     ) {

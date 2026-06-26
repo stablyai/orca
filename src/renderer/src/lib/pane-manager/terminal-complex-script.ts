@@ -3,7 +3,22 @@
 // without switching renderers based on the text content.
 const EMOJI_PRESENTATION_PATTERN = /\p{Emoji_Presentation}/u
 const ESCAPE_CHARACTER = String.fromCharCode(0x1b)
+const REWRITE_CSI_SCAN_TAIL_MAX_CHARS = 64
 const SGR_SEQUENCE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[([0-9:;]*)m`, 'g')
+
+function containsStandaloneCarriageReturn(data: string): boolean {
+  let index = data.indexOf('\r')
+  while (index !== -1) {
+    if (index === data.length - 1) {
+      return false
+    }
+    if (data[index + 1] !== '\n') {
+      return true
+    }
+    index = data.indexOf('\r', index + 1)
+  }
+  return false
+}
 
 function isInRange(value: number, start: number, end: number): boolean {
   return value >= start && value <= end
@@ -84,6 +99,99 @@ function containsBackgroundSgr(data: string): boolean {
     }
   }
   return false
+}
+
+function containsRewriteEraseSequence(data: string): boolean {
+  let escapeIndex = data.indexOf('\x1b[')
+  while (escapeIndex !== -1) {
+    for (let index = escapeIndex + 2; index < data.length; index++) {
+      const char = data[index]
+      if (char >= '0' && char <= '9') {
+        continue
+      }
+      if (char === ';' || char === '?') {
+        continue
+      }
+      // Why: erase-in-line/screen rewrites can leave stale renderer cells until
+      // the next resize; xterm's buffer is correct, but the visible layer needs repainting.
+      if (char === 'J' || char === 'K') {
+        return true
+      }
+      break
+    }
+    escapeIndex = data.indexOf('\x1b[', escapeIndex + 2)
+  }
+  return false
+}
+
+function trailingIncompleteRewriteCsiTail(data: string): string {
+  const escapeIndex = data.lastIndexOf(ESCAPE_CHARACTER)
+  if (escapeIndex === -1) {
+    return ''
+  }
+  const tail = data.slice(escapeIndex)
+  if (tail === ESCAPE_CHARACTER) {
+    return tail
+  }
+  if (!tail.startsWith('\x1b[')) {
+    return ''
+  }
+  if (tail.length > REWRITE_CSI_SCAN_TAIL_MAX_CHARS) {
+    return ''
+  }
+  for (let index = 2; index < tail.length; index++) {
+    const char = tail[index]
+    if (char >= '0' && char <= '9') {
+      continue
+    }
+    if (char === ';' || char === '?') {
+      continue
+    }
+    return ''
+  }
+  return tail
+}
+
+export function terminalRewriteOutputPrefersRenderRefresh(data: string): boolean {
+  if (data.includes('\b') || containsStandaloneCarriageReturn(data)) {
+    return true
+  }
+
+  return containsRewriteEraseSequence(data)
+}
+
+export type TerminalRewriteOutputRenderRefreshDecision = {
+  nextChunkEndsWithCarriageReturn: boolean
+  nextRewriteCsiScanTail: string
+  prefersRenderRefresh: boolean
+}
+
+export type TerminalRewriteOutputRenderRefreshState = {
+  previousChunkEndsWithCarriageReturn: boolean
+  previousRewriteCsiScanTail: string
+}
+
+export function terminalRewriteOutputRenderRefreshDecision(
+  data: string,
+  state: TerminalRewriteOutputRenderRefreshState
+): TerminalRewriteOutputRenderRefreshDecision {
+  if (!data) {
+    return {
+      nextChunkEndsWithCarriageReturn: state.previousChunkEndsWithCarriageReturn,
+      nextRewriteCsiScanTail: state.previousRewriteCsiScanTail,
+      prefersRenderRefresh: false
+    }
+  }
+  const scanData = state.previousRewriteCsiScanTail
+    ? `${state.previousRewriteCsiScanTail}${data}`
+    : data
+  return {
+    nextChunkEndsWithCarriageReturn: data.endsWith('\r'),
+    nextRewriteCsiScanTail: trailingIncompleteRewriteCsiTail(scanData),
+    prefersRenderRefresh:
+      (state.previousChunkEndsWithCarriageReturn && data[0] !== '\n') ||
+      terminalRewriteOutputPrefersRenderRefresh(scanData)
+  }
 }
 
 export function terminalOutputPrefersRenderRefresh(data: string): boolean {

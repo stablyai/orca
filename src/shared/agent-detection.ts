@@ -14,6 +14,10 @@ import {
   titleHasAgentName,
   titleHasAnyLegacyAgentName
 } from './agent-name-token-match'
+import {
+  getPiCompatibleSyntheticAgentLabel,
+  getPiCompatibleSyntheticAgentStatus
+} from './pi-compatible-synthetic-title'
 
 // Re-export so existing `agent-detection` importers keep working.
 export { AGENT_NAMES, titleHasAgentName } from './agent-name-token-match'
@@ -319,6 +323,12 @@ export function getAgentLabel(title: string): string | null {
   if (isGeminiTerminalTitle(title)) {
     return 'Gemini CLI'
   }
+  // Why: Pi-compatible synthetic titles can carry braille spinners, which the
+  // generic agent-title heuristics would otherwise claim first.
+  const piCompatibleSyntheticAgentLabel = getPiCompatibleSyntheticAgentLabel(title)
+  if (piCompatibleSyntheticAgentLabel) {
+    return piCompatibleSyntheticAgentLabel
+  }
   // Why: Pi working titles include a braille spinner prefix, which would be
   // mistaken for Claude Code if we checked `isClaudeAgent` first.
   if (isPiAgentTitle(title)) {
@@ -415,6 +425,13 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   }
   if (title.includes(GEMINI_IDLE)) {
     return 'idle'
+  }
+
+  // Why: resolve synthetic Pi/OMP permission/idle labels before the broader
+  // Pi and braille-spinner checks below.
+  const piCompatibleSyntheticAgentStatus = getPiCompatibleSyntheticAgentStatus(title)
+  if (piCompatibleSyntheticAgentStatus) {
+    return piCompatibleSyntheticAgentStatus
   }
 
   // Claude Code uses ✳ prefix for idle — must check before braille/agent-name

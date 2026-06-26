@@ -77,3 +77,25 @@ describe('MiMo title detection', () => {
     }
   )
 })
+
+describe('Pi-compatible title detection', () => {
+  it.each([
+    ['\u280b OMP', 'OMP', 'working'],
+    ['OMP ready', 'OMP', 'idle'],
+    ['OMP - action required', 'OMP', 'permission'],
+    ['\u280b Pi', 'Pi', 'working'],
+    ['Pi ready', 'Pi', 'idle'],
+    ['Pi - action required', 'Pi', 'permission']
+  ] as const)('classifies synthesized %s', (title, expectedLabel, expectedStatus) => {
+    expect(getAgentLabel(title)).toBe(expectedLabel)
+    expect(detectAgentStatusFromTitle(title)).toBe(expectedStatus)
+  })
+
+  it.each(['~/omp/working', 'omp-harness ready', '~/pi/working', 'pi-scratch ready'])(
+    'does not classify path or hyphen false positive %s',
+    (title) => {
+      expect(getAgentLabel(title)).toBeNull()
+      expect(detectAgentStatusFromTitle(title)).toBeNull()
+    }
+  )
+})

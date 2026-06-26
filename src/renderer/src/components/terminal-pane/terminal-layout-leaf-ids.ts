@@ -75,6 +75,16 @@ function hasLeafPtyBinding(
   return ptyIdsByLeafId ? Object.prototype.hasOwnProperty.call(ptyIdsByLeafId, leafId) : false
 }
 
+export function resolveRootlessTerminalLayoutLeafId(
+  snapshot: Pick<TerminalLayoutSnapshot, 'activeLeafId' | 'ptyIdsByLeafId'>
+): string | null {
+  if (snapshot.activeLeafId && isTerminalLeafId(snapshot.activeLeafId)) {
+    return snapshot.activeLeafId
+  }
+  const boundLeafIds = Object.keys(snapshot.ptyIdsByLeafId ?? {}).filter(isTerminalLeafId)
+  return boundLeafIds.length === 1 ? boundLeafIds[0] : null
+}
+
 export function resolveTerminalLayoutActiveLeafId(opts: {
   root: TerminalPaneLayoutNode | null | undefined
   activeLeafId: string | null | undefined
@@ -109,11 +119,7 @@ export function normalizeTerminalLayoutSnapshot(
 ): { snapshot: TerminalLayoutSnapshot; changed: boolean } {
   if (!snapshot?.root) {
     const nextSnapshot = snapshot ?? EMPTY_TERMINAL_LAYOUT
-    const activeLeafId = resolveTerminalLayoutActiveLeafId({
-      root: nextSnapshot.root,
-      activeLeafId: nextSnapshot.activeLeafId,
-      ptyIdsByLeafId: nextSnapshot.ptyIdsByLeafId
-    })
+    const activeLeafId = resolveRootlessTerminalLayoutLeafId(nextSnapshot)
     return {
       snapshot:
         activeLeafId === nextSnapshot.activeLeafId

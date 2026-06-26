@@ -34,6 +34,8 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   Pi: 'pi'
 }
 
+const HELPER_FOREGROUND_RETRY_DELAYS_MS = [250, 1250, 3500, 750] as const
+
 function agentFromTitle(title: string): TuiAgent | null {
   const label = getAgentLabel(title)
   return label ? (TITLE_LABEL_TO_AGENT[label] ?? null) : null
@@ -234,42 +236,69 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
     if (!ptyId || isRemoteLike) {
       return
     }
+    const localPtyId = ptyId
     let cancelled = false
+    const helperForegroundRetryTimers: number[] = []
     // Why: re-runs when ptyId or tab.title changes — a title change is the event
     // signalling a possible foreground transition (agent start, exit, or turn).
     // One RPC per transition, not a timer; cancellation coalesces rapid churn.
-    window.api.pty
-      .getForegroundProcess(ptyId)
-      .then((process) => {
-        if (cancelled) {
-          return
+    function readForeground(retryIndex = 0): void {
+      window.api.pty
+        .getForegroundProcess(localPtyId)
+        .then((process) => {
+          applyForegroundProcess(process, retryIndex)
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setForeground(undefined)
+          }
+        })
+    }
+    function scheduleHelperForegroundRetry(retryIndex: number): void {
+      const delay = HELPER_FOREGROUND_RETRY_DELAYS_MS[retryIndex]
+      if (delay === undefined) {
+        return
+      }
+      // Why: the daemon resolves shell/helper -> agent ancestry asynchronously
+      // after the first foreground read, so give its short cache a bounded re-read.
+      const timer = window.setTimeout(() => {
+        readForeground(retryIndex + 1)
+      }, delay)
+      helperForegroundRetryTimers.push(timer)
+    }
+    function applyForegroundProcess(process: string | null, retryIndex: number): void {
+      if (cancelled) {
+        return
+      }
+      const recognized = recognizeAgentProcess(process)
+      if (recognized) {
+        hasObservedAgentSignalRef.current = true
+        setHasObservedAgentSignal(true)
+        setForeground(recognized.agent)
+      } else if (process && isShellProcess(process)) {
+        setShellForegroundAfterAgentSignal(hasObservedAgentSignalRef.current)
+        setForeground(null)
+        if (tab.launchAgent && !hasObservedAgentSignalRef.current) {
+          scheduleHelperForegroundRetry(retryIndex)
         }
-        const recognized = recognizeAgentProcess(process)
-        if (recognized) {
+      } else {
+        if (process && tab.launchAgent) {
+          // Why: for Orca-owned launches, an unrecognized non-shell process
+          // is enough lifecycle evidence to clear launch intent when the pane
+          // later returns to a shell, without using title text as identity.
           hasObservedAgentSignalRef.current = true
           setHasObservedAgentSignal(true)
-          setForeground(recognized.agent)
-        } else if (process && isShellProcess(process)) {
-          setShellForegroundAfterAgentSignal(hasObservedAgentSignalRef.current)
-          setForeground(null)
-        } else {
-          if (process && tab.launchAgent) {
-            // Why: for Orca-owned launches, an unrecognized non-shell process
-            // is enough lifecycle evidence to clear launch intent when the pane
-            // later returns to a shell, without using title text as identity.
-            hasObservedAgentSignalRef.current = true
-            setHasObservedAgentSignal(true)
-          }
-          setForeground(undefined)
         }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setForeground(undefined)
+        setForeground(undefined)
+        if (process && tab.launchAgent) {
+          scheduleHelperForegroundRetry(retryIndex)
         }
-      })
+      }
+    }
+    readForeground()
     return () => {
       cancelled = true
+      helperForegroundRetryTimers.forEach((timer) => window.clearTimeout(timer))
     }
   }, [ptyId, isRemoteLike, tab.launchAgent, titleForegroundKey])
 

@@ -25,6 +25,10 @@ import { parseWslPath } from '../wsl'
 import { addWslEnvKeys } from '../wsl-env'
 import { getWslContextFromSessionId } from './wsl-session-context'
 import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
+import {
+  POWERLEVEL10K_WIZARD_DISABLE_ENV,
+  seedPowerlevel10kWizardEnv
+} from '../pty/powerlevel10k-wizard-env'
 import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { resolveAgentForegroundProcess } from '../providers/agent-foreground-process'
@@ -605,6 +609,14 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     }
     shellArgs = shellLaunch?.args ?? ['-l']
   }
+  seedPowerlevel10kWizardEnv(env, { envToDelete: opts.envToDelete })
+  if (
+    env[POWERLEVEL10K_WIZARD_DISABLE_ENV] !== undefined &&
+    process.platform === 'win32' &&
+    pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe'
+  ) {
+    addWslEnvKeys(env, [POWERLEVEL10K_WIZARD_DISABLE_ENV])
+  }
   promoteAgentTeamsShimPath(env, opts.env?.PATH)
 
   // Why: asar packaging can strip the +x bit from node-pty's spawn-helper
@@ -720,7 +732,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   }
   const shouldInspectFallbackForegroundProcess = (fallbackProcess: string | null): boolean =>
     fallbackProcess !== null &&
-    (isShellProcess(fallbackProcess) || isAgentForegroundWrapperProcess(fallbackProcess))
+    (isShellProcess(fallbackProcess) ||
+      isAgentForegroundWrapperProcess(fallbackProcess) ||
+      // Why: agent-spawned helper processes can become the PTY foreground
+      // child; the Unix process tree can still identify the parent agent.
+      process.platform !== 'win32')
   const scheduleAgentForegroundRefresh = (fallbackProcess: string | null): void => {
     if (dead || !proc.pid) {
       return
@@ -744,7 +760,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     foregroundRefreshInFlight = true
     lastForegroundRefreshStartedAt = now
     // Why: daemon foreground reads are sync and run on the IPC hot path.
-    // Refresh shell/wrapper-derived identities (powershell/node -> codex/etc.)
+    // Refresh derived identities (shell/wrapper/helper -> codex/claude/etc.)
     // in the background and serve them from a short cache on later reads.
     void resolveAgentForegroundProcess(proc.pid, fallbackProcess, {
       contextPaths: agentForegroundContextPaths

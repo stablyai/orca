@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { lstat, readFile, rm } from 'node:fs/promises'
+import { win32 } from 'node:path'
 import {
   buildWslLoginShellCommand,
   escapeWslShCommandForWindows,
@@ -8,7 +9,7 @@ import {
 import { toLinuxPath } from './wsl'
 import type { ReadPath, StatPath } from './worktree-orphan-gitdir-proof'
 
-type LocalWorktreeFilesystemOptions = {
+export type LocalWorktreeFilesystemOptions = {
   wslDistro?: string
 }
 
@@ -111,11 +112,17 @@ export async function removeLocalWorktreePath(
 ): Promise<void> {
   const distro = options.wslDistro?.trim()
   if (!shouldUseWslFilesystem(options) || !distro) {
-    await rm(targetPath, { recursive: true, force: true })
+    await rm(toHostRemovalPath(targetPath), { recursive: true, force: true })
     return
   }
 
   // Why: WSL-owned worktree directories may be POSIX paths that Node on
   // Windows cannot delete safely. Run the deletion inside the selected distro.
   await runWslLoginShellCommand(distro, `rm -rf -- ${quotePosixShell(toLinuxPath(targetPath))}`)
+}
+
+export function toHostRemovalPath(targetPath: string): string {
+  // Why: Git for Windows can fail long recursive deletes even after Orca has
+  // proven the worktree target; Node's host deletion should use Win32 long paths.
+  return process.platform === 'win32' ? win32.toNamespacedPath(targetPath) : targetPath
 }

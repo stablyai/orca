@@ -1167,6 +1167,16 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           nextRetentionSuppressedPaneKeys = { ...s.retentionSuppressedPaneKeys }
           delete nextRetentionSuppressedPaneKeys[paneKey]
         }
+        // Why: pane keys are reused by the same terminal pane across turns.
+        // Once a fresh live hook row arrives, any retained snapshot for that
+        // pane is stale and must not render beside the live row in the sidebar.
+        const hasRetainedSnapshot = paneKey in s.retainedAgentsByPaneKey
+        const nextRetainedAgents = hasRetainedSnapshot
+          ? { ...s.retainedAgentsByPaneKey }
+          : s.retainedAgentsByPaneKey
+        if (hasRetainedSnapshot) {
+          delete nextRetainedAgents[paneKey]
+        }
         const migrationUnsupported = pruneMigrationUnsupportedEntries(
           s.migrationUnsupportedByPtyId,
           (entry) => entry.paneKey === paneKey
@@ -1226,6 +1236,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         }
         return {
           agentStatusByPaneKey: { ...s.agentStatusByPaneKey, [paneKey]: entry },
+          retainedAgentsByPaneKey: nextRetainedAgents,
           sleepingAgentSessionsByPaneKey: nextSleepingAgentSessions,
           agentLaunchConfigByPaneKey: nextLaunchConfigs,
           migrationUnsupportedByPtyId: migrationUnsupported.next,

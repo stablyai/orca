@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { SshPtyProvider } from './ssh-pty-provider'
+import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../pty/powerlevel10k-wizard-env'
 
 type MockMultiplexer = {
   request: ReturnType<typeof vi.fn>
@@ -43,7 +44,7 @@ describe('SshPtyProvider', () => {
         cols: 80,
         rows: 24,
         cwd: undefined,
-        env: undefined
+        env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true' }
       })
       expect(result).toEqual({ id: scopedPty1 })
     })
@@ -62,7 +63,42 @@ describe('SshPtyProvider', () => {
         cols: 120,
         rows: 40,
         cwd: '/home/user',
-        env: { FOO: 'bar' }
+        env: { FOO: 'bar', [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true' }
+      })
+    })
+
+    it('preserves an explicit remote Powerlevel10k wizard env value', async () => {
+      mux.request.mockResolvedValue({ id: 'pty-2' })
+
+      await provider.spawn({
+        cols: 120,
+        rows: 40,
+        env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'already-set' }
+      })
+
+      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+        cols: 120,
+        rows: 40,
+        cwd: undefined,
+        env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'already-set' }
+      })
+    })
+
+    it('honors requests to delete the remote Powerlevel10k wizard env value', async () => {
+      mux.request.mockResolvedValue({ id: 'pty-2' })
+
+      await provider.spawn({
+        cols: 120,
+        rows: 40,
+        env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'already-set' },
+        envToDelete: [POWERLEVEL10K_WIZARD_DISABLE_ENV]
+      })
+
+      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+        cols: 120,
+        rows: 40,
+        cwd: undefined,
+        env: {}
       })
     })
 
@@ -88,6 +124,7 @@ describe('SshPtyProvider', () => {
         env: {
           PATH: '/home/user/.orca-relay/bin:/usr/bin',
           ORCA_TERMINAL_HANDLE: 'term_ssh',
+          [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
           ORCA_REMOTE_CLI_BIN_DIR: '/home/user/.orca-relay/bin',
           ORCA_RELAY_DIR: '/home/user/.orca-relay/relay-v1',
           ORCA_RELAY_NODE_PATH: '/usr/bin/node',
@@ -117,6 +154,7 @@ describe('SshPtyProvider', () => {
         cwd: undefined,
         env: {
           ORCA_TERMINAL_HANDLE: 'term_ssh',
+          [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
           ORCA_REMOTE_CLI_BIN_DIR: '/home/user/.orca-relay/bin',
           ORCA_RELAY_DIR: '/home/user/.orca-relay/relay-v1',
           ORCA_RELAY_NODE_PATH: '/usr/bin/node',
@@ -147,6 +185,7 @@ describe('SshPtyProvider', () => {
         cwd: undefined,
         env: {
           Path: 'C:/Users/me/.orca-relay/bin;C:/Windows/System32;C:/Tools',
+          [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
           ORCA_REMOTE_CLI_BIN_DIR: 'C:/Users/me/.orca-relay/bin',
           ORCA_RELAY_DIR: 'C:/Users/me/.orca-remote/relay-v1',
           ORCA_RELAY_NODE_PATH: 'C:/Program Files/nodejs/node.exe',
