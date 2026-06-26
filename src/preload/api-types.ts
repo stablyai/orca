@@ -484,6 +484,22 @@ export type EmulatorApi = {
   onFrameStreamError: (
     callback: (data: { streamId: string; message: string }) => void
   ) => () => void
+  startVideoStream: (args: { deviceId: string }) => Promise<void>
+  stopVideoStream: (args: { deviceId: string }) => Promise<void>
+  onVideoStreamMeta: (
+    callback: (data: {
+      deviceId: string
+      meta: { codecId: string; width: number; height: number }
+    }) => void
+  ) => () => void
+  onVideoStreamFrame: (
+    callback: (data: {
+      deviceId: string
+      config: boolean
+      keyFrame: boolean
+      bytes: ArrayBuffer
+    }) => void
+  ) => () => void
 }
 
 export type DetectedBrowserProfileInfo = {

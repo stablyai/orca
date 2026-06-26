@@ -60,11 +60,21 @@ export function useEmulatorPaneSession({
 
   const refreshDevices = useCallback(async (bootedTarget?: string | null) => {
     try {
-      const list = (await callRuntimeRpc(
-        { kind: 'local' },
-        'emulator.listSimulators',
-        {}
-      )) as SimulatorDeviceRow[]
+      // Unified list so Android devices/AVDs appear alongside iOS simulators.
+      const raw = (await callRuntimeRpc({ kind: 'local' }, 'emulator.listDevices', {})) as {
+        id: string
+        name: string
+        state: string
+        detail?: string
+        isAvailable?: boolean
+      }[]
+      const list: SimulatorDeviceRow[] = raw.map((device) => ({
+        name: device.name,
+        udid: device.id,
+        state: device.state === 'booted' ? 'Booted' : 'Shutdown',
+        runtime: device.detail,
+        isAvailable: device.isAvailable
+      }))
       const next = markSimulatorDeviceBooted(list, bootedTarget)
       if (!mountedRef.current) {
         return next

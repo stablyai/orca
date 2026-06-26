@@ -1,19 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 
-// ============================================================================
-// UNVERIFIED — needs Electron + a live scrcpy session to validate.
 // Decodes the Android H.264 stream (scrcpy access units forwarded over the
-// emulator:videoStream* IPC) with WebCodecs and paints it to a <canvas>. This
-// is the Android sibling of use-emulator-frame-stream (MJPEG/<img>). It cannot
-// be unit-tested in the node Vitest env (no WebCodecs/DOM); the byte framing it
-// consumes IS tested in src/main/emulator/android/scrcpy-video-frame-parser.
-//
-// Wiring still required (see docs/android-emulation-streaming.md):
-//   - preload: expose emulator.startVideoStream / onVideoStreamMeta /
-//     onVideoStreamFrame / stopVideoStream.
-//   - emulator-screen-stream-content.tsx: render this canvas when
-//     session.streamCodec === 'h264'.
-// ============================================================================
+// emulator:videoStream* IPC) with WebCodecs and paints it to a <canvas>. The
+// Android sibling of use-emulator-frame-stream (MJPEG/<img>). Validated against
+// a real emulator; the byte framing is unit-tested in scrcpy-video-frame-parser.
 
 type VideoFrameMessage = {
   deviceId: string
@@ -33,16 +23,21 @@ type EmulatorVideoApi = {
   onVideoStreamFrame?: (cb: (msg: VideoFrameMessage) => void) => () => void
 }
 
-// Default H.264 codec string; scrcpy emits Annex-B, so the decoder is configured
-// without an avcC description. The exact profile/level may need adjusting per device.
+// scrcpy emits Annex-B H.264; the decoder is configured without an avcC
+// description and the SPS/PPS config packet is prepended to the first keyframe.
 const H264_CODEC = 'avc1.640028'
+
+type StreamSize = { width: number; height: number }
 
 export function useEmulatorVideoStream(
   deviceId: string | undefined,
-  enabled: boolean
+  enabled: boolean,
+  onSize?: (size: StreamSize) => void
 ): { canvasRef: React.RefObject<HTMLCanvasElement | null>; error: string | null } {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [error, setError] = useState<string | null>(null)
+  const onSizeRef = useRef(onSize)
+  onSizeRef.current = onSize
 
   useEffect(() => {
     const api = (window as { api?: { emulator?: EmulatorVideoApi } }).api?.emulator
@@ -60,6 +55,7 @@ export function useEmulatorVideoStream(
     let disposed = false
     let configured = false
     let timestamp = 0
+    let configBytes: Uint8Array | null = null
     const canvas = canvasRef.current
     const ctx = canvas?.getContext('2d') ?? null
 
@@ -75,23 +71,42 @@ export function useEmulatorVideoStream(
       error: (err) => setError(err.message)
     })
 
+    const unsubMeta = api.onVideoStreamMeta?.((msg) => {
+      if (!disposed && msg.deviceId === deviceId) {
+        onSizeRef.current?.({ width: msg.meta.width, height: msg.meta.height })
+      }
+    })
+
     const unsubFrame = api.onVideoStreamFrame?.((msg) => {
       if (disposed || msg.deviceId !== deviceId) {
         return
       }
       const data = new Uint8Array(msg.bytes)
-      if (msg.config && !configured) {
-        decoder.configure({ codec: H264_CODEC, optimizeForLatency: true })
-        configured = true
+      // The config packet carries SPS/PPS; configure once and stash it to prepend
+      // to the next keyframe (Annex-B), since WebCodecs needs them with the IDR.
+      if (msg.config) {
+        if (!configured) {
+          decoder.configure({ codec: H264_CODEC, optimizeForLatency: true })
+          configured = true
+        }
+        configBytes = data
+        return
       }
       if (!configured) {
         return
       }
+      let chunkData = data
+      if (msg.keyFrame && configBytes) {
+        chunkData = new Uint8Array(configBytes.length + data.length)
+        chunkData.set(configBytes, 0)
+        chunkData.set(data, configBytes.length)
+        configBytes = null
+      }
       decoder.decode(
         new ChunkCtor({
-          type: msg.config || msg.keyFrame ? 'key' : 'delta',
+          type: msg.keyFrame ? 'key' : 'delta',
           timestamp: (timestamp += 1),
-          data
+          data: chunkData
         })
       )
     })
@@ -102,6 +117,7 @@ export function useEmulatorVideoStream(
 
     return () => {
       disposed = true
+      unsubMeta?.()
       unsubFrame?.()
       api.stopVideoStream?.({ deviceId })
       if (decoder.state !== 'closed') {
