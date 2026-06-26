@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process'
 import { EmulatorError } from '../emulator-errors'
 import type { AndroidCommandRunner } from './android-command-runner'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
@@ -28,9 +29,19 @@ export async function bootAndroidDevice(
     return existing
   }
   const known = new Set(running.map((device) => device.serial))
-  // Detached: the emulator process must outlive this call.
-  void runner(sdk.emulator, bootAvdArgs(deviceOrName), { timeoutMs: options.bootTimeoutMs })
+  launchAvdDetached(sdk.emulator, deviceOrName)
   return waitForNewBootedSerial(runner, sdk, deviceOrName, known, options)
+}
+
+// Launches the emulator as a detached, unref'd process with no stdio. It must
+// outlive this call and must NOT go through the command runner: execFile would
+// kill the long-running emulator at its timeout (and risks the stdout maxBuffer).
+function launchAvdDetached(emulatorPath: string, avdName: string): void {
+  const child = spawn(emulatorPath, bootAvdArgs(avdName), {
+    detached: true,
+    stdio: 'ignore'
+  })
+  child.unref()
 }
 
 async function waitForNewBootedSerial(

@@ -1,7 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { spawn } from 'node:child_process'
 import { AndroidEmulatorBackend } from './android-emulator-backend'
 import type { AndroidCommandResult, AndroidCommandRunner } from '../android/android-command-runner'
 import type { AndroidSdkPaths } from '../android/android-sdk-discovery'
+
+// The AVD boot spawns the emulator detached (not via the command runner).
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return { ...actual, spawn: vi.fn(() => ({ unref: () => {} })) }
+})
 
 const SDK: AndroidSdkPaths = {
   sdkRoot: '/sdk',
@@ -214,12 +221,12 @@ describe('AndroidEmulatorBackend', () => {
 
   it('boots a shutdown AVD and waits for the new booted serial', async () => {
     let bootStarted = false
+    vi.mocked(spawn).mockImplementation(() => {
+      bootStarted = true
+      return { unref: () => {} } as unknown as ReturnType<typeof spawn>
+    })
     const bootRunner = vi.fn(async (binary: string, args: readonly string[]) => {
       const a = args.join(' ')
-      if (binary === SDK.emulator && a === '-avd Pixel_Tablet') {
-        bootStarted = true
-        return ok('')
-      }
       if (binary === SDK.adb && a === 'devices -l') {
         return ok(
           bootStarted
@@ -234,10 +241,10 @@ describe('AndroidEmulatorBackend', () => {
     })
     const serial = await backend(bootRunner).ensureBooted('Pixel_Tablet')
     expect(serial).toBe('emulator-5556')
-    expect(bootRunner).toHaveBeenCalledWith(
+    expect(spawn).toHaveBeenCalledWith(
       SDK.emulator,
       ['-avd', 'Pixel_Tablet'],
-      expect.anything()
+      expect.objectContaining({ detached: true })
     )
   })
 
