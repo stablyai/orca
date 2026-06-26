@@ -39,6 +39,7 @@ export function registerVisibleTerminalWorktree(worktreeId: string | null | unde
       return
     }
     if (!getForegroundTerminalWorktreeIds().includes(id)) {
+      // Why: keep the sleep timer anchored to the end of the full foreground visit.
       foregroundTerminalWorktreeLastSeenAtById.set(id, Date.now())
     }
   }
@@ -69,6 +70,7 @@ function refreshExitedForegroundWorktreeLastSeen(
   const currentForegroundWorktreeIds = new Set(getForegroundTerminalWorktreeIds())
   for (const worktreeId of previousForegroundWorktreeIds) {
     if (!currentForegroundWorktreeIds.has(worktreeId)) {
+      // Why: visible panes can keep a worktree foreground after explicit ids change.
       foregroundTerminalWorktreeLastSeenAtById.set(worktreeId, now)
     }
   }

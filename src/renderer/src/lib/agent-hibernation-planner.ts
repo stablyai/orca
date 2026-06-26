@@ -149,6 +149,7 @@ function getEligiblePane(args: {
   if (!getAgentResumeArgv(entry.agentType, entry.providerSession)) {
     return null
   }
+  // Why: returning to the terminal should restart sleep even without pane input.
   const foregroundLastSeenAt = foregroundTerminalLastSeenAtByWorktreeId[tab.worktreeId]
   const effectiveIdleStart = Math.max(
     entry.updatedAt,
