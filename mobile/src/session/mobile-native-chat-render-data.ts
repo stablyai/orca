@@ -1,4 +1,8 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import {
+  deriveNativeChatStreamingText,
+  nativeChatStreamingMessage
+} from '../../../src/shared/native-chat-streaming'
 import { foldToolMessages } from './mobile-native-chat-blocks'
 import { stripNoiseMessages } from './mobile-native-chat-noise'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
@@ -21,30 +25,28 @@ export function statusHint(status: MobileNativeChatStatus, error?: string): stri
 export function buildMobileNativeChatData({
   messages,
   streamingText,
+  agentWorking = streamingText != null,
   pending
 }: {
   messages: NativeChatMessage[]
   streamingText?: string
+  /** Defaults to "streamingText present" for back-compat; pass the live working
+   *  flag so a stale preview from a finished turn never shows. */
+  agentWorking?: boolean
   pending: Array<{ id: string; text: string }>
 }): { folded: NativeChatMessage[]; streaming: string | null; data: NativeChatMessage[] } {
   // Fold each tool-result turn into the assistant turn it belongs to.
   const folded = foldToolMessages(stripNoiseMessages(messages))
-  // Only show the streaming bubble while its text leads the transcript — once the
-  // real assistant turn lands with the same text, drop the synthetic one.
-  const streaming = deriveStreaming(folded, streamingText)
+  // Show the streaming bubble only while its text leads the transcript (shared
+  // rule with desktop); once the real turn lands with the same text, drop it.
+  const streaming = deriveNativeChatStreamingText({
+    messages: folded,
+    previewText: streamingText,
+    working: agentWorking
+  })
   const data: NativeChatMessage[] = [
     ...folded,
-    ...(streaming
-      ? [
-          {
-            id: 'streaming',
-            role: 'assistant' as const,
-            blocks: [{ type: 'text' as const, text: streaming }],
-            timestamp: null,
-            source: 'hook' as const
-          }
-        ]
-      : []),
+    ...(streaming ? [nativeChatStreamingMessage(streaming)] : []),
     ...pending.map((p) => ({
       id: p.id,
       role: 'user' as const,
@@ -54,24 +56,4 @@ export function buildMobileNativeChatData({
     }))
   ]
   return { folded, streaming, data }
-}
-
-function deriveStreaming(folded: NativeChatMessage[], streamingText?: string): string | null {
-  const text = streamingText?.trim()
-  if (!text) {
-    return null
-  }
-  const last = folded[folded.length - 1]
-  const lastText =
-    last?.role === 'assistant'
-      ? last.blocks
-          .filter((b) => b.type === 'text')
-          .map((b) => (b.type === 'text' ? b.text : ''))
-          .join('')
-          .trim()
-      : ''
-  if (lastText.includes(text) || text.length <= lastText.length) {
-    return null
-  }
-  return text
 }

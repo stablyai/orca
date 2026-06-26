@@ -128,8 +128,8 @@ export function MobileNativeChatView({
   // route-owned optimistic queued messages. Memoize on the same deps so the
   // downstream autoscroll effects/`renderItem` keep referential stability.
   const { data } = useMemo(
-    () => buildMobileNativeChatData({ messages, streamingText, pending }),
-    [messages, streamingText, pending]
+    () => buildMobileNativeChatData({ messages, streamingText, agentWorking, pending }),
+    [messages, streamingText, agentWorking, pending]
   )
 
   // Follow the tail as the conversation grows, but only when already pinned to

@@ -25,6 +25,10 @@ import {
   prunePendingSends,
   type NativeChatPendingSend
 } from './native-chat-pending'
+import {
+  deriveNativeChatStreamingText,
+  nativeChatStreamingMessage
+} from '../../../../shared/native-chat-streaming'
 
 export type NativeChatViewProps = {
   /** The terminal tab hosting the agent. paneKey is `${tabId}:${leafId}`. */
@@ -93,6 +97,9 @@ function NativeChatResolvedView({
   // flips the instant the agent reports 'working' — even when switching to chat
   // mid-turn before the transcript merge has caught up.
   const hookWorking = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.state === 'working')
+  // The agent's in-progress reply preview (hook), shown as a live streaming
+  // bubble while it works — before the completed turn flushes to the transcript.
+  const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
   const canSend = useNativeChatCanSend(terminalTabId)
   // Reuse the verified composer send path for interactive cards and composer
   // stop (Stop sends ESC, the agent-TUI interrupt key).
@@ -122,12 +129,30 @@ function NativeChatResolvedView({
     setPending((prev) => [...prev, { id: `${pendingCounter.current}`, text, sentAt: Date.now() }])
   }, [])
 
+  // The streaming preview bubble (if any) sits after the transcript but before
+  // the optimistic user echoes — same order mobile uses.
+  const streamingText = useMemo(
+    () =>
+      deriveNativeChatStreamingText({
+        messages: session.messages,
+        previewText: hookPreview,
+        working: hookWorking
+      }),
+    [session.messages, hookPreview, hookWorking]
+  )
   const sessionWithPending = useMemo<typeof session>(() => {
-    if (pending.length === 0) {
+    if (pending.length === 0 && !streamingText) {
       return session
     }
-    return { ...session, messages: [...session.messages, ...pendingSendsAsMessages(pending)] }
-  }, [session, pending])
+    return {
+      ...session,
+      messages: [
+        ...session.messages,
+        ...(streamingText ? [nativeChatStreamingMessage(streamingText)] : []),
+        ...pendingSendsAsMessages(pending)
+      ]
+    }
+  }, [session, pending, streamingText])
   const pendingMessageIds = useMemo(
     () => new Set(pending.map((entry) => `pending:${entry.id}`)),
     [pending]
