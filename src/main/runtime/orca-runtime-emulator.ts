@@ -21,6 +21,8 @@ export type RuntimeEmulatorCommandHost = {
   getSettings(): Pick<GlobalSettings, 'mobileEmulatorEnabled' | 'mobileEmulatorDefaultDeviceUdid'>
 }
 
+type EmulatorTargetParams = { device?: string; emulator?: string; worktree?: string }
+
 export class RuntimeEmulatorCommands {
   constructor(private readonly host: RuntimeEmulatorCommandHost) {}
 
@@ -44,9 +46,7 @@ export class RuntimeEmulatorCommands {
     worktree?: string
   }): Promise<{ ok: true }> {
     const bridge = this.requireEmulatorBridge()
-    const worktreeId = params.worktree
-      ? (await this.host.resolveWorktreeSelector(params.worktree)).id
-      : undefined
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
     await bridge.tap(params.x, params.y, { device: params.device ?? params.emulator, worktreeId })
     return RuntimeEmulatorCommands.OK
   }
@@ -58,9 +58,7 @@ export class RuntimeEmulatorCommands {
     worktree?: string
   }): Promise<{ ok: true }> {
     const bridge = this.requireEmulatorBridge()
-    const worktreeId = params.worktree
-      ? (await this.host.resolveWorktreeSelector(params.worktree)).id
-      : undefined
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
     await bridge.gesture(params.points, { device: params.device ?? params.emulator, worktreeId })
     return RuntimeEmulatorCommands.OK
   }
@@ -72,9 +70,7 @@ export class RuntimeEmulatorCommands {
     worktree?: string
   }): Promise<{ ok: true }> {
     const bridge = this.requireEmulatorBridge()
-    const worktreeId = params.worktree
-      ? (await this.host.resolveWorktreeSelector(params.worktree)).id
-      : undefined
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
     await bridge.type(params.text, { device: params.device ?? params.emulator, worktreeId })
     return RuntimeEmulatorCommands.OK
   }
@@ -86,9 +82,7 @@ export class RuntimeEmulatorCommands {
     worktree?: string
   }): Promise<{ ok: true }> {
     const bridge = this.requireEmulatorBridge()
-    const worktreeId = params.worktree
-      ? (await this.host.resolveWorktreeSelector(params.worktree)).id
-      : undefined
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
     await bridge.button(params.name, { device: params.device ?? params.emulator, worktreeId })
     return RuntimeEmulatorCommands.OK
   }
@@ -100,9 +94,7 @@ export class RuntimeEmulatorCommands {
     worktree?: string
   }): Promise<{ ok: true }> {
     const bridge = this.requireEmulatorBridge()
-    const worktreeId = params.worktree
-      ? (await this.host.resolveWorktreeSelector(params.worktree)).id
-      : undefined
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
     await bridge.rotate(params.orientation, {
       device: params.device ?? params.emulator,
       worktreeId
@@ -117,9 +109,7 @@ export class RuntimeEmulatorCommands {
     worktree?: string
   }): Promise<unknown> {
     const bridge = this.requireEmulatorBridge()
-    const worktreeId = params.worktree
-      ? (await this.host.resolveWorktreeSelector(params.worktree)).id
-      : undefined
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
     return bridge.exec(params.command, {
       device: params.device,
       emulator: params.emulator,
@@ -147,9 +137,7 @@ export class RuntimeEmulatorCommands {
         'No emulator device specified. Choose a default device in Settings > Mobile Emulator or pass a device.'
       )
     }
-    const worktreeId = params.worktree
-      ? (await this.host.resolveWorktreeSelector(params.worktree)).id
-      : undefined
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
     if (worktreeId) {
       const reusable = await bridge.getReusableActiveForWorktree(worktreeId, device)
       if (reusable) {
@@ -189,9 +177,7 @@ export class RuntimeEmulatorCommands {
 
   async emulatorUnregisterActive(params: { worktree?: string }): Promise<{ ok: true }> {
     const bridge = this.requireEmulatorBridge()
-    const worktreeId = params.worktree
-      ? (await this.host.resolveWorktreeSelector(params.worktree)).id
-      : undefined
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
     if (worktreeId) {
       bridge.unregisterActiveEmulator(worktreeId)
     }
@@ -217,15 +203,78 @@ export class RuntimeEmulatorCommands {
     return this.requireEmulatorBridge().listAllDevices()
   }
 
+  private async resolveWorktreeId(worktree?: string): Promise<string | undefined> {
+    return worktree ? (await this.host.resolveWorktreeSelector(worktree)).id : undefined
+  }
+
+  async emulatorInstall(
+    params: EmulatorTargetParams & { path: string; reinstall?: boolean }
+  ): Promise<{ ok: true }> {
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
+    await this.requireEmulatorBridge().runCapability(
+      'install',
+      { device: params.device ?? params.emulator, worktreeId },
+      (backend, device) => backend.installApp!(device, params.path, { reinstall: params.reinstall })
+    )
+    return RuntimeEmulatorCommands.OK
+  }
+
+  async emulatorLaunch(
+    params: EmulatorTargetParams & { package: string; activity?: string }
+  ): Promise<{ ok: true }> {
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
+    await this.requireEmulatorBridge().runCapability(
+      'launch',
+      { device: params.device ?? params.emulator, worktreeId },
+      (backend, device) => backend.launchApp!(device, params.package, params.activity)
+    )
+    return RuntimeEmulatorCommands.OK
+  }
+
+  async emulatorPermissions(
+    params: EmulatorTargetParams & {
+      op: 'grant' | 'revoke' | 'reset'
+      package: string
+      permission?: string
+    }
+  ): Promise<{ ok: true }> {
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
+    await this.requireEmulatorBridge().runCapability(
+      'permissions',
+      { device: params.device ?? params.emulator, worktreeId },
+      (backend, device) =>
+        backend.setPermission!(device, params.op, params.package, params.permission)
+    )
+    return RuntimeEmulatorCommands.OK
+  }
+
+  async emulatorAx(params: EmulatorTargetParams): Promise<unknown> {
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
+    return this.requireEmulatorBridge().runCapability(
+      'accessibilityTree',
+      { device: params.device ?? params.emulator, worktreeId },
+      (backend, device) => backend.accessibilityTree!(device)
+    )
+  }
+
+  async emulatorLogcat(
+    params: EmulatorTargetParams & { lines?: number; filters?: string[] }
+  ): Promise<unknown> {
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
+    return this.requireEmulatorBridge().runCapability(
+      'logcat',
+      { device: params.device ?? params.emulator, worktreeId },
+      (backend, device) => backend.logcat!(device, { lines: params.lines, filters: params.filters })
+    )
+  }
+
   async emulatorKill(params: {
     device?: string
     emulator?: string
     worktree?: string
   }): Promise<{ ok: true; deviceUdid: string }> {
     const bridge = this.requireEmulatorBridge()
-    const worktreeId = params.worktree
-      ? (await this.host.resolveWorktreeSelector(params.worktree)).id
-      : undefined
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
     const killedUdid = await bridge.kill(params.device ?? params.emulator, worktreeId)
     serveSimStateWatcher.unmarkOrcaManaged(killedUdid)
     return { ok: true, deviceUdid: killedUdid }
@@ -238,9 +287,7 @@ export class RuntimeEmulatorCommands {
     managedOnly?: boolean
   }): Promise<{ ok: true; deviceUdid?: string }> {
     const bridge = this.requireEmulatorBridge()
-    const worktreeId = params.worktree
-      ? (await this.host.resolveWorktreeSelector(params.worktree)).id
-      : undefined
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
     if (params.managedOnly && worktreeId && !params.device && !params.emulator) {
       const shutdownUdid = await bridge.shutdownActiveManagedForWorktree(worktreeId)
       if (shutdownUdid) {

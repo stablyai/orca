@@ -179,6 +179,39 @@ describe('AndroidEmulatorBackend', () => {
     expect(runner).toHaveBeenCalledWith(SDK.adb, ['-s', 'emulator-5554', 'emu', 'kill'])
   })
 
+  it('installs an apk and grants a permission on the resolved device', async () => {
+    const android = backend(runner)
+    await android.installApp('emulator-5554', '/tmp/app.apk')
+    await android.setPermission('emulator-5554', 'grant', 'com.x', 'android.permission.CAMERA')
+    expect(runner).toHaveBeenCalledWith(SDK.adb, ['-s', 'emulator-5554', 'install', '/tmp/app.apk'])
+    expect(runner).toHaveBeenCalledWith(SDK.adb, [
+      '-s',
+      'emulator-5554',
+      'shell',
+      'pm',
+      'grant',
+      'com.x',
+      'android.permission.CAMERA'
+    ])
+  })
+
+  it('dumps the accessibility tree from the device', async () => {
+    runner.mockImplementation(async (binary: string, args: readonly string[]) => {
+      const a = args.join(' ')
+      if (binary === SDK.adb && a === 'devices -l') {
+        return ok(RUNNING_ADB)
+      }
+      if (binary === SDK.adb && a === '-s emulator-5554 shell cat /sdcard/window_dump.xml') {
+        return ok('<hierarchy><node text="Hi"/></hierarchy>')
+      }
+      return ok('')
+    })
+    const tree = (await backend(runner).accessibilityTree('emulator-5554')) as {
+      children: { text?: string }[]
+    }
+    expect(tree.children[0]).toMatchObject({ text: 'Hi' })
+  })
+
   it('boots a shutdown AVD and waits for the new booted serial', async () => {
     let bootStarted = false
     const bootRunner = vi.fn(async (binary: string, args: readonly string[]) => {

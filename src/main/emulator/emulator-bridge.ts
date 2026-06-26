@@ -8,6 +8,7 @@ import { IosEmulatorBackend } from './backends/ios-emulator-backend'
 import { AndroidEmulatorBackend } from './backends/android-emulator-backend'
 import type {
   EmulatorBackend,
+  EmulatorBackendCapabilities,
   EmulatorBackendKind,
   EmulatorDevice,
   EmulatorTargetOpts
@@ -179,6 +180,23 @@ export class EmulatorBridge {
   async exec(command: string, opts?: EmulatorTargetOpts): Promise<unknown> {
     const { backend, device } = await this.resolveTarget(opts)
     return backend.exec(device, command)
+  }
+
+  // Runs a capability-gated verb against the resolved target, rejecting backends
+  // that do not advertise the capability (e.g. install/logcat on iOS).
+  async runCapability<T>(
+    capability: keyof EmulatorBackendCapabilities,
+    opts: EmulatorTargetOpts | undefined,
+    run: (backend: EmulatorBackend, deviceId: string) => Promise<T>
+  ): Promise<T> {
+    const { backend, device } = await this.resolveTarget(opts)
+    if (!backend.capabilities[capability]) {
+      throw new EmulatorError(
+        'emulator_unsupported',
+        `${capability} is not supported by the ${backend.kind} emulator backend`
+      )
+    }
+    return run(backend, device)
   }
 
   async startHelperForDevice(device: string): Promise<EmulatorSessionInfo> {

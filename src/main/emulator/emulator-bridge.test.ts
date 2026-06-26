@@ -170,6 +170,14 @@ describe('EmulatorBridge helper ownership', () => {
     expect(bridge.getActiveForWorktree('wt-external')).toBeNull()
   })
 
+  it('rejects a capability the resolved backend does not support', async () => {
+    const bridge = new EmulatorBridge()
+    // device-1 resolves to the iOS backend, which advertises no explicit-verb caps.
+    await expect(
+      bridge.runCapability('install', { device: 'device-1' }, async () => 'unused')
+    ).rejects.toMatchObject({ code: 'emulator_unsupported' })
+  })
+
   it('kills the helper and shuts down the selected simulator', async () => {
     const bridge = new EmulatorBridge()
     bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })

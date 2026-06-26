@@ -61,6 +61,45 @@ const ExecParams = z.object({
   worktree: z.string().optional()
 })
 
+const InstallParams = z.object({
+  path: z.string(),
+  reinstall: z.boolean().optional(),
+  device: z.string().optional(),
+  emulator: z.string().optional(),
+  worktree: z.string().optional()
+})
+
+const LaunchParams = z.object({
+  package: z.string(),
+  activity: z.string().optional(),
+  device: z.string().optional(),
+  emulator: z.string().optional(),
+  worktree: z.string().optional()
+})
+
+const PermissionsParams = z.object({
+  op: z.enum(['grant', 'revoke', 'reset']),
+  package: z.string(),
+  permission: z.string().optional(),
+  device: z.string().optional(),
+  emulator: z.string().optional(),
+  worktree: z.string().optional()
+})
+
+const AxParams = z.object({
+  device: z.string().optional(),
+  emulator: z.string().optional(),
+  worktree: z.string().optional()
+})
+
+const LogcatParams = z.object({
+  lines: z.number().int().positive().optional(),
+  filters: z.array(z.string()).optional(),
+  device: z.string().optional(),
+  emulator: z.string().optional(),
+  worktree: z.string().optional()
+})
+
 const AttachParams = z.object({
   device: z.string().optional(),
   worktree: z.string().optional(),
@@ -144,6 +183,31 @@ export const EMULATOR_METHODS: RpcMethod[] = [
     name: 'emulator.listDevices',
     params: z.object({ worktree: z.string().optional() }).partial(),
     handler: async (params, { runtime }) => runtime.emulatorListDevices(params)
+  }),
+  defineMethod({
+    name: 'emulator.install',
+    params: InstallParams,
+    handler: async (params, { runtime }) => runtime.emulatorInstall(params)
+  }),
+  defineMethod({
+    name: 'emulator.launch',
+    params: LaunchParams,
+    handler: async (params, { runtime }) => runtime.emulatorLaunch(params)
+  }),
+  defineMethod({
+    name: 'emulator.permissions',
+    params: PermissionsParams,
+    handler: async (params, { runtime }) => runtime.emulatorPermissions(params)
+  }),
+  defineMethod({
+    name: 'emulator.ax',
+    params: AxParams,
+    handler: async (params, { runtime }) => runtime.emulatorAx(params)
+  }),
+  defineMethod({
+    name: 'emulator.logcat',
+    params: LogcatParams,
+    handler: async (params, { runtime }) => runtime.emulatorLogcat(params)
   }),
   defineMethod({
     name: 'emulator.unregisterActive',

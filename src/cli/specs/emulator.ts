@@ -75,5 +75,46 @@ export const EMULATOR_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca emulator shutdown [--device <id>] [--emulator <id>] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree']
+  },
+  {
+    path: ['emulator', 'install'],
+    summary: 'Install an APK onto the target Android device',
+    usage: 'orca emulator install <apkPath> [--reinstall] [--device <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree', 'path', 'reinstall'],
+    positionalArgs: ['path']
+  },
+  {
+    path: ['emulator', 'launch'],
+    summary: 'Launch an Android app by package (and optional activity)',
+    usage: 'orca emulator launch <package> [--activity <name>] [--device <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree', 'package', 'activity'],
+    positionalArgs: ['package']
+  },
+  {
+    path: ['emulator', 'permissions'],
+    summary: 'Grant/revoke/reset an Android runtime permission',
+    usage: 'orca emulator permissions <op> <package> [permission] [--device <id>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'device',
+      'emulator',
+      'worktree',
+      'op',
+      'package',
+      'permission'
+    ],
+    positionalArgs: ['op', 'package', 'permission']
+  },
+  {
+    path: ['emulator', 'ax'],
+    summary: 'Dump the Android accessibility (uiautomator) tree',
+    usage: 'orca emulator ax [--device <id>] [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree']
+  },
+  {
+    path: ['emulator', 'logcat'],
+    summary: 'Capture a one-shot logcat dump from the Android device',
+    usage: 'orca emulator logcat [--lines <n>] [--device <id>] [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree', 'lines']
   }
 ]

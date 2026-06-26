@@ -1,6 +1,11 @@
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
-import { getOptionalStringFlag, getRequiredFiniteNumber, getRequiredStringFlag } from '../flags'
+import {
+  getOptionalPositiveIntegerFlag,
+  getOptionalStringFlag,
+  getRequiredFiniteNumber,
+  getRequiredStringFlag
+} from '../flags'
 import { getEmulatorCommandTarget } from '../selectors'
 import { RuntimeClientError } from '../runtime-client'
 
@@ -43,6 +48,20 @@ function formatEmulatorDevices(value: unknown): string {
       const platform = device.backend === 'android' ? 'Android' : 'iOS'
       return `${platform.padEnd(8)} ${(device.state ?? '').padEnd(9)} ${device.name ?? ''}  (${device.id ?? ''})`
     })
+    .join('\n')
+}
+
+type LogcatRow = { timestamp?: string; level?: string; tag?: string; message?: string }
+
+function formatLogcat(value: unknown): string {
+  const entries = Array.isArray(value) ? (value as LogcatRow[]) : []
+  if (entries.length === 0) {
+    return 'No logcat output.'
+  }
+  return entries
+    .map((entry) =>
+      `${entry.timestamp ?? ''} ${entry.level ?? ''} ${entry.tag ?? ''}: ${entry.message ?? ''}`.trim()
+    )
     .join('\n')
 }
 
@@ -222,5 +241,65 @@ export const EMULATOR_HANDLERS: Record<string, CommandHandler> = {
       const result = r as EmulatorShutdownResult
       return `Shut down ${result.deviceUdid || target.device || 'emulator'}`
     })
+  },
+  'emulator install': async ({ flags, client, cwd, json }) => {
+    const target = await getEmulatorCommandTarget(flags, cwd, client)
+    const path = getRequiredStringFlag(flags, 'path')
+    const res = await client.call('emulator.install', {
+      path,
+      reinstall: flags.get('reinstall') === true,
+      device: target.device,
+      emulator: target.emulator,
+      worktree: target.worktree
+    })
+    printResult(res, json, () => `Installed ${path}`)
+  },
+  'emulator launch': async ({ flags, client, cwd, json }) => {
+    const target = await getEmulatorCommandTarget(flags, cwd, client)
+    const packageName = getRequiredStringFlag(flags, 'package')
+    const res = await client.call('emulator.launch', {
+      package: packageName,
+      activity: getOptionalStringFlag(flags, 'activity'),
+      device: target.device,
+      emulator: target.emulator,
+      worktree: target.worktree
+    })
+    printResult(res, json, () => `Launched ${packageName}`)
+  },
+  'emulator permissions': async ({ flags, client, cwd, json }) => {
+    const target = await getEmulatorCommandTarget(flags, cwd, client)
+    const op = getRequiredStringFlag(flags, 'op')
+    if (op !== 'grant' && op !== 'revoke' && op !== 'reset') {
+      throw new RuntimeClientError('invalid_argument', '<op> must be grant, revoke, or reset')
+    }
+    const packageName = getRequiredStringFlag(flags, 'package')
+    const res = await client.call('emulator.permissions', {
+      op,
+      package: packageName,
+      permission: getOptionalStringFlag(flags, 'permission'),
+      device: target.device,
+      emulator: target.emulator,
+      worktree: target.worktree
+    })
+    printResult(res, json, () => `${op} ${packageName}`)
+  },
+  'emulator ax': async ({ flags, client, cwd, json }) => {
+    const target = await getEmulatorCommandTarget(flags, cwd, client)
+    const res = await client.call('emulator.ax', {
+      device: target.device,
+      emulator: target.emulator,
+      worktree: target.worktree
+    })
+    printResult(res, json, (r) => JSON.stringify(r, null, 2))
+  },
+  'emulator logcat': async ({ flags, client, cwd, json }) => {
+    const target = await getEmulatorCommandTarget(flags, cwd, client)
+    const res = await client.call('emulator.logcat', {
+      lines: getOptionalPositiveIntegerFlag(flags, 'lines'),
+      device: target.device,
+      emulator: target.emulator,
+      worktree: target.worktree
+    })
+    printResult(res, json, formatLogcat)
   }
 }

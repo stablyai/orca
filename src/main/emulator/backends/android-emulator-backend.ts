@@ -11,11 +11,15 @@ import type {
 import { discoverAndroidSdk, type AndroidSdkPaths } from '../android/android-sdk-discovery'
 import { bootCompletedArgs, isBootCompleted, parseWmSize, wmSizeArgs } from '../android/adb-devices'
 import { bootAvdArgs, emuKillArgs } from '../android/avd-manager'
+import type { DeviceScreenSize } from '../android/android-input-mapping'
 import {
-  androidButtonKeycode,
-  normalizedToDevicePixels,
-  type DeviceScreenSize
-} from '../android/android-input-mapping'
+  androidButton,
+  androidExec,
+  androidRotate,
+  androidSwipe,
+  androidTap,
+  androidTypeText
+} from '../android/android-input-commands'
 import {
   execFileAndroidCommandRunner,
   type AndroidCommandRunner
@@ -25,6 +29,14 @@ import {
   listAndroidDevices,
   listRunningAdbDevices
 } from '../android/android-device-inventory'
+import {
+  captureAndroidLogcat,
+  dumpAndroidAccessibilityTree,
+  installAndroidApk,
+  launchAndroidApp,
+  setAndroidPermission
+} from '../android/android-capability-operations'
+import type { AndroidPermissionOp } from '../android/android-permissions'
 import type { EmulatorGesturePoint } from '../emulator-gesture-sender'
 
 export type AndroidEmulatorBackendOptions = {
@@ -152,9 +164,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
 
   async tap(deviceId: string, x: number, y: number): Promise<void> {
     const serial = await this.resolveDeviceId(deviceId)
-    const size = await this.getScreenSize(serial)
-    const pixel = normalizedToDevicePixels(x, y, size)
-    await this.adbShell(serial, ['input', 'tap', String(pixel.x), String(pixel.y)])
+    await androidTap(this.runner, this.requireSdk(), serial, x, y, await this.getScreenSize(serial))
   }
 
   async gesture(
@@ -162,56 +172,98 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     points: EmulatorGesturePoint[],
     _wsUrl: string | null
   ): Promise<void> {
-    const first = points[0]
-    const last = points.at(-1)
-    if (!first || !last || points.length < 2) {
-      return
-    }
-    // adb input only supports a straight swipe, so approximate the path by its
-    // endpoints; the scrcpy control phase replaces this with true multi-touch.
     const serial = await this.resolveDeviceId(deviceId)
-    const size = await this.getScreenSize(serial)
-    const start = normalizedToDevicePixels(first.x, first.y, size)
-    const end = normalizedToDevicePixels(last.x, last.y, size)
-    await this.adbShell(serial, [
-      'input',
-      'swipe',
-      String(start.x),
-      String(start.y),
-      String(end.x),
-      String(end.y),
-      '300'
-    ])
+    await androidSwipe(
+      this.runner,
+      this.requireSdk(),
+      serial,
+      points,
+      await this.getScreenSize(serial)
+    )
   }
 
   async type(deviceId: string, text: string): Promise<void> {
-    const serial = await this.resolveDeviceId(deviceId)
-    // adb input text uses %s for spaces and cannot carry newlines.
-    await this.adbShell(serial, ['input', 'text', text.replace(/ /g, '%s')])
+    await androidTypeText(
+      this.runner,
+      this.requireSdk(),
+      await this.resolveDeviceId(deviceId),
+      text
+    )
   }
 
   async button(deviceId: string, name: string): Promise<void> {
-    const serial = await this.resolveDeviceId(deviceId)
-    await this.adbShell(serial, ['input', 'keyevent', String(androidButtonKeycode(name))])
+    await androidButton(this.runner, this.requireSdk(), await this.resolveDeviceId(deviceId), name)
   }
 
   async rotate(deviceId: string, orientation: string): Promise<void> {
     const serial = await this.resolveDeviceId(deviceId)
     this.screenSizes.delete(serial)
-    await this.adbShell(serial, ['settings', 'put', 'system', 'accelerometer_rotation', '0'])
-    await this.adbShell(serial, [
-      'settings',
-      'put',
-      'system',
-      'user_rotation',
-      String(orientationToRotation(orientation))
-    ])
+    await androidRotate(this.runner, this.requireSdk(), serial, orientation)
   }
 
   async exec(deviceId: string, command: string): Promise<unknown> {
-    const serial = await this.resolveDeviceId(deviceId)
-    const result = await this.adbShell(serial, command.split(' ').filter(Boolean))
-    return result.stdout
+    return androidExec(
+      this.runner,
+      this.requireSdk(),
+      await this.resolveDeviceId(deviceId),
+      command
+    )
+  }
+
+  async installApp(
+    deviceId: string,
+    apkPath: string,
+    options?: { reinstall?: boolean }
+  ): Promise<void> {
+    const sdk = this.requireSdk()
+    await installAndroidApk(
+      this.runner,
+      sdk,
+      await this.resolveDeviceId(deviceId),
+      apkPath,
+      options
+    )
+  }
+
+  async launchApp(deviceId: string, packageName: string, activity?: string): Promise<void> {
+    const sdk = this.requireSdk()
+    await launchAndroidApp(
+      this.runner,
+      sdk,
+      await this.resolveDeviceId(deviceId),
+      packageName,
+      activity
+    )
+  }
+
+  async setPermission(
+    deviceId: string,
+    op: AndroidPermissionOp,
+    packageName: string,
+    permission?: string
+  ): Promise<void> {
+    const sdk = this.requireSdk()
+    await setAndroidPermission(
+      this.runner,
+      sdk,
+      await this.resolveDeviceId(deviceId),
+      op,
+      packageName,
+      permission
+    )
+  }
+
+  async accessibilityTree(deviceId: string): Promise<unknown> {
+    const sdk = this.requireSdk()
+    return dumpAndroidAccessibilityTree(this.runner, sdk, await this.resolveDeviceId(deviceId))
+  }
+
+  async logcat(
+    deviceId: string,
+    options?: { lines?: number; filters?: readonly string[] }
+  ): Promise<unknown> {
+    const sdk = this.requireSdk()
+    return captureAndroidLogcat(this.runner, sdk, await this.resolveDeviceId(deviceId), options)
   }
 
   // Boots an AVD (by name) when not already running and waits for the framework
@@ -269,14 +321,6 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     return size
   }
 
-  private async adbShell(
-    serial: string,
-    command: readonly string[]
-  ): ReturnType<AndroidCommandRunner> {
-    const sdk = this.requireSdk()
-    return this.runner(sdk.adb, ['-s', serial, 'shell', ...command])
-  }
-
   private requireSdk(): AndroidSdkPaths {
     if (!this.sdk) {
       throw new EmulatorError(
@@ -303,17 +347,4 @@ function safeDiscoverSdk(): AndroidSdkPaths | null {
 
 function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-function orientationToRotation(orientation: string): number {
-  switch (orientation) {
-    case 'landscape_left':
-      return 1
-    case 'portrait_upside_down':
-      return 2
-    case 'landscape_right':
-      return 3
-    default:
-      return 0
-  }
 }
