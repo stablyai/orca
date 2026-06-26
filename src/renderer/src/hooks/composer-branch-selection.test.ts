@@ -4,6 +4,7 @@ import {
   resolveComposerBranchNameOverrideForCreate,
   resolveComposerBranchReuse,
   resolveComposerBranchSelection,
+  resolveComposerManualBranchNameChange,
   resolveComposerReuseOverride
 } from './composer-branch-selection'
 
@@ -57,15 +58,28 @@ describe('resolveComposerBranchSelection', () => {
     })
   })
 
-  it('keeps resolver-provided PR branch overrides when the workspace name changes', () => {
+  it('keeps manual branch-name overrides when preserving workspace edits', () => {
     expect(
       resolveComposerBranchNameOverrideForCreate({
-        branchNameOverride: 'feature/fix',
-        branchAutoName: '',
+        branchNameOverride: 'feature/manual',
+        branchAutoName: 'feature/auto',
         workspaceName: 'edited display name',
         preserveWorkspaceNameEdits: true
       })
-    ).toBe('feature/fix')
+    ).toBe('feature/manual')
+  })
+
+  it('drops empty or missing branch-name overrides even when preserving workspace edits', () => {
+    for (const branchNameOverride of [undefined, '']) {
+      expect(
+        resolveComposerBranchNameOverrideForCreate({
+          branchNameOverride,
+          branchAutoName: 'feature/fix',
+          workspaceName: 'edited display name',
+          preserveWorkspaceNameEdits: true
+        })
+      ).toBeUndefined()
+    }
   })
 
   it('keeps existing branch picker override behavior tied to the auto-name', () => {
@@ -77,6 +91,58 @@ describe('resolveComposerBranchSelection', () => {
         preserveWorkspaceNameEdits: false
       })
     ).toBeUndefined()
+  })
+})
+
+describe('resolveComposerManualBranchNameChange', () => {
+  const forkPushTarget = {
+    remoteName: 'contributor',
+    branchName: 'feature/from-pr',
+    remoteUrl: 'https://example.com/contributor/repo.git'
+  }
+
+  it('clears a PR-derived push target when the manual branch changes to a different branch', () => {
+    expect(
+      resolveComposerManualBranchNameChange({
+        value: 'feature/manual',
+        pushTarget: forkPushTarget,
+        forkPushWarning: 'Cannot push to fork'
+      })
+    ).toEqual({
+      branchNameOverride: 'feature/manual',
+      pushTarget: undefined,
+      forkPushWarning: null
+    })
+  })
+
+  it('clears a PR-derived push target when manual branch input is empty or whitespace', () => {
+    for (const value of ['', '   ']) {
+      expect(
+        resolveComposerManualBranchNameChange({
+          value,
+          pushTarget: forkPushTarget,
+          forkPushWarning: 'Cannot push to fork'
+        })
+      ).toEqual({
+        branchNameOverride: undefined,
+        pushTarget: undefined,
+        forkPushWarning: null
+      })
+    }
+  })
+
+  it('preserves a PR-derived push target when the manual branch exactly matches its branch', () => {
+    expect(
+      resolveComposerManualBranchNameChange({
+        value: 'feature/from-pr',
+        pushTarget: forkPushTarget,
+        forkPushWarning: 'Cannot push to fork'
+      })
+    ).toEqual({
+      branchNameOverride: 'feature/from-pr',
+      pushTarget: forkPushTarget,
+      forkPushWarning: 'Cannot push to fork'
+    })
   })
 })
 

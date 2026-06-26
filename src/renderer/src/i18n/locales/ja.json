@@ -1170,7 +1170,9 @@
         "ephemeralVm": "ワークスペースごとの環境",
         "chooseRunTarget": "ターゲットを選択",
         "noRunTargets": "このプロジェクトには実行ターゲットが準備されていません。",
-        "perWorkspaceEnvHint": "レシピからオンデマンド環境をプロビジョニングする"
+        "perWorkspaceEnvHint": "レシピからオンデマンド環境をプロビジョニングする",
+        "branchName": "ブランチ名",
+        "branchNamePlaceholder": "feature/my-branch"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "ワークツリーを作成する",

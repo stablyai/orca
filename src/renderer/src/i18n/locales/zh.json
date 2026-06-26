@@ -1170,7 +1170,9 @@
         "ephemeralVm": "工作区专属环境",
         "chooseRunTarget": "选择目标",
         "noRunTargets": "此项目还没有可用的运行目标。",
-        "perWorkspaceEnvHint": "根据配方按需创建环境"
+        "perWorkspaceEnvHint": "根据配方按需创建环境",
+        "branchName": "分支名称",
+        "branchNamePlaceholder": "feature/my-branch"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "创建工作树",

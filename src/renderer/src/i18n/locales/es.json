@@ -1170,7 +1170,9 @@
         "ephemeralVm": "Entorno por espacio de trabajo",
         "chooseRunTarget": "Elige objetivo",
         "noRunTargets": "No hay objetivos de ejecución listos para este proyecto.",
-        "perWorkspaceEnvHint": "Proporcione un entorno bajo demanda a partir de una receta"
+        "perWorkspaceEnvHint": "Proporcione un entorno bajo demanda a partir de una receta",
+        "branchName": "Nombre de rama",
+        "branchNamePlaceholder": "feature/my-branch"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Crear árbol de trabajo",

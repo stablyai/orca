@@ -1,3 +1,5 @@
+import type { GitPushTarget } from './types'
+
 export type ComposerBranchSelection = {
   baseBranch: string
   branchNameOverride: string | undefined
@@ -110,4 +112,28 @@ export function resolveComposerBranchNameOverrideForCreate(args: {
     return args.branchNameOverride
   }
   return args.workspaceName === args.branchAutoName ? args.branchNameOverride : undefined
+}
+
+export function resolveComposerManualBranchNameChange(args: {
+  value: string | undefined
+  pushTarget: GitPushTarget | undefined
+  forkPushWarning: string | null
+}): {
+  branchNameOverride: string | undefined
+  pushTarget: GitPushTarget | undefined
+  forkPushWarning: string | null
+} {
+  const branchNameOverride = args.value?.trim() || undefined
+  if (args.pushTarget && args.pushTarget.branchName !== branchNameOverride) {
+    return {
+      branchNameOverride,
+      pushTarget: undefined,
+      forkPushWarning: null
+    }
+  }
+  return {
+    branchNameOverride,
+    pushTarget: args.pushTarget,
+    forkPushWarning: args.forkPushWarning
+  }
 }

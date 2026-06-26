@@ -1170,7 +1170,9 @@
         "ephemeralVm": "워크스페이스별 환경",
         "chooseRunTarget": "대상 선택",
         "noRunTargets": "이 프로젝트에는 실행 대상이 준비되어 있지 않습니다.",
-        "perWorkspaceEnvHint": "레시피에서 온디맨드 환경 프로비저닝"
+        "perWorkspaceEnvHint": "레시피에서 온디맨드 환경 프로비저닝",
+        "branchName": "브랜치 이름",
+        "branchNamePlaceholder": "feature/my-branch"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "작업 트리 만들기",
