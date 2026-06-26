@@ -6,7 +6,6 @@ import {
   useActiveWorktree,
   useAllWorktrees,
   useProjectHostSetupProjection,
-  useRepoById,
   useRepos
 } from '@/store/selectors'
 import { filterAiVaultSessions, groupAiVaultSessions } from './ai-vault-session-filters'
@@ -27,6 +26,7 @@ import {
 import { useAiVaultSessionLaunchActions } from './ai-vault-session-launch-actions'
 import { useAiVaultSessionWorktreeMap } from './ai-vault-session-worktree'
 import { useAiVaultOriginalPaneActions } from './ai-vault-original-pane-actions'
+import { getAiVaultResumeWorkspaceTargetStatus } from '@/lib/ai-vault-resume-target'
 import {
   AI_VAULT_AGENTS,
   type AiVaultAgent,
@@ -44,7 +44,6 @@ import { useAiVaultSessionRefresh } from './ai-vault-session-refresh'
 export default function AiVaultPanel(): React.JSX.Element {
   const activeWorktree = useActiveWorktree()
   const activeRepo = useActiveRepo()
-  const activeWorktreeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const repos = useRepos()
   const allWorktrees = useAllWorktrees()
   const projectHostSetupProjection = useProjectHostSetupProjection()
@@ -62,7 +61,10 @@ export default function AiVaultPanel(): React.JSX.Element {
   const userChangedScopeRef = useRef(false)
   const preferredScopeRef = useRef<AiVaultScope>(DEFAULT_AI_VAULT_SCOPE)
 
-  const isRemoteWorktree = Boolean(activeWorktreeRepo?.connectionId)
+  const isNonLocalWorktree = useAppStore(
+    (state) =>
+      getAiVaultResumeWorkspaceTargetStatus(state, activeWorktree?.id ?? null) === 'non-local'
+  )
   const activeWorktreePath = activeWorktree?.path ?? null
   // Why: AI Vault ownership is cwd-based, so we must consider live worktrees across all repos.
   const activeWorktreePaths = useMemo(
@@ -276,11 +278,11 @@ export default function AiVaultPanel(): React.JSX.Element {
         onRefresh={() => void refresh({ force: true })}
       />
 
-      {isRemoteWorktree ? (
+      {isNonLocalWorktree ? (
         <div className="border-b border-sidebar-border px-3 py-2 text-[11px] leading-4 text-muted-foreground">
           {translate(
             'auto.components.right.sidebar.AiVaultPanel.remoteBrowseLocalHistory',
-            'SSH-host workspaces can browse local history. Resume actions run from {{value0}} workspaces.',
+            'Non-local workspaces can browse local history. Resume actions run from {{value0}} workspaces.',
             { value0: getLocalExecutionHostLabel() }
           )}
         </div>

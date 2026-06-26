@@ -30,6 +30,17 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   }
 }
 
+function makeRepo(overrides: Partial<Repo> = {}): Repo {
+  return {
+    id: 'repo-1',
+    path: '/repo/orca',
+    displayName: 'orca',
+    badgeColor: '#000000',
+    addedAt: 1,
+    ...overrides
+  }
+}
+
 function makeWorktreeInfo(
   status: AiVaultSessionWorktreeInfo['status']
 ): AiVaultSessionWorktreeInfo {
@@ -90,6 +101,26 @@ describe('resolveAiVaultSessionResumeState', () => {
     })
   })
 
+  it('blocks runtime-owned targets even when they have no SSH connection', () => {
+    expect(
+      resolveAiVaultSessionResumeState({
+        worktreeInfo: makeWorktreeInfo('active'),
+        activeWorktreeId: null,
+        worktrees: [makeWorktree()],
+        repos: [
+          makeRepo({
+            connectionId: null,
+            executionHostId: 'runtime:env-1'
+          })
+        ]
+      })
+    ).toEqual({
+      blocked: true,
+      worktreeId: null,
+      usesSessionWorktree: false
+    })
+  })
+
   it('uses a local session worktree when the active workspace is remote', () => {
     expect(
       resolveAiVaultSessionResumeState({
@@ -109,6 +140,36 @@ describe('resolveAiVaultSessionResumeState', () => {
       blocked: false,
       worktreeId: 'repo-1::/repo/orca',
       usesSessionWorktree: true
+    })
+  })
+
+  it('falls back to the active workspace when the session worktree is runtime-owned', () => {
+    expect(
+      resolveAiVaultSessionResumeState({
+        worktreeInfo: makeWorktreeInfo('active'),
+        activeWorktreeId: 'repo-2::/repo/other',
+        worktrees: [
+          makeWorktree(),
+          makeWorktree({
+            id: 'repo-2::/repo/other',
+            repoId: 'repo-2',
+            path: '/repo/other'
+          })
+        ],
+        repos: [
+          makeRepo({ connectionId: null, executionHostId: 'runtime:env-1' }),
+          makeRepo({
+            id: 'repo-2',
+            path: '/repo/other',
+            connectionId: null,
+            executionHostId: 'local'
+          })
+        ]
+      })
+    ).toEqual({
+      blocked: false,
+      worktreeId: 'repo-2::/repo/other',
+      usesSessionWorktree: false
     })
   })
 })
@@ -149,6 +210,35 @@ describe('resolveAiVaultSessionResumeActions', () => {
     ).toEqual({
       worktree: { worktreeId: 'repo-1::/repo/orca', disabled: false },
       newTab: { worktreeId: 'repo-2::/remote/orca', disabled: true }
+    })
+  })
+
+  it('disables runtime-owned targets without disabling local targets', () => {
+    expect(
+      resolveAiVaultSessionResumeActions({
+        worktreeInfo: makeWorktreeInfo('active'),
+        activeWorktreeId: 'repo-2::/repo/other',
+        worktrees: [
+          makeWorktree(),
+          makeWorktree({
+            id: 'repo-2::/repo/other',
+            repoId: 'repo-2',
+            path: '/repo/other'
+          })
+        ],
+        repos: [
+          makeRepo({ connectionId: null, executionHostId: 'runtime:env-1' }),
+          makeRepo({
+            id: 'repo-2',
+            path: '/repo/other',
+            connectionId: null,
+            executionHostId: 'local'
+          })
+        ]
+      })
+    ).toEqual({
+      worktree: { worktreeId: 'repo-1::/repo/orca', disabled: true },
+      newTab: { worktreeId: 'repo-2::/repo/other', disabled: false }
     })
   })
 

@@ -87,6 +87,7 @@ describe('AntigravityHookService', () => {
     )
     expect(script).toContain('/hook/antigravity')
     if (process.platform === 'win32') {
+      expect(script).toContain('%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')
       expect(script).toContain('hook_event_name=$env:ORCA_ANTIGRAVITY_EVENT')
       expect(script).toContain('[string]::IsNullOrWhiteSpace($inputData)) { @{} }')
       expect(script).not.toContain('[string]::IsNullOrWhiteSpace($inputData)) { exit 0 }')
@@ -174,6 +175,7 @@ describe('AntigravityHookService', () => {
         'utf8'
       )
       expect(script).toContain('/hook/antigravity')
+      expect(script).toContain('%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')
       expect(script).toContain('hook_event_name=$env:ORCA_ANTIGRAVITY_EVENT')
       expect(script).toContain('[string]::IsNullOrWhiteSpace($inputData)) { @{} }')
       expect(script).not.toContain('[string]::IsNullOrWhiteSpace($inputData)) { exit 0 }')

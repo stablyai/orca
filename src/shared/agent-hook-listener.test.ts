@@ -1303,6 +1303,45 @@ describe('shared agent-hook-listener', () => {
     })
   })
 
+  it('ignores Grok routine permission prompt notifications during tool use', () => {
+    normalizeHookPayload(
+      state,
+      'grok',
+      { paneKey: PANE_KEY, payload: { hookEventName: 'UserPromptSubmit', prompt: 'ship it' } },
+      'production'
+    )
+    normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'PreToolUse',
+          toolName: 'Shell',
+          toolInput: { command: 'echo hi' }
+        }
+      },
+      'production'
+    )
+
+    const event = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'Notification',
+          notificationType: 'permission_prompt',
+          message: 'Tool permission requested',
+          level: 'info'
+        }
+      },
+      'production'
+    )
+
+    expect(event).toBeNull()
+  })
+
   it('reads Grok final assistant text from chat history on Stop', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-grok-session-'))
     const sessionId = '019e37f4-5135-7b63-a4ab-6d13aa6bf528'

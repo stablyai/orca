@@ -5,6 +5,7 @@ import type {
   PRReviewDecision,
   PRState
 } from '../../../shared/types'
+import { canEnableGitHubPRAutoMerge } from '../../../shared/github-pr-auto-merge-availability'
 import { translate } from '@/i18n/i18n'
 
 export type GitHubPRMergeStateInput = {
@@ -54,21 +55,11 @@ function hasFullMergeMetadata(item: GitHubPRMergeStateInput): boolean {
   return item.mergeable !== undefined || item.mergeStateStatus !== undefined
 }
 
-function isConflicting(item: GitHubPRMergeStateInput): boolean {
-  return item.mergeable === 'CONFLICTING' || item.mergeStateStatus === 'DIRTY'
-}
-
 // Why: GitHub rejects enabling auto-merge on a conflicting PR, so offering it
 // there only yields an error toast. Repos can also disable auto-merge entirely,
 // so suppress the action when GitHub explicitly reports that setting is off.
 function canEnableAutoMerge(item: GitHubPRMergeStateInput): boolean {
-  return (
-    item.state === 'open' &&
-    item.autoMergeEnabled !== true &&
-    item.autoMergeAllowed !== false &&
-    item.mergeQueueRequired !== true &&
-    !isConflicting(item)
-  )
+  return canEnableGitHubPRAutoMerge(item)
 }
 
 function passedChecksMergePresentation(
@@ -219,7 +210,7 @@ export function presentGitHubPRMergeState(
       autoMergeAction
     }
   }
-  if (isConflicting(item)) {
+  if (item.mergeable === 'CONFLICTING' || item.mergeStateStatus === 'DIRTY') {
     return {
       label: translate('auto.components.github.pr.merge.state.7e8bbe3cd7', 'Conflicts'),
       tone: DANGER_TONE,

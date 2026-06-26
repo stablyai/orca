@@ -20,13 +20,11 @@ import {
   getDropIndicatorClasses,
   getTabRootStateClasses,
   getTabStripBorderClasses,
-  showsTabSelectionChrome,
   type DropIndicator
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
-import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 
 function formatBrowserTabUrlLabel(url: string): string {
@@ -171,11 +169,6 @@ export default function BrowserTab({
     return () => window.removeEventListener('blur', dismiss)
   }, [menuOpen])
 
-  const { isPressed, onPointerDown: onTabPointerDown } = useTabStripPointerActivation({
-    onActivate
-  })
-  const showsSelectionChrome = showsTabSelectionChrome(isActive, isPressed)
-
   const tabRoot = (
     <div
       ref={setNodeRef}
@@ -183,12 +176,13 @@ export default function BrowserTab({
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...listeners}
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive, isPressed)}`}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
-        onTabPointerDown(
-          e,
-          listeners?.onPointerDown as ((event: React.PointerEvent<Element>) => void) | undefined
-        )
+        if (e.button !== 0) {
+          return
+        }
+        onActivate()
+        listeners?.onPointerDown?.(e)
       }}
       onMouseDown={(e) => {
         if (e.button === 1) {
@@ -207,7 +201,7 @@ export default function BrowserTab({
         }
       }}
     >
-      {showsSelectionChrome && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
+      {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
       {/* Why: the browser tab icon is the only non-terminal, non-editor
           surface in the tab strip. Coloring the Globe blue (matching the
           in-app browser's identity and the default tab insertion bar)
@@ -224,7 +218,7 @@ export default function BrowserTab({
       {!isPinned && (
         <button
           className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
-            showsSelectionChrome
+            isActive
               ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
               : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
           }`}

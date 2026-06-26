@@ -260,7 +260,7 @@ export async function createGitHubWorkItemWorkspaceInBackground(
       quickTelemetry
     }
 
-    deps.continueBackgroundCreate(creationId, request)
+    deps.continueBackgroundCreate(creationId, request, { revealCreationSurface: false })
     return { kind: 'background-started' }
   } catch (error) {
     if (!deps.hasPendingCreate(creationId)) {

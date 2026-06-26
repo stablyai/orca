@@ -3651,6 +3651,7 @@ describe('registerPtyHandlers', () => {
       setPtyController: vi.fn((value) => {
         controller = value
       }),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_trusted'),
       preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
@@ -3685,6 +3686,369 @@ describe('registerPtyHandlers', () => {
       leafId,
       ptyId: expect.any(String)
     })
+  })
+
+  it('reuses runtime materialization when renderer focuses the same pane during spawn', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        cwd?: string
+        worktreeId?: string
+        env?: Record<string, string>
+        tabId?: string
+        leafId?: string
+        persistHostSessionBinding?: boolean
+      }): Promise<{ id: string }>
+    }
+    let resolveSpawn!: (result: { id: string }) => void
+    const providerSpawn = vi.fn(
+      () =>
+        new Promise<{ id: string }>((resolve) => {
+          resolveSpawn = resolve
+        })
+    )
+    setLocalPtyProvider({
+      spawn: providerSpawn,
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    const store = {
+      persistPtyBinding: vi.fn()
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_trusted'),
+      preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+    const spawnController = controller as unknown as RuntimeSpawnController
+    const leafId = '22222222-2222-4222-8222-222222222222'
+    const paneKey = makePaneKey('tab-race', leafId)
+    const runtimeSpawn = spawnController.spawn({
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp',
+      worktreeId: 'wt-1',
+      tabId: 'tab-race',
+      leafId,
+      env: { ORCA_PANE_KEY: paneKey },
+      persistHostSessionBinding: true
+    })
+    await Promise.resolve()
+
+    // Why: SSH can strip ORCA_PANE_KEY before spawn; tab/leaf metadata must
+    // still dedupe against runtime materialization.
+    const rendererSpawn = handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp',
+      worktreeId: 'wt-1',
+      tabId: 'tab-race',
+      leafId,
+      env: {
+        ORCA_TAB_ID: 'tab-race',
+        ORCA_WORKTREE_ID: 'wt-1'
+      }
+    }) as Promise<{ id: string }>
+    await Promise.resolve()
+
+    expect(providerSpawn).toHaveBeenCalledTimes(1)
+    resolveSpawn({ id: 'pty-shared' })
+    await expect(Promise.all([runtimeSpawn, rendererSpawn])).resolves.toEqual([
+      { id: 'pty-shared' },
+      { id: 'pty-shared' }
+    ])
+    expect(providerSpawn).toHaveBeenCalledTimes(1)
+    expect(store.persistPtyBinding).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      tabId: 'tab-race',
+      leafId,
+      ptyId: 'pty-shared'
+    })
+  })
+
+  it('reuses renderer spawn when runtime materialization starts for the same pane', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        cwd?: string
+        worktreeId?: string
+        env?: Record<string, string>
+        tabId?: string
+        leafId?: string
+        persistHostSessionBinding?: boolean
+      }): Promise<{ id: string }>
+    }
+    let resolveSpawn!: (result: { id: string }) => void
+    const providerSpawn = vi.fn(
+      () =>
+        new Promise<{ id: string }>((resolve) => {
+          resolveSpawn = resolve
+        })
+    )
+    setLocalPtyProvider({
+      spawn: providerSpawn,
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    const store = {
+      persistPtyBinding: vi.fn()
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_trusted'),
+      preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+    const leafId = '33333333-3333-4333-8333-333333333333'
+    const paneKey = makePaneKey('tab-race', leafId)
+    const rendererSpawn = handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp',
+      worktreeId: 'wt-1',
+      tabId: 'tab-race',
+      leafId,
+      env: {
+        ORCA_PANE_KEY: paneKey,
+        ORCA_TAB_ID: 'tab-race',
+        ORCA_WORKTREE_ID: 'wt-1'
+      }
+    }) as Promise<{ id: string }>
+    await Promise.resolve()
+
+    const spawnController = controller as unknown as RuntimeSpawnController
+    const runtimeSpawn = spawnController.spawn({
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp',
+      worktreeId: 'wt-1',
+      tabId: 'tab-race',
+      leafId,
+      env: { ORCA_PANE_KEY: paneKey },
+      persistHostSessionBinding: true
+    })
+    await Promise.resolve()
+
+    expect(providerSpawn).toHaveBeenCalledTimes(1)
+    resolveSpawn({ id: 'pty-renderer' })
+    await expect(Promise.all([rendererSpawn, runtimeSpawn])).resolves.toEqual([
+      { id: 'pty-renderer' },
+      { id: 'pty-renderer' }
+    ])
+    expect(providerSpawn).toHaveBeenCalledTimes(1)
+    expect(store.persistPtyBinding).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      tabId: 'tab-race',
+      leafId,
+      ptyId: 'pty-renderer'
+    })
+  })
+
+  it('settles the pane reservation when a post-spawn step throws so later spawns do not hang', async () => {
+    // Why: regression for the reservation leak — if a post-spawn helper throws
+    // after provider.spawn resolves (here registerPty), the reservation must be
+    // rejected and cleared. Otherwise every later spawn for the same pane key
+    // awaits a promise that never settles and the tab hangs forever.
+    registerPtyHandlers(mainWindow as never)
+    const leafId = '44444444-4444-4444-8444-444444444444'
+    const spawnArgs = { cols: 80, rows: 24, tabId: 'tab-reservation', leafId }
+
+    registerPtyMock.mockImplementationOnce(() => {
+      throw new Error('boom: post-spawn registration failed')
+    })
+
+    await expect(handlers.get('pty:spawn')!(null, spawnArgs)).rejects.toThrow('boom')
+
+    // A second spawn for the same pane must run a fresh spawn rather than await
+    // the leaked (never-settled) reservation promise.
+    let hangTimer: ReturnType<typeof setTimeout> | undefined
+    const second = handlers.get('pty:spawn')!(null, spawnArgs) as Promise<{ id: string }>
+    const result = await Promise.race([
+      second,
+      new Promise<never>((_, reject) => {
+        hangTimer = setTimeout(
+          () => reject(new Error('second spawn hung: pane reservation leaked')),
+          1000
+        )
+      })
+    ]).finally(() => clearTimeout(hangTimer))
+
+    expect(result.id).toEqual(expect.any(String))
+    expect(spawnMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('settles the runtime-owned pane reservation when a post-spawn step throws so later spawns do not hang', async () => {
+    // Why: symmetry with the renderer-path regression — the runtime-controller
+    // spawn path keeps its own reservation, so it must also reject and clear it
+    // when a post-spawn helper (here runtime.registerPty) throws after
+    // provider.spawn resolves. Otherwise the next materialization for the same
+    // pane awaits a promise that never settles.
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        cwd?: string
+        worktreeId?: string
+        env?: Record<string, string>
+        tabId?: string
+        leafId?: string
+        persistHostSessionBinding?: boolean
+      }): Promise<{ id: string }>
+    }
+    let spawnCount = 0
+    const providerSpawn = vi.fn(async () => ({ id: `pty-${++spawnCount}` }))
+    setLocalPtyProvider({
+      spawn: providerSpawn,
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    const store = {
+      persistPtyBinding: vi.fn()
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_trusted'),
+      preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn().mockImplementationOnce(() => {
+        throw new Error('boom: runtime registration failed')
+      }),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+    const spawnController = controller as unknown as RuntimeSpawnController
+    const leafId = '55555555-5555-4555-8555-555555555555'
+    const paneKey = makePaneKey('tab-runtime-reservation', leafId)
+    const spawnArgs = {
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp',
+      worktreeId: 'wt-1',
+      tabId: 'tab-runtime-reservation',
+      leafId,
+      env: { ORCA_PANE_KEY: paneKey },
+      persistHostSessionBinding: true
+    }
+
+    await expect(spawnController.spawn(spawnArgs)).rejects.toThrow('boom')
+
+    // The reservation must be gone, so a second materialization runs a fresh
+    // provider.spawn instead of awaiting the leaked promise.
+    let hangTimer: ReturnType<typeof setTimeout> | undefined
+    const second = spawnController.spawn(spawnArgs)
+    const result = await Promise.race([
+      second,
+      new Promise<never>((_, reject) => {
+        hangTimer = setTimeout(
+          () => reject(new Error('second runtime spawn hung: pane reservation leaked')),
+          1000
+        )
+      })
+    ]).finally(() => clearTimeout(hangTimer))
+    expect(result.id).toEqual(expect.any(String))
+    expect(providerSpawn).toHaveBeenCalledTimes(2)
   })
 
   it('records SSH leases for runtime-owned headless session bindings', async () => {

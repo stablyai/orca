@@ -279,6 +279,73 @@ test.describe('Tabs', () => {
       .toEqual([domOrderBefore[1], domOrderBefore[0], ...domOrderBefore.slice(2)])
   })
 
+  test('clicking tabs still switches after dragging a terminal tab to reorder', async ({
+    orcaPage
+  }) => {
+    const worktreeId = (await getActiveWorktreeId(orcaPage))!
+
+    await orcaPage.evaluate((targetWorktreeId) => {
+      const store = window.__store
+      if (!store) {
+        return
+      }
+      const state = store.getState()
+      const existing = (state.tabsByWorktree[targetWorktreeId] ?? []).length
+      for (let i = existing; i < 2; i++) {
+        state.createTab(targetWorktreeId)
+      }
+    }, worktreeId)
+    await expect
+      .poll(() => countRenderedTabs(orcaPage), { timeout: 5_000 })
+      .toBeGreaterThanOrEqual(2)
+
+    const domOrderBefore = await orcaPage.$$eval(SORTABLE_TAB, (nodes) =>
+      nodes.map((n) => (n as HTMLElement).dataset.tabId ?? '')
+    )
+    const [firstTabId, secondTabId] = domOrderBefore
+    expect(firstTabId).toBeTruthy()
+    expect(secondTabId).toBeTruthy()
+
+    await tabLocator(orcaPage, firstTabId).click({ force: true })
+    await expect.poll(() => getDomActiveTabId(orcaPage), { timeout: 3_000 }).toBe(firstTabId)
+
+    const firstTabBox = await tabLocator(orcaPage, firstTabId).boundingBox()
+    const secondTabBox = await tabLocator(orcaPage, secondTabId).boundingBox()
+    expect(firstTabBox).not.toBeNull()
+    expect(secondTabBox).not.toBeNull()
+    const startX = firstTabBox!.x + firstTabBox!.width / 2
+    const startY = firstTabBox!.y + firstTabBox!.height / 2
+    const endX = secondTabBox!.x + secondTabBox!.width * 0.75
+    const endY = secondTabBox!.y + secondTabBox!.height / 2
+    await orcaPage.mouse.move(startX, startY)
+    await orcaPage.mouse.down()
+    // Why: this mirrors the release repro: drag a terminal tab across another
+    // tab far enough for dnd-kit to commit a reorder, then release on the tab
+    // strip before clicking tabs again.
+    await orcaPage.mouse.move(endX, endY, { steps: 8 })
+    await orcaPage.mouse.up()
+
+    await expect
+      .poll(
+        async () =>
+          orcaPage.$$eval(SORTABLE_TAB, (nodes) =>
+            nodes.map((n) => (n as HTMLElement).dataset.tabId ?? '')
+          ),
+        { timeout: 5_000, message: 'Terminal tab drag did not reorder the tab strip' }
+      )
+      .toEqual([secondTabId, firstTabId, ...domOrderBefore.slice(2)])
+
+    await tabLocator(orcaPage, firstTabId).click({ force: true })
+    await expect.poll(() => getDomActiveTabId(orcaPage), { timeout: 3_000 }).toBe(firstTabId)
+    await tabLocator(orcaPage, secondTabId).click({ force: true })
+    await expect
+      .poll(() => getDomActiveTabId(orcaPage), {
+        timeout: 5_000,
+        message: 'Tab click did not activate after a terminal tab reorder drag'
+      })
+      .toBe(secondTabId)
+  })
+
   /**
    * Regression: after a drag-reorder, Cmd/Ctrl+Shift+[ must walk tabs in
    * the new visible order. The pre-fix bug read a stale legacy order

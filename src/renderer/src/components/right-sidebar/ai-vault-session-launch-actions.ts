@@ -8,6 +8,7 @@ import {
 import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
+import { isNonLocalAiVaultResumeRepo } from '@/lib/ai-vault-resume-target'
 import type { AiVaultAgent, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { Repo, Worktree } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
@@ -80,7 +81,7 @@ export function useAiVaultSessionLaunchActions({
       }
 
       const worktreeRepo = repos.find((repo) => repo.id === worktree.repoId)
-      if (worktreeRepo?.connectionId) {
+      if (isNonLocalAiVaultResumeRepo(worktreeRepo)) {
         toast.error(
           translate(
             'auto.components.right.sidebar.AiVaultPanel.localWorkspacesOnly',

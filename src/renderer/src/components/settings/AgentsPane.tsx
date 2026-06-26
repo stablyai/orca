@@ -11,18 +11,10 @@ import {
   Info,
   RefreshCw,
   Terminal,
-  Trash2,
+  Trash2
 } from 'lucide-react'
-import type {
-  GlobalSettings,
-  TuiAgent,
-  TuiAgentProfile,
-} from '../../../../shared/types'
-import {
-  getAgentCatalog,
-  getAgentCatalogWithProfiles,
-  AgentIcon,
-} from '@/lib/agent-catalog'
+import type { GlobalSettings, TuiAgent, TuiAgentProfile } from '../../../../shared/types'
+import { getAgentCatalog, getAgentCatalogWithProfiles, AgentIcon } from '@/lib/agent-catalog'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
@@ -30,52 +22,46 @@ import { Input } from '../ui/input'
 import { cn } from '@/lib/utils'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import { AgentCacheTimerSection } from './AgentCacheTimerSection'
+import { AgentRuntimeSetting } from './AgentRuntimeSetting'
 import {
   getAgentGeneratedTabTitlesDescription,
-  getAgentGeneratedTabTitlesTitle,
+  getAgentGeneratedTabTitlesTitle
 } from './agent-generated-tab-title-copy'
-import {
-  getAgentStatusHooksDescription,
-  getAgentStatusHooksTitle,
-} from './agent-status-hooks-copy'
+import { getAgentStatusHooksDescription, getAgentStatusHooksTitle } from './agent-status-hooks-copy'
 import {
   SettingsBadge,
   SettingsSegmentedControl,
   SettingsSubsectionHeader,
-  SettingsSwitchRow,
+  SettingsSwitchRow
 } from './SettingsFormControls'
 import {
   isTuiAgentEnabled,
-  normalizeDisabledTuiAgents,
+  normalizeDisabledTuiAgents
 } from '../../../../shared/tui-agent-selection'
 import { isBuiltInTuiAgent } from '../../../../shared/tui-agent-config'
 import {
   getTuiAgentDefaultArgs,
-  getTuiAgentDefaultEnv,
+  getTuiAgentDefaultEnv
 } from '../../../../shared/tui-agent-launch-defaults'
 import {
   createTuiAgentProfileId,
-  normalizeTuiAgentProfiles,
+  normalizeTuiAgentProfiles
 } from '../../../../shared/tui-agent-profiles'
 import {
   applyAgentPermissionMode,
   resolveAgentPermissionModeSummary,
-  type AgentPermissionMode,
+  type AgentPermissionMode
 } from '../../../../shared/tui-agent-permissions'
 import { getSettingOwnershipSummary } from './setting-ownership'
 import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
-import {
-  parseAgentDefaultEnvDraft,
-  stringifyAgentDefaultEnvDraft,
-} from './agent-default-env-draft'
+import { parseAgentDefaultEnvDraft, stringifyAgentDefaultEnvDraft } from './agent-default-env-draft'
 
 export { getAgentsPaneSearchEntries } from './agents-search'
 
 type AgentsPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
-  /** Deprecated: agent detection now follows the resolved project runtime. */
   wslSupportedPlatform?: boolean
   wslAvailable?: boolean
   wslDistros?: string[]
@@ -159,10 +145,7 @@ function AgentLaunchVariableHint(): React.JSX.Element {
     <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
       <span className="inline-flex items-center gap-1">
         <Braces className="size-3" />
-        {translate(
-          'auto.components.settings.AgentsPane.variables',
-          'Variables',
-        )}
+        {translate('auto.components.settings.AgentsPane.variables', 'Variables')}
       </span>
       <span className="rounded px-1.5 py-0.5 font-mono text-[10px] text-foreground/80">
         {REPO_PATH_VARIABLE_TOKEN}
@@ -173,7 +156,7 @@ function AgentLaunchVariableHint(): React.JSX.Element {
       <span>
         {translate(
           'auto.components.settings.AgentsPane.worktreePathVariableHint',
-          'Available in command, arguments, and environment values.',
+          'Available in command, arguments, and environment values.'
         )}
       </span>
     </div>
@@ -183,9 +166,8 @@ function AgentLaunchVariableHint(): React.JSX.Element {
 export function buildAgentAvailabilitySettingsUpdate(
   settings: Pick<GlobalSettings, 'defaultTuiAgent' | 'disabledTuiAgents'>,
   id: TuiAgent,
-  enabled: boolean,
-): Pick<GlobalSettings, 'disabledTuiAgents'> &
-  Partial<Pick<GlobalSettings, 'defaultTuiAgent'>> {
+  enabled: boolean
+): Pick<GlobalSettings, 'disabledTuiAgents'> & Partial<Pick<GlobalSettings, 'defaultTuiAgent'>> {
   const latestDisabled = normalizeDisabledTuiAgents(settings.disabledTuiAgents)
   const nextDisabled = enabled
     ? latestDisabled.filter((agent) => agent !== id)
@@ -195,36 +177,24 @@ export function buildAgentAvailabilitySettingsUpdate(
 
   return {
     disabledTuiAgents: nextDisabled,
-    ...(settings.defaultTuiAgent === id && !enabled
-      ? { defaultTuiAgent: null }
-      : {}),
+    ...(settings.defaultTuiAgent === id && !enabled ? { defaultTuiAgent: null } : {})
   }
 }
 
 export function createAgentAvailabilityUpdateQueue(): (
-  options: AgentAvailabilityUpdateQueueOptions,
+  options: AgentAvailabilityUpdateQueueOptions
 ) => Promise<void> {
   let pendingUpdate: Promise<unknown> = Promise.resolve()
 
-  return ({
-    getSettings,
-    fallbackSettings,
-    updateSettings,
-    agentId,
-    enabled,
-  }) => {
+  return ({ getSettings, fallbackSettings, updateSettings, agentId, enabled }) => {
     // Why: serialize full-array replacements so each write sees the store after
     // the previous IPC has reconciled, while preserving the user's requested state.
     pendingUpdate = pendingUpdate
       .catch(() => {})
       .then(() =>
         updateSettings(
-          buildAgentAvailabilitySettingsUpdate(
-            getSettings() ?? fallbackSettings,
-            agentId,
-            enabled,
-          ),
-        ),
+          buildAgentAvailabilitySettingsUpdate(getSettings() ?? fallbackSettings, agentId, enabled)
+        )
       )
     return pendingUpdate.then(() => undefined)
   }
@@ -235,7 +205,7 @@ const enqueueAgentAvailabilityUpdate = createAgentAvailabilityUpdateQueue()
 export function AgentAvailabilityControl({
   label,
   isEnabled,
-  onSetEnabled,
+  onSetEnabled
 }: AgentAvailabilityControlProps): React.JSX.Element {
   const value: AgentAvailability = isEnabled ? 'enabled' : 'disabled'
 
@@ -250,24 +220,18 @@ export function AgentAvailabilityControl({
       ariaLabel={translate(
         'auto.components.settings.AgentsPane.1c9a9679ec',
         '{{value0}} availability',
-        { value0: label },
+        { value0: label }
       )}
       size="sm"
       options={[
         {
           value: 'enabled',
-          label: translate(
-            'auto.components.settings.AgentsPane.d4d2a45d63',
-            'Enabled',
-          ),
+          label: translate('auto.components.settings.AgentsPane.d4d2a45d63', 'Enabled')
         },
         {
           value: 'disabled',
-          label: translate(
-            'auto.components.settings.AgentsPane.8dc0192e48',
-            'Disabled',
-          ),
-        },
+          label: translate('auto.components.settings.AgentsPane.8dc0192e48', 'Disabled')
+        }
       ]}
     />
   )
@@ -275,26 +239,22 @@ export function AgentAvailabilityControl({
 
 export function AgentPermissionsSetting({
   mode,
-  onChange,
+  onChange
 }: AgentPermissionsSettingProps): React.JSX.Element {
-  const visibleMode: Exclude<AgentPermissionMode, 'mixed'> =
-    mode === 'manual' ? 'manual' : 'yolo'
+  const visibleMode: Exclude<AgentPermissionMode, 'mixed'> = mode === 'manual' ? 'manual' : 'yolo'
   return (
     <section className="space-y-3">
       <SettingsSubsectionHeader
         title={
           <span className="flex items-center gap-2">
-            {translate(
-              'auto.components.settings.AgentsPane.agentPermissions',
-              'Agent Permissions',
-            )}
+            {translate('auto.components.settings.AgentsPane.agentPermissions', 'Agent Permissions')}
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
                   aria-label={translate(
                     'auto.components.settings.AgentsPane.agentPermissionsInfo',
-                    'Agent permissions info',
+                    'Agent permissions info'
                   )}
                   className="grid size-5 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 >
@@ -304,7 +264,7 @@ export function AgentPermissionsSetting({
               <TooltipContent side="top" sideOffset={6}>
                 {translate(
                   'auto.components.settings.AgentsPane.agentPermissionsTooltip',
-                  "Doesn't apply to agents where you've overridden launch arguments.",
+                  "Doesn't apply to agents where you've overridden launch arguments."
                 )}
               </TooltipContent>
             </Tooltip>
@@ -312,7 +272,7 @@ export function AgentPermissionsSetting({
         }
         description={translate(
           'auto.components.settings.AgentsPane.agentPermissionsDescription',
-          'Choose whether Orca launches agents with fewer permission prompts or with manual checks.',
+          'Choose whether Orca launches agents with fewer permission prompts or with manual checks.'
         )}
         action={
           <SettingsSegmentedControl<AgentPermissionMode>
@@ -324,24 +284,21 @@ export function AgentPermissionsSetting({
             }}
             ariaLabel={translate(
               'auto.components.settings.AgentsPane.agentPermissions',
-              'Agent Permissions',
+              'Agent Permissions'
             )}
             size="sm"
             options={[
               {
                 value: 'yolo',
-                label: translate(
-                  'auto.components.settings.AgentsPane.agentPermissionsYolo',
-                  'Yolo',
-                ),
+                label: translate('auto.components.settings.AgentsPane.agentPermissionsYolo', 'Yolo')
               },
               {
                 value: 'manual',
                 label: translate(
                   'auto.components.settings.AgentsPane.agentPermissionsManual',
-                  'Manual',
-                ),
-              },
+                  'Manual'
+                )
+              }
             ]}
           />
         }
@@ -353,7 +310,7 @@ export function AgentPermissionsSetting({
 function AgentCommandOverrideInput({
   defaultCmd,
   cmdOverride,
-  onSaveOverride,
+  onSaveOverride
 }: AgentCommandOverrideInputProps): React.JSX.Element {
   const draftSeed = cmdOverride ?? defaultCmd
   const [cmdDraft, setCmdDraft] = useState(draftSeed)
@@ -411,7 +368,7 @@ function AgentCommandOverrideInput({
 
 function AgentProfileNameInput({
   label,
-  onSaveLabel,
+  onSaveLabel
 }: AgentProfileNameInputProps): React.JSX.Element {
   const [draft, setDraft] = useState(label)
 
@@ -454,7 +411,7 @@ function AgentProfileNameInput({
 function AgentDefaultArgsInput({
   defaultArgs,
   argsOverride,
-  onSaveArgs,
+  onSaveArgs
 }: AgentDefaultArgsInputProps): React.JSX.Element {
   const draftSeed = argsOverride
   const [argsDraft, setArgsDraft] = useState(draftSeed)
@@ -466,10 +423,7 @@ function AgentDefaultArgsInput({
   return (
     <div className="flex items-center gap-2">
       <span className="shrink-0 text-xs text-muted-foreground">
-        {translate(
-          'auto.components.settings.AgentsPane.cfb3f35775',
-          'Arguments',
-        )}
+        {translate('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
       </span>
       <Input
         value={argsDraft}
@@ -487,10 +441,7 @@ function AgentDefaultArgsInput({
         }}
         placeholder={
           defaultArgs ||
-          translate(
-            'auto.components.settings.AgentsPane.6f99bf5dd0',
-            'No default arguments',
-          )
+          translate('auto.components.settings.AgentsPane.6f99bf5dd0', 'No default arguments')
         }
         spellCheck={false}
         className="h-7 flex-1 font-mono text-xs"
@@ -516,7 +467,7 @@ function AgentDefaultArgsInput({
 function AgentDefaultEnvInput({
   defaultEnv,
   envOverride,
-  onSaveEnv,
+  onSaveEnv
 }: AgentDefaultEnvInputProps): React.JSX.Element {
   const defaultEnvText = stringifyAgentDefaultEnvDraft(defaultEnv)
   const draftSeed = stringifyAgentDefaultEnvDraft(envOverride)
@@ -537,10 +488,7 @@ function AgentDefaultEnvInput({
     <div>
       <div className="flex items-center gap-2">
         <span className="shrink-0 text-xs text-muted-foreground">
-          {translate(
-            'auto.components.settings.AgentsPane.8fbe1f37c1',
-            'Environment',
-          )}
+          {translate('auto.components.settings.AgentsPane.8fbe1f37c1', 'Environment')}
         </span>
         <Input
           value={envDraft}
@@ -564,17 +512,14 @@ function AgentDefaultEnvInput({
           }}
           placeholder={
             defaultEnvText ||
-            translate(
-              'auto.components.settings.AgentsPane.2d133152fa',
-              'No default environment',
-            )
+            translate('auto.components.settings.AgentsPane.2d133152fa', 'No default environment')
           }
           spellCheck={false}
           aria-invalid={envDraftTooLarge || undefined}
           aria-describedby={envDraftTooLarge ? envDraftErrorId : undefined}
           className={cn(
             'h-7 flex-1 font-mono text-xs',
-            envDraftTooLarge && 'border-destructive/50 bg-destructive/5',
+            envDraftTooLarge && 'border-destructive/50 bg-destructive/5'
           )}
         />
         {draftSeed !== defaultEnvText && (
@@ -589,10 +534,7 @@ function AgentDefaultEnvInput({
             }}
             className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
           >
-            {translate(
-              'auto.components.settings.AgentsPane.5200dac9da',
-              'Reset',
-            )}
+            {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
           </Button>
         )}
       </div>
@@ -600,7 +542,7 @@ function AgentDefaultEnvInput({
         <p id={envDraftErrorId} className="mt-1 text-[11px] text-destructive">
           {translate(
             'auto.components.settings.AgentsPane.3f1bdf3cb4',
-            'Environment text is too large to parse safely.',
+            'Environment text is too large to parse safely.'
           )}
         </p>
       )}
@@ -630,7 +572,7 @@ function AgentRow({
   onSaveLabel,
   onSaveOverride,
   onSaveArgs,
-  onSaveEnv,
+  onSaveEnv
 }: AgentRowProps): React.JSX.Element {
   const envSummary = stringifyAgentDefaultEnvDraft(envOverride)
   const defaultEnvSummary = stringifyAgentDefaultEnvDraft(defaultEnv)
@@ -638,7 +580,7 @@ function AgentRow({
     isProfile ||
       Boolean(cmdOverride) ||
       argsOverride !== defaultArgs ||
-      envSummary !== defaultEnvSummary,
+      envSummary !== defaultEnvSummary
   )
 
   return (
@@ -653,53 +595,35 @@ function AgentRow({
             <span className="text-sm font-medium leading-none">{label}</span>
             {isProfile && (
               <SettingsBadge tone="muted">
-                {translate(
-                  'auto.components.settings.AgentsPane.profileBadge',
-                  'Profile',
-                )}
+                {translate('auto.components.settings.AgentsPane.profileBadge', 'Profile')}
               </SettingsBadge>
             )}
             {isDetected ? (
               <SettingsBadge tone="accent">
-                {translate(
-                  'auto.components.settings.AgentsPane.c8794e622e',
-                  'Detected',
-                )}
+                {translate('auto.components.settings.AgentsPane.c8794e622e', 'Detected')}
               </SettingsBadge>
             ) : (
               <SettingsBadge tone="muted">
-                {translate(
-                  'auto.components.settings.AgentsPane.df123171d1',
-                  'Not installed',
-                )}
+                {translate('auto.components.settings.AgentsPane.df123171d1', 'Not installed')}
               </SettingsBadge>
             )}
             {!isEnabled && (
               <SettingsBadge tone="muted">
-                {translate(
-                  'auto.components.settings.AgentsPane.8dc0192e48',
-                  'Disabled',
-                )}
+                {translate('auto.components.settings.AgentsPane.8dc0192e48', 'Disabled')}
               </SettingsBadge>
             )}
           </div>
           <div className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
             {cmdOverride ? (
               <span>
-                <span className="text-muted-foreground/60 line-through">
-                  {defaultCmd}
-                </span>
+                <span className="text-muted-foreground/60 line-through">{defaultCmd}</span>
                 <span className="ml-1.5 text-foreground/80">{cmdOverride}</span>
               </span>
             ) : (
               defaultCmd
             )}
-            {argsOverride && (
-              <span className="ml-1.5 text-foreground/70">{argsOverride}</span>
-            )}
-            {envSummary && (
-              <span className="ml-1.5 text-foreground/60">{envSummary}</span>
-            )}
+            {argsOverride && <span className="ml-1.5 text-foreground/70">{argsOverride}</span>}
+            {envSummary && <span className="ml-1.5 text-foreground/60">{envSummary}</span>}
           </div>
         </div>
 
@@ -719,27 +643,15 @@ function AgentRow({
                 onClick={onSetDefault}
                 title={
                   isDefault
-                    ? translate(
-                        'auto.components.settings.AgentsPane.d7625cf8b2',
-                        'Default agent',
-                      )
-                    : translate(
-                        'auto.components.settings.AgentsPane.5f986a9b92',
-                        'Set as default',
-                      )
+                    ? translate('auto.components.settings.AgentsPane.d7625cf8b2', 'Default agent')
+                    : translate('auto.components.settings.AgentsPane.5f986a9b92', 'Set as default')
                 }
                 className="h-7 w-full justify-center gap-1 text-xs"
               >
                 {isDefault && <Check className="size-3" />}
                 {isDefault
-                  ? translate(
-                      'auto.components.settings.AgentsPane.24e032fa34',
-                      'Default',
-                    )
-                  : translate(
-                      'auto.components.settings.AgentsPane.959b67385b',
-                      'Set default',
-                    )}
+                  ? translate('auto.components.settings.AgentsPane.24e032fa34', 'Default')
+                  : translate('auto.components.settings.AgentsPane.959b67385b', 'Set default')}
               </Button>
             )}
           </div>
@@ -753,12 +665,12 @@ function AgentRow({
                 onClick={() => setCmdOpen((prev) => !prev)}
                 title={translate(
                   'auto.components.settings.AgentsPane.db9e9e5887',
-                  'Customize command',
+                  'Customize command'
                 )}
                 aria-expanded={cmdOpen}
                 className={cn(
                   'size-7 text-muted-foreground hover:text-foreground',
-                  (cmdOpen || cmdOverride) && 'text-foreground',
+                  (cmdOpen || cmdOverride) && 'text-foreground'
                 )}
               >
                 <Terminal className="size-3.5" />
@@ -775,7 +687,7 @@ function AgentRow({
                 onClick={onDuplicate}
                 title={translate(
                   'auto.components.settings.AgentsPane.duplicateProfile',
-                  'Duplicate agent',
+                  'Duplicate agent'
                 )}
                 className="size-7 text-muted-foreground hover:text-foreground"
               >
@@ -790,7 +702,7 @@ function AgentRow({
                 onClick={onDelete}
                 title={translate(
                   'auto.components.settings.AgentsPane.deleteProfile',
-                  'Delete profile',
+                  'Delete profile'
                 )}
                 className="size-7 text-muted-foreground hover:text-destructive"
               >
@@ -805,14 +717,8 @@ function AgentRow({
             rel="noopener noreferrer"
             title={
               isDetected
-                ? translate(
-                    'auto.components.settings.AgentsPane.fe4d630c94',
-                    'Docs',
-                  )
-                : translate(
-                    'auto.components.settings.AgentsPane.f95b5c79b8',
-                    'Install',
-                  )
+                ? translate('auto.components.settings.AgentsPane.fe4d630c94', 'Docs')
+                : translate('auto.components.settings.AgentsPane.f95b5c79b8', 'Install')
             }
             className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
           >
@@ -830,20 +736,17 @@ function AgentRow({
                   cmdOpen
                     ? translate(
                         'auto.components.settings.AgentsPane.cea7d97be1',
-                        'Collapse command override',
+                        'Collapse command override'
                       )
                     : translate(
                         'auto.components.settings.AgentsPane.dc4a2ffdc0',
-                        'Expand command override',
+                        'Expand command override'
                       )
                 }
                 className="size-7 text-muted-foreground hover:text-foreground"
               >
                 <ChevronDown
-                  className={cn(
-                    'size-3.5 transition-transform',
-                    cmdOpen && 'rotate-180',
-                  )}
+                  className={cn('size-3.5 transition-transform', cmdOpen && 'rotate-180')}
                 />
               </Button>
             )}
@@ -891,7 +794,7 @@ function AgentRow({
           <p className="mt-1.5 text-[11px] text-muted-foreground">
             {translate(
               'auto.components.settings.AgentsPane.f9f127d664',
-              'Override the binary path or name, and edit the default launch arguments or environment for this agent.',
+              'Override the binary path or name, and edit the default launch arguments or environment for this agent.'
             )}
           </p>
         </div>
@@ -906,11 +809,7 @@ type DefaultAgentPillProps = {
   children: React.ReactNode
 }
 
-function DefaultAgentPill({
-  active,
-  onClick,
-  children,
-}: DefaultAgentPillProps): React.JSX.Element {
+function DefaultAgentPill({ active, onClick, children }: DefaultAgentPillProps): React.JSX.Element {
   return (
     <button
       type="button"
@@ -920,7 +819,7 @@ function DefaultAgentPill({
         'inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
         active
           ? 'border-muted-foreground/40 bg-accent font-medium text-accent-foreground'
-          : 'border-border bg-background/50 text-muted-foreground hover:border-muted-foreground/35 hover:text-foreground',
+          : 'border-border bg-background/50 text-muted-foreground hover:border-muted-foreground/35 hover:text-foreground'
       )}
     >
       {children}
@@ -928,13 +827,8 @@ function DefaultAgentPill({
   )
 }
 
-function makeUniqueProfileLabel(
-  label: string,
-  existingLabels: Iterable<string>,
-): string {
-  const normalizedExisting = new Set(
-    [...existingLabels].map((entry) => entry.toLocaleLowerCase()),
-  )
+function makeUniqueProfileLabel(label: string, existingLabels: Iterable<string>): string {
+  const normalizedExisting = new Set([...existingLabels].map((entry) => entry.toLocaleLowerCase()))
   const normalizedLabel = label.toLocaleLowerCase()
   if (!normalizedExisting.has(normalizedLabel)) {
     return label
@@ -951,29 +845,25 @@ function makeUniqueProfileLabel(
 function updateAgentProfile(
   profiles: readonly TuiAgentProfile[],
   id: TuiAgent,
-  updates: Partial<TuiAgentProfile>,
+  updates: Partial<TuiAgentProfile>
 ): TuiAgentProfile[] {
   return normalizeTuiAgentProfiles(
-    profiles.map((profile) =>
-      profile.id === id ? { ...profile, ...updates } : profile,
-    ),
+    profiles.map((profile) => (profile.id === id ? { ...profile, ...updates } : profile))
   )
 }
 
 function getRawAgentArgsOverride(
   agent: TuiAgent,
   configuredArgs: Partial<Record<TuiAgent, string>>,
-  defaultArgs: string,
+  defaultArgs: string
 ): string {
-  return typeof configuredArgs[agent] === 'string'
-    ? (configuredArgs[agent] ?? '')
-    : defaultArgs
+  return typeof configuredArgs[agent] === 'string' ? (configuredArgs[agent] ?? '') : defaultArgs
 }
 
 function getRawAgentEnvOverride(
   agent: TuiAgent,
   configuredEnv: Partial<Record<TuiAgent, Record<string, string>>>,
-  defaultEnv: Record<string, string>,
+  defaultEnv: Record<string, string>
 ): Record<string, string> {
   return configuredEnv[agent] ?? defaultEnv
 }
@@ -981,12 +871,12 @@ function getRawAgentEnvOverride(
 export function AgentsPane({
   settings,
   updateSettings,
+  wslSupportedPlatform,
+  wslAvailable,
+  wslDistros,
+  wslCapabilitiesLoading
 }: AgentsPaneProps): React.JSX.Element {
-  const {
-    detectedIds: detectedList,
-    isRefreshing,
-    refresh,
-  } = useDetectedAgents()
+  const { detectedIds: detectedList, isRefreshing, refresh } = useDetectedAgents()
   // Why: refresh re-spawns the user's login shell to re-capture PATH
   // (preflight:refreshAgents on the main side). This handles the
   // "installed a new CLI, Orca doesn't see it yet" case without a restart.
@@ -995,7 +885,7 @@ export function AgentsPane({
   }
   const detectedIds = useMemo<Set<TuiAgent> | null>(
     () => (detectedList ? new Set(detectedList) : null),
-    [detectedList],
+    [detectedList]
   )
 
   const defaultAgent = settings.defaultTuiAgent
@@ -1005,13 +895,13 @@ export function AgentsPane({
   const agentDefaultEnv = settings.agentDefaultEnv ?? {}
   const agentProfiles = normalizeTuiAgentProfiles(settings.agentProfiles)
   const profileById: ReadonlyMap<TuiAgent, TuiAgentProfile> = new Map(
-    agentProfiles.map((profile) => [profile.id, profile]),
+    agentProfiles.map((profile) => [profile.id, profile])
   )
   const baseCatalog = getAgentCatalog()
   const baseCatalogById = new Map(baseCatalog.map((entry) => [entry.id, entry]))
   const agentPermissionMode = resolveAgentPermissionModeSummary({
     agentDefaultArgs,
-    agentDefaultEnv,
+    agentDefaultEnv
   })
   const disabledAgents = normalizeDisabledTuiAgents(settings.disabledTuiAgents)
 
@@ -1025,7 +915,7 @@ export function AgentsPane({
       fallbackSettings: settings,
       updateSettings,
       agentId: id,
-      enabled,
+      enabled
     })
   }
 
@@ -1043,8 +933,8 @@ export function AgentsPane({
     updateSettings({
       agentDefaultArgs: {
         ...agentDefaultArgs,
-        [id]: value,
-      },
+        [id]: value
+      }
     })
   }
 
@@ -1052,8 +942,8 @@ export function AgentsPane({
     updateSettings({
       agentDefaultEnv: {
         ...agentDefaultEnv,
-        [id]: value,
-      },
+        [id]: value
+      }
     })
   }
 
@@ -1068,7 +958,7 @@ export function AgentsPane({
     }
     const labels = [
       ...baseCatalog.map((agent) => agent.label),
-      ...agentProfiles.map((profile) => profile.label),
+      ...agentProfiles.map((profile) => profile.label)
     ]
     const label = makeUniqueProfileLabel(`${entry.label} (custom)`, labels)
     saveAgentProfiles([
@@ -1078,17 +968,9 @@ export function AgentsPane({
         baseAgent: entry.id,
         label,
         ...(cmdOverrides[id] ? { cmdOverride: cmdOverrides[id] } : {}),
-        defaultArgs: getRawAgentArgsOverride(
-          id,
-          agentDefaultArgs,
-          getTuiAgentDefaultArgs(id),
-        ),
-        defaultEnv: getRawAgentEnvOverride(
-          id,
-          agentDefaultEnv,
-          getTuiAgentDefaultEnv(id),
-        ),
-      },
+        defaultArgs: getRawAgentArgsOverride(id, agentDefaultArgs, getTuiAgentDefaultArgs(id)),
+        defaultEnv: getRawAgentEnvOverride(id, agentDefaultEnv, getTuiAgentDefaultEnv(id))
+      }
     ])
   }
 
@@ -1096,56 +978,45 @@ export function AgentsPane({
     const nextProfiles = agentProfiles.filter((profile) => profile.id !== id)
     updateSettings({
       agentProfiles: nextProfiles,
-      ...(defaultAgent === id ? { defaultTuiAgent: null } : {}),
+      ...(defaultAgent === id ? { defaultTuiAgent: null } : {})
     })
   }
 
   const saveAgentProfileLabel = (id: TuiAgent, value: string): void => {
     const labels = [
       ...baseCatalog.map((agent) => agent.label),
-      ...agentProfiles
-        .filter((profile) => profile.id !== id)
-        .map((profile) => profile.label),
+      ...agentProfiles.filter((profile) => profile.id !== id).map((profile) => profile.label)
     ]
     saveAgentProfiles(
       updateAgentProfile(agentProfiles, id, {
-        label: makeUniqueProfileLabel(value, labels),
-      }),
+        label: makeUniqueProfileLabel(value, labels)
+      })
     )
   }
 
   const saveAgentProfileCommand = (id: TuiAgent, value: string): void => {
     saveAgentProfiles(
       updateAgentProfile(agentProfiles, id, {
-        cmdOverride: value || undefined,
-      }),
+        cmdOverride: value || undefined
+      })
     )
   }
 
   const saveAgentProfileArgs = (id: TuiAgent, value: string): void => {
-    saveAgentProfiles(
-      updateAgentProfile(agentProfiles, id, { defaultArgs: value }),
-    )
+    saveAgentProfiles(updateAgentProfile(agentProfiles, id, { defaultArgs: value }))
   }
 
-  const saveAgentProfileEnv = (
-    id: TuiAgent,
-    value: Record<string, string>,
-  ): void => {
-    saveAgentProfiles(
-      updateAgentProfile(agentProfiles, id, { defaultEnv: value }),
-    )
+  const saveAgentProfileEnv = (id: TuiAgent, value: Record<string, string>): void => {
+    saveAgentProfiles(updateAgentProfile(agentProfiles, id, { defaultEnv: value }))
   }
 
-  const saveAgentPermissionMode = (
-    mode: Exclude<AgentPermissionMode, 'mixed'>,
-  ): void => {
+  const saveAgentPermissionMode = (mode: Exclude<AgentPermissionMode, 'mixed'>): void => {
     updateSettings(
       applyAgentPermissionMode({
         mode,
         agentDefaultArgs,
-        agentDefaultEnv,
-      }),
+        agentDefaultEnv
+      })
     )
   }
 
@@ -1157,17 +1028,15 @@ export function AgentsPane({
     return detectedIds !== null && detectedIds.has(agent.baseAgent ?? agent.id)
   })
   const enabledDetectedAgentEntries = detectedAgentEntries.filter((agent) =>
-    isTuiAgentEnabled(agent.id, disabledAgents),
+    isTuiAgentEnabled(agent.id, disabledAgents)
   )
-  const undetectedAgents = baseCatalog.filter(
-    (a) => detectedIds !== null && !detectedIds.has(a.id),
-  )
+  const undetectedAgents = baseCatalog.filter((a) => detectedIds !== null && !detectedIds.has(a.id))
 
   // Why: 'blank' is an explicit no-agent preference, not an auto fallback,
   // so the Auto pill should only light up when the default is null OR when a
   // selected agent id is no longer detected on PATH.
   const defaultAgentIsDetectedProfile = detectedAgentEntries.some(
-    (agent) => agent.id === defaultAgent,
+    (agent) => agent.id === defaultAgent
   )
   const isAutoDefault =
     defaultAgent === null ||
@@ -1180,37 +1049,25 @@ export function AgentsPane({
     <div className="space-y-8">
       <section className="space-y-4">
         <SettingsSubsectionHeader
-          title={translate(
-            'auto.components.settings.AgentsPane.385212c7a1',
-            'Default Agent',
-          )}
+          title={translate('auto.components.settings.AgentsPane.385212c7a1', 'Default Agent')}
           description={agentOwnership.description}
         />
 
         <div className="flex flex-wrap gap-2">
-          <DefaultAgentPill
-            active={isAutoDefault}
-            onClick={() => setDefault(null)}
-          >
+          <DefaultAgentPill active={isAutoDefault} onClick={() => setDefault(null)}>
             {isAutoDefault && <Check className="size-3.5" />}
-            {translate(
-              'auto.components.settings.AgentsPane.92033495ff',
-              'Auto',
-            )}
+            {translate('auto.components.settings.AgentsPane.92033495ff', 'Auto')}
           </DefaultAgentPill>
 
           {/* Why: users who prefer to open a raw shell by default need a
               first-class "no agent" choice here — without it, the Auto pill
               is the closest option but silently launches the first detected
               agent, which is the opposite of what they want. */}
-          <DefaultAgentPill
-            active={isBlankDefault}
-            onClick={() => setDefault('blank')}
-          >
+          <DefaultAgentPill active={isBlankDefault} onClick={() => setDefault('blank')}>
             <Terminal className="size-3.5" />
             {translate(
               'auto.components.settings.AgentsPane.110b74b022',
-              'No agent (blank terminal)',
+              'No agent (blank terminal)'
             )}
             {isBlankDefault && <Check className="size-3.5" />}
           </DefaultAgentPill>
@@ -1232,43 +1089,35 @@ export function AgentsPane({
         </div>
       </section>
 
-      <AgentStatusHooksSetting
+      <AgentRuntimeSetting
         settings={settings}
         updateSettings={updateSettings}
+        refresh={refresh}
+        wslSupportedPlatform={wslSupportedPlatform}
+        wslAvailable={wslAvailable}
+        wslDistros={wslDistros}
+        wslCapabilitiesLoading={wslCapabilitiesLoading}
       />
 
-      <AgentGeneratedTabTitlesSetting
-        settings={settings}
-        updateSettings={updateSettings}
-      />
+      <AgentStatusHooksSetting settings={settings} updateSettings={updateSettings} />
+
+      <AgentGeneratedTabTitlesSetting settings={settings} updateSettings={updateSettings} />
 
       <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
 
-      <AgentCacheTimerSection
-        settings={settings}
-        updateSettings={updateSettings}
-      />
+      <AgentCacheTimerSection settings={settings} updateSettings={updateSettings} />
 
-      <AgentPermissionsSetting
-        mode={agentPermissionMode}
-        onChange={saveAgentPermissionMode}
-      />
+      <AgentPermissionsSetting mode={agentPermissionMode} onChange={saveAgentPermissionMode} />
 
       {detectedAgentEntries.length > 0 && (
         <section className="space-y-3">
           <SettingsSubsectionHeader
             title={
               <span className="flex items-center gap-2">
-                {translate(
-                  'auto.components.settings.AgentsPane.02e0143be5',
-                  'Installed',
-                )}
+                {translate('auto.components.settings.AgentsPane.02e0143be5', 'Installed')}
                 <SettingsBadge tone="accent">
                   {detectedAgentEntries.length}{' '}
-                  {translate(
-                    'auto.components.settings.AgentsPane.ed3e110e61',
-                    'detected',
-                  )}
+                  {translate('auto.components.settings.AgentsPane.ed3e110e61', 'detected')}
                 </SettingsBadge>
               </span>
             }
@@ -1281,22 +1130,14 @@ export function AgentsPane({
                 disabled={isRefreshing}
                 title={translate(
                   'auto.components.settings.AgentsPane.13647f9f80',
-                  'Re-read your shell PATH and re-detect installed agents',
+                  'Re-read your shell PATH and re-detect installed agents'
                 )}
                 className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
               >
-                <RefreshCw
-                  className={cn('size-3', isRefreshing && 'animate-spin')}
-                />
+                <RefreshCw className={cn('size-3', isRefreshing && 'animate-spin')} />
                 {isRefreshing
-                  ? translate(
-                      'auto.components.settings.AgentsPane.c9b33eb5c0',
-                      'Refreshing…',
-                    )
-                  : translate(
-                      'auto.components.settings.AgentsPane.0d9e293a02',
-                      'Refresh',
-                    )}
+                  ? translate('auto.components.settings.AgentsPane.c9b33eb5c0', 'Refreshing…')
+                  : translate('auto.components.settings.AgentsPane.0d9e293a02', 'Refresh')}
               </Button>
             }
           />
@@ -1321,20 +1162,10 @@ export function AgentsPane({
                     isEnabled={isTuiAgentEnabled(agent.id, disabledAgents)}
                     isDefault={defaultAgent === agent.id}
                     cmdOverride={cmdOverrides[agent.id]}
-                    argsOverride={getRawAgentArgsOverride(
-                      agent.id,
-                      agentDefaultArgs,
-                      defaultArgs,
-                    )}
-                    envOverride={getRawAgentEnvOverride(
-                      agent.id,
-                      agentDefaultEnv,
-                      defaultEnv,
-                    )}
+                    argsOverride={getRawAgentArgsOverride(agent.id, agentDefaultArgs, defaultArgs)}
+                    envOverride={getRawAgentEnvOverride(agent.id, agentDefaultEnv, defaultEnv)}
                     onSetDefault={() => setDefault(agent.id)}
-                    onSetEnabled={(enabled) =>
-                      setAgentEnabled(agent.id, enabled)
-                    }
+                    onSetEnabled={(enabled) => setAgentEnabled(agent.id, enabled)}
                     onDuplicate={() => duplicateAgent(agent.id)}
                     onSaveOverride={(v) => saveOverride(agent.id, v)}
                     onSaveArgs={(v) => saveAgentArgs(agent.id, v)}
@@ -1383,14 +1214,11 @@ export function AgentsPane({
               <span className="flex items-center gap-2 text-muted-foreground">
                 {translate(
                   'auto.components.settings.AgentsPane.e8da2af684',
-                  'Available to install',
+                  'Available to install'
                 )}
                 <SettingsBadge tone="muted">
                   {undetectedAgents.length}{' '}
-                  {translate(
-                    'auto.components.settings.AgentsPane.024bd95089',
-                    'agents',
-                  )}
+                  {translate('auto.components.settings.AgentsPane.024bd95089', 'agents')}
                 </SettingsBadge>
               </span>
             }
@@ -1414,16 +1242,8 @@ export function AgentsPane({
                   isEnabled={isTuiAgentEnabled(agent.id, disabledAgents)}
                   isDefault={false}
                   cmdOverride={undefined}
-                  argsOverride={getRawAgentArgsOverride(
-                    agent.id,
-                    agentDefaultArgs,
-                    defaultArgs,
-                  )}
-                  envOverride={getRawAgentEnvOverride(
-                    agent.id,
-                    agentDefaultEnv,
-                    defaultEnv,
-                  )}
+                  argsOverride={getRawAgentArgsOverride(agent.id, agentDefaultArgs, defaultArgs)}
+                  envOverride={getRawAgentEnvOverride(agent.id, agentDefaultEnv, defaultEnv)}
                   onSetDefault={() => {}}
                   onSetEnabled={(enabled) => setAgentEnabled(agent.id, enabled)}
                   onSaveOverride={() => {}}
@@ -1440,7 +1260,7 @@ export function AgentsPane({
         <div className="flex items-center justify-center rounded-md border border-dashed border-border/50 py-6 text-sm text-muted-foreground">
           {translate(
             'auto.components.settings.AgentsPane.d83834f5e6',
-            'Detecting installed agents…',
+            'Detecting installed agents…'
           )}
         </div>
       )}
@@ -1450,7 +1270,7 @@ export function AgentsPane({
 
 export function AgentStatusHooksSetting({
   settings,
-  updateSettings,
+  updateSettings
 }: AgentsPaneProps): React.JSX.Element {
   const enabled = settings.agentStatusHooksEnabled !== false
   return (
@@ -1461,7 +1281,7 @@ export function AgentStatusHooksSetting({
         checked={enabled}
         onChange={() =>
           updateSettings({
-            agentStatusHooksEnabled: !enabled,
+            agentStatusHooksEnabled: !enabled
           })
         }
         ariaLabel={getAgentStatusHooksTitle()}
@@ -1472,7 +1292,7 @@ export function AgentStatusHooksSetting({
 
 export function AgentGeneratedTabTitlesSetting({
   settings,
-  updateSettings,
+  updateSettings
 }: AgentsPaneProps): React.JSX.Element {
   const enabled = settings.tabAutoGenerateTitle === true
   return (
@@ -1483,7 +1303,7 @@ export function AgentGeneratedTabTitlesSetting({
         checked={enabled}
         onChange={() =>
           updateSettings({
-            tabAutoGenerateTitle: !enabled,
+            tabAutoGenerateTitle: !enabled
           })
         }
         ariaLabel={getAgentGeneratedTabTitlesTitle()}

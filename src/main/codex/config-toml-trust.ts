@@ -122,12 +122,29 @@ export function getCodexCanonicalTrustPath(sourcePath: string): string {
   try {
     // Why: Codex canonicalizes trust paths before building config keys. On
     // macOS, /var is a symlink to /private/var; trusting the raw path still
-    // leaves the TUI in review/trust prompts. Forward-slash normalization
-    // prevents separator mismatch against Codex-written literal-string keys on Windows.
-    return normalizeWindowsPathSeparators(realpathSync.native(sourcePath))
+    // leaves the TUI in review/trust prompts. On Windows, Codex 0.140 writes
+    // hook state keys with native raw backslashes under an explicit parent table.
+    return realpathSync.native(sourcePath)
   } catch {
-    return normalizeWindowsPathSeparators(sourcePath)
+    return normalizeWindowsPathForCodexLookup(sourcePath)
   }
+}
+
+function getCodexCanonicalProjectPath(projectPath: string): string {
+  try {
+    // Why: local project trust still needs Codex's realpath shape, but remote
+    // SSH callers pass an already-canonical remote path string.
+    return realpathSync.native(projectPath)
+  } catch {
+    return projectPath
+  }
+}
+
+function normalizeWindowsPathForCodexLookup(sourcePath: string): string {
+  if (!usesWindowsPathSeparators(sourcePath)) {
+    return sourcePath
+  }
+  return sourcePath.replace(/\//g, '\\')
 }
 
 function normalizeWindowsPathSeparators(sourcePath: string): string {
@@ -242,9 +259,17 @@ export function upsertHookTrustEntriesInContent(
 ): string {
   const existing =
     existingContent.charCodeAt(0) === 0xfeff ? existingContent.slice(1) : existingContent
-  let updated = existing
+  let updated = entries.some((entry) =>
+    usesWindowsPathSeparators(getCodexCanonicalTrustPath(entry.sourcePath))
+  )
+    ? ensureHooksStateParentTable(existing)
+    : existing
   for (const entry of entries) {
-    updated = upsertTrustBlock(updated, computeTrustKey(entry), computeTrustedHash(entry))
+    updated = upsertTrustBlocks(
+      updated,
+      getTrustKeyWriteVariants(computeTrustKey(entry)),
+      computeTrustedHash(entry)
+    )
   }
   return updated
 }
@@ -265,11 +290,14 @@ export function upsertProjectTrustLevel(
 export function upsertProjectTrustLevelInContent(
   existingContent: string,
   projectPath: string,
-  trustLevel: CodexProjectTrustLevel
+  trustLevel: CodexProjectTrustLevel,
+  options?: { alreadyCanonical?: boolean }
 ): string {
   const existing =
     existingContent.charCodeAt(0) === 0xfeff ? existingContent.slice(1) : existingContent
-  const trustedProjectPath = getCodexCanonicalTrustPath(projectPath)
+  const trustedProjectPath = options?.alreadyCanonical
+    ? projectPath
+    : getCodexCanonicalProjectPath(projectPath)
   const headerPattern = buildProjectHeaderPattern(trustedProjectPath)
   const match = headerPattern.exec(existing)
   const eol = existing.includes('\r\n') ? '\r\n' : '\n'
@@ -311,10 +339,32 @@ export function upsertProjectTrustLevelInContent(
 // `enabled = false` survives reinstall.
 function buildTrustBlock(key: string, hash: string, enabled: boolean): string {
   return [
-    `[hooks.state."${escapeTomlString(key)}"]`,
+    `[hooks.state.${formatHookStateTableKey(key)}]`,
     `enabled = ${enabled}`,
     `trusted_hash = "${escapeTomlString(hash)}"`
   ].join('\n')
+}
+
+function formatHookStateTableKey(key: string): string {
+  const parsed = parseTrustKey(key)
+  if (parsed && usesWindowsPathSeparators(parsed.sourcePath) && !key.includes("'")) {
+    // Why: Codex 0.140 trusts Windows hooks only when the state table keys
+    // match the raw native path shape it writes after /hooks approval.
+    return `'${key}'`
+  }
+  return `"${escapeTomlString(key)}"`
+}
+
+function getTrustKeyWriteVariants(key: string): string[] {
+  const parsed = parseTrustKey(key)
+  if (!parsed || !usesWindowsPathSeparators(parsed.sourcePath)) {
+    return [key]
+  }
+  const suffix = `:${parsed.eventLabel}:${parsed.groupIndex}:${parsed.handlerIndex}`
+  return [
+    `${parsed.sourcePath.replace(/\//g, '\\')}${suffix}`,
+    `${parsed.sourcePath.replace(/\\/g, '/')}${suffix}`
+  ].filter((variant, index, variants) => variants.indexOf(variant) === index)
 }
 
 // Why: TOML basic strings forbid raw control chars; escape backslash first so
@@ -330,10 +380,18 @@ export function escapeTomlString(value: string): string {
     .replaceAll('\t', '\\t')
 }
 
-function upsertTrustBlock(content: string, key: string, hash: string): string {
-  const ranges = findTrustBlockRanges(content, key)
+function upsertTrustBlocks(content: string, keys: readonly string[], hash: string): string {
+  const ranges = keys
+    .flatMap((key) => findTrustBlockRanges(content, key))
+    .filter(
+      (range, index, ranges) =>
+        ranges.findIndex(
+          (candidate) => candidate.start === range.start && candidate.end === range.end
+        ) === index
+    )
+    .sort((a, b) => a.start - b.start)
   if (ranges.length === 0) {
-    const block = buildTrustBlock(key, hash, true)
+    const block = buildTrustBlocks(keys, hash, true)
     if (content.length === 0) {
       return `${block}\n`
     }
@@ -355,7 +413,7 @@ function upsertTrustBlock(content: string, key: string, hash: string): string {
     )
     return enabledMatch?.[1] === 'false'
   })
-  const block = buildTrustBlock(key, hash, enabled)
+  const block = buildTrustBlocks(keys, hash, enabled)
   let cursor = 0
   let deduped = ''
   ranges.forEach((range, index) => {
@@ -366,6 +424,29 @@ function upsertTrustBlock(content: string, key: string, hash: string): string {
     cursor = range.end
   })
   return deduped + content.slice(cursor)
+}
+
+function buildTrustBlocks(keys: readonly string[], hash: string, enabled: boolean): string {
+  // Why: Codex 0.140 can expose Windows hook-state keys with either native
+  // backslashes or forward slashes depending on the cwd string used at startup.
+  return keys.map((key) => buildTrustBlock(key, hash, enabled)).join('\n\n')
+}
+
+function ensureHooksStateParentTable(content: string): string {
+  if (/^[ \t]*\[hooks\.state\][ \t]*(?:#[^\r\n]*)?$/m.test(content)) {
+    return content
+  }
+  const eol = content.includes('\r\n') ? '\r\n' : '\n'
+  const parent = `[hooks.state]${eol}`
+  const hookHeader = /^[ \t]*\[hooks\.state\.(?:"|')/m.exec(content)
+  if (hookHeader) {
+    return `${content.slice(0, hookHeader.index)}${parent}${eol}${content.slice(hookHeader.index)}`
+  }
+  if (content.length === 0) {
+    return parent
+  }
+  const separator = content.endsWith(`${eol}${eol}`) ? '' : content.endsWith(eol) ? eol : eol + eol
+  return `${content}${separator}${parent}`
 }
 
 type TrustBlockRange = {
@@ -417,10 +498,13 @@ function findTrustBlockRanges(content: string, key: string): TrustBlockRange[] {
 }
 
 function buildProjectHeaderPattern(projectPath: string): RegExp {
-  const headerPaths = [escapeRegex(escapeTomlString(projectPath))]
+  const headerPathValues = [projectPath]
   if (usesWindowsPathSeparators(projectPath)) {
-    headerPaths.push(escapeRegex(escapeTomlString(projectPath.replace(/\//g, '\\'))))
+    headerPathValues.push(projectPath.replace(/\//g, '\\'), projectPath.replace(/\\/g, '/'))
   }
+  const headerPaths = [...new Set(headerPathValues)].map((path) =>
+    escapeRegex(escapeTomlString(path))
+  )
   return new RegExp(
     `(^|\\r?\\n)[ \\t]*\\[projects\\."(?:${headerPaths.join('|')})"\\][ \\t]*(?:#[^\\r\\n]*)?(?=\\r?\\n|$)`,
     process.platform === 'win32' ? 'i' : undefined
@@ -757,9 +841,17 @@ export function readHookTrustEntries(configPath: string): Map<string, CodexHookT
       // a line scan beats pulling in a full TOML value parser.
       const hashMatch = /^[ \t]*trusted_hash[ \t]*=[ \t]*"((?:[^"\\]|\\.)*)"/m.exec(block)
       const enabledMatch = /^[ \t]*enabled[ \t]*=[ \t]*(true|false)[ \t\r]*(?:#.*)?$/m.exec(block)
-      result.set(normalizeHookTrustKeyForLookup(key), {
-        trustedHash: hashMatch ? unescapeTomlString(hashMatch[1]) : undefined,
-        enabled: enabledMatch ? enabledMatch[1] === 'true' : undefined
+      const normalizedKey = normalizeHookTrustKeyForLookup(key)
+      const existingState = result.get(normalizedKey)
+      const enabled = enabledMatch ? enabledMatch[1] === 'true' : undefined
+      result.set(normalizedKey, {
+        trustedHash: hashMatch ? unescapeTomlString(hashMatch[1]) : existingState?.trustedHash,
+        // Why: Windows writes both slash variants for one hook; a disabled copy
+        // must remain authoritative regardless of which variant appears last.
+        enabled:
+          existingState?.enabled === false || enabled === false
+            ? false
+            : (enabled ?? existingState?.enabled)
       })
       cursor = nextCursor
       continue

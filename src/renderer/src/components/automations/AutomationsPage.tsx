@@ -93,6 +93,13 @@ import {
   getAutomationRerunPendingRemainingMs,
   getAutomationRunViewState
 } from './automation-run-view-state'
+import {
+  automationRunMatchesPaneKey,
+  buildAutomationRunOpenLayout,
+  canOpenAutomationRunOpenTarget,
+  getAutomationRunOpenTabId,
+  resolveAutomationRunOpenTarget
+} from './automation-run-open-target'
 import { getAutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { AutomationDetail } from './AutomationDetail'
@@ -345,6 +352,8 @@ export default function AutomationsPage(): React.JSX.Element {
   const projectHostSetups = useAppStore((s) => s.projectHostSetups)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
+  const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
+  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
@@ -646,13 +655,25 @@ export default function AutomationsPage(): React.JSX.Element {
         worktree: selectedAutomationRunPageWorktree
       })
     : null
+  const selectedAutomationRunPageOpenTabId = selectedAutomationRunPage
+    ? getAutomationRunOpenTabId(selectedAutomationRunPage)
+    : null
   const selectedAutomationRunPageViewState = selectedAutomationRunPage
     ? getAutomationRunViewState({
         run: selectedAutomationRunPage,
         workspaceExists: Boolean(selectedAutomationRunPageWorktree),
-        terminalTabExists: selectedAutomationRunPage.terminalSessionId
-          ? activeTerminalTabIds.has(selectedAutomationRunPage.terminalSessionId)
-          : false
+        terminalTargetExists: canOpenAutomationRunOpenTarget({
+          run: selectedAutomationRunPage,
+          terminalTabExists: selectedAutomationRunPageOpenTabId
+            ? activeTerminalTabIds.has(selectedAutomationRunPageOpenTabId)
+            : false,
+          currentLayout: selectedAutomationRunPageOpenTabId
+            ? terminalLayoutsByTabId[selectedAutomationRunPageOpenTabId]
+            : null,
+          livePtyIds: selectedAutomationRunPageOpenTabId
+            ? (ptyIdsByTabId[selectedAutomationRunPageOpenTabId] ?? [])
+            : []
+        })
       })
     : null
   const canRerunSelectedAutomationRunPage =
@@ -998,7 +1019,7 @@ export default function AutomationsPage(): React.JSX.Element {
   useEffect(() => {
     const inFlight = completionInFlightRef.current
     const completedRuns = runs.filter((run) => {
-      if (run.status !== 'dispatched' || !run.terminalSessionId) {
+      if (run.status !== 'dispatched' || !run.terminalPaneKey) {
         return false
       }
       if (inFlight.has(run.id)) {
@@ -1008,10 +1029,9 @@ export default function AutomationsPage(): React.JSX.Element {
       if (dispatchedAt === null) {
         return false
       }
-      const paneKeyPrefix = `${run.terminalSessionId}:`
       const liveDone = Object.entries(agentStatusByPaneKey).some(
         ([paneKey, entry]) =>
-          paneKey.startsWith(paneKeyPrefix) &&
+          automationRunMatchesPaneKey(run, paneKey) &&
           entry.state === 'done' &&
           entry.updatedAt >= dispatchedAt
       )
@@ -1020,7 +1040,7 @@ export default function AutomationsPage(): React.JSX.Element {
       }
       return Object.entries(retainedAgentsByPaneKey).some(
         ([paneKey, retained]) =>
-          paneKey.startsWith(paneKeyPrefix) &&
+          automationRunMatchesPaneKey(run, paneKey) &&
           retained.entry.state === 'done' &&
           retained.entry.updatedAt >= dispatchedAt
       )
@@ -1038,6 +1058,8 @@ export default function AutomationsPage(): React.JSX.Element {
           status: 'completed',
           workspaceId: run.workspaceId,
           terminalSessionId: run.terminalSessionId,
+          terminalPaneKey: run.terminalPaneKey,
+          terminalPtyId: run.terminalPtyId,
           error: null
         })
       )
@@ -1832,23 +1854,39 @@ export default function AutomationsPage(): React.JSX.Element {
   const openRunWorkspace = (run: AutomationRun): void => {
     const runWorktree = run.workspaceId ? (worktreeMap.get(run.workspaceId) ?? null) : null
     const store = useAppStore.getState()
+    const openTabId = getAutomationRunOpenTabId(run)
+    const terminalTabExists = openTabId ? Boolean(store.getTab(openTabId)) : false
+    const currentLayout = openTabId ? store.terminalLayoutsByTabId[openTabId] : null
+    const livePtyIds = openTabId ? (store.ptyIdsByTabId[openTabId] ?? []) : []
+    const terminalTarget = resolveAutomationRunOpenTarget({
+      run,
+      terminalTabExists,
+      currentLayout,
+      livePtyIds
+    })
     const runViewState = getAutomationRunViewState({
       run,
       workspaceExists: Boolean(runWorktree),
-      terminalTabExists: run.terminalSessionId
-        ? Boolean(store.getTab(run.terminalSessionId))
-        : false
+      terminalTargetExists: terminalTarget !== null
     })
     if (!run.workspaceId || !runWorktree || !runViewState.canOpen) {
       toast.error(runViewState.statusLabel)
       return
     }
-    const terminalTabExistsBeforeActivation = run.terminalSessionId
-      ? Boolean(store.getTab(run.terminalSessionId))
-      : false
-    if (run.terminalSessionId) {
-      if (terminalTabExistsBeforeActivation && activateAndRevealWorktree(run.workspaceId)) {
-        store.setActiveTab(run.terminalSessionId)
+    if (runViewState.availability === 'terminal' && !terminalTarget) {
+      toast.error(runViewState.statusLabel)
+      return
+    }
+    if (terminalTarget && currentLayout) {
+      store.setTabLayout(
+        terminalTarget.tabId,
+        buildAutomationRunOpenLayout({
+          target: terminalTarget,
+          currentLayout
+        })
+      )
+      if (activateAndRevealWorktree(run.workspaceId)) {
+        store.setActiveTab(terminalTarget.tabId)
         store.setActiveTabType('terminal')
         return
       }
