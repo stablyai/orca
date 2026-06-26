@@ -5,9 +5,11 @@ import type { EmulatorBridgeOptions } from './emulator-bridge-types'
 import type { EmulatorGesturePoint } from './emulator-gesture-sender'
 import { EmulatorSessionRegistry } from './emulator-session-registry'
 import { IosEmulatorBackend } from './backends/ios-emulator-backend'
+import { AndroidEmulatorBackend } from './backends/android-emulator-backend'
 import type {
   EmulatorBackend,
   EmulatorBackendKind,
+  EmulatorDevice,
   EmulatorTargetOpts
 } from './backends/emulator-backend'
 
@@ -19,16 +21,36 @@ export class EmulatorBridge {
   private readonly sessionRegistry = new EmulatorSessionRegistry()
   private readonly backends: EmulatorBackend[]
   private readonly iosBackend: IosEmulatorBackend
+  private readonly androidBackend: AndroidEmulatorBackend
 
   constructor(options: EmulatorBridgeOptions = {}) {
     this.iosBackend = new IosEmulatorBackend(options)
-    // Why: the iOS backend is always registered (not host-gated) so explicitly
-    // targeted commands still reach it; availability reporting handles host support.
-    this.backends = [this.iosBackend]
+    this.androidBackend = new AndroidEmulatorBackend()
+    // Why: backends are always registered (not host-gated) so explicitly targeted
+    // commands still reach them; availability reporting handles host support.
+    this.backends = [this.iosBackend, this.androidBackend]
   }
 
   listBackends(): EmulatorBackend[] {
     return this.backends
+  }
+
+  // Aggregated device list across host-supported backends (iOS simulators +
+  // Android devices/AVDs), for the unified `orca emulator list`.
+  async listAllDevices(): Promise<EmulatorDevice[]> {
+    const perBackend = await Promise.all(
+      this.backends.map(async (backend) => {
+        if (!backend.isSupportedOnHost()) {
+          return []
+        }
+        try {
+          return await backend.listDevices()
+        } catch {
+          return []
+        }
+      })
+    )
+    return perBackend.flat()
   }
 
   // iOS-specific passthroughs kept for back-compat with the runtime + availability code.

@@ -141,6 +141,11 @@ export const EMULATOR_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => runtime.emulatorAvailability(params)
   }),
   defineMethod({
+    name: 'emulator.listDevices',
+    params: z.object({ worktree: z.string().optional() }).partial(),
+    handler: async (params, { runtime }) => runtime.emulatorListDevices(params)
+  }),
+  defineMethod({
     name: 'emulator.unregisterActive',
     params: z.object({ worktree: z.string().optional() }).partial(),
     handler: async (params, { runtime }) => runtime.emulatorUnregisterActive(params)

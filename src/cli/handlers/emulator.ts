@@ -26,6 +26,26 @@ type EmulatorGesturePoint = {
   y: number
 }
 
+type EmulatorDeviceRow = {
+  backend?: 'ios' | 'android'
+  id?: string
+  name?: string
+  state?: string
+}
+
+function formatEmulatorDevices(value: unknown): string {
+  const devices = Array.isArray(value) ? (value as EmulatorDeviceRow[]) : []
+  if (devices.length === 0) {
+    return 'No emulator devices found.'
+  }
+  return devices
+    .map((device) => {
+      const platform = device.backend === 'android' ? 'Android' : 'iOS'
+      return `${platform.padEnd(8)} ${(device.state ?? '').padEnd(9)} ${device.name ?? ''}  (${device.id ?? ''})`
+    })
+    .join('\n')
+}
+
 function assertNormalizedCoordinate(value: number, name: string): void {
   if (value < 0 || value > 1) {
     throw new RuntimeClientError('invalid_argument', `--${name} must be between 0 and 1`)
@@ -90,6 +110,11 @@ export const EMULATOR_HANDLERS: Record<string, CommandHandler> = {
     const target = await getEmulatorCommandTarget(flags, cwd, client)
     const res = await client.call('emulator.list', { worktree: target.worktree })
     printResult(res, json, (v) => JSON.stringify(v, null, 2))
+  },
+  'emulator devices': async ({ flags, client, cwd, json }) => {
+    const target = await getEmulatorCommandTarget(flags, cwd, client)
+    const res = await client.call('emulator.listDevices', { worktree: target.worktree })
+    printResult(res, json, formatEmulatorDevices)
   },
   'emulator attach': async ({ flags, client, cwd, json }) => {
     const target = await getEmulatorCommandTarget(flags, cwd, client)

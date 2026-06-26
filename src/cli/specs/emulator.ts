@@ -9,6 +9,12 @@ export const EMULATOR_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'worktree']
   },
   {
+    path: ['emulator', 'devices'],
+    summary: 'List all emulator devices/AVDs across iOS and Android',
+    usage: 'orca emulator devices [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree']
+  },
+  {
     path: ['emulator', 'attach'],
     summary: 'Attach/start helper for a device and make it active for the worktree',
     usage: 'orca emulator attach [device] [--worktree <selector>] [--focus] [--json]',

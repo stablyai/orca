@@ -10,6 +10,7 @@ import { serveSimStateWatcher } from '../emulator/serve-sim-state-watcher'
 import type { EmulatorGesturePoint } from '../emulator/emulator-gesture-sender'
 import type { EmulatorSessionInfo } from '../emulator/emulator-types'
 import type { SimulatorDevice } from '../emulator/simctl-simulator-devices'
+import type { EmulatorDevice } from '../emulator/backends/emulator-backend'
 import type { GlobalSettings } from '../../shared/types'
 
 // Why: dedicated file for "one surface" separation (emulator), parallel to orca-runtime-browser.ts. Keeps OrcaRuntimeService focused; emulator routing easy to scan. No max-lines disable (split further if grows; per AGENTS + plan Phase 3).
@@ -208,6 +209,12 @@ export class RuntimeEmulatorCommands {
 
   async emulatorAvailability(_params: { worktree?: string } = {}): Promise<EmulatorAvailability> {
     return inspectEmulatorAvailability(this.requireEmulatorBridge())
+  }
+
+  // Why: unified device inventory across backends (iOS simulators + Android
+  // devices/AVDs) for the cross-platform `orca emulator devices` command.
+  async emulatorListDevices(_params: { worktree?: string } = {}): Promise<EmulatorDevice[]> {
+    return this.requireEmulatorBridge().listAllDevices()
   }
 
   async emulatorKill(params: {
