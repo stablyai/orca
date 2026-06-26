@@ -1,4 +1,6 @@
 import { execFile } from 'node:child_process'
+import { basename } from 'node:path'
+import { emulatorProbe, emulatorProbeError } from '../emulator-probe'
 
 export type AndroidCommandResult = { stdout: string; stderr: string; code: number }
 
@@ -26,11 +28,23 @@ export const execFileAndroidCommandRunner: AndroidCommandRunner = (binary, args,
             : error
               ? 1
               : 0
-        resolve({
+        const result = {
           stdout: stdout?.toString() ?? '',
           stderr: stderr?.toString() ?? '',
           code: exitCode
-        })
+        }
+        // PROBE: every adb/emulator command + outcome, for test diagnostics.
+        if (exitCode === 0) {
+          emulatorProbe('cmd', { bin: basename(binary), args })
+        } else {
+          emulatorProbeError('cmd.fail', error ?? new Error(result.stderr || 'nonzero exit'), {
+            bin: basename(binary),
+            args,
+            code: exitCode,
+            stderr: result.stderr.slice(0, 400)
+          })
+        }
+        resolve(result)
       }
     )
   })

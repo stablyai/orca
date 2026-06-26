@@ -16,6 +16,7 @@ import {
   type ScrcpyVideoFrame,
   type ScrcpyVideoMeta
 } from './scrcpy-video-frame-parser'
+import { emulatorProbe, emulatorProbeError } from '../emulator-probe'
 
 // ============================================================================
 // UNVERIFIED — needs a real device + the bundled scrcpy-server.jar to validate.
@@ -72,6 +73,7 @@ export class ScrcpyStreamSession {
   ): Promise<ScrcpyStreamSession> {
     const scid = newScid()
     const port = options.localPort ?? 27183
+    emulatorProbe('scrcpy.start', { serial: options.serial, port, scid })
     const session = new ScrcpyStreamSession(options, callbacks, scid, port)
     await session.deploy()
     session.spawnServer()
@@ -143,6 +145,7 @@ export class ScrcpyStreamSession {
         return
       }
       this.metaSeen = true
+      emulatorProbe('scrcpy.meta', meta)
       this.callbacks.onMeta(meta)
       buffer = Buffer.from(buffer.subarray(12))
     }
@@ -162,6 +165,7 @@ export class ScrcpyStreamSession {
     if (this.closed) {
       return
     }
+    emulatorProbeError('scrcpy.fail', new Error(message), { serial: this.options.serial })
     this.callbacks.onError(message)
     this.close()
   }
@@ -171,6 +175,7 @@ export class ScrcpyStreamSession {
       return
     }
     this.closed = true
+    emulatorProbe('scrcpy.close', { serial: this.options.serial })
     this.videoSocket?.destroy()
     this.controlSocket?.destroy()
     this.server?.kill()

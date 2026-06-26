@@ -26,6 +26,7 @@ import {
   successResponse
 } from './errors'
 import { ALL_RPC_METHODS } from './methods'
+import { emulatorProbe, emulatorProbeError } from '../../emulator/emulator-probe'
 import type { OrcaRuntimeService } from '../orca-runtime'
 
 export type DispatcherOptions = {
@@ -71,6 +72,10 @@ export class RpcDispatcher {
       )
     }
 
+    const isEmulator = request.method.startsWith('emulator.')
+    if (isEmulator) {
+      emulatorProbe(`rpc ${request.method}`, request.params)
+    }
     try {
       const result = await method.handler(parsedParams.value, {
         runtime: this.runtime,
@@ -79,6 +84,9 @@ export class RpcDispatcher {
       this.recordRuntimeFeatureInteraction(request.method, result, undefined, request.params)
       return successResponse(request.id, meta, result)
     } catch (error) {
+      if (isEmulator) {
+        emulatorProbeError(`rpc ${request.method}`, error, { params: request.params })
+      }
       return this.mapError(request, meta, error)
     }
   }
