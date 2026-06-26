@@ -52,7 +52,8 @@ const {
   registerSkillsHandlersMock,
   registerWorkspaceSpaceHandlersMock,
   registerWorkspacePortHandlersMock,
-  registerEmulatorFrameStreamHandlersMock
+  registerEmulatorFrameStreamHandlersMock,
+  registerEmulatorVideoStreamHandlersMock
 } = vi.hoisted(() => ({
   registerCliHandlersMock: vi.fn(),
   registerPreflightHandlersMock: vi.fn(),
@@ -103,7 +104,8 @@ const {
   registerSkillsHandlersMock: vi.fn(),
   registerWorkspaceSpaceHandlersMock: vi.fn(),
   registerWorkspacePortHandlersMock: vi.fn(),
-  registerEmulatorFrameStreamHandlersMock: vi.fn()
+  registerEmulatorFrameStreamHandlersMock: vi.fn(),
+  registerEmulatorVideoStreamHandlersMock: vi.fn()
 }))
 
 vi.mock('./onboarding', () => ({
@@ -217,6 +219,10 @@ vi.mock('./ui', () => ({
 
 vi.mock('./emulator-frame-stream', () => ({
   registerEmulatorFrameStreamHandlers: registerEmulatorFrameStreamHandlersMock
+}))
+
+vi.mock('./emulator-video-stream', () => ({
+  registerEmulatorVideoStreamHandlers: registerEmulatorVideoStreamHandlersMock
 }))
 
 vi.mock('./filesystem', () => ({
