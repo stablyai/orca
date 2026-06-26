@@ -12,6 +12,7 @@ import { Input } from '../ui/input'
 import { cn } from '@/lib/utils'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import { AgentCacheTimerSection } from './AgentCacheTimerSection'
+import { AgentRuntimeSetting } from './AgentRuntimeSetting'
 import {
   getAgentGeneratedTabTitlesDescription,
   getAgentGeneratedTabTitlesTitle
@@ -48,7 +49,6 @@ export { getAgentsPaneSearchEntries } from './agents-search'
 type AgentsPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
-  /** Deprecated: agent detection now follows the resolved project runtime. */
   wslSupportedPlatform?: boolean
   wslAvailable?: boolean
   wslDistros?: string[]
@@ -680,7 +680,14 @@ function DefaultAgentPill({ active, onClick, children }: DefaultAgentPillProps):
   )
 }
 
-export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React.JSX.Element {
+export function AgentsPane({
+  settings,
+  updateSettings,
+  wslSupportedPlatform,
+  wslAvailable,
+  wslDistros,
+  wslCapabilitiesLoading
+}: AgentsPaneProps): React.JSX.Element {
   const { detectedIds: detectedList, isRefreshing, refresh } = useDetectedAgents()
   // Why: refresh re-spawns the user's login shell to re-capture PATH
   // (preflight:refreshAgents on the main side). This handles the
@@ -820,6 +827,16 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
           })}
         </div>
       </section>
+
+      <AgentRuntimeSetting
+        settings={settings}
+        updateSettings={updateSettings}
+        refresh={refresh}
+        wslSupportedPlatform={wslSupportedPlatform}
+        wslAvailable={wslAvailable}
+        wslDistros={wslDistros}
+        wslCapabilitiesLoading={wslCapabilitiesLoading}
+      />
 
       <AgentStatusHooksSetting settings={settings} updateSettings={updateSettings} />
 
