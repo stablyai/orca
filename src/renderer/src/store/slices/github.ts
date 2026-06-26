@@ -1199,21 +1199,38 @@ function shouldWritePRCacheForHostedReviewSync(args: {
 function shouldPreserveExistingPRForFallbackMiss(args: {
   currentPR: PRInfo | null | undefined
   nextPR: PRInfo | null
+  state: AppState
+  worktreeId?: string
   linkedPRNumber?: number | null
   fallbackPRNumber?: number | null
   fallbackPRSource?: GitHubPRFallbackSource | null
 }): boolean {
+  const worktree = args.worktreeId ? findWorktreeById(args.state, args.worktreeId) : null
+  const worktreeHead = worktree?.head
+  // Why: merged branch PRs are only safe to keep when cached PR metadata still
+  // matches the commit this stored worktree is actually on.
+  const preservesMergedPRForCurrentHead =
+    args.nextPR === null &&
+    args.linkedPRNumber == null &&
+    args.currentPR?.state === 'merged' &&
+    typeof args.currentPR.headSha === 'string' &&
+    args.currentPR.headSha.length > 0 &&
+    typeof worktreeHead === 'string' &&
+    worktreeHead.length > 0 &&
+    args.currentPR.headSha === worktreeHead
+
   // Why: fallback PR numbers come from already-visible cache, not durable
   // worktree metadata. A branch/fallback miss is weaker than the current exact
   // PR context, except when the fallback is the hosted-review entry being
   // refreshed; that entry must not protect itself from exact misses.
-  return (
+  const preservesFallbackPR =
     args.nextPR === null &&
     args.linkedPRNumber == null &&
     args.fallbackPRNumber != null &&
     args.fallbackPRSource !== 'hosted-review' &&
     args.currentPR?.number === args.fallbackPRNumber
-  )
+
+  return preservesFallbackPR || preservesMergedPRForCurrentHead
 }
 
 function applyPRCacheResult(
@@ -1279,6 +1296,7 @@ function setGitHubPRResultCaches(
     executionHostId?: string | null
     pr: PRInfo | null
     fetchedAt: number
+    worktreeId?: string
     linkedPRNumber?: number | null
     fallbackPRNumber?: number | null
     fallbackPRSource?: GitHubPRFallbackSource | null
@@ -1310,27 +1328,30 @@ function setGitHubPRResultCaches(
     args.connectionId,
     args.executionHostId
   )
+  const nextPRCache = applyPRCacheResult(
+    state.prCache,
+    args.prCacheKey,
+    args.pr,
+    args.fetchedAt,
+    shouldWritePRCacheForHostedReviewSync({
+      hostedReviewSyncAccepted: hostedReviewSync.accepted,
+      hostedReviewEntry: state.hostedReviewCache[hostedReviewCacheKey],
+      pr: args.pr,
+      linkedPRNumber: args.linkedPRNumber,
+      fallbackPRNumber: args.fallbackPRNumber
+    }),
+    shouldPreserveExistingPRForFallbackMiss({
+      currentPR: state.prCache[args.prCacheKey]?.data,
+      nextPR: args.pr,
+      state,
+      worktreeId: args.worktreeId,
+      linkedPRNumber: args.linkedPRNumber,
+      fallbackPRNumber: args.fallbackPRNumber,
+      fallbackPRSource: args.fallbackPRSource
+    })
+  )
   return {
-    prCache: applyPRCacheResult(
-      state.prCache,
-      args.prCacheKey,
-      args.pr,
-      args.fetchedAt,
-      shouldWritePRCacheForHostedReviewSync({
-        hostedReviewSyncAccepted: hostedReviewSync.accepted,
-        hostedReviewEntry: state.hostedReviewCache[hostedReviewCacheKey],
-        pr: args.pr,
-        linkedPRNumber: args.linkedPRNumber,
-        fallbackPRNumber: args.fallbackPRNumber
-      }),
-      shouldPreserveExistingPRForFallbackMiss({
-        currentPR: state.prCache[args.prCacheKey]?.data,
-        nextPR: args.pr,
-        linkedPRNumber: args.linkedPRNumber,
-        fallbackPRNumber: args.fallbackPRNumber,
-        fallbackPRSource: args.fallbackPRSource
-      })
-    ),
+    ...(nextPRCache === state.prCache ? {} : { prCache: nextPRCache }),
     ...(hostedReviewSync.cache === state.hostedReviewCache
       ? {}
       : { hostedReviewCache: hostedReviewSync.cache })
@@ -1349,6 +1370,8 @@ function applyGitHubPRResultToCaches(args: {
   executionHostId?: string | null
   pr: PRInfo | null
   fetchedAt: number
+  state: AppState
+  worktreeId?: string
   linkedPRNumber?: number | null
   fallbackPRNumber?: number | null
   fallbackPRSource?: GitHubPRFallbackSource | null
@@ -1398,6 +1421,8 @@ function applyGitHubPRResultToCaches(args: {
       shouldPreserveExistingPRForFallbackMiss({
         currentPR: args.prCache[args.prCacheKey]?.data,
         nextPR: args.pr,
+        state: args.state,
+        worktreeId: args.worktreeId,
         linkedPRNumber: args.linkedPRNumber,
         fallbackPRNumber: args.fallbackPRNumber,
         fallbackPRSource: args.fallbackPRSource
@@ -2913,6 +2938,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         }
         if (prRequestGenerations.get(cacheKey) === generation) {
           let skippedStaleLinkedPRLookup = false
+          let didUpdatePRCache = false
           set((s) => {
             // Why: unlinking a PR while an exact linked-PR lookup is in flight
             // must prevent that older result from restoring the manual link UI.
@@ -2920,7 +2946,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               skippedStaleLinkedPRLookup = true
               return {}
             }
-            return setGitHubPRResultCaches(s, {
+            const updates = setGitHubPRResultCaches(s, {
               prCacheKey: cacheKey,
               repoPath,
               branch,
@@ -2930,22 +2956,29 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               executionHostId: repo?.executionHostId,
               pr,
               fetchedAt: outcome.fetchedAt,
+              worktreeId: options?.worktreeId,
               linkedPRNumber,
               fallbackPRNumber,
               fallbackPRSource,
               requestStartedAt,
               requestStartedEntry: requestStartedHostedReviewEntry
             })
+            didUpdatePRCache = updates.prCache !== undefined
+            return updates
           })
           if (skippedStaleLinkedPRLookup) {
             return null
           }
-          debouncedSaveCache(get())
+          if (didUpdatePRCache) {
+            debouncedSaveCache(get())
+          }
         }
         if (
           shouldPreserveExistingPRForFallbackMiss({
             currentPR: get().prCache[cacheKey]?.data,
             nextPR: pr,
+            state: get(),
+            worktreeId: options?.worktreeId,
             linkedPRNumber,
             fallbackPRNumber,
             fallbackPRSource
@@ -3649,6 +3682,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   applyGitHubPRRefreshEvent: (event) => {
+    let didUpdatePRCache = false
     set((s) => {
       const nextSequences = { ...s.prRefreshSequences }
       const prunedStates = pruneExpiredPRRefreshStates(s.prRefreshStates)
@@ -3775,12 +3809,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             executionHostId: aliasExecutionHostId,
             pr: data,
             fetchedAt: event.outcome.fetchedAt,
+            state: s,
+            worktreeId: alias.worktreeId,
             linkedPRNumber: alias.linkedPRNumber,
             fallbackPRNumber: alias.fallbackPRNumber,
             fallbackPRSource: alias.fallbackPRSource,
             requestStartedAt: event.requestStartedAt,
             requestStartedEntry
           })
+          didUpdatePRCache = didUpdatePRCache || nextCaches.prCache !== nextPRCache
           nextPRCache = nextCaches.prCache
           nextHostedReviewCache = nextCaches.hostedReviewCache
           continue
@@ -3832,7 +3869,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           }
         : {}
     })
-    if (event.outcome && event.outcome.kind !== 'upstream-error') {
+    if (didUpdatePRCache && event.outcome && event.outcome.kind !== 'upstream-error') {
       debouncedSaveCache(get())
     }
   },
