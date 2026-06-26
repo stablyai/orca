@@ -42,6 +42,7 @@ function relativeTail(base: string, full: string): string {
   return full.slice(base === '/' ? 1 : base.length + 1)
 }
 
+/** Translate `path` from one mount side to the other via longest-prefix match. */
 function translate(
   path: string,
   mounts: readonly ContainerMount[],

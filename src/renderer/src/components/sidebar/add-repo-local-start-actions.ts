@@ -23,6 +23,7 @@ export type AddRepoLocalStartAction = {
   onClick: () => void
 }
 
+/** Build the Add-Project start-step actions (primary Browse + secondary entries). */
 export function getAddRepoLocalStartActions({
   isSshLikely,
   onBrowse,

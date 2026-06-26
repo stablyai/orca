@@ -18,6 +18,7 @@ type FakePty = {
   emitExit: (code: number) => void
 }
 
+/** A fake node-pty handle whose data/exit events can be driven from tests. */
 function makeFakePty(): FakePty {
   let dataCb: ((data: string) => void) | null = null
   let exitCb: ((e: { exitCode: number }) => void) | null = null
@@ -38,6 +39,7 @@ function makeFakePty(): FakePty {
   }
 }
 
+/** Construct a provider wired to a fake spawn + stub config for assertions. */
 function setup(overrides: Partial<DockerPtyProviderConfig> = {}) {
   const fake = makeFakePty()
   const ptySpawn = vi.fn(() => fake as never)

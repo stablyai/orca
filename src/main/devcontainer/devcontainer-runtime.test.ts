@@ -9,6 +9,7 @@ import type { DockerClient, DockerInspect } from './docker-client'
 
 const KEY = '/Users/me/work/aprium'
 
+/** A `docker inspect` fixture for the test container in the given run state. */
 function inspect(running: boolean): DockerInspect {
   return {
     Id: 'cid-1',
@@ -19,6 +20,7 @@ function inspect(running: boolean): DockerInspect {
   }
 }
 
+/** A stub DockerClient resolving the test container, with optional overrides. */
 function client(overrides: Partial<DockerClient> = {}): DockerClient {
   return {
     listContainersByLabel: vi.fn(async () => [{ ID: 'cid-1', Names: 'aprium-dev' }]),

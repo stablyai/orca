@@ -56,6 +56,7 @@ export class DockerPtyProvider implements IPtyProvider {
 
   constructor(private readonly config: DockerPtyProviderConfig) {}
 
+  /** Start a shell inside the container via `docker exec` and stream its IO. */
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
     const containerId = await this.config.resolveContainerId()
     const shell = this.config.shell ?? 'bash'
@@ -103,17 +104,20 @@ export class DockerPtyProvider implements IPtyProvider {
     return { id, pid: proc.pid }
   }
 
-  // No cross-restart reattach in v1; a fresh terminal always spawns anew.
+  /** No cross-restart reattach in v1; a fresh terminal always spawns anew. */
   async attach(): Promise<void> {}
 
+  /** Whether a live PTY session exists for `id`. */
   hasPty(id: string): boolean {
     return this.sessions.has(id)
   }
 
+  /** Write input to the container shell's stdin. */
   write(id: string, data: string): void {
     this.sessions.get(id)?.proc.write(data)
   }
 
+  /** Resize the PTY; ignored if the process is already tearing down. */
   resize(id: string, cols: number, rows: number): void {
     try {
       this.sessions.get(id)?.proc.resize(cols, rows)
@@ -122,6 +126,7 @@ export class DockerPtyProvider implements IPtyProvider {
     }
   }
 
+  /** Kill the `docker exec` process and drop its session. */
   async shutdown(id: string, _opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
     const session = this.sessions.get(id)
     if (!session) {
@@ -135,6 +140,7 @@ export class DockerPtyProvider implements IPtyProvider {
     }
   }
 
+  /** Send a signal to the container shell process. */
   async sendSignal(id: string, signal: string): Promise<void> {
     try {
       this.sessions.get(id)?.proc.kill(signal)
@@ -143,33 +149,41 @@ export class DockerPtyProvider implements IPtyProvider {
     }
   }
 
+  /** Best-effort cwd: the live in-container cwd isn't readable from the host. */
   async getCwd(id: string): Promise<string> {
-    // Live in-container cwd isn't readable from the host; report the spawn cwd.
     return this.sessions.get(id)?.initialCwd ?? ''
   }
 
+  /** The in-container cwd the session was spawned in. */
   async getInitialCwd(id: string): Promise<string> {
     return this.sessions.get(id)?.initialCwd ?? ''
   }
 
+  /** No-op: scrollback clearing is handled client-side for docker sessions. */
   async clearBuffer(): Promise<void> {}
 
+  /** No-op: flow-control acks are not implemented for docker sessions. */
   acknowledgeDataEvent(): void {}
 
+  /** Child-process inspection isn't available across `docker exec`; report none. */
   async hasChildProcesses(): Promise<boolean> {
     return false
   }
 
+  /** Foreground-process inspection isn't available across `docker exec`. */
   async getForegroundProcess(): Promise<string | null> {
     return null
   }
 
+  /** No-op: devcontainer sessions are not serialized across app restarts in v1. */
   async serialize(): Promise<string> {
     return ''
   }
 
+  /** No-op counterpart to {@link serialize}. */
   async revive(): Promise<void> {}
 
+  /** List live sessions as `{ id, cwd, title }` triples. */
   async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
     return Array.from(this.sessions.entries()).map(([id, session]) => ({
       id,
@@ -178,24 +192,28 @@ export class DockerPtyProvider implements IPtyProvider {
     }))
   }
 
+  /** The shell launched inside the container (defaults to `bash`). */
   async getDefaultShell(): Promise<string> {
     return this.config.shell ?? 'bash'
   }
 
+  /** No selectable shell profiles for docker sessions. */
   async getProfiles(): Promise<{ name: string; path: string }[]> {
     return []
   }
 
+  /** Subscribe to terminal output; returns an unsubscribe function. */
   onData(callback: (payload: DataPayload) => void): () => void {
     this.dataListeners.add(callback)
     return () => this.dataListeners.delete(callback)
   }
 
-  // Replay only applies to relay/daemon reattach; devcontainer sessions never replay.
+  /** Replay only applies to relay/daemon reattach; devcontainer sessions never replay. */
   onReplay(): () => void {
     return () => {}
   }
 
+  /** Subscribe to PTY exit; returns an unsubscribe function. */
   onExit(callback: (payload: ExitPayload) => void): () => void {
     this.exitListeners.add(callback)
     return () => this.exitListeners.delete(callback)

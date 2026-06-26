@@ -24,6 +24,7 @@ export type DevcontainerProjectFields = {
   relativePaths: true
 }
 
+/** Map a discovered devcontainer to the repo/project fields Add-Project persists. */
 export function buildDevcontainerProjectFields(
   info: Pick<DevcontainerInfo, 'hostFolder'>
 ): DevcontainerProjectFields {

@@ -8,6 +8,7 @@ type DevcontainerStepProps = {
   onSelect: (info: DevcontainerInfo) => void
 }
 
+/** Derive a short client label (the last path segment) from the host folder. */
 function clientName(hostFolder: string): string {
   return hostFolder.split('/').filter(Boolean).at(-1) ?? hostFolder
 }

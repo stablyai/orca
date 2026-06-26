@@ -7,6 +7,7 @@
 import { ipcMain } from 'electron'
 import { listDevcontainers, type DevcontainerInfo } from '../devcontainer/discovery'
 
+/** Register the `devcontainer:*` IPC handlers (Add-Project devcontainer source). */
 export function registerDevcontainerHandlers(): void {
   ipcMain.handle('devcontainer:list', async (): Promise<DevcontainerInfo[]> => {
     try {

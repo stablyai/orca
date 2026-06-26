@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { listDevcontainers, parseDevcontainer } from './discovery'
 import type { DockerClient, DockerInspect, DockerPsEntry } from './docker-client'
 
+/** Build a `docker inspect` fixture for a devcontainer, with optional overrides. */
 function inspectFixture(overrides: Partial<DockerInspect> = {}): DockerInspect {
   return {
     Id: 'abc123',

@@ -48,6 +48,7 @@ export type DockerClient = {
   startContainer(id: string): Promise<void>
 }
 
+/** Run a `docker` CLI subcommand and return its stdout. */
 async function runDocker(args: string[]): Promise<string> {
   const { stdout } = await commandExecFileAsync('docker', args, {
     timeout: DOCKER_TIMEOUT_MS,
@@ -77,6 +78,7 @@ async function listContainersByLabel(
     .map((line) => JSON.parse(line) as DockerPsEntry)
 }
 
+/** Inspect a single container by id; null if it no longer exists. */
 async function inspectContainer(id: string): Promise<DockerInspect | null> {
   const stdout = await runDocker(['inspect', id])
   const parsed = JSON.parse(stdout) as DockerInspect[]
@@ -85,6 +87,7 @@ async function inspectContainer(id: string): Promise<DockerInspect | null> {
   return parsed[0] ?? null
 }
 
+/** Start a (possibly stopped) container by id. */
 async function startContainer(id: string): Promise<void> {
   await runDocker(['start', id])
 }
