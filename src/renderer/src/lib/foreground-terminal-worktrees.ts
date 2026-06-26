@@ -1,5 +1,6 @@
 let explicitForegroundWorktreeIds = new Set<string>()
 const visibleTerminalClaimsByToken = new Map<symbol, string>()
+const foregroundTerminalWorktreeLastSeenAtById = new Map<string, number>()
 
 function normalizeWorktreeIds(worktreeIds: Iterable<string | null | undefined>): Set<string> {
   return new Set(
@@ -12,7 +13,13 @@ function normalizeWorktreeIds(worktreeIds: Iterable<string | null | undefined>):
 export function setForegroundTerminalWorktreeIds(
   worktreeIds: Iterable<string | null | undefined>
 ): void {
+  const previousForegroundWorktreeIds = new Set(getForegroundTerminalWorktreeIds())
   explicitForegroundWorktreeIds = normalizeWorktreeIds(worktreeIds)
+  const now = Date.now()
+  for (const worktreeId of explicitForegroundWorktreeIds) {
+    foregroundTerminalWorktreeLastSeenAtById.set(worktreeId, now)
+  }
+  refreshExitedForegroundWorktreeLastSeen(previousForegroundWorktreeIds, now)
 }
 
 export function registerVisibleTerminalWorktree(worktreeId: string | null | undefined): () => void {
@@ -26,8 +33,14 @@ export function registerVisibleTerminalWorktree(worktreeId: string | null | unde
   // let each pane clean up without dropping sibling foreground protection.
   const token = Symbol(id)
   visibleTerminalClaimsByToken.set(token, id)
+  foregroundTerminalWorktreeLastSeenAtById.set(id, Date.now())
   return () => {
-    visibleTerminalClaimsByToken.delete(token)
+    if (!visibleTerminalClaimsByToken.delete(token)) {
+      return
+    }
+    if (!getForegroundTerminalWorktreeIds().includes(id)) {
+      foregroundTerminalWorktreeLastSeenAtById.set(id, Date.now())
+    }
   }
 }
 
@@ -39,7 +52,24 @@ export function getForegroundTerminalWorktreeIds(): string[] {
   )
 }
 
+export function getForegroundTerminalWorktreeLastSeenAtById(): Record<string, number> {
+  return Object.fromEntries(foregroundTerminalWorktreeLastSeenAtById)
+}
+
 export function resetForegroundTerminalWorktreeIdsForTests(): void {
   explicitForegroundWorktreeIds = new Set()
   visibleTerminalClaimsByToken.clear()
+  foregroundTerminalWorktreeLastSeenAtById.clear()
+}
+
+function refreshExitedForegroundWorktreeLastSeen(
+  previousForegroundWorktreeIds: Set<string>,
+  now: number
+): void {
+  const currentForegroundWorktreeIds = new Set(getForegroundTerminalWorktreeIds())
+  for (const worktreeId of previousForegroundWorktreeIds) {
+    if (!currentForegroundWorktreeIds.has(worktreeId)) {
+      foregroundTerminalWorktreeLastSeenAtById.set(worktreeId, now)
+    }
+  }
 }

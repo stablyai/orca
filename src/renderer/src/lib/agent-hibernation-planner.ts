@@ -25,6 +25,7 @@ export type AgentHibernationPlannerSnapshot = {
   agentStatusByPaneKey: Record<string, AgentStatusEntry | undefined>
   sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord | undefined>
   lastTerminalInputAtByPaneKey: Record<string, number | undefined>
+  foregroundTerminalLastSeenAtByWorktreeId: Record<string, number | undefined>
   now: number
 }
 
@@ -40,13 +41,6 @@ export type AgentHibernationCandidate = {
   signature: string
 }
 
-export type AgentHibernationConfirmationState = Record<string, string>
-
-export type AgentHibernationPlan = {
-  candidates: AgentHibernationCandidate[]
-  confirmationState: AgentHibernationConfirmationState
-}
-
 type EligiblePane = {
   paneKey: string
   tabId: string
@@ -56,6 +50,7 @@ type EligiblePane = {
   providerSessionId: string
   state: AgentStatusEntry['state']
   updatedAt: number
+  effectiveIdleStart: number
   inputAt: number
 }
 
@@ -120,6 +115,7 @@ function getEligiblePane(args: {
   livePtyIds: Set<string>
   sleepingAgentSessionsByPaneKey: AgentHibernationPlannerSnapshot['sleepingAgentSessionsByPaneKey']
   lastTerminalInputAtByPaneKey: AgentHibernationPlannerSnapshot['lastTerminalInputAtByPaneKey']
+  foregroundTerminalLastSeenAtByWorktreeId: AgentHibernationPlannerSnapshot['foregroundTerminalLastSeenAtByWorktreeId']
   mobileLockedPtyIds: Set<string>
   now: number
   idleMs: number
@@ -131,6 +127,7 @@ function getEligiblePane(args: {
     livePtyIds,
     sleepingAgentSessionsByPaneKey,
     lastTerminalInputAtByPaneKey,
+    foregroundTerminalLastSeenAtByWorktreeId,
     mobileLockedPtyIds
   } = args
   if (
@@ -152,7 +149,14 @@ function getEligiblePane(args: {
   if (!getAgentResumeArgv(entry.agentType, entry.providerSession)) {
     return null
   }
-  if (args.now - entry.updatedAt < args.idleMs) {
+  const foregroundLastSeenAt = foregroundTerminalLastSeenAtByWorktreeId[tab.worktreeId]
+  const effectiveIdleStart = Math.max(
+    entry.updatedAt,
+    typeof foregroundLastSeenAt === 'number' && Number.isFinite(foregroundLastSeenAt)
+      ? foregroundLastSeenAt
+      : 0
+  )
+  if (args.now - effectiveIdleStart < args.idleMs) {
     return null
   }
   const inputAt = lastTerminalInputAtByPaneKey[entry.paneKey]
@@ -177,6 +181,7 @@ function getEligiblePane(args: {
     providerSessionId: entry.providerSession.id,
     state: entry.state,
     updatedAt: entry.updatedAt,
+    effectiveIdleStart,
     inputAt: typeof inputAt === 'number' && Number.isFinite(inputAt) ? inputAt : 0
   }
 }
@@ -187,7 +192,7 @@ function signatureFor(worktreeId: string, panes: EligiblePane[]): string {
     .sort((a, b) => a.paneKey.localeCompare(b.paneKey))
     .map(
       (pane) =>
-        `${pane.paneKey}:${pane.ptyId}:${pane.runtimePtyId}:${pane.providerSessionId}:${pane.state}:${pane.updatedAt}:${pane.inputAt}`
+        `${pane.paneKey}:${pane.ptyId}:${pane.runtimePtyId}:${pane.providerSessionId}:${pane.state}:${pane.updatedAt}:${pane.effectiveIdleStart}:${pane.inputAt}`
     )
   return `${worktreeId}|${parts.join('|')}`
 }
@@ -269,6 +274,8 @@ export function planAgentHibernationCandidates(
           livePtyIds: new Set(tabLivePtyIds),
           sleepingAgentSessionsByPaneKey: snapshot.sleepingAgentSessionsByPaneKey,
           lastTerminalInputAtByPaneKey: snapshot.lastTerminalInputAtByPaneKey,
+          foregroundTerminalLastSeenAtByWorktreeId:
+            snapshot.foregroundTerminalLastSeenAtByWorktreeId,
           mobileLockedPtyIds,
           now: snapshot.now,
           idleMs
@@ -292,19 +299,4 @@ export function planAgentHibernationCandidates(
   return candidates.sort(
     (a, b) => a.worktreeId.localeCompare(b.worktreeId) || a.paneKey.localeCompare(b.paneKey)
   )
-}
-
-export function confirmAgentHibernationCandidates(
-  previous: AgentHibernationConfirmationState,
-  candidates: AgentHibernationCandidate[]
-): AgentHibernationPlan {
-  const confirmationState: AgentHibernationConfirmationState = {}
-  const confirmed: AgentHibernationCandidate[] = []
-  for (const candidate of candidates) {
-    confirmationState[candidate.id] = candidate.signature
-    if (previous[candidate.id] === candidate.signature) {
-      confirmed.push(candidate)
-    }
-  }
-  return { candidates: confirmed, confirmationState }
 }
