@@ -793,6 +793,11 @@ const FolderWorkspacePathStatusArgs = z.discriminatedUnion('scope', [
   z.object({
     scope: z.literal('project-group'),
     projectGroupId: z.string().min(1)
+  }),
+  z.object({
+    scope: z.literal('path'),
+    path: z.string().min(1),
+    connectionId: z.string().min(1).nullable().optional()
   })
 ])
 

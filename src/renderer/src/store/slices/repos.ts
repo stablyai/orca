@@ -905,9 +905,13 @@ function settingsForRepoOwner(state: Pick<AppState, 'repos' | 'settings'>, repoI
 }
 
 function getFolderWorkspacePathStatusScopeKey(request: FolderWorkspacePathStatusRequest): string {
-  return request.scope === 'project-group'
-    ? `project-group:${request.projectGroupId}`
-    : `folder-workspace:${request.folderWorkspaceId}`
+  if (request.scope === 'project-group') {
+    return `project-group:${request.projectGroupId}`
+  }
+  if (request.scope === 'path') {
+    return `path:${request.connectionId ?? ''}:${request.path}`
+  }
+  return `folder-workspace:${request.folderWorkspaceId}`
 }
 
 function getRuntimeTargetCachePrefix(
@@ -947,37 +951,17 @@ async function fetchRuntimeAddProjectPathStatus(args: {
   target: Extract<ReturnType<typeof getActiveRuntimeTarget>, { kind: 'environment' }>
   path: string
 }): Promise<FolderWorkspacePathStatus | null> {
-  let groupId: string | null = null
   try {
-    const created = await callRuntimeRpc<{ group: ProjectGroup }>(
-      args.target,
-      'projectGroup.create',
-      {
-        name: 'Path status check',
-        parentPath: args.path,
-        createdFrom: 'manual'
-      },
-      { timeoutMs: 15_000 }
-    )
-    groupId = created.group.id
     const { status } = await callRuntimeRpc<{ status: FolderWorkspacePathStatus }>(
       args.target,
       'folderWorkspace.getPathStatus',
-      { scope: 'project-group', projectGroupId: groupId },
+      { scope: 'path', path: args.path },
       { timeoutMs: 15_000 }
     )
     return status
   } catch (err) {
     console.warn('Failed to check runtime folder path status:', err)
     return null
-  } finally {
-    if (groupId) {
-      try {
-        await callRuntimeRpc(args.target, 'projectGroup.delete', { groupId }, { timeoutMs: 15_000 })
-      } catch (err) {
-        console.warn('Failed to delete runtime folder path status scope:', err)
-      }
-    }
   }
 }
 
@@ -985,6 +969,37 @@ function getFolderWorkspaceStatusRequestSnapshot(
   state: Pick<AppState, 'projectGroups' | 'folderWorkspaces' | 'repos' | 'sshConnectionStates'>,
   request: FolderWorkspacePathStatusRequest
 ): string | null {
+  if (request.scope === 'path') {
+    const candidateRepos = state.repos.filter((repo) =>
+      isPathInsideOrEqual(request.path, repo.path)
+    )
+    const relevantConnectionIds = new Set<string>()
+    if (request.connectionId) {
+      relevantConnectionIds.add(request.connectionId)
+    }
+    for (const repo of candidateRepos) {
+      if (repo.connectionId) {
+        relevantConnectionIds.add(repo.connectionId)
+      }
+    }
+    const sshFingerprint = [...relevantConnectionIds]
+      .map(
+        (connectionId) =>
+          `${connectionId}:${state.sshConnectionStates.get(connectionId)?.status ?? 'missing'}`
+      )
+      .sort()
+      .join('|')
+    const repoFingerprint = candidateRepos
+      .map(
+        (repo) => `${repo.id}:${repo.path}:${repo.projectGroupId ?? ''}:${repo.connectionId ?? ''}`
+      )
+      .sort()
+      .join('|')
+    return [request.path, '', request.connectionId ?? '', sshFingerprint, repoFingerprint].join(
+      '\0'
+    )
+  }
+
   const scope =
     request.scope === 'project-group'
       ? state.projectGroups.find((group) => group.id === request.projectGroupId)
