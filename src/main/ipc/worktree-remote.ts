@@ -118,7 +118,11 @@ import {
 
 const SSH_WORKTREE_CREATE_FETCH_FRESHNESS_MS = 30_000
 const SSH_WORKTREE_CREATE_FETCH_CACHE_MAX = 512
-const WORKTREE_SOURCE_CONFIG_FILES = ['orca.yaml', '.envrc'] as const
+// Why: `orca.yaml` must be available in the created worktree before setup so
+// Orca can read the worktree's own hooks/default tabs. `.envrc` is now owned by
+// the setup hook so it can deterministically compose workspace and repo-local
+// direnv sources without a pre-created file blocking the rewrite path.
+const WORKTREE_SOURCE_CONFIG_FILES = ['orca.yaml'] as const
 const sshWorktreeCreateFetchInflight = new Map<string, Promise<void>>()
 const sshWorktreeCreateFetchCompletedAt = new Map<string, number>()
 const sshWorktreeCreateFetchQueueTail = new Map<string, Promise<void>>()

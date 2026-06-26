@@ -1039,7 +1039,7 @@ describe('registerWorktreeHandlers', () => {
     expect(result.setup?.command).toContain('printf')
   })
 
-  it('copies source orca.yaml and .envrc into a new worktree before hook discovery', async () => {
+  it('copies source orca.yaml into a new worktree before hook discovery', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-worktree-copy-'))
     const repoPath = join(root, 'repo')
     const worktreePath = join(root, 'improve-dashboard')
@@ -1048,7 +1048,6 @@ describe('registerWorktreeHandlers', () => {
       await mkdir(repoPath, { recursive: true })
       await mkdir(worktreePath, { recursive: true })
       await writeFile(join(repoPath, 'orca.yaml'), 'scripts:\n  setup: copied-setup\n')
-      await writeFile(join(repoPath, '.envrc'), 'export ORCA_SOURCE=1\n')
 
       const repo = {
         id: 'repo-1',
@@ -1108,9 +1107,7 @@ describe('registerWorktreeHandlers', () => {
       expect(readFileSync(join(createdPath ?? worktreePath, 'orca.yaml'), 'utf-8')).toBe(
         'scripts:\n  setup: copied-setup\n'
       )
-      expect(readFileSync(join(createdPath ?? worktreePath, '.envrc'), 'utf-8')).toBe(
-        'export ORCA_SOURCE=1\n'
-      )
+      expect(() => readFileSync(join(createdPath ?? worktreePath, '.envrc'), 'utf-8')).toThrow()
       expect(loadHooksMock).toHaveBeenCalledWith(createdPath ?? worktreePath)
       expect(loadHooksMock).not.toHaveBeenCalledWith(repoPath)
     } finally {
@@ -1127,7 +1124,6 @@ describe('registerWorktreeHandlers', () => {
       await mkdir(repoPath, { recursive: true })
       await mkdir(worktreePath, { recursive: true })
       await writeFile(join(repoPath, 'orca.yaml'), 'scripts:\n  setup: copied-setup\n')
-      await writeFile(join(repoPath, '.envrc'), 'export ORCA_SOURCE=1\n')
 
       const repo = {
         id: 'repo-1',
