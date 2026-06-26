@@ -1,7 +1,7 @@
 import { platform } from 'os'
 import type { EmulatorBridge } from './emulator-bridge'
 import type { SimulatorDevice } from './simctl-simulator-devices'
-import type { EmulatorDevice } from './backends/emulator-backend'
+import type { BackendAvailability, EmulatorDevice } from './backends/emulator-backend'
 
 export type EmulatorAvailability = {
   platform: NodeJS.Platform
@@ -9,6 +9,7 @@ export type EmulatorAvailability = {
   devices: SimulatorDevice[]
   simctl: { ok: boolean; message?: string }
   serveSim: { ok: boolean; message?: string }
+  android: { sdkFound: boolean; sdkPath?: string; message: string }
   message: string
 }
 
@@ -91,9 +92,9 @@ export async function inspectEmulatorAvailability(
     ? await inspectIosAvailability(bridge)
     : { available: false, devices: [], simctl: { ok: false }, serveSim: { ok: false } }
 
-  const android = androidBackend
+  const android: BackendAvailability = androidBackend
     ? await androidBackend.checkAvailability()
-    : { available: false, devices: [] as EmulatorDevice[], message: '' }
+    : { available: false, devices: [], message: '' }
 
   const devices = [...ios.devices, ...android.devices.map(toSimulatorRow)]
   const available = ios.available || android.available
@@ -114,6 +115,11 @@ export async function inspectEmulatorAvailability(
     devices,
     simctl: ios.simctl,
     serveSim: ios.serveSim,
+    android: {
+      sdkFound: Boolean(android.sdkPath),
+      sdkPath: android.sdkPath,
+      message: android.message || ''
+    },
     message
   }
 }

@@ -115,21 +115,23 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
         message: 'Android SDK not found. Install Android Studio and set ANDROID_HOME.'
       }
     }
+    const sdkPath = this.sdk.sdkRoot
     let devices: EmulatorDevice[] = []
     try {
       devices = await this.listDevices()
     } catch (error) {
       const message = error instanceof Error ? error.message : 'adb is unavailable.'
-      return { available: false, devices: [], message }
+      return { available: false, devices: [], message, sdkPath }
     }
     if (devices.length === 0) {
       return {
         available: false,
         devices,
-        message: 'No Android devices or AVDs found. Create one in Android Studio.'
+        message: 'No Android devices or AVDs found. Create one in Android Studio.',
+        sdkPath
       }
     }
-    return { available: true, devices, message: 'Ready' }
+    return { available: true, devices, message: 'Ready', sdkPath }
   }
 
   async listDevices(): Promise<EmulatorDevice[]> {

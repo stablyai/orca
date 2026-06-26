@@ -32,6 +32,8 @@ export type BackendAvailability = {
   available: boolean
   devices: EmulatorDevice[]
   message: string
+  // Resolved toolchain root when found (e.g. the Android SDK path), for setup UI.
+  sdkPath?: string
 }
 
 // Target selectors accepted by the router's public input methods.

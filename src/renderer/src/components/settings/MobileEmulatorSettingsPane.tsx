@@ -7,6 +7,7 @@ import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { MobileEmulatorAgentControlRow } from './MobileEmulatorAgentControlRow'
+import { MobileEmulatorSdkStatus } from './MobileEmulatorSdkStatus'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSwitchRow } from './SettingsFormControls'
 import { getMobileEmulatorSearchEntries } from './mobile-emulator-search'
@@ -21,10 +22,12 @@ type SimulatorDeviceRow = {
 }
 
 type EmulatorAvailability = {
+  platform: string
   available: boolean
   devices: SimulatorDeviceRow[]
   simctl: { ok: boolean; message?: string }
   serveSim: { ok: boolean; message?: string }
+  android: { sdkFound: boolean; sdkPath?: string; message: string }
   message: string
 }
 
@@ -35,7 +38,6 @@ type MobileEmulatorSettingsPaneProps = {
 
 const AUTOMATIC_DEVICE_VALUE = '__orca_automatic_emulator_device__'
 const AUTOMATIC_DEVICE_LABEL = 'Auto-select device'
-const ANDROID_STUDIO_URL = 'https://developer.android.com/studio'
 const SIMULATOR_STATE_SUFFIX_RE =
   /\s+\((Booted|Booting|Creating|Shutdown|Shutting Down|Unavailable|Unknown)\)\s*$/i
 
@@ -109,10 +111,12 @@ export function MobileEmulatorSettingsPane({
       setAvailability(result)
     } catch (error) {
       setAvailability({
+        platform: '',
         available: false,
         devices: [],
         simctl: { ok: false },
         serveSim: { ok: false },
+        android: { sdkFound: false, message: '' },
         message: error instanceof Error ? error.message : 'Could not check emulator availability.'
       })
     } finally {
@@ -204,24 +208,6 @@ export function MobileEmulatorSettingsPane({
           }
         />
 
-        {enabled && availability && !availability.available ? (
-          <SettingsRow
-            alignTop
-            label="Set up an emulator"
-            description="Install Android Studio and create a Virtual Device to run Android on any OS; on macOS install Xcode for iOS Simulators. Orca finds the Android SDK via ANDROID_HOME or the default install path — click Refresh above after installing."
-            control={
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void window.api.shell.openUrl(ANDROID_STUDIO_URL)}
-              >
-                Download Android Studio
-              </Button>
-            }
-          />
-        ) : null}
-
         <SettingsRow
           alignTop
           label={translate(
@@ -258,6 +244,8 @@ export function MobileEmulatorSettingsPane({
           }
         />
       </SearchableSetting>
+
+      {enabled && availability ? <MobileEmulatorSdkStatus availability={availability} /> : null}
 
       {enabled ? (
         <SearchableSetting
