@@ -244,7 +244,7 @@ describe('AndroidEmulatorBackend', () => {
     expect(spawn).toHaveBeenCalledWith(
       SDK.emulator,
       ['-avd', 'Pixel_Tablet', '-no-window'],
-      expect.objectContaining({ detached: true, windowsHide: true })
+      expect.objectContaining({ windowsHide: true })
     )
   })
 

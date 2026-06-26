@@ -29,18 +29,18 @@ export async function bootAndroidDevice(
     return existing
   }
   const known = new Set(running.map((device) => device.serial))
-  launchAvdDetached(sdk.emulator, deviceOrName)
+  launchAvd(sdk.emulator, deviceOrName)
   return waitForNewBootedSerial(runner, sdk, deviceOrName, known, options)
 }
 
-// Launches the emulator as a detached, unref'd process. It must outlive this
-// call and must NOT go through the command runner: execFile would kill the
-// long-running emulator at its timeout (and risks the stdout maxBuffer).
-// -no-window runs it headless (the scrcpy pane is the view, parity with iOS
-// hiding Simulator.app); windowsHide + ignored stdio prevent a stray console.
-function launchAvdDetached(emulatorPath: string, avdName: string): void {
+// Launches the emulator with spawn (NOT the command runner: execFile would kill
+// the long-running, verbose emulator at its timeout / stdout maxBuffer). It is
+// NOT detached: DETACHED_PROCESS gives the console-subsystem emulator no console,
+// so it (and its qemu/netsim children) pop their own visible one. windowsHide
+// gives it a hidden console instead; unref lets the app exit without waiting, and
+// managed emulators are shut down on quit anyway. -no-window keeps it headless.
+function launchAvd(emulatorPath: string, avdName: string): void {
   const child = spawn(emulatorPath, [...bootAvdArgs(avdName), '-no-window'], {
-    detached: true,
     stdio: 'ignore',
     windowsHide: true
   })
