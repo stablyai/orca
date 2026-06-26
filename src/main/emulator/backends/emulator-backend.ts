@@ -34,6 +34,7 @@ export type BackendAvailability = {
   message: string
 }
 
+// Target selectors accepted by the router's public input methods.
 export type EmulatorTargetOpts = {
   device?: string
   emulator?: string
@@ -41,8 +42,10 @@ export type EmulatorTargetOpts = {
 }
 
 // One emulator platform (iOS serve-sim today, Android scrcpy next). The
-// EmulatorBridge router owns the session registry and per-worktree active state;
-// a backend owns only device/helper/input mechanics for its platform.
+// EmulatorBridge router owns the session registry and per-worktree active
+// state; a backend owns only device/helper/input mechanics for its platform.
+// All device-facing methods take an opaque device id/selector that the backend
+// resolves to its native id via resolveDeviceId.
 export type EmulatorBackend = {
   readonly kind: EmulatorBackendKind
   readonly streamCodec: EmulatorStreamCodec
@@ -51,19 +54,11 @@ export type EmulatorBackend = {
   isSupportedOnHost(): boolean
   checkAvailability(): Promise<BackendAvailability>
   listDevices(): Promise<EmulatorDevice[]>
-  // True when this backend recognizes/owns the given opaque device id.
   ownsDevice(id: string): Promise<boolean>
+  resolveDeviceId(deviceOrName: string): Promise<string>
 
   // Start (booting if needed) the helper/stream for a device and return its session.
   startSession(deviceId: string): Promise<EmulatorSessionInfo>
-
-  tap(x: number, y: number, opts?: EmulatorTargetOpts): Promise<void>
-  gesture(points: EmulatorGesturePoint[], opts?: EmulatorTargetOpts): Promise<void>
-  type(text: string, opts?: EmulatorTargetOpts): Promise<void>
-  button(name: string, opts?: EmulatorTargetOpts): Promise<void>
-  rotate(orientation: string, opts?: EmulatorTargetOpts): Promise<void>
-  exec(command: string, opts?: EmulatorTargetOpts): Promise<unknown>
-
   // Stop the helper for a device without powering it off.
   stopHelperForDevice(
     deviceId: string,
@@ -71,8 +66,15 @@ export type EmulatorBackend = {
   ): Promise<void>
   // Power off the underlying device/AVD.
   shutdownDevice(deviceId: string): Promise<void>
-  // Resolve a user-supplied device name/selector to the opaque id this backend keys on.
-  resolveDeviceId(deviceOrName: string): Promise<string>
-  // Whether a live helper process exists for the session (used to decide reuse).
-  hasHelperForSession(info: EmulatorSessionInfo): Promise<boolean>
+  // Whether an active session can be reused (stream reachable + helper alive).
+  isSessionReusable(info: EmulatorSessionInfo): Promise<boolean>
+
+  tap(deviceId: string, x: number, y: number): Promise<void>
+  // wsUrl is the iOS gesture stream from the registry; Android backends ignore it
+  // and drive their own control socket keyed by deviceId.
+  gesture(deviceId: string, points: EmulatorGesturePoint[], wsUrl: string | null): Promise<void>
+  type(deviceId: string, text: string): Promise<void>
+  button(deviceId: string, name: string): Promise<void>
+  rotate(deviceId: string, orientation: string): Promise<void>
+  exec(deviceId: string, command: string): Promise<unknown>
 }
