@@ -46,7 +46,9 @@ export type ScrcpyStreamOptions = {
 }
 
 function newScid(): string {
-  return randomBytes(4).toString('hex')
+  // scrcpy parses scid as a SIGNED 32-bit hex int, so mask to 31 bits and pad to
+  // 8 hex digits to match the server's own %08x format.
+  return (randomBytes(4).readUInt32BE(0) & 0x7fffffff).toString(16).padStart(8, '0')
 }
 
 // A live scrcpy session: owns the server process, the adb tunnel, and the video
@@ -92,38 +94,66 @@ export class ScrcpyStreamSession {
     // The server is long-running, so spawn it directly rather than via the
     // request/response command runner.
     this.server = spawn(sdk.adb, startScrcpyServerArgs(serial, { scid: this.scid, maxSize }), {
-      stdio: 'ignore'
+      stdio: ['ignore', 'pipe', 'pipe']
     })
+    let serverLog = ''
+    const capture = (chunk: Buffer): void => {
+      serverLog += chunk.toString()
+    }
+    this.server.stdout?.on('data', capture)
+    this.server.stderr?.on('data', capture)
     this.server.on('error', (error) => this.fail(error.message))
-    this.server.on('exit', () => this.close())
+    this.server.on('exit', (code) => {
+      emulatorProbe('scrcpy.server.exit', { code, log: serverLog.slice(0, 1000).trim() })
+      this.close()
+    })
   }
 
   private connectSockets(): void {
-    // tunnel_forward: the client opens the video socket first, then the control
-    // socket, on the same forwarded port. A short retry covers server startup.
-    this.videoSocket = this.connectWithRetry((socket) => this.attachVideo(socket))
-    this.controlSocket = this.connectWithRetry(() => {})
+    this.openVideoSocket(0)
   }
 
-  private connectWithRetry(onReady: (socket: Socket) => void, attempt = 0): Socket {
+  // adb accepts the forwarded TCP connection before the server's abstract socket
+  // exists (then resets it), so retry until the server actually delivers bytes
+  // (the dummy byte). Only then is the connection real; connect control after.
+  private openVideoSocket(attempt: number): void {
+    if (this.closed) {
+      return
+    }
     const socket = connect(this.port, '127.0.0.1')
-    socket.once('connect', () => onReady(socket))
-    socket.once('error', (error) => {
-      if (this.closed) {
+    let delivered = false
+    const retry = (): void => {
+      if (this.closed || delivered) {
         return
       }
-      if (attempt < 50) {
-        setTimeout(() => this.connectWithRetry(onReady, attempt + 1), 100)
+      socket.destroy()
+      if (attempt >= 100) {
+        emulatorProbeError('scrcpy.socket.fail', new Error('no data'), { attempt })
+        this.fail('scrcpy video stream did not start')
         return
       }
-      this.fail(`scrcpy socket failed: ${error.message}`)
+      setTimeout(() => this.openVideoSocket(attempt + 1), 100)
+    }
+    socket.once('data', (chunk: Buffer) => {
+      delivered = true
+      emulatorProbe('scrcpy.video.connected', { attempt, bytes: chunk.length })
+      this.videoSocket = socket
+      socket.on('data', (next: Buffer) => this.handleVideoChunk(next))
+      socket.on('error', (error) => this.fail(error.message))
+      this.handleVideoChunk(chunk)
+      this.openControlSocket()
     })
-    return socket
+    socket.once('error', retry)
+    socket.once('close', retry)
   }
 
-  private attachVideo(socket: Socket): void {
-    socket.on('data', (chunk: Buffer) => this.handleVideoChunk(chunk))
-    socket.on('error', (error) => this.fail(error.message))
+  private openControlSocket(): void {
+    if (this.closed) {
+      return
+    }
+    const socket = connect(this.port, '127.0.0.1')
+    socket.on('error', () => {})
+    this.controlSocket = socket
   }
 
   private handleVideoChunk(chunk: Buffer): void {
