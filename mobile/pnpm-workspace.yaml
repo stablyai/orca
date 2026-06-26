@@ -1,0 +1,15 @@
+allowBuilds:
+  esbuild: set this to true or false
+overrides:
+  '@babel/core@<=7.29.5': '>=7.29.6'
+  '@babel/plugin-transform-modules-systemjs@>=7.12.0 <=7.29.3': '>=7.29.4'
+  '@tootallnate/once@<2.0.1': '>=2.0.1'
+  'brace-expansion@>=5.0.0 <5.0.6': '>=5.0.6'
+  'esbuild@<0.28.1': '>=0.28.1'
+  'form-data@>=4.0.0 <4.0.6': '>=4.0.6'
+  'js-yaml@<=4.1.1': '>=4.2.0'
+  'postcss@<8.5.10': '>=8.5.10'
+  'shell-quote@>=1.1.0 <=1.8.3': '>=1.8.4'
+  'uuid@<11.1.1': '>=11.1.1'
+  'ws@>=7.0.0 <7.5.11': '>=7.5.11 <8'
+  'ws@>=8.0.0 <8.21.0': '>=8.21.0 <9'
