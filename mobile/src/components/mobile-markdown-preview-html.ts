@@ -1,15 +1,41 @@
-function decodeHtmlEntities(value: string): string {
-  return value
+// Why: README HTML snippets can document escaped entities; repeated cleanup
+// passes must not turn `&amp;lt;` into a real tag and strip it.
+const escapedHtmlEntityTokens = [
+  { pattern: /&amp;nbsp;/gi, token: '\uE000ORCA_MD_ENTITY_NBSP\uE000', value: '&nbsp;' },
+  { pattern: /&amp;lt;/gi, token: '\uE000ORCA_MD_ENTITY_LT\uE000', value: '&lt;' },
+  { pattern: /&amp;gt;/gi, token: '\uE000ORCA_MD_ENTITY_GT\uE000', value: '&gt;' },
+  { pattern: /&amp;quot;/gi, token: '\uE000ORCA_MD_ENTITY_QUOT\uE000', value: '&quot;' },
+  { pattern: /&amp;#39;/gi, token: '\uE000ORCA_MD_ENTITY_APOS\uE000', value: '&#39;' }
+] as const
+
+function protectEscapedHtmlEntities(value: string): string {
+  return escapedHtmlEntityTokens.reduce(
+    (next, entity) => next.replace(entity.pattern, entity.token),
+    value
+  )
+}
+
+function restoreEscapedHtmlEntities(value: string): string {
+  return escapedHtmlEntityTokens.reduce(
+    (next, entity) => next.replaceAll(entity.token, entity.value),
+    value
+  )
+}
+
+function decodeHtmlEntities(value: string, preserveEscapedEntities = false): string {
+  const next = preserveEscapedEntities ? protectEscapedHtmlEntities(value) : value
+
+  return next
     .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
+    .replace(/&amp;/gi, '&')
 }
 
 function stripTags(value: string): string {
-  return decodeHtmlEntities(value.replace(/<[^>]+>/g, ''))
+  return decodeHtmlEntities(value.replace(/<[^>]+>/g, ''), true)
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
@@ -68,5 +94,5 @@ export function normalizeMobileMarkdownPreviewHtml(content: string): string {
   next = normalizeInlineHtml(next)
   next = stripTags(next)
 
-  return next
+  return restoreEscapedHtmlEntities(next)
 }

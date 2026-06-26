@@ -43,4 +43,10 @@ describe('parseMobileMarkdown', () => {
     expect(normalized).not.toContain('<h1')
     expect(normalized).not.toContain('<img')
   })
+
+  it('preserves documented HTML entities while normalizing preview HTML', () => {
+    expect(
+      normalizeMobileMarkdownPreviewHtml('<p>Use <code>&amp;lt;button&amp;gt;</code></p>')
+    ).toBe('Use `&lt;button&gt;`')
+  })
 })
