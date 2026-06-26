@@ -97,30 +97,27 @@ export const filePreviewStyles = StyleSheet.create({
   },
   modeToolbar: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.bgBase
+    alignSelf: 'flex-start',
+    marginHorizontal: spacing.md,
+    marginVertical: spacing.sm,
+    padding: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.button,
+    backgroundColor: colors.bgPanel
   },
   modeToggle: {
-    flexDirection: 'row',
+    width: 34,
+    height: 28,
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: colors.bgRaised
+    justifyContent: 'center',
+    borderRadius: radii.row,
+    backgroundColor: 'transparent',
+    opacity: 0.72
   },
   modeToggleActive: {
-    backgroundColor: colors.bgPanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
-  },
-  modeToggleText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
+    backgroundColor: colors.bgRaised,
+    opacity: 1
   },
   truncatedNote: {
     marginBottom: spacing.md,
