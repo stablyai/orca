@@ -2,7 +2,7 @@
 // `/slash` commands. Detection is pure (text + cursor → active trigger) so it's
 // unit-testable and the composer stays a thin view over it.
 
-export type AutocompleteKind = 'file' | 'slash'
+export type AutocompleteKind = 'file' | 'slash' | 'skill'
 
 export type AutocompleteTrigger = {
   kind: AutocompleteKind
@@ -16,10 +16,11 @@ export type AutocompleteTrigger = {
 
 const TOKEN_CHAR = /[^\s]/
 
-/** Detect an active autocomplete trigger at the cursor. A `@` mention triggers
- *  anywhere it follows whitespace/start; a `/` command only at the very start of
- *  the input (slash commands are line-leading). Returns null when the cursor is
- *  not inside such a token. */
+/** Detect an active autocomplete trigger at the cursor. A `@` mention or `$`
+ *  skill triggers anywhere it follows whitespace/start; a `/` command only at the
+ *  very start of the input (slash commands are line-leading). Returns null when
+ *  the cursor is not inside such a token. Mirrors desktop
+ *  `deriveComposerAutocomplete` trigger rules. */
 export function detectAutocompleteTrigger(
   text: string,
   cursor: number
@@ -32,7 +33,7 @@ export function detectAutocompleteTrigger(
   }
   const triggerIndex = i + 1
   const triggerChar = text[triggerIndex]
-  if (triggerChar !== '@' && triggerChar !== '/') {
+  if (triggerChar !== '@' && triggerChar !== '/' && triggerChar !== '$') {
     return null
   }
   const before = triggerIndex === 0 ? '' : text[triggerIndex - 1]!
@@ -40,7 +41,8 @@ export function detectAutocompleteTrigger(
     // Slash commands are only offered at the very start of the message.
     return null
   }
-  if (triggerChar === '@' && triggerIndex !== 0 && !/\s/.test(before)) {
+  // `@` mentions and `$` skills must follow start-of-input or whitespace.
+  if ((triggerChar === '@' || triggerChar === '$') && triggerIndex !== 0 && !/\s/.test(before)) {
     return null
   }
   const query = text.slice(triggerIndex + 1, pos)
@@ -48,8 +50,9 @@ export function detectAutocompleteTrigger(
   if (/\s/.test(query)) {
     return null
   }
+  const kind = triggerChar === '@' ? 'file' : triggerChar === '$' ? 'skill' : 'slash'
   return {
-    kind: triggerChar === '@' ? 'file' : 'slash',
+    kind,
     query,
     start: triggerIndex,
     end: pos

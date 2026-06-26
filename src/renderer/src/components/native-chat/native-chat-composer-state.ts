@@ -6,15 +6,18 @@
 // the actual textarea/caret wiring.
 
 import type { DiscoveredSkill } from '../../../../shared/skills'
+import {
+  filterSlashCommands,
+  isSlashCommandDraft,
+  applySlashSuggestion,
+  slashCommandDispatchText,
+  type SlashCommandSuggestion
+} from '../../../../shared/native-chat-slash-commands'
+
+export type { SlashCommandSuggestion }
+export { filterSlashCommands, isSlashCommandDraft, applySlashSuggestion, slashCommandDispatchText }
 
 export type ComposerAutocompleteMode = 'none' | 'slash' | 'mention' | 'skill'
-
-export type SlashCommandSuggestion = {
-  /** The command token without its leading slash, e.g. `clear`. */
-  name: string
-  /** Optional one-line description for the suggestion row. */
-  description?: string
-}
 
 export type ComposerAutocomplete =
   | { mode: 'none' }
@@ -64,23 +67,6 @@ export function deriveComposerAutocomplete(
   }
 
   return { mode: 'none' }
-}
-
-/** Case-insensitive prefix filter over the agent's known commands. An empty
- *  query returns all commands so typing a bare `/` shows the full menu. */
-export function filterSlashCommands(
-  commands: readonly SlashCommandSuggestion[],
-  query: string
-): SlashCommandSuggestion[] {
-  const normalized = query.toLowerCase()
-  if (normalized === '') {
-    return [...commands]
-  }
-  return commands.filter((command) => command.name.toLowerCase().startsWith(normalized))
-}
-
-export function isSlashCommandDraft(draft: string): boolean {
-  return draft.trimStart().startsWith('/')
 }
 
 export function filterSkillSuggestions(
@@ -162,18 +148,6 @@ export function recallNext(history: HistoryState): HistoryRecall {
     history: { entries: history.entries, index: nextIndex },
     draft: history.entries[nextIndex]
   }
-}
-
-/** Replace the slash token at the start of `draft` with the chosen command,
- *  leaving a trailing space so the user can type arguments. */
-export function applySlashSuggestion(command: SlashCommandSuggestion): string {
-  return `/${command.name} `
-}
-
-/** Text to send when Enter accepts a slash command from the menu. The Codex TUI
- *  dispatches the selected command on Enter; Tab is the completion path. */
-export function slashCommandDispatchText(command: SlashCommandSuggestion): string {
-  return `/${command.name}`
 }
 
 /** Replace the active `@query` token before the caret with the chosen path.

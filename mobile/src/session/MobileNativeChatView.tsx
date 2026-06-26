@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { ArrowDown, ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { DiscoveredSkill } from '../../../src/shared/skills'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-native-chat-view-styles'
 import { buildMobileNativeChatData, statusHint } from './mobile-native-chat-render-data'
@@ -54,6 +55,11 @@ type Props = {
   inputLocked?: boolean
   filePaths?: string[]
   onNeedFiles?: () => void
+  /** Active agent — selects the per-agent slash-command catalog in the composer. */
+  agent?: string | null
+  /** Discovered skills for `$` autocomplete (Codex only). */
+  skills?: DiscoveredSkill[]
+  onNeedSkills?: () => void
   /** A pending agent question/permission detected from live status, shown as a
    *  native card above the composer; answering sends text to the agent. */
   /** Structured AskUserQuestion prompt parsed from the transcript (preferred over
@@ -92,6 +98,9 @@ export function MobileNativeChatView({
   inputLocked,
   filePaths,
   onNeedFiles,
+  agent,
+  skills,
+  onNeedSkills,
   ask,
   onAnswerAsk,
   question,
@@ -336,6 +345,9 @@ export function MobileNativeChatView({
         }
         filePaths={filePaths}
         onNeedFiles={onNeedFiles}
+        agent={agent}
+        skills={skills}
+        onNeedSkills={onNeedSkills}
       />
     </View>
   )

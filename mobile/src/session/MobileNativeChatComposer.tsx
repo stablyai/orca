@@ -15,21 +15,18 @@ import {
   detectAutocompleteTrigger,
   rankSuggestions
 } from './mobile-native-chat-autocomplete'
-
-// Common agent slash commands offered as autocomplete; sending them is just text
-// to the agent's terminal, so the set is intentionally provider-agnostic.
-const SLASH_COMMANDS = [
-  '/clear',
-  '/compact',
-  '/review',
-  '/model',
-  '/help',
-  '/init',
-  '/cost',
-  '/diff'
-]
+import {
+  getAgentSlashCommands,
+  type SlashCommandSuggestion
+} from '../../../src/shared/native-chat-slash-commands'
+import type { DiscoveredSkill } from '../../../src/shared/skills'
 
 const NO_FILE_PATHS: string[] = []
+const NO_SKILLS: DiscoveredSkill[] = []
+
+/** A row in the suggestion list: the text to insert plus an optional one-line
+ *  description (shown for slash commands and skills, like desktop). */
+type SuggestionRow = { value: string; description?: string }
 
 type Props = {
   /** Controlled composer text — owned by the parent so dictation can write to it. */
@@ -44,6 +41,13 @@ type Props = {
   placeholder?: string
   filePaths?: string[]
   onNeedFiles?: () => void
+  /** Active agent — selects the per-agent slash-command catalog. */
+  agent?: string | null
+  /** Discovered skills for `$` autocomplete (Codex only; empty otherwise). */
+  skills?: DiscoveredSkill[]
+  /** Called when the user opens a `$` skill token, so the route can lazily
+   *  discover skills (mirrors onNeedFiles). */
+  onNeedSkills?: () => void
 }
 
 export function MobileNativeChatComposer({
@@ -57,27 +61,50 @@ export function MobileNativeChatComposer({
   disabled = false,
   placeholder = 'Message, @files, /commands',
   filePaths = NO_FILE_PATHS,
-  onNeedFiles
+  onNeedFiles,
+  agent = null,
+  skills = NO_SKILLS,
+  onNeedSkills
 }: Props): React.JSX.Element {
   const [cursor, setCursor] = useState(0)
   const trimmed = value.trim()
   const canSend = trimmed.length > 0 && !disabled
 
+  const slashCommands = useMemo(() => (agent ? getAgentSlashCommands(agent) : []), [agent])
   const trigger = useMemo(() => detectAutocompleteTrigger(value, cursor), [value, cursor])
-  const suggestions = useMemo(() => {
+  const suggestions = useMemo<SuggestionRow[]>(() => {
     if (!trigger) {
       return []
     }
     if (trigger.kind === 'slash') {
-      return rankSuggestions(SLASH_COMMANDS, trigger.query)
+      // Rank by the bare command name, then render `/name` with its description.
+      const names = slashCommands.map((c) => c.name)
+      const byName = new Map<string, SlashCommandSuggestion>(slashCommands.map((c) => [c.name, c]))
+      return rankSuggestions(names, trigger.query).map((name) => ({
+        value: `/${name}`,
+        description: byName.get(name)?.description
+      }))
     }
-    return rankSuggestions(filePaths, trigger.query).map((p) => `@${p}`)
-  }, [trigger, filePaths])
+    if (trigger.kind === 'skill') {
+      // Only installed skills are insertable; mirror desktop's filter.
+      const installed = skills.filter((s) => s.installed)
+      const names = installed.map((s) => s.name)
+      const byName = new Map<string, DiscoveredSkill>(installed.map((s) => [s.name, s]))
+      return rankSuggestions(names, trigger.query).map((name) => ({
+        value: `$${name}`,
+        description: byName.get(name)?.sourceLabel
+      }))
+    }
+    return rankSuggestions(filePaths, trigger.query).map((p) => ({ value: `@${p}` }))
+  }, [trigger, filePaths, slashCommands, skills])
 
   const handleChange = (next: string): void => {
     onChangeText(next)
     if (onNeedFiles && filePaths.length === 0 && next.includes('@')) {
       onNeedFiles()
+    }
+    if (onNeedSkills && skills.length === 0 && next.includes('$')) {
+      onNeedSkills()
     }
   }
 
@@ -106,13 +133,18 @@ export function MobileNativeChatComposer({
           <ScrollView keyboardShouldPersistTaps="always" style={styles.suggestionScroll}>
             {suggestions.map((s) => (
               <Pressable
-                key={s}
+                key={s.value}
                 style={({ pressed }) => [styles.suggestion, pressed && styles.suggestionPressed]}
-                onPress={() => pickSuggestion(s)}
+                onPress={() => pickSuggestion(s.value)}
               >
                 <Text style={styles.suggestionText} numberOfLines={1}>
-                  {s}
+                  {s.value}
                 </Text>
+                {s.description ? (
+                  <Text style={styles.suggestionDescription} numberOfLines={1}>
+                    {s.description}
+                  </Text>
+                ) : null}
               </Pressable>
             ))}
           </ScrollView>
@@ -203,6 +235,11 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontFamily: typography.monoFamily,
     fontSize: typography.metaSize
+  },
+  suggestionDescription: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
+    marginTop: 1
   },
   bar: {
     flexDirection: 'row',

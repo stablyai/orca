@@ -35,6 +35,22 @@ describe('detectAutocompleteTrigger', () => {
   it('returns empty query right after the trigger char', () => {
     expect(detectAutocompleteTrigger('@', 1)).toMatchObject({ kind: 'file', query: '' })
   })
+
+  it('detects a $ skill after whitespace or at start', () => {
+    expect(detectAutocompleteTrigger('$ref', 4)).toMatchObject({ kind: 'skill', query: 'ref' })
+    expect(detectAutocompleteTrigger('use $ref-oss', 12)).toMatchObject({
+      kind: 'skill',
+      query: 'ref-oss'
+    })
+  })
+
+  it('does not trigger $ mid-word (e.g. shell var)', () => {
+    expect(detectAutocompleteTrigger('cost$5', 6)).toBeNull()
+  })
+
+  it('closes the $ skill token once a space is typed', () => {
+    expect(detectAutocompleteTrigger('$ref ', 5)).toBeNull()
+  })
 })
 
 describe('applyAutocomplete', () => {

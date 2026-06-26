@@ -185,15 +185,8 @@ import { MobileNativeChatView } from '../../../../src/session/MobileNativeChatVi
 import { useMobileNativeChatSession } from '../../../../src/session/use-mobile-native-chat-session'
 import { resolveMobileNativeChat } from '../../../../src/session/mobile-native-chat-eligibility'
 import { useMobileNativeChatAnswerSend } from '../../../../src/session/use-mobile-native-chat-answer-send'
-import { parseAgentQuestion } from '../../../../src/session/mobile-native-chat-question'
-import {
-  detectAgentPermission,
-  parseApprovalFromStatus
-} from '../../../../src/session/mobile-native-chat-permission'
-import {
-  extractPendingAsk,
-  parseAskFromStatus
-} from '../../../../src/session/mobile-native-chat-ask'
+import { useMobileNativeChatComposerSupport } from '../../../../src/session/use-mobile-native-chat-composer-support'
+import { useMobileNativeChatStatusCards } from '../../../../src/session/use-mobile-native-chat-status-cards'
 import {
   getRepoIdFromMobileWorktreeId,
   isFileExistsErrorMessage,
@@ -1152,179 +1145,56 @@ export default function SessionScreen() {
   const showNativeChatRef = useRef(showNativeChat)
   showNativeChatRef.current = showNativeChat
   const [chatComposerText, setChatComposerText] = useState('')
-  // Why: queued (optimistic) sends live on the route, not the chat view, so they
-  // survive switching to the terminal view and back until the agent's transcript
-  // catches up. Keyed by the active chat session so a tab switch starts fresh.
-  const [chatPending, setChatPending] = useState<Array<{ id: string; text: string }>>([])
-  const chatPendingCounter = useRef(0)
-  const activeChatSessionId = activeChatResolution?.sessionId ?? null
-  useEffect(() => {
-    setChatPending([])
-  }, [activeChatSessionId])
   const nativeChatSession = useMobileNativeChatSession({
     client,
     agent: activeChatResolution?.agent ?? null,
     sessionId: activeChatResolution?.sessionId ?? null
   })
-  // Drop a queued echo once its real user turn lands in the transcript.
-  useEffect(() => {
-    setChatPending((prev) =>
-      prev.length === 0
-        ? prev
-        : prev.filter(
-            (p) =>
-              !nativeChatSession.messages.some(
-                (m) =>
-                  m.role === 'user' &&
-                  m.blocks.some((b) => b.type === 'text' && b.text.trim() === p.text.trim())
-              )
-          )
-    )
-  }, [nativeChatSession.messages])
-  // Why: the active agent's live status drives the chat's "working" indicator.
-  const nativeChatAgentWorking =
-    activeChatResolution != null && activeSessionTab?.type === 'terminal'
-      ? activeSessionTab.agentStatus?.state === 'working'
-      : false
-  // Why: surface the agent's in-progress reply (hook preview) as a streaming
-  // bubble while it works, before the completed turn is written to the transcript.
-  const nativeChatStreamingText =
-    nativeChatAgentWorking && activeSessionTab?.type === 'terminal'
-      ? activeSessionTab.agentStatus?.lastAssistantMessage
-      : undefined
-  // Why: when the agent is blocked/waiting, heuristically surface a native
-  // permission or question card (permission wins) parsed from its status text.
-  const nativeChatStatus =
-    activeChatResolution != null && activeSessionTab?.type === 'terminal'
-      ? activeSessionTab.agentStatus
-      : null
-  const nativeChatBlocked =
-    nativeChatStatus?.state === 'waiting' || nativeChatStatus?.state === 'blocked'
-  // Prefer the heuristic permission (it reads the real numbered options from the
-  // prompt text) and fall back to the live approval envelope from the agent-status
-  // pipe (reliable detection when the prompt text isn't captured).
-  const nativeChatPermission =
-    (nativeChatBlocked && nativeChatStatus
-      ? detectAgentPermission({
-          state: nativeChatStatus.state,
-          lastAssistantMessage: nativeChatStatus.lastAssistantMessage,
-          toolName: nativeChatStatus.toolName,
-          toolInput: nativeChatStatus.toolInput
-        })
-      : null) ?? parseApprovalFromStatus(nativeChatStatus?.interactivePrompt)
-  const nativeChatQuestion =
-    nativeChatBlocked && nativeChatStatus && !nativeChatPermission
-      ? parseAgentQuestion(nativeChatStatus.lastAssistantMessage ?? '')
-      : null
-  // Why: a pending AskUserQuestion isn't in the transcript until it's answered,
-  // so prefer the live agent-status `interactivePrompt`. Parse it on its own so
-  // the result is referentially stable while the prompt is unchanged — otherwise
-  // it re-parses to a new object on every message tick and re-renders the card.
-  const askFromStatus = useMemo(
-    () => parseAskFromStatus(nativeChatStatus?.interactivePrompt, nativeChatStatus?.toolName),
-    [nativeChatStatus?.interactivePrompt, nativeChatStatus?.toolName]
-  )
-  // Fall back to the transcript tool-call only when there's no live prompt
-  // (covers replays / agents without the live field).
-  const askFromMessages = useMemo(
-    () => (askFromStatus ? null : extractPendingAsk(nativeChatSession.messages)),
-    [askFromStatus, nativeChatSession.messages]
-  )
-  const nativeChatAsk = activeChatResolution == null ? null : (askFromStatus ?? askFromMessages)
-  const handleNativeChatOpenFile = useCallback(
-    (relativePath: string) => {
-      if (!client) {
-        return
-      }
-      void client.sendRequest('files.open', { worktree: `id:${worktreeId}`, relativePath })
-    },
-    [client, worktreeId]
-  )
-  // Answer an AskUserQuestion (Claude multi-step stepping lives in this hook,
-  // which also owns cancelling the pending writes on Stop / unmount / swap).
+  // Live-status overlays (working indicator, streaming preview, interactive
+  // permission/question/Ask cards) derived in a focused hook to keep this route
+  // under its line cap.
+  const {
+    agentWorking: nativeChatAgentWorking,
+    streamingText: nativeChatStreamingText,
+    permission: nativeChatPermission,
+    question: nativeChatQuestion,
+    ask: nativeChatAsk
+  } = useMobileNativeChatStatusCards({
+    active: activeChatResolution != null,
+    status: activeSessionTab?.type === 'terminal' ? activeSessionTab.agentStatus : null,
+    messages: nativeChatSession.messages
+  })
+  // Answer an AskUserQuestion (Claude multi-step stepping + pending-write cancel on Stop/unmount/swap live in this hook).
   const { answerAsk: handleNativeChatAnswerAsk, cancelPending: cancelNativeChatAnswer } =
     useMobileNativeChatAnswerSend({
       client,
       handleRef: activeHandleRef,
       deviceTokenRef,
       agentRef: activeChatAgentRef,
-      sessionId: activeChatSessionId
+      sessionId: activeChatResolution?.sessionId ?? null
     })
-  // Stop the agent mid-turn. TUI agents (Claude Code, Codex) interrupt the
-  // current turn on Escape — not Ctrl-C, which tends to quit/clear the prompt.
-  // Send Escape twice to reliably cancel an in-progress generation.
-  const handleNativeChatStop = useCallback(() => {
-    const handle = activeHandleRef.current
-    if (!client || !handle) {
-      return
-    }
-    // Drop any in-flight per-question answer writes so Stop doesn't race them.
-    cancelNativeChatAnswer()
-    const escape = String.fromCharCode(27)
-    const sendEscape = (): void => {
-      void client.sendRequest('terminal.send', {
-        terminal: handle,
-        text: escape,
-        ...(deviceTokenRef.current
-          ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
-          : {})
-      })
-    }
-    sendEscape()
-    setTimeout(sendEscape, 80)
-  }, [client, cancelNativeChatAnswer])
-  // Why: file paths for the composer's `@` mention autocomplete, loaded lazily
-  // (only once the user opens a mention) so the chat view costs nothing up front.
-  const [nativeChatFilePaths, setNativeChatFilePaths] = useState<string[]>([])
-  const nativeChatFilesLoadedRef = useRef(false)
-  const loadNativeChatFiles = useCallback(() => {
-    if (nativeChatFilesLoadedRef.current || !client) {
-      return
-    }
-    nativeChatFilesLoadedRef.current = true
-    void client
-      .sendRequest('files.list', { worktree: `id:${worktreeId}` })
-      .then((response) => {
-        if (!response.ok) {
-          return
-        }
-        const result = response.result as { files?: Array<{ relativePath?: string }> }
-        setNativeChatFilePaths(
-          (result.files ?? [])
-            .map((f) => f.relativePath ?? '')
-            .filter((p): p is string => p.length > 0)
-        )
-      })
-      .catch(() => {
-        nativeChatFilesLoadedRef.current = false
-      })
-  }, [client, worktreeId])
-  const handleNativeChatSend = useCallback(
-    (text: string) => {
-      const handle = activeHandleRef.current
-      if (!client || !handle) {
-        return
-      }
-      // Submit as one bracketed paste + Enter so multi-line composer input
-      // reaches the agent as a single prompt, mirroring terminal.send usage.
-      void client
-        .sendRequest('terminal.send', {
-          terminal: handle,
-          text,
-          enter: true,
-          ...(deviceTokenRef.current
-            ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
-            : {})
-        })
-        .catch(() => {
-          // Transient send failure; the composer keeps the conversation visible.
-        })
-      // Optimistic echo so the prompt shows immediately as "queued".
-      chatPendingCounter.current += 1
-      setChatPending((prev) => [...prev, { id: `pending-${chatPendingCounter.current}`, text }])
-    },
-    [client]
-  )
+  // Why: the composer's `@file` / `$skill` suggestion sources, message-send,
+  // optimistic "queued" bubbles, and Stop/interrupt live in a focused hook to keep
+  // this route under its line cap.
+  const {
+    filePaths: nativeChatFilePaths,
+    loadFiles: loadNativeChatFiles,
+    skills: nativeChatSkills,
+    loadSkills: loadNativeChatSkills,
+    send: handleNativeChatSend,
+    pending: chatPending,
+    stop: handleNativeChatStop,
+    openFile: handleNativeChatOpenFile
+  } = useMobileNativeChatComposerSupport({
+    client,
+    worktreeId,
+    deviceTokenRef,
+    activeHandleRef,
+    activeChatAgentRef,
+    messages: nativeChatSession.messages,
+    sessionId: activeChatResolution?.sessionId ?? null,
+    cancelAnswer: cancelNativeChatAnswer
+  })
   const canSend =
     connState === 'connected' &&
     activeHandle != null &&
@@ -4965,6 +4835,9 @@ export default function SessionScreen() {
                       onLoadEarlier={nativeChatSession.loadEarlier}
                       onSend={handleNativeChatSend}
                       pending={chatPending}
+                      agent={activeChatResolution?.agent ?? null}
+                      skills={nativeChatSkills}
+                      onNeedSkills={loadNativeChatSkills}
                       composerText={chatComposerText}
                       onComposerTextChange={setChatComposerText}
                       onAttachImage={() => void attachImage('library')}
