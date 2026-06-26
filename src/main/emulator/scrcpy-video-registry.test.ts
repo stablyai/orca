@@ -39,4 +39,58 @@ describe('scrcpyVideoRegistry', () => {
     ).not.toThrow()
     expect(scrcpyVideoRegistry.subscribe('missing', () => {})()).toBeUndefined()
   })
+
+  it('replays the current GOP (keyframe + following deltas) to late subscribers', () => {
+    scrcpyVideoRegistry.register('gop', () => {})
+    const tag = (event: ScrcpyVideoEvent): string =>
+      event.type === 'frame' ? `${event.frame.keyFrame ? 'K' : 'D'}${event.frame.pts}` : 'M'
+    scrcpyVideoRegistry.pushFrame('gop', {
+      config: false,
+      keyFrame: true,
+      pts: '1',
+      bytes: new ArrayBuffer(2)
+    })
+    scrcpyVideoRegistry.pushFrame('gop', {
+      config: false,
+      keyFrame: false,
+      pts: '2',
+      bytes: new ArrayBuffer(2)
+    })
+
+    const seen: string[] = []
+    scrcpyVideoRegistry.subscribe('gop', (event) => seen.push(tag(event)))()
+    expect(seen).toEqual(['K1', 'D2'])
+
+    // A new keyframe drops the prior GOP so replay always starts decodeable.
+    scrcpyVideoRegistry.pushFrame('gop', {
+      config: false,
+      keyFrame: true,
+      pts: '3',
+      bytes: new ArrayBuffer(2)
+    })
+    const seen2: string[] = []
+    scrcpyVideoRegistry.subscribe('gop', (event) => seen2.push(tag(event)))()
+    expect(seen2).toEqual(['K3'])
+
+    scrcpyVideoRegistry.stop('gop')
+  })
+
+  it('does not buffer deltas that arrive before the first keyframe', () => {
+    scrcpyVideoRegistry.register('predelta', () => {})
+    scrcpyVideoRegistry.pushFrame('predelta', {
+      config: false,
+      keyFrame: false,
+      pts: '1',
+      bytes: new ArrayBuffer(2)
+    })
+
+    const frames: string[] = []
+    scrcpyVideoRegistry.subscribe('predelta', (event) => {
+      if (event.type === 'frame') {
+        frames.push(event.frame.pts)
+      }
+    })()
+    expect(frames).toEqual([])
+    scrcpyVideoRegistry.stop('predelta')
+  })
 })

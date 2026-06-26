@@ -1,9 +1,7 @@
 // scrcpy server v2.4 deployment command builders (pure). The impure orchestration
 // (push the jar, open the tunnel, spawn the server, connect sockets) lives in
-// scrcpy-stream-session. Pin the version to the bundled scrcpy-server.jar.
-//
-// UNVERIFIED: the server option names/order are version-coupled to scrcpy and
-// must be validated against the bundled jar on a real device.
+// scrcpy-stream-session. The option names/order are version-coupled to scrcpy and
+// pinned to SCRCPY_SERVER_VERSION (validated live against that jar on a device).
 
 export const SCRCPY_SERVER_VERSION = '2.4'
 export const SCRCPY_DEVICE_JAR_PATH = '/data/local/tmp/scrcpy-server.jar'

@@ -6,8 +6,6 @@ import { emulatorProbe } from '../emulator/emulator-probe'
 // renderer calls emulator:videoStreamStart with a deviceId; meta + H.264 access
 // units arrive on emulator:videoStreamMeta / emulator:videoStreamFrame. Mirrors
 // the MJPEG emulator-frame-stream handler but for the Android H.264 path.
-//
-// UNVERIFIED: end-to-end delivery needs a live scrcpy session (real device + jar).
 export function registerEmulatorVideoStreamHandlers(): void {
   const unsubscribers = new Map<string, () => void>()
   const keyFor = (webContentsId: number, deviceId: string): string => `${webContentsId}:${deviceId}`

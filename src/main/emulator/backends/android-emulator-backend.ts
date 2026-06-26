@@ -43,6 +43,7 @@ import {
   type StartAndroidStream
 } from '../android/android-stream-session-starter'
 import { AndroidStreamController } from '../android/android-stream-controller'
+import { scrcpyVideoRegistry } from '../scrcpy-video-registry'
 import type { EmulatorGesturePoint } from '../emulator-gesture-sender'
 
 export type AndroidEmulatorBackendOptions = {
@@ -61,8 +62,8 @@ const DEFAULT_BOOT_TIMEOUT_MS = 180_000
 const DEFAULT_POLL_INTERVAL_MS = 2_000
 
 // The Android backend. Device discovery + lifecycle + input run through `adb`
-// and the `emulator` binary; the live H.264 pane (scrcpy) is wired in a later
-// phase. Input uses `adb shell input` so it works without the scrcpy server.
+// and the `emulator` binary; the live H.264 pane streams via scrcpy. Input uses
+// `adb shell input`, so it works without sending on the scrcpy control socket.
 export class AndroidEmulatorBackend implements EmulatorBackend {
   readonly kind = 'android' as const
   readonly streamCodec = 'h264' as const
@@ -179,9 +180,10 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     await this.runner(sdk.adb, emuKillArgs(serial))
   }
 
-  async isSessionReusable(): Promise<boolean> {
-    // No persistent stream session yet (added with scrcpy).
-    return false
+  async isSessionReusable(info: EmulatorSessionInfo): Promise<boolean> {
+    // Reuse a live scrcpy stream so a renderer remount reconnects to it (the
+    // registry replays meta + config + GOP) instead of respawning the server.
+    return scrcpyVideoRegistry.has(info.deviceUdid)
   }
 
   async tap(deviceId: string, x: number, y: number): Promise<void> {

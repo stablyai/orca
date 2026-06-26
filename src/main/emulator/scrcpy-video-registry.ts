@@ -52,6 +52,14 @@ class ScrcpyVideoRegistry {
     }
     if (frame.config) {
       entry.config = frame
+    } else if (frame.keyFrame) {
+      // A keyframe starts a fresh decodeable GOP; buffer it + the following
+      // deltas so a late subscriber can decode immediately on replay.
+      entry.gop = [frame]
+    } else if (entry.gop.length > 0) {
+      // Only buffer deltas once a keyframe anchors the GOP (a delta alone is
+      // undecodable); deltas before the first keyframe are still sent live below.
+      entry.gop.push(frame)
     }
     for (const subscriber of entry.subscribers) {
       subscriber({ type: 'frame', frame })
