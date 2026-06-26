@@ -83,6 +83,7 @@ import {
 } from '@/runtime/web-runtime-session'
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { listBoundAgentTabActions, resolveDefaultAgentForNewTab } from '@/lib/agent-tab-shortcuts'
 import {
   createFloatingWorkspaceBrowserTab,
@@ -231,6 +232,7 @@ function Terminal(): React.JSX.Element | null {
   const consumeSuppressedPtyExit = useAppStore((s) => s.consumeSuppressedPtyExit)
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
+  const hydrationSucceeded = useAppStore((s) => s.hydrationSucceeded)
   const openFiles = useAppStore((s) => s.openFiles)
   const activeFileId = useAppStore((s) => s.activeFileId)
   const activeBrowserTabId = useAppStore((s) => s.activeBrowserTabId)
@@ -807,6 +809,21 @@ function Terminal(): React.JSX.Element | null {
     // (handleNewTab below) still bump normally.
     createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
   }, [workspaceSessionReady, activeWorktreeId, createTab, reconcileWorktreeTabModel])
+
+  const startupResumeWorktreeIdsRef = useRef(new Set<string>())
+  useEffect(() => {
+    if (!workspaceSessionReady || !hydrationSucceeded || !activeWorktreeId) {
+      return
+    }
+    if (startupResumeWorktreeIdsRef.current.has(activeWorktreeId)) {
+      return
+    }
+    startupResumeWorktreeIdsRef.current.add(activeWorktreeId)
+    // Why: startup hydration restores the active worktree without calling
+    // activateAndRevealWorktree, so orphaned live/quit records need a terminal
+    // surface pass after pane-level cold restore had first chance.
+    resumeSleepingAgentSessionsForWorktree(activeWorktreeId)
+  }, [activeWorktreeId, hydrationSucceeded, workspaceSessionReady])
 
   const handleNewTab = useCallback(
     (shellOverride?: string) => {
