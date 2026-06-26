@@ -36,13 +36,6 @@ vi.mock('@dnd-kit/sortable', () => ({
   })
 }))
 
-vi.mock('./tab-strip-pointer-activation', () => ({
-  useTabStripPointerActivation: () => ({
-    isPressed: false,
-    onPointerDown: vi.fn()
-  })
-}))
-
 vi.mock('lucide-react', () => ({
   Columns2: function Columns2(props: Record<string, unknown>) {
     return { type: 'Columns2', props }

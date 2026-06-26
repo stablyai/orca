@@ -279,7 +279,9 @@ test.describe('Tabs', () => {
       .toEqual([domOrderBefore[1], domOrderBefore[0], ...domOrderBefore.slice(2)])
   })
 
-  test('clicking tabs still switches after a tab drag gesture releases', async ({ orcaPage }) => {
+  test('clicking tabs still switches after dragging a terminal tab to reorder', async ({
+    orcaPage
+  }) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
 
     await orcaPage.evaluate((targetWorktreeId) => {
@@ -297,41 +299,49 @@ test.describe('Tabs', () => {
       .poll(() => countRenderedTabs(orcaPage), { timeout: 5_000 })
       .toBeGreaterThanOrEqual(2)
 
-    const domOrder = await orcaPage.$$eval(SORTABLE_TAB, (nodes) =>
+    const domOrderBefore = await orcaPage.$$eval(SORTABLE_TAB, (nodes) =>
       nodes.map((n) => (n as HTMLElement).dataset.tabId ?? '')
     )
-    const [firstTabId, secondTabId] = domOrder
+    const [firstTabId, secondTabId] = domOrderBefore
     expect(firstTabId).toBeTruthy()
     expect(secondTabId).toBeTruthy()
 
-    await orcaPage.evaluate((tabId) => {
-      window.__store?.getState().setActiveTab(tabId)
-    }, firstTabId)
+    await tabLocator(orcaPage, firstTabId).click({ force: true })
     await expect.poll(() => getDomActiveTabId(orcaPage), { timeout: 3_000 }).toBe(firstTabId)
 
     const firstTabBox = await tabLocator(orcaPage, firstTabId).boundingBox()
+    const secondTabBox = await tabLocator(orcaPage, secondTabId).boundingBox()
     expect(firstTabBox).not.toBeNull()
+    expect(secondTabBox).not.toBeNull()
     const startX = firstTabBox!.x + firstTabBox!.width / 2
     const startY = firstTabBox!.y + firstTabBox!.height / 2
+    const endX = secondTabBox!.x + secondTabBox!.width * 0.75
+    const endY = secondTabBox!.y + secondTabBox!.height / 2
     await orcaPage.mouse.move(startX, startY)
     await orcaPage.mouse.down()
-    // Why: exceed dnd-kit's 12px tab-drag threshold so this exercises the
-    // drag/click handshake, not just an ordinary tab press.
-    await orcaPage.mouse.move(startX + 24, startY, { steps: 4 })
+    // Why: this mirrors the release repro: drag a terminal tab across another
+    // tab far enough for dnd-kit to commit a reorder, then release on the tab
+    // strip before clicking tabs again.
+    await orcaPage.mouse.move(endX, endY, { steps: 8 })
     await orcaPage.mouse.up()
 
-    // Reset selection through setup state, then prove the user-visible click
-    // path still activates another tab after the drag release.
-    await orcaPage.evaluate((tabId) => {
-      window.__store?.getState().setActiveTab(tabId)
-    }, firstTabId)
-    await expect.poll(() => getDomActiveTabId(orcaPage), { timeout: 3_000 }).toBe(firstTabId)
+    await expect
+      .poll(
+        async () =>
+          orcaPage.$$eval(SORTABLE_TAB, (nodes) =>
+            nodes.map((n) => (n as HTMLElement).dataset.tabId ?? '')
+          ),
+        { timeout: 5_000, message: 'Terminal tab drag did not reorder the tab strip' }
+      )
+      .toEqual([secondTabId, firstTabId, ...domOrderBefore.slice(2)])
 
+    await tabLocator(orcaPage, firstTabId).click({ force: true })
+    await expect.poll(() => getDomActiveTabId(orcaPage), { timeout: 3_000 }).toBe(firstTabId)
     await tabLocator(orcaPage, secondTabId).click({ force: true })
     await expect
       .poll(() => getDomActiveTabId(orcaPage), {
         timeout: 5_000,
-        message: 'Tab click did not activate after a completed tab drag gesture'
+        message: 'Tab click did not activate after a terminal tab reorder drag'
       })
       .toBe(secondTabId)
   })
