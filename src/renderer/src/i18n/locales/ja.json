@@ -11883,5 +11883,10 @@
         }
       }
     }
+  },
+  "compare": {
+    "loadingChanges": "Loading changes…",
+    "agentTab": "Agent",
+    "changesTab": "Changes"
   }
 }

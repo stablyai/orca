@@ -308,11 +308,17 @@ function Terminal(): React.JSX.Element | null {
     const w = window as unknown as { __orcaCompare?: (ids?: string[] | null) => void }
     const enterCompareAuto = (): void => {
       const state = useAppStore.getState()
-      const active = state.activeWorktreeId
-      const others = Array.from(mountedWorktreeIdsRef.current).filter(
-        (id) => id !== active && getWorktreeActiveTerminalPane(state, id)
+      // Only worktrees with a resolvable terminal pane are eligible — including
+      // the active one, so its Agent column never portals nothing and blanks.
+      const withTerminal = Array.from(mountedWorktreeIdsRef.current).filter((id) =>
+        getWorktreeActiveTerminalPane(state, id)
       )
-      const picked = [active, others[0]].filter((id): id is string => typeof id === 'string')
+      const active = state.activeWorktreeId
+      const ordered =
+        active && withTerminal.includes(active)
+          ? [active, ...withTerminal.filter((id) => id !== active)]
+          : withTerminal
+      const picked = ordered.slice(0, 2)
       if (picked.length < 2) {
         console.warn('[compare] need 2 worktrees with live terminals; got', picked)
         return

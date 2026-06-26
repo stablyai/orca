@@ -7,6 +7,7 @@ import {
 } from '../activity/activity-terminal-portal'
 import { getWorktreeActiveTerminalPane } from './worktree-active-pane'
 import CombinedDiffViewer from '../editor/CombinedDiffViewer'
+import { translate } from '@/i18n/i18n'
 
 type ColumnMode = 'agent' | 'changes'
 
@@ -16,7 +17,8 @@ function worktreePathFromId(id: string): string {
   return i === -1 ? id : id.slice(i + 2)
 }
 function shortName(path: string): string {
-  const parts = path.split('/').filter(Boolean)
+  // Why: split on both separators so Windows (backslash) paths segment too.
+  const parts = path.split(/[/\\]/).filter(Boolean)
   return parts.at(-1) ?? path
 }
 
@@ -39,7 +41,7 @@ function ChangesPane({
   if (!file) {
     return (
       <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-        Loading changes…
+        {translate('compare.loadingChanges', 'Loading changes…')}
       </div>
     )
   }
@@ -133,10 +135,10 @@ export default function CompareStrip({
           >
             <div className="relative z-20 flex items-center gap-2 h-9 px-2 border-b border-border bg-card/60 text-xs shrink-0">
               <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${id === activeWorktreeId ? 'bg-green-500' : 'bg-muted-foreground/40'}`}
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${id === activeWorktreeId ? 'bg-status-success' : 'bg-muted-foreground/40'}`}
               />
               <span
-                className="font-mono text-[11px] text-muted-foreground truncate flex-1"
+                className="font-mono text-xs text-muted-foreground truncate flex-1"
                 title={path}
               >
                 {shortName(path)}
@@ -145,17 +147,17 @@ export default function CompareStrip({
                 <button
                   type="button"
                   onClick={() => setMode('agent')}
-                  className={`px-2 py-0.5 rounded text-[11px] ${mode === 'agent' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/50'}`}
+                  className={`px-2 py-0.5 rounded text-xs ${mode === 'agent' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/50'}`}
                 >
-                  Agent
+                  {translate('compare.agentTab', 'Agent')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setMode('changes')}
-                  className={`px-2 py-0.5 rounded text-[11px] flex items-center gap-1 ${mode === 'changes' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/50'}`}
+                  className={`px-2 py-0.5 rounded text-xs flex items-center gap-1 ${mode === 'changes' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/50'}`}
                 >
-                  Changes
-                  <span className="font-mono text-[10px] rounded-full bg-background px-1.5">
+                  {translate('compare.changesTab', 'Changes')}
+                  <span className="font-mono text-xs rounded-full bg-background px-1.5">
                     {count}
                   </span>
                 </button>
