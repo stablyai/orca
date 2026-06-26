@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from 'react'
 // be unit-tested in the node Vitest env (no WebCodecs/DOM); the byte framing it
 // consumes IS tested in src/main/emulator/android/scrcpy-video-frame-parser.
 //
-// Wiring still required (see docs/android-emulation-streaming-notes.md):
+// Wiring still required (see docs/android-emulation-streaming.md):
 //   - preload: expose emulator.startVideoStream / onVideoStreamMeta /
 //     onVideoStreamFrame / stopVideoStream.
 //   - emulator-screen-stream-content.tsx: render this canvas when
