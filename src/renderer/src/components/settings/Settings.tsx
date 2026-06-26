@@ -1331,7 +1331,7 @@ function Settings(): React.JSX.Element {
                   </SettingsSection>
                 ) : null}
 
-                {showDesktopOnlySettings && isMac ? (
+                {showDesktopOnlySettings ? (
                   <SettingsSection
                     id="mobile-emulator"
                     title={translate(
