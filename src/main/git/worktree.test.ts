@@ -332,6 +332,39 @@ describe('addWorktree', () => {
     ])
   })
 
+  it('fails fast with a clear error when git is too old for relative-path worktrees', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'git version 2.47.3\n' })
+
+    await expect(
+      addWorktree('/repo', '/repo-feature', 'feature/test', undefined, false, false, {
+        relativePaths: true
+      })
+    ).rejects.toThrow(/Git 2\.48 or newer is required for devcontainer worktrees/)
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([[['version'], { cwd: '/repo' }]])
+  })
+
+  it('verifies git version before using --relative-paths', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'git version 2.48.1\n' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'true\n' }) // push.autoSetupRemote already set
+
+    await addWorktree('/repo', '/repo-feature', 'feature/test', undefined, false, false, {
+      relativePaths: true
+    })
+
+    expect(gitExecFileAsyncMock.mock.calls[0]?.[0]).toEqual(['version'])
+    expect(gitExecFileAsyncMock.mock.calls[1]?.[0]).toEqual([
+      'worktree',
+      'add',
+      '--relative-paths',
+      '--no-track',
+      '-b',
+      'feature/test',
+      '/repo-feature'
+    ])
+  })
+
   it('checks out a selected existing local branch without creating a new branch', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
 

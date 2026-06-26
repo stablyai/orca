@@ -1,16 +1,12 @@
 import React, { useEffect, useState } from 'react'
 import { Container } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { basename } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
 import type { DevcontainerInfo } from '../../../../shared/devcontainer-types'
 
 type DevcontainerStepProps = {
   onSelect: (info: DevcontainerInfo) => void
-}
-
-/** Derive a short client label (the last path segment) from the host folder. */
-function clientName(hostFolder: string): string {
-  return hostFolder.split('/').filter(Boolean).at(-1) ?? hostFolder
 }
 
 /**
@@ -55,7 +51,7 @@ export function AddRepoDevcontainerStep({ onSelect }: DevcontainerStepProps): Re
         <DialogDescription>
           {translate(
             'auto.components.sidebar.AddRepoDevcontainerStep.description',
-            'Pick a running devcontainer to manage as a project. Files and git stay on your machine; the agent runs inside the container.'
+            'Pick a devcontainer to manage as a project. Files and git stay on your machine; the agent runs inside the container.'
           )}
         </DialogDescription>
       </DialogHeader>
@@ -95,7 +91,7 @@ export function AddRepoDevcontainerStep({ onSelect }: DevcontainerStepProps): Re
                 <Container className="size-4 shrink-0 text-muted-foreground" />
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium">
-                    {clientName(info.hostFolder)}
+                    {basename(info.hostFolder) || info.hostFolder}
                   </span>
                   <span className="block truncate text-xs text-muted-foreground">
                     {info.hostFolder}

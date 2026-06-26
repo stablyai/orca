@@ -62,7 +62,7 @@ describe('DockerPtyProvider.spawn', () => {
       cols: 120,
       rows: 30,
       cwd: '/Users/me/work/aprium/.worktrees/feat',
-      env: { TERM: 'xterm-kitty' }
+      env: { TERM: 'xterm-kitty', ANTHROPIC_API_KEY: 'from-spawn-env', PATH: '/opt/bin' }
     })
 
     expect(result.pid).toBe(4242)
@@ -88,8 +88,9 @@ describe('DockerPtyProvider.spawn', () => {
       'bash'
     ])
     // Secret value travels via the spawn env, not the argv.
-    expect(options.env.ANTHROPIC_API_KEY).toBe('secret')
-    expect(args.join(' ')).not.toContain('secret')
+    expect(options.env.ANTHROPIC_API_KEY).toBe('from-spawn-env')
+    expect(options.env.PATH).toBe('/opt/bin')
+    expect(args.join(' ')).not.toContain('from-spawn-env')
   })
 
   it('routes onData and cleans up on exit', async () => {

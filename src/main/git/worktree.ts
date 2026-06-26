@@ -126,6 +126,38 @@ function isBranchCheckedOutInWorktreeError(error: unknown): boolean {
   )
 }
 
+const MIN_RELATIVE_WORKTREE_PATHS_GIT_VERSION = { major: 2, minor: 48 }
+
+function parseGitVersion(stdout: string): { major: number; minor: number } | null {
+  const match = stdout.match(/git version (\d+)\.(\d+)/i)
+  if (!match) {
+    return null
+  }
+  return { major: Number(match[1]), minor: Number(match[2]) }
+}
+
+async function assertGitSupportsRelativeWorktreePaths(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<void> {
+  const { stdout } = await gitExecFileAsync(['version'], gitExecOptions(repoPath, options))
+  const version = parseGitVersion(stdout)
+  if (!version) {
+    throw new Error(
+      `Git ${MIN_RELATIVE_WORKTREE_PATHS_GIT_VERSION.major}.${MIN_RELATIVE_WORKTREE_PATHS_GIT_VERSION.minor} or newer is required for devcontainer worktrees with relative paths, but git version output could not be parsed: ${stdout.trim() || 'unknown'}`
+    )
+  }
+  if (
+    version.major < MIN_RELATIVE_WORKTREE_PATHS_GIT_VERSION.major ||
+    (version.major === MIN_RELATIVE_WORKTREE_PATHS_GIT_VERSION.major &&
+      version.minor < MIN_RELATIVE_WORKTREE_PATHS_GIT_VERSION.minor)
+  ) {
+    throw new Error(
+      `Git ${MIN_RELATIVE_WORKTREE_PATHS_GIT_VERSION.major}.${MIN_RELATIVE_WORKTREE_PATHS_GIT_VERSION.minor} or newer is required for devcontainer worktrees with relative paths (found ${stdout.trim() || 'unknown'}).`
+    )
+  }
+}
+
 function normalizeLocalBranchRef(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
@@ -774,6 +806,7 @@ export async function addWorktree(
   const args = ['worktree', 'add']
   let effectiveBase: string | undefined
   if (options.relativePaths) {
+    await assertGitSupportsRelativeWorktreePaths(repoPath, options)
     // Why first: `--relative-paths` is an option to `worktree add` itself; it
     // makes both the worktree `.git` file and the `.git/worktrees/<n>/gitdir`
     // back-pointer relative, so they resolve from any absolute prefix (host vs

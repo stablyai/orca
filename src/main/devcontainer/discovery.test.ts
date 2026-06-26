@@ -22,6 +22,12 @@ function inspectFixture(overrides: Partial<DockerInspect> = {}): DockerInspect {
   }
 }
 
+function unmountedInspectFixture(): DockerInspect {
+  return inspectFixture({
+    Mounts: [{ Type: 'bind', Source: '/Users/me/work/other', Destination: '/workspaces/other' }]
+  })
+}
+
 describe('parseDevcontainer', () => {
   it('extracts id, name, host folder, config file, and mounts', () => {
     expect(parseDevcontainer(inspectFixture())).toEqual({
@@ -41,6 +47,10 @@ describe('parseDevcontainer', () => {
     expect(parseDevcontainer(inspectFixture({ Config: { Labels: { foo: 'bar' } } }))).toBeNull()
     expect(parseDevcontainer(inspectFixture({ Config: { Labels: null } }))).toBeNull()
     expect(parseDevcontainer(inspectFixture({ Config: undefined }))).toBeNull()
+  })
+
+  it('returns null when the labeled host folder is not covered by a mount', () => {
+    expect(parseDevcontainer(unmountedInspectFixture())).toBeNull()
   })
 
   it('defaults configFile to null and tolerates missing/partial mounts', () => {
@@ -70,11 +80,17 @@ describe('listDevcontainers', () => {
   }
 
   it('queries by the devcontainer label and returns parsed infos', async () => {
-    const listContainersByLabel = vi.fn(async () => [{ ID: 'abc123', Names: 'cranky_swartz' }])
-    const inspectContainer = vi.fn(async () => inspectFixture())
+    const listContainersByLabel = vi.fn(async () => [
+      { ID: 'unsupported', Names: 'unsupported' },
+      { ID: 'abc123', Names: 'cranky_swartz' }
+    ])
+    const inspectContainer = vi.fn(async (id: string) =>
+      id === 'unsupported' ? unmountedInspectFixture() : inspectFixture()
+    )
     const result = await listDevcontainers(stubClient({ listContainersByLabel, inspectContainer }))
 
     expect(listContainersByLabel).toHaveBeenCalledWith('devcontainer.local_folder', {})
+    expect(inspectContainer).toHaveBeenCalledWith('unsupported')
     expect(inspectContainer).toHaveBeenCalledWith('abc123')
     expect(result).toHaveLength(1)
     expect(result[0]?.hostFolder).toBe('/Users/me/work/aprium')

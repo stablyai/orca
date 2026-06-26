@@ -1,4 +1,5 @@
 import type { ElectronApplication } from 'playwright'
+import { posix } from 'node:path'
 import { test, expect } from './helpers/orca-app'
 
 /**
@@ -7,27 +8,36 @@ import { test, expect } from './helpers/orca-app'
  * renders their client/folder info.
  */
 async function stubDevcontainerList(app: ElectronApplication): Promise<void> {
-  await app.evaluate(({ ipcMain }) => {
-    ipcMain.removeHandler('devcontainer:list')
-    ipcMain.handle('devcontainer:list', () => [
-      {
-        containerId: 'c-aprium',
-        name: 'aprium-dev',
-        hostFolder: '/Users/me/work/aprium',
-        configFile: '/Users/me/work/aprium/.devcontainer/devcontainer.json',
-        running: true,
-        mounts: [{ source: '/Users/me/work/aprium', destination: '/workspaces/aprium' }]
-      },
-      {
-        containerId: 'c-lac',
-        name: 'lac-dev',
-        hostFolder: '/Users/me/work/lac',
-        configFile: null,
-        running: false,
-        mounts: [{ source: '/Users/me/work/lac', destination: '/workspaces/lac' }]
-      }
-    ])
-  })
+  const apriumHostFolder = posix.join('/Users', 'me', 'work', 'aprium')
+  const lacHostFolder = posix.join('/Users', 'me', 'work', 'lac')
+  const apriumConfigFile = posix.join(apriumHostFolder, '.devcontainer', 'devcontainer.json')
+  await app.evaluate(
+    (
+      { ipcMain },
+      paths: { apriumHostFolder: string; lacHostFolder: string; apriumConfigFile: string }
+    ) => {
+      ipcMain.removeHandler('devcontainer:list')
+      ipcMain.handle('devcontainer:list', () => [
+        {
+          containerId: 'c-aprium',
+          name: 'aprium-dev',
+          hostFolder: paths.apriumHostFolder,
+          configFile: paths.apriumConfigFile,
+          running: true,
+          mounts: [{ source: paths.apriumHostFolder, destination: '/workspaces/aprium' }]
+        },
+        {
+          containerId: 'c-lac',
+          name: 'lac-dev',
+          hostFolder: paths.lacHostFolder,
+          configFile: null,
+          running: false,
+          mounts: [{ source: paths.lacHostFolder, destination: '/workspaces/lac' }]
+        }
+      ])
+    },
+    { apriumHostFolder, lacHostFolder, apriumConfigFile }
+  )
 }
 
 test.describe('Add project from devcontainer', () => {
@@ -37,7 +47,10 @@ test.describe('Add project from devcontainer', () => {
   }, testInfo) => {
     await stubDevcontainerList(electronApp)
 
-    await orcaPage.getByRole('button', { name: /Add Project/i }).first().click()
+    await orcaPage
+      .getByRole('button', { name: /Add Project/i })
+      .first()
+      .click()
     const addDialog = orcaPage.getByRole('dialog', { name: /Add a project/i })
     await expect(addDialog).toBeVisible()
 

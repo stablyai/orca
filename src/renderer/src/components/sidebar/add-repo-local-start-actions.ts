@@ -125,7 +125,7 @@ export function getAddRepoLocalStartActions({
         ),
         description: translate(
           'auto.components.sidebar.add.repo.local.start.actions.devcontainerDescription',
-          'Open a running devcontainer as a project'
+          'Open a devcontainer as a project'
         ),
         onClick: onOpenDevcontainerStep
       }

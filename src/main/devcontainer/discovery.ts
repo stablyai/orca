@@ -8,6 +8,7 @@
  * `devcontainer.local_folder` label set by the Dev Containers tooling.
  */
 import { dockerCli, type DockerClient, type DockerInspect } from './docker-client'
+import { hostToContainer } from './path-map'
 import type { ContainerMount, DevcontainerInfo } from '../../shared/devcontainer-types'
 
 export type { DevcontainerInfo }
@@ -37,6 +38,14 @@ export function parseDevcontainer(inspect: DockerInspect): DevcontainerInfo | nu
         mount.Destination.length > 0
     )
     .map((mount) => ({ source: mount.Source, destination: mount.Destination }))
+
+  // Why: PTY cwd translation needs a host mount that docker can actually route
+  // into the container. If the labeled host folder is not covered by any mount,
+  // skip this container instead of letting the devcontainer PTY fall back to a
+  // misleading repo-root cwd.
+  if (!hostToContainer(hostFolder, mounts)) {
+    return null
+  }
 
   return {
     containerId: inspect.Id,

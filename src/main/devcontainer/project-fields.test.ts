@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { toDevcontainerExecutionHostId } from '../../shared/execution-host'
 import { buildDevcontainerProjectFields } from './project-fields'
 
 describe('buildDevcontainerProjectFields', () => {
@@ -16,5 +17,18 @@ describe('buildDevcontainerProjectFields', () => {
   it('keeps connectionId equal to executionHostId so PTY routing resolves the docker provider', () => {
     const fields = buildDevcontainerProjectFields({ hostFolder: '/srv/lac' })
     expect(fields.connectionId).toBe(fields.executionHostId)
+  })
+
+  it('derives the repo display name from a Windows host path', () => {
+    const hostFolder = 'C:\\Users\\me\\work\\repo'
+
+    expect(buildDevcontainerProjectFields({ hostFolder })).toEqual({
+      path: hostFolder,
+      displayName: 'repo',
+      executionHostId: toDevcontainerExecutionHostId(hostFolder),
+      connectionId: toDevcontainerExecutionHostId(hostFolder),
+      worktreeBasePath: '.worktrees',
+      relativePaths: true
+    })
   })
 })

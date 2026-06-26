@@ -2287,7 +2287,8 @@ export function registerPtyHandlers(
     listProcesses: async () => {
       const providerSessions = await Promise.all([
         localProvider.listProcesses(),
-        ...Array.from(sshProviders.values(), (provider) => provider.listProcesses())
+        ...Array.from(sshProviders.values(), (provider) => provider.listProcesses()),
+        ...Array.from(dockerProviders.values(), (provider) => provider.listProcesses())
       ])
       return providerSessions.flat()
     },
@@ -3339,6 +3340,10 @@ export function registerPtyHandlers(
           sessions: await localProvider.listProcesses()
         }),
         ...Array.from(sshProviders.entries(), async ([connectionId, provider]) => ({
+          connectionId,
+          sessions: await provider.listProcesses().catch(() => [])
+        })),
+        ...Array.from(dockerProviders.entries(), async ([connectionId, provider]) => ({
           connectionId,
           sessions: await provider.listProcesses().catch(() => [])
         }))

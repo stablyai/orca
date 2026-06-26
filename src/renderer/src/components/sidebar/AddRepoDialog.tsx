@@ -282,6 +282,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
 
   const { handleSelectDevcontainer } = useAddRepoDevcontainerFlow({
     setIsAdding,
+    onRepoReady: (repoId) => completeGitRepoAdd(repoId, 'local_folder_picker'),
     onDone: resetState
   })
 
