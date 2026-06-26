@@ -33,13 +33,16 @@ export async function bootAndroidDevice(
   return waitForNewBootedSerial(runner, sdk, deviceOrName, known, options)
 }
 
-// Launches the emulator as a detached, unref'd process with no stdio. It must
-// outlive this call and must NOT go through the command runner: execFile would
-// kill the long-running emulator at its timeout (and risks the stdout maxBuffer).
+// Launches the emulator as a detached, unref'd process. It must outlive this
+// call and must NOT go through the command runner: execFile would kill the
+// long-running emulator at its timeout (and risks the stdout maxBuffer).
+// -no-window runs it headless (the scrcpy pane is the view, parity with iOS
+// hiding Simulator.app); windowsHide + ignored stdio prevent a stray console.
 function launchAvdDetached(emulatorPath: string, avdName: string): void {
-  const child = spawn(emulatorPath, bootAvdArgs(avdName), {
+  const child = spawn(emulatorPath, [...bootAvdArgs(avdName), '-no-window'], {
     detached: true,
-    stdio: 'ignore'
+    stdio: 'ignore',
+    windowsHide: true
   })
   child.unref()
 }

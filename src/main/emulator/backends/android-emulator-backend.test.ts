@@ -243,8 +243,8 @@ describe('AndroidEmulatorBackend', () => {
     expect(serial).toBe('emulator-5556')
     expect(spawn).toHaveBeenCalledWith(
       SDK.emulator,
-      ['-avd', 'Pixel_Tablet'],
-      expect.objectContaining({ detached: true })
+      ['-avd', 'Pixel_Tablet', '-no-window'],
+      expect.objectContaining({ detached: true, windowsHide: true })
     )
   })
 
