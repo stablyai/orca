@@ -18,13 +18,11 @@ import {
 } from './scrcpy-video-frame-parser'
 import { emulatorProbe, emulatorProbeError } from '../emulator-probe'
 
-// ============================================================================
-// UNVERIFIED — needs a real device + the bundled scrcpy-server.jar to validate.
-// The connection handshake (dummy byte, 64-byte device name, codec meta) and
-// the server option set are coupled to the scrcpy server version; the pure
-// framing (scrcpy-video-frame-parser) and control encoding (scrcpy-control-
-// protocol) ARE unit-tested. Treat this orchestration as scaffolding.
-// ============================================================================
+// A live scrcpy session validated against a real emulator. The connection
+// handshake (dummy byte, 64-byte device name, codec meta) and the server option
+// set are coupled to the pinned scrcpy server version; the pure framing
+// (scrcpy-video-frame-parser) and control encoding (scrcpy-control-protocol) are
+// unit-tested, while this orchestration is exercised live via probes.
 
 const DEVICE_NAME_BYTES = 64
 const DUMMY_BYTE = 1

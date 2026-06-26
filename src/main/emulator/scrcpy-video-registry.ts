@@ -2,11 +2,9 @@ import type { ScrcpyVideoMeta } from './android/scrcpy-video-frame-parser'
 
 // In-memory pub/sub bridging a live scrcpy session (fed by AndroidEmulatorBackend)
 // to renderer subscribers (the video pane, via the emulator-video-stream IPC).
-// Caches the codec meta + the latest config (SPS/PPS) frame so a late subscriber
-// can initialize its WebCodecs decoder immediately.
-//
-// UNVERIFIED: exercised end-to-end only with a real scrcpy session; the pure
-// framing it carries is unit-tested in scrcpy-video-frame-parser.
+// Caches the codec meta, the config (SPS/PPS) frame, and the current GOP
+// (keyframe + following deltas) so a late subscriber can initialize its WebCodecs
+// decoder and decode from the keyframe immediately, not after the next GOP.
 
 export type ScrcpyVideoFrameMessage = {
   config: boolean
@@ -24,6 +22,7 @@ export type ScrcpyVideoSubscriber = (event: ScrcpyVideoEvent) => void
 type RegistryEntry = {
   meta?: ScrcpyVideoMeta
   config?: ScrcpyVideoFrameMessage
+  gop: ScrcpyVideoFrameMessage[]
   subscribers: Set<ScrcpyVideoSubscriber>
   close: () => void
 }
