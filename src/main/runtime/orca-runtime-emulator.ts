@@ -3,9 +3,9 @@ import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import { EmulatorError } from '../emulator/emulator-errors'
 import {
   inspectEmulatorAvailability,
-  pickDefaultSimulatorDevice,
   type EmulatorAvailability
 } from '../emulator/emulator-availability'
+import { resolveDefaultAttachDevice } from '../emulator/emulator-default-attach-device'
 import { serveSimStateWatcher } from '../emulator/serve-sim-state-watcher'
 import type { EmulatorGesturePoint } from '../emulator/emulator-gesture-sender'
 import type { EmulatorSessionInfo } from '../emulator/emulator-types'
@@ -129,7 +129,7 @@ export class RuntimeEmulatorCommands {
     const bridge = this.requireEmulatorBridge()
     let device = params.device ?? settings.mobileEmulatorDefaultDeviceUdid ?? undefined
     if (!device) {
-      device = pickDefaultSimulatorDevice(await bridge.listSimulators())?.udid
+      device = await resolveDefaultAttachDevice(bridge)
     }
     if (!device) {
       throw new EmulatorError(
