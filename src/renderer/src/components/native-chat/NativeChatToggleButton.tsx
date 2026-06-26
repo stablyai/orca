@@ -1,12 +1,15 @@
 import { useMemo } from 'react'
 import { MessageSquare, SquareTerminal } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { isMacPlatform, nativeChatToggleShortcutLabel } from './native-chat-shortcut'
 
-/** Floating control to flip an agent terminal between the raw terminal and the
- *  native chat view. Rendered as an overlay corner button so it does not disturb
- *  the live xterm layout beneath it. */
+/** Tab-level control to flip an agent terminal between the raw terminal and the
+ *  native chat view. A ghost icon button matching the pane split/close controls
+ *  (TerminalPaneHeaderOverlay), kept as a top-right overlay so it does not
+ *  disturb the live xterm layout beneath it. Tab-level — native chat replaces the
+ *  whole tab view, so it is not duplicated per split pane. */
 export function NativeChatToggleButton({
   isChatViewMode,
   onToggle
@@ -22,10 +25,16 @@ export function NativeChatToggleButton({
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-xs"
             aria-label={label}
             aria-pressed={isChatViewMode}
+            // Match the pane split/close overlay buttons: a subtle ghost icon that
+            // reads as terminal chrome, with a faint surface so it stays legible
+            // over arbitrary xterm content.
+            className="native-chat-toggle-trigger absolute right-1.5 top-1.5 z-20 bg-card/80 text-muted-foreground shadow-sm backdrop-blur hover:bg-accent hover:text-accent-foreground"
             onPointerDown={(event) => {
               // Why: stop the overlay's group-focus pointer handler from also
               // firing, and prevent the click from stealing terminal focus.
@@ -35,15 +44,13 @@ export function NativeChatToggleButton({
               event.stopPropagation()
               onToggle()
             }}
-            className="absolute right-2 top-2 z-20 flex h-7 items-center gap-1.5 rounded-md border border-border bg-card/90 px-2 text-xs text-muted-foreground shadow-sm backdrop-blur hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             {isChatViewMode ? (
-              <SquareTerminal className="size-3.5" />
+              <SquareTerminal className="size-3" />
             ) : (
-              <MessageSquare className="size-3.5" />
+              <MessageSquare className="size-3" />
             )}
-            <span>{label}</span>
-          </button>
+          </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom">
           {label} ({shortcutLabel})
