@@ -3,8 +3,12 @@ import type { GlobalSettings, Repo } from './types'
 export const LOCAL_EXECUTION_HOST_ID = 'local'
 export const ALL_EXECUTION_HOSTS_SCOPE = 'all'
 
-export type ExecutionHostKind = 'local' | 'ssh' | 'runtime'
-export type ExecutionHostId = typeof LOCAL_EXECUTION_HOST_ID | `ssh:${string}` | `runtime:${string}`
+export type ExecutionHostKind = 'local' | 'ssh' | 'runtime' | 'devcontainer'
+export type ExecutionHostId =
+  | typeof LOCAL_EXECUTION_HOST_ID
+  | `ssh:${string}`
+  | `runtime:${string}`
+  | `devcontainer:${string}`
 
 export type ExecutionHostScope = typeof ALL_EXECUTION_HOSTS_SCOPE | ExecutionHostId
 
@@ -12,6 +16,10 @@ export type ParsedExecutionHost =
   | { kind: 'local'; id: typeof LOCAL_EXECUTION_HOST_ID }
   | { kind: 'ssh'; id: `ssh:${string}`; targetId: string }
   | { kind: 'runtime'; id: `runtime:${string}`; environmentId: string }
+  // Why containerKey (not a live container id): containers are recreated with a
+  // new id, so the host is keyed by something stable (the devcontainer's host
+  // folder) and re-resolved to the current container at attach time.
+  | { kind: 'devcontainer'; id: `devcontainer:${string}`; containerKey: string }
 
 function getCurrentLocalPlatform(): NodeJS.Platform | null {
   const globalNavigator = (globalThis as { navigator?: { userAgent?: string; platform?: string } })
@@ -56,6 +64,10 @@ export function toRuntimeExecutionHostId(environmentId: string): `runtime:${stri
   return `runtime:${encodeURIComponent(environmentId)}`
 }
 
+export function toDevcontainerExecutionHostId(containerKey: string): `devcontainer:${string}` {
+  return `devcontainer:${encodeURIComponent(containerKey)}`
+}
+
 export function parseExecutionHostId(value: string | null | undefined): ParsedExecutionHost | null {
   const normalized = normalizeHostPart(value)
   if (!normalized) {
@@ -88,11 +100,37 @@ export function parseExecutionHostId(value: string | null | undefined): ParsedEx
       return null
     }
   }
+  if (normalized.startsWith('devcontainer:')) {
+    const encoded = normalized.slice('devcontainer:'.length)
+    if (!encoded) {
+      return null
+    }
+    try {
+      const containerKey = decodeURIComponent(encoded)
+      return containerKey
+        ? { kind: 'devcontainer', id: `devcontainer:${encoded}`, containerKey }
+        : null
+    } catch {
+      return null
+    }
+  }
   return null
 }
 
 export function normalizeExecutionHostId(value: string | null | undefined): ExecutionHostId | null {
   return parseExecutionHostId(value)?.id ?? null
+}
+
+/**
+ * True when the host's filesystem, git, and worktrees live on THIS machine's
+ * disk: a local host, or a devcontainer whose project is bind-mounted from the
+ * host. Devcontainers run only the *terminal* inside the container (via
+ * `docker exec`); files and git are managed host-side on the same inodes, so
+ * they reuse the local providers and local worktree machinery.
+ */
+export function isLocalFilesystemHost(value: string | null | undefined): boolean {
+  const kind = parseExecutionHostId(value)?.kind
+  return kind === 'local' || kind === 'devcontainer'
 }
 
 export function normalizeExecutionHostScope(value: string | null | undefined): ExecutionHostScope {
@@ -164,5 +202,9 @@ export function getExecutionHostLabel(id: ExecutionHostScope): string {
       return parsed.targetId
     case 'runtime':
       return parsed.environmentId
+    case 'devcontainer':
+      // Why basename: the key is the devcontainer's host folder; its last
+      // segment ("aprium") is the recognizable client/project name.
+      return parsed.containerKey.split('/').filter(Boolean).pop() ?? parsed.containerKey
   }
 }

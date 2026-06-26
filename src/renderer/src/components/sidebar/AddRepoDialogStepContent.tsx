@@ -5,6 +5,8 @@ import { CreateStep } from './AddRepoCreateStep'
 import { AddRepoLocalStartStep } from './AddRepoStartSteps'
 import { AddRepoServerPathStartStep } from './AddRepoServerStartStep'
 import { AddRepoNestedImportStep } from './AddRepoNestedImportStep'
+import { AddRepoDevcontainerStep } from './AddRepoDevcontainerStep'
+import type { DevcontainerInfo } from '../../../../shared/devcontainer-types'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import type { NestedRepoScanResult } from '../../../../shared/types'
 import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types'
@@ -56,6 +58,8 @@ type AddRepoDialogStepContentProps = {
   onOpenCloneStep: () => void
   onOpenCreateStep: () => void
   onOpenRemoteStep: (targetId?: string | null) => void
+  onOpenDevcontainerStep: () => void
+  onSelectDevcontainer: (info: DevcontainerInfo) => void
   onStopNestedScan: () => void
   onServerPathChange: (path: string) => void
   onAddServerPath: (kind: 'git' | 'folder') => void
@@ -124,6 +128,8 @@ export function AddRepoDialogStepContent({
   onOpenCloneStep,
   onOpenCreateStep,
   onOpenRemoteStep,
+  onOpenDevcontainerStep,
+  onSelectDevcontainer,
   onStopNestedScan,
   onServerPathChange,
   onAddServerPath,
@@ -162,9 +168,14 @@ export function AddRepoDialogStepContent({
         onOpenCloneStep={onOpenCloneStep}
         onOpenRemoteStep={onOpenRemoteStep}
         onOpenCreateStep={onOpenCreateStep}
+        onOpenDevcontainerStep={onOpenDevcontainerStep}
         onStopNestedScan={onStopNestedScan}
       />
     )
+  }
+
+  if (step === 'devcontainer') {
+    return <AddRepoDevcontainerStep onSelect={onSelectDevcontainer} />
   }
 
   if (step === 'server-path') {

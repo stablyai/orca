@@ -41,6 +41,11 @@ export type AddWorktreeOptions = GitWorktreeExecOptions & {
     branch: string
     ref: string
   }
+  /** Create the worktree with relative gitdir pointers (`--relative-paths`,
+   *  git >= 2.48). Set for devcontainer repos so a worktree created host-side
+   *  stays valid when the same bind-mounted files are accessed at a different
+   *  absolute path inside the container. */
+  relativePaths?: boolean
 }
 
 export type RemoveWorktreeOptions = GitWorktreeExecOptions & {
@@ -768,6 +773,14 @@ export async function addWorktree(
   let localBaseRefUpdateSuggestion: LocalBaseRefUpdateSuggestion | undefined
   const args = ['worktree', 'add']
   let effectiveBase: string | undefined
+  if (options.relativePaths) {
+    // Why first: `--relative-paths` is an option to `worktree add` itself; it
+    // makes both the worktree `.git` file and the `.git/worktrees/<n>/gitdir`
+    // back-pointer relative, so they resolve from any absolute prefix (host vs
+    // in-container). Verified: an absolute-pointer worktree breaks when the
+    // host path is absent inside the container; a relative one stays valid.
+    args.push('--relative-paths')
+  }
   if (noCheckout) {
     args.push('--no-checkout')
   }

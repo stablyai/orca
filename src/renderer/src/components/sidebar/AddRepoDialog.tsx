@@ -15,6 +15,7 @@ import { useCreateProjectDefaults } from './useCreateProjectDefaults'
 import { useAddRepoHostChangeReset } from './use-add-repo-host-change-reset'
 import { AddRepoDialogChrome } from './AddRepoDialogChrome'
 import { AddRepoHostSelectorSlot } from './AddRepoHostSelectorSlot'
+import { useAddRepoDevcontainerFlow } from './useAddRepoDevcontainerFlow'
 import { useAddRepoRemoteNestedScan } from './use-add-repo-remote-nested-scan'
 
 const AddRepoDialog = React.memo(function AddRepoDialog() {
@@ -279,6 +280,11 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     [closeModal, isAdding, resetState, step, trackNestedBackAction]
   )
 
+  const { handleSelectDevcontainer } = useAddRepoDevcontainerFlow({
+    setIsAdding,
+    onDone: resetState
+  })
+
   return (
     <AddRepoDialogChrome
       isOpen={isOpen}
@@ -328,6 +334,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
         browseHostKind={
           selectedHostKind === 'ssh' || selectedHostKind === 'runtime' ? selectedHostKind : 'local'
         }
+        onOpenDevcontainerStep={() => setStep('devcontainer')}
+        onSelectDevcontainer={handleSelectDevcontainer}
         createDefaultParent={createDefaultParent}
         createGitAvailability={createGitAvailability}
         createRuntimeParentStatus={createRuntimeParentStatus}

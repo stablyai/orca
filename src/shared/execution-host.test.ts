@@ -9,6 +9,9 @@ import {
   normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds,
   parseExecutionHostId,
+  getExecutionHostLabel,
+  isLocalFilesystemHost,
+  toDevcontainerExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from './execution-host'
@@ -32,6 +35,27 @@ describe('execution host identity', () => {
       id: 'runtime:prod%2Fserver',
       environmentId: 'prod/server'
     })
+  })
+
+  it('round-trips devcontainer host ids and labels by folder basename', () => {
+    const id = toDevcontainerExecutionHostId('/Users/me/work/aprium')
+    expect(id).toBe('devcontainer:%2FUsers%2Fme%2Fwork%2Faprium')
+    expect(parseExecutionHostId(id)).toEqual({
+      kind: 'devcontainer',
+      id: 'devcontainer:%2FUsers%2Fme%2Fwork%2Faprium',
+      containerKey: '/Users/me/work/aprium'
+    })
+    expect(getExecutionHostLabel(id)).toBe('aprium')
+    // An empty/invalid devcontainer id is rejected like the other kinds.
+    expect(parseExecutionHostId('devcontainer:')).toBeNull()
+  })
+
+  it('treats local and devcontainer as local-filesystem hosts, but not ssh/runtime', () => {
+    expect(isLocalFilesystemHost(LOCAL_EXECUTION_HOST_ID)).toBe(true)
+    expect(isLocalFilesystemHost(toDevcontainerExecutionHostId('/Users/me/work/aprium'))).toBe(true)
+    expect(isLocalFilesystemHost(toSshExecutionHostId('vm'))).toBe(false)
+    expect(isLocalFilesystemHost(toRuntimeExecutionHostId('prod'))).toBe(false)
+    expect(isLocalFilesystemHost(null)).toBe(false)
   })
 
   it('labels the local host by platform and by navigator detection', () => {

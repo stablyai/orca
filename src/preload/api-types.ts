@@ -9,6 +9,7 @@ import type {
   HostedReviewProvider
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
+import type { DevcontainerInfo } from '../shared/devcontainer-types'
 import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
 import type { AppIdentity } from '../shared/app-identity'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
@@ -1518,6 +1519,10 @@ export type PreloadApi = {
       args: HostedReviewCreationEligibilityArgs
     ) => Promise<HostedReviewCreationEligibility>
     create: (args: CreateHostedReviewArgs) => Promise<CreateHostedReviewResult>
+  }
+  // ── Devcontainers — Add-Project source listing running devcontainers ──
+  devcontainer: {
+    list: () => Promise<DevcontainerInfo[]>
   }
   // ── GitLab — parallel to gh, MR/issue surface only in v1 ────────
   // Shapes mirror gh.* one-to-one where the data matches; diverge

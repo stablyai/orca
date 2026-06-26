@@ -39,6 +39,8 @@ import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import { SSH_SESSION_EXPIRED_ERROR, isSshPtyNotFoundError } from '../providers/ssh-pty-provider'
 import { parseAppSshPtyId, toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
+import { parseExecutionHostId } from '../../shared/execution-host'
+import { DevcontainerRuntime } from '../devcontainer/devcontainer-runtime'
 import { mintPtySessionId, isSafePtySessionId } from '../daemon/pty-session-id'
 import { addNodePtyRecoveryHint } from '../daemon/node-pty-error-hints'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
@@ -111,6 +113,22 @@ type FreshLocalFallbackProvider = IPtyProvider & {
   routesFreshSpawnsToLocalProvider?: true
 }
 const sshProviders = new Map<string, IPtyProvider>()
+// Devcontainer PTY providers (`docker exec`), keyed by the devcontainer
+// execution-host id used as the connectionId. Kept separate from sshProviders
+// because devcontainers carry none of the SSH relay machinery (no id wrapping,
+// no remote leases) — the guards below branch on `isDockerConnection`.
+const dockerProviders = new Map<string, IPtyProvider>()
+
+function isDockerConnection(connectionId: string | null | undefined): boolean {
+  if (!connectionId) {
+    return false
+  }
+  // Registration may be lazy, so also recognize the id format itself — the
+  // SSH-coupled id wrapping/lease guards must hold even before first spawn.
+  return (
+    dockerProviders.has(connectionId) || parseExecutionHostId(connectionId)?.kind === 'devcontainer'
+  )
+}
 // Why: PTY IDs are assigned at spawn time with a connectionId, but subsequent
 // write/resize/kill calls only carry the PTY ID. This map lets us route
 // post-spawn operations to the correct provider without the renderer needing
@@ -314,11 +332,32 @@ export function hasPendingRendererSerializerForPaneKey(paneKey: string): boolean
   return isValidPaneKey(paneKey) && pendingByPaneKey.has(paneKey)
 }
 
+/**
+ * Lazily create + register a devcontainer PTY provider the first time one of
+ * its terminals spawns. The host id (`devcontainer:<key>`) is self-describing,
+ * so no separate connect step is needed — unlike SSH, a devcontainer has no
+ * relay session to stand up. The runtime resolves/starts the container per spawn.
+ */
+function ensureDevcontainerProvider(connectionId: string): IPtyProvider | undefined {
+  const parsed = parseExecutionHostId(connectionId)
+  if (parsed?.kind !== 'devcontainer') {
+    return undefined
+  }
+  const provider = new DevcontainerRuntime({
+    containerKey: parsed.containerKey
+  }).createPtyProvider()
+  dockerProviders.set(connectionId, provider)
+  return provider
+}
+
 function getProvider(connectionId: string | null | undefined): IPtyProvider {
   if (!connectionId) {
     return localProvider
   }
-  const provider = sshProviders.get(connectionId)
+  const provider =
+    dockerProviders.get(connectionId) ??
+    sshProviders.get(connectionId) ??
+    ensureDevcontainerProvider(connectionId)
   if (!provider) {
     throw new Error(`No PTY provider for connection "${connectionId}"`)
   }
@@ -337,15 +376,23 @@ function hasPtyProviderForInspection(ptyId: string): boolean {
   // Why: process inspection is background polling; disconnected SSH hosts should
   // read as idle instead of surfacing repeated IPC errors.
   const connectionId = ptyOwnership.get(ptyId)
-  return connectionId == null || sshProviders.has(connectionId)
+  return connectionId == null || sshProviders.has(connectionId) || dockerProviders.has(connectionId)
 }
 
 function getAppPtyId(connectionId: string | null | undefined, ptyId: string): string {
-  return connectionId ? toAppSshPtyId(connectionId, ptyId) : ptyId
+  // Devcontainer providers return globally-unique ids and have no relay, so the
+  // SSH id wrapping must be skipped — the raw id is the app-facing id.
+  if (!connectionId || isDockerConnection(connectionId)) {
+    return ptyId
+  }
+  return toAppSshPtyId(connectionId, ptyId)
 }
 
 function getRelayPtyId(connectionId: string | null | undefined, ptyId: string): string {
-  return connectionId ? toRelaySshPtyId(connectionId, ptyId) : ptyId
+  if (!connectionId || isDockerConnection(connectionId)) {
+    return ptyId
+  }
+  return toRelaySshPtyId(connectionId, ptyId)
 }
 
 function stripRemotePaneEnvWhenHooksDisabled(
@@ -456,7 +503,7 @@ function finishPtyShutdown(
   store: Store | undefined
 ): void {
   clearProviderPtyState(id)
-  if (connectionId) {
+  if (connectionId && !isDockerConnection(connectionId)) {
     store?.markSshRemotePtyLease(connectionId, getRelayPtyId(connectionId, id), 'terminated')
   }
   ptyOwnership.delete(id)
@@ -966,6 +1013,22 @@ export function unregisterSshPtyProvider(connectionId: string): void {
 /** Get the SSH PTY provider for a connection (for dispose on cleanup). */
 export function getSshPtyProvider(connectionId: string): IPtyProvider | undefined {
   return sshProviders.get(connectionId)
+}
+
+/** Register a devcontainer (`docker exec`) PTY provider, keyed by its
+ *  devcontainer execution-host id (used as the connectionId on spawn). */
+export function registerDockerPtyProvider(connectionId: string, provider: IPtyProvider): void {
+  dockerProviders.set(connectionId, provider)
+}
+
+/** Remove a devcontainer PTY provider when its project/host is closed. */
+export function unregisterDockerPtyProvider(connectionId: string): void {
+  dockerProviders.delete(connectionId)
+}
+
+/** Get the devcontainer PTY provider for a connection (for dispose on cleanup). */
+export function getDockerPtyProvider(connectionId: string): IPtyProvider | undefined {
+  return dockerProviders.get(connectionId)
 }
 
 /** Get the installed PTY provider (for direct access in tests/runtime).
@@ -1983,7 +2046,9 @@ export function registerPtyHandlers(
               clearProviderPtyState(effectiveSessionAppId)
               deletePtyOwnership(effectiveSessionAppId)
             }
-            store?.markSshRemotePtyLease(args.connectionId, effectiveSessionRelayId, 'expired')
+            if (!isDockerConnection(args.connectionId)) {
+              store?.markSshRemotePtyLease(args.connectionId, effectiveSessionRelayId, 'expired')
+            }
           }
           if (isMintedSessionId && sessionId !== undefined) {
             clearProviderPtyState(sessionId)
@@ -1997,7 +2062,7 @@ export function registerPtyHandlers(
         ptyOwnership.set(result.id, args.connectionId ?? null)
         const relayResultId = getRelayPtyId(args.connectionId, result.id)
         const persistSshLease = (): void => {
-          if (!store || !args.connectionId) {
+          if (!store || !args.connectionId || isDockerConnection(args.connectionId)) {
             return
           }
           // Why: workspace-session bindings keep app-facing PTY ids for hydration,
@@ -2708,7 +2773,9 @@ export function registerPtyHandlers(
               clearProviderPtyState(effectiveSessionAppId)
               deletePtyOwnership(effectiveSessionAppId)
             }
-            store?.markSshRemotePtyLease(args.connectionId, effectiveSessionRelayId, 'expired')
+            if (!isDockerConnection(args.connectionId)) {
+              store?.markSshRemotePtyLease(args.connectionId, effectiveSessionRelayId, 'expired')
+            }
           }
           // Why: if buildPtyHostEnv materialized provider state for this minted
           // id but provider.spawn failed, that state would otherwise leak.
@@ -3231,7 +3298,9 @@ export function registerPtyHandlers(
     const ownedConnectionId = ptyOwnership.get(args.id)
     const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
     const connectionId = ownedConnectionId ?? parsedSshId?.connectionId
-    const provider = connectionId ? sshProviders.get(connectionId) : tryGetProviderForPty(args.id)
+    const provider = connectionId
+      ? (dockerProviders.get(connectionId) ?? sshProviders.get(connectionId))
+      : tryGetProviderForPty(args.id)
     if (!provider && connectionId) {
       // Why: detached SSH PTYs intentionally keep ownership after their
       // provider is unregistered; hydrated app-scoped ids can also arrive

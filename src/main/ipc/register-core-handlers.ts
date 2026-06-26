@@ -51,6 +51,7 @@ import { registerSpeechHandlers } from './speech'
 import { registerCodexAccountHandlers } from './codex-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
 import { registerAgentTrustHandlers } from './agent-trust'
+import { registerDevcontainerHandlers } from './devcontainer'
 import { registerClaudeAccountHandlers } from './claude-accounts'
 import { registerUpdaterHandlers } from '../window/attach-main-window-services'
 import {
@@ -115,6 +116,7 @@ export function registerCoreHandlers(
   registerCodexAccountHandlers(codexAccounts)
   registerAgentHookHandlers(runtime)
   registerAgentTrustHandlers()
+  registerDevcontainerHandlers()
   registerClaudeAccountHandlers(claudeAccounts)
   registerRateLimitHandlers(rateLimits)
   registerGitHubHandlers(store, stats)

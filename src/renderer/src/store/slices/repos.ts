@@ -90,6 +90,8 @@ export type RepoUpdate = Partial<
     | 'hookSettings'
     | 'worktreeBaseRef'
     | 'worktreeBasePath'
+    | 'executionHostId'
+    | 'connectionId'
     | 'kind'
     | 'symlinkPaths'
     | 'issueSourcePreference'
