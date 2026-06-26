@@ -175,10 +175,12 @@ function hasRestorableStablePanePty(
   ptyIdsByTabId: Record<string, string[] | undefined>,
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
 ): boolean {
+  const layout = terminalLayoutsByTabId[tabId]
+  const hasLeafPty = Boolean(layout?.ptyIdsByLeafId?.[leafId])
+  const isSingleLeafLayout = layout?.root?.type === 'leaf' && layout.root.leafId === leafId
+
   return Boolean(
-    tab.ptyId ||
-    (ptyIdsByTabId[tabId]?.length ?? 0) > 0 ||
-    terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId]
+    hasLeafPty || (isSingleLeafLayout && (tab.ptyId || (ptyIdsByTabId[tabId]?.length ?? 0) > 0))
   )
 }
 
@@ -252,6 +254,7 @@ export function resumeSleepingAgentSessionsForWorktree(worktreeId: string): numb
 
   const paneOwnedClaimKeys = new Set(
     worktreeRecords
+      .filter((record) => !isInvalidWorktreeActivationRecord(record))
       .filter((record) => recordPaneIsOwnedByPreservedPane(record, state))
       .map(getProviderSessionClaimKey)
   )
