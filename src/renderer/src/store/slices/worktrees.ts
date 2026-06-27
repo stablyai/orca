@@ -2955,7 +2955,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               s.settings,
               reviewRepo.id,
               reviewRepo.connectionId,
-              reviewRepo.executionHostId
+              reviewRepo.executionHostId,
+              true
             )
           : null
       const prCacheKey =
@@ -2966,7 +2967,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               reviewBranch,
               s.settings,
               reviewRepo.connectionId,
-              reviewRepo.executionHostId
+              reviewRepo.executionHostId,
+              true
             )
           : null
       const prCacheKeys =

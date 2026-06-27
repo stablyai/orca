@@ -135,7 +135,7 @@ function settingsForHostedReviewRepoOwner(
   settings: AppState['settings'],
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
 ): AppState['settings'] {
-  if (!repo?.executionHostId && !repo?.connectionId) {
+  if (!repo) {
     return settings
   }
   const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
@@ -149,6 +149,16 @@ function settingsForHostedReviewRepoOwner(
   return settings
     ? { ...settings, activeRuntimeEnvironmentId: null }
     : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
+}
+
+function settingsForHostedReviewActionOwner(
+  settings: AppState['settings'],
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
+): AppState['settings'] {
+  if (!repo?.executionHostId && !repo?.connectionId) {
+    return settings
+  }
+  return settingsForHostedReviewRepoOwner(settings, repo)
 }
 
 export type HostedReviewSlice = {
@@ -205,7 +215,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
   getHostedReviewCreationEligibility: async (args) => {
     const settings = get().settings
     const repo = findHostedReviewRepoByPath(get().repos, args.repoPath, args.repoId)
-    const ownerSettings = settingsForHostedReviewRepoOwner(settings, repo)
+    const ownerSettings = settingsForHostedReviewActionOwner(settings, repo)
     const target = getActiveRuntimeTarget(ownerSettings)
     if (target.kind === 'environment') {
       const { repoPath: _repoPath, worktreePath, ...runtimeArgs } = args
@@ -231,7 +241,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
   createHostedReview: async (repoPath, input) => {
     const settings = get().settings
     const repo = findHostedReviewRepoByPath(get().repos, repoPath, input.repoId)
-    const ownerSettings = settingsForHostedReviewRepoOwner(settings, repo)
+    const ownerSettings = settingsForHostedReviewActionOwner(settings, repo)
     const target = getActiveRuntimeTarget(ownerSettings)
     const { repoId: inputRepoId, ...hostedReviewInput } = input
     if (target.kind === 'environment') {
@@ -271,9 +281,10 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       repoPath,
       branch,
       ownerSettings,
-      options?.repoId,
+      repoId,
       repo?.connectionId,
-      repo?.executionHostId
+      repo?.executionHostId,
+      repo !== undefined
     )
     const cached = get().hostedReviewCache[cacheKey]
     const hintKey = linkedReviewHintKey(options)
@@ -341,7 +352,8 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                   branch,
                   ownerSettings,
                   repo?.connectionId,
-                  repo?.executionHostId
+                  repo?.executionHostId,
+                  repo !== undefined
                 ),
                 getLegacyGitHubPRCacheKey(repoPath, repoId, branch),
                 getLegacyGitHubPRCacheKey(repoPath, undefined, branch)

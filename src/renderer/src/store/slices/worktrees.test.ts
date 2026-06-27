@@ -19,6 +19,7 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 vi.mock('sonner', () => ({
   toast: {
@@ -3257,7 +3258,14 @@ describe('worktree remote runtime mutations', () => {
     })
     store.setState({
       repos: [
-        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+        {
+          id: 'repo1',
+          path: '/repo1',
+          displayName: 'Repo 1',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: LOCAL_EXECUTION_HOST_ID
+        }
       ],
       worktreesByRepo: { repo1: [wt] }
     } as Partial<AppState>)
@@ -4146,8 +4154,42 @@ describe('worktree remote runtime mutations', () => {
       linkedPR: 456
     })
     const fetchHostedReviewForBranch = vi.fn().mockResolvedValue(null)
-    const cacheKey = getHostedReviewCacheKey('/repo1', 'pr-branch', undefined, 'repo1')
-    const prCacheKey = getGitHubPRCacheKey('/repo1', 'repo1', 'pr-branch')
+    runtimeEnvironmentCall.mockImplementation(({ method }: RuntimeEnvironmentCallRequest) => ({
+      id: `test-${method}`,
+      ok: true,
+      result: method === 'worktrees.list' ? [] : null
+    }))
+    const focusedRuntimeSettings = { activeRuntimeEnvironmentId: 'env-win' } as AppState['settings']
+    const cacheKey = getHostedReviewCacheKey(
+      '/repo1',
+      'pr-branch',
+      focusedRuntimeSettings,
+      'repo1',
+      null,
+      null,
+      true
+    )
+    const runtimeCacheKey = getHostedReviewCacheKey(
+      '/repo1',
+      'pr-branch',
+      focusedRuntimeSettings,
+      'repo1'
+    )
+    const prCacheKey = getGitHubPRCacheKey(
+      '/repo1',
+      'repo1',
+      'pr-branch',
+      focusedRuntimeSettings,
+      null,
+      null,
+      true
+    )
+    const runtimePRCacheKey = getGitHubPRCacheKey(
+      '/repo1',
+      'repo1',
+      'pr-branch',
+      focusedRuntimeSettings
+    )
     const legacyRepoPRCacheKey = getLegacyGitHubPRCacheKey('/repo1', 'repo1', 'pr-branch')
     const legacyPathPRCacheKey = getLegacyGitHubPRCacheKey('/repo1', undefined, 'pr-branch')
     const prData = {
@@ -4160,6 +4202,7 @@ describe('worktree remote runtime mutations', () => {
       mergeable: 'MERGEABLE' as const
     }
     store.setState({
+      settings: focusedRuntimeSettings,
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
@@ -4177,11 +4220,19 @@ describe('worktree remote runtime mutations', () => {
             mergeable: 'MERGEABLE'
           },
           fetchedAt: Date.now()
+        },
+        [runtimeCacheKey]: {
+          data: null,
+          fetchedAt: Date.now()
         }
       },
       prCache: {
         [prCacheKey]: {
           data: prData,
+          fetchedAt: Date.now()
+        },
+        [runtimePRCacheKey]: {
+          data: { ...prData, title: 'Focused runtime PR' },
           fetchedAt: Date.now()
         },
         [legacyRepoPRCacheKey]: {
@@ -4200,7 +4251,9 @@ describe('worktree remote runtime mutations', () => {
 
     expect(store.getState().worktreesByRepo.repo1[0]?.linkedPR).toBeNull()
     expect(store.getState().hostedReviewCache[cacheKey]).toBeUndefined()
+    expect(store.getState().hostedReviewCache[runtimeCacheKey]).toBeDefined()
     expect(store.getState().prCache[prCacheKey]).toBeUndefined()
+    expect(store.getState().prCache[runtimePRCacheKey]).toBeDefined()
     expect(store.getState().prCache[legacyRepoPRCacheKey]).toBeUndefined()
     expect(store.getState().prCache[legacyPathPRCacheKey]).toBeUndefined()
     expect(fetchHostedReviewForBranch).toHaveBeenCalledWith('/repo1', 'pr-branch', {

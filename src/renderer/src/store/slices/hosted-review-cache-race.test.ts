@@ -90,7 +90,15 @@ describe('hosted review cache race protection', () => {
     })
     mockApi.hostedReview.forBranch.mockReturnValueOnce(fetch)
     const store = makeStore()
-    const cacheKey = getHostedReviewCacheKey('/repo', 'feature/race')
+    const cacheKey = getHostedReviewCacheKey(
+      '/repo',
+      'feature/race',
+      null,
+      'repo-1',
+      null,
+      null,
+      true
+    )
 
     const request = store.getState().fetchHostedReviewForBranch('/repo', 'feature/race')
     vi.setSystemTime(200)
@@ -125,7 +133,15 @@ describe('hosted review cache race protection', () => {
     })
     mockApi.hostedReview.forBranch.mockReturnValueOnce(fetch)
     const store = makeStore()
-    const cacheKey = getHostedReviewCacheKey('/repo', 'feature/error-race')
+    const cacheKey = getHostedReviewCacheKey(
+      '/repo',
+      'feature/error-race',
+      null,
+      'repo-1',
+      null,
+      null,
+      true
+    )
 
     try {
       const request = store.getState().fetchHostedReviewForBranch('/repo', 'feature/error-race')
@@ -167,7 +183,15 @@ describe('hosted review cache race protection', () => {
     })
     mockApi.hostedReview.forBranch.mockReturnValueOnce(fetch)
     const store = makeStore()
-    const cacheKey = getHostedReviewCacheKey('/repo', 'feature/same-ms-race')
+    const cacheKey = getHostedReviewCacheKey(
+      '/repo',
+      'feature/same-ms-race',
+      null,
+      'repo-1',
+      null,
+      null,
+      true
+    )
 
     const request = store.getState().fetchHostedReviewForBranch('/repo', 'feature/same-ms-race')
     store.setState({
@@ -202,7 +226,15 @@ describe('hosted review cache race protection', () => {
     }
     mockApi.hostedReview.forBranch.mockResolvedValueOnce(freshReview)
     const store = makeStore()
-    const cacheKey = getHostedReviewCacheKey('/repo', 'feature/same-ms-existing')
+    const cacheKey = getHostedReviewCacheKey(
+      '/repo',
+      'feature/same-ms-existing',
+      null,
+      'repo-1',
+      null,
+      null,
+      true
+    )
 
     store.setState({
       hostedReviewCache: {

@@ -165,7 +165,7 @@ describe('getPRGroupKey', () => {
     expect(getPRGroupKey(worktree, repoMap, prCache)).toBe('closed')
   })
 
-  it('does not fall back to local PR cache while runtime scoped data is loading', () => {
+  it('uses local PR cache for a known local repo while a runtime is focused', () => {
     const prCache = {
       'repo-1::feature/super-critical': {
         data: { state: 'merged' }
@@ -176,7 +176,7 @@ describe('getPRGroupKey', () => {
       getPRGroupKey(worktree, repoMap, prCache, {
         activeRuntimeEnvironmentId: 'env-1'
       } as never)
-    ).toBe('in-progress')
+    ).toBe('done')
   })
 
   it('uses SSH-scoped PR cache entries instead of local entries for SSH repos', () => {

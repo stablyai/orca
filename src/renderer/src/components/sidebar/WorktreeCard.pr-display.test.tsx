@@ -20,6 +20,7 @@ const updateWorktreeMeta = vi.fn()
 
 let worktreeCardProperties: WorktreeCardProperty[] = ['status']
 let hostedReviewCache: Record<string, unknown> = {}
+let issueCache: Record<string, unknown> = {}
 let prCache: Record<string, unknown> = {}
 let workspacePortScan: WorkspacePortScanResult | null = null
 let settings: Partial<GlobalSettings> | null = null
@@ -33,7 +34,7 @@ vi.mock('@/store', () => ({
       fetchLinearIssue,
       gitConflictOperationByWorktree: {},
       hostedReviewCache,
-      issueCache: {},
+      issueCache,
       linearIssueCache: {},
       openModal,
       prCache,
@@ -161,6 +162,7 @@ describe('WorktreeCard linked PR display', () => {
     vi.clearAllMocks()
     worktreeCardProperties = ['status']
     hostedReviewCache = {}
+    issueCache = {}
     prCache = {}
     workspacePortScan = null
     settings = null
@@ -665,6 +667,42 @@ describe('WorktreeCard linked PR display', () => {
 
     expect(markup).toContain('PR: Merged')
     expect(markup).toContain('text-purple-600/70')
+    expect(markup).not.toContain('Branch')
+    expect(markup).not.toContain('lucide-git-branch')
+  })
+
+  it('reads the local branch PR cache for a known local repo while a runtime is focused', async () => {
+    settings = {
+      activeRuntimeEnvironmentId: 'env-win',
+      experimentalNewWorktreeCardStyle: true
+    }
+    worktreeCardProperties = ['status']
+    prCache = {
+      'repo-1::feature/local-branch': {
+        data: makePRInfo({
+          number: 6341,
+          title: 'Keep local PR status visible',
+          state: 'open',
+          checksStatus: 'pending'
+        }),
+        fetchedAt: Date.now()
+      },
+      'runtime:env-win::repo-1::feature/local-branch': {
+        data: null,
+        fetchedAt: Date.now()
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ linkedPR: null })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('PR checks: Pending')
     expect(markup).not.toContain('Branch')
     expect(markup).not.toContain('lucide-git-branch')
   })

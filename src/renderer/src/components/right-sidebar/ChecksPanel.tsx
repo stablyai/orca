@@ -607,7 +607,8 @@ export default function ChecksPanel(): React.JSX.Element {
           branch,
           settings,
           repo.connectionId,
-          repo.executionHostId
+          repo.executionHostId,
+          true
         )
       : ''
   const hostedReviewCacheKey =
@@ -618,7 +619,8 @@ export default function ChecksPanel(): React.JSX.Element {
           settings,
           repo.id,
           repo.connectionId,
-          repo.executionHostId
+          repo.executionHostId,
+          true
         )
       : ''
   const refreshContextKey = `${activeWorktreeId ?? ''}::${prCacheKey}::${branch}`
@@ -726,7 +728,8 @@ export default function ChecksPanel(): React.JSX.Element {
           prChecksCacheSuffix(prNumber, pr?.prRepo),
           settings,
           repo.connectionId,
-          repo.executionHostId
+          repo.executionHostId,
+          true
         )
       : ''
   const commentsCacheKey =
@@ -737,7 +740,8 @@ export default function ChecksPanel(): React.JSX.Element {
           prCommentsCacheSuffix(prNumber, pr?.prRepo),
           settings,
           repo.connectionId,
-          repo.executionHostId
+          repo.executionHostId,
+          true
         )
       : ''
   const checksFetchedAt = useAppStore((s) =>

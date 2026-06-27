@@ -630,7 +630,15 @@ describe('createGitHubSlice.fetchPRChecks', () => {
 
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      repos: [
+        {
+          id: repoId,
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ],
       prCache: {
         [runtimePrCacheKey]: {
           data: makePR({ checksStatus: 'pending' }),
@@ -654,6 +662,51 @@ describe('createGitHubSlice.fetchPRChecks', () => {
     ])
     expect(store.getState().checksCache[localChecksCacheKey]).toBeUndefined()
     expect(store.getState().prCache[runtimePrCacheKey]?.data?.checksStatus).toBe('success')
+  })
+
+  it('keeps known local repo checks on local cache keys when a runtime is focused', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+    const branch = 'feature/local-checks'
+    const localPrCacheKey = `${repoId}::${branch}`
+    const localChecksCacheKey = `${repoId}::pr-checks::12`
+    const runtimeChecksCacheKey = `runtime:env-1::${repoId}::pr-checks::12`
+
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      prCache: {
+        [localPrCacheKey]: {
+          data: makePR({ checksStatus: 'pending' }),
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    mockApi.gh.prChecks.mockResolvedValueOnce([
+      { name: 'build', status: 'completed', conclusion: 'success', url: null }
+    ])
+
+    await store
+      .getState()
+      .fetchPRChecks(repoPath, 12, branch, undefined, null, { force: true, repoId })
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.gh.prChecks).toHaveBeenCalledWith({
+      repoPath,
+      repoId,
+      prNumber: 12,
+      headSha: undefined,
+      prRepo: null,
+      noCache: true,
+      sourceContext: undefined
+    })
+    expect(store.getState().checksCache[localChecksCacheKey]?.data).toEqual([
+      { name: 'build', status: 'completed', conclusion: 'success', url: null }
+    ])
+    expect(store.getState().checksCache[runtimeChecksCacheKey]).toBeUndefined()
+    expect(store.getState().prCache[localPrCacheKey]?.data?.checksStatus).toBe('success')
   })
 
   it('marks the PR cache entry as failure when any check fails', async () => {
@@ -1064,7 +1117,15 @@ describe('createGitHubSlice.fetchPRComments', () => {
 
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+      repos: [
+        {
+          id: repoId,
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ]
     } as unknown as Partial<AppState>)
 
     await store.getState().fetchPRComments(repoPath, 12, {
@@ -1090,6 +1151,42 @@ describe('createGitHubSlice.fetchPRComments', () => {
     ).toBe('remote')
     expect(
       store.getState().commentsCache[`${repoId}::pr-comments::acme/widgets::12`]
+    ).toBeUndefined()
+  })
+
+  it('keeps known local repo comments on local cache keys when a runtime is focused', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+    mockApi.gh.prComments.mockResolvedValueOnce([
+      { id: 1, author: 'local', authorAvatarUrl: '', body: '', createdAt: '', url: '' }
+    ])
+
+    await store.getState().fetchPRComments(repoPath, 12, {
+      force: true,
+      repoId,
+      prRepo: { owner: 'Acme', repo: 'Widgets' }
+    })
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.gh.prComments).toHaveBeenCalledWith({
+      repoPath,
+      repoId,
+      prNumber: 12,
+      prRepo: { owner: 'Acme', repo: 'Widgets' },
+      noCache: true,
+      sourceContext: undefined
+    })
+    expect(
+      store.getState().commentsCache[`${repoId}::pr-comments::acme/widgets::12`]?.data?.[0].author
+    ).toBe('local')
+    expect(
+      store.getState().commentsCache[`runtime:env-1::${repoId}::pr-comments::acme/widgets::12`]
     ).toBeUndefined()
   })
 
@@ -1249,7 +1346,15 @@ describe('createGitHubSlice.fetchPRCheckDetails', () => {
 
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+      repos: [
+        {
+          id: repoId,
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ]
     } as unknown as Partial<AppState>)
 
     await store.getState().fetchPRCheckDetails(
@@ -1276,6 +1381,39 @@ describe('createGitHubSlice.fetchPRCheckDetails', () => {
       timeoutMs: 30_000
     })
     expect(mockApi.gh.prCheckDetails).not.toHaveBeenCalled()
+  })
+
+  it('loads known local repo check details through local IPC when a runtime is focused', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    await store.getState().fetchPRCheckDetails(
+      repoPath,
+      {
+        checkRunId: 123,
+        checkName: 'build',
+        prRepo: { owner: 'Acme', repo: 'Widgets' }
+      },
+      { repoId }
+    )
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.gh.prCheckDetails).toHaveBeenCalledWith({
+      repoPath,
+      repoId,
+      checkRunId: 123,
+      workflowRunId: undefined,
+      checkName: 'build',
+      url: undefined,
+      prRepo: { owner: 'Acme', repo: 'Widgets' },
+      sourceContext: undefined
+    })
   })
 })
 
@@ -1428,7 +1566,15 @@ describe('createGitHubSlice PR comment mutations', () => {
     const repoId = 'repo-id'
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+      repos: [
+        {
+          id: repoId,
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ]
     } as unknown as Partial<AppState>)
 
     await store.getState().addPRReviewCommentReply(repoPath, 12, 99, 'reply', {
@@ -2937,8 +3083,28 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const settings = { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings']
     const runtimeHostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, settings, repoId)
     const localHostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+    const localChecksCacheKey = `${repoId}::${prChecksCacheSuffix(12, null, 'head-oid')}`
+    const runtimeChecksCacheKey = `runtime:env-1::${repoId}::${prChecksCacheSuffix(
+      12,
+      null,
+      'head-oid'
+    )}`
 
-    store.setState({ settings } as Partial<AppState>)
+    store.setState({
+      settings,
+      checksCache: {
+        [localChecksCacheKey]: {
+          data: [{ name: 'test', status: 'completed', conclusion: 'failure', url: null }],
+          fetchedAt: 1,
+          headSha: 'head-oid'
+        },
+        [runtimeChecksCacheKey]: {
+          data: [{ name: 'test', status: 'completed', conclusion: 'success', url: null }],
+          fetchedAt: 1,
+          headSha: 'head-oid'
+        }
+      }
+    } as Partial<AppState>)
 
     store.getState().applyGitHubPRRefreshEvent({
       sequence: 1,
@@ -2946,14 +3112,15 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       reason: 'visible',
       outcome: {
         kind: 'found',
-        pr: makePR({ number: 12, title: 'Local PR status' }),
+        pr: makePR({ number: 12, title: 'Local PR status', checksStatus: 'pending' }),
         fetchedAt: 2
       }
     })
 
     expect(store.getState().prCache[cacheKey]?.data).toMatchObject({
       number: 12,
-      title: 'Local PR status'
+      title: 'Local PR status',
+      checksStatus: 'failure'
     })
     expect(store.getState().prRefreshSequences[cacheKey]).toBe(1)
     expect(store.getState().hostedReviewCache[localHostedReviewCacheKey]?.data).toMatchObject({
@@ -3653,12 +3820,23 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
       {
         activeRuntimeEnvironmentId: 'env-1'
       } as AppState['settings'],
-      'repo-1'
+      'repo-1',
+      null,
+      'runtime:env-1',
+      true
     )
 
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      repos: [
+        {
+          id: 'repo-1',
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ],
       groupBy: 'pr-status',
       worktreeCardProperties: ['status'],
       worktreesByRepo: {
@@ -3934,7 +4112,15 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
 
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      repos: [
+        {
+          id: 'repo-1',
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ],
       groupBy: 'repo',
       worktreeCardProperties: ['comment'],
       activeWorktreeId: 'wt-1',
@@ -4062,7 +4248,15 @@ describe('createGitHubSlice.refreshGitHubForWorktree', () => {
 
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      repos: [
+        {
+          id: 'repo-1',
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ],
       worktreesByRepo: {
         'repo-1': [
           {
