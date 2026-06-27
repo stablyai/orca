@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import {
+  commandMarkersAsMessages,
+  isCommandMarkerId,
   isPendingMessageId,
   pendingSendsAsMessages,
   prunePendingSends,
   type NativeChatPendingSend
 } from './native-chat-pending'
+import { stripNoiseMessages } from './native-chat-noise'
 
 function userMessage(id: string, text: string): NativeChatMessage {
   return {
@@ -85,5 +88,29 @@ describe('isPendingMessageId', () => {
   it('recognizes the pending id prefix', () => {
     expect(isPendingMessageId('pending:p1')).toBe(true)
     expect(isPendingMessageId('transcript-123')).toBe(false)
+  })
+})
+
+describe('commandMarkersAsMessages', () => {
+  it('renders a slash command as a system "Ran <cmd>" message', () => {
+    expect(commandMarkersAsMessages([{ id: 'c1', command: '/clear', sentAt: 7 }])).toEqual([
+      {
+        id: 'command:c1',
+        role: 'system',
+        blocks: [{ type: 'text', text: 'Ran /clear' }],
+        timestamp: 7,
+        source: 'scrape'
+      }
+    ])
+  })
+
+  it('survives stripNoiseMessages (the "Ran" text is not a noise prefix)', () => {
+    const markers = commandMarkersAsMessages([{ id: 'c1', command: '/compact', sentAt: 1 }])
+    expect(stripNoiseMessages(markers)).toEqual(markers)
+  })
+
+  it('isCommandMarkerId recognizes the prefix', () => {
+    expect(isCommandMarkerId('command:c1')).toBe(true)
+    expect(isCommandMarkerId('pending:p1')).toBe(false)
   })
 })

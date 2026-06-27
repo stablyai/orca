@@ -74,3 +74,33 @@ export function pendingSendsAsMessages(pending: NativeChatPendingSend[]): Native
 export function isPendingMessageId(id: string): boolean {
   return id.startsWith('pending:')
 }
+
+/** A locally-recorded slash command (e.g. `/clear`). Slash commands dispatch to
+ *  the agent's TUI and are not chat turns, so we surface a small system line as
+ *  feedback that the command ran rather than echoing a user bubble. */
+export type NativeChatCommandMarker = {
+  id: string
+  /** The command as typed, e.g. `/clear`. */
+  command: string
+  sentAt: number
+}
+
+/** Render command markers as compact `system` messages. The `system` role draws
+ *  as a muted aside (not a user bubble); the text avoids the harness noise
+ *  prefixes so stripNoiseMessages keeps it. */
+export function commandMarkersAsMessages(
+  markers: readonly NativeChatCommandMarker[]
+): NativeChatMessage[] {
+  return markers.map((marker) => ({
+    id: `command:${marker.id}`,
+    role: 'system' as const,
+    blocks: [{ type: 'text' as const, text: `Ran ${marker.command}` }],
+    timestamp: marker.sentAt,
+    source: 'scrape' as const
+  }))
+}
+
+/** True when a message id was minted for a slash-command marker. */
+export function isCommandMarkerId(id: string): boolean {
+  return id.startsWith('command:')
+}

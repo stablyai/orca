@@ -21,8 +21,10 @@ import {
   shouldShowNativeChatWorking
 } from './native-chat-working-suppression'
 import {
+  commandMarkersAsMessages,
   pendingSendsAsMessages,
   prunePendingSends,
+  type NativeChatCommandMarker,
   type NativeChatPendingSend
 } from './native-chat-pending'
 import {
@@ -117,9 +119,14 @@ function NativeChatResolvedView({
   // the message never vanishes between send and transcript catch-up.
   const [pending, setPending] = useState<NativeChatPendingSend[]>([])
   const pendingCounter = useRef(0)
+  // Slash commands aren't chat turns, so they get a small local "Ran /clear"
+  // system line instead of a user bubble. Capped + reset per conversation.
+  const [commandMarkers, setCommandMarkers] = useState<NativeChatCommandMarker[]>([])
+  const commandCounter = useRef(0)
   // Reset the queue when the conversation changes so echoes never cross sessions.
   useEffect(() => {
     setPending([])
+    setCommandMarkers([])
     setWorkingInterrupted(false)
   }, [sessionId, agent])
   // Prune echoes whose real user turn is now in the transcript.
@@ -130,6 +137,13 @@ function NativeChatResolvedView({
     setWorkingInterrupted(false)
     pendingCounter.current += 1
     setPending((prev) => [...prev, { id: `${pendingCounter.current}`, text, sentAt: Date.now() }])
+  }, [])
+  const onSlashCommand = useCallback((command: string) => {
+    commandCounter.current += 1
+    // Keep only the most recent few so a long session of commands can't grow it.
+    setCommandMarkers((prev) =>
+      [...prev, { id: `${commandCounter.current}`, command, sentAt: Date.now() }].slice(-8)
+    )
   }, [])
 
   // The streaming preview bubble (if any) sits after the transcript but before
@@ -144,18 +158,19 @@ function NativeChatResolvedView({
     [session.messages, hookPreview, hookWorking]
   )
   const sessionWithPending = useMemo<typeof session>(() => {
-    if (pending.length === 0 && !streamingText) {
+    if (pending.length === 0 && commandMarkers.length === 0 && !streamingText) {
       return session
     }
     return {
       ...session,
       messages: [
         ...session.messages,
+        ...commandMarkersAsMessages(commandMarkers),
         ...(streamingText ? [nativeChatStreamingMessage(streamingText)] : []),
         ...pendingSendsAsMessages(pending)
       ]
     }
-  }, [session, pending, streamingText])
+  }, [session, pending, commandMarkers, streamingText])
   // Derive the view state from the pending-augmented session so a send into an
   // otherwise-empty conversation flips to the list (showing the queued bubble)
   // instead of staying on the empty state.
@@ -231,6 +246,7 @@ function NativeChatResolvedView({
         isWorking={isWorking}
         onStop={stopAgent}
         onOptimisticSend={onOptimisticSend}
+        onSlashCommand={onSlashCommand}
       />
     </div>
   )

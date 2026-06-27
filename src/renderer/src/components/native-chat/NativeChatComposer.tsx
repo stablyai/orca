@@ -55,6 +55,10 @@ export type NativeChatComposerProps = {
   /** Optional optimistic-send hook: called with the sent text so the view can
    *  render a "queued" echo until the real transcript turn lands (mobile parity). */
   onOptimisticSend?: (text: string) => void
+  /** Called with a dispatched slash command (e.g. `/clear`) so the view can show
+   *  a small "Ran /clear" system line — slash commands aren't chat turns and
+   *  otherwise leave no visible trace that anything happened. */
+  onSlashCommand?: (command: string) => void
 }
 
 /**
@@ -71,7 +75,8 @@ export function NativeChatComposer({
   canSend = true,
   isWorking = false,
   onStop,
-  onOptimisticSend
+  onOptimisticSend,
+  onSlashCommand
 }: NativeChatComposerProps): React.JSX.Element {
   const [draft, setDraft] = useState('')
   const [caret, setCaret] = useState(0)
@@ -178,9 +183,12 @@ export function NativeChatComposer({
     // Two-write send (body, then a delayed Enter) so the agent TUI submits the
     // message instead of leaving it in its input box (R6: works for SSH panes).
     sendNativeChatMessage(target.settings, target.ptyId, text)
-    // Slash commands are TUI controls, not durable chat turns. Showing them as
-    // queued bubbles makes commands like /clear visibly flicker then vanish.
-    if (!isSlashCommandDraft(text)) {
+    // Slash commands are TUI controls, not chat turns: don't echo a user bubble,
+    // but DO surface a small "Ran /clear" system line so the command leaves a
+    // visible trace instead of seeming to do nothing.
+    if (isSlashCommandDraft(text)) {
+      onSlashCommand?.(text.trim())
+    } else {
       onOptimisticSend?.(text)
     }
     // Why: U10 telemetry — record adoption + local-vs-remote runtime split. The
@@ -193,7 +201,7 @@ export function NativeChatComposer({
     setDraft('')
     setCaret(0)
     setNotice(null)
-  }, [agent, draft, disabled, resolveTarget, onOptimisticSend])
+  }, [agent, draft, disabled, resolveTarget, onOptimisticSend, onSlashCommand])
 
   const interrupt = useCallback(() => {
     if (isWorking && onStop) {
@@ -223,6 +231,9 @@ export function NativeChatComposer({
         return
       }
       sendNativeChatMessage(target.settings, target.ptyId, next)
+      // Surface the command as a system line (this is the autocomplete-menu
+      // dispatch path; the typed-Enter path in `send` does the same).
+      onSlashCommand?.(next.trim())
       emitNativeChatMessageSent({
         agent,
         runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
@@ -233,7 +244,7 @@ export function NativeChatComposer({
       setActiveSuggestion(0)
       setNotice(null)
     },
-    [agent, disabled, resolveTarget]
+    [agent, disabled, resolveTarget, onSlashCommand]
   )
 
   const handlePaste = useCallback(
