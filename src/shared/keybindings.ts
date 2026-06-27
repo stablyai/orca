@@ -1775,7 +1775,14 @@ function digitKeyMatches(input: KeybindingInput, digit: string): boolean {
   if (logicalKey && logicalKey.length === 1 && logicalKey >= '0' && logicalKey <= '9') {
     return logicalKey === digit
   }
-  return canUsePhysicalCodeFallback(input) && input.code === `Digit${digit}`
+  // Why: a real Shift+digit press reports the shifted symbol as key (e.g. '!'
+  // for Digit1), which logicalKeyTokenFromInput cannot map back to a digit, so
+  // recover the digit from the physical code. Mirrors the letter/punctuation
+  // physical-code fallbacks used for other Shift/Option-composed chords.
+  return (
+    (canUsePhysicalCodeFallback(input) || hasModifier(input, 'shift')) &&
+    input.code === `Digit${digit}`
+  )
 }
 
 function isPunctuationKeyToken(token: string | null): token is string {

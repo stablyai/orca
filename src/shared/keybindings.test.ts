@@ -1320,6 +1320,19 @@ describe('digit-index shortcuts', () => {
     ).toBe(4)
   })
 
+  it('matches a real Shift-bearing digit press whose key is the shifted symbol', () => {
+    // A genuine Ctrl+Shift+1 press on US/QWERTY reports key='!', code='Digit1'.
+    // The stored binding 'Ctrl+Shift+1' (accepted by Settings validation) must fire.
+    expect(
+      matchKeybindingDigitIndex(
+        'tab.selectByIndex',
+        { key: '!', code: 'Digit1', meta: false, control: true, alt: false, shift: true },
+        'darwin',
+        { 'tab.selectByIndex': ['Ctrl+Shift+1'] }
+      )
+    ).toBe(0)
+  })
+
   it('canonicalizes stored bindings and rejects non-number chords', () => {
     expect(normalizeKeybindingListForAction('workspace.selectByIndex', 'Mod+5')).toEqual(['Mod+1'])
     expect(normalizeKeybindingArrayForAction('tab.selectByIndex', ['Ctrl+9'])).toEqual(['Ctrl+1'])
