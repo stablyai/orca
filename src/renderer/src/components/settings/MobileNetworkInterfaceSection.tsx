@@ -175,7 +175,11 @@ export function MobileNetworkInterfaceSection({
                           value={`__use__ ${entry.address}`}
                           onSelect={() => handleSelectUseQuery(entry.address)}
                         >
-                          Use &quot;{entry.address}&quot;
+                          {translate(
+                            'auto.components.settings.MobileNetworkInterfaceSection.use-address-row',
+                            'Use "{address}"',
+                            { address: entry.address }
+                          )}
                         </CommandItem>
                       </div>
                     )

@@ -5358,7 +5358,8 @@
           "c541f67790": "Generate QR Code",
           "1e64659126": "Regenerate",
           "new-combobox-placeholder": "Search or type an address…",
-          "new-combobox-empty": "No matching interfaces"
+          "new-combobox-empty": "No matching interfaces",
+          "use-address-row": "Use \"{{address}}\""
         },
         "MobilePane": {
           "dd3cd78d04": "Scan with Orca Mobile",

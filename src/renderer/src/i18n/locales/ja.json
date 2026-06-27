@@ -5343,7 +5343,8 @@
           "c541f67790": "QRコードの生成",
           "1e64659126": "再生する",
           "new-combobox-placeholder": "Search or type an address…",
-          "new-combobox-empty": "No matching interfaces"
+          "new-combobox-empty": "No matching interfaces",
+          "use-address-row": "Use \"{{address}}\""
         },
         "MobilePane": {
           "dd3cd78d04": "Orca モバイルでスキャン",
