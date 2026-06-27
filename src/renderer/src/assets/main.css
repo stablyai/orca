@@ -140,6 +140,7 @@
   --input: #e5e5e5;
   --ring: #a1a1a1;
   --terminal-pane-locate: var(--color-blue-600);
+  --markdown-doc-link-color: #0969da;
   --ai-action-accent: var(--color-violet-500);
   --status-success: #15803d;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
@@ -219,6 +220,7 @@
   --input: rgb(255 255 255 / 0.15);
   --ring: #737373;
   --terminal-pane-locate: var(--color-blue-400);
+  --markdown-doc-link-color: #58a6ff;
   --ai-action-accent: var(--color-violet-400);
   --status-success: #86efac;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
@@ -1836,7 +1838,7 @@
 }
 
 .monaco-editor .monaco-markdown-doc-link {
-  color: #58a6ff !important;
+  color: var(--markdown-doc-link-color) !important;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
   text-underline-offset: 2px;

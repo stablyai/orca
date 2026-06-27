@@ -590,6 +590,11 @@
   color: #58a6ff;
 }
 
+.markdown-light .markdown-body .markdown-doc-link,
+.markdown-dark .markdown-body .markdown-doc-link {
+  color: var(--markdown-doc-link-color);
+}
+
 .markdown-light .markdown-body .markdown-doc-link-broken,
 .markdown-dark .markdown-body .markdown-doc-link-broken {
   color: var(--muted-foreground);
