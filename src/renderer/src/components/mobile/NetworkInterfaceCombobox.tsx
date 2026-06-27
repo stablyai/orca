@@ -1,16 +1,8 @@
-import { useCallback, useMemo, useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { ChevronDown, Search } from 'lucide-react'
 import { parseManualNetworkAddress } from '../../../../shared/network/manual-address'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
-import {
-  Command,
-  CommandEmpty,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandSeparator
-} from '../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import {
   buildComboboxEntries,
@@ -23,6 +15,13 @@ import {
 // copy of the shadcn Select, with no manual-entry support. Extract once,
 // share everywhere — adding tailnet/hostname support to one place now means
 // both surfaces pick it up automatically.
+//
+// Implementation note: this used to wrap shadcn's `Command` + `CommandItem`
+// primitives, but their `onSelect` dispatch was unreliable in `pnpm dev`
+// after a fast HMR cycle — the parent state never received the click. The
+// current shape uses plain `<button>`s inside the popover so React's
+// synthetic-event delegation fires on the first user click without any
+// intermediate effect that could be skipped.
 const TRIGGER_LABEL_CUSTOM = 'custom'
 const ERROR_MESSAGE = 'Enter an IPv4 address or Tailscale MagicDNS hostname'
 
@@ -49,6 +48,7 @@ export function NetworkInterfaceCombobox({
 }: NetworkInterfaceComboboxProps): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const selectedIface = useMemo<MobileNetworkInterface | null>(() => {
     if (!selectedAddress) {
@@ -77,11 +77,11 @@ export function NetworkInterfaceCombobox({
     [networkInterfaces, query]
   )
 
-  // Why: surfaces the same error message in two places — the popover
-  // (CommandEmpty) and below the trigger. The popover copy is for users
-  // actively typing; the trigger-adjacent copy is for assistive tech and
-  // for tests asserting on the rendered DOM without opening the popover.
-  // `aria-invalid` on the trigger carries the same signal to AT.
+  // Why: surfaces the same error message in two places — the list body
+  // and below the trigger. The list copy is for users actively typing; the
+  // trigger-adjacent copy is for assistive tech and for tests asserting on
+  // the rendered DOM without opening the popover. `aria-invalid` on the
+  // trigger carries the same signal to AT.
   const queryParse = parseManualNetworkAddress(query)
   const showInlineError = query.trim() !== '' && !queryParse.ok
 
@@ -103,9 +103,18 @@ export function NetworkInterfaceCombobox({
     [onSelectedAddressChange]
   )
 
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    setOpen(nextOpen)
+    if (!nextOpen) {
+      // Why: drop the in-flight query when the popover closes so reopening
+      // shows the full interface list rather than the previous filter.
+      setQuery('')
+    }
+  }, [])
+
   return (
     <div>
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <Button
             id={id}
@@ -123,60 +132,79 @@ export function NetworkInterfaceCombobox({
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[320px] p-0" align="start">
-          <Command shouldFilter={false}>
-            <CommandInput
+          <div className="flex items-center gap-2 border-b border-border bg-muted/30 px-3 py-2">
+            <Search className="size-4 shrink-0 opacity-50" />
+            <input
+              ref={inputRef}
+              autoFocus
               value={query}
-              onValueChange={setQuery}
+              onChange={(event) => setQuery(event.target.value)}
               placeholder={translate(
                 'auto.components.settings.MobileNetworkInterfaceSection.new-combobox-placeholder',
                 'Search or type an address…'
               )}
+              className="flex h-9 w-full rounded-md bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
-            <CommandList>
-              <CommandEmpty>
-                {parseManualNetworkAddress(query).ok
-                  ? translate(
+          </div>
+          <ul
+            className="max-h-[min(400px,60vh)] overflow-y-auto p-1"
+            role="listbox"
+            aria-label={translate(
+              'auto.components.settings.MobileNetworkInterfaceSection.new-combobox-listbox',
+              'Network interfaces'
+            )}
+          >
+            {entries.length === 0 ? (
+              <li
+                className="px-2 py-6 text-center text-sm text-muted-foreground"
+                role="presentation"
+              >
+                {showInlineError
+                  ? ERROR_MESSAGE
+                  : translate(
                       'auto.components.settings.MobileNetworkInterfaceSection.new-combobox-empty',
                       'No matching interfaces'
-                    )
-                  : ERROR_MESSAGE}
-              </CommandEmpty>
-              {entries.map((entry, index) => {
-                if (entry.kind === 'interface') {
-                  return (
-                    <CommandItem
-                      key={`iface-${entry.iface.name}-${entry.iface.address}`}
-                      value={`${entry.iface.address} ${entry.iface.name}`}
-                      onSelect={() => handleSelectInterface(entry.iface)}
+                    )}
+              </li>
+            ) : null}
+            {entries.map((entry, index) => {
+              if (entry.kind === 'interface') {
+                return (
+                  <li key={`iface-${entry.iface.name}-${entry.iface.address}`} role="presentation">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectInterface(entry.iface)}
+                      className="flex w-full cursor-pointer items-center rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none"
                     >
                       {formatInterfaceLabel(entry.iface)}
-                    </CommandItem>
-                  )
-                }
-                // Why: cmdk groups don't visually separate the manual-entry
-                // row from the auto-discovered interfaces; a separator makes
-                // the boundary obvious. The separator only renders when at
-                // least one interface entry has come before, so the layout
-                // stays clean when the list is empty (use-query only).
-                const precededByInterface = index > 0
-                return (
-                  <div key={`use-${entry.address}`}>
-                    {precededByInterface ? <CommandSeparator /> : null}
-                    <CommandItem
-                      value={`__use__ ${entry.address}`}
-                      onSelect={() => handleSelectUseQuery(entry.address)}
-                    >
-                      {translate(
-                        'auto.components.settings.MobileNetworkInterfaceSection.use-address-row',
-                        'Use "{{address}}"',
-                        { address: entry.address }
-                      )}
-                    </CommandItem>
-                  </div>
+                    </button>
+                  </li>
                 )
-              })}
-            </CommandList>
-          </Command>
+              }
+              // Why: a top border separates the auto-discovered interfaces
+              // from the manual-entry row so users see the boundary clearly
+              // when the list contains both kinds.
+              const isFirstUseQuery = index > 0
+              return (
+                <li key={`use-${entry.address}`} role="presentation">
+                  {isFirstUseQuery ? (
+                    <div className="my-1 h-px bg-border" role="separator" />
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => handleSelectUseQuery(entry.address)}
+                    className="flex w-full cursor-pointer items-center rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none"
+                  >
+                    {translate(
+                      'auto.components.settings.MobileNetworkInterfaceSection.use-address-row',
+                      'Use "{{address}}"',
+                      { address: entry.address }
+                    )}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
         </PopoverContent>
       </Popover>
       {showInlineError ? (
@@ -187,8 +215,3 @@ export function NetworkInterfaceCombobox({
     </div>
   )
 }
-
-// Re-export the error message constant so consumers (e.g. MobileNetworkInterfaceSection)
-// can render the same inline validation message below the combobox without
-// hardcoding the copy in two places.
-export { ERROR_MESSAGE as NETWORK_INTERFACE_COMBOBOX_ERROR_MESSAGE }

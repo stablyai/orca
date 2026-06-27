@@ -58,7 +58,7 @@ describe('MobileNetworkInterfaceSection', () => {
     await user.click(screen.getByRole('combobox'))
     const input = screen.getByPlaceholderText(/search or type/i)
     await user.type(input, 'my-mac.tail-abcd.ts.net')
-    await user.click(screen.getByRole('option', { name: /Use "my-mac\.tail-abcd\.ts\.net"/ }))
+    await user.click(screen.getByRole('button', { name: /Use "my-mac\.tail-abcd\.ts\.net"/ }))
     expect(onSelectedAddressChange).toHaveBeenCalledWith('my-mac.tail-abcd.ts.net')
   })
 
@@ -69,15 +69,15 @@ describe('MobileNetworkInterfaceSection', () => {
     expect(
       screen.getByText(/Enter an IPv4 address or Tailscale MagicDNS hostname/i)
     ).toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: /Use / })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Use / })).not.toBeInTheDocument()
   })
 
   it('suppresses the Use row when the typed address matches an existing interface', async () => {
     const { user } = renderSection()
     await user.click(screen.getByRole('combobox'))
     await user.type(screen.getByPlaceholderText(/search or type/i), '192.168.1.24')
-    expect(screen.getByRole('option', { name: '192.168.1.24 (en0)' })).toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: /Use "192\.168\.1\.24"/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '192.168.1.24 (en0)' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Use "192\.168\.1\.24"/ })).not.toBeInTheDocument()
   })
 
   it('renders the (custom) label on the trigger after a custom selection', () => {
