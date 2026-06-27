@@ -153,4 +153,23 @@ describe('createWslWatcher', () => {
 
     await expect(promise).rejects.toThrow('WSL watcher exited before first snapshot')
   })
+
+  it('does not emit a shutdown refresh after a startup error', async () => {
+    const scheduleBatchFlush = vi.fn()
+    const { child, promise } = startWatcher(makeDeps(scheduleBatchFlush))
+
+    child.emit('error', new Error('spawn failed'))
+    child.emit('close', 1, null)
+
+    await expect(promise).rejects.toThrow('spawn failed')
+    expect(scheduleBatchFlush).not.toHaveBeenCalled()
+  })
+
+  it('rejects startup when WSL exits before reading the snapshot script', async () => {
+    const { child, promise } = startWatcher()
+
+    child.stdin.emit('error', new Error('write EPIPE'))
+
+    await expect(promise).rejects.toThrow('write EPIPE')
+  })
 })

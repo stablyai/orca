@@ -197,6 +197,9 @@ export async function createWslWatcher(
     if (stopped) {
       return
     }
+    if (!prevSnapshot) {
+      return
+    }
     stopped = true
     markOverflowWithoutUncStat(root)
     deps.scheduleBatchFlush(rootKey, root)
@@ -254,12 +257,18 @@ export async function createWslWatcher(
     throw error instanceof Error ? error : new Error(String(error))
   }
 
-  child.stdin.end(buildSnapshotScript(deps.ignoreDirs))
-
   const startupTimer = setTimeout(() => {
     settleInitial(new Error(`Timed out starting WSL watcher for ${worktreePath}`))
     child.kill()
   }, STARTUP_TIMEOUT_MS)
+
+  child.stdin.on('error', (error) => {
+    // Why: WSL can exit before reading the script; handle EPIPE here so the
+    // startup failure rejects the watcher instead of crashing on a stream error.
+    if (!initialSettled) {
+      settleInitial(error)
+    }
+  })
 
   child.stdout.on('data', (chunk: Buffer) => {
     if (disposed) {
@@ -271,6 +280,20 @@ export async function createWslWatcher(
 
   child.stderr.on('data', (chunk: Buffer) => {
     stderrTail = (stderrTail + stderrDecoder.write(chunk)).slice(-4096)
+  })
+
+  child.stdout.on('error', (error) => {
+    if (!initialSettled) {
+      settleInitial(error)
+      return
+    }
+    if (!disposed) {
+      signalWatcherStopped()
+    }
+  })
+
+  child.stderr.on('error', () => {
+    // Ignore diagnostic stream failures; stdout/close determine watcher state.
   })
 
   child.once('error', (error) => {
@@ -295,6 +318,8 @@ export async function createWslWatcher(
       signalWatcherStopped()
     }
   })
+
+  child.stdin.end(buildSnapshotScript(deps.ignoreDirs))
 
   await initialSnapshotReady.finally(() => clearTimeout(startupTimer))
 
