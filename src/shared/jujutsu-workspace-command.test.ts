@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
   JJ_WORKSPACE_LIST_TEMPLATE,
+  buildJjRemoteListArgs,
   buildJjWorkspaceAddArgs,
   buildJjWorkspaceForgetArgs,
   buildJjWorkspaceListArgs,
+  buildJjWorkspaceListDefaultArgs,
   buildJjWorkspaceRootArgs,
   jujutsuWorkspaceNameForPath,
+  parseJujutsuRemoteNames,
   parseJujutsuWorkspaceList,
+  parseJujutsuWorkspaceListDefault,
   resolveJujutsuBaseRevision
 } from './jujutsu-workspace-command'
 
@@ -58,12 +62,47 @@ describe('buildJjWorkspace* arg builders', () => {
     ])
   })
 
+  it('builds the template-less list args for the older-jj fallback', () => {
+    expect(buildJjWorkspaceListDefaultArgs()).toEqual(['workspace', 'list'])
+  })
+
   it('builds forget args from a workspace name', () => {
     expect(buildJjWorkspaceForgetArgs('feature')).toEqual(['workspace', 'forget', 'feature'])
   })
 
   it('builds workspace root args', () => {
     expect(buildJjWorkspaceRootArgs()).toEqual(['workspace', 'root'])
+  })
+
+  it('builds git remote list args', () => {
+    expect(buildJjRemoteListArgs()).toEqual(['git', 'remote', 'list'])
+  })
+})
+
+describe('parseJujutsuWorkspaceListDefault', () => {
+  it('parses names from `name: summary` lines with empty paths', () => {
+    const stdout = 'default: qpv abc main | msg\nfeature: rly def | (no description set)\n'
+    expect(parseJujutsuWorkspaceListDefault(stdout)).toEqual([
+      { name: 'default', path: '' },
+      { name: 'feature', path: '' }
+    ])
+  })
+
+  it('skips blank lines', () => {
+    expect(parseJujutsuWorkspaceListDefault('\ndefault: x\n\n')).toEqual([
+      { name: 'default', path: '' }
+    ])
+  })
+})
+
+describe('parseJujutsuRemoteNames', () => {
+  it('takes the first whitespace-delimited token per line', () => {
+    const stdout = 'origin https://example.com/a.git\nupstream git@example.com:b.git\n'
+    expect(parseJujutsuRemoteNames(stdout)).toEqual(['origin', 'upstream'])
+  })
+
+  it('returns an empty array for empty output', () => {
+    expect(parseJujutsuRemoteNames('')).toEqual([])
   })
 })
 
@@ -119,19 +158,28 @@ describe('resolveJujutsuBaseRevision', () => {
     expect(resolveJujutsuBaseRevision('   ')).toBeUndefined()
   })
 
-  it('rewrites a single remote/branch ref into a jj remote-bookmark revset', () => {
-    expect(resolveJujutsuBaseRevision('origin/main')).toBe('main@origin')
+  it('rewrites a remote/branch ref to a jj remote-bookmark revset when the prefix is a known remote', () => {
+    expect(resolveJujutsuBaseRevision('origin/main', ['origin'])).toBe('main@origin')
+  })
+
+  it('does NOT rewrite a slash ref when the prefix is not a known remote (local bookmark safety)', () => {
+    // `feature/foo` is a valid local jj bookmark — must not become `foo@feature`.
+    expect(resolveJujutsuBaseRevision('feature/foo', ['origin'])).toBe('feature/foo')
+  })
+
+  it('passes a slash ref through verbatim when no remotes are known', () => {
+    expect(resolveJujutsuBaseRevision('origin/main')).toBe('origin/main')
   })
 
   it('passes through a bare local branch name', () => {
-    expect(resolveJujutsuBaseRevision('main')).toBe('main')
+    expect(resolveJujutsuBaseRevision('main', ['origin'])).toBe('main')
   })
 
   it('passes through an explicit jj remote-bookmark revset unchanged', () => {
-    expect(resolveJujutsuBaseRevision('main@origin')).toBe('main@origin')
+    expect(resolveJujutsuBaseRevision('main@origin', ['origin'])).toBe('main@origin')
   })
 
   it('passes through refs with multiple slashes verbatim', () => {
-    expect(resolveJujutsuBaseRevision('refs/heads/feature')).toBe('refs/heads/feature')
+    expect(resolveJujutsuBaseRevision('refs/heads/feature', ['refs'])).toBe('refs/heads/feature')
   })
 })

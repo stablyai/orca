@@ -64,15 +64,23 @@ describe('jj repo detection', () => {
 })
 
 describe('addJujutsuWorkspace', () => {
-  it('runs `jj workspace add` with a derived name and translated base revision', async () => {
+  it('rewrites a remote-tracking base ref after confirming the remote exists', async () => {
+    // baseRef contains a slash -> remote lookup runs first, then workspace add.
+    commandExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: 'origin https://example.com/repo.git\n',
+      stderr: ''
+    })
     commandExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
     await addJujutsuWorkspace({
       repoPath: '/repo',
       worktreePath: '/repo/.worktrees/feature',
       baseRef: 'origin/main'
     })
-    expect(commandExecFileAsyncMock).toHaveBeenCalledTimes(1)
-    expect(commandExecFileAsyncMock).toHaveBeenCalledWith(
+    expect(commandExecFileAsyncMock).toHaveBeenNthCalledWith(1, 'jj', ['git', 'remote', 'list'], {
+      cwd: '/repo'
+    })
+    expect(commandExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
       'jj',
       [
         'workspace',
@@ -87,13 +95,30 @@ describe('addJujutsuWorkspace', () => {
     )
   })
 
-  it('honours an explicit name and omits the revision when no base is given', async () => {
+  it('keeps a slash-containing local bookmark intact when no matching remote exists', async () => {
+    commandExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'origin https://x\n', stderr: '' })
+    commandExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+    await addJujutsuWorkspace({
+      repoPath: '/repo',
+      worktreePath: '/repo/.worktrees/foo',
+      baseRef: 'feature/foo'
+    })
+    expect(commandExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      'jj',
+      ['workspace', 'add', '--name', 'foo', '--revision', 'feature/foo', '/repo/.worktrees/foo'],
+      { cwd: '/repo' }
+    )
+  })
+
+  it('skips the remote lookup and omits the revision when no base is given', async () => {
     commandExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
     await addJujutsuWorkspace({
       repoPath: '/repo',
       worktreePath: '/repo/.worktrees/feature',
       name: 'custom'
     })
+    expect(commandExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(commandExecFileAsyncMock).toHaveBeenCalledWith(
       'jj',
       ['workspace', 'add', '--name', 'custom', '/repo/.worktrees/feature'],
@@ -117,6 +142,31 @@ describe('listJujutsuWorkspaces', () => {
       ['workspace', 'list', '--template', expect.any(String)],
       { cwd: '/repo' }
     )
+  })
+
+  it('falls back to the template-less listing when jj rejects --template', async () => {
+    commandExecFileAsyncMock.mockRejectedValueOnce(
+      Object.assign(new Error('error: unexpected argument --template found'), {
+        stderr: 'unexpected argument'
+      })
+    )
+    commandExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: 'default: qpv abc main | msg\nfeature: rly def | msg\n',
+      stderr: ''
+    })
+    expect(await listJujutsuWorkspaces('/repo')).toEqual([
+      { name: 'default', path: '' },
+      { name: 'feature', path: '' }
+    ])
+    expect(commandExecFileAsyncMock).toHaveBeenNthCalledWith(2, 'jj', ['workspace', 'list'], {
+      cwd: '/repo'
+    })
+  })
+
+  it('rethrows unrelated listing failures instead of falling back', async () => {
+    commandExecFileAsyncMock.mockRejectedValueOnce(new Error('repo is locked'))
+    await expect(listJujutsuWorkspaces('/repo')).rejects.toThrow('repo is locked')
+    expect(commandExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 })
 
