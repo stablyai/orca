@@ -87,6 +87,9 @@ export function NetworkInterfaceCombobox({
 
   const handleSelectInterface = useCallback(
     (iface: MobileNetworkInterface) => {
+      // Why: temporary debug log so QA can confirm the click path runs end
+      // to end. Remove once manual verification lands.
+      console.log('[NIC] select iface', iface.address)
       setQuery('')
       setOpen(false)
       onSelectedAddressChange(iface.address)
@@ -96,6 +99,9 @@ export function NetworkInterfaceCombobox({
 
   const handleSelectUseQuery = useCallback(
     (address: string) => {
+      // Why: temporary debug log so QA can confirm the click path runs end
+      // to end. Remove once manual verification lands.
+      console.log('[NIC] use-query', address)
       setQuery('')
       setOpen(false)
       onSelectedAddressChange(address)
