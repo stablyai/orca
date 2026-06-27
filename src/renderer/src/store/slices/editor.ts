@@ -401,7 +401,12 @@ export type EditorSlice = {
   markdownFrontmatterVisible: Record<string, boolean>
   setMarkdownFrontmatterVisible: (fileId: string, visible: boolean) => void
 
-  // Markdown table of contents
+  // Per-file opt-in to keep the markdown table of contents open. Default is
+  // hidden; absent entry means hidden.
+  markdownTableOfContentsVisible: Record<string, boolean>
+  setMarkdownTableOfContentsVisible: (fileId: string, visible: boolean) => void
+
+  // Markdown table of contents panel sizing
   markdownTocPanelWidth: number
   setMarkdownTocPanelWidth: (width: number) => void
 
@@ -819,6 +824,21 @@ function removeEditorStateForReplacedPreview(
       Object.entries(state.editorViewMode).filter(([fileId]) => fileId !== replacedFileId)
     )
   }
+}
+
+function removeMarkdownVisibilityKeys(
+  visibility: Record<string, boolean>,
+  keysToRemove: readonly string[]
+): Record<string, boolean> {
+  let next: Record<string, boolean> | null = null
+  for (const key of keysToRemove) {
+    if (!(key in visibility)) {
+      continue
+    }
+    next ??= { ...visibility }
+    delete next[key]
+  }
+  return next ?? visibility
 }
 
 function getGroupActiveTab(group: TabGroup, tabsById: Map<string, Tab>): Tab | null {
@@ -1331,7 +1351,27 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return { markdownFrontmatterVisible: { ...s.markdownFrontmatterVisible, [fileId]: true } }
     }),
 
-  // Markdown table of contents
+  // Markdown table of contents visibility
+  markdownTableOfContentsVisible: {},
+  setMarkdownTableOfContentsVisible: (fileId, visible) =>
+    set((s) => {
+      if (!visible) {
+        if (!(fileId in s.markdownTableOfContentsVisible)) {
+          return s
+        }
+        const next = { ...s.markdownTableOfContentsVisible }
+        delete next[fileId]
+        return { markdownTableOfContentsVisible: next }
+      }
+      return {
+        markdownTableOfContentsVisible: {
+          ...s.markdownTableOfContentsVisible,
+          [fileId]: true
+        }
+      }
+    }),
+
+  // Markdown table of contents panel sizing
   markdownTocPanelWidth: 240,
   setMarkdownTocPanelWidth: (width) =>
     set((s) => ({
@@ -1645,13 +1685,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                     ([fileId]) => fileId !== replacedPreview.id
                   )
                 )
-          const frontmatterVisibilityKeys = new Set([replacedPreview.id])
+          const markdownVisibilityKeys = new Set([replacedPreview.id])
           if (replacedPreview.markdownPreviewSourceFileId) {
-            frontmatterVisibilityKeys.add(replacedPreview.markdownPreviewSourceFileId)
+            markdownVisibilityKeys.add(replacedPreview.markdownPreviewSourceFileId)
           }
-          const frontmatterKeysToRemove = [...frontmatterVisibilityKeys].filter(
+          const visibilityKeysToRemove = [...markdownVisibilityKeys].filter(
             (key) =>
-              key in s.markdownFrontmatterVisible &&
               !s.openFiles.some(
                 (file, index) =>
                   index !== existingPreviewIdx &&
@@ -1659,12 +1698,15 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
               )
           )
           const nextMarkdownFrontmatterVisible =
-            replacedPreview.id === id || frontmatterKeysToRemove.length === 0
+            replacedPreview.id === id || visibilityKeysToRemove.length === 0
               ? s.markdownFrontmatterVisible
-              : Object.fromEntries(
-                  Object.entries(s.markdownFrontmatterVisible).filter(
-                    ([fileId]) => !frontmatterKeysToRemove.includes(fileId)
-                  )
+              : removeMarkdownVisibilityKeys(s.markdownFrontmatterVisible, visibilityKeysToRemove)
+          const nextMarkdownTableOfContentsVisible =
+            replacedPreview.id === id || visibilityKeysToRemove.length === 0
+              ? s.markdownTableOfContentsVisible
+              : removeMarkdownVisibilityKeys(
+                  s.markdownTableOfContentsVisible,
+                  visibilityKeysToRemove
                 )
           // Why: editorCursorLine entries accumulate per file; clean up the
           // evicted preview's entry so it does not leak across tab replacements.
@@ -1721,6 +1763,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             markdownViewMode: nextMarkdownViewMode,
             editorViewMode: nextEditorViewMode,
             markdownFrontmatterVisible: nextMarkdownFrontmatterVisible,
+            markdownTableOfContentsVisible: nextMarkdownTableOfContentsVisible,
             recentlyClosedEditorTabsByWorktree: nextRecentlyClosed,
             ...previewTabBarUpdate,
             ...activeResult
@@ -1962,25 +2005,22 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       delete newMarkdownViewMode[fileId]
       const newEditorViewMode = { ...s.editorViewMode }
       delete newEditorViewMode[fileId]
-      const frontmatterVisibilityKeys = new Set([fileId])
+      const markdownVisibilityKeys = new Set([fileId])
       if (closedFile?.markdownPreviewSourceFileId) {
-        frontmatterVisibilityKeys.add(closedFile.markdownPreviewSourceFileId)
+        markdownVisibilityKeys.add(closedFile.markdownPreviewSourceFileId)
       }
-      const keysToRemove = [...frontmatterVisibilityKeys].filter(
+      const visibilityKeysToRemove = [...markdownVisibilityKeys].filter(
         (key) =>
-          key in s.markdownFrontmatterVisible &&
           !newFiles.some((file) => file.id === key || file.markdownPreviewSourceFileId === key)
       )
       const newMarkdownFrontmatterVisible =
-        keysToRemove.length > 0
-          ? (() => {
-              const next = { ...s.markdownFrontmatterVisible }
-              for (const key of keysToRemove) {
-                delete next[key]
-              }
-              return next
-            })()
+        visibilityKeysToRemove.length > 0
+          ? removeMarkdownVisibilityKeys(s.markdownFrontmatterVisible, visibilityKeysToRemove)
           : s.markdownFrontmatterVisible
+      const newMarkdownTableOfContentsVisible =
+        visibilityKeysToRemove.length > 0
+          ? removeMarkdownVisibilityKeys(s.markdownTableOfContentsVisible, visibilityKeysToRemove)
+          : s.markdownTableOfContentsVisible
       // Why: editorCursorLine entries are keyed by fileId and accumulate on
       // every cursor move. Without cleanup they grow without bound across a
       // long session as files are opened and closed.
@@ -2112,6 +2152,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         markdownViewMode: newMarkdownViewMode,
         editorViewMode: newEditorViewMode,
         markdownFrontmatterVisible: newMarkdownFrontmatterVisible,
+        markdownTableOfContentsVisible: newMarkdownTableOfContentsVisible,
         tabBarOrderByWorktree: nextTabBarOrderByWorktree,
         pendingEditorReveal: null,
         recentlyClosedEditorTabsByWorktree: nextRecentlyClosed
@@ -2208,6 +2249,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           markdownViewMode: {},
           editorViewMode: {},
           markdownFrontmatterVisible: {},
+          markdownTableOfContentsVisible: {},
           pendingEditorReveal: null
         }
       }
@@ -2225,6 +2267,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       )
       const newMarkdownFrontmatterVisible = Object.fromEntries(
         Object.entries(s.markdownFrontmatterVisible).filter(([fileId]) =>
+          remainingFileIds.has(fileId)
+        )
+      )
+      const newMarkdownTableOfContentsVisible = Object.fromEntries(
+        Object.entries(s.markdownTableOfContentsVisible).filter(([fileId]) =>
           remainingFileIds.has(fileId)
         )
       )
@@ -2295,6 +2342,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         markdownViewMode: newMarkdownViewMode,
         editorViewMode: newEditorViewMode,
         markdownFrontmatterVisible: newMarkdownFrontmatterVisible,
+        markdownTableOfContentsVisible: newMarkdownTableOfContentsVisible,
         activeFileIdByWorktree: newActiveFileIdByWorktree,
         activeTabTypeByWorktree: newActiveTabTypeByWorktree,
         tabBarOrderByWorktree: nextTabBarOrderByWorktree,
