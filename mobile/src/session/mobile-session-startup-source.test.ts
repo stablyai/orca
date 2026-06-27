@@ -36,6 +36,7 @@ describe('mobile session startup', () => {
     )
 
     expect(startupEffect).toContain("void client\n          .sendRequest('worktree.activate'")
+    expect(startupEffect).toContain('notifyClients: false')
     expect(startupEffect).not.toContain("await client\n          .sendRequest('worktree.activate'")
     expect(startupEffect.indexOf("sendRequest('worktree.activate'")).toBeLessThan(
       startupEffect.indexOf('await fetchSessionTabs()')

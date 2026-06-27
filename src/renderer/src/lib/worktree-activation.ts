@@ -306,11 +306,12 @@ export function activateAndRevealWorktree(
   const ownerRuntimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(postActivationState, wt.id)
   if (opts?.notifyHostRuntime !== false && isWebRuntimeSessionActive(ownerRuntimeEnvironmentId)) {
     // Why: paired web clients own only local selection state. The desktop host
-    // must also activate the worktree so hidden renderer-owned terminal panes
-    // mount and publish session surfaces back to the web client.
+    // should publish session surfaces for the phone without treating that as a
+    // desktop navigation command.
     void activateWebRuntimeSessionWorktree({
       worktreeId,
-      environmentId: ownerRuntimeEnvironmentId
+      environmentId: ownerRuntimeEnvironmentId,
+      notifyDesktop: (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
     })
   }
 
