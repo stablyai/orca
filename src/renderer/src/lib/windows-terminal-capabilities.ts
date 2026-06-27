@@ -41,6 +41,19 @@ type WindowsTerminalCapabilityHookState = {
 
 type WindowsTerminalCapabilityLoadTarget = RuntimeClientTarget
 
+function resolveWindowsTerminalCapabilityCacheKey(args: {
+  ownerKey?: string
+  target?: WindowsTerminalCapabilityLoadTarget
+  sshConnectionId?: string | null
+}): string {
+  const explicitOwnerKey = args.ownerKey?.trim()
+  if (explicitOwnerKey) {
+    return explicitOwnerKey
+  }
+  const environmentId = args.target?.kind === 'environment' ? args.target.environmentId : null
+  return getWindowsTerminalCapabilityOwnerKey(environmentId, args.sshConnectionId)
+}
+
 export function getWindowsTerminalCapabilityOwnerKey(
   activeRuntimeEnvironmentId?: string | null,
   sshConnectionId?: string | null
@@ -114,9 +127,13 @@ export function loadWindowsTerminalCapabilities(
   } = {}
 ): Promise<WindowsTerminalCapabilities> {
   const now = options.now ?? Date.now()
-  const ownerKey = options.ownerKey ?? 'local'
-  const target = options.target ?? { kind: 'local' }
   const sshConnectionId = options.sshConnectionId?.trim() || null
+  const target = options.target ?? { kind: 'local' }
+  const ownerKey = resolveWindowsTerminalCapabilityCacheKey({
+    ownerKey: options.ownerKey,
+    target,
+    sshConnectionId
+  })
   pruneExpiredCapabilityOwners(now)
   const cached = cachedCapabilitiesByOwnerKey.get(ownerKey)
   if (cached && !options.force && now - cached.loadedAt < CAPABILITY_CACHE_TTL_MS) {
@@ -154,7 +171,7 @@ export function loadWindowsTerminalCapabilities(
 }
 
 export function refreshWindowsTerminalCapabilities(
-  ownerKey = 'local',
+  ownerKey: string | undefined = undefined,
   target: WindowsTerminalCapabilityLoadTarget = { kind: 'local' },
   sshConnectionId?: string | null
 ): Promise<WindowsTerminalCapabilities> {
@@ -171,69 +188,73 @@ export function selectWindowsTerminalCapabilitiesForOwner(
   }
   return state.ownerKey === ownerKey
     ? state.capabilities
-    : (cachedCapabilitiesByOwnerKey.get(ownerKey)?.capabilities ?? UNAVAILABLE_CAPABILITIES)
+    : getCachedWindowsTerminalCapabilities(ownerKey)
 }
 
 export function useWindowsTerminalCapabilities(
   enabled: boolean,
   forceRefreshOnMount = false,
-  ownerKey = 'local',
+  ownerKey: string | undefined = undefined,
   target: WindowsTerminalCapabilityLoadTarget = { kind: 'local' },
   sshConnectionId?: string | null
 ): WindowsTerminalCapabilities {
   const targetKind = target.kind
   const targetEnvironmentId = target.kind === 'environment' ? target.environmentId : null
   const sshConnectionIdKey = sshConnectionId?.trim() || null
-  const [state, setState] = useState(() => ({
+  const resolvedTarget: WindowsTerminalCapabilityLoadTarget =
+    targetKind === 'environment' && targetEnvironmentId
+      ? { kind: 'environment', environmentId: targetEnvironmentId }
+      : { kind: 'local' }
+  const resolvedOwnerKey = resolveWindowsTerminalCapabilityCacheKey({
     ownerKey,
-    capabilities: getCachedWindowsTerminalCapabilities(ownerKey)
+    target: resolvedTarget,
+    sshConnectionId: sshConnectionIdKey
+  })
+  const [state, setState] = useState(() => ({
+    ownerKey: resolvedOwnerKey,
+    capabilities: getCachedWindowsTerminalCapabilities(resolvedOwnerKey)
   }))
 
   useEffect(() => {
     if (!enabled) {
-      setState({ ownerKey, capabilities: UNAVAILABLE_CAPABILITIES })
+      setState({ ownerKey: resolvedOwnerKey, capabilities: UNAVAILABLE_CAPABILITIES })
       return
     }
-    const loadTarget: WindowsTerminalCapabilityLoadTarget =
-      targetKind === 'environment' && targetEnvironmentId
-        ? { kind: 'environment', environmentId: targetEnvironmentId }
-        : { kind: 'local' }
-
     let cancelled = false
-    const cached = getCachedWindowsTerminalCapabilities(ownerKey)
-    const hasOwnerCache = cachedCapabilitiesByOwnerKey.has(ownerKey)
+    const cached = getCachedWindowsTerminalCapabilities(resolvedOwnerKey)
+    const hasOwnerCache = cachedCapabilitiesByOwnerKey.has(resolvedOwnerKey)
     setState({
-      ownerKey,
+      ownerKey: resolvedOwnerKey,
       capabilities: hasOwnerCache ? cached : { ...cached, isLoading: true }
     })
     const setCapabilities = (capabilities: WindowsTerminalCapabilities): void => {
-      setState({ ownerKey, capabilities })
+      setState({ ownerKey: resolvedOwnerKey, capabilities })
     }
-    const subscribers = subscribersByOwnerKey.get(ownerKey) ?? new Set()
+    const subscribers = subscribersByOwnerKey.get(resolvedOwnerKey) ?? new Set()
     subscribers.add(setCapabilities)
-    subscribersByOwnerKey.set(ownerKey, subscribers)
+    subscribersByOwnerKey.set(resolvedOwnerKey, subscribers)
     void loadWindowsTerminalCapabilities({
       force: forceRefreshOnMount,
-      ownerKey,
-      target: loadTarget,
+      ownerKey: resolvedOwnerKey,
+      target: resolvedTarget,
       sshConnectionId: sshConnectionIdKey
     }).then((nextCapabilities) => {
       if (!cancelled) {
-        setState({ ownerKey, capabilities: nextCapabilities })
+        setState({ ownerKey: resolvedOwnerKey, capabilities: nextCapabilities })
       }
     })
 
     return () => {
       cancelled = true
-      const currentSubscribers = subscribersByOwnerKey.get(ownerKey)
+      const currentSubscribers = subscribersByOwnerKey.get(resolvedOwnerKey)
       currentSubscribers?.delete(setCapabilities)
       if (currentSubscribers?.size === 0) {
-        subscribersByOwnerKey.delete(ownerKey)
+        subscribersByOwnerKey.delete(resolvedOwnerKey)
       }
     }
-  }, [enabled, forceRefreshOnMount, ownerKey, sshConnectionIdKey, targetKind, targetEnvironmentId])
+  }, [enabled, forceRefreshOnMount, resolvedOwnerKey, resolvedTarget, sshConnectionIdKey])
 
-  return selectWindowsTerminalCapabilitiesForOwner(state, enabled, ownerKey)
+  return selectWindowsTerminalCapabilitiesForOwner(state, enabled, resolvedOwnerKey)
 }
 
 async function readWindowsTerminalCapabilities(

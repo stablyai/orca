@@ -227,6 +227,33 @@ describe('PtyHandler', () => {
     }
   })
 
+  it('passes the selected WSL distro to relay launches on Windows', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Ubuntu-24.04'
+      })
+
+      expect(mockPtySpawn).toHaveBeenCalledWith(
+        'wsl.exe',
+        ['-d', 'Ubuntu-24.04'],
+        expect.any(Object)
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
   it.skipIf(process.platform === 'win32')(
     'enables shell-ready marker env for delivery-hinted startup commands',
     async () => {

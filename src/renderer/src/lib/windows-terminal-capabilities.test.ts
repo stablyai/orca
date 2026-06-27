@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getCachedWindowsTerminalCapabilities,
+  getWindowsTerminalCapabilityOwnerKey,
   hasCachedWindowsTerminalCapabilities,
   loadWindowsTerminalCapabilities,
   refreshWindowsTerminalCapabilities,
@@ -296,6 +297,79 @@ describe('windows terminal capabilities', () => {
       wslDistros: ['Ubuntu'],
       pwshAvailable: true,
       gitBashAvailable: true,
+      hostPlatform: 'win32',
+      isLoading: false
+    })
+  })
+
+  it('derives the SSH owner cache key when callers omit ownerKey', async () => {
+    const detectRemoteWindowsTerminalCapabilities = vi
+      .fn()
+      .mockResolvedValueOnce({
+        wslAvailable: true,
+        wslDistros: ['Ubuntu'],
+        pwshAvailable: true,
+        gitBashAvailable: true,
+        hostPlatform: 'win32'
+      })
+      .mockResolvedValueOnce({
+        wslAvailable: true,
+        wslDistros: ['Ubuntu', 'Debian'],
+        pwshAvailable: true,
+        gitBashAvailable: false,
+        hostPlatform: 'win32'
+      })
+    vi.stubGlobal('window', {
+      api: {
+        preflight: {
+          detectRemoteWindowsTerminalCapabilities
+        }
+      }
+    })
+
+    const sshOwnerKey = getWindowsTerminalCapabilityOwnerKey(null, 'ssh-1')
+    await expect(loadWindowsTerminalCapabilities({ sshConnectionId: 'ssh-1' })).resolves.toEqual({
+      wslAvailable: true,
+      wslDistros: ['Ubuntu'],
+      pwshAvailable: true,
+      gitBashAvailable: true,
+      hostPlatform: 'win32',
+      isLoading: false
+    })
+
+    expect(getCachedWindowsTerminalCapabilities(sshOwnerKey)).toEqual({
+      wslAvailable: true,
+      wslDistros: ['Ubuntu'],
+      pwshAvailable: true,
+      gitBashAvailable: true,
+      hostPlatform: 'win32',
+      isLoading: false
+    })
+    expect(getCachedWindowsTerminalCapabilities()).toEqual({
+      wslAvailable: false,
+      wslDistros: [],
+      pwshAvailable: false,
+      gitBashAvailable: false,
+      hostPlatform: null,
+      isLoading: false
+    })
+
+    await expect(
+      refreshWindowsTerminalCapabilities(undefined, { kind: 'local' }, 'ssh-1')
+    ).resolves.toEqual({
+      wslAvailable: true,
+      wslDistros: ['Ubuntu', 'Debian'],
+      pwshAvailable: true,
+      gitBashAvailable: false,
+      hostPlatform: 'win32',
+      isLoading: false
+    })
+
+    expect(getCachedWindowsTerminalCapabilities(sshOwnerKey)).toEqual({
+      wslAvailable: true,
+      wslDistros: ['Ubuntu', 'Debian'],
+      pwshAvailable: true,
+      gitBashAvailable: false,
       hostPlatform: 'win32',
       isLoading: false
     })
