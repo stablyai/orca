@@ -13,9 +13,6 @@ export const colors = {
   textMuted: '#555555',
 
   accentBlue: '#3b82f6',
-  // Text/icon color on a filled accent (accentBlue) button, where the muted
-  // textPrimary would lack contrast against the saturated fill.
-  onAccent: '#ffffff',
 
   statusGreen: '#22c55e',
   statusAmber: '#f59e0b',

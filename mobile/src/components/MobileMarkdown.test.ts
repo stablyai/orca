@@ -13,40 +13,6 @@ describe('parseMobileMarkdown', () => {
     ])
   })
 
-  it('tracks nesting depth for indented list items (4-space convention)', () => {
-    const blocks = parseMobileMarkdown('- top\n    - child\n        - grandchild\n- top two')
-    expect(blocks).toHaveLength(1)
-    const list = blocks[0]
-    expect(list?.type).toBe('list')
-    if (list?.type !== 'list') {
-      throw new Error('expected list')
-    }
-    expect(list.items.map((i) => ({ text: i.text, depth: i.depth }))).toEqual([
-      { text: 'top', depth: 0 },
-      { text: 'child', depth: 1 },
-      { text: 'grandchild', depth: 2 },
-      { text: 'top two', depth: 0 }
-    ])
-  })
-
-  it('tracks nesting depth with the 2-space convention too', () => {
-    const blocks = parseMobileMarkdown('- a\n  - b\n  - c\n- d')
-    const list = blocks[0]
-    if (list?.type !== 'list') {
-      throw new Error('expected list')
-    }
-    expect(list.items.map((i) => i.depth)).toEqual([0, 1, 1, 0])
-  })
-
-  it('keeps flat lists at depth 0', () => {
-    const blocks = parseMobileMarkdown('- a\n- b\n- c')
-    const list = blocks[0]
-    if (list?.type !== 'list') {
-      throw new Error('expected list')
-    }
-    expect(list.items.every((i) => i.depth === 0)).toBe(true)
-  })
-
   it('parses standalone HTTPS images without folding them into paragraphs', () => {
     expect(parseMobileMarkdown('![Screenshot](https://example.com/screen.png)')).toEqual([
       {

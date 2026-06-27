@@ -6,7 +6,7 @@ import type {
   MobileSyntaxSegment
 } from '../../../../src/session/mobile-file-syntax'
 import type { TerminalRecord } from '../../../../src/session/mobile-terminal-records'
-import type { DiffComment, TuiAgent } from '../../../../../src/shared/types'
+import type { DiffComment } from '../../../../../src/shared/types'
 import type { AgentStatusEntry } from '../../../../../src/shared/agent-status-types'
 
 export type Terminal = TerminalRecord
@@ -23,9 +23,6 @@ export type MobileSessionTab =
       status?: 'pending-handle' | 'ready'
       terminal: string | null
       agentStatus?: AgentStatusEntry | null
-      /** Agent Orca launched in this terminal, if any. Sent by the host; drives
-       *  native-chat eligibility before a live agent-status entry arrives. */
-      launchAgent?: TuiAgent | null
       terminalTheme?: MobileTerminalTheme
       isActive: boolean
     }

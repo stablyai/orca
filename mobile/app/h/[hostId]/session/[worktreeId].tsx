@@ -53,12 +53,10 @@ import type { RpcClient } from '../../../../src/transport/rpc-client'
 import type { RuntimeTerminalPathResolution } from '../../../../../src/shared/runtime-types'
 import { loadHosts } from '../../../../src/transport/host-store'
 import {
-  loadNativeChatTabIds,
   loadTerminalAutocompleteEnabled,
   loadTerminalLinkOpenMode,
   loadTerminalTextScale,
   HOST_DOCK_MIN_WIDTH,
-  saveNativeChatTabIds,
   saveTerminalTextScale,
   type MobileTerminalLinkOpenMode
 } from '../../../../src/storage/preferences'
@@ -181,12 +179,6 @@ import {
   isDictationSetupRequiredError
 } from '../../../../src/dictation/mobile-dictation-setup'
 import { TerminalPaneView } from '../../../../src/session/TerminalPaneView'
-import { MobileNativeChatView } from '../../../../src/session/MobileNativeChatView'
-import { useMobileNativeChatSession } from '../../../../src/session/use-mobile-native-chat-session'
-import { resolveMobileNativeChat } from '../../../../src/session/mobile-native-chat-eligibility'
-import { useMobileNativeChatAnswerSend } from '../../../../src/session/use-mobile-native-chat-answer-send'
-import { useMobileNativeChatComposerSupport } from '../../../../src/session/use-mobile-native-chat-composer-support'
-import { useMobileNativeChatStatusCards } from '../../../../src/session/use-mobile-native-chat-status-cards'
 import {
   getRepoIdFromMobileWorktreeId,
   isFileExistsErrorMessage,
@@ -1099,102 +1091,6 @@ export default function SessionScreen() {
   const [terminalFrameWidth, setTerminalFrameWidth] = useState(0)
 
   const activeSessionTab = sessionTabs.find((tab) => tab.id === activeSessionTabId) ?? null
-  // Why: native chat is a per-tab view toggled from the tab long-press menu.
-  // Kept as local device state (like terminalModes) — it's a client-side
-  // rendering choice, not host session state, so it needs no RPC round-trip.
-  const [chatTabIds, setChatTabIds] = useState<Set<string>>(new Set())
-  // Restore each tab's chat/terminal choice for this worktree on mount.
-  useEffect(() => {
-    let active = true
-    void loadNativeChatTabIds(worktreeId).then((ids) => {
-      if (active && ids.length > 0) {
-        setChatTabIds(new Set(ids))
-      }
-    })
-    return () => {
-      active = false
-    }
-  }, [worktreeId])
-  const toggleTabChatView = useCallback(
-    (tabId: string) => {
-      setChatTabIds((prev) => {
-        const next = new Set(prev)
-        if (next.has(tabId)) {
-          next.delete(tabId)
-        } else {
-          next.add(tabId)
-        }
-        void saveNativeChatTabIds(worktreeId, [...next])
-        return next
-      })
-    },
-    [worktreeId]
-  )
-  const activeChatResolution =
-    activeSessionTab && activeSessionTab.type === 'terminal' && chatTabIds.has(activeSessionTab.id)
-      ? resolveMobileNativeChat(activeSessionTab)
-      : null
-  // Why: the answer handler is a stable callback; read the live agent kind via a
-  // ref so it can gate Claude's multi-step AskUserQuestion stepping without
-  // re-creating on every resolution change.
-  const activeChatAgentRef = useRef<string | null>(activeChatResolution?.agent ?? null)
-  activeChatAgentRef.current = activeChatResolution?.agent ?? null
-  // Why: dictation's onTranscript is a stable closure; read the live view mode
-  // through a ref so transcripts route to the chat composer only while it's open.
-  const showNativeChatRef = useRef(activeChatResolution != null)
-  showNativeChatRef.current = activeChatResolution != null
-  const [chatComposerText, setChatComposerText] = useState('')
-  const nativeChatSession = useMobileNativeChatSession({
-    client,
-    agent: activeChatResolution?.agent ?? null,
-    sessionId: activeChatResolution?.sessionId ?? null,
-    transcriptPath: activeChatResolution?.transcriptPath ?? null
-  })
-  // Live-status overlays (working indicator, streaming preview, interactive
-  // permission/question/Ask cards) derived in a focused hook to keep this route
-  // under its line cap.
-  const {
-    agentWorking: nativeChatAgentWorking,
-    streamingText: nativeChatStreamingText,
-    permission: nativeChatPermission,
-    question: nativeChatQuestion,
-    ask: nativeChatAsk
-  } = useMobileNativeChatStatusCards({
-    active: activeChatResolution != null,
-    status: activeSessionTab?.type === 'terminal' ? activeSessionTab.agentStatus : null,
-    messages: nativeChatSession.messages
-  })
-  // Answer an AskUserQuestion (Claude multi-step stepping + pending-write cancel on Stop/unmount/swap live in this hook).
-  const { answerAsk: handleNativeChatAnswerAsk, cancelPending: cancelNativeChatAnswer } =
-    useMobileNativeChatAnswerSend({
-      client,
-      handleRef: activeHandleRef,
-      deviceTokenRef,
-      agentRef: activeChatAgentRef,
-      sessionId: activeChatResolution?.sessionId ?? null
-    })
-  // Why: the composer's `@file` / `$skill` suggestion sources, message-send,
-  // optimistic "queued" bubbles, and Stop/interrupt live in a focused hook to keep
-  // this route under its line cap.
-  const {
-    filePaths: nativeChatFilePaths,
-    loadFiles: loadNativeChatFiles,
-    skills: nativeChatSkills,
-    loadSkills: loadNativeChatSkills,
-    send: handleNativeChatSend,
-    pending: chatPending,
-    stop: handleNativeChatStop,
-    openFile: handleNativeChatOpenFile
-  } = useMobileNativeChatComposerSupport({
-    client,
-    worktreeId,
-    deviceTokenRef,
-    activeHandleRef,
-    activeChatAgentRef,
-    messages: nativeChatSession.messages,
-    sessionId: activeChatResolution?.sessionId ?? null,
-    cancelAnswer: cancelNativeChatAnswer
-  })
   const canSend =
     connState === 'connected' &&
     activeHandle != null &&
@@ -1284,14 +1180,12 @@ export default function SessionScreen() {
     client,
     enabled: canSend,
     onTranscript: (text) => {
-      const append = (current: string): string =>
-        current.trim() ? `${current.trimEnd()} ${text}` : text
-      // Route dictation into whichever composer is in front.
-      if (showNativeChatRef.current) {
-        setChatComposerText(append)
-      } else {
-        setInput(append)
-      }
+      setInput((current) => {
+        if (!current.trim()) {
+          return text
+        }
+        return `${current.trimEnd()} ${text}`
+      })
       showToast('Dictation inserted')
     },
     onError: (err) => {
@@ -4812,45 +4706,6 @@ export default function SessionScreen() {
                     onOpenUrl={handleTerminalOpenUrl}
                   />
                 ))}
-                {/* Why: overlay native chat over the live terminal (kept mounted so
-                    its PTY stream survives toggling) rather than unmounting it. */}
-                {activeChatResolution != null && (
-                  <View style={styles.nativeChatOverlay}>
-                    <MobileNativeChatView
-                      messages={nativeChatSession.messages}
-                      status={nativeChatSession.status}
-                      error={nativeChatSession.error}
-                      agentWorking={nativeChatAgentWorking}
-                      streamingText={nativeChatStreamingText}
-                      onStop={handleNativeChatStop}
-                      ask={nativeChatAsk}
-                      onAnswerAsk={handleNativeChatAnswerAsk}
-                      question={nativeChatQuestion}
-                      onAnswerQuestion={handleNativeChatSend}
-                      permission={nativeChatPermission}
-                      onRespondPermission={handleNativeChatSend}
-                      onOpenFile={handleNativeChatOpenFile}
-                      hasMore={nativeChatSession.hasMore}
-                      loadingEarlier={nativeChatSession.loadingEarlier}
-                      onLoadEarlier={nativeChatSession.loadEarlier}
-                      onSend={handleNativeChatSend}
-                      pending={chatPending}
-                      agent={activeChatResolution?.agent ?? null}
-                      skills={nativeChatSkills}
-                      onNeedSkills={loadNativeChatSkills}
-                      composerText={chatComposerText}
-                      onComposerTextChange={setChatComposerText}
-                      onAttachImage={() => void attachImage('library')}
-                      isAttaching={isAttaching}
-                      onMicPress={handleDictationToggle}
-                      micActive={dictation.isRecording}
-                      inputLocked={connState !== 'connected'}
-                      filePaths={nativeChatFilePaths}
-                      onNeedFiles={loadNativeChatFiles}
-                      keyboardInset={keyboardLift}
-                    />
-                  </View>
-                )}
                 {toastMessage && (
                   <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
                     <Text style={styles.toastText}>{toastMessage}</Text>
@@ -4860,324 +4715,320 @@ export default function SessionScreen() {
             )}
 
             {/* Why: translate instead of resizing so keyboard open/close does not
-            trigger a server-side PTY viewport change. The dock hides in native
-            chat because that view supplies its own composer. */}
-            {!activeMarkdownTab &&
-              !activeFileTab &&
-              !activeBrowserTab &&
-              !(activeChatResolution != null) && (
-                <View
-                  style={[
-                    styles.commandDock,
-                    { paddingBottom: insets.bottom, transform: [{ translateY: -keyboardLift }] }
-                  ]}
-                >
-                  {/* Accessory keys */}
-                  <View style={styles.accessoryBar}>
-                    {/* Why: with default tap handling the first tap on any accessory
+            trigger a server-side PTY viewport change. */}
+            {!activeMarkdownTab && !activeFileTab && !activeBrowserTab && (
+              <View
+                style={[
+                  styles.commandDock,
+                  { paddingBottom: insets.bottom, transform: [{ translateY: -keyboardLift }] }
+                ]}
+              >
+                {/* Accessory keys */}
+                <View style={styles.accessoryBar}>
+                  {/* Why: with default tap handling the first tap on any accessory
                   key dismisses the open keyboard and is swallowed, so live
                   input lost its keyboard on every Esc/Tab press (#5106). */}
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.accessoryContent}
-                      keyboardShouldPersistTaps="always"
-                    >
-                      <Pressable
-                        style={({ pressed }) => [
-                          styles.accessoryKey,
-                          pressed && styles.accessoryKeyPressed,
-                          !canSend && styles.accessoryKeyDisabled
-                        ]}
-                        disabled={!canSend}
-                        onPress={() => {
-                          if (activeHandle) {
-                            void toggleDisplayMode(activeHandle)
-                          }
-                        }}
-                        accessibilityLabel={
-                          isPhoneMode(activeHandle)
-                            ? 'Switch to desktop mode'
-                            : 'Switch to phone mode'
-                        }
-                      >
-                        {isPhoneMode(activeHandle) ? (
-                          <Monitor
-                            size={14}
-                            color={canSend ? colors.textSecondary : colors.textMuted}
-                          />
-                        ) : (
-                          <Smartphone
-                            size={14}
-                            color={canSend ? colors.textSecondary : colors.textMuted}
-                          />
-                        )}
-                      </Pressable>
-                      <Pressable
-                        style={({ pressed }) => [
-                          styles.accessoryKey,
-                          liveInputEnabled && styles.accessoryKeyActive,
-                          pressed && styles.accessoryKeyPressed,
-                          !canSend && styles.accessoryKeyDisabled
-                        ]}
-                        disabled={!canSend}
-                        onPress={toggleLiveInput}
-                        accessibilityLabel={
-                          liveInputEnabled
-                            ? 'Switch to buffered command input'
-                            : 'Switch to live terminal input'
-                        }
-                      >
-                        <ChevronsRight
-                          size={14}
-                          color={
-                            liveInputEnabled
-                              ? colors.bgBase
-                              : canSend
-                                ? colors.textSecondary
-                                : colors.textMuted
-                          }
-                        />
-                      </Pressable>
-                      {canPaste && (
-                        <Pressable
-                          style={({ pressed }) => [
-                            styles.accessoryKey,
-                            pressed && styles.accessoryKeyPressed,
-                            !canSend && styles.accessoryKeyDisabled
-                          ]}
-                          disabled={!canSend}
-                          onPress={() => void handlePaste()}
-                          accessibilityLabel="Paste from clipboard"
-                        >
-                          <Text
-                            style={[
-                              styles.accessoryKeyText,
-                              !canSend && styles.accessoryKeyTextDisabled
-                            ]}
-                          >
-                            Paste
-                          </Text>
-                        </Pressable>
-                      )}
-                      {visibleBuiltInAccessoryKeys.map((key) => (
-                        <Pressable
-                          key={key.id}
-                          style={({ pressed }) => [
-                            styles.accessoryKey,
-                            pressed && styles.accessoryKeyPressed,
-                            !canSend && styles.accessoryKeyDisabled
-                          ]}
-                          disabled={!canSend}
-                          onPressIn={() => {
-                            if (!key.repeatable) {
-                              return
-                            }
-                            void handleAccessoryKey(key.bytes)
-                            startAccessoryRepeat(key.bytes)
-                          }}
-                          onPressOut={() => {
-                            if (key.repeatable) {
-                              stopAccessoryRepeat()
-                            }
-                          }}
-                          onPress={() => {
-                            if (key.repeatable) {
-                              return
-                            }
-                            void handleAccessoryKey(key.bytes)
-                          }}
-                          accessibilityLabel={key.accessibilityLabel ?? `Send ${key.label}`}
-                        >
-                          <Text
-                            style={[
-                              styles.accessoryKeyText,
-                              !canSend && styles.accessoryKeyTextDisabled
-                            ]}
-                          >
-                            {key.label}
-                          </Text>
-                        </Pressable>
-                      ))}
-                      {customKeys.map((key) => (
-                        <Pressable
-                          key={key.id}
-                          style={({ pressed }) => [
-                            styles.accessoryKey,
-                            styles.customAccessoryKey,
-                            pressed && styles.accessoryKeyPressed,
-                            !canSend && styles.accessoryKeyDisabled
-                          ]}
-                          disabled={!canSend}
-                          onPress={() => void handleAccessoryKey(key.bytes)}
-                          onLongPress={() => {
-                            triggerMediumImpact()
-                            setDeleteKeyTarget(key)
-                          }}
-                          delayLongPress={400}
-                          accessibilityLabel={`Send ${key.label}`}
-                        >
-                          <Text
-                            style={[
-                              styles.accessoryKeyText,
-                              !canSend && styles.accessoryKeyTextDisabled
-                            ]}
-                          >
-                            {key.label}
-                          </Text>
-                        </Pressable>
-                      ))}
-                      <Pressable
-                        style={({ pressed }) => [
-                          styles.accessoryKey,
-                          pressed && styles.accessoryKeyPressed
-                        ]}
-                        onPress={() => setShowCustomKeyModal(true)}
-                        accessibilityLabel="Add custom shortcut"
-                      >
-                        <Plus size={14} color={colors.textSecondary} strokeWidth={2.2} />
-                      </Pressable>
-                    </ScrollView>
-                  </View>
-
-                  {/* Input bar */}
-                  {liveInputEnabled ? (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.accessoryContent}
+                    keyboardShouldPersistTaps="always"
+                  >
                     <Pressable
-                      style={[styles.inputBar, styles.liveInputBar]}
+                      style={({ pressed }) => [
+                        styles.accessoryKey,
+                        pressed && styles.accessoryKeyPressed,
+                        !canSend && styles.accessoryKeyDisabled
+                      ]}
                       disabled={!canSend}
-                      onPress={focusLiveInput}
-                      accessibilityLabel="Focus live terminal input"
+                      onPress={() => {
+                        if (activeHandle) {
+                          void toggleDisplayMode(activeHandle)
+                        }
+                      }}
+                      accessibilityLabel={
+                        isPhoneMode(activeHandle)
+                          ? 'Switch to desktop mode'
+                          : 'Switch to phone mode'
+                      }
                     >
-                      <KeyboardIcon size={16} color={colors.textSecondary} strokeWidth={2} />
-                      <Text style={styles.liveInputHint} numberOfLines={1}>
-                        Keyboard input directly goes to terminal
-                      </Text>
-                      <TextInput
-                        ref={liveInputRef}
-                        style={styles.liveInputCapture}
-                        value={liveInputCapture}
-                        onChangeText={handleLiveInputChange}
-                        onKeyPress={handleLiveInputKeyPress}
-                        onSubmitEditing={handleLiveInputSubmit}
-                        placeholder=""
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                        spellCheck={false}
-                        smartInsertDelete={false}
-                        // Why: iOS textContentType wins over autoComplete and can
-                        // narrow the keyboard surface; keep IME switching available.
-                        autoComplete="off"
-                        keyboardType={getTerminalLiveInputKeyboardType(Platform.OS)}
-                        returnKeyType="default"
-                        blurOnSubmit={false}
-                        editable={canSend}
-                        importantForAutofill="no"
+                      {isPhoneMode(activeHandle) ? (
+                        <Monitor
+                          size={14}
+                          color={canSend ? colors.textSecondary : colors.textMuted}
+                        />
+                      ) : (
+                        <Smartphone
+                          size={14}
+                          color={canSend ? colors.textSecondary : colors.textMuted}
+                        />
+                      )}
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.accessoryKey,
+                        liveInputEnabled && styles.accessoryKeyActive,
+                        pressed && styles.accessoryKeyPressed,
+                        !canSend && styles.accessoryKeyDisabled
+                      ]}
+                      disabled={!canSend}
+                      onPress={toggleLiveInput}
+                      accessibilityLabel={
+                        liveInputEnabled
+                          ? 'Switch to buffered command input'
+                          : 'Switch to live terminal input'
+                      }
+                    >
+                      <ChevronsRight
+                        size={14}
+                        color={
+                          liveInputEnabled
+                            ? colors.bgBase
+                            : canSend
+                              ? colors.textSecondary
+                              : colors.textMuted
+                        }
                       />
                     </Pressable>
-                  ) : (
-                    <View style={styles.inputBar}>
-                      <TextInput
-                        // Why: Android caches the IME inputType at mount, so toggling
-                        // autocomplete must remount there; iOS can update without a focus-costly remount.
-                        key={
-                          Platform.OS === 'android'
-                            ? autocompleteEnabled
-                              ? 'cmd-input-ac-on'
-                              : 'cmd-input-ac-off'
-                            : 'cmd-input'
-                        }
-                        style={styles.textInput}
-                        value={input}
-                        onChangeText={(text) =>
-                          setInput((previousText) => normalizeTerminalTextInput(text, previousText))
-                        }
-                        placeholder="Type a command…"
-                        placeholderTextColor={colors.textMuted}
-                        autoCapitalize="none"
-                        autoCorrect={autocompleteEnabled}
-                        spellCheck={autocompleteEnabled}
-                        smartInsertDelete={false}
-                        // Why: terminal commands are not autofill content, but the
-                        // keyboard must stay default so non-Latin IMEs remain selectable.
-                        autoComplete="off"
-                        keyboardType={getTerminalCommandKeyboardType(
-                          Platform.OS,
-                          autocompleteEnabled
-                        )}
-                        returnKeyType="send"
-                        editable={canSend}
-                        onSubmitEditing={() => void handleSend()}
-                      />
+                    {canPaste && (
                       <Pressable
-                        style={[
-                          styles.dictationButton,
-                          (!canSend || isAttaching) && styles.sendButtonDisabled
-                        ]}
-                        disabled={!canSend || isAttaching}
-                        // Tap opens the photo library straight away (one-tap, like
-                        // Discord); long-press is the escape hatch for picking a file.
-                        onPress={() => void attachImage('library')}
-                        onLongPress={() => void attachImage('files')}
-                        delayLongPress={350}
-                        accessibilityLabel={isAttaching ? 'Sending image' : 'Attach a photo'}
-                        accessibilityHint="Long press to attach a file instead"
-                      >
-                        {isAttaching ? (
-                          <ActivityIndicator size="small" color={colors.textSecondary} />
-                        ) : (
-                          <ImagePlus size={17} color={colors.textSecondary} strokeWidth={2.4} />
-                        )}
-                      </Pressable>
-                      <Pressable
-                        style={[
-                          styles.dictationButton,
-                          (dictation.isStarting || dictation.isRecording) &&
-                            styles.dictationButtonActive,
-                          !canSend && styles.sendButtonDisabled
+                        style={({ pressed }) => [
+                          styles.accessoryKey,
+                          pressed && styles.accessoryKeyPressed,
+                          !canSend && styles.accessoryKeyDisabled
                         ]}
                         disabled={!canSend}
-                        onPress={dictationMode === 'toggle' ? handleDictationToggle : undefined}
-                        onPressIn={dictationMode === 'hold' ? handleDictationPressIn : undefined}
-                        onPressOut={dictationMode === 'hold' ? handleDictationPressOut : undefined}
-                        onLongPress={
-                          dictationMode === 'toggle'
-                            ? () => {
-                                if (dictation.isRecording || dictation.isProcessing) {
-                                  void dictation.cancel()
-                                }
-                              }
-                            : undefined
-                        }
-                        accessibilityLabel={
-                          dictation.isRecording
-                            ? 'Stop voice dictation'
-                            : dictation.isProcessing
-                              ? 'Cancel voice dictation'
-                              : dictation.isStarting
-                                ? 'Starting voice dictation'
-                                : 'Start voice dictation'
-                        }
+                        onPress={() => void handlePaste()}
+                        accessibilityLabel="Paste from clipboard"
                       >
-                        {dictation.isProcessing ? (
-                          <ActivityIndicator size="small" color={colors.textSecondary} />
-                        ) : dictation.isStarting || dictation.isRecording ? (
-                          <Mic size={17} color={colors.textPrimary} strokeWidth={2.4} />
-                        ) : (
-                          <Mic size={17} color={colors.textSecondary} strokeWidth={2.4} />
-                        )}
+                        <Text
+                          style={[
+                            styles.accessoryKeyText,
+                            !canSend && styles.accessoryKeyTextDisabled
+                          ]}
+                        >
+                          Paste
+                        </Text>
                       </Pressable>
+                    )}
+                    {visibleBuiltInAccessoryKeys.map((key) => (
                       <Pressable
-                        style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
+                        key={key.id}
+                        style={({ pressed }) => [
+                          styles.accessoryKey,
+                          pressed && styles.accessoryKeyPressed,
+                          !canSend && styles.accessoryKeyDisabled
+                        ]}
                         disabled={!canSend}
-                        onPress={() => void handleSend()}
-                        accessibilityLabel="Send command"
+                        onPressIn={() => {
+                          if (!key.repeatable) {
+                            return
+                          }
+                          void handleAccessoryKey(key.bytes)
+                          startAccessoryRepeat(key.bytes)
+                        }}
+                        onPressOut={() => {
+                          if (key.repeatable) {
+                            stopAccessoryRepeat()
+                          }
+                        }}
+                        onPress={() => {
+                          if (key.repeatable) {
+                            return
+                          }
+                          void handleAccessoryKey(key.bytes)
+                        }}
+                        accessibilityLabel={key.accessibilityLabel ?? `Send ${key.label}`}
                       >
-                        <ArrowUp size={18} color={colors.textSecondary} strokeWidth={2.5} />
+                        <Text
+                          style={[
+                            styles.accessoryKeyText,
+                            !canSend && styles.accessoryKeyTextDisabled
+                          ]}
+                        >
+                          {key.label}
+                        </Text>
                       </Pressable>
-                    </View>
-                  )}
+                    ))}
+                    {customKeys.map((key) => (
+                      <Pressable
+                        key={key.id}
+                        style={({ pressed }) => [
+                          styles.accessoryKey,
+                          styles.customAccessoryKey,
+                          pressed && styles.accessoryKeyPressed,
+                          !canSend && styles.accessoryKeyDisabled
+                        ]}
+                        disabled={!canSend}
+                        onPress={() => void handleAccessoryKey(key.bytes)}
+                        onLongPress={() => {
+                          triggerMediumImpact()
+                          setDeleteKeyTarget(key)
+                        }}
+                        delayLongPress={400}
+                        accessibilityLabel={`Send ${key.label}`}
+                      >
+                        <Text
+                          style={[
+                            styles.accessoryKeyText,
+                            !canSend && styles.accessoryKeyTextDisabled
+                          ]}
+                        >
+                          {key.label}
+                        </Text>
+                      </Pressable>
+                    ))}
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.accessoryKey,
+                        pressed && styles.accessoryKeyPressed
+                      ]}
+                      onPress={() => setShowCustomKeyModal(true)}
+                      accessibilityLabel="Add custom shortcut"
+                    >
+                      <Plus size={14} color={colors.textSecondary} strokeWidth={2.2} />
+                    </Pressable>
+                  </ScrollView>
                 </View>
-              )}
+
+                {/* Input bar */}
+                {liveInputEnabled ? (
+                  <Pressable
+                    style={[styles.inputBar, styles.liveInputBar]}
+                    disabled={!canSend}
+                    onPress={focusLiveInput}
+                    accessibilityLabel="Focus live terminal input"
+                  >
+                    <KeyboardIcon size={16} color={colors.textSecondary} strokeWidth={2} />
+                    <Text style={styles.liveInputHint} numberOfLines={1}>
+                      Keyboard input directly goes to terminal
+                    </Text>
+                    <TextInput
+                      ref={liveInputRef}
+                      style={styles.liveInputCapture}
+                      value={liveInputCapture}
+                      onChangeText={handleLiveInputChange}
+                      onKeyPress={handleLiveInputKeyPress}
+                      onSubmitEditing={handleLiveInputSubmit}
+                      placeholder=""
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      spellCheck={false}
+                      smartInsertDelete={false}
+                      // Why: iOS textContentType wins over autoComplete and can
+                      // narrow the keyboard surface; keep IME switching available.
+                      autoComplete="off"
+                      keyboardType={getTerminalLiveInputKeyboardType(Platform.OS)}
+                      returnKeyType="default"
+                      blurOnSubmit={false}
+                      editable={canSend}
+                      importantForAutofill="no"
+                    />
+                  </Pressable>
+                ) : (
+                  <View style={styles.inputBar}>
+                    <TextInput
+                      // Why: Android caches the IME inputType at mount, so toggling
+                      // autocomplete must remount there; iOS can update without a focus-costly remount.
+                      key={
+                        Platform.OS === 'android'
+                          ? autocompleteEnabled
+                            ? 'cmd-input-ac-on'
+                            : 'cmd-input-ac-off'
+                          : 'cmd-input'
+                      }
+                      style={styles.textInput}
+                      value={input}
+                      onChangeText={(text) =>
+                        setInput((previousText) => normalizeTerminalTextInput(text, previousText))
+                      }
+                      placeholder="Type a command…"
+                      placeholderTextColor={colors.textMuted}
+                      autoCapitalize="none"
+                      autoCorrect={autocompleteEnabled}
+                      spellCheck={autocompleteEnabled}
+                      smartInsertDelete={false}
+                      // Why: terminal commands are not autofill content, but the
+                      // keyboard must stay default so non-Latin IMEs remain selectable.
+                      autoComplete="off"
+                      keyboardType={getTerminalCommandKeyboardType(
+                        Platform.OS,
+                        autocompleteEnabled
+                      )}
+                      returnKeyType="send"
+                      editable={canSend}
+                      onSubmitEditing={() => void handleSend()}
+                    />
+                    <Pressable
+                      style={[
+                        styles.dictationButton,
+                        (!canSend || isAttaching) && styles.sendButtonDisabled
+                      ]}
+                      disabled={!canSend || isAttaching}
+                      // Tap opens the photo library straight away (one-tap, like
+                      // Discord); long-press is the escape hatch for picking a file.
+                      onPress={() => void attachImage('library')}
+                      onLongPress={() => void attachImage('files')}
+                      delayLongPress={350}
+                      accessibilityLabel={isAttaching ? 'Sending image' : 'Attach a photo'}
+                      accessibilityHint="Long press to attach a file instead"
+                    >
+                      {isAttaching ? (
+                        <ActivityIndicator size="small" color={colors.textSecondary} />
+                      ) : (
+                        <ImagePlus size={17} color={colors.textSecondary} strokeWidth={2.4} />
+                      )}
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.dictationButton,
+                        (dictation.isStarting || dictation.isRecording) &&
+                          styles.dictationButtonActive,
+                        !canSend && styles.sendButtonDisabled
+                      ]}
+                      disabled={!canSend}
+                      onPress={dictationMode === 'toggle' ? handleDictationToggle : undefined}
+                      onPressIn={dictationMode === 'hold' ? handleDictationPressIn : undefined}
+                      onPressOut={dictationMode === 'hold' ? handleDictationPressOut : undefined}
+                      onLongPress={
+                        dictationMode === 'toggle'
+                          ? () => {
+                              if (dictation.isRecording || dictation.isProcessing) {
+                                void dictation.cancel()
+                              }
+                            }
+                          : undefined
+                      }
+                      accessibilityLabel={
+                        dictation.isRecording
+                          ? 'Stop voice dictation'
+                          : dictation.isProcessing
+                            ? 'Cancel voice dictation'
+                            : dictation.isStarting
+                              ? 'Starting voice dictation'
+                              : 'Start voice dictation'
+                      }
+                    >
+                      {dictation.isProcessing ? (
+                        <ActivityIndicator size="small" color={colors.textSecondary} />
+                      ) : dictation.isStarting || dictation.isRecording ? (
+                        <Mic size={17} color={colors.textPrimary} strokeWidth={2.4} />
+                      ) : (
+                        <Mic size={17} color={colors.textSecondary} strokeWidth={2.4} />
+                      )}
+                    </Pressable>
+                    <Pressable
+                      style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
+                      disabled={!canSend}
+                      onPress={() => void handleSend()}
+                      accessibilityLabel="Send command"
+                    >
+                      <ArrowUp size={18} color={colors.textSecondary} strokeWidth={2.5} />
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            )}
           </View>
           {canDockPanel && activePanel !== null && (
             <SessionDockColumn
@@ -5269,28 +5120,6 @@ export default function SessionScreen() {
         visible={actionTarget != null}
         title={actionTarget?.title || 'Terminal'}
         actions={[
-          ...(() => {
-            const tab = actionTarget
-              ? sessionTabs.find(
-                  (candidate) =>
-                    candidate.type === 'terminal' && candidate.terminal === actionTarget.handle
-                )
-              : null
-            if (!tab || !resolveMobileNativeChat(tab)) {
-              return []
-            }
-            const isChat = chatTabIds.has(tab.id)
-            return [
-              {
-                label: isChat ? 'Switch to terminal view' : 'Switch to chat view',
-                icon: isChat ? SquareTerminal : MessageSquare,
-                onPress: () => {
-                  setActionTarget(null)
-                  toggleTabChatView(tab.id)
-                }
-              }
-            ]
-          })(),
           ...(actionTarget
             ? [
                 {

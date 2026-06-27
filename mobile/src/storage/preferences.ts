@@ -2,27 +2,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 
 const PINS_PREFIX = 'orca:pins:'
 const NOTIF_KEY = 'orca:pushNotificationsEnabled'
-const NATIVE_CHAT_TABS_PREFIX = 'orca:nativeChatTabs:'
-
-/** Tab ids currently showing the native chat view in a worktree — persisted so a
- *  tab keeps its chat/terminal choice across navigation and app restarts. */
-export async function loadNativeChatTabIds(worktreeId: string): Promise<string[]> {
-  try {
-    const raw = await AsyncStorage.getItem(NATIVE_CHAT_TABS_PREFIX + worktreeId)
-    const parsed = raw ? (JSON.parse(raw) as unknown) : null
-    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []
-  } catch {
-    return []
-  }
-}
-
-export async function saveNativeChatTabIds(worktreeId: string, ids: string[]): Promise<void> {
-  try {
-    await AsyncStorage.setItem(NATIVE_CHAT_TABS_PREFIX + worktreeId, JSON.stringify(ids))
-  } catch {
-    // Best-effort persistence; a failed write just forgets the view choice.
-  }
-}
 
 // Why: default-off so the iOS notification permission prompt never
 // fires until the user explicitly opts in via Settings → Notifications.

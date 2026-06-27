@@ -3,11 +3,7 @@ export type MobileMarkdownBlock =
   | { type: 'heading'; level: number; text: string }
   | { type: 'quote'; text: string }
   | { type: 'code'; text: string; language?: string }
-  | {
-      type: 'list'
-      ordered: boolean
-      items: Array<{ text: string; checked?: boolean; depth: number }>
-    }
+  | { type: 'list'; ordered: boolean; items: Array<{ text: string; checked?: boolean }> }
   | { type: 'image'; alt: string; url: string }
   | { type: 'table'; headers: string[]; rows: string[][] }
   | { type: 'rule' }
@@ -24,28 +20,6 @@ function splitTableRow(line: string): string[] {
 function isTableSeparator(line: string): boolean {
   const cells = splitTableRow(line)
   return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell))
-}
-
-/** Convert raw per-item indent widths into normalized depth levels via an indent
- *  stack. This tolerates either 2- or 4-space nesting (and inconsistent widths):
- *  a deeper indent than the current level pushes one level; a shallower indent
- *  pops back to the matching level. Depth is clamped so a pathological document
- *  can't produce runaway indentation. */
-function assignListDepths(
-  raw: Array<{ text: string; checked?: boolean; indent: number }>
-): Array<{ text: string; checked?: boolean; depth: number }> {
-  const MAX_DEPTH = 6
-  const stack: number[] = [] // indent width at each open depth level
-  return raw.map((item) => {
-    while (stack.length > 0 && item.indent < stack[stack.length - 1]!) {
-      stack.pop()
-    }
-    if (stack.length === 0 || item.indent > stack[stack.length - 1]!) {
-      stack.push(item.indent)
-    }
-    const depth = Math.min(stack.length - 1, MAX_DEPTH)
-    return { text: item.text, checked: item.checked, depth }
-  })
 }
 
 export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
@@ -122,26 +96,22 @@ export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
     }
 
     if (/^\s*(?:[-*+]|\d+[.)])\s+/.test(line)) {
-      const raw: Array<{ text: string; checked?: boolean; indent: number }> = []
+      const items: Array<{ text: string; checked?: boolean }> = []
       let ordered = false
       while (index < lines.length && /^\s*(?:[-*+]|\d+[.)])\s+/.test(lines[index] ?? '')) {
         const current = lines[index] ?? ''
-        // Leading-whitespace width signals nesting; tabs count as 2 columns.
-        const indentText = current.match(/^[\t ]*/)?.[0] ?? ''
-        const indent = indentText.replace(/\t/g, '  ').length
         const orderedMatch = current.match(/^\s*\d+[.)]\s+(.+)$/)
         const unorderedMatch = current.match(/^\s*[-*+]\s+(.+)$/)
         ordered ||= Boolean(orderedMatch)
         const rawText = (orderedMatch?.[1] ?? unorderedMatch?.[1] ?? '').trim()
         const task = rawText.match(/^\[([ xX])\]\s+(.+)$/)
-        raw.push({
+        items.push({
           text: task?.[2] ?? rawText,
-          checked: task ? task[1]?.toLowerCase() === 'x' : undefined,
-          indent
+          checked: task ? task[1]?.toLowerCase() === 'x' : undefined
         })
         index += 1
       }
-      blocks.push({ type: 'list', ordered, items: assignListDepths(raw) })
+      blocks.push({ type: 'list', ordered, items })
       continue
     }
 

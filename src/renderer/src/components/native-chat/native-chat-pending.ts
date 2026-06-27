@@ -85,6 +85,48 @@ export type NativeChatCommandMarker = {
   sentAt: number
 }
 
+export type NativeChatCommandMarkerScope = {
+  paneKey: string
+  agent: string
+  sessionId: string | null
+}
+
+const COMMAND_MARKER_LIMIT = 8
+const commandMarkerCache = new Map<string, NativeChatCommandMarker[]>()
+let commandMarkerCounter = 0
+
+function commandMarkerScopeKey(scope: NativeChatCommandMarkerScope): string {
+  return `${scope.paneKey}\0${scope.agent}\0${scope.sessionId ?? ''}`
+}
+
+export function readCommandMarkerCache(
+  scope: NativeChatCommandMarkerScope
+): NativeChatCommandMarker[] {
+  return [...(commandMarkerCache.get(commandMarkerScopeKey(scope)) ?? [])]
+}
+
+export function appendCommandMarkerCache(
+  scope: NativeChatCommandMarkerScope,
+  command: string,
+  sentAt = Date.now()
+): NativeChatCommandMarker[] {
+  commandMarkerCounter += 1
+  const key = commandMarkerScopeKey(scope)
+  // Why: native/TUI view switches remount the chat surface, but slash commands
+  // are not transcript turns, so their local feedback needs a pane-scoped cache.
+  const next = [
+    ...(commandMarkerCache.get(key) ?? []),
+    { id: `${sentAt}-${commandMarkerCounter}`, command, sentAt }
+  ].slice(-COMMAND_MARKER_LIMIT)
+  commandMarkerCache.set(key, next)
+  return [...next]
+}
+
+export function clearCommandMarkerCacheForTests(): void {
+  commandMarkerCache.clear()
+  commandMarkerCounter = 0
+}
+
 /** Render command markers as compact `system` messages. The `system` role draws
  *  as a muted aside (not a user bubble); the text avoids the harness noise
  *  prefixes so stripNoiseMessages keeps it. */

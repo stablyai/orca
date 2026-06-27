@@ -12,10 +12,6 @@
     "../src/main/ipc/worktree-metadata-merge.ts",
     "../src/main/wsl.ts"
   ],
-  "exclude": [
-    "../src/shared/native-chat-ask-parser-parity.test.ts",
-    "../src/shared/native-chat-merge-parity.test.ts"
-  ],
   "compilerOptions": {
     "baseUrl": null,
     "paths": {

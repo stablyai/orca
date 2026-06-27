@@ -8,10 +8,6 @@
     "../src/relay/**/*",
     "../src/types/**/*"
   ],
-  "exclude": [
-    "../src/shared/native-chat-ask-parser-parity.test.ts",
-    "../src/shared/native-chat-merge-parity.test.ts"
-  ],
   "compilerOptions": {
     "composite": true,
     "types": ["electron-vite/node"]

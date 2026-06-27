@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import {
+  appendCommandMarkerCache,
+  clearCommandMarkerCacheForTests,
   commandMarkersAsMessages,
   isCommandMarkerId,
   isPendingMessageId,
   pendingSendsAsMessages,
   prunePendingSends,
+  readCommandMarkerCache,
   type NativeChatPendingSend
 } from './native-chat-pending'
 import { stripNoiseMessages } from './native-chat-noise'
@@ -112,5 +115,38 @@ describe('commandMarkersAsMessages', () => {
   it('isCommandMarkerId recognizes the prefix', () => {
     expect(isCommandMarkerId('command:c1')).toBe(true)
     expect(isCommandMarkerId('pending:p1')).toBe(false)
+  })
+})
+
+describe('command marker cache', () => {
+  it('persists slash command markers for the same pane conversation', () => {
+    clearCommandMarkerCacheForTests()
+    const scope = { paneKey: 'tab-a:leaf-a', agent: 'codex', sessionId: 'session-1' }
+
+    const appended = appendCommandMarkerCache(scope, '/clear', 10)
+
+    expect(appended).toEqual([{ id: '10-1', command: '/clear', sentAt: 10 }])
+    expect(readCommandMarkerCache(scope)).toEqual(appended)
+    expect(readCommandMarkerCache({ ...scope, sessionId: 'session-2' })).toEqual([])
+  })
+
+  it('caps cached command markers to the latest eight', () => {
+    clearCommandMarkerCacheForTests()
+    const scope = { paneKey: 'tab-a:leaf-a', agent: 'claude', sessionId: 'session-1' }
+
+    for (let i = 0; i < 10; i += 1) {
+      appendCommandMarkerCache(scope, `/cmd-${i}`, i)
+    }
+
+    expect(readCommandMarkerCache(scope).map((marker) => marker.command)).toEqual([
+      '/cmd-2',
+      '/cmd-3',
+      '/cmd-4',
+      '/cmd-5',
+      '/cmd-6',
+      '/cmd-7',
+      '/cmd-8',
+      '/cmd-9'
+    ])
   })
 })

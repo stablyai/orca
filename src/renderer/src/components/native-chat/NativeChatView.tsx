@@ -22,8 +22,10 @@ import {
 } from './native-chat-working-suppression'
 import {
   commandMarkersAsMessages,
+  appendCommandMarkerCache,
   pendingSendsAsMessages,
   prunePendingSends,
+  readCommandMarkerCache,
   type NativeChatCommandMarker,
   type NativeChatPendingSend
 } from './native-chat-pending'
@@ -119,16 +121,22 @@ function NativeChatResolvedView({
   // the message never vanishes between send and transcript catch-up.
   const [pending, setPending] = useState<NativeChatPendingSend[]>([])
   const pendingCounter = useRef(0)
+  const commandMarkerScope = useMemo(
+    () => ({ paneKey, agent, sessionId }),
+    [paneKey, agent, sessionId]
+  )
   // Slash commands aren't chat turns, so they get a small local "Ran /clear"
-  // system line instead of a user bubble. Capped + reset per conversation.
-  const [commandMarkers, setCommandMarkers] = useState<NativeChatCommandMarker[]>([])
-  const commandCounter = useRef(0)
-  // Reset the queue when the conversation changes so echoes never cross sessions.
+  // system line instead of a user bubble. Capped + cached per conversation.
+  const [commandMarkers, setCommandMarkers] = useState<NativeChatCommandMarker[]>(() =>
+    readCommandMarkerCache(commandMarkerScope)
+  )
+  // Reset the optimistic queue when the conversation changes so echoes never
+  // cross sessions; command markers rehydrate from their pane-scoped cache.
   useEffect(() => {
     setPending([])
-    setCommandMarkers([])
+    setCommandMarkers(readCommandMarkerCache(commandMarkerScope))
     setWorkingInterrupted(false)
-  }, [sessionId, agent])
+  }, [commandMarkerScope])
   // Prune echoes whose real user turn is now in the transcript.
   useEffect(() => {
     setPending((prev) => prunePendingSends(prev, session.messages))
@@ -138,13 +146,12 @@ function NativeChatResolvedView({
     pendingCounter.current += 1
     setPending((prev) => [...prev, { id: `${pendingCounter.current}`, text, sentAt: Date.now() }])
   }, [])
-  const onSlashCommand = useCallback((command: string) => {
-    commandCounter.current += 1
-    // Keep only the most recent few so a long session of commands can't grow it.
-    setCommandMarkers((prev) =>
-      [...prev, { id: `${commandCounter.current}`, command, sentAt: Date.now() }].slice(-8)
-    )
-  }, [])
+  const onSlashCommand = useCallback(
+    (command: string) => {
+      setCommandMarkers(appendCommandMarkerCache(commandMarkerScope, command))
+    },
+    [commandMarkerScope]
+  )
 
   // The streaming preview bubble (if any) sits after the transcript but before
   // the optimistic user echoes — same order mobile uses.

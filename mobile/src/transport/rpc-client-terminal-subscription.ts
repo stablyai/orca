@@ -31,34 +31,6 @@ export function updateTerminalSubscriptionViewport(
   }
 }
 
-/** Build the unsubscribe RPC for a streaming method that needs the host told to
- *  tear down (session tabs, native chat), or null when none is required. Keeps
- *  the per-method echo logic out of the rpc-client teardown closure. */
-export function buildStreamUnsubscribe(
-  method: string | undefined,
-  params: unknown
-): { method: string; params: Record<string, unknown> } | null {
-  if (!params || typeof params !== 'object') {
-    return null
-  }
-  if (method === 'session.tabs.subscribe') {
-    const worktree = (params as { worktree?: unknown }).worktree
-    return typeof worktree === 'string'
-      ? { method: 'session.tabs.unsubscribe', params: { worktree } }
-      : null
-  }
-  if (method === 'nativeChat.subscribe') {
-    // The host keys the transcript watcher by agent:sessionId; echo it so the
-    // fs-watcher is closed when the chat view toggles off (not just on disconnect).
-    const agent = (params as { agent?: unknown }).agent
-    const sessionId = (params as { sessionId?: unknown }).sessionId
-    return typeof agent === 'string' && typeof sessionId === 'string'
-      ? { method: 'nativeChat.unsubscribe', params: { subscriptionId: `${agent}:${sessionId}` } }
-      : null
-  }
-  return null
-}
-
 export function buildTerminalUnsubscribeParams(
   params: unknown
 ): { subscriptionId: string; client?: { id: string } } | null {

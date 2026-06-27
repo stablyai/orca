@@ -31,7 +31,6 @@
     "../src/main/runtime/runtime-metadata.ts",
     "../src/main/win32-utils.ts"
   ],
-  "exclude": ["../src/shared/native-chat-ask-parser-parity.test.ts"],
   "compilerOptions": {
     "composite": true,
     "module": "CommonJS",
