@@ -1,8 +1,8 @@
 import { ArrowLeft, ArrowRight, Copy, RefreshCw } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { AndroidLogo, IosBrandIcon } from './MobileBrandIcons'
+import { NetworkInterfaceCombobox } from './NetworkInterfaceCombobox'
 export { HeroIntro } from './MobileHeroIntro'
 export { HeroPaired, type PairedDevice } from './MobileHeroPairedDevices'
 import { translate } from '@/i18n/i18n'
@@ -162,34 +162,13 @@ export function HeroFlow({
                 <span className="mp-network-label">
                   {translate('auto.components.mobile.MobileHero.dfd2aa9d5d', 'Network')}
                 </span>
-                <Select
-                  value={selectedAddress ?? ''}
-                  onValueChange={onSelectedAddressChange}
+                <NetworkInterfaceCombobox
+                  networkInterfaces={networkInterfaces}
+                  selectedAddress={selectedAddress}
+                  onSelectedAddressChange={onSelectedAddressChange}
                   disabled={networkInterfaces.length === 0}
-                >
-                  <SelectTrigger
-                    size="sm"
-                    className="mp-network-select"
-                    aria-label={translate(
-                      'auto.components.mobile.MobileHero.79d2f480da',
-                      'Network interface to advertise'
-                    )}
-                  >
-                    <SelectValue
-                      placeholder={translate(
-                        'auto.components.mobile.MobileHero.ca85e595a7',
-                        'No interfaces found'
-                      )}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {networkInterfaces.map((iface) => (
-                      <SelectItem key={`${iface.name}-${iface.address}`} value={iface.address}>
-                        {iface.address} ({iface.name})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  className="mp-network-select"
+                />
                 <button
                   type="button"
                   className={cn('mp-network-refresh', refreshingNetworkInterfaces && 'is-spinning')}

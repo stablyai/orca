@@ -1,27 +1,13 @@
-import React, { useCallback, useMemo, useState } from 'react'
-import { ChevronDown, ExternalLink, Loader2, QrCode, RefreshCw, Wifi } from 'lucide-react'
+import React from 'react'
+import { ExternalLink, Loader2, QrCode, RefreshCw, Wifi } from 'lucide-react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion'
 import { Button } from '../ui/button'
-import {
-  Command,
-  CommandEmpty,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandSeparator
-} from '../ui/command'
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
-import { parseManualNetworkAddress } from '../../../../shared/network/manual-address'
 import { translate } from '@/i18n/i18n'
-import {
-  buildComboboxEntries,
-  type MobileNetworkInterface
-} from './mobile-network-interface-selection'
+import { NetworkInterfaceCombobox } from '../mobile/NetworkInterfaceCombobox'
+import type { MobileNetworkInterface } from './mobile-network-interface-selection'
 
 const TAILSCALE_DOWNLOAD_URL = 'https://tailscale.com/download'
-const TRIGGER_LABEL_CUSTOM = 'custom'
-const ERROR_MESSAGE = 'Enter an IPv4 address or Tailscale MagicDNS hostname'
 
 type MobileNetworkInterfaceSectionProps = {
   networkInterfaces: MobileNetworkInterface[]
@@ -34,10 +20,6 @@ type MobileNetworkInterfaceSectionProps = {
   onGenerateQr: () => void
 }
 
-function formatInterfaceLabel(iface: MobileNetworkInterface): string {
-  return `${iface.address} (${iface.name})`
-}
-
 export function MobileNetworkInterfaceSection({
   networkInterfaces,
   selectedAddress,
@@ -48,56 +30,6 @@ export function MobileNetworkInterfaceSection({
   hasQrCode,
   onGenerateQr
 }: MobileNetworkInterfaceSectionProps): React.JSX.Element {
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
-
-  const selectedIface = useMemo<MobileNetworkInterface | null>(() => {
-    if (!selectedAddress) {
-      return null
-    }
-    const matched = networkInterfaces.find((iface) => iface.address === selectedAddress)
-    if (matched) {
-      return matched
-    }
-    // Why: a parent-supplied custom address still renders the (custom) label
-    // so the trigger reflects the user's choice on first paint — not
-    // "No interfaces found".
-    return { name: TRIGGER_LABEL_CUSTOM, address: selectedAddress }
-  }, [networkInterfaces, selectedAddress])
-
-  const triggerLabel = selectedIface
-    ? formatInterfaceLabel(selectedIface)
-    : translate(
-        'auto.components.settings.MobileNetworkInterfaceSection.b2c384cfd6',
-        'No interfaces found'
-      )
-
-  const entries = useMemo(
-    () => buildComboboxEntries(networkInterfaces, query),
-    [networkInterfaces, query]
-  )
-
-  const queryParse = useMemo(() => parseManualNetworkAddress(query), [query])
-  const showInlineError = query.trim() !== '' && !queryParse.ok
-
-  const handleSelectInterface = useCallback(
-    (iface: MobileNetworkInterface) => {
-      setQuery('')
-      setOpen(false)
-      onSelectedAddressChange(iface.address)
-    },
-    [onSelectedAddressChange]
-  )
-
-  const handleSelectUseQuery = useCallback(
-    (address: string) => {
-      setQuery('')
-      setOpen(false)
-      onSelectedAddressChange(address)
-    },
-    [onSelectedAddressChange]
-  )
-
   return (
     <div className="rounded-lg border border-border/60 p-4">
       <div className="mb-3 flex items-center gap-2">
@@ -117,77 +49,12 @@ export function MobileNetworkInterfaceSection({
       </p>
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
-          <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                role="combobox"
-                aria-expanded={open}
-                className="min-w-[220px] justify-between font-normal"
-              >
-                <span className="truncate">{triggerLabel}</span>
-                <ChevronDown className="ml-2 size-3.5 opacity-60" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[320px] p-0" align="start">
-              <Command shouldFilter={false}>
-                <CommandInput
-                  value={query}
-                  onValueChange={setQuery}
-                  placeholder={translate(
-                    'auto.components.settings.MobileNetworkInterfaceSection.new-combobox-placeholder',
-                    'Search or type an address…'
-                  )}
-                />
-                <CommandList>
-                  <CommandEmpty>
-                    {showInlineError
-                      ? ERROR_MESSAGE
-                      : translate(
-                          'auto.components.settings.MobileNetworkInterfaceSection.new-combobox-empty',
-                          'No matching interfaces'
-                        )}
-                  </CommandEmpty>
-                  {entries.map((entry, index) => {
-                    if (entry.kind === 'interface') {
-                      return (
-                        <CommandItem
-                          key={`iface-${entry.iface.name}-${entry.iface.address}`}
-                          value={`${entry.iface.address} ${entry.iface.name}`}
-                          onSelect={() => handleSelectInterface(entry.iface)}
-                        >
-                          {formatInterfaceLabel(entry.iface)}
-                        </CommandItem>
-                      )
-                    }
-                    // Why: cmdk groups don't visually separate the manual-entry row from
-                    // the auto-discovered interfaces; a separator makes the boundary
-                    // obvious. The separator only renders when at least one interface
-                    // entry has come before, so the layout stays clean when the list is
-                    // empty (use-query only).
-                    const precededByInterface = index > 0
-                    return (
-                      <div key={`use-${entry.address}`}>
-                        {precededByInterface ? <CommandSeparator /> : null}
-                        <CommandItem
-                          value={`__use__ ${entry.address}`}
-                          onSelect={() => handleSelectUseQuery(entry.address)}
-                        >
-                          {translate(
-                            'auto.components.settings.MobileNetworkInterfaceSection.use-address-row',
-                            'Use "{address}"',
-                            { address: entry.address }
-                          )}
-                        </CommandItem>
-                      </div>
-                    )
-                  })}
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+          <NetworkInterfaceCombobox
+            networkInterfaces={networkInterfaces}
+            selectedAddress={selectedAddress}
+            onSelectedAddressChange={onSelectedAddressChange}
+            className="min-w-[220px] justify-between font-normal"
+          />
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -213,11 +80,6 @@ export function MobileNetworkInterfaceSection({
             </TooltipContent>
           </Tooltip>
         </div>
-        {showInlineError ? (
-          <p className="text-xs text-destructive" role="status">
-            {ERROR_MESSAGE}
-          </p>
-        ) : null}
         <Button
           onClick={onGenerateQr}
           disabled={loading || !selectedAddress}
