@@ -64,7 +64,7 @@ import {
   anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout
 } from './terminal/split-group-mount'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { setForegroundTerminalWorktreeIds } from '@/lib/foreground-terminal-worktrees'
+import { setForegroundTerminalTabIds } from '@/lib/foreground-terminal-tabs'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
 import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
 import CodexRestartChip from './CodexRestartChip'
@@ -279,23 +279,23 @@ function Terminal(): React.JSX.Element | null {
   const activityTerminalPortals: ActivityTerminalPortalTarget[] = useActivityTerminalPortals(
     activeView === 'activity'
   )
-  const foregroundTerminalWorktreeIds = useMemo(() => {
+  const foregroundTerminalTabIds = useMemo(() => {
     const ids = new Set<string>()
-    if (activeView === 'terminal' && renderedActiveWorktreeId) {
-      ids.add(renderedActiveWorktreeId)
+    if (activeView === 'terminal' && activeTabType === 'terminal' && activeTabId) {
+      ids.add(activeTabId)
     }
     for (const portal of activityTerminalPortals) {
-      ids.add(portal.worktreeId)
+      ids.add(portal.tabId)
     }
     return Array.from(ids)
-  }, [activeView, activityTerminalPortals, renderedActiveWorktreeId])
+  }, [activeTabId, activeTabType, activeView, activityTerminalPortals])
 
   useEffect(() => {
     // Why: hibernation must treat terminals portaled into foreground surfaces
-    // as visible even when they are not the singular active worktree.
-    setForegroundTerminalWorktreeIds(foregroundTerminalWorktreeIds)
-    return () => setForegroundTerminalWorktreeIds([])
-  }, [foregroundTerminalWorktreeIds])
+    // as visible even when they are not the singular active terminal tab.
+    setForegroundTerminalTabIds(foregroundTerminalTabIds)
+    return () => setForegroundTerminalTabIds([])
+  }, [foregroundTerminalTabIds])
 
   const tabs = useMemo(
     () => (renderedActiveWorktreeId ? (tabsByWorktree[renderedActiveWorktreeId] ?? []) : []),

@@ -11,9 +11,9 @@ import {
 import type { AppState } from '@/store/types'
 import { getAllDrivers } from './pane-manager/mobile-driver-state'
 import {
-  getForegroundTerminalWorktreeIds,
-  getForegroundTerminalWorktreeLastSeenAtById
-} from './foreground-terminal-worktrees'
+  getForegroundTerminalTabIds,
+  getForegroundTerminalTabLastSeenAtById
+} from './foreground-terminal-tabs'
 import { getAgentHibernationOutputSignature } from './agent-hibernation-output-activity'
 import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
@@ -61,7 +61,7 @@ function snapshotFromState(
   return {
     settings: state.settings,
     activeWorktreeId: state.activeWorktreeId,
-    foregroundWorktreeIds: getForegroundTerminalWorktreeIds(),
+    foregroundTerminalTabIds: getForegroundTerminalTabIds(),
     tabsByWorktree: state.tabsByWorktree,
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
     ptyIdsByTabId: state.ptyIdsByTabId,
@@ -73,7 +73,7 @@ function snapshotFromState(
     agentStatusByPaneKey: state.agentStatusByPaneKey,
     sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
     lastTerminalInputAtByPaneKey: state.lastTerminalInputAtByPaneKey,
-    foregroundTerminalLastSeenAtByWorktreeId: getForegroundTerminalWorktreeLastSeenAtById(),
+    foregroundTerminalLastSeenAtByTabId: getForegroundTerminalTabLastSeenAtById(),
     now
   }
 }

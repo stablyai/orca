@@ -15,7 +15,7 @@ export const MAX_AGENT_HIBERNATION_IDLE_MS = 24 * 60 * 60 * 1000
 export type AgentHibernationPlannerSnapshot = {
   settings: Pick<GlobalSettings, 'experimentalAgentHibernation' | 'agentHibernationIdleMs'> | null
   activeWorktreeId: string | null
-  foregroundWorktreeIds: string[]
+  foregroundTerminalTabIds: string[]
   tabsByWorktree: Record<string, TerminalTab[]>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
   ptyIdsByTabId: Record<string, string[] | undefined>
@@ -25,7 +25,7 @@ export type AgentHibernationPlannerSnapshot = {
   agentStatusByPaneKey: Record<string, AgentStatusEntry | undefined>
   sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord | undefined>
   lastTerminalInputAtByPaneKey: Record<string, number | undefined>
-  foregroundTerminalLastSeenAtByWorktreeId: Record<string, number | undefined>
+  foregroundTerminalLastSeenAtByTabId: Record<string, number | undefined>
   now: number
 }
 
@@ -115,7 +115,7 @@ function getEligiblePane(args: {
   livePtyIds: Set<string>
   sleepingAgentSessionsByPaneKey: AgentHibernationPlannerSnapshot['sleepingAgentSessionsByPaneKey']
   lastTerminalInputAtByPaneKey: AgentHibernationPlannerSnapshot['lastTerminalInputAtByPaneKey']
-  foregroundTerminalLastSeenAtByWorktreeId: AgentHibernationPlannerSnapshot['foregroundTerminalLastSeenAtByWorktreeId']
+  foregroundTerminalLastSeenAtByTabId: AgentHibernationPlannerSnapshot['foregroundTerminalLastSeenAtByTabId']
   mobileLockedPtyIds: Set<string>
   now: number
   idleMs: number
@@ -127,7 +127,7 @@ function getEligiblePane(args: {
     livePtyIds,
     sleepingAgentSessionsByPaneKey,
     lastTerminalInputAtByPaneKey,
-    foregroundTerminalLastSeenAtByWorktreeId,
+    foregroundTerminalLastSeenAtByTabId,
     mobileLockedPtyIds
   } = args
   if (
@@ -149,8 +149,9 @@ function getEligiblePane(args: {
   if (!getAgentResumeArgv(entry.agentType, entry.providerSession)) {
     return null
   }
-  // Why: returning to the terminal should restart sleep even without pane input.
-  const foregroundLastSeenAt = foregroundTerminalLastSeenAtByWorktreeId[tab.worktreeId]
+  // Why: returning to the containing terminal tab should restart sleep even
+  // without pane input; sibling tabs in the worktree should keep their age.
+  const foregroundLastSeenAt = foregroundTerminalLastSeenAtByTabId[tab.id]
   const effectiveIdleStart = Math.max(
     entry.updatedAt,
     typeof foregroundLastSeenAt === 'number' && Number.isFinite(foregroundLastSeenAt)
@@ -232,19 +233,14 @@ export function planAgentHibernationCandidates(
   }
   const idleMs = getEffectiveAgentHibernationIdleMs(snapshot.settings.agentHibernationIdleMs)
   const mobileLockedPtyIds = new Set(snapshot.mobileLockedPtyIds.map(toRuntimePtyId))
-  const foregroundWorktreeIds = new Set(snapshot.foregroundWorktreeIds)
+  const foregroundTerminalTabIds = new Set(snapshot.foregroundTerminalTabIds)
   const runtimeLivenessRequiredWorktreeIds = new Set(
     snapshot.runtimeLivenessRequiredWorktreeIds ?? []
   )
   const agentEntriesByTabId = getAgentEntriesByTabId(snapshot.agentStatusByPaneKey)
   const candidates: AgentHibernationCandidate[] = []
   for (const [worktreeId, tabs] of Object.entries(snapshot.tabsByWorktree)) {
-    if (
-      !worktreeId ||
-      worktreeId === snapshot.activeWorktreeId ||
-      foregroundWorktreeIds.has(worktreeId) ||
-      tabs.length === 0
-    ) {
+    if (!worktreeId || worktreeId === snapshot.activeWorktreeId || tabs.length === 0) {
       continue
     }
     if (
@@ -257,6 +253,9 @@ export function planAgentHibernationCandidates(
       continue
     }
     for (const tab of tabs) {
+      if (foregroundTerminalTabIds.has(tab.id)) {
+        continue
+      }
       const tabLivePtyIds = getLivePtyIdsForTab(
         tab,
         snapshot.ptyIdsByTabId,
@@ -275,8 +274,7 @@ export function planAgentHibernationCandidates(
           livePtyIds: new Set(tabLivePtyIds),
           sleepingAgentSessionsByPaneKey: snapshot.sleepingAgentSessionsByPaneKey,
           lastTerminalInputAtByPaneKey: snapshot.lastTerminalInputAtByPaneKey,
-          foregroundTerminalLastSeenAtByWorktreeId:
-            snapshot.foregroundTerminalLastSeenAtByWorktreeId,
+          foregroundTerminalLastSeenAtByTabId: snapshot.foregroundTerminalLastSeenAtByTabId,
           mobileLockedPtyIds,
           now: snapshot.now,
           idleMs
