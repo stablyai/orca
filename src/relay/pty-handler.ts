@@ -1,6 +1,7 @@
 /* oxlint-disable max-lines */
 import type { IPty } from 'node-pty'
 import type * as NodePty from 'node-pty'
+import { resolveWindowsGitBashShellPath } from '../main/git-bash'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import {
   resolveDefaultShell,
@@ -423,7 +424,11 @@ export class PtyHandler {
     const env = params.env as Record<string, string> | undefined
     const shellOverride =
       typeof params.shellOverride === 'string' ? params.shellOverride.trim() : ''
-    const shell = shellOverride || resolveDefaultShell()
+    const resolvedShellOverride =
+      process.platform === 'win32'
+        ? (resolveWindowsGitBashShellPath(shellOverride) ?? shellOverride)
+        : shellOverride
+    const shell = resolvedShellOverride || resolveDefaultShell()
     const id = `pty-${this.nextId++}`
 
     // Why: server-side augmenter values (ORCA_AGENT_HOOK_* and plugin overlay

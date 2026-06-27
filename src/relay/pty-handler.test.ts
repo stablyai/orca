@@ -4,6 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
+import * as gitBash from '../main/git-bash'
 import * as ptyShellUtils from './pty-shell-utils'
 
 const { mockPtySpawn, mockPtyInstance } = vi.hoisted(() => ({
@@ -192,6 +193,37 @@ describe('PtyHandler', () => {
       )
     } finally {
       resolveDefaultShellSpy.mockRestore()
+    }
+  })
+
+  it('resolves the Git Bash sentinel to the remote bash.exe path on Windows', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    const resolveGitBashSpy = vi
+      .spyOn(gitBash, 'resolveWindowsGitBashShellPath')
+      .mockReturnValue('C:\\Program Files\\Git\\bin\\bash.exe')
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'git-bash'
+      })
+
+      expect(resolveGitBashSpy).toHaveBeenCalledWith('git-bash')
+      expect(mockPtySpawn).toHaveBeenCalledWith(
+        'C:\\Program Files\\Git\\bin\\bash.exe',
+        expect.any(Array),
+        expect.any(Object)
+      )
+    } finally {
+      resolveGitBashSpy.mockRestore()
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
     }
   })
 
