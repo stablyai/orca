@@ -797,31 +797,67 @@ function getReplaceablePreviewFileId(
 function removeEditorStateForReplacedPreview(
   state: Pick<
     EditorSlice,
-    'editorDrafts' | 'editorCursorLine' | 'markdownViewMode' | 'editorViewMode'
+    | 'editorDrafts'
+    | 'editorCursorLine'
+    | 'markdownViewMode'
+    | 'editorViewMode'
+    | 'markdownFrontmatterVisible'
+    | 'markdownTableOfContentsVisible'
+    | 'openFiles'
   >,
-  replacedFileId: string,
+  replacedFile: Pick<OpenFile, 'id' | 'markdownPreviewSourceFileId'>,
   nextFileId: string
-): Pick<EditorSlice, 'editorDrafts' | 'editorCursorLine' | 'markdownViewMode' | 'editorViewMode'> {
-  if (replacedFileId === nextFileId) {
+): Pick<
+  EditorSlice,
+  | 'editorDrafts'
+  | 'editorCursorLine'
+  | 'markdownViewMode'
+  | 'editorViewMode'
+  | 'markdownFrontmatterVisible'
+  | 'markdownTableOfContentsVisible'
+> {
+  const visibilityKeys = [
+    replacedFile.id,
+    ...(replacedFile.markdownPreviewSourceFileId ? [replacedFile.markdownPreviewSourceFileId] : [])
+  ].filter(
+    (key) =>
+      key !== nextFileId &&
+      !state.openFiles.some(
+        (file) =>
+          file.id !== replacedFile.id &&
+          (file.id === key || file.markdownPreviewSourceFileId === key)
+      )
+  )
+  if (replacedFile.id === nextFileId) {
     return {
       editorDrafts: state.editorDrafts,
       editorCursorLine: state.editorCursorLine,
       markdownViewMode: state.markdownViewMode,
-      editorViewMode: state.editorViewMode
+      editorViewMode: state.editorViewMode,
+      markdownFrontmatterVisible: state.markdownFrontmatterVisible,
+      markdownTableOfContentsVisible: state.markdownTableOfContentsVisible
     }
   }
   return {
     editorDrafts: Object.fromEntries(
-      Object.entries(state.editorDrafts).filter(([fileId]) => fileId !== replacedFileId)
+      Object.entries(state.editorDrafts).filter(([fileId]) => fileId !== replacedFile.id)
     ),
     editorCursorLine: Object.fromEntries(
-      Object.entries(state.editorCursorLine).filter(([fileId]) => fileId !== replacedFileId)
+      Object.entries(state.editorCursorLine).filter(([fileId]) => fileId !== replacedFile.id)
     ),
     markdownViewMode: Object.fromEntries(
-      Object.entries(state.markdownViewMode).filter(([fileId]) => fileId !== replacedFileId)
+      Object.entries(state.markdownViewMode).filter(([fileId]) => fileId !== replacedFile.id)
     ),
     editorViewMode: Object.fromEntries(
-      Object.entries(state.editorViewMode).filter(([fileId]) => fileId !== replacedFileId)
+      Object.entries(state.editorViewMode).filter(([fileId]) => fileId !== replacedFile.id)
+    ),
+    markdownFrontmatterVisible: removeMarkdownVisibilityKeys(
+      state.markdownFrontmatterVisible,
+      visibilityKeys
+    ),
+    markdownTableOfContentsVisible: removeMarkdownVisibilityKeys(
+      state.markdownTableOfContentsVisible,
+      visibilityKeys
     )
   }
 }
@@ -2537,7 +2573,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             openFiles: s.openFiles.map((file, index) =>
               index === replaceablePreviewIndex ? newFile : file
             ),
-            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex].id, id),
+            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex], id),
             activeFileId: id,
             activeTabType: 'editor',
             activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
@@ -2628,7 +2664,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             openFiles: s.openFiles.map((file, index) =>
               index === replaceablePreviewIndex ? newFile : file
             ),
-            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex].id, id),
+            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex], id),
             activeFileId: id,
             activeTabType: 'editor',
             activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
@@ -2719,7 +2755,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             openFiles: s.openFiles.map((file, index) =>
               index === replaceablePreviewIndex ? newFile : file
             ),
-            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex].id, id),
+            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex], id),
             activeFileId: id,
             activeTabType: 'editor',
             activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
@@ -2920,7 +2956,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             openFiles: s.openFiles.map((file, index) =>
               index === replaceablePreviewIndex ? newFile : file
             ),
-            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex].id, id),
+            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex], id),
             activeFileId: id,
             activeTabType: 'editor',
             activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },

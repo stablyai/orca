@@ -1459,6 +1459,64 @@ describe('createEditorSlice markdown view state', () => {
       })
     ])
   })
+
+  it('drops markdown visibility for a preview replaced by a diff', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/docs/README.md',
+        relativePath: 'docs/README.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+    store.getState().setMarkdownFrontmatterVisible('/repo/docs/README.md', true)
+    store.getState().setMarkdownTableOfContentsVisible('/repo/docs/README.md', true)
+
+    store.getState().openDiff('wt-1', '/repo/docs/guide.md', 'docs/guide.md', 'markdown', false, {
+      preview: true
+    })
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({})
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({})
+  })
+
+  it('keeps markdown visibility when another preview still references a replaced source', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/docs/README.md',
+        relativePath: 'docs/README.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+    store.getState().openMarkdownPreview({
+      filePath: '/repo/docs/README.md',
+      relativePath: 'docs/README.md',
+      worktreeId: 'wt-1',
+      language: 'markdown'
+    })
+    store.getState().setMarkdownFrontmatterVisible('/repo/docs/README.md', true)
+    store.getState().setMarkdownTableOfContentsVisible('/repo/docs/README.md', true)
+
+    store.getState().openDiff('wt-1', '/repo/docs/guide.md', 'docs/guide.md', 'markdown', false, {
+      preview: true
+    })
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({
+      '/repo/docs/README.md': true
+    })
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({
+      '/repo/docs/README.md': true
+    })
+  })
 })
 
 describe('createEditorSlice editor view mode', () => {
