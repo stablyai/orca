@@ -201,6 +201,28 @@ describe('relay quick open ignored file listing', () => {
     await expect(promise).rejects.toThrow('git ls-files killed by SIGTERM')
   })
 
+  it('git fallback rejects non-zero exits instead of expanding a partial result set', async () => {
+    const primaryProc = createMockProcess()
+    const ignoredProc = createMockProcess()
+    let callIndex = 0
+
+    spawnMock.mockImplementation(() => {
+      callIndex++
+      return callIndex === 1 ? primaryProc : ignoredProc
+    })
+
+    const promise = listFilesWithGit('/remote/root')
+
+    setTimeout(() => {
+      ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\0')
+      primaryProc.emit('close', 0, null)
+
+      ignoredProc.emit('close', 128, null)
+    }, 10)
+
+    await expect(promise).rejects.toThrow('git ls-files exited with code 128')
+  })
+
   it('git fallback rejects when a timed-out child does not emit close', async () => {
     vi.useFakeTimers()
     try {

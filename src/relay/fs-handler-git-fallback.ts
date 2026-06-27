@@ -109,7 +109,7 @@ export function listFilesWithGit(
       function handleError(err: Error): void {
         rejectPass(err)
       }
-      function handleClose(_code: number | null, signal: NodeJS.Signals | null): void {
+      function handleClose(code: number | null, signal: NodeJS.Signals | null): void {
         if (done) {
           return
         }
@@ -123,7 +123,14 @@ export function listFilesWithGit(
         if (buf) {
           processPath(buf)
         }
-        resolvePass()
+        if (code === 0) {
+          resolvePass()
+          return
+        }
+        // Why: a non-zero exit (e.g. not a git repo) means the listing is
+        // incomplete; reject so the caller surfaces the failure instead of
+        // expanding a partial result set. Matches the main-process fallback.
+        rejectPass(new Error(`git ls-files exited with code ${code}`))
       }
 
       child.stdout!.setEncoding('utf-8')
